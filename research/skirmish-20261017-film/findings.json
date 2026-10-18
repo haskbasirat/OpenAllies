@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "status": "bounded components and required-prefix tests passed; complete current film startup remains unimplemented",
+  "production": [
+    {
+      "file": "crates/aa-runtime/src/film_session.rs",
+      "sha256": "b56f192073b47bb0366690605e2379a264265d3a6ecbb346021438278d27300c"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_header.rs",
+      "sha256": "ba534c1dcebcf14ece089005620a5278aecd8c77d4ad8de1169a06628a34ac82"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_resource.rs",
+      "sha256": "d95f52850c533870b12571ba9627fe4fcd2991b767ed7d4998e8ac70cc9549bf"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_text.rs",
+      "sha256": "929a2d72e05e3cb92b1bb177de733014f6718e1a018a065ec38c638ec74cbf2c"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_variables.rs",
+      "sha256": "16cf8caaa0b6dc218391934ad4753e1d4fc5b2876235dae701d48cb3ae0e95a0"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_paths.rs",
+      "sha256": "3fda1d540b0f622acb7cd85c717b430c9992da4ddf498f7559a00097868c9dba"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_header_capture.rs",
+      "sha256": "7e6a7e9ddd676f1baf64ecab29922e8bcbcec3ba530a42bc3cea6a7a9b76fd21"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_creator.rs",
+      "sha256": "478067d2854e1a7c19c628d3399ab0a312c3f1c29a7ee68c8ee744d0edb13057"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_header_entries.rs",
+      "sha256": "9864db7f0da1ecacbd740d88666bbee8a76f15bdc63b1ba7c27962e0a4f46c38"
+    }
+  ],
+  "tests": [
+    {
+      "file": "crates/aa-runtime/tests/film_capture_native.rs",
+      "sha256": "eeb28c0e3cadb726817f1583c36b9d7e616c152e2573b6fecda9f07300b00589"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_creator_native.rs",
+      "sha256": "9e4a7a89594fc1f2a9d11cf2cc16dc920018aa4ab4f03426584dff7655871596"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_entries_native.rs",
+      "sha256": "74bfafb69af15c586973123bcb952dc6249c57de8fcb68ba19adccdb549df05f"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_header_native.rs",
+      "sha256": "a76bfc317f67deab925564708a63aa7119e135f76cd69896bbdce9d8e9ec7265"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_paths_native.rs",
+      "sha256": "fbbd561bf3d3b335e0797bae3b276474c216daf8627b33aa5aec17aad01cfa1c"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_resource.rs",
+      "sha256": "dc697de23601519745cfd68c7235c516fbe44e686ac2a5ab0b0de13398b3298d"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_session_native.rs",
+      "sha256": "587c97213e206f6828cb12b6aab1b9398db12d07724a85954c765dec5522193d"
+    },
+    {
+      "file": "crates/aa-runtime/tests/film_text_native.rs",
+      "sha256": "acc892d6710b61f14f1bd41677448a035718aab2470a1782210832fd6aa71cdf"
+    },
+    {
+      "file": "crates/aa-runtime/src/film_variables_tests.rs",
+      "sha256": "b68575548695345cebaed252d11d6c6ea9960e823428af388b1e856478a5c293"
+    }
+  ],
+  "generators": [
+    {
+      "file": "research/skirmish-20261017-film/native_film_capture.py",
+      "sha256": "f6a5492dbfa64eadbf44ff4e3b83a413d58a4534aed3d09c2ee0a1ed23ee9b89"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_creator.py",
+      "sha256": "54feaa016a2a85013e70d45341d31302623236fd0b7ee50983178b931b7d4ee9"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_entries.py",
+      "sha256": "78fe51737c8a64e17362f7a71a89ff953994cd1a425901c1f7ec6261693388dd"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_header.py",
+      "sha256": "fb87e2f69b1cc88dc1ad989ff577dfcf4549772c5ea8068fa03042a4675f05a8"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_paths.py",
+      "sha256": "a439512579e64bbcbc03a2f3ee93fbbf5192d1771e21a960cfec98934a2b4497"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_rotation.py",
+      "sha256": "93906b723f95802b487042360379ad0263bbf5e9c8dac045cfcfa788d82c59ed"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_session.py",
+      "sha256": "12bc1248b0ef3180b1c6509ec206a749076db3bf4bc1a26f88f75d9460efeec5"
+    },
+    {
+      "file": "research/skirmish-20261017-film/native_film_text.py",
+      "sha256": "a093862598146373fbbe8d96b4c6bf0d2be50d2e86877cd012abf0ea5348173f"
+    }
+  ],
+  "native_fixtures": [
+    {
+      "file": "research/skirmish-20261017-film/native-film-session.json",
+      "sha256": "38b93f90977bfddec1292cf1ec683bfb710f27b4c9239b51c827289656ebeb9b",
+      "paired_rows": 123,
+      "separate_image_runs": 246,
+      "pinned_units": 140,
+      "pin_basis": "instructions",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-header.json",
+      "sha256": "f50c13bc82a7f05af584dc16f314880fc86c0157d4736f70ceb4e54b58d8d5e0",
+      "paired_rows": 9,
+      "separate_image_runs": 18,
+      "pinned_units": 1099,
+      "pin_basis": "instructions",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-text.json",
+      "sha256": "8eee8e405ff2db5d179bc9743960ee36c7717b941b24a5fdada8238a88ca2a94",
+      "paired_rows": 36,
+      "separate_image_runs": 72,
+      "pinned_units": 1327,
+      "pin_basis": "blocks",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-rotation.json",
+      "sha256": "fbd6188c67271c70e2f041dea80e5f5c9275da5a5645da5dc058473d05cb60ed",
+      "paired_rows": 27,
+      "separate_image_runs": 54,
+      "pinned_units": 1371,
+      "pin_basis": "blocks",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-paths.json",
+      "sha256": "23bcee101bee487b20691d97c4b4867dd15c46a3ceab5a5815d3fc6fb3717bed",
+      "paired_rows": 120,
+      "separate_image_runs": 240,
+      "pinned_units": 98,
+      "pin_basis": "blocks",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-capture.json",
+      "sha256": "75dfcf7eb30fb040f2f576cf1abbd86b34e34ddf28193c256086ce48529eb0e0",
+      "paired_rows": 51,
+      "separate_image_runs": 102,
+      "pinned_units": 34,
+      "pin_basis": "blocks",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-creator.json",
+      "sha256": "118b3e8e915ee689436471da5673e6965384f19589bdeebfefbb414c5de3f26a",
+      "paired_rows": 24,
+      "separate_image_runs": 48,
+      "pinned_units": 1147,
+      "pin_basis": "instructions",
+      "all_pc": true
+    },
+    {
+      "file": "research/skirmish-20261017-film/native-film-entries.json",
+      "sha256": "3a313aed7e169a924ef656ea2c6a467e403b60e9e292aaf1bac44a4fb937edba",
+      "paired_rows": 84,
+      "separate_image_runs": 168,
+      "pinned_units": 98,
+      "pin_basis": "blocks",
+      "all_pc": true
+    }
+  ],
+  "paired_rows_total": 474,
+  "separate_image_runs_total": 948,
+  "rust_checks": [
+    {
+      "file": "research/skirmish-20261017-film/session-tests-fixed.log",
+      "sha256": "4175ea8b745b0aec453a64cd91891ae93ac9240aa71752ac4d2b396792c14fae",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/header-tests.log",
+      "sha256": "16c9f7e72a2aa05ab562f74787452df92067e5b0d74a27c1dfd0e498809f5235",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/resource-tests.log",
+      "sha256": "58cbc73e12ca1b4e0efcdcf7a8bb617837c48d966d3d1b08e06653f57eac5861",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/text-tests-fixed.log",
+      "sha256": "254a3a054faa83e04114a1a2d3e9a37c9370d288a484732e136c2d8217afd3b3",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/variables-tests-final.log",
+      "sha256": "6b1a8775051b71ebf46f1a1825194eae00115bf28c2a803451363f877aa20499",
+      "passed": 2
+    },
+    {
+      "file": "research/skirmish-20261017-film/paths-tests.log",
+      "sha256": "011388fd1812067b36f9840f862943ff7557b69279e2a6b5cfc26a3666ef1c65",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/capture-tests.log",
+      "sha256": "569ab9c519be9c7310f7eb4a4685d6b334d32ba9555e55aece04c358e0a9cf63",
+      "passed": 1
+    },
+    {
+      "file": "research/skirmish-20261017-film/entries-creator-tests.log",
+      "sha256": "2b19e9e77ca93aa59a62d32a1f6cd36557e6df220d90801a7ddb803a80c1ee85",
+      "passed": 2
+    }
+  ],
+  "rust_tests_passed_total": 10,
+  "scoped_current_check": "latest-final-test-check.log passed --test film_entries_native --test film_creator_native and shared production/aa-netcode",
+  "integration_dependencies": {
+    "actual_roster": "FilmRoster/PlayersBorrow +same Sim and Node8 opaque allocation",
+    "actual_recorder": "Session1C Resource and Node268 weak RecorderHandle +same mirror stream",
+    "actual_creator": "resource_creator Creator Kind and base_payload +same sourceResource50",
+    "actual_ai": "load_sai_players Arena.profile_for_kingdom native ascending first-match slots"
+  },
+  "unimplemented": [
+    "fresh5A23F0/5A14C0 header processmetadata/current clock owner",
+    "510EB0 complete current parameters, localized pairs and majorKingdom controlglyph4E93C0",
+    "4F1310/411790 current CampaignState services",
+    "5A3250 work-depot publication and5A00E0 actual filename/open102",
+    "5A1120 positive missing map-text-entry creation/current mutable TextData list integration",
+    "59FDA0 optional separate MAPSTRINGS resource/file branch",
+    "complete7757F0 actual launch/header/factory/output invocation and RFM playback"
+  ],
+  "not_claimed": [
+    "full film startup or playable battle",
+    "current save/network completion",
+    "Windows depot/file-lock lifecycle",
+    "general Unicode/font escapes/language merge",
+    "identical native TGI formatter or zlib deflater bytes",
+    "native allocator failure or C++ SEH equivalence",
+    "fresh native run from existing RFM observation"
+  ],
+  "existing_native_rfm_observation": {
+    "file": "research/skirmish-20261017-film/existing-native-film-observation.json",
+    "sha256": "8c6a4467d26925962a29d881f5be54995a26308ba1aafdc70bd63078048710a5"
+  },
+  "readme": {
+    "file": "research/skirmish-20261017-film/README.txt",
+    "sha256": "80a3d5035375f41da206fa4396df463d381ea9bfd6d6c7d3b87926da82e0060b"
+  }
+}

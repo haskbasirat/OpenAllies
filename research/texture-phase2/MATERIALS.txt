@@ -1,0 +1,52 @@
+Original material metadata correction scope
+==========================================
+
+The exporter reads the existing 1,847-model converted manifest and the corresponding
+original Data NIF files. It does not edit those files or their textures. Every
+existing converted mesh is matched in order to its original hierarchy, name,
+vertex count and triangle count. Both whole-file SHA256 values are recorded.
+The consumer must reject missing/mismatched records instead of guessing.
+
+The corrections address two original engine tags:
+  * Sg and Sg2 designate native shadow proxy geometry. Such meshes are not normal
+    colored scene surfaces and are omitted from this ordinary geometry pass.
+  * RepColor selects the original texture-alpha/team-color material behavior.
+    Its presence is significant even if a named extra has a value of zero.
+
+ProcessObject 0x879A90 copies a parent context, clears the relevant inherited
+flags at each non-NiGeometry object (0x879B72..0x879B86), processes the current
+object's own tags, and passes this context to children (0x87A7A1..0x87A7BC).
+A tag on a NiNode therefore reaches an immediate geometry child. It is not
+unconditionally inherited across a tagless intermediate NiNode.
+
+Before checking tag presence, 0x8790B0 normalizes known names from CRLF-delimited
+NiStringExtraData lines; 0x877C50 uses exact name length and a case-insensitive
+comparison. It does not generally trim whitespace or split bare LF. Its scan
+retains the last '=' and does not flush a final unterminated '='. 0x871CC0 then
+checks exact named-extra presence, followed by case-insensitive whole-string
+values. The ten-name normalization table includes RepColor, Sg and Sg2.
+The corpus's effective string tags are bare repcolor/Sg/Sg2/SG values. A string
+extra consumed entirely by normalization loses its former name before the
+canonical new names are attached; for example name RepColor/value SG becomes
+a shadow tag. Ambiguous combinations of multiple conflicting named strings,
+multiple normalized strings with non-bare material tags, or a trailing '='
+after normalized lines require a separate mutable-array
+audit and are rejected. This is not a general replacement for Gamebryo loading.
+These byte ranges and the material stage operations are separately recorded in
+research/phase2-textures/repcolor-native-state-oracle.json and its assembly files.
+
+Targeted original evidence:
+  GBRCorps: one regular textured RepColor mesh.
+  GBRCorpsPack: 72 existing converted meshes; 15 shadow-tagged proxy meshes were
+    formerly rendered as red/green strips, and ten roof meshes require RepColor
+    supplied by their immediate parent UserPropBuffer tags.
+  GBRDepotOil: all three existing converted meshes remain. The mesh named Sg01
+    has RepColor and no shadow tag. A name-only Sg prefix rule would be wrong.
+
+No general red/untextured-mesh filter, name-prefix shadow filter, new UV edit,
+or texture-image mutation is applied. The old converter's eligibility/nearest
+LOD traversal is reproduced only to identify its existing rows. This audit
+does not restore geometry that the historical converter already omitted, and
+does not claim complete native animation, visibility, LOD or shadow rendering.
+The renderer separately applies the audited native RepColor expression and
+opaque output-alpha correction. Screenshot acceptance belongs to the parent.

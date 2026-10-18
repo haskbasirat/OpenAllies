@@ -1,0 +1,45 @@
+Native gameplay range predicates
+
+Production: crates/aa-spatial/src/range.rs. These routines take original gameplay
+Shape/Placement values, explicit x87 precision, and return a fallible predicate.
+They do not infer gameplay collision/range from rendered meshes or visual scale.
+
+46F100 chooses the higher shape kind, then the larger radius for equal kinds.
+It translates relative positions, preserving the asymmetric float32 stores in
+the original box-frame rotation. 46EB70 dispatches point/circle/box behavior;
+46E2D0 uses the other shape's authored radius to inflate a rectangle. This is the
+original calculation, including its unusual behavior: equality passes both the
+ordinary and minimum-range predicates; a point inside the rectangle passes even
+the minimum-range predicate. Negative finite range values remain accepted.
+
+4EE400 captures actor XY/facing before virtual+14. 4EE800 captures target before
+source. The descriptor retains a shape pointer, so the Rust wrapper retains a
+ShapeHandle and resolves it after both getters. Tests cover getters that mutate
+the other actor's position, their own captured position, or a previously returned
+shape radius. 4EE7C0 copies the point arguments before source capture.
+
+Ordinary actor getter 4EA030 returns definition+68 if byte definition+80 is nonzero,
+otherwise definition+50. It does not use blocking shape definition+38 or multiply
+by visual scale. Derived virtual overrides remain the caller's explicit boundary.
+
+Evidence: native_range.py executes unchanged original AA.exe instructions in
+Unicorn, verifies all pinned source ranges byte-identical in the v14 patched exe,
+and records 14,160 helper cases, 60 wrapper cases, and four ordinary getter cases.
+Inputs cover all four shape kinds, normal/inverted comparisons, inside/edge/
+corner positions, unequal kinds and radii, facing differences, randomized finite
+coordinates, and precision witnesses at 1+2^-24 and 1+2^-55. PC24/53/64 are explicit
+round-to-nearest settings. Full pinned ranges include return instructions/tables.
+
+The helpers execute directly. For actor wrappers, only virtual+14 is hooked as a
+declared mutable leaf; the original capture, dispatch, and arithmetic still run.
+Point tests use the PE zero-initialized global at B3A8C4 as kind0/radius0. The full
+global initialization lifecycle and live process-wide x87 state are not proved.
+The supported contract rejects unsupported shape kinds and nonfinite/undefined
+numeric inputs instead of silently inventing a distance result. It is not a claim
+of complete combat, pathfinding, or gameplay equivalence.
+
+Validation: cargo test -p aa-spatial --release --test native_range -- --nocapture
+passes three tests, matching every helper and wrapper case and checking invalid
+inputs. cargo clippy -p aa-spatial --release --all-targets --no-deps -- -D warnings
+passed. Independent review is requested separately; producer evidence is not an
+independent review.

@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "status": "author_frozen_bounded_memory_stats",
+  "freeze_sha256": "537f7222e50802eb1d689813611f59c914a59c740d947ae52f5314e3eaa537ac",
+  "native": {
+    "body_rows": 54,
+    "body_original_v14_runs": 108,
+    "body_pins": 245,
+    "supply_rows": 72,
+    "supply_original_v14_runs": 144,
+    "supply_pins": 248,
+    "precision": "24/53/64",
+    "pin_wording": "Executed byte pins plus explicitly stopped stat-entry probes in error rows; independent static field-mapping pins separate",
+    "body_correction": "4CEC90 alwayspushesNULL to45D730; sourceData+284 basehealth, not current maximum/modifier",
+    "supply_correction": "Actual actor+8C Supply slot11, notDenizen slot10; +424 is_relay gates +18current and +428source reads",
+    "scope": "Finite explicit guard inputs and full4EC4A0 ordering/partial stores with actual native child bodies; named inherited CString transports, no native allocation failure/unwind equivalence"
+  },
+  "rust": {
+    "coherent_final_replay": "3/3 PASS0.01s; old252rows plus54Body and72Supply rows",
+    "actual_capture": "1/1 PASS44.16s",
+    "actual_immutable": "1/1 PASS63.07s",
+    "binary_sha256": "ed9cb154637cf046d296585a838d3d8c2a94bef02dbdbccd0c0f7c2116c0e59c",
+    "prior_body_build": "2/2 PASS but predatesSupply, retained as supplementary integration log only"
+  },
+  "actual": {
+    "objects": 113,
+    "result": "Ok(())",
+    "explored_tiles": 16384,
+    "tiles": 16384,
+    "same_allocations": true,
+    "same_moved_bank": true,
+    "catalog_bank_empty": true,
+    "farm_source_health_bits": 1140457472,
+    "farm_published_records": 2,
+    "farm_source_stat_bits": [
+      1140457472,
+      1140457472
+    ]
+  },
+  "limitations": [
+    "All16384tiles explored only for genuine113-object stopped prefix; NOT a completed whole map/PostLoad/mission/battle.",
+    "Actual Farm Body source/stat/publication is checked; positive saved Supply callback is not separately claimed captured in this prefix. Positive Supply native probe/storage binding is distinct evidence.",
+    "Dynamic numbered/Settlement names, construction/stance aspect selection and positive observers retain explicit required boundaries where reached.",
+    "Source compilation reuses actualBank sourcePC/current canonical source; no aa-rules parser/source changes.",
+    "Current shared files may evolve later; snapshots and exact executable remain the checkpoint."
+  ]
+}

@@ -1,0 +1,19 @@
+DEVELOPMENT 07 VALIDATION
+
+Executable SHA-256: c5bd663998bbbf1840f608a00ab84eea9a7cecd6e8b99e43f0576d9becafe55b
+
+Passed: workspace default release tests (505 passed, 62 ignored) before the
+final preview UI changes; final client defaults (43 passed, 15 ignored);
+one source/GPU integration test spanning five factions and four clips each;
+strict client test-target Clippy; 85 executable diagnostics including 80
+original map inputs; six packaged-EXE render smoke tests across Vulkan/DX12.
+Four invalid CLI inputs were rejected. GUI checks are detailed in
+evidence/build-07/gui.json. These checks do not establish full game parity.
+
+The source/GPU test checks pose changes, pause/restart equality, visibility,
+manual transforms and stable resident allocation size. Render-frame timings
+are not gameplay FPS benchmarks. Native game and Development06 hashes match.
+
+Not available: full battles, AI, campaign, original save loading, multiplayer.
+Not retested: all ignored hardware/source cases, 150% Windows DPI, second-PC
+or internet play. The ZIP requires external recovered game assets.

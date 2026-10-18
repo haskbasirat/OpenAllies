@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "status": "frozen bounded registration source/proof, focused2/2 pass",
+  "scope": "Actual4D62F0 loop and same-owner runtime grid bridge. Positive4D4A90 child services remain required. No full4F9510 duplication or wholebattle/readiness claim.",
+  "proof": {
+    "native_loop_rows": 708,
+    "native_table_constructor_runs": 6,
+    "native_executions": 714,
+    "instructions": 1146,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "allshl": "96D710 uses low8 CL; shifts64..255 yield zero; index256 wraps CL only. Native production manager42 descriptors is semantic constructor table, not authored file order.",
+    "seams": [
+      "heap allocator",
+      "CString transport/provider",
+      "DataManager insertion transport; receiver must GameData+2C0",
+      "4D4A90 required observed state-entry child",
+      "4CFEA0 observed grid child; concrete grid proof owned separately by load_zone_entry"
+    ]
+  },
+  "tests": {
+    "focused_native_replay_and_actual_map": "runtime-direct-v4.log:2/2 pass29.10s",
+    "actual_map": "tutorial02 Kingdom781, same held allocation/currentLoading/sourceBankPC53; true initial state0; real terrain/membership/initial zones/decodedWorld48/verifiedPointShape at all3livePC. SessionE4=3 explicitfixture; fullInit omitted by this diagnostic. Positiveindex0 and partial-current-owner-retirement are synthetic guard probes.",
+    "prior_failures": [
+      "runtime-tests-v1.log:authored/native descriptor-order mismatch identified and corrected",
+      "runtime-tests-v2.log:test lacked actual Catalog Settings owner; corrected testsetup only",
+      "runtime-tests-v3.log:bothbehaviorchecks completed but relative capture destination absent under Cargo crate cwd; same compiled test exe reran with absolute freshcapture path and passed. No source change between compilation and finaldirectreplay."
+    ]
+  },
+  "api": [
+    "aa_actors::actor_registration::World/register minimalnativekernel",
+    "load_actor_registration::register(catalog,id,held,current_mut_registry,GridContext{zones,spatial,point,session,world},Reentry,pc)",
+    "live_registration::Effects::register_actor now borrows mutable same registry; currentLoading/sourceidentity guards before/aftercallback retain earlier stores"
+  ],
+  "source_table_binding": "Byte-proven477FC0 native42 table order; actual same completedBank sourceidentities; actual native mode2 manager; authored identities constrained to constructor table. Active descriptor canonical payload resolved lazily at same sourcePC, shadow/absent rejected.",
+  "open": [
+    "actual positive4D4A90 effects are being implemented separately; no forged state-entry success",
+    "actual SessionE4 owner tested by rootintegration, this test labels its fixture",
+    "fullNativeInit/PostCreate/wholeWorld completion and playable battle outside this module",
+    "old fullActorCreation register integration regression and mutable liveRegistration tests to be included in later scoped final suite"
+  ],
+  "files": {
+    "crates\\aa-actors\\src\\actor_registration.rs": "8166cc283abb6a96b545486cd556ba9de69bf6ece41b0bf0252407ad0fb62551",
+    "crates\\aa-actors\\src\\actor_creation.rs": "4663b05b3d8c9da462ba65bce4d7c56b3486669718dca623bb99b2299a7d9aed",
+    "crates\\aa-runtime\\src\\load_actor_registration.rs": "045a5a92b1c72a4d8ae7befb42c19eab96b19b3575a37fbd0a788b181af6690a",
+    "crates\\aa-runtime\\src\\load_actor_registration_tests.rs": "2ee3f6a9d7577941f6d680dbc6156d63ff26f4763334d97d8244910a034b493a",
+    "crates\\aa-runtime\\src\\live_registration.rs": "11adeb49acd7e26584c729594dc3fc1a458c163e12a95efa229e2a46e74e459a",
+    "crates\\aa-runtime\\src\\live_registration_tests.rs": "ac3fd4e44759b737d1b83d828ae63f1b92a4300b6ec73560106ad74e86877ed9",
+    "research\\skirmish-20261016-load-actor-registration\\native_registration.py": "7f24576b49d3fffe4eade36c6d80f3f5045b342044de48dcd703b210a73d71e4",
+    "research\\skirmish-20261016-load-actor-registration\\native-registration.json": "7888c4c3174407a2d66b7b1011a9301808aeffe3f9d25300a1955498677fb464",
+    "research\\skirmish-20261016-load-actor-registration\\actual-first-kingdom-v4.json": "7d734caebda0cfaf5e502f08bde973d1aabda2948bc15fb30621c7bc029e1644",
+    "research\\skirmish-20261016-load-actor-registration\\runtime-direct-v4.log": "23b9b63c6a153547e473956de2766ded1d9e7f75381bd3ff3d3a48c4f2c6ce16",
+    "target\\s-graphics-review\\release\\deps\\aa_runtime-f4ddb32fd0fb81b7.exe": "872c1d689dca5fa21ee8e192a44fe8c662ae553056a0052cfe9309c100022a2c"
+  }
+}

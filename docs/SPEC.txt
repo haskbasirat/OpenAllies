@@ -1,0 +1,106 @@
+AXIS & ALLIES RUST REBUILD — SIMULATION FOUNDATION
+
+Development 02 note: this document describes the original aa-simulation
+laboratory. Coupled resource mutations and bounded stock-flow arithmetic are
+now implemented separately in aa-economy; outer dispatch/list order is in
+aa-world. Their native fixtures and limits are described in DEVELOPMENT-02.txt,
+WORLD-ORDER.txt and crates/aa-economy/README.md. Full gameplay is still missing.
+
+Scope and ownership
+This is new Rust code in rust-rebuild. The existing native installation,
+restoration packages and profiles are not modified or launched. aa-simulation
+is an evidence-backed arithmetic and scheduling laboratory, not a playable RTS
+or a completed replacement for the original simulation. The preservation target
+is the accepted expanded v14 behavior described in BASELINE.txt, including its
+100 caps/16 sides/maps and control changes. Missing behavior is not substituted
+with invented rules or silently reset to stock defaults.
+
+Public API
+  NativeRng::new(seed).next_u32()
+    Exact original integer generator primitive. Does not choose game seeds,
+    reproduce GetFRand or decide where the game consumes random numbers.
+  NativeClock::stock() / NativeClock::with_step(FloatBits)
+    Explicit stored step; stock Data/Game/SVars.tgi supplies 16 ticks/second.
+    advance_fragment() implements only the native clock-field instructions.
+  ProviderState::new(raw_bits, limited, maximum).accumulated(delta_bits)
+    Finite raw-provider accumulation and effective limit projection only.
+    The caller supplies the native data value (stock cap 20, expanded cap 100).
+    NOT the full production/upkeep function and NOT a recruitment command.
+  Core::new(seed, independent_provider_rows, workers)
+  Core::apply_batch(Batch { sequence, commands }) -> BatchReceipt
+    Lab commands: AccumulateProvider { slot, delta }, DrawRandom.
+    Sequence must equal the expected next sequence. Gaps, duplicates, invalid
+    slots and unsupported numeric inputs fail without partial state mutation.
+  Core::advance_clock_fragment()
+    Separate explicit operation. No invented association between a command
+    batch and the native world-update phase graph is implied.
+  Core::snapshot() / Core::restore(snapshot, workers)
+    Versioned Rust-only state. FloatBits keeps exact IEEE bits, including -0.
+    canonical_bytes() defines little-endian order; sha256() fingerprints it.
+    Neither format is RSG/RMP, a native network decree, or native sync CRC.
+    Restore validates schema, positive finite step and provider coherence. It
+    does not establish arbitrary supplied clock begin/end/tick consistency or
+    replace validation required by a future native save decoder.
+
+Native basis
+1. Data/Game/SVars.tgi sets GameTicksPerGameSecond=16. The compiled fallback of
+   ten is overridden by data. Game/admin/visual clocks are different systems.
+2. GWorld clock fragment 0x4F9A07..0x4F9A3B increments the 32-bit counter,
+   copies old end to begin, and stores signed(counter)*stored_step as float32.
+   End time is derived from the counter, not accumulated by repeatedly adding
+   dt. Stock tick period is exactly 0.0625 seconds.
+3. RNG 0x85D840 multiplies unsigned state by 0x41C64E6D, adds 0x3039 and stores
+   the low32 state. Its return contains bits16..47 of the wide intermediate;
+   returning just state>>16 loses native output bits.
+4. Production 0x4E3940 stores raw+=delta, then uses min(raw, cap) only for a
+   resource marked as a limited provider. Other raw resources are not capped.
+   The complete function ALSO rebalances shortage costs via 0x4E1F60 before
+   and after this operation. That coupled behavior is not yet ported.
+5. Client AdminNode 0x74FD10 consumes next decree history index and then
+   increments it. GWorld 0x4F9970 traverses ordered queues/lists and invokes
+   explicit phases. Their complete nested order and side effects remain open.
+6. 0x76B120 clamps interpolated visual time to available begin/end game ticks.
+   Rendering must not invent simulation ticks when a peer lacks a decree.
+
+Determinism and worker boundaries
+- Authoritative order comes from the caller's validated sequence. Do not sort
+  commands by actor ID or client ID as a replacement for native ordering.
+- A global RNG is never drawn from parallel jobs. Draws and their output slots
+  remain in command order on the commit thread.
+- The current parallel work consists only of independent provider arithmetic
+  rows. Commands on one row remain sequential. A row never reads another row.
+  Rayon results are collected by index and committed deterministically.
+- Native shortage/upkeep is cross-resource and must NOT enter that job group
+  without its full dependency ordering. This library is not permission to
+  parallelize arbitrary kingdoms, actors, collisions, AI or visibility.
+- Render/UI consumers may read immutable snapshots; authoritative state has
+  one commit owner. Completion order, thread IDs, wall time and worker count
+  do not enter snapshots or digests.
+- No parallel floating-point reductions, fast-math reassociation, implicit
+  per-thread RNG or speculative commits are used.
+- The clock's integer-times-f32 result is explicitly rounded once to f32;
+  a premature integer-to-f32 cast is avoided. Full x87 control-word lifecycle,
+  GetFRand conversion, physics/geometry precision and denormal handling still
+  need native evidence before full simulation parity can be asserted.
+
+Evidence and tests
+docs/generate_native_rule_vectors.py reads the exact installed original image
+SHA256 5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26.
+It executes unchanged original x86 in isolated Unicorn fixtures, not a live game.
+The copied code ranges also match the currently restored v14 native image.
+The checked fixture has 74 RNG, 84 clock and 59 provider cases. Clock fixtures
+use FPU control word0x037F; this is a stated oracle configuration, not proof of
+the entire original process's FPU lifecycle. Provider fixtures contain one
+upkeep definition and no purchase resource, so shortage costs are not covered.
+
+Run: cargo test -p aa-simulation
+Tests compare exact native bit patterns, 1/2/4/8-worker receipts and snapshots,
+non-associative command ordering, transactional failure and restore continuation.
+Worker invariance of this laboratory does not establish complete gameplay parity.
+
+Next evidence gates
+Map all native world phases and actor/list lifetime mutations; identify the
+actual command decoder and command-within-decree ordering; port resource
+shortage/research/supply arithmetic with original x86 fixtures; locate RNG seed
+and every deterministic draw site; implement exact save/state topology; only
+then admit additional parallel jobs whose inputs and writes are proven disjoint.

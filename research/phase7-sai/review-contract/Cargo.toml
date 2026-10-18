@@ -1,0 +1,8 @@
+[package]
+name = "sai-review-contract"
+version = "0.0.0"
+edition = "2024"
+[workspace]
+[dependencies]
+aa-navigation = { path = "../../../crates/aa-navigation" }
+serde_json = "1"

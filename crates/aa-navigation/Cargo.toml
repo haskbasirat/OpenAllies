@@ -1,0 +1,16 @@
+[package]
+name = "aa-navigation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+aa-spatial = { path = "../aa-spatial" }
+aa-mapworld = { path = "../aa-mapworld" }

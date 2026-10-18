@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "status": "bounded_special_object_init_author_accepted",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_executions": 708,
+  "unique_executed_instruction_pins": 424,
+  "rust_tests_passed": 4,
+  "functions": [
+    "Area4DB200",
+    "Camera4DBCF0",
+    "Doodad4DC730",
+    "Disturbable5904A0",
+    "Breakable58F960",
+    "Updatable50ACC0/50B250"
+  ],
+  "native_seams": [
+    "baseObject4EBE50 success/failure",
+    "baseObject constructor4EA690",
+    "empty-string/successful node allocation/free",
+    "Session phase76AC90",
+    "diagnostic logger77DA70 transport",
+    "deferred bucket allocation callback; current owner links run unchanged"
+  ],
+  "ownership": [
+    "same held derived payload",
+    "same World camera/area generation owner",
+    "same NativeRng stream",
+    "same Catalog load Queues and Owners moved into staged runtime; no head mirror/copyback"
+  ],
+  "reached_errors": [
+    "legacy pre-v22 Area schedule",
+    "missing actual source/slot definition",
+    "missing real queue owner",
+    "queue/live precision mismatch"
+  ],
+  "boundaries": [
+    "Full Object source/placement/spatial services have separate native evidence, not re-proven by the named base seam.",
+    "No complete map/playable battle/multiplayer claim follows from these bounded Init proofs.",
+    "Source canonical-owner/slot checks are explicit host validity boundaries, not native invalid-pointer parity.",
+    "Finite period arithmetic covered including zero/subnormal/negative/max-finite; unsupported numeric values remain explicit errors.",
+    "No allocator exhaustion, corruption or concurrent reentrancy claim. Original game/release files untouched."
+  ],
+  "files": {
+    "crates/aa-runtime/src/load_special_object_init.rs": "8754def15a6d1fd67882638e77de01ca283e4d22cfe9595efa0c6cab422f2792",
+    "crates/aa-runtime/src/load_special_object_init_tests.rs": "9c8de1ccbaebeb705397b7706ea9bbb5b8e333eb72b151d8796ebb730b73d994",
+    "research/skirmish-20261016-special-object-init/README.md": "17c78b8dfb9e821b808fb73417c7b98fed4167ab81a7884be337c49dd8f08973",
+    "research/skirmish-20261016-special-object-init/author-native-replay.json": "5bf42d99bbe3689646869a0f665ad9d9d27898e6140e5b00cf6e19c5c3db8cbb",
+    "research/skirmish-20261016-special-object-init/author-rust-tests-lib-final.log": "9c5483d3d4414515b83488bef2297112e4011b4eaf564a9db1045146afcc04ca",
+    "research/skirmish-20261016-special-object-init/native-special-classes.json": "8946e817adf84c4513c86de9edddb85e4befe1ee75c1013d918b897d68424058",
+    "research/skirmish-20261016-special-object-init/native-special-tail.json": "4ed4c0d4a33c5bd57468212f41ab0a55d0ab5a59af43b914d2cc83af6b5d9163",
+    "research/skirmish-20261016-special-object-init/native_special_classes.py": "6bde4825cdeee1fd390395ab2ef522ab48921c9855ea8f3ee78127526bbfce57",
+    "research/skirmish-20261016-special-object-init/native_special_tail.py": "bd2517bf24a2cf53e3c89a707192c584dcd1b0b5c928c8c3b23fa3806b48f57b",
+    "research/skirmish-20261016-special-object-init/replay_native.py": "c86039f232f25345b2daed3ee7b3d31753945628723bd456e02f0ae0d31e5c84"
+  }
+}

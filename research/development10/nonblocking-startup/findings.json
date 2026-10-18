@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "scope": "Source-only preparation transport and deterministic GUI/worker handshake regression. No Engine/World/Application owner is moved, no native readiness result constructed.",
+  "result": "Exact current-source standalone5/5 PASS0.00s",
+  "checks": [
+    "Pending source work returns immediately from poll while GUI-side code can pump its requested reply.",
+    "Returned failure retains the SAME move-only source-prefix owner until explicit caller retirement.",
+    "Ready result can be delivered while trailing wake remains blocked; poll does not join unfinished threads.",
+    "Deliberately blocking predecessor-pattern fixture stalls its own GUI reply until harness rescue.",
+    "Drop detaches unfinished SOURCE-only work; no GUI shutdown wait.",
+    "Source panic returns error; repaint panic cannot erase the owned outcome."
+  ],
+  "limits": [
+    "Predecessor fixture is adversarial transport proof, not a claim actual Berlin preactivation reached a circular UI callback wait. Observed actual symptom is synchronous GUI starvation.",
+    "Actual Controller status/error reducer and real Berlin click were not executed by this test; Builder/Root own integration and isolated GUI QA.",
+    "Source-only generic contract excludes Engine, World and captured ApplicationThread. Caller ownership composition must preserve that boundary.",
+    "No native oracle is needed for this modern transport; it makes no native game behavior parity claim."
+  ],
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "pins": {
+    "crates/aa-client/src/battle_startup_job.rs": "42629cba7c68ea1b83e51b1109219590eee6bb1444b6462afa5295c1b786f4c7",
+    "crates/aa-client/src/battle_startup_job_tests.rs": "e34aa96d754a0b5c5daef2e8e9e93c0806e89b8c4000f4308830c9607d579239",
+    "research\\development10\\nonblocking-startup\\exact_startup_job_tests.rs": "46f717a577ea606fe2e17905534e9bdbbd4718640168421c46d9b69cb5760c84",
+    "research\\development10\\nonblocking-startup\\exact-startup-job-tests.exe": "3a0918898bfb8c0d2ce378a580eb61d3c82d9ec28f35f9082b8a3ccb85dbb2dc",
+    "research\\development10\\nonblocking-startup\\exact-build01.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "research\\development10\\nonblocking-startup\\exact-replay01.log": "be4163865d402806aa82cc5c46c10c619b7a360227cc4dcdceed3f79970b0131"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Original saved-object post-Load lifecycle control and owned names/class/team/available-city registration storage; concrete effect bodies and complete world startup are separate mandatory services.",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native": {
+    "registration_rows": 414,
+    "registration_inputs": 69,
+    "registration_complete": 246,
+    "registration_dependency_stops": 162,
+    "registration_team_exceptions": 6,
+    "team_initialization_rows": 36,
+    "lifecycle_rows": 636,
+    "lifecycle_inputs": 106,
+    "lifecycle_complete_native_epilogues": 426,
+    "lifecycle_dependency_stops": 180,
+    "lifecycle_required_null_refusals": 30,
+    "total_reexecuted_calls": 1086,
+    "registration_instruction_pins": 558,
+    "lifecycle_instruction_pins": 132,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "images": [
+      "original",
+      "v14"
+    ]
+  },
+  "actual_storage": {
+    "map": "(2v2)Kursk.RMP",
+    "unmodified_classes_exercised": [
+      3,
+      4,
+      5
+    ],
+    "not_present_in_restored_registry": [
+      6,
+      7
+    ],
+    "shell_allocation_identity_preserved": true,
+    "actual_flags_names_and_team_slot": true,
+    "canonical_source_owner_laziness": true,
+    "actual_source_byte34_city_and158_probes": true,
+    "generation_checked_self_and_stale_references": true,
+    "actual_registry_move_into_actor_store": true,
+    "source_completion_not_promoted": true,
+    "actor4d62f0_callback": "explicit required-service failure, not a success stub"
+  },
+  "production_sha256": {
+    "crates/aa-runtime/src/live_registration.rs": "fc2b0344f105423397b8938d75dca03503a47547740f58e2d59b0fc57e67af28",
+    "crates/aa-runtime/src/live_registration_tests.rs": "e55059623f2b9d67e3253cf48e561229919565a635cdeb298196f5dd52993e23",
+    "crates/aa-runtime/tests/live_registration_native.rs": "be390e73939ee3ee96756482d93711e3f27ba7e188dc23d583a36b57ce031c80",
+    "crates/aa-mapworld/src/record_lifecycle.rs": "3d9939ece24b17ba64f80c037bf0ed320d29d8c54629f18d1367eee2d6129b70",
+    "crates/aa-mapworld/tests/record_lifecycle_native.rs": "81342c3d736821938cf453a6d54fd2c99068743a156feaac19af42d5a313a089"
+  },
+  "evidence_sha256": {
+    "native_registration.py": "527230af8590fe78b128c20c245e3fef1c1ad6ed880e112ddb2d14d7f02e761f",
+    "native-registration.json": "291d8a46685db274032774c6c2ae85d00629ef5be47fe9c2a026c4e033113045",
+    "native-construction-pins.json": "b9c5c48a87aa5f96908b30fe8be291bb468b5828abe73099e91deea70587ad45",
+    "native_lifecycle.py": "63129629befbc93894e3ad1ef90b4c873322486315b0e0d5c48f2832731d6ce6",
+    "native-lifecycle.json": "3a60c0f8ea8b09e49e6fd57ceffd16fde10523e5d86cb973170a74ce8381bd62",
+    "readonly_replay.py": "8bde58283830add69d0bda40d1a82993e3b1793386f4f372219f022aa2621a63",
+    "readonly-replay.json": "df4b7f0d6d63ff75c4f21f4e52d143aba9c44d6f28dea98dcabed553fa6944c5",
+    "README.md": "9435ea6a25f8b65ad2fcce3c8d66bc5909152392379beddb42ff64b2c9392936",
+    "LIFECYCLE.md": "504de714282c514c4e4ab7fc62df27bb3355dac901cc8bd4337a8449085d7f8c"
+  },
+  "commands": [
+    {
+      "command": "cargo test -p aa-runtime --test live_registration_native --release --locked --offline -j4",
+      "target_dir": "target/s-graphics-review",
+      "exit_code": 0,
+      "passed_tests": 3,
+      "log": "cargo-native-final2.log",
+      "sha256": "2731bfb20ca0ca55eb2b759410fed817ab3dc08e62f4a2d703661937732d1648"
+    },
+    {
+      "command": "AA_GAME_ROOT=game-root cargo test -p aa-runtime --lib live_registration::tests:: --release --locked --offline -j4 -- --include-ignored --nocapture",
+      "target_dir": "target/s-graphics-review",
+      "exit_code": 0,
+      "passed_tests": 1,
+      "log": "cargo-storage-final.log",
+      "sha256": "a444c1c30d45b4ebaefd7360be3f69e71bf2a7969414ffa38fd42fbcc5f193a3"
+    },
+    {
+      "command": "cargo test -p aa-mapworld --test record_lifecycle_native --release --locked --offline -j4",
+      "target_dir": "target/s-graphics-review",
+      "exit_code": 0,
+      "passed_tests": 1,
+      "log": "cargo-lifecycle.log",
+      "sha256": "1327163955758645e3a01e9627a7ae1d1ca8931260667b911ad4e66706f08eaf"
+    }
+  ],
+  "root_integration_contract": [
+    "Move the same non-Clone registration State alongside registry into Attempt/Staged.",
+    "Initialize team slots from actual serialized TEAMS count through430240 behavior.",
+    "Supply explicit current B3CC40 process lifetime state; fresh-process PE BSS starts zero and World construction does not reset it.",
+    "Invoke record_lifecycle only at actual immediate4FAE80 post-Load point before the next record.",
+    "Do not clone a held record or build publication order from sorted GTIDs.",
+    "Supply real required Init/PostCreate/Actor4D62F0/grid/assert/warning/destruction/definition services; stop if missing.",
+    "Route trigger names through the registration owner; do not create another mutable name table."
+  ],
+  "exclusions": [
+    "Full4FAE80 allocation/Load/conversion prefix and full world startup/readiness.",
+    "Concrete Actor4D62F0 state property/FX/grid bodies, object Init, SAI/updatable publication.",
+    "Concrete warning CRT/localization text, full destructor/SEH unwinding and allocator-failure machine semantics.",
+    "Class8 Group restoration, list removal/object deletion and arbitrary reentrant mutation of held record identity.",
+    "Names outside established ASCII/no-NUL C-locale supported domain.",
+    "Actual-map Area/Camera storage cases (absent in selected restored Kursk registry); native byte and controlled fixture proof only.",
+    "Playable battle, multiplayer, campaign, release EXE or a completion percentage."
+  ],
+  "changes_outside_owned_modules": "Only appended module exports to each crate lib.rs, with before copies; root owns all Catalog/restore/Attempt/Staged integration. No manifests/dependencies/releases/original files changed.",
+  "independent_review": "Pending parent-assigned peer review; readonly-replay is explicitly author re-execution."
+}

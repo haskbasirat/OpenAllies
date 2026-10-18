@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "scope": "Reached native4CEF10 captured request wrapper over SAME Staged PropertyState and Bank; no natural request-count claim",
+  "changes": [
+    "Required.property forwards each captured nullable DefinitionRef to existing property_api kernel with kind2 and source SAME new Actor",
+    "Null Property returns before Actor lookup; missing Properties precedes captured token/source validation",
+    "Reached token transport validates usable Bank allocation/domain/case-insensitive IDS before existing State binding/facts/reference",
+    "Existing PropertyRef apply entry remains delegated to same Admission and kernel; outer caller ignores native AL result"
+  ],
+  "validation": {
+    "token_transport": "Exact production source via rustc helper:1/1 PASS, laboratory Bank identities only",
+    "native_caller": "Immutable native replacement-drain caller168 rows/206 executed pins PASS;4CEF10 is a named seam, not native body equivalence",
+    "typecheck": "State agent cargo check -p aa-runtime --tests --release --locked --offline -j4 PASS1m14s; includes playable_battle_startup; source typecheck only",
+    "independent_review": "State bounded source-only review accepted; zero reviewer native or actual runner executions"
+  },
+  "limits": [
+    "Actual41 stopped earlier in fresh ground4EB500; captured request property count and natural positive property behavior remain unmeasured",
+    "DefinitionRef is validated queue transport, not standalone native pointer capability",
+    "No native404F90 threshold/ABI, complete source-loading, allocator, or unwind equivalence is claimed",
+    "Existing property native body and positive downstream effects retain independent proof limits"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/staged_property_admission.rs",
+      "sha256": "2be5d72feb9d86c1a71988c18af4798e2aa1dfd0fcad0706785e01e9fd095215"
+    },
+    {
+      "path": "crates/aa-runtime/src/replacement_property_reference.rs",
+      "sha256": "1dce0bc84a86d1398e8b5d7b3818697e0b6f93dd316de2e7820f94df61ca1dbd"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_replacement_drain.rs",
+      "sha256": "359121002cbbd64def723ce93b006dde569e7882354d4558ec4b0acaf55eacea"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_replacement_queue.rs",
+      "sha256": "f1e8a44d9bb44215088e118465f4da60f0500e33fc6b3b19a86500d78bd656dc"
+    },
+    {
+      "path": "research/development10/replacement-captured-property/transport-core-tests01.log",
+      "sha256": "e5dd609ab634c35926280f3bcd0d4488083c6aa502872d3c8608cf69192c768b"
+    },
+    {
+      "path": "research/development10/replacement-captured-property/native-caller-replay.log",
+      "sha256": "5f7e494fa19eb8ba80f46939d551f13d4a123bce9eff61227ed6a07023fa1c8f"
+    },
+    {
+      "path": "research/skirmish-20261017-map-replacement-drain/native-replacement-drain.json",
+      "sha256": "524a187b554f9a56a3116e4e6aef3f2a7a6d5ae503059f25fe8891cc7774b5f9"
+    },
+    {
+      "path": "research/skirmish-20261017-organization-members/tests-source-properties07.log",
+      "sha256": "b054f722c8e379b03b294cb158db432fd587943ecdc08ad3f809a139b378954e"
+    },
+    {
+      "path": "research/skirmish-20261017-organization-members/independent-captured-property-review.json",
+      "sha256": "811402d07d3e4b91a767fa33a556db14f125e58c9a069e3cae2847030e896025"
+    }
+  ]
+}

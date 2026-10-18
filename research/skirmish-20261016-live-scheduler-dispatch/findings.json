@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "status": "frozen concrete scheduled component service kernel; not complete world Services or battle readiness",
+  "native_entries": {
+    "periodic": "50B330 -> Updatable+14",
+    "deferred3": "4F05C0 -> Updatable+18",
+    "deferred4": "4F05B0 -> Updatable+1C (required/unbound)",
+    "noop": "4D1E10 RET8 for Recruit/Builder/MobileDeployment/Research/HQ periodic vtables",
+    "performer": "57F040 signed dispatch, actual4D03D0 pause sources,50ACC0 schedule and50B1C0 removal"
+  },
+  "authoritative_owners": [
+    "ActorStore component allocations",
+    "Owners portable Updatable identities",
+    "Queues intrusive scheduling state",
+    "NativeRng stream",
+    "Spatial published placement"
+  ],
+  "implemented_effects": [
+    "actual no-op periodic leaves without consuming unused elapsed float words",
+    "inactive/nonselected Performer returns before placement/Properties reads",
+    "actual Thing+8 bit0 skips Properties; current Properties.modifier.flags at+1C bit1 controls pause",
+    "paused delivery schedules same owner/data in actual queue3 with native epsilon and no RNG draw",
+    "signed mismatched/default/negative events and cue with absent Character return natively",
+    "stage0 stores actual turret_index=-1 and removes owner queue0/data0 before required57ED20 error"
+  ],
+  "remaining_required": [
+    "Performer57ED20 begin",
+    "57E8C0 use frame",
+    "4C8300/4C8850 end ability context",
+    "57DC90 actual Mind+138 notification",
+    "Animator563AA0 cue",
+    "other periodic components",
+    "queue4 virtual+1C",
+    "Sun/Actor/Kingdom/Area/Doodad/Command/Controller updates",
+    "other clocked::Services world effects/predicates before a real full tick"
+  ],
+  "native_proof": {
+    "performer_rows": 972,
+    "noop_rows": 135,
+    "precisions": [
+      24,
+      53,
+      64
+    ],
+    "bounded_returns": 756,
+    "first_unbound_boundaries": 216,
+    "boundary_counts": {
+      "begin": 36,
+      "use_frame": 36,
+      "end_context": 36,
+      "finish": 36,
+      "animator_cue": 72
+    },
+    "actual_native_queue_helpers": true,
+    "page0_unmapped": true,
+    "seams": [
+      "allocator6F7810",
+      "free6F7430",
+      "queue diagnostics/logs as phase6 harness"
+    ],
+    "scope": "first unbound callee stopped at entry, never a fake successful callback"
+  },
+  "rust_validation": {
+    "tests_passed": 3,
+    "failed": 0,
+    "ignored": 0,
+    "replayed_performer_rows": 972,
+    "replayed_noop_rows": 135,
+    "actual_original_source_actor": true,
+    "isolated_noop_component_probes_qualified": true,
+    "allocation_stays_in_place": true,
+    "published_pose_not_snapshot": true,
+    "actual_queued_paused_callback": true,
+    "profile": "release --locked --offline -j4 --config profile.release.lto=false --config profile.release.codegen-units=16",
+    "initial_fixture_order_failure": "preserved; fixed constructor timing before publication without changing production guard"
+  },
+  "source_precision": "No fresh authored numeric fields read by admitted paths; future source-dependent updates require completed Bank source PC distinct from simulation PC",
+  "independent_review": "not independently accepted at this freeze; native and author replay only",
+  "limits": [
+    "not full component Update coverage",
+    "not movement/combat/economy gameplay success",
+    "no client playability/multiplayer/save compatibility claim",
+    "not a full workspace or final EXE test",
+    "errors preserve earlier state/queue effects; enclosing failed world requires recovery, not retry"
+  ],
+  "all_owned_commands_reaped": true,
+  "pins": {
+    "crates/aa-runtime/src/live_scheduler_dispatch.rs": "22f2915c868a1ce505896c469139379b9d16996802aa720e5a54116fa95c8b22",
+    "crates/aa-runtime/tests/live_scheduler_dispatch.rs": "eb9eaf87257f006a2e0160ad845800eca99afd6c24bdc14d17bf3c47cfca9da2",
+    "research/skirmish-20261016-live-scheduler-dispatch/native_dispatch.py": "e9cab31c667fa766f508d8b01ad1c301b5b8d5e0438985e57f08f0aa11a5f4f2",
+    "research/skirmish-20261016-live-scheduler-dispatch/native-dispatch.json": "7f3f6556fcd45a46cf5f6c172e41a8c2c3130c3fd8e75b69c331747195cbf63c",
+    "research/skirmish-20261016-live-scheduler-dispatch/native-run.log": "421a2900f3955120e6061a50c84840572c6b21c6ed883ce104ccb79d69a5029c",
+    "research/skirmish-20261016-live-scheduler-dispatch/runtime-tests.log": "3afd2dd2b6f07cd0da5f5fdde4b72ec834571598200ba1623891c84d10083e51",
+    "research/skirmish-20261016-live-scheduler-dispatch/runtime-tests.before-fixture-order-fix.log": "2bc31aa591886e2467cbf7817a41fced5ca9f4b16ce363d8a7b24be75d09cc13",
+    "research/skirmish-20261016-live-scheduler-dispatch/README.txt": "d4cf9e6bcffd14f8400c1c37ab263f898797b2858913d8d5b7ed04ac823d0dc2"
+  }
+}

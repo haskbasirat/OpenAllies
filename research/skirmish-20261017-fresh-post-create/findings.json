@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "status": "bounded source integration compiled; natural current Staged execution acceptance pending root runner",
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/fresh_post_create_world.rs",
+      "sha256": "6c09230311785a9f7d18d88a73471093d025ab6520d7e37cef2562787b85d934"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_owner_add_actor.rs",
+      "sha256": "f26e85c1727bc77a6c662434265e172a4853e6ded157a3bc514f5ec8f5eccdee"
+    },
+    {
+      "path": "crates/aa-runtime/src/fresh_post_create_world_tests.rs",
+      "sha256": "08f1fe0ca5bd8cacdcd433ffd71e7c1c9d5525b5c031d7cf307d6260eb294919"
+    },
+    {
+      "path": "crates/aa-actors/src/world_publication.rs",
+      "sha256": "6855eb32bc342170fddc114ce7ec0003d7eef2f85f512cd8f6bd0b78b1de3e75"
+    },
+    {
+      "path": "crates/aa-economy/src/kingdom_registry_storage.rs",
+      "sha256": "7904b5ab402ba9b04125cc6ec1045f77c9f9f0974995271a2adcb5dd263f6326"
+    }
+  ],
+  "shared_fragments": [
+    {
+      "path": "crates/aa-runtime/src/map_actor_creation.rs",
+      "whole_file_sha256_at_freeze": "f6a335a700072ef1e0ee78e89e713b9008c350f060f909fe07a26c65eaf8a3c7",
+      "owned_fragment": "map_actor_creation-owned-fragment.rs",
+      "fragment_sha256": "5ae6efc1c432b21ffd6b36320addcf343a9c7db35a708cf43dd5ecbff5466a74",
+      "qualification": "Only this narrowly approved successor fragment belongs to this task; other shared file changes are not attributed here."
+    },
+    {
+      "path": "crates/aa-runtime/src/spatial_world.rs",
+      "whole_file_sha256_at_freeze": "c72ccad8b8c5865527d7d01e32259d2ff3bb0153bfde17a29d922d767f72add4",
+      "owned_fragment": "spatial_world-owned-fragment.rs",
+      "fragment_sha256": "a3dee9ecae57ae5d6bd8e6ce2073636bd7151d36c74f1be7c3925a64cf68d32c",
+      "qualification": "Only this narrowly approved successor fragment belongs to this task; other shared file changes are not attributed here."
+    },
+    {
+      "path": "crates/aa-spatial/src/index.rs",
+      "whole_file_sha256_at_freeze": "8ccd48920ea5f10a7443e6d10e9cb3d167a92d35b69906f9385ea0837020369f",
+      "owned_fragment": "index-owned-fragment.rs",
+      "fragment_sha256": "86e6054e53125fa4221af005ca6944ccfc7885d52febbf308d7ef28e75099ffb",
+      "qualification": "Only this narrowly approved successor fragment belongs to this task; other shared file changes are not attributed here."
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\native_fresh_post_create.py",
+      "sha256": "46954e0a88593adc3ac3624994f4fcc3dd533a15dcde8edfd82acc0177451546"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\native-fresh-post-create.json",
+      "sha256": "ff49eeba1d0ba7632fdf704810b7ce80dc62bbfaff91ae3770022967e086ecbd"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\borrowed-owner-immutable-replay.json",
+      "sha256": "147fae16c2b63611d93a38d7297876f6857c55fbd9d0c9b89c2cb486bbe179bf"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\exact-fresh-tests-final.exe",
+      "sha256": "27fdd3f8ae6cfdb9ddaceeccc7ee7aa09d4232dc7ca793a45894b5accb05baef"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\exact-host-pins-final.json",
+      "sha256": "9574edc41098c3bcd563d58aeae9172ce9489a08c7f17d3d0ca8cef97f1948dc"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\build_exact_fresh.py",
+      "sha256": "36cb94b90464630b7c8a29ec1e1f79dac543ab5bc49b5204f32214a708f7eb42"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\exact-tests-final.log",
+      "sha256": "4813b1b1fefa728ccb4330d2e0480b17bb8f931edc1038cb4ffd659e1a784b73"
+    },
+    {
+      "path": "research\\skirmish-20261017-fresh-post-create\\check-runtime-tests03.log",
+      "sha256": "639015c27acca9151e0536e6dd8c4d2b5dde6f0d93c4b72c4815ffbc7ef958a4"
+    }
+  ],
+  "native": {
+    "fresh_caller_rows": 384,
+    "original_v14_pairs": 192,
+    "all_precision": true,
+    "pins": 134,
+    "qualified_cutoffs": [
+      "4EB500 ground entry observed before execution",
+      "5644F0 City entry observed before execution"
+    ],
+    "component_vtable_entries": 26,
+    "borrowed_owner_replay": {
+      "cases": 216,
+      "constructors": 6,
+      "observed_pins": 494,
+      "author_fixture_unchanged": true
+    }
+  },
+  "rust": {
+    "exact_current_caller_kernel": "1/1 PASS0.01s, all384 rows; no Staged binding execution claim",
+    "current_runtime_and_tests": "cargo check -p aa-runtime --tests --release --locked --offline -j2 PASS1m25s; no Cargo link"
+  },
+  "implemented": [
+    "Actual fresh Params/nonzero pointer/full native flag to same world_publication caller",
+    "Current component slot rereads; Properties native source registry order into SAME staged_property_instances State",
+    "Current ActorE8 \u2192same stored Kingdom add_actor_stored; class list/vector/count/flags/supply/capital owners retain partial errors",
+    "Same published placement flag word via restricted bits27/28 OR API",
+    "Current stored Economy refresh, Organization value refresh and native Kingdom ownership list kernel reused",
+    "Current moved Bank/source PC and canonical proof/component mask validation; fresh Source::New required for public fresh entry"
+  ],
+  "required_positive_children": [
+    "4EB500 ground deformation/paint when flag low byte0 and actual MapResourceA8==0",
+    "564BE0/5644F0 City component and fresh city postpass",
+    "Positive Kingdom318 existing property application and TechnologyProperty4E3AD0",
+    "Positive statistics/flare/deployment-primary/destruction/Wall children explicitly named at reached callback"
+  ],
+  "limitations": [
+    "No loaded Record/LoadShell copy, duplicate KingdomRegistry/ActorStore/Bank/Property State, placeholder false/empty source or raw ready setter.",
+    "Read-only source/identity checks precede the admitted owned native domain; arbitrary external reentrant source mutation is not claimed.",
+    "Existing kernel effect seams prove caller/order only; actual properties/Economy integration relies on separately accepted same-owner modules and still awaits natural current mission acceptance.",
+    "No whole InitCreate/full actor/world/battle/visual/multiplayer completion claim."
+  ]
+}

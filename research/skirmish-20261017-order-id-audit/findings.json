@@ -1,0 +1,188 @@
+{
+  "schema": 1,
+  "scope": "Read-only independent cross-crate hardcoded OrderRegistry ordinal audit against Builder fullCRT358 published inventory. No production/source/fixture mutation, no native process, no build/test run.",
+  "authority": "research/skirmish-20261017-order-registry-correction/native-registry-audit.json",
+  "authority_sha256": "7d0ef97a4ea1a9a565016ecc25fe1c2fe27dff756910c71990268cd038989b76",
+  "inserted": {
+    "id": 323,
+    "name": "OrderVersionAckRequest",
+    "initializer": "0x9e65f0",
+    "descriptor": "0xb40af0",
+    "handler": "0x766cf0"
+  },
+  "verified_old_entries": 357,
+  "shifted_entries": 34,
+  "rule": "old0..322 unchanged; inserted323; old323..356 add1",
+  "findings": [
+    {
+      "file": "crates/aa-netcode/src/staging.rs",
+      "line": 42,
+      "observed": "pub const LAUNCH_COUNTDOWN_PROGRESS_REQUEST: usize = 325;",
+      "source_sha256": "53d05120df1aba664cb56c866b324ad334c379ed7db114bd44d2c90382c59074",
+      "issue": "P1 live countdown writes oldOrderID325; after insertion this names MidgameCreateAIs request instead of LaunchCountdownProgress.",
+      "action": "Use corrected326 or a generated exact descriptor constant after Builder promotion. Caller at206; native shape/fields remain same."
+    },
+    {
+      "file": "crates/aa-netcode/src/local_all_tasks_complete.rs",
+      "line": 241,
+      "observed": "323,",
+      "source_sha256": "7304e50bba267eeae1a42485f858739f9fa3d26bbba924a3bea41ce4c7efae48",
+      "issue": "P1 live UpdateKingdomName reentrant emission uses old323; new323 is actual OrderVersionAckRequest.",
+      "action": "Use corrected324 after Builder promotion; preserve actual current player/request stream and fields."
+    },
+    {
+      "file": "crates/aa-orders/src/payload/lobby.rs",
+      "line": 81,
+      "observed": "323 => p323,",
+      "source_sha256": "121c2a8e34fc08cd3d91cd946f1943430d1694b41c6269f78d4f847c8124cd2b",
+      "issue": "P1 schema switch old323..354 maps every later payload to the previous ordinal.",
+      "action": "Regenerate all shifted arms and source docs; implement new323 only from actual766CF0/751FC0 evidence. Existing lower IDs unchanged."
+    },
+    {
+      "file": "crates/aa-orders/src/payload/complex.rs",
+      "line": 19,
+      "observed": "355 | 356 => mg_command,",
+      "source_sha256": "da9ed476e714430ac00c7d4b2babdcd0fea8833397544afa1800d22a639d4e4e",
+      "issue": "P1 metagame command schemas old355/356 shift to356/357.",
+      "action": "Change only these selector ordinals after authoritative mapping; do not change MG command enum values inside the payload."
+    },
+    {
+      "file": "crates/aa-orders/src/payload/schemas.rs",
+      "line": 7,
+      "observed": "pub const SCHEMAS: usize = 357;",
+      "source_sha256": "45c53c2654f32999c824671516546de482271251b2836f18ded9d78a35e55f19",
+      "issue": "SCHEMAS357 is stale full native descriptor count.",
+      "action": "358; prefer authoritative registry length for consistency checks."
+    },
+    {
+      "file": "crates/aa-orders/src/native_registry.rs",
+      "line": 2,
+      "observed": "pub const DESCRIPTORS: [Descriptor; 357] = [",
+      "source_sha256": "a2550406d270d7dc404ca1a67d469a148295330170594278c798b992ba9a9694",
+      "issue": "Generated357 entries omit actual323 and shift34 later entries.",
+      "action": "Builder owns fullCRT corrected358 inventory; preserve duplicate names and handler order."
+    },
+    {
+      "file": "crates/aa-orders/src/flow_table.rs",
+      "line": 3,
+      "observed": "pub static SHAPES: [Shape; 357] = [",
+      "source_sha256": "d29f5263a4de56fee4955610a7e0fe5c3d20f24092232d43dfc6ec52811fb340",
+      "issue": "Generated357 Shape records carry old descriptor/decree ordinals.",
+      "action": "Builder must regenerate shifted descriptor and decree IDs from actual native registration; newAck direct tail thunk is not automatically a RequestDecree template."
+    },
+    {
+      "file": "crates/aa-orders/tests/reentrant_request_emission.rs",
+      "line": 39,
+      "observed": "emission.emit_request(true,323,&values,if self.malformed{4}else{*slot},&Context)?;",
+      "source_sha256": "195bd03c5bccd4d196f95be786100eb030f604796ff5d14fb95d36ca14c3364f",
+      "issue": "Test creates UpdateKingdomName request using old323.",
+      "action": "Update request and byte expectations at60/63 to324; maintain malformed/current-player/prefix assertions. Error text8..10 docs also stale."
+    },
+    {
+      "file": "crates/aa-orders/tests/gameplay_orders.rs",
+      "line": 24,
+      "observed": "assert_eq!(rows.len(), DESCRIPTORS.len());",
+      "source_sha256": "e4e29beba3b6664ec34a6b496afc0580c2e1d90806d1ce7bc11ad82d947ea2b9",
+      "issue": "Full registry test depends on old phase4 registry fixture357.",
+      "action": "Use newly executed full358 proof for registry. Existing movement47/66 payload/process fixture remains valid bounded scope."
+    },
+    {
+      "file": "crates/aa-orders/tests/order_traces.rs",
+      "line": 16,
+      "observed": "\"/../../research/phase8-orders/order-traces.json\"",
+      "source_sha256": "4ea46de677a6ad02a29caafe308e26b9216434edfa8b4ccae08e511c67efaa45",
+      "issue": "All-handler wire replay reads phase8 fixture with357 descriptor IDs and old emitted decree headers.",
+      "action": "Refresh new358 native environment or retain explicitly historical and add current authoritative358 replay; do not silently mass-edit old native bytes."
+    },
+    {
+      "file": "crates/aa-orders/tests/order_flow.rs",
+      "line": 130,
+      "observed": "let v = load(\"order-flow.json\");",
+      "source_sha256": "2afbb304b1c4e3717ba6991fc561c870bf799c6f45bcbe2ce4e1913214f38784",
+      "issue": "All-handler flow replay reads old357 fixture, including shifted emitted decree IDs and names.",
+      "action": "Refresh using actual corrected native CRT registration, not correctedRust table plus legacy registry(self)."
+    },
+    {
+      "file": "crates/aa-netcode/tests/staging.rs",
+      "line": 70,
+      "observed": "w.write_uint(descriptor as u32, aa_orders::registry_bits(357).unwrap()).unwrap();",
+      "source_sha256": "5df6ea5bf63eb3b14cc45ecb017a77824477269d17b8d777669a179d410ad30a",
+      "issue": "Expected registry_bits357 remains9, so this count alone will not catch missing registration. Countdown descriptor constant will change packet bytes.",
+      "action": "Use actual table length; refresh natural native countdown fixture header325\u2192326 from actual registration."
+    },
+    {
+      "file": "crates/aa-netcode/tests/lobby.rs",
+      "line": 552,
+      "observed": "w.write_uint(307, aa_orders::registry_bits(357).unwrap()).unwrap();",
+      "source_sha256": "39d6a10f9e4d4500002c66e5079330e48cfe5860d3d2dee455e1d4e683276363",
+      "issue": "Expected post-player-join307 uses registry_bits357, width unchanged.",
+      "action": "307 remains correct. Width still9 for358; update full-registry metadata if this test intends actual count, no blanket307 remap."
+    },
+    {
+      "file": "research/phase8-net/native_launch.py",
+      "line": 48,
+      "observed": "self.w(0xb40b2c + 4, 325); self.w(0xb40b2c + 8, self.string('TGC_LaunchCountdownProgressOrderRequest'))",
+      "source_sha256": "a8a7c58b4286013a467436cd0d8dcd533c29bd6be8e5f426a113b88779e35a11",
+      "issue": "Native producer overrides actual B40B2C+4 with old325, masking wrong native registry ID.",
+      "action": "Recapture from actual corrected registry or seed proved326 and clearly identify this source projection. Doc6 old325/329 changes326/330."
+    },
+    {
+      "file": "research/phase8-orders/native_order_traces.py",
+      "line": 32,
+      "observed": "assert len(DESCRIPTORS) == 357",
+      "source_sha256": "7c56e4480a07c5031dd8cf2d5e94817368e4956933622b82a4c9099f4d4981b4",
+      "issue": "Trace producer assert357 and imports legacy phase4 registry().",
+      "action": "Update both inventory and native initialization environment; sourceonly358 is insufficient if legacy callback filtering remains."
+    },
+    {
+      "file": "research/phase8-orders/gen_schemas.py",
+      "line": 15,
+      "observed": "COMPLEX = {22, 23, 51, 70, 64, 83, 91, 93, 94, 95, 321, 322, 84, 85, 86, 87, 117, 118, 122, 123, 177, 196, 293, 296, 355, 356}",
+      "source_sha256": "52afc65349b1b6be517c985f6fc0bc59fbae82624e72907b6c57f9db415314e2",
+      "issue": "COMPLEX includes shifted old355/356.",
+      "action": "Shift exact MG request/decree values to356/357 after updated native traces; generated lobby docs/ranges77 also stale."
+    },
+    {
+      "file": "research/phase4-orders/recover_orders.py",
+      "line": 79,
+      "observed": "assert n==357",
+      "source_sha256": "b148cb04cde42ae3cd0fc0b4e8571ce39abe8627a428e8f501a5d57947c2ec4a",
+      "issue": "Old recovery asserts357 and previously omitted9E65F0.",
+      "action": "Builder owns genuine fullCRT successor; preserve historical logs/manifests."
+    }
+  ],
+  "unchanged_registered_order_ids": {
+    "47": "KKC_TellActorMoveOrderRequest",
+    "66": "KKC_TellActorMoveOrderDecree",
+    "84": "KKC_TellSelectedCommandOrderRequest",
+    "85": "KKC_TellActorCommandOrderRequest",
+    "86": "KKC_TellSelectedCommandOrderDecree",
+    "87": "KKC_TellActorCommandOrderDecree",
+    "298": "TGC_SetPlayerOrderDecree",
+    "299": "KKC_SetSimSyncValueOrderRequest",
+    "302": "TGC_SetSyncValueOrderRequest",
+    "304": "TGC_UpdateTaskStatusOrderRequest",
+    "309": "TGC_PlayerLeaveOrderDecree",
+    "311": "KKC_SetSimSyncValueOrderDecree",
+    "314": "TGC_SetSyncValueOrderDecree",
+    "315": "TGC_UpdateTaskStatusOrderDecree",
+    "317": "TGC_PlayerJoinOrderDecree",
+    "320": "TGC_SetPlayerOrderRequest",
+    "321": "TGC_SetSessionRMCOrderRequest",
+    "322": "TGC_SetSessionRMCOrderDecree"
+  },
+  "distinctions": [
+    "304/315 in current Node task-status emission/dispatch are actual OrderRegistry IDs below insertion, so stay304/315. Their status payload0..4 and TaskHistory fields are separate domains.",
+    "UDP packet types/channel selectors, component enum values, source registry indexes, object field offsets0x143..165 and synthetic fixture registry counts are not OrderRegistry IDs and must not receive blanket shifts.",
+    "Descriptor width remains9 for357 and358; width-only tests do not prove complete registration.",
+    "Selected move/attack generic command84..87 and movement47/66 are unaffected by this insertion.",
+    "Several native descriptor names duplicate; audit matched(name,handler) rather than using first name occurrence.",
+    "No newAck payload/effect has been invented; handler766CF0 direct MOV ECX,[B36558];JMP751FC0 is a special route requiring its actual proof."
+  ],
+  "test_impact": "Run refreshed registry358 coverage + all aa-orders payload/traces/flow/reentrant suites and affected aa-netcode staging/launch suite after one coherent correction. Existing lower-ID proof remains bounded valid; avoid changing unrelated enum/status integers.",
+  "limitations": [
+    "No independent repeat of Builder fullCRT execution; authority hash verified and all old357 entries independently matched exact name+handler.",
+    "Line numbers/hash describe pre-promotion source snapshots; Builder owns corresponding updates.",
+    "No whole battle/frame/network compatibility claim."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "scope": "Paused fresh Object foundational storage/interface batch plus independent native constructor/caller contract. Runtime Object factory, Object Init service adapter and City Object caller remain unpublished; no complete creation/world/battle success claim.",
+  "checkpoint": {
+    "path": "foundation-checkpoint.json",
+    "sha256": "0bcc86018531acfd7338ce2dd41700bbde114b2809e8137ec1d1bddf53daf477"
+  },
+  "native": {
+    "producer": "native_fresh_object_contract.py",
+    "fixture": "native-fresh-object-contract-v2.json",
+    "sha256": "2edb555ab8c46e15dbcdcffdd60095d6f7fc5dfc8dcfb2c6cda582913114fac9",
+    "rows": 48,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "observed_instruction_pins": 1654,
+    "dispatch_words": 14,
+    "fresh_immutable_replay": "PASS",
+    "transports": "Exact existing phase8-conversion/native_fresh_creation.py declarations; allocator/CString, placement/index/terrain/visibility/ground/scene/FX/destruction and queue endpoints remain explicit. No runtime callback certification.",
+    "global_point_qualification": "B279C0/C4 are pinned PE-entry fixture words only, not a real live-startup capability or proof that indirect writers cannot exist."
+  },
+  "historical_attempt": {
+    "fixture": "native-fresh-object-contract.json",
+    "replay_log": "native-contract-replay.log",
+    "result": "Python tuple/list JSON comparison mismatch in input idmgr slots; native outputs unchanged. Producer and failed receipt retained. v2 canonicalizes JSON sequence types before comparison."
+  },
+  "current_guard_obligation": "Preserve original Params virtual0 provenance. GACD City-created Object uses actual ActorParams mode6/4C ground semantics; plain ObjectParams uses direct terrain sample. Do not infer Params type from created runtime class/B4.",
+  "production_writes": "Paused per Root Development10 package request. No writes after check03/foundation checkpoint."
+}

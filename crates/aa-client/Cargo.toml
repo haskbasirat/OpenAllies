@@ -1,0 +1,49 @@
+[package]
+name = "aa-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "AxisAlliesRust"
+path = "src/main.rs"
+
+[dependencies]
+aa-animation = { path = "../aa-animation" }
+aa-actors = { path = "../aa-actors" }
+aa-body = { path = "../aa-body" }
+aa-movement = { path = "../aa-movement" }
+aa-navigation = { path = "../aa-navigation" }
+aa-numeric = { path = "../aa-numeric" }
+aa-orders = { path = "../aa-orders" }
+aa-economy = { path = "../aa-economy" }
+aa-rules = { path = "../aa-rules" }
+aa-runtime = { path = "../aa-runtime" }
+aa-netcode = { path = "../aa-netcode" }
+aa-resources = { path = "../aa-resources" }
+aa-assets = { path = "../aa-assets" }
+aa-formats = { path = "../aa-formats" }
+aa-simulation = { path = "../aa-simulation" }
+aa-spatial = { path = "../aa-spatial" }
+aa-mapworld = { path = "../aa-mapworld" }
+aa-ui = { path = "../aa-ui" }
+aa-heightfield = { path = "../aa-heightfield" }
+rodio = { version = "0.22", default-features = false, features = ["playback", "mp3", "wav"] }
+eframe = { version = "=0.33.3", default-features = false, features = ["default_fonts", "wgpu"] }
+egui-wgpu = { version = "=0.33.3", default-features = false }
+wgpu = { version = "27", default-features = false, features = ["std", "dx12", "vulkan", "wgsl"] }
+glam = { version = "0.30", features = ["bytemuck"] }
+bytemuck = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tga", "dds"] }
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+pollster = "0.4"
+
+[build-dependencies]
+embed-resource = "3"

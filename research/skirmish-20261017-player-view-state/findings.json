@@ -1,0 +1,40 @@
+{
+  "status": "production and test-source checked; native replay passed; runtime execution pending parent cohort",
+  "native_rows": 60,
+  "native_executions": 120,
+  "executed_instruction_pins": 384,
+  "intercepted_address_pins": 5,
+  "scope": "successful native allocation/string/localization fixture domain; real runtime Localization resolver binding; one existing selection List owner",
+  "production_modules": [
+    "aa_runtime::player_view_state",
+    "aa_netcode::local_bootstrap VWorldState alias"
+  ],
+  "no_initialized_mission_or_playable_battle_claim": true,
+  "pins": {
+    "crates/aa-runtime/src/player_view_state.rs": "ad9f06e0a6bc3f5556b70a1649c0fd24652004b909116067d52420598168cb59",
+    "crates/aa-runtime/src/player_view_state_tests.rs": "3029156cf1b14c7fdec8561071c52ab3bf585598793f6e4a9475c1d75f465751",
+    "crates/aa-runtime/src/player_selection.rs": "b0fa1f14b6d915ca5d834410a0b49173ad516e27471ce8afb984d307707a8548",
+    "crates/aa-netcode/src/local_bootstrap.rs": "f58a226d9e77b986dc05e2df1f85b16c1f2e052b195853615c8a8ede0ead62fb",
+    "crates/aa-netcode/src/local_bootstrap_tests.rs": "db006e1857a44377d055fbc67765ba8ec0db2e34eedce33e5ff658649c908530",
+    "crates/aa-netcode/src/local_implicit_ai.rs": "265631ef2b469048093ce73d03ddfed6ca7a6212a01e1ba2ab6b46843c0a17c8",
+    "research/skirmish-20261017-player-view-state/native_player_view.py": "35b2516238ebdc42826d5b809dee2ac238bb0bed6030452afe50bb8086408b42",
+    "research/skirmish-20261017-player-view-state/native-player-view.json": "a26f1d1b9faff390a7e9506a945c77189bfd4069865ab615706d3e5b76711b15"
+  },
+  "required_positive_services": [
+    "CurrentGroup producer/group assignment",
+    "StaticGroup nonempty4E28D0 removal effects"
+  ],
+  "unchanged_required_guards": [
+    "PlayerFields.binding_complete",
+    "raw Player28 != complete765E10",
+    "VWorld+C unwritten"
+  ],
+  "reused_existing_map_camera": [
+    "aa_actors::world_load_tail::local_kingdom",
+    "aa_actors::world_load_tail::look_at",
+    "aa_runtime::load_tail_binding::after_post_load"
+  ],
+  "known_failed_checks": [
+    "test-source-check-01: unrelated mission_owner_sources external facade missing exports; runtime lib-test source check succeeded separately"
+  ]
+}

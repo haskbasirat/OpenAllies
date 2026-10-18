@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Fresh standard ActorData +2C0 source projection and unchanged null-context45D580 getter; not a generic ActorData loader",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "addresses": {
+    "constructor": "0x4624b0",
+    "constructor_ebx_zero": "0x4624e1",
+    "constructor_morale_zero_store": "0x46280c",
+    "component_lookup_fragment": "0x466822",
+    "absent_component_continuation": "0x466b17",
+    "resupply_rate_get_fixed": "0x46688b",
+    "morale_value_string": "0xa08384",
+    "morale_value_get_fixed": "0x46689d",
+    "morale_store": "0x4668a2",
+    "fragment_stop": "0x4668a8",
+    "getter": "0x45d580",
+    "float_to_fixed_rejection": "0x5b7d30",
+    "diagnostic_formatter_seam": "0x405d60"
+  },
+  "api": "aa_rules::native::actor_morale::actor_morale_contribution(&ActorCatalog, canonical_id: &str, Precision) -> native::Result<u32>",
+  "provenance_api": "aa_rules::native::actor_morale::actor_morale_source -> ActorMoraleContribution",
+  "native_oracle": {
+    "path": "native-morale.json",
+    "sha256": "514e1ca31f6ff1221fd57d481290ec8997e4c34fb2b15477f0a97b7c9dc7d806",
+    "rows": 48,
+    "cases": 16,
+    "precisions": ["Single24", "Double53", "Extended64"],
+    "generator_sha256": "71749587d7fede73ddb5f1455a41f1738620802e8655284a1a3127b3aada5f83"
+  },
+  "source_census": {
+    "path": "source-census.json",
+    "sha256": "c7bc490c241d7319a3f2c6c646d2484f22662e9678d1fa18f992fa4166ed2fb0",
+    "files": 1647,
+    "registered_things": 1959,
+    "standard_actors": 1028,
+    "element_components": 372,
+    "non_actor_kinds": 931,
+    "category_errors": 0,
+    "morale_errors": 0,
+    "existing_syntax_notices": 11
+  },
+  "rust_files": [
+    {"path": "crates/aa-rules/src/native_actor_morale.rs", "sha256": "848f4d4cba2aa49b6786ace2a25223c1fe0e08ada0aeb9d432ed84264670ec8d"},
+    {"path": "crates/aa-rules/tests/native_actor_morale.rs", "sha256": "a211ee76cb085d445651338fa6d3c1a91a4bf521bdfe9a282d1fb3cfb3b4b7c6"}
+  ],
+  "tests": {"passed": 4, "failed": 0, "ignored": 0, "log": "tests.log"},
+  "canonical_identity_policy": "Reject canonical IDs shadowed by Translate; regression covers A->B then B->C without second translation",
+  "caps_changed": [],
+  "remaining": ["Full ActorData and ElementComponent loader", "ActorData reload", "Non-null Properties modifier path", "Live Organization integration", "Exact formatted diagnostic text", "End-to-end gameplay parity"]
+}

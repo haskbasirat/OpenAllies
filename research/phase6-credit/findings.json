@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Native kill credit, statistics and experience amount",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_cases": 186,
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "focused_rust_tests": 3,
+  "entire_body_crate_tests": 13,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-body"
+      ],
+      "exit_code": 0,
+      "log": "tests.log",
+      "sha256": "143ee0ac83f2f76d769f726d8d02b1921c2934d8d40e8c07e86d58ff9abe2faa"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-body",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "943945add9488f46a6af47c633768bfc6bd9b56aca7e806a68f8a5121a127d6c"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-body/src/credit.rs": "da6e143de30ed0dafda92243e384aab8bacbbc65f228ab2054b8c6d007bde0bb",
+    "crates/aa-body/src/lib.rs": "2b1f80a95d899bc66404405b2cd4387b1369d3abe0d0bcb3c23e284d9d96fbf3",
+    "crates/aa-body/tests/native_credit.rs": "024c45076c7d66bc6f1fd01b6759523533d72875680fe676b242152e66c05f91",
+    "research/phase6-credit/README.txt": "cd516ccd6f3ec3695d1b2e20c6ee699db92af0521979a4e1efc163d74e8b775c",
+    "research/phase6-credit/inspect_native.py": "0e1e31c5f2f7bc9387075f28798e4a5be4eec0648781c25b540351ad893c62ab",
+    "research/phase6-credit/native-ranges.json": "a1250de23bb5d3640796fcd4398e05276feb11be625829294910d7ef582aae1d",
+    "research/phase6-credit/original_credit.py": "4201f8d0b864022921ad180312b224b9dbfd7920c6896a9e030bc2233a8ab593",
+    "research/phase6-credit/credit-native-oracle.json": "bfe02b8997a17460ff811a7505c696ae562509a50405e5ae7afb760843d89d0c",
+    "research/phase6-credit/record_findings.py": "77b8cee66696bc8374bbe082ca77361c45d3db81ae7723c773ab0975d7ec3b59",
+    "research/phase6-credit/00432e40.asm.txt": "b2be9f1d31a235c464893d0bccfd2c8ec42e948f1650983c506700e1f6a780e1",
+    "research/phase6-credit/0045eca0.asm.txt": "16d09b46dc6a0a2072d5dc34decccd1da080a333e3cd43e8fbe4de5780f1c29d",
+    "research/phase6-credit/004ce6c0.asm.txt": "feb3181bdceae9745d8b6e62d9040d5094ec6931a6bc66e2fa091f251db3f16c",
+    "research/phase6-credit/004d57c0.asm.txt": "7247e5ce797cf467eaa479efa415ffc6ef1d91f3189fbf0c749955124cd8211a",
+    "research/phase6-credit/00571820.asm.txt": "a23a6eae8a95fb31c8e52a7c0817550f6fb98f8199a1913271d3ea605a92b758",
+    "research/phase6-credit/00571960.asm.txt": "5e21c5ab2309558a70c11bedd248fa3c430ef8cbb721b63d25d08f7c843aff6e",
+    "research/phase6-credit/0058d950.asm.txt": "d975bd8775960c0223c1f41d31e7005a909401f220019c0669278ed7a872d6a1",
+    "research/phase6-credit/0058e870.asm.txt": "fbf413b6d22b719c362c2d6f547751fa43b733cef50c1b6500540b8435393b1a",
+    "research/phase6-credit/0058ea30.asm.txt": "b537962a5115fcfe0b0541fc534d2ac7eb93df2270248e9febd39fc6ab1d799e",
+    "research/phase6-credit/0058ea50.asm.txt": "c7b7d7f493df0d9fca212326ab6f03ddc9c5336cdd7617e6c1c28a9c51d37012",
+    "research/phase6-credit/0058ea80.asm.txt": "c185bb8beda882e6cd67e49171a917e63fdca2c961f1d5c63fa31edece4954d0",
+    "research/phase6-credit/0058eab0.asm.txt": "e7c8a1bc5b256255302b46a52da99d2534d67e289de62ee3d409a562d5e20df7",
+    "research/phase6-credit/0058eae0.asm.txt": "ccfdc4f41f81d4cb55cf09a546ef2ab1dc26234d04c7fee0c70c3fa79b091bd0",
+    "research/phase6-credit/0058edd0.asm.txt": "f95d16ddf5bf9a999e7b066891e0b04236aea5ca036a1c9804e9c3248b3e8c43",
+    "research/phase6-credit/0058ee00.asm.txt": "742bbfa263d078a6c505de43ffddf0ba14fda08c330435cc6bc9a6bbf5c1d2ef",
+    "research/phase6-credit/007ba3c0.asm.txt": "78a340c2fc015936e5d6fdb1657d48bff2ed9759a66f60d038fbf2d0f03a5021"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+  },
+  "limits": [
+    "Explicit actor registry/component views and world callbacks; not an integrated playable world.",
+    "Derived actor value and actual reward/promotion/ownership/campaign/death-trigger application remain required leaves.",
+    "Result errors preserve earlier credit/statistics; automatic retry is unsafe.",
+    "Native pointer/allocation/hash-layout/string and FPU exception lifecycle parity are not claimed.",
+    "Visited pins include hook-entry bytes, not instructions behind replaced leaves."
+  ],
+  "independent_review": "Separate independent-review.json; producer does not self-approve peer review."
+}

@@ -1,0 +1,44 @@
+{
+  "scope": "Lifecycle projection correction after actual successful native caught-Load cleanup; no completion-gate relaxation",
+  "trigger": {
+    "caught_native_skip_records": 20,
+    "binary_sha256": "1898dccf0c726d081155e83ad1cb6bc2265ce2b53111444098a991175e792a8a",
+    "stopped_before": null,
+    "worker_seconds": 88.43,
+    "actual23_completed_record_lifecycles": 2366,
+    "decoded_dynamic_placements": 2377,
+    "error": "Load did not complete; immediate lifecycle not reached: Map Load Canceled: Actor owner 0x0000068d is not currently registered (native4D8DAA load error)",
+    "objectives_completed": true,
+    "last_dynamic_ordinal": 2376
+  },
+  "change": "Move failed Load lifecycle projection after native catch branch. Successful exact classified catch/destruction leaves authoritative SkipLedger and no attempted/completed tail. Ownership/catch cleanup errors remain failed; real callbacks gate unchanged.",
+  "native": {
+    "fixture": "../skirmish-20261017-actor-owner-cancel/native-owner-cancel.json",
+    "immutable_replay": "PASS",
+    "scope": "Previously proved owner slice/RTTI/catch body, CString+destruction named leaf seams; no full native SEH/destructor execution claim",
+    "executed_pins": 38,
+    "rows": 60
+  },
+  "rust": {
+    "additional_assertions": [
+      "24 successful classified catch cases retain skip and emit no tail event",
+      "30 unrelated incomplete-tail cases remain failed",
+      "24 nested cleanup refusals preserve registered allocation, prior skip and explicit failed event"
+    ],
+    "first_log": "owner-cancel-tests01.log filter selected0 tests and is not acceptance evidence",
+    "full_mapworld_library": "15/15 PASS0.01s",
+    "focused": "2/2 PASS0.02s"
+  },
+  "next": "Actual24 build/run records separate whole startup validation",
+  "pins": [
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "sha256": "37ee690c8f3f70f3f72d1ad374d6caa7d871db385448c0f965deaaa6d7003d2e"
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore_owner_cancel_tests.rs",
+      "sha256": "ae43338453a2310530a0a55d0720711f74bbd89756573e9476b991de764599f4"
+    }
+  ],
+  "profile": "release lto=false codegen-units16 --locked --offline -j4"
+}

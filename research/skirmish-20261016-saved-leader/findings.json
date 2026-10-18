@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "scope": "Saved579A00 borrowed actual Organization/Element/Thing/canonical LayoutFormation/RNG adapter",
+  "production_frozen": true,
+  "native_cases": 78,
+  "unmodified_saved_cases": 36,
+  "explicit_storage_probe_cases": 42,
+  "outcomes": {
+    "ok": 72,
+    "missing_element": 6
+  },
+  "portable_identity_source_checks": 12,
+  "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+  ],
+  "images": [
+    "original",
+    "v14"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "proven": [
+    "leader and per-axis offset stores preserve partial failures in actual saved allocation",
+    "canonical current layout/formation fields and original native XY facing/position",
+    "full generation identity and required Element header owner checks",
+    "same actual LoadContext RNG stream using85D840 native arithmetic",
+    "actual native-message sink fields and explicit Mind+114 boundary"
+  ],
+  "not_proven": [
+    "concrete Mind+114 execution",
+    "immediate saved Actor Init/PostCreate/publication",
+    "native malformed-pointer exception parity",
+    "arbitrary reentry in saved adapter",
+    "nonfinite arithmetic",
+    "every CRT formatted diagnostic string",
+    "playable battle"
+  ],
+  "files": {
+    "crates/aa-runtime/src/saved_organization_leader.rs": "89a1175181c9a2a413b4066920fa74323db0536b861a724071c40bc9bc33b008",
+    "crates/aa-runtime/src/saved_organization_leader_tests.rs": "734aeaf59e46fde8b6e43ef123584a318d85888266949ebc09bce97a14a6025b",
+    "research/skirmish-20261016-saved-leader/native_saved_leader.py": "4471cb07031577cee58768561edc97ae2666a2dc8aaee90dea185faff2f0129f",
+    "research/skirmish-20261016-saved-leader/actual-saved-inputs.json": "145acdd4978192eeef07de9400524bea7f929c2e68e41149143ea1925ebd8d08",
+    "research/skirmish-20261016-saved-leader/native-saved-leader.json": "ea80dd25802518fbe2cda2fc63f1a4da534842569cf7a588acfcad21b4c2f1b1",
+    "research/skirmish-20261016-saved-leader/README.txt": "e29e38a61888afe561b7516631ce4cb62468db820d6780eab898332995db2610",
+    "research/skirmish-20261016-saved-leader/pin_findings.py": "800db4ddb71e14b7ceef81b88c9880ce15b15535a8699f1f25d7d4c59df38999"
+  }
+}

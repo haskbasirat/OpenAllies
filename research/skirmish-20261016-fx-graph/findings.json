@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "status": "bounded_created_fx_graph_and_constructor_author_accepted",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_paired_rows": 264,
+  "native_executions": 528,
+  "unique_executed_instruction_pins": 1414,
+  "rust_tests_passed": 2,
+  "actual_source_census_tests_passed": 1,
+  "actual_created_source_definitions": 582,
+  "completed_create_vfx_graphs": 312,
+  "tutorial02_created_instances": 54,
+  "tutorial02_created_unique_graphs": 8,
+  "tutorial02_source_compilation_errors": 0,
+  "scope": [
+    "Created list only:42BF10/42B990,42AEF0,42C1B0,42C5E0",
+    "4296B0/428F40/428480/624100(NULL) event construction; no effect execution",
+    "486650/486870/486980/93D4E0/47B400 Bone ordinal source producer",
+    "497A40/497E20/42BF70 enum-registering callers"
+  ],
+  "native_seams": [
+    "typed source getters, enums, current registry answers, allocation and string transport",
+    "command fixture current Thing virtuals, Win32 thread IDs and selected clocks",
+    "Bone unique-ID null Find, hash/string factory and unused reserve-element lifecycle",
+    "enum insertion transport; caller registrations run unchanged"
+  ],
+  "boundaries": [
+    "Full source census still requires162 PLAY_SFX,63 EQUIPMENT,45 CREATE_RFX loaders.",
+    "Only Created lists share the correct initially empty first-VFX reference context; other lists refuse.",
+    "Non-finite getter/point inputs remain explicit unproved domains.",
+    "Positive predefined ActorState ordinal source is required; no guessed ordinal.",
+    "Native source context completion and runtime queue submission are distinct from compiled graph ownership.",
+    "Live captured App/current OS thread identities and selected View/World clock must be supplied; no role or PC inference.",
+    "No renderer/audio execution, complete battle/multiplayer, allocator failure or reentrancy claim. Original/release files untouched."
+  ],
+  "files": {
+    "crates/aa-runtime/src/fx_graph.rs": "1aa3ee6c385dedae7f0ea9b8da1096971f0d4a7c14c36c3760a79d24b1c6cf2a",
+    "crates/aa-runtime/src/fx_graph_tests.rs": "3590540c133a26635441910923d41605dd9fcf4a67f11528858d2f8d58d348a0",
+    "research/skirmish-20261016-fx-graph/README.md": "1eea5e3f0c58c5736b28069a10d1bde8c9d6bf7d71a2124aa90557d36ec8c411",
+    "research/skirmish-20261016-fx-graph/actual-source-inputs.json": "a18915ca66b28d5d9478b25ee64ed1a2ec4787322957e4c6c778d56974c30996",
+    "research/skirmish-20261016-fx-graph/author-core-replay-final.log": "24f2c235538396151f572e8499c2ac78de9651f9367d100478b325af6830d450",
+    "research/skirmish-20261016-fx-graph/author-native-replay.json": "663705743c3b2439d007ec0d0544f52f22f00fafe3a65819a9994b7de6fe209e",
+    "research/skirmish-20261016-fx-graph/author-source-capture-02.log": "89abca1ffa8ce2aeb5f299cc84089a7b6f100543b997d82121b8c4a303cdd639",
+    "research/skirmish-20261016-fx-graph/native-bone-ordinal.json": "d39155e77bbfe7271817b9438c50934f0dbb529efdb11ae29a0fa0ebad85c7ab",
+    "research/skirmish-20261016-fx-graph/native-fx-command.json": "17e97eff81af5f31f8ab1a30ff8bbb107bfb66e690bcc7825459d4bee467eb76",
+    "research/skirmish-20261016-fx-graph/native-fx-enums.json": "b37bd2243de708ed47b81a715734c085c464b13928e1247078b3f05da8e4e158",
+    "research/skirmish-20261016-fx-graph/native-fx-graph.json": "be551770aea4f47d2c3b8850340aa2890da2718f988a37d469444158bbc04d95",
+    "research/skirmish-20261016-fx-graph/native_bone_ordinal.py": "766a44b0abc1a880d70ff55a3975e1194aae5704be4ee57b6cd49fd6791c522e",
+    "research/skirmish-20261016-fx-graph/native_fx_command.py": "07b018218f1e74746c2a73f5c667a47d4d3399d77f39f59271d668c963cc4e13",
+    "research/skirmish-20261016-fx-graph/native_fx_enums.py": "751434103466f539487c415e8ce89788cf31ef03e19cb421f206dadafd1b0346",
+    "research/skirmish-20261016-fx-graph/native_fx_graph.py": "28679809e4e459f6206a04ec942706c8a79ccf39d95b02a41d9ec7b700822985",
+    "research/skirmish-20261016-fx-graph/replay_native.py": "c4329fc601f74aa27af64aca536cd1a230b20b8adfdb79c546518c8510dbf17b"
+  }
+}

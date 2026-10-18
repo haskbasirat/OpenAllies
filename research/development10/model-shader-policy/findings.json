@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "status": "modern-backend-policy-actual-GPU-validated",
+  "native": {
+    "predicate_rows": 648,
+    "constructor_field_rows": 18,
+    "executed_pins": 81,
+    "constructor_intercepts": [
+      "8A5130",
+      "8A68E0"
+    ],
+    "immutable_replay": "PASS"
+  },
+  "tests": {
+    "ui113_required_actual_and_native": "5/5 PASS, before peerDevMode62 extension",
+    "current_client_test_typecheck": "PASS29.42s",
+    "exact_kernel": "2/2 PASS",
+    "headless_actual_gpu": "1/1 PASS0.75s NVIDIA GeForce RTX3080/Vulkan",
+    "same_client_camera": "3/3 PASS",
+    "same_client_model_kernel": "2/2 PASS",
+    "same_client_epoch": "1/1 PASS",
+    "same_client_radius": "1/1 PASS"
+  },
+  "binary": {
+    "path": "target/s-client-dev09/release/deps/AxisAlliesRust-3866aa63f92283e1.exe",
+    "sha256": "25b53d84eccf5653fcd0160285f269c6fb33fc20292ff5ce71c84473675a46f2"
+  },
+  "scope": [
+    "actual per-model-boundary UI/backend query",
+    "sealed same renderer allocation and pipeline epoch",
+    "canonical current UVar113",
+    "explicit approved DX12/Vulkan compatibility and absent bone-skinning pair mapping"
+  ],
+  "corrections": [
+    "B36510+275 is problematic driver flag, not editor/GameApp",
+    "push0x32 before40F7B0 is AVar50 RendererHBPPSuffix, not ASCII2"
+  ],
+  "exclusions": [
+    "no native D3D9 shader initialization/parity",
+    "no positive hardware bone-skinning path",
+    "no native Model loader completion or source radius64 readiness",
+    "no full VObject/Actor Init or Thing+C publication",
+    "no AD,74FF50,activation or playablebattle claim"
+  ],
+  "observed_files": [
+    {
+      "path": "crates/aa-client/src/view_model_policy.rs",
+      "sha256": "9f9915d8f81afa03a8d47ae19be97125613da0a837ce6f7555e329d0a550c618"
+    },
+    {
+      "path": "crates/aa-client/src/view_model_policy_kernel.rs",
+      "sha256": "cf49cec440ce0d31618724de044863d9ab364b6744a0285ea39bf374fe347c3f"
+    },
+    {
+      "path": "crates/aa-client/src/view_model_policy_gpu_tests.rs",
+      "sha256": "98e0525ca88dc98c4ea9bc78f5af2aae16d959f6b3b5297c0a6ea37541583db1"
+    },
+    {
+      "path": "crates/aa-client/src/gpu.rs",
+      "sha256": "157f4b0be888ac42b24a357162bb199a3445cda89b2d1409e1d628d7e92f332f"
+    },
+    {
+      "path": "crates/aa-client/src/live_scene.rs",
+      "sha256": "6ce57fa9e8940b354d3d054d2a78d701b2f333dbafd6cfe384c296937241e9c1"
+    },
+    {
+      "path": "crates/aa-ui/src/view_variables.rs",
+      "sha256": "fc109672e8ee567835c84232206b952bec0be046a20abca839dde4120e4bd69c"
+    },
+    {
+      "path": "crates/aa-ui/src/uvars.rs",
+      "sha256": "f38fc0319176160759088fdb6a8414a9439b76e339e133fdeb5f53b52d91fcf8"
+    },
+    {
+      "path": "crates/aa-ui/src/view_variables_tests.rs",
+      "sha256": "7fd85b20fd65e20987a9088e89b971388ed12f8337d5393edf3842b037ee6fba"
+    },
+    {
+      "path": "research/development10/model-shader-policy/native_model_policy.py",
+      "sha256": "f4532968dd1d35b27c7d98a0f016f882c9df66c13e32f21a2680fdcf704426e0"
+    },
+    {
+      "path": "research/development10/model-shader-policy/native-model-policy.json",
+      "sha256": "0cfb8abaa46d3701e4aff1b1afdbea5148c1077caa80dd4d468365dc29f2d37e"
+    },
+    {
+      "path": "research/development10/model-shader-policy/producer-leads.json",
+      "sha256": "7e7e320516ce97cc09d2f15a4ff764d03153a19b93bfd09d4781332d338d8dbf"
+    },
+    {
+      "path": "research/development10/model-shader-policy/ui113-tests01.log",
+      "sha256": "6a368d620dad204bc92a2716a2e9db5f35953943fad584f76294dd0a3b034af7"
+    },
+    {
+      "path": "research/development10/model-shader-policy/client-check01.log",
+      "sha256": "2f5a35e6fe91af35145e46ba7affd481d114368c0bf18c46a4c1f696f690b05e"
+    },
+    {
+      "path": "research/development10/model-shader-policy/kernel-tests01.log",
+      "sha256": "dab79d29e17c433122ee0328494160ba735da715aa4e96d6e9b5a26050a07ed9"
+    },
+    {
+      "path": "research/development10/model-shader-policy/native-replay01.log",
+      "sha256": "17a57e9e0e5ed6810b4583bfd4ab5b6fde177ba12a4ac8db51007251df8269b3"
+    },
+    {
+      "path": "research/development10/model-shader-policy/gpu-tests01.log",
+      "sha256": "11d66470b1abf17c9d4fef2cd426e4d3f25cf68ec8d65c63f76631106a8a7bf2"
+    },
+    {
+      "path": "research/development10/model-shader-policy/client-camera-tests01.log",
+      "sha256": "27d8cbeb2c1f2542edd2a43e31af5882ff45566ba91e82201889d3902ecf481e"
+    },
+    {
+      "path": "research/development10/model-shader-policy/client-kernel-tests01.log",
+      "sha256": "337bd65d6aa33a5f5862ed5a4b5c10fea30332ea251142c3919ae028a8986ca8"
+    },
+    {
+      "path": "research/development10/model-shader-policy/client-epoch-tests01.log",
+      "sha256": "578387dd989bbc8e761191794256f35a3027407e8bbf1b6364704525503bbb44"
+    },
+    {
+      "path": "research/development10/model-shader-policy/client-radius-tests01.log",
+      "sha256": "cd2c97d207639ba726701476495b2e00173b4272386a9a18be6c89657c88824e"
+    },
+    {
+      "path": "research/development10/model-shader-policy/README.md",
+      "sha256": "f0f19575e32350031488223a00f595833229204c427cdb55d3655ead4855d952"
+    }
+  ]
+}

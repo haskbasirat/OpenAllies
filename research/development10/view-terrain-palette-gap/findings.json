@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T17:12:16.643164+00:00",
+  "status": "continuation gap diagnosed; frozen candidate unchanged",
+  "passed": true,
+  "scope": "Read-only source/existing-proof diagnosis and exact raw-map source projection only. No source/release edit, build, native/GUI process, fix acceptance, GPU receipt or playable-battle acceptance.",
+  "observed": {
+    "candidate": "HF02 GUI candidate3",
+    "map": "DeveloperMaps/(3v3)Firefight",
+    "screenshot": "qa-output/development10/hotfix02-gui03/firefight/after-125s.png",
+    "message": "Native view initialization stopped: terrain palette identity varies within one loaded palette slot",
+    "guard": "crates/aa-client/src/view_terrain_backend.rs:69; Prepared::from_world stores resolved[id] by serialized palette id and requires every tile using that id to have the same actual VariationDefinition.id."
+  },
+  "diagnosis": {
+    "conclusion": "The rendering adapter conflates a serialized palette reference with the effective native per-tile Variation owner. That invariant is invalid when the source palette alias resolves NULL and native loading carries the preceding successful Variation. The existing guard correctly refuses the lossy representation; deleting the guard or picking one identity would corrupt material selection.",
+    "native_order": [
+      "557AD0/557960 reads source-ordered palette entries and resolves Variation through native48D500, including one-hop translation semantics.",
+      "Initial carried Variation comes from actual loaded Biome+78 Terrain+30. It is not an arbitrary global biome fallback.",
+      "557D43..557D4B indexes the serialized palette by the saved tile slot and tests its resolved pointer.",
+      "NULL branch557E33 reloads previous Variation from the loader local;557E3C stores the chosen pointer as previous for the next source-order tile.",
+      "552C50 and54EE20 then use that effective Variation for the tile. Distinct tiles sharing one missing saved slot can therefore retain different real Variation owners."
+    ],
+    "retained_owner": "aa-mapworld::TerrainCell.resolved_palette_index plus BoundTerrain.initial_variation preserve the loader choice. aa-runtime::BattleTerrain.effective_variations retains canonical source Variation indices per tile; variation_definition_at(x,y) returns that SAME retained source definition. The current backend already calls it, but then collapses its results back to a single serialized id."
+  },
+  "source_only_firefight_witness": {
+    "qualification": "Derived read-only from exact raw map bytes and the already frozen original/Double53 native-source-find query outputs, applying the current retained loader carry order. This is not a newly captured live World snapshot or a new native execution. The existing all-PC native lookup and tile carry fixtures support the operations separately.",
+    "map_sha256": "c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b",
+    "terrain_sha256": "084b1f164ec36d6fd6b14c2a4679de623defcfe09ddca68fedf9f572eddc8981",
+    "version": 6,
+    "biome": "tropical_forest",
+    "initial_variation": "tropical_grass01",
+    "grid": [
+      128,
+      128
+    ],
+    "tile_count": 16384,
+    "palette_count": 245,
+    "missing_alias_tile_count": 6271,
+    "first_collision": {
+      "serialized_slot": 165,
+      "serialized_id": "tropical_waterfordable01",
+      "native_lookup_result": null,
+      "earlier": {
+        "ordinal": 15,
+        "xy": [
+          15,
+          0
+        ],
+        "effective_canonical_id": "tropical_grass01",
+        "resolved_palette_index": 116
+      },
+      "later": {
+        "ordinal": 44,
+        "xy": [
+          44,
+          0
+        ],
+        "effective_canonical_id": "tropical_jungle01",
+        "resolved_palette_index": 136
+      }
+    },
+    "other_varying_serialized_slots": [
+      153,
+      154
+    ]
+  },
+  "available_proof": {
+    "lookup": "research/skirmish-20261016-battle-terrain/native-source-find.json:3702 original/v14 all-PC actual registry lookups; native_source_find.py executes48D500/4154D0/4915F0 over410 canonical Variation registrations and authored translations, including chained misses.",
+    "tile_carry": "research/phase6-spatial/native-terrain.json and native_terrain.py: original557AD0..557F0B loader with explicit stream/allocation/string/reference/biome transports;8 fallback sequences preserve carried pointer identity. Native region/aux suffix and whole World publication excluded.",
+    "review": "Existing independent-review-terrain.json records bounded loader/carry review and both-image range equality. This task did not rerun any native producer."
+  },
+  "next_steps": [
+    "After the frozen delivery, capture per-tile actual effective Variation identity and its source provenance from the SAME retained World, keeping the original serialized slot for diagnostics. Confirm the reported Firefight collision against that live owner.",
+    "Change only the rendering input representation so different effective native Variation allocations can occupy distinct rendering entries even when their serialized slot is equal. A deterministic render-only directory may key the actual canonical source allocation, while leaving simulation cells, aliases, RNG and serialized palette unchanged. Do not assign one arbitrarily chosen asset per saved slot.",
+    "For every used effective identity, preserve require_current_materials canonical VariationData/source path/SHA guards and use its authored rendering material. Continue the existing canonical-alias representative/priority rules and native transition planner on the effective per-tile identities.",
+    "Add a focused regression for repeated missing saved slot after two different valid predecessor slots, including initial-biome carry and true canonical aliases. Then rerun exact candidate GUI and terrain upload validation; this finding provides no fix acceptance."
+  ],
+  "limits": [
+    "The error alone does not identify the actual failing tile. The tile15/tile44 pair is a source-only witness, not an observed live error payload.",
+    "No native723E00 compositor/GPU ABI parity, cache-target quantization, borders, clouds, water or final lighting completion is claimed.",
+    "Later material-source/mask/upload/native-view children may remain blocked after this representation gap is fixed.",
+    "Berlin Aspect preparation is a separate diagnosis and is not addressed here."
+  ],
+  "evidence_files": [
+    {
+      "path": "crates/aa-client/src/view_terrain_backend.rs",
+      "bytes": 14118,
+      "sha256": "ba49c6bf6e76e72533bdaeabcdb5bb63bc9bffb1149152a3f181735df71cc03e"
+    },
+    {
+      "path": "crates/aa-client/src/terrain_render.rs",
+      "bytes": 22968,
+      "sha256": "b3b3b27dd22fff32853f359165aef3bee45f6ea2cee2e4e3e3c71e98abd8dba1"
+    },
+    {
+      "path": "crates/aa-runtime/src/battle_terrain.rs",
+      "bytes": 23813,
+      "sha256": "4e3bc5dc769e626266200e370f1a97ac1c2749837fdf7e1bc63b2a8f736acfa9"
+    },
+    {
+      "path": "crates/aa-mapworld/src/terrain.rs",
+      "bytes": 14570,
+      "sha256": "2ff3ac89b34409d0da5e66efda789779dc09aecc263a385771a7681daddbc868"
+    },
+    {
+      "path": "research/skirmish-20261016-battle-terrain/native-source-find.json",
+      "bytes": 564222,
+      "sha256": "3dda0409a61673c1784b75941d099d996e849c6a08cd8e00e8795cc5ac868f34"
+    },
+    {
+      "path": "research/skirmish-20261016-battle-terrain/native_source_find.py",
+      "bytes": 3687,
+      "sha256": "2239f267a37e51dc86a16cdabb9d87efeb24ff57a294beeb35d931d24dfbb92a"
+    },
+    {
+      "path": "research/skirmish-20261016-battle-terrain/actual-map-inputs.json",
+      "bytes": 6237061,
+      "sha256": "f79ad353a279da5ef3abc7394d0018d5497d61ed70b7e45806ede72939c70732"
+    },
+    {
+      "path": "research/phase6-spatial/native-terrain.json",
+      "bytes": 290559,
+      "sha256": "8b357e76722b15bf0ef11d84061fde984452bcc55a627cab6722625b757a780e"
+    },
+    {
+      "path": "research/phase6-spatial/native_terrain.py",
+      "bytes": 10258,
+      "sha256": "2fe5a4c8d60c13d8db67913f8a507c8f3b2276d249104a2017bafd44f1724d47"
+    },
+    {
+      "path": "research/phase6-spatial/independent-terrain-output/loader_through_tile_input.txt",
+      "bytes": 18916,
+      "sha256": "64240be112f7668200c88756e3319a8c47cce464a9ebe0353ddeea8de15610ff"
+    },
+    {
+      "path": "research/phase6-spatial/independent-review-terrain.json",
+      "bytes": 7473,
+      "sha256": "c6a9eff0b482c67781c6c15b3c8f42475edb1418c022cd14c34b60dae4dc050e"
+    },
+    {
+      "path": "research/phase6-terrain/terrain-render-metadata.json",
+      "bytes": 286501,
+      "sha256": "3f9b7a71c1073fb6a37d211fd0e6d15dd634c2f3a2a2b4143338ca091ce73a62"
+    },
+    {
+      "path": "qa-output/development10/hotfix02-gui03/firefight/after-125s.png",
+      "bytes": 1049510,
+      "sha256": "2e0e79d25d1f81038dc035cb39d754bbfa9ec0119f36d09e2ca7b74faa196c0a"
+    }
+  ]
+}

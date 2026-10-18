@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "status": "frozen,222 direct native rows and2 focused Rust tests passed",
+  "entry": "OrganizationWorld::member_flag_4d1080 forwarding to private restored_member_flag_4d1080",
+  "native": "Actor+104 &4 !=0",
+  "production_files_changed": [
+    "crates/aa-mapworld/src/organization_restore.rs"
+  ],
+  "native_cases": 222,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "range": {
+    "4D1080": {
+      "start": "0x4D1080",
+      "end": "0x4D1098",
+      "sha256": "636d375743f3e03f7c23c80c4ec47e3e0e5b54c7d930023dca4ac6a47de00ad1"
+    }
+  },
+  "owner_context": "actual active owner Actor shell outside registry",
+  "member_context": "full-generation checked registry Actor record and existing Actor shell",
+  "failure_cases": [
+    "null/missing",
+    "stale generation",
+    "removed entry",
+    "Loading",
+    "non-Actor record",
+    "missing Actor shell"
+  ],
+  "unchanged_next_boundary": "4D64F0 owner state change during restore remains unported",
+  "actual_saved_runtime_continuation": "owned by root; not claimed in these focused tests",
+  "files": {
+    "crates/aa-mapworld/src/organization_restore.rs": "bb28f252a507f17f768ed23e9b0859c09ca835417d3203f7b0ee8abb51a16215",
+    "crates/aa-actors/src/registry.rs": "1f1145230834b47a301dff9cfd9899e7b725ba94196d37739eb95427b07da70c",
+    "research/phase8-combat/native_morale.py": "a41c40ecf831907d16832e849fc889fd0278461c69d3d69afe602a3f6c22785b",
+    "research/phase8-combat/native-morale-fixtures.json": "23128e2e09fa7611fc74309d6a98c3b9342dc69ea0252851cdfd729a84488119",
+    "research/phase8-combat/asm/004d1080.asm.txt": "5394eca37177a6f1cadc10afb2f91e5c42cc01a8d38d7270f2f3b96c7ef77b80",
+    "research/skirmish-20261016-member-state-bit/backups/organization_restore.rs": "1f5c4b3ab7d11697759e04ff7ebf1a5d2cbf73fb38981eec1a68d04773cdcefe",
+    "research/skirmish-20261016-member-state-bit/native-member-state-bit.json": "78d4322f4cd067993ad6fdbaa4cbbaa643dd7a35db19d80626598e3aae1c3abc",
+    "research/skirmish-20261016-member-state-bit/native-replay.log": "f81da27f9fc6799bf5ef48edf1758401bc74c29449601f0f9a0ae01bccd602d6",
+    "research/skirmish-20261016-member-state-bit/native.log": "f81da27f9fc6799bf5ef48edf1758401bc74c29449601f0f9a0ae01bccd602d6",
+    "research/skirmish-20261016-member-state-bit/native_member_state_bit.py": "1255288eaefb12bad5f4b32c939bf2d1fd5f32b756bf28bba3c899c355aff67f",
+    "research/skirmish-20261016-member-state-bit/README.txt": "8b4cc00cad966ddfccaebac7d16e1258d59741179b6f60058981fb37c8a518a0",
+    "research/skirmish-20261016-member-state-bit/tests.log": "6d377167e1099af1705ae67dc01bb4a9e4680633dfc842a6e2dc4db59ed7726e"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "scope": "5705E0/57C800/57C680 Element/Organization position notification with native578E90/578E10/4515F0 predicates and57C080 interpolation",
+  "native_executions": 188,
+  "rust_tests_passed": 4,
+  "strict_clippy": "passed",
+  "behavior": [
+    "World mode6 suppresses organization notification; only the exact selected member+40 may update it.",
+    "Both actor runtime flag30 bits bypass Mind predicates and cause immediate owner relocation after the goal write.",
+    "Mind64/7C predicates reread owner/Mind after callbacks. Goal coordinates and selected-member comparison are reread, but the original notified member is retained for relocation.",
+    "Only a previously reached organization goal starts interpolation. Failed interpolation preserves the new goal, queries queued event0/data1 and schedules command1 only if absent.",
+    "Float equality preserves signedzero equality and unordered NaN behavior. All state resides in existing typed ground component payloads.",
+    "57C080 now implements actual positive-step interpolation math and repeated candidate probing, preserving nonpopping delta/square x87 stores, minimum speed, epsilon shortcut, native Manhattan member test51D510, goal rereads and final relocation ordering.",
+    "Query preparation adds native0x400 to both masks; probe results remain supplied by the actual553BA0 service. No fixed probe count limit or clear-collision fallback is introduced."
+  ],
+  "boundaries": [
+    "553BA0 traversal and query preparation552DD0/5531F0 remain required runtime services; current aa-spatial cell probes are not falsely substituted for this different query.",
+    "Ground relocation requires4EEB40 and full position callbacks, through aa-spatial SpatialIndex.",
+    "Actual Mind virtual predicates, typed selected-member reference and queue lookup/schedule must be supplied by live runtime. No default clear-collision or accepted movement result exists.",
+    "Interpolation numeric domain is finite and requires positive step once beyond the direct-arrival shortcut. Nonpositive step explicitly errors rather than inventing motion or silently looping; near-zero squared-distance underflow is also outside aa-numeric division domain."
+  ],
+  "pins": {
+    "crates/aa-actors/src/element_position.rs": "5c0039e6c74d74efc0cb1c476af2a8c6b84e96e5e88ad272e2d4a9cb0ed7cdcc",
+    "crates/aa-actors/tests/element_position_native.rs": "79d6c71736b7c03211bc6b37c378b5e7484a47d40b8a33b98201c7bd07740fd7",
+    "research/phase7-element-position/native_position.py": "78e9f4e1e8baff88d473201107a856377e373791ccb54f70c85305396dd7dd85",
+    "research/phase7-element-position/native-position.json": "79082398d216f343e7c78ec22e1169dff2deebef6d47dcd3798642e68ba719a5",
+    "crates/aa-actors/src/organization_interpolation.rs": "1346f3e96c66ced70114bbbbed1d0dabf93cfb65a92d1270d1ae81c2239d13d8",
+    "research/phase7-element-position/native_interpolation.py": "7b22eb7b7da787e03e4da066792e4aa7e144d964290b2987f448c6c0cf3d5584",
+    "research/phase7-element-position/native-interpolation.json": "99a6c5d9930409f78bd4af5763b52b2eb315f6e0cbeffb52de3c68dc6ecca009"
+  }
+}

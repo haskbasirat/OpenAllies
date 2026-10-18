@@ -1,0 +1,40 @@
+--- before/crates/aa-runtime/src/load_sai_players.rs
++++ after/crates/aa-runtime/src/load_sai_players.rs
+@@ -11,8 +11,36 @@
+ 
+ /// Implemented by a proxy retaining the exact opaque SessionPlayer handle.
+ /// The association is not a numeric player id or an Actor GTID.
+-pub trait SessionPlayer:std::fmt::Debug {
++//Owned allocation-lifetime association travels with the sole SAI owner. Send
++//permits an owned handoff; it does not authorize concurrent player access.
++pub trait SessionPlayer:std::fmt::Debug + Send {
+     fn validate(&self)->Result<()>;
++}
++///The same source-created SAI profile manager is available before a World or
++///AIPlayer slot exists (776580). This service never constructs controllers.
++pub trait ProfileService {
++    fn profile_count(&mut self)->Result<usize>;
++    fn find_profile(&mut self,name:&[u16])->Result<Option<&Profile>>;
++}
++pub struct ProfileContext<'a,'source> {
++    catalog:&'a Catalog<'source>,bank:&'a Bank,arena:&'a mut Arena,
++}
++impl<'a,'source> ProfileContext<'a,'source> {
++    pub fn new(catalog:&'a Catalog<'source>,bank:&'a Bank,arena:&'a mut Arena)->Self {
++        Self {catalog,bank,arena}
++    }
++}
++impl ProfileService for ProfileContext<'_,'_> {
++    fn profile_count(&mut self)->Result<usize> {
++        self.arena.bind_profiles(self.catalog,self.bank)?;
++        Ok(self.arena.profiles.len())
++    }
++    fn find_profile(&mut self,name:&[u16])->Result<Option<&Profile>> {
++        if name.contains(&0)||name.iter().any(|&c|c>127) {return Err("SAI profile Find requires an ASCII, non-NUL native CString identity".into())}
++        let name=String::from_utf16(name).map_err(|e|e.to_string())?;
++        self.arena.bind_profiles(self.catalog,self.bank)?;
++        Ok(self.arena.profiles.iter().find(|p|p.fields.ids.eq_ignore_ascii_case(&name)))
++    }
+ }
+ /// Borrowed boundary for actual766960 callers without an aa-netcode->aa-mind
+ /// dependency. Production callers bind AddContext to the constructor owners.

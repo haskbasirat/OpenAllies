@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "scope": "Source-only incremental CPUbudget arithmetic review; no allocationstress orGPUquery",
+  "source": "crates\\aa-client\\src\\loading.rs",
+  "sha256": "192f2a52a2b923c5b296a24b56fb6604d4f621c2a3a34311fc01c2bee79b3f28",
+  "observations": [
+    "Source phase uses actualJSONbytes plus dimensions with checkedmultiplies;12xJSON/800Bpercell remain declaredheuristics",
+    "PreparedScene droppedbeforetexturebudgetquery; existingdraws reflected inobservedavailability ratherthan doublecharged",
+    "Textureplan headerscheckGPUdimensions beforeparalleldecode; exactRGBA8fullmipbyteschecked",
+    "Incrementalestimate=4xtexturemips+meshstaging thenconfigured20percentoverhead; includescandidateRGBA, scratch anduploadstaging",
+    "Imageallocationlimits derivefromplannedsize/hardwarebudget; decodefailuresabortcandidate ratherthanomittexture"
+  ],
+  "limitations": [
+    "Volatilequerydoesnotreserve memory orprove futureallocation",
+    "No measuredVRAMresidencybudget; GPUlimits/errors requireseparatehandling",
+    "ImageJSONallocator/libraryscratchpeak is estimated, notformallybounded"
+  ]
+}

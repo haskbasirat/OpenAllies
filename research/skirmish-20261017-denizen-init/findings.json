@@ -1,0 +1,71 @@
+{
+  "scope": "Held saved Denizen5687E0/568070 coordinator/source behavior-word projection and lazy queue binding. No actual full Actor Init/World/mission/battle completion claim.",
+  "production_pins": {
+    "crates/aa-runtime/src/load_denizen_init_world.rs": "abd65f938779566466422bffd194d4a6031a879e23c5b77fb2b6ab99bca1fae0",
+    "crates/aa-runtime/src/load_denizen_init_world_tests.rs": "f20e986d1c4ff73f847325679a5dfc80aba11d457305775231fd710df39cbed1",
+    "crates/aa-runtime/src/load_detection_init_world.rs": "7d3b6827c4d230cf0039e87a73c551cdace39c0f28d8abeb091e10ea528a55ef"
+  },
+  "executable": {
+    "path": "research/skirmish-20261017-denizen-init/frozen-denizen-tests-01.exe",
+    "sha256": "eb81d53c06a6a4ab71e7ce67a53223d729491ba378d851cd042380abd91df565"
+  },
+  "native": {
+    "native-denizen-init.json": {
+      "sha256": "d3aa9a9eb71c0316041d6d837fcdb0134cee4c962d3a7ab785313256c4aa59b5",
+      "rows": 1194,
+      "executions": 2388
+    },
+    "native-denizen-behaviors.json": {
+      "sha256": "9d42f605e066f5a67a5da12d95ad2cd35bccca355e0b671766334146c87cf4ed",
+      "rows": 63,
+      "executions": 126
+    },
+    "native-denizen-dispatch.json": {
+      "sha256": "eda7d63c5c14b62c97abf28066cf49f56567932a0e46403c6f8b924bb1543ab1",
+      "rows": 6,
+      "executions": 6
+    }
+  },
+  "rust_tests": [
+    {
+      "filter": "load_denizen_init_world::tests",
+      "passed": 2,
+      "failed": 0,
+      "log": "rust-tests-01.log"
+    },
+    {
+      "filter": "load_detection_init_world::tests::native_shared_564d80_gate_and_required_queue_prefix_match_all90_rows",
+      "passed": 1,
+      "failed": 0,
+      "log": "shared-scheduler-regression.log"
+    },
+    {
+      "filter": "load_element_init_world::tests",
+      "passed": 1,
+      "failed": 0,
+      "log": "element-rate-regression.log"
+    }
+  ],
+  "verification": [
+    "Production check02 passed.",
+    "Native1194-row coordinator fixture replayed read-only unchanged.",
+    "Native63-row real463520 tokenizer fixture replayed read-only unchanged.",
+    "Real six callback executions and paired vtable/zero/static bytes replayed read-only unchanged.",
+    "Root owns integration into actual load_world ActorServices and the real tutorial4097 observation; not certified by the four focused tests."
+  ],
+  "semantics": [
+    "Current Denizen38 updates once per native node, then reads next; second-list binding follows completed first-list stores.",
+    "No Denizen Box removal/copyback and no actor/viewer pose snapshot.",
+    "Source precision from completed Bank is independent of live arithmetic PC.",
+    "Version then current pending head precede lazy guard/inventory condition; real queue owner and RNG are reused.",
+    "Zero guard exits AfterInit before flags and zones; create return ignored; guard and current position reread before move.",
+    "Positive Zone children remain explicit required services. A null515940 receiver fault is real native execution; null515F40 world reads are not preempted by a fake early success/error."
+  ],
+  "open": [
+    "Actual tutorial4097 full Actor Init and Denizen AfterInit observation pending root load.",
+    "Positive Zone5 allocator/flag/move bridge remains RequiredZones until same shared owner is bound.",
+    "Behavior-word reading is a narrow canonical projection, not full DenizenData/deferred-reference/group-size/formation construction.",
+    "Existing generic component_virtuals aggregation defect remains open separately in existing-component-aggregation-defect.json.",
+    "Native localized diagnostics/SEH and malformed/cyclic raw pointer graphs are not implemented by this typed borrowed adapter."
+  ]
+}

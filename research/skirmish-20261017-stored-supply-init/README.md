@@ -1,0 +1,13 @@
+Fresh stored Supply checkpoint
+
+The adapter calls the existing Supply initialization/tick/provides/state kernels against the same Staged ActorStore, moved definition Bank, Supply box, queue owners/queues, RNG, current World variables and ZoneMap. ActorStore::with_zone_fields splits actual fields synchronously; neither the current RuntimeObject nor its selected Zone is removed from storage. Reads of the current ID route to those actual borrowed fields; reads of other IDs route to the original other allocations.
+
+The existing native Supply producer replay passed 1,506 rows / 3,012 original-v14 executions / 112 native basic-block byte windows (including declared child/stop boundaries, not an executed-instruction count) without rewriting fixtures. Production and all-tests typechecks passed. The new ignored constructor/ownership laboratory is saved and typechecked, awaiting the root cohort; it is not full Actor assembly, Supply owner registration, or a zone-solve proof. The natural Globals actual34 result is also pending in this checkpoint.
+
+Positive unbound services remain errors with earlier mutations retained. No playable battle or whole fresh mission completion is claimed. Shared-file snapshots seal only this historical checkpoint; approved additive peer changes may follow.
+
+Actual34 reached real Supply Zone0 (actor1688, key11, range60, tile20/108), retaining its queue and zone prefix, then exposed the post-staging missing Catalog lifecycle loan. The v2 correction passes the same Staged.inactive_load directly and reads its actual observer through the existing managed-mode guard at the original gate. Production check passed15.95s. Actual35 and root unit replay remain pending.
+
+Actual35 passed the prior lifecycle read, then reached the missing current Session+E4 /World+48 gate (131.34s). The v3 adapter lends Catalog.load_session lazily and the same World.mission_fields to the unchanged gate. It also reuses the saved adapter relation kernels over actual Kingdom/Team derived fields. The runtime compiled these current sources for actual37; the natural result and root ownership test remain pending. Historical relation native proof is cited separately from this source-only adapter reuse.
+
+Actual40 reached DetectionAfter Zone6 Actor64 after the earlier zone/lifecycle/Session/recruit gates. The v4 successor binds that callback through the same ZoneFields/Object memory owners and existing native coordinators. Evidence: ../skirmish-20261017-zone-memory-access/reveal-v4-checkpoint.json. Native fixture replay passed282 original-v14 executions; exact shared reveal1/1 and unchanged record-refresh3/3 pass. Two production checks pass. Actual41 and expanded actual ownership test replay are pending; no mission completion is claimed.

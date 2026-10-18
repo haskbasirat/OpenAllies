@@ -1,0 +1,233 @@
+{
+  "schema": 1,
+  "status": "Bounded production adapter and field kernels checked; genuine full same-world member spawn remains unobserved.",
+  "scope": "Same staged Organization completion, raw57AD30 stack creation, live4FBF40 queries and placement writeback, existing57D950 creation/membership, current578040 guard/Kingdom refresh, and bounded real hero table postpass.",
+  "owned_sources": [
+    {
+      "path": "crates/aa-runtime/src/stored_organization_spawn.rs",
+      "sha256": "c841a59a7c3c7e6e2f8673af3410a6685a2376d7f39a31bf38014cc37551f775"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_organization_spawn_fields.rs",
+      "sha256": "e8279c33fb7ad13c7a97db77a8e92f6426624f3a120eeb11bbc7b7816d6d18e3"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_organization_spawn_fields_tests.rs",
+      "sha256": "9f9a75fd8e27f09e201c98b52e472bd59c355f1139fd9e7d45cfb96af6cc1c09"
+    }
+  ],
+  "shared_successor_snapshots": [
+    {
+      "path": "crates/aa-mapworld/src/fresh_creation.rs",
+      "sha256": "785cf166a12f335bd8898e3d1d33341486aecc53e8b87b90ba19e4654d839c91"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_actor_creation.rs",
+      "sha256": "8fcafc84c37bd7f0dcb7ea985eecbbcddb932a6abfcdc4d5d48291210e609666"
+    },
+    {
+      "path": "crates/aa-runtime/src/fresh_organization_completion.rs",
+      "sha256": "96a5e8331178c2a62563867d338b19b9632bc3fd0fd3d94f3de4135f99923572"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_organization_members.rs",
+      "sha256": "58e3bba903d7f7f064c33fadba5e7aa9e1f8a8da0052c5be263b9e78e5bfb9ba"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_deployment.rs",
+      "sha256": "2b82ad652e98bea0b92d689efee65c997f5ac4629ca0f9f8e14559ffdeed9109"
+    },
+    {
+      "path": "crates/aa-runtime/src/member_deployment_fields.rs",
+      "sha256": "b12b3672280af88c25475c9b29d1652d42e1f5d69c9e63414ee06f3297f9f4a6"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "sha256": "e7fcd8369642ff4402637657f41efff0ad843501aee18c0f36675a7ad622bc1b"
+    },
+    {
+      "path": "crates/aa-actors/src/organization_spawn.rs",
+      "sha256": "755099026dc85bb72dfab9d7d650917baf5d4b99161460bb6d8715b8174b03c7"
+    },
+    {
+      "path": "crates/aa-actors/src/world_creation.rs",
+      "sha256": "36b469945474c84625bba1e4157fd0d373fa7c4ed80fdb48f9a81cef10268d07"
+    },
+    {
+      "path": "crates/aa-actors/src/actor_creation.rs",
+      "sha256": "73659b19dc9d8cfc258daa7350a6a10e1388088709d82b10d1db454526bead30"
+    },
+    {
+      "path": "crates/aa-spatial/src/rectangle_actors.rs",
+      "sha256": "5967b9863b760cd8b3829bbf5595b0a96dad722b2a3784f12930cc40359f8a5e"
+    }
+  ],
+  "shared_qualification": "Whole shared-file hashes are context snapshots, not exclusive ownership or full-file acceptance. Parent owns live query/placement kernel changes; State owns add-member; SavedLeader owns completion/hero/deployment constituents.",
+  "native": {
+    "new_rows": 888,
+    "new_executions": 1776,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "distinct_executed_byte_pins": 171,
+    "slot": {
+      "rows": 720,
+      "executions": 1440,
+      "pins": 108,
+      "scope": "Whole57AD30 through explicit4FBF40 child; native inline constructor fields/raw51/occupied/late-cutoff behavior; CString/vtable addresses and unwritten53 padding excluded."
+    },
+    "notify": {
+      "rows": 168,
+      "executions": 336,
+      "pins": 63,
+      "scope": "Whole578040 current read/guard order through explicit4E14E0/statistics/classification/SDK child transports and cutoffs."
+    },
+    "qualification": "Synthetic child cutoffs represent required service boundaries, not native C++ exception unwinding. Explicit child-entry bytes are excluded from executed counts. No native game process is launched by these producers."
+  },
+  "rust": {
+    "exact_production_field_tests": "2/2 passed after final field interface/formatting;720+168 native rows replayed.",
+    "production_typecheck": {
+      "path": "research/development10/stored-organization-spawn/check-06-tests.log",
+      "sha256": "2d7307a2caa1094a0a17ee7be7ecb728022759d12f5dcd949a5cdc51febb7292"
+    },
+    "support": "Small exact-source field harness links pinned warm aa-actors ActorParams and JSON support. No full current runtime/client executable link or end-to-end World acceptance is claimed.",
+    "support_libraries": [
+      {
+        "path": "target/native-runtime/release/deps/libaa_actors-da01587d98fcfe3e.rlib",
+        "sha256": "795ff1465c9aec33287d0080b5fffcf2a6022809a19f38399c420a513613203f"
+      },
+      {
+        "path": "target/native-runtime/release/deps/libserde_json-3f0b3bb60c709793.rlib",
+        "sha256": "82a2aba517966426964e4330a2be2a9eee81b64f0714567f972427649186f30a"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "path": "research/development10/organization-spawn/native-create-member.json",
+      "sha256": "de594cd6d7a17cfa8e6d020967610cd3aee15d3cd37c3df1096abaf505000ddb"
+    },
+    {
+      "path": "research/development10/organization-spawn/native-rectangle-actors-v2.json",
+      "sha256": "b0842497a7189e4eb2ed40f463929b34cf43e26030c2a6d7799b0be40ae6c341"
+    },
+    {
+      "path": "research/development10/organization-spawn/native-member-slot-writeback.json",
+      "sha256": "48851bd2a9dd3c59986b8d2bfbd20e8fc0e240bfbd9c738f457015573894d0b1"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-organization-completion/findings.json",
+      "sha256": "6d4f6a337959fd1e1ef576f4279e1d2390fbd1d5e1bb7073dd5b55ef965bf312"
+    },
+    {
+      "path": "research/skirmish-20261017-member-deployment/findings.json",
+      "sha256": "1c851e923ccfc830d3b728025dd851eb364ea6ed4e156b038fdadf2dbeec3f56"
+    },
+    {
+      "path": "research/skirmish-20261017-member-deployment/native-actor-shape-getter.json",
+      "sha256": "abb9d12dd0141a54b8bf412f2d5d568677987e9582237b005f01fb1ff7856bf3"
+    },
+    {
+      "path": "research/skirmish-20261017-member-deployment/point2-findings.json",
+      "sha256": "ad163725d0d63a6af8e43f889f9c77aeac1cf383b7aab15258b460e76af1b0c5"
+    }
+  ],
+  "dependency_qualification": "Existing child receipts are cited separately; their runs are not included in the new1,776 execution count. Native getter static/previous-constructor pins remain qualified by their original receipt.",
+  "artifacts": [
+    {
+      "path": "research/development10/stored-organization-spawn/native_spawn_slot.py",
+      "sha256": "0b88a107c9150614f29012e730f362ecdba4ee4bead798af2d1c5ca4580f44e5"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/native-spawn-slot.json",
+      "sha256": "1a9e3e08cbc778e99ee9202889ca214a25d8da9a03f32314fbb5f5e6ba356ac5"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/native-replay.log",
+      "sha256": "a0b234e794feddc0fec23e677e4b42333594fb2eaf23c72dbf51c6be9f427dda"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/native_notify.py",
+      "sha256": "5667fc75ad936dc75779e1032057d0fec32208e0e27b2a190980b440ca245bdb"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/native-notify.json",
+      "sha256": "2e890fc283475a2b91c26f9ce8c863e614bed2ff0ab75689b5aa4af9e5442553"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/notify-replay.log",
+      "sha256": "523171581d638b0fb9c1245a4727e7c9e070ff4786210b706baf528fbf0b65e1"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/fields-tests.rs",
+      "sha256": "4ae1e6df699fc35095a95f8e0c8c796dd1e666f475a9d178db78200ac9ce7d0a"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/fields-tests.exe",
+      "sha256": "60a0b5be6b73c270a9167206cf39632485c61303f0980abe16303df02ba91016"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/fields-tests-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/fields-tests.log",
+      "sha256": "e2e23297047702abfcc5ff53fb84c8ab4e71617aacd8c29a306bb791b44c2ea5"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/check-01.log",
+      "sha256": "e3bebc5f583d2b72a1f2ca7a0dd51e2f32ab76126c2943ebb5480e2bb7261b8f"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/check-02.log",
+      "sha256": "88cdee938c31dfaf48a23232b54fd0ff3e015f5e4c4b910b35cdf859e54d3d35"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/check-03.log",
+      "sha256": "d2de3838099756184602a929a8c06eef780de1f6d2788f1d7e8c7ee6f82657c3"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/check-04-tests.log",
+      "sha256": "811bb2fcc683fad0aaf69ae3f0308224ed659c98265b1f1b6560464821b5c4ab"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/disassemble.py",
+      "sha256": "a353d854185a5b414fb118d3f624a324f18e2587082e0f822aa59ffc757f6f6f"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/disassembly.txt",
+      "sha256": "72ca9bd325bc757a454099fbdf4a1f4560108f29ff3ecdc88e3a5f5ad8e594ee"
+    },
+    {
+      "path": "research/development10/stored-organization-spawn/README.md",
+      "sha256": "fd50c7dfdfcdb81351dc91d10e76a1eecd8adc0c5248d97b85d99cca7a9c6881"
+    }
+  ],
+  "invariants": [
+    "The same Staged/ActorStore/World/spatial index/source Bank/queues/RNG are borrowed; no object, installed component, live pose or candidate list is cloned or reconstructed.",
+    "CompletionWorld is a narrow service extraction from the unchanged completion body; old EntryWorld callers delegate through its blanket implementation. No unrelated assertion latch default is invented.",
+    "The captured Organization Box is checked by nonowning allocation identity; current layout/parameters are read at each native boundary. Fresh actor component reads remain distinct where native rereads actor+7C.",
+    "Raw ActorParams51 preserves noncanonical byte payloads. Native stack parameter blocks are separate real local owners, not snapshots of mutable world owners.",
+    "Live Cursor begin/next/finish delegate the parent helpers over the actual current index. Native marks survive callbacks and structure creation; no Vec candidate shortcut is used.",
+    "Candidate3EC precedes lazy canonical17C membership. Current actor position, owner and Kingdom/Team relation fields are borrowed at their existing call points.",
+    "Successful578290 writes back actual XY for57D950; copied stack facing remains the incoming value. Runtime uses the same existing native placement algorithm.",
+    "Real4F9C10 allocation/init/register and same installed State57CBA0 add-member run in order. Positive unbound recruit slots never certify a working item arena or successful pairing.",
+    "ActorD8 uses the actual Hq component slot30, not an invented numeric pointer word. Kingdom4E14E0 captures count once and rereads one current2E8 actor per callback before actual action rebuild.",
+    "578040 retains current state1 guard before positive statistics, then actual SDK-presence and repeated Actor154 reads. Missing positive owners fail at reached services.",
+    "Hero pass reads actual LayoutSlotEntry.number, current members, captured Bank token, distinct owner108 calls and same Kingdom find_single(token,true). No assumed empty table or default hero count.",
+    "Source preflight validates the same moved Bank universe/precision. Valid managed-graph behavior is the admitted domain, not malformed native-pointer fault parity.",
+    "No new fixed memory/VRAM/bandwidth/list budget or fake native ABI pointer is introduced."
+  ],
+  "remaining_required": [
+    "Actual full organization/member creation and mission/battle acceptance await the next genuine strict startup run; typechecking and bounded fields do not mint StartedMission/readiness.",
+    "Positive recruit-item pairing4CEA60, hero attachment57B830/localized notification, new member Mind198 deployment, positive statistics/SDK effects and real destruction retain explicit required errors.",
+    "Actual source point2 parser/deployment-source successors and other authors add-member callbacks are separately owned and qualified.",
+    "Source existing57D950/create/completion/hero/placement/query receipts prove their bounded kernels; this adapter does not claim every child has completed."
+  ]
+}

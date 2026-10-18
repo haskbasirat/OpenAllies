@@ -1,0 +1,36 @@
+[package]
+name = "aa-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+aa-world = { path = "../aa-world" }
+aa-simulation = { path = "../aa-simulation" }
+aa-numeric = { path = "../aa-numeric" }
+aa-orders = { path = "../aa-orders" }
+aa-production = { path = "../aa-production" }
+aa-rules = { path = "../aa-rules" }
+aa-mapworld = { path = "../aa-mapworld" }
+aa-metagame = { path = "../aa-metagame" }
+aa-actors = { path = "../aa-actors" }
+aa-body = { path = "../aa-body" }
+aa-animation = { path = "../aa-animation" }
+aa-economy = { path = "../aa-economy" }
+aa-heightfield = { path = "../aa-heightfield" }
+aa-combat = { path = "../aa-combat" }
+aa-mind = { path = "../aa-mind" }
+aa-spatial = { path = "../aa-spatial" }
+aa-zones = { path = "../aa-zones" }
+aa-triggers = { path = "../aa-triggers" }
+aa-trig = { path = "../aa-trig" }
+aa-navigation = { path = "../aa-navigation" }
+aa-movement = { path = "../aa-movement" }
+serde.workspace = true
+thiserror.workspace = true
+
+serde_json.workspace = true
+
+[dev-dependencies]
+aa-netcode = { path = "../aa-netcode" }

@@ -1,0 +1,32 @@
+{
+  "snapshot": {
+    "sampled_unix_ms": 1791915982862,
+    "physical_total_bytes": 68378025984,
+    "physical_available_bytes": 32923226112,
+    "system_commit_limit_bytes": 137097502720,
+    "system_committed_bytes": 49397362688,
+    "process_available_commit_bytes": 87700140032,
+    "process_virtual_total_bytes": 140737488224256,
+    "process_virtual_available_bytes": 140733139009536,
+    "page_size_bytes": 4096
+  },
+  "policy": {
+    "physical_headroom_bps": 1000,
+    "commit_headroom_bps": 1000,
+    "estimation_overhead_bps": 2000
+  },
+  "estimate": {
+    "resident_cpu_bytes": 0,
+    "temporary_cpu_bytes": 0,
+    "upload_staging_bytes": 0,
+    "gpu_bytes": 0
+  },
+  "estimated_cpu_peak_bytes": 0,
+  "adjusted_cpu_peak_bytes": 0,
+  "physical_reserved_bytes": 6837802599,
+  "commit_reserved_bytes": 13709750272,
+  "physical_budget_bytes": 26085423513,
+  "system_commit_budget_bytes": 73990389760,
+  "effective_cpu_budget_bytes": 26085423513,
+  "exceeded": []
+}

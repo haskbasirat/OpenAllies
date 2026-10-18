@@ -1,0 +1,16 @@
+# Standalone extraction tool (its own workspace; not a member of rust-rebuild).
+# Build: CARGO_TARGET_DIR=<scratch> cargo build --release --offline (Cargo.lock
+# copied from rust-rebuild), then run it on every original .RMP map.
+[package]
+name = "saved-payload-dump"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aa-mapworld = { path = "../../../crates/aa-mapworld" }
+aa-rules = { path = "../../../crates/aa-rules" }
+aa-numeric = { path = "../../../crates/aa-numeric" }
+serde_json = "1"
+
+[workspace]

@@ -1,0 +1,17 @@
+[package]
+name = "aa-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+aa-heightfield = { path = "../aa-heightfield" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+aa-mapworld = { path = "../aa-mapworld" }
+aa-rules = { path = "../aa-rules" }

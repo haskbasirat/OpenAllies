@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "author-frozen-independent-review-pending",
+  "scope": "One held/stored4D4130 transition and actual stored579EB0 member/Property bridges; bounded direct tests, not initialized battle.",
+  "verification": {
+    "production": "shared-fields check21.43s; stored binding check16.27s; integratedcheck22.08s all passed",
+    "current": "actual-tests-03.log2/2PASS18.15s: exact pure production186 native outcome/F8 rows and actual moved Kursk owner11631/source/three live PC/direct context",
+    "immutable": "same frozen exact executable2/2PASS20.93s captureunset",
+    "standalone": "direct rustc exact pure production file1/1PASS186 native outcome/F8 rows; dependency pins retained",
+    "broad_test_typecheck": "known unrelated mission_owner_sources partial harness missingimport failure; root/owner notified; targeted current build passed"
+  },
+  "implementation": [
+    "One shared transition; old held API delegates same read/store/callback order.",
+    "Same currentF8, component table, sourceBank, Terrain, typed PropertyState, Arena and actual current variables; no cloning/removal/reconstruction.",
+    "Native old/new Property source order; actual kind5/self source confirmed in equal both-image instruction bytes.",
+    "Native ordered Organization members and real Element children; cycle remains explicit portable refusal.",
+    "Empty actual effect owner removal uses shared lazy remove_reference before unrelated definition compilation."
+  ],
+  "limits": [
+    "Actual probe uses diagnostic map boxes and explicit active gates/cached-cell seed; its actual native tile constructor has no actor memberships.",
+    "Actual current Terrain source listempty; old arctic_city list removal targets actual emptyProperties owner. No positive mutation/Org recursive success is certified.",
+    "No natural ActorInit, mission startup, GPU effect or playable battle claim.",
+    "Settlement585650 remains required because typed runtime/list owner absent; static exact requirements documented.",
+    "Independent source/binary review requested from saved_leader_adapter, pending; no accepted reviewer result is asserted here."
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/actor_terrain_fields.rs": "852c570a6f74f5b234e34ee94f5e8d78c636b95c4c4b20e80b1e60bdbe5d30a9",
+    "crates/aa-runtime/src/load_actor_terrain_refresh.rs": "50678e93b3d8720bbf775291585abf1e1f266799f7f6a7d10876308e87cf70b4",
+    "crates/aa-runtime/src/stored_actor_terrain_refresh.rs": "3317127c6ffbece60a8872e22262e527e0f861ad0c59105862a60c4bc6be2b39",
+    "crates/aa-runtime/tests/stored_actor_terrain_refresh.rs": "7bb3aefb0e71691c39d2553757e4e723da3eef23aa36476b0d9be298170b106d",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\actual-stored-terrain-v2.json": "2556ec949c2762d6641c656b8b95826f8c0b8034f13f5e1c41551f2525ecf42b",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\actual-tests-03.log": "648ab8b623cbf1cde4162b4c54c44791cc78e986834b4415f6fb293912d3d42d",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\immutable-actual-replay.log": "cfda520ab14982de6a46c9f9923d2c39a3bdae48a65b05b7e2e7df62da70ee11",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\frozen-stored-terrain-tests.exe": "dc53ec84af242185944aab3f9a34fefb8e0cb6f8c62f659144d97ced1c1e8ad3",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\exact-field-tests.exe": "ec4f1eb16d795a87202cd094e711f6059b3f27bfa8857557f2ec94cac0324359",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\exact-field-tests.log": "2cd228eae07f99b16983a4c9227409347c88489161757c89d60c5ee7c1cf79ed",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\exact-field-dependencies.json": "5ac44595392d8b1713ba8aad87623b03cdb491b41248d308c972617fddd71ddd",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\algorithm-preservation.json": "4778797976aa47e532f01f89656290d60512685284b77c62666cbb920047e35b",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\property-callback-arguments.json": "34406a3363c663ab50fbefa649690bcc7d77efb21d8d8274b4414b89cde26def",
+    "research\\skirmish-20261017-stored-actor-terrain-refresh\\settlement-static-gap.json": "d76b9795d8671321e1c935c00622036b2996856bb1fca38fa4d8285c0efd0fbb"
+  }
+}

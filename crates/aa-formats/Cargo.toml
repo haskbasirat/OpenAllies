@@ -1,0 +1,15 @@
+[package]
+name = "aa-formats"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Read-only, checked readers for recovered Axis & Allies 2004 formats"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "rwd"
+path = "src/bin/rwd.rs"
+
+[dependencies]

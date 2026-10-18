@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "status": "accepted bounded source and callback binding; no battle readiness claim",
+  "scope": "ActorData WhenEnter compiled prefix, native4D0A00 matching and bounded4293C0 event constructor; held-record publisher uses same actual World presentation owner",
+  "source": {
+    "crates/aa-runtime/src/fx_graph.rs": "5a2a350d74a98881a6fcf2f252d5a278ecb821a6e891dc20e73e4ccc8ca4f326",
+    "crates/aa-runtime/src/fx_graph_actor_state.rs": "738ad5e94de64aaa527d44d65d686a256e76ec729b5b5ad967216741816ee4b1",
+    "crates/aa-runtime/src/fx_graph_actor_state_tests.rs": "287c3aa15b69244192a2a469d52d695d53cbe0ed7c4659708d36e590b7029916",
+    "crates/aa-runtime/src/load_actor_state_fx.rs": "a0bb76c5d64ebc5de50c1c37bf3fb99a1252ac3f4aeac1268b3e5812c7452b30",
+    "crates/aa-runtime/src/load_actor_state_reentry.rs": "fd0b0ff379096ce305d19718f3e1549a82674173c7047e345de78df0126f027b",
+    "crates/aa-runtime/src/load_actor_state_reentry_tests.rs": "b1447ac4006e62389d88478f5d50b22ecab60cac80cec48794d90610a75c0ae7",
+    "crates/aa-runtime/src/load_creation_fx.rs": "5c873f79fc6b614d94e4daaf1d8c8b7b190b2ca631c6f7d0393f941d84e5b29e",
+    "crates/aa-runtime/src/fx_graph_tests.rs": "701dd9da72033f3aef33dce120a14516a8ae53a095a12a78c2c57bed7cf566d0"
+  },
+  "fixtures": {
+    "native-actor-source-boundaries.json": {
+      "sha256": "c490c89e13bfa93987222a2f83754d12d2a62a7b1b60ad953def4776bc583c67",
+      "native_executions": 60
+    },
+    "native-actor-state-fx.json": {
+      "sha256": "6bba0e8e906485a1b213c1116c5f409212b7a6d3e5d798f8337e818d10ea676e",
+      "native_executions": 3456
+    },
+    "native-actual-actor-state-fx.json": {
+      "sha256": "c2ee4ca3ebd71a8db9218d80b8d58409e047ff4fa05ccc4d6a847176c410985b",
+      "native_executions": 510
+    },
+    "native-vfx-active-source.json": {
+      "sha256": "9019bcab81c53ff8ca635772e3a2a259b86f1294a304dbd63648300c7b60e1e6",
+      "native_executions": 288
+    }
+  },
+  "source_capture_sha256": "5caf3ec44570079eebcd3dfa9ea3d6f06fac16c9da4fa35bf525c8b84d88398e",
+  "actor_state_descriptor_reused_proof": {
+    "path": "research/skirmish-20261016-load-actor-registration/native-registration.json",
+    "sha256": "7888c4c3174407a2d66b7b1011a9301808aeffe3f9d25300a1955498677fb464",
+    "scope": "477FC0 /474270 /473490 native42 descriptor table order, both images/all PC; source load order is not Data+C ordinal"
+  },
+  "tests": {
+    "focused": {
+      "log": "rust-tests.log",
+      "passed": 3,
+      "failed": 0
+    },
+    "legacy": {
+      "log": "rust-legacy-and-source-tests.log",
+      "passed": 9,
+      "failed": 1,
+      "reason": "explicit AA_CAPTURE_FX_GRAPH path omitted for existing manual source census; no source comparison failed"
+    },
+    "created_census_recheck": {
+      "log": "rust-created-census-recheck.log",
+      "passed": 1,
+      "failed": 0,
+      "capture_sha256": "de39fb4f4fc2dd96474bc7ec12d4d7040147745d423ec0fa0acaab8f103c9fba"
+    },
+    "summary": "all10 distinct FX tests passed using one compiled source snapshot, with the required explicit fresh capture path supplied on the census rerun"
+  },
+  "limitations": [
+    "No full ActorData LoadData, WhenLeave compiler or synthesized StopVFX consumer claim. Actual native copy direction is Enter+194 ->Leave+19C, not reversed.",
+    "Positive state event requires actual B28114 global target position, actual View clock on app thread, attached View delivery/destruction; missing required callbacks remain errors.",
+    "Native fixture allocation/identity/OS/getters/enum lookups are explicit seams; complete source parser and VFX registry service bodies are not claimed by new fixtures.",
+    "Finite typed VFX source duration only; class1 iff permanent equivalence does not certify other full VFX classes or loading services.",
+    "No battle/movement/combat/audio playback/render/network readiness claim."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "status": "frozen startup input verifier; no Sun constructor observation/map/battle claim",
+  "native_address": "B2814C/B28150/B28154",
+  "native_image_storage": "initialized writable .data raw bytes, not PE zero-fill tail",
+  "observed_words": [
+    0,
+    0,
+    0
+  ],
+  "native_writes_before_cutoff": 0,
+  "threads_armed": 62,
+  "post_cutoff_watch_calibration_probes": 3,
+  "source_return_and_session_ctor_observed": true,
+  "sun_ctor_itself_observed": false,
+  "support_files_independently_copied_and_checked": 54,
+  "all1028_rows_and_source_FP_numeric_match_frozen_capture03": true,
+  "original_profiles_and_archives_unchanged": true,
+  "cleanup": "normal wait0/exit0/EXIT_PROCESS/errors[]; PID50308 gone",
+  "production": "private ConstructorInput binds sealed Catalog/source/FP target; create_sun consumes input after current target revalidation and calls separately proved sun_state::State::new",
+  "tests": {
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "profile": "release --locked --offline -j4 --config profile.release.lto=false --config profile.release.codegen-units=16"
+  },
+  "independent_review": "world_startup_gap narrow tracer diff accepted; raw hardware receipt review pending separately at freeze",
+  "limits": [
+    "not a Sun constructor dynamic observation",
+    "no map/battle/perpetual immutability claim",
+    "Sun native constructor and exact read-only address-reference audit are separate sun_state evidence",
+    "inherited pre-try setup limitation; accepted success requires recorded final cleanup",
+    "two original CreateProcess handles close with bounded Python process exit; duplicates close explicitly",
+    "focused tests, not full workspace or final EXE verification"
+  ],
+  "all_owned_commands_reaped": true,
+  "pins": {
+    "crates/aa-runtime/src/load_sun_reference.rs": "1627541cf8f69fa11b4a2bb49a98096fe2535678ef218f4b3eac34e24d24d21d",
+    "crates/aa-runtime/tests/load_sun_reference.rs": "375033d3c3c582bd66e706508cf6e70b842199b835653f19e9390dbdb9b2ec0c",
+    "research/skirmish-20261016-sun-startup-capture/prepare_tracer.py": "3c1df40b906f295cbd475fed5747f8fb8c1040b7ebc19bbbf93c04b0a7929062",
+    "research/skirmish-20261016-sun-startup-capture/capture_sun_startup.py": "93f9ad79892216253d7c88d314480035b600eca01429f59b07f7390133dbb4bf",
+    "research/skirmish-20261016-sun-startup-capture/capture-01/capture.json": "0de2475b1f9eeb5dc99c7221789a3a8357749174a3cf20b12a501a2ddba4ccf1",
+    "research/skirmish-20261016-sun-startup-capture/capture-01/runtime-files.json": "25704eccdadc17c2d6eed967f03a1694e26094e231a3e1f8eca44553bcd9d494",
+    "research/skirmish-20261016-sun-startup-capture/seal_sun_reference.py": "dcd0b658b158ff1bad72c511171ba68967c73518641bceddf306247d2660d2af",
+    "research/skirmish-20261016-sun-startup-capture/sun-startup-reference.json": "615e66797737ef5a8503625a4047119751659b6460e39802fac966b7218e8f33",
+    "research/skirmish-20261016-sun-startup-capture/runtime-tests.log": "fb13c0919cce309f4c8db6b03569af90ae8339457e41c113651e0d907be43370",
+    "research/skirmish-20261016-sun-startup-capture/post-process-inventory.json": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f",
+    "research/skirmish-20261016-sun-startup-capture/README.txt": "5c8195e12e244164c91ee23acf46589748a7ed1a8723ac66c732be153d08c5b2"
+  }
+}

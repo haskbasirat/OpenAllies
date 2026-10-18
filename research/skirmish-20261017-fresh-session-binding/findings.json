@@ -1,0 +1,79 @@
+{
+  "scope": "Forward actual retained Session owner through post-load readonly Catalog into genuine fresh InitExisting; no new native branch or phase scalar",
+  "change": "local_skirmish_startup adds read.bind_load_session(&parts.session); root Catalog binder stores the actual borrowed SessionPhase reference",
+  "validation": {
+    "before": "actual28 strictFAIL114.20s at fresh memory requires actual application SessionF8 owner",
+    "after": "actual31 buildPASS2m23s; strictFAIL83.74s at later genuine Economy InitExisting56F280 missing owner",
+    "session_connection": "Accepted bounded by actual advancement through the prior memory refusal",
+    "full_startup": "FAIL; no StartedMission or activation",
+    "binary31_sha256": "b51070e88f16ab11b35cbbf9badbbdb16d0c2aab38d53d09d1a1a51ebd9c49c3",
+    "profile": "release lto=false codegen-units16 --locked --offline -j4",
+    "build_qualification": "data_actor_request.rs changed during actual31 compilation and is explicitly recorded in inputs; no final native source-tree acceptance for that foreign module"
+  },
+  "actual_fresh": {
+    "definition": "ger_corps",
+    "gtid": 1688,
+    "object_key": 2362,
+    "mind": "same installed Element Mind1",
+    "source_precision": 53,
+    "live_precision": 53,
+    "world_revision": 1,
+    "denizen_word34_bits": "80000000",
+    "economy_flags": "actual10=false/11=false",
+    "economy_header_pending": "None",
+    "prefix": "MISSION",
+    "next_gate": "fresh actual componentEconomy InitExisting56f280 owner is required"
+  },
+  "native_proof": "Existing memory/Session getter kernels unchanged; source-backed Session construction/transitions remain authoritative; no new native fixture needed for a borrowed reference forwarding change",
+  "historical_build_only": [
+    "attempt26 sound Entry memory fields WIP",
+    "attempt27 Audio lifetime WIP",
+    "attempt29 resource Task WorkerWitness API WIP",
+    "attempt30 DataActor DefinitionProof comparison WIP"
+  ],
+  "limitations": [
+    "No 570020 entry or fully initialized fresh Actor claim",
+    "No complete mission, active battle, UI readiness, or playable match claim",
+    "Passive retained graph snapshot; original full mutable replacement Params not preserved",
+    "Original game and release files untouched"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-netcode/src/local_skirmish_startup.rs",
+      "sha256": "5573a59fcb35101b337049f423b1d70ec15bfea78bc120fcea5bf695c14653b7"
+    },
+    {
+      "path": "crates/aa-runtime/src/catalog.rs",
+      "sha256": "0d55bdc46d273a86a9faf2b25e98bb611ef77918fcad0d7bb19291ed181e162f"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt28.inputs.json",
+      "sha256": "0c18d913539d8814c84b2e89d09d3c9e2d232adddf659c4f366229235029fba7"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt28.fresh-actor-prefix.json",
+      "sha256": "97bd5cc7ad4169084373961cd78834244fa54e5a977612752d387d2aba794127"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt31.inputs.json",
+      "sha256": "e5a4383b1efa9e9bec0561372c4b6e581cbcd7a9fe9c051d9dacd95a612fd276"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt31.worker.json",
+      "sha256": "554f860a51e4d906d0223d6050e6548d95c4d3d5d6a5bec3c06b05477e4c2312"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt31.fresh-actor-prefix.json",
+      "sha256": "c51e913443c583d9c0bfcc6d30b7e7cc642371382cf50aa5b95d64b1787947b2"
+    },
+    {
+      "path": "research/skirmish-20261016-local-bootstrap/load-task/playable-build31.log",
+      "sha256": "b305b3830dd4df02149faab4ac716906cace10a89368ddb058dc8e25dbf70cc6"
+    },
+    {
+      "path": "research/skirmish-20261016-local-bootstrap/load-task/playable-run31.log",
+      "sha256": "fca0a287f7233047c87c7344513556a5ce35fe1a0288bf7852fcffd6d06693c6"
+    }
+  ],
+  "processes": "All own build/test processes reaped; exclusive target/s-local-bootstrap free"
+}

@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "scope": "Concrete original4EE4C0 membership of actual stopped first tutorial02 Kingdom with borrowed mutable fields and same-index ActorStore adoption; not complete Init/battle readiness",
+  "frozen": true,
+  "native": {
+    "rows": 9,
+    "actual_kingdom_rows": 3,
+    "labelled_class2_class3_rows": 6,
+    "fresh_original_v14_machines": 18,
+    "refresh_calls": 36,
+    "address_byte_pins": 308,
+    "executed_address_pins": 307,
+    "intercepted_entry_pins": 1,
+    "seams_reached": [
+      "6F7810 native8-byte node allocator"
+    ],
+    "present_bit_second_call": "no-op"
+  },
+  "actual_input": {
+    "map": "Campaign/tutorial02",
+    "gtid": 781,
+    "canonical_definition": "kingdom",
+    "definition_bank_token": 1019,
+    "source_pc": "Double53",
+    "record_restoration_pc": "Double53",
+    "membership_pc": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "grid": [
+      128,
+      128
+    ],
+    "flags_before": "A0C46900",
+    "flags_after": "A4C46900",
+    "tile_flags_le_sha256": "3d49073d102a00817aee4a02bdd09b99c91fc8eeb66e1464ee532322d313aedd"
+  },
+  "validation": {
+    "corrected_source_bank_capture": "2/2 passed (actual-source-pc-capture.log)",
+    "latest_three_test_replay": "3/3 passed,20.23sec; replay-final.log; session65110 reaped",
+    "independent_review": {
+      "status": "accepted",
+      "report": "research/skirmish-20261016-load-spatial/independent-review/independent-review.json",
+      "sha256": "fb58c6dd75a375407cdbbce06784fd18c7628bc014084ada3b297575812ead72",
+      "fresh_native": "9rows/18machines/36calls exact",
+      "fresh_Rust": "3/3 passed16.53sec",
+      "jobs": "all reaped"
+    },
+    "existing_index_regressions": "3/3 passed0.12sec; existing-index-tests-second.log; prior unrelated saved_hq blocker resolved; session43534 reaped"
+  },
+  "ownership": [
+    "single persistent native tile/node/generation owner",
+    "actual mutable fields exist in index only within synchronous callback-free lease",
+    "current changed flags committed on kernel success/error",
+    "private immutable source DefinitionProof checked across previous records/adoption",
+    "adoption owns same index before fallible transfer and returns owner plus completed/pending/error",
+    "generation-bearing reference lookup does not need mutable member fields"
+  ],
+  "portable_guard_probes": [
+    "missing source Bank",
+    "fabricated flags/component-mask/category/constructor",
+    "two consistently modified mutable definition proofs",
+    "successful-first/failed-second adoption with actual second Kingdom stale-generation metadata",
+    "load lease drops transient fields; conflicting generation refusal; retired reference lookup refusal"
+  ],
+  "unproven": [
+    "complete immediate Init/PostCreate/register lifecycle",
+    "blocking Actor collision query lease and services",
+    "derived virtual classes beyond2/3/4",
+    "renderer/UI and full world callbacks",
+    "world startup/battle tick/real multiplayer"
+  ],
+  "files": {
+    "crates/aa-runtime/src/load_spatial.rs": "5bb6e8b3d152a32898ea457c7a06ffc48d6ab706f5d6000dd2884745612dfeef",
+    "crates/aa-runtime/src/load_spatial_tests.rs": "0c1d16189185949d8ebd02c6ffe994d58e716cf696f896b8c88110f15e949004",
+    "crates/aa-runtime/src/spatial_world.rs": "b854e2d3fbc6e7984e75ac35db07f07dabdbfbc899e68d87d10dd548f9884ffc",
+    "crates/aa-spatial/src/index.rs": "274be32649b76cfd2c1bd174209afb5d61d534252b51f00448d0e026da511166",
+    "research\\skirmish-20261016-load-spatial\\actual-first-kingdom.json": "f9d2f865d84d5acb31e20db7234f9310f1d3f2c77d475d6beb476d51c32cb116",
+    "research\\skirmish-20261016-load-spatial\\native-load-spatial.json": "3c176e9e6e3914e66d29402454dc531cf062df03a5fbff5d06654345a5741061",
+    "research\\skirmish-20261016-load-spatial\\native_load_spatial.py": "46b6d7e4e4b7e06591b5e1606fdc197957e913d3bfe5a8bdbb5e5a77d38301ee",
+    "research\\skirmish-20261016-load-spatial\\native-vtable-audit.json": "a19aa24ba7a3b4226afd34519866fd523798f76f6d5f5a5ec3102fcf4d5540f7"
+  }
+}

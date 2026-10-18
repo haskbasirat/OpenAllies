@@ -1,0 +1,21 @@
+# Concrete held Actor registration into its actual Kingdom
+
+The implementation binds native `4E6180` to the current held `Record` and the referenced current-generation stored Kingdom. It does not rebuild a Kingdom from a diagnostic scan, move its arrays into a temporary registry, or make a detached `ActorStore`.
+
+`aa-economy::kingdom_registry::add_actor` now delegates to the same borrowed-storage kernel used by the runtime adapter. `StoredRegistryWorld` combines the storage/effect interface so every reached access observes the actual current owner. Native order remains: class-head insertion, flag28, Economy, component lists, Supply, completion/counting, capital, properties/research, deployment counting, and Flares. Mutations before a required child remain committed on failure. The supported load callback domain does not add/remove component descriptors during this call; arbitrary reentrant component-graph mutation is not certified.
+
+`SpecialShell` now owns eleven native class lists and its flare list as typed `ActorId` containers. The eleven entries are the native runtime-class enum, not a unit-count limit. Raw head/tail mirrors at `26C..2C0`, `2F8`, and `2FC` were retired. `scalar_projection` emits null only for an actually empty typed list and omits process-pointer projections for nonempty lists. Existing native vector, Supply, capital, counter, and Kingdom190 fields keep their original owners.
+
+The runtime validates the held actor's canonical source, exact E8 owner, stored Kingdom generation, class/source proof and constructor owner. Actor words E8/158 are read from the actual Actor storage, not the Object-word interface. Native list/vector writes access the stored Kingdom lazily. Public production calls use the real shared Economy refresh helper with the same actual map inventory; a private cfg(test) reached-child stop proves the caller prefix without claiming Economy success. Positive unbound Wall, Organization, statistics, research, property, ownership, destruction and Flare services remain explicit errors at their reached native child.
+
+Evidence:
+
+- `native-owner-add.json`: fresh original/v14 native execution of 216 AddActor cases and six actual `4E55A7..4E567E` constructor regions, all x87 precision controls; 494 instruction pins. Actual list/vector/count leaves execute, with heap allocation transport and reached complex-effect stops declared in the producer. These memory-domain cases are synthetic, not mislabeled as source-derived gameplay.
+- Constructor region proves eleven list constructors, Supply and Flare null heads/tails, and native vector capacities 10/3/5/20. The stop is an internal constructor boundary with four cdecl arguments still on the stack, not a whole-constructor return claim.
+- `core-regression.log`: existing original Registry API native regression passed 1/1 after delegation.
+- `special-state-regression.log`: existing SpecialShell constructor/resource-prefix regression passed 2/2 after ownership migration.
+- The actual tutorial02 source capture uses the same completed Bank and real held Actor784 (`start_loc`), stored Kingdom782, and all three live precision controls. It records the real pre-call Supply list, rather than inferring an empty list. A corrupted canonical owner definition is refused before list/flag mutations. The bounded reached-Economy prefix is replayed against both native images; the body is a separate service proof.
+
+Historical failures are retained. The first own runtime attempt used the unsupported Object E8 getter; production was corrected to actual Actor words. A first actual native setup omitted the genuine pre-existing Supply list `[8132,4173]`; no production mutation was implicated, and the later source capture explicitly records pre-call input before a fresh oracle is accepted. Stale concurrent compile snapshots are preserved separately. Captures and oracle outputs use create-new semantics.
+
+This is a concrete load service. These results do not certify a full Init sequence, published running World, general simulation, or playable battle. Full immediate-load acceptance, including the production Economy body, belongs to the parent integration run. Final hashes and exact final test outcomes are recorded in `findings.json` once the current capture/replay completes.

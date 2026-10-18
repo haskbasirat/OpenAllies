@@ -1,0 +1,99 @@
+{
+  "scope": "Narrow actual SourceNew Actor WorldStart+B4 binding",
+  "status": "FOCUSED_ACTUAL_SOURCE_AND_REGRESSIONS_PASS",
+  "recorded_utc": "2026-10-17T16:06:53.2305851+00:00",
+  "changes": {
+    "production_files": 1,
+    "existing_integration_hook_files": 1,
+    "new_support_files": 1,
+    "clock_memory_detection_changes": 0,
+    "post_load_classifier_changes": 0
+  },
+  "implementation": "Only WorldStart::object_active handles Source::New ordinary class3 Actors using the actual current registry identity, typed storage, same immutable proof fields and retained binding source precision. It returns the original/v14-proven Actor vtable+B4 constant AL=true. All other sources retain the previous saved/Special classifier.",
+  "checks": [
+    {
+      "command": "cargo check -p aa-runtime --test world_start_world --release --config profile.release.lto=false --config profile.release.codegen-units=16 --locked --offline -j2",
+      "result": "PASS",
+      "elapsed_seconds": 22.68,
+      "log": "research/development10/world-start-fresh-classification/implementation/check01.log"
+    },
+    {
+      "command": "cargo test -p aa-runtime --test world_start_world --no-run --release --config profile.release.lto=false --config profile.release.codegen-units=16 --locked --offline -j2",
+      "result": "PASS",
+      "elapsed_seconds": 164,
+      "log": "research/development10/world-start-fresh-classification/implementation/build01.log"
+    },
+    {
+      "command": "world_start_world-f7420a80a01ae895.exe --ignored --exact fresh_actor::actual_source_fresh_actor_world_start_b4_preserves_owner_and_rejects_poison --nocapture",
+      "result": "PASS1/1",
+      "elapsed_seconds": 2.84,
+      "log": "research/development10/world-start-fresh-classification/implementation/actual-source-test01.log",
+      "domain": "Actual V14Sources ger_corps cached binding, real source-backed Actor constructor/initialize_object/current GTID, sourcePC53 and livePC24/53/64; controlled constructor lab startupPC24 and unowned direct request. No fabricated Staged or mission."
+    },
+    {
+      "command": "world_start_world-f7420a80a01ae895.exe --nocapture",
+      "result": "PASS6/6; 2 ignored by default",
+      "elapsed_seconds": 0.25,
+      "log": "research/development10/world-start-fresh-classification/implementation/regression-test01.log",
+      "rows": "360 unchanged coordinator +240 tracking +132 Kingdom snapshot rows; existing ordered failure-prefix/started guard and new savedGroup8/inert regression"
+    }
+  ],
+  "executable": {
+    "path": "target/s-local-bootstrap/release/deps/world_start_world-f7420a80a01ae895.exe",
+    "sha256": "75f58d084dea99a2c2bb1134a64eed0632d39ae282a6dbdc30df462787298083"
+  },
+  "test_guards": [
+    "Same allocation/entity and registered identity traversal preserved by each predicate call",
+    "Current GTID generation/type/Actor/Object/proof/binding/sourcePC corruptions refuse without mutation",
+    "Requested NULL saved_id remains distinct from assigned current GTID",
+    "Current flags and SourceNew bookkeeping phase/failure do not change native constant predicate",
+    "Strict PostLoad helper continues refusing SourceNew; savedGroup8 remains true"
+  ],
+  "native_evidence": {
+    "path": "research/development10/world-start-fresh-classification/native-pins.json",
+    "sha256": "c1579b5d23be8cab0ccca51bb5212fae20ccc634cf55c4b51ef2212c52c82fb2",
+    "new_native_executions": 0,
+    "description": "Reused independently original/v14-proven actual fresh4D6BE8 vptr store and Actor A273F0+B4 ->6A71D0 B001C3, native WorldStart caller TEST AL. Existing coordinator oracle names B4 seam; it is not misrepresented as a fresh-owner binding proof."
+  },
+  "reviewers": [
+    {
+      "path": "research/development10/world-start-fresh-classification/implementation/independent-leader-implementation-review.json",
+      "sha256": "e023293ba86a9bb7b5555cf84c8fc10ab79fe5a1249532bc718a890f420001fc",
+      "scope": "Read-only implementation/test review; zero reviewer builds"
+    },
+    {
+      "path": "research/development10/world-start-fresh-classification/independent-implementation-source-review.json",
+      "sha256": "0ae6bb05616160e145eef2c9bb62a9b00fcd1508fd914fd548bd64fdb64b44db",
+      "scope": "Read-only implementation/test review; zero reviewer builds"
+    }
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/world_start_world.rs",
+      "sha256": "9172f129287190234fd14dc6efbd21c560f2b02bfc3bd1481f35ce70872ef1e1",
+      "equal_build_input": true
+    },
+    {
+      "path": "crates/aa-runtime/tests/world_start_world.rs",
+      "sha256": "d79a85cf4ea8364cb348655d63ff0612944eaac0998f4d603b1f8074b0786ab7",
+      "equal_build_input": true
+    },
+    {
+      "path": "crates/aa-runtime/tests/support/world_start_fresh_actor.rs",
+      "sha256": "bf84c0278f5aae951ed97e20fa01aede90130cffa37abb4f62445dc9c650f66f",
+      "equal_build_input": true
+    }
+  ],
+  "limits": [
+    "No fresh full actual47 startup run; parent owns fresh Berlin and Firefight acceptance.",
+    "No StartedMission/activation/AD/loading315/firstFrame or GUI success claimed by predicate laboratory.",
+    "Do not reset or retry failed46 graph: earlier started/statistics partial effects remain authoritative.",
+    "Only the three owned endpoint sources are pinned stable; concurrently authored Berlin clock/shared callers may differ during dependency compilation. No universal source snapshot claim.",
+    "Target s-local-bootstrap build session49258 is reaped; all own test commands finished and target is free."
+  ],
+  "backups": {
+    "directory": "research/development10/world-start-fresh-classification/implementation/source-before",
+    "original_world_start_world_sha256": "02b766569fcd0e44b6fe8084cb7722b686f13caba5a12e120fec6f0ab5653c8f",
+    "original_integration_sha256": "5a4a57b0842a0f5db0a2ee2fbb1fa61c7bc83092ec4b9a9488ec9c5230fa4bfa"
+  }
+}

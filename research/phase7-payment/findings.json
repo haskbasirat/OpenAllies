@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "scope": {
+    "name": "payment",
+    "cases": 366,
+    "transitions": 0,
+    "producer": "research/phase7-payment/native_payment.py",
+    "fixture": "research/phase7-payment/native-payment-fixtures.json"
+  },
+  "rust_tests": 2,
+  "clippy_passed": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "full_ranges": [
+    {
+      "name": "ability_payment",
+      "start": "0x4e2590",
+      "end_exclusive": "0x4e2630",
+      "sha256": "c7c6310fe29be3affdeb70b938c715b701ea15bb910b6c7eddafae72fc259439",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "faction_payment",
+      "start": "0x4cdd90",
+      "end_exclusive": "0x4cddfa",
+      "sha256": "4b38338ea75148042580a607d6790bd0497e6d86158d39044cab099adec04a9e",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "cost_copy",
+      "start": "0x4beb50",
+      "end_exclusive": "0x4bebec",
+      "sha256": "afebb6b4bb21e32d9da5422e23a00ebc3a9f5633e840790e18b1d49de6328145",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "stockpile_debit",
+      "start": "0x4e1690",
+      "end_exclusive": "0x4e16c5",
+      "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c",
+      "original_equals_accepted": true
+    }
+  ],
+  "files": {
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251",
+    "crates/aa-combat/src/ability.rs": "0d2d24ad39ef21b0be07f26326518e6f8e6abd593f1569d7dd83144607be7e52",
+    "crates/aa-combat/src/payment.rs": "44905b9441c4c55c6260344e89969b221a85e46c5dfc301aadf79779835d23c2",
+    "crates/aa-combat/tests/native_payment.rs": "d9177130e2b5e3dc62072730574693cd6713bda51e3138cbaac31fa7549a3d09",
+    "crates/aa-economy/src/binary.rs": "01fb5c714f44626acee9297d557ef1e4d1e976604cf5745f67acf6effa1eaa7f",
+    "crates/aa-economy/src/lib.rs": "74924b6fec26e553af4ba19d35a798918b279c8d41dbc34f35015a3bfd28284e",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-ability/clippy.log": "d35df987284bbac08341b0c150ea99a10f90980c815de88a6f442b1bb390f46d",
+    "research/phase7-ability/rust-tests.log": "5555a6dfd571d91de1a799f812ca89296d563a09142180ac24de998d93d119cf",
+    "research/phase7-payment/README.txt": "46f6d8bbd061ff55b6e08f99c2a8299824f5852f9b0dba593a10b4437a6e3bd1",
+    "research/phase7-payment/native-payment-fixtures.json": "f1ce3b7e2057f1004d479c1029232023065a8e282d19ceb7d07ff512e5fffa4e",
+    "research/phase7-payment/native_payment.py": "89f6a2a6042514a8b08c844948ce74c23abad62ce2cd349c34837fde3025264e"
+  },
+  "limits": "See README.txt. Shared full-suite log contains21 tests; this report claims only the named two tests and fixture scope. No runtime integration or rendering claim."
+}

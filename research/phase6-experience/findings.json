@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Native actor component value and experience routing",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "value_cases": 165,
+  "award_cases": 84,
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "focused_tests": 2,
+  "entire_body_tests": 13,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-body"
+      ],
+      "exit_code": 0,
+      "log": "tests.log",
+      "sha256": "4b37acf977d4925790d45cef52f8454572a662f16ffbed44e88ec3429b79e000"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-body",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "6ea5ca41d3d78ade45fb959493bcc598fae98f64bc6505bd4f27ecea1468d6cd"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-body/src/experience.rs": "8ff882f5cb1997529db8d8b7d078619e3028c052b7711ab0d2b1c74f29023851",
+    "crates/aa-body/src/lib.rs": "2b1f80a95d899bc66404405b2cd4387b1369d3abe0d0bcb3c23e284d9d96fbf3",
+    "crates/aa-body/tests/native_experience.rs": "4af712f9ef6a3939990bea5b17ac1f0856f211e18993e9be1db117875731c8e6",
+    "crates/aa-body/README.md": "756ca110a3a0425c2ed60f939220494618ffb3ab1fe2f618d1635140eeb600d8",
+    "research/phase6-experience/README.txt": "93b78f6e5e77e56deb7bb9b6cc28d506801628cd9e90c59fa7cd8d4877ea0ffe",
+    "research/phase6-experience/original_experience.py": "3d36127cb0412e77deec0743e5a99bc1c680d9c6a90d09696e8a1b4b4714a55d",
+    "research/phase6-experience/native-experience-fixtures.json": "2c8dcdba926988872d3ac936da4d08c11fd670b8a270593a63f478dfb7b3f9c3",
+    "research/phase6-experience/inspect_native.py": "f95068c1ce3eb2aa93cb1dda6004e96056ac14fe5a92b9e4a916f22a53d51e80",
+    "research/phase6-experience/native-ranges.json": "0fcde619f171386051fbb61973df270792d0a240027d296b6b18380fc9f70c6b",
+    "research/phase6-experience/record_findings.py": "b1d24f80a845776e120ce778301afd09aa1697a268de4b1c995fdd6d9abffaf5",
+    "research/phase6-experience/004ce770.asm.txt": "f680bb239579cade02975a0366d1702e7f963e737c4172097bb194cdcff84d8c",
+    "research/phase6-experience/004d01e0.asm.txt": "1ca7a75d00fd4e348c64fef30678a45626ebe4aceb673308cc4de54fe808d97e",
+    "research/phase6-experience/00578710.asm.txt": "ce3b77905ff53fa9d5cbf8f923ca0d13bff1213ef11ab16124eceffe6bd297cd",
+    "research/phase6-experience/00578c00.asm.txt": "886f2e604c78ca07ea8c2e1a7759e9a504a0ecde8ef5833dd6ceb0192ee7c07a"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-body/src/credit.rs": "da6e143de30ed0dafda92243e384aab8bacbbc65f228ab2054b8c6d007bde0bb",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+  },
+  "limits": [
+    "Actual actor/regiment component binding remains a required world adapter.",
+    "Promotion application571A60 remains a required callback; no guessed rank thresholds/effects.",
+    "Argument=true578C00 resupply value path is not implemented.",
+    "Errors preserve earlier effects; cycle detection applies only to unchanged routes between mutating callbacks, and callback-producing loops have no arbitrary cap.",
+    "Native heap layouts, invalid pointers and FPU exception flags are not emulated."
+  ],
+  "independent_review": "Pending separate peer review; this producer is not an independent approval."
+}

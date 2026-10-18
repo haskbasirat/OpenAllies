@@ -1,0 +1,228 @@
+{
+ "schema": 1,
+ "component": "Native frame loop, admin/world tick scheduler, removal requests, RNG census",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "accepted_v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "addresses": {
+  "frame": {
+   "0x765410": "TGC_NetNode::Update (per frame; real time 0x59ABA0*0.001 -> NetNode+0x58)",
+   "0x75CA70": "TGC_AdminNode frame update: at most one world OR admin tick",
+   "0x775BF0": "session launch (SetFrozen(false), world dump)"
+  },
+  "world_tick": {
+   "0x752AE0": "world tick wrapper (replay hooks 0x74D640/0x751A40, wall-clock stats)",
+   "0x76F790": "KKC_Sim world tick (AVI reset, sync logs, 0x41C180, 0x4F9970, 0x76F600)",
+   "0x4F9970": "GWorld update (phase2 oracle)",
+   "0x4F65B0": "phase transition"
+  },
+  "admin_tick": {
+   "0x755290": "admin tick",
+   "0x752E60": "host executes client requests (decrees)",
+   "0x751B60": "per-client request execution",
+   "0x752EA0": "host records decree history",
+   "0x74FD10": "client replays history entry +0x20C",
+   "0x74D710": "decree stream decoder",
+   "0x766CE0": "decree handler call",
+   "0x752DA0": "admin history (not in playback)",
+   "0x75FD80": "host rate helper (0.1)"
+  },
+  "timeline": {
+   "0x76F240": "KKC_Sim ctor",
+   "0x76AF90": "GetNextTickEventAdminTime",
+   "0x76AF30": "game time per admin tick",
+   "0x76B780": "admin tick end timeline update",
+   "0x76DCE0": "ResetAdminTime",
+   "0x76DD90": "SetFrozen",
+   "0x76B230": "speed -> +0x2C",
+   "0x76F370": "SetGameSpeed clamp",
+   "0x76B120": "render game time (presentation)",
+   "0x76AEE0": "host sync gate",
+   "0x76B030": "AVI frame pump",
+   "0x74B180": "admin clock estimate used by SetFrozen"
+  },
+  "constants": {
+   "0xA8C084": "admin tick 1/16",
+   "0xA92F84": "no-event 1e12",
+   "0xA874AC": "disconnect timeout 2.5",
+   "0x76DD6E": "max speed 64.0",
+   "0x75543E": "0.1 host rate arg"
+  },
+  "svars": {
+   "SVars(0xB39AB0)+0x1C": "GameTicksPerGameSecond (shipped 16)",
+   "SVars+0x20": "AdminTicksPerSecond (default 16)",
+   "SVars+0x28": "TickCountPerTrackPlacement",
+   "SVars+0x64..0x70": "GameSpeedMin/Max/FilmMin/FilmMax",
+   "UVars(0xB39940)+0x1C8": "RenderDumpAVI",
+   "UVars+0x1CC": "RenderAVIFramesPerTick",
+   "UVars+0x350": "SinglePlayerAutoPause",
+   "UVars+0x2B8/0x2BC": "SAITimeBetweenThinks/SAIMaxAccumulateThinkTime",
+   "View(0xB39990)+0x11C": "NetworkAdminAsyncTicksPerSecond",
+   "offset_rule": "settings table offset = 4*registration index (0x4B3470)"
+  },
+  "updatables": {
+   "0x50AC00": "queue0 every tick (gate vfunc +8)",
+   "0x50AC60": "queue1 1 s (gate +8)",
+   "0x50ACC0": "queue3 add_after (gate +0xC)",
+   "0x50AD20": "queue3 add_at",
+   "0x50AD80": "queue4 add_after (gate +0x10)",
+   "0x50B250": "cancel all",
+   "0xA30BE0": "periodic vtable (+8 0x50B330 update, +0xC 0x50B2C0 add)",
+   "0xA30C24": "deferred vtable (+8 0x50B020, +0xC 0x50AF10, +0x10 0x50BA50)"
+  },
+  "removal": {
+   "0x4F6760": "request/dedup",
+   "0x542A00": "prepend",
+   "0x4F53D0": "remove now",
+   "0x4F5490": "destroy now",
+   "0x4F5370": "availability+classification",
+   "0xB364C0": "GTID table"
+  },
+  "rng": {
+   "GWorld+0xD4": "world m_rng",
+   "0x4F02B0": "GetRNG",
+   "0x85D840": "raw draw (cdecl)",
+   "0x40C8A0": "bounded draw",
+   "0x50B2C0": "periodic queue add draws once",
+   "0x4F6280": "world sync dump draws once (launch 0x775BF0)",
+   "0x50AB10": "track placement ctor draws world RNG",
+   "[0xB3653C]+0xD4": "interface RNG (presentation)",
+   "[[0xB36528]+0x2C]": "app RNG (presentation)"
+  },
+  "precision": {
+   "0x891890": "NiDX9Renderer::Create adds D3DCREATE_FPU_PRESERVE only for flag 0x40",
+   "0x710AC0": "KKC_Renderer::ChangeResolution never passes 0x40",
+   "0x7F1965/0x7F1A39": "library context sets/restores _PC_53"
+  }
+ },
+ "cases": {
+  "driver_cases": 31,
+  "driver_frames": 776,
+  "native_world_ticks": 282,
+  "native_admin_ticks": 240,
+  "timeline_rows": 180,
+  "removal_cases": 11,
+  "rng_direct_sites": 209,
+  "rng_world_sites": 66,
+  "rng_orphan_call_sites": 25
+ },
+ "proven": [
+  "Frame decision (world vs admin vs wait), seam order, sync-log values, admin time, heartbeat, sync counters, timeline and world clock bits for every frame of 22 native cases (PC24 and PC64)",
+  "Timeline arithmetic 0x76AF90/0x76AF30/0x76B780/0x76DCE0 and the admin increment at PC24/53/64 incl. 80-bit ST0 results",
+  "Removal request dedup/flag/prepend (LIFO drain), immediate remove (phases 0-mode3/3/6) and immediate destroy paths incl. GTID redirection",
+  "Admin/world interleaving depends on x87 precision (rate 1/3 case diverges PC24 vs PC64)"
+ ],
+ "compiled_only": [
+  "Simulation::step/unfreeze composition",
+  "Timeline::new beyond one hand check",
+  "disconnect-timeout Unsupported error"
+ ],
+ "not_ported_seams": [
+  "network pump/commands",
+  "decree decoding and handlers",
+  "replay record/playback",
+  "sync-log transport",
+  "heartbeat 0x75B820",
+  "0x759680",
+  "0x76F600",
+  "0x41C180",
+  "SAI think loop",
+  "0x752AE0 statistics",
+  "0x76B230 GameSpeed conversion (0x96D890)",
+  "0x74B180"
+ ],
+ "open_gaps": [
+  "In-game x87 precision during ticks (likely PC24, unproven)",
+  "Per-type Updatable caller attribution is heuristic (nearest .cpp string)",
+  "RNG census is static/heuristic; draw order inside callbacks follows dispatch order but individual callback draw counts are not enumerated",
+  "Queue 2 (+0x1D4, 5 s) registration has no wrapper; inline callers not enumerated"
+ ],
+ "removed_caps": [],
+ "threading": "No in-frame work proven order-independent; none parallelised. Rendering/audio/asset work may run concurrently with the tick from committed snapshots.",
+ "source_sha256": {
+  "crates/aa-runtime/src/simulation.rs": "0725b69551d45ba46b17306e1ec06b65c647de4b9a53671a64153dfe440ceb04",
+  "crates/aa-runtime/src/simulation/speed.rs": "45def7e9c58d13e62fbdf8696697cefe6cb863c725c2f326c1cf1339c61763a1",
+  "crates/aa-runtime/src/clocked.rs": "f591d658c9798c5ecf716491588669f5bc1b6f012e5653b8ed02802f7a1f21fd",
+  "crates/aa-world/src/lib.rs": "2bf49669a5fb526653b2256d6d3686f6a7d8715925f68616afb69c94c4187190",
+  "crates/aa-numeric/src/lib.rs": "bc3299316e3824df520370b35cea6ea6d8938ef2f96d2dc37d43e77ac90689ac",
+  "crates/aa-trig/src/angle.rs": "e774755efca74f11550583f8761f335120b3d4ee32c72132d4e5f767e54ebaaa",
+  "crates/aa-trig/src/lib.rs": "9ff28cb22267e615319f0e2f97c1e39cb41b79b08583e595cf2dd4b1e2b55d6c",
+  "crates/aa-runtime/tests/simulation_native.rs": "a3cfdeec6b911bc7e5e6260f39478b830231ba95307fea28cd2f8055de9cd59d",
+  "crates/aa-runtime/tests/simulation_round2.rs": "d3214aee398c89b60094fc467183d6326e5357cac6a1b7cf55ea4caa28d97d1c",
+  "crates/aa-runtime/tests/removal_request_services.rs": "4b30f731026ce0bd0e5381c56df2f5ab91c123e6268056a4145f2ade55504d68",
+  "crates/aa-world/tests/removal_request.rs": "2c8c4874c0f0a651dc7228f88c2e2863db420d73ace2930da7a9567962b9fa98",
+  "crates/aa-world/tests/native_dispatch.rs": "ccd6701e82de89c02d5e2d424910249e649bdb45658cd875aa274bcefebf9b91",
+  "crates/aa-trig/tests/angle_extended.rs": "890efb07d8c48443196d64aae2dd5caa344eb88df9cd5b47a7392c5fa9f3d5d2",
+  "research/phase8-tick/native_tick_driver.py": "2dc9041708887ec25e71d5e41a5812463723d7e40121894310af125108068387",
+  "research/phase8-tick/native-tick-driver.json": "14d0bfb2915881debc361492b16685d0b45d5318e14779e1defdf73066f62d53",
+  "research/phase8-tick/native_tick_round2.py": "b6ddf0d7bee76cbfc1cc9a34d9177a4f2e48ae844d8ed3357eb70bbaa73a80a5",
+  "research/phase8-tick/native-tick-round2.json": "21e07a4b4d312a835fdeb682369cca5ab22388ea3b44b5548eed1f5d9c59d8b4",
+  "research/phase8-tick/native_angle_extended.py": "55ddd5f056be7b463f795936f216e07ebb49f4817b5aa8484cdd8def7fe8d52a",
+  "research/phase8-tick/native-angle-extended.json": "39443574fd0b7c97d5a0988c88dd988c8138e6a62ecc168c6ef3427dad0040cc",
+  "research/phase8-tick/native_removal_request.py": "d481b9ff618c804dd30f7c648c8ad4ca101cfd389153e446e00f8278fdaa79f7",
+  "research/phase8-tick/native-removal-request.json": "14f08de783ba9bd2050a8649a10fd03b7d12f035dc8310a4e7d21b13c629d8cf",
+  "research/phase8-tick/rng_sites.py": "4940bd0291cac9f8cc2d3a3b56afb5e930875db451687322294d3a91ebdba4a0",
+  "research/phase8-tick/rng-sites.json": "399ba6d776ad4db0350bb4a791b85c0cae7737ae384eadfd99f0e081c407b97d",
+  "research/phase8-tick/fpu_scan.py": "9abafcda726fe0d2b9c7bddae7d5496d6aaae2193031282dac270e08fafc2a19",
+  "research/phase8-tick/fpu-sites.json": "2c382c6ab1fdd8e3f1fd001e13773881ab313bd978f3ca09e6e29ecd91fd8d99",
+  "research/phase8-tick/emulator_limits.py": "524b17f51e8972104565a5176c3af77d07cd84cbd50cbf9bd670399ccb419d38",
+  "research/phase8-tick/emulator-limits.json": "5bf66b7a6828b3feb29668b31fde5c3eecf10c4bd4221f218f88b75d9edd628a",
+  "docs/WORLD-ORDER.txt": "6af2008449e75724878e4b82e6b483a36c6459912396877e74d5bdfe7e9b56e8"
+ },
+ "validation": {
+  "commands": [
+   "CARGO_TARGET_DIR=target/s-tick cargo test -p aa-world -p aa-numeric -p aa-simulation -p aa-trig --release --locked --offline -j 4",
+   "CARGO_TARGET_DIR=target/s-tick cargo test -p aa-runtime --release --locked --offline -j 4 --no-fail-fast --lib --test simulation_native --test simulation_round2 --test removal_request_services --test native_runtime --test scheduler_owners --test updatables --test saved_queues --test saved_queue_adversarial"
+  ],
+  "results": "aa-world/aa-numeric/aa-simulation/aa-trig: 40 passed, 0 failed; aa-runtime selected targets: 24 passed, 0 failed. Full aa-runtime suite not rerun green this round because other agents' in-progress files (catalog.rs, saved_performer test) failed to compile at times.",
+  "logs": [
+   "research/phase8-tick/validation-tests.log",
+   "research/phase8-tick/validation-tests-runtime.log"
+  ]
+ },
+ "round2": {
+  "precision_verdict": "Static: tick runs on net TGC_Thread (thunk NetNode+0x40 -> 0x765410, started 0x41ABDC after CreateDevice 0x41A200); _FPmtinit 0xB3509C is a RET (0x7D723C) so the thread keeps the OS initial CW 0x027F (PC53); D3D (no FPU_PRESERVE: 0x89198C, 0x710AC0) sets PC24 only on the main thread; no game-code CW changes; reachable CRT math restores CW. PC24 policy refuted for the simulation; PC53 recommended pending dynamic check (fpu-precision.md).",
+  "sticky_pe_verdict": "PE set on every tick (0x76544F binary32 time store each frame; no reachable FNINIT; FNCLEX only for unmasked exceptions; _CIpow FRSTOR restores caller status).",
+  "addresses": {
+   "0x76F370": "SetGameSpeed",
+   "0x76B230": "speed -> +0x2C",
+   "0x76B3A0": "max speed",
+   "0x96D890": "CRT _CIpow dispatcher",
+   "0x977A10": "_CIpow SSE2 body",
+   "0x96D8ED": "_CIpow x87 body",
+   "0x9773D4": "___sse2_available_init (flag 0xB4B340)",
+   "0x74B180": "admin clock estimate",
+   "0x76DD90": "SetFrozen",
+   "0x759680": "server backup-mode decision",
+   "0x757250": "SetBackupMode (+0x2D4/+0x2D8)",
+   "0x757010": "SetHost (+0x2C4)",
+   "0x759790": "SetServer (+0x2C8)",
+   "0x75B820": "heartbeat (network only)",
+   "0x76F600": "end-of-session UI check",
+   "0x41C180": "KKC_TimingStats smoothing",
+   "0x76AA90": "KKC_Sim::CreateGWorld (seed via 0x85D880)",
+   "0x85ED90": "TGC_Thread::Run",
+   "0x891890": "NiDX9Renderer::Create (CreateDevice 0x891B45/0x891B8A/0x891F0E)",
+   "0x445400": "angle routine (unstored ST0 now in aa_trig::signed_angle_extended)"
+  },
+  "cases": {
+   "driver_cases": 31,
+   "driver_frames": 776,
+   "pow_rows": 3132,
+   "pow_rows_exact_st0": 84,
+   "pow_rows_refused": 0,
+   "game_speed_rows": 96,
+   "admin_clock_estimate_rows": 180,
+   "set_frozen_rows": 48,
+   "angle_extended_rows": 2400,
+   "angle_ai_captured_calls": 522,
+   "angle_bit_identical_own": 1910,
+   "angle_bit_identical_ai": 400
+  },
+  "emulator_limits": "Unicorn 2.1.4: FPATAN/FSIN/FCOS/FYL2X binary64-accurate, PE never raised by arithmetic (emulator-limits.json).",
+  "corrections": [
+   "AdminNode +0x2D4 is backup mode (SetBackupMode 0x757250), not playback",
+   "0xB36558 is the local TGC_AdminNode; +0x2C4 host, +0x2C8 server",
+   "Driver precision: PC53 likely, not PC24"
+  ]
+ }
+}

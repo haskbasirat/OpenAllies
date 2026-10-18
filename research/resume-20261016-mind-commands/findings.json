@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-16",
+  "scope": "Original saved Element Mind command decoding and explicit owned command bindings; runtime catalog/staging integration owned by lead agent.",
+  "addresses": [
+    "0x4d9c80",
+    "0x4dace0",
+    "0x4dab60",
+    "0x4c2e60",
+    "0x4dac20",
+    "0x4daaa0",
+    "0x52c580",
+    "0x536340"
+  ],
+  "synthetic_native_cases": 369,
+  "real_native_cases": 647,
+  "real_maps": 57,
+  "unique_real_payloads": 593,
+  "real_command_names": {
+    "stop": 647
+  },
+  "passed_tests": {
+    "saved_commands_native": 4,
+    "saved_load_native": 1,
+    "dump_restored_mind_commands": 1
+  },
+  "original_exe_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_exe_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "limits_removed": [],
+  "ownership": "One distinct nonzero owned ID per saved allocation; no schedule or dispatch during Load; pending order preserved; error before mutations for binding/unsupported checks.",
+  "known_unported": [
+    "ParameterSet flag bit5",
+    "Regiment and Aircraft saved Mind readers",
+    "nonempty bombard text apply",
+    "live command definition and actual dispatch validation belong to runtime integration, not these lookup seams"
+  ],
+  "provenance_issue": {
+    "records": 647,
+    "description": "Embedded component spans carry local offsets despite absolute-span documentation; whole-payload unique byte matches verify original chunk provenance."
+  },
+  "files": {
+    "crates/aa-mind/src/saved_command.rs": "24b2acac0904086fe4782e41ba923768b2a2e460c9b115baa04bc4cf9d8b25cf",
+    "crates/aa-mind/src/saved_load.rs": "fe98081cd7d66238d0d2484182c4e6f568931e23314e79def4e27e719cb6e7fe",
+    "crates/aa-mind/src/lib.rs": "3fe50797438025c54ef05dace42095d7e2cf31174b53105611929104e90cdea9",
+    "crates/aa-mind/tests/saved_commands_native.rs": "d301237cf4dfb0bd36972daf776edcfa4b40ca8ec65b8dc6fa66f3a6b12952c0",
+    "crates/aa-runtime/tests/saved_payload_probe.rs": "e94ef827245afb6ecb8efa9058dcfef7d8799907db2404cbe50e5396ac01efd5",
+    "research/resume-20261016-mind-commands/embedded-corpus.log": "d2b6bb07109089f81e8d8ad658122b3c433b68d9046018f36b9055488c1f11db",
+    "research/resume-20261016-mind-commands/load-instructions.txt": "fe21e04e778ad3c6176622e3010d2c7fb696832b562704c0332c1aaff0774de5",
+    "research/resume-20261016-mind-commands/map-command-corpus.jsonl": "d8f9901040f6eefa279691c4f99f0873216a2d86c3dd107ba672aac092930c14",
+    "research/resume-20261016-mind-commands/native-commands.json": "6908fac097629d838d0c6711167da66f700262ce24fd69bcd90138d25e97da86",
+    "research/resume-20261016-mind-commands/native-map-commands.json": "5e1a583d2cd6514ff9f6ac2202c7e4cb1b312201c43fade13f60118bb27d1191",
+    "research/resume-20261016-mind-commands/native_commands.py": "a078f3c15c2b982e405d911a9b602995c5ea8f6328d3bc493d1ae174e273ea64",
+    "research/resume-20261016-mind-commands/native_map_commands.py": "c159d095acbb4ce80933675eb245834ae2455fb817bc41506e6a2844ecf9fd6b",
+    "research/resume-20261016-mind-commands/README.txt": "bffb55dc970476878e6c3281dbc9e531e1b53f24bc2bedd6062d1e4beae46917",
+    "research/resume-20261016-mind-commands/tests-final.log": "a9618cf671fa6fa4712b804eec98a4b7df3ff61a141b29260e1e01f8355abe99"
+  }
+}

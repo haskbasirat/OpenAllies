@@ -1,0 +1,42 @@
+Supplement to findings.json; 2026-10-17
+
+The new film_parameters storage ports the native 50F890 empty active counts
+and the full Team phase of 510EB0 through 511020. Actual World+16C slots are
+read in their existing order; null slots are skipped. Thing+18 and BOTH words
+of Team's localized value (+3C/+40) are copied. The native capacity eight is
+a growth hint, not a new limit. Twenty-Team native cases exercise growth.
+
+The authoritative State has no Clone, Default, raw setter, or conversion
+from the explicit-input diagnostic Table. State::capture_teams reads the
+actual ActorStore, registration slots, completed Bank source precision,
+canonical proof and current special Team storage. It mutates its own Table
+directly. There is no detached live table or final copyback. This concrete
+adapter compiled; an actual positive managed Team capture has not run yet.
+
+The native oracle executes real constructor, iterator, CString copy and
+vector append/growth code with explicit source storage. It stops before
+the Kingdom-count reset at 511020. It proves 36 paired original/v14 rows
+(72 separate image sessions) across PC24/53/64, with 193 executed block
+pins. The diagnostic Rust table replays every row and failure prefix.
+
+film_header_fields supplies the same proven 5A26E0 write/callback sequence
+over an actual fresh header destination: no decoded MapHeader or fabricated
+chunk SourceIdentity is required. Destination setters commit immediately;
+Rules, typed GameType, Parameters, Campaign and Entries owners remain the
+caller's real owners. The reused 51-row native capture fixture is NOT
+counted as additional native executions here. The fresh-field test also
+checks the high-FILETIME-word store before the low word and uses move-only
+definition/Campaign handles.
+
+Final release command:
+  CARGO_TARGET_DIR=target/s-borrowed-leader-check cargo test -p aa-runtime
+    --test film_teams_native --test film_fields_native --release --locked
+    --offline -j4
+Both tests passed. Log: teams-fields-tests-authority.log.
+
+Not proven or completed by this supplement: Kingdom/trigger-extra phases
+of 510EB0; actual current Header constructor and complete capture; 4E93C0
+colored display glyph; actual managed Team positive call; full film depot/
+file backend; a playable battle, original-save compatibility or multiplayer.
+State's constructor-zero Kingdom count must never authorize a claim that
+current Kingdom capture completed.

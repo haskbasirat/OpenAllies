@@ -1,0 +1,63 @@
+{
+  "scope": "Research-only522270/529D80 ordinary reason4 and live member coordinator; partial4D7960 death entry. Unpublished during root source freeze for unfinished Development10 packaging.",
+  "native": {
+    "outer_rows": 123,
+    "death_prefix_rows": 18,
+    "executions": 282,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_pins": 110,
+    "static_vtable_fixture_pins": 1,
+    "cutoff_pins_excluded_from_execution": 1,
+    "effects": "Real4CEEF0 stores observed with memory-write hook; nonzero reasons cause NO writes. Controlled virtual-return mutations are explicit input effects at4CEF04 after the actual setter body.",
+    "remaining_child": "Active main death stops at its first4D57C0 child. Separate death-prefix rows execute actual4D57C0 bit4 or Session3 return, then stop BEFORE4D7993. Nil Session rows prove lazy bypass; no positive credit/death acknowledgement."
+  },
+  "portable_draft": {
+    "result": "PASS2/2 exact source under standalone rustc test harness",
+    "type_scope": "Harness-only MindId and World-error type shim; coordinator uses no Arena or ID fields. Not a production aa-mind/runtime typecheck. No ActorStore/World initialized claim.",
+    "coverage": "All123 outer rows incl callback failures, duplicates/null members, no-write preservation, actor/org/vector/count mutations; all18 death-prefix rows."
+  },
+  "concrete_draft": {
+    "path": "drafts/stored_regiment_orphan.rs",
+    "status": "rustfmt syntax checked only; not exported, runtime typechecked, linked or executed",
+    "api": "run(catalog,&mutActorAccess,&Arena,&Bank,&SpatialWorld,MindId,capturedObjectKey,Precision)",
+    "owners": "Same captured Installed Regiment, current Arena.actor, canonical moved Bank source, actual Organization pointer receipt, current member vector; no detach/copy/default owner.",
+    "death": "Actual removed guard; actual bit4/Session3 credit0 short circuits; positive credit/remainder required. Reason stores before reached errors remain committed."
+  },
+  "freeze": {
+    "crate_writes": 0,
+    "production_modules_exported": 0,
+    "full_runtime_links": 0,
+    "current_Update_forwarding": "unchanged explicit required virtual1A8; parent source freeze remains intact"
+  },
+  "historical": {
+    "native-regiment-orphan.json": "Preliminary observed cutoff pin was not yet excluded; not the accepted fixture.",
+    "native-regiment-orphan-v2.json": "Superseded by null-Session lazy guard probes and memory write receipt.",
+    "native-regiment-orphan-v3.json": "Superseded by exact no-write receipt and Option store decision. Preserved unchanged."
+  },
+  "required_followup": [
+    "Root release of crate source freeze before publishing modules/exports/caller.",
+    "Production typecheck of draft after integration.",
+    "Same actual ActorStore adapter execution and native scoped proof acceptance.",
+    "Actual positive4D57C0 and4D7960 zone/notification/state/component/destruction owners; no completed death claim."
+  ],
+  "pins": {
+    "native_regiment_orphan.py": "571e0264306278109cbf318f94cf4e2d00c7d64e4b76b5a317efa27e1aabad8a",
+    "native-regiment-orphan-v4.json": "32e594991d376d80134a33a4859d3babd68a519167b1f55578c846fe79705d5b",
+    "native-v4-immutable.log": "e1996042cf0c98e8f277ea92aac2dcca69b15ce8c8aca22a087d6e5d19e1fc10",
+    "drafts/regiment_orphan.rs": "317f612c11a3fe5eb1d2218b4ffea887f10dcb89ca2480a61f228207b012c4a1",
+    "drafts/stored_regiment_orphan.rs": "4a92264bfbd615efc62858ecca264142eb861db1c32dfba5b10a132569f9846c",
+    "exact-draft-tests.rs": "5bd35dfeb476c205c2fa85b9f0ca6b6080704bdc24f6253827bf3facd47ea096",
+    "run_exact_draft.ps1": "63a7396be1bed5554a887b117dec30b1b427258a86f9fc580e2886e23656ae7c",
+    "exact-draft-tests.exe": "ee1f01ed80283f6413976b48c4263edfcb87f35afd3fbeb0afaacd2b2636d6da",
+    "exact-draft-tests.log": "da0b3cae628b5e54cbe6ce8c0ea684c7ff5efe3ec742f4fe893a4994e211f51f",
+    "native-function-map.json": "e427e12e38402cf60b99b24a28c51680b04a60bbeedbe8c252ef6d56a623079b"
+  }
+}

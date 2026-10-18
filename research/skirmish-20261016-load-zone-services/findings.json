@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "status": "author source/evidence frozen; independent review separate",
+  "scope": "Actual pre-first-record mode0 ZoneMap factory and reached saved Object footprint/memory services; no complete initialization or playable battle claim",
+  "native_initial": {
+    "machines": 6,
+    "mode_rows": 126,
+    "zero_and_actual_variation_binding_rows": 12,
+    "executed_pins": 217,
+    "intercepted_leaf_entries": 2,
+    "executed": "4981A0 payload stores,59E520/511860,557E6E..91/54EA50,5566AA..C6 zero fill and54FDC0",
+    "seams": "allocation and mode registration storage; not whole enum intern/CString or full GWorld/GMap loader proof"
+  },
+  "native_current": {
+    "rows": 30,
+    "fresh_original_v14_machines": 60,
+    "executed_pins": 364,
+    "seams": [],
+    "executed": "4EA150/554DD0/554330/4CF210/ordinary shape getters,4EB490/4EA350/76AC90/4EBC70",
+    "controlled_inputs": "actual stopped first Kingdom field-shaped pose/source shape/flags, explicit fixture zero point, two component masks and five Session phases",
+    "not_claimed": "Captured actual mask/startup phase, global point producer, complete Object Init or positive detection-memory branches"
+  },
+  "rust": {
+    "passed": 3,
+    "failed": 0,
+    "ignored": 0,
+    "actual_map": "Campaign/tutorial02.RMP",
+    "tile_count_each_precision": 16384,
+    "precision_modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "combined_final_passed": 4,
+    "guards": [
+      "saved mask is not current mode0 fog",
+      "mode/grid/static flags mismatch",
+      "fractional creator extent uses native ceil",
+      "runtime constructor storage refusal",
+      "reached private PointShape validates destination Catalog and current numeric source bindings"
+    ]
+  },
+  "concrete_owners": [
+    "Same actual BoundTerrain, header-derived TerrainGridLayout and persistent SpatialIndex feed the initial ZoneMap",
+    "Private PointShape and actual borrowed SessionPhase; no PE-zero construction or cached phase",
+    "Current shell/source-bound geometry for occupancy and actual live ZoneMap sets/entry order",
+    "Reached supported actorE8 and actual generation-checked Kingdom18C/190 fog-prefix reads"
+  ],
+  "remaining": [
+    "PointShape startup provenance is a separate global-owner proof; native fixture point is explicit controlled input",
+    "World owns stage correctness and same-map association; equal dimensions cannot authenticate foreign maps",
+    "Zone entry actor identity uses ActorId.raw domain, distinct SpatialIndex keys need explicit mapping",
+    "Positive blocking query, type1 reveal mask/kingdom vector, container100, memory/SAI and source16D children refuse when reached",
+    "No complete world load, map Init, actor registration, tick, battle or renderer parity certification"
+  ],
+  "production_pins": [
+    {
+      "path": "crates/aa-runtime/src/load_zone_services.rs",
+      "bytes": 11986,
+      "sha256": "87ad4f8f336db76d05432d901bb03cd413f7f19a805c2aed65e6e8fd32566f89"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_services_tests.rs",
+      "bytes": 7596,
+      "sha256": "fbe2fac050f9ac6c57f69bf47bb79ec4e8301c1f38ca8493b27e316c4fa7f010"
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native_initial_zones.py",
+      "bytes": 6822,
+      "sha256": "33c39c5b50e4c87f12d8f85bd8cc7b2d12aaedb67dcb7be3f1357d1588ff3c6d"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-initial-zones.json",
+      "bytes": 36403,
+      "sha256": "f8779e09d28a08e5a1c05325a0f00fed4648e8ba85ccce037d799c2ec9f271af"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-initial-replay.log",
+      "bytes": 190,
+      "sha256": "0b57323bffd20162443ff98ce8c6186170e07c0f5767e3c6166b2eeb4d20dcc7"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native_current_services.py",
+      "bytes": 4575,
+      "sha256": "3375385223498fdf58cf5575545fbeaa4f3ef92179f6f3ef112c52ac9ab8934a"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-current-services.json",
+      "bytes": 54915,
+      "sha256": "73e3f2bf211c7f22157d7eb478bd37d8dda8a5e4667a6bf4d3fa6b8431cd053f"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-current-replay.log",
+      "bytes": 168,
+      "sha256": "729a9b173d68e46202c7327e6379e2004ef07cf4109c2b689121989cacb220bf"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/inspect_native.py",
+      "bytes": 1332,
+      "sha256": "a9706677e816e313b1d7822971217805e2d0c47a4a92e2270aa4caf15fc87f23"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-instructions.log",
+      "bytes": 33079,
+      "sha256": "b8a2a63757819f0454d78afc93f93939de5041cc38b9a0f00eaa965621f983ff"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/native-load-order.log",
+      "bytes": 8086,
+      "sha256": "3afc7a98dbb6770506dc4f1e7baaa9baf2c58e79e887a74f8c4c29569da7881e"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/world-mode-table-xrefs.log",
+      "bytes": 1327,
+      "sha256": "a268ddfb23e91282b066f58222fe418b051cdd43cca7e2ee7f549a29d33b7f5e"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/world-mode-owner-xrefs.log",
+      "bytes": 1031,
+      "sha256": "5d64d53ed0b68ea3450a8a2ee606db222d910695ba56465a7b8b56d4b4bef023"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/world-mode-ctor-neighbors.log",
+      "bytes": 10810,
+      "sha256": "6eacd3e0bc8694b1beefa7632af85adf4abc07fba319489d21118c5d33119d9a"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/rust-tests-final-v3.log",
+      "bytes": 1046,
+      "sha256": "752b37eab874ae7f010e9d80b9965b99139548b8e6cfecc6f5da55c93fc05d16"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-services/README.txt",
+      "bytes": 7089,
+      "sha256": "53c1c12e60fb5c43ba81f476ac25e301d40ac9611726819d43edb5f0b7c1e623"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/rust-tests-frozen.log",
+      "bytes": 795,
+      "sha256": "9b6cb50345542a3589ffff435cbea057e52922c572f56082817d5bef3d059538"
+    }
+  ],
+  "preservation": "No Cargo/lock, original native files/assets/save/profile/release edited; only new runtime module/test and shared module export for this slice"
+}

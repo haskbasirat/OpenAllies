@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Entire4E5DF0 control/order coordinator with mandatory World callbacks; not a completed runtime host",
+  "api": "aa_economy::kingdom_init::initialize(kingdom, argument, precision, &mut World) -> Result<bool, EconomyError>",
+  "addresses": [
+    "4E5DF0",
+    "4D7230",
+    "4BEDF0",
+    "404F60",
+    "50AC00",
+    "4BC6C0",
+    "4BB3E0",
+    "46C8C0",
+    "4BB3F0",
+    "4E1810",
+    "4E4C30",
+    "79E170",
+    "4F8AF0",
+    "4F0680",
+    "4F06B0",
+    "54EBA0",
+    "559600"
+  ],
+  "behavior": [
+    "Actor Init argument/false result before all other phases",
+    "Current world-version and schedule gate",
+    "Live resource-count reread after per-index1A0/1AC/1B8 stores; suffix/stock preservation",
+    "Team membership prepend, conditional tail initialization, wrapping count increment",
+    "UNIT19 thenTRUCK42 category traversal with lazy link predicates and current next-node reads",
+    "Plain available recruit construction and ownership callback",
+    "Conditional active SAI registration followed by mandatory world registration",
+    "Live nullable major-vector traversal and virtual138/relation228/relation22C order"
+  ],
+  "validation": {
+    "native_scenarios": 33,
+    "native_rows": 99,
+    "original_v14_executions": 198,
+    "precision_modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "rust_scoped_test_passed": 1,
+    "rust_rows_compared": 99,
+    "strict_scoped_clippy": "passed",
+    "independent_review": "assigned to denizen_actions; see its additive review when complete"
+  },
+  "mandatory_effect_seams": [
+    "4D7230 Actor Init",
+    "50AC00 legacy scheduling",
+    "4E1810 actual restrictions",
+    "4E4C30 recruit ownership",
+    "79E170 SAI registration (ret4)",
+    "4F8AF0 world registration",
+    "other virtual+138",
+    "54EBA0 and559600 relation effects"
+  ],
+  "additional_oracle_services": [
+    "operator new/free",
+    "vector capacity reallocation",
+    "CString diagnostic and log formatting"
+  ],
+  "limits": [
+    "No runtime binding installed; missing callbacks must return error",
+    "Outer LoadThing bit7 gate is caller responsibility",
+    "Interrupted callback fixture cases prove side-effect prefix, not C++ exception/destructor unwind",
+    "Allocation-failure semantics outside oracle scope",
+    "Null first UNIT head and null Element backreference fault boundaries report explicit errors",
+    "No mission, publication, playable battle, multiplayer or campaign success"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "sha256": {
+    "crates/aa-economy/src/kingdom_init.rs": "a1798f9f94fa6e810c5a094e65a5a0a689458c49f194c1a40d1bb8b2a18542ac",
+    "crates/aa-economy/tests/kingdom_init.rs": "7a4d98c76665924fca8862737d279000a9a5f854c9c123c635533b26eae1ad3f",
+    "research/skirmish-20261016-kingdom-init/native_kingdom_init.py": "e4413cdfff15f081409419abead165ef0b452314d1951c5acf4d1fc28cd8a289",
+    "research/skirmish-20261016-kingdom-init/native-kingdom-init.json": "616beda7240881d1b08a5b987b3e1087e665c8b0005f98f3d4391a66b0709a3f",
+    "research/skirmish-20261016-kingdom-init/README.txt": "8356ee45401615e50561c3c89417ad3530749ce19a14198194ca943507ca0d44",
+    "research/skirmish-20261016-kingdom-init/tests.log": "50b5699eb547689b7ea531244da64ca888848eb532c5d42081b93f73438ac87d",
+    "research/skirmish-20261016-kingdom-init/clippy.log": "33d3566e4dc7c7950eaa1973a14113eddf03d34a8031b6a05624d53b5c27e44b"
+  }
+}

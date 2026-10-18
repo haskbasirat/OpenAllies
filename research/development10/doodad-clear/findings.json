@@ -1,0 +1,47 @@
+{
+  "scope": "Native4F5560 clear coordinator and existing TriggerManager54C200/540C40/543A90 membership; concrete same-world binding remains Leader/Film work.",
+  "native": {
+    "paired_cases": 153,
+    "executions": 306,
+    "observed_pins": 285,
+    "executed_instruction_pins": 279,
+    "declared_seam_entries": [
+      "0x5530f0",
+      "0x555620",
+      "0x4bedf0",
+      "0x404f90",
+      "0x4f5490",
+      "0x6f7430"
+    ],
+    "both_images_all_precisions": true
+  },
+  "rust": {
+    "trigger_test": "PASS1/1;306rows x4Thing queries; lazy current names, raw case-sensitive NUL-terminated UTF16 comparison",
+    "clear_test": "PASS2/2;306rows and every observed required-child error prefix; laterThing flags changed by prior destruction"
+  },
+  "proofs": [
+    "The SAME TriggerManager B36520 protects Thing parameters in loaded manager/list order regardless of trigger enabled state.",
+    "Native class2/9 and flag10 gates are lazy; resolves happen in private collected GTID order.",
+    "Actual name getter ownership is a declared seam; real native wcscmp and full membership chain execute.",
+    "IDS is read before current GTID for eager diagnostic arguments; real child destruction is a declared seam.",
+    "The native private list releases its nodes in original collection order; Rust owns the analogous collection without native allocator ABI."
+  ],
+  "limitations": [
+    "No runtime terrain/startup acceptance or gameplay claim.",
+    "Overlap descriptor/query are declared seams here; existing all_overlaps proof/binding is reused.",
+    "Native logger threshold/CRT formatting and destructors are not proved by this fixture.",
+    "Unregistered/mistyped decoded fields and missing current owners return explicit errors."
+  ],
+  "sources": {
+    "crates/aa-spatial/src/doodad_clear.rs": "dc9052efd82702b68c6b4370ee1a3753aa4ef5da4e9f4156dea39b576e142b45",
+    "crates/aa-triggers/src/thing_references.rs": "7c56a0ba995dc706d9e08d399e663cafe24dfa0ed7e3c2762603dbf08ca7e541",
+    "crates/aa-triggers/tests/native_thing_references.rs": "0f04a2ae191e9262edae698aa63a99046eea1a85961ddb2f869b461e206ca213",
+    "crates/aa-spatial/tests/native_doodad_clear.rs": "d306981249bf9eee6a95a77db021d9e2abae16570f952fee23e2746a348dfef4",
+    "research/development10/doodad-clear/native_clear.py": "35589ffc405b178eb2c130dadae662397978a7e94f826e412b2ea1c683acbfbc",
+    "research/development10/doodad-clear/native-clear.json": "42943f3cfe759ae8b468cee627f40181d94dfd04ea2e7034074f4b5dcc02b6f8"
+  },
+  "logs": [
+    "qa-output/development10/doodad-trigger-rust01.log",
+    "qa-output/development10/doodad-clear-rust01.log"
+  ]
+}

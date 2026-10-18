@@ -1,0 +1,84 @@
+DEVELOPMENT 04 — ACTOR AND MOVEMENT FOUNDATIONS
+
+This is an incomplete Rust reconstruction. It cannot yet run a full match.
+The existing asset browser, model/material corrections, terrain orientation and
+animation coverage are preserved. This pass primarily advances simulation code.
+The original game, saves, profiles and previous release folders are unchanged.
+
+Native actor identity and lifecycle
+aa-actors implements the original generation-bearing GTID registry: allocation,
+saved-ID registration, invalidation, stale-reference checking and ordered
+iteration. It also implements the31 component slots, dependencies and exact
+create/existing/post-initialize order; Mind is deliberately initialized last.
+It does not infer component masks from authored child names or convert map
+placement IDs into live GTIDs. Full definition evaluation, actor construction,
+owner publication and spatial registration remain required.
+
+Health and healing
+aa-body ports bounded health/max-health updates, ordinary healing, threshold
+effects and death dispatch with synchronous required callbacks and native
+rereads. Linked-body propagation and damage-converting healers are explicit
+unsupported branches. Weapons, armor, projectiles, capture, kill credit and
+the full death lifecycle are not implemented by this component.
+
+Ground movement and turning
+aa-movement ports begin/stop motion and ground-step ordering: turn, accelerate,
+terrain speed cap, destination crossing, target range, collision callback,
+position commit and Mind/Character notifications. Acceleration delta remains
+distinct from the world's turn/displacement delta. Actual collision, route
+solving, terrain height and spatial commits must be supplied by the native-
+compatible world. Falling/aircraft paths and the outer scheduler remain absent.
+
+aa-trig preserves the4096-entry original sine/cosine tables and quantized
+rotation, using explicit x87 precision and native stores. Signed angle uses a
+small isolated x86_64 x87 block that restores the calling thread's FP state.
+The concrete ground-step adapter only enables PC53, whose native CRT angle
+branch is independent of inherited precision flags. Other modes require more
+status tracking in the preceding movement arithmetic; no global PC default is
+assumed. Standalone angle/rotation functions have separate precision contracts.
+
+The original tiny-negative-angle lookup can read index4096 outside its table.
+Rust reports that unsupported access rather than reproducing undefined memory
+contents. Nonfinite, malformed or unrepresentable inputs are also checked.
+
+Commands and random numbers
+The full357-entry command registration order is recovered, preserving duplicate
+names as distinct ordinals. Explicit actor-move request47 and decree66 decode
+their complete UTF-16 selector and three raw words. Process guards and command5
+delivery are reproduced with required actor callbacks. Other355 payloads are
+explicit errors. This is not a full normal right-click command implementation.
+
+Command5 must pass through the native component/UAI path and path-node producer
+before it starts Mover. Directly connecting a packet to a straight walk would
+change gameplay, so this release does not make that connection.
+
+NativeRng now distinguishes raw state restoration from native seed mixing.
+Bounded modulo draws and unsigned-to-binary32 conversion preserve separately
+rounded native operations, including PC24 behavior. RNG ownership, seed sources
+and authoritative draw order are still missing.
+
+Executable integration and acceptance
+--mechanics-check runs a small embedded set of original-instruction samples
+before asset discovery. It compares output state and callback traces and emits
+JSON with its scope. Its diagnostic actor/world callbacks are clearly labeled;
+passing it does not establish an actual match, save or multiplayer session.
+The wider source tests and independent review reports carry the full coverage.
+See VALIDATION-04.txt for the exact final build checks.
+
+The normal executable remains the development asset browser. Pathfinding,
+combat, live world construction, AI, campaign/strategic mode, original UI/audio,
+native saves and end-to-end multiplayer are still required for a replacement
+game. Previous visual limitations in PARITY.txt remain open. No additional
+visual fidelity or general performance improvement is claimed from this pass.
+
+Resource and preservation policy
+The process remains64-bit with no fixed game RAM/VRAM allowance or disk/network
+rate throttle. Parallel asset work remains separate from sequential simulation
+ordering. Native identity/packet formats and gameplay rules retain their own
+finite domains; those are not host-memory allowances. Hardware resources remain
+finite. The source backup before this pass is
+backups/development-03-source-before-phase4.zip.
+
+Development-04 is a preview executable package requiring the existing recovered
+asset directory and its included cache for rendering. It is not a standalone
+whole-game distribution. The mechanics diagnostic alone does not need assets.

@@ -1,0 +1,117 @@
+{
+ "scope": "Frontend/native battle renderer presentation wiring, not complete battle startup or combat acceptance",
+ "owned_source": [
+  {
+   "path": "crates/aa-client/src/frontend.rs",
+   "sha256": "bc0f875cd513b986b6722d5b641ac25b789e3e8681ee3855da9d021c0e757821"
+  },
+  {
+   "path": "crates/aa-client/src/tgi_frontend.rs",
+   "sha256": "13e143771e85645e2764a8e9d46410b89ba9183561eccf752507ee76269f5368"
+  },
+  {
+   "path": "crates/aa-client/src/battle_presentation.rs",
+   "sha256": "6752d640f4216740de422c749ecaffe317266b242ff8b6b16d50fabd86fcf7da"
+  }
+ ],
+ "exact_before_backups": [
+  {
+   "path": "backups/source-checkpoint-20261018-mapload/settlement/frontend.rs",
+   "sha256": "cc06526644f7201456a74d6d991a7fcc28898ca321f2650a7233a952c60cb40f"
+  },
+  {
+   "path": "backups/source-checkpoint-20261018-mapload/settlement/tgi_frontend.rs",
+   "sha256": "557cdf924161e7862795784e957b9f74e70ecd9d4362a26be4214ece7ba21002"
+  }
+ ],
+ "source_changes": [
+  "Allocate the actual fixed initial window target before pumping native camera/frontend RPC.",
+  "Refresh the actual same-size Viewport receipt after scene upload changes renderer epoch.",
+  "Submit a nonblocking read on the same retained SimulationThread; use actual VWorld scene renderer receipt, current normalized camera, World/root relationship and real Viewport.",
+  "Return only sealed immutable camera packet/weak witnesses; native World and Directory remain on SimulationThread.",
+  "Draw with SceneRenderer.render_native and paint its texture behind the unchanged source TGI forest.",
+  "Share the exact prior TGI input/update/event/layout/paint algorithm; only legacy Loading black clear is omitted when an actual battle frame was drawn.",
+  "Keep actual Loading TGI until native AppState selects Game; no Playing status, AD/task/Loading/Sim-ready writes.",
+  "Keep first target dimensions fixed; letterbox subsequent window sizes rather than silently change native projection aspect.",
+  "Emit a one-time actual battle native frame presented log only after render_native succeeds, with selected map label, World revision, native init word B8 and camera pixel dimensions."
+ ],
+ "source_equivalence": {
+  "tgi_common_frame_body_identical_except_clear_predicate": true,
+  "prior_frame_body_sha256": "9afc8230ddb4788945bac2ef58d11be1dc7ce4b29791924d42493a5e95cf2353",
+  "qualification": "exact source comparison; no new native TGI callback execution claimed"
+ },
+ "validation": {
+  "client_metadata": {
+   "result": "PASS",
+   "elapsed_seconds": 14.02,
+   "log": {
+    "path": "research/development10/mapload-ui-check02.log",
+    "sha256": "73d18e2c58cb3017e539ab92b6c0c0245306c24e8a4d25f36345ef3a970440d6"
+   }
+  },
+  "client_tests_metadata": {
+   "result": "PASS",
+   "elapsed_seconds": 9.0,
+   "log": {
+    "path": "research/development10/mapload-ui-tests-check03.log",
+    "sha256": "ce761d7e9abe808a8bfa881327b7a1150e1321498f5688cd1b9cc1c8ef30c6a2"
+   }
+  },
+  "isolated_exact_aspect_function": {
+   "result": "1/1 PASS",
+   "source": {
+    "path": "research/development10/mapload-presentation/aspect_fit_exact.rs",
+    "sha256": "c3564830d128c3f86af695975b4f62319605f020fbe73dfaa216fc38ac3b3c9c"
+   },
+   "binary": {
+    "path": "research/development10/mapload-presentation/aspect-fit-tests.exe",
+    "sha256": "72335d35a1429eaee7700559b1e307dc73e9e12827557bcb3b3642b4ff766bea"
+   },
+   "log": {
+    "path": "research/development10/mapload-presentation/aspect-fit-tests.log",
+    "sha256": "18ccfadd9a63feafaf8123d29811b96ae6accac0d65bf2b1a0c9c8ed422e30b3"
+   },
+   "qualification": "exact production aspect-fit function and its test only; no fabricated Camera Snapshot or VWorld owner"
+  },
+  "first_metadata_predecessor": {
+   "result": "blocked only by Builder controller E0505, repaired before final checks",
+   "log": {
+    "path": "research/development10/mapload-ui-check01.log",
+    "sha256": "d8f17ae334a3cb183079edc48adb5866255200bf089188add05c0756daeefb9c"
+   }
+  }
+ },
+ "shared_context_snapshot_only": [
+  {
+   "path": "crates/aa-client/src/battle_controller.rs",
+   "sha256": "6d6a4bcd49acd3cd7296d8ef214e5083ef8413151812ab9991135672714e6a43"
+  },
+  {
+   "path": "crates/aa-client/src/battle_scene_startup.rs",
+   "sha256": "e3222c14313b41e322802fd4d44d0eca446127513b31bbb8790079a8128e0778"
+  },
+  {
+   "path": "crates/aa-client/src/battle_view_startup.rs",
+   "sha256": "c5b0f0072afe3518578a48841dba71a26d00d4370aa31364b9027901179a004b"
+  },
+  {
+   "path": "crates/aa-client/src/main.rs",
+   "sha256": "2e1b1836e08e809134f0e400699cdb4932b8c11190d37365f970810f95597240"
+  }
+ ],
+ "not_claimed": [
+  "Actual native map first-frame marker observed",
+  "linked current application probe",
+  "full VWorld startup success",
+  "Loading/UserReady completion",
+  "Admin304/315 unfreeze success",
+  "combat/AI readiness",
+  "native camera resize operation"
+ ],
+ "initial_audit_barriers": [
+  "Product skirmish_session never called render_native.",
+  "No product caller prepared native camera viewport or minted same-VWorld camera Frame.",
+  "Legacy TgiFrontend Page::Loading black clear persisted after actual Game forest was selected."
+ ],
+ "remaining_validation": "Root linked application probe must reach actual scene/camera receipts and show the first-frame marker. Reached native startup failures remain authoritative; no viewer fallback."
+}

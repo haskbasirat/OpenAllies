@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "production/tests frozen, all scoped replays passed",
+  "scope": "WorldInit53F840/5402A0 sameMapsolver allocations,50C4C0 header gates and paired-index/currentSVar binding; not completeWorldInit/zoneWorld or battle",
+  "sources_sha256": {
+    "crates/aa-runtime/src/load_zone_globals.rs": "b8b23f3e628c67bce55656e3fca1c23d8469e259d0c73c524d15548d920d7369",
+    "crates/aa-runtime/src/load_zone_globals_tests.rs": "168d4dca6a3ce6c5eaef457088117f5c2ad09f3d77f57209cfd5599ad898287a",
+    "crates/aa-zones/src/tile.rs": "71609ac1e5142c8c4a4ac9a725d3c976e37a12b1dd87dc80cd635ed1eba9d482"
+  },
+  "native": {
+    "constructors": 9,
+    "presentation_rows": 24,
+    "machines": 66,
+    "executed_pins": 147,
+    "allocator_or_required_entries": [
+      "6F7810",
+      "43BA80"
+    ],
+    "fixture_sha256": "9ac9303d22a87f51bc4276285cae1d96b7142a2d9a4ca619af63c218a2d404ea",
+    "producer_sha256": "1ae3e63ee9c6af27f353ab193e2f211b7c324d1628189d732332cea2ef7e5637",
+    "fresh_replay_sha256": "3acb710f5cb2254f647ba9113d5088c28e138ee967f9760338256770fe241b24"
+  },
+  "rust": {
+    "globals": "2/2 pass final",
+    "aa_zones": "all9 native integration suites pass on currentWeak witness source",
+    "globals_log_sha256": "b9b39ae107fbbb143fdd5c499bb43f123422383c4d4dd8c9ab779ccd87b99709",
+    "zone_regression_log_sha256": "28446342b1ce085527cf4b6c6529bf9e064d8cf1059c4f45f131023fc7d2f315"
+  },
+  "correction": "Firstpre-reveal run caught positiveattachedview rereadcount2 native vs1 Rust; currentproduction does test+reread before43BA80 required child, final2tests pass. Failedlogretained.",
+  "ownership": "OpaqueWeak mapowner witness, no rawVecpointerABA; deepclone fresh witness, move retains, Vecreserve allowed. Actualsamepair index is rootprivateprecondition, not readinesscertificate.",
+  "reuse": "Existing actualfx_manager header and dispatcherphase; samepublishedload_view_variables State, actualCatalogobserver, persistentnativeindex reference_for_key chain",
+  "open": [
+    "actual43BA80 positive presentation",
+    "completeworldsolver/callback integration",
+    "other actor zone effects/hide/unexplore"
+  ],
+  "test_overrides": {
+    "LTO": false,
+    "codegen_units": 16,
+    "shipping_profile_unchanged": true
+  }
+}

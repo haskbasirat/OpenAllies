@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "status": "author portable/source checkpoint; independent review and actual same-Bank runtime test pending",
+  "scope": "Native4FACA0 same mutable ActorParams and exact finite transforms/order; completed canonical source3DC..3EC projection; reuse existing completed17C arena.",
+  "native": {
+    "deployment_rows": 168,
+    "typed_source_rows": 12,
+    "constructor_fragment_rows": 3,
+    "shape_rows": 648,
+    "executions": 1662,
+    "executed_address_byte_pins": 317,
+    "explicit_children": [
+      "actor virtualC/46EC70 outcome in coordinator (separate full predicate proof)",
+      "4F9C10 creation",
+      "current new-member Mind198",
+      "404ED0 warning",
+      "404F60 failed log",
+      "4F6760 destruction",
+      "5B4D80 typed point getter service"
+    ],
+    "constructor_qualification": "462A81..99 only, requested FPCW and enclosing constructor EBX=0 explicit; not whole constructor execution"
+  },
+  "getter": {
+    "executions": 6,
+    "executed_address_byte_pins": 3,
+    "static_pins": 3,
+    "scope": "class3 Actor virtualC only; ctor storesA273F0, tableC4EA010 returns currentData+38; predecessor fresh-ctor executed pin cited"
+  },
+  "rust": {
+    "exact_production_core_tests": "2/2 pass",
+    "scoped_runtime_lib_tests_typecheck": "pass54.95sec",
+    "new_runtime_unit_link": false,
+    "actual_runtime_source_test": "saved ignored, typechecked only"
+  },
+  "actual_source_census": {
+    "precisions": "three explicit lab PCs; no startupPC authority",
+    "canonical_actordata": 1028,
+    "deployment_present": 40,
+    "deployment_absent": 988,
+    "typed_success": 39,
+    "typed_required_error": "usa_hq_infantry creation_offset contains1.5.0; strict scalar parser refuses; native tokenizer proof required before change"
+  },
+  "not_claimed": [
+    "initialized Staged World",
+    "natural mission deployment acceptance",
+    "actual positive creation/Mind/destructor child success",
+    "whole ActorData LoadData/partial source allocation owner",
+    "new17C algorithm or parser change",
+    "nonfinite arithmetic domain"
+  ],
+  "source": [
+    {
+      "path": "crates/aa-runtime/src/stored_member_deployment.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/stored_member_deployment.rs",
+      "sha256": "2b82ad652e98bea0b92d689efee65c997f5ac4629ca0f9f8e14559ffdeed9109"
+    },
+    {
+      "path": "crates/aa-runtime/src/member_deployment_fields.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/member_deployment_fields.rs",
+      "sha256": "b12b3672280af88c25475c9b29d1652d42e1f5d69c9e63414ee06f3297f9f4a6"
+    },
+    {
+      "path": "crates/aa-runtime/src/member_deployment_fields_tests.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/member_deployment_fields_tests.rs",
+      "sha256": "d121383e61a17730a07bb1b397d5c7a87818e10b98485ccf03767509bcd778f2"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_deployment_tests.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/stored_member_deployment_tests.rs",
+      "sha256": "cc7f0080f369dda93e84c106f4b2f633f5de0298180768945c44ce7078ddd82f"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "native_member_deployment.py",
+      "sha256": "277630c8c2dfba7cd648a72eb1606cc9f18e6c60f23beb1043750b9437c33cb3"
+    },
+    {
+      "path": "native-member-deployment.json",
+      "sha256": "ea4cb44280b00d0ab09bb8e3219fbe11818f4e5ef6612364f7fd2fd758be5a5d"
+    },
+    {
+      "path": "native-write.log",
+      "sha256": "79ccbc487e668d690bebec7ea7427199bdb7efe17060ae297c35b558c2a58cda"
+    },
+    {
+      "path": "native-replay.log",
+      "sha256": "79ccbc487e668d690bebec7ea7427199bdb7efe17060ae297c35b558c2a58cda"
+    },
+    {
+      "path": "native_actor_shape_getter.py",
+      "sha256": "e88b1e6bb969941af28cc5feac58efc71445b534c74935070de713b9b91f6cab"
+    },
+    {
+      "path": "native-actor-shape-getter.json",
+      "sha256": "abb9d12dd0141a54b8bf412f2d5d568677987e9582237b005f01fb1ff7856bf3"
+    },
+    {
+      "path": "native-actor-shape-write.log",
+      "sha256": "28e26fbb578cce09d6fdebf9c5810af87e76fa2785e0ce1fb92aa2a37dc160d9"
+    },
+    {
+      "path": "native-actor-shape-replay.log",
+      "sha256": "28e26fbb578cce09d6fdebf9c5810af87e76fa2785e0ce1fb92aa2a37dc160d9"
+    },
+    {
+      "path": "exact-fields-tests.rs",
+      "sha256": "f4e1522babc5ef31620a46bd84ebad4880333ce89475c3d2bee24e5453daa4fb"
+    },
+    {
+      "path": "exact-fields-tests.exe",
+      "sha256": "666e7abd7370b5eba5ae7175cbd773c08e856ac99cde9b124d6e22798ac17606"
+    },
+    {
+      "path": "exact-build02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "exact-tests02.log",
+      "sha256": "7e9866a839f8d01cf4b3d393185d3baecf073a388b339938674edba5e2300432"
+    },
+    {
+      "path": "actual-source-census.rs",
+      "sha256": "8a7bee4e2fd7fc2eca4a85ee10956cbc51a1e54e4c074a3cd60ee2beb1a17c64"
+    },
+    {
+      "path": "actual-source-census.exe",
+      "sha256": "3c35f0aae16814b8fdd8f2e04ba57934deb5616976ae3e97bbdbfcbe2f00f60c"
+    },
+    {
+      "path": "actual-source-census.json",
+      "sha256": "81befa7cf9a6140f5f0b327ac3c463dbf0d04ada26336dd0a992b4425faf53bb"
+    },
+    {
+      "path": "actual-source-census.log",
+      "sha256": "3b9ffe3c9fab00707a2494a0146ef064a29b63e108329efe0d54285e6a6f744c"
+    },
+    {
+      "path": "actual-source-census-build02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "check-lib.log",
+      "sha256": "02800b10257853b5173ce4f1316b18f51f7be5de1a789b6da52fa6e7d83a55fb"
+    },
+    {
+      "path": "check-tests02.log",
+      "sha256": "743a73618838085babf105fbeb19e5d0416c8039489c072ad9878aeef7756c10"
+    },
+    {
+      "path": "native-actor-ctor.txt",
+      "sha256": "a7044b4145b0a49231b85dcc7a44f832c9990d382935eb8b134bd337e71244a6"
+    },
+    {
+      "path": "README.md",
+      "sha256": "b481893e46078203308e700f16b5293f9abc63655614e6c6381bdb24456f5272"
+    },
+    {
+      "path": "seal_checkpoint.py",
+      "sha256": "afbaf9bbea268937d6d757228b0a1b60fd5c4016e11a16cefa5bee37ceaaa0f9"
+    }
+  ],
+  "external_evidence": [
+    {
+      "path": "crates/aa-rules/src/native_recruit_backrefs.rs",
+      "sha256": "21de024e6a9761b234ac186666afd7b9a22d07343bc31d929b1bec9b43055f12"
+    },
+    {
+      "path": "crates/aa-rules/tests/native_recruit_backrefs.rs",
+      "sha256": "49891a19c81e1e5484c8b84d3e2a05e6375f4ac1ef2212ad90987a54ce2c17a0"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/native-recruit-backrefs.json",
+      "sha256": "08719041e4babb89524022347c80792a6f145f3942d472e955fe41510496bb59"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/native-real-recruit-backrefs.json",
+      "sha256": "ea08d893c01b72573adf779654ef48508f33792ccc0c517d3729707e4b56e31f"
+    },
+    {
+      "path": "research/skirmish-20261017-map-actor-creation/native-constructor.json",
+      "sha256": "452295dd5d551fa76b6f44d2d9b1adcc423cde7933a4d31e92e8699687e411d3"
+    },
+    {
+      "path": "../reconstruction/assets/original/Data/Templates/template_deployment.tgi",
+      "sha256": "4099c38e29deec7ab9019857a85822a75db8c5be8d422daa37ae976e25c68fd6"
+    },
+    {
+      "path": "../reconstruction/assets/original/Data/Templates/Components/template_denizen.tgi",
+      "sha256": "545ba93f94877630d6d6bc7355da98ab61aa3fb01f52d709634d8bbad047309b"
+    }
+  ]
+}

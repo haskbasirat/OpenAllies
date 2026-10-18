@@ -1,0 +1,63 @@
+{
+  "scope": "Raw unused pose-word retention on native point/circle membership; numeric APIs remain finite on reached geometry",
+  "native": {
+    "pins": 335,
+    "immutable_replay": "PASS",
+    "fixture": "native-unused-fields.json",
+    "paired_rows": 30,
+    "fresh_executions": 60
+  },
+  "rust": {
+    "full_spatial_lib": "30/30 PASS0.39s",
+    "focused": "2/2 PASS0.07s",
+    "profile": "release lto=false codegen-units16 --locked --offline -j4"
+  },
+  "actual21": {
+    "original_map_sha256": "c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b",
+    "serialized_facing_hex": [
+      "FFC00000",
+      "FFC00000",
+      "00000000"
+    ],
+    "actual_runtime_snapshot": "not captured in21; serialized source probe explicitly labelled",
+    "geometry": "blocking/soft/target allcircle kind1",
+    "ordinal": 1132,
+    "class": 2,
+    "source_flags_hex": "22242800",
+    "definition": "waves",
+    "record": 16669
+  },
+  "change": "Remove blanket Binary conversion of all raw pose fields at index registration/field lease. Preserve identity and tile_rectangle validation. No facing normalization or NaN arithmetic widening.",
+  "limits": [
+    "Original probes use explicit isolated class2 input owners, not a whole-map execution",
+    "Box facing and XY nonfinite remain precise numeric errors",
+    "Later queries/movement/presentation may reach additional numeric domains; not certified by this proof",
+    "Actual22 validation pending"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-spatial/src/index.rs",
+      "sha256": "219feae01e9057cba9a3e7b7d00fa4e7830ec119238fe89c8d45d4cb50a7fbb9"
+    },
+    {
+      "path": "crates/aa-spatial/src/index_unused_fields_tests.rs",
+      "sha256": "c0ce6803ec209f129901a79e2cc1a1143d623f925a5a267cf259142d55ba270e"
+    },
+    {
+      "path": "research/skirmish-20261017-load-nonfinite/native_unused_fields.py",
+      "sha256": "930d20e1efecb238dcca7d27163524d9e40077d164d22e9df1198422892fd129"
+    },
+    {
+      "path": "research/skirmish-20261017-load-nonfinite/native-unused-fields.json",
+      "sha256": "1042d4c0bd73f5460dd6a7e01e7b6c269f5d3e80a4eac21cc47b6d9fbfef0d99"
+    },
+    {
+      "path": "research/skirmish-20261017-load-nonfinite/inspect_saved.rs",
+      "sha256": "4e1853321076ae276f271d8e0addcdc7ad2d3eaea999ba195f1d86ff16a5a6b0"
+    },
+    {
+      "path": "research/skirmish-20261017-load-nonfinite/source-16669.txt",
+      "sha256": "9aa2c70b05937f4bd79de5f79f553f3cf57a2a718b4ef86b420acc23e440375d"
+    }
+  ]
+}

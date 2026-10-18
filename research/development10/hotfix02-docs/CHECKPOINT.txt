@@ -1,0 +1,81 @@
+DEVELOPMENT 10 HOTFIX 02 - CHECKPOINT (2026-10-17)
+DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: UNAVAILABLE
+
+User-reported Berlin failure
+actor creation path not ported: 4EC4C8 actual GWorld+E0 clock owner
+
+Immediate restoration lent Catalog.load_clock the actual restored clock.
+The later resource-worker mission Catalog intentionally omits runtime loans,
+while Attempt -> Staged retains that same clock. Positive visibility-memory
+creation could reach the timestamp getter without a clock loan. The text
+alone does not identify whether Berlin reached fresh footprint/reveal,
+zone activation, Actor/Object visibility or global Fog. All identified
+mission callers now forward the actual Staged.clock through a narrow Context
+borrow; no new World/clock, copied timestamp or default time replaces it.
+If both explicit and legacy Catalog clock loans exist, they must identify
+the same allocation. Errors remain lazy at the reached timestamp read,
+after prior table/record allocation; native guard and partial-write order
+remain unchanged. Pre-activation Staged.clock is the authority; later live
+ClockedWorld ownership is a separate existing activation boundary.
+
+Native confirmation
+4EC4A0 reads current GWorld+E0 and stores record time at4EC4C8 before the
+name virtual at4EC4D3. The new original/v14 native probe has21 paired cases
+covering updated current time, distinct other clock words and raw bit cases.
+The source review and exact probes are under
+research/development10/berlin-clock-owner/native-review.
+
+Separate Firefight blocker
+WorldStart4F1E10 formerly reused the saved-only PostLoad class reader for a
+Source::New Actor. The narrow successor validates the actual current GTID,
+typed Actor/Object storage, constructor/source proofs and source precision,
+then returns the original Actor vtable+B4 result (6A71D0: AL=true).
+Saved/Special and Group8 behavior remain unchanged. No liveness, creation
+phase or requested saved_id==assigned currentGTID condition is invented.
+Original constructor/table/leaf proofs and source-backed regressions are
+under research/development10/world-start-fresh-classification.
+The native coordinator and mission retry guard are unchanged. A failed
+graph keeps earlier effects and cannot be reset/retried to fake success.
+
+Activation settings boundary
+The packaged candidate1 Berlin run cleared the clock/WorldStart gates and
+reached a distinct missing SAI settings load-argument binding. Activation
+and recurring notification catalogs now retain the same captured task load
+argument. This differs from current MapResource+A8: normal resource return
+restores the previous word. State-effect callbacks borrow that actual current
+owner through the existing same-allocation alias instead of Catalog mode.
+The native getter4F0460 remains lazy at its original callback position.
+Native probes, focused owner tests and exact final GUI observations are
+recorded with their limits in evidence/validation.json.
+
+Loading status literal
+The unsealed candidate2 GUI reached view initialization on both maps and
+stopped at a missing app_status_loading_world localization key. Both native
+images instead push app_status_loading_resources at682FF4, calling773CE0
+with word0 and translate1 before the Loading15 transition. That key exists
+in the original strings_rtse.tgi source. The one-literal correction preserves
+the same live text owner, callback order and strict missing-key fallback.
+The real missing-key diagnostic/fallback remains a separate required service.
+See research/development10/status-localization-key/findings.json.
+
+Validation scope
+Exact packaged EXE, actual GUI Start actions and observed remaining errors
+are in evidence/validation.json. A separate strict startup integration EXE
+checks the same fresh Host/resource/mission path; it is not the packaged
+GUI client and StartedMission alone would not establish activation/View or
+playable battle. Compilation, native fragment replays and static previews
+prove only their stated bounds. Build fingerprints cover Cargo/crates,
+not every external compiler include. No full client unit-test link, clean-PC
+deployment,150% laptop DPI or real internet multiplayer acceptance follows.
+
+Continuation
+Read docs/NATIVE-PORT-RULES.md, then
+research/development10/ACTIVE-SESSION-20261017.md and the latest startup
+results. Continue reached actual World/Session/View initialization and native
+selection/orders, scheduled movement, combat, AI and victory. Skirmish and
+multiplayer remain ahead of campaign. A second PC on a different internet
+connection is unavailable. Whole-game percentage and ETA remain unmeasured.
+
+The separate release folder preserves all earlier releases and the native
+game. No restricted Gamebryo SDK code was integrated by this hotfix.

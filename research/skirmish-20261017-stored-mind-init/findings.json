@@ -1,0 +1,23 @@
+{
+  "scope": "bounded fresh Mind same-owner binding and native parent reset protocols; actual initialized fresh actor pending",
+  "native_functions": ["529EC0", "51D1B0", "51E3A0", "52D7C0", "4D11A0", "52A660", "50AD80"],
+  "native_proofs": {
+    "regiment": {"rows": 864, "separate_pe_runs": 1728, "executed_pins": 74, "fixture": "native-regiment-reset.json"},
+    "element": {"rows": 96, "separate_pe_runs": 192, "executed_pins": 26, "fixture": "native-element-reset.json"},
+    "latches": {"pe_images": 2, "literal_references": 9, "fixture": "native-reset-guards.json"}
+  },
+  "explicit_child_contracts": ["52BF30 pending resume", "51E1D0 Join", "56C210 Denizen", "52A810 activate", "50AD80 scheduler"],
+  "real_native_children": ["NULL52A660 command clear", "4D11A0 generation lookup", "canonical source rampage-byte read"],
+  "storage": ["same ActorStore Arena and component boxes", "one retained World.mind_runtime", "one-time restored command transfer before fresh reset", "same queues, owner map, RNG, clock, variables, moved Bank and adopted SpatialWorld", "single Arc<RwLock<Payload>> with nonblocking guards and retained poison writes"],
+  "rust_runtime_execution": "pending root cohort; filters stored_mind_init_world::tests:: and movement_world::payload_tests::",
+  "checks": {
+    "production_before_final_home_read": "PASS31.08s production-check-final.log",
+    "final_production_attempt": "foreign view_grid_variables.rs122 String/&str error; no owned module error",
+    "final_test_source_attempt": "foreign canonical_svars_tests missing native-setters.json; no owned test error",
+    "native_regiment_immutable": "PASS",
+    "native_element_immutable": "PASS",
+    "native_latch_audit_immutable": "PASS"
+  },
+  "open_gaps": ["actual initialized fresh Actor acceptance", "positive Actor4D4A90/4D16B0 effects (next successor)", "Aircraft flight", "live Home Join and Denizen", "other active metadata", "positive queued commands/facing/group effects", "replacement World application-latch reuse", "native heap failure and SEH unwind"],
+  "no_claims": ["full child effects from parent-contract probes", "playable battle", "later application lifetime coverage"]
+}

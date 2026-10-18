@@ -1,0 +1,54 @@
+pub(crate) fn local_ability(catalog:&Catalog<'_>,handle:u32,source_pc:Precision)->Result<AbilityLocal> {
+    let (local_name,definition,local_token)={
+        let arena=catalog.ability_arena.try_borrow().map_err(error)?;let ability=arena.get(handle).map_err(error)?;
+        let token=ability.local_definition.ok_or(Error::NullDereference("57E430 Ability+8 local definition"))?;
+        let bank=catalog.definition_bank.try_borrow().map_err(error)?;let entry=bank.entry(token).map_err(error)?;
+        if entry.key.domain!="actorlocalability" {return Err(Error::Unsupported("57E430 local Ability token belongs to another manager"))}
+        (entry.key.name.clone(),ability.definition,token)
+    };
+    //Keep the original first Bank/arena loans ended before source binding.
+    local_ability_from_names(catalog,local_name,definition,local_token,source_pc,|read|{
+        let bank=catalog.definition_bank.try_borrow().map_err(error)?;read(&bank)
+    })
+}
+///Same immutable local/shared source validation after staging moved both owners.
+///The caller resolves the actual Ability handle in its canonical live arena;
+///neither the Ability nor Bank is cloned or installed back into Catalog.
+pub(crate) fn local_ability_in_bank(catalog:&Catalog<'_>,bank:&crate::definitions::Bank,
+    ability:&aa_combat::ability::Ability,source_pc:Precision)->Result<AbilityLocal>{
+    let token=ability.local_definition.ok_or(Error::NullDereference("57E430 Ability+8 local definition"))?;
+    let entry=bank.entry(token).map_err(error)?;
+    if entry.key.domain!="actorlocalability" {return Err(Error::Unsupported("57E430 local Ability token belongs to another manager"))}
+    local_ability_from_names(catalog,entry.key.name.clone(),ability.definition,token,source_pc,|read|read(bank))
+}
+fn local_ability_from_names(catalog:&Catalog<'_>,local_name:String,definition:u32,local_token:u32,source_pc:Precision,
+    read_bank:impl FnOnce(&dyn Fn(&crate::definitions::Bank)->Result<AbilityLocal>)->Result<AbilityLocal>)->Result<AbilityLocal>{
+    let (id,index,defender)=if let Some((id,index))=local_name.rsplit_once("/ability/"){(id,index,false)}
+        else if let Some((id,index))=local_name.rsplit_once("/defender/"){(id,index,true)}
+        else{return Err(Error::Unsupported("57E430 actual local Ability source identity producer unavailable"))};
+    let index=index.parse::<usize>().map_err(error)?;catalog.require_untranslated_actor_identity(id).map_err(error)?;
+    let binding=catalog.actor_bindings(id,source_pc).map_err(error)?;
+    let defender_source;
+    let loaded=if defender {
+        defender_source=catalog.actors.native_loaded_defender(id,source_pc,binding.character.as_ref().map(|c|c as &dyn aa_rules::abilities::AnimationResolver)).map_err(error)?;
+        defender_source.as_ref().ok_or(Error::Unsupported("57E430 Defender local source missing"))?.abilities().get(index)
+    }else {binding.performer.as_ref().ok_or(Error::Unsupported("57E430 Performer local source missing"))?.abilities().get(index)}
+        .ok_or(Error::Unsupported("57E430 local Ability source ordinal missing"))?;
+    crate::saved_organization_actions::require_shared_ability_identity(catalog,&loaded.authored.shared_definition_id).map_err(error)?;
+    read_bank(&|bank|{
+    if bank.token("ActorLocalAbility",&local_name)!=Some(local_token){return Err(Error::Unsupported("57E430 actual local Ability source token differs"))}
+    let expected=match &loaded.authored.shared_definition_id {
+        None=>bank.token("ActorLocalAbilityDefinition",&local_name),
+        Some(aa_rules::native::TypedValue::String{value,..})=>bank.token("AbilityDefinition",value),
+        _=>return Err(Error::Unsupported("57E430 shared Ability source type differs")),
+    };
+    if expected!=Some(definition){return Err(Error::Unsupported("57E430 actual Ability shared-definition token differs"))}
+    let mut local=crate::combat_value_source::ability_input(loaded).map_err(error)?;
+    if let Some(bits)=bank.entry(definition).map_err(error)?.range_override_bits {
+        //The same Bank's explicit constructor/faction range write, not an
+        //authored fallback. Other unbound shared field writers still refuse.
+        local.definition.range_24=F32(bits);
+    }
+    Ok(local)
+    })
+}

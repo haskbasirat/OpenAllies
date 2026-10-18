@@ -1,0 +1,7 @@
+# Bounded point2 decimal-prefix successor
+
+Actual source `Buildings/USA/usa_hq_infantry.tgi` has `creation_offset = 2.5, 1.5.0`. The declared template type remains point2. Native5BD6E0 retains numeric classification after a second decimal dot. Native5BB7F0 splits point2 components and calls CRT96D3E8;5B4D80 calls actual point field virtual40 when gameplay reads it.
+
+The intended Rust successor is limited to point2 components. The established `scalar_literal` path is tried first and remains unchanged. An additional admissible subset consists only of outer whitespace, one optional leading sign, decimal digits and dots, with at least one digit in the initial decimal prefix and a second dot marking the ignored tail. The entire ignored tail must contain only dots/digits. The existing strict scalar converter then parses the actual prefix. There is no invented zero, no numeric-string correction table, and no general acceptance of arbitrary suffixes, references, arithmetic, exponents or nonfinite values.
+
+Scalar fields and point3 retain their existing strict APIs. Every newly admitted point2 case must match the whole native parser plus actual point getter fixture at all three precision settings in both executables. The actual USA HQ is then checked through the real source projection/census. Required aa-rules real-data and aa-metagame export regressions follow; no whole runtime/client link is needed.

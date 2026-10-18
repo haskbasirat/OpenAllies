@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "status": "bounded leaf frozen; root runtime integration separate",
+  "production_frozen": true,
+  "api": "load_actor_terrain_refresh::refresh(catalog,record,terrain,livePC,effects)",
+  "native_refresh_pairs": 192,
+  "native_refresh_original_v14_executions": 384,
+  "native_terrain_source_pairs": 12,
+  "native_terrain_source_executions": 24,
+  "rust_immutable_tests_passed": 2,
+  "actual_controlled_calls": 6,
+  "actual_subjects": [
+    "GTID11632 neutral village: real empty temperate_grass Properties list completes",
+    "GTID15283 animal Organization: actual F8 store retained before required579EB0"
+  ],
+  "explicit_gaps": [
+    "Organization terrain refresh579EB0",
+    "Properties removal581810 actual instance owner",
+    "Property compiled criteria5035E0",
+    "Properties admission/effects5817A0",
+    "null-terrain diagnostics before the later required null dereference"
+  ],
+  "limitations": [
+    "Actual source test explicitly controls gate bits and cached cell; not unmodified Actor Init or battle readiness",
+    "Native refresh synthetic key weapon refers to actual typed Properties slot6 atActor+78; documented historical label",
+    "Native source constructor/count0/prepend fixture uses explicit string/allocator/source getter/reference seams, not complete TGI loading or Property compiler"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/load_actor_terrain_refresh.rs",
+      "sha256": "54f7562019154643f249de0a4af3f4eb80a7b203c4625dd55d12f308e75439bb"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_terrain_refresh_tests.rs",
+      "sha256": "c8bf401cb7b9a47ed406d0ac5791d3ca125af7afa534dabd202b41478a7c0a09"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/README.txt",
+      "sha256": "412e66438d274ed5f4c1b43831ccce550eea7063d8485474a3d6f62be530df37"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/actual-capture-v2.log",
+      "sha256": "f37761dc5e9cdc375a7bc84ad040f73ae81af066e3fa7137993c8c4f6e9cd62d"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/actual-capture.log",
+      "sha256": "bf7c67b15e57cdfe22487e255fe2a14c3e5e5d14a1d4f03d66aab5f78164fef5"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/actual-held-terrain.json",
+      "sha256": "a1810c0255848fd459ffbcb830f400ca7d2b6c8f203b7101000a84665391f94b"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/author-tests-v2.log",
+      "sha256": "ca658a5fcc6bae6ca8c27d4f8fbbca40e43e54da44823f908bc28ccb68c59f30"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/author-tests.log",
+      "sha256": "846a417c9bbbb5c022ead5f5eedbe124b1dad199d3234353af171699b8f10b6d"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/compile-check-v2.log",
+      "sha256": "c7d5a91e99e35ec1b93c0b571480fd8f9ea51e97f0c96cf012c344ff9083cd22"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/compile-check.log",
+      "sha256": "49a2ffc82f52f9832de02e3c3277f5a361e3fb73355ecbd4e386f0c780c76141"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/frozen-terrain-refresh-tests.exe",
+      "sha256": "b310759597edd43d81b4e4daa5815fb10981ae53d844938174e24b23a1728dcb"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/immutable-final-replay.log",
+      "sha256": "69f6b3c7b1102bff586317cae64473cbf311533707c60ac5c657dd555d9bf00e"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-actor-terrain-null.json",
+      "sha256": "aa98db77266838d901b4290827a7edd86662ff07ababd75d254e95173bd33fe5"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-actor-terrain-refresh.json",
+      "sha256": "33e8a1de9441ec61eef00b35ed351e04acd121bfa770724d205446e0c0f23c39"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-null-replay.log",
+      "sha256": "9285ce74fa3baabe582827a5eaedb2fc39143c198877cd8e04f702e364b8c738"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-refresh-replay.log",
+      "sha256": "4780a96aaae89e7fc2f998c4d8808d1686043ef8accfb77639649ecf7a878fac"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-source-replay.log",
+      "sha256": "cf2851afab1ee51471b21f278d0f6b82bb096283ee715b6c319504943e64b29e"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native-terrain-property-source.json",
+      "sha256": "d7f023f5b248e43b1617fdca8a8db129ede5115d6579bcd6973115f9b8e60576"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native_actor_terrain_null.py",
+      "sha256": "b290989519b3f6f8a319c6d5057c35a0848daff42c48ee7c0b4cb68c936e9604"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native_actor_terrain_refresh.py",
+      "sha256": "18bfb7e8388408be48e0256bcebbaa97d837d0854a0f425407652e7f683c2153"
+    },
+    {
+      "path": "research/skirmish-20261016-actor-terrain-refresh/native_terrain_property_source.py",
+      "sha256": "8f7a16bfc13e3833dc43ff4bc87f6ce473ffe979998b5c10e2603b08db698b8a"
+    }
+  ]
+}

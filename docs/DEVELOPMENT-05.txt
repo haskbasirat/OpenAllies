@@ -1,0 +1,77 @@
+DEVELOPMENT 05 — MAP ORIENTATION, VISIBILITY AND MATERIALS
+
+This is an incomplete Rust reconstruction. A complete match is not playable.
+The original game and Development 01–04 packages are preserved. New deliverables
+are grouped inside release/Development-05.
+
+Road and object placement
+The old preview used the extractor's XY heading angle directly, even though
+native models face negative Y. That put straight road sections across their
+intended direction. The shared prepared-instance yaw now uses atan2(x,-y),
+verified against original matrix construction. Geometry picking uses the same
+transform. Raw placement records remain unchanged. This is a planar facing fix;
+native pitch/roll, road projection and complete terrain/decal behavior remain
+separate fidelity work.
+
+Invisible markers
+The floating wheel-shaped objects in Crete are speaker models attached to
+ambient sounds. Original templates explicitly mark them invisible. The map
+loader now reads the exact inherited literal Flags.invisible value and hides
+those instances from both drawing and picking. It retains every placement,
+model and source record; isolated model browsing still works.
+Crete hides 324 source-invisible placements, including 298 audio markers. Across
+80 maps, the audit finds 6,908 explicit invisible placements. Unknown definitions,
+ambiguous aliases and unsupported expressions are preserved and reported, not
+silently hidden. This does not implement dynamic reveal, fog or stealth.
+
+Material appearance
+The old renderer replaced authored blending with ordinary source-alpha blend
+and disabled depth writes for every blended material. Original city-center,
+farm and vineyard assets use different combinations. Native inherited blend
+factors, alpha-test comparison/threshold and depth-test/write settings now
+reach the renderer through the source-bound model sidecar. Foliage cutouts,
+team-color masks and prior UV fixes are preserved. Metadata covers 1,847 models.
+
+The supported target is static authored RGB state on an opaque viewport with
+ordinary depth buffering. Destination-alpha-dependent blends are rejected;
+none occur in the retained supported mesh corpus. Native geometry/triangle
+sorting, animated material controllers, dynamic overrides, W-buffer behavior,
+illumination and exact Direct3D9 pixel equivalence remain unimplemented.
+
+Engine rewrite progress
+- Base GThing constructor/identity: original flags, record mutation, direction
+ normalization, random-facing draws and saved/new IDs, with explicit precision.
+ Complete derived actor construction/definition evaluation is still required.
+- Owned path lifecycle and prepared-node activation/ActionGo: waypoint arithmetic
+ and callback/RNG order. The actual route solver remains unimplemented.
+- Spatial query/commit: original cell/neighbor selection, height-source choice,
+ shape snapshots, snapping, position updates and notification order. World
+ shape/tile/presentation services remain required callbacks.
+- Original nearest/interpolated heightfield samplers: extended returns and exact
+ remainder arithmetic. Binding them to the live map/world is still required.
+- Generic selected/actor commands and player-context wire fields/process guards.
+ Registry resolution, selection execution and authoritative timing remain open.
+- CPU terrain layer/mask planning with source transition textures. GPU terrain
+ blending is still absent; this is not a newly rendered terrain feature.
+
+Numerical checks
+Exact integer square root and remainder retain native extended values. A new
+hardware check caught incorrect emulator remainder results at extreme exponent
+ratios. All raw observations and 1,188 mismatches are preserved; the accepted
+remainder corpus uses actual x87 hardware and exact integer arithmetic. The
+production implementation was not altered to copy the emulator error.
+
+Diagnostics and package
+- -world-check compares 24 embedded original-reference samples for actor creation,
+navigation, commands and spatial operations. --mechanics-check remains 53 checks.
+Both run before asset discovery. Their world callbacks are explicitly synthetic;
+passing them does not establish a playable battle, save compatibility or network
+session. The normal GUI remains the map/model/animation development browser.
+See VALIDATION-05.txt for final executable, render and package checks.
+
+No full-game parity or performance improvement is claimed. Complete combat,
+AI, production/supply, campaign/strategic mode, original UI/audio, saves/replays
+and multiplayer remain outstanding. Overall completion is still a rough
+engineering estimate around 10%, not a measured percentage of original code.
+The source/cache checkpoint before the visual changes is
+backups/phase5-before-visual-fixes.zip.

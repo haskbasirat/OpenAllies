@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "scope": "Native4D4CF0 build-target list and4D4E50 direct-parent refresh on actual saved Actor storage",
+  "production_frozen": true,
+  "native_cases": 60,
+  "unmodified_saved_cases": 36,
+  "explicit_storage_probe_cases": 24,
+  "portable_identity_source_cycle_checks": 9,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+  ],
+  "images": [
+    "original",
+    "v14"
+  ],
+  "proven": [
+    "actual per-owner list clear/free,head/tail,nodes and member union",
+    "canonical Builder504 source references with independent actualA8/174 gates",
+    "direct Element parentActor propagation and generation-checked member lookup",
+    "retained clear/free/member-union stores before portable source/identity/cycle refusals"
+  ],
+  "not_proven": [
+    "all unrelated global source deferrals",
+    "allocation failure/reentry",
+    "native corrupt-pointer exception parity",
+    "immediate Actor Init/PostCreate/publication",
+    "live battle startup or ticking"
+  ],
+  "files": {
+    "crates/aa-runtime/src/saved_actor_properties.rs": "13436ec71c3d7714e89172ce846bfb616a77e1b77cb7b81a0041103e3ec3839b",
+    "crates/aa-runtime/src/saved_actor_properties_tests.rs": "6e5579f5605d354caa618625ee4b144dc40b21efbe2611bf1884126354d3639b",
+    "research/skirmish-20261016-saved-actor-properties/native_saved_actor_properties.py": "b77b4a609818d26a4b62793440c82524de41ed5945f4a0ba3c4dceb89a282b44",
+    "research/skirmish-20261016-saved-actor-properties/actual-saved-inputs.json": "d0f6b78f2737ab0d9b15c55e1bf29fb1a2c9950f518ea026bc14398066bae51e",
+    "research/skirmish-20261016-saved-actor-properties/native-saved-actor-properties.json": "cc3405818b80c5ea3663b09f6e58acf1fa6372b581772ec80f0af215985029be",
+    "research/skirmish-20261016-saved-actor-properties/README.txt": "9059a9e44785997ad9ab17784e0dba7b0b7a9c46a93fe09a8545cc7fe9069d72",
+    "research/skirmish-20261016-saved-actor-properties/pin_findings.py": "73ef53ace75f772a52ed5cc180a9fd857f4362d7e1b0a4146bd5196ca6955fee",
+    "research/skirmish-20261016-actor-property-core/native_actor_property_core.py": "ea9642f629a840b529e6c17ef49a55627b75c3162b2cf88f25701c87f914f6d6",
+    "research/skirmish-20261016-actor-property-core/native-actor-property-core.json": "0be3ace847596ae4088b373a4116257445b2eaadc2ce5d2d8baec29a08eb1ad0"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "status": "bounded author proof passed; parent accepted constituent scope; no full battle claim",
+  "native_rows": 16,
+  "native_executions": 32,
+  "executed_instruction_pins": 537,
+  "pcs": [
+    "Double53",
+    "Extended64",
+    "Single24"
+  ],
+  "actual_targets": [
+    [
+      781,
+      "kingdom"
+    ],
+    [
+      782,
+      "kingdom"
+    ],
+    [
+      2696,
+      "weurope_farm6x6_01"
+    ],
+    [
+      4097,
+      "usa_corps"
+    ],
+    [
+      4099,
+      "regiment_usa_hq_infantry_unpacked"
+    ],
+    [
+      4100,
+      "usa_hq_infantry"
+    ],
+    [
+      4349,
+      "ger_bunker"
+    ]
+  ],
+  "native_sha256": "05ee39d154e619012389d7106790e33672f68be5754af16d9f34128a2eda08dc",
+  "input_sha256": "c5700b35714bf542ca28f1e04a2e8efa98cebd4390ef2082c5023891394afbd9",
+  "freeze_sha256": "af99de9f48b7983a4facfb6bb668868f62430e33c9f24e3f4d50d251ea44bfd1",
+  "rust": {
+    "new_immutable": "1/1 PASS, 15.15 s",
+    "saved_instances": "1/1 PASS, 17.54 s",
+    "saved_numeric": "1/1 PASS, 19.54 s"
+  },
+  "qualifications": [
+    "Actual tutorial02 restored-prefix boxes, Bank and Ability arena moved once; direct probes, not initialized mission or natural grant",
+    "The phase named numeric is a resistance/clamp probe; no staged positive numeric consequence claim",
+    "Saved wrappers preserve prior native error-prefix behavior and pass immutable tests",
+    "No Properties, Entity, registry or instance arena clone/copyback; current variables and moved Bank are actual retained owners",
+    "Three positive Performer rows stop exactly at57F4C0; subsequent duplicate insertions complete natively without that tail",
+    "Generic4CEF10 admission, positive member propagation, Settlement, immediate actor children, Enchantment and WhenAddedFX remain explicit"
+  ]
+}

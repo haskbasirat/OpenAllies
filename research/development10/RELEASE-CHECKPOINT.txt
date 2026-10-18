@@ -1,0 +1,78 @@
+DEVELOPMENT 10 - TEST BUILD CHECKPOINT (2026-10-17)
+DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: UNAVAILABLE
+
+Delivered scope
+The packaged executable is the current x64 Rust client, built in release mode.
+The public mechanics diagnostic now uses a separate immutable registry358
+bundle from both native executables; the historical357 bundle is preserved.
+All nonregistry golden values remain unchanged.
+The client now exposes local skirmish setup and the actual retained Host,
+worker and activation pipeline. Its start button explicitly tests unfinished
+startup. An unsupported callback remains an error with its earlier effects
+retained; it never switches to a simulated battle or to the original engine.
+The original front end, Options and asset/animation previews remain available.
+
+What changed since Development-09
+Selected-map startup shares its actual ResourceCatalog owner throughout worker,
+staged mission and activation. Native building construction, initial Properties,
+terrain deformation, Organization initialization, Kingdom Resource binding,
+control-zone registration and additional reveal forwarding are connected.
+Same-owner formation member commands, arrival lists, Regiment Sleep and
+scheduled secondary-Updatable dispatch are connected as bounded ports.
+The application/UI/menu, View resource and Model processing paths have further
+native bindings. Source-specific graph and additional field sidecars are in
+this package. None of these additions alone establishes a working battle.
+
+Last directly observed startup advancement before release checks
+Frozen test45 on DeveloperMaps/(3v3)Firefight ran115.92s, passed the previous
+Actor64 reveal boundary, and retained HQ ger_corps1688 plus ger_bunker16103
+and16104. Each bunker has6 Property instances; HQ has12. It then stopped with:
+"actor creation world service failed: runtime actor operation unavailable:
+published placement must be read through the spatial runtime".
+Read-only caller analysis localizes this to the global Fog reveal adapter
+using staged-only access after map actors have been published. No failing
+individual actor/tile is inferred from that source analysis.
+All83 tracked source endpoints stayed unchanged during that test. Its test
+executable is separate from the packaged client; no activated Session or
+battle frame is accepted.8 presentation commands remain buffered, viewNone.
+
+Still required for the first complete battle
+1. Finish every reached selected-map creation/initialization callback and
+   complete real World/Session activation.
+2. Complete actual Model/terrain View startup, readiness notifications and
+   resource tasks, then display the same live World.
+3. Connect current camera/terrain/model picking and GUI selection/order
+   requests to the same simulation owners.
+4. Exercise real scheduled unit updates and movement, including crossing map
+   cells, then finish all reached attack/damage/death/AI and victory paths.
+5. Play a match through to its result and verify repeatable behavior.
+
+Further whole-game work
+Compatible original saves, complete multiplayer including real internet
+connections, campaign progression and complete original visual/gameplay
+parity remain unaccepted. No second PC/different internet connection is
+available here, so that multiplayer test is blocked. No completion percentage
+or finish date is established from the native function/test counts.
+
+Validation limits
+Separate native instruction-oracle and focused Rust tests prove only their
+specified kernels and seams. Compilation is not natural gameplay execution.
+The package validation documents exact EXE/CLI/render checks. Preview render
+images do not prove the native Model metadata path is complete or visually
+identical to the original. This build requires existing original assets;
+no clean computer or standalone whole-game package is accepted.
+Build source hashes cover Cargo files and crates. The supplemental external
+include inventory is an endpoint snapshot, not a before/after attestation of
+all compiler inputs. Prior releases remain separately hashed and unchanged.
+
+Continuation
+Read docs/NATIVE-PORT-RULES.md, then
+research/development10/ACTIVE-SESSION-20261017.md and latest per-agent findings.
+Important pending work: terrain-ray native proof awaits Rust binding;
+UIWorld same-owner authority/pointer integration is unfinished; positive
+Engage, timed actor lists and522270 have research proofs but their successors
+were not published during this release freeze. Fresh Object factory/City
+Object rows and full4D6350 cell relocation remain explicit required children.
+Original AA.exe and v14 AA.exe remain unmodified. No licensed Gamebryo source
+archive was integrated into this rewrite.

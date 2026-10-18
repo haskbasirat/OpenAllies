@@ -1,0 +1,13 @@
+--- before/crates/aa-mapworld/src/restore_components.rs
++++ after/crates/aa-mapworld/src/restore_components.rs
+@@ -15,7 +15,9 @@
+ /// restore adapter. aa-mapworld does not name the aa-mind types: the adapter
+ /// owns the value behind this interface and moves it into the live Mind arena
+ /// when the restored records are staged. The value is never default-built.
+-pub trait RestoredMindState: std::fmt::Debug {
++/// The owned allocation can move once from the resource worker into the main
++/// actor store. This does not permit shared access or a simulation-thread move.
++pub trait RestoredMindState: std::fmt::Debug + Send {
+     fn clone_box(&self) -> Box<dyn RestoredMindState>;
+     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
+     fn as_any(&self) -> &dyn std::any::Any;

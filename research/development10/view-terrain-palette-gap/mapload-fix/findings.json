@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "utc": "2026-10-18T22:38:38.927045+00:00",
+  "status": "implemented and focused CPU regressions passed; actual GUI/GPU continuation pending root",
+  "changed_source": {
+    "path": "crates/aa-client/src/view_terrain_backend.rs",
+    "sha256": "556aa3737d3b1bb10fada407e171222bddfd34f13f581e5565ca48e8d153c2a9"
+  },
+  "unchanged_terrain_renderer_sha256": "b3b3b27dd22fff32853f359165aef3bee45f6ea2cee2e4e3e3c71e98abd8dba1",
+  "backups": "backups/source-checkpoint-20261018-mapload/sdk/source-before.json",
+  "behavior": {
+    "native_basis": "557D4B..557E3C actual per-tile carried Variation; original proof preserved in ../findings.json",
+    "rendering_adaptation": "Deterministic growable per-packet directory keyed by the canonical Variation returned from SAME BattleTerrain. Rendering IDs are dense first-visit indices, unrelated to saved slot IDs. Every saved tile index and grid is checked before replacing the local packet grid/palette. Actual World remains immutably borrowed.",
+    "source_guards": "Existing map SourceIdentity, Catalog source owner/completed combat source, current VariationData path/SHA, biome and material guards remain required. Existing terrain mask planner is unchanged.",
+    "failure": "Remap builds temporary owned tiles/palette and commits only after every actual entry and count validates. No guessed replacement asset or suppressed child error."
+  },
+  "executed": {
+    "regression_count": 2,
+    "failed": 0,
+    "seconds": 2.0,
+    "continuity": "Initial carried material, repeated unresolved saved slot after two distinct predecessors, true canonical alias, unused slot removal, raw index mismatch and incomplete-entry refusal without partial packet mutation.",
+    "actual_firefight": "Real original/v14 source loading at Double53; exact map/TERRAIN SHA. All 16384 per-tile canonical identities equal current retained BattleTerrain; saved slot165 differs at tile15/44 (grass116/jungle136). Serialized bytes/tiles and bound cells unchanged. Every used material source path/SHA matches actual native Variation registry. Every126x126 interior3x3 runs unchanged TerrainLayerPlanner.",
+    "method": "Verbatim current production helpers + new tests extracted into Rust executable, linked with existing real compiled release dependencies. LTO required by existing dependency artifacts. No fake World/backend types. First two compile/link attempts preserved in build.log/build02.log; final build03.log succeeds.",
+    "receipt": "test-receipt.json"
+  },
+  "limits": [
+    "No full client test link or workspace test suite. Parent owns current client GUI build.",
+    "No GPU upload/render receipt or actual mission acceptance from these CPU tests.",
+    "Later native view/resource/activation gaps may still be encountered; this change fixes only the invalid palette representation.",
+    "No native723E00 rendering ABI/pixel parity claim. Existing border/cloud/shadow/quantization gaps unchanged."
+  ]
+}

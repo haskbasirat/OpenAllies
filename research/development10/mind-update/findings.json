@@ -1,0 +1,46 @@
+{
+  "scope": "Native529D00 base +524910 Regiment secondary-Updatable deferred Update coordinator. Concrete runtime dispatcher is a separate integration.",
+  "native": {
+    "pairs": 360,
+    "executions": 720,
+    "observed_pins": 159,
+    "executed_in_image_pins": 156,
+    "in_image_seams": [
+      "0x4d37e0",
+      "0x523ea0",
+      "0x6f7430"
+    ],
+    "external_virtual_seams": [
+      "Actor.HasState(10)",
+      "Actor.owner108",
+      "Mind.virtual1A8",
+      "State.Think",
+      "Updatable.schedule"
+    ]
+  },
+  "exact_rust": {
+    "result": "PASS2/2;720 row replay and all observed required-child failure prefixes",
+    "log": "qa-output/development10/mind-update-rust01.log",
+    "binary_sha256": "a16d80232947916a4831625261a173e45598ee0eb292979d0ff0fa563ac040b0"
+  },
+  "findings": [
+    "Secondary Updatable vtableA33578, not primary componentA335A0. THIS=Mind+8; queue4 calls+1C524910.",
+    "Base529D00 precedes all Regiment flags/member checks. NativeState10/owner239 and Element/home gates remain lazy.",
+    "Actor captured afterbase is reused for two distinct flags reads and membercount.",
+    "523EA0 refreshes Engage atMind+1CC; it is not an exhaustion check.",
+    "Think sees CURRENT top after Engage callback. Post-Think queue head and Actor are reread before optional schedule(2.0,0).",
+    "Actual home-generation lookup, member iterator/current-state getter and arrival-node cleanup execute in oracle.",
+    "Destruction of arrival list is last and absent on early flag/no-member return; Think can mutate head/Actor/flags."
+  ],
+  "limits": [
+    "Timed-list/Engage/Think and scheduling bodies are explicit child seams here.",
+    "Missing runtime services must preserve prior effects and fail; no default Sleep or success is permitted.",
+    "This is not first tick/AI/combat/gameplay acceptance."
+  ],
+  "sources": {
+    "crates/aa-mind/src/regiment_update.rs": "fbc160619166925e6afed51bac82c1169fedd371fc3ccd92c2b01bbc7aacdba5",
+    "crates/aa-mind/tests/native_regiment_update.rs": "b58238945efce2207fbda867fb1e0e053ee12775682ab4f16aa909d66b1fdb10",
+    "research/development10/mind-update/native_regiment_update.py": "0f55917435126366ad456a0cc6b456caaa0493ce264bbbf612b195b4f5081c61",
+    "research/development10/mind-update/native-regiment-update.json": "1a47b5e273c5c56594fd0b886f62b04814542b5ab95c6d7acab26b0ca3504685"
+  }
+}

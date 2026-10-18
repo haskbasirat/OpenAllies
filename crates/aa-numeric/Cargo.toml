@@ -1,0 +1,17 @@
+[package]
+name = "aa-numeric"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license = "MIT"
+description = "Explicit finite x87-significand arithmetic for instruction-backed reconstruction"
+
+[dependencies]
+serde.workspace = true
+num-bigint = "0.4"
+num-traits = "0.2"
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

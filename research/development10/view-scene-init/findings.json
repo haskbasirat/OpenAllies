@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "status": "bounded scene CPU implementation validated; real camera/backend/full-view readiness remain separate",
+  "scope": "43F948..43FCA4; five442C00 constructor fields; actualNi transforms/light normalization",
+  "validation": {
+    "native_executions": 282,
+    "instruction_pins": 2377,
+    "rust_tests_passed": 3,
+    "rust_scene_rows": 39,
+    "rust_numeric_rows": 72,
+    "production_check": "cargo check -p aa-runtime --lib --release --locked --offline -j4 final production-check-03.log; final source exact-source Rust3/3 replay passed"
+  },
+  "required": [
+    "real current7010D0 camera reset and164 node owner",
+    "actualsameSceneRenderer backend binding",
+    "remainingterrain/finalization/resource/UI completion beforeAD/74FF50",
+    "native teardown for reinitialization"
+  ],
+  "limits": [
+    "finite successful-allocation semantic domain",
+    "noSDK ABI/debug reference-count or pool-thread lifecycle parity",
+    "noapplicationstartup or activebattle certification",
+    "12native block cutoffs notRust replayed"
+  ],
+  "pins": {
+    "crates/aa-runtime/src/view_scene_init.rs": "84dee8abd12961498269bc35a2ace826479ef4482ac7660190f847a4852cc508",
+    "crates/aa-runtime/src/view_scene_init_tests.rs": "99c0093ef6b26a0cd3dd80d16f5525d52804494b6fddd4c60dbcc6d3c6e16f32",
+    "research/development10/view-scene-init/native_scene.py": "a0dd1d1cf82126e113ed489075c5e8166c2f1cecdf5eb9dd41c2eeaf878db970",
+    "research/development10/view-scene-init/native-scene.json": "922582c05f6eb4d0d3fa3c2ff704f73e2525d7bbdd26d9a738f24d1df7d059f1",
+    "research/development10/view-scene-init/audit_scene.py": "3fa0bc8e35e7c01b3d2b025ef1b566b6a20845883805384bd11b4f70bf4a461c",
+    "research/development10/view-scene-init/pin-audit.json": "46dd6b3b000db67da0d08a1bb46279d81a4563ea3fa3c24d5ee0dd478a31c916",
+    "research/development10/view-scene-init/isolated.rs": "2d0ba93e6509bded0808f55e1e1861d0899efeb258ec884a63154b6f58b89de7",
+    "research/development10/view-scene-init/world_revision_kernel.rs": "6b59ba1ed58cd344b2a438e0a3bb66f66a1848a124aa9c43087ba23929ae8b51",
+    "research/development10/view-scene-init/isolated-tests.exe": "551089f7489f56aac19c69b1635a7d82c6d6dd314071ef797f14e6286fc02f9e",
+    "research/development10/view-scene-init/isolated-tests-07.log": "ad139de9461d709385574a522d020183add30b71360cf67d69ba40a7cb6309d1",
+    "research/development10/view-scene-init/production-check-03.log": "10bcdd74a677492db3b0bedd3dd8f2392d37de90d8aece44d30d3672c8502e03",
+    "research/development10/view-scene-init/README.md": "04005c6875239eb5f68d4e1972a1f15d85c8adb94479732fa01576f119977fda"
+  }
+}

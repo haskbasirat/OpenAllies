@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "status": "implemented_frozen_author_tests_passed_pending_independent_review",
+  "scope": "Saved HQ factory/Load integration and actual owner bindings; not full battle readiness.",
+  "native_functions": [
+    "4CF480(case30)",
+    "574490",
+    "574040",
+    "580F70",
+    "5739E0",
+    "573890"
+  ],
+  "reused_postload_functions": [
+    "5736B0",
+    "4E2640"
+  ],
+  "native_cases": 162,
+  "native_images": [
+    "original",
+    "v14"
+  ],
+  "native_precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "executed_pins_excluding_leaf_entries": 766,
+  "static_instruction_pins": 32,
+  "live_prefix_comparisons": 90,
+  "actual_tutorial02": {
+    "rmp_sha256": "525ed33f7627294e9a83bdbabb557db2844badf0267e4312da7807089750823d",
+    "report": "tutorial02-v3.json",
+    "report_sha256": "ba224f3ed2a982e8e2a4de9d664acbeac8c2ba03608f6985620ba06d21ac3ea0",
+    "actor": 4099,
+    "source_ordinal_before_hq_stop": 434,
+    "definition": "regiment_usa_hq_infantry_unpacked",
+    "kingdom_owner": 3172,
+    "nation": "nation_usa",
+    "nation_badge_count": 28,
+    "source_slots_530": 5,
+    "loaded_badge": 3,
+    "slots_null": 5,
+    "pending": 0,
+    "payload_bytes": 25,
+    "dynamic_things_offset": 68482,
+    "record_errors": 0,
+    "runtime_publication_ready": false
+  },
+  "tests": [
+    {
+      "log": "mapworld-regression.log",
+      "tests": 9,
+      "result": "pass"
+    },
+    {
+      "log": "actors-regression.log",
+      "tests": 4,
+      "result": "pass"
+    },
+    {
+      "log": "tutorial02-final.log",
+      "tests": 1,
+      "result": "pass",
+      "ignored_real_data_included": true
+    },
+    {
+      "log": "mapworld-final.log",
+      "tests": 2,
+      "result": "pass"
+    }
+  ],
+  "limitations": [
+    "Invalid-badge map adapter diagnostic name/Nation text/sink remains explicit refusal, not a substituted message or badge reset. Current actual map never reaches it.",
+    "Direct scalar destructor proof does not complete external PreDestroy574550/attachment/world lifecycle. HQ cannot reach native Body/Experience remove-after-Load.",
+    "Actual Updatable id==count is out of allocation and refused; historical extra-cell synthetic row excluded from production adapter acceptance.",
+    "Allocator success/no external reentry and typed valid graph required.",
+    "All record errors absent does not certify immediate Init/PostCreate/PostLoad/spatial/commands/network/battle readiness."
+  ],
+  "backup_directory": "before",
+  "freeze": "freeze.json",
+  "files": {
+    "crates/aa-actors/src/owned.rs": "3a2c08ffaa1bdab5ed91ba351013ad97f7495321c3b6778914a41a3f8a89fb7d",
+    "crates/aa-mapworld/src/saved_components.rs": "20790f2c8ea4609f3a4c6a3b45a8289797ed882fc875b215adedb549038ff857",
+    "crates/aa-mapworld/src/saved_hq.rs": "937f79071dbe9f4c23e98fc7bc9f35efb01c7aaacd8d0a692cf3055aca3f8cee",
+    "crates/aa-mapworld/src/restore.rs": "e462930a77d2d85a396ccb940dc194ac24da67a8893f5d63bbac4e86bfc5854a",
+    "crates/aa-mapworld/src/actor_finish.rs": "1115ac264224b43c120f59aedd65ca16ab1fcdc678453163f5b56c85a09ec512",
+    "crates/aa-runtime/src/saved_hq.rs": "f5a58d87e8d95aeef7972e82a768dda856a01c2fc00885a48ad90f3f977268c2",
+    "crates/aa-runtime/src/post_load_world.rs": "b408f163b27e532f5bdf2f7edd73838e42e43e8463acc3d0f813b0503dd96d88",
+    "crates/aa-mapworld/tests/saved_hq.rs": "1ff3d050c6fbb92903294c456c9ca6f841882dc27bc855c091ee97e35a499390",
+    "crates/aa-runtime/tests/saved_hq_restore.rs": "bead2a8d8b622fe3ec6b75ac7f3e1ac380155a3b52c1e0ad6747142d7a36f1ac",
+    "research/development10/saved-hq/native_saved_hq.py": "451cb4934263105ccc5dea1d0e63bc5c417a5af1410af9dfc1a4766ab29bdf36",
+    "research/development10/saved-hq/native-saved-hq.json": "fdbe3acc8ef41d8a017d2a021d4f8c502063ef5d99dfb498e8899cbdd5d7bc33",
+    "research/development10/saved-hq/tutorial02-v3.json": "ba224f3ed2a982e8e2a4de9d664acbeac8c2ba03608f6985620ba06d21ac3ea0",
+    "research/development10/saved-hq/static-hq-windows.json": "aedd0d9e48913651978afab0f5913554887a27fb9377ca8121318640d18aa29b"
+  }
+}

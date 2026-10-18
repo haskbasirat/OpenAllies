@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T16:32:54.620257+00:00",
+  "reviewer": "/root/state_binding_review",
+  "scope": "Independent read-only 4F0460 authority/lifetime/lazy-call diagnosis; no crate edits/builds or candidate2 execution",
+  "status": "Blocking source authority defect confirmed in pre-fix stored_actor_state_effects.active_fx_only; implementation delegated to Builder",
+  "native_authority": {
+    "getter": "4F0460 loads actual THIS.World+28. If NULL returnsfalse; otherwise reads current DWORD MapResource+A8 and returns !=0. It does not use original task argument, Session mode, GWorld phase or WorldRules mode.",
+    "bytes": {
+      "4F0460": "8b4928",
+      "4F0463": "33c0",
+      "4F0465": "85c9",
+      "4F0467": "740b",
+      "4F0469": "8b91a8000000",
+      "4F046F": "85d2",
+      "4F0471": "0f95c0",
+      "4F0474": "c3"
+    },
+    "state_caller": "4D4BD7 loads actual current B36534 into ECX,4D4BE3 calls4F0460,4D4BF0 pushes result and4D4BF3 calls4D0A00.",
+    "timing": "After Organization/Economy/properties/stance transition and before WhenEnter FX-list scan, even if that list is null. Leave path uses false and does not call this getter."
+  },
+  "lifetime": [
+    "Actual GWorld constructor4F7D60 installs the MapResource pointer in+28. Existing WorldSettings alias producer executes caller\u2192Creator\u2192Sim\u2192World publication/store prefix and proves later caller targets that same World/resource.",
+    "Root World owns one stable Box<Option<u32>> map_mode beside SameWorldSettings address witness. Same Box moves Catalog\u2192Attempt\u2192Staged\u2192live World ownership; its contents stay current and are not replaced by source metadata.",
+    "LoadMap5A2BDF saves prior Resource+A8;5A2BF1 writes temporary supplied1/2/4. Normal return5A3110 reads saved prior,5A311A writes it back into same Resource+A8.",
+    "Existing concrete finish_resource_load first validates actual owner/source, closes actual streams, restores same mode Box through Owner.finish_normal_return; start_mission then validates returned owner before MapPrepare/state effects.",
+    "Captured Catalog.native_load_mode remains original task/managed lifecycle mode. It is needed for legitimate task and InactiveLoad mode validation and must not be globally overwritten to simulate current+A8.",
+    "Fresh current resource prior0 is a proved actual constructor store, but getter must borrow current owner rather than assume all modes/current resources are0. Failed/unreached resource returns retain temporary current mode."
+  ],
+  "concrete_defect": {
+    "source": "Pre-fix stored_actor_state_effects.rs796 reads Catalog.native_load_mode; Context/Bound has no actual map_mode loan.",
+    "counterexample": "Fresh resource prior0 and load argument1: during load active=true; after successful return actual+A8=0 so active=false, while captured Catalog value1 still producestrue. Same issue for temporary2/4.",
+    "limits": "This is static/native source authority diagnosis, not an observed Berlin FX event/caller count or a whole candidate2 outcome."
+  },
+  "recommended_binding": [
+    "Loan actual world.global_settings_mode and reference to same world.map_mode into Context/Bound; preserve that tuple through all staged/registration/Mind/character recursive state paths and live frame/scheduler sources.",
+    "At active_fx_only only, call existing read_settings_mode(true,None,binding,Some(owner)); Null\u2192false, currentSome(word)\u2192word!=0, Unbound/missing owner/address mismatch\u2192reached error. SameWorld owner OptionNone is unavailable storage, not proof of nativeNULL.",
+    "Getter must remain late after preceding state/economy/property/stance writes and before FX-list scan. Missing tuple must not fail constructor/preflight early, and empty list must not skip mode read.",
+    "Do not use copied original load_mode, diagnostic prior_word, captured Boolean, map header mode, stock0 or Catalog fallback. Keep mutable state/source/graph/ActorStore owners unchanged.",
+    "SameWorld pointer witness is valid for the one retained World interval; replacement GWorld requires actual retire/rebind rather than reuse of stale alias. Portable wrong-owner refusal is not native invalid-pointer parity."
+  ],
+  "fresh_native_probe": {
+    "artifact": "native-current-mode.json",
+    "paired_cases": 30,
+    "separate_native_executions": 60,
+    "executed_pins": 18,
+    "seams": [],
+    "interval_matrix": "Both images/all3PC: prior0/2/DEADBEEF x temporary1/2/4, actual save/store/restore intervals and4F0460 before/during/after.",
+    "pointer_matrix": "Both images/all3PC: actualNULL\u2192resourceAcurrent1\u2192resourceBcurrent0\u2192sameResourceBcurrent80000000 yields0,1,0,1.",
+    "limits": "Explicit laboratory pointer/register/frame fields. Does not execute whole load/factory/state entry/startup; omitted valid-frame setup is disclosed, not fake service completion."
+  },
+  "existing_evidence_audited_not_reexecuted": [
+    "load-actor-state-reentry/native-state-entry.json:108generated+3actualsavedfieldrows/222machines/137executedpins/no body seams; full4D4A90 includes4F0460 even emptyFX. It proves callback placement, not a persistent current MapResource owner.",
+    "world-settings-alias/native-world-settings-alias.json:12paired/24P-V runs, real bounded constructor pointer flow/global+28 stores, current owner rereads including1\u21920 and foreign World read; logger/allocation/WorldParameters seams explicit.",
+    "mission-start/native-map-resource.json:6factorycases/fullfactory+ctor with named transports,54 isolated mode intervals including nonzero prior; current restore exact, not whole MapResourceLoad/record success."
+  ],
+  "execution_limits": {
+    "crate_edits": 0,
+    "cargo_builds": 0,
+    "rust_reviewer_runs": 0,
+    "whole_client_runs": 0,
+    "candidate2_acceptance": false
+  },
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/map_resource_load.rs",
+      "sha256": "24824e7b3abeff9039eab20b2a9aefba9dac92f1d73b3681d00903494ba2b339",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/map_resource_load.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_mission_start_world.rs",
+      "sha256": "19c633caa5b392f7256c37c9c42e9f74bc4d4a9cead26bdb23afbc766d212064",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/load_mission_start_world.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world.rs",
+      "sha256": "3e384ae42bff34077997b324bae29adc29c9f8180d7d582d4509c93a20b0e40e",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/load_world.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world_settings.rs",
+      "sha256": "4af88b28cdbada7e3484f1078aa2269d7b1eeabebd5f6f3e0fbe8198ca5eec2d",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/load_world_settings.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_placement.rs",
+      "sha256": "9f5fc3c51b8ae37d116ed7e66f2bf8855b956b41b528ced4a38b07c9582be9bd",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/live_placement.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_state_reentry.rs",
+      "sha256": "fd0b0ff379096ce305d19718f3e1549a82674173c7047e345de78df0126f027b",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-runtime/src/load_actor_state_reentry.rs"
+    },
+    {
+      "path": "crates/aa-actors/src/state_effects.rs",
+      "sha256": "3960d73ceba3afa1d61f303502fe6e12125f8550e8b3e4caa9c4858ed3190ae9",
+      "snapshot": "research/development10/state-fx-map-mode-review/source-audited/crates/aa-actors/src/state_effects.rs"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/live_frame_services.rs",
+      "sha256": "f0ff48e86d53ef7feede738c225a5d662d2c967acaabb213559eb89282b5e742",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/live_world_frame.rs",
+      "sha256": "6b33268f98eb2880353c0e0bc98d093ed73a0c8fa15a32c562a80c0cf4efd257",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/player_order_frame.rs",
+      "sha256": "3e384a392048472e2ca99c788c9fc709619485ba50010f1203af7b9ef13c4553",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/stored_actor_state_effects.rs",
+      "sha256": "3d0a97fa2f9e7337f7aae17b0b4dc922b6c9450dd2d659a8834aca9335d59679",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/stored_member_command.rs",
+      "sha256": "172096b7f0c1bc85e5ed7007accc8ae1011bb008da5f7009036792baf4fcf752",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/stored_mind_init_world.rs",
+      "sha256": "57df382c425e762628d6ef066f957f6930eefbfd35657f2ad9e4a4f34e12045b",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/stored_mind_update.rs",
+      "sha256": "5aebb49f8ecc3ce0b121d96b6e208c967a61944206b9a113399f90c0c9896575",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-before/crates/aa-runtime/src/stored_world_registration.rs",
+      "sha256": "0b5dc7729e76e48aa78b40f42204730929fb9a8632bf1c4c17d7e19ce4742fa1",
+      "classification": "Builder-preserved pre-fix source; current implementation not audited by this diagnosis"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native_state_entry.py",
+      "sha256": "1655a5b09ab12098eb6ebc617f1cfdc1d203641a5bc7eabee4bff2f3216870f7"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native-state-entry.json",
+      "sha256": "51901e1bb5d01c686836df29aae39d84445f517170f2384fe595e958344d8e33"
+    },
+    {
+      "path": "research/skirmish-20261016-world-settings-alias/native_world_settings_alias.py",
+      "sha256": "e622036af160fe70b1482a0cf5a0ceb0ec13b74b3bc5e7d1902be94b18784385"
+    },
+    {
+      "path": "research/skirmish-20261016-world-settings-alias/native-world-settings-alias.json",
+      "sha256": "766084fd6960fbe834178a8c0e84bfb2afb8301b5c85b0d00f3f2ae38fd758b5"
+    },
+    {
+      "path": "research/skirmish-20261017-mission-start/native_map_resource.py",
+      "sha256": "182930c3974ccf70392e0687771decc6e03d7be764c4e433f5a29d99ff95efd1"
+    },
+    {
+      "path": "research/skirmish-20261017-mission-start/native-map-resource.json",
+      "sha256": "7ea68f6f02e1480d1566e92aeeb8b3be676b23d95e15d0b136a6e88c37eb8b22"
+    },
+    {
+      "path": "research/development10/state-fx-map-mode-review/native_current_mode.py",
+      "sha256": "8b0551c0545738e796aef83b1a2a0d9755c6fb02d7c83fd092a89e6604260352"
+    },
+    {
+      "path": "research/development10/state-fx-map-mode-review/native-current-mode.json",
+      "sha256": "159e1e9f38b95195979e0a49f21b41694869886e2732ca3196ba1045bcc0b1ba"
+    }
+  ]
+}

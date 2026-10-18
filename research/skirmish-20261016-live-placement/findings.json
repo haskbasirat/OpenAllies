@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "scope": "4F3640 creation placement coordinator and borrowed 4F4590 saved-shell binding; not whole battle completion",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "sdk_source_integrated": false,
+  "source_files": {
+    "crates/aa-spatial/src/creation_placement.rs": "af100313143d00d21976ee7b20055f580d4d1c974596d1ec846b298b7d0a819c",
+    "crates/aa-spatial/tests/creation_placement_native.rs": "0160e79c6b22e2934c8e273692590003b4b6c72f3836e28bf9a5a9c763d9f19b",
+    "crates/aa-runtime/src/live_placement.rs": "9264fbe2cbb3a142d557510aae420153cd2a330a5a436e5234a87485fe57490b",
+    "crates/aa-runtime/tests/live_placement.rs": "1d34bbd0c610256fe84f4b7b99452a79feed3ba01a960b8bc76b48e47ac5a9c8"
+  },
+  "native_proofs": [
+    {
+      "file": "native-creation-placement.json",
+      "rows": 363,
+      "executions": 726,
+      "instruction_pins": 734,
+      "sha256": "c4ff162a373eb2bf76e1e47d3f6cc4a511c010d69e5ce6587211138eec4bbae0",
+      "scope": "untouched coordinator with explicit required source/world services; four additional preparatory original runs enumerate reached stops"
+    },
+    {
+      "file": "native-placement-tiles.json",
+      "rows": 432,
+      "executions": 864,
+      "instruction_pins": 1282,
+      "sha256": "26ac35057dfcdac602126505f83a1fc6a8765a3bb59f713700376a729dc5ca77",
+      "scope": "untouched mode0 full-cell and mode1 supplied point-shape geometry"
+    },
+    {
+      "file": "native-creation-shape.json",
+      "rows": 72,
+      "executions": 144,
+      "instruction_pins": 128,
+      "sha256": "9fa1182100597852a829f3571a415f77dd06f4744b20828c41d5ce036788650b",
+      "scope": "49BD10 expansion arithmetic with explicit GameData+44 probes"
+    },
+    {
+      "file": "native-actual-placement.json",
+      "rows": 9,
+      "executions": 18,
+      "instruction_pins": 397,
+      "sha256": "3e65c1559fafca0816ff2df7d19c8de57faf66995d41fbec710660bbfe58cac1",
+      "scope": "actual first Kingdom in tutorial02/Firefight/Berlin through 4F4590->4F3640; all five child services forbidden and unreached"
+    },
+    {
+      "file": "team-admission/native-team-placement.json",
+      "rows": 6,
+      "executions": 12,
+      "instruction_pins": 368,
+      "sha256": "d4c024c55a2ed2742857804eae66731f98dc0166bf5b48c0f68a9766b7ee10d3",
+      "scope": "actual first Team Firefight/Berlin allPC, unchanged4F4590/4F3640 and real source/runtime vtables; explicitly supplied six-word point probe, whose actual startup producer is separately owned"
+    }
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "source_precision_owner": "immutable Bank combat source receipt; actual current source PC53, independent of placement PC",
+  "actual_capture_sha256": "626de047ed3e472a7992f5e69036ecb7d3480d380e41ce262892cdf3dca179d8",
+  "author_tests": {
+    "creation_placement_native": 2,
+    "live_placement_including_actual_assets": 3
+  },
+  "limits_removed": [],
+  "required_remaining_services": [
+    "positive required-zone integration4F1660",
+    "positive zone actor4F0AE0 runtime proof",
+    "structure4F2220",
+    "current-shell query lease and collision4F0A70 policy",
+    "footprint4F0B70",
+    "whole per-record Object/Actor/Kingdom Init/PostCreate/registration"
+  ],
+  "domain_exclusions": [
+    "nonfinite numeric inputs",
+    "binary32 temporary overflow",
+    "heap failure and SEH/unwind parity",
+    "arbitrary reentrant host services",
+    "unported source post-verifier flags: random, Placeholder and non-Actor ownable repair"
+  ],
+  "independent_review": "Baseline parent accepted by builder_source_review; later Team admission separately authored and tested, not independently accepted here."
+}

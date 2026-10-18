@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "native production queue and recruit admission",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_sequences": 231,
+  "native_transitions": 558,
+  "rust_tests": 4,
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "strict_clippy_passed": true,
+  "implemented": [
+    "recruit request and organization enrollment gates",
+    "double price quote, captured owner and payment ordering",
+    "native FIFO insertion, duration, pause/deadline processing",
+    "completion and failure-refund callbacks",
+    "head/non-head cancellation, upkeep removal and organization slot lifetime"
+  ],
+  "integration": "Tests use real aa-economy for affordability, debit/credit and coupled consumption; no aa-world modifications or fake actor fulfillment.",
+  "required_boundaries": [
+    "authored pricing and recruitability",
+    "supply and actual capacity predicates",
+    "ownership/organization registries",
+    "actor/research fulfillment",
+    "scheduler links and native clock",
+    "command routing and authorization"
+  ],
+  "explicit_differences": [
+    "Rust initializes native unspecified new-item +0x4C to zero before later organization detachment.",
+    "Finite checked input domain and fallible callbacks; no undefined native heap behavior.",
+    "Callbacks preserve live queue membership/order/item fields while an item is selected; recursive same-queue execution and raw item-storage alias mutation are unsupported.",
+    "Research queue progression is supported but research request/pricing admission is separate."
+  ],
+  "sha256": {
+    "research/phase6-production/native_production.py": "070198b3e437571ff954a26701d5c3cef1bd258252fbe7ee6924871a4e0ae4c9",
+    "research/phase6-production/native-production-fixtures.json": "d10acb0fa8dff97fd315a921254abf5ffab525c37f477f5a59d6e4637aa493ac",
+    "research/phase6-production/README.txt": "367d0623c728743f2121d41855ccb9e18aa700dbdf6b6595936f3eace412cfb9",
+    "research/phase6-production/native-oracle.log": "8141e8ebeff92d681e9721d2abf2612f9b3b577caff89c5bc11e5dedba6ea6bc",
+    "research/phase6-production/rust-tests.log": "9b5e2611462752ecfdefc30ae49a3b5ba2015031814045d21e136de2165883bc",
+    "research/phase6-production/clippy.log": "e9ca495e57ef946c2ad6e99e89d4fa887e5be993f59f790222232f675ec24cd8",
+    "crates/aa-production/Cargo.toml": "cb3b50916b6d8e9cc2c48a9a91628ac5cf7f75b2b400fa139fc6d55337a1fa68",
+    "crates/aa-production/src/lib.rs": "c075298fa8f6c77c0fc58c7b0c24504682b8d9f2036d50d4664341582e22ec2f",
+    "crates/aa-production/tests/native_queue.rs": "30b0e7afaed52216554aa6d479f6a4c14514a111ae9b1f28c03d91cbf128c0da"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "scope": "aa-client original-animation inspector adapter and inspector-only GPU pose alpha/visibility surface. No gameplay animation algorithm or render pipeline changed.",
+  "changes": [
+    "Inspector-only load_preview/sample_preview; live_animation verified_asset remains on strict AnimatedAsset::load with existing source/mesh/material checks.",
+    "Catalog verify_path at direct/UI preview load; catalog discovery/resolve owned by root.",
+    "Posed opacity replaces Vertex.color alpha; absent override restores immutable material opacity every frame. No repeated base-alpha multiplication.",
+    "Only meshes targeted by actual alpha tracks may honor authored blend bit despite RepColor texture-mask policy. The shader still treats RepColor texture alpha as a replacement-color mask.",
+    "Posed visibility drives retained Draw.visible without deleting or recreating buffers; all batch validation precedes updates.",
+    "Source limitations, unsupported controller metadata and nonexecuted event/effect/sound markers are shown in warnings.",
+    "upload_pose updates geometry/alpha/visibility together; root owns main/render-check integration."
+  ],
+  "validation": {
+    "metadata": "PASS aa-client --tests --release --locked --offline in1m05s, target/s-builder-current-mode.",
+    "exact_cpu": "PASS6/6:4 new +2 existing actual helper/test source fragments; real aa-animation/aa-assets types, copied GPU interface declarations only.",
+    "tiny_library": "Only anyhow dependency built2.13s to provide compatible standalone-link object; no full runtime or client test link.",
+    "gpu_test": "Saved and typechecked but NOT executed: gpu::tests::preview_pose_alpha_visibility_and_failed_batch_keep_resident_scene. Actual GPU rendered capture acceptance belongs to root final executable run.",
+    "preserved_byte_regions": {
+      "legacy_update_vertices": "e91a4d8b1c6b6cf51230375d754b3240c30ba8fa5034036fd83d2d417b21d30c",
+      "live_update_instances": "1c12f7106b8f3bd50575d4a846fb8c67c3a78bbda6fc52254f98388f63ef8101"
+    }
+  },
+  "limits": [
+    "No native interpolation parity claim from these adapter tests; original curve investigation and source exports are peer-owned.",
+    "Unsupported particle/FX/sound/gameplay marker execution remains explicit.",
+    "GPU execution and representative original HQ/death captures are pending separately; no all-animation successful-playback claim."
+  ],
+  "pins": {
+    "crates/aa-client/src/animation_preview.rs": "c10e4bd793d13152787e4c7504b84518fe86f2d65cde2e809a0b2e1ec44760b5",
+    "crates/aa-client/src/gpu.rs": "dd601b4d23fe2973bb2e71ec8e76fcd56338b635585f2204e716437d8dd562cf",
+    "research/animation-browser-20261017/client-adapter/source-before/animation_preview.rs": "233c0b79c46faf1cc991fad3045f7f5a68a4b93c5c57d19546e71f75156ea852",
+    "research/animation-browser-20261017/client-adapter/source-before/gpu.rs": "c8b01a4df575bc4a2c681c9336c7ac5ff1f29b385b73fb4efb4869acecd47c75",
+    "research/animation-browser-20261017/client-adapter/check-client01.log": "f6dbb4b6ac3854aae39324d1864abf0b2dad00cdc18906bfa3527155c3b43534",
+    "research/animation-browser-20261017/client-adapter/exact-cpu-adapter.rs": "3df9851183a5df13c0376bb1b3fb3a6e49f15a3e0f421e7e9ea453649a07bee8",
+    "research/animation-browser-20261017/client-adapter/exact-cpu-pins.json": "2b2da0fe25aafdf8be976aa92a1602f7b7ae8aebd51cd1a3a4b43d435e05483b",
+    "research/animation-browser-20261017/client-adapter/exact-cpu-adapter-tests.exe": "7302131c35bad72db4b408dac99e3d2648dc536de8c59e3be6468207922fb4b8",
+    "research/animation-browser-20261017/client-adapter/exact-cpu-tests.log": "d5747b1a4adef30540fe51ae1852d47c546c0cf23316ea9b1e9ed63bdabc72f7",
+    "research/animation-browser-20261017/client-adapter/run_exact_cpu.ps1": "c5a24cbf67dd31458615973cd8d93a074430ce4f8fb9a3334ac7ad61780f0386"
+  }
+}

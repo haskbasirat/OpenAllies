@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "status": "accepted by independent review within explicit coordinator scope",
+  "native_rows": 306,
+  "native_executions": 612,
+  "native_instructions": 544,
+  "rust_tests_passed": 2,
+  "strict_clippy": "blocked by pre-existing recruit_actions.rs:77 and actor_creation.rs:716 warnings",
+  "runtime_init_binding_complete": false,
+  "required_descendant_services_implemented": false,
+  "pins": {
+    "crates/aa-actors/src/object_init_null.rs": "a52ea452bc130036cf3a8ad49fe84f745cfe3e17605992d5c6b77cf39b2cf7d5",
+    "crates/aa-actors/tests/object_init_null.rs": "b0c098cc612c103affda691a8afb25b909ed385f369aa0437c57bc62687221d6",
+    "research/skirmish-20261016-object-init-null/native_object_init_null.py": "65f47810194d3ab95167a5c0bb03775bbb47de7085253c62ba990a347cb9d064",
+    "research/skirmish-20261016-object-init-null/native-object-init-null.json": "2b2c69fdeb829a9bf8dfdd6131b781557ed98f7067454eb88165ab438b334085",
+    "research/skirmish-20261016-object-init-null/README.txt": "5cddc1831788574b72ce8fbcf9d6d9cdaa44753e46ce086a444bffbcf44138cf",
+    "research/phase8-conversion/native_machine.py": "48ee90ea4a032b08fcfb09837e5e18de4964ceaceeeae5f77a369885a7e11c71",
+    "research/skirmish-20261016-object-init-null/backups/aa-actors-lib.rs.before": "0c1ec22153453bb3c5aa6b113be1b8828e48d7b44dc141e148e1aff92db20a5a",
+    "research/skirmish-20261016-object-init-null/rust-test.log": "093d07e652f772630a0cb5449f5716b5430bbeac9621728f10d2bef611403ac1",
+    "research/skirmish-20261016-object-init-null/clippy.log": "1106a526b15e97738098e1d86861f5ce734137dd9542f7d2152d4f7c7dd70b05"
+  },
+  "independent_review": {
+    "path": "research/skirmish-20261016-object-init-null/independent-review.json",
+    "sha256": "c878ff2e10a858adb1226252903b3d1455be64c93ba8c2ee84d20cd334909811",
+    "blocking_findings": [],
+    "native_executions_replayed": 612,
+    "rust_tests_passed": 2
+  }
+}

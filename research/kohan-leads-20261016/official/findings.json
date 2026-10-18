@@ -1,0 +1,62 @@
+{
+  "schema": "kohan_official_source_lead_v1",
+  "research_date_local": "2026-10-16 America/New_York",
+  "retrieval_note": "Raw captures occurred 2026-10-17 UTC, still 2026-10-16 EDT.",
+  "game": "Kohan II: Kings of War",
+  "appid": 97130,
+  "event_gid": "672876020537229477",
+  "announcement_gid": "672876020537229478",
+  "title": "Kohan II: Kings of War Multiplayer & Modernization Update is Live!",
+  "post_unix": 1785285026,
+  "post_utc": "2026-07-29T00:30:26Z",
+  "post_edt": "2026-07-28T20:30:26-04:00",
+  "canonical_event_url": "https://store.steampowered.com/news/app/97130/view/672876020537229477",
+  "canonical_announcement_url": "https://steamcommunity.com/games/97130/announcements/detail/672876020537229478",
+  "source_claim_quote": "Rebuilt from the original source code",
+  "claim_class": "Official developer publication; not an independent runtime test or a public-source license.",
+  "steam_developers": [
+    "Lootmax Games",
+    "TimeGate Studios"
+  ],
+  "steam_publisher": "Big Bad Wolf, Inc.",
+  "official_product_website": "https://www.lootmaxgames.com/",
+  "public_original_game_source_or_sdk_located": false,
+  "search_absence_is_exhaustive_proof": false,
+  "aa_source_reuse_permission_verified": false,
+  "cross_game_compatibility_verified": false,
+  "separate_publisher_website_verified": false,
+  "public_fan_patch_lead": {
+    "url": "https://github.com/ibm2187/axis-and-allies-2004-remastered",
+    "commit": "7fd8ebe9a838e634c9886c4778fb22c1178570ab",
+    "classification": "Unofficial patch/installer project requiring original game; not original TimeGate source.",
+    "code_documentation_license": "MIT; original game/art/middleware rights excluded from this inference.",
+    "downloaded_scope": [
+      "commit metadata",
+      "README",
+      "LICENSE"
+    ],
+    "runtime_or_technical_claims_tested": false
+  },
+  "searches": [
+    "Kohan II Lootmax July 2026 original source code",
+    "site:lootmaxgames.com source SDK github",
+    "Kohan II source SDK TimeGate",
+    "Axis & Allies 2004 TimeGate original source SDK official",
+    "GitHub repositories: kohan timegate",
+    "GitHub repositories: \"lootmax games\"",
+    "GitHub repositories: axis allies rts"
+  ],
+  "mutations": {
+    "production": false,
+    "releases": false,
+    "accounts": false,
+    "external_messages": false,
+    "compiled_game_downloads": false
+  },
+  "unsent_request": "UNSENT-SOURCE-REQUEST.txt",
+  "announcement_api_evidence": {
+    "file": "steam-97130-events.json",
+    "bytes": 34474,
+    "sha256": "9d8a17b2618ead10a3e0547ab7789a18c13c36ca4c4647b1cae22cdfd6301e7f"
+  }
+}

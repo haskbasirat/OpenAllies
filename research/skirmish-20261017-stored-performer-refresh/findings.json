@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "status": "author-checkpoint-frozen-pending-genuine-failure",
+  "scope": "Same owned stored Performer property gate and shared saved/stored value kernel; current production integration plus bounded native and saved actual refresh regressions. No naturally initialized fresh grant/battle certificate.",
+  "apis": [
+    "stored_performer_refresh::refresh_on_owners(catalog,actors,mutable_bank,optional_actual_spatial,key,variables,inventory,environment,livePC)",
+    "stored_performer_refresh::refresh_value_on_owners(same owners): direct57E430 without extra property gate"
+  ],
+  "preserved_owners": [
+    "ActorStore current GTID/generation and original Performer/Properties/Body/Mover/Defender boxes",
+    "ActorStore Ability map and property_allocations actual instance directory",
+    "same moved mutable Bank, its completed immutable source results and mutable current manager cache",
+    "same current World.variables CV cells and actual current-thread sampler",
+    "optional actual paired SpatialWorld borrowed lazily, never copied flags or a detached placement"
+  ],
+  "shared_kernel": [
+    "Ordered actual Properties bias sum, then +60 zero store, then Body/maximum/Mover fields",
+    "Primary Ability table then Defender table; disabled entries skip source/CV reads",
+    "Each maximum store survives subsequent source/CRT/service errors",
+    "Saved API delegates while original Performer stays in its actual component slot",
+    "Approved local_ability/_in_bank/from_names helper region exactly preserved"
+  ],
+  "callbacks": [
+    "Native57F4C0 CALL57F1E0, RET4 with ignored Property argument",
+    "Actual source-linked required Property lookup over ordered effect handles, disabled instances still match",
+    "Immediate enabled-byte stores; only changes invoke full stored_actor_actions::rebuild over same owner",
+    "Full4D1350 uses real existing contributor kernels; any unsupported Mind/Organization/publication child remains exact required after retained prefix",
+    "57E430 uses exact current modifier, mutable Bank manager cache, CV cells and lazy actual CRT sampler; no source-environment fallback"
+  ],
+  "verification": {
+    "current_production_check": "check-final-01.log PASS12.25s, includes optional placement/full Actions/fresh property-value integration",
+    "shared_kernel_tests": "field-tests-02.log3/3PASS; immutable-field-tests.log3/3PASS. Unit kernel matches final value source; binary predates only final callback integration in stored Bound/fresh adapter, not these executed methods.",
+    "saved_actual_regressions": "Existing external value1/1 and gate1/1PASS against unchanged JSON fixture outputs at all3livePC; immutable copies1/1 eachPASS6.59s/10.06s, capture variables explicitly unset.",
+    "native_wrapper": "81 paired cases,162separate original-v14/all3PC executions,131executed pins, no successful child seams; immutable replay PASS. Explicit empty/disabled tables and Property biases are isolated guard inputs, not source-created live actors.",
+    "helper_preservation": "ability-helper-preservation.json exact region equality",
+    "independent_review": "Requested source-only review; report may follow separately."
+  },
+  "fresh_integration": [
+    "Actual moved-Bank global Property slot0 read;5035E0 applicability;5817A0(current actor,kind0,self source) confirmed by actual4D7377..37B push order",
+    "Fresh direct57E430 callback reuses same actual Store/Bank/variables; no extra57F1E0",
+    "Fresh direct4D1350 callback uses same ActorStore/Bank/inventory and completed actual World.live_spatial"
+  ],
+  "remaining_boundaries": [
+    "Natural selected initialized Staged grant awaits parent real runner; no constructor lab or InspectPartial fixture is renamed natural creation.",
+    "Full fresh4D7230 still has reached nonconstant component, terrain/Organization/Settlement/Denizen, zone/FX services requiring concrete bindings.",
+    "Positive stored action child dependencies remain precise required when reached.",
+    "No full mission/world, battle, AI, multiplayer, renderer or save compatibility readiness claim.",
+    "No native allocation failure, invalid pointer, panic or unwind parity claim."
+  ],
+  "preservation": "Immediate pre-refactor saved source files retained; no own root Cargo/lock, original executable/assets/saves or releases changed."
+}

@@ -1,0 +1,99 @@
+LOBBY FILE TRANSFER (MAP/SAVE): ORIGINAL CODE, ORACLE AND RUST PORT
+====================================================================
+
+Rust: crates/aa-netcode/src/file.rs. Oracle: native_file_transfer.py ->
+native-file-transfer.json (3.8 MB). Replay: crates/aa-netcode/tests/file_transfer.rs
+  CARGO_TARGET_DIR=target/s-netcode-file cargo test -p aa-netcode --release --locked --offline -j 4 --test file_transfer
+Regenerate: PYTHONPATH=<game>\reconstruction\tools\python-packages python native_file_transfer.py (~2 min)
+
+1. FUNCTIONS (all executed under Unicorn, both images)
+  AdminConn  0x74FE30 start (++gen +0x418, then 0x761540)   0x74C8B0 generation check (read side)
+  Sender     ctor 0x7611B0 (BlockSender 0x760390(BlocksPerFrame, 1), queue 0x74B790(0x100), TGC_File 0x857FE0)
+             reset 0x761400, start 0x761540 (header block, finalizer 0x74D0A0), vtable 0xA91BEC:
+             available 0x761920 -> read-ahead 0x7617E0 -> block read 0x761420; release 0x761850
+             (retire 0x750880 + read-ahead); estimate 0x761310; serialize 0x7613C0 -> 0x75FFA0;
+             progress 0x7612D0
+  Receiver   ctor 0x761870 (BlockReceiver 0x75FE00(BlocksPerFrame), queue 0x74B790(0x100)), reset
+             0x761500, vtable 0xA91C00: receive 0x761DB0 (payload 0x7610A0, drain 0x761CE0, header
+             0x7619A0, write 0x761220), skip 0x761150
+  Channel    BlockSender 0x760A80 / 0x7608E0 and BlockReceiver 0x760F20 / 0x75FEA0 with file blocks
+  Layout     sender +0x2C queue {begin,end,cap,ring}, +0x3C TGC_File, +0x48 size (ctor leaves it
+             unset: 0xCDCDCDCD sentinel survives 0x7611B0; AdminConn ctor 0x756BC0 -> 0x752110 resets).
+             receiver +4 span, +8 queue, +0x18 TGC_File, +0x24 size.
+  AVars      [0xB39990]+0x120/0x124/0x128 = index 0x48/0x49/0x4A, registered 0x403762/0x4037A5/0x4037E8
+             with defaults 20/64/256; identical in v14; no TGI override in original or v14 Data.
+
+2. SEAMS
+  TGC_File virtuals (+0 read, +4 write, +0x14 is_open, +0x20 open, +0x28 close, +0x30 size) are a
+  recording Python model installed right after the original 0x857FE0 ctor returns (0x76120C /
+  0x7618CB). Sender and receiver have separate "disks". Open failure is not emulated (it throws
+  TGC_FileException 0x869200 because modes carry 0x20000; C++ unwinding). Allocator, CString manager,
+  0x401B00, 0x401330, logging 0x404F60 (recorded), the 0x760F20 debug label 0x405D60/0x405A50 are
+  seams; CString concatenation 0x4108C0/0x40F4B0 runs original code.
+
+3. CASES (steps compare results, wire bytes, reader/writer positions, sender + BlockSender +
+  receiver state, generation, TGC_File call sequences, log lines; scenarios compare the files written)
+  original image 35 scenarios / 1440 steps, v14 image 34 / 1422, interop 4 / 112.
+  Sizes 0, 1, 63, 64, 65, 128, 192, 197, 300, 700, 1000, 1500, 3000; BS 7 (sizes 49, 50);
+  receiver BS 32 vs sender 64; MaxPendingBlocks 0/1/3; reverse, shuffled, duplicate, header-last
+  delivery; names with "..", ".." after an embedded NUL, 300 and 65540 units, non-BMP, empty;
+  short read (reported size > content); direct calls beyond the queue, far-ahead/negative/stale
+  indices, skip, resets, restart mid-transfer; channel sections with lossless, tight budgets,
+  losses + ack delay, exact multiple, generation restart with late old-generation packets
+  (skip path 0x75FEA0 + log 0x168C, reset path + log 0x1694).
+  Executed windows: 138 (original) / 140 (v14). Differing bytes between images in executed code:
+  only 0x76146A (sender), 0x761270 (receiver) and the v14 caves 0x9EFF80..0x9EFFAF.
+
+4. FINDINGS
+  * ACCEPTED v14 AA.exe REPAIRS THE EXACT-MULTIPLE TAIL. Original: terminal length size % BS, so a
+    non-zero multiple of BS sends an empty terminal block and loses the last BS bytes (64 -> 0,
+    128 -> 64, 192 -> 128, 49@BS7 -> 42, channel 256 -> 192) while progress reports the full size.
+    v14: sender cave 0x9EFF80 uses BS for remainder 0; receiver cave 0x9EFF90 uses min(payload
+    length, BS) (unsigned) for remainder 0. Interop: the repair needs both ends (original host ->
+    v14 client and v14 host -> original client both still lose 64 of 128 bytes).
+    Port: FileTransferConfig.tail = TerminalTail::{Original, V14}; Default = V14 (docs/BASELINE.txt).
+  * Size 0: L = 0, no data block; neither side ever closes its file (both images).
+  * ".." check: _wcsstr on the name up to its first NUL; ".." anywhere (also "a..b") rejects (log
+    0xBF, no open, size still stored, later blocks drained without writes). After an embedded NUL it
+    is accepted and the path (length-based concatenation) keeps the NUL; CreateFileW would open the
+    truncated name. Destination = profile dir + name, no other validation (absolute names, "\" etc.).
+  * Header name length is 16 bits (0x7616CE movzx): 65536+ unit names are cut on the wire while the
+    sender opened the full name.
+  * Receiver writes a length derived from ITS OWN BlockSize and the header size, not from the
+    payload: mismatched BlockSize writes wrong data; a payload shorter than that length is a heap
+    over-read in the original (Rust: Error::Protocol). Receiver has no pending-block limit: any
+    index >= begin is buffered (window grows to index+1).
+  * MaxPendingBlocks limits only the sender read-ahead (end - begin); 0 stalls after the header.
+  * Block reads ignore the returned count; buffers are zero-filled (0x767110), so a short read sends
+    zeros. Estimate = 32 + 8*len - 3 - (byte0 & 7) (under-counts by 3 + pad, treats file bytes as a
+    pad field); for an empty buffer (original exact-multiple tail) the byte read is past the buffer
+    (heap-dependent; port uses 0 = what the zero-filled oracle heap shows).
+  * Budget: a block is chosen only when its estimate < limit - span - 33; 64-byte blocks estimate
+    534..541 bits, so a section carries one only for limit > 587..594 (tight-budget scenario uses
+    limits 0x252/0x253 around that edge). v14 also raises the type-5 file
+    target 0xC03 -> 0x2403 (0x74E36E) and redirects 0x74BEC8 call 0x74BCB0 -> 0x9EFF40 (send
+    scheduling): both are AdminConn code outside file.rs, not ported here.
+  * Progress 0x7612D0 = size when begin == L+1 else (begin-2)*BS (wrapping): -128 on a reset
+    sender, -64 when only the header is acknowledged.
+  * Start does not close a previously open file (restart while sending reopens the handle).
+
+5. CAPS (original value -> port)
+  0x7611FA / 0x7618B4  0x74B790(0x100): block-buffer rings, 256 initial slots, grown by 0x74CDB0
+                       -> BlockWindow (BTreeMap, sparse, no capacity)
+  0x761648             header writer buffer 0x767110(0x100) bytes, grown by 0x767000 -> WireWriter
+  0x7610E5             payload buffer of the 32-bit decoded length (hostile length overflows the
+                       allocation size) -> Vec after a remaining-bits check
+  0x760390             BlockSender windows 0x100 (channel.rs)
+  Kept as rules: BlocksPerFrame 20 and BlockSize 64 (wire; both ends must agree), MaxPendingBlocks
+  256 (sender-only flow rule, may be raised without breaking peers), 16-bit name length (wire).
+
+6. PROVEN / NOT PROVEN
+  Proven (oracle replay): everything in section 3 for both images and both interop directions,
+  including BlockSender/BlockReceiver integration at section level.
+  Rust-only tests (no oracle): explicit errors (BS 0, block index 2^31-1, backward retire, empty
+  slot serialize, over-read, unopened size, hostile payload length, empty header), receiver open
+  failure (Catch@0x761BCD: log 0xB9 + UI message, continue; from machine code/pseudocode), StdFile
+  round trip through channel sections in a temp directory.
+  Not covered: real sockets/datagrams, type-5 packet writer/reader (0x74E280/0x75A350 incl. the
+  "not most recent" drop), UpdateFileTransferStatus 0x74F310, the sender-side open exception path
+  (where it is caught upstream is unknown), OS share modes. No end-to-end network claim.

@@ -1,0 +1,107 @@
+{
+  "scope": "Bounded actual37 first ger_corps HQ replacement continuation inventory; static source/native call order, no future callback success claim",
+  "actual": {
+    "map": "Maps/DeveloperMaps/(3v3)Firefight.RMP",
+    "gtid": 1688,
+    "key": 2362,
+    "world_revision": 1,
+    "source_pc": 53,
+    "live_pc": 53,
+    "definition": "ger_corps",
+    "source": "Buildings/GER/ger_corps.tgi",
+    "source_span": [
+      5234,
+      6186
+    ],
+    "source_sha256": "1df68a3b479fadad7cbc7edade480779a3c556642fda5a1ee76d10bc03855b2b",
+    "state_low": 134221824,
+    "state_high": 4,
+    "mind": 1,
+    "mind_stack": [
+      3
+    ],
+    "state3_status": 2
+  },
+  "reached": "Mind-last InitExisting nested ActorState action rebuild refuses5827B0; all present non-Mind InitExisting calls precede Mind in native4D7230",
+  "remaining_in_native_order": [
+    {
+      "boundary": "Finish Mind529EC0/Element reset/state publication",
+      "owner": "State5827B0 successor; further derived Mind children stay required if reached"
+    },
+    {
+      "boundary": "All component+14 AfterInit in slot order",
+      "status": "Denizen568070/Detection56EC90 concrete; other ger_corps leaves pure4B2830; not naturally reached yet"
+    },
+    {
+      "boundary": "RequiredObject+158 attach if actualnonzero",
+      "status": "positive currently required"
+    },
+    {
+      "boundary": "4D4CF0 then4D1350 then4D67F0; conditional global Property5035E0/5817A0;4D4130",
+      "status": "existing same-owner concrete kernels; may expose positive child requirements"
+    },
+    {
+      "boundary": "Org5788B0/Settlement585650 if present;Performer57E430;Denizen569E40",
+      "status": "Org/Settlement absent on source mask; Performer/Denizen concrete, actual sampler now retained lazily"
+    },
+    {
+      "boundary": "Conditional discoveryZone2; SAI;Tracks; ExistingFX42A590",
+      "status": "Zone2 caller/SAI inactive guard bound; tracks positive required; certified-empty Constructed FX only"
+    },
+    {
+      "boundary": "4CF300 PostCreate",
+      "owner": "Leader assigned; current caller still required"
+    },
+    {
+      "boundary": "4F9510 register;50C220 scene publication",
+      "owner": "root/WorldStartup current source producer work"
+    },
+    {
+      "boundary": "4F9FC7 creation42A590 on ListCreated",
+      "owner": "root assigned after this inventory"
+    },
+    {
+      "boundary": "4FBB32 per-property4CEF10 for each captured Property, then4FBBAD404F90 created diagnostic",
+      "status": "Property positive required; actual request list not captured; created diagnostic assigned this agent"
+    }
+  ],
+  "known_later_domains": [
+    "Next organization bit7 target takes4FA150 member/hero path, still required; not predicted next queue entry",
+    "Aircraft517C60, nonnull scene interleaving, name-list/TrackInfo/requiredObject positive branches remain precise errors"
+  ],
+  "limitations": [
+    "Original mutable Params and remaining replacement Queue were not retained in actual37 snapshot; no asserted next target name/Property count",
+    "Native static contiguous call slices (149 both-image pins) are not executed-path/CFG parity",
+    "No StartedMission/activation/full HQ create completion"
+  ],
+  "pins": [
+    {
+      "path": "research/development10/first-mission-callbacks/native-call-slices.json",
+      "sha256": "3fcae26c615236e5a65c04b25d899553ede3b9377d56462add7cde9e19903d9f"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt37.result.json",
+      "sha256": "013af0ecd718a404f4ebca9ddc4b703c1eaa4aa8009a06ebd3f05c42bab03d2b"
+    },
+    {
+      "path": "crates/aa-actors/src/actor_init_existing.rs",
+      "sha256": "208787f52233b4fe9a4e691702cf7b7e05064f4ac7d50840dd336619d760966e"
+    },
+    {
+      "path": "crates/aa-actors/src/world_creation.rs",
+      "sha256": "f5e7a0a0a09f249e08854a7decdf50a251c0259c849014d82f982c35fb41074d"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_actor_creation.rs",
+      "sha256": "f6a335a700072ef1e0ee78e89e713b9008c350f060f909fe07a26c65eaf8a3c7"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_actor_init_existing.rs",
+      "sha256": "4e91d9faab83d729384fe9440441c3db9a836f9f34bc946930f0fd8cfa0f3a1c"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_replacement_drain.rs",
+      "sha256": "d528f64f6a914087cb8723afd1c31d4934d526b592fed1cec91bc48057ce17ef"
+    }
+  ]
+}

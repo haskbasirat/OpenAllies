@@ -1,0 +1,55 @@
+{
+  "scope": "bounded Sequence/Object/Actor Animation source projection; no full Data/source/renderer/gameplay readiness",
+  "files": {
+    "crates/aa-runtime/src/resource_sequence.rs": "c72078a9e6698c47d385690dfd601295c7af87edce956cec03dbd37f4043d8a7",
+    "crates/aa-runtime/src/resource_sequence_tests.rs": "6a9a0fe15429e887fca20eea16ba7ff4750be71012d7f9cb054c1187e5c2b431",
+    "crates/aa-runtime/src/object_animation_set.rs": "d33c8eaa95e102bb4870a076568f030272d92d79b53cd8ee60ede98cf28811f1",
+    "crates/aa-runtime/src/object_animation_core.rs": "fb2ffc1f0d68a9aa3ce734ffef895465ebb1ffe7b8ac5b6baa37b085c205c9ea",
+    "crates/aa-runtime/src/object_animation_core_tests.rs": "465f5137bd0fa112de06b2d8d17020ccf1ddf5a83fa924f42936c07d26b8b92a",
+    "crates/aa-runtime/src/actor_animation_source.rs": "5bcc88c8cb91d960ce7668744e3f33b8bc8b0ab0e329a26d65f7465007bdb0d2",
+    "crates/aa-runtime/src/actor_animation_core.rs": "a39e5cfa41180a092cccdb3d6bc84bb129a2a5d10ced97faad73f651c71b9758",
+    "crates/aa-runtime/src/actor_animation_core_tests.rs": "ab7741df7a6677ce9ff40ed7ed948ee84710f69998d25d956e573558e4bfe778",
+    "research/skirmish-20261017-object-animation/native_sequence.py": "c478f7f61ad747cf9d4e4ff650af463bab35ddee4ffceea66c6942dc6c0c03e3",
+    "research/skirmish-20261017-object-animation/native-sequence.json": "5a89e99b351f4b7efda4ee516f26a1c7a790a58254f8307410ad932f2f7acca0",
+    "research/skirmish-20261017-object-animation/native_object_animation.py": "618f85e3338e41dc87e6aeb0a0296f15db474a8b9b2ebab4134676de33f44392",
+    "research/skirmish-20261017-object-animation/native-object-animation.json": "672c36016b38a679b7035241d41c8a9ca2fd09224737cb33b805a79a5bf796f9",
+    "research/skirmish-20261017-object-animation/native_actor_animation.py": "9f447c23ebb4131bafe3a5f19b32ca1f983b25b70b0595558e11846f7d380a6b",
+    "research/skirmish-20261017-object-animation/native-actor-animation.json": "b7c0458a9757ce99be0bed481c2b189880592c0940c08f06291b2570a96e82c4",
+    "research/skirmish-20261017-object-animation/exact_core_tests.rs": "81f1cb77167d4bdc8ab960a316fb58d40eea51dfd7907ed4c8636b240cb9f3eb",
+    "research/skirmish-20261017-object-animation/README.txt": "9fc4c17c597b4ba0f7997d4e25debb31b6897d277fcc806fcba24359ac4c578b"
+  },
+  "native": {
+    "sequence": {
+      "constructors": 18,
+      "typed_lookups": 24,
+      "executed_pins": 209
+    },
+    "object": {
+      "source_cases": 120,
+      "request_cases": 54,
+      "executed_pins": 1169
+    },
+    "actor": {
+      "source_cases": 300,
+      "seed_calls": 24,
+      "finalizer_cases": 126,
+      "request_cases": 72,
+      "executed_pins": 2472
+    }
+  },
+  "verification": {
+    "fresh_native_readonly_replays": "pass",
+    "exact_production_core_tests": "5/5 pass",
+    "client_production_check08": "pass40.58s; before latest Actor-global factory loan successor",
+    "sequence_runtime_constructor_test": "saved,not run; runtime50 captured zero,not counted",
+    "actual_full_source_adapter_replay": "not claimed",
+    "runtime_production_check09": "pass22.11s; concrete Source/Session/Graph visitor and current common Resource fields"
+  },
+  "limits": [
+    "native typed node/factory/source folder transports and explicit child cutoffs are recorded",
+    "finite ASCII source domain; no FP status/SEH/allocator failure claim",
+    "actual pre-World global source phase not yet certified",
+    "positive Object CreateVFX/PlaySFX and death-filter registry lookup remain required",
+    "Sequence4C decoder,resource barrier,positive FX effects,renderer/VWorldAD remain separate"
+  ]
+}

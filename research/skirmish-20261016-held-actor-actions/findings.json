@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "owner": "/root/builder_source_review",
+  "scope": "Generalized saved4D1350 adapter over the actual held Actor and optional actual detached Organization; no new native action kernel",
+  "status": "complete within the explicitly bounded adapter/native and current actual Mind scopes",
+  "api": "aa_runtime::saved_actor_actions::rebuild(catalog, inventory, &mut Record, live_precision)",
+  "production_sha256": "54093c89110b5a8c5921d45281b6979ee56de79290f8391d17f44cb5ea88fe95",
+  "tests_sha256": "7e91c299e82644ae57acb805f9185006d9ad5505d2a8ec5863c26fece4eab912",
+  "shared_context_sha256": "6a5ba089ee9388463aff563ccd608f8e80d75c84fa31aab560a68fc1a2a13593",
+  "frozen_file_pins": "frozen-hashes.json",
+  "native": {
+    "producer": "native_held_actor_actions.py",
+    "producer_sha256": "4f9705dd3db58cb4f261a29412eee82be218fa921056bb3773c632255be9116c",
+    "fixture": "native-held-actor-actions.json",
+    "fixture_sha256": "41ccf68f10d1e04f1619c7d865ee54f061a2beecac8140bcae3e828fc2d45bd0",
+    "paired_rows": 144,
+    "executions": 288,
+    "executed_address_pins": 162,
+    "required_boundary_entry_pins_not_executed": 2,
+    "successful_intercepted_bodies": 0,
+    "precision_modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "author_immutable_replay": "passed",
+    "independent_reviewer": "/root/world_startup_gap",
+    "independent_immutable_replay": "passed; final report pending Rust replay"
+  },
+  "rust": {
+    "type_check": "cargo check -p aa-runtime --tests --release --locked --offline -j4 --target-dir target/s-builder-source-review passed in28.64s before final lazy source-precision getter; not current final-source proof",
+    "initial_combined_actual_mind_integration": "Author state_binding_review reported3/3, all12 actual calls returned true across four saved Kursk Mind owners and all three live PCs; same allocation/core/states/commands retained",
+    "initial_binary_qualification": "Predates final lazy source-precision getter and final stopped-pin metadata split. It is integration/capture evidence, not final frozen-source validation.",
+    "final_current_combined_replay": "pending"
+  },
+  "ownership_and_order": [
+    "New held path requires canonical source Bank/class/layout/mask/provenance and current Loading generation before clearing F0/F4",
+    "Optional detached Organization is Some only for an existing borrowed real allocation; ordinary Actor None uses its actual component slots",
+    "Current F0/F4 and Components.state remain authoritative ActorShell storage",
+    "Existing Mind contributor moves and restores its real owned core/states before returning either Result",
+    "Actual installed Bank source precision is used lazily for immutable source materialization; live action arithmetic retains its explicit PC",
+    "Only existing no-State standalone diagnostic adapters retain an explicitly supplied source PC; that path confers no startup completion",
+    "Native clear/contributor/publication order and already-committed stores before required UI/renderer errors are retained"
+  ],
+  "separate_work": "SDK agent owns economy_values/refresh optional-Organization and source-PC follow-through. Mind author owns actual InitExisting transitions, source provenance, state/core loan and exact native-prefix proof.",
+  "not_certified": [
+    "full per-record Init/PostCreate/registration",
+    "WorldStart",
+    "playable battle",
+    "positive unported UI/renderer services",
+    "native unwinding"
+  ],
+  "original_game_or_release_files_changed": false,
+  "manifest_changes_by_this_slice": false,
+  "final_validation": {
+    "binary": "research/skirmish-20261016-load-mind-init/frozen-aa-runtime-mind-tests.exe",
+    "binary_sha256": "c60e8f9a8a3211af987fb81d11da4345cbca3a5e4a876bb7f26b20a5a4141b84",
+    "portable_tests": "2/2 independent pass",
+    "actual_mind": "12 actual held action calls;903 native Mind prefixes; independent current actual test passed",
+    "legacy_some_organization": "1/1 pass, regression-owner-actions-projected.log; explicit test-only original input projection; expected native outputs unchanged",
+    "independent_report_sha256": "2e9e32349bbe23d04cafd75e2a3a7b18528908c79a063fc7f5e6bb3846e2d4cb"
+  },
+  "legacy_input_drift": {
+    "cause": "Restoration now retains actual Mind4/Detection22 and more recursive Organization members; old oracle supported fewer components/members.",
+    "evidence": "legacy-regression/capture-diff.json",
+    "old_input_sha256_preserved": "7e9693710ae7f5c790efdcc03a926ec66360bd17f8bb67937eae3fddd060b4bf",
+    "test_path": "crates/aa-runtime/src/saved_owner_actions_tests.rs",
+    "test_sha256": "51a0432c54890be824f56d46453a85a52455a76d4734d97ae251a24b2e0f1b29",
+    "scope": "Legacy test projects only old-null cells and moves the same newly restored Mind/Detection owners out and back; full current Mind integration is separate. No production action behavior changed."
+  }
+}

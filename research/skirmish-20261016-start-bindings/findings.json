@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-16",
+  "scope": "Bounded source/selection helpers; no replacement drain or mission publication",
+  "tested": {
+    "scoped_tests_passed": 6,
+    "weighted_rows": 195,
+    "lookup_rows": 5,
+    "nation_prefix_cases": 6,
+    "random_source_cases": 5,
+    "original_v14_primitive_calls": 4126,
+    "installed_thing_definitions": 1959,
+    "installed_nations": 5,
+    "installed_random_tables": 56,
+    "populated_random_tables": 56
+  },
+  "explicit_limits": [
+    "No completed map_prepare host",
+    "4FC4A0/4FBA50 drain refused",
+    "Immediate translated references need historical registry",
+    "Source loader prefix/window rather than full Nation/Actor/Object loads",
+    "Finite binary32 overflow partial failure parity unclaimed"
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/skirmish_start.rs": "ebb5d8f1b83eea02c0dd88f6d15eeda6aee36c0b022f5a0eb955b52324a613cb",
+    "crates/aa-runtime/tests/skirmish_start.rs": "dc0716b16d6ad1ec43784659f9e246a98b8ee9c51336d8b7f04b103392bd2635",
+    "research/skirmish-20261016-start-bindings/native-nation-pairs.json": "fd295f4f8317f0ea57dfb6ad8eecfef0e415d7d5796b3aee403b3a1efb3c517d",
+    "research/skirmish-20261016-start-bindings/native-random-source.json": "aad57ee900eedc1eb6c5b1831dd7913090ca812cc762f582bd3d07e2fb5aa683",
+    "research/skirmish-20261016-start-bindings/native-selection.json": "d2ff38ddf3a0e4444b0af4459ed396affdf943556bf7b57c2f81bfb2288abf46",
+    "research/skirmish-20261016-start-bindings/native_nation_pairs.py": "9342a0b0aaddd0895f8d2c02ad573175822d72110f1684b46dcb09df72a58afa",
+    "research/skirmish-20261016-start-bindings/native_random_source.py": "724995d12b4cda4c5bc05f3fbac42402d99c5936e788099c258b73642bb86a6d",
+    "research/skirmish-20261016-start-bindings/native_selection.py": "2997fe2827d68d6993b97410e356ee111bc7292863b651199753332a30ef385a"
+  }
+}

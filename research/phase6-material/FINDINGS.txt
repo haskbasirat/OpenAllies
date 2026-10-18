@@ -1,0 +1,68 @@
+PHASE 6: CAMERA-DEPENDENT GEOMETRY TRANSPARENCY ORDER
+
+Recovered behavior
+Original NiAlphaAccumulator::RegisterObject at 896070 queues blend-enabled
+geometry unless the native no-sort hint (bit13) is respected and set. The
+KKC_Renderer initialization at 71032E creates the original accumulator through
+895DF0 with respect-no-sort enabled and radius subtraction disabled.
+
+895ED0 calculates an x87 depth key from the geometry's world bounding-sphere
+center and camera direction: Y product + Z product, then X product, followed
+by an optional radius subtraction. The result is stored to binary32. It does
+not use distance from the eye or sort individual triangles. 8DA890 sorts with
+the native median-of-three/Hoare partition behavior. Equal keys have an
+unstable but reproducible order. 8DA9C0 submits the sorted array in reverse.
+
+The pure Rust helper preserves these choices and takes explicit x87 PC24,
+PC53 or PC64. It rejects non-finite unsupported keys before partitioning and
+uses an explicit work stack instead of recursive native call-stack growth.
+The original functions are executed by original_transparency.py; only list
+allocation and final geometry submission are intercepted. Submission ends
+before list cleanup. All pinned code bytes match the original AA.exe and v14.
+
+Renderer integration
+Terrain draws retain their explicit authored layer order and run first.
+Opaque and no-sort object instances use recorded map actor/mesh traversal
+order. Other blended geometry instances are sorted whenever the camera moves
+or the frame is redrawn. Adjacent compatible instance ranges still batch.
+The UI draw-call counter now reports actual encoded commands.
+
+Map loading retains original actor source indices even though geometry is
+prepared in model groups. The material sidecar additionally preserves each
+authored NIF sphere center through the same static transforms, axis conversion
+and six-decimal export basis used by the currently rendered mesh. It does not
+replace this source center with an invented box midpoint. Original NIFs and
+converted assets remain untouched. The new sidecar is staged at:
+  research/phase6-material/model-materials.json
+  SHA256 72477535bd89371daa2699b51c2e851ffc503ac2ae4151c81b3f201da804b771
+  All 1847 models / 11035 exported mesh rows contain source centers.
+
+Explicit remaining boundaries
+The live original rendering FPU precision lifecycle has not been proven.
+The preview chooses Single24 for keys, consistent with its binary32 model
+transforms, and says so in reconstruction notes. The exact helper supports
+all three modes. Recorded RMP actor order is not proof of the original live
+scenegraph traversal. Static preview transform rounding is not claimed equal
+to every original world-transform callback. Animated/legacy meshes without
+source centers use current posed vertex-box centers and update those after
+vertex deformation; original skinned sphere propagation remains unrecovered.
+Dynamic material/alpha controllers, W-buffer rendering, triangle sorting,
+complete native frustum culling and original alpha-target behavior are not
+implemented here. Phase5 original blend/depth/cutout/team-mask fixes remain.
+
+Validation
+  cargo test -p aa-client --release gpu:: -- --include-ignored --nocapture
+  Native fixtures: 1056 key/sort/submission cases, PC24/53/64, plus22 queue cases.
+  Cases include ties, reversed and ordered inputs, zero/one geometry, signed
+  zeros, negative keys, cancellation, optional radius subtraction and cameras
+  facing different directions. Keys are compared bit-for-bit and every draw
+  index is checked in native submission order.
+  GPU pixel regression additionally verifies separated half-transparent
+  layers produce identical spatial composition in either input order.
+  Prior material-state, depth-writing/no-sort, cutout and failure-preservation
+  hardware checks continue to run.
+
+Representative headless images, timing and independent review are recorded
+separately once the integrated terrain/material candidate is built. Increased
+draw-command counts from preserving source/sorted instance order must be
+measured; no frame-rate improvement is claimed without a comparable benchmark.

@@ -1,0 +1,47 @@
+{
+  "scope": "Bounded native GWorld/MapResource alias and actual current mode-owner borrow; not complete constructor/load/battle",
+  "sources": {
+    "crates/aa-runtime/src/load_world_settings.rs": "4af88b28cdbada7e3484f1078aa2269d7b1eeabebd5f6f3e0fbe8198ca5eec2d",
+    "crates/aa-runtime/src/live_placement.rs": "b96e1736518cedd971c6024be580111e304ce7c1fc6071ce757544d699c0ab9a",
+    "crates/aa-runtime/src/load_object_init_world.rs": "9c7bc7bb9a9591390dedf5dd8b68992a16b37405d66a07314944024fb9f25f92",
+    "crates/aa-runtime/tests/live_placement.rs": "9a258ea2b4551d7641d6be7d271cdd9ea355438bd76164f86b509f0bc276b59e"
+  },
+  "native_fixture": {
+    "file": "native-world-settings-alias.json",
+    "sha256": "766084fd6960fbe834178a8c0e84bfb2afb8301b5c85b0d00f3f2ae38fd758b5",
+    "rows": 12,
+    "original_v14_executions": 24,
+    "executed_instruction_pins": 86,
+    "data_pins": [
+      "A32170 -> 5126C0"
+    ]
+  },
+  "tests": {
+    "unit": 2,
+    "live_placement": 3,
+    "load_object_init_world": 1,
+    "load_placement_children": 1,
+    "passed": 7,
+    "unit_log": "unit-tests.log",
+    "integration_log": "integration-tests.log",
+    "check_log": "check-01.log",
+    "native_log": "native-replay.log"
+  },
+  "shared_integration": "Root owns stable World.map_mode Box and SameWorld capability; peer live_object_init forwards actual mode owner; same field must receive Task A8 restoration",
+  "seams": [
+    "logging404F60",
+    "allocation6F7810",
+    "WorldParameters511DF0"
+  ],
+  "fragment_stops": [
+    "4F7D63 immediately after global-this and World+28 stores",
+    "4FC600 entry before WorldLoad body"
+  ],
+  "required_lifetime": "One managed current World; retire/rebind capability before binding any child that replaces GWorld",
+  "remaining": [
+    "Full native constructor and WorldLoad body not proved by this fragment",
+    "No native first-map capture",
+    "No arbitrary unported callback immutability claim",
+    "Playable battle acceptance remains separate"
+  ]
+}

@@ -1,0 +1,82 @@
+DEVELOPMENT 03 — ORIGINAL DATA, COMMAND FOUNDATIONS AND MAP INSPECTION
+
+This is an incomplete Rust reconstruction. It cannot yet run a full match.
+The original installation, saves and earlier releases are unchanged.
+
+Visible additions
+- Click a rendered map object to inspect its original Thing ID, instance ID,
+  coordinates, source record and model. Focus centers the camera; Inspect model
+  opens its separate model view. Escape clears selection.
+- Authored definition fields load once in the background. Health, defense,
+  movement speed, category and model-prefix values retain source path/hash/span.
+  The panel displays unevaluated original/v14 expressions, not live unit state.
+- Terrain texture V now follows the original negative-map-Y direction and
+  authored repeat scale. This fixes texture orientation without inventing the
+  missing native blend masks or water renderer.
+- Additional original animation families are available under Animations. The
+  release manifest and animation render report give exact included coverage.
+  Original infantry and the Development 02 model/material fixes remain intact.
+  Duplicate authored clip names show their KF source and index; --clip-index
+  selects an exact binding for diagnostics. This avoids silently selecting the
+  wrong enabled/disabled bunker animation when both are named Recoil1.
+
+Selection implementation
+The inspector reuses corrected visible model geometry and rendering transforms.
+One acceleration structure per unique model is shared by its placed instances;
+terrain blocks objects behind it. Near/far clipping and deterministic ties are
+handled. Logical UI coordinates are converted once, using the physical render
+target only for camera aspect. CPU projection tests cover 100/150/225/300% scale.
+This does not reproduce native gameplay selection or collision. Transparent
+texture texels are not considered in picking. Live laptop UI testing was not
+performed during this pass.
+
+Original rule-data progress
+Native grammar mode now parses 1,845 of 1,847 original TGI files. It recognizes
+proven line-ending headers and plain EOF body closure while recording notices.
+Game/trigger_elements.tgi and Units/USA/usa_carrier.tgi remain explicit errors.
+The bounded template projection contains 1,645 authored Thing rows and 6,535
+raw field values. Duplicate/ambiguous definitions, lists and unsupported header
+operations remain unresolved. Native registry order, expression evaluation,
+template type validation and runtime actor construction remain missing.
+
+Command/history progress
+The new aa-orders source library reproduces native scalar bit packing, registry
+width decoding, ordered descriptor dispatch with opaque payload handlers,
+history-ring growth/retirement and one-entry client consumption. Native dispatch
+can stop after reading a descriptor; history consumption retains its packet and
+rereads the current index before advancing. Native fixtures cover these details.
+This is not a lobby, complete command protocol, replay loader or game scheduler.
+Actual registry registration order, payload handlers and their gameplay effects
+must be reconstructed before this can drive a match.
+
+Animation integrity
+New exports carry original converted-mesh indices and static JSON hashes, in
+addition to original NIF hashes. The client checks the complete retained mesh
+sequence against the audited material sidecar. A shadow-helper mismatch is
+rejected. Empty UV arrays are normalized only on verified untextured meshes,
+where UVs cannot change material appearance. Unsupported curve/controller
+families remain excluded; animation state selection/blending/events are missing.
+Published coverage is 46 models / 85 clip bindings, including 41 new models /
+65 bindings. It does not cover every declared actor aspect: for example, the
+GER artillery bunker's disabled-aspect KF reference is missing. The complete
+missing/unsupported list is in the
+animation catalog; no missing file is synthesized.
+
+Build/resource policy
+The executable is 64-bit, uses hardware-derived resource checks, and introduces
+no fixed game RAM/VRAM allowance or bytes-per-second disk/network throttle.
+Model preparation can run in parallel. Command/history operations retain native
+sequential ordering. OS/hardware/driver limits and finite memory still apply.
+The preserved native game's accepted 100-unit/building rules are gameplay data,
+not an engine memory limit.
+
+What remains
+Complete movement/pathfinding, collision, combat, formation/supply/recruitment,
+AI, campaign/strategic modes, audio/UI, original-save codecs and multiplayer
+remain unfinished. Terrain blending/water, lighting, optional material stages,
+placement facing and runtime animation semantics still need work. No native
+pixel-identical, full-game parity or internet-match success is claimed.
+
+Source backup: backups/development-02-source-before-phase3.zip
+Evidence: research/phase3-{orders,rules,terrain,animation,client}/
+Checks and render images: qa-output/phase3/

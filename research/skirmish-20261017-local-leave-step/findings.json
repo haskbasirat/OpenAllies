@@ -1,0 +1,62 @@
+{
+  "status": "accepted bounded concrete fresh owner services",
+  "native": {
+    "paired_rows": 117,
+    "executions": 234,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "functions": [
+      "752A60",
+      "7514F0",
+      "74DA10",
+      "770500 fresh/default and notification branch",
+      "76F998 constructor store",
+      "775DB0 null branch"
+    ],
+    "services": [
+      "allocator/free",
+      "CString provider/copy",
+      "OS synchronization and notification transport successful fixtures"
+    ],
+    "pins_semantics": "Recorded observer terminal76F99E is an observed cutoff, not an executed instruction."
+  },
+  "rust": {
+    "passed": 4,
+    "filtered": 29,
+    "target": "target/s-graphics-review",
+    "log": "research\\skirmish-20261017-local-leave-step\\rust-tests.log",
+    "production_check": "aa-netcode --tests passed; aa-runtime production also checked at this newer snapshot"
+  },
+  "ownership": [
+    "Sole same Node vote-to-kick64/68 list, clear head-first",
+    "Sole private constructor-null Session124 TaskSlot; no fabricated completion",
+    "Retained real SessionE4/mode54/type58, same real Notifications queue",
+    "Same Node/Admin allocation and fresh reset path covered"
+  ],
+  "limitations": [
+    "Positive Session124 task creation/status/publication is not implemented by this slice",
+    "States1/2/4/5 require concrete world/roster/film/countdown/UI leave effects",
+    "Actual remote Peer64/68 owner is explicit required; raw multiple-peer fixture is only per-peer clear primitive proof",
+    "Full Session constructor is not emulated: exact null-store island plus XOR prefix pinned; no full startup/battle claim"
+  ],
+  "shared_files_scope": "local_bootstrap: sole task field/ctor and native Notification kind constructor extraction/export; local_host: sole vote list ctor and clear primitive. Other concurrently authored changes are not certified by whole-file hashes.",
+  "sha256": {
+    "crates/aa-netcode/src/local_leave_step.rs": "bbc64f3c66536ce47e9b2aaac54514a99fd62db16293f7676af2ca3829e5dca2",
+    "crates/aa-netcode/src/local_leave_step_tests.rs": "a396174b1bc082e5439b7c35688282ab86059497564e7c3f34a94d804c9b15bf",
+    "crates/aa-netcode/src/local_bootstrap.rs": "5ded9d8726af9cd4818e55ddbba9f9f1fa91802349d67a6530982d719287c954",
+    "crates/aa-netcode/src/local_host.rs": "08bddba8eebf6a18c3ead72935cd3660c5c566b63f03d397120f3619b24e2fe6",
+    "research\\skirmish-20261017-local-leave-step\\native_leave_step.py": "1e8510c16ca15fc699abae7ecbefdfaf0dd134e85407e153fb25bfb612791b42",
+    "research\\skirmish-20261017-local-leave-step\\native-leave-step.json": "759239a4717fd2299730cd9c5210818ac6fd59d5ab153c73fbb71112dc52dc96",
+    "research\\skirmish-20261017-local-leave-step\\native_leave_notification.py": "1150b066dfe215d24f2ad37e53ab19e0dbd79063852e5aa774c7dc2975209cc8",
+    "research\\skirmish-20261017-local-leave-step\\native-leave-notification.json": "d944377eea432b04390aed22486195ef7becc7a643101590e098fb089495c207",
+    "research\\skirmish-20261017-local-leave-step\\rust-tests.log": "be1f37850ece640c4f15994f7ec781099e99456cc3f504ab5a5ec645ccb05861",
+    "research\\skirmish-20261017-local-leave-step\\production-tests-check.log": "d1473c73f9b38e7c5f0aea66e16a6afabef8ec824091554e8bcb1576503c1e2f"
+  }
+}

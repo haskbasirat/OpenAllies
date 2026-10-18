@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "scope": "Bounded native 4BBF90 shared-owner mean producer, not completed all-manager source graph or ActorData+1E4",
+  "passed": true,
+  "native_cases": 210,
+  "native_success": 150,
+  "native_declared_stops": 60,
+  "executed_instruction_pins": 702,
+  "images": [
+    "original",
+    "v14"
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "focused_rust_tests": 2,
+  "clippy": "clean aa-combat all-targets",
+  "files": [
+    {
+      "path": "crates/aa-combat/src/combat_mean_coordinator.rs",
+      "sha256": "868125002bc78ddbcf9e27a2c59fbcfc6e8b10957b55aebaec9c4c49d45cca3b"
+    },
+    {
+      "path": "crates/aa-combat/tests/combat_mean_coordinator.rs",
+      "sha256": "f472759811eb79a3979fb52244d376a4f2bbcc8abec7d8ac42fd8f2c9aa00b52"
+    },
+    {
+      "path": "research/skirmish-20261016-combat-means/native_means.py",
+      "sha256": "2e9564074d9422e11f3332f43e627777c22d0f6bc9f181366781139f8bf6013d"
+    },
+    {
+      "path": "research/skirmish-20261016-combat-means/native-means.json",
+      "sha256": "2474339ee4a08abf3f6c57bb4b0e155811ea05d2eb3e2e94ffb6c8ac0b8bc4c1"
+    },
+    {
+      "path": "research/skirmish-20261016-combat-means/tests-v2.log",
+      "sha256": "3007f6da8e0444e4ee515da1dd08805bde747a67d6f0793c79f70f9428cb8699"
+    },
+    {
+      "path": "research/skirmish-20261016-combat-means/clippy.log",
+      "sha256": "e30a5e6f1401df4d2f310bd8539ac984ba9eaa6fa0dd0253b55aa5ffc502fbbd"
+    },
+    {
+      "path": "research/skirmish-20261016-combat-means/README.txt",
+      "sha256": "27ae023565acc8fae301e579519b7d37bf422988985cf55e76683cf1a5aabfc3"
+    }
+  ],
+  "source_subset_count": 10,
+  "whole_registered_actor_count": 1028,
+  "full_manager_means_claimed": false,
+  "actual_native_startup_fp_observed": false,
+  "completed_source_graph_claimed": false,
+  "completed_actor_value_claimed": false,
+  "root_shared_files_modified": [
+    "crates/aa-combat/src/lib.rs: appended module export only"
+  ],
+  "sdk_reuse": false,
+  "profile_reads": false,
+  "limitations": [
+    "Getter entry bytes are pins only in native getter mode; dynamic mode declares them response seams. Native allocator/free/assert/log entries are always excluded.",
+    "Empty range stops immediately before native reciprocal division, not a claimed safe native recovery.",
+    "Source subset is ten registered definitions previously bound from source, in filtered native-kind-2 list order; it is not all 1028 definitions or completed startup.",
+    "No native source-load PC/profile context, preceding completion-pass receipt, ActorData+1E4, 4BB590, full game or battle claim."
+  ],
+  "superseded_attempts": [
+    {
+      "kind": "native setup failure",
+      "detail": "An unnecessary unrelated 0x2255064 write was unmapped; removed before first native execution. Original tool output retained in conversation."
+    },
+    {
+      "path": "native-run-v2.log",
+      "detail": "204 cases before reviewer strengthened two-ability capture and added captured-definition storage intervention."
+    },
+    {
+      "path": "tests-v1.log",
+      "detail": "1 pass / 1 fail: fixture guard JSON bool incompatible with expected native integer byte; corrected fixture serialization without weakening traces."
+    }
+  ],
+  "independent_review": {
+    "path": "independent-review.json",
+    "sha256": "35f1c6a8f375bcfbc86206cf556df94a232576ef3f9f9f6228c3a0951f797e29",
+    "status": "accepted_bounded_borrowed_mean_producer",
+    "fresh_native_fixture_exact_match": true,
+    "focused_plus_existing_combat_value_tests_passed": 6,
+    "independently_audited_instructions": 52,
+    "production_edits_by_reviewer": false
+  }
+}

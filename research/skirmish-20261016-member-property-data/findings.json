@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "author": "/root/state_binding_review",
+  "scope": "Bounded immediate source producer for ActorData+2D8 ElementComponent/SupportProperty/property_IDS, shared PropertyRef identity and45EC60 cursor semantics.",
+  "status": "implemented_and_independently_accepted",
+  "native": {
+    "rows": 72,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "byte_address_pins": 100,
+    "executed_image_instruction_addresses": 92,
+    "intercepted_leaf_entry_addresses": 8,
+    "replay_exit_code": 0,
+    "scope": "4C4CF0 successful-allocation list stores/order/error prefixes and45EC60 cursor; source getter/CString/registry/allocator leaves explicitly seamed."
+  },
+  "actual_source_census": [
+    {
+      "precision": "Single24",
+      "canonical_actor_data": 1084,
+      "element_present": 372,
+      "nonempty": 0
+    },
+    {
+      "precision": "Double53",
+      "canonical_actor_data": 1084,
+      "element_present": 372,
+      "nonempty": 0
+    },
+    {
+      "precision": "Extended64",
+      "canonical_actor_data": 1084,
+      "element_present": 372,
+      "nonempty": 0
+    }
+  ],
+  "validation": {
+    "all-rules-tests.log": {
+      "passed": 140,
+      "failed": 0,
+      "ignored": 0,
+      "exit_code": 0
+    },
+    "metagame-tests.log": {
+      "passed": 39,
+      "failed": 0,
+      "ignored": 0,
+      "exit_code": 0
+    }
+  },
+  "independent_review": {
+    "reviewer": "/root/sdk_native_geometry_review",
+    "status": "accepted_no_blocking_findings",
+    "native_rows": 72,
+    "focused_rust_passed": 4,
+    "fresh_actual_census_matches": true,
+    "report": "research/skirmish-20261016-member-property-data/independent-review/independent-review.json",
+    "sha256": "209329d100ca6a014595dea30336199cb2bbc5a70fb48cc54ca164f3545838e2"
+  },
+  "properties": [
+    "Constructor zero state462830/462836; actual source call466A79..466AA7 into4C4CF0 and reader45EC60 confirmed against original/v14 bytes.",
+    "Immediate Property lookup uses owner RootPosition; later definitions/translations are invisible. This is not a deferred473AD0 reference.",
+    "Canonical registration provenance avoids translating an obtained owner again; both standard and RandomActorData source classes supported.",
+    "Completed list is reverse authored order with duplicates. Shared NativeLayoutData PropertyRef IDs are retained, including reload-stable registered identities.",
+    "Public partial-state coordinator captures signed count and commits each prepend before later typed/lookup errors. Completed owner API refuses failed loading.",
+    "The API reads only string identities and is precision-independent given the supplied source registry. It does not set/default restore precision."
+  ],
+  "limits": [
+    "Caller must supply the same catalog NativeLayoutData instance/registry used by other PropertyRef consumers; runtime Catalog forwarding does so.",
+    "Native parser/registry/Translate internals and complete ActorData loading are not newly executed by this72-row proof. Existing registry evidence is reused unchanged; source visibility/canonical binding additionally tested in Rust.",
+    "Real census is a Rust provenance-bound source projection, not a new native full-data load or initialized battle observation.",
+    "Allocator reentry/null faults, corrupted head/tail states, runtime property instances/admission/insertion/effects and full global source completion are not claimed.",
+    "Original game files/assets/saves/profiles/releases/manifests were not modified. Failed first capture only used a relative evidence path and was retried with an absolute path; its log is retained."
+  ],
+  "files": {
+    "crates/aa-rules/src/native_member_property_data.rs": "d776e7a9723515eaf95a2a53b637946885910a23945a7b430ad86fab04ca8607",
+    "crates/aa-rules/tests/native_member_property_data.rs": "b7f66b14f1e16b3f2179f6e36298688194bb701fa7bb7696cf73763cfd5cddfb",
+    "research/skirmish-20261016-member-property-data/native_member_property_data.py": "a580b45baa80a2eb2262a93db07382e1020ea9b9e205a8147b88c055f2477553",
+    "research/skirmish-20261016-member-property-data/native-member-property-data.json": "602d2964bfdc1373f5a63a8ebd0c6e5d3c7938c33fa7cc3c4cfcebe039ea41bf",
+    "research/skirmish-20261016-member-property-data/actual-source-data.json": "df62dd757965a535e9430570879a32c79261fc71922ef33c3e7fe2d160d9d6e1",
+    "research/skirmish-20261016-member-property-data/native-source-instructions.log": "862ce1c08b8d77544af0c2f1cb06e09bd19b6faa0ad6354d581789d4a321355b",
+    "research/skirmish-20261016-member-property-data/README.txt": "cc74e88e65e94a3911a8ff54fd38c12f7877b795b1908f05fa04770b5394f125",
+    "research/skirmish-20261016-member-property-data/native-replay.log": "51776236a973701ead8139167a79b6e61130d35a3fdf9f6f9731684ff82ca383",
+    "research/skirmish-20261016-member-property-data/all-rules-tests.log": "d530e1ab1f7068966e647305dcd9897c26ade001edf8a8f45ed49aea73e95a24",
+    "research/skirmish-20261016-member-property-data/metagame-tests.log": "744de295e86be90375e11fd935c37c0af44ab174ec0b117e7ebeed76f1782ed0",
+    "research/skirmish-20261016-member-property-data/independent-review/independent-review.json": "209329d100ca6a014595dea30336199cb2bbc5a70fb48cc54ca164f3545838e2"
+  },
+  "all_author_commands_reaped": true,
+  "targets_released": [
+    "target/s-state-binding-review",
+    "target/s-state-binding-review-metagame"
+  ]
+}

@@ -1,0 +1,8 @@
+    fn minimum_multiplier(&mut self)->aa_body::Result<aa_body::F32> {
+        Ok(aa_body::F32(self.variables.modifier_clamp_multiply_bits()))
+    }
+    fn numeric_changed(&mut self,catalog:&Catalog<'_>,fields:&mut crate::load_property_instances::Fields<'_>,modifier:&aa_body::property_effects::NumericModifier,
+        properties:&mut aa_body::properties::PropertiesState,instances:&mut aa_body::property_effects::Instances)->aa_body::Result<()> {
+        crate::load_property_numeric::changed(catalog,fields,modifier,properties,instances,&mut *self.variables)
+    }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "aa-netcode"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+aa-orders = { path = "../aa-orders" }
+aa-rules = { path = "../aa-rules" }
+aa-mapworld = { path = "../aa-mapworld" }
+aa-runtime = { path = "../aa-runtime" }
+aa-simulation = { path = "../aa-simulation" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

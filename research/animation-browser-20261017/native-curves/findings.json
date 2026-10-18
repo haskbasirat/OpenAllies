@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T22:59:01.054209+00:00",
+  "passed": true,
+  "scope": "Bounded original-PE scalar/vector quadratic2 andTCB3, Euler rotation order and emptyaxes, finite controller scale-store kernel evidence. Research only; no restricted SDK code copied/integrated, crate edits or Rust builds.",
+  "reviewer": "/root/state_binding_review",
+  "proofs": [
+    {
+      "path": "native-curves-lab.json",
+      "sha256": "0fbc678251397245a6c91372e5b6253db5be6537253d0af387b73a49ff5842ec",
+      "paired_cases": 168,
+      "native_executions": 336,
+      "sample_pairs": null,
+      "pins": 788,
+      "executed_pins": 787
+    },
+    {
+      "path": "native-curves-actual.json",
+      "sha256": "2bce1542cbe509a0d6393fd6647d2b8ba89920528c19e1b7d6c2091e2f5aca50",
+      "paired_cases": 45,
+      "native_executions": 90,
+      "sample_pairs": null,
+      "pins": 549,
+      "executed_pins": 548
+    },
+    {
+      "path": "native-curve-edges.json",
+      "sha256": "4165e3754f84a83888a5f378f5d3059fb914241336f4eed892d3ec70208a6bfa",
+      "paired_cases": 126,
+      "native_executions": 252,
+      "sample_pairs": null,
+      "pins": 491,
+      "executed_pins": 490
+    },
+    {
+      "path": "native-tcb3.json",
+      "sha256": "d06ad0095a01f23cf95e9dc14a3bbd644c03d18063f1258b1a3460edd0624bce",
+      "paired_cases": 24,
+      "native_executions": 48,
+      "sample_pairs": 378,
+      "pins": 993,
+      "executed_pins": 992
+    }
+  ],
+  "totals": {
+    "paired_cases": 363,
+    "native_executions": 726,
+    "unique_pins": 1568,
+    "unique_executed_pins": 1567,
+    "heap_transport_entries": 1
+  },
+  "production_owner": "/root/leader_binding_review",
+  "export_owner": "/root/builder_source_review",
+  "findings": [
+    {
+      "id": "quadratic-serialized-tangents",
+      "fact": "Real scalar loader860E30 consumes time,value,forward,backward; field+8value,+Cforward,+10backward. Vector typed loader uses+8value,+14forward,+20backward. Actual native evaluation consumes left.backward/right.forward, without multiplying tangents by segment duration.",
+      "math": "u=(time-t0)/(t1-t0),d=v1-v0,C=3d-(2m0+m1),D=m0+m1-2d; value=((D*u+C)*u+m0)*u+v0. Native vector precomputes/stores coefficients and evaluates with additional f32 stores.",
+      "authority": "actual registration860F10/862040, loader, scalar860890\u2192860BF0\u21928B7CE0 and vector861000\u2192861720/861900 execute."
+    },
+    {
+      "id": "Euler-order-real-word",
+      "fact": "Serialized 10.1.0.0 word called UnknownFloat by PyFFI is actual native Euler order:8633D0 reads rawDWORD into key+30. It must be bitcast and retained, not discarded as vestigialtime. Native table0..8 isXYZ,XZY,YZX,YXZ,ZXY,ZYX,XYX,YZY,ZXZ.",
+      "math": "Native WXYZ axis quaternions leftmultiply in tableorder; order0 yields qZ*qY*qX, equivalent to existing column-matrixRz*Ry*Rx mathematical convention.",
+      "authority": "Actual862F50 ctor\u2192862170/862FE0\u2192871130(axis)\u2192870E80(multiply); all9orders lab-probed. Serializedword-reader mapping separately staticbyte-proved."
+    },
+    {
+      "id": "empty-Euler-axis",
+      "fact": "Actual axis count0 contributes literal angle0, without bind fallback. Threeemptyaxes produce identity. Explicit empty arrays must remain distinguishable from absent entire rotation channel."
+    },
+    {
+      "id": "finite-scale-store",
+      "fact": "Controller8C02CE..8C02EE clamps finite sampled scale to max(0,value); signedzero storespositive0. Rawscalarhelper remainsunclamped. This exact callerinterval is separate from fullcontroller lifecycle."
+    },
+    {
+      "id": "TCB3-controls",
+      "fact": "Actual TCBscalar865B10/vector864E70 wireloaders retainT,B,C. Derivedcontrols use native endpoint reflection withsyntheticdtPrev=dtNext=1, and nonuniform interior interval factors. Incoming coefficient order differs from the provisional uniform preview formula.",
+      "incoming": "[(1-B)(1+C)*deltaPrev+(1+B)(1-C)*deltaNext]*(1-T)/2 *2*dtPrev/(dtPrev+dtNext)",
+      "outgoing": "[(1+B)(1+C)*deltaPrev+(1-B)(1-C)*deltaNext]*(1-T)/2 *2*dtNext/(dtPrev+dtNext)",
+      "evaluation": "left.outgoing/right.incoming into same Hermite, no additional duration multiplier",
+      "authority": "Actual865940/8658A0+864910/864750 controls,860890/861000 interpolation, forward/reversecachedsearch;24paired48machines/378samplepairs. Real-valued formula comparator is tolerance-based, not an x87 bitexact port."
+    },
+    {
+      "id": "authentic-death-key-replay",
+      "fact": "Selected originalGBRCorpsDeath,GBRHQInfantryDeath,USAHQInfantryDeath data blocks, rawsourcehashes validatedagainst independently RWD-verified inventory. Actual varying scale/Euler keys are nativeinputs at5defined-range timestamps/all3PC;45paired90P-Vruns. No preview outputs usedasnativeinputs."
+    }
+  ],
+  "bounded_domains": [
+    "Finite strictlyincreasing scalar/vector keys. Type2labincludes asymmetrictangents/nonuniformdurations/endpoints;TCB1/2/3/4keylabincludes nonzeroT/B/C, nonuniformspacing, endpointcontrols and cachedforward/reverse traversal.",
+    "Actualdeath3selecteddata blocks support concretecurveprovenance, not every node/controller/asset or wholeNIFloading.",
+    "Original/v14 outputs are exactequal rawf32words for allrecordedPCs. Rustpreview equivalence mustbe demonstrated separately; use meaningfultolerances for different arithmetic/store evaluation, no blanketbitparityclaim.",
+    "Nativecurvehelper source registration/body executes. Heap allocation and byte-streamread are namedtransportseams; x87resultstore uses explicitoutsideimageoutputtransport. No success stand-in for positive gamechild."
+  ],
+  "gaps": [
+    "Nonlinear quaternion type2/type3 interpolation and derivedcontrols remainUNPROVED in thischeckpoint. Do not usecomponentHermite/TCB or linearSLERP asreplacement; explicitrequired is honestuntilseparateproof.",
+    "Existing linearquaternion shortestarc endpoint/normalization/nearparallel behavior is not recertified by thiswork.",
+    "General emptykey/out-of-range controller/stream fixup, malformeddata/allocatorunwind, completeNiStream/controllerclock/lifecycle/blending/targetordering/rootmotion are excluded.",
+    "No deformation/skin/mesh/visibility/material/alpha/render/browser/gameplay/end-to-end or allanimationscompletionclaim. Leader/Builder ownrespectiveimplementation andvalidation.",
+    "Lab inputregistration andactualsourcefieldtransport are not wholePEstartup/NIFloader execution."
+  ],
+  "audit_limits": {
+    "crate_writes": 0,
+    "rust_builds": 0,
+    "runtime_runs": 0,
+    "native_original_files_modified": 0,
+    "restricted_SDK_code_loaded_or_copied": 0
+  },
+  "pins": [
+    {
+      "path": "research/animation-browser-20261017/native-curves/native-curve-edges.json",
+      "bytes": 126812,
+      "sha256": "4165e3754f84a83888a5f378f5d3059fb914241336f4eed892d3ec70208a6bfa"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/native-curves-actual.json",
+      "bytes": 119110,
+      "sha256": "2bce1542cbe509a0d6393fd6647d2b8ba89920528c19e1b7d6c2091e2f5aca50"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/native-curves-lab.json",
+      "bytes": 206370,
+      "sha256": "0fbc678251397245a6c91372e5b6253db5be6537253d0af387b73a49ff5842ec"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/native-tcb3.json",
+      "bytes": 181000,
+      "sha256": "d06ad0095a01f23cf95e9dc14a3bbd644c03d18063f1258b1a3460edd0624bce"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/probe_actual_curves.py",
+      "bytes": 4723,
+      "sha256": "c3aef33693246071ed18716aa490879df9eb7d0f62863f31b2818337262e07b4"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/probe_curves.py",
+      "bytes": 7816,
+      "sha256": "1f19f37f93b820c967c0a030b9ee8a62df0b92a4dee017820369e347712e22d4"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/probe_curve_edges.py",
+      "bytes": 3357,
+      "sha256": "0c3a99133de2307d16e5ac46bfc82db5e34939f5daf08a6e947954c7e9e9ecd6"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/probe_tcb.py",
+      "bytes": 6200,
+      "sha256": "0eb033e5c7b142b408eca92acd9bbe4ba025b91d3aa15f7eb7323a2099d0ad05"
+    },
+    {
+      "path": "research/animation-browser-20261017/native-curves/static-controller-reader-pins.json",
+      "bytes": 21392,
+      "sha256": "141ceb05c29611ca3538a54a906eaf32bdf571a57208df19aa9e57bbfaecf720"
+    },
+    {
+      "path": "research/phase8-movement/harness.py",
+      "bytes": 9020,
+      "sha256": "847aa5c1470e45157d94fdbf92273ca70f35323a8446243056fd9e593ebd0798"
+    },
+    {
+      "path": "research/animation-browser-20261017/inventory/original-source-catalog.json",
+      "bytes": 23840141,
+      "sha256": "b1b424c1fe204ad9af6274abee81f38d702996eaa7915d7fbabc0d347f33fd73"
+    }
+  ]
+}

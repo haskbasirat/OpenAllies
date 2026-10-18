@@ -1,0 +1,4 @@
+Canonical sealed author checkpoint: findings.json and pins.json.
+README.txt is the preserved earlier in-progress draft; final verification and limits are in findings.json.
+Added raw-byte helper-region check (including line endings): ability-helper-raw-preservation.json.
+Independent review may be added separately; natural full mission/grant remains outside this checkpoint.

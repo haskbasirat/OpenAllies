@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "scope": "Accepted selection Process16/17/18/333 and actual same-player/same-ActorStore/moved-Bank adapter. Separate from UI pointer picking, request production, selected Move and whole battle readiness.",
+  "native": {
+    "process_rows": 45,
+    "b0_reader_rows": 72,
+    "executions": 234,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      24,
+      53,
+      64
+    ],
+    "executed_pins": 86,
+    "child_boundaries": [
+      "40D5D0 explicit16bit transport",
+      "4ED0D0 clear",
+      "4ECFF0 add",
+      "4ED080 remove"
+    ],
+    "notes": [
+      "Selection children are intercepted before their bodies; existing selection kernels are reused, not newly proved here.",
+      "Actual B0 leaves cover classes1/2/3/4/5/6/7/9. Rust adapter admits positive2/3/4/6/7/9 only; classes1/5 remain precise unsupported.",
+      "Set clears first then rereads current order target/current player. Add/Remove null skip player lookup."
+    ]
+  },
+  "rust": {
+    "exact_source_tests": 1,
+    "result": "PASS",
+    "production_check": "aa-netcode --lib release locked offline PASS24.44s; no runtime unit link",
+    "actual_frame_execution": false
+  },
+  "ownership": [
+    "Decoded holds generation-bearing ActorId and weak ActorStore witness, no raw-pointer or snapshot authority.",
+    "Reached child receives same Admin284-selected Player view and moved actual Bank.",
+    "Existing86/87 route and player_order_frame service macro unchanged."
+  ],
+  "limits": [
+    "No actual UI request emitter or native picking owner is claimed.",
+    "Multi-object selection group callbacks and selected-order diagnostic/synchronizer may still be required.",
+    "NonActor positiveB0 does not certify positive selection storage support."
+  ],
+  "pins": {
+    "crates/aa-runtime/src/player_selection_frame.rs": "695be2b3895774d9c7d42633081b639ed11797c86070b6b1d1266daee95bac8b",
+    "crates/aa-runtime/src/player_selection_orders.rs": "bc0cb56da2ad13144580aced23a609cefce16f1ab2db355418d455239f441f58",
+    "crates/aa-runtime/src/player_selection_orders_tests.rs": "02c559cebee1795d271755f2e03206d4613a697fc49e686f9ba8b1b899d9756f",
+    "crates/aa-runtime/src/player_order_world.rs": "1925a045c5c1f5746118d65df82e6fc4cceb6eab2d438d915bfc271b597e1dcf",
+    "crates/aa-netcode/src/local_gameplay_order.rs": "62368b78cb52e780b884b4eb2d9cd67f209d090aee58f8f42bbfe71f0d15a517",
+    "crates/aa-netcode/src/local_live_frame.rs": "6ae29bf2a14011a7ba618ffb1c80e8dbde6a679c180aada301def4f3ae1a05fb",
+    "research\\skirmish-20261017-player-selection-frame\\native_selection_orders.py": "44bc5c37677245291e35fc09ddfa3fe661a5fe655b428707c1744aaa15403140",
+    "research\\skirmish-20261017-player-selection-frame\\native-selection-orders.json": "9aed8c4d081bd31255fd945d85e1cae57071ea44b90b735a64b4baf8ed8233e6",
+    "research\\skirmish-20261017-player-selection-frame\\exact_selection_tests.rs": "35a8bd3844abbef4630ef6c9e26dbbf9339302a488f70c13d28e7d540e3755f2",
+    "research\\skirmish-20261017-player-selection-frame\\exact-selection-tests.exe": "6bcc262b6672d5165aec5f48c345bfe02d7f48eb6203dacf74459194193f91d1",
+    "research\\skirmish-20261017-player-selection-frame\\native-immutable-replay.log": "bc799146216715fac20ac1e0b5d7f572b6bf740a1db13a00dd5819727aab3370",
+    "research\\skirmish-20261017-player-selection-frame\\exact-replay01.log": "fe70e721066d36c42f6c2140ebb40565c0d955579650fa90ec3a18a814a7de68",
+    "research\\skirmish-20261017-player-selection-frame\\check02.log": "5f8a4dec6c535ab5e48bc3826c0289cf821da63c02b184558de0c1eb777f5a40"
+  }
+}

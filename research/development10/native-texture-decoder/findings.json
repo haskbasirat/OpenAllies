@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "scope": "Modern CPU decoding and real modern GPU source-mip allocation, preserving the actual Resource input/SourcePixels identity. This is not whole native image-engine/GPU parity, a loaded flag, a completed VWorld, or a playable battle.",
+  "pins": {
+    "crates/aa-client/src/native_texture_decoder.rs": "40dca59c00ef0320bd1a752d354eefb031a12821f919d447cb68b4a16ef8dd91",
+    "crates/aa-client/src/native_texture_decoder_tests.rs": "0850359afb51c03b57a47ade531dd5a0dc47e94d71abc8a6c0885cd68fd10442",
+    "crates/aa-client/src/native_texture_pixel_tests.rs": "f77df567e8c4cdb410de5db0d53befe1d4469b34757087df97ea1750d09d93fc",
+    "crates/aa-client/src/native_texture_gpu.rs": "b27a72c6e1ba12a186827ae5c29972012aa1176d86360a2cbf97a44d473f7560",
+    "crates/aa-client/src/native_texture_gpu_tests.rs": "10fbfc840de9b0849d0b1fa33362ad255fb9ecd84615fcc09739d6a04e311a3e",
+    "crates/aa-client/src/battle_texture_services.rs": "b2d7d35e1c8325d936bcaa22615c6a0115733294119615916322c07df7b609bb",
+    "qa-output/development10/client-tests52.exe": "38b2e0425d58ae76cb10b0155c9ac75eab7e7ab11332b8837e710f02bc516cbf",
+    "qa-output/development10/client52-decoder.log": "304faf421b73645a5d2c4c87989dd56b7c087324ec8f0a1964644ef40169d607",
+    "qa-output/development10/client52-decoder-source.log": "2af233e496cccfadbb8b68bc9bd9dafae807c6120bddfc56e251b86e1764f97f",
+    "qa-output/development10/client52-gpu-texture.log": "11b545ff1800b318a2be5b49d8f3bd075587acdfd9b5c7d4d8000fed36c8a436",
+    "qa-output/development10/client52-gpu-device.log": "6565168750bdbd01128b4adbcca064a78756f02a558d992ff50747a379d8b52e",
+    "research/development10/native-texture-decoder/exact-decoder-tests04.exe": "b6184463cb66b5b469d9bcd6f3f29a5615d32c11884731d20356adf5ca930e1b",
+    "research/development10/native-texture-decoder/exact-run04.log": "a48b17c0e4503bdfbd7fdce15e2bb6202aad8a64492f97a7bd54637e5a0268ba",
+    "research/development10/native-texture-decoder/exact-decoder-inputs.json": "c8f176c99470c010e878e37887f57a2c31a0e36371553a5a38af2cbc331179fb",
+    "research/skirmish-20261017-texture-reader/native-reader-pixels.json": "754e398f22b32a72008a09e869a3d060e81de78d1cc8ed322417001119c2ed6a",
+    "research/skirmish-20261017-texture-reader/native-reader-pixel-poison.json": "3e91eebf524d6f300ffb698f96acb8d94c99e4dc529abe99a83b0b207a06a493"
+  },
+  "cpu": {
+    "exact_current_extracted_tests": 6,
+    "defined_native_pixel_rows": 90,
+    "native_fixture_total_rows": 96,
+    "native_fixture_executions": 192,
+    "rgba_defined_scope": "TGA24/32 raw/RLE+origin flags, PNG RGB/RGBA8 noninterlaced, DDS32 channel/alpha/pitch cases",
+    "fixes": [
+      "TGA ignores horizontal-origin and declared alpha-width bits; depth32 actual alpha retained.",
+      "DDS native loader ignores header pitch; uses native complex/mipmap caps and alpha-present flag.",
+      "All original DDS mips decoded; actual NativePixelLayout selects the reached source quality span.",
+      "DXT1 three-color selector3 one-bit alpha restored, including1x1/2x2 source mip levels."
+    ],
+    "qualification": "Native grayscale PNG pixels depend on unwritten heap bytes, proven separately with0/A5/FF. Modern decoder deliberately expands grayscale deterministically using PNG semantics; no native gray pixel parity claim."
+  },
+  "client52": {
+    "registered": 141,
+    "focused_pass": 15,
+    "scope": "Frozen52 compiled before final native TGA/DDS fixes and physical stream binding. Five basic decoder tests+one actual original-source Resource identity test passed; real headless GPU mip readback1 and actual device/viewport ownership1 passed; seven queue/owner/epoch/policy/terrain regressions passed.",
+    "gpu_scope": "Actual4x4/2x2/1x1 GPU allocations and readback compare every byte includingalpha. The test exercises upload_allocation, not a natural manager Source2C attachment or battle rendering."
+  },
+  "integration": {
+    "saved": "Current actual Ui policy/NativePixelLayout/decode_retained/publish40/failed-decoded-retention and real Renderer vf100 upload callback are wired. The real selected stream remains retained until its ordered close.",
+    "source40_semantics": "Native87BB50 CPU Pixel40 publication is separate from later87BA60 GPU Source2C creation. Resource/task flags remain exclusively in the actual loader/task coordinator.",
+    "not_yet_tested": [
+      "Natural physical Texture load through actual running battle Resource Task and same Source2C GPU attachment.",
+      "Actual completed Scene/Tail/AD/Loading/current-frame gameplay.",
+      "Native direct reload and old-pixel reuse branches; native PNG resize child remains explicitly required.",
+      "Pixel-by-pixel compressed GPU equality with original D3D9: original DXT readers retain compressed bytes; modern CPU codec preserves standardized block semantics."
+    ]
+  }
+}

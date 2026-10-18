@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "status": "author frozen; bounded current UVar reset child only",
+  "source_files": {
+    "crates/aa-ui/src/uvars.rs": "611537e63dabb3c79b396eb22b2e8b44574897e3b834936eee496799fb5edd7a",
+    "crates/aa-ui/src/view_variables.rs": "171290afc80d577c96ba13860e007fd9c87dba31f463f1f5b645cf521c7ac046",
+    "crates/aa-ui/src/view_variables_tests.rs": "fc058f6dad7790f4d189fc4fa2d416ce1656125c06723f8039ef7716b178f1d9",
+    "crates/aa-ui/src/view_variable_registration.rs": "95ede35eb2e93c9bf7d974ac41429e0eb72a7f31d881b0df2779bad37c6ac82b"
+  },
+  "native": [
+    {
+      "fixture": "native-uvar-registration.json",
+      "sha256": "60a856bf070f93ce7854852229eda6d80eaa407d9a7b7ce6d08f0b2eca3c2db7",
+      "producer": "native_uvar_registration.py",
+      "producer_sha256": "5d4c334796f55e767d8f1a96358661f0328fd0232c55bcfd489d9447fbbd67e6"
+    },
+    {
+      "fixture": "native-view-uvar-reset.json",
+      "sha256": "3a68cbf781bc75d8c43017edd3edfc0f6efb768e470b74c41279821a080ed6db",
+      "producer": "native_view_uvar_reset.py",
+      "producer_sha256": "0efa44464267c43b43b41f1fbb54ba3634f9d64071371ba7c684b53b46b20eb9"
+    },
+    {
+      "fixture": "native-view-bool-assignment.json",
+      "sha256": "e79d4bf1b6b328d8d0722c5544fef26eb01684efe2c9de94dccdc37586153c82",
+      "producer": "native_view_bool_assignment.py",
+      "producer_sha256": "6fca3bb97c480353c81ad70e6542c58cb187bae298a2bfb95a3efd0764270e90"
+    }
+  ],
+  "mutable_indices": [
+    22,
+    24,
+    25,
+    27,
+    29,
+    44,
+    100,
+    101
+  ],
+  "overlap": "CameraInformation forwards SAME aa-ui UVars cell; no parallel current/default string entries; other seven previously unowned",
+  "tests": {
+    "full_ui_before_added_oracle": 55,
+    "final_current_library": 22,
+    "distinct_library_plus_integration": 56,
+    "native_metadata_runs": 6,
+    "native_reset_rows": 84,
+    "native_assignment_rows": 288,
+    "actual_data": "three root UVars files, same CameraInformation byte, profile roundtrip and lazy reset"
+  },
+  "logs": [
+    {
+      "path": "ui-all-tests-v1.log",
+      "sha256": "7dd2a6735b7b8761b59e6e272b35840cc4ec55939ba73a6480e97f43801c74b5"
+    },
+    {
+      "path": "ui-lib-tests-final.log",
+      "sha256": "9611462c2fcd7cd626b274c5e884fbb5a0d05803215d33ce144b21176acbffd9"
+    },
+    {
+      "path": "registration-replay.log",
+      "sha256": "843c32813b6cf6a4db79a8384b84ebec7a8f443bb0bbad7614de633daec8363d"
+    },
+    {
+      "path": "reset-replay.log",
+      "sha256": "dfb2dcc2b61c1a849dcc1d06f28d3688560154575f13c75249125b4579e3fa99"
+    },
+    {
+      "path": "bool-replay.log",
+      "sha256": "f912136a78a7bb6a33ffe30417684c525534dd332873202f1215295f5346475f"
+    }
+  ],
+  "binary": {
+    "path": "ui-tests-final.exe",
+    "sha256": "a726d7ae47296691d96687298f29ca81f2bbc1456fc133f21b27d5491a36f082"
+  },
+  "remaining_required": [
+    "whole43F0A0 resource/scene/terrain/camera/final-manager graph",
+    "actual Screen/User/ResourceManager/Input owners before reset",
+    "positive editor source overrides with actual developer gate",
+    "actual application/source file identity validation at concrete client assembly",
+    "resource task queue/barrier and Loading17 callback",
+    "actual GPU/GUI acceptance",
+    "Session status3 and unfreeze"
+  ],
+  "not_claimed": [
+    "VWorld AD or view-ready capability",
+    "playable battle",
+    "whole native source/profile loading"
+  ],
+  "preservation": "Original executables/assets/saves/profiles unchanged; no vendor source integrated."
+}

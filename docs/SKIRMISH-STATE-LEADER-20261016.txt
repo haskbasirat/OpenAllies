@@ -1,0 +1,269 @@
+AXIS & ALLIES RUST REWRITE - STATE / LEADER CONTINUATION
+2026-10-16. Read docs/NATIVE-PORT-RULES.md before implementation.
+
+PRIORITY AND RELEASE STATUS
+Skirmish first, multiplayer second, campaign last. The rejected aa-game/aa-net
+simulation remains archived. This checkpoint describes current source changes
+after Development-09, not a new playable build or a replacement game engine
+assembled from the downloaded SDK. Original AA.exe instructions and the pinned
+v14 executable remain the authorities. No vendor SDK implementation was added.
+
+release/Development-09 remains the sealed earlier executable and ZIP. It does
+not include the current state, borrowed/saved leader, loaded-placement or
+Settlement investigation work below. Do not describe tests of current source
+as tests of that unchanged release. Original game files, assets, saves, user
+profiles, earlier releases, Cargo manifests and Cargo.lock are preserved by
+the scoped tasks; root's final preservation record is authoritative.
+
+See qa-output/skirmish-state-leader-20261016/acceptance.json for final
+integration results. This document does not invent final root test totals,
+current map-census totals, new executable hashes or release validation.
+
+FINAL ROOT INTEGRATION
+Workspace/all-target release check passed (existing client warnings remain).
+Final runtime library/integration tests:46 passed. Full real-data aa-rules:
+131 passed; aa-metagame:39 passed, with export disabled. The80-map managed
+mode1/PC53/clock0 InspectPartial diagnostic passed its census test.
+All final commands used --release --locked --offline -j4.
+
+Record failures remain796, but219 earlier state/leader stops now advance to
+the owner's required4D4CF0 refresh;577 still require completed ActorData+1E4.
+The same20 maps have record-clean diagnostics. ZERO maps complete immediate
+Init, world publication or a playable battle. The census executes later
+PostLoad on its clean prefixes but omits immediate Init/PostCreate and other
+required full-load steps; do not translate20 clean maps into a game percentage.
+Tutorial02 still first stops at actor4099/ordinal434, now4D4CF0; its eight
+historical membership-prefix probes pass unchanged. Retained failed attempts
+are explained in acceptance.json and are superseded by the final passing run.
+
+NEW CONNECTED STATE BEHAVIOR
+crates/aa-runtime/src/saved_actor_state.rs binds GActor::SetState4D64F0 to the
+actual in-progress ActorShell and mutable Thing flags. Root's shared plumbing
+adds ActorStateContext, RestoreDefinitions::actor_set_state and Catalog
+forwarding, passing the same owner Actor/Thing storage into Organization load.
+Actor+100/+104 use Components.state, not duplicate opaque word-map entries.
+
+The existing native-proved state coordinator is reused. An unchanged request
+returns before source lookup or an effect; state34 unpacked and state37
+missing_primary can therefore advance where the actual saved state is already
+correct. Changed states preserve all preceding native writes before reporting
+the first unbound enter4D4A90, leave4D16B0 or action rebuild4D1350. Construction
+Thing flag31 suppresses enter/leave, but not the exclusive-state action rebuild.
+This is a narrow exclusive-borrow adapter whose effects only commit then error;
+it is not a generic stale copy-out/copy-back implementation for live callbacks.
+
+Evidence:4044 original/v14/all-PC comparisons:2388 native returns and1656
+required-effect stops, including204 state34/37 rows. Two scoped Rust tests and
+the prior coordinator regressions passed in independent review. The12 concrete
+tutorial02 owner/member rows are from an observed Rust partial restore prefix,
+not a completed native map Init or a fabricated initialized world.
+  research/skirmish-20261016-saved-actor-state/README.txt
+  research/skirmish-20261016-saved-actor-state/findings.json
+  research/skirmish-20261016-saved-actor-state/independent-review.json
+
+NEW BORROWED ORGANIZATION LEADER CORE
+crates/aa-movement/src/borrowed_formation.rs ports full579A00 SetLeader and
+5797E0 ComputeSlotPosition over authoritative borrowed storage. The older
+formation::set_leader remains unchanged for existing callers. The new core
+stores leader+40 first, recomputes the old slot, rereads the current leader,
+recomputes the new slot, then reads/notifies the owner Mind. Assigning the same
+leader still recomputes both slots; there is no invented same-pointer shortcut.
+
+Offset axes are stored immediately. Actual allocation identity is retained
+across native callback boundaries, including the recapture of+78 after RNG.
+Lazy source/primary-slot/formation reads and current member positions retain
+native order. Dependency failures retain preceding stores and consumed draws.
+Shared native85D840 draws are supplied, never replaced with an independent RNG.
+
+678 native rows:113 inputs x2 separately mapped original/v14 images x3 x87
+precision modes. The borrowed core and existing formation tests passed; strict
+scoped Clippy passed. Mandatory logger, owner Mind+114 and identity/source host
+services remain explicit. Numeric arithmetic is the proved finite domain, not
+a new arbitrary NaN/infinity or C++ exception compatibility claim.
+  research/skirmish-20261016-borrowed-leader/README.txt
+  research/skirmish-20261016-borrowed-leader/findings.json
+  research/skirmish-20261016-saved-leader/independent-review.json
+The combined independent review above covers both the borrowed core and adapter.
+
+NEW SAVED ORGANIZATION LEADER BINDING
+crates/aa-runtime/src/saved_organization_leader.rs connects the borrowed core to
+the actual OrganizationState, saved Element/Actor/Thing storage, current canonical
+LayoutData and source FormationData. Root's OrganizationLeaderContext and
+RestoreDefinitions::organization_set_leader callback thread the actual owner,
+generation-checked registry, restore RNG and native diagnostic sink. No world,
+Organization or position snapshot is committed only on success.
+
+Active-owner reads use the actual temporarily-held shells; other actors require
+current full-generation identities and real saved payloads. Required Element
+header ownership is validated at its first use. Offsets mutate the actual+78
+vector one axis at a time. Canonical source identity checks remain lazy and
+actual orientation/facing/offset bits are used without renderer conversions.
+The saved adapter's exclusive borrow prevents vector replacement during its
+implemented callbacks; the borrowed core separately proves reentrant recapture.
+
+78 native rows include36 unmodified saved rows and42 labelled substituted
+storage probes, plus12 portable identity/source checks. The recorded Kursk
+prefix has no nonempty Organization owner with actual Mind in this adapter's
+sample. Concrete Mind+114 remains an explicit error; no initialized Mind was
+invented to satisfy an expected fixture. Core proof covers its mandatory call
+order, while the adapter's absent-Element/native null cases compare retained
+prefixes only. Detached diagnostic fields/order are proved; exact CRT locale,
+nonfinite formatting and all byte-string encodings are not.
+  research/skirmish-20261016-saved-leader/README.txt
+  research/skirmish-20261016-saved-leader/findings.json
+  research/skirmish-20261016-saved-leader/independent-review.md
+  research/skirmish-20261016-saved-leader/independent-review.json
+
+SAVED MEMBER POSITION NOTIFICATION - BOUNDED REVIEW ACCEPTED
+crates/aa-runtime/src/saved_organization_position.rs is the current
+binding of57C800/578E90/57C680 through the existing native-proved
+aa_actors::element_position::organization_moved core. Independent review
+accepted90 original/v14/all-PC rows:72 returns and18 actual goal-write prefixes
+before required relocation. Twelve separately labelled native Mind-presence
+probes stop at+64 without answering the predicate. Two adapter tests and four
+prior position-core tests pass. Root integration is recorded in QA acceptance.
+
+The adapter reads actual selected-member+40, owner Mind and saved coordinates,
+with no guessed Mind predicate. Native mode6, nonselected notifications and the
+reached no-Mind return are lazy. In the dual flag30 branch, goal stores precede
+the required4EEB40 relocation error. Actual Mind+64/+7C,4EEB40 relocation,
+57C080 interpolation,50B220 queue lookup and50AC00 scheduling remain required
+when reached. The selected-null external-notification case is outside the
+supported saved add-member caller domain; portable refusal is not malformed
+native-pointer parity. Earlier failed fixture-selection assumptions are kept.
+  research/skirmish-20261016-saved-organization-position/README.txt
+  research/skirmish-20261016-saved-organization-position/findings.json
+  research/skirmish-20261016-saved-organization-position/independent-review.json
+The reviewer also ran24 native selected-null probes to check the caller-domain
+qualification. Valid actual saved Mind execution remains unbound and unproven.
+
+NEW LOADED-OBJECT PLACEMENT WRAPPER
+crates/aa-spatial/src/loaded_object_placement.rs ports4F4590, constructing the
+actual A25B28 temporary descriptor for the saved4EF6A0(NULL) caller. It captures
+definition, facing then position before the actual+B4/+108 virtuals, rereads
+current flags afterward, and retains every defined descriptor field. Native
+uninitialized byte+53 is absent from Rust instead of being guessed as zero.
+Normal return releases the current descriptor+1C, including callee replacement.
+
+159 paired rows/318 separate native executions at PC24/53/64 cover optional
+vectors, raw nonfinite/signed-zero bits, lazy dispatch, mutation/read order,
+all native result-word probes, current-name cleanup and explicit error prefixes.
+Two Rust tests and strict scoped Clippy pass. Independent review accepted the
+wrapper and111 instruction pins. CString atomic decrement ran natively, but
+the Rust allocator/refcount owner remains a required host service. Native
+exception unwind/allocation failure is not implemented by this wrapper.
+
+Complete4F3640 is still a mandatory unported coordinator and this new wrapper
+has no production runtime ObjectInit adapter. SpatialPlacement::verdict ports
+4F3C40 and cannot substitute for4F3640, which has additional required-object,
+footprint and placement branches, including codes5/6/7. This is source progress
+toward ObjectInit; it does not initialize a map or produce a playable battle.
+  research/skirmish-20261016-loaded-placement/README.txt
+  research/skirmish-20261016-loaded-placement/findings.json
+  research/skirmish-20261016-loaded-placement/independent-review.json
+
+SETTLEMENT DEPENDENCY CORRECTION AND BOUNDED SOURCE WORK
+The actual native-order v14 catalog census found1028 registered ActorData,
+no SettlementComponent and no registered WallSets. All1647 source hashes were
+checked against original extracted bytes or actual v14 loose overrides. The
+loader retained11 native syntax notices and0 fatal/truncating exceptions.
+Exact registered provenance, including later-translated IDs, was used. This
+is a source/registration census, not a complete native application data load.
+
+The native optional-child branch was separately proved: absent
+SettlementComponent skips4640F0. Thus460940 fitting is NOT demonstrated as a
+reached startup dependency for the current shipped ActorData population. Older
+checkpoints' generic possible-dependency list must not be read as evidence that
+this currently blocks AA. Mods/new sources that actually add the component
+would still need its complete source path.
+
+crates/aa-rules/src/settlement_completion.rs adds bounded source census/current
+WallSet inputs, shared-definition Level/placeholder mutation prefixes and only
+the initial half-diameter radius store. Aliased gameplay shapes are read as
+each native write is reached. The current-registry WallSet projection cannot
+replace historical load-time reference resolution. No completed mutable
+WallSet, full4640F0 or fitted+478 is published.
+
+Scoped proof covers384 shared-shape/error cases,192 WallSet validation cases,
+54 initial-radius stores and12 optional-child cases. Four scoped Rust tests
+and independent review passed. A separate96-case local hardware x87 FSIN/FCOS
+reference preserves full caller FP state; it is not a portable trig algorithm,
+cross-CPU accuracy certificate, source-PC observation or completed460940 fit.
+  research/skirmish-20261016-settlement-completion/README.txt
+  research/skirmish-20261016-settlement-completion/findings.json
+  research/skirmish-20261016-settlement-completion/independent-review.json
+
+ACTUAL REMAINING STARTUP / CV DEPENDENCIES
+Completed canonical ActorData+1E4 remains required. The previous source binder
+provides inputs, including actual Body/Mover/Performer/property/Organization/
+Denizen fields for tested definitions; its45E090 prefix oracle uses labelled
+laboratory return values and is not completed real CV. Remaining reached work
+includes10 effective typed numeric settings, real CombatValueCSV UVar/profile
+and override result,4BBF90 means before4BB590 values, the actual completed
+shared source graph in native reverse registration order, explicit source-load
+precision and CRT/SSE2 environment. Source-load context must not silently become
+restore PC53. No+1E4/+30C/+36C completion arena or live Performer+60 is invented.
+
+Immediate per-record lifecycle is still the main end-to-end integration gap.
+Native4FAE80 performs+D8 Load then, for a clear Thing bit7,+E8 Init(NULL), checks
+AL,+EC PostCreate(0,1), then4F9510 registration before the next saved record.
+Constructor GTID registration is earlier and distinct. The current diagnostic
+still omits this immediate sequence. Later+DC PostLoad is a separate pass.
+
+Previously-proved Object/Actor/Team/Kingdom Init coordinators require real
+loaded geometry/placement, spatial membership, terrain, blocking/detection,
+world-list/Kingdom ownership, visibility/memory and component services. Existing
+snap/height/index/detection ports are reusable, but their existence does not
+provide every host binding or derived-class dispatch. Constructor-empty Kingdom
+flow arrays must not be zero-filled to bypass true ActorInit success.
+
+Real conversion drain, destruction/fresh creation/property transfer, SUN and
+MISC_DATA ownership, loaded-map/mission initialization, world lists, SAI
+activation and publication remain required. The authoritative driver/clock/
+queues/RNG ports then need actual production services before the first ordered
+tick. Menu/render/asset inspection or isolated function fixtures do not run
+those stages. No completed match, whole-game saves or network interoperability
+is established by this checkpoint.
+
+SCHEDULE AND MEASURABLE EXIT CRITERIA
+There is no reliable overall completion percentage or finish date. Treat a
+multi-month full faithful rewrite only as a planning assessment, potentially
+longer, not a measured estimate, commitment or countdown. Current function/test
+counts cover bounded inputs and explicit required seams; they cannot establish
+how many dependent behaviors remain or certify end-to-end gameplay.
+
+1. First real initialized world: one original map completes immediate object
+   lifecycle, conversion drain, later PostLoad, actual lists/managers, mission
+   initialization and publication with no fabricated callback. Expand native
+   state/list/queue/RNG comparisons and map/save-version coverage afterward.
+2. First ordered simulation: that world performs actual native-order admin,
+   decree and component updates through required services over multiple ticks,
+   retaining the single authoritative clock and RNG. A test clock alone fails
+   this gate. This provides a more useful basis for estimating first skirmish.
+3. First complete skirmish: original unit commands, movement/pathfinding,
+   combat/death, building/recruitment/economy, fog/AI, victory/defeat and save/
+   reload/restart operate together. This remains the user's first priority.
+4. Multiplayer: deterministic two-process skirmish, then real lobby/hosting/
+   joining, decree history, synchronization/recovery and save-transfer tests
+   across separate PCs and connections. Required separate-internet equipment
+   was unavailable in the last human answer; do not claim that acceptance.
+5. Campaign/WWII: original scripted missions, objectives, transitions,
+   progression, metagame and save compatibility follow those foundations.
+
+The final target remains the original game's behavior in an x64 Windows EXE,
+original assets/maps/units/nations/animations/audio/UI, skirmish, multiplayer,
+campaign/WWII and compatible saves where actually verified. Recoverable source,
+research, tests and packaging should make continuation possible. Engine memory
+and allocation caps should use growable owners; threading must preserve native
+simulation order and deterministic results. Hardware/OS/network limits remain.
+Faster loading/smoother presentation, DPI/input fixes and removed artificial
+limits require actual measurements and validation; they are not automatic
+benefits proven merely by choosing Rust. Full visual parity also remains open.
+
+Additional critical-path source audit:
+  research/skirmish-20261016-startup-critical-path/README.md
+  research/skirmish-20261016-startup-critical-path/findings.json
+That read-only audit captures the Development-09 baseline. This checkpoint's
+new placement wrapper and Settlement census supersede its earlier next-module
+proposal and generic possible Settlement dependency. Use final root acceptance
+for the current integrated source and any newly reached boundary.

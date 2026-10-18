@@ -1,0 +1,85 @@
+{
+  "schema": "kohan-widescreen-aa-lead-review-v1",
+  "date_local": "2026-10-16",
+  "repository": "https://github.com/Ensrick/kohan2-widescreen",
+  "commit": "312a8f3cd84d20708ad5ee555a46a66c1bdb9fb4",
+  "repository_target": "Kohan II classic/Steam1.2.3; not independently verified on actual Kohan executable",
+  "mod_version": "changelog0.2.0 plus unreleased changes",
+  "license": "MIT original work with explicit proprietary derivative-content exclusion; complete LICENSE retained",
+  "selected_source_files": 11,
+  "selected_source_bytes": 77675,
+  "git_blob_sha1_and_sha256_verified": true,
+  "dll_or_game_binaries_downloaded": false,
+  "downloaded_sources_executed": false,
+  "crossgame_addresses_assumed_identical": false,
+  "aa_unique_matching_signature": {
+    "va": "0x892b4d",
+    "sha256": "ecced529cf611f8e19b14ada058f704609402309cce508fca71eeaacaecde279",
+    "size": 8,
+    "kohan_rva_not_aa_rva": "0x49545d"
+  },
+  "aa_candidate_function": "0x892970..0x892e84",
+  "aa_projection_fragment": "0x892b7a..0x892d5e exclusive",
+  "native_original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "native_v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "raw_aa_ranges": [
+    {
+      "start": "0x892970",
+      "end_exclusive": "0x8929a4",
+      "sha256": "abfa7ca08175b3db916f4d26bc57edcbf012b02f59ece365553532a9d74b6340",
+      "instruction_count": 16
+    },
+    {
+      "start": "0x892b44",
+      "end_exclusive": "0x892b5e",
+      "sha256": "fd1d63d2bb19ac12945abe23a033b58608b64cf6dfd151eeed8724255c4504a8",
+      "instruction_count": 8
+    },
+    {
+      "start": "0x892b7a",
+      "end_exclusive": "0x892d5e",
+      "sha256": "84904c3aa4393fbb5f5284d70727ffb4964cb3bcb361ba1116de7f7d87417e1f",
+      "instruction_count": 117
+    },
+    {
+      "start": "0x892e7a",
+      "end_exclusive": "0x892e8a",
+      "sha256": "18c5b29aead8ac3246429a464b0d932e22765ecfc44be4be075104dc6585e70d",
+      "instruction_count": 12
+    },
+    {
+      "start": "0x402808",
+      "end_exclusive": "0x402848",
+      "sha256": "560aa9f193e0033e6442b228daac18f611df8ff8e3e635260384f2d6f8cf189e",
+      "instruction_count": 16
+    }
+  ],
+  "constants": [
+    {
+      "va": "0x9f32e0",
+      "bits": "0x3f800000"
+    },
+    {
+      "va": "0xa0083c",
+      "bits": "0xc0000000"
+    }
+  ],
+  "findings": [
+    "Native AA provides independent projection candidate with real frustum argument5 and perspective/orthographic branches",
+    "Kohan docs label+8/+C reversed; AA-native API uses header-confirmed top/bottom order",
+    "C source has resolution zoom/far scaling absent from older PowerShell/Python aspect-only code",
+    "DPI/text/hitbox policy is not supplied by this patch",
+    "Bounded separately authorized AA projection port uses native instructions and no Kohan constants or code",
+    "No completeAAcamera/defaultFOV/culling/client integration or visual parity established"
+  ],
+  "files": {
+    "reconstruction/references/kohan-leads-20261016/widescreen/download-manifest.json": "9689ed2bd62bb38755bba72cc2d79dc68eb549b5c7b40d07c2880260c693fcad",
+    "reconstruction/references/kohan-leads-20261016/widescreen/README.txt": "035a1c8e2803666dc2ce5b967f83b4ed795639eb560456e9a0c5df939a77580f",
+    "reconstruction/references/kohan-leads-20261016/widescreen/commit.json": "d0ee20a65817ef1d8e4d238ced7d9369ca1e650663f7140a0e943599268659e5",
+    "reconstruction/references/kohan-leads-20261016/widescreen/repository.json": "9f86cb34f3660efae818dad467df463e09ef7139b5dae9af5e0e406272f43526",
+    "reconstruction/references/kohan-leads-20261016/widescreen/tree.json": "21683e955c2d53da62ff2102d94a671af684403e9a95f4ac4d11c64615591b15",
+    "rust-rebuild/research/kohan-leads-20261016/widescreen/README.md": "3d3e7601690ac5c705f36a10f8664670314f3b0f8d7c1d53d094ee90536746ee",
+    "rust-rebuild/crates/aa-client/src/camera.rs": "0182eae9cc7a81ee45fce1307540901610808078ff9b6fa221e6a16f4e9f7499",
+    "rust-rebuild/research/phase8-tick/fpu-precision.md": "e4fecb99effa3dbc9d9ef04f999930e4ebb8fa2f46cab79994948aa3b6bb831c"
+  }
+}

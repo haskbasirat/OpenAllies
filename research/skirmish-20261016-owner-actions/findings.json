@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "scope": "Saved owner4D1350 rebuild through actual SavedActions/held Organization; native executed coordinator/ground/publication prefixes",
+  "production_frozen": true,
+  "native_cases": 90,
+  "unmodified_saved_cases": 36,
+  "explicit_probe_cases": 54,
+  "outcomes": {
+    "ok": 78,
+    "owner_views_required": 6,
+    "renderer_required": 6
+  },
+  "instruction_pins": 578,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "proven": [
+    "actual ownerF0/F4 clear before gates and reached native ground aggregation",
+    "same actual held Organization/Actor/typed-list ownership and unchanged member masks in bounded shapes",
+    "real saved Kingdom metadata, native empty-HQ services and generation validity predicate",
+    "changed-mask-only native4CFCC0 and required owner-view/renderer errors after stores",
+    "signed Object4C publication gate and unavailable resupply source read refusal"
+  ],
+  "not_proven": [
+    "full battle Init/PostCreate/publication/ticking",
+    "actual Mind/special contributor execution in these owner shapes",
+    "nonempty HQ eligibility",
+    "actual UI/render publication",
+    "native malformed-pointer exception equivalence",
+    "arbitrary reentry"
+  ],
+  "files": {
+    "crates/aa-runtime/src/saved_owner_actions.rs": "8ab6a955de00d51c83d2967f12da55bb24423bcd117fac3bbbf065833ade778b",
+    "crates/aa-runtime/src/saved_owner_actions_tests.rs": "87781e8406cfa58ccc4ed18cb46e45b441534206043edd6decd2fc329da4752e",
+    "research/skirmish-20261016-owner-actions/native_owner_actions.py": "507ce1ce29654170fc2665fc43e0c27f2758bac9081db5002f24c762da3b5f92",
+    "research/skirmish-20261016-owner-actions/actual-saved-inputs.json": "7e9693710ae7f5c790efdcc03a926ec66360bd17f8bb67937eae3fddd060b4bf",
+    "research/skirmish-20261016-owner-actions/native-owner-actions.json": "bf628e2d34447525989e9bd90f0190a90ead2edc23c20bb0383148eeb24d432a",
+    "research/skirmish-20261016-owner-actions/README.txt": "96afbc09db992207c8e9131e3e38478b99871b9842d056662b91159de9ceff93",
+    "research/skirmish-20261016-owner-actions/pin_findings.py": "8f72e6e6edee339e03143da122eae7e481480d809ed68ed99e42865699d17445"
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-16",
+  "reviewer": "/root/restore_review",
+  "status": "Confirmed missing immediate lifecycle boundary. This does not approve standalone flow-array zeroing or future coordinator implementations.",
+  "finding": {
+    "priority": "P1 for any native-complete restoration claim",
+    "summary": "Saved record Load reaches AwaitingPostLoad without the required immediate Init/PostCreate/registration. Teams are affected before Kingdoms; Kingdoms are affected before later Organization attachments. Later virtual+DC PostLoad cannot substitute.",
+    "locations": [
+      {
+        "path": "crates/aa-mapworld/src/restore.rs",
+        "line": 1598,
+        "meaning": "Team is marked AwaitingPostLoad after derived Load"
+      },
+      {
+        "path": "crates/aa-mapworld/src/restore.rs",
+        "line": 1778,
+        "meaning": "Kingdom is marked AwaitingPostLoad after derived Load"
+      },
+      {
+        "path": "crates/aa-mapworld/src/restore.rs",
+        "line": 2002,
+        "meaning": "source_stage calls restore_world_entity then advances without a record finish driver"
+      },
+      {
+        "path": "crates/aa-runtime/src/restoration.rs",
+        "line": 545,
+        "meaning": "The later global pass dispatches virtual+DC only"
+      }
+    ]
+  },
+  "native_order": {
+    "Team_LoadThing": "4FCACA",
+    "Kingdom_LoadThing": "4FCD52",
+    "later_Thing_chunks": [
+      "4FCF17",
+      "4FCF2E",
+      "4FCF45"
+    ],
+    "record_calls": [
+      "4FB2F7 virtual+D8 Load(stream)",
+      "4FB574 virtual+E8 Init(NULL), if Thing bit7 clear",
+      "4FB500 virtual+EC PostCreate(NULL,1), if bit7 still clear",
+      "4FB50F 4F9510 registration",
+      "4FB534 4296B0 definition+BC event list when virtual+B0 true"
+    ],
+    "bit7": "Read after Load. Set branch clears bit31 and enqueues world+110 via542A00; object/bit7 are reread afterward. Ordinary set-bit7 skips Init/PostCreate/register but can still reach Created FX.",
+    "Init_false": "Low AL zero reaches4FB582 diagnostics, then4FB5FD4F5490 destruction and4FB602 null result. The bounded execution stops at the diagnostic branch; full cleanup is statically pinned only."
+  },
+  "Kingdom_chain": [
+    "4E5DF0 first calls4D7230 with the actual Init argument; false returns before flow reset.",
+    "Actor Init(NULL) includes GObject/placement, required object, component InitExisting with Mind last, component+14 loops and actual action/property/spatial/SAI/track/FX refreshes.",
+    "After Actor Init, current GWorld+2C<22 with Kingdom+184 null causes50AC00(0) on+180 before the flow stores.",
+    "4E5EAB..4E5FB5 resets the first ResourceCount slots of actual+1A0/+1AC/+1B8 vectors, interleaved per resource. Counts grow as needed; longer tails are retained.",
+    "Then Team membership prepend/count, source recruitment items, conditional SAI,4F8AF0 all/major Kingdom registration, and other major Kingdom refreshes.",
+    "Only after true Init does the outer PostCreate and4F9510 path execute."
+  ],
+  "required_integration": [
+    "Bind a shared post-D8 record finish path before the next record, including recursive LoadThing calls.",
+    "Distinguish a loaded prefix from completed or genuinely deferred initialization.",
+    "Use actual world, Team, Kingdom, component, spatial and scheduler owners; preserve the NULL creation-argument distinction.",
+    "Do not use actor_creation::init_existing with a fabricated default block: its nonnull path unconditionally assigns+138 and differs in the Existing-FX condition.",
+    "Keep the flow adapter borrowed and fail on absent/short initialized arrays. Place the native reset only inside real Kingdom Init after successful predecessors.",
+    "Do not treat portable unsupported errors as native successful Init or erase preceding partial effects. Full false-Init destruction requires its own binding."
+  ],
+  "proof": {
+    "native_dispatch_executions": 60,
+    "native_instruction_sites": 67,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "PC24",
+      "PC53",
+      "PC64"
+    ],
+    "page_zero": "unmapped",
+    "seams": "Load/Init/PostCreate and queue/register/FX bodies are recorded leaves.",
+    "whole_record_or_gameplay_execution": false,
+    "existing_flow_reset_fixture": "40 fragment cases read and pinned, not rerun or credited as full Init proof."
+  },
+  "current_source_pins": [
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "sha256": "123a58fa25e31ac41c90f905775abc47ed067ac5e89fb3714082654792d7e7cf",
+      "same_as_initial_static_pin": true
+    },
+    {
+      "path": "crates/aa-runtime/src/restoration.rs",
+      "sha256": "95904ee4aec2813749fe7825ffa13f5cea38c18b88215de6e31787dd81b5de90",
+      "same_as_initial_static_pin": false
+    },
+    {
+      "path": "crates/aa-actors/src/post_load.rs",
+      "sha256": "cb84ee5b5b4e2a0f24b187c9cf916670d9a9255d7ae53d0bc4e3cd0968f21648",
+      "same_as_initial_static_pin": true
+    },
+    {
+      "path": "crates/aa-actors/src/actor_creation.rs",
+      "sha256": "c8671b9bfb0d3c63f0f8767392d3eb973714a070a7c16cce7d23ac25022b4f07",
+      "same_as_initial_static_pin": true
+    },
+    {
+      "path": "crates/aa-mapworld/src/special_state.rs",
+      "sha256": "c3a029d570d5c38e1f67bf6679660479a50bbc9d2cd9ef766bd2d60d46b5e585",
+      "same_as_initial_static_pin": true
+    },
+    {
+      "path": "research/phase7-runtime/native_kingdom_flow_init.py",
+      "sha256": "3596925b428a5270bcd555ea446c358f553c9e73b8a22ddb60295a8095af76b7",
+      "same_as_initial_static_pin": true
+    },
+    {
+      "path": "research/phase7-runtime/native-kingdom-flow-init.json",
+      "sha256": "666b0ab074bfd640d737d6119c572856c728f6fe5f8f2610632ea4c60ecadcd3",
+      "same_as_initial_static_pin": true
+    }
+  ],
+  "source_drift_note": "restoration.rs changed during the audit to add explicit stopped-load/source bindings and documentation that they do not certify per-record Init. The +DC pass and missing restore.rs immediate boundary were re-read afterward; the finding remains. Initial static source hashes remain preserved.",
+  "artifact_pins": [
+    {
+      "path": "research/skirmish-20261016-saved-flows/lifecycle-proof/README.txt",
+      "sha256": "5c771b1dfe3e1cbe231fcad3f52c57f43edeb5e99f8ac361e49aa0539b26090e"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-flows/lifecycle-proof/native_loadthing_lifecycle.py",
+      "sha256": "4160e34f0319f81c479ce7a103071da58e8b857acd0381d7e72618651baa14c7"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-flows/lifecycle-proof/native-loadthing-lifecycle.json",
+      "sha256": "aab7fdb39edb834f1dc05b3bf788b556ae0ad588a80098334a7f8f94ead5a282"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-flows/lifecycle-proof/static-proof.json",
+      "sha256": "02d3461011a7d8e0cc349995527188cfc6df61b3fdebffc04636363bc71fb26e"
+    }
+  ],
+  "coordination": "Root, world_start_stats, derived_stats_source and actor_name_lists received the result. Other agents own new pure Team/Kingdom coordinators; this audit does not approve those implementations.",
+  "changes": "Only new research audit artifacts. No production edits, Cargo builds, original game writes or release changes."
+}

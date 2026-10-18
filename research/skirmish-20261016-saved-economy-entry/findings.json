@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Only saved4CF0F0 absent-Economy and570020 null-owner return; nonnull remains unsupported",
+  "api": "aa_runtime::saved_economy_refresh::refresh_member(&mut SavedActions,ActorId)->aa_combat::Result<()> [crate-private]",
+  "native_addresses": [
+    "4CF0F0..4CF100",
+    "570020..570051",
+    "5701F6 return",
+    "4D1E80..4D1E87"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_entry_cases": 36,
+  "prior_refresh_rows_replayed": 3,
+  "source_sha256": {
+    "crates/aa-runtime/src/saved_economy_refresh.rs": "25a0dc8323cb586ebd55be729a6f1dbfbb8a6c640447231fee53b766d4215ed8"
+  },
+  "evidence_sha256": {
+    "native_entry.py": "88a2b888db1f96bb62c6af206697f2c6724af2eba0ad1dcf2c833da4a816e7ba",
+    "native-entry.json": "bbb0642f536554f877ae236e3388a6a7e794c6b7778f0a48101aadf4e711d459",
+    "oracle.log": "0e9842a253d6caa92cc9a882a1b1635116d7ed3b173eb0e6f0e41bce8333340b",
+    "tests.log": "466d79d33c5521a640b3062364aad6d92678899ddd7511b4b31997cb22645037"
+  },
+  "prior_refresh_fixture_sha256": "e5948ff9c1ed0a885928bc901b0968326bdb2a595ac525bd7cc7db90f5d2a007",
+  "backups_sha256": {
+    "aa-runtime-lib-before-export.rs": "6f4385ff8cf84275d61e7a55eeed812ada9c51d27f21ddcbff56090c2e4bf50f"
+  },
+  "tests": {
+    "passed": 4,
+    "failed": 0,
+    "includes_ignored_real_assets": true
+  },
+  "actual_saved_census": {
+    "absent_economy": 17,
+    "null_owner": 0,
+    "nonnull_owner": 29
+  },
+  "mutation": "None; success and explicit unsupported leave all component and actor data unchanged",
+  "identity_guard": "Header owner mismatch is explicit runtime consistency refusal; not native corrupt-world parity",
+  "native_boundary": "Nonnull owner stopped before570051 in new oracle; no resource arithmetic claimed",
+  "limits_changed": [],
+  "remaining": [
+    "Concrete nonnull-owner570020 service",
+    "Canonical initialized Kingdom resource ownership",
+    "Complete saved-world publication",
+    "Live economy/skirmish/multiplayer"
+  ]
+}

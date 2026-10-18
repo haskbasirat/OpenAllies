@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "status": "final private complete-set and opaque guards frozen; six focused tests passed; bounded independent review accepted",
+  "scope": "Source-owned, canonical/provenance/precision-bound placement dependency fields; guarded empty Settlement/Upgrade/required-object writer graphs only; not full source completion or battle completion",
+  "files": [
+    {
+      "path": "crates/aa-rules/src/native_source_requirements.rs",
+      "sha256": "464185d7551587535ee5244378e75bba796f246df5db3899d5295cac65103c45"
+    },
+    {
+      "path": "crates/aa-rules/tests/native_source_requirements.rs",
+      "sha256": "9d93f5332a27ab85f947bfeda3f475334665f7018b98792fbc952637f9a9446b"
+    },
+    {
+      "path": "research/skirmish-20261016-live-placement/source-requirements/native_source_requirements.py",
+      "sha256": "c18abe831a0d2564afe4d5093408eba6e633f1dbaa757385e4d872bc02911b8e"
+    },
+    {
+      "path": "research/skirmish-20261016-live-placement/source-requirements/native-source-requirements.json",
+      "sha256": "e582a5f2ae6639a42247e781392f4c5b141e1f638752b63b24e678aacadce384"
+    },
+    {
+      "path": "research/skirmish-20261016-live-placement/source-requirements/actual-source-requirements.json",
+      "sha256": "dc209bd57b1f7099d752baa4ff92095627ecd3406b9576f6b90c14c5bc33e2b8"
+    },
+    {
+      "path": "research/skirmish-20261016-live-placement/source-requirements/README.txt",
+      "sha256": "4f2830871466e2d24e6c17d7cb6f5ddda32fd90aaf97632fb42858b4a563c64a"
+    }
+  ],
+  "actual_source": {
+    "registered_things": 1959,
+    "actor_data_including_derived": 1084,
+    "random_actor_data": 56,
+    "settlement_category": 0,
+    "source_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "proof_counts": {
+    "synthetic_cases": 144,
+    "actual_source_projection_cases": 6504,
+    "isolated_constructor_stores": 30,
+    "guarded_prepasses": 6,
+    "all_kind_virtual_verifiers": 6,
+    "positive_prepass_leaf_write_sets": 54
+  },
+  "checks": [
+    {
+      "command": "AA_GAME_ROOT=<game> cargo test -p aa-rules --test native_source_requirements --release --locked --offline -j 4 --target-dir target/s-builder-source-review -- --include-ignored --nocapture",
+      "result": "6 passed; 0 failed; 0 ignored; final private complete-set guard run 23.31s test execution",
+      "exit_code": 0
+    },
+    {
+      "command": "python research/skirmish-20261016-live-placement/source-requirements/native_source_requirements.py",
+      "result": "all original/v14 and all-PC native rows passed; zero unexpected null-page accesses",
+      "exit_code": 0
+    }
+  ],
+  "corrected_diagnostic": "An intermediate Rust test expectation wrongly assumed a +175 byte mask read. Native evidence showed +174 dword; the assertion was corrected and the final four-test run passed. No native behavior was changed. Final conservative hardening rejects all opaque source inputs, even after public diagnostics are cleared; this prevents omitted canonical bool reloads from becoming a false source proof. Current source/native fixture bytes remain unchanged. Independent review then found public ActorCatalog projection mutation could hide a writer; final private resolved-root complete-set/IDS/provenance/template/source checks reject those mutations. arena_ordinal is a portable logical slot only, and the guarded slice is order independent.",
+  "limitations": [
+    "Source receipt parsing is independently guarded, not full native TGI startup replay.",
+    "Only mask bit14 participates in 45DB10; real-source rows initialize other mask bits zero and claim no full-mask equivalence.",
+    "Positive Settlement, Upgrade and required-object graphs remain unsupported by the Rust producer.",
+    "Postpass writer exclusions beyond the bounded guarded executions require the accompanying typed static audit.",
+    "Successful allocation is the only application seam in the positive child propagation check; allocation failures and external callback reentry excluded.",
+    "Full rules/metagame compatibility is coordinated by root after all definition writers freeze.",
+    "The source proof supplies no final flags/masks/shapes/combat values/settings/CSV context or full ObjectInit."
+  ],
+  "freeze_local": {
+    "source": "2026-10-16 22:15:59 America/New_York",
+    "tests": "2026-10-16 22:15:59 America/New_York"
+  },
+  "independent_review": {
+    "reviewer": "borrowed_leader_core",
+    "path": "research/skirmish-20261016-live-placement/source-requirements/independent-review.json",
+    "sha256": "635e31ce6c43d65174c3c2b7fafa911a1eeea95cbeee9923753ce0440fc2bb20"
+  }
+}

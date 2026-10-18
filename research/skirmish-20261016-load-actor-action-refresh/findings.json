@@ -1,0 +1,47 @@
+{
+  "status": "accepted author checkpoint, independent review pending",
+  "scope": "Actual late4D7332 full action dispatch only; no whole ActorInit/battle completion",
+  "actual_loads": 3,
+  "actual_owner": 2696,
+  "actual_native_rows": 9,
+  "separate_native_machines": 18,
+  "pins": {
+    "executed": 344,
+    "source_svar_transport_entry": 1
+  },
+  "actual_same_allocations": true,
+  "actual_actions": [
+    0,
+    0,
+    0
+  ],
+  "validation": {
+    "actual": "1/1 all3PC102.37s",
+    "native": "9/18 fresh immutable",
+    "rust_native": "1/1 0.01s final exact-binary fixture replay"
+  },
+  "required_later_services": [
+    "ExistingFX42A590 and later ActorInit children",
+    "complete mission/battle/multiplayer"
+  ],
+  "test_profile": {
+    "release": true,
+    "LTO": false,
+    "codegen_units": 16,
+    "jobs": 4,
+    "locked_offline": true
+  },
+  "sha256": {
+    "crates/aa-runtime/src/load_actor_action_refresh.rs": "e7b5e5347975a1f51de09b28d554c1f8423bd423f3e57d13cef689e99f5ab291",
+    "crates/aa-runtime/src/load_actor_action_refresh_tests.rs": "eaf494efb3428ff4dd0e1a2bdc3d4a3ed86fc365f81598d2ddcceefb434b3603",
+    "research\\skirmish-20261016-load-actor-action-refresh\\action-tests.exe": "65ef691d82a24629a72f25cb00da296f0935b0bb51861fadd29d37e14a8b6675",
+    "research\\skirmish-20261016-load-actor-action-refresh\\actual-capture-absolute.log": "c1f5a858676fd0a57b904582fd5f95189def0ad08556e27676ca6723f673cdd2",
+    "research\\skirmish-20261016-load-actor-action-refresh\\actual-farm-action-inputs.json": "d38236b84d3bd04515422b9e4921f04010f97bfc5a8017b497872d4dd9f00d23",
+    "research\\skirmish-20261016-load-actor-action-refresh\\native-farm-action-refresh.json": "49144810b41be5411d4ff865a0bb0dc06f943f605d971930752b9e6b8ad004f4",
+    "research\\skirmish-20261016-load-actor-action-refresh\\native-replay.log": "b95f22d8eb60723b4a7d496b0f785cd72a46562f558767058e329858b850a914",
+    "research\\skirmish-20261016-load-actor-action-refresh\\native_farm_action_refresh.py": "c326362dc67afcf1b1db71c2dcf574e5f9f9e64796f05244260c16f01b7974e1",
+    "research\\skirmish-20261016-load-actor-action-refresh\\README.txt": "1c93edaaeef5a6e90eadf9ec07fdeae54f44c95e8cc90e8663e390a0c15b27bc",
+    "research\\skirmish-20261016-load-actor-action-refresh\\rust-native-replay.log": "67c3849c283d9c41153328663d52ffdef684a7ff75cc77f05afcd04100b49442"
+  },
+  "actual_publication": "Skipped by native because actual old/new action masks are both zero; prior changed-mask/publication proofs reused, not freshly executed here."
+}

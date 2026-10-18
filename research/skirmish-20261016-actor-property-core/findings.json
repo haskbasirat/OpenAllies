@@ -1,0 +1,115 @@
+{
+  "schema": "native-actor-list-108-core-v1",
+  "date": "2026-10-16",
+  "functions": [
+    "004D4CF0",
+    "004D4E50",
+    "004364C0"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_rows": 942,
+  "native_executions": 1884,
+  "inputs": 314,
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "separately_mapped_images": true,
+  "all_original_v14_outputs_equal": true,
+  "visited_instruction_pins": 137,
+  "dependency_stop_rows": 843,
+  "mutation_rows": 9,
+  "outcomes": {
+    "ok": 99,
+    "actor_head": 129,
+    "node_next": 144,
+    "store_actor_head": 60,
+    "free_node": 15,
+    "store_actor_tail": 24,
+    "has_source_component_a8": 12,
+    "definition": 6,
+    "definition_flags": 6,
+    "definition_head_504": 6,
+    "allocate_node": 45,
+    "node_value": 165,
+    "store_node_value": 45,
+    "store_node_next": 45,
+    "actor_tail": 45,
+    "organization": 12,
+    "organization_member_count": 30,
+    "organization_member": 36,
+    "element": 12,
+    "element_parent": 6
+  },
+  "native_service_seams": [
+    "6F7810(8) allocation",
+    "6F7430 free"
+  ],
+  "full_ordered_trace_replayed": true,
+  "raw_partial_nodes_and_head_tail_replayed": true,
+  "new_rust_tests_passed": 2,
+  "existing_numeric_property_refresh_tests_passed": 2,
+  "scoped_strict_clippy_passed": true,
+  "authoritative_state_type": "aa_body::actor_property_list::State<T>",
+  "new_actor_field_owned_by_root": "actor_list_108:State<String>",
+  "native_constructor_head_tail_null": true,
+  "unwritten_allocated_fields_explicit": true,
+  "fixed_list_cap": false,
+  "native_parent_is_direct_actor": true,
+  "scheduling_calls_in_functions": false,
+  "default_success_services": false,
+  "canonical_source_producer_implemented_here": false,
+  "saved_runtime_adapter_implemented_here": false,
+  "battle_ready": false,
+  "sdk_implementation_used": false,
+  "limitations": [
+    "Actual canonical Builder504/source arena and saved/live registry adapter are separate required work",
+    "Value equality must compare stable canonical definition identity",
+    "No allocator-null/OOM unwind or malformed cyclic graph parity claim",
+    "No complete Actor Init/PostCreate/publication, battle or multiplayer claim"
+  ],
+  "files": {
+    "crates/aa-body/src/actor_property_list.rs": {
+      "bytes": 9700,
+      "sha256": "b5a05231915c5e05da61c22bf6acd191a19254ffbd88cef1dc1f5983b94b7235"
+    },
+    "crates/aa-body/tests/native_actor_property_list.rs": {
+      "bytes": 9837,
+      "sha256": "5c64eb7689feb6fd115c368fccffea3d63b211cef25d7f532d148fb9749db10a"
+    },
+    "research/phase8-movement/harness.py": {
+      "bytes": 9020,
+      "sha256": "847aa5c1470e45157d94fdbf92273ca70f35323a8446243056fd9e593ebd0798"
+    },
+    "research/skirmish-20261016-actor-property-core/native_actor_property_core.py": {
+      "bytes": 9579,
+      "sha256": "ea9642f629a840b529e6c17ef49a55627b75c3162b2cf88f25701c87f914f6d6"
+    },
+    "research/skirmish-20261016-actor-property-core/native-actor-property-core.json": {
+      "bytes": 6041854,
+      "sha256": "0be3ace847596ae4088b373a4116257445b2eaadc2ce5d2d8baec29a08eb1ad0"
+    },
+    "research/skirmish-20261016-actor-property-core/native-instructions.txt": {
+      "bytes": 4323,
+      "sha256": "28cfe39a4eae9259defae891bc4c66b6fed8a7c459c96846dcd713ab61be2aba"
+    },
+    "research/skirmish-20261016-actor-property-core/README.txt": {
+      "bytes": 6473,
+      "sha256": "17620a23ed62a2a4426c5de629470946855111fe4a9d8bad6453cd73c7741a07"
+    },
+    "research/skirmish-20261016-actor-property-core/tests-final.log": {
+      "bytes": 947,
+      "sha256": "017692d28973e7a16b9482b9f61ff47e49c53800c4dbe0f12ff7d280e446d492"
+    },
+    "research/skirmish-20261016-actor-property-core/clippy.log": {
+      "bytes": 146,
+      "sha256": "5f9cc4928e764ae9274b3d21e00102bb80a53615d1a11b201bc7f2d11e235834"
+    },
+    "research/skirmish-20261016-actor-property-core/lib.rs.before": {
+      "bytes": 24546,
+      "sha256": "96c0781c4fc3fe800d725171385f87377ac7baca5ac5ddc1dc8dd87354746c16"
+    }
+  }
+}

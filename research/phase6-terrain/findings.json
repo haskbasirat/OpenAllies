@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "Original terrain transition passes integrated in the GPU preview",
+  "implementation": {
+    "files": ["crates/aa-assets/src/terrain.rs", "crates/aa-client/src/terrain_render.rs", "crates/aa-client/src/gpu.rs", "crates/aa-client/src/scene.wgsl", "crates/aa-client/src/loading.rs", "crates/aa-client/src/animation_preview.rs"],
+    "layer_selection": "Uses Phase5 native-tested 3x3 minimum-priority choices, unique variation identities, ascending priority, corner closing and the 161-entry rotation/reflection lookup for 33 original masks.",
+    "authored_metadata": "Original Terrain base_priority plus Variation ordinal; translation aliases share canonical identity; original texture dimensions and ordered Biome TransitionSets are retained with source hashes.",
+    "transition_selection": "0x7296B0 coordinate hash with signed wrapping integer arithmetic and signed remainders; invalid negative native indices are rejected.",
+    "source_uv": "Preserves [worldX/textureWidth, 1-worldY/textureHeight] verified in Phase3.",
+    "mask_uv": "Dedicated cell-local UV attribute, separately interpolated from diffuse UV. Native 0x72A3B4 scales by (pixels-1)/pixels then adds half-texel offset before original wrap/rotation/reflection. Default TerrainTextureTexelsPerMeter=16 at0x41FA74 and 2m cells give32texels/cell.",
+    "composition": "Original 0x72A650 texture stage0 modulates source RGB by diffuse; stage1 preserves RGB and selects mask alpha. Original0x72A280 disables blending for the first pass and enables SRCALPHA/INVSRCALPHA for subsequent default-property passes. These decisions are executed original-code fixtures, not an invented neighbor-color average.",
+    "ordering": "Terrain batches are ordered by native priority and retained before object rendering; the object transparency queue cannot reorder terrain passes.",
+    "geometry": "Terrain positions, normals, heights, source records and picking remain unchanged. Shared Vertex gains a separate2-float terrain UV; ordinary model/animation paths set it tozero.",
+    "passability_metadata": "land/water booleans resolve actual Terrain/MountainTerrain/WaterTerrain template defaults plus authored root overrides. They are distinct from native terrain type and available for separate navigation work."
+  },
+  "native_evidence": {
+    "generator": "research/phase6-terrain/recover_compositor.py",
+    "fixtures": "research/phase6-terrain/compositor-fixtures.json",
+    "metadata": "research/phase6-terrain/terrain-render-metadata.json",
+    "mask_transform_cases": 40,
+    "transition_set_cases": 80,
+    "blend_state_cases": 24,
+    "texture_stage_sequences": 2,
+    "external_state_sinks": "Blend/state fixtures intercept renderer state submission only; stage fixtures record original call arguments. TransitionSet selector stops before resource lookup after the actual native hashed set-pointer load. Matrix cases execute original arithmetic and matrix lookup.",
+    "api_constant_sources": ["https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dtextureop", "https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dblend"]
+  },
+  "validation": {
+    "cpu": "Original instruction fixtures and Rust selector/UV/state assertions.",
+    "gpu": "Explicit headless hardware test covers all8 native rotation/reflection selectors and opaque/transparent quadrants, plus half-alpha source-over color mixing.",
+    "maps": "Headless biome matrix compares new captures with preserved Development05; results in qa-output/phase6/terrain-maps/report.json when complete.",
+    "first_crete_observation": "Original masks blend19,780 interior cells;892 outermost cells retain fallback. Square grass/crop/mountain edges visibly transition in the captured preview. This is an inspection-render improvement, not proof of native screenshot parity."
+  },
+  "remaining_limits": [
+    "Direct geometry multipass uses the modern renderer's linear/sRGB framebuffer. Original cached offscreen terrain texture quantization, filtering and gamma behavior are not reproduced.",
+    "Native final terrain lighting, macro/detail textures, water, shadows and edge/skirt geometry remain incomplete.",
+    "Outermost map cells retain the previous single-material draw until native border/ghost-cell reconstruction is proved.",
+    "Unresolved variation metadata, ambiguous equal priorities, or conflicting multi-biome TransitionSet lists retain explicit single-material fallback and are counted.",
+    "The authored metadata is pinned to recovered original sources; this is not a general runtime terrain TGI editor or hot-reload implementation.",
+    "Default power-of-two mask target dimensions are native-bit-checked; arbitrary floating texture-density/FPU configurations are not claimed.",
+    "Terrain passes add draw/geometry cost. Concurrent object sorting also changes draw counts; no general performance improvement is claimed from unlike debug/release load timings."
+  ]
+}

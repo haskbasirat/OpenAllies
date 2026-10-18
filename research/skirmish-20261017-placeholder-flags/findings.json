@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "scope": "Unchanged Placeholder definition flags only; not whole4BC7F0/source/World completion",
+  "production_sha256": "589eefaf73a64708dc0c187e695483565b1324103fef4cfb120c2b6bf77a9a70",
+  "native": {
+    "rows": 204,
+    "actual_source_rows": 90,
+    "machines": 588,
+    "address_byte_pins": 173,
+    "executed": 171,
+    "intercepted_diagnostic_entries": 2,
+    "both_original_and_v14_all3PC": true,
+    "fresh_immutable_replay_passed": true
+  },
+  "rust": {
+    "verbatim_pure_function_extraction_rows_passed": 294,
+    "extraction_scope": "same production finite/contains/fixed_pair text, no shipping source edits; not whole crate/cache test",
+    "actual_factory_external_tests_passed": 1,
+    "actual_factory_capture_seconds": 20.65,
+    "actual_factory_immutable_seconds": 22.18,
+    "actual_source_pc": "Double53",
+    "runtime_unit_native_and_cache_move_tests": {
+      "passed": 2,
+      "failed": 0,
+      "seconds": 13.41,
+      "binary_sha256": "aba30fa4398381da16192ab6dfc652d046366b91de6373888cbbdfbe2e6e9f36"
+    }
+  },
+  "source_census": {
+    "things": 1959,
+    "random_receivers": 56,
+    "placeholders": 6,
+    "nations": 5,
+    "verified_pairs_perPC": 30,
+    "PCs": 3,
+    "explicit_upgrades": 0,
+    "mask": "0xA74C00; actualA05540+3C->4C9FA0 FALSE",
+    "all_masks_already_unchanged": true
+  },
+  "alias_guard_correction": "Whole registration census now compares original id/provenance with sealed field tokens, without re-Find of unrelated later-translated chaparral_wall; reached Placeholder lookups remain strict.",
+  "not_claimed": [
+    "nonfixedpoint source flag mutation/logging/order",
+    "missing/null Nation substitution DataCheckingStrict service",
+    "arbitrary derived vtable flag rule",
+    "whole Thing8C validation/world startup",
+    "complete fresh actor creation/mission/battle"
+  ],
+  "freeze_sha256": "42a16da5c96336d0474ce0688b5112e9485538780c4c56b244b6256ca5f8573a",
+  "status": "bounded unchanged-flags source/cache checkpoint passed"
+}

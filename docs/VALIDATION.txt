@@ -1,0 +1,75 @@
+RUST DEVELOPMENT FOUNDATION — VALIDATION, 13 OCTOBER 2026
+
+This validates a reconstruction foundation, not a finished Axis & Allies game.
+
+Passed
+- Release workspace suite: 62 tests passed, including the optional original-file
+  and real-GPU tests. No tests were ignored in this final run.
+- Strict Clippy across all workspace crates and targets: no warnings.
+- Actual RWD indexes for all ten original archives, exact member extraction,
+  malformed inputs, refusal to overwrite, and sparse offsets above 4 GiB.
+- All 80 original map structures (225,851 placement records) and 1,847 converted
+  model files decoded/preprocessed. All 80 maps completed actual GPU texture
+  decoding/upload/render/readback using Vulkan on this RTX 3080.
+- The map sweep rendered 221,048 placements. The remaining 4,803 records have
+  no renderable model in the current pipeline; classification/recovery remains
+  unfinished. They are not claimed to have been faithfully rendered.
+- Direct3D 12 and Vulkan both rendered the tutorial. One-worker and four-worker
+  Vulkan tutorial PNGs are byte-identical. The two graphics backends are not
+  pixel-identical (mean absolute channel difference 0.487/255 in this sample).
+- Scoped GPU validation error capture; a rejected scene upload leaves the
+  previous scene/statistics intact. Real GPU out-of-memory was not induced.
+- Original x86 oracle: 217 cases for narrow RNG/clock/provider primitives,
+  plus 21 independent native terrain-height-query cases. Simulation laboratory
+  snapshots/receipts match across one, two, four and eight worker threads.
+- All 23 accepted v14 loose-data overlays verified by size/hash. Exact expanded
+  cap/side/map declarations checked. TGI corpus: 1,834 parsed, 13 explicit errors.
+- Streaming transfer: exact bytes/checksum over local ephemeral TCP, including
+  4,194,427-byte data, corruption, truncation, interrupted/short I/O, and refusal
+  to overwrite a destination. No public service or internet host was started.
+- Native window opened and displayed the tutorial. F11 fullscreen and Home zoom
+  worked. At 150% application UI size, map selection, loading Berlin, and the
+  visible fullscreen checkbox responded at their displayed positions.
+- Real egui consecutive-frame input tests retain held movement during secondary
+  mouse press/hold/release, stop on key-up, and clear held keys on focus loss.
+- Executable is native AMD64/PE32+ with an embedded PerMonitorV2 manifest.
+
+Limits of those checks
+150% above is application UI scaling on this Windows desktop, not a test of a
+separate laptop's Windows 150% scale or mixed-DPI monitor transitions. Native
+fullscreen was tested; original game graphics/options have not been replaced.
+
+The renderer uses static converted meshes, provisional material/lighting and
+camera projection/pan response, incomplete transparency/LOD/terrain blending,
+and no reconstructed animation/water/shadow systems. Thirty-nine retail/campaign
+maps resolve the reviewed terrain metadata; developer/trailer legacy IDs can
+still use explicit warned fallbacks. Rendering a map successfully is not visual
+parity and does not execute its mission scripts or game rules.
+
+The 13 syntax failures include gameplay files. The parser does not yet implement
+native expression, inheritance, reference or type semantics. The client does not
+run a gameplay catalog, and the small arithmetic tests do not establish whole
+game deterministic equivalence or original-save/network compatibility.
+
+RAM preflight uses observed physical/commit memory and estimates; it cannot
+reserve that memory or guarantee success under concurrent pressure. Total VRAM
+residency/eviction is not managed. No >2 GiB live game, sustained SSD throughput,
+network throughput benchmark or original-versus-Rust FPS comparison was run.
+The preview has no fixed 2/4 GiB game allowance or bytes-per-second throttle.
+
+Still unimplemented/unverified
+Complete combat, movement/pathfinding, formations, economy/supply/production,
+morale, research/abilities, fog/LOS, AI, animation/audio, original UI, campaigns,
+strategic mode, native save/replay codecs, lobby/hosting/joining, game save transfer
+integration, and actual multiplayer matches. A second PC and separate internet
+connection are unavailable; those end-to-end internet tests remain blocked.
+
+Evidence in the source workspace
+qa-output/workspace-tests.txt and workspace-clippy.txt
+qa-output/all-maps-vulkan/report.json (per-map warnings, counts and image hashes)
+qa-output/tutorial-vulkan-1.png, tutorial-vulkan-4.png, tutorial-dx12-4.png
+research/evidence/ and research/engine-baseline/ (native proof, source reviews)
+research/gpu-source-independent-review.json
+
+Original game files, user saves/settings, and native release packages were not
+changed by this Rust work. All new files are under rust-rebuild.

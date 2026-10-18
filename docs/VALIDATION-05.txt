@@ -1,0 +1,64 @@
+DEVELOPMENT 05 — VALIDATION
+
+Final Windows x86-64 release, Intel i7-11700KF and RTX3080
+- 187 Rust workspace tests passed, zero failed or ignored, including local
+ original files and actual GPU tests. Strict all-target workspace Clippy passed.
+- Release --world-check passed 24 source-pinned samples; --mechanics-check passed
+53 comparisons. Both ran from an unrelated working folder with a nonexistent
+ --assets path, proving the embedded checks do not require installation data.
+- Release catalog verification, authored actor and economy diagnostics passed.
+
+Visual/native checks
+- 144 original matrix cases prove the placement basis correction. Rendering and
+ picking share the prepared yaw; raw source placement records remain unchanged.
+- Crete visibility:324 authored-invisible placements hidden, 298 speaker markers;
+ all source/model records preserved. Three tests and an 80-map source audit pass.
+- 127 Crete NIFs independently inspected:331 geometries;223 exported,55 authored
+ hidden and53 native shadow-tag omissions. No unexplained missing main geometry.
+- 532 alpha-state and32 depth-state original cases; three actual GPU overlap,
+ cutoff and depth-write tests; nine exporter and one metadata-application tests.
+- Seven representative before/after scenes, eight material-focused renders and
+ three Direct3D12 checks pass. Roads now connect; farm barrels/posts no longer
+ draw through solid roofs/walls. Fountain/vineyard changes follow authored state.
+ Standalone road, three GBR buildings and infantry preserve their old pixels.
+- The final build is also swept through all 80 original maps and all 85 shipped
+ animation bindings across 46 rigs. Reports are bound to the executable hash.
+
+Engine coverage added
+- 282 native base constructor/identity cases and6144 startup direction vectors.
+- 255 original navigation executions,252 Rust operation comparisons plus three
+ native self-copy contract rows. Required route/world callbacks remain explicit.
+- 504 spatial query/commit cases and735 nearest/interpolated heightfield cases.
+- 345 generic command/context records; native registry resolution still external.
+- 1027 CPU terrain planner cases,161 mask entries and33 source texture hashes.
+ This planner is not yet used by the GPU; terrain blending is not claimed fixed.
+- 3267 extended/host square-root cases and3696 actual-host remainder cases.
+ The raw emulator observations are retained, including 1,188 incorrect extreme-
+ ratio remainder results. Hardware plus exact integer arithmetic are the accepted
+ references. Original failed logs are preserved and explained in the peer review.
+
+Independent review and packaging
+Eleven independent reviews cover the new engine, diagnostics and visual changes.
+Review hash refreshes identify source-only integration checks rather than invent
+new test runs. Packaging verifies current reviewed file hashes, final executable,
+all map/animation results, unchanged animation cache identities, updated native
+material metadata, every ZIP payload SHA256 and CRC. The copied executable gets
+a separate diagnostic/cache smoke check from an unrelated working directory.
+Reports and final logs are in qa-output/phase5; individual evidence is under
+research/phase5-*/. Source/cache backup: backups/phase5-before-visual-fixes.zip.
+
+Limits
+The screenshot defects have specific verified fixes; this is not complete
+native visual parity. No identical-camera original-game pixel reference was
+captured. Backend images are visually consistent but not byte-identical. Native
+water, terrain composition, road draping, lighting/shadows, LOD, transparent
+sorting and dynamic material behavior still require work. Unknown authored
+visibility expressions/definitions are retained and reported rather than guessed.
+
+No full playable match, native save/replay compatibility, complete combat/AI,
+campaign/strategic mode or real multiplayer session is claimed. Internet tests
+across separate PCs/connections remain unavailable. Live laptop/multi-monitor
+GUI tests were not repeated; headless and source/GPU tests are distinguished.
+The preview package requires the existing recovered original assets and source
+data. It is not a standalone whole-game distribution. Original/v14 executables,
+saves/profiles and Development 01–04 packages were not edited.

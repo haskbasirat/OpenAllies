@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-16T22:28:38.664267+00:00",
+  "scope": "Bounded saved Economy ownership/value/flow integration and Catalog observer forwarding; no record Init/PostCreate or playable map claim.",
+  "backup": "backups/source-before-saved-economy-integration-20261016.zip",
+  "source_pins": {
+    "crates/aa-runtime/src/saved_economy_refresh.rs": "ac82a36e8af525863a68a2556b0741f95924feee1a67e857f608533392f47226",
+    "crates/aa-runtime/src/saved_organization_actions.rs": "abf5b2ba931f1eb996f475cb67557eb7e27f4a549d2dd47291805690e8d9b0ce",
+    "crates/aa-runtime/src/economy_refresh.rs": "d5953f9603e50706457a3e06d15030e4a74b7840ad5876b52b640f25862ff9aa",
+    "crates/aa-runtime/src/saved_economy_values.rs": "4003b57cbc64d771171b3642bfc5d97e0da241cdf1400e75ac5f310e980992b7",
+    "crates/aa-runtime/src/saved_economy_values_tests.rs": "a9cc5bf43a36cd98b2ec567eac4e4d46cee2428b46c7f58b35ddcfe54070475c",
+    "crates/aa-runtime/src/saved_kingdom_flows.rs": "9f277f6fcc9ac4a9605f6a30918995ae14a96cc0a95e07dd646563843f9c20ab",
+    "crates/aa-runtime/src/catalog.rs": "878809734582960089df156db92a207d1c90346b19008fe23e33ddb890782d31",
+    "crates/aa-runtime/src/restoration.rs": "95904ee4aec2813749fe7825ffa13f5cea38c18b88215de6e31787dd81b5de90",
+    "crates/aa-runtime/src/restore_lifecycle.rs": "33b262198e8d2de0b28a5c79e1cf1ca59fd7dbb82a29daf323c2457c67866600",
+    "crates/aa-runtime/src/kingdom_economy.rs": "e1110b924ff0c5030d8e0b47c696e7ae22d1ea4a3e15390fef493aaf10d19a50",
+    "crates/aa-economy/src/borrowed_flows.rs": "6eb0f4bd7b7f4b2710b6a735b4c98686f648b12573a8b1cf4f95df3a31c0e88e",
+    "crates/aa-actors/src/economy_values.rs": "dbdd5b8031f546472d2efc2e65188d8efadc3eb0ecd864fd70ad7c3f472b06b9",
+    "crates/aa-rules/src/native_recruit_backrefs.rs": "21de024e6a9761b234ac186666afd7b9a22d07343bc31d929b1bec9b43055f12"
+  },
+  "artifact_pins": {
+    "native_saved_refresh.py": "e449cb91a61215564e81d9f8c74f6648dfa2203c086e0d99ae6807d2e5846be4",
+    "native-initialized-refresh.json": "4731572201d09087f7d6aeea40e3f0a63a6cb32329b34fc70b5542e3241a1b5e",
+    "native-natural-hq-refresh.json": "b0dfedaa6487c0c24d397a831d965d1a341d14d8d0d392a382fd05bd4d74b914",
+    "actual-initialized-input.json": "9cfc7f587401787a90dc81c8851019377da639e95cd6436e3337030bff14383d",
+    "actual-natural-refresh.json": "02aa3a0c964e1c8ec74aef93b0afa9536097bf3f1025fb17903e6b7418fb1f9c",
+    "actual-natural-refresh-final.json": "02aa3a0c964e1c8ec74aef93b0afa9536097bf3f1025fb17903e6b7418fb1f9c",
+    "native-replay.log": "0e1616c3e381f26d158234be5e3f066ab196e274556198d5c520eeda5d038c69",
+    "final-native-recompare-tests.log": "2f64b168a392557e75cbd81d10a93825f50b008462554962034587a9026b1395",
+    "independent_replay.py": "3cccbcc910bc698a0ec49627900aa078a654d4eaac4ce83bc3e8dc6b675e4b7d",
+    "independent-native-replay.log": "7719ce3f624701a0e070f48ddfeaeee19751e9211e458f68843ec9c0f3ff4731",
+    "independent-tests.log": "fd3bb6e115eb8113f63bf8c5eb01fe5aa1dff1da9d937f0c5b95e0073e5526bc",
+    "independent-review.json": "bd222fcb5c17a8fa11452f959b13c2a5365ff27568814c9fbbbbec97d5fe4f48",
+    "census-start-source-reconstructed.rs": "ab202df10e54b1a15b1385ca6caae57a0afe8dba0105fed8f1d8f3f02e30c478",
+    "README.txt": "9144aa937373bc960a4502ee0979690ef272edc2c57153488ba9ef379eb59ec9"
+  },
+  "snapshot_sha256": "ab9f950212dee5568435244fc35f05d153ee9368ed09f35b48446f1dfff81db1",
+  "census_start_full_source_sha256": "ab202df10e54b1a15b1385ca6caae57a0afe8dba0105fed8f1d8f3f02e30c478",
+  "production_prefix_sha256": "7d71e807afe71fd768909f254c1416399b148f02f1b8a1af8e7f29ac0dc71060",
+  "freeze_note": "Exact reconstructed census-start full-file hash matches the independently recorded start pin; final production prefix is byte-identical. Only test additions/formatting differ.",
+  "native_new": {
+    "initialized_refresh": 6,
+    "natural_hq_refresh": 12,
+    "source_getter_executions": 54,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "images": [
+      "original",
+      "v14"
+    ]
+  },
+  "tests": {
+    "focused_rust_passed": 4,
+    "independent_rust_passed": 4,
+    "independent_native_refresh": 18,
+    "independent_source_getter_executions": 54
+  },
+  "natural_record_diagnostic": {
+    "map": "Campaign/tutorial02",
+    "mode": 1,
+    "actors": 46,
+    "economy_absent": 17,
+    "economy_null_owner": 0,
+    "economy_nonnull_owner": 29,
+    "specific_missing_kingdom_1b8_0": 27,
+    "gated_success_actor_ids": [
+      4100,
+      8131
+    ],
+    "Init_PostCreate_completed": false
+  },
+  "ownership_fixture": "Artificial link of two actual loaded Economy owners; parent failure keeps same Boxes and committed child Cost/parent Upkeep prefix. This is not a natural map relationship or recursive gameplay parity claim.",
+  "remaining": [
+    "Immediate real Kingdom Init before actor Load is not bound; no missing arrays are synthesized.",
+    "Active SAI and existing-world teardown remain outside the inactive managed lifecycle.",
+    "Source preflight inherits existing valid-constructed-source limits.",
+    "Combined census, broad compatibility, release packaging and game/multiplayer tests belong to root and are not claimed by this subtask."
+  ]
+}

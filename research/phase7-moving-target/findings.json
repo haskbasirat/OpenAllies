@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "complete_native_target_executions": 330,
+  "unsupported_mode2_native_prefixes": 4,
+  "complete_native_maximum_executions": 108,
+  "focused_rust_tests": 8,
+  "strict_scoped_clippy": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_ranges": {
+    "target": {
+      "update": {
+        "va": "0x533c30",
+        "length": 351,
+        "sha256": "16e2b1c59131c86e52c864d8842ca5f0245dbb968e437d65fb7638e155922de5"
+      },
+      "projection": {
+        "va": "0x5317a0",
+        "length": 690,
+        "sha256": "6efc3630307f459a7c6274fa20270cbff347a54d5267056e3329bd45c7b64db6"
+      },
+      "placed_projection": {
+        "va": "0x46e4f0",
+        "length": 79,
+        "sha256": "2d504d2e5188b1c5be12a093f99c7a3e3fd82403e10bb102cec78c849e80b6c9"
+      },
+      "element_formation_dispatch": {
+        "va": "0xa358b4",
+        "length": 4,
+        "sha256": "3728b3222e12d2b4181fdf2904d319acc5caff845bb748d7fb8a095c87379dde"
+      },
+      "element_formation_mode": {
+        "va": "0x52d780",
+        "length": 15,
+        "sha256": "6d4cbe85d1958c4c0de1e111831a80611e644ccfb78f6d888988ead56fe51cd5"
+      },
+      "threshold": {
+        "va": "0xa3547c",
+        "length": 4,
+        "sha256": "beece2ebb17bc117d64ce591f55a0c9a861919c14de85372e2fce800c9e3bb4b"
+      }
+    },
+    "maximum": {
+      "maximum": {
+        "va": "0x57ec80",
+        "length": 149,
+        "sha256": "6eb69b89861242970c945a3fcb1581ed829aa02a664628d8c708a7d81c1fbd6e"
+      },
+      "iterator_start": {
+        "va": "0x517f60",
+        "length": 112,
+        "sha256": "5619c15628c87b715cae67acb11abc5f44e0ca30b386c176d47fec69523a6bc7"
+      }
+    }
+  },
+  "files": {
+    "crates/aa-combat/src/admission.rs": "621b3bbfe52abfb32caee9ff1a62929e366fe0723ed11b256ae38cf90b2ea6f1",
+    "crates/aa-combat/src/lib.rs": "3672851597ed10129ec7fb6c1c1f9230eebcbcd7d5de50cc4bfd2922317e3dfe",
+    "crates/aa-combat/src/surface.rs": "503b624d0a677deb1fb8c42607bcdbdd7d79c17630519496a64af184cc3d41e3",
+    "crates/aa-combat/tests/native_admission.rs": "4d8fd567ae3213cc13f2c8ca1fea627663287633807224cb444c3b1ac02a7d1f",
+    "crates/aa-combat/tests/native_surface.rs": "0da9695b27cc53e092b0689691525e1755c2df93fd73e321383c15d3104ef251",
+    "crates/aa-mind/Cargo.toml": "8e439a76166bb5c22a7870d8876ae3db6bde7575441f4182a851e603b4ca4cb7",
+    "crates/aa-mind/src/construct.rs": "088b56986bccbb516f9bb45a8ac7fb6468949d836354cc8fe89aba07b30299f6",
+    "crates/aa-mind/src/element_move.rs": "a450bc131d55449faa374b6e9925c616e3798727345d14ee57aadd390d617773",
+    "crates/aa-mind/src/lib.rs": "10612ca0069832964c7811176a7286fb0487b9fefc64671e6aa897228dda2f4a",
+    "crates/aa-mind/src/moving_target.rs": "444e9fff26e8077a245cfb062598d1e5e3342851b2f37c2eb19f660a07abb23e",
+    "crates/aa-mind/tests/moving_target_native.rs": "295444dc20177701f1c5ac09cb666a26f48620524f3fea23135c8699806d6c80",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-spatial/src/query.rs": "d917c606ef350677af5c4e5c04279bb3aa9ade63e52cdc49d9b8512b7c59bab3",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-ability/native_admission.py": "ca567bb3e933910667ac2212a3d059bc011921957bde05669ad4f8156603a501",
+    "research/phase7-element-move/native_element_move.py": "9ef6bb3dad13a9a6d60e39a37156f20660d326985a940c5b26f901d26a4ccc04",
+    "research/phase7-mind/native-constructors.json": "199f1ac85a81cbbe47ed412eccf09a07d4c7c1f8e0495eaabe0d1f7abad6ace9",
+    "research/phase7-moving-target/README.txt": "4133a30dbf2246c2a09ba8bebd4eafc3ee4af21a70ac1c3b578286d2ee93eda1",
+    "research/phase7-moving-target/clippy.log": "acd1ba7241242bbb45254a432781df36ca69eb0b02e6fc322787bbf11c71eba0",
+    "research/phase7-moving-target/combat-tests.log": "93a1553ef2f28bc0bdf46a2aed3ee4f15764c25908508328fe42f9576ef5e553",
+    "research/phase7-moving-target/native-maximum-fixtures.json": "32e10819c8214c835d3a5fad33d4d2409e09f3d892abb1f8d461d0b8e08813b5",
+    "research/phase7-moving-target/native-target-fixtures.json": "514a864fa3c47ce3fffab933d1948aae3771af6311ca40b8f691c8b7e0468342",
+    "research/phase7-moving-target/native_maximum.py": "87d0910429a1c00a96921cecba8419db02c00212a822115495a8e15350b52de2",
+    "research/phase7-moving-target/native_target.py": "b8449dd4e6f4e95fe61aa0b616c1a5e565293d6b26cdc0c6501323ac39a344d4",
+    "research/phase7-moving-target/target-tests.log": "a21f6b5c7edb76b9fe0fc436dd0c111be1787ca46fba0d977f19fb2dec2e262a",
+    "research/phase7-surface/independent-review.json": "65849752c6d4d92c56d30add55151f1f09f4dd4d36ad8d9139d0e63585897f23"
+  },
+  "scope": "README.txt",
+  "remaining": [
+    "Actual runtime World services must bind live canonical state.",
+    "Element mode2 formation45D4C0/556070 remains explicit unsupported.",
+    "No full movement/attack/AI/match claim."
+  ],
+  "source_changes": [
+    "New moving_target.rs and tests; aa-mind direct aa-combat/aa-spatial dependencies and export.",
+    "Additive surface::placed_projection46E4F0 and admission::maximum_range57EC80; earlier algorithms unchanged and regression tests rerun.",
+    "Actual Element52D780 dispatch corrected before freeze; old exploratory Regiment false-getter assumption is not evidence."
+  ]
+}

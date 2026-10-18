@@ -1,0 +1,146 @@
+{
+  "date": "2026-10-16",
+  "scope": "Saved Mind action ownership/source integration and Recruit/MobileDeployment forwarding; not playable world publication",
+  "production_frozen": true,
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/saved_mind_actions.rs",
+      "bytes": 13926,
+      "sha256": "f1f8976b9e418e5e831b89b41b29b607add0569a7bcc203b8dfbc2b8a10dcb71"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_mind_actions_tests.rs",
+      "bytes": 10620,
+      "sha256": "86640253cc10f4820764b278b33e1e56fb97e54a7deb34016b8884d07d2b54ba"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_organization_actions.rs",
+      "bytes": 19256,
+      "sha256": "ac2d7ba91b9e99fe11f49601955018a85016d6505e127e5004136bcfdba7c86f"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_action_settings.rs",
+      "bytes": 18760,
+      "sha256": "56917bbbc4db74402b1fed9ec44506118d9a27a6c1b79d4296ada4ca8d111ab7"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_recruit_actions.rs",
+      "bytes": 10362,
+      "sha256": "217f22d4b8334465332fce2b1e65f959425135f6a075131246d0fee87fb61ceb"
+    },
+    {
+      "path": "crates/aa-runtime/src/catalog.rs",
+      "bytes": 48545,
+      "sha256": "dd02ca82866bd60efa32b67b347ffab5c6b306f73d0dac97297ca09462575ed4"
+    },
+    {
+      "path": "crates/aa-runtime/src/restoration.rs",
+      "bytes": 21953,
+      "sha256": "77070f93a534ddab0afeaa7c2dfb65bcab1a739aae76ca9f2363ceabb7a362ff"
+    },
+    {
+      "path": "crates/aa-runtime/src/lib.rs",
+      "bytes": 949,
+      "sha256": "b144a3337d880de0d468f1e9bb9f7598f201246f42435547934b2e2531b4f9bc"
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "bytes": 94293,
+      "sha256": "88d881ba7114a589bb8af117cc3b3ca7f87d0494dde33f05054838ca5cb4228b"
+    },
+    {
+      "path": "crates/aa-mapworld/src/organization_restore.rs",
+      "bytes": 33643,
+      "sha256": "667e4657e15839ce495d3674fa1b155671e94f6c47900009a1840fdfb94c124a"
+    },
+    {
+      "path": "crates/aa-mapworld/src/header.rs",
+      "bytes": 10814,
+      "sha256": "ac2ceab95b13f32df3628c7b55941ba861f090f5bf5bfc304ec4face8da9902f"
+    },
+    {
+      "path": "crates/aa-mapworld/src/world.rs",
+      "bytes": 10006,
+      "sha256": "16965ed4c51e28c7daa6cca4e2df5bd7adf917dba2b7dcd8a8f00af011ef4e3c"
+    },
+    {
+      "path": "crates/aa-runtime/tests/element_attach_restore.rs",
+      "bytes": 8125,
+      "sha256": "9fd54f1c9b5693f8288c24de4044fbf138dddecfcd455eb48cfc2dd551dbde6a"
+    },
+    {
+      "path": "crates/aa-rules/src/native_mobile_deployment.rs",
+      "bytes": 9902,
+      "sha256": "1e4edaca4fe23376a777aa55c99be359ac85e3a634a055d7c6f395668f0ba80e"
+    },
+    {
+      "path": "crates/aa-rules/src/native_recruit_data.rs",
+      "bytes": 4938,
+      "sha256": "73f0eb8f4892358e10aa42059c2a72bc02d7c53744f73135bba515b4e2e51498"
+    }
+  ],
+  "backups": [
+    "backups/source-before-saved-mind-actions-20261016.zip",
+    "research/resume-20261016-saved-mind-actions/frozen-source.zip"
+  ],
+  "new_native_evidence": {
+    "saved_element_executions": 12,
+    "saved_element_instruction_sites": 372,
+    "fog_generated": 93,
+    "fog_actual_RULES": 80,
+    "game_type_CString": 9,
+    "morale_setter_sequences": 6
+  },
+  "composed_provider_evidence": {
+    "mind_existing_native_cases": 219,
+    "mobile_predicate_cases": 552,
+    "mobile_source_pairing_cases": 49,
+    "recruit_contributor_executions": 906,
+    "recruit_source_cases": 45
+  },
+  "validation_logs": [
+    "qa-output/resume-20261016/saved-actions-final-cstring-test.log",
+    "qa-output/resume-20261016/saved-actions-integration-final.log",
+    "qa-output/resume-20261016/saved-actions-native-masks.log",
+    "research/resume-20261016-saved-mind-actions/settings/rust-tests.log"
+  ],
+  "next_stops": {
+    "tutorial01_mode1": "Organization578A30 ActorData class-reference lists",
+    "tutorial02": "Research583FC0 action contributor"
+  },
+  "limits": [
+    "Current12newnativecases cover two original Element Minds; Regiment/Aircraft glue reuses existing proven primitives but no new sourcecase oracle here",
+    "NativeMapResource mode must be explicit; legacyAttempt paths keepNone",
+    "Source constructor-valid fields/Ability identities only; eager projection can conservatively fail before native on malformed later descriptors",
+    "No full80recordcensus or world publication performed by this subtask",
+    "Economy refresh570020, SAI phase, renderer/owner-view publication and additional action/recruitment contributors remain explicit required services"
+  ],
+  "validation": {
+    "runtime_saved_unit_tests": 7,
+    "runtime_saved_unit_failed": 0,
+    "runtime_attachment_layout_tests": 6,
+    "existing_native_mask_tests": 2,
+    "existing_native_mask_cases": 219,
+    "native_source_Element_executions": 12,
+    "all_passed": true,
+    "combined_80_map_census": "parent-owned, not run by this subtask"
+  },
+  "log_pins": [
+    {
+      "path": "qa-output/resume-20261016/saved-actions-final-cstring-test.log",
+      "sha256": "7c930413b6c9b5c3bcbc825d1b83b5134236b1dc77aecc811c585347e4d1978e"
+    },
+    {
+      "path": "qa-output/resume-20261016/saved-actions-integration-final.log",
+      "sha256": "acd891238fd7626ae68a357db536c4254a1e86e858af5a2aa2b9392de9762790"
+    },
+    {
+      "path": "qa-output/resume-20261016/saved-actions-native-masks.log",
+      "sha256": "0470c7aa9ce1c592ba8e2602a614ba80ed829cf1153996be41aefcf377ed5cc2"
+    },
+    {
+      "path": "research/resume-20261016-saved-mind-actions/settings/rust-tests.log",
+      "sha256": "e762e61040143d85b3b3c7cd682e4b584f74d758705a9f6967dd95be19477f7f"
+    }
+  ]
+}

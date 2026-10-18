@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T16:44:17.568890+00:00",
+  "passed": true,
+  "scope": "Captured load-argument forwarding plus separate current MapResource mode loan: source review, complete client metadata check and five focused actual runtime unit tests. Not GUI/battle/whole-runtime test-suite acceptance.",
+  "changes": [
+    "Controller activation Catalog forwards SAME successfulTask.mission.Staged.native_load_mode; notification/view/Frame Catalog forwards SAME liveWorld.evidence.native_load_mode. These are captured load arguments for existing saved-settings projection, not current A8.",
+    "State-effect Context/Bound instead borrow existing SettingsMode alias plus SAME World.map_mode word. All actual Staged/registration/Mind/Frame/scheduler/member/Sleep/Character paths forward this loan. Ownerless legacy wrappers carry explicit None and have no current product callers.",
+    "active_fx_only uses existing read_settings_mode only at original late getter after state/property/view writes. Native NULL is SettingsMode::Null\u2192false; absent loan/unbound or unavailable word and foreign owner fail. No Catalog fallback, scalar current-mode copy or defaultzero.",
+    "Leave behavior/coordinator, native property/stance/FX order, other payloads and algorithms remain unchanged."
+  ],
+  "predecessors": {
+    "v1": "Source v1 omitted the recursive Character Context field; root builds failed E0063. Frozen v1 and independent resolved finding retained. V2 adds exactly that forwarding line.",
+    "metadata01": "Check01 passed but started before v2 one-line correction; not accepted as clean-v2 metadata proof. Check02 began/ended on stablev2 and passed0.84s."
+  },
+  "tests": [
+    {
+      "path": "research/development10/current-map-mode/tests-current-mode01.log",
+      "sha256": "bb3d148198b9e4958ae4716305f93074aefc18f0e788ad5bda66ccf5cbafe1d4",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "research/development10/current-map-mode/tests-owner-alias01.log",
+      "sha256": "16eff834f8a0ceeda7047d2e7dd472b63200dbd620cc0750861d0b57eabd441e",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 5,
+    "failed": 0,
+    "ignored": 0
+  },
+  "binary": {
+    "path": "target/s-builder-source-review/release/deps/aa_runtime-e88a8a621b2266fe.exe",
+    "sha256": "a16fdd8d236cf44d37b1fa438247ba434d0dd9f96adee68dc87ad31f73b05a79",
+    "scope": "Only two named filters, five tests executed;537-test entire suite was not run"
+  },
+  "metadata": {
+    "path": "research/development10/current-map-mode/check-client02.log",
+    "passed": true,
+    "target": "target/s-builder-current-mode",
+    "command": "cargo check -p aa-client --release --locked --offline -j2"
+  },
+  "controller": {
+    "path": "crates/aa-client/src/battle_controller.rs",
+    "sha256": "250aaad8fa5794601e46b49ae68186bff32a2e8279f098717e8b4655f96a9a19",
+    "writes_by_this_agent": false
+  },
+  "native_scope": "State independent native proof:30 paired cases/60 original-v14 all-PC runs, actual4F0460 plus save/store/restore intervals, no body seams. Separate existing factory/World alias proofs establish pointer origin. Rust3tests replay all27interval+3pointer rows; existing2tests cover same-owner move/mutation and foreign/unbound refusals.",
+  "frozen_files": [
+    {
+      "path": "crates/aa-runtime/src/stored_actor_state_effects.rs",
+      "sha256": "cc744a6ebadac32336ba0756b1736164f0eb10c83353d74a90b980dcb22a64da",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_actor_state_effects.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_world_registration.rs",
+      "sha256": "eff844aa1f7e3cfbbbe32c52de2cd76cce1d63197fd41aa74e24f37b031ea317",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_world_registration.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_mind_init_world.rs",
+      "sha256": "1df41fe17421ab12711a6003f399a93f65d0c4fa58c93306ec1bc1cdaff8a021",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_mind_init_world.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/player_order_frame.rs",
+      "sha256": "305d9fa042d4e7d5e3843b321f72abaf063cb0728169c937d32a9b3e787ead5d",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/player_order_frame.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_world_frame.rs",
+      "sha256": "51362a87834a73b7a56ee711522fcde5c31ebf319d390140349ff45e904c97a1",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/live_world_frame.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_frame_services.rs",
+      "sha256": "85095c0adc59663490e8a38604c2da0eb990df55b454b68d828881fc090132f9",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/live_frame_services.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_mind_update.rs",
+      "sha256": "bb6ff6472accf76055f26852ac58964506562ffb75da331683a0dfc7f246d94e",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_mind_update.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_command.rs",
+      "sha256": "d1e16d9e70ae87e036667f81d11bd4e1f4f6af02a9f8d91a3412de81f748ec42",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_member_command.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_regiment_sleep.rs",
+      "sha256": "7ea6ea6c4d4f8870d5ce9c1f15b3a8ccd25c2af2beefe1ff76e305b5203f8cd5",
+      "snapshot": "research/development10/current-map-mode/source-frozen-v2/crates/aa-runtime/src/stored_regiment_sleep.rs"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/development10/current-map-mode/source-freeze-v2.json",
+      "sha256": "40ace73b1c7a58469047c44107982860e52bf0e433afc3c4b6d6d3a8c78475f0"
+    },
+    {
+      "path": "research/development10/current-map-mode/before-manifest.json",
+      "sha256": "792b1b0f25fa1805560d2b874d5c4ca9c37cdd554bb999151161cfe94f535ce0"
+    },
+    {
+      "path": "research/development10/current-map-mode/source-diff-v2.patch",
+      "sha256": "dadb793c791036c36bc93eba27702674e370bc89fa19ad868a15af0c7f0397f8"
+    },
+    {
+      "path": "research/development10/current-map-mode/independent-review.json",
+      "sha256": "03ab5d85a1d733cfaf91caa96f26e01c107bd3428840956bc92543f6e83526e9"
+    },
+    {
+      "path": "research/development10/current-map-mode/check-client02.log",
+      "sha256": "a880fe790779de302ffc0f97380a266e8f56380efa394aa32e5c539118f4d01c"
+    },
+    {
+      "path": "research/development10/current-map-mode/tests-build01.log",
+      "sha256": "738b5a984358f4fae3a41a1292ae2da85aa9ad68551dbe496fe01f20c30560fd"
+    },
+    {
+      "path": "research/development10/state-fx-map-mode-review/findings.json",
+      "sha256": "235a3788f2ddaf6b1874442ced34b186643daa5c6095c79c259d16ed925eceb8"
+    },
+    {
+      "path": "research/development10/state-fx-map-mode-review/native-current-mode.json",
+      "sha256": "159e1e9f38b95195979e0a49f21b41694869886e2732ca3196ba1045bcc0b1ba"
+    }
+  ],
+  "limitations": [
+    "Root candidate2 package/GUI/native-startup QA and actual advancing battle remain separate.",
+    "No crate writes after frozenv2; no original game/save/profile/release files changed by this implementation task."
+  ]
+}

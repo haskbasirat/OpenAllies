@@ -1,0 +1,55 @@
+DEVELOPMENT 03 — VALIDATION
+
+Final Windows build, RTX 3080
+- 113 Rust workspace tests passed; zero failed or ignored. This includes original
+  file fixtures and the real GPU allocation/update/material checks.
+- All-target workspace Clippy passed with warnings treated as errors.
+- All 80 maps loaded, uploaded and rendered on Vulkan after the terrain UV fix.
+- All 85 model/clip bindings across 46 rigs loaded and rendered on Vulkan. The
+  sweep selects by clip index, including both same-named USA bunker animations.
+- Both USA bunker bindings also rendered with Direct3D 12. Ambiguous by-name
+  selection is explicitly rejected before producing an output image.
+- Tank, artillery, ship, tutorial and Normandy previews visually inspected.
+- Original-source definition diagnostics matched USA infantry health/defense/
+  speed 200/1/2.5, medium tank 400/6/3.5 and GBR Corps health 3500. These are
+  authored values, not runtime health. Previous economy diagnostic still passes.
+- ZIP payload hashes/CRC and copied-executable checks accompany packaging.
+
+Independent evidence
+- Native command packet/history implementation: 935 original-x86 cases and
+  scenarios, 21 checked native ranges; six Rust tests and peer review.
+- Terrain UV: 34 original-instruction cases / 136 corners, with actual palette
+  data from three maps. Repeat-equivalent UVs, not bit-exact x87 GPU rendering.
+- Rules: 20 native cases, 23 Rust tests; native grammar coverage 1845/1847,
+  1645 authored Thing rows and 6535 raw field values. Two syntax gaps remain.
+- Animation: 471 independent original-data reference poses across old/new
+  families, 1390 source/identity checks, six Rust and three exporter tests.
+  Native runtime state selection/blending/events and exact interpolation parity
+  are not established by these original-data pose comparisons.
+- Client source review includes geometry selection, DPI coordinate handling,
+  source-bound asynchronous fields, material mapping and clip disambiguation.
+
+Scope and remaining work
+Checks were headless or source/fixture based; the user's existing preview was
+not closed or driven. Pointer mathematics covers 100/150/225/300% scaling;
+live laptop/multi-monitor GUI verification was not performed in this pass.
+Geometry selection ignores transparent texture texels and is not the original
+game's selection/collision behavior.
+
+The first animation sweep exposed duplicate clip labels and could not cover the
+second USA bunker binding. It is retained as historical evidence. The final
+indexed sweep covers both distinctly and passes all 85 bindings.
+
+Rendering an asset is not a gameplay test. Complete movement, combat, AI,
+campaigns, original saves and multiplayer remain missing. No playable-match,
+full-game parity, complete native lighting/water/blending or internet success
+is claimed. A second PC/connection for eventual real internet tests remains
+unavailable, as previously reported.
+
+Original/v14 installation, save files, user settings and earlier releases were
+not changed. Development 03 remains a separate executable/cache package that
+requires the recovered original assets and installation for authored-rule data.
+
+Final logs/images: qa-output/phase3/workspace-*-final.txt,
+  maps-indexed-final/, animations-indexed-final/, *integration-final.json
+Evidence and independent reviews: research/phase3-*/

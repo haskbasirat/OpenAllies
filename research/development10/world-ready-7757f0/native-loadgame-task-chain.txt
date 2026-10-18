@@ -1,0 +1,22 @@
+[
+  {
+    "address": "0xb3d868",
+    "parent": "0xb3d804",
+    "name": "KKC_ResourceManagerTaskLoadGame",
+    "crt": "0x9d0490"
+  },
+  {
+    "address": "0xb3d804",
+    "parent": "0xb38e54",
+    "name": "KKC_ResourceManagerGWorldTask",
+    "crt": "0x9d03a0"
+  },
+  {
+    "address": "0xb38e54",
+    "parent": "0xb38e54",
+    "name": "TGC_ResourceManagerTask",
+    "crt": "0x9c8030"
+  }
+]
+B3DAC0 name TGC_ResourceManagerTaskSave
+Clockvf8 0x75fcb0

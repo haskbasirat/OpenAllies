@@ -1,0 +1,132 @@
+AXIS & ALLIES RUST REWRITE - BUILD OPTIONS / PUBLIC REFERENCES
+October 16, 2026. Follow docs/NATIVE-PORT-RULES.md.
+
+This is source progress after SKIRMISH-STATE-LEADER-20261016.txt. Development-09
+is unchanged. No new EXE, complete battle or multiplayer acceptance is implied.
+Skirmish remains first, multiplayer second, campaign last. Read the exact final
+integration results in qa-output/public-build-options-20261016/acceptance.json.
+
+FINAL ROOT VERIFICATION
+Workspace/all-target release check passed with existing client warnings.
+Four Actor storage/Organization tests,52 runtime tests,136 aa-rules tests and
+39 aa-metagame tests passed:231 source/compatibility tests. Real-data ignored
+tests were included and metagame export was disabled. The80-map census test
+also passed in managed mode1, PC53 and explicit diagnostic clock0.
+
+Record failures remain796:577 still need completed ActorData+1E4, while219
+previous4D4CF0 stops now reach required owner4D1350. The same20 record-clean
+maps remain diagnostic only. ZERO complete immediate Init, publication or a
+playable battle. All eight historical tutorial membership-prefix probes pass.
+The census ran alongside compiles; its elapsed time is not a performance
+benchmark or evidence that loading/FPS improved.
+
+The first finalization run linked the earlier context library to a later
+empty-assignment regression while source was still being finalized; its failure
+is retained in runtime-regressions.log. The complete52-test selection was rerun
+after all production/test freezes and passed in runtime-regressions-final.log.
+The final all-target workspace check was also rerun. See acceptance.json for
+the accepted review schemas, full hashes and other superseded fixture attempts.
+
+PUBLIC SOURCES
+docs/PUBLIC-REFERENCES-20261016.md indexes the selected NifSkope, Niflib,
+GameSpy, OpenSpy, AA FOV and publisher AI-paper downloads. The separate
+reconstruction/references/public-rewrite-20261016/ area keeps pinned commits,
+URLs, notices, raw selected sources and hashes. Nothing there was installed or
+executed. External implementation code was not copied into production Rust.
+GameSpy is a later version than AA; OpenSpy's implementation reuse license was
+not verified. The FOV source has a statically identified signature-guard issue.
+The AI paper supplies design leads for existing native aa-mind::sai machinery.
+
+Only optional authored baseTextureState retention was implemented from the
+graphics investigation. Newly converted materials retain clamp/filter/UV words;
+old converted files remain readable. Existing payloads were not regenerated,
+and geometry, preview UVs, CpuMaterial/GPU sampling and appearance are unchanged.
+This supersedes only the earlier ordinary Material schema-loss finding, not
+the remaining billboard, sampler, transparency or animation gaps.
+
+ACTOR BUILD-TARGET LIST
+The previous219 state/leader stops reached4D4CF0, which rebuilds build-target
+ActorData identities. It is NOT PropertiesComponent numeric581420 refresh.
+aa-body/src/actor_property_list.rs now provides the native4D4CF0/4D4E50 core
+and authoritative growable node storage. Clear/free, allocation, per-field
+writes, source duplicates, member deduplication and live iterator rereads keep
+native order and partial effects. Element+10 is a direct parent Actor identity;
+there is no extra Organization+4 owner dereference. The core has no scheduler.
+The942 paired replay rows cover1884 original/v14 native executions at all3 PCs.
+
+ActorShell now owns actor_list_108. Raw words108/10C were removed to avoid a
+second mutable pointer representation. The proven constructor starts empty;
+map_components moves the same typed owner. Historical constructor tests project
+only this proven null state back to raw nulls for comparison. Saved/live Mind
+mask views use actual head presence for the native !=0 predicate; NodeIds are
+never exposed as native pointers. Economy-focused borrows keep the same Actor.
+
+saved_actor_properties connects the core to the held owner, actual mid-load
+Organization, generation-checked registry members and canonical Builder source.
+Source reads remain behind native Builder+A8/ActorData174-bit18 guards. Parent
+updates mutate actual Actors; a malformed parent cycle is explicitly refused
+after preceding stores, without a fixed depth cap. This is a documented safe
+invalid-graph boundary, not native recursion-overflow parity.
+
+BUILDER SOURCE
+aa-rules/src/native_builder_data.rs projects native464BD0 BuildActor deferrals,
+473AD0 registration and475230 execution ordering through4604C0. Canonical owner
+roots use registered provenance. Target lookup applies current translation once;
+canonical owner/node values are not looked up a second time. Unknown targets or
+targets without Body fail with prior node/head/tail effects retained. Completed
+lists retain authored order and duplicates. RandomActor kind19 derives the
+ActorData loader and typed predicate; both standard kind2 and kind19 are included.
+
+Catalog owns one immutable cached Builder arena, including a cached failure.
+This producer performs integer/reference operations; no source FP context is
+invented from restore precision. It proves the Builder callback subsequence,
+not successful execution of every unrelated global deferred callback. Full
+source-load lifecycle completion remains a separate requirement.
+
+OWNER ECONOMY
+saved_owner_economy threads the held owner through the existing native-backed
+570020 saved refresh.4CF0F0 itself only tests actual Economy presence before
+dispatch. No Economy is the native no-op; a present component keeps real owner,
+value and Kingdom-flow requirements. No uninitialized Kingdom arrays are reset
+or fabricated. This caller passes the same mutable Organization and registry.
+
+COMBAT SOURCE CONTEXT
+combat_value_source_context binds ten real typed numeric inputs with declaration
+provenance, plus explicitly scoped CombatValueCSV root UVar/override input.
+SourceFpContext is a supplied diagnostic context, not a native-startup receipt;
+it has no Default or implicit restore-PC substitution. Unknown profile scope is
+an error; explicit FreshNoProfile is diagnostic only. Active user profiles,
+preferences and credentials are not imported. Nonempty CSV remains a required
+unsupported debug-stream path. This does not publish completed ActorData+1E4,
+means, shared graph completion or an observed original startup FP/CRT context.
+Supplied file overrides explicitly carry native flags0 or3. Restricted user-file
+mode3 ignores existing CombatValueCSV flags0 assignments and preserves their
+skipped provenance. Unquoted empty assignments are an explicit unsupported
+syntax boundary, never silently accepted as a valid typed-null value.
+
+EVIDENCE
+research/public-references-20261016/{graphics,networking,ai}/
+research/skirmish-20261016-actor-property-core/
+research/skirmish-20261016-saved-actor-properties/
+research/skirmish-20261016-builder-data/
+research/skirmish-20261016-owner-economy-refresh/
+research/skirmish-20261016-combat-source-context/
+Final test counts, census comparison, accepted reviews, superseded failures,
+source hashes and release preservation are in the dated QA acceptance/backup
+records. Retain earlier failed assumptions and compile logs as historical data.
+
+NEXT GATES
+The actual tutorial02 first stop remains actor4099/ordinal434, now the required
+owner4D1350 action-mask rebuild. Existing aa_actors::ability_flags::rebuild and
+SavedActions are relevant to the next binding, but their current member caller
+does not itself bind this owner callback. Pass the same held Organization and
+preserve every required contributor/publication effect; do not make it a no-op.
+Continue the first actual reached owner/action/world callback, completed combat
+source values, real4F3640 placement and host services. Immediate per-record Init,
+PostCreate and registration, conversion drain, full PostLoad/mission startup,
+world publication and ordered live ticks remain required before a real match.
+The previous Settlement census established zero components for its1028 kind2
+actors; it did not certify every possible derived class or future mod source.
+GameSpy/OpenSpy references do not implement TimeGate's deterministic simulation
+or certify Internet reachability. Real separate-PC/connection acceptance remains
+unavailable. No reliable whole-game percentage or delivery date is established.

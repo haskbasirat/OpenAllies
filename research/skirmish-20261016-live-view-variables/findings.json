@@ -1,0 +1,55 @@
+{
+  "scope": "Controlled fresh single active World current SVar dependency slice",
+  "date": "2026-10-17",
+  "status": "bounded implementation and replay accepted; current State released for separately tested CV extension",
+  "native": {
+    "functions": ["401940", "4017D0", "474C50", "4B3580", "512200", "512160", "41C670", "4B2E60"],
+    "images": ["original", "v14"],
+    "x87_pc": [24, 53, 64],
+    "paired_rows": 141,
+    "separate_executions": 282,
+    "executed_instruction_pins": 451,
+    "fixture_sha256": "40f1bc792e0b907eec5633de930f8a4b5daf36a5421eca4fae96e3edf5c72f11",
+    "generator_sha256": "5efec5a4c37386424ad056984e906b0f2292c348bd2a1d135eedbadb7be6bf4c",
+    "replay_log": "native-replay-owner-checked.log",
+    "seams": ["CString allocation and assignment", "named variable lookup with actual Settings hash-map owner assertion", "native diagnostics"],
+    "initialized_inputs": ["selected three-entry source snapshot", "actual-type WorldRule descriptors"],
+    "static_only": ["indexed registration sites", "names", "source snapshot order", "World reset and RULES-before-TERRAIN boundary"]
+  },
+  "owned_fields": ["FogOfWar signed Integer", "CheatFog raw Boolean byte", "ZoneBuilderFastDetectionZones raw Boolean byte", "ResourceStockpileDefault binary32 word", "CityVictoryRatio signed Integer", "EconomyStockpileResourceMax binary32 word"],
+  "important_ordering": [
+    "Fog constructor2 is replaced by registered enum defaultEXPLORED1 before source snapshot and World reset",
+    "standalone RULES publication precedes TERRAIN load",
+    "native selected WorldRule registry order controls commits after closed preflight validation",
+    "CheatFog, FastDetection and Maximum remain unchanged during RULES publication",
+    "actual maximum read must follow each4E39D0 first result store",
+    "source context comes from actual completed Bank and remains distinct from live arithmetic precision"
+  ],
+  "rust": {
+    "state_tests": {"passed": 2, "failed": 0, "log": "tests-final.log"},
+    "existing_saved_settings_regression": {"passed": 5, "failed": 0, "log": "saved-action-settings-regression-with-root.log"},
+    "complete_runtime_lib_tests_check": {"passed": true, "log": "check-tests-final.log"},
+    "compiled_test_exe_sha256": "6c90e2e3fb65640c895929860829d653117827fdfdb1af75200b5aca7794b905",
+    "state_tested_before_cv_sha256": "44417d2391ae87be706193e0936f8e717c742187086d1096c725e4e3497fae8e",
+    "historical_state_copy": "load-view-variables-tested-before-cv.rs",
+    "tests_sha256": "0ec280f4aec4ed387be7d12c4b7fb5959da665e43e4fa53437573e25f3c5e124",
+    "factored_saved_settings_sha256": "de335c1199b12131f834ad70b76f248df548acbe6eb52d546bde80ca1ba44cf5",
+    "actual_data": ["verified original/v14 completed source", "tutorial02 standalone RULES", "Firefight standalone RULES", "Berlin standalone RULES", "same Bank moved into staged owner"]
+  },
+  "probe_corrections": [
+    "CString cdecl assignment seam initially popped a caller-cleaned argument; corrected before accepted generation",
+    "late named-lookup owner assertion corrected to Settings+14 B39ABC; direct setter probes corrected from ECX0 to Settings baseB39AA8; fixture outputs unchanged",
+    "first direct ignored regression run omitted AA_GAME_ROOT and failed at env unwrap; rerun with actual path passed5/5"
+  ],
+  "not_claimed": [
+    "native Windows profile or console overrides imported; scope is explicit ControlledNone",
+    "entire SVar manager or simultaneous independent active World owners",
+    "full native enclosing GWorld or Session execution",
+    "SEH, panic or arbitrary allocator failure equivalence",
+    "all current UI, console, Mind, mission and view consumers migrated",
+    "playable battle, multiplayer or final game completion",
+    "later CV extension bytes covered by these tests"
+  ],
+  "sibling_evidence": "load_mission_variables author owns separate144-row/288-execution/435-pin flags0 source/default/reset/publication evidence under skirmish-20261017-mission-start; its outputs are temporary preflight values, never a second current owner",
+  "original_profile_save_release_mutations": false
+}

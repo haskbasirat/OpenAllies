@@ -1,0 +1,191 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Native launch-settings assignment and staging settings-store composition",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "sources": [
+    {
+      "path": "crates/aa-netcode/src/lib.rs",
+      "sha256": "9087a110e2cdffdcad4449bd86d120128a26fd243630bf33a40d891d3b490f3b",
+      "bytes": 1722
+    },
+    {
+      "path": "crates/aa-netcode/src/launch_assignment.rs",
+      "sha256": "e07959df8efb8e95fd9af7977bcdfc6bc0fba3f4b645f56210417c1890fd2a4e",
+      "bytes": 9047
+    },
+    {
+      "path": "crates/aa-netcode/src/lobby_staging.rs",
+      "sha256": "64d2318714b2526423d67d4779084657fc81bbd7e1352b4460de278a3d51cc5d",
+      "bytes": 5248
+    },
+    {
+      "path": "crates/aa-netcode/src/heartbeat.rs",
+      "sha256": "44495730544c30647d6a5dea7289735ba5ba1452bf29a4aec4219f463d834cc9",
+      "bytes": 62043
+    },
+    {
+      "path": "crates/aa-netcode/src/lobby.rs",
+      "sha256": "595729cd9a43eca85aa2c3bc464864cc95f8f8414fd57f02a6e47074ce808271",
+      "bytes": 80689
+    },
+    {
+      "path": "crates/aa-netcode/src/staging.rs",
+      "sha256": "48ea191fee1b09d35cd4f3d31705d9961568cead1adb2e5936fe80f981c61e7e",
+      "bytes": 15734
+    },
+    {
+      "path": "crates/aa-netcode/tests/launch_assignment.rs",
+      "sha256": "fad5c4352f6d71d3d81494d5389f80df74463a26c2f05eb96a1a3c2505215447",
+      "bytes": 1608
+    },
+    {
+      "path": "crates/aa-netcode/tests/lobby_staging.rs",
+      "sha256": "273963987154fa041992bdfb586cf4727f5909ed98cfe5bca64e2ef1535bcabe",
+      "bytes": 6234
+    },
+    {
+      "path": "crates/aa-netcode/tests/heartbeat.rs",
+      "sha256": "975f91ded3404239e607d751787d1a577d304dc4020d7b0af7130f51a0f4e72b",
+      "bytes": 33788
+    },
+    {
+      "path": "crates/aa-netcode/tests/staging.rs",
+      "sha256": "5df6ea5bf63eb3b14cc45ecb017a77824477269d17b8d777669a179d410ad30a",
+      "bytes": 12024
+    },
+    {
+      "path": "crates/aa-netcode/tests/join_resume.rs",
+      "sha256": "4b469d0cc17b3caa639132f463d1c3465ddd7bcd1f45fe58adfe7ddcbda9c825",
+      "bytes": 10421
+    },
+    {
+      "path": "crates/aa-netcode/tests/send_selector.rs",
+      "sha256": "b61f292630851d3f08f2fa7bf3f5c76371f4f583861d175b75924cf3e4771e56",
+      "bytes": 1637
+    },
+    {
+      "path": "crates/aa-netcode/tests/loopback.rs",
+      "sha256": "5948f99e759b67d06cd7b0c6dd2be839cfdab064f9a923583d349533988e6a92",
+      "bytes": 39115
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "59da20d02c06d634f3b41bd5872e0ee0e3a48e151ff6d1487fe942d80e57b8e0",
+      "bytes": 1039
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "5ad8bf8592119c1e8b90fccbac97648332adc6b2a2b756a9f1929041ea0541ca",
+      "bytes": 104783
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/phase8-net-integration/native_launch_assignment.py",
+      "sha256": "5c9ba5b754d0394f7e9eaa6f8840f760a05bd537ea1ef49be6b787b4ff007d51",
+      "bytes": 5943
+    },
+    {
+      "path": "research/phase8-net-integration/native_staging_assignment.py",
+      "sha256": "55f0902e894fdd32203abfe9c7947fb3c13cc4d680d6e6b39cf185741f42ef28",
+      "bytes": 4714
+    },
+    {
+      "path": "research/phase8-net-integration/native-launch-assignment.json",
+      "sha256": "4805a4ebc517acc8dae3cfafbfd1701a94d1a47f5c8295795cecadf49fda0aa3",
+      "bytes": 1991448
+    },
+    {
+      "path": "research/phase8-net-integration/native-staging-assignment.json",
+      "sha256": "d760b495669c491269370a197343fc5378ee7c69efad3fc92cf7a061e01561df",
+      "bytes": 8820226
+    },
+    {
+      "path": "research/phase8-net-integration/README.txt",
+      "sha256": "f26e67a0d851b3b9d183879816047d2a2250bacbc12e5059f0266567ba374ae4",
+      "bytes": 6847
+    }
+  ],
+  "oracle_runs": {
+    "assignment": {
+      "cases_per_image": 32,
+      "images": [
+        "original",
+        "v14"
+      ],
+      "copy_seams": false
+    },
+    "staging_with_real_assignment": {
+      "cases": 48,
+      "image": "original",
+      "executed_windows_identical_in_v14": true,
+      "copy_seams": false
+    }
+  },
+  "validation": [
+    {
+      "file": "validation-assignment.log",
+      "result": "passed",
+      "passed": 2,
+      "ignored": 0,
+      "note": "runs overlap; do not sum as distinct tests"
+    },
+    {
+      "file": "validation-integration.log",
+      "result": "passed",
+      "passed": 14,
+      "ignored": 0,
+      "note": "runs overlap; do not sum as distinct tests"
+    },
+    {
+      "file": "validation-heartbeat-cleanup.log",
+      "result": "passed",
+      "passed": 5,
+      "ignored": 0,
+      "note": "runs overlap; do not sum as distinct tests"
+    },
+    {
+      "file": "validation-clippy-final.log",
+      "result": "passed",
+      "scope": "aa-netcode lib and two new integration test targets, --no-deps, -D warnings"
+    }
+  ],
+  "earlier_strict_clippy_failure": {
+    "file": "validation-clippy.log",
+    "reason": "pre-existing heartbeat.rs:1245 collapsible_if; equivalent let-chain approved and final check rerun"
+  },
+  "concurrent_edit_retry": {
+    "file": "validation-heartbeat-concurrent-edit.log",
+    "reason": "aa-runtime catalog trait methods temporarily preceded RestoreDefinitions additions; unrelated shared edit completed before retry"
+  },
+  "independent_review": {
+    "agent": "network_assignment_review",
+    "result": "no blocking findings within complete-settings successful-copy contract",
+    "verification": "reviewer independently regenerated both native harness outputs and compared existing JSON; outputs identical",
+    "caveats": [
+      "safe Rust self-assignment replay uses distinct equal-valued inputs",
+      "allocation failure / within-copy partial-store parity unproven",
+      "decoder companion binding remains open"
+    ]
+  },
+  "production_integration": [
+    "SettingsStore supplies native 0x779F00 copies to existing StagingHost",
+    "Snapshot state-transition seam routes through original ChangeToState and real settings store"
+  ],
+  "unchanged": [
+    "native game and prior releases",
+    "network wire codecs",
+    "client/Cargo/runtime integration",
+    "existing loopback test source"
+  ],
+  "open": [
+    "wire snapshot reader must reconstruct copy-only companions when kingdom records are replaced/reordered; count validation is insufficient for identity",
+    "complete constructor-bound settings state and decoder integration",
+    "map readiness/checksum transport and UI/world effects are still required explicit leaves",
+    "client has no native runtime/session frame-loop integration",
+    "allocation failure and native exception-state equivalence",
+    "two-machine/separate-internet multiplayer, full matches, save compatibility"
+  ]
+}

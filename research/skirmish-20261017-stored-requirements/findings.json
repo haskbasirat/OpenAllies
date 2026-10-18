@@ -1,0 +1,105 @@
+{
+  "status": "production and focused shared-kernel proofs pass; actual runtime-source unit/mission path pending Root cohort",
+  "scope": "Same ActorAccess/Bank requirements4C5250 adapter for stored recruitment, plus lazy shared5890C0 field kernel; no copied Actor/World/property/Kingdom state.",
+  "api": {
+    "evaluate": "evaluate(catalog,&mut ActorAccess,&mut Bank,recruiter,target,source_pc)->Result<aa_production::research::RequirementOutcome,String>",
+    "strict": "hide_if_missing_properties(catalog,&Bank,target,source_pc)->Result<bool,String>"
+  },
+  "production_check": {
+    "result": "PASS",
+    "seconds": 26.04,
+    "log": "check03.log",
+    "includes_state_caller": true
+  },
+  "proofs": {
+    "structure": {
+      "rows": 768,
+      "machines": 1536,
+      "executed_pins": 121,
+      "child_seams": 0,
+      "generated_and_immutable": "PASS"
+    },
+    "source_lists_shared_type": {
+      "rows": 36,
+      "machines": 72,
+      "function_invocations": 360,
+      "executed_pins": 98,
+      "named_child_transports": 3,
+      "generated_and_immutable": "PASS",
+      "seams": [
+        "463FA0 canonical Property lookup",
+        "4BDBA0 canonical Actor lookup",
+        "6F7810 allocator"
+      ]
+    },
+    "rust_focused": {
+      "tests": 3,
+      "result": "PASS",
+      "frozen_immutable_replays": 3,
+      "whole_runtime_link": false
+    }
+  },
+  "ownership": [
+    "actual Properties.effects and same State.instances",
+    "actual Kingdom vector318 instance handles and2C4 structure GTIDs, current generation checks",
+    "actual components.state low/high; no actor.words100 mirror",
+    "canonical source/template chain and exact completed Bank universe/PC",
+    "native sourceNULL never resolves instance.source",
+    "registered SharedPropertyData vf18 constantTRUE distinct from5C",
+    "existing strict Upgrade census demanded only at a reached source-list branch"
+  ],
+  "pending": [
+    {
+      "test": "stored_requirements::tests::actual_element_requirements_use_same_moved_bank_and_registered_properties",
+      "state": "saved/ignored; not executed yet; Root next runtime cohort",
+      "scope": "real source only/no Actor/World minted"
+    },
+    {
+      "actual40": "Globals owns next natural startup; not executed at this checkpoint"
+    }
+  ],
+  "open_boundaries": [
+    "positive actual Settlement585500 typed payload owner",
+    "positive Wall58CB30 parent owner",
+    "nonempty Upgrade linked source graph",
+    "unknown/duplicate source reference diagnostic continuation",
+    "native allocator/SEH failure parity"
+  ],
+  "qualifications": [
+    "Source projection is a portable immutable binding preflight, not whole464BD0 execution/source partial-failure parity.",
+    "Source-list head order and constructor modes are native proved; Property/Actor lookup transports explicitly named.",
+    "Parent4C5250 is reused with existing accepted fixtures; no independent reimplementation.",
+    "Initial vf18/5C draft mismatch was caught by State before caller integration and corrected; no wrong result accepted.",
+    "First failed compile lacked the local aa-production dependency; Root added it and metadata--locked--offline passed; no external versions changed.",
+    "No full mission/battle/View readiness claim."
+  ],
+  "pins": {
+    "crates/aa-runtime/src/stored_requirements.rs": "c05f9897cd59c540330a0e5396d67e41d3ef97cd054b702806a80c3cdc79c288",
+    "crates/aa-runtime/src/stored_requirements_tests.rs": "f1c16683350ab954a8f86c4349707f2a8eebc15b5f0836bcec0a6c0c46239c40",
+    "crates/aa-production/src/construction.rs": "58c41287fdb22ec76e2e378911f31db51562f3203eeb735488450cfeb217bfa3",
+    "crates/aa-production/tests/native_structure_match_lazy.rs": "77a642c5e56b11d562a6513b925f0f1d4140ae0c4ac31c563ea5f8ea8e8ada9c",
+    "crates/aa-runtime/src/stored_recruit_eligibility.rs": "75876075483669551a30cd8ce098518222d6c4d31d3ab74dce31e09327bfb9b1",
+    "crates/aa-runtime/Cargo.toml": "451aa64b4e701f89fc7a4f41dec27d366e25e142d79774618a86b4837ac6d652",
+    "Cargo.lock": "dccb09ff6091252e903cbfecef46b8e6f42899cf334587404252e2c3e548f5a0",
+    "research/skirmish-20261017-stored-requirements/check01-missing-local-dependency.log": "944459eb2ad6e96e99ddd953bca0758a931439f862a9fcc91ab25462732a796c",
+    "research/skirmish-20261017-stored-requirements/check02.log": "06c7956a4b0f98334835609257397c555e0334614763fdc7082c18cfec563e22",
+    "research/skirmish-20261017-stored-requirements/check03.log": "9aae75080daa40bd796c4f4535387762f9d96cc314487c30c99242cf54e8272c",
+    "research/skirmish-20261017-stored-requirements/frozen-lazy-replay.log": "0b64181b942af33d02508469c0317553cbdc94a6d41a27c732ba6beb82487536",
+    "research/skirmish-20261017-stored-requirements/frozen-native-requirements.exe": "ed750d443c53eab362b94d865c2f49a63b9a3527eb32a7eec43dc4247dd256c0",
+    "research/skirmish-20261017-stored-requirements/frozen-native-settlement-slots.exe": "510cdba00359fadd5a30af6d4b6a4ca2699f330a97576347515f8295962199d4",
+    "research/skirmish-20261017-stored-requirements/frozen-native-structure-match-lazy.exe": "dbfe8aae4462fb79e1f036216ea5d0d04f739aeb6d3df7fd03cc26798d09f75e",
+    "research/skirmish-20261017-stored-requirements/frozen-requirements-replay.log": "f58a7562e5a6d52ecc7e5ed0e89edc2646e5c305e0dcdcfbd2974b323b3da8b3",
+    "research/skirmish-20261017-stored-requirements/frozen-settlement-replay.log": "dba80adbf46e4e308db54a8e85daeb5589770b0556ef89bc70b6cddd61872175",
+    "research/skirmish-20261017-stored-requirements/independent-state-binding-source-review.json": "3b0690f1b609b8f522009c9ae1a82d641a716015ca9c9fd1fe5ca22e75ff6377",
+    "research/skirmish-20261017-stored-requirements/native-source-generate.log": "49a1722aab6edf5cf969913b8a34bdecd0a0ed0fdc19895ce9dfecb4b3fb3a59",
+    "research/skirmish-20261017-stored-requirements/native-source-immutable.log": "49a1722aab6edf5cf969913b8a34bdecd0a0ed0fdc19895ce9dfecb4b3fb3a59",
+    "research/skirmish-20261017-stored-requirements/native-source-lists.json": "792d17597ff71bf5ffe22a97b7afb326dea4086624375934205440c333f1d7f2",
+    "research/skirmish-20261017-stored-requirements/native-structure-generate.log": "9fc1bffe74ac4ecaa36eed537cd14f6eb4d093ec6fde95a4ac33493dde0b31d6",
+    "research/skirmish-20261017-stored-requirements/native-structure-immutable.log": "9fc1bffe74ac4ecaa36eed537cd14f6eb4d093ec6fde95a4ac33493dde0b31d6",
+    "research/skirmish-20261017-stored-requirements/native-structure-match.json": "b83aa33a672279e37111cfed9ed167a2e2e3323d068a7a7fd2fc1ff67fd7b4b2",
+    "research/skirmish-20261017-stored-requirements/native_source_lists.py": "987942cda2cb90810a911867a9867b1f4e5a1aca6cff7b7499e8c917427fa8e9",
+    "research/skirmish-20261017-stored-requirements/native_structure_match.py": "37873bc12ae068f633308b2679ada8332aed09eb32680d8510cc0efa63eede87",
+    "research/skirmish-20261017-stored-requirements/production-kernel-tests.log": "b5a4468196b8d8aab4ea197b60b9872e82b07a5a00e3021af9c9415d4a7e6975",
+    "research/skirmish-20261017-stored-requirements/README.txt": "fa1f7ba724efeacc606196bbac8ee867a745df03fdcb8d6bc199f128d98b9e15"
+  }
+}

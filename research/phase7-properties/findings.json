@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Concrete Properties/Modifier constructors and native getters",
+  "native_cases": 420,
+  "focused_tests": 2,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-body"
+      ],
+      "exit_code": 0,
+      "log": "research/phase7-properties/lifecycle-tests.log",
+      "sha256": "641b7e429d5cd8092bdefa855664926347291a833e5fd6a50489d7c53b6f695b"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-body",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "research/phase7-properties/lifecycle-clippy.log",
+      "sha256": "de235c9a1c2f860295ab2eaa2377405c7d07c9c8571b778e3a73f41a24691805"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-body/src/properties.rs": "dd5722d1e4f9ca48dd01eda70ce30e55e18761265f82d2af299803e6fabe8360",
+    "crates/aa-body/tests/native_properties.rs": "7c8daa505f6f416031641fc424028819bfc370d2dad771c3e5cad29c39ca880a",
+    "research/phase7-properties/README.txt": "b566165e4749d62893dd874fb144507a6cb11d577c400476615a3011fbdccddd",
+    "research/phase7-properties/original_properties.py": "551343531a523186b514f6765094b54d90577ae75869f3b6d273e60e09f4a9f8",
+    "research/phase7-properties/native-properties-fixtures.json": "b3aeeb5cab297912db297aa6b26175ce0bf3a5e9e95e66aa6d12759f03d1a8f1",
+    "research/phase7-properties/record_findings.py": "7a6b246630e0ff108c6b3745ebc60053b64a0694b5815caec3aa7db7f54884e3",
+    "research/phase7-properties/inspect_domain.py": "732f70a912bed405a849f99652e48e82842970d2eb168e73d6c22d29845c4706",
+    "research/phase7-properties/domain-evidence.json": "d637a2f64dba50f1cdbd2f13a15c6ac83e42a18dd05dd7e3bd6fb4f18a5cee4f"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-body/src/lib.rs": "27fd2b7689bcb0fb9bbe5dabb8a07816a975d16ed2b3b9236267eba408895690"
+  },
+  "limitations": [
+    "Property activation/removal/recomputation is separate from constructor/getter scope.",
+    "Actual loaded definition-domain count/global minimum/actor effect identities are required.",
+    "Only finite round-to-nearest arithmetic; explicit invalid offset/division/nonfinite errors."
+  ],
+  "independent_review": "Separate peer review required.",
+  "checkpoint_rebind": {
+    "producer": "research/phase7-properties/refresh_existing_gates.py",
+    "producer_sha256": "5a951930ef71e5534df4b7d84a0d14b62edd018e27398ae6ab1e126375431a5c",
+    "scope": "Implementation and native comparison test unchanged; added sibling module exports and documentation are rebound after the final22-test aa-body run and strict Clippy. No new native cases or peer acceptance implied.",
+    "full_test_count": 22
+  }
+}

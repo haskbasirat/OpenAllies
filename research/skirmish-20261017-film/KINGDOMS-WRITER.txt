@@ -1,0 +1,57 @@
+Supplementary Kingdom capture and current-owner serialization; 2026-10-17.
+
+511020..511297 captures current Kingdoms in actual World+148 slot order.
+The target count is cleared before the first slot read. A temporary50F4C0(1)
+record reads constructor resource count, Thing+18, BOTH194/198 localized
+words, actual4E5340 current198, then49AE00. Its table effects survive later
+errors even when the temporary row is never appended. Required4E93C0 follows.
+Current190, Team1EC/name18, Nation234, Commander230+4, Color1E8, Handicap244,
+23B/23C/19C,240,23D and final resource count are read in native order.
+23D overwrites parameter+32; +31 remains constructor0. Resource slots are
+zeroed in registry order; the live Kingdom stockpile is NOT copied.
+
+The native oracle has156 paired rows/312 separate original-v14 sessions at
+PC24/53/64,308 block pins.20 rows exercise vector growth; null slots and all
+field/service cutoffs are included.4E93C0 and4BAA20 existing-entry lookup
+are explicit child seams; actual49AE00 entry assignment executes. Native
+unused-capacity record constructors execute during growth, but their pure
+global resource-count reads are not semantic service cutoffs: growable Rust
+does not preconstruct unused records. The actual temporary record's two
+count reads are retained. Native heap failure/SEH unwinding is not claimed.
+
+The concrete adapter borrows the same ActorStore, KingdomRegistryState,
+completed Bank/startup PC and current live_text. It validates actual source/
+class/storage and canonical typed source references. It copies no live actor,
+pose, resource balance or mutable list into a replacement authority. The
+private State cannot be populated from the public explicit-input Table.
+This adapter compiled; a complete positive managed capture has not run yet.
+
+5A17D0 now accepts ParameterTarget and writes the SAME retained State's
+profile field; existing decoded diagnostics delegate to the same kernel.
+
+50D730 and59E7E0 now share readonly ParameterSource/HeaderSource writers
+between decoded diagnostics and actual Header/Parameter owners. The actual
+State writer preserves both localized CString words through required
+Sink::register_localized_pair. Its default explicitly refuses text loss.
+It never installs a detached parameter DTO or fabricates MapHeader identity.
+Rules' read-only wire projection never replaces the retained Rules owner.
+Resource IDs are read from the actual completed source registry at the
+reached resource element. Definition identities retain canonical provenance.
+
+New pair-aware native fixture189 paired rows/378 image sessions/597 executed
+pins proves actual49AA30 passing BOTH current words after stream key writes,
+including65537-unit key low16 wire truncation but full collection key, raw
+resource bits and all write/collection cutoffs. Raw stream writes and5A1120
+collection are explicit seams. The original header9-row fixture freshly
+replays byte-for-byte after the helper extension; it is not counted again.
+
+Final release run current-writer-tests.log:5/5 passed, consisting of one
+existing Header test, one existing Entries test, one Kingdom test and two
+pair tests. New unique native scope here is345 paired/690 image sessions;
+existing Header/Entries fixtures are reused, not counted again.
+
+Remaining: actual4E93C0 adapter binding/positive managed full call, trigger-
+objective extras after511297, actual5A26E0/5A3250 complete resource caller,
+pair-aware text-entry creation/retention, filesystem/depot backend and full
+7757F0 recording. Nothing here certifies a playable battle, completed rewrite,
+original save compatibility or internet multiplayer.

@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "consumer": "0x501730",
+  "producer_addresses": [
+    "0x4624B0",
+    "0x464BD0",
+    "0x473AD0",
+    "0x475230",
+    "0x461750",
+    "0x461810",
+    "0x460000",
+    "0x460310",
+    "0x4C2310",
+    "0x45EEF0"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "canonical_actor_count": 1028,
+  "nonempty_17c_count": 327,
+  "source_callbacks_per_graph": 906,
+  "source_native_graphs": 6,
+  "source_native_callback_executions": 5436,
+  "synthetic_native_graphs": 270,
+  "tests": {
+    "passed": 3,
+    "failed": 0,
+    "source_facts_equal_at": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "source_native_outcome_required": "ok"
+  },
+  "clippy": "passes with only two existing named lint allowances: clippy::manual_map and clippy::doc_lazy_continuation",
+  "integration": "root and organization_morale_source own lazy Economy getter/Catalog cache; no live or saved Economy source edited here",
+  "limits": [
+    "Completed+17C source projection only, not full native definition loading end to end",
+    "Explicit typed final4BDBA0 identity lookup, heap, CString retain/cleanup and diagnostic seams",
+    "Resource count0 omits warning diagnostics which do not change+17C",
+    "Invalid source/global producer failures remain errors; partial fault/load side effects unclaimed",
+    "No original/release/save/profile/network service files changed"
+  ],
+  "full_compatibility_checks": "root coordinates aa-rules and aa-metagame include-ignored checks after combined freeze",
+  "files": [
+    {
+      "path": "crates/aa-rules/src/native_recruit_backrefs.rs",
+      "bytes": 17796,
+      "sha256": "21de024e6a9761b234ac186666afd7b9a22d07343bc31d929b1bec9b43055f12"
+    },
+    {
+      "path": "crates/aa-rules/tests/native_recruit_backrefs.rs",
+      "bytes": 5318,
+      "sha256": "49891a19c81e1e5484c8b84d3e2a05e6375f4ac1ef2212ad90987a54ce2c17a0"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/native_recruit_backrefs.py",
+      "bytes": 9538,
+      "sha256": "2eddc6a6194ed6a504067c9ecd1d6a9645ef68e5433dd44db30f0f7a78bd17e2"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/native-recruit-backrefs.json",
+      "bytes": 1249093,
+      "sha256": "08719041e4babb89524022347c80792a6f145f3942d472e955fe41510496bb59"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/actual-source-inputs.json",
+      "bytes": 3093779,
+      "sha256": "5431c826970da482d2549d65953913819694bde2856cfb88f5dedc1dd5119d1d"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/native-real-recruit-backrefs.json",
+      "bytes": 19007705,
+      "sha256": "ea08d893c01b72573adf779654ef48508f33792ccc0c517d3729707e4b56e31f"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/instructions.txt",
+      "bytes": 11315,
+      "sha256": "5dbf1d3e0e36b68e8882779f6db15bfcaa0367f49c4728c0a8b3c58f8e1b7acf"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/all-tests.log",
+      "bytes": 696,
+      "sha256": "00a5872c568901a9b711671a95f28ac7be151b25baa6747b5d0d33bd44f339f9"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/clippy.log",
+      "bytes": 3941,
+      "sha256": "2b7a26742d0635c23d89035546adb4a779fb2d5835a134cca9e329bc5c75583a"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/clippy-scoped.log",
+      "bytes": 148,
+      "sha256": "ee3d98bcd5d2a484fcd5f939403d7f597786bd29f779b5a1b5ac2e47d5f7b562"
+    },
+    {
+      "path": "research/skirmish-20261016-recruit-backrefs/README.txt",
+      "bytes": 7234,
+      "sha256": "a1ea4dad04731e64a023a562d5222a5f170b1cf8afa70f83a1b381cc3827dda6"
+    }
+  ]
+}

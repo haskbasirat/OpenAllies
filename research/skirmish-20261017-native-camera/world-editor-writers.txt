@@ -1,0 +1,7 @@
+Who touches GWorld byte +0x275 (the world editor flag), from the decompiled code.
+
+Writers: 0x4F1080 (stores its argument), 0x4F27E0, 0x4F7D00, 0x4FC600, 0x70EF50 (clear it),
+0x70EDF0 (sets it to 1).
+Readers through the global GWorld at 0xB36534: 0x42D130, 0x4361B0, 0x6FE670, 0x6FE9C0, 0x6FF220,
+0x76AD10, 0x76B2F0, 0x76B3A0, 0x76F530, 0x7A0080.
+Reader through the global at 0xB36510: 0x73A560.

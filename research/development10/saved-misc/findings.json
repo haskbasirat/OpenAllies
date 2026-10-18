@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "status": "author frozen; native parity and actual codec/source tests passed; world integration/readiness separately owned",
+  "production": [
+    "crates/aa-runtime/src/sun_state.rs",
+    "crates/aa-runtime/src/saved_misc.rs"
+  ],
+  "native_functions": [
+    "4EE0A0",
+    "4EDBD0",
+    "50AB90",
+    "50BCD0",
+    "4F7D00 field slices4F8018..4F8072 and4F8125..4F813D",
+    "4FC600 body4FD017..4FD3B3",
+    "4F9280",
+    "507DB6..507DE4"
+  ],
+  "native_runs": {
+    "Sun": 2376,
+    "MISC": 774,
+    "actual_SUN": 18,
+    "actual_MISC": 18,
+    "builds": [
+      "original",
+      "v14"
+    ],
+    "PCs": [
+      24,
+      53,
+      64
+    ]
+  },
+  "pins": {
+    "Sun_executed_nonleaf": 372,
+    "MISC_executed_nonleaf": 468,
+    "Sun_exact_global_references": 66
+  },
+  "source_constructor": "actual completed source arena PC, GameSpeed fixed value/span/hash and all3rule views; controlled fresh source Settings only",
+  "source_tests": {
+    "maps": [
+      "Campaign/tutorial02",
+      "Campaign/allies01_el_alamein",
+      "(2v2)Berlin"
+    ],
+    "source_GameSpeed_bits": 0,
+    "registered_or_saved_GameSpeed_override": "refused",
+    "forged_raw": "refused",
+    "actual_named_lookup_calls": 0,
+    "actual_Weather_lookup_calls": 0
+  },
+  "final_tests": {
+    "log": "tests-v3.log",
+    "MISC_passed": 3,
+    "SUN_passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "command": "cargo test -p aa-runtime --release --locked --offline -j4 --test saved_misc --test saved_sun -- --include-ignored --nocapture",
+    "all_sessions_reaped": true
+  },
+  "freeze_sha256": "283e486d5cd0136e853853bb5fbf9573669b8ee3a9011bab832adf8f96e8c2ac",
+  "sun_startup_reference_other_author": "615e66797737ef5a8503625a4047119751659b6460e39802fac966b7218e8f33",
+  "independent_review_of_OTHER_author_Sun_reference": "445566eba8803a22d168625f63d783e2ae16cf1203856227a2d9686910c10720",
+  "independent_review_of_THIS_author_ports": "pending root assignment; no self-review claimed",
+  "limits": [
+    "No whole GWorld constructor/Load/lifecycle/ready/battle certificate",
+    "Chunk seek/wrapper and persistent owner/token/warning/scheduler bindings are root integration",
+    "Dictionary registry lookup leaves explicit in synthetic oracles; actual3maps reach no registry lookup",
+    "Stream truncation uses declared atomic read seam; native EOF implementation not proved",
+    "Allocation-success domain; uninitialized pair/Weather words explicitly represented",
+    "Sun Update/trigger effects outside codec scope",
+    "GameSpeed source binder applies only controlled fresh source window; later current global owner must supply word",
+    "Original native id==count is undefined access; actual allocated-table owner refuses it",
+    "No aa-rules/parser/rootmanifest/nativeasset/save/profile/release mutations"
+  ],
+  "old_attempts_retained": [
+    "saved-sun/actual-map-tests-v1.log relative-output-only failure",
+    "saved-misc/native-saved-misc-v1.json",
+    "saved-misc/native-saved-misc-v2.json",
+    "saved-misc/tests-v1.log pre-freeze NUL regression failure",
+    "saved-misc/tests-v2.log unrelated in-progress scheduler type error"
+  ]
+}

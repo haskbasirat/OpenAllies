@@ -1,0 +1,50 @@
+{
+  "scope": "fresh same-owner Recruit581F30/MobileDeployment5757C0; Research21 remains actual6A71D0",
+  "frozen_at_utc": "2026-10-17T12:00:05.572974+00:00",
+  "files": {
+    "crates/aa-runtime/src/stored_recruit_mobile_init_world.rs": "8206b9e0a9429612b002290783ed346eed8d0048ba37ac33a6df1627f7b1f86d",
+    "crates/aa-actors/tests/native_recruit_mobile_init.rs": "99599740510590db2d1ac8cdd97f47df8f53352d0d3cf232223f6e9afa410810",
+    "research/skirmish-20261017-stored-recruit-mobile/native_recruit_mobile.py": "1fffebc8cb08e5ca8bb4b162c401b069b70b751113d314682e6a6e8817d330e3",
+    "research/skirmish-20261017-stored-recruit-mobile/native-recruit-mobile.json": "0b22919a75a8883f357db5c4a95885dc229f6d7dc7f0df1fd025084610029f1e",
+    "research/skirmish-20261017-stored-recruit-mobile/README.txt": "a377c51e8cfb6b982523c485322851ac506da3e38ca648643768cc0b1c01ec02"
+  },
+  "shared_snapshot_files": {
+    "crates/aa-actors/src/component_virtuals.rs": "b8408cf5202c1773377f72e3b85d3765af346067b00c94a543ca3fa6e49acde6",
+    "crates/aa-runtime/src/map_actor_init_existing.rs": "b9b24eb3eec7ed87f10ff4b195db24145a7851dcaf4e097b011ed97348e51056",
+    "crates/aa-runtime/src/stored_component_init_source.rs": "26a4bc33f57ca5d64dec7271771aa694e00b8652b871d0e4a3853ead6b758ce3"
+  },
+  "native": {
+    "pc": [
+      24,
+      53,
+      64
+    ],
+    "images": [
+      "original",
+      "v14"
+    ],
+    "fresh_machines": 6,
+    "recruit_runs": 72,
+    "mobile_runs": 360,
+    "executed_pins": 727,
+    "immutable_replay": "pass",
+    "transport": "50ACC0 other-owner callback; Object49C760 constructor-base transport explicit"
+  },
+  "verification": {
+    "new_actors_tests": "2/2 pass",
+    "existing_native_component_leaves": "1/1 pass unchanged fixture",
+    "runtime_lib_current_source_check": "pass17.09s",
+    "actual_Staged_concrete_integration": "not claimed"
+  },
+  "logs": {
+    "research/skirmish-20261017-stored-recruit-mobile/actors-tests-final.log": "6a20f90e01303493c7b272594e543ae6364e7aa8559ff0107e681164e53e8958",
+    "research/skirmish-20261017-stored-recruit-mobile/source-check-final-v2.log": "d4b92aefaf5d6de53439633a9495710efa21f4f741a87bc4517f0587dd344223",
+    "research/skirmish-20261017-stored-recruit-mobile/native-replay.log": "d6915590bd0530fddd4e77f26de2550f5937bc46f71ee908260c8acb2d601057"
+  },
+  "limits": [
+    "finite numeric domain",
+    "typed immutable source success projections reused,not wholeData/sourcephase",
+    "actual queue kernel reused; native callback transport is not scheduler/wholeactor completion",
+    "no wholemission or playablebattle claim"
+  ]
+}

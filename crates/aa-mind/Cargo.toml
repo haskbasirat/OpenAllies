@@ -1,0 +1,20 @@
+[package]
+name = "aa-mind"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+aa-navigation = { path = "../aa-navigation" }
+aa-trig = { path = "../aa-trig" }
+aa-combat = { path = "../aa-combat" }
+aa-spatial = { path = "../aa-spatial" }
+aa-rules = { path = "../aa-rules" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+aa-movement = { path = "../aa-movement" }
+serde_json.workspace = true

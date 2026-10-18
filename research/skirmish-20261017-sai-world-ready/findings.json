@@ -1,0 +1,315 @@
+{
+  "status": "author-frozen-focused-validated",
+  "scope": "Same-owner SAI source/setup/topology/startup bindings; bounded native kernels, not completed whole-world startup/Think/application activation or playable battle.",
+  "source_files": [
+    {
+      "path": "crates/aa-navigation/src/startup.rs",
+      "sha256": "40844407db322bea69e6d18d72b48fe9488b05697714c3a08fe7473b202bbcf4"
+    },
+    {
+      "path": "crates/aa-navigation/src/ai_startup.rs",
+      "sha256": "1b1aea3cc5681681d036a2ae5121d09777c7275444999dfcf242c9d27ae1eca8"
+    },
+    {
+      "path": "crates/aa-navigation/tests/ai_startup_inplace.rs",
+      "sha256": "7362a5819fe2bde8c9145854f40971256c51d6173919b0a8161e4e62a139efd2"
+    },
+    {
+      "path": "crates/aa-mind/src/sai/manager.rs",
+      "sha256": "494e4097180be6d81c7b6d28b9bf365a1e556b7456538b5c89ec76ab024b2afb"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_world.rs",
+      "sha256": "1e675aef6feb2a3ac30dea1b4c0d325cb7ec5e985c8b3bf95967ffaa56b19ccd"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_world_tests.rs",
+      "sha256": "0ae0b0fa69f8d4c78101d28c0812612078acdc6e341177c622601ce9ee09e181"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_players.rs",
+      "sha256": "1209cd35315e7af57fd52f9b225d0a4a6e5aac7712ee980be1233880b6e1826d"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_players_tests.rs",
+      "sha256": "fb8e5a9593d51b95eca772fc17022c9a0ffa16d31670094e482f8dbcee7e2748"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_actor.rs",
+      "sha256": "3c08c9f026bf9ab6755a1bfcd5e7c118159b848b1181804d0fcc15696b672908"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_actor_tests.rs",
+      "sha256": "9dc61ded0de3ca6d99f000f0bf1ab46e37b1a83932deb7d54a749d975518bbe9"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_startup.rs",
+      "sha256": "531f3fe1632adade1c4c530c70c957dbc57f9123ff743c83f970a65207b96e62"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_lists.rs",
+      "sha256": "7e57a29bb09ea3ecf298e8a1a63d40de86dc45c9686d30831422aa748cbcb031"
+    }
+  ],
+  "shared_sections": "lib.rs module exports; restore_lifecycle.rs Arena field/constructor/disjoint loans/two4C54 pristine checks only. Other owners may change unrelated sections; no exclusive whole-file freeze claim.",
+  "fixtures": [
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-actor-map-lists.json",
+      "sha256": "3a0986d932faecf56462e944699a9206005d32679a8b3c160a1e8350a881398d",
+      "bytes": 55193,
+      "complete_rows": 36,
+      "controlled_prefix_rows": 0,
+      "machines": 72,
+      "executed_pins": 742,
+      "intercepted_leaf_entries": 2,
+      "virtual_seams": [],
+      "scope": "Full7A0390 category0 through real4CF010 region lookup,79F390/4D4E70/4D12C0,7BC330/470 and manager90 insertion; actual region constructor from full topology load; zero actual manager AI slots and region-player count. Actor154 is constructor-null. No positive controller/SAIActor body claimed."
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-actor-ordinary.json",
+      "sha256": "cca1d7672e0339b992384eb27ee6bfc73174bf9d636db48aa2067fa06a92c0c8",
+      "bytes": 177285,
+      "complete_rows": 708,
+      "controlled_prefix_rows": 0,
+      "machines": 1416,
+      "executed_pins": 305,
+      "intercepted_leaf_entries": 2,
+      "virtual_seams": [],
+      "scope": "Fresh concrete ordinary-Actor predicate and empty-listener registration paths.\n\nActor/Kingdom actual vtable dispatch. Activity uses real nested Element parents;\n79E080 executes all three getters, including current GTID generation lookup.\nWall positive and matching-controller/positive category0 map lists are excluded.\nOnly ordinary registration's temporary new/free leaves are intercepted.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-actor-registration.json",
+      "sha256": "d782832d6baced767f05a9cb285f4aa645e0018b268b2c472ebdc4b53fd0a949",
+      "bytes": 65275,
+      "complete_rows": 162,
+      "controlled_prefix_rows": 0,
+      "machines": 324,
+      "executed_pins": 179,
+      "intercepted_leaf_entries": 0,
+      "virtual_seams": [],
+      "scope": "Full native7A0390/79F6E0/7A0C20 complete non-MARKER category3/4 paths.\n\nFresh original/v14 machines, actual Actor/Kingdom vtable owner getters and\nclassification/setter bodies. No child/allocation seams. Ordinary category\n0/1/2, MARKER and Flare retirement are outside this fixture's complete paths.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-actual-map.json",
+      "sha256": "8db0209f22cf297962aefccd77c102fb0d65c635812dbe1e32405a984758876d",
+      "bytes": 1893960,
+      "complete_rows": 3,
+      "controlled_prefix_rows": 0,
+      "machines": 6,
+      "executed_pins": 1652,
+      "intercepted_leaf_entries": 3,
+      "virtual_seams": [],
+      "scope": "Actual runtime-bound tutorial TERRAIN7AA9B0 plus7ABC30 at all3PC/bothPE.\n\nThe captured actual source Bank/terrain supplies static flags and the typed\ndepth witness; stream/version transport and allocation are named seams.\nThis does not run complete7A0D40 or substitute any AI player configuration.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-add-ai-player.json",
+      "sha256": "6a7d6d7eab764e6583d0aeaab5486d07bd067f3d4ce3301ff2952b22240fe4ea",
+      "bytes": 49584,
+      "complete_rows": 18,
+      "controlled_prefix_rows": 0,
+      "machines": 36,
+      "executed_pins": 764,
+      "intercepted_leaf_entries": 3,
+      "virtual_seams": [],
+      "scope": "Full79FC40 inactive AddSAIPlayer with explicit profile and full7B1080 child.\n\nHeap allocation/free and diagnostic logger are named leaf seams. Existing\nslots/worklists and duplicate Kingdoms are explicit fixtures. Profile choice\nand ready=true activation are separate required services, not empty defaults.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-ai-player-constructor.json",
+      "sha256": "3f0a3347c02d9474a7beebc4ab4fc935ba8cc92977ca5765cda3fd083bfe44f6",
+      "bytes": 440789,
+      "complete_rows": 9,
+      "controlled_prefix_rows": 0,
+      "machines": 18,
+      "executed_pins": 521,
+      "intercepted_leaf_entries": 1,
+      "virtual_seams": [],
+      "scope": "Full7B1080 AIPlayer constructor, including97x2 command containers and ego getter.\n\nOnly operator-new is intercepted. The profile head-ego and manager table are\nexplicit source-layout fixtures; this is not a source profile-selection proof.\nUnused capacity allocation bytes are not interpreted as initialized fields.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-ai-startup.json",
+      "sha256": "b631be6c111ff212d424a10ec783d14cdd47ffbc04a0d77da4f539da9b7f1afe",
+      "bytes": 1058103,
+      "complete_rows": 54,
+      "controlled_prefix_rows": 12,
+      "machines": 132,
+      "executed_pins": 1979,
+      "intercepted_leaf_entries": 4,
+      "virtual_seams": [],
+      "scope": "Fresh paired full7B4830 and deliberate pre7BB1C0 prefix cutoffs.\n\nComplete18 frozen synthetic source graphs at all3PC, actual constructors and\ngoal publication/filtering/neighbors. Three prefix cases stop at the first\nneighbor walk ENTRY; nine more stop before exploration, recruitment, or the\nKingdom RecruitSingle count read. They establish retained publication state,\nnot a native exception, throw, missing-source acceptance, or completed startup.\nOnly inherited allocation/stream/version and name/log leaves are intercepted.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-map-constructor.json",
+      "sha256": "9bb64a11db2b4b4b02e0f79b6d88885596f9fc506e8271e9126cf3aca27f4711",
+      "bytes": 6143,
+      "complete_rows": 9,
+      "controlled_prefix_rows": 0,
+      "machines": 18,
+      "executed_pins": 52,
+      "intercepted_leaf_entries": 1,
+      "virtual_seams": [],
+      "scope": "Full7AA0B0 SAI map constructor; only heap allocation is intercepted."
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-pick-ai-profile.json",
+      "sha256": "4918cc0bcf42f3111c5da0b5bc672d0e4d9e9e2d512dc4b2a20fd3c569248387",
+      "bytes": 42425,
+      "complete_rows": 48,
+      "controlled_prefix_rows": 0,
+      "machines": 96,
+      "executed_pins": 187,
+      "intercepted_leaf_entries": 3,
+      "virtual_seams": [],
+      "scope": "Full79FAF0 profile choice including real hash predicates and private85D840 RNG.\n\nGenerated explicit source-profile layouts. Only allocation/free and fallback\ndiagnostic logger are intercepted. Both eligible-pool and full-registry\nfallback branches execute; decompiler's unreachable-branch warning is false.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-startup-getters.json",
+      "sha256": "03ebdd2e282d5ca0bb901da4c55ad31be8823ae2888690ec5faee561d337b1eb",
+      "bytes": 50500,
+      "complete_rows": 228,
+      "controlled_prefix_rows": 0,
+      "machines": 456,
+      "executed_pins": 13,
+      "intercepted_leaf_entries": 0,
+      "virtual_seams": [],
+      "scope": "Actual constructed runtime B0/B4/8C and source Data+38 SAI startup getters.\n\nReal vtable slots execute with poison EAX. Runtime ctor vtable stores are\nstatic byte/address pins, not a claim of full ctor execution in this fixture.\nObject8C reads only the supplied authoritative count58. No body seams.\n"
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native-startup.json",
+      "sha256": "5bafc0f0d51a9ec94c4d96511c204f0e73e07182ffb58f58ad2f5210b2c2434d",
+      "bytes": 94196,
+      "complete_rows": 17,
+      "controlled_prefix_rows": 0,
+      "machines": 34,
+      "executed_pins": 255,
+      "intercepted_leaf_entries": 10,
+      "virtual_seams": [
+        "Actor+B4/B0",
+        "seen-context+38"
+      ],
+      "scope": "Fresh original/v14 7A0D40 outer-kernel replay; required child seams named.\n\nThis certifies the existing coordinator's direct-field-lease transformation,\nnot actual AI setup or complete live-world startup.\n"
+    }
+  ],
+  "native_fresh_machine_executions": 2608,
+  "producers": [
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_actor_map_lists.py",
+      "sha256": "47e766502e3eb30ab77ffa6f921873a1cdd00cf7aa288af57b5166a646ce756f",
+      "bytes": 5583
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_actor_ordinary.py",
+      "sha256": "abe08e551242d2afcf0a97e0b6f27b0f5da22989f07bbf610802dec87cbe9eed",
+      "bytes": 4725
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_actor_registration.py",
+      "sha256": "398bc92c27eb653004ca9450a0c9bd504059ad2dc4b7d2148b923ffd4ef0d557",
+      "bytes": 3686
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_actual_map.py",
+      "sha256": "c5e2fea073e05a6757abbadd6dde59ece808a5695c6776a904dc719eaf14c98d",
+      "bytes": 3830
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_add_ai_player.py",
+      "sha256": "1cee0a97a334a61c7db97b9869ff9247ccfebf8d0c0789f504eeef449b376bcf",
+      "bytes": 3901
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_ai_player_constructor.py",
+      "sha256": "a49023283b6928b8f62eb14a87af9a5d5a95c7541e0cdd291690bef769fac194",
+      "bytes": 3814
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_ai_startup.py",
+      "sha256": "33187af9bb75c31436f8eedfd1fe8528281173965e8d2e819b6397b18fa999a6",
+      "bytes": 4721
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_map_constructor.py",
+      "sha256": "784c249c505ac08fb9d6b32c61a77b9de58d0178a2437f6e7b58dd48603c79b9",
+      "bytes": 3293
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_pick_ai_profile.py",
+      "sha256": "97bfa5761d177c022135bb9b565d711b7190d5d5d30d47e51ce139696908fad2",
+      "bytes": 3184
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_startup_getters.py",
+      "sha256": "0844ee6039f7a7ba724642f17f2892b156b7769f052940496a361b05a606f58c",
+      "bytes": 3370
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/native_startup_replay.py",
+      "sha256": "bd722c11d3a43aeaf8de19701c405e25a12d8cfcf527d6eafcd6eb397dce9fdc",
+      "bytes": 2429
+    }
+  ],
+  "actual_source": {
+    "profiles": 25,
+    "ego_roots": 75,
+    "source_identities": 1647,
+    "source_precision": "Double53",
+    "ego_projection": "all75 narrow exploration counts and neighbor depth checked against prior full native Ego decoded images"
+  },
+  "rust": {
+    "current_runtime": "9/9 including actual source/map guards and list owners",
+    "navigation": "4/4 (3 in-place +1 old wrapper)",
+    "baseline": "8/8 earlier complete scoped snapshot; not substituted for current9"
+  },
+  "explicit_remaining": [
+    "No completed actual full-map ActorStore startup replay yet",
+    "Positive Commander ability and nonempty RecruitSingle allocation references",
+    "Positive initialized-controller region/actor/definition notifications",
+    "Positive Actor154 SAIActor pointer owner/time store",
+    "Flare retirement,MARKER side effects,positive Wall container",
+    "Ready=true AddPlayer completes publication prefix then refuses unbound initialization/notifications",
+    "AI Think/fibers and application/mission activation seal not completed by this component"
+  ],
+  "errors_preserve": "Native manager ready/revision/list prefixes, constructed AI allocations/controller/goals/scripts, region and manager list publications are not rolled back. Repeated binding attempts refuse instead of interpreting a partial ready byte as success.",
+  "game_files": "No original archives,assets,saves,profiles,releases modified",
+  "artifacts": [
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/README.txt",
+      "sha256": "f24cd2979bec6835bd24bd70d682a744e1efc3e5f3f31f0929959e7b5f6847aa",
+      "bytes": 5630
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/frozen-source-hashes.json",
+      "sha256": "631201bcfc6c294ffe4c0d4ffa656a75ad2a6a4ae1d3997a32c45adc520388b5",
+      "bytes": 2115
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/actual-profiles-current.json",
+      "sha256": "9aeabb30d5c772ebe90880ca2d4e866f9744af9aa9dc07840ff86132f5782427",
+      "bytes": 426543
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/actual-map-input.json",
+      "sha256": "7d8690c9dee93ec8bfc5c32dc881d09df41523c602e1b1a4eca750bc4fcc8e5f",
+      "bytes": 3760236
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/sai-final-nine-tests.log",
+      "sha256": "a5f80f661605c55e44d6ba646e30929ce6542bded6dac3d10f3ed7af6638df92",
+      "bytes": 15499
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/actor-player-startup-tests-final-v2.log",
+      "sha256": "f20fc5cc8b46723768283e0978df7d4f3d2a549b4c2572f184c4e84bdb1c9b5e",
+      "bytes": 15650
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/ai-inplace-source-tests.log",
+      "sha256": "bd9d0cc6db9976ed0307dc0ac1314e4d51f8e2241b7d55c79f63c7bb453a5464",
+      "bytes": 1744
+    },
+    {
+      "path": "research/skirmish-20261017-sai-world-ready/map-list-check.log",
+      "sha256": "9ed476058714b8df35456076e7408579fff91ca905c4005791313ca1fea18998",
+      "bytes": 11763
+    }
+  ]
+}

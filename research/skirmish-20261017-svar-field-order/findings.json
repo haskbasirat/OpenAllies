@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "author-source-proof-test-freeze",
+  "files": {
+    "crates/aa-rules/src/native_field_order.rs": "224ccb0c56f3847c36e053e779bf898e181df7ed82412282c54f9909e55cfafa",
+    "crates/aa-rules/src/native_field_order_tests.rs": "012c9729fab5e618656aed63f22cd73909076a3a4ad71a455351da2507cacf61",
+    "crates/aa-rules/src/actors.rs": "1bca1d7b3bd7d0146ef095f5872bb01219a3622597df86af4227071ffa4a1998",
+    "crates/aa-rules/src/resolved.rs": "5c647c641c50fcc3d8ee1037cb53d41cf843fe7516c8ab6219904c000b308acb",
+    "research/skirmish-20261017-svar-field-order/native_field_order.py": "0861ffbbc017b8c98992d36bf3a374a12b4959d0f4aa0306eb5efbfd47a8d1ea",
+    "research/skirmish-20261017-svar-field-order/native-field-order.json": "160f63cc80ef5a4da57b18ee3c479fd3442fc8b5bcd3f2b3ccbd3085dce0e4d9",
+    "research/skirmish-20261017-svar-field-order/native_full_sources.py": "13a60adc9333e6f6c73472a6527f56f1d5296d3ea71ded0b954782a5823c1913",
+    "research/skirmish-20261017-svar-field-order/native-full-sources.json": "2f8946e02b62c10715478078cda065db8442cc09eb92f1a00c7b62b470dbc4bc",
+    "research\\skirmish-20261017-svar-field-order\\frozen-aa-rules-field-tests.exe": "10d8b041764fd7d0d8dab17274b2500dd25d77ef0d63fa64a4272f9ab9d31b03"
+  },
+  "source_native": {
+    "fresh_field_table": "native-field-order.json51paired/102original-v14allPCruns6187executedpins",
+    "actual_constructor_and_two_files": "native-full-sources.json3paired/6machines9487executedpins: real135constructors,214+40sourcefields,231finalcurrentVars",
+    "transport": "Prior reviewed parser host line/EOF/string/heap/mutex transports only; actual registration/hash/vector/getters/setters execute. No Windows-captured current input. Global debug/markup fixture setup retained; template-registry fallback uncalled."
+  },
+  "rust": {
+    "focused": "field-tests-02.log3/3PASS2.19s: all nativefield rows,lazy/scope guards,actual2source projection",
+    "required_full_suite": {
+      "log": "full-rules-tests.log",
+      "passed": 154,
+      "failed": 0,
+      "ignored": 0
+    },
+    "required_metagame_export": "metagame-export-check.log1/1PASS4.30s;AA_METAGAME_EXPORT0,originaloracleunchanged"
+  },
+  "corrected_author_assumptions": [
+    "First virtual-table-label inference confused inferredFloat3 with Fixed4 and explicitInt2 with1. Actual virtual48 execution/Rustcorpus exposed this before acceptance. Source helper now preserves exact Float source type; Settings destination remains Fixed2.",
+    "First actualsource test used shorthandDisableSAI; fixed to actualDisableSAIWhenGameLost,productionunchanged."
+  ],
+  "remaining": [
+    "No inherited/prefilled field-table semantics; helper explicitly refuses those source shapes.",
+    "No arbitrary inferred expressions/strings/numericgrammar beyond boundedBool/ordinarydecimal-with-dot.",
+    "Actual current State/WorldRules/default reset/mutable runtime cell owner integration is a separate author/test scope.",
+    "No process startup,fullworld,mission,battle,AI,multiplayer or campaign readiness claim.",
+    "No native allocation/transport failure,invalidpointer,panic or unwind parity claim."
+  ],
+  "preservation": "New helper/tests plus tinyexports only; rootCargo/lock/originalexe/assets/saves/releases untouched by this author. Source-before-export reconstructions explicitly labelled."
+}

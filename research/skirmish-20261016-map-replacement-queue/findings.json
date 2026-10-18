@@ -1,0 +1,129 @@
+{
+  "scope": "Original4FD7F0/4FD8C0 replacement capture and4FC500 queue payload/order/ownership, bound read-only to real ActorStore; full4FBA50 creation/drain remains unbound",
+  "date": "2026-10-16",
+  "status": "implemented; focused release tests passed",
+  "native_addresses": [
+    "4FD7F0",
+    "4FD8C0",
+    "4FC500",
+    "4FC4A0 visit order only",
+    "4F4B90",
+    "4C8C20",
+    "4F5FD0",
+    "4F8C90",
+    "4F8CE0",
+    "4F7C30",
+    "4F6050",
+    "503080",
+    "766DE0",
+    "4849F0",
+    "4F3EA0",
+    "4012C0",
+    "405B80"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "oracle": {
+    "path": "native-queue.json",
+    "cases": 30,
+    "precisions": [
+      "PC24",
+      "PC53",
+      "PC64"
+    ],
+    "instruction_pins": 1025,
+    "sha256": "f3e7569366766b0f39cc436d26b8b6811dc3476182de9594a0630c6b78fd42c9",
+    "seams": [
+      "successful allocator/delete",
+      "CString allocator identity/empty/free virtuals",
+      "ordinary owner virtual108",
+      "warning404F60",
+      "4FBA50 visit returning false; no actual creation"
+    ],
+    "boundaries": [
+      "ordinary source capture only; no callbacks mutating source actor during owner/logging leaves",
+      "successful allocation only; allocator failure/unwinding not claimed",
+      "4FC4A0 order inspected with4FBA50 seam, not complete runtime drain"
+    ]
+  },
+  "api": {
+    "module": "aa_runtime::map_replacement_queue",
+    "queue": "Queue owns separate Vec<ObjectRequest> and Vec<ActorRequest>",
+    "capture": "Context::capture(&self,&mut Queue,ObjectKey,Option<u32>,Kind,&mut Vec<Warning>)",
+    "context": [
+      "actual ActorStore",
+      "actual Spatial owner",
+      "skirmish_start::Definitions",
+      "same canonical Bank",
+      "ActorCatalog",
+      "Precision"
+    ],
+    "refs": "ActorId/ObjectKey distinguish GTID from address; DefinitionRef retains portable token and canonical IDS; active native params reuse full ActorParams/ObjectCreationParams",
+    "ownership": "queue owns captured immutable data/property definition references; source actor/instances retained; aliased append gets a distinct property vector",
+    "order": "all Objects then all Actors; insertion order within each vector; native_order is inspection only"
+  },
+  "proof": [
+    "30 original/v14 cases replay every meaningful creation parameter, property sequence, warning prefix, alias copy values, and mixed-list visit order.",
+    "Properties kinds1/2/3 checked before source; onlykind2 source0/self transferred; disabled ignored, duplicate/null definitions retained.",
+    "Native actor null replacement is rejected after properties; foreign null property rejected at logging dereference; prior warnings retained.",
+    "Actor mode5, variant0, empty name, requested/source GTID, owner and required-object+30 branch match native.",
+    "No FPU arithmetic or RNG draw in capture; raw transform bits preserved.",
+    "Actual Firefight staged source placeholder, owner and transform captured with actual gbr_corps source binding without actor/RNG mutations.",
+    "Explicit source-derived injected Property fixture verifies current ordered actual-instance reads, ignored disabled flag, and earlier warning retained after a later missing-instance error."
+  ],
+  "tests": [
+    {
+      "command": "cargo check -p aa-runtime --release --locked --offline -j4",
+      "result": "passed",
+      "log": "check.log"
+    },
+    {
+      "command": "AA_GAME_ROOT=<game> cargo test -p aa-runtime --test map_replacement_queue --release --locked --offline -j4 -- --include-ignored",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log": "tests.log",
+      "target": "target/s-map-replacement-queue",
+      "note": "One unused import removed from test after pass; no semantic changes."
+    }
+  ],
+  "native_allocation_caps": "Original initial8 queue slots/minimum4/doubling remain allocation details; Rust Vec grows with demand, no request/property count cap introduced.",
+  "limits": [
+    "No destruction, fresh creation, property application, spatial/world publication or playable battle claim.",
+    "native_collision_definition retains explicit nonempty Upgrade/Settlement-positive/shadowed-identity restrictions for required-object source binding.",
+    "Nonempty saved Properties is an existing earlier restore dependency; missing runtime instances fail explicitly.",
+    "No campaign, multiplayer, internet, UI, game executable or release changes.",
+    "Malformed host identity guards can reject earlier than native corrupt-pointer fault; allocation/unwinding parity not claimed.",
+    "No all-map census or broad workspace tests were run by this task; no strict Clippy result claimed."
+  ],
+  "changed_files": [
+    "crates/aa-runtime/src/map_replacement_queue.rs",
+    "crates/aa-runtime/tests/map_replacement_queue.rs",
+    "research/skirmish-20261016-map-replacement-queue/native_queue.py"
+  ],
+  "module_registration": "crates/aa-runtime/src/lib.rs appended pub mod map_replacement_queue;",
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/map_replacement_queue.rs",
+      "sha256": "f0ffe00a33844a6bf367f005d9272da1a7d1ce39e79054c35f8de0446ad4bbd6"
+    },
+    {
+      "path": "crates/aa-runtime/tests/map_replacement_queue.rs",
+      "sha256": "c8217df9d80ca7ad9b919da1be10e737c3e7ca9ae1ee991367ec4be2ea37060c"
+    },
+    {
+      "path": "research/skirmish-20261016-map-replacement-queue/native_queue.py",
+      "sha256": "97beb8cb1a637bfdd891521b243f5e443c911a0190b344e4c394739ed8583786"
+    }
+  ],
+  "backup": "backups/map-replacement-queue-before-20261016-180347.zip",
+  "unchanged_shared_files": [
+    "restoration.rs",
+    "catalog.rs",
+    "actor_world.rs",
+    "root Cargo.toml",
+    "Cargo.lock",
+    "original/v14 exe",
+    "release files"
+  ]
+}

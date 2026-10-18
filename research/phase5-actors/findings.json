@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "scope": "Bounded base GThing construction and valid-record identity initialization; not a complete actor factory.",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "implemented": {
+    "constructor": "4EF2A0 flags, raw position/name/time, facing branch order, record mutation, RNG draw and normalization",
+    "identity": "4EE460 ordinary allocation or saved generation plus registration through existing verified registry",
+    "fixtures": 282,
+    "direction_vectors": 6144,
+    "single_vs_double_startup_vectors_differing": 433,
+    "double_vs_extended_startup_vectors_differing": 0,
+    "crate_tests_observed_passed": 9,
+    "focused_creation_tests_observed_passed": 3,
+    "strict_clippy_observed_passed": true
+  },
+  "evidence_only_not_implemented": {
+    "definition_mask": "4624B0 initializes +174;464BD0 typed child-node/value branches set or clear component bits. Static instruction inventory only.",
+    "derived_getters": "441 original x86 speed/health/defense getter cases with null or explicit resolved modifier context; final diagnostic f32 store."
+  },
+  "missing": [
+    "typed merged/inherited actor definition evaluation",
+    "full GObject/GActor constructors",
+    "spatial placement/world grid",
+    "ownership/required and nested actors",
+    "component constructor factories",
+    "ability and state setup",
+    "world publication and failure destruction",
+    "original save record decoding"
+  ],
+  "source_sha256": {
+    "crates/aa-actors/src/creation.rs": "277f047c856838c82a8427848a2bfdcc1a11863707988da024b5f3b573e816ce",
+    "crates/aa-actors/tests/native_creation.rs": "21155d3a325d0c7f370b2c271f5fd6ed30e0d97b2d9166a961c02fcd9a1ad298",
+    "research/phase5-actors/original_creation.py": "70fdbd4d72d23434729c3a37494659ec642fe4f31c90cb5f618e66326c409bc5",
+    "research/phase5-actors/creation-native-oracle.json": "58ea5ea082644915845371320703b23f1df114de2fae5780ff1d3122aa4d4657",
+    "research/phase5-actors/direction-tables.bin": "20826310088f1a222dd5e480efe7697a8e47814f7f5743175b26ca6238dc0e95",
+    "research/phase5-actors/definition_prerequisites.py": "762680d901ef87712a36e1f51ab481d7ceadef53ad62b805bfb05d3980955888",
+    "research/phase5-actors/definition-prerequisites.json": "48aee61a700a49e6e7c7db1e5905bead22ed69f0b0243db17f73d17b74b9d3cb",
+    "research/phase5-actors/definition-mask-instructions.txt": "799ba002282d6e1dab24b3b84edb19a0fdbe550289470c84a48e677a05308695",
+    "research/phase5-actors/client_samples.rs": "1bd8863d1736e0ae956b963ef818bf95978246759392f15fbf1e82fa41cba436",
+    "research/phase5-actors/client-samples.json": "4ae889fa205cdfec809804ff2de6669bc948adac2f552572bd0a9d77ef0cc279",
+    "research/phase5-actors/README.txt": "4d329176fe490a1be313da8839241373d1429af9d16d82d67b1af685e00ab67c"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "status": "current profile schema implemented and validated; independent review pending",
+  "production": {
+    "crates/aa-mapworld/src/restriction_groups.rs": "54f734c0dab64d0a4fd293d414595e63c21ac27a21c25b84132066010427833d",
+    "crates/aa-mapworld/tests/restriction_groups.rs": "9de6e18a7a82acdae89ed1007223821e726495238b407a191d8e26beefabadca",
+    "crates/aa-runtime/src/restriction_groups.rs": "dc55510d597c3a480403f6ec899bc04ac2c3cdc45c399c8076e3c809e6f300cc",
+    "crates/aa-runtime/tests/restriction_groups.rs": "b4645a0d4fed8a86244c2a64b514a6d5c6ffbaa8eafdb3c7fc2be62769989d6e"
+  },
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native": {
+    "maps": 80,
+    "synthetic": 5,
+    "executions": 510,
+    "executed_address_pins": 1426,
+    "fixture_sha256": "995dd9e3d5fe5e1d6b401bb2185eba8aad55f6e8282828c2bcc7dbc5f2111b43",
+    "producer_sha256": "728d3d198b8dd42b1673e2240c25f8cdc2875d9a687533da11c36f4f454cf3d4",
+    "scope": "Original/v14 actual reader/constructors/hashmaps/typed wrappers at all3PCs; explicit current source lookup transport/string/I-O/allocator/localization seams; no full Find/history/startup claim"
+  },
+  "actual_census": {
+    "maps_with_chunk": 80,
+    "nonempty_chunks": 24,
+    "profiles": 37,
+    "all_profile_envelopes": 4,
+    "allowed_actor_references": 23679,
+    "allowed_property_references": 2093,
+    "restricted_actor_references": 762,
+    "restricted_property_references": 247
+  },
+  "independent_source_capture": {
+    "result": "all80 maps, complete typed lookup maps and source_files match production capture",
+    "input_sha256": "2838da1c863df805bc2e7fb523c6f32380e732dd66ef67bb289be09303fcef20",
+    "production_capture_sha256": "3e1c051c36d59fc4e23819c7784eeb52c3d508cab7edd5968734b7c0485f3aba",
+    "helper_source_sha256": "8d3310463716aff724b1127d9bae09357373a91e2bfdb7f88dff634cd1a77a5b"
+  },
+  "rust": {
+    "decoder": "FINAL1/1 PASS release locked offline j4 checked wire test; frozen source/test unchanged.",
+    "production_reference_replay": "FINAL2/2 PASS normal production library; all80 authored maps,5 synthetic cases, current typed trace/native restricted-map/duplicate log checks, unavailable Bank borrow, private registry corruption, foreign Property arena, diagnostic-Bound source-PC and same-PC foreign-source refusal.14.42s.",
+    "guard_setup_failure": "Earlier diagnostic regression lacked actual Settings owner; failure preserved in rust-runtime-regression-setup-error.log. Actual V14 Settings/text/resource owners then supplied; final test passes. No production default added."
+  },
+  "required_unported": [
+    "Historical profile0/1 category-list/property is_technology complements",
+    "Native allocation reentry/failure/destruction/SEH",
+    "Runtime localized display effects and non-ASCII key domain",
+    "Native modifier-property effects and unrelated whole source startup",
+    "Whole World/Actor Init, mission activation, battle, original save writer and multiplayer"
+  ],
+  "separate_review": "Props/Body independently accepted bounded scope; independent-props-body report is separate and not expanded by this owner.",
+  "frozen_hashes_verified_after_runtime_replay": true,
+  "all_own_commands_reaped": true
+}

@@ -1,0 +1,19 @@
+[package]
+name = "aa-actors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-zones = { path = "../aa-zones" }
+aa-world = { path = "../aa-world" }
+aa-body = { path = "../aa-body" }
+aa-movement = { path = "../aa-movement" }
+aa-numeric = { path = "../aa-numeric" }
+aa-simulation = { path = "../aa-simulation" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

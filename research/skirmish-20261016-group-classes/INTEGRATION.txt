@@ -1,0 +1,80 @@
+Organization578A30 runtime binding -- 2026-10-16
+
+The initial checkpoint mislabeled ActorData+1EC as ActorClass references.
+Original4655E6..465797 proves it is the ordered local AbilityData list; its
+entry+0 points to AbilityDefinition, whose+54 bit3 is BOMBARD. Duplicate
+abilities warn but append. Existing native_loaded_performer already produces
+this exact completed list, so no aa-rules parser/provider was changed.
+
+Runtime saved_organization_actions now binds:
+- Current Organization.layout.definition through direct registered layout
+  identity, without reapplying a layout translation.
+- Layout entries+D locked and captured entries count.
+- Current Organization.layout.parameters[index] canonical ActorData identity.
+- Its completed LoadedPerformer ordered AbilityDefinition flags. Runtime
+  enabled ability state is intentionally irrelevant to native578A30.
+- A reached shared AbilityDefinition reference must resolve to the same
+  canonical identity the older source loader used; translated or shadowed
+  references remain explicit unsupported, never silently wrong flags.
+The shared guard is also used by saved Mind capability projection.
+
+The pure World interface has additive lazy locked/count/individual-flag
+readers. Native578A30 skips unlocked groups before parameter dereference and
+returns on the first bit3 match before reading a later local pointer. Outer
+count is captured (578A38/578A97 instructions), as is each inner ability count.
+Historical AttackGroup.class_flags naming remains API-compatible but now has
+the correct AbilityData meaning documented.
+
+Validation
+1. native_group_scan.py:96 original/v14 executions at PC24/53/64, no callback
+   seams and no pagezero mapping. Includes skipped null unlocked parameters,
+   unread late null abilities, first-match success, duplicate flags and actual
+   invalid reads. Four aa-actors tests pass, including the existing290-case
+   full coordinator fixture and the existing Organization-status fixture.
+2. Source audit:18 native ordered list cases and45 flag-loop cases, pinned
+   original/v14 instructions. See README.txt/native-ability-list.json.
+3. Actual original (2v2)Kursk mode1 StopOnError: saved herd_horse owner15283
+   has one locked horse parameter with no abilities and two unlocked NULL
+   parameters. The real locked-only query returnsfalse. An explicit unfiltered
+   diagnostic query reaches the native null read and returns unsupported in
+   Rust; it is not replaced with an empty list.
+4. A separately labeled source-derived regiment_usa_infantry_artillery layout
+   probe uses actual USA infantry/MG/mortar/captain definitions. Mortar flags
+   36872 retain bombard bit3. Unfiltered=true; locked-only=false. This is not
+   claimed to be a saved Kursk regiment. Saved layout ownership is restored
+   after the isolated probe.
+5. Independent replay:183 matching executions (96scan+63producer+24observed
+   horse/artillery, two filter modes, two images, three precisions). The
+   independent review pins narrow group sections separately from later action
+   dispatch additions. See integration-independent-review.json.
+6. After the coordinated Option<Mind> ownership change and all forwarding:
+   18 saved-adapter runtime tests and6 attachment/layout tests pass. The
+   original actual group observation remained byte-identical. Logs and13
+   source pins are in integration-findings.json; integration-frozen-source.zip
+   captures the accepted sources. No broad workspace/census claim is implied.
+
+Related coordinated forwarding
+The same adapter now forwards source-proven Research583FC0, Structure589A60,
+Denizen569C70, Construction565140, Kingdom4E1430/4E1E40, and the bounded
+4CF0F0/570020 Economy entry to their dedicated modules. Each provider has its
+own oracle/source evidence. Absent Economy and actual null allegiance return
+natively; nonnull allegiance still needs the real Kingdom flow owners.
+
+Current bounded observations
+With the Economy null-owner entry wired, Kursk reaches the explicit unknown
+SAI observer lifecycle boundary. A mode1 flag is not evidence of inactive or
+absent observer state, so no default bypass is introduced. The source loader
+and client are not a playable battle. No broad80map census was run here.
+
+Limits
+Catalog.actor_bindings materializes complete source construction before a
+parameter's flags are queried. The exact lazy pointer cases prove the pure
+native scan, not equal failure timing for malformed later source definitions.
+Translated shared AbilityDefinition projection is rejected until the older
+full source producer is updated; this patch does not claim arbitrary mod
+definition reload/translation parity. Group tests do not validate all other
+action contributors, Economy resource effects, observer phase, world startup,
+gameplay ticks, campaigns or multiplayer.
+
+Backup: backups/source-before-group-binding-20261016.zip. Original game data,
+AA.exe, profiles and Development08 release were not changed.

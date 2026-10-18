@@ -1,0 +1,5 @@
+Fresh Economy InitExisting56F280, 2026-10-17
+
+The new adapter reuses the unchanged load_economy_init_world initialize coordinator (only World/initialize visibility became pub(crate)). Source348 is the constructor cached ActorBindings source_ground Economy supply_required Bool, validated against the moved Bank source precision and canonical factory. Pending/current event links come only from the actual Queues and existing scheduler Target. No source read occurs inside the native kernel if a head is present. A true value reuses queue1/data0 and the actual staged RNG.
+
+The original/v14/all-PC frozen native producer was replayed immutably:48 generated plus3 earlier actual saved inputs,102 machines,139 executed instruction pins and one explicitly intercepted heap entry pin. Its prior inactive debug-recorder qualification remains. The new stored field adapter compiled successfully in16.47s. Natural ger_corps1688 Mission execution remains the parent-run acceptance; no fresh successful call is claimed by this report alone.

@@ -1,0 +1,324 @@
+{
+ "schema": 1,
+ "status": "bounded helper/source freeze; actual fresh graph advance pending",
+ "implementation": "New specialized Construction/Detection/Lair InitExisting calls unchanged shared564D80 coordinator over same stored_component_schedule/Staged version/Owners/Queues/RNG. DetectionAfter shares one new storage-independent front kernel with existing held API; fresh adapter creates/borrows same Actor zone6 and delegates actual stored_zone_activation solver with same World248/identities/Bank. No detached runtime, copied zone, reconstructed World, default version, or readiness bit.",
+ "native": {
+  "shared_init_existing_paired_rows": 90,
+  "shared_runs": 180,
+  "shared_executed_pins": 14,
+  "shared_required_entry_pins": 1,
+  "shared_fixture_sha256": "c979af7e3f6bf348ceb7dfa02073d542e3521e4631c568143484c902d25eb4b3",
+  "after_front_paired_rows": 96,
+  "after_front_runs": 192,
+  "after_front_executed_pins": 54,
+  "after_front_decoded": [
+   {
+    "address": "0x529c30",
+    "sha256": "651ce5c13731be090196a06d7ab050a94145d629912f85d4df1cfda0dca7633f",
+    "size": 3
+   },
+   {
+    "address": "0x529c33",
+    "sha256": "8837463159c94fab9f88f79941386968f9ffa67aa078f55226c75edc4572f42f",
+    "size": 3
+   },
+   {
+    "address": "0x529c36",
+    "sha256": "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e",
+    "size": 1
+   },
+   {
+    "address": "0x56ec90",
+    "sha256": "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
+    "size": 1
+   },
+   {
+    "address": "0x56ec91",
+    "sha256": "de5a6f78116eca62d7fc5ce159d23ae6b889b365a1739ad2cf36f925a140d0cc",
+    "size": 1
+   },
+   {
+    "address": "0x56ec92",
+    "sha256": "f7f55aeb563f96b4cba54af81ceeed57ee70e798f4823259a7b30067b3ce82e0",
+    "size": 2
+   },
+   {
+    "address": "0x56ec94",
+    "sha256": "16289f8f8ba08de3d484d18b6d6b5e57d397df23121ccc4b70b5f308a91ac18b",
+    "size": 3
+   },
+   {
+    "address": "0x56ec97",
+    "sha256": "9e209228601c7d4aa54a0e9b907e47e924510c329135ba3235a9ca9b2edcdd21",
+    "size": 6
+   },
+   {
+    "address": "0x56ec9d",
+    "sha256": "efc136ab5d2909229f45e048884b3d9ab7a70b590c58cc9b6ef3ebde35db5a85",
+    "size": 5
+   },
+   {
+    "address": "0x56eca2",
+    "sha256": "a843932057795ea71b924ac1dbe4196f846aa6e914088874b991473831eeb65b",
+    "size": 2
+   },
+   {
+    "address": "0x56eca4",
+    "sha256": "a013a411fe3879e071904ae5d628d5d0b905f8a9f3581a31a3489e46f0be76e2",
+    "size": 2
+   },
+   {
+    "address": "0x56eca6",
+    "sha256": "a8de322b50595587657a8564b2cd3b8c838e612a92f938f7dfb6989ea67294a3",
+    "size": 6
+   },
+   {
+    "address": "0x56ecac",
+    "sha256": "1b27330d678f1076171484867cdb3aa336afa5dbad93d78e59920a247cf1c1a5",
+    "size": 6
+   },
+   {
+    "address": "0x56ecb2",
+    "sha256": "043b5c16f0c4129abe8ea534766c2117090a2f144dcc6fe6f25719f50ea562e1",
+    "size": 2
+   },
+   {
+    "address": "0x56ecb4",
+    "sha256": "cd33c1d125b520591ea045da84693685e10b5270a0d58fb1bc3590a717f412fd",
+    "size": 6
+   },
+   {
+    "address": "0x56ecba",
+    "sha256": "516d98b8f7e112c7ab40cf0397e0c0231765f39a38298f43fccc3f60a7f096e1",
+    "size": 2
+   },
+   {
+    "address": "0x56ecbc",
+    "sha256": "efbbd12a6884c8fa76b1c2742e9ccba6bcd758d1c6c73b6ff264f5cff7a922a0",
+    "size": 5
+   },
+   {
+    "address": "0x56ecc1",
+    "sha256": "33096de7873e9a78dee12a383c2854c71a629d5779c5d279082121c5933800ca",
+    "size": 6
+   },
+   {
+    "address": "0x56ecc7",
+    "sha256": "16289f8f8ba08de3d484d18b6d6b5e57d397df23121ccc4b70b5f308a91ac18b",
+    "size": 3
+   },
+   {
+    "address": "0x56ecca",
+    "sha256": "b037b13285d97fd6f7a3789cfb3fdd24740642b01ed42d89870ef673dc1fcee9",
+    "size": 4
+   },
+   {
+    "address": "0x56ecce",
+    "sha256": "2333a62c9817b9e5e3801cb23bb1ea3297751bd0271f6de5eeb7eeb510bad228",
+    "size": 6
+   },
+   {
+    "address": "0x56ecd4",
+    "sha256": "83cb63a08c5649e79e5440e6141cb2959af1c04de5d6b8511ba6296f3f093ed8",
+    "size": 3
+   },
+   {
+    "address": "0x56ecd7",
+    "sha256": "00cd4f15e8d2a062a525f3ba4ffc86b068d73313707cd5441babcaf0c1649494",
+    "size": 2
+   },
+   {
+    "address": "0x56ece6",
+    "sha256": "8fb92af601334ca5905b034f643e675e81f5eb7c13eff845d3a0085d19aad419",
+    "size": 2
+   },
+   {
+    "address": "0x56ece8",
+    "sha256": "ee5ea053bef9e67517d2b00182d778991174b179c4dc8360024474f16a267a10",
+    "size": 5
+   },
+   {
+    "address": "0x56ed42",
+    "sha256": "043b5c16f0c4129abe8ea534766c2117090a2f144dcc6fe6f25719f50ea562e1",
+    "size": 2
+   },
+   {
+    "address": "0x56ed44",
+    "sha256": "512f26ada3c3d634ac3c6b12b7b33cb50bb0963c3f6d9924241619c84ec78ff2",
+    "size": 2
+   },
+   {
+    "address": "0x56ed46",
+    "sha256": "516d98b8f7e112c7ab40cf0397e0c0231765f39a38298f43fccc3f60a7f096e1",
+    "size": 2
+   },
+   {
+    "address": "0x56ed48",
+    "sha256": "af9024fed89f6758a06be3271c106376625b8d8891ea488296cbafc093231eb4",
+    "size": 5
+   },
+   {
+    "address": "0x56ed76",
+    "sha256": "d17bddef22a785fc990a432aac8fd00c6a11270dedadbd2fe02c3d4df45cdc2f",
+    "size": 3
+   },
+   {
+    "address": "0x56ed79",
+    "sha256": "e6e040e7b8d2122d30378aa9058c733a28bdb0406f8b697bc08e0541afd44199",
+    "size": 4
+   },
+   {
+    "address": "0x56ed7d",
+    "sha256": "8c2d29725021fca0ae6e28444352624d7ea428229ef9440725eaede9d03eb105",
+    "size": 2
+   },
+   {
+    "address": "0x56ed7f",
+    "sha256": "ce1aee2a9ea8f81c0daf5f09739ac08dc14ce970b765e0f23176bbe901741326",
+    "size": 3
+   },
+   {
+    "address": "0x56ed82",
+    "sha256": "b597173d38211dec5c05e7d6f7fb5c4a1d753ed215eaa5883fe2212dcb026257",
+    "size": 6
+   },
+   {
+    "address": "0x56ed88",
+    "sha256": "59cc047f253b1302157b310328b9f1e23a8cd66a6d37a00ef495f3249c50051f",
+    "size": 2
+   },
+   {
+    "address": "0x56ed8a",
+    "sha256": "37b82e8a6981c5b532926ee800aaf399f6fc75ec69f2d95b9eda69624466f360",
+    "size": 3
+   },
+   {
+    "address": "0x56ed8d",
+    "sha256": "608aa931e63de1eacbc8cf15780393212dd62677929bfbfb3f5c31b63e62a4df",
+    "size": 2
+   },
+   {
+    "address": "0x56ed8f",
+    "sha256": "d28c16ba02462fcf665efcccfba9c9198712fe3e235072870ff1bb3c1b4d3472",
+    "size": 3
+   },
+   {
+    "address": "0x56ed92",
+    "sha256": "90ef8690a679d25d77655565ce4ad197255f49a3eaa58f9a96fc2aa903fe72a2",
+    "size": 2
+   },
+   {
+    "address": "0x56ed94",
+    "sha256": "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
+    "size": 1
+   },
+   {
+    "address": "0x56ed95",
+    "sha256": "516d98b8f7e112c7ab40cf0397e0c0231765f39a38298f43fccc3f60a7f096e1",
+    "size": 2
+   },
+   {
+    "address": "0x56ed97",
+    "sha256": "5c62e091b8c0565f1bafad0dad5934276143ae2ccef7a5381e8ada5b1a8d26d2",
+    "size": 1
+   },
+   {
+    "address": "0x56ed98",
+    "sha256": "8fb92af601334ca5905b034f643e675e81f5eb7c13eff845d3a0085d19aad419",
+    "size": 2
+   },
+   {
+    "address": "0x56ed9a",
+    "sha256": "15efe8d5590add7e366d76173cd92d1eb82bc856956583b2f3614677adfb5943",
+    "size": 5
+   },
+   {
+    "address": "0x56eda2",
+    "sha256": "d28c16ba02462fcf665efcccfba9c9198712fe3e235072870ff1bb3c1b4d3472",
+    "size": 3
+   },
+   {
+    "address": "0x56eda5",
+    "sha256": "35b660100acac77a09eed3bdd6b22a8db7b27c1e8c4c4ed44bd52d51c9084b03",
+    "size": 2
+   },
+   {
+    "address": "0x56eda7",
+    "sha256": "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
+    "size": 1
+   },
+   {
+    "address": "0x56eda8",
+    "sha256": "516d98b8f7e112c7ab40cf0397e0c0231765f39a38298f43fccc3f60a7f096e1",
+    "size": 2
+   },
+   {
+    "address": "0x56edaa",
+    "sha256": "5c62e091b8c0565f1bafad0dad5934276143ae2ccef7a5381e8ada5b1a8d26d2",
+    "size": 1
+   },
+   {
+    "address": "0x56edab",
+    "sha256": "8fb92af601334ca5905b034f643e675e81f5eb7c13eff845d3a0085d19aad419",
+    "size": 2
+   },
+   {
+    "address": "0x56edad",
+    "sha256": "edc512f4bf29ee4c46edd1117ed7a17d4b3898633edd47c90276ee839d502326",
+    "size": 5
+   },
+   {
+    "address": "0x56edb2",
+    "sha256": "74cd9ef9c7e15f57bdad73c511462ca65cb674c46c49639c60f1b44650fa1dcb",
+    "size": 1
+   },
+   {
+    "address": "0x56edb3",
+    "sha256": "18f5384d58bcb1bba0bcd9e6a6781d1a6ac2cc280c330ecbab6cb7931b721552",
+    "size": 1
+   },
+   {
+    "address": "0x56edb4",
+    "sha256": "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e",
+    "size": 1
+   }
+  ],
+  "child_scope": "Front56EC90 stops at actual56EB40/4D69A0 child entry or before attached Data430 read. It supplies no successful child result. Real529C30 getter executes. Original/v14/all3PC equality, actual state100->Actor138, ordinary flags then conditional radius comparison and radius reread for child argument."
+ },
+ "rust": {
+  "exact_current_after_core_tests": 1,
+  "rows": 96,
+  "production_check": "PASS33.57s",
+  "qualifier": "Front probe callbacks stop with required errors; they cannot mint successful zone/solver state. Existing shared564D80 Rust kernel and all existing zone kernels are reused. New fresh storage binding has not yet been exercised by a complete genuine startup result."
+ },
+ "corrections": "The old held adapter cached radius before flags. New common kernel follows actual native state100/Actor138/flags/radius reads; finite admitted outputs are unchanged, and lazy getter/error prefixes are now native-ordered.",
+ "limits": [
+  "Nonzero ordinary Actor138 keeps source430/Denizen/scheduling required rather than inventing a null guard.",
+  "State author owns positive SAI/reveal/component-effect callbacks in actual stored_zone_activation; missing reached services retain zone allocation/prefix.",
+  "No whole Actor Init, mission, View completion or playable-battle certificate.",
+  "Nonfinite comparisons remain outside the existing aa-zones finite input domain."
+ ],
+ "owned_source_sha256": {
+  "crates\\aa-runtime\\src\\stored_detection_init_world.rs": "3622d4ee775bdc1010909dc68253eca903c1c45cb0b2ffc8c383af27ff58e604",
+  "crates\\aa-runtime\\src\\detection_after_core.rs": "55ec2a76b09ee666a76bfa11ef9a6855bbf6c5be5d1a69596bd876d5d3956afd",
+  "crates\\aa-runtime\\src\\detection_after_core_tests.rs": "6e429c59be7c9aa9d88f5d77fe25b3052f918bf1cfeca58e149dbf00bdaa6180"
+ },
+ "shared_whole_file_snapshot_only_sha256": {
+  "crates\\aa-runtime\\src\\load_detection_activation.rs": "1b1b3aa8917f9f2c9ca96d80d953d3e37c6be8b4a3d05d1a5a2cca6fd5afb031",
+  "crates\\aa-runtime\\src\\stored_component_schedule.rs": "0955094c00f09a75441c88a0190a79685837c0a80dadcdbdaac911409090525b",
+  "crates\\aa-runtime\\src\\map_actor_init_existing.rs": "b9b24eb3eec7ed87f10ff4b195db24145a7851dcaf4e097b011ed97348e51056",
+  "crates\\aa-runtime\\src\\lib.rs": "31c261c94e3311db4363d610fac8f2b646da8ab8985900b43d79041d05056756"
+ },
+ "evidence_sha256": {
+  "research\\development10\\stored-detection-init\\native_after_fields.py": "25016b1f7650770285b64705d0afe4374f44b81b8bc5667599b4407e81e74e34",
+  "research\\development10\\stored-detection-init\\native-after-fields.json": "184c959d31c7cc1eeaaa74d45e93cce6e5aeb4405508fa0adc092e45ed627637",
+  "research\\development10\\stored-detection-init\\native-after-generation.log": "7e6a1bb5c35621308dcd1df6b07157a31b519f5430924af6f9fa9a9576bf6829",
+  "research\\development10\\stored-detection-init\\after-native-replay.log": "7e6a1bb5c35621308dcd1df6b07157a31b519f5430924af6f9fa9a9576bf6829",
+  "research\\development10\\stored-detection-init\\shared-schedule-native-replay.log": "630d9590a8877ce4d70b5ae13ac9e59905e21a34c13e952b30d0f9585161af5f",
+  "research\\development10\\stored-detection-init\\exact-core-tests.rs": "e5652f18a024475ff5456990b483efdf029cf595bfd5b6486e68244e9c38cb19",
+  "research\\development10\\stored-detection-init\\exact-core-tests.exe": "5d3c915f130e6cce8eb2309bc4325d1550ef1092edb0e53272c7b37d05c4d119",
+  "research\\development10\\stored-detection-init\\core-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "research\\development10\\stored-detection-init\\core-tests.log": "99b8c638ed33e3e0228e22c70cf71a4abf3d7737ea8dc73760d03a19c24989b2",
+  "research\\development10\\stored-detection-init\\check-01.log": "797f646f9b9ac4a01c2097ede9937108428d7935da27eefb7436d8abe21cf4e7"
+ }
+}

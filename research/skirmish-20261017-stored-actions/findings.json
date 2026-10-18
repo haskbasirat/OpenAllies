@@ -1,0 +1,45 @@
+{
+  "status": "Author frozen and scoped checks passed",
+  "scope": "Same-owned ordinary stored4D1350 binding; direct actual saved-prefix scope, not initialized/natural mission.",
+  "source": {
+    "crates/aa-runtime/src/stored_actor_actions.rs": "f478e4a24aa6bc5df586003c6bb1e6d519c00bc566356e14c802d8c85c6eec29",
+    "crates/aa-runtime/src/mind_actions.rs": "e63b13758c872b2794659b8d141bde9ea68efb6014b6a496b35118690575147e",
+    "crates/aa-runtime/tests/stored_actor_actions.rs": "1eefb81c0ffe1eeb16281beccf7f82bc0966cd1e96d43b405f0c773cb0d1962c"
+  },
+  "native": {
+    "rows": 9,
+    "executions": 18,
+    "executed_pins": 924,
+    "required_boundaries": 0,
+    "fixture_sha256": "c9bd9cf2abfa8208a20757a88e7e0f7dcc8b9bec55c0cb6d2c50da28ad80ca78",
+    "input_sha256": "7d49ccfd6f66602ca573e8e0b83cbdfc757bb94118e4c7bffdc18494fd8131ba",
+    "producer_sha256": "091e305c5f60b3e62624e3b3aae7962a27c47008f6c2059a67e86e43db3391dc"
+  },
+  "commands_reaped": true,
+  "validation": {
+    "production_check": "mind-check01.log passed34.71s; prior check21.82s",
+    "frozen_immutable": "immutable-v3-replay.log1/1 passed14.30s",
+    "final_current": "final-regressions.log2/2 passed: old five-faction Mind3.05s, actual stored9calls11.62s",
+    "native_immutable": "native_stored_actions.py default9rows/18machines/924executedpins, zero required boundaries for current actual rows",
+    "binaries": {
+      "stored-actions-v3-tests.exe": "388f8c034532db70f9f41e9ecd55da1c7e71c653452d552ee6ef1cc1217fa9c3",
+      "stored-actions-final-tests.exe": "2c9f043615467c3a4ca4daff5939ca2d397d19e1e940f45f52e95c8d8d11ba5c",
+      "legacy-mind-final-tests.exe": "99308b8fbf9b0f7312f5b827ff5f62d089b10251f06fe761279b800b8dffa856"
+    }
+  },
+  "actual_owner_guards": [
+    "same RuntimeObject/component allocation pointers before/after every call",
+    "held source flag tamper refuses before coordinator clears F0/F4",
+    "same moved Bank remains outside Catalog",
+    "same Arena is directly loaned via split_minds, never copied/reconstructed"
+  ],
+  "remaining": [
+    "positive Organization source groups/recruit eligibility",
+    "Settlement/Flare contributors",
+    "current MoraleRetreatPenalty cell",
+    "reached absent current Fog owner/publication",
+    "positive owner-view/renderer selected-view services"
+  ],
+  "qualification": "Whole native4D1350 bodies execute on transported actual current fields. Source parser/whole loader, allocator/SEH/invalid alias not claimed; natural gbr_corps/fresh selected lifecycle separately root-owned.",
+  "independent_review": "Not claimed. Peer preliminary source read was reassigned to critical Body bridge before a completed review; parent bounded review requested."
+}

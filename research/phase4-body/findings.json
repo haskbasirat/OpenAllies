@@ -1,0 +1,190 @@
+{
+  "schema": 1,
+  "status": "bounded body operations implemented and native-oracle matched; not a completed damage/death system",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "api": [
+    "Body::from_resolved",
+    "Body::set_health",
+    "Body::set_health_and_maximum",
+    "Body::update_resolved_maximum",
+    "Body::heal_plain",
+    "Body::check_death",
+    "Body::sink_fraction_f32"
+  ],
+  "native_fields": {
+    "Body+04": "owning actor",
+    "Body+10": "current health binary32",
+    "Body+14": "resolved maximum health binary32",
+    "Body+18": "resolved defense binary32",
+    "Body+1C": "dying-start time, initialized-1",
+    "Body+20": "last heal time, initialized-999",
+    "Body+24": "sink duration, initialized0",
+    "Body+28..40": "opaque seven-word damage info, initialized[0,0,0,0,0,0,10]",
+    "Actor+14": "GTID low16slot/high16generation; registry responsibility outside aa-body",
+    "Actor+60": "Body component pointer",
+    "Actor+168": "linked actor GTID requiring original registry generation check",
+    "Data+284": "base health getter input",
+    "Data+288": "base defense getter input",
+    "Data+291": "destructible flag",
+    "Data+29C": "WhenHealth list",
+    "Data+27C/+280": "rot_time/sink_time"
+  },
+  "numeric_contract": {
+    "primitive": "aa-numeric",
+    "modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "rounding": "nearest-even only, precision chosen per operation; no assumption of process-wide37F",
+    "setter_ratio": "reciprocal computed at selectedprecision, multiply old/currenthealth, then each ratio storedf32 before health-rule predicates",
+    "restore_ratio": "direct currenthealth/currentmaximum division compared in selectedprecision against suppliedrestorethreshold; no prematuref32 store",
+    "recalculate_ratio": "561D40 stores health/maximum tobinary32 before multiplying binary32 null-kingdom getterresult; positive newmaximum<1 can stillproducehealth1 through originalearlyreturn",
+    "heal_sum": "ordinary562BA0 adds to the health read after notification, then storesf32 before canonicalsetter; overflow beyondfinite arithmetic is explicitlyoutside",
+    "sink": "5617E0 stores elapsedtimef32; subtractrot/dividesink at selectedprecision, then explicitlyobservedbinary32callerstore. Progressmayexceed1."
+  },
+  "callbacks": {
+    "synchronous": true,
+    "nontransactional_error": true,
+    "order": [
+      "storehealth",
+      "optional4D0050actorstance",
+      "conditional4D64F0state39request",
+      "firstmatchingWhenHealth-trigger429290call",
+      "conditional566AC0fullrecovery"
+    ],
+    "mutation_cases": [
+      "stancecallback changeshealth, affecting subsequentdisabledgate",
+      "stancecallback changesmaximum, affectingfullrecovery",
+      "healthFXcallback changeshealth, affectingrecovery",
+      "healnotification changeshealthbeforeaddition andworldclockaftersetter",
+      "deathvirtualcallback marksdestructed but subsequent4D7960 stillruns"
+    ],
+    "leaves_not_implemented": [
+      "4D0050stance propagation",
+      "4D64F0actorstate machine",
+      "429290effectchain execution",
+      "566AC0recovery/construction/upgrade notifications",
+      "50C380healing notification",
+      "actorvirtual+2C and4D7960death scheduling"
+    ]
+  },
+  "support_boundary": [
+    "Finitebinary32body/context inputs; currentmaximumpositive. Sourcevaluesare explicitinputs andnotrawTGIdefaults.",
+    "No validlinkedBody/noattackerFXdirection; nohealerMind+A8damageconversion. These unsupported pathsaretypederrors,not skippedbehavior.",
+    "Null-kingdom derivedmax getter returnsbinary32; modifiedkingdom getter potentiallyextendedresult requires separatefutureboundary.",
+    "No automaticweapon damage formula, armor calculation, capture, killcredit, wall/organizationneighbor propagation or deathability invented.",
+    "Body setter reachingzero is not automaticallykill; original check_death event path is separate."
+  ],
+  "authored_source_notes": {
+    "template": "reconstruction/assets/original/Data/Templates/Components/template_body.tgi",
+    "restore_ratio": "Original Game/SVars.tgi has0.1, Game/SVars_AA.tgi overrides0.51. Environmenttakesresolvednativevalue; fixture0.25isexplicittestinput,notagamedefault.",
+    "live_default_claim": false
+  },
+  "checked_static_windows": {
+    "body_data_load": {
+      "start": "0x4662b8",
+      "end_exclusive": "0x466380",
+      "sha256": "0235671bb062d50783740ebc6251f649c0d583d47d17219ae2cc5a61b03d7819"
+    },
+    "full_unported_damage": {
+      "start": "0x5625c0",
+      "end_exclusive": "0x562b9c",
+      "sha256": "3d6a2a8e96746d97a830af9fd4a456d699b6223dd3d7b69a34be1962a5c79378"
+    },
+    "start_dying_unported": {
+      "start": "0x562380",
+      "end_exclusive": "0x5625b5",
+      "sha256": "d8c45cfdbf2e41dbf2769357e65c5e2aca9b1df28ff2053136be4c1d1cbb9270"
+    }
+  },
+  "pins": [
+    {
+      "path": "crates/aa-body/Cargo.toml",
+      "size": 398,
+      "sha256": "c3a97ccba784a058da9f7d0f648a32a43108e84ed18f295cda9679a5279a9b49"
+    },
+    {
+      "path": "crates/aa-body/src/lib.rs",
+      "size": 17006,
+      "sha256": "f0b5d052cc60d8e4c61b2c9fbe0c236c55be36c2ac4f13f12410040c49c086a1"
+    },
+    {
+      "path": "crates/aa-body/tests/native_parity.rs",
+      "size": 7249,
+      "sha256": "89009916713535946fc8cb6305029c925f3c704eb76b808c53594db89a8de7da"
+    },
+    {
+      "path": "crates/aa-body/README.md",
+      "size": 2916,
+      "sha256": "15379bb44b819cd398ac1abcbefc61279fd44dedb7fba578ba0d20a953a7d766"
+    },
+    {
+      "path": "research/phase4-body/original_body.py",
+      "size": 13079,
+      "sha256": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+    },
+    {
+      "path": "research/phase4-body/body-native-oracle.json",
+      "size": 554510,
+      "sha256": "25e6c8563ee058a09c8579b1fdfe9ebcea09954c28ef802c103c8af7a844eed9"
+    },
+    {
+      "path": "crates/aa-numeric/src/lib.rs",
+      "size": 10288,
+      "sha256": "fa645e03537c5bcdefc53c939ec32b1aae31e43584c536d5327b080913f46437"
+    },
+    {
+      "path": "crates/aa-numeric/tests/native_parity.rs",
+      "size": 3803,
+      "sha256": "94dfc25900bdcf868cf6947fa554e540f113ff1cc703defcd0e21180e44863d6"
+    },
+    {
+      "path": "research/phase4-body/numeric_oracle.py",
+      "size": 3355,
+      "sha256": "f7bc3386b17b7abf18b188e977f3302976e95894cabe88b1375054e440f11256"
+    },
+    {
+      "path": "research/phase4-body/numeric-native-oracle.json",
+      "size": 90993,
+      "sha256": "20a0b927f05a1ac0a83aaa68b89ce90c239784493ed5dfd5cece7dee51c56957"
+    },
+    {
+      "path": "research/phase4-orders/numeric-independent-review.json",
+      "size": 2365,
+      "sha256": "399dfeb1055453a9f02a9f69e23b837d208f1ebf52337dedb1b4a96bcef95075"
+    },
+    {
+      "path": "research/phase4-orders/body-independent-review.json",
+      "size": 3978,
+      "sha256": "990747d777bf4cc97d2553b40af786f4562ff7cd4c604545a4e247e095751ad7"
+    }
+  ],
+  "checks": [
+    {
+      "command": "python research/phase4-body/original_body.py",
+      "passed": true,
+      "original_x86_cases": 270
+    },
+    {
+      "command": "cargo test -p aa-body",
+      "passed": true,
+      "tests": 3
+    },
+    {
+      "command": "cargo clippy -p aa-body --all-targets -- -D warnings",
+      "passed": true
+    },
+    {
+      "command": "cargo test -p aa-numeric",
+      "passed": true,
+      "tests": 3,
+      "synthetic_x87_cases": 234
+    },
+    {
+      "command": "cargo clippy -p aa-numeric --all-targets -- -D warnings",
+      "passed": true
+    }
+  ]
+}

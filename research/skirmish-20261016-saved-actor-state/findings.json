@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "feature": "saved Actor 004D64F0 coordinator on the actual shell/Thing flags",
+  "source_authority": "original AA machine code and the previous native-proved aa_actors::state::set",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "native_rows": 4044,
+  "native_completed_rows": 2388,
+  "native_unchanged_state_rows_catalog_poisoned": 2028,
+  "required_effect_boundary_rows": {
+    "4D4A90": 300,
+    "4D1350": 648,
+    "4D16B0": 708
+  },
+  "organization_state34_or37_rows": 204,
+  "rust_tests": {
+    "passed": 2,
+    "failed": 0,
+    "mode": "release/locked/offline -j4"
+  },
+  "context_race_compile": "First attempt occurred before root shared contexts/traits were saved; retained separately; later focused build passed.",
+  "callback_services_returning_fake_success": 0,
+  "callbacks_reached_are_executed": false,
+  "source_changes": [
+    "crates\\aa-runtime\\src\\saved_actor_state.rs",
+    "crates\\aa-runtime\\src\\saved_actor_state_tests.rs"
+  ],
+  "shared_integration_owner": "root; ActorStateContext, restore hook, Catalog forwarding, and actual Thing flag plumbing",
+  "preserved_on_error": [
+    "native prefix state bits",
+    "Thing flags",
+    "unrelated Actor words",
+    "component payloads"
+  ],
+  "limitations": [
+    "004D4A90 enter, 004D16B0 leave, and exclusive 004D1350 rebuild explicitly error at their required boundary.",
+    "Native descriptors/masks supplied from earlier complete 00477FC0 registration oracle; registration transport not rerun.",
+    "Concrete tutorial02 input comes from an existing Rust partial restore; it is not a complete native map-load proof.",
+    "The later missing_primary=false request is a focused input case, not proof that preceding callbacks completed.",
+    "Invalid-index refusal is a portable safety domain, not malformed native table parity.",
+    "No immediate Init/PostCreate, live publication, battle startup, or multiplayer completion is claimed.",
+    "No vendor SDK implementation copied or integrated."
+  ],
+  "inputs": [
+    {
+      "path": "crates\\aa-runtime\\src\\saved_actor_state.rs",
+      "sha256": "5f57cebab42e1dd25945fe98f88f3a1754f6d9b421f13bb1ac6dac77f10901a2"
+    },
+    {
+      "path": "crates\\aa-runtime\\src\\saved_actor_state_tests.rs",
+      "sha256": "48ebd1bc579acf2f97d17f6e1d1582a9b08f60c84c5028e4a3edd1a782806421"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\native_saved_actor_state.py",
+      "sha256": "846f7495b4eedc6b48adcb9c1ba716ca65a88082fdb5afd3d9ee199dcaf30d65"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\native-saved-actor-state.json",
+      "sha256": "b8cfe249ac65dc2a2d00c64409adbee801d579de72ebce563b59d6e490090e8f"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\state-tests.log",
+      "sha256": "924ee6b5c090c4a89914f09fdca69b4607ab00ce40f1eeb44f0dc00366f10c5f"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\context-not-yet-landed.log",
+      "sha256": "100ce75a16fd8cbc0c432a8badbd27b4378e97d10a1ca3c8e6bbdd10785bdb10"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\native-replay.log",
+      "sha256": "25ce89872bd257c240005c491c352a3f813420c5c3794195a20a806881dbbfc3"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\README.txt",
+      "sha256": "15f6186557a00552e12294615d3009f7b5d3020335bb6f74ff69c6e524306078"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-actor-state\\record_evidence.py",
+      "sha256": "b9439283fc40baead0a601c083818f3d4983af7823f851f46faca859b1595094"
+    }
+  ]
+}

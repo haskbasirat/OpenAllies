@@ -1,0 +1,52 @@
+World-start virtual getter proof, 2026-10-16
+==========================================
+
+Files:
+  native_world_start_getters.py  reproducible original-code harness
+  world-start-getters.json      54 fixture cases, 108 original/v14 executions
+
+Original and v14 vtable bytes agree for each of these classes:
+  Actor    A273F0
+  Kingdom  A299D8
+  Group    A29490
+All three have +B4=6A71D0, +100=4CED60, +108=4D1E80.
+The fixture calls each target read from its actual mapped vtable slot.
+
+4CED60 (+100):
+  Read Actor+94 (Structure). If present and Structure+10 is nonzero,
+  return that exact word. The Wall pointer at Actor+90 is not read.
+  Otherwise read Actor+90 (Wall). If absent, return zero.
+  If present, call the real 58CB30 getter of Wall+10.
+  A zero Wall+10 returns zero after one leaf call.
+  A nonzero Wall+10 invokes 58CB30 again by tail jump and returns its word.
+  A fixture with nonzero Structure+10 and unmapped Wall address DEAD0000
+  succeeds, proving that Structure's result bypasses Wall access entirely.
+
+4D1E80 (+108):
+  mov eax,[ecx+E8]; ret. Returns the raw owner word, including null.
+  No lookup, filtering, ownership mutation, or callback occurs here.
+
+6A71D0 (+B4):
+  mov al,1; ret. Boolean truth is returned in AL. Upper EAX bytes are
+  unchanged; do not interpret this ABI as an always-literal EAX=1.
+  Seeds 0, A5A5A500 and FFFFFFFF prove that distinction.
+
+Harness:
+  Uses protected research/phase8-ai/native_machine.py, which faults any
+  page-zero access except the legitimate FS-prefixed SEH word.
+  Every getter and the 58CB30 leaf execute unchanged native instructions.
+  No callback seams, synthetic target stubs, or code patches are installed.
+  Memory hooks observe reads/writes without modifying the execution.
+  Object/component bytes are unchanged in all cases; fixture writes are empty.
+  All 26 executed original instruction byte sequences equal v14 bytes.
+  Floating-point operations are absent, so x87 precision is irrelevant.
+
+Pinned binaries:
+  original 5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26
+  v14      3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1
+Fixture SHA256:
+  322d0b78d8e50144af18f128d0f88dcc4812f603686bc69aa18291f23658609f
+
+This proves these bounded virtual adapters, not the remainder of world-start,
+the constructor's selection of a particular class, or a playable battle.
+No Rust production code, game files, profiles, saves, or releases changed.

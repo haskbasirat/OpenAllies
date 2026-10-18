@@ -1,0 +1,92 @@
+{
+  "scope": "TaskLoad constructor, same task fields/references, queue ordering/removal/repriority, request/run/block coordinator and auto-reset queue notification backend; no decoder/GPU or battle readiness claim.",
+  "pins": {
+    "crates/aa-runtime/src/resource_task.rs": "81ade76721fa5571a1bfaf465b08b4377ac893f674faeb1d3608e513754a495c",
+    "crates/aa-runtime/src/resource_task_tests.rs": "e3d6b8ad21e642ecd33613f45a4fd6768abde6b819f8f9bfb9532e3e975a8632",
+    "native_resource_task.py": "3e4b89ca210a28ed5952c37de6aa6ef0ea04502613e3be59a738bcc8afe5de71",
+    "native_task_wrappers.py": "fe774b54622d11d38880bf59ab34e6a9c69eed3c6a290cc4bc46b4d8fd92d994",
+    "native_queue_signal.py": "d73cd0a6712c8c1476f052dfd21bf86daa9dfe5dc2e1b35515c45c260084e15f",
+    "audit_globals.py": "5be48367a379a0c5c54f486521f68a28769a4b14c1e569cfa5f3a81ce60c40e3",
+    "native-resource-task.json": "b3904fce0264fb64ee363add60dcc39b31d5a910ef99d9bb284cb380a115b6b4",
+    "native-task-wrappers.json": "1c0a0725567c622fa847e46aae2037efcb7dcac0868f856914f986915896ef59",
+    "native-queue-signal.json": "7d0fa30045608ef7e3384284e979c22a99db47f31ad8f4988c5c121701af51fe",
+    "global-direct-audit.json": "b9bcc74b584264ae0200e10738490d586d836e2ac226631ddbf76446bd0bacd6",
+    "standalone_task.rs": "120d561c0525a7b8a9758cf7ba110fb8f97a081f1b048df3280f09187dee862f",
+    "build_probe.py": "f04ae73dfc455a0a762cc74ae0ec04eb230ef4a8d99f48f9c1295390bf2c0de8",
+    "resource_objects-production.rs": "d6b06705bfa4a5e21d1d7c85c1baf6a1b64c9e5334bb4c282e5e38453c35972c",
+    "resource-objects-source-pin.json": "f4640192f704f035dd99cf2ad7974c673f2e82dd584f125c55bbed87d43e9159",
+    "normalizer-source-pin.json": "0b4fb09050782c6cd7b51e2c10e1dfc713e734988ab2b9db11c250c3d54a1911",
+    "frozen-resource-task-tests.exe": "7db6049c4b731bdc6deec2314750d12b6ef75ed1265138f8851d04547343b953"
+  },
+  "native": [
+    {
+      "fixture": "native-resource-task.json",
+      "paired_rows": 36,
+      "separate_original_v14_executions": 72,
+      "instruction_pins": 557,
+      "scope": "Real constructor and real queue/list kernels; declared allocation, atomics, mutex, signal and diagnostic transports."
+    },
+    {
+      "fixture": "native-task-wrappers.json",
+      "paired_rows": 66,
+      "separate_original_v14_executions": 132,
+      "instruction_pins": 639,
+      "scope": "Real request/run/block + Texture3C OR4/OR6. Resource4C has explicit return/required-stop transport; no decoder or GPU proof. Cache and running waiter positive children stop explicitly."
+    },
+    {
+      "fixture": "native-queue-signal.json",
+      "paired_rows": 6,
+      "separate_original_v14_executions": 12,
+      "instruction_pins": 76,
+      "scope": "Real queue signal constructor/SetEvent. Unnamed auto-reset event is initially clear. Native Signal+4 byte remains poisoned until SetEvent, so it is not represented as constructor zero."
+    }
+  ],
+  "precision": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "native_replay": "All three immutable default replays passed; fixture bytes unchanged.",
+  "rust": {
+    "passed": 5,
+    "failed": 0,
+    "seconds": 0.02,
+    "log": "rust-tests-06.log",
+    "build": "build-06.log",
+    "source_pins_unchanged": true,
+    "host_scope": "Exact Task/ExecutionContext sources. Exact ResourceObjects production text with only its unrelated integration-test module declaration excluded; exact pure normalized_key mechanically extracted. No parser/manager/thread success stub."
+  },
+  "production_check": {
+    "command": "cargo check -p aa-runtime --lib --release --locked --offline -j2",
+    "target": "target/s-borrowed-leader-check",
+    "passed": true,
+    "seconds": 16.51,
+    "log": "production-check-02.log",
+    "scope": "Production API/source check, not an actual completed resource request or startup execution."
+  },
+  "current_default_priority": {
+    "address": "B282F0",
+    "fresh_pe_seed": 1,
+    "direct_reads": 35,
+    "scope": "Both PEs pinned; all direct-address references are reads. This is a bounded direct-address audit, not absence of arbitrary alias writers or perpetual native immutability."
+  },
+  "shared_external_sequence": {
+    "address": "B3DA08",
+    "fresh_pe_seed": 0,
+    "api": "Application::publish_load_task_sequence(catalog,bank,selected,&Inputs)->ExternalSequence",
+    "validation": "Inputs same selected Creator/source plus exact source Arc in SAME Application map cache; allocation-only guard has no Find/refcount/stream effects.",
+    "status": "Runtime bridge compiled and same-counter laboratory test passed. Actual specialized local task glue is owned by Globals and pending its separate freeze/execution. No actual later counter parity is asserted before that integration."
+  },
+  "required_boundaries": [
+    "Resource4C source decode/model/texture backend and GPU acknowledgement are independent real services.",
+    "Model3C Ni cache child remains required after actual OR6 stores.",
+    "Already-running task waiter5B1FD0 and heterogeneous worker/dequeue scheduling remain required.",
+    "C++ thrown-exception diagnostic/status3/rethrow5B1B1D..5B1B53 is not emulated by portable required-service Result errors. Earlier task/flag effects are preserved; Rust temporary guard cleanup is separately qualified.",
+    "Native final-reference deleting destructor remains a required service; no zero-ref successful retirement is fabricated."
+  ],
+  "historical_failures_retained": [
+    "build-05.log: peer ResourceObjects added unrelated integration tests to standalone host; fixed host exclusion only.",
+    "rust-tests-03.log: test audit incorrectly counted a declared host cache mutation as a CPU write; production unchanged."
+  ],
+  "shared_source_qualification": "Application bridge and map-cache guard are additive shared-file edits. Resource facade/Manager implementation is owned and proved separately by State; this report does not claim its whole-file source/native equivalence."
+}

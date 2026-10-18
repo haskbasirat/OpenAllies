@@ -1,0 +1,57 @@
+{
+ "schema": 1,
+ "status": "bounded native kernel and affected Rust tests passed; next actual map advancement pending",
+ "native": {
+  "paired_rows": 195,
+  "executions": 390,
+  "precision": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "decoded_equal_executed_pins": 53,
+  "required_read_queue_cutoffs": 8,
+  "actual_child": "45D730 null-context target health",
+  "seam": "50AC60 queue boundary; live implementation uses existing actual queues/RNG"
+ },
+ "rust": {
+  "passed_tests": [
+   "new native_denizen_init_create 195-row replay",
+   "existing native_actor_creation_leaves full fixture"
+  ],
+  "production_check": "No owned errors reported; shared check02 failed resource_sound Entry migration, check03 failed audio_data_pre_request result annotation. No complete production check claimed yet."
+ },
+ "ownership": "same Staged ActorStore/Denizen Box, Catalog binding allocation checked against moved Bank, actual stable Inventory and canonical target health, same queue owner/Queues/RNG; no native gameplay defaults",
+ "reached_predecessor": {
+  "path": "research/development10/playable-startup/attempt25.fresh-actor-prefix.json",
+  "sha256": "0e35d35c5f2d0c50aa0d7ac5679f0234f736061ec097a8e522d6ce0deb87ffa4",
+  "gtid": 1688,
+  "key": 2362,
+  "definition": "ger_corps",
+  "phase": "AwaitingInitCreate",
+  "scope": "actual diagnostic predecessor, never constructor/source input"
+ },
+ "source_producer": "3A4 constructor-zero at4629F8, overridden only by optional DenizenComponent/Runway.delay at4675A8; source PC independent of live PC.35C tests source Inventory-node head, not constructed slot count.",
+ "limitations": [
+  "Stable valid typed Inventory links and source owners during direct null-context getter",
+  "Finite target health; no signallingNaN CPU exception equivalence",
+  "Native pointer/invalid-link/unwind behavior excluded; portable source/owner preflight explicit",
+  "No whole fresh Actor PostCreate/publication/StartedMission/activation or playable-battle certificate"
+ ],
+ "pins": {
+  "crates/aa-runtime/src/map_denizen_init_create.rs": "37a4e4cc2a0853f65844a0f6cf01fd062ef785597d1bfc79cdce37d0e3f5566d",
+  "crates/aa-actors/tests/native_denizen_init_create.rs": "1628b01c4f2a90f021303ec9bc08782df5d65c97721d9381d650b5689ca23fd1",
+  "research/development10/denizen-init-create/native_denizen.py": "0c7297256d3cbadcc9919a078fb6f5a2e351c914a75ab392ca9693100a8f6731",
+  "research/development10/denizen-init-create/native-denizen-init-create.json": "010ffdbac67b76aa32cb5a9f5e6451e6391abb92422548e6b327c950106f695f",
+  "research/development10/denizen-init-create/audit_denizen.py": "adef244ff88f6c6bf29c99ebc64183a1bf22a959575b30cca8a6e7dc45e8a14c",
+  "research/development10/denizen-init-create/pin-audit.json": "1f8cdda8ca7f8f5c8c8f83562482c275ab11703f124f89c908f0ec10a22bf2fb",
+  "research/development10/denizen-init-create/actors-tests-01.log": "893224d9180f0d8f9b91efa24c6f8a040f85c3960588d1bb26e174fe1ea4c3f7",
+  "research/development10/denizen-init-create/README.md": "fe6b087808c90ce7ed1b312dc88ad36b5c4ac2c172dc642107763cc1dd0b5577",
+  "research/development10/denizen-init-create/seal.py": "e5aa1909ebc56e26b6c51c5aad63f445747452c28cc4903edaa4c4235afaa205"
+ },
+ "shared_source_snapshots": {
+  "crates/aa-actors/src/component_virtuals.rs": "4d60e5864fd9d6f5415acc04fe0a9b83803d8b155d5beecea28c49c5073ca34e",
+  "crates/aa-runtime/src/map_component_init_create.rs": "58e4d41bf87200b152ca17feb5b6fc0c5f1c89842d5da3ce5c67796ffc305ab3",
+  "crates/aa-runtime/src/lib.rs": "797c98626e5e70bd94cf6e7ddef63bc59c6b910e23425d6e4dc544e1a8627e3b"
+ }
+}

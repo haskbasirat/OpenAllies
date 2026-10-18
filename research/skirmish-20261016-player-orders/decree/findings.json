@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "status": "bounded native/source integration accepted; not playable battle",
+  "scope": "Original decoded selected86/actor87 command ownership/routing/diagnostic prefixes; actual Host SetSeed92 same Session writer",
+  "production": [
+    {
+      "path": "crates/aa-runtime/src/player_order_decree.rs",
+      "sha256": "b520e1e36a38144b7c08c6ef1ac69ca63bf97e5de5f15ef02df81f31432e0f66",
+      "bytes": 14732
+    },
+    {
+      "path": "crates/aa-runtime/src/player_order_world.rs",
+      "sha256": "e4f2944a359706c6eba2c2a2f7385407d9e172cea777156c7a835312e300cc75",
+      "bytes": 26242
+    },
+    {
+      "path": "crates/aa-orders/src/commands.rs",
+      "sha256": "e9403df34c4b837698a0bbf8525ac080f77231cc7dac384214950c60194e6291",
+      "bytes": 33071
+    },
+    {
+      "path": "crates/aa-netcode/src/command_sync.rs",
+      "sha256": "449288c599dcd33bc8226a8289c6981e5d2d4ee5b57ff3d4135a2aae2e908aef",
+      "bytes": 8028
+    },
+    {
+      "path": "crates/aa-netcode/src/local_order_host.rs",
+      "sha256": "bba3c7cb65272fb3cbab692365842a2f41978c38a6a3cdcb014160b979117ce5",
+      "bytes": 11017
+    }
+  ],
+  "tests": [
+    {
+      "path": "crates/aa-runtime/tests/player_order_decree.rs",
+      "sha256": "59139c664cc9dcfbc05b7617f83321e77304288e615fdfea893adc0ff0f220e5",
+      "bytes": 6630
+    },
+    {
+      "path": "crates/aa-runtime/tests/player_order_binding.rs",
+      "sha256": "0c07a2df30ae6590ce2aa06218f7eee9d06e85055138b50e599974907f2a1366",
+      "bytes": 19681
+    },
+    {
+      "path": "crates/aa-orders/tests/decree_fallible.rs",
+      "sha256": "9304424e3d6849a6e43017b76fe80f43189c9369e402ed0322dca5c616c79f72",
+      "bytes": 5543
+    },
+    {
+      "path": "crates/aa-runtime/tests/local_order_host.rs",
+      "sha256": "a5ca48109c9b88942f72a159f53635ef5059222d962c31657eecdf14f9e39593",
+      "bytes": 9063
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native_decree.py",
+      "sha256": "fedde6587ff4d6068f2b9598cde0831ff19f7fc8002e41f95a6ec786e5baa2f3",
+      "bytes": 5646
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-decree.json",
+      "sha256": "1595f8ac3874d312b62dc3cee2343e11464b83be66192c2f2ae3321cb26dcdd0",
+      "bytes": 1602507
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native_selected_decree.py",
+      "sha256": "0acf772e679ae13ca3e794b4321567ea0b374e3184caf355e58da7be4dd6d2a2",
+      "bytes": 3274
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-selected-decree.json",
+      "sha256": "c53f7a74695a242c006b47bca4427032223ce5c685589a0efd2be20f97322db8",
+      "bytes": 31599
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native_command_sync.py",
+      "sha256": "e7ed8bf98efbfe95822fdcad9ce4cda0f34b18d9e08c2a664d0549986adb0400",
+      "bytes": 2433
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-command-sync.json",
+      "sha256": "c22abae821943718c1e045c1ed2eddf97343e645d80770010dd75b011abb1693",
+      "bytes": 170587
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/order-tests-v2.log",
+      "sha256": "1eb187bbcaf311f5d0d108fb361caa3b0a25c54c39e627228aab32d5b4f0f265",
+      "bytes": 1354
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/runtime-tests-v2.log",
+      "sha256": "df63e3dc4437cde79cb9dd7fb0e026cf892bbdf410cc5586dba2d1c4e18492f1",
+      "bytes": 9052
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/command-sync-tests-v3.log",
+      "sha256": "4c75660e8185b7220554a90adeb57b1ce81ac3c51c3cbc2b59352862b2bd085d",
+      "bytes": 13033
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/seed-host-tests-v3.log",
+      "sha256": "912d6d5d1cee9282c926bda64a10e96038899d97b204a734f1e265f70fb085cc",
+      "bytes": 13909
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/README.txt",
+      "sha256": "c153492e8d3faf1ef9d14260260d75ac8abcef3ae6128492c0cde18e14057a9f",
+      "bytes": 3205
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-decree.json",
+      "rows": 2400,
+      "instructions": 351
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-selected-decree.json",
+      "rows": 72,
+      "instructions": 241
+    },
+    {
+      "path": "research/skirmish-20261016-player-orders/decree/native-command-sync.json",
+      "rows": 432,
+      "instructions": 26
+    }
+  ],
+  "total_paired_cases": 2904,
+  "native_executions": 5808,
+  "seed_writer_authority": {
+    "path": "research/skirmish-20261016-local-bootstrap/host-tail/native-seed.json",
+    "sha256": "ca5775b215acea08eff623037b725fcae2dea0d4b9753f559821a17131568e3a",
+    "bytes": 24431
+  },
+  "validations": {
+    "new_orders_tests": 2,
+    "legacy_generic_commands": 7,
+    "runtime_tests": 3,
+    "command_sync": 4,
+    "actual_source_host": 1,
+    "all_passed": true
+  },
+  "unproven": [
+    "binary wire codec primitive parity",
+    "positive ParameterSet and other unsupported command registry leaves",
+    "default command4DA570 source fallback",
+    "positive current group effects",
+    "full Mind movement/attack effects",
+    "native UI click producer binding",
+    "whole active battle and multiplayer"
+  ],
+  "backups": [
+    "before-decree-commands.rs and before-decree-player-world.rs are contemporaneous owned snapshots",
+    "before-actual-owner-test.rs and before-seed-host-test.rs preserve previous test bytes",
+    "No new pre-edit backup was made for the later local_order_host seed-only hunk; prior accepted evidence is retained, not mislabeled as a new contemporaneous backup"
+  ],
+  "notes": [
+    "No aa-rules parser/source-loader changes in this scope; no SDK implementation used",
+    "Shared lib exports and parent/root integrations are not frozen by a whole-file hash here",
+    "Native fixture input services are explicit and do not certify external services as complete"
+  ]
+}

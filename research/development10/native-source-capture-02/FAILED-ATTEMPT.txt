@@ -1,0 +1,21 @@
+FAILED SECOND DEBUGGER ATTEMPT — original failure not recoverable
+
+This attempt handled WOW64 breakpoint/single-step status codes and attempted
+profile-folder redirection, but its capture loop raised before it continued a
+pending debug event. The finally block called TerminateProcess and waited
+without continuing/draining the event. That wait timed out, replacing the
+original Python exception. No capture.json or original traceback was written.
+The original exception therefore remains UNKNOWN. It must not be attributed to
+a floating-point mismatch merely because the script contained such assertions.
+
+The exact pre-fix script is preserved separately as
+research/development10/capture_native_source.attempt02-preserved.py.
+There is no accepted FP, source-completion, or profile-isolation receipt here.
+
+Before attempt03, the debugger now retained the first traceback before cleanup,
+tracked every pending event, requested termination of the exact created image,
+continued/drained debug events through EXIT_PROCESS, then waited on a stable
+owned duplicate handle. Register writes were restricted to CONTROL rather than
+ALL, so breakpoint stepping does not rewrite observed floating/SSE state.
+The raw legacy and FXSAVE contexts are recorded before unchanged fail-closed
+equality checks. A process inventory before attempt03 found no AA.exe process.

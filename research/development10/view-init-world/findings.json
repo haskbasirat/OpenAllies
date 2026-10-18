@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "scope": "Bounded retained VWorld composition and native leaf acceptance, NOT whole43F0A0/AD/battle readiness.",
+  "production": {
+    "crates/aa-runtime/src/view_init_world.rs": "f0e3db832926268d227e5ad74e9a3acd8a4752752fbb34a84af1d296fdab594d",
+    "crates/aa-runtime/src/view_init_globals.rs": "f57ed45ab14acf6fd2f466d053b00298bbf1a7044d78b46e9dc666b6cd50cc00",
+    "crates/aa-runtime/src/view_terrain_slots.rs": "f5518f7ea56601648353bfebda95afbf597c4dd989f7069ff9fa26fe8a9569d4",
+    "crates/aa-runtime/src/view_trigger_vfx.rs": "1090e2fa4bf7904ebbb6e95a3037ba203f8b58ea7a1a2b4d8f09bab5b9b994d2",
+    "crates/aa-runtime/src/view_trigger_vfx_collect.rs": "fd8debae17395cb1c019893333a930100af533d9796cb6d3ceef1499d03ff194",
+    "crates/aa-runtime/src/view_trigger_vfx_collect_tests.rs": "6034104217b6ac8c96cc5689d59cf69bc5504794d399747757ab433282e92423"
+  },
+  "evidence": {
+    "native-tail-fields.json": "57c6ab22cc5896b65151d7473d4bf7667c5f874483119a008ea247b88d329324",
+    "native-trigger-vfx.json": "86bd212b99376a9c3022cac2e06d609654f6793004ae02c0d7cd865cae2909ce",
+    "pin-audit.json": "dbd7c4a55db15835c6ed4b8700f6024746ebafcf1700e7df44fb1f892a701791",
+    "native_tail_fields.py": "f1dffcc3892919660b49af79354a5dfe079db9eb3744d0b582750fd1dbcee732",
+    "native_trigger_vfx.py": "a8396db0d250367765d7cde19c9cf6d0f5dc0b6878c7650bae98251f4ae0beec",
+    "audit_tail.py": "629cbfabd0c7f9ddca444658538f275e1f369d0325620f9561579f8f05306e56",
+    "isolated_tail_fields.rs": "c7e974389625482e65f79286b82c0737cebac2632bb079037801925b4933ba43",
+    "isolated_trigger_vfx.rs": "ffa3793745e4b99ebce277d49f3ded9fb031ac4e62762d1f5bf2aa31a34e623d",
+    "isolated-tail-fields.exe": "17d397d8018f040142d3cac3b0e852d8d57df24c8844ecf5f0879e4d24dc5741",
+    "isolated-trigger-vfx.exe": "45a00b3f91af75ab3fed93cb641be0eb42cce72496c400e47c858590d1ecde1c",
+    "tail-fields-tests-01.log": "3e9e4c57b6ea19513303b3ceacfc07bdc961ad7b05968cee03114f1a8ea8e85a",
+    "trigger-tests-01.log": "4cb1fcd0de12712468236e669a6aba5aa23607b29f2f7a35de1aacead968e54b",
+    "production-check-04.log": "163717f1a8b3a5e4de0406bff652168088a1275cf6c0280be17c844ec2122e73",
+    "README.md": "01a65e914e848cea46fd5f5768d25407584ad41092da456278769c5babb5185f"
+  },
+  "native": {
+    "paired_rows": 93,
+    "executions": 186,
+    "decoded_pins": 246,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "rust": {
+    "isolated_tests_passed": 5,
+    "production_typecheck": "production-check-04.log; PASS14.17s; existing warnings retained",
+    "aggregate_genuine_world_gpu_completed": false
+  },
+  "shared_extensions": [
+    "Inputs helper_globals is a separately approved sixth owner beyond prior five-owner bundle; later camera-render-source extension belongs to Leader.",
+    "PresentationParts lends actual creator_extents/camera_target/triggers; no snapshot.",
+    "FX author owns same State fx_commands field/getters; no AD/phase mutation."
+  ],
+  "remaining": [
+    "Concrete environment+texture asset owner completion",
+    "Actual camera constructor/directory/captured6FF130 owner",
+    "Actual terrain+scene GPU integration against this same aggregate",
+    "Reached resource40 VFX child owner",
+    "Full concrete completion facade before AD may be written"
+  ]
+}

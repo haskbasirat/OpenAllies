@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "status": "bounded_detection_memory_author_accepted",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_paired_rows": 249,
+  "native_executions": 498,
+  "executed_instruction_pins": 389,
+  "static_vtable_pins": 18,
+  "focused_rust_tests_passed": 2,
+  "actual_immediate_entry_tests_passed": 1,
+  "constructor_integration_tests_passed": 2,
+  "functions": [
+    "4EBC70 refresh",
+    "4EA3E0 slot allocation",
+    "4EB9F0 record constructor",
+    "4ECA80/4EC4A0 creation prefix",
+    "4EB970 deletion",
+    "4EBB80 clearing"
+  ],
+  "native_seams": [
+    "refresh fixtures explicitly provide eligibility and create/delete/clear virtual effects",
+    "allocator/free and empty-name destructor transport",
+    "creation stops at the real virtual24 name getter after timestamp store"
+  ],
+  "ownership": [
+    "one Object+58/+5C typed count/allocation/record owner moved from shell into runtime",
+    "actual persistent major-Kingdom vector including null holes",
+    "same held Object and current Kingdom190/18C/228",
+    "actual managed observer presence/active state",
+    "actual Catalog load begin clock"
+  ],
+  "actual_entry": [
+    "original tutorial02, actual scoped source completion and Session borrow, real Attempt::load_immediate",
+    "GTID28/class9 temperate_pine_trees; majors [781,782,null]; count0/no allocation before and after"
+  ],
+  "boundaries": [
+    "No complete memory refresh/name/aspect/stat/UI observer implementation is claimed.",
+    "Positive creation retains allocation and timestamp then refuses the reached missing Object virtual24 service.",
+    "Actor/Kingdom14C wrapper reads Structure container and refuses reached Wall/Settlement dependencies; its extra wrapper is static-pinned, not separately dynamically proved here.",
+    "Actual capture is a bounded startup entry, not a full map/battle or full native Session constructor proof.",
+    "Record+24/+28 remain explicitly unwritten after constructor; live handles are never native pointers.",
+    "No allocator exhaustion, invalid-pointer parity, concurrent reentrancy or complete map/battle/multiplayer claim."
+  ],
+  "files": {
+    "crates/aa-actors/src/detection_memory.rs": "00241fe260eed79cdf6814a20f02ee63913dc54158822d95585e813d1be4b622",
+    "crates/aa-runtime/src/load_detection_memory.rs": "a48d8b21b603a2f29060bfc573696fc652a676b942804a3058f1f5f27e999ed7",
+    "crates/aa-runtime/src/load_detection_memory_tests.rs": "cf8368681b1df9f611793d6d7a16d746430bff0263112683eac385e045ac49ed",
+    "research/skirmish-20261016-load-detection-memory/README.md": "fdd53f0ece12c8c2c57e145632a5b1ed3d752d1be101c4855b357ff1c0564670",
+    "research/skirmish-20261016-load-detection-memory/actual-first-object-entry.json": "beb51d154cb09cd083b46521dcc07de6d9e0404a959d67a11c2efcae102f6880",
+    "research/skirmish-20261016-load-detection-memory/author-actor-constructor-regressions-final.log": "5c740e5f30af6a77ffa6ed687bfd569c42946839e4415ca6d0592eefef6833b1",
+    "research/skirmish-20261016-load-detection-memory/author-actual-capture-object-final.log": "c7bead9755adad55656b927c58d09b3104b2760f8ccaae27f7e29c2857982d76",
+    "research/skirmish-20261016-load-detection-memory/author-actual-immutable.log": "2b6fe0b17ed06274562a9d492dac6e734a0691601f3981db0f1b4d149218d600",
+    "research/skirmish-20261016-load-detection-memory/author-native-replay.log": "76b5a9cc3ff4a6e25d68b591080daf3d3afd8c699b855184b763552e0bdaa6a1",
+    "research/skirmish-20261016-load-detection-memory/author-rust-replay.log": "6c56bc594585ab3e7cd66457186522898a61723648c64bf8ff02cb8b64b9f07d",
+    "research/skirmish-20261016-load-detection-memory/native-memory.json": "da1ab923040284f1a35afd5b81ac901c5bbb0e6321e2b8380c42850cc9958a9b",
+    "research/skirmish-20261016-load-detection-memory/native_memory.py": "fd8bd1e09fc08600c5254cdda20a015d40371e71ce734eeb3538ee5123f14a12"
+  }
+}

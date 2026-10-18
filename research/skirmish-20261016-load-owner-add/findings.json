@@ -1,0 +1,123 @@
+{
+  "status": "frozen-bounded-native-backed-implementation",
+  "native_addresses": [
+    "004E6180",
+    "004E55A7..004E567E",
+    "0079E130",
+    "0096D18D",
+    "004CED60",
+    "004E1540",
+    "004E4470",
+    "004E3C70",
+    "00766DE0",
+    "004849F0",
+    "004E1F00"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "production_and_tests": {
+    "crates/aa-runtime/src/load_owner_add_actor.rs": "a1af72c6da3a242777efc8937e5cf13691ec55a0e1a873433ccc2d54b533020f",
+    "crates/aa-runtime/src/load_owner_add_actor_tests.rs": "25ea151296769cbbe368adf67dc899306100652fc60003600a28a8702f3416ec",
+    "crates/aa-economy/src/kingdom_registry.rs": "c7233fd2544adeac65b467a4551d6d38bd4fe436f8f968dd9c77701684232fdc",
+    "crates/aa-economy/src/kingdom_registry_storage.rs": "098370722bd60351a6ed5379eac4b463c982f75a6f257a4e4d7cbcf4f8a6b1db",
+    "crates/aa-economy/tests/native_owner_storage.rs": "58e5bb458de1f8abe1a441fbd7789bfe4330f0a840dc94c3b7668a29a1d141af",
+    "crates/aa-mapworld/src/special_state.rs": "eef52b703572c646b1e777003e90866a80dc3b6de24d4a47ffae3802d1913e76"
+  },
+  "evidence": {
+    "native_owner_add.py": "17820b06aac92402a3b40d74d7d60f54c728132f5f115dec47806598f72ecbc6",
+    "native-owner-add.json": "f27a366e15f16f7ef13292ffd3bbe96445192288363f05fe69317b3982b516f0",
+    "native_owner_actual.py": "e65131e9d8a4c548b23ee3111cb2fe72982b0dc8e4e814bd13b63a377fda9078",
+    "actual-owner-inputs-v2.json": "3a3d8af77023fbc652e3bbe95097be9c4eb91dd6388e3c2e3fb68fb87ee774af",
+    "native-actual-owner.json": "ded6459490565234972293b83416549eec52d69b79ddb2e37a954323216778ee",
+    "runtime-capture-tests-v5.log": "dba97289b843cee5b25786410c573abf3efbcdc358852561e483499201604bc3",
+    "immutable-runtime-replay.log": "1ef6cf80adc2db1988b519a2e065d3449e10720c83fc7d71d6ca7546b7ff01e3",
+    "borrowed-storage-tests.log": "e606594709e6d21ac9e0cead7cf4fac48d9783670b04c7429ddfe4c3cb4c16fe",
+    "core-regression.log": "c037c615d5f522877008cfabc2e0740b4f5e5936ba57c840cd9d76c1a15cf97b",
+    "special-state-regression.log": "1efe25671d6c033d3c567fa4120a07486f057ff8e38155dd3857c1a4bd5adf87",
+    "README.md": "839d4a7b3e4c847fc50ea69eb149a210de89ae59c935b776accbae9988dbb173"
+  },
+  "backups": {
+    "kingdom_registry.rs": "fb68db1ae62fc4af047ae65d206740510a4622e4b89e9974b8bab02c351dc3c6",
+    "special_state.rs": "9ef27a571842d0835775ea28eb0ae4288d551f4f24b7c86949a025c545903edd"
+  },
+  "native_proof": {
+    "full_add_actor_memory_domain_rows": 216,
+    "constructor_regions": 6,
+    "full_fixture_instruction_pins": 494,
+    "actual_source_prefix_rows": 6,
+    "actual_prefix_instruction_pins": 34,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "x87_precision_controls": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "actual_actor_id": 784,
+    "actual_owner_kingdom_id": 782,
+    "definition": "start_loc",
+    "actual_pre_call_supply": [
+      8132,
+      4173
+    ]
+  },
+  "tests": [
+    {
+      "command": "cargo test -p aa-runtime --lib load_owner_add_actor --release --locked --offline -j4 -- --include-ignored",
+      "result": "2/2 pass; actual source capture",
+      "log": "runtime-capture-tests-v5.log",
+      "duration_seconds": 31.06
+    },
+    {
+      "command": "target/s-graphics-review/release/deps/aa_runtime-f4ddb32fd0fb81b7.exe load_owner_add_actor --include-ignored",
+      "result": "2/2 pass; immutable native actual fixture; capture environment unset",
+      "log": "immutable-runtime-replay.log",
+      "duration_seconds": 33.12
+    },
+    {
+      "command": "cargo test -p aa-economy --test native_owner_storage --release --locked --offline -j4",
+      "result": "1/1 pass; all216 native rows through new borrowed kernel",
+      "log": "borrowed-storage-tests.log"
+    },
+    {
+      "command": "cargo test -p aa-economy --test native_registry --release --locked --offline -j4",
+      "result": "1/1 existing classic API native regression pass",
+      "log": "core-regression.log"
+    },
+    {
+      "command": "cargo test -p aa-mapworld --test special_state --release --locked --offline -j4",
+      "result": "2/2 existing constructor/resource-prefix regression pass",
+      "log": "special-state-regression.log"
+    }
+  ],
+  "ownership": [
+    "same held current Record outside registry Loading entry",
+    "same referenced current-generation stored Kingdom derived allocation",
+    "typed eleven native class lists and typed flare list replace raw head/tail mirrors",
+    "existing vectors/Supply/capital/190/counter storage is reused directly",
+    "public production Economy callback delegates real shared refresh with actual same Inventory",
+    "no detached KingdomRegistry or ActorStore; retained native store prefix on errors"
+  ],
+  "limits_removed": {
+    "class_lists": "Eleven is native runtime-class semantic enum count, not unit count limit. Each list and native vector backing storage grows fallibly. No new gameplay count cap. Native signed32 serialized/count arithmetic domain remains explicit."
+  },
+  "required_positive_services": [
+    "Wall58CB30",
+    "Organization4D1350",
+    "statistics58F010/58EA80/58E870",
+    "live-city ownership4E3C70",
+    "property instance4CEF10",
+    "research45ECA0/4E3AD0",
+    "world destruction4F6760",
+    "Flare setting/time/destruction"
+  ],
+  "qualifications": [
+    "Actual source caller test uses diagnostic load storage with immediateInit omitted and privately stops at reached Economy child. It does not certify successful body/full Init/publication/battle. Production delegates the actual body; independent parent immediate pipeline must prove that composed call.",
+    "Native216 inputs are labeled synthetic memory domains; required complex child effects stop explicitly. Native actual prefix uses separately captured real owned source input, including pre-existing Supply list.",
+    "Supported admitted callback domain preserves component descriptor presence and immutable definition metadata; arbitrary reentrant component-graph mutation is not certified.",
+    "Native process-pointer head/tail projection is omitted for nonempty portable lists, never fabricated.",
+    "Historical failed runs remain preserved: unsupported ObjectE8 fixed to ActorE8; native actual setup omitted real pre-call Supply, fixed only in fresh capture/producer; stale concurrent compile snapshots retained."
+  ]
+}

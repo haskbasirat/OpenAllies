@@ -1,0 +1,15 @@
+[package]
+name = "aa-zones"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+aa-trig = { path = "../aa-trig" }
+aa-spatial = { path = "../aa-spatial" }
+aa-heightfield = { path = "../aa-heightfield" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

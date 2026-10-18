@@ -1,0 +1,36 @@
+Independent Denizen569C70 review -- organization_morale_source,2026-10-16
+
+No blocking findings within the documented contributor/saved-binding scope.
+The reviewer did not author Denizen. No production source, author fixture or
+original game/save/profile was changed during this review.
+
+Reviewed actual original instructions against both new modules and the typed
+Structure/Denizen owners. Verified saved GActor constructor4D6DBD installs
+vtableA273F0 whose actual+100 target is4CED60, identical inoriginal/v14.
+Parent lookup is therefore the native Settlement-self/Structure/Wall path,
+not an inferred ownership relation. Present Wall remains explicitly unbound.
+
+Re-executed all2,154 authored native rows and12 actual-saved rows. Compared
+them against both their recorded outputs and an independently derived native
+predicate. Executed1,920 additional original/v14/three-PC rows covering all
+256 raw byte values and all component/reference presence combinations with
+and without state30. All match. Two additional original raw-store probes
+show unchanged high-word stores and the exact state30 low-word clear order.
+The original/v14 byte pins and unchanged author fixture hashes were checked.
+
+Independently reran existing scoped Rust tests:2pure +1 actual saved adapter,
+all pass. The latter compares actual tutorial01 Denizen data and preserves
+its real allocation. The explicit unused Organization context fixture is not
+queried by this leaf, and is not evidence of a full attachment transaction.
+
+Qualified equivalence: native state30 self-writes the unchanged high word
+before some low writes. Rust writes combined64-bit masks. No callback occurs
+between those native stores, so observable action-mask order is retained;
+the author README correctly avoids claiming raw redundant-store equivalence.
+Malformed-storage fault/read timing is not claimed. No Denizen command/tick,
+world publication, playable battle, multiplayer or EXE acceptance follows.
+
+Machine-readable decisions and all hashes:independent-review.json.
+Native results:independent-review-native.json.
+Logs:independent-native-replay.log,independent-actors-test.log,
+independent-runtime-test.log. Scripts reproduce only these review artifacts.

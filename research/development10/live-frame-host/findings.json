@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "status": "bounded_current_svar_component_tests_complete_whole_frame_pending",
+  "owner": "/root/settlement_completion",
+  "owned_source_pins": [
+    {
+      "path": "crates/aa-runtime/src/current_svar_sync.rs",
+      "sha256": "f7feeda2adcde7928acbe8cc2e43f8b3763bf1d07cd9d6427e09b7161a2d6637"
+    },
+    {
+      "path": "crates/aa-runtime/src/current_svar_sync_tests.rs",
+      "sha256": "00d76bc502305d09146a9a14494a69ef8318f39a0f505b7b86af211e1bfd3d1d"
+    },
+    {
+      "path": "crates/aa-runtime/src/inactive_svar_dump.rs",
+      "sha256": "a37d7377f38d38291c07aea499de225b7b47348fd790e8a0818ed5d18785a862"
+    },
+    {
+      "path": "crates/aa-runtime/src/frame_variables.rs",
+      "sha256": "228b385891a121f4ff8c5c8ddee5935dc963809cdc2bfdefdf67dd27f491195d"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_frame_host.rs",
+      "sha256": "1cca0077531e7f9b25351e35498086d945a1290a2c107ad19d49d7932c287b5c"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_frame_task_effects.rs",
+      "sha256": "4b981b2c0173d5db8ac2901c0bf6b9d7f29247bdc1c91f926dbe8a2034a514d3"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_all_tasks_services.rs",
+      "sha256": "2b2ceabc316cd8beee06324803b30c0076a156888581eb51a8c609079bd23981"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_order_gate.rs",
+      "sha256": "7c2d3ce7c84f805886152c41506cbaf683c558ca7c37406c387bc4a54bf7c1e5"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_node_commands.rs",
+      "sha256": "547eba0f723a56472ffcb22c7f78aaedab84e1ab5c9755d2755617a8fccf3a7a"
+    },
+    {
+      "path": "crates/aa-orders/tests/lazy_gate.rs",
+      "sha256": "1e2d74dc3c6753532043e8745022a17f9c1c8640225aee6f0d3598b1bb89632a"
+    }
+  ],
+  "shared_file_context_only_not_exclusive_freeze": [
+    {
+      "path": "crates/aa-orders/src/lib.rs",
+      "sha256": "219ff88232979834387131252d02ee498841956710bdaa7405f1ad9163e7d040"
+    },
+    {
+      "path": "crates/aa-orders/src/net/admin.rs",
+      "sha256": "054847c5ac1ee6788ceb16e15687087674de6f94c2a5ab5caa16cd19f49cb55c"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_order_host.rs",
+      "sha256": "08b6eed5508e0e2c4cc7704afe1ce25eaa3133a03dec415d5a4fd0dc1441917e"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_bootstrap.rs",
+      "sha256": "1f4160e64c720a7be4ec8950b5ac3343fcbeaefd65dd22dcbbcc7c8d6eaebc4d"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_host.rs",
+      "sha256": "23ba4ffab133d41ffef2e5419b83f189b8eec9be29f6ca395d50d5c29791a306"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_all_tasks_complete.rs",
+      "sha256": "96c95d0292d765cf757afcb9cb7213464742db4f3b515ac7b4f94e6effc4cba4"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_world_frame.rs",
+      "sha256": "87ef29f114bf86004beb701193060195af82262c4b79c3defddfe964e5794ae3"
+    },
+    {
+      "path": "crates/aa-runtime/src/initial_world_sync.rs",
+      "sha256": "91721f6b6f0ccd2e4e04f4dfd6a246fb7da06b055c33f25be2dc551f3f945506"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world.rs",
+      "sha256": "9d328acbe26a8d487e338b755912654af0cbb6ca39003a762b31b72cfa8483f7"
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research/development10/live-frame-host/native-frame-variables.json",
+      "sha256": "e9419d0b158968838a29552a40960db548ba94d0ba9d402234bccc13be4279a3"
+    },
+    {
+      "path": "research/development10/live-frame-host/native-command-queue.json",
+      "sha256": "db423edb69393e383aa58d62af5757b17fe64b7167f84c14a04d108e90bba634"
+    },
+    {
+      "path": "research/development10/live-frame-host/native-order-gate.json",
+      "sha256": "3b2441f2516a80adf007b9995ecec6d58f36bb7a095d30cb7de3a43764f1fc90"
+    },
+    {
+      "path": "research/development10/current-svar-sync/native-current-svar.json",
+      "sha256": "4f2ae7dd48135b4b790df63db271f9ad61decdc6442c500972c6094fa02cd738"
+    },
+    {
+      "path": "research/development10/live-frame-host/native-pin-audit-v3.json",
+      "sha256": "f13ba378d6aff0cff1e9a1f1d90187a82a079fe0ef734012b04c8c5fb1028eff"
+    },
+    {
+      "path": "research/development10/current-svar-sync/independent-state-binding/source-review.json",
+      "sha256": "4f669e8face9c372f771c9055dd9e355ec7a818da1fcebb04a188adb9d8d3ef8"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/findings.json",
+      "sha256": "2633cec9fbe4868bf8159fa77e0684f1002f85cf231c8056c3a0183d81fc8932"
+    },
+    {
+      "path": "qa-output/development10/runtime46-inactive_svar_dump-current.log",
+      "sha256": "ac2ba67768e85c04e549b21ca057ac964d53fe87554f408363461fdd5a0476d0"
+    },
+    {
+      "path": "qa-output/development10/runtime46-canonical_svars-tests.log",
+      "sha256": "d49ae2437ae03900d97573caf860bd55be43106b905b5ceb3b5cdd761ed03399"
+    }
+  ],
+  "validation": {
+    "netcode_unit_before_later_svar_timing_heartbeat_additions": 56,
+    "lazy_gate_unit": 3,
+    "actual_frame_variable_source": 1,
+    "frame_variable_constructor_unit": 1,
+    "existing_sim_tests": 8,
+    "current_svar_unit": 3,
+    "parent_current_svar_unit": 3,
+    "parent_canonical_current_source_and_map_acceptance": 3,
+    "inactive_inventory_compatibility": 2,
+    "initial_world_sync_compatibility": 3,
+    "whole_svar_native_runs": 84,
+    "bounded_boolean_normalization_runs": 24,
+    "frame_variable_native_runs": 12,
+    "command_queue_native_runs": 18,
+    "gate_native_cases": 96,
+    "bounded_gate_constructor_store_projections": 96
+  },
+  "qualifications": [
+    "No genuine StartedMission, activated frame, VWorld completion, or playable battle was produced by this component validation.",
+    "Registration reference seals names/types/order, not current values; current data comes from the separate canonical State producer.",
+    "Native SVar logger bodies execute disabled; arguments and cutoff prefixes are observed; Boolean normalization is a separate bounded post-allocation prefix.",
+    "Current SVar positive SyncSink and actual-map source/moved-Bank acceptance passed in parent cohort46; source-native proof remains separately authored and pinned.",
+    "Shared file pins record context and may be superseded by other authorized owners; they do not attribute their whole contents to this author.",
+    "Actual factory/callers are trusted; RuntimeBorrow public fields are not hardened against deliberate hostile sibling swapping.",
+    "Required services include positive command payload handlers, remote peers, AVI and actual view completion; outer752AE0 duration-history, timing and heartbeat extensions are separately authored and not certified by the earlier56-test checkpoint.",
+    "Failed attempts and superseded fixtures remain on disk and are not successful acceptance evidence."
+  ]
+}

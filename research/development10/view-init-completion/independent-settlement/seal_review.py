@@ -1,0 +1,22 @@
+from pathlib import Path
+import hashlib,json
+HERE=Path(__file__).resolve().parent;EVIDENCE=HERE.parent;ROOT=HERE.parents[3]
+H=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+world=ROOT/'crates/aa-runtime/src/view_init_world.rs';prefix=ROOT/'crates/aa-runtime/src/view_init_prefix.rs'
+s=world.read_text();start=s.index('    pub fn complete_init_after_children(');end=s.index('    ///The concrete asset owner',start);body=s[start:end]
+ordered=['self.phase!=Phase::TailCpuComplete','self.require_world(parts.revision)?','self.prefix.require_prefix_complete()?','self.assets.require_initialized(catalog,parts.definitions,parts.revision)?','self.scene.require_renderer(parts.revision)?','self.terrain.as_ref()','self.auxiliary_12c.is_none()','self.prefix.complete_full_init_43ff36(parts.revision)?','self.phase=Phase::Complete']
+positions=[body.index(v)for v in ordered];assert positions==sorted(positions)
+assert 'height.as_ref()'in body and 'validate(world,height)?'in body and 'self.helper_10c.is_none()'in body and '!self.trigger_vfx.is_complete()'in body
+assert body.count('complete_full_init_43ff36(')==1
+ps=prefix.read_text();assert ps.count('completed_ad_43ff36(&mut self.fields.initialized)')==1
+assert 'fn completed_ad_43ff36(initialized:&mut u8){*initialized=1;}'in ps
+fixture=json.loads((EVIDENCE/'native-completion.json').read_text());assert len(fixture['rows'])==54 and fixture['pins']=={'0x43ff36':'c686ad00000001'}
+matrix=[['aggregate phase','TailCpuComplete only after captured camera/diagnostic/aux/helper/trigger collection+request all return Ok'],['World/source','same World Witness and prefix; real assets.require_initialized checks completed phase, same World and current Catalog/Bank source identities'],['scene/backend','require_renderer repeats CPU completion/same World and retained renderer validation against current semantic State'],['terrain/height','actual retained height required; TerrainBinding.validate(world,height) rechecks concrete World/height/backend correlation'],['tail children','actual auxiliary12C/helper10C presence and trigger list complete&&!stopped'],['final store','crate-only prefix method repeats prefix/World checks; single AD=1, then aggregate Complete'],['AC/resource','completion never writes AC; separate resource_callback_5b355d checks same World and clears only AC']]
+paths=[world,prefix,ROOT/'crates/aa-runtime/src/view_assets.rs',ROOT/'crates/aa-runtime/src/view_scene_init.rs',ROOT/'crates/aa-runtime/src/view_trigger_vfx.rs',ROOT/'crates/aa-client/src/battle_view_startup.rs']
+doc=dict(schema=1,status='accepted bounded AD completion guard/store; no whole Init success proof',native=dict(paired_rows=54,reviewer_executions=108,executed_pins=1,store_bytes='c686ad00000001',fixture_sha256=H(EVIDENCE/'native-completion.json'),producer_sha256=H(EVIDENCE/'native_completion.py')),
+ rust=dict(exact_source_isolated_tests=4,passed=4,scope='Original prefix/store tests plus reviewer private-prefix guard/foreign-World/AC-callback test. Does not construct fake full World/asset/GPU positives or execute the aggregate all-positive path.'),static_guard_matrix=matrix,
+ qualifications=['The native oracle executes one AD store and stops at43FF3D; no earlier43F0A0 child or later task/UI success is inferred.','The Rust harness imports original prefix/store source and its original tests directly; only unrelated world_revision cfg(test) block is omitted in a labeled production-body copy.','Aggregate phase/asset/renderer/terrain/tail guards and actual caller ordering were reviewed statically, not claimed independently executed as a complete view.','AC remains unchanged by completion; later resource task callback/barrier and Loading/74FF50 protocol are separately required.','Current client still has an explicit required43F1D4 asset boundary before its private full-scene helper; this report does not bypass it.','No production edit or full/cold Cargo link was performed.'],
+ guard_body_sha256=hashlib.sha256(body.encode()).hexdigest(),source_snapshots={str(p.relative_to(ROOT)):H(p)for p in paths},
+ evidence={p.name:H(p)for p in[HERE/'prepare_rust.py',HERE/'rust-harness-pins.json',HERE/'rust-store-review.exe',HERE/'rust-build.log',HERE/'rust-tests.log',HERE/'native-replay.log',HERE/'seal_review.py']})
+data=(json.dumps(doc,indent=1)+'\n').encode();p=HERE/'findings.json';p.write_bytes(data)
+print(json.dumps(dict(sha256=hashlib.sha256(data).hexdigest(),native_executions=108,rust_passed=4,guards=len(matrix))))

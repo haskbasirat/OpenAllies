@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Native Recruit582C40 action contributor with explicit required eligibility5827B0; not recruitment execution",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "api": "aa_actors::recruit_actions::contribute(&mut impl World, recruit_storage_owner: ActorId)",
+  "cases": 906,
+  "inputs": 151,
+  "images": [
+    "original",
+    "v14"
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "native_functions": [
+    "582C40",
+    "4D14C0",
+    "4D0820",
+    "529C30",
+    "517FA0"
+  ],
+  "mandatory_gameplay_seam": "5827B0(definition,default_layout,1,0)",
+  "state_oracle_sha256": "97ce7a7266ad304164a7f6e63e2345d0da78a348169fe3b7485270c673727657",
+  "source_sha256": {
+    "crates/aa-actors/src/recruit_actions.rs": "9394d796fae711d8249862a3cca477d5a279b08d6ce50cbab1e5aa2b0c081a71",
+    "crates/aa-actors/tests/native_recruit_actions.rs": "5be3f324d2ff82e9889143d84ec90f3da5e7f7e5041c4488eba7d22ec6c5b08a"
+  },
+  "evidence_sha256": {
+    "native_recruit_actions.py": "216d87f2e5bb3aa418f6e1ff2432e19a16b4bf4b060c6b639cf0f59238b4963d",
+    "native-recruit-actions.json": "56002e6a8420115c15db315c541428751933519a2bcad4b5b3fa3b9f539e10e3",
+    "tests.log": "9da501ac151fa8a392265fe1576ac168c98e5b693c6b6fe67140d65c2d33156e"
+  },
+  "backup_sha256": "ca768e137737871f955494d483c2343efc94a2a6f294e2384173e4a5d442e5b8",
+  "new_files_have_no_prior_version": [
+    "crates/aa-actors/src/recruit_actions.rs",
+    "crates/aa-actors/tests/native_recruit_actions.rs"
+  ],
+  "test_result": {
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0
+  },
+  "mutation_order": [
+    "commission14",
+    "eligibility calls in live list order",
+    "recruit15",
+    "location17",
+    "rally16"
+  ],
+  "limits_changed": [],
+  "explicit_unsupported": [
+    "Missing group13 descriptor",
+    "Cyclic source list (native does not terminate)",
+    "Unbound eligibility/source/runtime callbacks"
+  ],
+  "later_source_and_saved_adapter_report": "source-adapter-findings.json",
+  "remaining": [
+    "Recruit eligibility5827B0 concrete service",
+    "Live runtime binding",
+    "Production execution",
+    "Skirmish/multiplayer"
+  ]
+}

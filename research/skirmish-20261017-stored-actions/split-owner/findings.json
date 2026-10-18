@@ -1,0 +1,85 @@
+{
+  "scope": "Additive same algorithm4D1350 storage binding over already-split current ActorAccess+Arena; not fresh Mind lifecycle/mission completion",
+  "source": [
+    {
+      "path": "crates/aa-runtime/src/stored_actor_actions.rs",
+      "sha256": "04fa4258967700b2086e2e094e066c7c0a7113bc9124aa58fc1af2e598725850"
+    },
+    {
+      "path": "crates/aa-runtime/tests/stored_actor_actions.rs",
+      "sha256": "34e88fee6a0141adc6015953532310eccf7c5521ee84c596dbd0b68881140004"
+    }
+  ],
+  "native_fixture": {
+    "path": "research/skirmish-20261017-stored-actions/native-stored-actions-v3.json",
+    "sha256": "c9bd9cf2abfa8208a20757a88e7e0f7dcc8b9bec55c0cb6d2c50da28ad80ca78"
+  },
+  "actual_inputs": {
+    "path": "research/skirmish-20261017-stored-actions/actual-inputs-v3.json",
+    "sha256": "7d49ccfd6f66602ca573e8e0b83cbdfc757bb94118e4c7bffdc18494fd8131ba"
+  },
+  "native_replay": {
+    "contexts": 9,
+    "executions": 18,
+    "executed_pins": 924,
+    "required_boundaries": 0,
+    "result": "PASS",
+    "log": "native-replay.log"
+  },
+  "rust_actual_replay": {
+    "result": "PASS",
+    "tests": 1,
+    "seconds": 14.22,
+    "build": "2m42s",
+    "log": "replay-test.log",
+    "wrapper_calls": 9,
+    "already_split_calls": 9,
+    "assertions": [
+      "identical outcomes/action masks",
+      "same Arena/abilities/entity/components addresses",
+      "moved Bank never reinstalled",
+      "same original native9contexts, unchanged source/live precision scopes"
+    ]
+  },
+  "checks": [
+    {
+      "result": "PASS",
+      "scope": "aa-runtime library check",
+      "seconds": 18.56,
+      "log": "check-lib.log"
+    },
+    {
+      "result": "PASS",
+      "scope": "single external stored_actor_actions test typecheck",
+      "seconds": 17.81,
+      "log": "check-test.log"
+    },
+    {
+      "result": "PASS",
+      "scope": "final current-source external test metadata check",
+      "seconds": 34.84,
+      "log": "check-final-source.log"
+    }
+  ],
+  "binary": {
+    "path": "target/s-builder-source-review/release/deps/stored_actor_actions-a9e1571d50b9c6ff.exe",
+    "sha256": "7878753bab162e861210374ee8d1f3ff00b5b33d25d340ef6f3a40cf3943397d"
+  },
+  "storage_contract": [
+    "ActorAccess and Arena must be paired sameStore loans",
+    "Active Mind core stays installed during callbacks",
+    "No component/Mind/State clone or removal, no copyback",
+    "Old Store APIs split once then use same Bound/coordinator",
+    "Mind contributor reborrows same Arena into existing mind_actions World"
+  ],
+  "remaining": [
+    "Fresh Mind InitExisting/state callback integration owned by saved_leader_adapter",
+    "All prior positive unbound source/owner/publication callbacks remain required",
+    "No actual GUI battle, multiplayer or overall readiness claim"
+  ],
+  "compiled_scope_qualification": "Two ownership-precondition doc-comment lines were added while external production build ran; function bodies unchanged; final current-source metadata check recorded separately.",
+  "frozen_binary": {
+    "path": "research/skirmish-20261017-stored-actions/split-owner/stored-actions-split-tests.exe",
+    "sha256": "7878753bab162e861210374ee8d1f3ff00b5b33d25d340ef6f3a40cf3943397d"
+  }
+}

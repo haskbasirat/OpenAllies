@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "status": "bounded native+exact coordinator replay; runtime adapter compile only",
+  "native_images": [
+    {
+      "role": "Loader ORIGINAL",
+      "sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26"
+    },
+    {
+      "role": "Loader ACCEPTED v14",
+      "sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+    }
+  ],
+  "addresses": [
+    "566DB0",
+    "529C30",
+    "45D6C0",
+    "45D4C0",
+    "4D69A0",
+    "516640",
+    "515940"
+  ],
+  "explicit_native_children": [
+    "515F40 zone solver",
+    "57E430 Performer"
+  ],
+  "native": {
+    "rows": 1050,
+    "executions": 2100,
+    "pcs": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_block_pins": 48,
+    "write": "native-write.log",
+    "immutable": "native-immutable.log"
+  },
+  "rust": {
+    "tests_passed": 2,
+    "log": "rust-core-final.log",
+    "failure_retained": "rust-core01.log: fullEAX instead of Boolean AL expectation"
+  },
+  "runtime": {
+    "check": "production-check-final.log",
+    "actual_adapter_executed": false,
+    "actual_mission_ready": false
+  },
+  "sources": [
+    {
+      "path": "crates/aa-actors/src/defender_init.rs",
+      "sha256": "cfc2dc2c65e9ab01526344d28b050171e0ab80f4a27b45607ebe90c36e01b93c",
+      "bytes": 1678
+    },
+    {
+      "path": "crates/aa-actors/src/defender_init_tests.rs",
+      "sha256": "6b23b66681a6ba1a82510fb1c1ca1490993d2082791b2072f849561081b11103",
+      "bytes": 4813
+    },
+    {
+      "path": "crates/aa-actors/src/component_virtuals.rs",
+      "sha256": "b8408cf5202c1773377f72e3b85d3765af346067b00c94a543ca3fa6e49acde6",
+      "bytes": 36730
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_defender_init_world.rs",
+      "sha256": "3eb19f346b9ce65c99db1d67431ec71ad9387698b6743d2f82d424b76a1d7018",
+      "bytes": 10103
+    },
+    {
+      "path": "crates/aa-runtime/src/map_actor_init_existing.rs",
+      "sha256": "b9b24eb3eec7ed87f10ff4b195db24145a7851dcaf4e097b011ed97348e51056",
+      "bytes": 32035
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_component_init_source.rs",
+      "sha256": "26a4bc33f57ca5d64dec7271771aa694e00b8652b871d0e4a3853ead6b758ce3",
+      "bytes": 1927
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_zone_activation.rs",
+      "sha256": "94bedec519fdea41e925d8289efdf98bb0e84609ca5331133d14ff44f10d753c",
+      "bytes": 12018
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_performer_refresh.rs",
+      "sha256": "e6202f25b501251046b007d1cd5e5dcb3238f7e6e6e6e7f66b1c9cdb06677250",
+      "bytes": 13791
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_activation.rs",
+      "sha256": "1b1b3aa8917f9f2c9ca96d80d953d3e37c6be8b4a3d05d1a5a2cca6fd5afb031",
+      "bytes": 42164
+    },
+    {
+      "path": "research/skirmish-20261017-stored-defender-init/native_defender.py",
+      "sha256": "76b6c5d0ee90aca19e12450c26fed87b0c1e6f08aeca9e1bc88cdccfd267a6c5",
+      "bytes": 4049
+    },
+    {
+      "path": "research/skirmish-20261017-stored-defender-init/native-defender.json",
+      "sha256": "b38775db244248cfbd6e1cafc7c348febc6d673163310d973626efe9ed07ae8d",
+      "bytes": 593813
+    },
+    {
+      "path": "research/skirmish-20261017-stored-defender-init/replay_defender.rs",
+      "sha256": "da95d0afb56945ad6f928fbde5893e17a0443d8b0a75fee03995d66f55aa3d77",
+      "bytes": 345
+    },
+    {
+      "path": "research/skirmish-20261017-stored-defender-init/replay-defender.ps1",
+      "sha256": "096775988e1fae13b199a9f4511474c3e0fdeda716d3521452b74ea07f00099d",
+      "bytes": 867
+    },
+    {
+      "path": "research/skirmish-20261017-stored-defender-init/README.txt",
+      "sha256": "4c85a8bbbc9944963313dcb64f5e57dfd859f31f72eaea74b35fb15bea9ba94e",
+      "bytes": 3812
+    }
+  ],
+  "artifact": {
+    "path": "target/s-borrowed-leader/defender-tests.exe",
+    "sha256": "dc3ca7b40549c55e885146dde2645c5fb995de87e619977815fb9a6ba501dd37",
+    "bytes": 955392
+  },
+  "dependencies": [
+    {
+      "path": "target/s-borrowed-leader/release/deps/libaa_actors-da01587d98fcfe3e.rlib",
+      "sha256": "eabfe966ea6a5ae169fb868fbec81dd1ac400d507bb01dcc45314230fbffd2d5",
+      "bytes": 6976040
+    },
+    {
+      "path": "target/s-borrowed-leader/release/deps/libserde_json-3f0b3bb60c709793.rlib",
+      "sha256": "c3fbb165e967c84e3c3022ea2a9dc74e1c7295156dd296cb3097d81b4782d8e8",
+      "bytes": 2121754
+    }
+  ],
+  "exclusions": [
+    "SignallingNaN Unicorn parity",
+    "malloc failure",
+    "dead-actor diagnostic completion",
+    "actual zone solver callback parity",
+    "actual57E430 computations",
+    "actualger_corps1688/full mission startup"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "status": "Current runtime production check passed; no naturally reached fresh registration or full battle acceptance yet",
+  "source_pins": {
+    "crates/aa-runtime/src/stored_world_registration.rs": "d86a14b937e75d8f3ab8d622716054bf12fffddcb7a3cef233d5651fc76d393a",
+    "crates/aa-runtime/src/map_actor_init_existing.rs": "4e91d9faab83d729384fe9440441c3db9a836f9f34bc946930f0fd8cfa0f3a1c",
+    "crates/aa-runtime/src/world_ready_services.rs": "d216ffe7cd47f1c24fc37be756a2f689c7619e4f03e17b5a83fcb0179bd67067",
+    "crates/aa-runtime/src/map_actor_creation.rs": "f6a335a700072ef1e0ee78e89e713b9008c350f060f909fe07a26c65eaf8a3c7",
+    "crates/aa-runtime/src/catalog.rs": "b78f808a2d24a92102b81294dee2e7824e80d8ec940dd56b277769fa446cb2b6",
+    "crates/aa-runtime/src/stored_scene_publication.rs": "948749868091117c7b391319fcf103b672bc07246002993a5a8da41589e78787"
+  },
+  "production_check": {
+    "seconds": 22.71,
+    "result": "PASS",
+    "log": "qa-output/development10/fresh-registration-check03.log"
+  },
+  "ownership": [
+    "fresh ordinary Source::New Actor only; actual completed canonical source/Bank",
+    "same registration State fields retained in World; no take/default or list reconstruction",
+    "same ActorStore split ActorAccess/Mind arena; real spatial flag store clears bit31",
+    "same state/zone/grid owners supplied by WorldStartup stored_actor_registration::Context",
+    "same class/GTID checked after4D62F0 even on error",
+    "real current WorldD8/attachedView gates; uninhabited View type cannot mint positive callback success",
+    "same Application canonical Bone source context bound before Model publication/Bank worker move"
+  ],
+  "native_calls": [
+    "4D73F3→4D69A0 Zone2",
+    "4D7435→515F40 Zone2 move",
+    "4D7556→42A590 Data+E4 Constructed list, byte58=0",
+    "4F9FC7→42A590 Data+BC Created list, byte58=0",
+    "4F9510→4D62F0 then4F4C40",
+    "50C220→43D160 only after actual phase!=6/nonnullThing/attachedView"
+  ],
+  "limitations": [
+    "Registration portable preflight requires current published spatial/session owners before native body; not a generic unbound-world replay API",
+    "Positive attached View scene callback remains required for later in-battle construction",
+    "Positive FX graph/source/execution/attached-view effects remain required; RequestOnly never executes",
+    "Positive duplicate available-city assertion remains required",
+    "Current registration helper retains positive City/control/guard/discovery child requirements documented separately",
+    "Model source-context installation is compiled; not a decoded Model or GPU readiness receipt"
+  ],
+  "tests": {
+    "actor_registration": "unchanged native fixed-table/state-reread kernel one focused test PASS",
+    "view_factory": "195 original/v14/all-PC fixture pairs replayed by unchanged kernel, one focused test PASS",
+    "binary": "qa-output/development10/runtime-tests53.exe",
+    "new_binding_test": "not yet naturally reached; actual37 stopped earlier inside Mind Recruit eligibility5827B0",
+    "sha256": "6bfcfa11602f7399219e95163795c83dacfcce66c8814f3aca84c2911b2dcd30"
+  },
+  "related": [
+    "research/development10/fresh-zone2-independent/findings.json",
+    "research/skirmish-20261017-stored-actor-registration",
+    "research/skirmish-20261017-view-factory/native-view-factory.json",
+    "research/skirmish-20261017-preworld-view/checkpoint.json"
+  ],
+  "scope": "Same-owner fresh4F9510 registration wrapper, actual50C220 early gates via existing publication kernel, native42A590 null-list forwarding and sameApplication Model Bone source binding"
+}

@@ -1,0 +1,16 @@
+[package]
+name = "aa-triggers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-numeric = { path = "../aa-numeric" }
+aa-navigation = { path = "../aa-navigation" }
+aa-body = { path = "../aa-body" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

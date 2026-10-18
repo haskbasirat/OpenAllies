@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "checkpoint": "Root requested all crates frozen for unfinished Development10 test build; no later code edits authorized yet.",
+  "scope": "Native game UIWorldState constructor field projection; camera-ray arithmetic; pointer field/control producer. Actual GUI Game source retains one constructor owner. Not a completed pointer gameplay bridge or initialized battle.",
+  "native": {
+    "constructor_rows": 12,
+    "ray_rows": 72,
+    "projection_rows": 24,
+    "pointer_rows": 111,
+    "separate_executions": 438,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      24,
+      53,
+      64
+    ],
+    "constructor_executed_pins": 242,
+    "core_executed_pins_excluding_entry": 170,
+    "projection_entry": "43C4B0 executed in projection rows, transported in pointer rows",
+    "child_seams": [
+      "59AA70/59AB60 actual OS-frequency/anchor transport, timer bodies excluded",
+      "Inherited allocation/CString/String-manager/localization transport",
+      "43C4B0 callback only in pointer rows",
+      "71D840 body excluded; callback supplies defined primary/secondary points and returns either AL0 orAL1; caller output identical"
+    ]
+  },
+  "rust": {
+    "exact_source_tests": 4,
+    "result": "PASS0.00s",
+    "production_client_check": "PASS42.49s",
+    "exact_harness_Camera_binding": "Compile-only unreachable State-word stub; tests invoke actual generic arithmetic with fixture CameraWords. Real normalized Camera impl separately production-checks; no concrete camera-owner execution claimed."
+  },
+  "same_owner": [
+    "Game UI state allocated once beside battle_menus actual Kind::Game TGI forest; failed timer/text child retains prefix and forbids rebuild.",
+    "Child timer is actual existing Windows PerformanceTimer; display getter reads same Ui.strings and rejects absent value.",
+    "Opaque weak GameWorldReference does not retain retired GUI owner; actual operations require original thread.",
+    "VWorld allocation owns no new copied input/selection state; binding of this capability to13C is still pending."
+  ],
+  "limits": [
+    "No VWorld13C binding or GUI click producer wired yet.",
+    "Pointer State not installed into SAME view_init_world State yet; pure field/kernel owner only.",
+    "Native71D840/model454AC0 positive hit testing excluded. No inspector geometry used.",
+    "clear_hover_4363C0/current4363B0 source/instructions checked and compiled but no fresh positive-owner replay claimed.",
+    "Container capacities become growable allocations, never gameplay limits. Constructor fixture capacity1 is observed native metadata, not a Rust fixed cap.",
+    "Unknown UIState+4,1E/1F,Brush+C and high byte padding remain unrepresented.",
+    "Brush parent links are unique containment/borrow relationships in Rust, not raw pointer values."
+  ],
+  "required_successor_correction": "State fresh71B9B0 trace identifies optional arg5 as secondary LAND HIT POINT, not a hit normal. Current frozen source names that neutral3-word owner normal; this is a known API/documentation naming error queued for after Root crate freeze. No native-normal claim is accepted. Numeric/storage shape is unchanged and no actual terrain child is bound.",
+  "pins": {
+    "crates/aa-runtime/src/view_ui_world.rs": "2ebdd37e0455e7fb7caf16a345fb09296b0ce97300772e7e57913627c263e2ff",
+    "crates/aa-runtime/src/view_ui_world_tests.rs": "bbcad3270f3c8a3542e74d9db08738c199e22b83dedf89809b450d4c1e323ebd",
+    "crates/aa-runtime/src/view_pointer.rs": "6f53f8d12cfb4e8ed939797d2398f47c05eb5c0be52486b8e8fb68c25c1fb3b9",
+    "crates/aa-runtime/src/view_pointer_tests.rs": "3db9cb1a5b915f2bff1c66f7b692545c3150afbde1106feb620988cd48b01af7",
+    "crates/aa-client/src/battle_game_ui.rs": "fa37dede20ab52473e9e63ac0a30adbef7c2dbe7a0c8c799e3bbcecaaca96df1",
+    "crates/aa-client/src/battle_menus.rs": "f67c7c542334ee5b3946f87f238133fbc07528db084d294b6308bae52d8a3000",
+    "research\\skirmish-20261017-ui-world-pointer\\native_ui_pointer.py": "d055fa57c41d3d002ed72804700c4dc40fa28b3a984e283bfca7560d6d53f205",
+    "research\\skirmish-20261017-ui-world-pointer\\native-ui-pointer.json": "85da008e26a9f109ff9585bc121bdf4a07c4ffdd60f97ef7748aeebb70be09b7",
+    "research\\skirmish-20261017-ui-world-pointer\\native-immutable-replay.log": "af53fea09ef49c90e56822e0557c4c04f19aded266b45b8863fc84b5bb4b8fd5",
+    "research\\skirmish-20261017-ui-world-pointer\\exact_ui_pointer_tests.rs": "97bafeb7f78ba6c7a0030e69e8f628eeb6e5feae41d41ed8f9dc11d6fda8c834",
+    "research\\skirmish-20261017-ui-world-pointer\\exact-ui-pointer-tests-02.exe": "da3f04c361261dd858a8f5587796e20d93794418a473077c4c0813c31c569fe6",
+    "research\\skirmish-20261017-ui-world-pointer\\exact-build02.log": "5b6d0709fba9e67c660bcfdae721baac588843b1a91409ba7b04283c0ad4264e",
+    "research\\skirmish-20261017-ui-world-pointer\\exact-replay02.log": "9d628f2111a16973feabb9ea89c4129b5deae17bb8d4b20a2b441aafb020e7d3",
+    "research\\skirmish-20261017-ui-world-pointer\\check-client02.log": "aff9d3922735f6ea29aa364d90a3c60e1b74f70270fc4e06fc068ee0683bc8c6"
+  }
+}

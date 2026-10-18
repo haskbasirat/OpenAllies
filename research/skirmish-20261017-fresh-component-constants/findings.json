@@ -1,0 +1,67 @@
+{
+  "scope": "Fresh generic InitExisting/AfterInit pure AL1/RET leaves after actual source/factory/slot/owner validation",
+  "change": "Replace old constant-payload whitelist with checked actual typed owner across represented ground payloads; only6A71D0 or4B2830 may return success",
+  "source_context": "Bound Source and require_slot retain existing canonical Bank/source/Actor generation/slot checks before helper; specialized Mind/Performer stay arena adapters",
+  "native": {
+    "primary_tables": 33,
+    "table_offsets": [
+      "8 InitExisting",
+      "14 AfterInit"
+    ],
+    "paired_rows": 99,
+    "fresh_machines": 198,
+    "pure_leaf_calls": 222,
+    "executed_and_table_pins": 69,
+    "images": "original and acceptedv14 separately/all3PC",
+    "transport": "none",
+    "poison": "unmapped ECX DEADC000; EAXA5A5A5EE preservesupper24 forAL1 andall32 forRET",
+    "qualification": "Some class rows have neither constant entry and execute no leaf; they certify table comparison only. Prior constructor/class table binding remains old phase8-native-component-leaves evidence."
+  },
+  "tests": {
+    "exact_source": "3/3PASS via standalone include of unchanged production helper",
+    "cases": [
+      "All33class primarytables compare toexistingRustfactory table; nativeconstant EAX results",
+      "EconomyAfterRET while InitExisting56F280 stillnonconstant; rejectforeignowner/missingmask/wrongslot",
+      "HQInitExistingAL1 andAfterRET; City563FE0 remainsnontrivial"
+    ],
+    "runtime_build": "Actual32 production+netcode+integration compilePASS1m43s",
+    "actual32": "StrictFAIL97.74s at later old Denizen5687E0 arm; Economy56F280 passed; genericAfterInit notyetnaturallyreached"
+  },
+  "remaining": "Nontrivial callbacks remain explicit required until real same-owner adapters; no new unsupported component constructors",
+  "limitations": [
+    "No fullInit/Actor completion or StartedMission claim",
+    "No broadcomponent flag/state/queue success inferred from pureleaf",
+    "No fullaa-runtime unitlink run by this author; extracted3tests andactualstartupbuild only",
+    "Shared dispatcher receives otherauthors narrowarms; this helper/test freeze is stable, wholefile checkpoints are historical"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/map_component_constant_leaf.rs",
+      "sha256": "e162e16213823d89b9d6435f7ae3b17b56a38481855315d923dd11bee1a84535"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_component_constant_leaf_tests.rs",
+      "sha256": "0903e37e8abce88b201c2ee840d513484f69174599aab91ac3cac7ddb003f72b"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-component-constants/native_constants.py",
+      "sha256": "2c306c56b2a741c5f56fcda309e827d434b38067db796aa777bd019dd94c8271"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-component-constants/native-constants.json",
+      "sha256": "cf4086c393e9583a5b8fdf6f0c8b962a5156a2755cec1927a051587c0b4dadcd"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-component-constants/exact_core.rs",
+      "sha256": "ea3e99cb3e0a8ac6921f4b8ffce81f32cb373f0c30518beb0a0e7f2bd0ce9943"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-component-constants/core-tests.log",
+      "sha256": "edfa304e6d85755416d2dd77d32718fb41d0ac750f804f2898a50eaa9b6f7a1d"
+    },
+    {
+      "path": "research/skirmish-20261017-fresh-component-constants/native-replay.log",
+      "sha256": "fe132bb2025ccc5fe4a299b630a7703fbdc61ae9174a48a64561d7ee8e0ecefa"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+    if adoption.error.is_some() || !adoption.pending.is_empty() {
+        return Err("4EE560 actual spatial adoption is incomplete".into());
+    }
+    staged.actors.detach_spatial_for_destruction(key,&mut adoption.world,pc)
+        .map_err(|e|e.to_string())?;
+    staged.actors.retire_identity(key).map_err(|e|e.to_string())?;
+    Ok(())
+}
+fn actor_uninit(
+    staged: &mut Staged,
+    catalog: &Catalog<'_>,
+    key: ObjectKey,
+    retain: bool,
+    pc: Precision,
+) -> Result<()> {
+    if canonical(staged, catalog, key)?.definition.native_class != 3 {
+        return Err("4D7580 actual ordinary Actor vtable required".into());
+    }
+    or_removal_flags(staged, key, 1)?;
+    //Native4D37E0 traverses no node when the actual constructor/list head isNULL.
+    if actor_word(staged, catalog, key, 0x130)? != 0 {
+        return Err("4D37E0 positive timed-list owner/unlink required".into());
+    }
+    if actor_word(staged, catalog, key, 0x144)? != 0 {
+        return Err("4D7580 positive144 allocation cleanup required".into());
+    }
+    let active = staged
+        .inactive_load
+        .as_ref()
+        .ok_or("4D7580 actual SAI observer owner absent")?
+        .observer_active()?;
+    if active {
+        return Err("4D7580 active7A0A40 category transition required".into());
+    }
+    *staged
+        .actors
+        .object_mut(key)
+        .map_err(|v| v.to_string())?
+        .actor
+        .as_mut()
+        .unwrap()
+        .words
+        .get_mut(&0x140)
+        .ok_or("4D7580 actual140 owner absent")? = 5;
+    let companion = ActorId::from_raw(actor_word(staged, catalog, key, 0x158)?);
+    if staged.actors.key(companion).is_some() {
+        return Err("4D7580 live158 companion virtual12C required".into());
+    }
+    for zone in canonical(staged, catalog, key)?
+        .actor
+        .as_ref()
+        .unwrap()
+        .zones_148
+        .zones()
+        .slots
+        .iter()
+        .flatten()
+    {
+        if zone.radius_bits != aa_zones::zone::INACTIVE {
+            return Err("4D7580 active Zone514CE0 uninit required".into());
+        }
+    }
+    if canonical(staged, catalog, key)?
+        .actor
+        .as_ref()
+        .unwrap()
+        .components
+        .state
+        .low
+        & (1 << 25)
+        != 0
+    {
+        or_removal_flags(staged, key, 2)?;
+    }
+    if actor_word(staged, catalog, key, 0x160)? != 0 {
+        return Err("4D19F0 actual160 owner removal required".into());
+    }
+    if staged
+        .actors
+        .key(ActorId::from_raw(actor_word(staged, catalog, key, 0x164)?))
+        .is_some()
+    {
+        return Err("4DFF30 actual164 owner removal required".into());
+    }
+    let components = &canonical(staged, catalog, key)?
+        .actor
+        .as_ref()
+        .unwrap()
+        .components;
+    if let Some(component) = components.get(ComponentSlot::Mind) {
+        let RuntimeComponent::Mind(installed) = component else {
+            return Err("4D7580 actual Mind slot/class differs".into());
+        };
+        let mind = staged
+            .actors
+            .minds
+            .minds
+            .get(&installed.mind_id)
+            .ok_or("4D7580 actual Mind allocation absent")?;
+        if mind.actor
+            != staged
+                .actors
+                .id(key)
+                .ok_or("4D7580 current GTID absent")?
+                .raw()
+        {
+            return Err("4D7580 actual Mind owner differs".into());
+        }
+        if let Some(linked) = staged.actors.key(ActorId::from_raw(mind.words_24_30[1])) {
+            let linked = canonical(staged, catalog, linked)?;
+            if linked
+                .actor
+                .as_ref()
+                .ok_or("4D7580 Mind+28 linked actual Actor absent")?
+                .components
+                .present(ComponentSlot::Economy)
+            {
+                return Err("4D7580 actual Mind+28 linked Economy removal568B10 required".into());
+            }
+        }
+    }
+    if let Some(component) = components.get(ComponentSlot::Element) {
+        let RuntimeComponent::Element(element) = component else {
+            return Err("4D7580 actual Element slot/class differs".into());
+        };
+        if element.header.owner != staged.actors.id(key).ok_or("4D7580 current GTID absent")? {
+            return Err("4D7580 actual Element owner differs".into());
+        }
+        if element.organization.is_some() {
+            return Err("4D7580 actual Element organization detach57CD70 required".into());
+        }
+    }
+    if actor_word(staged, catalog, key, 0xe8)? != 0 {
+        owner_remove::remove(staged, catalog, key, pc)?;
+    }
+    if staged
+        .actors
+        .key(ActorId::from_raw(actor_word(staged, catalog, key, 0x168)?))
+        .is_some()
+    {
+        return Err("4D7580 live168 linked Actor removal requires actual SessionE4".into());
+    }
+    let components = &canonical(staged, catalog, key)?
+        .actor
+        .as_ref()
+        .unwrap()
+        .components;
+    if components.present(ComponentSlot::Structure) {
+        return Err("589CC0 actual Structure uninit required".into());
+    }
+    //4CF390 visits Mind first, then slots30..0; the pointer is cleared only
+    //after its actual Uninit and destructor have both completed.
+    for slot in std::iter::once(ComponentSlot::Mind)
+        .chain(aa_actors::components::ALL_SLOTS.into_iter().rev())
+    {
+        if canonical(staged, catalog, key)?
+            .actor
+            .as_ref()
+            .unwrap()
+            .components
+            .present(slot)
+        {
+            if slot == ComponentSlot::Properties {
+                properties_cleanup(staged, catalog, key)?;
+            } else {
+                return Err(format!("4CF390 actual {slot:?} Uninit/destructor required"));
+            }
+        }
+    }
+    or_removal_flags(staged, key, 2)?;

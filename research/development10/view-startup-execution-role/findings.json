@@ -1,0 +1,451 @@
+{
+ "schema": 1,
+ "scope": "Read-only existing Windows capture + original/v14 code audit.\nLaunches no process, debugger or executable; changes no production FP policy.\n",
+ "observations": [
+  {
+   "capture": "capture-02",
+   "capture_sha256": "a0910b123aedd7a56c1bacd115a40f00d8c11999434c6d008d220016e84cf334",
+   "script_sha256": "1d91a3cb2ddcb370f9bee4564eceaf25c12c7126d4b0afbca91072084b19c5ea",
+   "runtime_pins": {
+    "AA.exe": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "D3D9.dll": "6a0ca214784be04b7c8b547105aa9d79acf4dc26c0b6f8702b437ddca54058b2",
+    "dgVoodoo.conf": "241951ccb0361e76c5a7c7afe4f481122a7b3ff5d428e606913aae89631291f6"
+   },
+   "initial_main_tid": 31776,
+   "session_phase_transition_tids": [
+    17964
+   ],
+   "observed_contexts": [
+    {
+     "label": "session_ctor_return",
+     "tid": 31776,
+     "eip": "0x75d1dc",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x4025",
+     "precision": "Double53",
+     "session_phase": 0,
+     "mxcsr": "0x1fbd"
+    },
+    {
+     "label": "grid_ctor_entry",
+     "tid": 31776,
+     "eip": "0x430290",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x20",
+     "precision": "Double53",
+     "session_phase": 4,
+     "mxcsr": "0x1fbd"
+    },
+    {
+     "label": "grid_ctor_return",
+     "tid": 31776,
+     "eip": "0x43f124",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x20",
+     "precision": "Double53",
+     "session_phase": 4,
+     "mxcsr": "0x1fbd"
+    }
+   ],
+   "qualification": "Same CREATE_PROCESS main TID at real constructor; only these exact observations are hardware FP evidence. No full43F0A0 return or later main-frame CW capture."
+  },
+  {
+   "capture": "capture-03",
+   "capture_sha256": "c16947a55fc7fad1cdd2a10c231bcdeb6bc95fd025f16b88f241ec465d691ae4",
+   "script_sha256": "6ba48f5554fdf4636e43f62e40298ecc189876c9d917ffac4bc1d58e288302c4",
+   "runtime_pins": {
+    "AA.exe": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "D3D9.dll": "6a0ca214784be04b7c8b547105aa9d79acf4dc26c0b6f8702b437ddca54058b2",
+    "dgVoodoo.conf": "241951ccb0361e76c5a7c7afe4f481122a7b3ff5d428e606913aae89631291f6"
+   },
+   "initial_main_tid": 52704,
+   "session_phase_transition_tids": [
+    18880
+   ],
+   "observed_contexts": [
+    {
+     "label": "session_ctor_return",
+     "tid": 52704,
+     "eip": "0x75d1dc",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x4025",
+     "precision": "Double53",
+     "session_phase": 0,
+     "mxcsr": "0x1fbd"
+    },
+    {
+     "label": "grid_ctor_entry",
+     "tid": 52704,
+     "eip": "0x430290",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x20",
+     "precision": "Double53",
+     "session_phase": 4,
+     "mxcsr": "0x1fbd"
+    },
+    {
+     "label": "grid_ctor_return",
+     "tid": 52704,
+     "eip": "0x43f124",
+     "legacy_cw": "0x27f",
+     "fxsave_cw": "0x27f",
+     "sw": "0x20",
+     "precision": "Double53",
+     "session_phase": 4,
+     "mxcsr": "0x1fbd"
+    }
+   ],
+   "qualification": "Same CREATE_PROCESS main TID at real constructor; only these exact observations are hardware FP evidence. No full43F0A0 return or later main-frame CW capture."
+  }
+ ],
+ "direct_closures": [
+  {
+   "root": "0x5c3000",
+   "direct_reachable_functions": 749,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "0096da09",
+     "function": "0096d8ed",
+     "operation": "frstor"
+    },
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097786e",
+     "function": "00977837",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009778a7",
+     "function": "00977895",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977926",
+     "function": "0097791e",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977950",
+     "function": "0097792b",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009779b5",
+     "function": "00977969",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  },
+  {
+   "root": "0x43f0a0",
+   "direct_reachable_functions": 640,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "0096da09",
+     "function": "0096d8ed",
+     "operation": "frstor"
+    },
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097786e",
+     "function": "00977837",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009778a7",
+     "function": "00977895",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977926",
+     "function": "0097791e",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977950",
+     "function": "0097792b",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009779b5",
+     "function": "00977969",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  },
+  {
+   "root": "0x700e30",
+   "direct_reachable_functions": 161,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097786e",
+     "function": "00977837",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009778a7",
+     "function": "00977895",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977950",
+     "function": "0097792b",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  },
+  {
+   "root": "0x7010d0",
+   "direct_reachable_functions": 193,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097786e",
+     "function": "00977837",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009778a7",
+     "function": "00977895",
+     "operation": "fldcw"
+    },
+    {
+     "site": "00977950",
+     "function": "0097792b",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  },
+  {
+   "root": "0x6ff130",
+   "direct_reachable_functions": 91,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  },
+  {
+   "root": "0x723e00",
+   "direct_reachable_functions": 386,
+   "create_device_891890_reachable": false,
+   "controlfp_control87_reachable": false,
+   "control_state_sites": [
+    {
+     "site": "009776d9",
+     "function": "009776b7",
+     "operation": "fldcw"
+    },
+    {
+     "site": "009792e2",
+     "function": "0097928a",
+     "operation": "fldcw"
+    },
+    {
+     "site": "0097de2c",
+     "function": "0097de28",
+     "operation": "fnclex"
+    },
+    {
+     "site": "0097de4f",
+     "function": "0097de34",
+     "operation": "fldcw"
+    }
+   ],
+   "qualification": "Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters."
+  }
+ ],
+ "pinned_equal_code_windows": [
+  {
+   "address": "0x410e70",
+   "length": 507,
+   "label": "main-frame consumes NetEvents before UIUpdate/render",
+   "sha256": "9d3e79c774d9a93121c134350d425057988d8eef03ae5837166e39386da86a6f",
+   "instruction_count": 128
+  },
+  {
+   "address": "0x40fbe0",
+   "length": 191,
+   "label": "queue Pop followed by current AppState virtual1C",
+   "sha256": "c472df01ca7869b654b8e53f9fd61a920928c5c4e338df91db1eb200e35a9d51",
+   "instruction_count": 59
+  },
+  {
+   "address": "0x682fd0",
+   "length": 158,
+   "label": "Loading derived notification then base414620",
+   "sha256": "263381610fbe402a65e0d1e819f5d0d85380c66d5c9e5f77b336577475a9590d",
+   "instruction_count": 49
+  },
+  {
+   "address": "0x414620",
+   "length": 1781,
+   "label": "base OnNetEvent switch; case1 direct40CF00",
+   "sha256": "4dc1ac8bf458feabca31dc294a52e895b9b5bcbce573f66c59c0e9ffc2d3b917",
+   "instruction_count": 493
+  },
+  {
+   "address": "0x40cf00",
+   "length": 43,
+   "label": "synchronous5C3000 then current screen virtualE8",
+   "sha256": "7b0deadf1178e3c96320ba8aa310b028453cd801337fc6638345f04ac6ae7fdd",
+   "instruction_count": 10
+  },
+  {
+   "address": "0x5c3000",
+   "length": 355,
+   "label": "reset700E30 then43F0A0; resource task scheduled AFTER world-view Init",
+   "sha256": "afc724d6c960abc9129b3b0e6c44b60d144286e36177825fedc5d03df6083221",
+   "instruction_count": 90
+  },
+  {
+   "address": "0x43f0a0",
+   "length": 336,
+   "label": "VWorld prefix contains direct430290 constructor call",
+   "sha256": "da785508449e9b53db0fe5d5e213c1005cfe098434961784e224ce7ca1b2369a",
+   "instruction_count": 90
+  },
+  {
+   "address": "0x700e30",
+   "length": 664,
+   "label": "camera Reset direct body",
+   "sha256": "4ef1042a89c39dbca242d563ae197876c6ac111f5e95fa60aa06feb01250dbc6",
+   "instruction_count": 176
+  },
+  {
+   "address": "0x7010d0",
+   "length": 28,
+   "label": "scene camera reset direct body",
+   "sha256": "3622675133ea6376470dd2b0c326e74dc3a7ce4c735ed9747aa7b681b9bed95e",
+   "instruction_count": 11
+  }
+ ],
+ "conclusion": "Use explicit Double53 for the captured v14/wrapper view-startup reference. The main-thread label alone does not imply PC24. Existing production Double53 was not changed.",
+ "route": "410E70\u219240FBE0\u2192785060 notification Pop\u2192current AppState virtual1C\u2192414620 (directly or through Loading682FD0)\u2192case1 40CF00\u21925C3000\u2192700E30\u219243F0A0\u2192430290.5B17F0/5AED10 resource task is scheduled after43F0A0 returns, not a thread transfer that executes43F0A0. Actual selected AppState vtable was not recorded by these captures.",
+ "limits": [
+  "Hardware observations stop at Grid constructor return43F124; later scene/terrain FP follows explicit caller context as a supported inference, not a new whole-Init CW observation.",
+  "Old static D3D9-main-PC24 expectation is not hardware evidence for the configured wrapper. The mechanism producing observed main PC53 is not identified here.",
+  "Bare original-system Direct3D, other wrappers/device recreation and all later main frames are not assigned a precision by this report.",
+  "CRT helpers may temporarily alter/restore control state; finite normal paths are distinct from unmasked exception handler behavior.",
+  "Source Bank precision remains separately sourced; its53 value is not used to prove view execution precision."
+ ],
+ "provenance": {
+  "research/skirmish-20261017-view-grid/hardware-grid-seed-reference.json": "64039c63149ed59c3698fa7b6fdabd40f901c5ae861d12ff1054cdb60e7f671b",
+  "research/phase8-tick/fpu-sites.json": "2c382c6ab1fdd8e3f1fd001e13773881ab313bd978f3ca09e6e29ecd91fd8d99",
+  "research/phase8-tick/fpu-precision.md": "d4fe19217b06a906e25a06b27c29e700c5df9518a026041a18ddb9d0ac5a2ea5"
+ }
+}

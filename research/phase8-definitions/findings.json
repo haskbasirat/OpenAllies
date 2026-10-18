@@ -1,0 +1,355 @@
+{
+  "schema": 1,
+  "area": "phase8-definitions",
+  "date": "2026-10-14",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "fixture": "research/phase8-definitions/native-definition-registry.json",
+  "producer": "research/phase8-definitions/native_definition_registry.py",
+  "native_addresses": {
+    "index_chain": {
+      "48DB60": "GameData init; 4901DC..49024C enumerate index*.LST (85BD30 args 1,1,0) and call 48D970",
+      "48D970": "KKC_Data::LoadIndex: 5AB590 expansion, per file lock/parse, 48D660, keep (766DE0) when false else release (vf14 5AA550)",
+      "5AB590": "KKC_IndexFileResource::LoadIndex: ';' lines skipped, 858850 path resolution, wildcard via 85BD30, LST via 5AB350/recursion, 425E80 append (no dedup)",
+      "5AB3C0": "index file Load: lines via 857210 (0x800 buffer), 425310 right-trim CR/LF, nonempty lines stored",
+      "858850": "leading '/' stripped else index directory prefix '%s/%s'",
+      "8562B0": "case-insensitive substring search (first 'LST' must end the name)",
+      "85BD30": "enumeration: 85A280 flags (+259 full path, +25B dirs, +25A recursive), 85B980 collect, qsort 859A10",
+      "5AF720": "resource FindFirst (state +20C = 0), INVALID_HANDLE_VALUE when empty",
+      "5AF7F0": "resource FindNext",
+      "5AEF60": "per-resource match: 859830 whole path, then pairwise '/' segments; deeper paths rejected",
+      "859830": "wildcard matcher ('*' skips to the next pattern unit; any '*' + exhausted side = match; toupper ASCII)",
+      "859B70": "file name part for find data",
+      "859A10": "qsort comparator (ordinal UTF-16)"
+    },
+    "parse_and_templates": {
+      "5BD080": "TGC_DataFileParser",
+      "5BD2C0": "KKC_DataFileResource::Load; catch logs and rethrows (parse errors are fatal to the data load)",
+      "5BF0D0": "template registration (returns 0 for a live duplicate name)",
+      "5BACE4/5BCA42": "registration callers; 0 -> 'Template was already defined.' (A4A13C) thrown",
+      "5BF0A0": "template lookup by current node name (4247C0, _wcsicmp)",
+      "5B5C80": "child insertion; same-name siblings renamed ?%07d_<name> (42BC40)",
+      "5BCDD0": "KKC_DataFileResource::Unload -> 5B3FE0 node destroy -> 5BF080 unregister (flag 0x20)",
+      "5AA550": "resource Release; refcount 0 -> 5AEE70 -> unload"
+    },
+    "root_dispatch": {
+      "48D660": "visit non-template roots, label for '?' names, GameData+834 handler map, 'Unknown node type' throw; try state 0..1, catches TGC_BadDataException 48D824, TGC_DataFileNodeException 48D886, TGC_DataFileException 48D8F0; continuation 48D95A returns false",
+      "AE0BC0": "48D660 FuncInfo",
+      "410C40": "throw helper (TGC_BadDataException, ThrowInfo AD7CC8)",
+      "49006C..4900BD": "MetaGameData (GameData+820, 93E2B0) handler map merged into GameData+834",
+      "93E2B0": "MetaGameData ctor registering MGAI, MGMap, MGMapTable, MGDivision, MGCommand, DynamicCampaign, MGHelpPopup"
+    },
+    "thing_registry": {
+      "4BD9C0": "Thing DataManager ctor, vtable A21260 (vf0 4BDC50, vf8 6A71D0 true, vf18 4BDD90 -> 427BD0); global B39F58",
+      "4BDC50": "Thing root: IDS, category (48D500, 'Unknown thing category'), 4BCA00, def vf0 LoadData",
+      "4BCA00": "registry check: existing IDS -> 'ThingData name already used: %s' (A211F8); create by category kind; register",
+      "47D960": "KKC_Data LoadData base: 'loading duplicate node with ids' when the definition name is already set",
+      "427BD0": "DataManager<Thing>::Find: empty -> 0; translation map (+C, count +14) first, then registry (+30) with the target only",
+      "48D500": "generic DataManager Find (same algorithm as 427BD0)",
+      "4915F0": "registry bucket lookup (405030 hash, _wcsicmp on def+8)",
+      "4154D0": "translation map lookup (5043F0 bucket)",
+      "478E10": "translation map insert (bucket head)"
+    },
+    "translations": {
+      "48D2D0": "Translate handler (vtable A0B3EC slot 0): node/ids_old/ids_new; manager lookup GameData+834 (missing or vf8 false -> 'does not exist'); duplicate old -> throw before insert; insert; vf18(new)==0 -> 'does not contain target IDS' after insert"
+    },
+    "map_record_loader": {
+      "4FC340": "per-section loop; null record -> 858F50 seek to next index entry",
+      "4FAE80": "per-record: IDS, class, saved ID, generation check, 427BD0; null -> load_warning_unknown_thing_ids|s (A2CAF8) and null; class mismatch with saved class 2 and context -> 4F26F0/405B80/4EA050/4F9840 conversion record; other mismatch logged and skipped",
+      "4FC600": "world load; 4FCE64..4FCEA4 conversion vector; 4FD47C..4FD781 converted records created via 4F9C10, logs load_warning_replaced_changed_gclass|s (A2CE40) / load_warning_cant_replace_changed_gclass|s (A2CE90)"
+    },
+    "kingdom_resources": {
+      "4E863C": "Kingdom load calls 4CDC70 for +1C4; true -> 'unrecognized resource IDS loading kingdom' (A2A1A0)",
+      "4CDC70": "resource vector reader; catch 4CDD04 (FuncInfo AE4B10) consumes the value (41CD00) and continues",
+      "4CDBB0": "record IDS (41D290); empty -> null; 48D500 via [B3A660]; null -> 41DFB0 'Unknown IDS %s for class %hs'"
+    },
+    "construction": {
+      "565FA0": "Construction ctor",
+      "565F20": "cost setup (+ predecessors for Structure with nonempty 4D0)",
+      "5657B0": "cost entry only when ActorData +174 bit 9 (EconomyComponent): 45F4D0 then 5655C0"
+    }
+  },
+  "inventory": {
+    "before": "research/phase8-restoration/unsupported-inventory.raw.json",
+    "after": "research/phase8-definitions/inventory-after.raw.json",
+    "counter": "research/phase8-definitions/inventory_groups.py",
+    "groups": [
+      {
+        "group": 1,
+        "error": "source class # differs from definition class #",
+        "before": [
+          7781,
+          27
+        ],
+        "after": [
+          7879,
+          27
+        ],
+        "status": "definitions native-correct; conversion is restoration work (R3)"
+      },
+      {
+        "group": 2,
+        "error": "unsupported native definition: missing definition <id>",
+        "before": [
+          4751,
+          47
+        ],
+        "after": [
+          3912,
+          39
+        ],
+        "status": "839 resolved by the native translation map; remaining are null in the native registry -> native skip (R2)"
+      },
+      {
+        "group": 3,
+        "error": "Resource IDS ipcs has # matching declarations",
+        "before": [
+          106,
+          32
+        ],
+        "after": [
+          106,
+          32
+        ],
+        "status": "native skip proven; native_named_definition provided; adapter change requested (R4)"
+      },
+      {
+        "group": 4,
+        "error": "ambiguous template AAUSAAttackBattleShipBombard: # declarations",
+        "before": [
+          41,
+          13
+        ],
+        "after": [
+          0,
+          0
+        ],
+        "status": "resolved natively (file release unregisters templates)"
+      },
+      {
+        "group": 5,
+        "error": "ambiguous Thing IDS eastern_europe_city_center#_small",
+        "before": [
+          27,
+          12
+        ],
+        "after": [
+          0,
+          0
+        ],
+        "status": "resolved natively (subdirectory file not in the index)"
+      },
+      {
+        "group": 6,
+        "error": "Construction without Economy data requires separate native zero-cost path binding",
+        "before": [
+          1,
+          1
+        ],
+        "after": [
+          1,
+          1
+        ],
+        "status": "native no-cost path proven; construction.rs change requested (R5)"
+      }
+    ],
+    "total_failed_records": [
+      18389,
+      16486
+    ],
+    "maps_without_failures": [
+      0,
+      0
+    ]
+  },
+  "real_data_model": {
+    "index_files": [
+      "index_aa.lst",
+      "templates.lst",
+      "templates_AA.lst",
+      "mg_resources.lst"
+    ],
+    "data_files": 1647,
+    "tgi_members_not_loaded": 200,
+    "thing_manager_registrations": 1959,
+    "translate_roots": 182,
+    "thing_translations": 114,
+    "unmodeled_translations": 68,
+    "predicted_native_exceptions": 0,
+    "files_released": 1481,
+    "files_kept": 166,
+    "translation_hides_registered_thing": [
+      "chaparral_wall -> temperate_walls"
+    ],
+    "native_log_evidence": "no 'KKC_Data::LoadDataFile' catch log in reconstruction/native-game/qa/expanded-runtime-log-0-ok.log or Logs/log-2*.log (channel B38B70 records level-10 lines there; catch logs are level 0 via 404EA0)",
+    "native_logs": [
+      {
+        "path": "reconstruction/native-game/qa/expanded-runtime-log-0-ok.log",
+        "sha256": "3e85ccacd25ab47ccfbc13b38653b9f8301da3c32c32ac8e9dcf279a0503293e",
+        "loading_index_lines": 1,
+        "LoadDataFile_lines": 0
+      },
+      {
+        "path": "Logs/log-205-ok.log",
+        "sha256": "9a54c9c50d6c1a795e693e1c96e716984be37127096116eb85672c73d3e56a9e",
+        "loading_index_lines": 1,
+        "LoadDataFile_lines": 0
+      },
+      {
+        "path": "Logs/log-210-ok.log",
+        "sha256": "40421edf1c0aaefda0e07a6ee175d9b72dfc6031092b9415755b0677c996efe2",
+        "loading_index_lines": 1,
+        "LoadDataFile_lines": 0
+      }
+    ]
+  },
+  "removed_caps": [
+    {
+      "address": "5AB3C0",
+      "original": "index line buffer 0x800 units (857210)",
+      "port": "unbounded lines"
+    }
+  ],
+  "proven_by_oracle": [
+    "859830",
+    "5AF720/5AF7F0/5AEF60 segment rule",
+    "85BD30 qsort order (2389 real names)",
+    "427BD0",
+    "48D2D0 (Thing manager)",
+    "48D660 abandon-rest-of-file + return",
+    "parser template registration/lookup/rename",
+    "5BCDD0 unload unregisters",
+    "4BCA00 first-wins",
+    "4CDC70 unknown resource skip",
+    "5657B0 no-Economy guard",
+    "translate.tgi native roots"
+  ],
+  "static_only": [
+    "48D970 keep/release",
+    "48DB60 tag table + MetaGame merge",
+    "5AB3C0/5AB590 line rules",
+    "4FAE80/4FC600 conversion path",
+    "FuncInfo/try maps (xref.py funcinfo)"
+  ],
+  "not_modeled": [
+    "per-category LoadData exceptions (none in native logs)",
+    "non-Thing translation manager registries",
+    "generic DataManager duplicate re-LoadData (4BD1B0/47D960)",
+    "dangling registry entries of renamed templates in released files"
+  ],
+  "requests": "research/phase8-definitions/requests-to-lead.md",
+  "emulator_caveats_checked": {
+    "fs_page0": "page-0 access faults unless FS-prefixed [0..3]; zero violations in the final fixture; one earlier silent null read (4BCF71, hand-built manager) fixed by building managers with 4BD9C0; case results unchanged",
+    "allocator_seams": "6F7810, CRT malloc/calloc/realloc/free, 85C680 alloc, 85C2B0 release; every case completes or stops at a recorded throw",
+    "x87": "no transcendental or NaN inputs in these oracles",
+    "stale_translation": "no emulated code writes; stubs are hook-implemented"
+  },
+  "round2": {
+    "date": "2026-10-15",
+    "native_addresses": {
+      "character_view": {
+        "563670": "Character ctor: first animation of 4D0720(owner)",
+        "4D0720": "Actor+15C stance != -1 -> 45E5E0 else Object+40 variant -> 45E690",
+        "45E5E0": "ActorData+188 stance -> +8 -> +8 aspect index",
+        "45E690": "ActorData+1BC[index]; -1 or null -> last (+1C0-1); +1C0==0 -> null",
+        "4D6D70": "saved-load Actor ctor sets +15C = -1"
+      },
+      "denizen": {
+        "464BD0@467350..4674C7": "Inventory list +35C: wcscmp search, 462E60 insert after equal run, 45FD30 append, 461770 actor_ids deferred + count",
+        "464BD0@467165..4672E1": "Organization list +34C: organization_ids deferred, 463520 behavior flags",
+        "463520": "behavior tokens ' +': worker 2, militia_offensive 4, militia_defensive 8, air_offensive 10, air_defensive 20, air_recon 40, air_escort 80",
+        "56B720": "Denizen ctor: count slots per +35C entry, prepended; flags 568880(t,2), 568880(t,2C)",
+        "568880": "target mask bits 0 and 6, then owner +34C org with behavior&mask and layout acceptance 4C1D60/4C1CF0/45EEF0"
+      },
+      "generic_managers": {
+        "48A8E0": "GameData ctor: manager ctors with (nbuckets, mode)",
+        "47D880": "DataManager base ctor: +8 = mode",
+        "47D030/479080/479BE0/...": "vf1C type Load (4BD1B0 shape): mode!=0 lookup+reuse",
+        "4BD270": "create: 'Data IDS already used' / mode 2 'Unknown data cannot be added'",
+        "47D960": "KKC_Data base LoadData: 'loading duplicate node with ids' when stored name nonempty",
+        "48D500": "generic Find (translation first)",
+        "4B87A0": "TerrainData LoadData registers [Variation] children via [GameData+658] vf1C"
+      },
+      "headers": {
+        "5BD080": "section header: stray '=' ignored; bare word -> 'Malformed section name.'"
+      }
+    },
+    "inventory_groups": {
+      "a_character_view_animations": {
+        "before": [
+          794,
+          32
+        ],
+        "status": "producer done; consumer R8"
+      },
+      "b_denizen_inventory": {
+        "before": [
+          168,
+          40
+        ],
+        "status": "producer done; consumer R9"
+      },
+      "c_non_thing_translations": {
+        "count": 68,
+        "status": "modeled; 0 native exceptions"
+      },
+      "d_generic_duplicates": {
+        "shipped_duplicates": 0,
+        "status": "native mode rule ported and oracle-proven"
+      }
+    },
+    "oracle_sections": [
+      "lookup (+48D500)",
+      "generic (15)",
+      "headers (8)",
+      "denizen (4)",
+      "character_view (40)"
+    ],
+    "not_modeled": [
+      "mode-2 predefined entries (code-created)",
+      "mode-1 re-load field overlay",
+      "Denizen Organization layout acceptance (no shipped Organization children)",
+      "'#key' localized names in the 47D960 check (string table not consulted)"
+    ],
+    "inventory": {
+      "file": "research/phase8-definitions/inventory-round2.raw.json",
+      "groups": {
+        "1": [
+          7879,
+          27
+        ],
+        "2": [
+          1,
+          1
+        ],
+        "3": [
+          0,
+          0
+        ],
+        "4": [
+          0,
+          0
+        ],
+        "5": [
+          0,
+          0
+        ],
+        "6": [
+          0,
+          0
+        ],
+        "a": [
+          901,
+          32
+        ],
+        "b": [
+          168,
+          40
+        ]
+      },
+      "total_failed_records": 11602,
+      "maps_without_failures": 1,
+      "note": "R2/R4/R5 were applied by the restoration agent before this run; a/b need R8/R9"
+    }
+  }
+}

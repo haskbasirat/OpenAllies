@@ -1,0 +1,44 @@
+{
+ "schema": 1,
+ "status": "bounded projection accepted; environment owner integration remains required",
+ "source_boundary": "86BA10 mode2 plus unconditional86BBB7..86BC25 and actual870720",
+ "native": {
+  "rows": 153,
+  "original_v14_executions": 306,
+  "precision": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "seams": [],
+  "decoded_instruction_pins": 94,
+  "all_required_read_prefixes": 31
+ },
+ "rust": {
+  "exact_source_tests": 2,
+  "passed": 2,
+  "production_check": "PASS17.71s",
+  "failures_retained": [
+   "build-01.log (missing thin LTO for existing bitcode libraries)"
+  ]
+ },
+ "qualification": [
+  "No full86E8D0 controller/parent/bound update claim",
+  "No texture or environment114 owner duplication",
+  "No AD/view/application readiness capability",
+  "Finite supported arithmetic; invalid pointers/native traps/Inf/NaN excluded",
+  "Concrete environment114 same-field integration is a separate required caller"
+ ],
+ "pins": {
+  "research/development10/view-environment-projection/native_projection.py": "1a48df0f3ad073d1534a5ec31983d3c4cfc1f89593404beb61309993380bb218",
+  "research/development10/view-environment-projection/native-projection.json": "372e6beeca69805a4ef1f3d9239498ee41d1252c6543fa05cf24850b1bbe0741",
+  "research/development10/view-environment-projection/audit_projection.py": "c1c53a66c63bf135b15bcb63d57374cc97577b91ddf7a561c288a9681fccd198",
+  "research/development10/view-environment-projection/pin-audit.json": "71c437a63b533607bdee2f21c7e1cb1f2b99a7961f2a3ffb09f0611737f1452b",
+  "research/development10/view-environment-projection/isolated-projection.exe": "474c699c72a55240aee45d5c3e164e1d7f71d22129d0cd485877c5073483cc52",
+  "research/development10/view-environment-projection/tests-02.log": "11c3cc86208f71e2cb2f8e04370c94b96b78f4875721dc7a5d59bf3f4f5f9ac2",
+  "research/development10/view-environment-projection/production-check-01.log": "7d0447ea455eb1442dbb0eaf023ccfbcd65f27227e02edb91a64dc195a56d3f3",
+  "research/development10/view-environment-projection/native-final-replay.log": "689438cd19b4a9fc5f313d6d5cffc28cd03dc62cd6732a514e4cb75ea540335f",
+  "crates/aa-runtime/src/view_environment_projection.rs": "a6623eaade732d29423cdbfe7c2d08b98e3f140936c007bd79d0e5b727343087",
+  "crates/aa-runtime/src/view_environment_projection_tests.rs": "4a1aaacbaf2f8f373ed07cc077be2caa143f96226702dd1e84010560b9296c3f"
+ }
+}

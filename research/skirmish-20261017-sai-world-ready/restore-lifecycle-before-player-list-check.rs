@@ -1,0 +1,332 @@
+//! Owned, stopped projection of the native application/LoadGame SAI lifecycle.
+//!
+//! This is deliberately a new application scope, not evidence about an already
+//! running native game. 7A0AA0 publishes a present inactive SAI; 76F240 leaves
+//! Sim+3C null. The first 5A4280 load therefore runs 76AB80's actual empty-world
+//! branch before 4F7910 and map dispatch. Existing-world destruction, task
+//! completion/StartMission and active SAI remain separate unported services.
+use aa_rules::{
+    sources::{ResolvedFile, V14Sources},
+    tgi::{Document, Item, Limits},
+};
+use std::sync::{Condvar, Mutex};
+
+type Result<T> = std::result::Result<T, String>;
+
+/// LoadGameTask+20 selects the wrapper; it is not MapResource's load mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskKind {
+    Normal,
+    Editor,
+    Alternate,
+}
+impl TaskKind {
+    /// 5A3ECB pushes1;5A3E8E pushes2;5A3F3B pushes4.
+    pub fn native_load_mode(self) -> u32 {
+        match self {
+            Self::Normal => 1,
+            Self::Editor => 2,
+            Self::Alternate => 4,
+        }
+    }
+    pub fn wrapper_address(self) -> u32 {
+        match self {
+            Self::Normal => 0x5a3eb0,
+            Self::Editor => 0x5a3e20,
+            Self::Alternate => 0x5a3f20,
+        }
+    }
+}
+
+/// Facts retained for diagnostics; these do not grant a loading capability.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Initialization {
+    pub uvars_path: String,
+    pub uvars_sha256: String,
+    pub elapsed_millis: u32,
+    pub private_seed: u32,
+}
+
+/// 857D60 creates one initially nonsignaled auto-reset event and registers its
+/// waitable owner. The stopped scope owns the Rust synchronization allocation;
+/// it exposes no unported waiter/worker execution.
+#[derive(Debug)]
+struct Signal {
+    _ready: Mutex<bool>,
+    _changed: Condvar,
+}
+#[derive(Debug)]
+struct Sai {
+    signal: Box<Signal>,
+    initialization: Initialization,
+    // The constructor, loading observer and startup coordinator share this
+    // actual manager. No active-byte/list snapshot is copied back later.
+    engine: aa_mind::sai::manager::Sai,
+    world_revisions: std::cell::RefCell<crate::world_revision::Counter>,
+}
+
+/// No default present/absent assumption. A default scope is Unknown and cannot
+/// issue an InactiveLoad. This owner is non-Clone and never adopts an existing
+/// world or copies a caller's guessed observer flag.
+#[derive(Debug, Default)]
+pub struct ScopedManagedLoad {
+    initialized: Option<Sai>,
+}
+
+impl ScopedManagedLoad {
+    /// Resolve the actual root UVars*.tgi set (419C76). This fresh scope does
+    /// not import an existing original-game user profile. A second declaration
+    /// of GoalPriorityCSV is explicitly unsupported until its override path is
+    /// bound; it must not be ignored while accepting the base-file null value.
+    pub fn from_sources(sources: &mut V14Sources, elapsed_millis: u32) -> Result<Self> {
+        let mut names: Vec<_> = sources
+            .catalog()
+            .into_iter()
+            .map(|entry| entry.logical_path)
+            .filter(|name| {
+                let lower = name.to_ascii_lowercase();
+                !lower.contains(['/', '\\'])
+                    && lower.starts_with("uvars")
+                    && lower.ends_with(".tgi")
+            })
+            .collect();
+        names.sort_by_key(|name| name.to_ascii_lowercase());
+        let mut base = None;
+        for name in names {
+            let file = sources.read(&name).map_err(|e| e.to_string())?;
+            if name.eq_ignore_ascii_case("UVars.tgi") {
+                base = Some(file);
+                continue;
+            }
+            let doc =
+                Document::parse_native(file.bytes, Limits::default()).map_err(|e| e.to_string())?;
+            for item in &doc.items {
+                let Item::Node(node) = item else { continue };
+                if !doc
+                    .header_name(&node.header)
+                    .is_some_and(|n| n.eq_ignore_ascii_case("Vars"))
+                {
+                    continue;
+                }
+                if node.header.tokens.len() != 1 {
+                    return Err(format!(
+                        "UVars node inheritance in {name} needs its native source owner"
+                    ));
+                }
+                if node.items.iter().any(|item| matches!(item, Item::Property(property)
+                    if doc.property_name(property).is_some_and(|n| n.eq_ignore_ascii_case("GoalPriorityCSV")))) {
+                    return Err(format!("GoalPriorityCSV override in {name} needs the native override owner"));
+                }
+            }
+        }
+        Self::from_uvars(
+            &base.ok_or("resolved UVars.tgi is missing")?,
+            elapsed_millis,
+        )
+    }
+
+    /// Initialize the bounded fresh-application observer and empty Sim owner.
+    /// The actual resolved UVars source is required:7A5BF0 queries type4
+    /// GoalPriorityCSV. Only the empty-file path is implemented; configured
+    /// debug output is an error, not a silently omitted constructor callback.
+    /// `elapsed_millis` is the application's actual 59ABA0 clock input, not
+    /// simulation RNG. No existing game/profile/application is adopted here.
+    pub fn from_uvars(file: &ResolvedFile, elapsed_millis: u32) -> Result<Self> {
+        if !file.logical_path.eq_ignore_ascii_case("UVars.tgi") {
+            return Err("fresh SAI initialization requires resolved UVars.tgi".into());
+        }
+        if aa_rules::sources::sha256(&file.bytes) != file.sha256 {
+            return Err("SAI UVars source hash differs from its bytes".into());
+        }
+        let doc = Document::parse_native(file.bytes.clone(), Limits::default())
+            .map_err(|e| e.to_string())?;
+        let mut values = Vec::new();
+        for item in &doc.items {
+            let Item::Node(node) = item else { continue };
+            if !doc
+                .header_name(&node.header)
+                .is_some_and(|n| n.eq_ignore_ascii_case("Vars"))
+            {
+                continue;
+            }
+            if node.header.tokens.len() != 1 {
+                return Err("UVars node inheritance needs its native source owner".into());
+            }
+            for item in &node.items {
+                let Item::Property(property) = item else {
+                    continue;
+                };
+                if !doc
+                    .property_name(property)
+                    .is_some_and(|n| n.eq_ignore_ascii_case("GoalPriorityCSV"))
+                {
+                    continue;
+                }
+                if property.left.len() != 2
+                    || !doc
+                        .text(property.left[0].span)
+                        .is_some_and(|t| t.eq_ignore_ascii_case("string"))
+                {
+                    return Err(
+                        "GoalPriorityCSV requires its assigned native string declaration".into(),
+                    );
+                }
+                values.push(
+                    doc.property_value(property)
+                        .ok_or("GoalPriorityCSV has no assignment")?,
+                );
+            }
+        }
+        let [value] = values.as_slice() else {
+            return Err("GoalPriorityCSV source is missing or ambiguous".into());
+        };
+        if !value.eq_ignore_ascii_case("null") && *value != "\"\"" {
+            return Err("7A5BF0 nonempty GoalPriorityCSV initialization is unbound".into());
+        }
+        // Full constructor oracle proves85D8A0's encoding and the zero branch.
+        let encoded = (elapsed_millis.wrapping_shl(16) | elapsed_millis) ^ 0x8e4b12a5;
+        let initialization = Initialization {
+            uvars_path: file.logical_path.clone(),
+            uvars_sha256: file.sha256.clone(),
+            elapsed_millis,
+            private_seed: if encoded == 0 { 0x8e4b12a5 } else { encoded },
+        };
+        Ok(Self {
+            initialized: Some(Sai {
+                signal: Box::new(Signal {
+                    _ready: Mutex::new(false),
+                    _changed: Condvar::new(),
+                }),
+                initialization,
+                engine: aa_mind::sai::manager::Sai::new(elapsed_millis),
+                world_revisions: std::cell::RefCell::new(crate::world_revision::Counter::fresh_application()),
+            }),
+        })
+    }
+
+    /// Enter5A4280's load prefix, stopping at the selected MapResource load.
+    /// The scope exclusively owns its fresh null Sim+3C;76AB80 therefore does
+    /// no GWorld/SAIMap teardown. It cannot be used to skip a previous world.
+    /// 4F7910's previous-load diagnostics are constructor-empty in this scope.
+    /// No task-success flag, world-ready callback, or activation is synthesized.
+    pub fn begin(self, task: TaskKind) -> Result<InactiveLoad> {
+        let sai = self
+            .initialized
+            .ok_or("SAI lifecycle is Unknown: initialize a fresh managed application scope")?;
+        if sai.engine.ready
+            || !sai.engine.players.is_empty()
+            || !sai.engine.commands.is_empty()
+            || !sai.engine.general_powers.is_empty()
+            || !sai.engine.list_88.is_empty()
+            || !sai.engine.vector_90.is_empty()
+            || sai.engine.metagame
+            || sai.engine.goal_fiber
+            || sai.engine.rai_fiber
+            || sai.engine.metagame_fiber
+            || sai.engine.main_fiber
+        {
+            return Err(
+                "existing/active SAI requires the real76AB80 old-world teardown owner".into(),
+            );
+        }
+        Ok(InactiveLoad {
+            sai,
+            task,
+            valid: true,
+        })
+    }
+}
+
+/// Non-Clone capability for the interval after managed teardown and before
+/// task completion/activation. Move it Attempt->Staged; Catalog only borrows it.
+/// Private construction and Rust borrowing prevent a stale copied witness.
+#[derive(Debug)]
+pub struct InactiveLoad {
+    sai: Sai,
+    task: TaskKind,
+    valid: bool,
+}
+impl InactiveLoad {
+    pub(crate) fn construct_world_revision(&self)->Result<crate::world_revision::ConstructedWorldRevision> {
+        self.check()?;
+        Ok(self.sai.world_revisions.try_borrow_mut()
+            .map_err(|_|"application World revision counter is already borrowed")?.construct())
+    }
+    fn check(&self) -> Result<()> {
+        if !self.valid || self.sai.engine.ready {
+            return Err("managed inactive SAI loading capability is no longer valid".into());
+        }
+        Ok(())
+    }
+    pub fn native_load_mode(&self) -> u32 {
+        self.task.native_load_mode()
+    }
+    pub fn task(&self) -> TaskKind {
+        self.task
+    }
+    pub fn initialization(&self) -> &Initialization {
+        &self.sai.initialization
+    }
+    /// 5705C5 tests singleton presence, not its active byte. It is present.
+    pub fn observer_present(&self) -> Result<bool> {
+        self.check()?;
+        Ok(true)
+    }
+    /// Read the actual SAI+20 owned by this load interval. A missing or
+    /// invalidated interval must not be interpreted as an inactive observer.
+    pub fn observer_active(&self) -> Result<bool> {
+        self.check()?;
+        Ok(self.sai.engine.ready)
+    }
+    /// 7A0C20 with+20=0 returns before even reading the actor argument. The
+    /// original42-case oracle proves this exact no-op; no actor is inspected.
+    pub fn notify_observer(&self, _actor: u32) -> Result<()> {
+        self.check()
+    }
+    /// 775DB0 only reaches activation after successful task completion. Full
+    /// 7757F0/7A0D40 is unbound: attempting to cross that boundary invalidates
+    /// this loading capability and reports an error instead of enabling AI.
+    pub fn request_world_ready(&mut self) -> Result<()> {
+        self.valid = false;
+        Err("7757F0/7A0D40 active SAI world-ready transition is unbound".into())
+    }
+    /// Lease the sole constructor-owned manager to the real7A0D40 coordinator.
+    /// Invalidate this inactive interval before the first fallible effect;
+    /// partial mutations stay in the manager on error.
+    pub fn with_startup_engine<T>(
+        &mut self,
+        start: impl FnOnce(&mut aa_mind::sai::manager::Sai) -> Result<T>,
+    ) -> Result<T> {
+        self.check()?;
+        self.valid = false;
+        start(&mut self.sai.engine)
+    }
+    /// Move the manager after leaving the loading interval. This transition
+    /// certifies neither a successful startup nor task/application readiness.
+    /// A failed coordinator retains its actual partially mutated owner too.
+    pub fn into_startup_owner(self) -> std::result::Result<StartupOwner, Self> {
+        if self.valid { return Err(self); }
+        Ok(StartupOwner { sai: self.sai })
+    }
+    /// Useful for checking that transfers keep the actual synchronization
+    /// owner; it is neither a native pointer nor an observer identity.
+    #[doc(hidden)]
+    pub fn synchronization_owner_address(&self) -> usize {
+        self.sai.signal.as_ref() as *const Signal as usize
+    }
+}
+
+/// The same application SAI after its inactive load capability was retired.
+/// No Clone/Default and no readiness constructor; later native services borrow
+/// its real fields, including the state retained by a failed startup.
+#[derive(Debug)]
+pub struct StartupOwner { sai: Sai }
+impl StartupOwner {
+    pub fn engine(&self) -> &aa_mind::sai::manager::Sai { &self.sai.engine }
+    pub fn engine_mut(&mut self) -> &mut aa_mind::sai::manager::Sai { &mut self.sai.engine }
+    pub fn initialization(&self) -> &Initialization { &self.sai.initialization }
+    #[doc(hidden)]
+    pub fn synchronization_owner_address(&self) -> usize {
+        self.sai.signal.as_ref() as *const Signal as usize
+    }
+}

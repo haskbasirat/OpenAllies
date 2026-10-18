@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "feature": "saved Organization member-position notification 0057C800",
+  "source_authority": "original AA machine code and existing native-proved aa_actors::element_position core",
+  "native_addresses": [
+    "0057C800",
+    "00578E90",
+    "0057C680",
+    "004515F0"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "actual_saved_allocation_native_rows": 90,
+  "outcomes": {
+    "ok": 72,
+    "relocate": 18
+  },
+  "isolated_native_mind_presence_probes": 12,
+  "isolated_probe_result": "all stop at required Mind virtual+64; no predicate answered",
+  "rust_replay_tests": {
+    "passed": 2,
+    "failed": 0,
+    "mode": "release/locked/offline -j4 --include-ignored"
+  },
+  "actual_context": {
+    "map": "(2v2)Kursk",
+    "organization_owners": 3,
+    "owner_mind_present": false,
+    "native_mode": 1,
+    "managed_fresh_scope": true,
+    "elapsed_millis_fixture": 0,
+    "no_immediate_Init_PostCreate_claim": true
+  },
+  "per_owner_probes": [
+    "unchanged saved input",
+    "nonselected missing GTID",
+    "explicit mode6",
+    "explicit selected member",
+    "explicit dual flag30"
+  ],
+  "storage": [
+    "actual Organization +40",
+    "actual Organization goal +BC/+C0",
+    "actual owner Thing flags and XY",
+    "generation-checked restored member Thing fields",
+    "lazy real Mind slot/core validation at dispatch"
+  ],
+  "preserved": [
+    "Organization allocation identity",
+    "member vector",
+    "all unrelated Organization words",
+    "formation offsets",
+    "world RNG",
+    "native message sink",
+    "owner/member Thing positions"
+  ],
+  "no_fabricated_predicate_or_service_success": true,
+  "owned_source_frozen": true,
+  "shared_wiring_owner": "root; restore trait, OrganizationLeaderContext forwarding, Catalog",
+  "limitations": [
+    "Actual saved no-Mind paths only; current restore has no available Mind Organization owner with loaded members for direct actual-context comparison.",
+    "Mind+64/+7C, relocation4EEB40, interpolation57C080, queue50B220 and schedule50AC00 remain required errors.",
+    "Mind+7C/interpolation/scheduler are unexecuted through this adapter because the first required Mind+64 is unbound.",
+    "Isolated native Mind probes are explicit input substitutions, not observed saved or initialized Rust Mind states.",
+    "Selected-null notification is outside the bound saved-caller domain; mode6/nonselected guards still run first.",
+    "Invalid registry/payload cases are portable refusal tests, not native malformed-pointer parity.",
+    "Two failed fixture-selection assumptions retained separately; corrected actual contexts and final replay pass.",
+    "No complete Init/PostCreate, live publication, battle, spatial movement or multiplayer completion.",
+    "No vendor SDK implementation copied or integrated."
+  ],
+  "inputs": [
+    {
+      "path": "crates\\aa-runtime\\src\\saved_organization_position.rs",
+      "sha256": "5ad75eb760a474acd9cb2393fc8d5d3adc0a2c8cc29d34550ef1497e379621b5"
+    },
+    {
+      "path": "crates\\aa-runtime\\src\\saved_organization_position_tests.rs",
+      "sha256": "dc3f04cf90925b3f07dbc86e98f5fb232d87ef08d9c81d3c2209a809f549c752"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\native_saved_position.py",
+      "sha256": "7d5c09757a6d85044857355954ec1b28946c1c4bb540116b5f88fee2b1492d28"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\actual-saved-inputs.json",
+      "sha256": "57a6fd41742ad5af7b7f4386809a73e4ccf7e9b66f42e1c59b5694285b8af1f9"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\native-saved-position.json",
+      "sha256": "50dd38f9258644e82662898531b992dd44a6b3feb9de83b032013a5c6c501d73"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\capture-tests.log",
+      "sha256": "01b0d9cdf40c3dd4a8eb8f19b48620baa11b5e074d976589db16772281d60bf9"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\replay-tests.log",
+      "sha256": "ae3e73a7aad629b481ceca6aa1e2dd9a0b78079541c43088091a761d9ba16296"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\capture-selection-assumption.log",
+      "sha256": "ccf380dfe49559b9ef151e8328580aca9dd2e7db59ba3fc0e5253f5838f2a8ed"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\capture-mind-members-assumption.log",
+      "sha256": "aff0940f8f5658d8b72ff79b84383af44092521ccd009b80d0afa84159cf6092"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\README.txt",
+      "sha256": "5e8a28b108391da79a2caeaf60330943cb8a6ada63d7c45719fcaee048cd1a05"
+    },
+    {
+      "path": "research\\skirmish-20261016-saved-organization-position\\record_evidence.py",
+      "sha256": "60efbef1d6b5c46529126866e0562de7a929d33fe4e98ff38ca58521228051e1"
+    }
+  ]
+}

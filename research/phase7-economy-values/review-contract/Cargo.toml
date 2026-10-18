@@ -1,0 +1,10 @@
+[package]
+name = "economy-values-independent-review"
+version = "0.0.0"
+edition = "2024"
+[workspace]
+[dependencies]
+aa-actors = { path = "../../../crates/aa-actors" }
+aa-body = { path = "../../../crates/aa-body" }
+aa-numeric = { path = "../../../crates/aa-numeric" }
+serde_json = "1"

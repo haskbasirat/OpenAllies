@@ -1,0 +1,123 @@
+{
+  "status": "source_and_tests_frozen",
+  "scope": "Concrete saved PostCreate(NULL,1) dispatch/current owned component/owner/source binding, plus shared six-list ObjectData FX source inputs and certified empty fast paths. Not a complete property/Kingdom/FX implementation or battle certificate.",
+  "production_sha256": {
+    "crates/aa-runtime/src/load_post_create_world.rs": "4b9156e349ec36f4040d41c564d8671404cf9987b5a3166ae1faa5dc41142dda",
+    "crates/aa-runtime/src/definition_fx.rs": "20fc0be49872e800694967ca858611ad7faed4466059b281e60a51f2012856ab",
+    "crates/aa-runtime/src/load_post_create_world_tests.rs": "53935cab158efef349ba19d90a0c0ab4f2458b7de7d695a4b0c81f3ed1e3f80b"
+  },
+  "evidence_sha256": {
+    "native_post_create.py": "5b061356114b6327b5d6830e2c6226e8bec7641ed5dafa23f9e02841fdadd360",
+    "native-post-create.json": "0dbf031eb2d34cb5320b13ce7860bdc014211f3930b8d926d7a21989707194dd",
+    "native_empty_fx_source.py": "22dfa7f2a996bae1f15759c08b5653c7609117d9f79dabf4fd58a51c194d46d0",
+    "native-empty-fx-source.json": "ed3fd602cd22318c94d717a1c3394b0937cade81d9ea0d44eaaee5278c19a019",
+    "actual-first-kingdom-v3.json": "117b458de2f7a2fbeb77cd976bec0c3db4d7f37b68f696a1108542cb6792abc7",
+    "final-cargo-tests-v3.log": "22ccd6bfa2b747e0ee0d760ca3d0e640d67c8bf224365e4523c38f5cf7b6edf3"
+  },
+  "shared_exports": [
+    "aa_runtime::load_post_create_world",
+    "aa_runtime::definition_fx"
+  ],
+  "api": [
+    "post_create(&Catalog,&mut restore_lifecycle::Context,&mut impl Effects)",
+    "publish_definition_created_fx(&Catalog,&mut restore_lifecycle::Context,&mut impl Effects)",
+    "definition_fx::Source::bind(&Catalog,&RuntimeDefinition); list(ListKind::{Created,Destroyed,Selected,Commanded,CommandedAggressive,Constructed})"
+  ],
+  "native_proof": {
+    "dispatch_and_caller_rows": 156,
+    "rust_replayed_actor_caller_rows": 120,
+    "created_empty_fx_rows": 6,
+    "constructor_count0_enum_existing_empty_fx_rows": 6,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "post_create_instruction_pins": 113,
+    "source_and_existing_instruction_pins": 121,
+    "actual_calls": [
+      "4D1E10",
+      "4EBA40",
+      "4CF300",
+      "581880",
+      "529C30",
+      "45EED0",
+      "564BE0",
+      "4296B0(nullhead)",
+      "79E130",
+      "42BF10(count0)",
+      "4979D0",
+      "42A590",
+      "429080(nullhead)"
+    ],
+    "required_observed_seams": [
+      "5817A0 initial property allocation/insertion",
+      "4E6180 Kingdom actor registration",
+      "5B4220 source child-count getter",
+      "4976B0 enum registration sink"
+    ],
+    "qualification": "The seamed positive property/Kingdom bodies are not ported by the oracle. Native caller order and retained prefixes are proved; no arbitrary reentrant source mutation domain."
+  },
+  "actual_source_test": {
+    "map": "Campaign/tutorial02",
+    "saved_id": 781,
+    "definition": "kingdom",
+    "components": [
+      6
+    ],
+    "stored_owner_e8": 0,
+    "initial_properties_1d4": 0,
+    "all_six_fx_source_lists_empty": true,
+    "source_precision": "Double53 from same Bank",
+    "live_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "same_actual_held_allocation_unchanged": true,
+    "registry_generation_loading_guard_checked": true,
+    "qualification": "The record prefix diagnostic deliberately omitted immediate Init; this test certifies source/storage binding and the independent PostCreate path only."
+  },
+  "rust_tests": {
+    "passed": 2,
+    "failed": 0,
+    "log": "final-cargo-tests-v3.log",
+    "command": "CARGO_TARGET_DIR=target/s-graphics-review AA_GAME_ROOT=<original game> cargo test -p aa-runtime --lib load_post_create_world --release --locked --offline -j4 -- --include-ignored"
+  },
+  "source_guards": [
+    "Same Catalog source owner, canonical identity/source/template chain/class and no shadowing Thing translation.",
+    "Same source Bank source identities and explicit source FP precision; no host/default precision substitutes.",
+    "FX constructor-empty proof is accepted only in the single-declaration domain; shared reload/appends explicitly require real owner.",
+    "Native typed IDS getter handles quoted source IDs. No source error is silently ignored in reload census.",
+    "Absent View or zero inherited source child count preserves true constructor-empty list. Positive authored entries retain source provenance and are not labeled compiled FXC nodes."
+  ],
+  "ownership": [
+    "Context.split_current borrows real held record and exact GTID Loading placeholder.",
+    "Actual current31 component table is reread after preceding callbacks through existing native-proved world_publication core.",
+    "Properties+1D4 source traversal uses existing native load-position PropertyRef producer and forwards every initial property in order.",
+    "Actor+E8 is read from actual owned words; nonnull owner must resolve current Kingdom generation.",
+    "No duplicate mutable Properties arena, Kingdom list, renderer or FX queue is constructed."
+  ],
+  "remaining_required": [
+    "5817A0/5030F0/581630 persistent property-instance arena and all actual modifier effects for reached positive initial-property lists.",
+    "4E6180 persistent Kingdom actor lists/statistics/properties/ownership services for reached nonnull stored owners.",
+    "Nonempty FX source compilation, actual world mute state and thread-owned presentation queue for4296B0/42A590.",
+    "Full source ObjectData reload graph and positive FXC semantics.",
+    "Concrete Init/services/registration/PostLoad/world conversion/clock/input/combat remain separate work."
+  ],
+  "not_claimed": [
+    "full Init or full World::Load",
+    "complete positive FX graph or actual GPU/sound effect execution",
+    "playable battle, complete skirmish, multiplayer or campaign",
+    "current Rust thread observed native FP state"
+  ],
+  "old_logs_preserved": [
+    "cargo-tests.log initial2pass",
+    "final-cargo-tests.log pre-final quoted-IDS census failure",
+    "native-empty-fx-source-v1.json retained before enum/Existing proof extension"
+  ]
+}

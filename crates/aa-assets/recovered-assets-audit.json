@@ -1,0 +1,2256 @@
+{
+  "errors": [],
+  "maps": [
+    {
+      "decode_errors": 0,
+      "id": "(2v2)Berlin",
+      "placements": 7971,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(2v2)Berlin.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(2v2)Berlin.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(2v2)Berlin.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(2v2)Berlin.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "(2v2)Kursk",
+      "placements": 4673,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(2v2)Kursk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(2v2)Kursk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(2v2)Kursk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(2v2)Kursk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "(2v2)Market_Garden",
+      "placements": 5683,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(2v2)Market_Garden.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(2v2)Market_Garden.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(2v2)Market_Garden.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(2v2)Market_Garden.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "(2v2)Moscow",
+      "placements": 4351,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(2v2)Moscow.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(2v2)Moscow.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(2v2)Moscow.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(2v2)Moscow.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "(3v3)Saint_lo",
+      "placements": 7288,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(3v3)Saint_lo.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(3v3)Saint_lo.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(3v3)Saint_lo.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(3v3)Saint_lo.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "(3v3)Stalingrad",
+      "placements": 3068,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/(3v3)Stalingrad.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/(3v3)Stalingrad.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/(3v3)Stalingrad.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/(3v3)Stalingrad.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies01_el_alamein",
+      "placements": 2896,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies01_el_alamein.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies01_el_alamein.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies01_el_alamein.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies01_el_alamein.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies02_guadalcanal",
+      "placements": 1756,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies02_guadalcanal.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies03_stalingrad",
+      "placements": 6779,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies03_stalingrad.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies04_kursk",
+      "placements": 5687,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies04_kursk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies04_kursk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies04_kursk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies04_kursk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies05_monte_cassino",
+      "placements": 3077,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies05_monte_cassino.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies06_normandy",
+      "placements": 7888,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies06_normandy.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies06_normandy.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies06_normandy.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies06_normandy.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies07_saint_lo",
+      "placements": 7895,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies07_saint_lo.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies07_saint_lo.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies07_saint_lo.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies07_saint_lo.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies08_market_garden",
+      "placements": 6788,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies08_market_garden.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies08_market_garden.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies08_market_garden.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies08_market_garden.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies09_battle_of_the_bulge",
+      "placements": 4325,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies09_battle_of_the_bulge.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies09_battle_of_the_bulge.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies09_battle_of_the_bulge.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies09_battle_of_the_bulge.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies10_berlin",
+      "placements": 9796,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies10_berlin.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies10_berlin.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies10_berlin.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies10_berlin.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies11_iwo_jima",
+      "placements": 4064,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies11_iwo_jima.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies11_iwo_jima.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies11_iwo_jima.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies11_iwo_jima.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/allies12_okinawa",
+      "placements": 4720,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/allies12_okinawa.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/allies12_okinawa.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/allies12_okinawa.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/allies12_okinawa.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis01_crete",
+      "placements": 5633,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis01_crete.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis01_crete.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis01_crete.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis01_crete.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis02_el_alamein",
+      "placements": 2204,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis02_el_alamein.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis02_el_alamein.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis02_el_alamein.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis02_el_alamein.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis03_suez_canal",
+      "placements": 1867,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis03_suez_canal.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis03_suez_canal.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis03_suez_canal.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis03_suez_canal.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis04_stalingrad",
+      "placements": 5301,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis04_stalingrad.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis05_australia",
+      "placements": 3123,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis05_australia.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis05_australia.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis05_australia.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis05_australia.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis06_kursk",
+      "placements": 5926,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis06_kursk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis06_kursk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis06_kursk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis06_kursk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis07_normandy",
+      "placements": 7030,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis07_normandy.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis07_normandy.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis07_normandy.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis07_normandy.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis08_sealion",
+      "placements": 9055,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis08_sealion.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis08_sealion.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis08_sealion.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis08_sealion.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis09_burma",
+      "placements": 6324,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis09_burma.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis09_burma.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis09_burma.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis09_burma.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis10_moscow",
+      "placements": 6220,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis10_moscow.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis10_moscow.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis10_moscow.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis10_moscow.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis11_midway",
+      "placements": 2081,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis11_midway.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis11_midway.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis11_midway.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis11_midway.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/axis12_hawaii",
+      "placements": 5022,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/axis12_hawaii.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/tutorial01",
+      "placements": 2732,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/tutorial01.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/tutorial01.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/tutorial01.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/tutorial01.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "Campaign/tutorial02",
+      "placements": 1046,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/Campaign/tutorial02.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/Campaign/tutorial02.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/Campaign/tutorial02.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/Campaign/tutorial02.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(1v1)BorealForest",
+      "placements": 848,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(1v1)BorealForest.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(1v1)BorealForest.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(1v1)BorealForest.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(1v1)BorealForest.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(1v1)Golden Fields",
+      "placements": 27,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        },
+        {
+          "message": "9534 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: chaparral_crops_transition01, chaparral_crops_dry01, chaparral_crops_dry_transition01, chaparral_crops_wet01, chaparral_crops_wet_transition01, chaparral_dirt_transition01, chaparral_grassdry05, chaparral_grassdrytrans01, chaparral_honey_grass01, chaparral_honey_grass02, chaparral_honey_grass03, chaparral_honey_grass_04, chaparral_honey_grass_05, chaparral_lush_grass01, chaparral_lush_grass02, chaparral_lush_grass03, chaparral_lush_grass_04, chaparral_lush_grass_05, chaparral_mountain_transition01, chaparral_mountain_transition02, chaparral_water_deep01, chaparral_water_river01, chaparral_water_shallow01",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(1v1)Golden Fields.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(1v1)MountianPass",
+      "placements": 1429,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        },
+        {
+          "message": "8751 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropswet01, temperate_cropswet02, temperate_dirtdark04, temperate_dirtdarktrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasslush03, temperate_mountainbald01, temperate_mountainbaldtrans01, temperate_shoremuddy01, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(1v1)MountianPass.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(2v2)Comrades",
+      "placements": 1139,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        },
+        {
+          "message": "1267 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: arctic_waterdeep01, arctic_watershallow01",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(2v2)Comrades.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(2v2)TheMesa",
+      "placements": 404,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        },
+        {
+          "message": "19933 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_dirt03, desert_dirt_transition01, desert_grassland04, desert_grassland05, desert_mountain_transition01, desert_sand_transition01, desert_savannah05, desert_scrub_transition01, desert_scrub_dense01, desert_scrub_dense_transition01, desert_water_river01",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(2v2)TheMesa.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(3FFA)AirSupremecy",
+      "placements": 1656,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        },
+        {
+          "message": "11980 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropstrans01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirtdark04, temperate_dirtdarktrans01, temperate_forestconiferous03, temperate_forestdeciduousdense02, temperate_forestdeciduousdense03, temperate_grasslush03, temperate_mountaintrans01, temperate_shoremuddy01, temperate_waterdeep01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(3FFA)AirSupremecy.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(3v3)Firefight",
+      "placements": 2377,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        },
+        {
+          "message": "8195 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_sand02, tropical_sand04, tropical_sand05, tropical_waterfordable01",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(3v3)Firefight.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(4FFA)Farmhouses",
+      "placements": 1831,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        },
+        {
+          "message": "13545 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry02, temperate_cropswet01, temperate_cropswet02, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore05, temperate_waterdeep01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(4FFA)Farmhouses.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(4FFA)TropicalCruise",
+      "placements": 32,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        },
+        {
+          "message": "30806 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_beachriver01, tropical_dirttrans01, tropical_grass05, tropical_grass06, tropical_grassdry04, tropical_grassdry05, tropical_grasshoney02, tropical_grasshoney04, tropical_grassyellow01, tropical_grassyellow02, tropical_grassyellow03, tropical_grassyellow04, tropical_mountaintrans01, tropical_rivertrans01, tropical_sand01, tropical_sand02, tropical_sand03, tropical_sand04, tropical_sand05, tropical_sandtrans01, tropical_watercoral02",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(4v4)NorthernFrance",
+      "placements": 6543,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        },
+        {
+          "message": "42612 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountainbald01, temperate_mountainbaldtrans01, temperate_mountaintrans01, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(4v4)NorthernFrance.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/(4v4)Sandstorm",
+      "placements": 1515,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        },
+        {
+          "message": "26466 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_grassland04, desert_grassland05, desert_mountain_transition01, desert_sand_transition01, desert_savannah05, desert_scrub_transition01, desert_scrub_dense01, desert_scrub_dense_transition01, desert_water_deep01, desert_water_shallow01",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/(4v4)Sandstorm.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/AI_Test_Map_1",
+      "placements": 308,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        },
+        {
+          "message": "3382 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_watercoral02",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/AI_Test_Map_1.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GBR_ARCTIC_ART",
+      "placements": 149,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GBR_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GBR_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GBR_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GBR_ARCTIC_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GBR_Art_Map",
+      "placements": 194,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        },
+        {
+          "message": "4051 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirttrans01, temperate_waterdeep01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GBR_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GBR_DESERT_ART",
+      "placements": 149,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        },
+        {
+          "message": "1163 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_scrub_transition01, desert_water_river01",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GBR_DESERT_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GBR_TEMPERATE_ART",
+      "placements": 167,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "979 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirttrans01, temperate_waterriver01",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GBR_TEMPERATE_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GER_ARCTIC_ART",
+      "placements": 141,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GER_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GER_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GER_ARCTIC_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GER_ARCTIC_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GER_Art_Map",
+      "placements": 197,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        },
+        {
+          "message": "3922 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirtdarktrans01, temperate_shoremuddy01, temperate_waterdeep01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GER_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GER_DESERT_ART",
+      "placements": 143,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        },
+        {
+          "message": "1163 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_scrub_transition01, desert_water_river01",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GER_DESERT_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/GER_TEMPERATE_ART",
+      "placements": 143,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "979 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirttrans01, temperate_waterriver01",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/GER_TEMPERATE_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/IND_Art_Map",
+      "placements": 96,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/IND_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/IND_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/IND_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/IND_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/JPN_Art_Map",
+      "placements": 200,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        },
+        {
+          "message": "3865 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_sand05, tropical_waterdeep01, tropical_watershallow01",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/JPN_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/RUS_ARCTIC_MAP",
+      "placements": 145,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/RUS_ARCTIC_MAP.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/RUS_ARCTIC_MAP.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/RUS_ARCTIC_MAP.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/RUS_ARCTIC_MAP.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/RUS_Art_Map",
+      "placements": 200,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        },
+        {
+          "message": "5721 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirttrans01, temperate_waterdeep01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/RUS_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/RUS_DESERT_ART",
+      "placements": 145,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        },
+        {
+          "message": "1163 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_scrub_transition01, desert_water_river01",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/RUS_DESERT_ART.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/RUS_TEMPERATE_MAP",
+      "placements": 145,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        },
+        {
+          "message": "979 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirttrans01, temperate_waterriver01",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/RUS_TEMPERATE_MAP.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/USA_Art_Map",
+      "placements": 203,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        },
+        {
+          "message": "2699 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_waterdeep01",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/USA_Art_Map.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/axis00_dunkirk",
+      "placements": 1199,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "11279 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/axis00_dunkirk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_01",
+      "placements": 312,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        },
+        {
+          "message": "3073 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdrytrans01, temperate_dirt04, temperate_dirttrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_mountainbald01, temperate_mountainbaldtrans01, temperate_mountaintrans01",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_01.rmp"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_02",
+      "placements": 2953,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        },
+        {
+          "message": "40700 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_dirttrans01, tropical_grass05, tropical_grass06, tropical_grassdry04, tropical_grassdry05, tropical_grasshoney01, tropical_grasshoney02, tropical_grasshoney03, tropical_grasshoney04, tropical_grassyellow01, tropical_grassyellow02, tropical_grassyellow03, tropical_grassyellow04, tropical_grassyellow05, tropical_mountaintrans01, tropical_rivertrans01, tropical_sand01, tropical_sand02, tropical_sand03, tropical_sand04, tropical_sand05, tropical_sandtrans01, tropical_watercoral01, tropical_watercoral02, tropical_watercoral03, tropical_waterdeep01, tropical_waterfordable01, tropical_watershallow01",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_02.rmp"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_03",
+      "placements": 322,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        },
+        {
+          "message": "4961 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: chaparral_crops_transition01, chaparral_crops_dry01, chaparral_crops_dry_transition01, chaparral_crops_wet01, chaparral_crops_wet_transition01, chaparral_dirt_transition01, chaparral_dry_grass01, chaparral_dry_grass02, chaparral_dry_grass03, chaparral_dry_grass_04, chaparral_dry_grass_05, chaparral_dry_grass_transition01, chaparral_honey_grass01, chaparral_honey_grass02, chaparral_honey_grass03, chaparral_honey_grass_04, chaparral_honey_grass_05, chaparral_lush_grass01, chaparral_lush_grass02, chaparral_lush_grass03, chaparral_lush_grass_04, chaparral_lush_grass_05, chaparral_mountain_transition01, chaparral_mountain_transition02, chaparral_water_deep01, chaparral_water_river01, chaparral_water_shallow01",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_03.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_04",
+      "placements": 166,
+      "vertices": 36864,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        },
+        {
+          "message": "3297 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_sand_transition01, desert_scrub_transition01, desert_scrub_dense_transition01, desert_water_river01, desert_water_shallow01, desert_water_shallow02",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_04.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_05",
+      "placements": 387,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        },
+        {
+          "message": "5562 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: desert_beach_transition01, desert_dirt03, desert_dirt_transition01, desert_grassland05, desert_sand_transition01, desert_savannah05, desert_scrub_transition01, desert_scrub_dense01, desert_scrub_dense_transition01, desert_water_deep01, desert_water_shallow01",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_05.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "DeveloperMaps/cutscene_short_06",
+      "placements": 6933,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        },
+        {
+          "message": "47984 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/DeveloperMaps/cutscene_short_06.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/ABombMap",
+      "placements": 363,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        },
+        {
+          "message": "2047 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney02, temperate_grasshoney03, temperate_mountainbaldtrans01, temperate_mountaintrans01, temperate_whitecliffs",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/ABombMap.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/ABombMap2",
+      "placements": 361,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        },
+        {
+          "message": "2047 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney02, temperate_grasshoney03, temperate_mountainbaldtrans01, temperate_mountaintrans01, temperate_whitecliffs",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/ABombMap2.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/allies02_guadalcanal",
+      "placements": 953,
+      "vertices": 102400,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "20977 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_beachriver01, tropical_dirttrans01, tropical_grass05, tropical_grass06, tropical_grassdry04, tropical_grassdry05, tropical_mountaintrans01, tropical_rivertrans01, tropical_sand01, tropical_sand02, tropical_sand03, tropical_sand04, tropical_sand05, tropical_sandtrans01, tropical_watercoral01, tropical_watercoral02, tropical_watercoral03, tropical_waterdeep01, tropical_watershallow01",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/allies03_stalingrad",
+      "placements": 1098,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/allies03_stalingrad.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/allies03_stalingrad.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/allies04_kursk",
+      "placements": 3969,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        },
+        {
+          "message": "36285 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/allies04_kursk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/allies05_monte_cassino",
+      "placements": 459,
+      "vertices": 147456,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "2792 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: chaparral_grasshoney01, chaparral_grasshoney02, chaparral_grasshoney03, chaparral_grasslush01, chaparral_grasslush02, chaparral_grasslush03",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/allies05_monte_cassino.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/allies10_berlin",
+      "placements": 2980,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        },
+        {
+          "message": "30826 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirtdark04, temperate_dirtdarktrans01, temperate_forestconiferous03, temperate_forestconiferousdense01, temperate_forestconiferousdense02, temperate_forestdeciduousdense01, temperate_forestdeciduousdense02, temperate_forestdeciduousdense03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasslush03, temperate_mountainbald01, temperate_mountainbaldtrans01, temperate_mountaintrans01, temperate_shoremuddy01, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/allies10_berlin.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis00_dunkirk",
+      "placements": 1254,
+      "vertices": 65536,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "11349 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis00_dunkirk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis01_crete",
+      "placements": 3659,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        },
+        {
+          "message": "10046 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: chaparral_grasshoney01, chaparral_grasshoney02, chaparral_grasshoney03, chaparral_grasslush01, chaparral_grasslush02, chaparral_grasslush03",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis01_crete.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis04_stalingrad",
+      "placements": 2067,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis04_stalingrad.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis04_stalingrad.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis06_kursk",
+      "placements": 3847,
+      "vertices": 200704,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        },
+        {
+          "message": "35871 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore04, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis06_kursk.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis07_normandy",
+      "placements": 1858,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        },
+        {
+          "message": "36384 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_dirt04, temperate_dirttrans01, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney04, temperate_grasshoney05, temperate_grasslush03, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis07_normandy.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis08_sealion",
+      "placements": 6269,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        },
+        {
+          "message": "44760 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: temperate_cropsdry01, temperate_cropsdry02, temperate_cropsdrytrans01, temperate_cropstrans01, temperate_cropswet01, temperate_cropswet02, temperate_cropswettrans01, temperate_dirt04, temperate_dirttrans01, temperate_forestconiferous03, temperate_grassdry04, temperate_grassdrytrans01, temperate_grasshoney02, temperate_grasshoney03, temperate_grasshoney05, temperate_grasslush03, temperate_mountaintrans01, temperate_shore03, temperate_shore04, temperate_shore05, temperate_waterdeep01, temperate_waterfordable01, temperate_waterriver01, temperate_watershallow01, temperate_whitecliffs",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis08_sealion.RMP"
+        }
+      ]
+    },
+    {
+      "decode_errors": 0,
+      "id": "TrailerMaps/axis12_hawaii",
+      "placements": 1647,
+      "vertices": 262144,
+      "warnings": [
+        {
+          "message": "Cell spacing of 2 world units verified against native HeightMap constructor 0x5519a0.",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Terrain blending, tile orientation flags, scenario actors and mission scripts are not applied in the viewer.",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Height and mountain samples recovered exactly; their additive rendering is provisional.",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        },
+        {
+          "message": "51712 terrain corners use base-only fallback because active terrain-type metadata is unresolved; disabled legacy aliases are not revived.",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Unresolved terrain variation IDs: tropical_beachriver01, tropical_dirttrans01, tropical_grass05, tropical_grass06, tropical_grassdry04, tropical_grassdry05, tropical_grasshoney01, tropical_grasshoney02, tropical_grasshoney03, tropical_grasshoney04, tropical_grassyellow01, tropical_grassyellow02, tropical_grassyellow03, tropical_grassyellow04, tropical_grassyellow05, tropical_mountaintrans01, tropical_rivertrans01, tropical_sand01, tropical_sand02, tropical_sand03, tropical_sand04, tropical_sand05, tropical_sandtrans01, tropical_watercoral01, tropical_watercoral02, tropical_watercoral03, tropical_waterdeep01, tropical_waterfordable01, tropical_watershallow01",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        },
+        {
+          "message": "Uses native conditional mountain/type-1 noise control flow at grid vertices (render query0x122); rounded recovered floats and f64 intermediates are not bit-exact x87. Native arbitrary-position interpolation/edge mesh behavior remains unverified.",
+          "source": "Maps/TrailerMaps/axis12_hawaii.RMP"
+        }
+      ]
+    }
+  ],
+  "maps_loaded": 80,
+  "models_prepared": 1847,
+  "passed": true
+}

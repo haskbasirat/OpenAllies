@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "status": "author bounded native fields/source checkpoint; whole-owner integration pending",
+  "scope": "522890 actual owner adapter and shared direct Stop; original coordinator and order backend reused",
+  "native_new": {
+    "rows": 387,
+    "original_v14_executions": 774,
+    "executed_address_byte_pins": 105,
+    "static_vtable_data_pins": 3,
+    "immutable_replay": "PASS",
+    "aircraft": "finite native fixture; logical hardware x87_copy tested separately"
+  },
+  "native_core_reused": {
+    "path": "research\\development10\\member-command\\native-member-command.json",
+    "sha256": "4877137224825ad96f2810fff17db360c7fd9ffc9095a6997157777f6b91414b",
+    "pairs": 288,
+    "executions": 576,
+    "pins": 298,
+    "reviewer_replay": false
+  },
+  "rust": {
+    "exact_production_fields": "3/3 PASS",
+    "existing_element_position_regressions": "4/4 PASS",
+    "production_typecheck": "PASS final06",
+    "whole_runtime_or_client_link": false,
+    "whole_actoraccess_execution": "pending"
+  },
+  "sources": [
+    {
+      "path": "crates/aa-runtime/src/stored_member_command.rs",
+      "snapshot": "source-v1\\stored_member_command.rs",
+      "sha256": "5061921f9b62ab566b1b06ff10fe8ec2f65f0d70c69004bbf8efe59f69fcdf96"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_command_fields.rs",
+      "snapshot": "source-v1\\stored_member_command_fields.rs",
+      "sha256": "6d4a18894c9b964344059c7c99253a2cd2235609dc9406aedec6d8277893e874"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_command_fields_tests.rs",
+      "snapshot": "source-v1\\stored_member_command_fields_tests.rs",
+      "sha256": "c9b4e893fb284672501427f01a0ab06337b14809ba48c5edfaafbc2600d69085"
+    }
+  ],
+  "shared_algorithms": [
+    "aa_mind::cai_member_command::run",
+    "aa_actors::element_position::set_position",
+    "organization_mind_callbacks::position_active",
+    "player_order_decree::allocate_decoded_in_bank",
+    "player_order_world::deliver_in_bank",
+    "player_order_frame::Services",
+    "aa_mind::cai_thinks::x87_copy"
+  ],
+  "ownership": [
+    "same current ActorAccess/Arena/Bank/Runtime/command allocations",
+    "captured Organization identity and Zone4 owner/key; current fields reread",
+    "short field loans end before actual command delivery",
+    "constructor command reference released after both successful and failed delivery",
+    "actual goal store retained before reached relocation/interpolation error"
+  ],
+  "required": [
+    "positive Organization branch of4CEDE0",
+    "Base Mind vf80 purecall",
+    "unwritten/foreign current owners",
+    "full4EEB40/4D0EE0 relocation children",
+    "positive57C080 interpolation and50AC00 scheduling",
+    "any reached unbound actual command backend service"
+  ],
+  "not_claimed": [
+    "natural mission acceptance or initialized battle",
+    "whole57C680 positive relocation success",
+    "Unicorn signalling-NaN hardware parity",
+    "malformed native pointer/allocator/Win32/unwind equivalence",
+    "parent or peer later source successors"
+  ],
+  "files": {
+    "native_member_command_fields.py": "fbfa87c1e37534975c0a4a451c6dfe706aa53bda2946f00721df9ac8e7859e29",
+    "native-member-command-fields.json": "c11879e03d4d44c4842fe893935266fecf17ce276110592da2fc9712282afd8d",
+    "native-fields-write.log": "5decb69f86f902a3dc09258d3c42bdfd81a2f045302ccf451303948134a52b79",
+    "native-fields-immutable.log": "5decb69f86f902a3dc09258d3c42bdfd81a2f045302ccf451303948134a52b79",
+    "exact-fields-tests.rs": "843ef9799b8330eda21196419f6011b2545cea26b04c714f2a780c2b25472229",
+    "exact-fields-tests.exe": "df1971de65b5a30a0207955ef77bcebf33fbcfbcec3cd0b087a2c1f7f2e0c80a",
+    "exact-fields-tests.log": "052bf4806fd4a09091d3b4194f45dc973e5815fc5949e48c4e944d931f3ed048",
+    "exact-fields-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run_exact_fields.ps1": "5e8dd19f608bdb3d64644ade1dfda9627b84ea11f233355084d3c42b619e9dd7",
+    "element-position-regressions.log": "db899c0003679a5af4a79446013470c449f89416c85af790d7f8ac0efb966906",
+    "check-runtime-final06.log": "536e7e06376ce871815c2c80e807d7a8db8310358fa9f63283537afb28976d39",
+    "README.md": "c95cab2c0436743d10907dc76215a7faae203b0386b23f512f4f38c103a07f45",
+    "seal_checkpoint.py": "d3df552c484d1ae792a17244f8c6695da011eedd06f9d146ee198ce85f785748"
+  }
+}

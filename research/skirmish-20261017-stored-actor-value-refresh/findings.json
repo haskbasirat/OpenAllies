@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "status": "author-frozen",
+  "scope": "Stored Organization5788B0 and Denizen569E40 direct numeric refresh; diagnostic moved owner test, no natural battle claim.",
+  "implementation": [
+    "Existing native Org coordinator reused; Denizen existing recompute unchanged except pub(crate) visibility.",
+    "Actual component remains in its table through split_slot; borrowed current/other entity lookup. No component removal/clones, no Arena replacement.",
+    "Actual completed Bank authorizes target values; immutable sourcePC and live arithmeticPC remain separate.",
+    "Fresh ActorInit callbacks now invoke the real stored owner entries."
+  ],
+  "verification": {
+    "production": "check-02.log PASS22.20s; initial private typed path error repaired",
+    "actual": "actual-tests-01.log1/1PASS7.31s; actual native-fixture input equality then outputs all3livePC, same boxes/current/member/target fields, source/layout error reset prefixes",
+    "immutable": "exact frozen executable1/1PASS9.47s, capture unset",
+    "independent": "independent-source-review.json accepted bounded source plus exact binary1/1PASS13.35s; ZERO fresh native executions"
+  },
+  "source_fact": "gbr_corps actual source mask lacks Organization; actual tested nonempty Organization is regiment_usa_hq_infantry_unpacked GTID4099. Denizen is usa_airfield7742 with six real saved slots.",
+  "limits": [
+    "Direct tests retain diagnostic pre-Init Performer values; HQ Org output0 is not invented initialized combat data.",
+    "No natural fresh actor, property reentrant numeric callback, mission startup or playable battle proof.",
+    "Existing native fixtures unchanged; current tests match their inputs rather than claiming a new whole-native corpus."
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/stored_actor_value_refresh.rs": "31e6bcdd92fea278959b253e5b937cfb09e50a1fdf12ff38b9a3851b113b32b7",
+    "crates/aa-runtime/src/load_denizen_value_refresh.rs": "aedcb4f7b8c46800d971f13033f2ebde8271a0f7891893be1a8b264e3b0f541b",
+    "crates/aa-runtime/src/map_actor_init_existing.rs": "52c30e5d05062493f9386420d2d652dd2d9f86ba8a39807657bdd3a8eab0cd58",
+    "crates/aa-runtime/tests/stored_actor_value_refresh.rs": "0ad48afa6e05d903edb64651c1e75131bf1246bd422633f1af4ac142742c6e9a",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\actual-stored-values.json": "3c41394c56cd63b3f952622fe25f785c6e6ca97237f4106e32a5176d21396f0c",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\frozen-stored-values-tests.exe": "653f3ded9a51123d73e7faf1b0ac4653f6cda34adb9034ceb95b45636e83a8e8",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\actual-tests-01.log": "a1f93aed43da03fad0fd1bf31f78991f56f0c6fa056aea3ea185638f2eb08bda",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\immutable-actual-replay.log": "4e64e418effd0dd54374420e0eb3017014348a653694089fe8244642008d6a68",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\independent-source-review.json": "9dd64e404ce41827ca1c1fa9d63d4a98165ef7f3f415e9f42ac3f225180c5ba7",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\algorithm-preservation.json": "dd6a24a5716515714ff9d5326a0e05d744982a9480e46ef3d7766d23af3ae454",
+    "research\\skirmish-20261017-stored-actor-value-refresh\\integration-preimage.json": "bfc4fe96247d05dbe9c471bd117cf32ba3ba0bc9a1664a5c3644ebde7a83dead"
+  }
+}

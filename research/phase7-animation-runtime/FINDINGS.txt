@@ -1,0 +1,76 @@
+Native Character timing and authored animation definitions
+
+Production is crates/aa-animation/src/runtime.rs and definitions.rs. The existing
+aa-actors CharacterState constructor is retained. Its legacy field names refer
+to native Animator data: elapsed is the start timestamp (Character+14), resumed_at
+is pause timestamp (+18), rate is +1C, animation is +20, and active is the paused
+byte (+24). These fields are not an independent simulation clock.
+
+Native routines ported:
+- 4DAF20 pause, 4DAF40 resume, 4DB120 ordinary animation start, and 4DB170 movement
+  rate/start. Float operations use explicit PC24/53/64 and original f32 stores.
+- 563770 Character start includes pending variant remap, minimum movement speed
+  0x38D1B717, old-animation end/new-animation start FX order, and optional event
+  rescheduling. The current animation is reread after the old-end callback.
+- 563640 begin, 563620 use, 563AA0 indexed cues, 4DB080 stop/cancel. Stop does not
+  pause/reset the animator; native pause/resume are distinct operations.
+- 563BA0 default stance, including its scheduled/current-component early return,
+  activation, Performer/actor-flag short circuit, first-idle fallback, authored
+  random repeat interval, and event0 scheduling. 4CFC80 clears the active pointer
+  before old deactivation and rereads it before new resume callbacks.
+- 4BE5C0 ability animation selection uses one original RNG draw for nonempty
+  lists, including single-entry lists. 4BE610 membership, 4BE660 idle selection,
+  and 4BE590 complete masked mode comparison are retained. Performer uses mode3
+  for keep-previous; a prior animation does not undo the required selection draw.
+- 44F8A1..44F8E6 playback-parameter store fragment preserves pause-adjusted client
+  start and (KF resource duration / desired gameplay length) * animator rate.
+
+World services are explicit required callbacks for scheduler, FX, actor virtuals,
+view remapping and the shared RNG/definition routing. They can change Character
+at documented native callback boundaries. Definition queries are stable during a
+call. Unsupported arithmetic fails within the finite numeric contract; exceptional
+native NaN/overflow behavior and callback errors are not transactional parity.
+
+definitions.rs reads source-bound ResolvedNode data. 461F70 gameplay length,
+key_ratio and walk_distance are distinct from a KF's controller duration. Each
+WhenDoAtTime insertion prepends to the native linked list; cue order is reversed
+from authored list order, not sorted by timestamp. Native aspect animation sets
+precede missing-name base fallbacks. The full set array has each original aspect
+followed by the base/default set; 45E690 falls back to base for absent sets.
+45EBB0 is first case-insensitive name match; 45EC00 first restricts native kind.
+The aa-rules AnimationResolver adapter exposes this source-bound gameplay data.
+Factory binding must select the actual object variant, with -1 selecting base.
+An Actor+15C state-view override first maps the native state through StateData+8
+to an aspect index (45E5E0); that state-aspect source mapping is still a required
+caller boundary. Supplying base for every created Character would be incorrect.
+
+Only canonical native type names are accepted by this metadata projection. The
+seven original type rows are idle/fidget/move/die/ability/summon/hit; only idle/move
+loop. Additional registry aliases are not guessed from filenames. Positive desired
+length is a portable consumer precondition, stricter than the original loader's
+ratio-only diagnostic. Original fields and declaration provenance are retained.
+KF resource expressions remain unexpanded source data; this does not prove that
+the graphics resource loaded or that native FX definitions were fully compiled.
+
+Evidence:
+native_runtime.py executes 720 Character/Animator cases across all three explicit
+precision modes, plus selection/membership/mode/idle cases, 192 playback store
+fragments and 18 actor-default dispatch cases. Original source instruction ranges
+are pinned and byte-identical in the preserved v14 exe. Only documented service
+leaves are hooked. Mutation cases replace animations during end/cancel callbacks.
+native_bindings.py executes the original timing-store entry, set-fallback routine,
+cue-prepend fragment, ASCII name/type lookup and individual type-entry constructor.
+All finite getter/CRT/allocator-identity assumptions are recorded in its fixture.
+No producer fixture is presented as an independent review.
+
+Six focused Rust tests cover these original fixtures, typed metadata rejection,
+and actual source definitions for infantry from all five factions. The medium
+US tank correctly has no Character set. The source test also binds these real
+sets into the checked aa-rules Ability loader; that integration has a separate
+test log. Native animation definition loading is independent of KF playback.
+
+Remaining boundaries: full Character fidget/summon/death scheduled dispatcher,
+save/load lifecycle, FX execution, renderer blend transitions, dynamic actor clip
+selection/skinning, native resource acquisition and world/client clock lifecycle.
+The existing KF inspector remains separate. These additions are concrete building
+blocks, not a claim that complete combat or the full game is implemented.

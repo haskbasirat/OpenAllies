@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-16",
+  "scope": "Original 4FDA70 ordered traversal and required callback dispatch only; no actual startup/creation/publication or runnable mission",
+  "source_hashes": {
+    "crates/aa-mapworld/src/map_prepare.rs": "09fed01568fa98b1e561dbfff395160f2c32a42ee81e9b82943c68478baebf4a",
+    "crates/aa-mapworld/tests/native_map_prepare.rs": "8857e945518eb2495498de1a56d9828bf2a659da12c9a923107d1c62f4728aa0",
+    "research\\skirmish-20261016-map-prepare\\native_map_prepare.py": "cdc93f9613dca075248166c9a91fbdfcd0e9962f9cc73d3c744207ed19f5d7d3",
+    "research\\skirmish-20261016-map-prepare\\native-map-prepare.json": "32bd111d6515423b822ef6e8ec3371a1c9053927bc29b07d8dd0ee5031ff24bb",
+    "research\\skirmish-20261016-map-prepare\\replay.log": "706c6ed67af64d072314bcf5ad05a56d308ac6958e30706678b03d3868cb2403"
+  },
+  "native_address": "0x4FDA70",
+  "function_bytes": 621,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "whole_function_identical": true,
+  "native_rows": 96,
+  "successful_rows": 90,
+  "null_owner_rows": 6,
+  "unique_executed_instructions": 168,
+  "boundary_counts": {
+    "begin": 96,
+    "count": 567,
+    "process": 90,
+    "finish": 90,
+    "next": 558,
+    "definition": 534,
+    "category": 1122,
+    "owner": 237,
+    "kingdom_word": 69,
+    "nation": 54,
+    "substitute": 54,
+    "is_actor": 48,
+    "queue": 225,
+    "scope": 177,
+    "rng": 354,
+    "log_rng": 354,
+    "choose": 177,
+    "missing": 6
+  },
+  "rust_test": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "log": "research\\skirmish-20261016-map-prepare\\replay.log"
+  },
+  "runtime_bound": false,
+  "full_mission_start": false,
+  "limitations": [
+    "Host lookup, selector, batch construction/request capture/drain/creation remain seams",
+    "Replay covers boundary sequencing, not callee functionality",
+    "Native allocation-failure and C++ exception-unwind cleanup are not established",
+    "No real map mission startup or multiplayer test"
+  ]
+}

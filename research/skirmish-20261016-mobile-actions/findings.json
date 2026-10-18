@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "status": "pure native contributor and predicates proven; runtime adapter is separate work",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_functions": [
+    "575FB0",
+    "575C00",
+    "575BB0",
+    "575B70",
+    "4D0230(false)",
+    "529C30",
+    "4CF110",
+    "4D14C0",
+    "4D0820"
+  ],
+  "native_cases": 552,
+  "observed_native_instructions": 1294,
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "source_required": {
+    "ActorData+534": "forward unpack target resolved by4605B0",
+    "ActorData+548": "reverse pack target set by4605B0, not component presence",
+    "ActorData+54C": "pack_health_min stored by464BD0 only for an empty forward unpack ID",
+    "Properties+1C": "bit0x800 blocks packing",
+    "actor+100/+104": "registered group13 must be absent or27 and bit21 clear",
+    "Body+10/+14": "health/max at explicit x87 precision; absent Body returns+0",
+    "actor+70": "actual logical Mind presence, including runtime-owned active Arena state"
+  },
+  "branch_rules": [
+    "threshold <1 OR unordered",
+    "health ratio >threshold OR unordered; equality false",
+    "action34 enabled only after packing predicate succeeds and Mind absent",
+    "575BB0 checks unpack reference and optionally group13/bit21 only"
+  ],
+  "tests": {
+    "native_replay": "552 cases compare byte-for-byte",
+    "rust_new_module": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "ability_flags_regression": {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    "action_publication_regression": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "scope_limits": [
+    "Does not implement packing/unpacking execution or its timing/spawns/animations.",
+    "Predicate API does not expose x87 status flags or NaN payload identity.",
+    "No native data/save/release08 edit; no artificial hardware caps or RNG changes.",
+    "New source projection only; existing generic parser and runtime binding are untouched by this agent."
+  ],
+  "pins": {
+    "crates/aa-actors/src/mobile_deployment_actions.rs": {
+      "sha256": "7a7150c48385a61b6a5d43912dabda0add97bbb372ce5bac89c07de29501c0fe",
+      "bytes": 5959
+    },
+    "crates/aa-actors/tests/native_mobile_deployment_actions.rs": {
+      "sha256": "df409b0fb6878b79949f4be5a7c4270e2f97ca802c8b7c534c8f7718d08b1cc7",
+      "bytes": 5613
+    },
+    "research/skirmish-20261016-mobile-actions/native_mobile_actions.py": {
+      "sha256": "48295fca21f5d7bf3267859c8888e862961b59b50837efb4c313124e5ffb249a",
+      "bytes": 6843
+    },
+    "research/skirmish-20261016-mobile-actions/native-mobile-actions.json": {
+      "sha256": "f8c2be0036c44ae475dafb6c8cf2846b9bd57a71416885b1c549ea31cc85a819",
+      "bytes": 375003
+    },
+    "research/skirmish-20261016-mobile-actions/native-assembly.txt": {
+      "sha256": "a249720bbaac485579abd557ade163bd4f344b859b2ab007b6620f147db8b102",
+      "bytes": 6531
+    },
+    "research/skirmish-20261016-mobile-actions/native-run.log": {
+      "sha256": "08616d202244ce33995c038a295d20f58a6ccf7738ee6113e1b4495f8cfe81c8",
+      "bytes": 116
+    },
+    "research/skirmish-20261016-mobile-actions/native-replay.log": {
+      "sha256": "08616d202244ce33995c038a295d20f58a6ccf7738ee6113e1b4495f8cfe81c8",
+      "bytes": 116
+    },
+    "research/skirmish-20261016-mobile-actions/final-tests.log": {
+      "sha256": "7b1b511b1f7994cc90a2967a4a9c651737ee54b431d34d40cd09526d0538eabb",
+      "bytes": 1440
+    },
+    "backups/source-before-mobile-deployment-actions-20261016.zip": {
+      "sha256": "0ef777d652584b4fb69f1439f07268b832f4d67027820842ddc58c63ce62e649",
+      "bytes": 4960
+    },
+    "crates/aa-rules/src/native_mobile_deployment.rs": {
+      "sha256": "1e4edaca4fe23376a777aa55c99be359ac85e3a634a055d7c6f395668f0ba80e",
+      "bytes": 9902
+    },
+    "crates/aa-rules/tests/native_mobile_deployment.rs": {
+      "sha256": "e7cf7038fd017fd3864ee6f39314877ab67f421819f4900c07a2c94b1062f5c5",
+      "bytes": 7748
+    },
+    "research/skirmish-20261016-mobile-actions/native_mobile_pairing.py": {
+      "sha256": "ca788019f4f48d47f8c1eff2d3535d647ac9ff2fb3230cef9c45ebe06eca1097",
+      "bytes": 4520
+    },
+    "research/skirmish-20261016-mobile-actions/native-mobile-pairing.json": {
+      "sha256": "153a12c9c8e64e639fa1d41c9ae8e0efa01bda8bfb66c996c34f65b1adc5cf19",
+      "bytes": 59201
+    },
+    "research/skirmish-20261016-mobile-actions/native-pairing-replay.log": {
+      "sha256": "9a5562f83bd139b62dec0837f737d137949087537e890d4b493be0de1b9d469b",
+      "bytes": 114
+    },
+    "research/skirmish-20261016-mobile-actions/pairing-final-tests.log": {
+      "sha256": "82716609756a7a539868b53fb47670a7427ec523c34201f560b681aced7ae8f5",
+      "bytes": 720
+    },
+    "research/skirmish-20261016-mobile-actions/shipped-mobile-source.json": {
+      "sha256": "812bf69a48366fbf5351e1e7904cf6afa62d0dcac24e8a0399bb1e6d940c25ce",
+      "bytes": 2354889
+    },
+    "research/skirmish-20261016-mobile-actions/actor-loader-assembly.txt": {
+      "sha256": "21c196940557cf5e002f70c40050409b2a0bca6a361f339f08c7a14efe105eea",
+      "bytes": 150477
+    },
+    "research/skirmish-20261016-mobile-actions/native-pairing-assembly.txt": {
+      "sha256": "7efa07384ad40e0d4c20e5b077d6750c3dc8467ef9996fa0821fce861e0608c9",
+      "bytes": 4318
+    },
+    "backups/source-before-mobile-definition-projection-20261016.zip": {
+      "sha256": "4b6b793eff96e95ad4e2a77f0502af1a34016d4764f6c35cfd4050a09d270c6d",
+      "bytes": 2794
+    }
+  },
+  "source_projection": {
+    "module": "aa_rules::native_mobile_deployment",
+    "api": "ActorCatalog::native_mobile_deployment_data(precision); data.definition(canonical_registered_id)",
+    "native_pairing_cases": 49,
+    "observed_native_instructions": 167,
+    "native_replay": "byte-for-byte passed",
+    "rust_tests": {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    "source_definitions": 1028,
+    "source_callbacks": 75,
+    "source_pairs": 75,
+    "full_rules_metagame_compatibility": "root-owned final validation after all providers freeze",
+    "scope": "Constructor fields and direct typed source projection anchored to original loader instructions; native pairing/order/partial writes proven by original executable. This does not run every ActorData LoadData validation."
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Saved Team4E68C0 / base4EFA40(NULL) coordinator only",
+  "native_rows": 240,
+  "instruction_sites": 113,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "tests_passed": 2,
+  "oracle_default_compare": "passed",
+  "actual_source_records": 2,
+  "actual_source_maps": {
+    "DeveloperMaps/(3v3)Firefight.RMP": 2,
+    "Campaign/tutorial02.RMP": 0
+  },
+  "actual_team_flags": "0xa0042800",
+  "actual_world_init_result": "explicit required4EF6A0 error, not success",
+  "required_services": [
+    "46EE00 snap",
+    "4EF6A0 placement(NULL)",
+    "4EE4C0 spatial membership",
+    "4F0E50 terrain height",
+    "404F60 diagnostic"
+  ],
+  "excluded": [
+    "nonnull Init params",
+    "complete actual-world Init",
+    "SEH/unwind and CString allocation failure",
+    "outer PostCreate/4F9510",
+    "runtime restoration integration"
+  ],
+  "preserved": [
+    "generic restore",
+    "shared runtime",
+    "source parsers",
+    "original assets and saves",
+    "Development08",
+    "manifests and dependencies"
+  ],
+  "sha256": {
+    "backups/source-before-team-init-20261016.zip": "e86aecc69140cea6cee801dda3f2902d42c2742e4666e842ac4217a0a19d9656",
+    "research/skirmish-20261016-team-init/native-team-init.json": "3719024e9a4528cedfb0ebf874349165315c5a885b0505560408792e4cd45f2f",
+    "research/skirmish-20261016-team-init/native.asm.txt": "3b09994efed63fa44460438a5361474b0ebb9bd063263506a567b61740354641",
+    "research/skirmish-20261016-saved-flows/lifecycle-proof/static-proof.json": "02d3461011a7d8e0cc349995527188cfc6df61b3fdebffc04636363bc71fb26e",
+    "crates/aa-mapworld/src/team_init.rs": "fee8eaceab8df50503bafb708ad2beb9642ea5632bf3cf97df241a9cdd9383e9",
+    "research/skirmish-20261016-team-init/native_team_init.py": "73032e033aff309d58f930cc3f079c129461690d08675682f239c0316f378a97",
+    "research/skirmish-20261016-team-init/native-replay.log": "de8c4db58fc6e6b0624e671656d9e6bb21413be6b0097ea185be8be9d9f3da7f",
+    "crates/aa-mapworld/tests/native_team_init.rs": "410a34228fad70f0a4fdde2e0d2d3c6d301b4c9c828857734e50b7964e6acfdc",
+    "research/skirmish-20261016-team-init/tests.log": "ca18d02942c3d5b856416e0b9e53aefd8faca2122533d20851bf3bbb7c21de7c"
+  }
+}

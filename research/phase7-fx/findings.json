@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "scope": {
+    "name": "fx",
+    "cases": 52,
+    "transitions": 0,
+    "producer": "research/phase7-fx/native_fx.py",
+    "fixture": "research/phase7-fx/native-fx-fixtures.json"
+  },
+  "native_emissions": 208,
+  "rust_tests": 1,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "full_ranges": [
+    {
+      "name": "fx_wrapper",
+      "start": "0x4c8500",
+      "end_exclusive": "0x4c8560",
+      "sha256": "3607c58fda849401b30b3818178e5cf20b3e2f71ee29256367caa3b231a157e8",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_request",
+      "start": "0x4294e0",
+      "end_exclusive": "0x4296b0",
+      "sha256": "e3384e7e2bd516767d21b3c13a67f0fff2ae9c6bce199e605ba18d7af7c64e98",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_allegiance",
+      "start": "0x428f40",
+      "end_exclusive": "0x428fb0",
+      "sha256": "5d7f263294556a998f47af645c140c860c904d38af766a3340e236d68b4c2029",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_constructor",
+      "start": "0x428570",
+      "end_exclusive": "0x428620",
+      "sha256": "24db646ccdcb2efa6ae4eadf0b9a97218d5f4513d1db41db4ce781b269de9595",
+      "original_equals_accepted": true
+    }
+  ],
+  "files": {
+    "research/phase7-fx/native_fx.py": "668c00e89d22548e79219a88d0f1e86937b2dc637640a9109bd5c2b6ea98ca68",
+    "research/phase7-fx/native-fx-fixtures.json": "ab69d12efc774908fc1020084709f9cab379309a171473904309ee8a9d177a0c",
+    "research/phase7-fx/README.txt": "a25f476dbe41e862f76ad837f4b091bc792be3e2071655ddab9d5ff825bf33b1",
+    "crates/aa-combat/src/fx.rs": "8a8b6c05a70d2d8ebb0307cb3dc2b1f8bbc53a879a963fa21e0be767df2e94a1",
+    "crates/aa-combat/tests/native_fx.rs": "5c8b4845447877f204726b71000fe153e3a72dd4155e66ed0f08685b73365cd9",
+    "research/phase7-ability/final-tests.log": "55b046fcc10572f5580382b99d835162ff2ac23fed7c1ce90ad72302c7f08e80",
+    "research/phase7-ability/final-clippy.log": "6964aabee2e8585d0a5d45439374dbc1855c5f25421c803d2835e9b24fa53e14",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251"
+  },
+  "limits_reference": "README.txt",
+  "status": "native_differential_passed_pending_independent_review"
+}

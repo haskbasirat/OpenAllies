@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "scope": "Bounded actual FIFO/AppState/menu/SessionStatus/selected-map confirmation composition. No complete VWorld, native task readiness, first frame, or playable battle receipt.",
+  "owned_sources": [
+    {
+      "path": "crates/aa-runtime/src/application_menu_callbacks.rs",
+      "sha256": "3e04327106cdad05010fac5ed38ec2cdfd30083814d83f92dfe8b58d66087f2e"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_session_status.rs",
+      "sha256": "f2e34d03802052878b171bfd079c4374ce6c195c244d379a06b1c880e811e6ce"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_session_status_core.rs",
+      "sha256": "fc626203c8f88658bf91c318047dbcd49715a91037d6de90d4797d8c69a48076"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_selected_map_confirm.rs",
+      "sha256": "b5b95928f729a5c87a26da1bad89f75f2a5a904b7db3560444ae2ea417bcca4c"
+    },
+    {
+      "path": "crates/aa-client/src/battle_menus.rs",
+      "sha256": "40691c4664acc945077d008beac2c4e938ab78ec05af0333ae8d9c3dc56bd847"
+    },
+    {
+      "path": "crates/aa-client/src/battle_notifications.rs",
+      "sha256": "5fc26fe27a2e5b90233c7700cdb3cc86573869305e4ca19903d14712d172c318"
+    }
+  ],
+  "shared_successor_snapshots": [
+    {
+      "path": "crates/aa-runtime/src/application_loading.rs",
+      "sha256": "71efe5559413c9f3d1923d54547ec283e6a5d58169b14d394aafe3c86fa0d22e"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_init_prefix.rs",
+      "sha256": "cad0079b3b9a228749bbb84b63d1de26121420a343e40a96f321212201564c2c"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_init_prefix_tests.rs",
+      "sha256": "975afe808b7b13b37b97e2aa995b9a418b7ef790c51c54ea6e58f449b98a3356"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_init_world.rs",
+      "sha256": "b6449fb470c594a7e6b58dfacc34d895c3442806b12a4dde2a04cf0bcf068c74"
+    },
+    {
+      "path": "crates/aa-runtime/src/ui_world_init.rs",
+      "sha256": "bbe3c667a01db1e4b778654b6d6e70bcf7fc35c51108f971e52ac04adb7c0b21"
+    },
+    {
+      "path": "crates/aa-runtime/src/lib.rs",
+      "sha256": "aa3da4f0430e4e452eb1e20fc5225fc97f831c5fc75b397f1065ec087a67544d"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_bootstrap.rs",
+      "sha256": "e65bbaa2edf53e1ed4de67dd36d6f14c1772040f6a695296fafebf66120ced73"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_world_view.rs",
+      "sha256": "58309e4d4c0798feadc1a182dc286e997333d91efda880dd8a921b26bdd8cdf3"
+    },
+    {
+      "path": "crates/aa-client/src/battle_controller.rs",
+      "sha256": "42a9ba8fa4dc55995fb94d67504f7426d92f295d8bfc14adeadc2c75ef7fac86"
+    },
+    {
+      "path": "crates/aa-client/src/battle_view_startup.rs",
+      "sha256": "c5b0f0072afe3518578a48841dba71a26d00d4370aa31364b9027901179a004b"
+    },
+    {
+      "path": "crates/aa-client/src/battle_ui_bridge.rs",
+      "sha256": "4b1a7a5312a2ad2d43a411339979b4385615ac11bf728c3f7fd510f9a65d354c"
+    },
+    {
+      "path": "crates/aa-client/src/tgi_frontend.rs",
+      "sha256": "328ea1ea94e7f1c1cf4cfef6061af23a4d94a46719e939661b696de7cc6bd615"
+    },
+    {
+      "path": "crates/aa-client/src/frontend.rs",
+      "sha256": "833c6d4cbc807e1b8c59b1df9414bb9df8e89afd4044d9db5937ff6a76edbb4a"
+    },
+    {
+      "path": "crates/aa-client/src/main.rs",
+      "sha256": "97b03b43aa1686586637618b81e44460415bc446b5f61aa8797289f8e8f7a509"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "research/development10/application-state-menus/native-menu-callbacks.json",
+      "sha256": "6a9030472682abc9c93b0a0c36507602219932019138dd755feee4bc446b4558"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-session-status.json",
+      "sha256": "2a27fa0c017a72f740cfe162193176ce6efb44e2b41232eeb8db3816fd614512"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-selected-confirm.json",
+      "sha256": "cb27d2c95e05922dae179dcf539d3597cab5afc6393a11b1238de156298a2106"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-ui-argument.json",
+      "sha256": "b91a1c9deb40fbc4a2cee3e0516e860703fcc211f2b875d1a8d3f9754cac810d"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "research/development10/application-state-menus/native_menus.py",
+      "sha256": "1b868ba31bc35c4041842b4e74be48d4b32b981ef4bce465b373b5d2fed05b29"
+    },
+    {
+      "path": "research/development10/application-state-menus/native_status.py",
+      "sha256": "24bc53415dfa6a0cfaa880545fe22daca4789076d8068c6af6eeea9ad1ab57eb"
+    },
+    {
+      "path": "research/development10/application-state-menus/native_selected_confirm.py",
+      "sha256": "c37f43522230a33b588eba53e39133ebd80be5957ae2a12d3af559b19216462c"
+    },
+    {
+      "path": "research/development10/application-state-menus/native_ui_argument.py",
+      "sha256": "d1be1a53a05e1ac95adc5b0df1655d45a8978041766073854072d04a1055f4fa"
+    },
+    {
+      "path": "research/development10/application-state-menus/kernel-tests.rs",
+      "sha256": "ade9feb20ecc2ad781c4e8a3ec142ec0a124593b8e208226a177c204c6fdd05b"
+    },
+    {
+      "path": "research/development10/application-state-menus/kernel-tests.exe",
+      "sha256": "32c741b1698bcf3072b94fb9cb34389f7e1b66784b7073b8ddf26e067a7a018d"
+    },
+    {
+      "path": "research/development10/application-state-menus/kernel-tests-final.log",
+      "sha256": "4a568a78066b641ab7fb3831986bfbb1ef7ec6e54e8d887bfc3b8abbffaae09a"
+    },
+    {
+      "path": "research/development10/application-state-menus/menu-source-tests.rs",
+      "sha256": "7da692f1ae384dce8b4fb01a4082b7987d227dbd1b4baa8016cb29562aec9302"
+    },
+    {
+      "path": "research/development10/application-state-menus/menu-source-tests.exe",
+      "sha256": "38e298d9632ee198450a50fb7b32fd8764c839aa55e19fef61d189c21b56b2e2"
+    },
+    {
+      "path": "research/development10/application-state-menus/menu-source-tests-final.log",
+      "sha256": "ba893776343776647b986c8c2a76aec5d464279cdf5703f54078a1e8b022b962"
+    },
+    {
+      "path": "research/development10/application-state-menus/build_b8_tests.py",
+      "sha256": "b39afb79644ecb76a911f984791d72aa8dd67f32dcbd8e4b060ed11fd45f04ee"
+    },
+    {
+      "path": "research/development10/application-state-menus/b8-source-pins.json",
+      "sha256": "cd072b888bb991e0c3e339d1f54aa74860373f274f6e84f912a69e71be80ccad"
+    },
+    {
+      "path": "research/development10/application-state-menus/b8-tests.exe",
+      "sha256": "e8b41492f04140ee4ccb69d7e874ffd40d522b6b6a9cb7ef50b92d92def5f8cf"
+    },
+    {
+      "path": "research/development10/application-state-menus/b8-tests.log",
+      "sha256": "1dd5fb255b51793746747c4a5138c9a80fd6c375c01e58fcff2cb04cf3dc2882"
+    },
+    {
+      "path": "research/development10/application-state-menus/build_selected_tests.py",
+      "sha256": "4a7b94b5d29f9b35dc4da218d6fafd64bf8e891f09a8a6fc7df0f99a8b78e816"
+    },
+    {
+      "path": "research/development10/application-state-menus/selected-source-pins.json",
+      "sha256": "9c105fd34b64a3983d687bc5526d03b0cbe116849cf5631a585105efb93bb5fc"
+    },
+    {
+      "path": "research/development10/application-state-menus/selected-kernel-tests.exe",
+      "sha256": "3c38f559da0f775189ff3b78a891b7503f3ac577ac01d18b08de1c6b51ff0feb"
+    },
+    {
+      "path": "research/development10/application-state-menus/selected-kernel-tests.log",
+      "sha256": "4bc82de9931bf6e1251eddead467d7bff8300c3d52dd96ef817b20d0686c1017"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-menus-replay.log",
+      "sha256": "dcbb9b4ec10bee946e04fae62dff8af39d90d28a5adf1947e6d083b8116b4c60"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-status-replay.log",
+      "sha256": "edfb21085e411ef0d0b8d6d6f7f0e021adab6f24ce4a01be77ef3f39c8365bfc"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-confirm-replay.log",
+      "sha256": "d59693b839c3797e787903f8e8579cadf972da44970badeacf101b356cc81d50"
+    },
+    {
+      "path": "research/development10/application-state-menus/native-argument-replay.log",
+      "sha256": "0a3628e080027028e54013db332ba12d5d0e1929c0335ee0b3e430d47ce3343f"
+    },
+    {
+      "path": "research/development10/application-state-menus/check-07.log",
+      "sha256": "ef63845e243324113523560c6986ba994b001510225bf0902e6c42ee9b6b0bff"
+    }
+  ],
+  "native": {
+    "images": [
+      "original AA.exe",
+      "v14 AA.exe"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "menus": {
+      "pairs": 291,
+      "runs": 582,
+      "executed_pins": 85,
+      "stopped_show_entry": "5C0440 is a required child boundary; no native animator acceptance"
+    },
+    "status": {
+      "pairs": 135,
+      "runs": 270,
+      "executed_pins": 94,
+      "children": "Mutex/CString/translation/timer/logger primitives are explicit transports/cutoffs; late failure is not native SEH"
+    },
+    "confirmation": {
+      "pairs": 15,
+      "runs": 30,
+      "executed_pins": 90,
+      "stopped_entry": "68F68D before SetLaunchSettings transport; whole selector dialog and Host not claimed"
+    },
+    "ui_argument": {
+      "pairs": 9,
+      "runs": 18,
+      "executed_pins": 132,
+      "children": "Actual40CF00/5C3000/task ctor/E8RET; camera/VWorld/publication/enqueue remain child seams"
+    },
+    "fresh_readonly_replays": "All four producers replay immutable fixtures successfully; stop entries excluded from executed pins"
+  },
+  "rust": {
+    "exact_menu_status_kernel_tests": 3,
+    "actual_source_three_menu_allocation_test": 1,
+    "current_prefix_tests": 5,
+    "exact_confirmation_kernel_test": 1,
+    "total": 10,
+    "production_check": "cargo check -p aa-client --bin AxisAlliesRust --release --locked --offline -j4 --target-dir target/s-settlement-completion: PASS11.82s",
+    "qualification": "Small source harnesses use pinned warm numeric/UI/JSON support, no full current client link. Actual LocalBootstrap status owner test saved for parent warm cohort; not claimed executed here."
+  },
+  "invariants": [
+    "One retained App10C110 State on same SimulationThread as actual ActivatedSession/ApplicationViews; actual FIFO popped event retained on error with stop latch.",
+    "Typed weak menu handles name distinct actual TGI allocations. Actual Widget forests move between same Ui and owner; no loading15/17 is minted by paint or show.",
+    "Session12C status lock is distinct from world lock;148 writes before actual timer/diagnostic,14C only after successful diagnostic. Translation borrows same live TextManager.",
+    "Ordinary confirmation captures current actual AppState and rejects7; same GameApp mode1/source Bank/Creator/Header90/IDS/options/seed; actual ctor then784130(4,1), outer6 false04. Ordinary local map choice is explicit modern entry precondition, not a guessed dialog12A byte.",
+    "Notification.word38 explicitly reaches nativeB8; managed World Witness remains separate. Existing genuine7738B0 currently supplies revision value, so previous admitted numeric equality was not a distinct native argument proof.",
+    "Current product UI/prefix callers use explicit notification argument APIs. Legacy world.value adapters remain documented laboratory compatibility only.",
+    "PreWorld AD comes from actual retained442C00 State through weak reader, later adopted once. No missing View means false readiness."
+  ],
+  "deliberate_modern_backend": [
+    "Actual modern UI presentation installs selected source-bound Widget forest immediately; legacy5C0440 D0 animator ABI is not claimed.",
+    "Initial real main menu0 enter is explicit; legacy splash/intro/staging navigation is omitted, without changing native Host settings/seed semantics.",
+    "Separate real Windows QPC timer anchors represent modern globalB396E0 and Node50 timers. No Node cached timer substitution.",
+    "Frontend GUI remains on its native thread; actual AppState/World stay on retained simulation thread, immutable UI work crosses sanctioned bridge."
+  ],
+  "remaining_required": [
+    "No whole native UI/view initialization or runtime GUI/GPU acceptance from this report.",
+    "Non6 launch kinds and positive flag04 GameApp reset stay required; ordinary selected-map producer now selects actual6 without mode/settings changes.",
+    "Positive EndSession40CF30 teardown, positive reentrant kind9 AppState transition and other unimplemented notification kinds remain explicit required boundaries.",
+    "Native B3E1E0 event/log pointer transport is not synthesized by the modern queue.",
+    "773CE0 source fallback/legacy CRT formatting and native exception behavior beyond admitted current Localization/regular Windows timer are not independently ported by this bounded proof."
+  ]
+}

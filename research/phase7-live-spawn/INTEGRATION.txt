@@ -1,0 +1,18 @@
+Client API (no main.rs edits in this scope)
+
+let request = live_scene::spawn::SpawnActor {
+    thing_id: canonical_thing_id,
+    object_variant: authoritative_object_variant,
+    resolved_aspect: optional_actual_effective_aspect_index,
+    visual: live_scene::ActorVisual { actor_id: registered_id.raw(), native_position,
+        native_facing, scale: authoritative_visual_scale, visible, team_color },
+};
+let prepared = live_scene::spawn::prepare(store, catalog, settings, request, precision)?;
+// UI thread/render owner; failure preserves prior pixels/picking/binding.
+let report = live.append(renderer, objects, prepared)?;
+// The renderer epoch has NOT changed. All prior actor bindings remain valid.
+// Subsequent live.apply(...snapshot sequence..., actors) updates this actor normally.
+
+resolved_aspect None asserts ordinary active view: nonvariation variant-1 uses normal; variations require actual resolved nonnegative constructor selection. Otherwise call native effective-aspect selection and pass Some(index). Do not pass the Actor+15C state index directly. Do not derive variant from inspector mesh/model count.
+
+New picking Object has source_index=usize::MAX and saved record_length=0 because it was created live. UI should label that as a live actor instead of displaying a map placement ordinal. Native actor_id is the full generation GTID. Presentation append should follow successful simulation publication; unsupported rendering resource errors must be surfaced and should not duplicate/re-register the simulation actor.

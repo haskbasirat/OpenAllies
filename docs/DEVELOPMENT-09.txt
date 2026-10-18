@@ -1,0 +1,59 @@
+AXIS & ALLIES RUST RECONSTRUCTION - DEVELOPMENT 09
+Test build; the game rewrite is unfinished.
+
+This build adds actual native map-loading diagnostics to the client. In the
+asset viewer's Maps tab, select a map and click "Check map loading". The
+background check reports restored records and the first unsupported step.
+This does not start a playable skirmish or multiplayer match.
+
+Start
+-----
+Extract the ZIP completely. Double-click AxisAlliesRust.exe for the original
+front-end preview, or "Start Asset Viewer.cmd" for map/model/animation viewing.
+"Start Live Preview.cmd" opens the isolated infantry preview.
+"Check Firefight Loading.cmd" prints the native loading diagnostic and waits
+for a key before closing. Exit code 0 means the diagnostic ran; it does not
+mean every record, initialization stage, or match is complete.
+
+Original assets are still required
+---------------------------------
+This ZIP is NOT a standalone copy of the full game for a friend with no other
+files. It contains the new Windows x64 EXE, launchers, audited asset caches
+including menu video frames, and checkpoint/validation evidence. It relies on
+the existing original Data.rwd and recovered reconstruction tree, including
+maps/models/textures/animations, original UI/fonts, v14 source overlays, and
+recovered Skins/Music/Speech. Keep the folder in this installation's release
+tree, or supply the existing reconstruction path with --assets.
+
+Existing controls
+-----------------
+WASD/arrows pan, the mouse wheel zooms, F11 toggles fullscreen. The asset
+viewer and isolated live preview remain development tools. Their success
+does not establish full original gameplay or visual parity.
+
+What remains unavailable
+------------------------
+Playable complete battles, complete initialization/publication, campaign
+progression, compatible whole-game saves, and multiplayer are not finished.
+Original per-record Init/PostCreate and later services remain explicit
+diagnostic boundaries. The original AA.exe, saves and previous release are
+unchanged by this package. User preferences live in
+%APPDATA%/AxisAlliesRust/settings.json.
+
+Build evidence
+--------------
+Executable SHA256: db8ceac200346462571bb5135948feff86c5f296e4f020c01e3ed743612a9131
+Read VALIDATION.txt for exactly what was tested and not tested.
+Read CHECKPOINT.txt for the current source continuation checkpoint.
+evidence/source-snapshot.json lists the workspace sources at staging; it is
+a hash snapshot, not the complete source tree or independent build attestation.
+manifest.json lists packaged file hashes. The ZIP's CRC and every payload
+SHA256 are checked before sealing.
+
+New source in this build also includes the native saved Economy/load-lifecycle
+work since Development-08, borrowed Organization combat values, real saved
+storage bindings, member-state checks and verified Actor/Object Init(NULL)
+coordinators. Several real world services are still unbound; these source
+additions do not enable a playable battle. Read CHECKPOINT.txt for details.
+No artificial RAM, VRAM, disk or network cap was added. Hardware and OS limits
+still exist. No overall completion percentage is established.

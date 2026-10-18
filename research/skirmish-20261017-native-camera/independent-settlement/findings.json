@@ -1,0 +1,32 @@
+{
+ "schema": 1,
+ "status": "accepted bounded frozen Directory/Current/Process/Snapshot integration",
+ "freeze_sha256": "f6f6a5a3a0ae6c7ccefc64a0e9e7b43c974d325650fda688f35ac1df51e734c9",
+ "reviewer_runs": {
+  "author_owned_fixture_producer_pins_verified": 30,
+  "existing_exact_source_directory_tests": 26,
+  "world_flags_tests": 1,
+  "passed": 27,
+  "fresh_native_executions": 0,
+  "cold_builds": 0
+ },
+ "source_findings": [
+  "Only zero/nonzero local numeric204 alternatives are duplicated; actual property/Bool/device/node/list effects execute once and failure owners remain retained. Actual publication ordinal precedes real UI reset; all known fields/typed internal aliases must converge before truncating the duplicate and normalizing.",
+  "Directory handles bind private directory/allocation/ordinal. Scene captures pre7010D0 handle and rereads actual current root separately; Tail targets captured handle and checks same World/PC. Second UI camera remains Published until actually reset.",
+  "Current source reads same actual Inputs/Bank/Session/World275/physicalWorld34/visual-map owners. Optional fresh visual map NULL remains distinct from physical terrain ownership. Frontend caches reached readonly cells once per closed modern operation; concrete UI Bool/device/property effects remain required.",
+  "Snapshot private producer requires normalized current0, CPU-complete same-World scene, actual Rc parent-node relation and backend device/epoch. Snapshot rechecks camera generation, World/scene lifetime and viewport/backend currency; it does not mint AD, view readiness or activation."
+ ],
+ "qualifications": [
+  "Constructor204 normalization and deferred modern UI allocation are deliberate qualified behavior, not original unwritten-memory branch/timing parity.",
+  "No actual activated UI/GPU execution was performed. No fresh native replay was launched; existing immutable native fixture pins and fresh warm Rust replays support the bounded review.",
+  "Four shared successor files have legitimate integration drift (main, battle_view_startup, battle_controller, view_world_owner), recorded separately in pins.json and outside this frozen review.",
+  "Explicit PC53 remains consistent with separately audited actual configured-runtime Grid captures. No blanket UI24 or all-wrapper precision claim.",
+  "Fresh process/application factory lifetime is the current retained caller scope; no arbitrary repeated-global-bootstrap correctness claim."
+ ],
+ "evidence": {
+  "review_pins.py": "babae6e2749f2e6ad100d61819b31a1a560c3f1d21f8074a91849a6132088033",
+  "pins.json": "3d8fd3a614a35935344f5460f45bcf719c1694d92e8bfc601bd286f0d35ce292",
+  "directory-tests.log": "d8690033265c13596801b8276e911a8e81b6dfa4d7ff140a0e14ce5d3996f0cf",
+  "world-flags-tests.log": "9789f45851f300419ee28d5a4d1b79e0022bbbf5df091317e120a30ab7e76273"
+ }
+}
