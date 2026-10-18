@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "status": "Native CPU terrain-layer planner implemented; GPU terrain blending remains unimplemented",
+  "user_visible_issue": {
+    "reported_roads": "Separate road NIF placements have a native facing-basis error. The independent visual-audit agent owns that fix in store.rs; this work does not rotate terrain cells or duplicate the facing fix.",
+    "terrain_edges": "Current single-palette terrain batches cannot represent the original layered transitions. The planner below provides verified decisions for a future renderer integration, without guessing a GPU alpha equation."
+  },
+  "implementation": {
+    "source": "crates/aa-assets/src/terrain.rs",
+    "api": "TerrainLayerPlanner::bundled()?.plan([TerrainLayerInput; 9])",
+    "input": "Fully resolved row-major 3x3 original-variation identities and their signed native priorities. Native priority is terrain base_priority plus variation append ordinal, not map palette index.",
+    "output": "Ascending-priority cell texture layers, each with its native closed 8-bit neighbor mask. First layer has no transition. Later layers expose the selected original base mask, transformation selector, raw 4x4 matrix and original TransitionSet filename suffix.",
+    "native_routines": ["0x729470", "0x729760", "0x729230", "0x72AFF0", "0x72AB30", "0x72A950", "0x729EA0", "0x729180"],
+    "safety": "Rejects conflicting priorities for one identity and distinct identities with equal priorities; equal-priority CRT qsort tie behavior is not guessed.",
+    "integration": "Exported through aa-assets terrain module. Does not replace prepare() or change current terrain geometry, source UV, rendering, picking, maps, original assets or native saves."
+  },
+  "evidence": {
+    "generator": "research/phase5-terrain/native_layers.py",
+    "fixtures": "research/phase5-terrain/native-layer-fixtures.json",
+    "embedded_mask_catalog": "research/phase5-terrain/mask-lookup.json",
+    "original_x86_cases": 1027,
+    "cases": "All 512 binary 3x3 neighborhoods, 3 directional-priority examples and 512 deterministic random grids with unique material priorities.",
+    "native_lookup_entries": 161,
+    "original_authored_base_masks": 33,
+    "method": "Executes unchanged original x86 neighborhood selection, CRT qsort, gap closing and lookup construction. Hooks only allocator and the coordinate-hashed TransitionSet/texture leaf 0x7296B0. Every executed native instruction is checked against accepted v14; mask resource files are read and SHA256-pinned.",
+    "tests": "crates/aa-assets/tests/terrain_layers.rs: native layer/output/matrix comparison; ambiguity guards; filenames against all 33 original authored masks."
+  },
+  "remaining": [
+    "GPU alpha equation and native material texture-stage state need executed source fixtures.",
+    "The raw mask matrix must still receive the compositor target-resolution scale and texel offset; it must not be used directly as final GPU UVs.",
+    "Native block border reconstruction, offscreen target filtering and seams are unimplemented.",
+    "0x7296B0 coordinate-hashed TransitionSet choice and texture resolution are outside the port; resource names are suffixes, not complete selected paths.",
+    "Distinct variations with equal rendering priority require original CRT-qsort tie recovery before general runtime use.",
+    "Authored priority metadata is an explicit caller input; this task does not silently infer it from palette order.",
+    "Native water, terrain lighting, edge mesh and complete original screenshot parity remain unimplemented."
+  ]
+}

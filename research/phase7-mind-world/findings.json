@@ -1,0 +1,20 @@
+{
+  "status": "producer_validated",
+  "scope": "Live canonical Mind storage, simple lifecycle/Stop binding, native ground scheduling, plain command ownership and moving-status query",
+  "native_cases": 216,
+  "rust_tests": 3,
+  "ground_lifecycle_cases": 164,
+  "plain_copy_cases": 32,
+  "ground_moving_cases": 12,
+  "clippy": "cargo clippy -p aa-runtime --test mind_world -- -D warnings passed",
+  "source_sha256": {
+    "crates/aa-runtime/src/mind_world.rs": "406b616e5a3c3632447952fa1039d61038485f9bf859ab465923ee563f596a74",
+    "crates/aa-runtime/tests/mind_world.rs": "4489b82d93916e281b2e80c667d26a253928242ad6580551b1583a9785b005a6",
+    "research/phase7-mind-world/native-plain-command.json": "47c8d22fffe04b1277bb47792ddb12d36e92dc5d0427e243598727f2f5becfe3",
+    "research/phase7-mind-world/native-world.json": "bc1d2af7b187e7f399e78525a137ec5f7cae542ebd4113e290e6eb3eafc144b0",
+    "research/phase7-mind-world/native_plain_command.py": "81cc29f8d2ea05ab44b2d0fcf40d48ad3ec351f932aa9f9c22bac813b0aaedcc",
+    "research/phase7-mind-world/native_world.py": "c043cc23b0a2a07d0f68d314271b3dde37eda6e8f551a8d46f20f4733077f05f",
+    "research/phase7-mind-world/README.txt": "5c31d9185a8bbb5c703fad3e22549175e89faed88606e1d8b9f105fe88be00cd"
+  },
+  "remaining": "Required gameplay side effects listed in README; not a full working Mind world yet."
+}

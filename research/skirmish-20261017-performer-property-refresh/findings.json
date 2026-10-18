@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "status": "author_verified_bounded_gate_and_explicit_composition",
+  "accepted": true,
+  "blocking_findings": [],
+  "scope": "Native57F1E0 concrete same held Performer/AbilityArena/property-owner adapter and gate kernel. Natural original battleship no-op gate succeeds; nonempty required-list tests are EXPLICIT source-constructed table/instance attachments, not a natural saved positive case or full property admission/battle.",
+  "production_files": [
+    {
+      "path": "crates/aa-runtime/src/load_performer_property_refresh.rs",
+      "bytes": 8611,
+      "sha256": "55e24437b40ea0fb42548f4f92f3f354ced1ab1efffefb45510ad0f21818900f"
+    },
+    {
+      "path": "crates/aa-combat/src/performer_property_gate.rs",
+      "bytes": 1538,
+      "sha256": "a554778d9619565d41e6a81e3edffd9988b74001df55253d2c1927e905bdff22"
+    },
+    {
+      "path": "crates/aa-combat/tests/performer_property_gate.rs",
+      "bytes": 2058,
+      "sha256": "fa748e01b0d03004b8bfb4abcc64f07728efcc75bcabadde73a82caacb8a82f5"
+    },
+    {
+      "path": "crates/aa-runtime/tests/load_performer_property_refresh.rs",
+      "bytes": 12174,
+      "sha256": "86570abbce6721584ec562e4e89c344a2085b04fd28e813e3883ab3403129e33"
+    }
+  ],
+  "api": "load_performer_property_refresh::refresh(catalog,&mutRecord,&mutContext{variables:&mut load_view_variables::State,properties:&load_property_instances::State,inventory:&WorldInventory,current_environment:EnvironmentSampler},livePC)->actor_creation::Result<()>",
+  "behavior": [
+    "Same actual primary table count captured once and table reread each iteration; NULL local and empty required list retain current enabled byte.",
+    "Only actual source-backed local/shared tokens accepted, with source PC from same completed Bank independently of live arithmetic PC. Required Property mapping uses actual retained State source receipt/PropertyRef/Bank tokens.",
+    "581280 lookup reads ordered same Properties.effects and actual State.instances. Disabled matching instances still satisfy; NULL source/exclusion means no source-GTID/disabled-field read. Genuine empty effects do not require missing definition facts. NULL required Properties stays explicit error.",
+    "Enabled bytes write immediately in same AbilityArena; later lookup/actions/value failures cannot roll them back. Full concrete4D1350 runs only when any byte changed, then same concrete57E430 reads exact same variables/instances/current-thread environment. No default successful callback or reconstructed owner.",
+    "Properties remains in the actual component slot; no detached shadow or whole-record clone. Source metadata requirement vectors/handle snapshots are immutable observations, not alternate mutable owner state."
+  ],
+  "native_prefix": {
+    "paired_cases": 306,
+    "native_executions": 612,
+    "executed_pins": 119,
+    "successful_seams": [],
+    "required_boundaries": [
+      "4D1350 actions body",
+      "57E430 value body",
+      "5032D6 actual NULL Properties required read"
+    ],
+    "fixture": {
+      "path": "research/skirmish-20261017-performer-property-refresh/native-performer-property.json",
+      "bytes": 157628,
+      "sha256": "c30d37c01d35e231a4b2a29ea1efb0b77a16d084583d726693f1d3a38a65fac3"
+    },
+    "producer": {
+      "path": "research/skirmish-20261017-performer-property-refresh/native_performer_property.py",
+      "bytes": 4406,
+      "sha256": "db05fcc87a92b96b1d8cad3f39532bc447f8a93223b63ef57a008c39d17dab51"
+    },
+    "replay": {
+      "path": "research/skirmish-20261017-performer-property-refresh/native-dynamic-definition-replay.log",
+      "bytes": 175,
+      "sha256": "843604dcd68dbc546c44f9b76565ed600fe1b8896beddec4d59eff3d4bacdac8"
+    }
+  },
+  "core_rust": {
+    "tests_passed": 1,
+    "native_rows_replayed": 306,
+    "log": {
+      "path": "research/skirmish-20261017-performer-property-refresh/core-tests.log",
+      "bytes": 544,
+      "sha256": "b2e509fb48f78f0d90a3245faca3f124ba02756abf682204198b0b7b196b8e2e"
+    }
+  },
+  "concrete_rust": {
+    "tests_passed": 2,
+    "log": {
+      "path": "research/skirmish-20261017-performer-property-refresh/actual-immutable-replay.log",
+      "bytes": 360,
+      "sha256": "ed9fe8a58d800632ba30c2ceecd54b20e0fa2410745d4c635dbd5ea208572789"
+    },
+    "binary": {
+      "path": "research/skirmish-20261017-performer-property-refresh/frozen-performer-property-tests.exe",
+      "bytes": 6614016,
+      "sha256": "a8dba8fe3e9749b7693c5adce1c2a74fc437b4a08d489205bfd4d7ba061d8c5d"
+    },
+    "capture": {
+      "path": "research/skirmish-20261017-performer-property-refresh/actual-property-refresh.json",
+      "bytes": 6424,
+      "sha256": "8c5cf15821029e3203b7e9c362183519c4b1df37243696b6dc68ce1c19688f47"
+    },
+    "natural_original_noop": [
+      {
+        "definition": "usa_battleship",
+        "owner": 4397,
+        "same_allocation": true,
+        "unchanged_enabled": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "value": 1142330770
+      }
+    ],
+    "explicit_source": "usa_bomber",
+    "explicit_abilities": 1,
+    "explicit_property_instances": 1,
+    "explicit_changed_prefixes": 9,
+    "explicit_full_concrete_refresh_successes": 9,
+    "live_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "source_precision": "Double53"
+  },
+  "actual_native_prefix": {
+    "paired_cases": 9,
+    "native_executions": 18,
+    "executed_pins": 111,
+    "successful_seams": [],
+    "required_boundary": "4D1350; its body and subsequent value body not executed in this prefix oracle",
+    "fixture": {
+      "path": "research/skirmish-20261017-performer-property-refresh/native-actual-gate.json",
+      "bytes": 8771,
+      "sha256": "9246a50dec26d6fdd5c731f462620870f7a3661f1987ed2fd92f4a622d51aa00"
+    }
+  },
+  "limitations": [
+    "Current diagnostic Kursk had no naturally restored Performer with nonempty required-property list. The failed natural test/log is retained, not reclassified as success.",
+    "Positive phases explicitly allocate Ability::new using existing performer_inputs from real usa_bomber source, temporarily attach that table to the SAME real usa_battleship allocation, and allocate Instance::new in actual typed PropertyState with explicit membership/disabled-byte inputs. They test genuine source/owner binding and real downstream services but are not ordinary original saved unit data or full581630 admission/consequences.",
+    "Native general/actual oracles stop BEFORE required actions/value bodies and exclude those entry instructions from executed pins. Rust actually executes both implemented services; separate57E430/current-CV native parity evidence is in the sibling performer-value area.",
+    "External State source binder initially exposed absent EnchantmentType generic registry; property agent/root added actual proven generic manager/mode0 support, not fallback source guessing. That dependency proof/freeze is owned separately.",
+    "Portable structural/source/factory preflight is stronger than malformed native fault timing. Canonical boolean bytes and finite/supported numeric domains only. No panic/unwind recovery claim.",
+    "No completed ActorInit/world startup/tick/rendered battle/AI/multiplayer readiness claim. Original assets/executables/saves/releases and Cargo manifests/lock untouched by this slice."
+  ],
+  "independent_review": "Pending parent/reviewer; author verification only."
+}

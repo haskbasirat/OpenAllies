@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "scope": "Bounded original/v14 source-completion controller/list/CSV proof and static source dependency audit. No production helper or full source completion.",
+  "passed": true,
+  "files": {
+    "research\\skirmish-20261016-combat-source-settings\\audit_dependencies.py": "41dab3262f590a715b61535f07d26a251d8c4377c13e04ae1465ad6410d21c17",
+    "research\\skirmish-20261016-combat-source-settings\\native-source-context.json": "fbb6c976a0b48feaa451aa5cd0a755745e2016df516560fcc29256fa7e9be80f",
+    "research\\skirmish-20261016-combat-source-settings\\native_source_context.py": "cee5d71323dcdfc595b7685aedae3b5c471681d7ec6d5eb8f09319c5d9070dc3",
+    "research\\skirmish-20261016-combat-source-settings\\README.txt": "40f799a34b01071f870f414585ef5eb22e4092b5185e27326e3888a6c45cf8a1",
+    "research\\skirmish-20261016-combat-source-settings\\source-dependencies.json": "1cfa2a0f668af166bf809672193e6a4067b69340ec9e4b14384c872b5eabbb9c"
+  },
+  "native_cases": {
+    "list_prepend": 18,
+    "completion_controller": 18,
+    "empty_csv_cache": 6,
+    "executed_instruction_pins": 108,
+    "static_context_windows": 8,
+    "cached_float_registration_windows": 8,
+    "additional_source_ranges": 9
+  },
+  "precision": "Actual main startup chain after renderer is statically pinned. PC24 is expected only with the established D3D non-preserve runtime behavior; it is not observed by this oracle. Keep source PC and CRT environment explicit and separate from restore PC.",
+  "coordinated_with": "/root/world_start_stats",
+  "production_changes": [],
+  "cargo_runs": [],
+  "exact_remaining_requirements": [
+    "Native-order source catalog and successful source completion coverage, not arbitrary syntax projection.",
+    "Completed component masks and exact local Ability/Body/Mover/property/layout/Denizen inputs.",
+    "Source-hash-checked effective10 numeric SVars, including registered WorldRule default effects or proven absence.",
+    "Effective empty CombatValueCSV UVar or implemented debug stream path; no existing-profile assumption.",
+    "Positive Settlement exact completed radius and footprint producer460940, including its trig/geometry effects.",
+    "Explicit native source-load precision and CRT environment provenance."
+  ],
+  "not_claimed": [
+    "Full data-load execution",
+    "Original Windows/D3D FP capture",
+    "Completed ActorData combat-value arena",
+    "Runtime restoration advancement",
+    "Playable match, multiplayer or release build"
+  ]
+}

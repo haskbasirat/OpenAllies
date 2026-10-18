@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "status": "author frozen; independent review separate",
+  "scope": "Reached saved Actor registration4D4A90 state-entry null/empty branches; no full positive state effects or playable battle claim",
+  "native": {
+    "generated_rows": 108,
+    "actual_saved_field_rows": 3,
+    "fresh_original_v14_machines": 222,
+    "executed_pins": 137,
+    "seams": [],
+    "executed": "Full4D4A90,45E620/4B4590 BodyNULL,45E600 nullproperty,4F0460,4D0A00 nullFX,generation checks; bounded constructor stores and79E130",
+    "not_executed": "full ActorData constructor/TLS/loader and FXC graph construction; static source-list provenance mapping is separately pinned"
+  },
+  "rust": {
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "actual_record": 3172,
+    "map": "Campaign/tutorial02.RMP",
+    "precision_modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "source_pc": "Double53",
+    "actual_definition": "kingdom",
+    "actual_state_low": 134217728,
+    "actual_state_high": 0,
+    "actual_index": 27,
+    "actual_state": "structure_normal",
+    "stance_count": 0,
+    "stance_before": -1,
+    "stance_after": -1,
+    "guards": [
+      "forged state identity",
+      "same-ID changed typed priority/provenance equality",
+      "canonical component-mask mismatch",
+      "positive Organization stops before stance mutation",
+      "reached missing mode stops after successful stance15C mutation"
+    ]
+  },
+  "ownership": [
+    "actual held Actor/Kingdom shell and current Loading generation",
+    "fresh canonical Source and fixed mode2 native descriptor index",
+    "Bank-owned sourcePC and source identities; runtime PC is separate",
+    "actualComponents state owner and actual15C, no raw100/104 shadow",
+    "one canonical ActorData source declaration, both sourceFXlists empty due WhenLeave->WhenEnter copying",
+    "retained MapResource mode, never missing=>zero"
+  ],
+  "remaining": [
+    "positive Organization/Economy/Property/Body-rule/Character/FXC/Group children explicitly unsupported",
+    "invalid old stance diagnostics unsupported",
+    "native proof no general exception/unwind certification",
+    "actual decoded-record check omits full Init/PostCreate and world stage; root immediate-world integration is separate",
+    "no renderer or complete battle parity claim"
+  ],
+  "production_pins": [
+    {
+      "path": "crates/aa-runtime/src/load_actor_state_reentry.rs",
+      "bytes": 11844,
+      "sha256": "63e617672086120117a3a97e9412469d1d962607980d2fb447df012e7e98254c"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_state_reentry_tests.rs",
+      "bytes": 10856,
+      "sha256": "3c0934aa1f1d7094c5e5da3bdde5f62cc1070a67eb5a822c08a7300541b27c56"
+    }
+  ],
+  "original_map_pin": {
+    "path": "reconstruction/assets/original/Data/Maps/Campaign/tutorial02.RMP",
+    "bytes": 146656,
+    "sha256": "525ed33f7627294e9a83bdbabb557db2844badf0267e4312da7807089750823d"
+  },
+  "evidence_pins": [
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native_state_entry.py",
+      "bytes": 5020,
+      "sha256": "1655a5b09ab12098eb6ebc617f1cfdc1d203641a5bc7eabee4bff2f3216870f7"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native-state-entry.json",
+      "bytes": 54226,
+      "sha256": "51901e1bb5d01c686836df29aae39d84445f517170f2384fe595e958344d8e33"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native-replay-final.log",
+      "bytes": 169,
+      "sha256": "ff0e07f15c35a2721ec332ebf529aa9f328e4092a3e88ff448674d6d1e0b1cd7"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/inspect_native.py",
+      "bytes": 662,
+      "sha256": "32f5e80e1665f8e13954599b1e4262c0c7d3db1d10deea66205d92727142bd70"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/native-instructions.log",
+      "bytes": 32583,
+      "sha256": "859fea0d6f9785a0b572fb92a3e6793afbb3c83fa229e25dd5c0676673a6e5f6"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/actual-3172-frozen.json",
+      "bytes": 10962,
+      "sha256": "617bfd0328723040c2f95032a819598709c76e013171d066bafac4626b4ba73d"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/actual-3172-initial.json",
+      "bytes": 8202,
+      "sha256": "25d708acf9a4b6ada1afc667f860ec877b27107011d82e5a8da7bd75674c8adc"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/actual-capture-build.log",
+      "bytes": 2907,
+      "sha256": "bf1dc95e5b0e8566ad194c5dcd53db37dbb407a14c1ab280eada145205a2074f"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/rust-tests-final.log",
+      "bytes": 2244,
+      "sha256": "90144244d22ac0e318a60d5751e2a82fb227953e6440d6d7889d5c6a387479d9"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/rust-tests-frozen.log",
+      "bytes": 571,
+      "sha256": "b0adf38751bc4f03148d377046fa7ee5972dfc691dc7fb87d6e4b3a2bfb5f600"
+    },
+    {
+      "path": "research/skirmish-20261016-load-actor-state-reentry/README.txt",
+      "bytes": 5029,
+      "sha256": "a12016ca152510524641ac914000ddcf81836c0d71b8ecb2dfe118bb421c2cd0"
+    }
+  ],
+  "preservation": "No original native executable/assets/save/profile/release changed; no workspace Cargo/lock edits by this slice; new runtime module/tests and module export only"
+}

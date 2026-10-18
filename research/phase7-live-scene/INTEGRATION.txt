@@ -1,0 +1,46 @@
+Live scene presentation boundary
+
+The loader builds CpuScene.live from original placement IDs and retained mesh
+source_order. Slots use the same nonempty-draw compaction as SceneRenderer.upload.
+One ID binds every retained mesh slot and the matching CPU picking object.
+Ambiguous source IDs remain unbound and are reported; no guessed units appear.
+
+After successful upload, call live.attach(renderer.scene_epoch()). Retain the
+LiveScene with SceneObjects. Apply native ActorVisual deltas with a monotonically
+increasing snapshot sequence. Omitted IDs remain unchanged; hide/delete is an
+explicit visible=false row. New real actors lacking a mesh binding are returned
+as unbound_actor_ids; spawning/loading their source assets is a later boundary.
+Do not truncate native IDs or substitute placement list indices.
+
+An update stages/validates transforms, replacement colors, visibility and picking
+before writing GPU instance buffers. Model vertices, poses, materials and textures
+stay resident. Colors and opaque transforms reuse the cached render bundle;
+queued transparent transforms and visibility changes invalidate command order.
+Local posed bounds are retained so later transform changes use the current pose.
+CPU picking bounds/inverses move only after the GPU accepts the snapshot.
+Hardware/driver loss is not claimed as a transactional rollback.
+
+main.rs integration observations
+- The current frame elapsed value drives only camera and animation previews;
+  camera pan clamps elapsed to0.05s. Do not reuse that clamp as a simulation clock.
+- Run fixed simulation ticks from their native timing contract and carry excess
+  elapsed time. Rendering cadence must not change authoritative movement/order
+  results. Any render interpolation belongs strictly in presentation snapshots.
+- Queue keyboard/mouse orders once, then consume at a defined simulation tick;
+  held camera panning remains independent of mouse buttons and text entry focus.
+- Publish the latest accepted actor snapshot before picking and drawing. Pointer
+  rays use logical egui points with the physical viewport aspect, preserving DPI.
+- Selection records contain a hit position from an earlier ray. For moving actors,
+  re-anchor markers/focus from SceneObjects by actor ID; clear selection when the
+  bound object becomes hidden or when replacing the scene.
+- Reset bindings/snapshot serial on every successfully uploaded scene. A stale
+  renderer epoch is rejected, including after switching to an isolated model.
+- Root controls pause/loading/input capture. This module does not invent native
+  scheduling, player orders, action-to-animation mapping, or multiplayer state.
+
+Rendering limits
+The original native negative-Y model-forward convention and uniform scale are
+preserved. This stage updates planar facing only; pitch/roll and native event-
+selected per-actor animation are separate. Existing geometry is not reskinned
+or rebuilt by transform updates. Viewer global team color still applies when
+ActorVisual.team_color isNone; actual actor colors use per-instance attributes.

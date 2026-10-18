@@ -1,0 +1,100 @@
+{
+  "scope": "Pre-static queued class4 Kingdom destruction on same restore owners; actual selected deletion/configuration prefix completed, no whole startup/playability claim",
+  "native": {
+    "f0_rows": 66,
+    "f0_executed_pins": 165,
+    "session_rows": 54,
+    "session_executed_pins": 26,
+    "e0_rows": 42,
+    "e0_executed_pins": 728,
+    "qualification": "Counts include both images/all3PC. Laboratory prefix/destructor executions; heap/CString transport and named child cutoffs remain scoped."
+  },
+  "rust": {
+    "focused_passed": 2,
+    "shared_regressions_passed": 7,
+    "failed": 0,
+    "log": "tests-01.log",
+    "duration_seconds": 0.01,
+    "qualification": "Binary captured before later shared ThingCore handle-width widening; source body hashes independently reviewed and unchanged."
+  },
+  "actual": {
+    "input": "research/development10/playable-startup/attempt07.removal-owned.json",
+    "observed_kingdom": 1677,
+    "status": "Actual selected attempt10 configuration_completed=true after Kingdom1677 deletion; DynamicThing1682 completes,1683 stops on now-removed owner1677.",
+    "completed_prefix": "research/development10/playable-startup/attempt10.worker.json"
+  },
+  "files": [
+    {
+      "path": "crates/aa-runtime/src/configure_kingdom_removal.rs",
+      "sha256": "77b7ff27a19d926bf7aa5e045dbc940398edb1671732b7fcff0217563d4f6942"
+    },
+    {
+      "path": "crates/aa-runtime/src/configure_kingdom_removal_tests.rs",
+      "sha256": "5345cd240b630c57dff66c767ba8a1fdc3df2cadeff54a0b47333b57e234e4d9"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_uninit.rs",
+      "sha256": "3d119531b399b06908f6084e8b1c4f9fd50483f7471414e228140f69e4591f6f"
+    },
+    {
+      "path": "crates/aa-runtime/src/map_replacement_drain.rs",
+      "sha256": "d528f64f6a914087cb8723afd1c31d4934d526b592fed1cec91bc48057ce17ef"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native_kingdom_f0.py",
+      "sha256": "b4b7253765cc368f78cfd8dc110cf643144c84282252add99d6eecc0538cd4e1"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native-kingdom-f0.json",
+      "sha256": "62605424c1d57bc6cbbbc4894622b75c67e13763dab1039ea77423d13d682126"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native_session_scan.py",
+      "sha256": "ad145632d5fda9fe5ad4db65c932f3a25643a58695d2ae3cd857a1e25649733a"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native-session-scan.json",
+      "sha256": "a4c700872a2019f6eb4185219061e5d5317e2a56d3cd761e2ba83f6aa76e238e"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native_kingdom_e0.py",
+      "sha256": "a794977350fb3aa78a1584d3e448d3a43f8bfc3cb881d2a768f349871b1de99e"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/native-kingdom-e0.json",
+      "sha256": "5f2eedf30d653d1cf256b964e4eb3f35e378afb49543644a2c90f2c3aed47581"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/tests-01.log",
+      "sha256": "1eca1a9eb3624e1ce7fc31d549d6a28724b036314a59ef106a1588e33c1c473d"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/check-e0-01.log",
+      "sha256": "104abd7ce1a0cc28c595ea9f0571a459b743352a1265ab03c5c1e5646b242f42"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/independent-builder-review.json",
+      "sha256": "13889d2c8d942ebfd451b2337c70367d347e10661417140e9f31249a82adf871"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/README.md",
+      "sha256": "22138a043c401a7780582559b278c9fa5f7d72794680d677cfad1a148e5c4d7a"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/shared-drain-replay.log",
+      "sha256": "00475e797e113df8c56d72f424c8d3873d4ef7c3cb585777c0ad7988cd299ccb"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/shared-ownership-replay.log",
+      "sha256": "f02ccf2f19512ca209b54e4922422eb5556d25baa962600af17ea7fe46672629"
+    },
+    {
+      "path": "research/skirmish-20261017-configure-kingdom-removal/shared-lifetime-replay.log",
+      "sha256": "f258c81a80b53b3569122f689e790701516c815bfeff03c87443f39fa59f3631"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt10.worker.json",
+      "sha256": "52410b68eb3ba8aed6e85143835f8271da19f4ced799d67ba386eb204ff84e41"
+    }
+  ]
+}

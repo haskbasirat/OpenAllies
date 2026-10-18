@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "status": "source_frozen_focused_validation_passed",
+  "battle_ready": false,
+  "new_client_battle_owner": false,
+  "component": "actual538340 contextual Element Move binding using existing native core",
+  "native_addresses": {
+    "handler": "538340",
+    "near_point": "52A240",
+    "stack_head": "52A000",
+    "generation_lookup": "530F10",
+    "schedule": "529CD0",
+    "fresh_point_activation": "52DF60",
+    "sleep_activation": "52A810",
+    "kill_activation": "5351C0",
+    "bombard_activation": "538120",
+    "follow_activation": "532930"
+  },
+  "native_oracle": {
+    "actually_executed": "original AA machine code under Unicorn",
+    "cases": 123,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "v14_proof": "every reached instruction byte equals v14; not separate full-battle execution",
+    "non_fs_page_zero_reads": 0,
+    "effect_seams": [
+      "57E280 indirect fire",
+      "target virtual+16C",
+      "Updatable virtual+4 Schedule",
+      "52A810 Sleep activation",
+      "52DF60 Move activation",
+      "5351C0 Kill activation",
+      "538120 Bombard activation",
+      "532930 Follow activation"
+    ]
+  },
+  "actual_state_validation": {
+    "source": "original Data.rwd plus v14 overrides; usa_infantry",
+    "native_rows_replayed": 123,
+    "mutation_probes_included": 3,
+    "real_wakeup_schedule_probes": 6,
+    "extra_ownership_probes": 6,
+    "all_are_isolated_state_probes_not_saved_battles": true,
+    "stores": [
+      "ActorStore/ActorAccess",
+      "Mind Arena",
+      "Commands",
+      "typed Move payload",
+      "Owners",
+      "Queues",
+      "SpatialWorld"
+    ],
+    "no_snapshot_copyback": true,
+    "no_invented_unknown_fields": true
+  },
+  "tests": [
+    {
+      "path": "research/skirmish-20261016-playable-path/actual-store-replay-v2.log",
+      "bytes": 1781,
+      "sha256": "92eba85a6403f289d1e6a5fada66f87d8529c083ed25b3235a3759fbce5c5d5b",
+      "passed_test_suites": [
+        {
+          "passed": 2,
+          "failed": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0
+        }
+      ],
+      "compile_error": false
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/core-replay.log",
+      "bytes": 1025,
+      "sha256": "7dde1afa1ee0380a6cf726232c163b919218f3cb6365ca36bcd5c86e60289ae5",
+      "passed_test_suites": [
+        {
+          "passed": 2,
+          "failed": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0
+        }
+      ],
+      "compile_error": false
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/final-adapter-tests-after-shared-fix.log",
+      "bytes": 563,
+      "sha256": "28371d778d33098e210193eab856c22cdbb4217374dc8dc4875a764129decb82",
+      "passed_test_suites": [
+        {
+          "passed": 2,
+          "failed": 0
+        }
+      ],
+      "compile_error": false
+    }
+  ],
+  "retained_failure_log": {
+    "path": "research/skirmish-20261016-playable-path/final-adapter-tests.log",
+    "bytes": 1403,
+    "sha256": "5fc63485a50e6be9850042952249a850a7dfc261fa9d706e59d9b30e433ab5a4",
+    "passed_test_suites": [],
+    "compile_error": true,
+    "qualification": "concurrent live_registration.rs E0283 prevented compilation; owner fixed it, then final rerun passed"
+  },
+  "files": [
+    {
+      "path": "crates/aa-runtime/src/element_move_command.rs",
+      "bytes": 11661,
+      "sha256": "d09fcde472710e029f7ebf420044610bff70ec87ac1c2590ce6b5007598a445e"
+    },
+    {
+      "path": "crates/aa-runtime/tests/element_move_command.rs",
+      "bytes": 24321,
+      "sha256": "34d1425fba6bc5859c59189d778f618923fa956b77767574da56d33308b9425c"
+    },
+    {
+      "path": "crates/aa-mind/src/element_command.rs",
+      "bytes": 7897,
+      "sha256": "81291611159a4fc2cddcc6a4e0affafd34fd9286025615e9fe512bcb378db3d2"
+    },
+    {
+      "path": "crates/aa-runtime/src/mind_world.rs",
+      "bytes": 31204,
+      "sha256": "8e497e3c261a6c8ff49e644aad957c4197354aca51f616e6fe9e0dba49d44736"
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/native_element_move.py",
+      "bytes": 3021,
+      "sha256": "0f06dfc5e1914c1545abdd7047a49982182d064dc4e300bc66d2639ac968b0da"
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/native-element-move.json",
+      "bytes": 215454,
+      "sha256": "d35dd121d06e6c4cd84e9025daf05696712006ffe17b53e9480d9cbbb91a4def"
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/README.md",
+      "bytes": 10312,
+      "sha256": "7bf5eb8f219c6215bf5bfc1e1ff1ad1cdb6fce0b68b33a6c557bd63278a2c9a5"
+    },
+    {
+      "path": "research/skirmish-20261016-playable-path/write_findings.py",
+      "bytes": 5097,
+      "sha256": "c2c3071a24a1b9a8601f45ef82a18cf2be574c0bc41dcdd6d76df32d03121fed"
+    }
+  ],
+  "runtime_export": "pub mod element_move_command;",
+  "approved_shared_edits": [
+    "aa-mind element_command granular getters and matching native branch reads",
+    "mind_world Commands::value_mut only",
+    "runtime lib export only"
+  ],
+  "limits": [
+    "No client StartMatch/authorization/decree integration added here.",
+    "No complete map Init/PostLoad/world-start publication or concrete complete clocked/Network services.",
+    "Fresh activation, target acceptance and indirect fire remain required live services; recorder seams are tests only.",
+    "Active Move payload independent reentry during an existing mutable borrow explicitly refuses; no cached bypass.",
+    "No full movement/attack/economy battle, campaign, multiplayer or internet test occurred.",
+    "No completion percentage or finish date can be inferred from leaf counts."
+  ],
+  "target_dir": "target/s-saved-leader",
+  "author_commands_reaped": true,
+  "original_assets_modified": false,
+  "release_modified": false,
+  "root_manifests_modified": false,
+  "new_external_dependencies": false
+}

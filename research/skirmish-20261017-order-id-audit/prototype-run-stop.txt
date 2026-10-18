@@ -1,0 +1,1 @@
+Stopped only verified owned Python PID42892 after ready60 to correct inherited native_lobby count357 to authoritative358. Partial log retained; no output fixture was produced. No original game process ran.

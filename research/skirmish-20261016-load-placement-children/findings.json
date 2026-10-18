@@ -1,0 +1,64 @@
+{
+  "scope": "Bounded concrete load-placement children; no full battle or all positive services claim",
+  "source_files": {
+    "crates/aa-runtime/src/load_placement_children.rs": "6336b563e22c1c1fe43c71d071f41fa229fecc9cafb4c3531e004d0cea9ed92a",
+    "crates/aa-runtime/tests/load_placement_children.rs": "8e479b04779d0badbc70296af85e78d90b8895d29cfa5b6624b8de37d4389b10",
+    "crates/aa-runtime/src/load_object_init_world.rs": "9c7bc7bb9a9591390dedf5dd8b68992a16b37405d66a07314944024fb9f25f92",
+    "crates/aa-runtime/src/live_placement.rs": "b96e1736518cedd971c6024be580111e304ce7c1fc6071ce757544d699c0ab9a"
+  },
+  "native_proofs": [
+    {
+      "file": "native-null-parents.json",
+      "sha256": "49c523c68656e9d16d1706070672c545174e96a4697a39fa6d534db566763ee3",
+      "rows": 24,
+      "executions": 48,
+      "instruction_pins": 36,
+      "scope": "Native null-parent branches4CED60 and4CE9A0 on actual Actor/Kingdom vtables.\nStructure absence and present Structure+10 null are explicit memory inputs;\nWall is absent. Positive parent/Wall states are not ported by the adapter.\n"
+    },
+    {
+      "file": "native-object-dispatch.json",
+      "sha256": "0ec5b17ccd86155601558cdf3936acdb3ad8cdfb8bca3fa452eb9dfa36c240e2",
+      "rows": 60,
+      "executions": 120,
+      "instruction_pins": 17,
+      "scope": "Actual Object/Area/Camera/Doodad vtable exclusion, B4 and owner/parent leaves.\nThe direct source50 link is null; source self/other and real classification\nare explicit probes. No positive generation link, wall, callback or shape is\nreplaced with a permissive answer.\n"
+    },
+    {
+      "file": "native-actual-direct-child.json",
+      "sha256": "02a237ebb222763eb957ed70948b18cd83b3395b13a767f50a19f988d46291e3",
+      "rows": 3,
+      "executions": 6,
+      "instruction_pins": 737,
+      "scope": "Unchanged4F0A70->553BA0 on captured actual first-Kingdom direct-child probes.\nThe diagnostic calls are not naturally reached by that Kingdom's Init. Actual\ncaptured grid/source/query fields are used; only tile0 is admitted to native\nreads (the rest of allocated tile storage is explicitly outside this probe).\nNo collision/query/source callback is replaced. The descriptor constructor's\norientation source is an explicit probe and gets overwritten before use.\n"
+    }
+  ],
+  "author_tests": {
+    "live_placement": 3,
+    "load_object_init_world": 1,
+    "load_placement_children": 1
+  },
+  "test_log": "tests-final.log",
+  "check_log": "check-final.log",
+  "actual_probe_scope": "Actual first saved Kingdom781 direct collision before current membership, sourcePC53/live24/53/64; not naturally reached Kingdom lifecycle; sourceActor None and no actor policy callback reached. Exact tile0 flags801 yields static collision1. Required4F1660 refuses uncompleted manager74 source owner.",
+  "concrete_wiring": [
+    "required4F1660 uses existing live_required_placement and same terrain/index/zones/source fields plus actual SessionE4",
+    "collision4F0A70 uses same LoadSpatial read-only lease, exact query and late definition38",
+    "source flags and1A8 use immutable Bank sourcePC/provenance",
+    "Object/special base exclusion and null100/108 bind native leaves",
+    "Actor4D5600 uses existing source_exclusion core plus typed110 list, actual Element/Mind state",
+    "nonnull different-owner relation vectors and4D1120 typed current state are bound but not covered by the actual direct query probe"
+  ],
+  "remaining_required": [
+    "custom function callbacks",
+    "positive Wall/Structure parent pointers/4D36F0",
+    "positive zone actor/structure4F2220/footprint4F0B70",
+    "moving_exclusion4CEDE0",
+    "current-thread identity and globalB28158/orphan relations",
+    "naturally reached positive actor collision and complete lifecycle/battle"
+  ],
+  "settings_alias_integration": {
+    "evidence": "../skirmish-20261016-world-settings-alias/findings.json",
+    "actual_mode_borrow": true,
+    "affected_regression_tests_passed": 5
+  }
+}

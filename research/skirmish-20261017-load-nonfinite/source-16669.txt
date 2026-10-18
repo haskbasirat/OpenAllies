@@ -1,0 +1,266 @@
+map_source=SourceIdentity { sha256: "c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b", bytes: 231059 }
+definition=waves
+serialized_input=Placement {
+    record_ordinal: 1132,
+    source_span: ByteSpan {
+        offset: 106342,
+        length: 80,
+    },
+    thing_id_utf16: [
+        119,
+        97,
+        118,
+        101,
+        115,
+    ],
+    class_code: 2,
+    serialized_id: 16669,
+    thing: ThingState {
+        version: 2,
+        name_utf16: [],
+        word_1c: 0,
+        position_bits: [
+            1102053337,
+            1128267776,
+            1071644594,
+        ],
+        facing_bits: [
+            4290772992,
+            4290772992,
+            0,
+        ],
+        serialized_flags: 639903752,
+        legacy_version_one_word: None,
+    },
+    object: Some(
+        ObjectState {
+            version: 5,
+            scale_multiplier_bits: 1065353216,
+            variant_index: Some(
+                2,
+            ),
+            associated_object_id: Some(
+                0,
+            ),
+            legacy_word: Some(
+                0,
+            ),
+            nested_count: Some(
+                0,
+            ),
+        },
+    ),
+    actor: None,
+    opaque_tail_span: ByteSpan {
+        offset: 106422,
+        length: 0,
+    },
+    opaque_tail: [],
+}
+category=CategoryDescriptor { name: "OBJECT", registry_index: 1, native_kind: 1, runtime_class: 2, view_type: 2 }
+final_flags=0x22242800
+object_definition=ObjectDefinition {
+    id: "waves",
+    source: Provenance {
+        path: "Doodads/Shared/waves.tgi",
+        sha256: "a65fdff1fe705c18566df06a17e77045c6cb8081df15fa251fd6ea2389ed2223",
+        span: Span {
+            start: 0,
+            end: 560,
+        },
+    },
+    height: TypedScalar {
+        bits: 1073741824,
+        field_type: Fixed,
+        source: Provenance {
+            path: "Templates/template_doodad_aa.tgi",
+            sha256: "f31cb5538ac5e928357d8fe8417f0e6f8da31421dcc800ab1536e14fb145f6f4",
+            span: Span {
+                start: 556,
+                end: 566,
+            },
+        },
+        declaration_source: Provenance {
+            path: "Templates/template_object.tgi",
+            sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+            span: Span {
+                start: 1842,
+                end: 1854,
+            },
+        },
+    },
+    scale_min: TypedScalar {
+        bits: 1065353216,
+        field_type: Fixed,
+        source: Provenance {
+            path: "Doodads/Shared/waves.tgi",
+            sha256: "a65fdff1fe705c18566df06a17e77045c6cb8081df15fa251fd6ea2389ed2223",
+            span: Span {
+                start: 196,
+                end: 212,
+            },
+        },
+        declaration_source: Provenance {
+            path: "Templates/template_object.tgi",
+            sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+            span: Span {
+                start: 1573,
+                end: 1592,
+            },
+        },
+    },
+    scale_max: TypedScalar {
+        bits: 1065353216,
+        field_type: Fixed,
+        source: Provenance {
+            path: "Doodads/Shared/waves.tgi",
+            sha256: "a65fdff1fe705c18566df06a17e77045c6cb8081df15fa251fd6ea2389ed2223",
+            span: Span {
+                start: 215,
+                end: 231,
+            },
+        },
+        declaration_source: Provenance {
+            path: "Templates/template_object.tgi",
+            sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+            span: Span {
+                start: 1596,
+                end: 1615,
+            },
+        },
+    },
+    blocking: Shape {
+        words: [
+            1,
+            1045220557,
+            0,
+            0,
+            0,
+            0,
+        ],
+    },
+    soft: Shape {
+        words: [
+            1,
+            1056964608,
+            0,
+            0,
+            0,
+            0,
+        ],
+    },
+    target: Shape {
+        words: [
+            1,
+            1056964608,
+            0,
+            0,
+            0,
+            0,
+        ],
+    },
+    has_explicit_target: false,
+    shape_inputs: {
+        "Size.blocking_radius": Scalar(
+            TypedScalar {
+                bits: 1045220557,
+                field_type: Fixed,
+                source: Provenance {
+                    path: "Templates/template_object.tgi",
+                    sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                    span: Span {
+                        start: 1998,
+                        end: 2025,
+                    },
+                },
+                declaration_source: Provenance {
+                    path: "Templates/template_object.tgi",
+                    sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                    span: Span {
+                        start: 1998,
+                        end: 2025,
+                    },
+                },
+            },
+        ),
+        "Size.blocking_shape": String {
+            value: "CIRCLE",
+            source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 1909,
+                    end: 1939,
+                },
+            },
+            declaration_source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 1909,
+                    end: 1939,
+                },
+            },
+        },
+        "Size.soft_radius": Scalar(
+            TypedScalar {
+                bits: 1056964608,
+                field_type: Fixed,
+                source: Provenance {
+                    path: "Templates/template_object.tgi",
+                    sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                    span: Span {
+                        start: 2232,
+                        end: 2255,
+                    },
+                },
+                declaration_source: Provenance {
+                    path: "Templates/template_object.tgi",
+                    sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                    span: Span {
+                        start: 2232,
+                        end: 2255,
+                    },
+                },
+            },
+        ),
+        "Size.soft_shape": String {
+            value: "",
+            source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 2115,
+                    end: 2139,
+                },
+            },
+            declaration_source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 2115,
+                    end: 2139,
+                },
+            },
+        },
+        "Size.target_shape": String {
+            value: "",
+            source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 2534,
+                    end: 2560,
+                },
+            },
+            declaration_source: Provenance {
+                path: "Templates/template_object.tgi",
+                sha256: "00b3c3af30bd0be1699ba4279dd0a16dd7719c9ed1f7b632c56da4d37c5ee5d7",
+                span: Span {
+                    start: 2534,
+                    end: 2560,
+                },
+            },
+        },
+    },
+}

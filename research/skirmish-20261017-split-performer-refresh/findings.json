@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "status": "author-frozen",
+  "scope": "Same actual stored Performer and paired ActorAccess/Arena owner factoring, reusing one existing property gate/value algorithm. Not natural fresh mission or changed-enabled Actions proof.",
+  "changes": [
+    "Store entry splits same ActorStore exactly once then forwards to one shared owner kernel.",
+    "New refresh_on_split_owners borrows actual same ActorAccess, full PropertyState, Ability map, Arena, moved Bank, variables, inventory and optional published SpatialWorld.",
+    "No LoadShell/Mind/Ability copy, temporary replacement or new mutable authority."
+  ],
+  "verification": {
+    "production_check": "check-01.log passed; 30.98 seconds",
+    "actual": "actual-tests-02.log 2 passed, including current hardware sampler and same allocation/cell results for diagnostic Tutorial02 usa_corps and usa_battleship across three live precisions; 7.02 seconds",
+    "immutable_replay": "same frozen exact executable, capture unset, 2 passed; 7.97 seconds",
+    "preservation": "algorithm-preservation.json documents exact unchanged field/gate method text with lifetime and paired-owner Actions-entry normalization"
+  },
+  "limits": [
+    "Input actors were diagnostic-loaded and moved once. Their natural fresh startup is outside this test.",
+    "Actual rows do not force changed-enabled Actions.",
+    "Existing native algorithm fixtures remain historical authority; no new whole-native parity claim from owner-only factoring."
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/stored_performer_refresh.rs": "e6202f25b501251046b007d1cd5e5dcb3238f7e6e6e6e7f66b1c9cdb06677250",
+    "crates/aa-runtime/tests/stored_performer_split_refresh.rs": "78d6b547ad96af9d6fd983d71ef9a60ee954a803400d25aab1e206127800c469",
+    "research\\skirmish-20261017-split-performer-refresh\\stored-performer-before-split.rs": "3b7f1561b17fbf298a581c12666a3701562603c3cb0a07c66d6fc804abde1e53",
+    "research\\skirmish-20261017-split-performer-refresh\\actual-split.json": "b5b95b75c14b644b9972d555900ce0aa1bd0ac687068c40af5b377a6f369d738",
+    "research\\skirmish-20261017-split-performer-refresh\\frozen-split-performer-tests.exe": "68d66d5882ae2cd22c947343f3b8326718d7744307853d39af196e1d60a4bf88",
+    "research\\skirmish-20261017-split-performer-refresh\\actual-tests-02.log": "8085371c635d3b943415772cfe0a9f2ca870a60ecaa379a18e8e60e256a6ab85",
+    "research\\skirmish-20261017-split-performer-refresh\\immutable-actual-replay.log": "abbb40a1d68267348820ae7e5d18ae2951a374dfb36432cee2c3b4a1185ec7cb",
+    "research\\skirmish-20261017-split-performer-refresh\\algorithm-preservation.json": "f65ddb50b61e00290ebf7f6a8e47a64bd1ecda60bfeed2aba911d5bf0659625d"
+  }
+}

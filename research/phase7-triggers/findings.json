@@ -1,0 +1,297 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Trigger serialization, ordered manager state, eight native intrinsic opcodes and eight recovered world-action wrappers",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_corpora": [
+    {
+      "file": "native-saved-writer.json",
+      "sha256": "dacbaed6b2672e55bbdecd2b2f2f564c9a0c2dfb5d9ecb681e2d466e87ebd328",
+      "cases": 185,
+      "seams": [
+        "stream write callback",
+        "stream write-mode and contextual-interface predicates returntrue",
+        "external MAPSTRINGS native save mode59E3B0 returnsfalse",
+        "5A1120 localized registration, does not emit binary bytes"
+      ]
+    },
+    {
+      "file": "native-manager-fixtures.json",
+      "sha256": "19e43119c27fbd0f575055a891c9bc8f7cf4940ccba1ec0234a8ee48070abe0e",
+      "cases": 67,
+      "seams": [
+        "546AF0 bool/mutation leaf scripts",
+        "application mode getter",
+        "mode7 localized failure reporting branch, captured and skipped",
+        "heap free observation"
+      ]
+    },
+    {
+      "file": "native-core-program.json",
+      "sha256": "81ef14c9a78fa6f715e914040a27ec95f2cb7b3a0bbfeeb0713af5a2a9ee4c00",
+      "cases": 327,
+      "seams": [
+        "string copy/assignment without native refcount ownership",
+        "variable dictionary lookup/insertion with real owned variable fields",
+        "heap allocation",
+        "diagnostic logging"
+      ]
+    },
+    {
+      "file": "native-world-program.json",
+      "sha256": "638da2acb40baf7c1a637ceeb646847254eab6a3e08780e7b6a252454878317e",
+      "cases": 201,
+      "seams": [
+        "name table actor/Kingdom helpers with class-valid fixture results",
+        "463FA0 SharedProperty lookup; invalid-ID warning setting false",
+        "5035E0 applicability;581630 insertion (both separately ported)",
+        "actor command admission+38 and component handler+24; no SAI handle in this corpus",
+        "string allocation/assignment, variable dictionary lookup and logging from core oracle",
+        "heap allocation"
+      ]
+    }
+  ],
+  "native_ranges": [
+    {
+      "address": "0x546af0",
+      "size": 7229,
+      "sha256": "2de50b293be803b427b184cd5e11ffc9b979fb788139375861753070c6b89bdb"
+    },
+    {
+      "address": "0x541900",
+      "size": 75,
+      "sha256": "f8b467864fa38c6240a0c7d6909f94839cb66e1a6ceef5c1e05f496ec367e233"
+    },
+    {
+      "address": "0x5422f0",
+      "size": 68,
+      "sha256": "868b29eeb423e8e69572e28fc2d0ac97c7bcdcd9535723e8908f6b00cb6b3f18"
+    },
+    {
+      "address": "0x54a5a0",
+      "size": 120,
+      "sha256": "06684cf279cb8a7402d1b7b2958f4539cb48baf0e898988129b1453e8546fcdd"
+    },
+    {
+      "address": "0x548900",
+      "size": 19,
+      "sha256": "09ebd464350d7c891b3d40f602fd3df1f623bc1984489e2a763637f0c7091832"
+    },
+    {
+      "address": "0x4c5db0",
+      "size": 11,
+      "sha256": "15030f684dea83b6107eae64c20fca77789159ed282c8a876926a6eb9b27635b"
+    },
+    {
+      "address": "0x541de0",
+      "size": 164,
+      "sha256": "be1541f2f85e8882d007682543ed8d850b742f7bb9dbe72b1e3898c849ae15fa"
+    },
+    {
+      "address": "0x5425c0",
+      "size": 40,
+      "sha256": "c3e7fdd52255dc9ceced1a4f074f5bc903994336b2eaf9aff60b1947abadb1a7"
+    },
+    {
+      "address": "0x54d9e0",
+      "size": 54,
+      "sha256": "09f77d7eda17bad56ff482c174014df21f54c15abb74839ac30d0c2def2e11a7"
+    },
+    {
+      "address": "0x54da40",
+      "size": 15,
+      "sha256": "3d1f297d97888af416786703a4bdf89c979118c0259a7d33ba9c43e4fbf18b5e"
+    },
+    {
+      "address": "0x54da50",
+      "size": 15,
+      "sha256": "d4d24e5be707c5942296cb7fefe092ff6ee3f49a6a9925a459c2550b9628e6e0"
+    },
+    {
+      "address": "0x54bd30",
+      "size": 37,
+      "sha256": "c850400745aafee5b056e92e2adc19655939f18c8201fddc59f1848ef09184a5"
+    },
+    {
+      "address": "0x540a30",
+      "size": 36,
+      "sha256": "3918b774de4655d7387fbdc1843d2a5acffc3eaf9ac7f0fe9a403fddad8184df"
+    },
+    {
+      "address": "0x5439a0",
+      "size": 106,
+      "sha256": "0d662f8f011ec92c60d8790f20c526a49a0fb2ae3ba6f04e0d82df9a7124440e"
+    },
+    {
+      "address": "0x54d280",
+      "size": 327,
+      "sha256": "f96c61b65499b469c87c8a25dd1a4fae2a9ff212229798265694a2b3f541a41a"
+    },
+    {
+      "address": "0x54cce0",
+      "size": 89,
+      "sha256": "529174b23af28a2dc34b0d09e808740e5c1391ff83900147d360948cc512ce30"
+    },
+    {
+      "address": "0x54dd40",
+      "size": 181,
+      "sha256": "783ea74b1b1a1917048a8f566ffd419b2359656a95bc23d4ef476901415f53c6"
+    },
+    {
+      "address": "0x541f40",
+      "size": 28,
+      "sha256": "4eb87154b9dc71459c6c3bb9f2b3bf39a4f626c7801487b2a8d6c66976c9eb65"
+    },
+    {
+      "address": "0x541f60",
+      "size": 28,
+      "sha256": "dcaa814f27a56df2390b616251d607b20535962179d10a67c16ba2ef9ee7a4b1"
+    },
+    {
+      "address": "0x54ce70",
+      "size": 97,
+      "sha256": "6e28e9b9330d95c9a6156e719ffe219e042fe0cf744b226de856a760c8b99b8f"
+    },
+    {
+      "address": "0x54ea10",
+      "size": 39,
+      "sha256": "a24610d6e3be9a769fa359fc12fe6150fc3eb93372076de4fda6ee41e4229b9c"
+    },
+    {
+      "address": "0x54da20",
+      "size": 19,
+      "sha256": "62fdcc8d0b2d1ddcf3b559aee35f907c70f60acc1f8a4536ba47bd28c7770408"
+    },
+    {
+      "address": "0x54dac0",
+      "size": 160,
+      "sha256": "928b44e86cec066c37f26ec00ce58cec1c0c7dba23e350f288da0b6441577fef"
+    },
+    {
+      "address": "0x54dc20",
+      "size": 144,
+      "sha256": "59aeaf91f68d7d28d12f0511377414b4505f0e3e2ae8547039d2b2e1cbe4688e"
+    },
+    {
+      "address": "0x54e880",
+      "size": 27,
+      "sha256": "d832a1199b1060a5d7b01d05ce02727aaddeae564ab1cb6283e9d25d15107176"
+    },
+    {
+      "address": "0x54e080",
+      "size": 249,
+      "sha256": "071261b65c185d786909844bde858dffd9c56a33b43ca7e04f43a66793027da0"
+    },
+    {
+      "address": "0x541d40",
+      "size": 29,
+      "sha256": "b97800f17933c46b44d4c531873c648ead79653690f257e3d1143e02c07a9bf0"
+    },
+    {
+      "address": "0x541d60",
+      "size": 29,
+      "sha256": "b97800f17933c46b44d4c531873c648ead79653690f257e3d1143e02c07a9bf0"
+    },
+    {
+      "address": "0x4ed890",
+      "size": 32,
+      "sha256": "ce158b7e46b3723dfc7e57615e0ec2772d9aa98e456858f8aa407fbc60c1e020"
+    },
+    {
+      "address": "0x4ed8b0",
+      "size": 38,
+      "sha256": "34b29f284074fd6e80f0cd7be67cd604c2148ed42d659ff8c769eaa91a43f329"
+    },
+    {
+      "address": "0x5421a0",
+      "size": 28,
+      "sha256": "4a8a7d77c01e62c8a0f5ee09480ff6447a9fdfc48ff5f3ebd51580746e954435"
+    },
+    {
+      "address": "0x541fe0",
+      "size": 36,
+      "sha256": "cb7da18abd9cb9acc7ee007cb90d28fdb77dadf9ca32f624fec7b9a14084275e"
+    }
+  ],
+  "rust_tests": 8,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-triggers"
+      ],
+      "exit_code": 0,
+      "log": "tests.log",
+      "sha256": "e604a7ea11bdf7528ef1acb33b9501a1e164e7f9a8204f590a692d237d2a4aff"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-triggers",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "7c5a074766aa598fe49cb9a63364e73ba6700d37421eeccf32f0517057f66c91"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-triggers/src/decode.rs": "73de8a18a43c7c023348d381f99da255de74e7a1105ce0af01da71aba11add99",
+    "crates/aa-triggers/src/lib.rs": "cd52009f1fad9933be0d46ace401d224004f7d28b5b122552445408c56e7fb66",
+    "crates/aa-triggers/src/manager.rs": "d44273341a9e905a13f9c08b9947321e150fd25616fc60fcc6c7e9478d09d735",
+    "crates/aa-triggers/src/program.rs": "e5c66c836e0ebf1b470fcf3d20ac85280e27aec2c28d7de1609b2532e989ba74",
+    "crates/aa-triggers/src/registrations.rs": "eb29f168eb8e2eaa016633af6691c2b1c10566dc3381aa1cb00e2a336fe6b020",
+    "crates/aa-triggers/src/world_program.rs": "e657f5bccf690cd872f2623fe8bb59a5626d4b8c0ee1a5562c3fc6fcfba6adeb",
+    "crates/aa-triggers/tests/manager_native.rs": "5a646f7144564462af09b6e71a46b6ad7a789eddba98ad866570cc73dc4157bd",
+    "crates/aa-triggers/tests/program_native.rs": "3df5aa7c4b57098ea57bc2f8208e09fe1f9a7fa08bc9d3f50b70a311807df032",
+    "crates/aa-triggers/tests/saved_native.rs": "4c1111507794451c09b0b3bd37c7bec9a06109bd68531f1e9d3b120c39943f9c",
+    "crates/aa-triggers/tests/world_program_native.rs": "0ed2e4b31aaf79ffd1fdc542dac44f8240ec57d2e7b0c29b00a8cdda44098fbb",
+    "crates/aa-triggers/Cargo.toml": "a9373caabb2ceca07ad8593544cc034a8ca3e2ba3e868864c64318428187377e",
+    "research/phase7-triggers/build_saved_fixture.py": "834e8476ecd996ae721d704bb65d0b312827ee64b42d1091a5953ce844a3bcb8",
+    "research/phase7-triggers/decode_census.py": "f65de6ce745c219af83ca117ab6bb73f59d2eaf1ddc9b08aa4942661d7104d46",
+    "research/phase7-triggers/generate_registrations.py": "f955b5bd2a84ee20440cc8cc4f4a5f0908ad754d92880256780f2c8fa9968bb0",
+    "research/phase7-triggers/native_core_program.py": "878e209d39329e3ac8a2850f8d9b2d41cd4659450e74794e6b00e15afb6ac6a6",
+    "research/phase7-triggers/native_manager.py": "d9c60fd1fb188db03c3a44fadb6e4638f5ea29106ed4d82581ecbe55b9f0d885",
+    "research/phase7-triggers/native_saved_writer.py": "71d79cbc4afc1ecf87a74d1956c5135363277a1204fa3620b9a498350040ab80",
+    "research/phase7-triggers/native_world_program.py": "6ebf066d4ed4cefa5c8712e3eb01b8623bf5b99215d62ddf138aee42d8eb9452",
+    "research/phase7-triggers/record_findings.py": "39c71134a82b5b60a936995518261f17aa8c4809abbb218f0407e5bf57bf81e1",
+    "research/phase7-triggers/registrations.py": "80889501a49922e6e7747e6ec089dbefdba56e6d570c8f97f09cfcd61af7e8a7",
+    "research/phase7-triggers/README.txt": "e96b29e4cc436747a3c4d06a7f3b17fe4609ca249ada0adefd51c62b5d69d455",
+    "research/phase7-triggers/WORLD.txt": "ab9b4292eaac705382971bc1c3209fd84f15d2fcc5d9e7a221f82abf383f351c",
+    "research/phase7-triggers/native-registrations.json": "4c0bfc05ae0b2f40daa2fcd37e4d6f7f90592d2dc8cbf2530ce92dac3a2f82bd",
+    "research/phase7-triggers/tutorial01-decoded.json": "8ddca44c35339fee36763ae59a266149d57f0eca6b2ccb3e8d9a896b7e706570",
+    "research/phase7-triggers/tutorial02-decoded.json": "5fa85dc0f96bed4d109d917b7293530092d13d491b8dd842129ea3f046939d42",
+    "research/phase7-triggers/tutorial-census.json": "9d6b4cd7afc9cd38c1059c4c6910c66d0c328eea440308f4a7fc0ffb013e964a",
+    "research/phase7-triggers/saved-rust-fixtures.json": "01562e45a3e7198d0b21c920f4f7ffa3b356702a0607f5d17605929048ef8499"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-mapworld/src/archive.rs": "040ed128359906d1b2516d3771c9d1cfe9db74999935d8b4a0ce9907eb191048",
+    "crates/aa-navigation/src/control.rs": "b4a1d559b130490feba4693e39de1735162ac238bf8e2cce64f2a366b1ee20f8",
+    "crates/aa-body/src/property_admission.rs": "9441c31eec53a8a922079027275bd84484ec45a5e635d5d0a133bdbff878ddf7",
+    "crates/aa-body/src/property_effects.rs": "6fd58f9caa137b188ef254d85beb2640848c25ec7c38358673c6b4d29b85a675",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+  },
+  "review": "Independent peer review pending.",
+  "limitations": [
+    "Not a working tutorial or full trigger VM: unsupported opcodes return explicit errors.",
+    "WorldProgram requires actual canonical registry/component/name/property services; tests declare those fixtures.",
+    "Native writer gate covers185 individual records, not manager hash-table serialization.",
+    "Manager sequencing fixture replaces546AF0 only for that separate gate.",
+    "Current runtime trigger/element lists immutable during callbacks.",
+    "Finite round-to-nearest arithmetic and ASCII variable-ID domain only.",
+    "Final Windows EXE integration not tested here."
+  ],
+  "prior_failures": [
+    "Initial strict check encountered dependency aa-mapworld collapsible_if lint; owner fixed it.",
+    "World oracle initially observed presentation offsets without the wrapper World+4C base; Rust comparison caught it, source verified and observer/comments corrected."
+  ]
+}

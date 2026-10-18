@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T17:09:01.896361+00:00",
+  "status": "Read-only continuation diagnosis; no implementation/whole-source/View readiness acceptance",
+  "observed": {
+    "root_report": "qa-output/development10/hotfix02-gui03/berlin/after-240s.png",
+    "error": "Native view initialization stopped: actual source Aspect allocation table not prepared",
+    "scope": "Root observed actual candidate3 GUI; this agent traced frozen source only, did not run GUI/build/native replay"
+  },
+  "diagnosis": "The reached canonical Data Entry has aspects=None. The product View adapter lends the same retained Application DataState, but the source-phase Object/ActorData producer has not been integrated in the product source path. A prepared scalar default Aspect index is not a prepared mutable Aspect allocation.",
+  "failing_path": [
+    "View factory constructs/retains actual Directory entry and initialize_bound_with marksInitRunning",
+    "view_object_init.initialize selects/stores Aspectindex, then callsaspect BEFORE modelresolution/radius/common45B530 pre-request",
+    "view_object_binding.Current.aspect74 calls SAME InitContext.application.with_data_pre_request\u2192State.object_aspect(catalog,sameBank,actualRuntimeDefinition,index)",
+    "data_aspect.object_aspect427 binds canonicalData; requiresEntry.aspects Some at436; observederror isNone, distinct from unfinishedchild or out-of-rangeindex"
+  ],
+  "missing_producer": {
+    "entry_initialization": "data_pre_request.bind_canonical creates canonical Entry with aspects=None at492; this is explicit UNPREPARED, not an admitted native emptytable",
+    "existing_api": "data_object_request.State.prepare_object_requests(catalog,sameBank,actualDefinition,&mut sameResources,actualModelPolicy,actualTexturePolicy) calls prepare_object_aspects_with_policy asstep0 beforeother Object/Actor source children",
+    "source_fields": "data_aspect.prepare_object_aspects_with_policy allocatesObjectfields; uses actual inherited View/Aspect nodes+sourcefolder/prefix; retains pending46A510 row; reads realskin/glow Texture handles and49DA40 AnimationSet/Sequence fields; appends only afterchildren complete; markscomplete only after reached real Banner/normal-list handling",
+    "native_expected": "ObjectData49DC40 aspectload subsequence\u219249C670 constructs46A510 Aspect, source46A8A0 loads actualfields/resources,49C360 appends completed allocation. Later469FE0/454F70 modelresolution consumes sameAspect andcurrentBiome; source load is earlier than World/VWorld context changes.",
+    "production_census": "All matching references included. External invocations are testfiles; non-test calls are declarations/wrappers and internal recursion. No product call populates this table beforeView.",
+    "calls": [
+      {
+        "path": "crates/aa-runtime/src/data_aspect.rs",
+        "line": 234,
+        "text": "pub fn prepare_object_aspects(",
+        "test_file": false
+      },
+      {
+        "path": "crates/aa-runtime/src/data_aspect.rs",
+        "line": 241,
+        "text": "self.prepare_object_aspects_with_policy(",
+        "test_file": false
+      },
+      {
+        "path": "crates/aa-runtime/src/data_aspect.rs",
+        "line": 249,
+        "text": "pub fn prepare_object_aspects_with_policy(",
+        "test_file": false
+      },
+      {
+        "path": "crates/aa-runtime/src/data_aspect_tests.rs",
+        "line": 105,
+        "text": "state.prepare_object_aspects(&catalog,&bank,&d,resources)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/data_aspect_tests.rs",
+        "line": 222,
+        "text": "state.prepare_object_aspects(&catalog,&bank,&definition,resources)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/data_aspect_tests.rs",
+        "line": 230,
+        "text": "state.prepare_object_aspects(&catalog,&bank,&definition,resources)?;assert_eq!(state.aspect_request_count(&data)?,count);",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/data_object_request.rs",
+        "line": 148,
+        "text": "self.prepare_object_aspects_with_policy(catalog, bank, d, resources, texture_policy)?;",
+        "test_file": false
+      },
+      {
+        "path": "crates/aa-runtime/src/data_object_request.rs",
+        "line": 222,
+        "text": "self.prepare_object_requests(",
+        "test_file": false
+      },
+      {
+        "path": "crates/aa-runtime/src/data_object_request_tests.rs",
+        "line": 81,
+        "text": "let data=state.prepare_object_requests(&catalog,&bank,&farm,resources,&mut policy,&mut RequiredTexture)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/data_object_request_tests.rs",
+        "line": 82,
+        "text": "let portrait_data=state.prepare_object_requests(&catalog,&bank,&portrait,resources,&mut policy,&mut RequiredTexture)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/data_object_request_tests.rs",
+        "line": 103,
+        "text": "let same=state.prepare_object_requests(&catalog,&bank,&farm,resources,&mut policy,&mut RequiredTexture)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/fx_graph_texture_tests.rs",
+        "line": 55,
+        "text": "let data=state.prepare_object_requests(&catalog,&bank,&definition,resources,&mut ModelLab,&mut FoundOnly)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/fx_graph_texture_tests.rs",
+        "line": 58,
+        "text": "let again=state.prepare_object_requests(&catalog,&bank,&definition,resources,&mut ModelLab,&mut FoundOnly)?;",
+        "test_file": true
+      },
+      {
+        "path": "crates/aa-runtime/src/fx_graph_texture_tests.rs",
+        "line": 70,
+        "text": "let mismatch=application.with_data_pre_request(|state|state.prepare_object_requests(&catalog,&bank,&definition,&mut foreign.resources(),&mut ModelLab,&mut FoundOnly)).unwrap_err();",
+        "test_file": true
+      }
+    ]
+  },
+  "retained_owner": "world_ready_services.Application.depot is the same application-lifetime resource_depot.Application moved through source/resource/activation into View. Its Arc<Mutex<data_pre_request::State>> is initialized once byfrom_sources. with_data_pre_request_resources is the existing disjoint SAME DataState/Resources loan; do not instantiate a second State/depot or replace canonicalData.",
+  "product_boundary": "battle_controller.prepare_sources constructs Application, installs viewinputs and selectsmap; world_ready_services.from_fresh_sources prepares ModelBone sourcecontext only. Neither invokes Object/ActorData Aspect/request source preparation. Later battle_view_startup prefix changes5AE0A0 currentBiome before actualView traversal.",
+  "continuation": [
+    "Capture exact reached RuntimeDefinition.proof.id, sourcechain andselectedAspectindex from retained failedView entry before choosing a minimal actual source test. Screenshot/error do not identify DataID/index; no assumption that it isFarm/HQ/ger_corps orindex0.",
+    "Integrate source preparation in actual pre-World source interval over SAME canonicalBank, DataState, Resources and real current model/texture policies; preserve pending row/handle/Graph ownership on failure. Native current resource-context timing must remain correct.",
+    "Existing selected source APIs/proofs are bounded and may reach further required positive texture/search/Banner/Animation/FX children. Do not call them fullglobalDataLoad completion or silently skip errors.",
+    "Start a fresh startup after source is corrected. FailedView InitRunning/index prefix is retained; do not retry or blesssamefailedView, synthesizeSome(empty), substitute staticActorCatalogDTO or manufactureModel/AD/readiness."
+  ],
+  "evidence": [
+    {
+      "path": "research/skirmish-20261017-object-aspect-source/findings.json",
+      "sha256": "f7009ad6c599c2b738bd67a7ca705716f7bf07235e02c38b8c199284b867fc93",
+      "scope": "Existing bounded proof; not rerun for this audit"
+    },
+    {
+      "path": "research/skirmish-20261017-data-pre-request/native-aspect-constructor.json",
+      "sha256": "cf87a250d61cc85b2e21fcbe544df921183ab12fb23e5544a8e2a1ed1fb42b05",
+      "scope": "Existing bounded proof; not rerun for this audit"
+    },
+    {
+      "path": "research/skirmish-20261017-data-pre-request/native-aspect-request.json",
+      "sha256": "241a942fe58804874eb64fe290c7b442fc2b41c65f465b6dc672946e01b1ba34",
+      "scope": "Existing bounded proof; not rerun for this audit"
+    }
+  ],
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/data_aspect.rs",
+      "sha256": "246644152d60531e8828f036ffc491d187cf2d5ef29ccccb2707a268c8d159ac"
+    },
+    {
+      "path": "crates/aa-runtime/src/data_pre_request.rs",
+      "sha256": "5acf705452eb980d64f02a7742c50d8d8426c3cd59c5cb29d88e757d4ec32486"
+    },
+    {
+      "path": "crates/aa-runtime/src/data_object_request.rs",
+      "sha256": "25c9f74efe927ed4b9099779db051b2f04d43da13943e28eb4f0632fd2d6c812"
+    },
+    {
+      "path": "crates/aa-runtime/src/resource_depot.rs",
+      "sha256": "f844bb9b01defd06abc5d334fd6bb81618d105cc263a45a8b133371102775b7e"
+    },
+    {
+      "path": "crates/aa-runtime/src/world_ready_services.rs",
+      "sha256": "f5382d8adeb7eae0e7321c9edb5660bd4503a6335ba10f18145123ea26b8b6f3"
+    },
+    {
+      "path": "crates/aa-client/src/view_object_binding.rs",
+      "sha256": "2913deb4f0caf3645483a13a045833436fda406e1c165ac6bc070ad61e65679e"
+    },
+    {
+      "path": "crates/aa-client/src/view_object_init.rs",
+      "sha256": "18b69835befab93cf4a419ff0322eb7daa5c4ba675011160e426320189c15186"
+    },
+    {
+      "path": "crates/aa-client/src/view_directory.rs",
+      "sha256": "a71deb664f9d55a8fbe26a32f6fc903d54b390dc4c5b40f851fb32266eccff9f"
+    },
+    {
+      "path": "crates/aa-client/src/battle_controller.rs",
+      "sha256": "250aaad8fa5794601e46b49ae68186bff32a2e8279f098717e8b4655f96a9a19"
+    },
+    {
+      "path": "crates/aa-client/src/battle_view_startup.rs",
+      "sha256": "c5b0f0072afe3518578a48841dba71a26d00d4370aa31364b9027901179a004b"
+    },
+    {
+      "path": "crates/aa-runtime/src/data_object_request_tests.rs",
+      "sha256": "d4024c37ff91a4f5db1ee19a9f285ef5b9fc0f8c91ba429a1495120dc67378ed"
+    }
+  ],
+  "limits": [
+    "No source,release,originalgame,userprofile writes; only this new research finding. No tests/build/game/nativeexecution by this audit.",
+    "Exact natural firstData/Aspect unknown untilactual retainedowner capture; do not inferemptytable orIDfromscalar defaultindex."
+  ],
+  "path_qualification": "The shared error uniquely identifies object_aspect Entry.aspects=None. The listed VObject Init route is source-mapped, not a captured Berlin stack. view_directory.request_world_model also calls object_aspect; the error alone cannot prove exact DataID/index or select among shared callers."
+}

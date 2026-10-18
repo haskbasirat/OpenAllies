@@ -1,0 +1,40 @@
+{
+  "scope": "522890 formation Move/Stop coordinator and529F10 distance; required callback interfaces, not whole live battle.",
+  "native": {
+    "coordinator_rows": 576,
+    "paired_cases": 288,
+    "observed_pins": 298,
+    "in_image_seam_entries": 5,
+    "executed_in_image_pins": 293,
+    "external_mind_vf80_seam": "0x2e00200",
+    "distance_edge_rows": 24,
+    "distance_edge_executed_pins": 19
+  },
+  "tests": {
+    "scoped": "PASS3/3 native_member_command;576 rows+every observed child failure prefix+24 precision edge rows",
+    "log": "qa-output/development10/member-command-rust03.log",
+    "frozen_binary": "qa-output/development10/member-command-tests03.exe",
+    "binary_sha256": "94e29ed7097fa3ebed52c05c6bf96aabc2c6d12ff21c06229bbcf33353a5639e"
+  },
+  "findings": [
+    "Captured original Organization precedes optional relocation; current offset comes from later owner lookup.",
+    "Formation destination stores binary32 before tile checks. Zone4 is captured after first tile and reused for fallback.",
+    "Member position is reread after active Mind target callback.",
+    "529F10 compares x87 PC result directly, with no intermediate binary32 spill;8 new native rows distinguish accidental spilling.",
+    "Actual4D9E20/4CA760 constructor and4CA2D0 null-parameter cleanup bodies execute in this oracle; real command delivery remains declared seam."
+  ],
+  "limits": [
+    "Finite source position/offset arithmetic domain; missing/nonfinite typed numeric input is an explicit error.",
+    "Native logger/view/runtime gameplay not proved by these tests.",
+    "Concrete same-owner adapter implemented separately by SavedLeader; native field and runtime source checks do not establish natural spawning.",
+    "Original producer local variable named denizen actually holds native member+70 Mind; this is a label only; source and fixture bytes remain immutable."
+  ],
+  "independent_review": "research/development10/member-command/independent-review/findings.json",
+  "sources": {
+    "crates/aa-mind/src/cai_member_command.rs": "a8396d7fef6a1388351a27d38f967a771e4b4376ebba741a822baf3c143a6a50",
+    "crates/aa-mind/tests/native_member_command.rs": "c4bac88759967a6d33d90bb569a89774e32b7c9477a8e8532612735eea5540e8",
+    "research/development10/member-command/native_member_command.py": "ec2c6f31f629b5664cc43203ade6038024f34e8ce25c44dae6efaecd98b223d0",
+    "research/development10/member-command/native-member-command.json": "4877137224825ad96f2810fff17db360c7fd9ffc9095a6997157777f6b91414b",
+    "research/development10/member-command/independent-review/distance-no-fst-edges.json": "ab2cc6e22f3ffd0563ce943604ca1be7460b8678ca4750bf06f3b4377be8776e"
+  }
+}

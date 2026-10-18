@@ -1,0 +1,40 @@
+DEVELOPMENT 10 ANIMATIONS 01 - CHECKPOINT
+DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: UNAVAILABLE
+
+Read docs/NATIVE-PORT-RULES.md first. This task extends an animation asset
+browser, not native battle readiness. Preserve source identities, authored
+curve/controller semantics, explicit unsupported cases and source coverage.
+Do not silently drop controller children or equate a complete source list
+with supported playback. Original source NIF/KF timelines and current game
+animation role bindings are distinct provenance.
+
+The package retains the complete legacy game-rig/menu/model-sidecar cache
+closure and adds only manifest-listed browser files under
+assets-cache/animation/browser. It does not overwrite earlier caches or
+sealed releases. All stage/build/evidence/source and ZIP guards remain
+exclusive and hash checked. Detailed actual observations belong in
+evidence/validation.json; no unexecuted test result is asserted here.
+
+Continue remaining animation/renderer support from explicit source/status
+reports. Whole playable battle, native controls/movement/combat/AI/victory,
+multiplayer, campaign and full-game parity remain separate unaccepted work.
+No performance guarantee or overall completion percentage is implied.
+
+HOW TO TEST
+Run Animation Browser.cmd to open a British infantry HQ death immediately.
+Or run AxisAlliesRust.exe, choose Editor, then Animations.
+Type HQ, CorpsDeath, Pack, UnPack, or a unit name into Filter original assets.
+Click a listed rig: it now loads automatically. Choose a clip and use Play,
+Loop and the time slider. Loaded shows the actual original model identity.
+Other animation sources lists files whose timelines cannot yet be played.
+Reconstruction notes lists unsupported effect controllers on loaded rigs.
+
+This build publishes 786 model rigs and 3,316 model/clip bindings. All 20 HQ
+death models, five Corps deaths, 77 building deaths and 119 building
+Pack/UnPack source models are represented. The full catalog covers 2,481
+original NIF/KF files; 240 animated sources remain explicitly unavailable.
+47 nonlinear quaternion clips were excluded rather than played incorrectly.
+139 published rigs also contain unsupported controllers; particles, UV,
+look-at and other effects can remain incomplete. These counts describe
+source/playback coverage, not completion of the game.

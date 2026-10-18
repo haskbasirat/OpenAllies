@@ -1,0 +1,68 @@
+{
+  "scope": "Read-only producer/source identity evidence for Organization578A30; no ActorClass helper created",
+  "critical_correction": "ActorData+1EC contains local AbilityData pointers; each+0 references AbilityDefinition; definition+54 bit3 is BOMBARD",
+  "native_executions": {
+    "ordered_ability_lists": 18,
+    "definition_flag_loops": 45,
+    "precisions": [
+      24,
+      53,
+      64
+    ]
+  },
+  "source_helper": "Reuse Catalog::actor_bindings with canonical guard and validate shared-definition translation behavior; no new helper required",
+  "production_changes": [],
+  "rust_builds": 0,
+  "source_census_executed": false,
+  "files": {
+    "research\\skirmish-20261016-group-classes\\README.txt": {
+      "bytes": 5814,
+      "sha256": "54a5471e9d903a72140a8700e9b768c4f3eea1f33e62f9d2204f001437531d12"
+    },
+    "research\\skirmish-20261016-group-classes\\native_ability_list.py": {
+      "bytes": 7537,
+      "sha256": "d577ac4366eda139bbfdf35411a55b71b39d67b8aff36ca3faf36db02d747ae5"
+    },
+    "research\\skirmish-20261016-group-classes\\native-ability-list.json": {
+      "bytes": 114623,
+      "sha256": "db11a13a0885c8aafaab54997ef2c6dfa1d917c5e4e238949ece637461062f50"
+    },
+    "crates\\aa-rules\\src\\abilities.rs": {
+      "bytes": 11568,
+      "sha256": "446f3668ffe24ff8a3f7e360c0c2d7faad96c78e8cae2230a1006cc9abd0e7e1"
+    },
+    "crates\\aa-rules\\src\\ability_load.rs": {
+      "bytes": 95741,
+      "sha256": "15d99d726df6d07bd1d46bb7d508e5853cf4827ace3cf23c0d7a3db2c9e77117"
+    },
+    "crates\\aa-rules\\src\\resolved.rs": {
+      "bytes": 25247,
+      "sha256": "47cdab14153a786465947b1f41fd4ba708cbec386076c4eec74c8b91e92f349c"
+    },
+    "crates\\aa-rules\\src\\native_load.rs": {
+      "bytes": 44648,
+      "sha256": "e92fbbae81a2232c866ae164034f9f623b4b531e4ad7b144f1b61e3b66bce5ec"
+    },
+    "..\\reconstruction\\assets\\original\\Data\\Templates\\Components\\template_performer.tgi": {
+      "bytes": 734,
+      "sha256": "981dec037c0e0562ef601e49d6a1100941dd5ccc4aaee04491112cf230130c05"
+    },
+    "..\\reconstruction\\assets\\original\\Data\\Templates\\template_actorability.tgi": {
+      "bytes": 3637,
+      "sha256": "854ca64e8bd7a1f2795eaf275ae39652ff96df5c0d886f736be64bf892ec7569"
+    },
+    "..\\reconstruction\\assets\\original\\Data\\Templates\\template_abilitydefinition.tgi": {
+      "bytes": 4613,
+      "sha256": "671d70b6344f0bb755e5aae4962e7bcdabca1c972471882e5bc042f8fd56a18f"
+    },
+    "..\\reconstruction\\assets\\original\\Data\\Templates\\template_abilitydefinition_aa.tgi": {
+      "bytes": 24041,
+      "sha256": "96c9204714bfe735d41b6d7862a9995bceecebb3ff39cfbb4491907f5206de32"
+    }
+  },
+  "limits": [
+    "Bounded fragments with explicit field/lookup/allocator seams, not complete ActorData load",
+    "Shared AbilityDefinition aliases in existing source loader require guard or a dedicated fix",
+    "Parent owns runtime integration and Rust acceptance tests"
+  ]
+}

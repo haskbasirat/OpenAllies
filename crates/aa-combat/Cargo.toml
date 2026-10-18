@@ -1,0 +1,17 @@
+[package]
+name = "aa-combat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+aa-body = { path = "../aa-body" }
+aa-economy = { path = "../aa-economy" }
+aa-numeric = { path = "../aa-numeric" }
+aa-spatial = { path = "../aa-spatial" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

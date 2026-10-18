@@ -1,0 +1,58 @@
+PHASE 5: ORIGINAL MATERIAL STATE
+
+The old static conversion retained only alphaBlend and a threshold. It lost
+source/destination blend factors, alpha comparison functions and independent
+depth-buffer writes. The preview then used conventional alpha blending for
+every blend material and disabled all their depth writes.
+
+This was an actual authored-data mismatch on the reported Crete map:
+- MediterraneanCityCenter01/Mesh01 uses alpha flags 193: ONE/SRC_ALPHA.
+- MediterraneanFarm01/Village02 uses flags 4845, threshold 150, Z flags 3.
+- ChaparralVineyard meshes mix Z flags 3 (write) and 1 (read only).
+- Dirt roads use normal source-alpha blending and read-only depth.
+The wheel-like models in the screenshot are audio-source editor markers,
+investigated separately under phase5-scenegraph; these were not lost bodies.
+
+The source-bound sidecar now retains inherited NiAlphaProperty flags/threshold
+and NiZBufferProperty flags/function for all 1847 models / 11035 exported meshes.
+Original/recovered model files and prior release sidecars remain unchanged.
+Default alpha 236 and Z 3/3 are supported by native constructor instructions.
+RepColor still suppresses alpha blend/test as recovered in phase 2, preserving
+replacement-color masks. Material-opacity alone no longer enables blending
+when authoritative NIF flags are available. Legacy sidecars remain readable.
+
+The renderer creates pipelines for the authored RGB blend factors and depth
+state. WGSL evaluates all eight authored alpha comparison modes. The opaque
+scene target is presented with alpha 1; shader alpha still controls color blend
+factors and cutout tests. Destination-alpha-dependent blend factors are rejected
+explicitly until a separate internal-alpha target is implemented; the entire
+retained non-team-color original mesh corpus contains zero such factors.
+
+Evidence:
+  original_render_state.py / native-render-state-vectors.json
+  Native 73A5B0 alpha state emissions: 532 cases, only GPU-state sink intercepted.
+  Native 913680 depth state emissions: 32 cases, ordinary Z mode (state+10C=0).
+  Native 913B91 constructor table region supplies the actual enum mappings.
+  Constructor register preconditions and inline default Z constructor are pinned.
+  All invoked native regions equal untouched original AA.exe and accepted v14.
+  crete-materials.json: read-only audit of 127 model references.
+  corpus-material-state.json: full sidecar state census and alpha-target scope.
+
+Checks performed:
+  cargo test -p aa-client --release gpu::tests -- --include-ignored --nocapture
+  3 passed: native 564 cases; scoped GPU failure preservation; hardware layer test.
+  Hardware layer test renders and reads pixels without opening any window:
+  ONE/SRC_ALPHA preserves source RGB at zero alpha, normal transparency remains
+  transparent, strict GREATER removes zero-alpha cutout pixels, solid cutout
+  survives, blended depth-writing geometry occludes farther geometry, and
+  read-only depth remains read only. Every presented pixel retains alpha 255.
+  python research/texture-phase2/test_model_materials.py: 9 passed.
+  Headless original-model comparison and independent review recorded separately.
+
+Limits:
+This is static authored material parity on an opaque Z-buffer target. Native
+sorting, per-triangle ordering, W-buffer mode, alpha-controller animation,
+dynamic game-state material overrides, complete native shader stages,
+illumination and color-space parity remain unfinished. Cutout filtering and
+float comparisons use the modern GPU and are not claimed bit-identical to D3D9.
+The test fixtures establish state choices, not a running original match.

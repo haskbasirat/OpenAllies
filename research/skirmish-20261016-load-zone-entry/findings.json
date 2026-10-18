@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "status": "author frozen; independent review separate",
+  "scope": "Actual4CFEA0 grid half,554CC0/554330/54EF10 and reached515620 no-effect prefixes; not complete Actor Register/world load/battle",
+  "native": {
+    "rows": 300,
+    "fresh_original_v14_machines": 600,
+    "executed_pins": 932,
+    "seams": [],
+    "point": "explicit fixture words; startup source certified separately"
+  },
+  "rust": {
+    "final_combined_passed": 4,
+    "own_native_replay_tests": 1,
+    "failed": 0,
+    "ignored": 0,
+    "guards": [
+      "native selected-cell order and leaf gates",
+      "first callback refusal stops prefix",
+      "private PointShape validates current destination Catalog"
+    ]
+  },
+  "owners": [
+    "held current Actor/Kingdom shell and canonical Bank source-PC definition",
+    "same persistent LoadSpatial generation and ZoneMap geometry",
+    "actual SessionE4 callback each tile, separate from F8",
+    "actual saved WorldState.word_48 when reached",
+    "current native-order ZoneMap sets and ActorId.raw entry domain"
+  ],
+  "remaining": [
+    "effectful zone component/guard/control/marker/discovery children refuse at reached position",
+    "caller must retain same actual map; dimensions alone do not authenticate association",
+    "whole-world actual retained Session integration belongs to caller",
+    "no native exception/unwind, visual parity or playable battle claim"
+  ],
+  "production_pins": [
+    {
+      "path": "crates/aa-runtime/src/load_zone_entry.rs",
+      "bytes": 7410,
+      "sha256": "a068023a5301142615109402bc73b9be52a2484f4eefefa5a775e68a3e1b1344"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_entry_tests.rs",
+      "bytes": 2852,
+      "sha256": "b435c8bf940e67b022c0f4d2e55e2106c769343da0a9d79b5b6a1b76631d5017"
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/native_grid_registration.py",
+      "bytes": 4049,
+      "sha256": "dca2799b8762fb1deda7da403eb2d337992dff691b4ab2806980eb8cced02c33"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/native-grid-registration.json",
+      "bytes": 214259,
+      "sha256": "bc337316b556c9e82913ceaed7ed14ea4233b6af355bdd6671d17a25053503ec"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/native-replay.log",
+      "bytes": 170,
+      "sha256": "dbe5d4b63608df0357119c247e4638a297705be3b17ad26d0728ad9b5ad56231"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/inspect_native.py",
+      "bytes": 723,
+      "sha256": "89aca570dbca805802d5e6509b51adadb094e09d47a71ffae810a8dd186a8ce2"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/native-instructions.log",
+      "bytes": 14060,
+      "sha256": "d38b735d5ea4d7efa97944f24b3eea0b9de3fbdab04da00015f8d20e53439bc2"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/point-binding-review.json",
+      "bytes": 2190,
+      "sha256": "2daefdb4ef99447c5eaf0d323ed97d4fdcdee6bfc7ae911bc27022d32e0d0ced"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/rust-tests-initial.log",
+      "bytes": 755,
+      "sha256": "37ecd3caf6f8104e021977505b633a9fd2d746b43c629c051d4772de81a75748"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/rust-tests-final-v2.log",
+      "bytes": 1418,
+      "sha256": "376e38ea99ed9648b8f73670b0cb500dc51963e11ad746da7ff6274c444f66a8"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/rust-tests-frozen.log",
+      "bytes": 795,
+      "sha256": "9b6cb50345542a3589ffff435cbea057e52922c572f56082817d5bef3d059538"
+    },
+    {
+      "path": "research/skirmish-20261016-load-zone-entry/README.txt",
+      "bytes": 4331,
+      "sha256": "493064f47813a6f63ca854f91f9f3760d0e8ba49a15342c65f7cd8df49b06190"
+    }
+  ],
+  "preservation": "No Cargo/lock, original assets/native binary/save/profile/release changed by this slice; only new module/tests and module export"
+}

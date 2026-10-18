@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "status": "frozen; all scoped native/Rust/actual replays passed",
+  "scope": "Same-allocation4EC010 reveal and4CED60 typedStructure getter; no complete zone activation/world/battle claim",
+  "sources_sha256": {
+    "crates/aa-runtime/src/load_actor_reveal.rs": "c772fcaa60228967cdc03cee5cabb487894fac070e16833c3d7705790aaa5d84",
+    "crates/aa-runtime/src/load_actor_reveal_tests.rs": "1e390585786c481658b79527d5e850a0d76f8c14e3beb35663161bcdd91b63f1",
+    "crates/aa-runtime/src/load_detection_memory.rs": "b2a78a36a87ef4dccbe0f7f7e7c07926a2473eb516204ef92c54f3e7aac7fec7",
+    "crates/aa-runtime/src/load_detection_memory_fields.rs": "dbf23c96f62a5801f2023afd99b9f0c593834b40a16c302b937e79443783583b",
+    "crates/aa-runtime/src/live_object_init.rs": "63ec3387cff3ae128e3fb1b10a0a77b4c3ff2f245dc721fff90040ea2a36fe46",
+    "crates/aa-runtime/src/load_zone_services.rs": "67ca3ef2782295adf9171ae8dc6a447717cb50ac889254e981f9ad0b64f66ad6",
+    "crates/aa-runtime/src/load_detection_activation.rs": "a8f55d0d620e8176f5ed78322283c97b96b5be48c3001e51909ddafdc99a41c6",
+    "crates/aa-runtime/src/load_detection_activation_tests.rs": "f0e2a796eed54391a893836c6fb849819b463b160bc736b65b22c91bd949aa28",
+    "crates/aa-runtime/src/load_zone_globals.rs": "b8b23f3e628c67bce55656e3fca1c23d8469e259d0c73c524d15548d920d7369",
+    "crates/aa-runtime/src/load_zone_globals_tests.rs": "168d4dca6a3ce6c5eaef457088117f5c2ad09f3d77f57209cfd5599ad898287a",
+    "crates/aa-zones/src/tile.rs": "71609ac1e5142c8c4a4ac9a725d3c976e37a12b1dd87dc80cd635ed1eba9d482"
+  },
+  "source_snapshot_directory": "research/skirmish-20261016-load-actor-reveal/source-snapshot",
+  "native": {
+    "fixture_sha256": "115b4e7ad0362b3c80ba0ab9773a1589518ccd5fb7043256752ca5ba9ba46dc4",
+    "producer_sha256": "7851525f13a4540fbfb93bcb79169f92b0b2ea99da17f8a4e77af7ef7391bcb1",
+    "coordinator_rows": 117,
+    "container_rows": 24,
+    "machines": 282,
+    "precision_controls": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_address_pins": 155,
+    "test_or_required_entry_pins": 3,
+    "test_only_memory_return_seam": "4EBC70",
+    "required_children": [
+      "4EBC70 in stop cases",
+      "58CB30 Wall",
+      "recursive container64",
+      "432E40 first sighting"
+    ],
+    "fresh_immutable_replay_passed": true
+  },
+  "rust": {
+    "focused_reveal_tests": "2/2 pass",
+    "prior_memory_tests": "2/2 pass",
+    "globals_tests": "2/2 pass",
+    "activation_supply_tests": "2/2 pass before expanded48row supply test",
+    "memory_predicates": "2 focused tests pass",
+    "actual_object28": "1/1 pass50.44s; old capture exact unchanged",
+    "actual_two_detection_owners": "1/1 pass11.83s;2owners x3livePC same allocation",
+    "test_profile_overrides": {
+      "CARGO_PROFILE_RELEASE_LTO": "false",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "16"
+    },
+    "shipping_profile_changed": false,
+    "frozen_binary_sha256": "8b86009aebfc7ffed2557aac3624d9297e94949f4d30a127a572c5c456172e73",
+    "expanded_supply_word_fixture": "48rows atall3PC acrossbothbytestorageandpackedwordowner1/1pass",
+    "expanded_supply_word_log_sha256": "4e404c93a8b24ca54bc242d3936f3579e4636df310f707672ec635d09dacdd7d"
+  },
+  "evidence_sha256": {
+    "research/skirmish-20261016-load-actor-reveal/author-rust-replay.log": "f311e2cbdd19da369513efcbcff38f22e5c10e32f4a543299ad3999d4ad9c3f0",
+    "research/skirmish-20261016-load-actor-reveal/current-check.log": "f1753e104a7e59ba41de7572a870dff8b1a76009bc973c00e0047ec9983abf16",
+    "research/skirmish-20261016-load-actor-reveal/native-replay.log": "b349bc984fded5f4c074eeb32c511cdde7013c50576d219fa0cf17f5b26ef971",
+    "research/skirmish-20261016-load-actor-reveal/prior-memory-native-replay.log": "76b5a9cc3ff4a6e25d68b591080daf3d3afd8c699b855184b763552e0bdaa6a1",
+    "research/skirmish-20261016-load-actor-reveal/prior-memory-rust-replay.log": "744b369c2206ae869a75c79f5906341f505ff0cb104af627ecf246145e3025a9",
+    "research/skirmish-20261016-load-actor-reveal/globals-rust-final.log": "b9b39ae107fbbb143fdd5c499bb43f123422383c4d4dd8c9ab779ccd87b99709",
+    "research/skirmish-20261016-load-actor-reveal/activation-rust-final.log": "524c72dd6fd08308d9536a594065cae88b382a0a3b1abe233900a61ff4c1c220",
+    "research/skirmish-20261016-load-actor-reveal/predicate-rust-final.log": "929d64c6f3b3e2cdc51efe1c3489d223e151be518b1c9229d1ed2ce15db021d8",
+    "research/skirmish-20261016-load-actor-reveal/derived-predicate-rust-final.log": "61dfef7159aea7bdae85d54c2655095bc197f2aee5fc2796dfb3f1d8cb80f850",
+    "research/skirmish-20261016-load-actor-reveal/actual-memory-final.log": "986210c28fa997f6dfd096f9af336ef5dfbe4ae20abea25867c5ffdc1af44fe3",
+    "research/skirmish-20261016-load-actor-reveal/actual-detection-final.log": "46b574fba9b226efc2ca075b910b0f35b46497eddda9148270a050a04b84a928"
+  },
+  "actual_structure_capture_sha256": "aaccf7b7814dadc8343ab6f7f720a2493a8c07e3520983f22a891b4ac8f2661b",
+  "ownership": [
+    "currentZone stored in actualActorShell.zones_148 throughout all callbacks",
+    "same mutableObject+54 and original memoryarena",
+    "prioractual record held withLoading marker and restored onOk/Err",
+    "source/Loading/constructor/proof checks shared by originalRecord and readonlyMemoryRecord"
+  ],
+  "open": [
+    "nonnull recursive container Actor64 child",
+    "Wall58CB30 currentgetter",
+    "positive first-sighting message/SAI",
+    "memory virtual24 name/refresh and positiveobserver children remain asv1",
+    "other zone effects/hide/unexplore remain explicit",
+    "root fully composed strict load not certified here"
+  ],
+  "root_composition": {
+    "path": "research/development10/immediate-world-12.json",
+    "sha256": "9979f223e93ef9a5300fbd3a1d6a0c8c7c6346684009b42b9e62524d52e4e388",
+    "observation": "112 priorlifecycles complete;2696 reacheslater4D7332->4D1350 oldStructurecontributor required service. +22C/reveal bindingerrorabsent. No whole2696lifecycleorwholeWorldclaim."
+  }
+}

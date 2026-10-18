@@ -1,0 +1,61 @@
+DEVELOPMENT 02 — RECONSTRUCTION AND MODEL TEXTURE REPAIRS
+
+This is an incomplete reconstruction, not the completed game.
+
+Texture issue reported by the user
+GBRCorps, GBRCorpsPack and GBRDepotOil were drawing atlas regions in incorrect
+places. The recovered meshes store (u,1-native_v) for their earlier Three.js
+renderer. wgpu uploads unchanged PNG rows from the top. The client now restores
+native V for models and animation meshes only. Original PNGs and generated
+terrain UVs are unchanged. All four relevant PNGs match the original DDS pixels.
+
+Some colored faces in GBRCorpsPack were shadow proxies. The old conversion did
+not correctly propagate native UserPropBuffer Sg/Sg2 and RepColor tags. A new
+read-only audit matched all 1,847 model files and 11,035 meshes by source hash,
+converted hash, hierarchy, name and geometry counts. It found 336 shadow proxies
+and 1,260 team-mask flag corrections (1,256 on retained meshes). The client removes only audited proxies
+from the color pass, restores material tags, and recomputes visible bounds.
+GBRCorpsPack loses 15 proxy meshes and gains 10 inherited team-mask corrections.
+GBRDepotOil's legitimate RepColor-tagged Sg01 mesh remains visible.
+
+Original RepColor code uses texture alpha to mix between texture RGB and team
+RGB, then modulates by diffuse lighting. It is not texture transparency. The
+shader now follows that base-stage formula, disables blend/cutout for RepColor,
+and leaves opaque pixels in the viewport. The white default is from the original
+ReplacementColorDefault. The development viewer has a team-color control; it
+does not infer map actor ownership. Optional texture stages and original final
+lighting/color-space are still not fully reconstructed.
+
+Other progress
+- Model inspection and a correctly scaled camera, including far-depth coverage
+  for tall or widely zoomed-out models.
+- Five original infantry skeletons, four original clips each, with CPU skinning
+  and GPU vertex-buffer updates. The reference is decoded original NIF/KF data;
+  it does not prove native game animation-state/blending/event parity.
+- Native-evidence economy mutations, shortage rebalance, affordability/debits,
+  stock clamping and a bounded stock-flow arithmetic prefix. Explicit 24-, 53-
+  and 64-bit x87 precision modes reproduce native instruction/store rounding.
+- Original outer world-dispatch and linked-list mutation ordering. Gameplay
+  callbacks, queue internals, command/decree cadence and full world state remain
+  outside that implementation. No arbitrary parallel actor execution was added.
+- Typed original/v14 resource definitions and one proven TGI tokenizer extension.
+  1,835/1,847 TGI sources parse; 12 remain explicit errors. No general native
+  expression/template evaluator or complete gameplay catalog is claimed.
+
+The executable's --economy-check runs a labelled diagnostic with authored costs
+and limits. The amounts are test inputs, not guessed starting balances. The
+stock-flow call stops before bankruptcy, attrition and game event callbacks.
+
+Evidence locations in the source workspace
+research/animation-phase2/
+research/evidence/economy-phase2* and rules-phase2*
+research/phase2-world-order/
+research/phase2-textures/
+research/texture-phase2/
+qa-output/phase2/
+
+Original game files, saves, settings and native releases remain unchanged. The
+previous Rust release and pre-change client source backup remain available.
+This work does not yet provide full combat, AI, campaigns, original-save loading,
+lobbies, hosting/joining or playable multiplayer. Separate internet testing is
+still unavailable without the second PC/connection identified earlier.

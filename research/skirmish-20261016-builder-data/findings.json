@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "feature": "current source Builder ActorData+504/+508 canonical arena",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "addresses": [
+    "00467F08..00468007 Builder reference creation",
+    "00473AD0 deferred prepend",
+    "00475230 deferred dispatch",
+    "00461820 Builder thunk",
+    "004604C0 target check and prepend",
+    "004BDBA0 typed ActorData check"
+  ],
+  "native_generated_cases": 252,
+  "native_real_source_cases": 6,
+  "native_typed_actor_probes": 18,
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "rust_tests": {
+    "passed": 5,
+    "failed": 0,
+    "mode": "release/locked/offline -j4 --include-ignored"
+  },
+  "real_source": {
+    "canonical_actor_data": 1084,
+    "standard_actor_data": 1028,
+    "derived_random_actor_data": 56,
+    "builder_components": 5,
+    "nonempty_lists": 5,
+    "references": 15
+  },
+  "fixed_review_blocker": "RandomActorData19 inherits actual ActorData constructor/load and IsActorData; now included and tested.",
+  "allocator": "explicit successful fixed allocator; arbitrary reentry/exceptions and failure not claimed",
+  "partial_failures": "unknown/noBody checks precede allocation/stores; all earlier callback nodes/head/tail retained; later callbacks not executed",
+  "identity": "canonical owners by registered source Provenance; targets current final Find once; canonical getters never Translate again",
+  "preservation": [
+    "No parser or global loader changes",
+    "No manifest/dependency changes",
+    "No original files or releases changed",
+    "No SDK implementation copied"
+  ],
+  "limitations": [
+    "Builder-only deferred subsequence conditional on relevant LoadData and unrelated deferred success/no Builder-visible mutation",
+    "Does not certify complete global475230 or reconstruct historical partial source-manager states",
+    "Callback lookup4BDBA0 supplied as final typed seam; separate18probes execute actual4BDBA0 and native vtable predicates",
+    "Constructor zero stores/loader creation/RandomActor inheritance byte pinned; full constructors/LoadData not reexecuted",
+    "Initial synthetic fixture declaration/binding failures retained; final five tests pass with assertions intact",
+    "Runtime4D4CF0 integration, complete Init/world publication and gameplay remain root-owned work"
+  ],
+  "inputs": [
+    {
+      "path": "crates\\aa-rules\\src\\native_builder_data.rs",
+      "sha256": "8c398a7a78d2e6e5c8a9adace637edc588308a486a21b9deb93cef98d95ce4d8"
+    },
+    {
+      "path": "crates\\aa-rules\\tests\\native_builder_data.rs",
+      "sha256": "ed3e1d79f2945877e01a464b0bb90794d2fdf67b6654ac89c1fc066314808049"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\native_builder_data.py",
+      "sha256": "2f50e7b0eaca6eaa10b5f040791c7da2d2a381cf9818a2e30af547447c76f177"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\native-builder-data.json",
+      "sha256": "312b76124a86aa7777807eac7492cedc82406917a45bc38dea0b8bec40c01d43"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\native-real-builder-data.json",
+      "sha256": "55a9c574811492909311421cd79c895ff42ca8569010abe86613694610f5a7ae"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\actual-source-inputs.json",
+      "sha256": "13966d14bf5b7a69a2337d5875e430fd8a999b49abcb84b7afecb39a49e12361"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\capture-tests.log",
+      "sha256": "5e6d70c5c617d05ee30833c96213841340a9f2e45717586015f880a9c72eff25"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\replay-tests.log",
+      "sha256": "eacebbf652cd3da823ca6893144ac6ab24f20da90e2493fce5d405553763f64f"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\capture-list-declaration-assumption.log",
+      "sha256": "5493f70854c2b1731286439bb093c295bfac201ba32ec2335fcf938be4ad3f59"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\capture-template-binding-assumption.log",
+      "sha256": "7f41585897a15071e01fef28c698f0a52b99fb1818b738937d50e614899c1dda"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\README.txt",
+      "sha256": "048f930486b2ecbb6f01cf2d9e840ccc937361ed397aa112734fcd278a06b241"
+    },
+    {
+      "path": "research\\skirmish-20261016-builder-data\\record_evidence.py",
+      "sha256": "ad03dc86b19addf95a4e2a1aaa132e284d99306688cf1dc2878df13a649fbd42"
+    }
+  ]
+}

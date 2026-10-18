@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "status": "author scoped validation passed; independent review separate",
+  "changes": [
+    "native WorldRuleMode/task dispatch helpers",
+    "retained World constructor TailState",
+    "required source integer starting-location priority through same moved Bank",
+    "borrowed SessionRead interface with bounded old-fixture compatibility",
+    "actual Staged post-record load-tail adapter and GMap float extent binding"
+  ],
+  "tests": [
+    {
+      "log": "priority-tests-final-v7.log",
+      "passed": 4,
+      "failed": 0,
+      "invocation": "direct final subject binary aa_runtime-2264c0723cc57ac2.exe load_tail_source::tests --include-ignored",
+      "subject": "final frozen source/test hashes; binary produced by tests-final-v1 FirstTick compile"
+    },
+    {
+      "log": "combined-tail-tests-v1.log",
+      "passed": 10,
+      "failed": 0,
+      "subject": "existing7 load_tail_world plus3 mode tests; these subject source hashes remain unchanged"
+    }
+  ],
+  "native": [
+    {
+      "fixture": "native-map-resource-mode.json",
+      "rows": 144,
+      "pins": 232
+    },
+    {
+      "fixture": "native-starting-priority.json",
+      "rows": 42,
+      "pins": 44
+    },
+    {
+      "fixture": "native-tail-constructor.json",
+      "rows": 18,
+      "pins": 166
+    },
+    {
+      "fixture": "native-gmap-extent.json",
+      "rows": 30,
+      "pins": 16
+    }
+  ],
+  "actual_map_priority_summary": [
+    {
+      "map": "Campaign/tutorial02",
+      "count": 24,
+      "nonzero": []
+    },
+    {
+      "map": "Campaign/allies01_el_alamein",
+      "count": 43,
+      "nonzero": []
+    },
+    {
+      "map": "(2v2)Berlin",
+      "count": 28,
+      "nonzero": [
+        {
+          "id": "placeholder_corpsunpacked",
+          "value": 1000
+        }
+      ]
+    }
+  ],
+  "qualifications": [
+    "No complete restoration/PostLoad/BeginPlaying/battle claim from these source tests.",
+    "Actual concrete tail requires complete PostLoaded records, same retained World/Bank, actual SessionRead and Kingdom membership owners.",
+    "Reentrant mutations during read-only binding assembly and native invalid-pointer/exception unwind are outside this successful adapter domain.",
+    "Saved/metagame world-start service remains an explicit required binding at its native branch.",
+    "Superseded failed compile snapshots retained; none counted as passing validation."
+  ],
+  "pins": {
+    "crates/aa-runtime/src/map_resource_mode.rs": "5296414654faa39d07276528dfa6321e93eec4c97f8f1542f292b742fd747bc2",
+    "crates/aa-runtime/tests/map_resource_mode.rs": "3b597e3d4aad2ff6695e91777adb89988693fc2ac5e0f583bdc5e1e04deed3d1",
+    "crates/aa-runtime/src/load_tail_source.rs": "ab864e3afd605f5cd070bc4a4c481175009d7e54cd2a83afcb771c03f3d37ea0",
+    "crates/aa-runtime/src/load_tail_source_tests.rs": "ab38539bcedeb69e05a74cdac8569c297ed634838dc577794b803b804439cd83",
+    "crates/aa-runtime/src/load_tail_world.rs": "48023bc37fb8841233104fc41945f407d6c6309e97618eac903ba544198ac8de",
+    "crates/aa-runtime/src/load_tail_binding.rs": "5a453a62ccc4caf4b3481790535c21be55da903a2465d72fad341f269e3b447b",
+    "research/development10/map-resource-mode/native-generate-v2.log": "496eacd97efabd91f39d84ef800ea0485df783700862281db1b12adf0ce6e29c",
+    "research/development10/map-resource-mode/native-gmap-extent.json": "1a474d231bbcd9c999c65df154ecb84f55954ddce5fd30d9f0439827e5b1a1f3",
+    "research/development10/map-resource-mode/native-map-resource-mode.json": "05c0b66a0ffd74dde0f8b2f8323fcc692737bb57b32dd503b842c4a04c7ea2e6",
+    "research/development10/map-resource-mode/native-mode-factory-replay.log": "0b57323bffd20162443ff98ce8c6186170e07c0f5767e3c6166b2eeb4d20dcc7",
+    "research/development10/map-resource-mode/native-replay-final.log": "496eacd97efabd91f39d84ef800ea0485df783700862281db1b12adf0ce6e29c",
+    "research/development10/map-resource-mode/native-starting-priority.json": "eb82c7357883f7472876df0da0d5bfd7c1abc03220899c9cb0934952f1a91be5",
+    "research/development10/map-resource-mode/native-tail-constructor.json": "4a2b202fb1eaf8fb6d47a37c2fe9c0d70d9aaf6017cb9c7ad080a8fa48359001",
+    "research/development10/map-resource-mode/native_gmap_extent.py": "f6c3f30260f919aaa16ef33a5d2316059c6a6206339ee0c0803d3cccab18e544",
+    "research/development10/map-resource-mode/native_map_resource_mode.py": "e8dc87ba0fe929432673dbce3c87e005412da3af5c54814eb4810b54eaa619f5",
+    "research/development10/map-resource-mode/native_starting_priority.py": "266ba28e4e48e6a0315f7488418131c0af1a069d11f2679e2fe87757c35cb802",
+    "research/development10/map-resource-mode/native_tail_constructor.py": "e632bd48afceb5c7864644c371f935a5cd891bb51950f951724b3b1124041a7f",
+    "research/development10/map-resource-mode/load_tail_world-before-borrowed-session.rs": "6420f05c30e17ce69bc1fda317190b981068953411038cc3ecb3aefc77c5792c",
+    "research/development10/map-resource-mode/actual-source-priorities-final.json": "12c026c27f91a3ee1be2dfd4e1abc72f14d1a68a6818a50f1e939adac04f45be",
+    "research/development10/map-resource-mode/priority-tests-final-v7.log": "aeb98ab74fc9fc32f4f0c573577e6b1eab692933437f1b7b667185fdbef9228d",
+    "research/development10/map-resource-mode/combined-tail-tests-v1.log": "4424167d793d33157005a8b0f3951628d3c1199acb74bb50e03f6e056c926dd2",
+    "research/development10/map-resource-mode/gmap-extent-replay-final.log": "d818f2ff2113aed1688e980725ee96fccb761f4fe8f76b6213c0a0b165c1164f"
+  }
+}

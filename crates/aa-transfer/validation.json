@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "component": "aa-transfer",
+  "passed": true,
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+  "commands": [
+    "cargo test --manifest-path rust-rebuild/Cargo.toml -p aa-transfer",
+    "cargo clippy --manifest-path rust-rebuild/Cargo.toml -p aa-transfer --all-targets -- -D warnings"
+  ],
+  "integration_tests_passed": 11,
+  "test_network": "127.0.0.1 ephemeral TCP listeners only",
+  "largest_byte_checked_tcp_payload": 4194427,
+  "io_buffer_bytes": 65536,
+  "wire_length_bits": 64,
+  "source_files": [
+    {
+      "path": "Cargo.toml",
+      "size": 289,
+      "sha256": "5ce599b3356079e57a5f52701e819ecc490df535ff951ad8fe36117b038252ea"
+    },
+    {
+      "path": "README.md",
+      "size": 2498,
+      "sha256": "6d69c3814b00ad9f0854261267f9eaf11911e1e5ec88d01591e03193b48d985d"
+    },
+    {
+      "path": "src/lib.rs",
+      "size": 8406,
+      "sha256": "e2e9dfb29370348291c5afbec1b69c5c2b0c8d04992f71ce846c9a2e461934c8"
+    },
+    {
+      "path": "tests/transfer.rs",
+      "size": 15218,
+      "sha256": "f374baa8b9204dd07e259e36835c77b6c24b131ddcb7139c71fe897ed464d34f"
+    }
+  ],
+  "scope": [
+    "Independent protocol, not original multiplayer compatibility",
+    "SHA256 corruption check, not authentication",
+    "No library bandwidth limit, block sleeps, or payload-sized allocation",
+    "No public listener, game launch, or original/native file mutation",
+    "File receiver preserves existing destination; incomplete new file retained on error",
+    "No resume, remote acknowledgement, atomic publication, or untrusted-parent race guarantee"
+  ]
+}

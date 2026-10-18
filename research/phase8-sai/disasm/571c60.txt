@@ -1,0 +1,11 @@
+00571c60  d905dc329f00         fld dword ptr [0x9f32dc]
+00571c66  d94118               fld dword ptr [ecx + 0x18]
+00571c69  dae9                 fucompp 
+00571c6b  dfe0                 fnstsw ax
+00571c6d  f6c444               test ah, 0x44
+00571c70  7b06                 jnp 0x571c78
+00571c72  d94118               fld dword ptr [ecx + 0x18]
+00571c75  c20400               ret 4
+00571c78  8b4c2404             mov ecx, dword ptr [esp + 4]
+00571c7c  e8cf49f3ff           call 0x4a6650
+00571c81  c20400               ret 4

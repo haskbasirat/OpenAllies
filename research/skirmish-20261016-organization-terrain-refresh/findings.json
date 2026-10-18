@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "production_frozen": true,
+  "status": "bounded actual member terrain tree tested; root whole-world integration separate",
+  "api": "load_organization_terrain_refresh::refresh(catalog,record,terrain,livePC)",
+  "native_paired_cases": 69,
+  "native_original_v14_executions": 138,
+  "executed_address_pins": 158,
+  "stopped_null_element_entry_pins": 1,
+  "successful_native_body_seams": 0,
+  "rust_public_api_tests_passed": 1,
+  "successful_actual_tree_runs": 3,
+  "original_default_required_runs": 3,
+  "missing_element_fault_runs": 1,
+  "actual_parent": 15283,
+  "actual_members": [
+    15284,
+    15285,
+    15286,
+    15287
+  ],
+  "source_precision": "Double53",
+  "live_precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "linked_production_library_at_build": {
+    "path": "target/s-skirmish-start-review/release/deps/libaa_runtime-e697fe91de5f16e9.rlib",
+    "sha256": "c090ca62ad42678523676b561df1ddf9136fc59dfea5d7c855b99dd73677ecfe",
+    "mutable_target_checkpoint_only": true
+  },
+  "checks": [
+    "actual ready Element/parent/source relationships preserved; explicit gate/cached-cell setup only",
+    "same parent allocation is held Loading and F8 is read through actual guarded ancestor view",
+    "all real non-null slots visited; native null/duplicate/ready behavior separately exercised",
+    "same member allocation returns before Result error; parent F8 prefix retained on missing Element",
+    "original public default remains required579EB0 and does not mutate members"
+  ],
+  "limitations": [
+    "Actual parent and members are horse herd animals, not military actors or a playable battle",
+    "Panic/unwind and cyclic/reentrant held-member services are not implemented/accepted",
+    "Positive terrain Property criteria/instances/effects remain precise required errors",
+    "No WorldStart/tick/combat/multiplayer/campaign readiness claim"
+  ],
+  "source_census": {
+    "registrations": 144,
+    "positive_property_views": 28,
+    "scope": "separate read-only explicit Double53 source inventory, not full receipt/link/criteria/runtime proof"
+  },
+  "pins": [
+    {
+      "path": "crates/aa-mapworld/src/organization_restore.rs",
+      "sha256": "012dfa0b66e4f4552fd2505aca66d21ecb455b563b04c5e2f72f64d89b5ec1e4"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_overlaps_tests.rs",
+      "sha256": "6f0e080b418fe0b002ae1394d6b171e54758bbfd3b39113dacfd686f729f7d29"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_terrain_refresh.rs",
+      "sha256": "f396eef39052399621c8e74958121a95ec7be5b22b05e3093590e7d093379fde"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_organization_terrain_refresh.rs",
+      "sha256": "764fa0e65e34bcef1a59a0c7a3bbf6474cd174a31701703f16e0e283f0735ba1"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_organization_terrain_refresh_tests.rs",
+      "sha256": "c1e5bd122b1d6d1b7785abb479b5a5b732d70fb141659bbe4e605ed5035dbe8c"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/README.txt",
+      "sha256": "caabb86dc88c6063a0758e7d466d6151c9e0702d740dd3c789d550feac5520c4"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/actual-organization-terrain-v1-before-default-probe.json",
+      "sha256": "49f24a5423ef3fb6d5705ae01713a7cc3057f341d3a70a874de98eebd1ddc725"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/actual-organization-terrain.json",
+      "sha256": "3af182dd2779d0be16b0b44165b24cb780453b96e9dd04c66049b0edf8ff9627"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/author-build-v2.log",
+      "sha256": "f35d97e7f83c475413e41851eb76d4e873df69b6a3ccc5cc1fd68a8280e6b77b"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/author-build-v3.log",
+      "sha256": "6bcf7594e16fcb0717d76c3ebd560a779f5e44ca1a8865d52f5c8e4f6598f42e"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/author-build-v4.log",
+      "sha256": "917d243f8eb32d1f994d4aafc42f21bc3ec4a5a75e5b39a09b0fc4c7c2a75a86"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/author-build.log",
+      "sha256": "77639d7c1b8e0e1c463868eb1f7e874301b1298c668e0c5a327f1e6bfe0a7dc9"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/census-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/census-run.log",
+      "sha256": "9838e25302a39a003da7fc5e5f7102f4c3fe31f7c46024abdc091238f903d7c7"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/compile-check.log",
+      "sha256": "7fba9c1e2565a165fa0112a1b34b6fc7be466316cfd7420e3bc07bd82f5f6b56"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/immutable-public-final-replay.log",
+      "sha256": "bcb17a7830ef7cdca3ab51fe27f0f2626b2c67a00f458186cb3a3a70f5a51c4b"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/independent-held-source-review.json",
+      "sha256": "62c03004016d89a80d2ebdde5b87f944c1cf1c4bff0ca6742f442cf5154f5eed"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/native-generate.log",
+      "sha256": "40c82bc5aafd33c5784e3142cd3a17d687bb2127364159315c2f5291d29d0199"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/native-organization-terrain.json",
+      "sha256": "e03f17588834609d6a99608cfec97781e744e7b57ec3b904be6e65bc8dad0ec5"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/native-replay.log",
+      "sha256": "40c82bc5aafd33c5784e3142cd3a17d687bb2127364159315c2f5291d29d0199"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/native_organization_terrain.py",
+      "sha256": "b478d8aab957da932ed56e4e4c2b3d698a1cf7f55c7cfb7d12144247c9c7b6a9"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/production-library-build.log",
+      "sha256": "dcd27ba820938af7af08ea70bb51c372289b82506be9b96e3c00d1195546cd70"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-capture-final.log",
+      "sha256": "6910b7851b33ca6e859521e8d4f48173206f585d94f2568377f09922b38d9344"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-capture-v2.log",
+      "sha256": "fb34aca09f33502cd5ced86455cdf33b813f90bc130d4979bbecfbb309124557"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-capture-v3.log",
+      "sha256": "000d9b24c316b4867237e910b7e63973106657afdd302f33f2d769ca58fe5756"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-capture.log",
+      "sha256": "5899bf6ab47bce120e85d0677fa19f90a5986251193ea2722fd02496b04043c1"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-test-harness-final.exe",
+      "sha256": "7fc2f83fb5847f5b23aa1a5d376b40c23826fac04df18e282bfd7807fa3d1dc3"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-test-harness-v2.exe",
+      "sha256": "1e91b3ffefd60748ecda3e17618b44cba09967c96922584d0572abec9845723a"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-test-harness-v3.exe",
+      "sha256": "f98071b03b99da2ff0543c8f6934a826ab332a57d78114ac147ec54a9cfa13fb"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-actual-test-harness.exe",
+      "sha256": "cab543fa242cd078555bab054ce10de965f656f4c7fb64a63557096e951fbf9d"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-harness-build-final.log",
+      "sha256": "2bd97d5fc22863f7a7567d21a1c37b0888c752a94971298b5cc33b09f27e677c"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-harness-build-v2.log",
+      "sha256": "2bd97d5fc22863f7a7567d21a1c37b0888c752a94971298b5cc33b09f27e677c"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-harness-build-v3.log",
+      "sha256": "2bd97d5fc22863f7a7567d21a1c37b0888c752a94971298b5cc33b09f27e677c"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public-harness-build.log",
+      "sha256": "2bd97d5fc22863f7a7567d21a1c37b0888c752a94971298b5cc33b09f27e677c"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/public_actual_test_harness.rs",
+      "sha256": "6d48324b6c694b78f03b1f658fdb329d50ec2f2e40708160cca7d1ce96fc3bea"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/terrain-helper-before-held-parent.rs",
+      "sha256": "54f7562019154643f249de0a4af3f4eb80a7b203c4625dd55d12f308e75439bb"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/terrain-property-census.exe",
+      "sha256": "7834252a8b2869a621e3eee98ccc7fd37ae6a3837e573e7ee48531ad44c97a77"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/terrain-property-source-census.json",
+      "sha256": "469c5b64c882a9caf51f507cb205a43f53180c039fe0f1babb94007d38bef7d0"
+    },
+    {
+      "path": "research/skirmish-20261016-organization-terrain-refresh/terrain_property_census.rs",
+      "sha256": "c837a256207292e01f8e77d1c369e1f197d4238911371c4eacb85ed37869e428"
+    }
+  ]
+}

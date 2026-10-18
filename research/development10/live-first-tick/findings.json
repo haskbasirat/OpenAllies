@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "status": "author scoped validation passed; independent review separate",
+  "source_sha256": "117264784b842dd6253cd125a28fbff76348ca9c7691f4b2f82ef1c862fcabfa",
+  "test_sha256": "6f66621968840f2841e10182a03c74e147dd5f526b46658467ce5f438e343527",
+  "tests": {
+    "log": "tests-final-v5.log",
+    "passed": 3,
+    "failed": 0,
+    "cases": [
+      "72 actual native selection/error rows",
+      "required output callback/storage partial-effects",
+      "actual source input binding with laboratory bound-null SessionRead/output"
+    ]
+  },
+  "native": [
+    {
+      "fixture": "native-first-tick.json",
+      "rows": 72,
+      "pins": 75
+    },
+    {
+      "fixture": "native-nation-music.json",
+      "rows": 36,
+      "pins": 56
+    }
+  ],
+  "actual_nation_inputs": [
+    {
+      "id": "nation_usa",
+      "audio": "usa_ambient",
+      "clips": 20
+    },
+    {
+      "id": "nation_gbr",
+      "audio": "gbr_ambient",
+      "clips": 20
+    },
+    {
+      "id": "nation_ger",
+      "audio": "ger_ambient",
+      "clips": 20
+    },
+    {
+      "id": "nation_rus",
+      "audio": "rus_ambient",
+      "clips": 20
+    },
+    {
+      "id": "nation_jpn",
+      "audio": "jpn_ambient",
+      "clips": 20
+    }
+  ],
+  "observer": [
+    {
+      "audio": {
+        "category": {
+          "String": {
+            "declaration_source": {
+              "path": "Templates/template_audio.tgi",
+              "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+              "span": {
+                "end": 787,
+                "start": 772
+              }
+            },
+            "source": {
+              "path": "Templates/template_audio.tgi",
+              "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+              "span": {
+                "end": 6522,
+                "start": 6506
+              }
+            },
+            "value": "MUSIC"
+          }
+        },
+        "fallout": {
+          "input": {
+            "String": {
+              "declaration_source": {
+                "path": "Templates/template_audio.tgi",
+                "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+                "span": {
+                  "end": 1518,
+                  "start": 1497
+                }
+              },
+              "source": {
+                "path": "Templates/template_audio.tgi",
+                "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+                "span": {
+                  "end": 1518,
+                  "start": 1497
+                }
+              },
+              "value": ""
+            }
+          },
+          "paths": []
+        },
+        "files": {
+          "input": {
+            "String": {
+              "declaration_source": {
+                "path": "Templates/template_audio.tgi",
+                "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+                "span": {
+                  "end": 1494,
+                  "start": 1475
+                }
+              },
+              "source": {
+                "path": "Audio/music_aa.tgi",
+                "sha256": "2c7b92e6f59e6849d99a140f993bfd9f6f7b819bc41ba5161edde312db2eed07",
+                "span": {
+                  "end": 562,
+                  "start": 393
+                }
+              },
+              "value": "Music/GeneralAmbient01.mp3,Music/GeneralAmbient02.mp3,Music/GeneralAmbient03.mp3,Music/GeneralAmbient04.mp3,Music/GeneralAmbient05.mp3,Music/GeneralAmbient06.mp3"
+            }
+          },
+          "paths": [
+            "Music/GeneralAmbient01.mp3",
+            "Music/GeneralAmbient02.mp3",
+            "Music/GeneralAmbient03.mp3",
+            "Music/GeneralAmbient04.mp3",
+            "Music/GeneralAmbient05.mp3",
+            "Music/GeneralAmbient06.mp3"
+          ]
+        },
+        "id": "menu_background_music",
+        "leadin": {
+          "input": {
+            "String": {
+              "declaration_source": {
+                "path": "Templates/template_audio.tgi",
+                "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+                "span": {
+                  "end": 1472,
+                  "start": 1452
+                }
+              },
+              "source": {
+                "path": "Templates/template_audio.tgi",
+                "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+                "span": {
+                  "end": 1472,
+                  "start": 1452
+                }
+              },
+              "value": ""
+            }
+          },
+          "paths": []
+        },
+        "source": {
+          "path": "Audio/music_aa.tgi",
+          "sha256": "2c7b92e6f59e6849d99a140f993bfd9f6f7b819bc41ba5161edde312db2eed07",
+          "span": {
+            "end": 634,
+            "start": 333
+          }
+        },
+        "sources": [
+          {
+            "path": "Audio/music_aa.tgi",
+            "sha256": "2c7b92e6f59e6849d99a140f993bfd9f6f7b819bc41ba5161edde312db2eed07",
+            "span": {
+              "end": 634,
+              "start": 333
+            }
+          },
+          {
+            "path": "Audio/music_aa.tgi",
+            "sha256": "2c7b92e6f59e6849d99a140f993bfd9f6f7b819bc41ba5161edde312db2eed07",
+            "span": {
+              "end": 81,
+              "start": 28
+            }
+          },
+          {
+            "path": "Templates/template_audio.tgi",
+            "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+            "span": {
+              "end": 6603,
+              "start": 6465
+            }
+          },
+          {
+            "path": "Templates/template_audio.tgi",
+            "sha256": "54c1ccf95a626a40bc60d24c1619c5fb8c4288d6ba2f95704e8da90685b26a45",
+            "span": {
+              "end": 6169,
+              "start": 577
+            }
+          }
+        ]
+      },
+      "delivery": {
+        "Finished": "Accepted"
+      },
+      "origin": {
+        "Observer": {
+          "source": {
+            "path": "AVars.tgi",
+            "sha256": "c2ba65e128d28e2c57353da793fb18f5ebf8b2ad45614558ebf9922ee8f63b7c",
+            "span": {
+              "end": 13425,
+              "start": 13377
+            }
+          }
+        }
+      }
+    }
+  ],
+  "qualifications": [
+    "No full747630/Miles backend, voice/channel/playlist parity claim.",
+    "Actual callback wiring/device playback and live BeginPlaying remain separate integration tests.",
+    "The actual source test uses an explicitly laboratory bound-null SessionRead and laboratory output; it does not certify a live local Player+28 or audible playback.",
+    "Controlled fresh source AVar/Nation values only; arbitrary later profile/setter/current-definition mutations are not inferred.",
+    "Selected clip paths are source metadata; this module does not choose/shuffle a playlist.",
+    "Native source/name/registry/fatal/backend service seams and no unwind parity are declared in the fixture/readme.",
+    "Superseded failed test/compile logs remain retained and excluded."
+  ],
+  "pins": {
+    "crates/aa-runtime/src/live_first_tick.rs": "117264784b842dd6253cd125a28fbff76348ca9c7691f4b2f82ef1c862fcabfa",
+    "crates/aa-runtime/src/live_first_tick_tests.rs": "6f66621968840f2841e10182a03c74e147dd5f526b46658467ce5f438e343527",
+    "research/development10/live-first-tick/native-first-tick.json": "c62d3736223547a5f92b3e82066edcfbefde4b8adab0b139aad4c5550d6f0cbc",
+    "research/development10/live-first-tick/native-generate-final.log": "18f0d5208627d2a08f32ddacf6b78748fb9f25ca2c31ce6687ecfd2676d30996",
+    "research/development10/live-first-tick/native-generate-v1.log": "8c020a7481e54189f1e023dd9fa144c72743d791c0ae2d28a0d42be7aebcd68e",
+    "research/development10/live-first-tick/native-nation-music.json": "51f8d45aa3f8f3be8ed6755bd878b3ca564a4fb442dfdfefc45190834aadc0af",
+    "research/development10/live-first-tick/native-replay-final.log": "18f0d5208627d2a08f32ddacf6b78748fb9f25ca2c31ce6687ecfd2676d30996",
+    "research/development10/live-first-tick/native_first_tick.py": "8cac5d0295ed467b9da879207aaf35753f23e79fde7106fa3add529921b31390",
+    "research/development10/live-first-tick/native_nation_music.py": "f8af72f0d2a7e35a94ca6596f2d66c58e3a3e83887c589a8a1c5d59a50cfb65c",
+    "research/development10/live-first-tick/actual-source-inputs.json": "aa201071fd9eaf1ebba881b5602551c9c1ba4681fe40b90cb0534c81bc501fbb",
+    "research/development10/live-first-tick/tests-final-v5.log": "aa784c0a86fa231f1279ba7af29b1a3d7a20cc133353b4cffcd1b2fc4bd1d4bc",
+    "research/development10/live-first-tick/README.txt": "86a41c0be885c4ccfb7c1a86dd4e178eea2ba2742df2a2e453aaf289c1b0155d",
+    "research/development10/live-first-tick/nation-source-replay-final.log": "29de88eae8829a8c31c7464e6dc347671cfcd08e53b94a9108a3c825310e675d"
+  }
+}

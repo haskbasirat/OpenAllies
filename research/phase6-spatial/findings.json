@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Native height construction/input, exact cell walk and fallible ground-world boundary",
+  "native_cases": {
+    "constructors": 28,
+    "v1_loads": 6,
+    "real_map_samples": 144,
+    "tile_walks": 360
+  },
+  "actual_maps_bound": 80,
+  "actual_height_layers_bound": 160,
+  "rust_tests": 18,
+  "source_sha256": {
+    "crates/aa-heightfield/Cargo.toml": "8fbd6f3883b6da8b9d4cbf547f9ea1ab1a52e2b1e91018c79f6115e6589b7486",
+    "crates/aa-heightfield/README.md": "943fbe45f6add75bda51d5b29b6e1015853eab8461211e43cad1867039b8f66c",
+    "crates/aa-heightfield/src/binding.rs": "365248379fe1b2403c595c183d6caee9cf67b72b9a32ef8d467720a78a02500e",
+    "crates/aa-heightfield/src/lib.rs": "d3376035a522dc22f1a08466f0a6ba756a122fe2dfb1f2e71a49e3ae69cf5c3a",
+    "crates/aa-heightfield/tests/native_binding.rs": "6d4e98b1cd8fec301d134d198944ae4a57271b3e59dae20b691fa7aaf2777518",
+    "crates/aa-heightfield/tests/native_fixtures.rs": "99d9a763de2f4cfead8b3cac08a5cda939b70496b239b7c74acd174ab543cb82",
+    "crates/aa-heightfield/tests/original_maps.rs": "ed9aab7d5cc07339fcbddfa364697e5d21e2fbaceee81a5ace9ea5129c0bcc37",
+    "crates/aa-spatial/Cargo.toml": "7d9cf0fbef492c2ad3615704e3c7c475c9ea52e0eda97c64759d5fb723100cbd",
+    "crates/aa-spatial/README.md": "57566d582eb2f330d72cbc42a489ef843069ae1b3739d566b1d96d635de7a76b",
+    "crates/aa-spatial/src/height_layers.rs": "203e2e10ab521a850323a915eda4187772f8ad518168bef1c186270312df4323",
+    "crates/aa-spatial/src/lib.rs": "70c9c2e43388bd7f9a6058ed47e0b41a55ba051d2cc2f8b8fd957b486393f56b",
+    "crates/aa-spatial/src/tile_walk.rs": "4209197b07be1d57e58617c8b746e88eb08ca3108153e6954308285586b750fe",
+    "crates/aa-spatial/tests/native_parity.rs": "9019f0b62e1054f443f7aab239dac44d03fedb3c432eb63e0d87418e4dad372a",
+    "crates/aa-spatial/tests/tile_walk.rs": "6b1b6fece261fbb4b015c728a7a21b019f27df8f865daf2f3a131d4ca572e2a3",
+    "crates/aa-movement/Cargo.toml": "36b608ba394014f613f1e6849dae2a54c7ac337e8e6e20926f1b50e686c57ea3",
+    "crates/aa-movement/README.md": "36fd5c0549306ea097cdab8217ff0610f7ddb6a1e6941fc02861450b5f035423",
+    "crates/aa-movement/src/lib.rs": "e2f0f028973a88aa16d668e162952d9d946a107a741af83544a3394a95b72947",
+    "crates/aa-movement/tests/native_fixtures.rs": "60395f978500bae43c02d0da1566d36fd238e4609f3201c18a39e14dbca5aaee",
+    "crates/aa-client/src/mechanics_check.rs": "6a1059f2b052853616180c3bb5c3024020b4aed77d47dce916c321c9429cf605",
+    "research/phase6-spatial/README.txt": "9ecfb1a85e24df4ee9a9f142826fceed1c866582548681b1667840473245cbef",
+    "research/phase6-spatial/original_height_binding.py": "3995dffe25c4acc34640994eb62a90e42ebd2c99c49cc79306b20b3b310a3b0f",
+    "research/phase6-spatial/original_map_heights.py": "78506880ec1247aef0922186d3295077ebcc14b1395d6d82c0af414a45a47aa4",
+    "research/phase6-spatial/original_tile_walk.py": "ee77fa215e557d1a149da16a076986031b0ebf6207b6fe6fcb454bdab8bd573a",
+    "research/phase6-spatial/native-height-binding.json": "f49fe0980c27ea27b7db7546a4cf79aca4e7cb9b232fe6dcf5e69e71dd941fd4",
+    "research/phase6-spatial/native-real-map-heights.json": "06f5cebd10b991a253878ab8304b291d400102f09bfda4b13ee0b9f6bfe7d3e8",
+    "research/phase6-spatial/native-tile-walk.json": "ed035d14ccace3df5bf9270b678c5c49755102af13b4c87287fde140b9535700",
+    "research/phase6-spatial/record_evidence.py": "565b0251ab693f610df66ed58ca33dd34a0ab30e6c15f3c930f3b349ce20031a"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-trig/src/lib.rs": "3932c883c36bb26aade94f3a889ec28958a31e21441052482f2746ff40f73cc1",
+    "crates/aa-trig/src/angle.rs": "40c3c28058d013b0d6b9bae0aaeec44493f33f80542d8b93c2e25530a4f5b160",
+    "crates/aa-mapworld/src/archive.rs": "040ed128359906d1b2516d3771c9d1cfe9db74999935d8b4a0ce9907eb191048",
+    "crates/aa-mapworld/src/header.rs": "442377c4f9ac7b27e5569dc6d281e1245345043a2d4692bc557c5a101e1d3a5e",
+    "research/phase6-mapheader/inspect_header.py": "ae0f222a2e7377b048b3ff60998b5ce244f794fb6fbcb90fdfa8e615186b51e9",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5"
+  },
+  "commands": [
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase6-spatial\\original_height_binding.py"
+      ],
+      "exit_code": 0,
+      "log": "binding-oracle.log",
+      "sha256": "2e9e4c18b2d36d89434ff0d29dcedf129b7cb3bb5fbd7cff90b26faaaca9278c"
+    },
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase6-spatial\\original_map_heights.py"
+      ],
+      "exit_code": 0,
+      "log": "maps-oracle.log",
+      "sha256": "1eddbd6cc8eff6fde94efcac20a26999c941585de7b0e87eebcd473ea6163deb"
+    },
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase6-spatial\\original_tile_walk.py"
+      ],
+      "exit_code": 0,
+      "log": "walk-oracle.log",
+      "sha256": "d923ced67cfd39bd4a32b5ae8690c9fc85fc54319c75a79e801cfb2a817045c3"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-heightfield",
+        "-p",
+        "aa-spatial",
+        "-p",
+        "aa-movement",
+        "--",
+        "--include-ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "rust-tests.log",
+      "sha256": "c915950b512cabed986d68c288d5c6e632d48c9480e5f6b76f71fe8f80339029"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-heightfield",
+        "-p",
+        "aa-spatial",
+        "-p",
+        "aa-movement",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "2f94fde5cf2f680ce5da3b325531e96f59b56bb2969e47fcb1c63501747bc891"
+    }
+  ],
+  "source_images": {
+    "original": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "limits": [
+    "Actual height reader551E60 only supportsversion1 here; version0 world-dependent flags rebuild is rejected. Writer5500F0 is never used as input execution.",
+    "Original-map fixture supplies the source-pinned resolution1 value and verifies no matching decoded rule override; runtime precision/resolution remain explicit caller inputs.",
+    "Height samplers preserve extended returns; raw sampleflags and unread chunk tails are retained without guessed semantics.",
+    "Tile traversal supplies exact candidate order, not passability or collision answers.",
+    "Movement callback failures stop later work but retain prior native field writes and host effects; no automatic retry/rollback.",
+    "Full shape collision, tile ownership/membership, live actor registry integration and the complete world adapter remain unimplemented.",
+    "No original game process, map, asset, prior release or user configuration modified."
+  ],
+  "peer_review": "Recorded separately; do not treat this producer ledger as independent review."
+}

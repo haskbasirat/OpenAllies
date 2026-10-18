@@ -1,0 +1,46 @@
+Resident original actor presentation
+
+The new LiveScene maps each unambiguous native actor ID to every retained GPU
+mesh instance and its original picking object. It uses original placement source
+ordinals through the same empty-draw compaction as GPU upload. IDs retain all
+generation bits. Unknown/new actors are reported as unbound rather than receiving
+procedural substitute units. All original materials, textures, vertex buffers,
+current model poses, and terrain stay resident during an actor transform update.
+
+ActorVisual carries the native position, planar facing, final visual scale,
+visibility, and optional per-instance replacement color. Native model forward is
+negative Y; existing native-to-render coordinates and static placement basis are
+preserved. Per-instance color does not change global inspector color semantics:
+None continues to use that global control. No pitch/roll is inferred here.
+
+SceneRenderer::update_instances stages and checks every slot before GPU writes,
+coalesces adjacent changed instances, and publishes CPU instance/bound state only
+after the scoped GPU call succeeds. Caller errors cannot partly modify a snapshot.
+Driver/device failure is not a rollback guarantee. Visibility changes update the
+draw command list without rewriting the instance buffer. Opaque transforms and
+color-only changes reuse cached native commands/render bundles; visible queued
+transparent transforms invalidate sorting. New posed local bounds are retained
+so a later transform composes from the current pose rather than the bind pose.
+
+LiveScene stages picking transforms first, then updates GPU instances, then
+publishes picking bounds/inverses. It rejects stale scene epochs and decreasing
+snapshot sequences, ignores duplicate sequences, and rejects duplicate actor IDs
+within a snapshot. Omitted IDs are deltas that stay unchanged; hide/delete must
+explicitly supply visible=false. A newly uploaded map needs fresh bindings.
+
+Tests: the hardware instance test verifies two colors sharing one mesh, live color
+replacement, transform movement, visibility, unchanged resident byte count,
+render-bundle reuse, native transparent-order invalidation, stale-epoch/duplicate-
+slot/invalid-later-slot rejection, and pose-then-instance bound composition.
+Existing alpha/depth/mask/failure-preserves-scene GPU regressions passed alongside
+the new hardware test (four GPU tests total). A separate picking test verifies
+the ray follows the new position and ignores a hidden object. Original tutorial01
+loading verifies native actor IDs bind every retained mesh slot and matching
+picking object, including actors split across multiple draws.
+
+Scope: this is presentation integration groundwork. Main/runtime supply native
+simulation snapshots, timing, ownership, orders, pause/loading behavior, and
+selection anchoring. This module does not implement or claim native actor spawn
+asset loading, per-actor event-selected animation, simulation rules, or multiplayer.
+See INTEGRATION.txt for fixed-step/input/DPI boundaries. Producer tests are not
+an independent review; that gate is requested separately from the parent agent.

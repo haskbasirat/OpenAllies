@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-16",
+  "scope": "Bounded source/effective saved-map settings for Mind action-mask callbacks",
+  "production_files": [
+    "crates/aa-runtime/src/saved_action_settings.rs",
+    "crates/aa-runtime/src/lib.rs (module declaration only)"
+  ],
+  "api": [
+    "fog_of_war(&Catalog, &WorldInventory, Precision) -> Result<bool,String>",
+    "morale_retreat_penalty(&Catalog, &WorldInventory, Precision) -> Result<u32,String>"
+  ],
+  "critical_findings": [
+    "FogOfWar is integer SVar index66 (offset108), not Bool.",
+    "MoraleRetreatPenalty is binary32 SVar index54 (offsetD8).",
+    "FogOfWar hardcoded/TGI SVar default2 is replaced by WorldRule EXPLORED=1 before source-default snapshot.",
+    "GWorld restoration uses separate RULES chunk, not MAP_HEADER rules.",
+    "Serialized rule byte+4 is locked, not enabled; value applies regardless.",
+    "Missing/type-changed/unknown records preserve definition defaults; accepted duplicates replace in stream order.",
+    "Mode2 resets always-editable rules; modes1/4 preserve accepted values; missing mode is an error.",
+    "Fog publication clamps signed integer to0..2; Morale source5 is overridden by SVars_AA0.",
+    "Lookup uses case-insensitive UTF16 prefix before first NUL, without trimming; malformed tail is ignored. Serialized empty GameType bypasses lookup, but nonempty first-NUL reaches unknown-reference exception."
+  ],
+  "validation": {
+    "native_fog_generated": 93,
+    "native_fog_original_RULES": 80,
+    "native_morale_setter_sequences": 6,
+    "static_pinned_windows": 25,
+    "rust_tests_passed": 5,
+    "rust_tests_failed": 0,
+    "rust_tests_ignored": 0,
+    "actual_catalog_maps_checked": 80,
+    "map_fog_values": {
+      "1": 50,
+      "0": 30
+    },
+    "command": "cargo test -p aa-runtime --release --locked --offline -j 4 saved_action_settings --lib -- --include-ignored",
+    "target_dir": "target/s-settings",
+    "native_game_type_cstring_cases": 9
+  },
+  "limits": [
+    "No complete GWorld or game session execution.",
+    "Definition LoadData4905E0 static/source-bound; native rule/GameType lookup executes against supplied registries. Stream string allocation and CRT TLS context are explicit seams; README records precise boundaries.",
+    "Numeric TGI LoadData4B3C10 static dispatch evidence; six native numeric sequences execute registration/setter, not full TGI parser.",
+    "No new full gameplay/AI parity claim.",
+    "A WorldRule targeting MoraleRetreatPenalty is explicitly unsupported until ported."
+  ],
+  "artifacts": {
+    "README.txt": {
+      "bytes": 12904,
+      "sha256": "7c064feb726ee5b89b0bb992ac25219f6638e536ce54618466f5b979282bd73d"
+    },
+    "audit_settings.py": {
+      "bytes": 4395,
+      "sha256": "6ef243656c200d83a5d9c8c3ed49616e80fe0c158127164b11bd219595719aa8"
+    },
+    "settings-evidence.json": {
+      "bytes": 111281,
+      "sha256": "9239be2b0a0bd94386c5d3e330ad6c613e979760060bea812305f3edbe7af1ad"
+    },
+    "native_fog_rules.py": {
+      "bytes": 8847,
+      "sha256": "c023893b5b5b52136cfdaba7fd60c8ce4022cf92b64aca9a057f8a8c0c00f18b"
+    },
+    "native-fog-rules.json": {
+      "bytes": 357273,
+      "sha256": "48b7047ed6a504841f3189d4489463b91a34fa89513f529420da3c656473873f"
+    },
+    "native_morale_settings.py": {
+      "bytes": 3238,
+      "sha256": "b04b8de3266fcc00a47d3892ede3c47b5480420377f8140051dc378e3366bb9f"
+    },
+    "native-morale-settings.json": {
+      "bytes": 39259,
+      "sha256": "a004b2b360e233123316941d48171a34beea0955ecd0f218cb66d6462ee428c9"
+    },
+    "rust-tests.log": {
+      "bytes": 890,
+      "sha256": "e762e61040143d85b3b3c7cd682e4b584f74d758705a9f6967dd95be19477f7f"
+    }
+  },
+  "helper_sha256": "56917bbbc4db74402b1fed9ec44506118d9a27a6c1b79d4296ada4ca8d111ab7"
+}

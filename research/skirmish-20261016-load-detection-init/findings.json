@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "status": "author_verified_pending_independent_review",
+  "scope": "Common Construction15/Detection22/Lair25 InitExisting564D80; Construction/Lair4B2830 After constant; actual Detection56EC90 nonstructure/Actor138zero path through owned CreateZone6 and Zone clamp/move until genuine required World+248 read. No full solver/fog/Actor Init/battle claim.",
+  "sources": [
+    {
+      "path": "crates/aa-runtime/src/load_detection_activation.rs",
+      "sha256": "2c50eaa9216975dd63d8f553c1c466b3686f5833d5870950f5971e3be31eec3f",
+      "snapshot_path": "research/skirmish-20261016-load-detection-init/activation-required-prefix-frozen.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_activation_tests.rs",
+      "sha256": "915e4c640c7cf7af98d425083618ef535fc9614af6c7254e5ea43aa8b7326c52",
+      "snapshot_path": "research/skirmish-20261016-load-detection-init/activation-tests-frozen.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_init_world.rs",
+      "sha256": "c8ce9f87ecf8f07871ac7ade61cc940242a35fd158c8430ff5a6767c3a8bff76"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_init_world_tests.rs",
+      "sha256": "cfb836e4f53c15206f73a8bb5d86e7829bc588d05987ca1e06e4a39865d7b233"
+    },
+    {
+      "path": "crates/aa-actors/src/loading.rs",
+      "sha256": "8cc7966c7bad25deb91a6936129a34747662dd792cacdc35212cf095d56e3f16"
+    },
+    {
+      "path": "crates/aa-actors/tests/native_load_constructors.rs",
+      "sha256": "a80632474ca4e11b503080954e088d53aa381b5bb7260644cdae38f4ee7d373a"
+    },
+    {
+      "path": "crates/aa-actors/tests/load_shell_mapping.rs",
+      "sha256": "3ec44bf4ad22d0c6a92d15278756ac1ab88443ccc291f7692f396d3b3e4afaf5"
+    },
+    {
+      "path": "crates/aa-actors/tests/native_actor_creation.rs",
+      "sha256": "886365f5f4fecc5bc61ca0bf4bde6698fadd506bb64891692f024ddcc03cff22"
+    },
+    {
+      "path": "crates/aa-mapworld/src/organization_restore.rs",
+      "sha256": "012dfa0b66e4f4552fd2505aca66d21ecb455b563b04c5e2f72f64d89b5ec1e4"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_object_init_world.rs",
+      "sha256": "f2c93d04017d27c0a7b8c9066a02848ea72856f3b19c48bc8845deeb4b9816b7"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_placement.rs",
+      "sha256": "4a252537afd0762030d1f404d8183fd7e1de77c051c7a9ede6c5aa577ee0c229"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_required_placement.rs",
+      "sha256": "e83a61aeaedc50faf567f91882c2b66f2d867bebf2642be724da59570c295f51"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "research/skirmish-20261016-load-detection-init/native-scheduled-init.json",
+      "sha256": "c979af7e3f6bf348ceb7dfa02073d542e3521e4631c568143484c902d25eb4b3"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/native-detection-activation-required-prefix-v1.json",
+      "sha256": "e7887957929e05a1c23cb7e470f8ad9cea43aba93237da4aa38825bf38540025"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/native_scheduled_init.py",
+      "sha256": "e771bb520275635a5b4e19ae7be1a54cb1ace248931f37a94ce30f36ed5044a6"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/native-detection-activation-producer-v1-frozen.py",
+      "sha256": "b5660efbf8cb6e82f32a16ba934dce4068b948f2c8eb0617a48245c810029810"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/actual-two-activation-prefixes.json",
+      "sha256": "6fa47b884f7790eaa17e65bddd521c8b7d0f2cd05cd361045c0f656b9a476763"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/boundary-01/actual-2696-before-56ec90.json",
+      "sha256": "adeb9527163b627f12e906d90deb1d8157be1b6fef3359fa83fb455b3fdb4970"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/boundary-01/actual-6477-before-56ec90.json",
+      "sha256": "0530e66789e65e75c3bbe638f7008516e33197cebb12f9b3b00b79dcbeb83886"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-init/frozen-activation-tests.exe",
+      "sha256": "1aa32ff6ac7a0de4017797a4ea8911852cc2deaed31329d716ef23cdc4cd5582"
+    }
+  ],
+  "native_scheduled": {
+    "rows": 90,
+    "machines": 180,
+    "executed_address_pins": 14,
+    "required_entry_pins": 1,
+    "all_pc": true,
+    "seams": "50AC60 stops at real child; queue implementation reused explicit existing native queue proof."
+  },
+  "native_activation": {
+    "rows": 54,
+    "machines": 108,
+    "executed_address_pins": 348,
+    "allocator_entry_pins": 1,
+    "required_boundary_pins": 2,
+    "all_pc": true,
+    "returning_seam": "successful6F7810 allocation only",
+    "stops": [
+      "515A20 before actual World+248 read",
+      "514CE0 required release entry"
+    ],
+    "actual_rows": 6,
+    "probe_rows": 48
+  },
+  "validation": [
+    {
+      "log": "scheduled-gate-rust-retry.log",
+      "result": "1/1 passed90rows"
+    },
+    {
+      "log": "actor-zone-owner-tests-final.log",
+      "result": "3/3 passed saved constructors/move/native creation"
+    },
+    {
+      "log": "activation-final-build-retry.log",
+      "result": "1/1 passed54rows, one actual test ignored in ordinary run"
+    },
+    {
+      "log": "activation-actual-final-rust.log",
+      "result": "1/1 actual public binding,2owners x3livePC, same DetectionBox/ZoneVec preserved,9.93s"
+    },
+    {
+      "log": "native-activation-replay.log",
+      "result": "fresh immutable54rows exact"
+    },
+    {
+      "log": "native-scheduled-final-replay.log",
+      "result": "fresh immutable90rows exact"
+    }
+  ],
+  "limits": [
+    "Initial direct actual test used source-only stopped Attempt, before Object Init bit26 spatial store. It deliberately compares every REACHED predicate bit0 and statebit21 plus exact radius/XY against separately observed pre56EC90 boundary; it does not claim entire pre/post Init input equality. Original failed full-flags assertion log retained.",
+    "All actual calls stop at required515A1A and retain actual vector/zone partial stores. No solver presence/absence guessed.",
+    "Positive Actor138/source430/Denizen scheduling branch remains explicitly required; structure remote range reads actual source PC but no new actual structure success claim.",
+    "Zone IDs are a separate persistent portable allocation domain, not native pointers or ActorGTID casts.",
+    "Raw148/14C/150 mirrors removed; Organization owner count reader migrated to typed vector after genuine actual-load regression; positive Organization zone4 field service remains required.",
+    "Allocation failure/native undefined memory behavior not certified.",
+    "No multiplayer, gameplay loop, rendering capture or full-world completion is tested here.",
+    "V1 harness filled an Actor header with unused definition-block VA A25B28. No virtual dispatch/header read occurs before any V1 stop. Current producer corrects header to actual4D6DBD ctor vtableA273F0 and adds static original/v14 byte assertion; all54 rows and reached pins remain equal. Exact old fixture/producer bytes are retained separately with their original hashes."
+  ],
+  "profiles": {
+    "test_only": "release LTO=false/codegen-units16,locked/offline,j4",
+    "shipping": "unchanged default release profile"
+  },
+  "historical_failures": [
+    "actor-zone-owner-tests.log: pre-existing raw108 test projection needed explicit typed constructor-empty list comparison",
+    "activation-actual-rust.log: full-flags assertion failed on expected ObjectInit bit26 difference; source fields never edited to hide it",
+    "activation-final-build.log: unrelated saved_action_settings missing registry/definition compile error; fixed by owner before current final build"
+  ],
+  "checkpoint": "Required-prefix-v1. Current production extends real global Effects and has a separate pending checkpoint; shared source pins record this tested checkpoint, not a permanent freeze."
+}

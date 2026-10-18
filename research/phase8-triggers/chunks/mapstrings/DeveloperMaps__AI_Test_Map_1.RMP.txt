@@ -1,0 +1,10 @@
+[Text language=Default]
+{
+	ids = map_strings_table
+	name = "AI_Test_Map_1"
+
+	kingdom_1 = "Side 1"
+	kingdom_0 = "Side 0"
+	map_name = "AI_Test_Map_1"
+	map_description = "Map Description"
+}

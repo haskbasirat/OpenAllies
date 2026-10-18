@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "status": "portable constituents accepted by author; concrete same-world integration pending",
+  "ordinary": "Unchanged existing create_organization tail extracted once; old entry delegates; actual Params+51 getter invoked only immediately before each reached nonleader spawn.",
+  "hero": "Native4FA3D0 postpass after explicit4FA150 child result; same captured/current owner order and partial error/mutation prefixes.",
+  "native": {
+    "rows": 411,
+    "executions": 822,
+    "executed_address_byte_pins": 78,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "explicit_children": [
+      "4FA150 creation result",
+      "member virtual108 current owners",
+      "4E2A60 recruit query",
+      "57B830 hero attachment",
+      "4FA4A0..4FA54F localized notification subtree"
+    ]
+  },
+  "execution": {
+    "exact_production_module_tests": "2/2 pass",
+    "existing_mapworld_fresh_creation_regressions": "4/4 pass",
+    "runtime_production_check": "pass",
+    "new_runtime_unit_link": false
+  },
+  "required_positive_children": [
+    "actual recruit-table ownership/query",
+    "57B830 hero insertion/refresh",
+    "actual localized formatted notification",
+    "recursive same-world member creation and teardown"
+  ],
+  "not_claimed": [
+    "fully initialized Staged World",
+    "natural mission organization completion",
+    "native notification or positive hero child implementation",
+    "raw pointer production identity domain"
+  ],
+  "source": [
+    {
+      "path": "crates/aa-runtime/src/fresh_organization_completion.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/fresh_organization_completion.rs",
+      "sha256": "96a5e8331178c2a62563867d338b19b9632bc3fd0fd3d94f3de4135f99923572"
+    },
+    {
+      "path": "crates/aa-runtime/src/fresh_organization_completion_tests.rs",
+      "snapshot": "source-checkpoint/crates/aa-runtime/src/fresh_organization_completion_tests.rs",
+      "sha256": "6075fa22851518ac23bfe6467c917bb69deb536d693031cafaac8239bedef555"
+    },
+    {
+      "path": "crates/aa-mapworld/src/fresh_creation.rs",
+      "snapshot": "source-checkpoint/crates/aa-mapworld/src/fresh_creation.rs",
+      "sha256": "2b409b1daaf84b9bd14edeadba69a71d9097f17e5e7e0baf50511b3bc594a274"
+    },
+    {
+      "path": "crates/aa-mapworld/tests/fresh_creation.rs",
+      "snapshot": "source-checkpoint/crates/aa-mapworld/tests/fresh_creation.rs",
+      "sha256": "423ecf0ef825bd59817a479553955c38c27c7ab495d24469aea2eca402968032"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "native_hero_postpass.py",
+      "sha256": "0c396bd12bb8e07e09db480b66992e079c268e9e2222c23a714e40475fad3d75"
+    },
+    {
+      "path": "native-hero-postpass.json",
+      "sha256": "4b1f9b828e21f9981b2df61dee04ffd215cae022738c14af255a54baecc72d3a"
+    },
+    {
+      "path": "native-write.log",
+      "sha256": "859f094466da0e8417d5870ab2d6e26e6f7ceb88c3b30f61ac3e4b867314bd02"
+    },
+    {
+      "path": "native-replay.log",
+      "sha256": "859f094466da0e8417d5870ab2d6e26e6f7ceb88c3b30f61ac3e4b867314bd02"
+    },
+    {
+      "path": "native-4fa150-instructions.txt",
+      "sha256": "17ed77a074228fc2cc3c44c2b3617c780de8986768c9c89f3e50570eba53e3d6"
+    },
+    {
+      "path": "exact-hero-tests.rs",
+      "sha256": "51bf9717a8d273ebe50eb69686a48c996db3cd64bfa091b03f4cdd8f4c1aa672"
+    },
+    {
+      "path": "exact-hero-tests.exe",
+      "sha256": "ab28d5c0fe56e242c45daabf40efe0d2637bf4c2194bb6a5b02edd822acac998"
+    },
+    {
+      "path": "exact-tests-build03.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "exact-tests03.log",
+      "sha256": "41e66880227a928c54a3850aca566dea4694cf7d2604ac597ca607916ab0b588"
+    },
+    {
+      "path": "existing-mapworld-regression03.log",
+      "sha256": "94c6f45516aad6c76233f693004c51242129c3b5c54799345a4a831a806fb12e"
+    },
+    {
+      "path": "check-lib-final.log",
+      "sha256": "f04d2f8212efcbaae3277baaacf0aa34fe82b9f448ae77744c661cdc675e40ae"
+    },
+    {
+      "path": "integration-spec.md",
+      "sha256": "13408aa5f55d4c80a684bec2e537be8fad3048400bc9f8adde0f2b2266afbc4f"
+    },
+    {
+      "path": "README.md",
+      "sha256": "38c8fa882b9192ba8ac92a7703b0637f984252a8cccde2f9c37d6856013a7ac2"
+    },
+    {
+      "path": "seal_checkpoint.py",
+      "sha256": "c9f8f892b5f9e0b5ebac06fe35444b16328fe8681d03625187423b28a9c9cee1"
+    }
+  ],
+  "external_evidence": [
+    {
+      "path": "research/phase8-conversion/native-fresh-creation.json",
+      "sha256": "b6338d937654beb5164c93f96aac4741678c66296aced992c9259449f9ab125c"
+    },
+    {
+      "path": "research/phase8-ai/native_machine.py",
+      "sha256": "1aba789e7e72dc2d016623caa22456181c03fcedc3f40dc57bff7fb7bde68c00"
+    }
+  ]
+}

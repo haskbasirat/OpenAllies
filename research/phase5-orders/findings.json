@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "aa-orders generic command serialization and guarded delivery boundaries",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_cases": {
+    "payloads": 309,
+    "slots": 18,
+    "actor_process": 5,
+    "selected_process": 3,
+    "player_process": 7,
+    "packets": 3
+  },
+  "rust_tests": {
+    "phase5": 7,
+    "all_orders": 19
+  },
+  "visited_byte_windows": 4379,
+  "byte_window_scope": "The compatibility field executed_windows records visited native instruction addresses, including intercepted seam-entry bytes. A pinned seam entry is not evidence that its original instructions executed.",
+  "source_sha256": {
+    "crates/aa-orders/Cargo.toml": "7b3f927bae1ce610a460e791c5c4a9999300d5232f5ef25807207e0bd540ccb0",
+    "crates/aa-orders/README.md": "b9b2c6e8cb0ad2523dbeffea915bd557a91d52c61343e22888a6b3a7419b1400",
+    "crates/aa-orders/src/lib.rs": "f9890bf4a7e43bddb67465896246a1daef97a3ec1420b01d8348f8623deac838",
+    "crates/aa-orders/src/commands.rs": "87554146d032f69f4310234955ece89be9f35ba267eb20c6c7d7969b30762090",
+    "crates/aa-orders/src/native.rs": "61c527a4245fee7e50d7a05bd2223c91defee2dda4c2b472eb43130a3af02e07",
+    "crates/aa-orders/src/native_registry.rs": "a2550406d270d7dc404ca1a67d469a148295330170594278c798b992ba9a9694",
+    "crates/aa-orders/tests/generic_commands.rs": "f6cdeb84cf26038729899c4f8d6a70a6e6273fb87aff18ebb0e2f5e28f720e40",
+    "research/phase5-orders/README.txt": "f47650c014bfa9571bf85993df0e1d3e04e6cc9a27049521a83ee94e58f7ad9c",
+    "research/phase5-orders/native_commands.py": "842b1f900247b70462ddc182e1bdf789b5a74d73c68cc9af5b062a674c080991",
+    "research/phase5-orders/commands-native-oracle.json": "a55f0776becdfb2c9971a175d21d2b01372e705133726e12dfb750494aeb298f",
+    "research/phase5-orders/record_evidence.py": "7bf0639567fee6888ea31fc680e0dfad3cfd753c40ac474802f41ac7ead8fcfc",
+    "research/phase5-orders/select_client_samples.py": "f4c427ef2db9383c5132e856df9bd88b34609ebd1a137d005a9515aed3bd80ff",
+    "research/phase5-orders/client_samples.rs": "9011fc1295b84e539a0eea0a6e66309b6304a1a17ff288f691819c2527ada777",
+    "research/phase5-orders/client-samples.json": "6629d7a5960f062056d4fe2bc18ce3eb46b38540e28a7281f849bc5bcdfd1a12"
+  },
+  "dependency_sha256": {
+    "research/phase4-orders/recover_orders.py": "b148cb04cde42ae3cd0fc0b4e8571ce39abe8627a428e8f501a5d57947c2ec4a",
+    "research/phase3-orders/original_orders.py": "e3ed4b21d39b7a9aed55b0cffecb48b409dc247313888b028fff26ceb4899d4d",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a"
+  },
+  "commands": [
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase5-orders\\native_commands.py"
+      ],
+      "exit_code": 0,
+      "log": "native-oracle.log",
+      "sha256": "adf3bdf896d4af2e1a903aeb1e9eb6e624b66f2a64bb7dc3df3cdcbad90ca077"
+    },
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase5-orders\\select_client_samples.py"
+      ],
+      "exit_code": 0,
+      "log": "client-samples.log",
+      "sha256": "a007e57f7ce120308987e8665e70a406335f45149e464e1ac5c4707503d0cd0b"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-orders"
+      ],
+      "exit_code": 0,
+      "log": "rust-tests.log",
+      "sha256": "a6cd59c21336571c41e2d23e8875d410e61abafc8cc1e43d243f07a30aeb388f"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-orders",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "d0c98f58a95c7c1729b8d7dcc7f249196b5ff0f052c130afbecf6e4fe20a1e33"
+    }
+  ],
+  "seams": [
+    "Allocator/free, CString allocation, clock and diagnostic output are fixture seams.",
+    "Actual conditional command writer61E6B0/decoder61EBA0 and each registry serializer/lookup execute. Registry contents are synthetic explicit inputs; their authoring/index population is not claimed.",
+    "Actual actor-slot lookup76A5A0 runs; virtual+B4 type-validity is supplied. Object-definition virtual+38 validity is supplied.",
+    "Actual actor guarded process61E220 and linked-GTID validation44DEA0 run. Virtual+150 may replace the command; linked-group lookup/preparation and final delivery are traced gameplay leaves.",
+    "Actual selected61F210 runs; selection/gameplay handler4ED360 is an explicit leaf, not implemented formation/path/ownership behavior.",
+    "Actual current-player75D710, linked-list lookup76B8F0 and setter helpers execute. Film-stop751EB0 is a synchronous traced callback, including a state-mutation case."
+  ],
+  "limits": [
+    "Requests are decoded but no request authorization, authoritative scheduling or outgoing recording/mirror is implemented.",
+    "Malformed negative/oversized parameter counts and invalid registry references are Rust safety errors, not emulated native corruption.",
+    "This is not complete world command execution."
+  ],
+  "peer_review": "Separate independent-review.json; not recursively included in this ledger."
+}

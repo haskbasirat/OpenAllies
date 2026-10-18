@@ -1,0 +1,1443 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T16:54:31.318632+00:00",
+  "passed": true,
+  "scope": "Read-only exact native status literal/call flags +98resolved-source text census. No game/GUI execution, build, original/source/release edits, or full missing-key fallback acceptance.",
+  "conclusion": "The GUI blocker is a wrong ported literal: native Loading682FD0 kind1 requests app_status_loading_resources, while candidate2 Rust requests absent app_status_loading_world. It is not a dropped rebuiltCatalog localization owner. Root owns the one-line correction for a new candidate.",
+  "native": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "literal": {
+      "va": "0xa6e728",
+      "utf16": "app_status_loading_resources",
+      "bytes": "6100700070005f007300740061007400750073005f006c006f006100640069006e0067005f007200650073006f00750072006300650073000000"
+    },
+    "pins": [
+      {
+        "name": "loading_kind1_call",
+        "start": "0x682feb",
+        "end": "0x68301e",
+        "bytes": "8b0783f8018bf175566828e7a6008d4c241ce8feead7ff8b0d5065b3006a016a008d44242050c744241c00000000e8c20c0f00",
+        "sha256": "19ba84e39b2fa554b29eb59e8d7d638c272dc5b614c749eeb38e1ac15768633d",
+        "instructions": [
+          {
+            "va": "0x682feb",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [edi]"
+          },
+          {
+            "va": "0x682fed",
+            "mnemonic": "cmp",
+            "operands": "eax, 1"
+          },
+          {
+            "va": "0x682ff0",
+            "mnemonic": "mov",
+            "operands": "esi, ecx"
+          },
+          {
+            "va": "0x682ff2",
+            "mnemonic": "jne",
+            "operands": "0x68304a"
+          },
+          {
+            "va": "0x682ff4",
+            "mnemonic": "push",
+            "operands": "0xa6e728"
+          },
+          {
+            "va": "0x682ff9",
+            "mnemonic": "lea",
+            "operands": "ecx, [esp + 0x1c]"
+          },
+          {
+            "va": "0x682ffd",
+            "mnemonic": "call",
+            "operands": "0x401b00"
+          },
+          {
+            "va": "0x683002",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [0xb36550]"
+          },
+          {
+            "va": "0x683008",
+            "mnemonic": "push",
+            "operands": "1"
+          },
+          {
+            "va": "0x68300a",
+            "mnemonic": "push",
+            "operands": "0"
+          },
+          {
+            "va": "0x68300c",
+            "mnemonic": "lea",
+            "operands": "eax, [esp + 0x20]"
+          },
+          {
+            "va": "0x683010",
+            "mnemonic": "push",
+            "operands": "eax"
+          },
+          {
+            "va": "0x683011",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x1c], 0"
+          },
+          {
+            "va": "0x683019",
+            "mnemonic": "call",
+            "operands": "0x773ce0"
+          }
+        ]
+      },
+      {
+        "name": "loading15_after_status",
+        "start": "0x68303c",
+        "end": "0x68304a",
+        "bytes": "8b088b1150ff5204c6461501eb09",
+        "sha256": "e8acff998845741eb898b6b4ebebaed6c3ed065433e04696109c326cf5969851",
+        "instructions": [
+          {
+            "va": "0x68303c",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [eax]"
+          },
+          {
+            "va": "0x68303e",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [ecx]"
+          },
+          {
+            "va": "0x683040",
+            "mnemonic": "push",
+            "operands": "eax"
+          },
+          {
+            "va": "0x683041",
+            "mnemonic": "call",
+            "operands": "dword ptr [edx + 4]"
+          },
+          {
+            "va": "0x683044",
+            "mnemonic": "mov",
+            "operands": "byte ptr [esi + 0x15], 1"
+          },
+          {
+            "va": "0x683048",
+            "mnemonic": "jmp",
+            "operands": "0x683053"
+          }
+        ]
+      },
+      {
+        "name": "session_translate_branch",
+        "start": "0x773d10",
+        "end": "0x773d45",
+        "bytes": "8a44242884c0c74424180000000074258b4c242068483bb400518b0d4465b300e80b62d4ff8db748010000508bcee83d1ec9ffeb61",
+        "sha256": "e6a6f9f7b9b9ba11e4f6619a5abb6a4f8fd36d8f9a970dd990b63d4bfb715b4f",
+        "instructions": [
+          {
+            "va": "0x773d10",
+            "mnemonic": "mov",
+            "operands": "al, byte ptr [esp + 0x28]"
+          },
+          {
+            "va": "0x773d14",
+            "mnemonic": "test",
+            "operands": "al, al"
+          },
+          {
+            "va": "0x773d16",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x18], 0"
+          },
+          {
+            "va": "0x773d1e",
+            "mnemonic": "je",
+            "operands": "0x773d45"
+          },
+          {
+            "va": "0x773d20",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [esp + 0x20]"
+          },
+          {
+            "va": "0x773d24",
+            "mnemonic": "push",
+            "operands": "0xb43b48"
+          },
+          {
+            "va": "0x773d29",
+            "mnemonic": "push",
+            "operands": "ecx"
+          },
+          {
+            "va": "0x773d2a",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [0xb36544]"
+          },
+          {
+            "va": "0x773d30",
+            "mnemonic": "call",
+            "operands": "0x4b9f40"
+          },
+          {
+            "va": "0x773d35",
+            "mnemonic": "lea",
+            "operands": "esi, [edi + 0x148]"
+          },
+          {
+            "va": "0x773d3b",
+            "mnemonic": "push",
+            "operands": "eax"
+          },
+          {
+            "va": "0x773d3c",
+            "mnemonic": "mov",
+            "operands": "ecx, esi"
+          },
+          {
+            "va": "0x773d3e",
+            "mnemonic": "call",
+            "operands": "0x405b80"
+          },
+          {
+            "va": "0x773d43",
+            "mnemonic": "jmp",
+            "operands": "0x773da6"
+          }
+        ]
+      },
+      {
+        "name": "text_lookup_missing_flow",
+        "start": "0x4b9f40",
+        "end": "0x4ba08b",
+        "bytes": "6aff686814990064a1000000005064892500000000515355568b7424208b068bd9578d4c24248d6b4c518bcd89442428e8cbfdffff85c074048b00eb0233c085c08bf8897c241074078b50044289500485c0c744241c000000000f85b60000008b4424288b088b51f485d20f85c70000008b154099b3008b82f400000080380074238b0e51687001a200682001a200680b010000682000a20068708bb300e8edaef4ffeb218b1652687001a200682001a200680d010000682000a20068708bb300e89aaef4ff8b435c83c4188d4c2424518bcd89442428e824fdffff85c074118b0085c0740b8b5004428950048bf8eb258b435c50687001a200682001a2006812010000682000a20068708bb300e84daef4ff83c41885ff8d7710c744241cffffffff74118b47044889470475088b176a018bcfff128bc68b4c24145f5e5d5b64890d0000000083c410c2",
+        "sha256": "b0e6833a14d80700bff7c1abc964d9729f1b4eac7625be2d3236c78296c5e4bf",
+        "instructions": [
+          {
+            "va": "0x4b9f40",
+            "mnemonic": "push",
+            "operands": "-1"
+          },
+          {
+            "va": "0x4b9f42",
+            "mnemonic": "push",
+            "operands": "0x991468"
+          },
+          {
+            "va": "0x4b9f47",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr fs:[0]"
+          },
+          {
+            "va": "0x4b9f4d",
+            "mnemonic": "push",
+            "operands": "eax"
+          },
+          {
+            "va": "0x4b9f4e",
+            "mnemonic": "mov",
+            "operands": "dword ptr fs:[0], esp"
+          },
+          {
+            "va": "0x4b9f55",
+            "mnemonic": "push",
+            "operands": "ecx"
+          },
+          {
+            "va": "0x4b9f56",
+            "mnemonic": "push",
+            "operands": "ebx"
+          },
+          {
+            "va": "0x4b9f57",
+            "mnemonic": "push",
+            "operands": "ebp"
+          },
+          {
+            "va": "0x4b9f58",
+            "mnemonic": "push",
+            "operands": "esi"
+          },
+          {
+            "va": "0x4b9f59",
+            "mnemonic": "mov",
+            "operands": "esi, dword ptr [esp + 0x20]"
+          },
+          {
+            "va": "0x4b9f5d",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [esi]"
+          },
+          {
+            "va": "0x4b9f5f",
+            "mnemonic": "mov",
+            "operands": "ebx, ecx"
+          },
+          {
+            "va": "0x4b9f61",
+            "mnemonic": "push",
+            "operands": "edi"
+          },
+          {
+            "va": "0x4b9f62",
+            "mnemonic": "lea",
+            "operands": "ecx, [esp + 0x24]"
+          },
+          {
+            "va": "0x4b9f66",
+            "mnemonic": "lea",
+            "operands": "ebp, [ebx + 0x4c]"
+          },
+          {
+            "va": "0x4b9f69",
+            "mnemonic": "push",
+            "operands": "ecx"
+          },
+          {
+            "va": "0x4b9f6a",
+            "mnemonic": "mov",
+            "operands": "ecx, ebp"
+          },
+          {
+            "va": "0x4b9f6c",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x28], eax"
+          },
+          {
+            "va": "0x4b9f70",
+            "mnemonic": "call",
+            "operands": "0x4b9d40"
+          },
+          {
+            "va": "0x4b9f75",
+            "mnemonic": "test",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4b9f77",
+            "mnemonic": "je",
+            "operands": "0x4b9f7d"
+          },
+          {
+            "va": "0x4b9f79",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [eax]"
+          },
+          {
+            "va": "0x4b9f7b",
+            "mnemonic": "jmp",
+            "operands": "0x4b9f7f"
+          },
+          {
+            "va": "0x4b9f7d",
+            "mnemonic": "xor",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4b9f7f",
+            "mnemonic": "test",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4b9f81",
+            "mnemonic": "mov",
+            "operands": "edi, eax"
+          },
+          {
+            "va": "0x4b9f83",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x10], edi"
+          },
+          {
+            "va": "0x4b9f87",
+            "mnemonic": "je",
+            "operands": "0x4b9f90"
+          },
+          {
+            "va": "0x4b9f89",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [eax + 4]"
+          },
+          {
+            "va": "0x4b9f8c",
+            "mnemonic": "inc",
+            "operands": "edx"
+          },
+          {
+            "va": "0x4b9f8d",
+            "mnemonic": "mov",
+            "operands": "dword ptr [eax + 4], edx"
+          },
+          {
+            "va": "0x4b9f90",
+            "mnemonic": "test",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4b9f92",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x1c], 0"
+          },
+          {
+            "va": "0x4b9f9a",
+            "mnemonic": "jne",
+            "operands": "0x4ba056"
+          },
+          {
+            "va": "0x4b9fa0",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [esp + 0x28]"
+          },
+          {
+            "va": "0x4b9fa4",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [eax]"
+          },
+          {
+            "va": "0x4b9fa6",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [ecx - 0xc]"
+          },
+          {
+            "va": "0x4b9fa9",
+            "mnemonic": "test",
+            "operands": "edx, edx"
+          },
+          {
+            "va": "0x4b9fab",
+            "mnemonic": "jne",
+            "operands": "0x4ba078"
+          },
+          {
+            "va": "0x4b9fb1",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [0xb39940]"
+          },
+          {
+            "va": "0x4b9fb7",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [edx + 0xf4]"
+          },
+          {
+            "va": "0x4b9fbd",
+            "mnemonic": "cmp",
+            "operands": "byte ptr [eax], 0"
+          },
+          {
+            "va": "0x4b9fc0",
+            "mnemonic": "je",
+            "operands": "0x4b9fe5"
+          },
+          {
+            "va": "0x4b9fc2",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [esi]"
+          },
+          {
+            "va": "0x4b9fc4",
+            "mnemonic": "push",
+            "operands": "ecx"
+          },
+          {
+            "va": "0x4b9fc5",
+            "mnemonic": "push",
+            "operands": "0xa20170"
+          },
+          {
+            "va": "0x4b9fca",
+            "mnemonic": "push",
+            "operands": "0xa20120"
+          },
+          {
+            "va": "0x4b9fcf",
+            "mnemonic": "push",
+            "operands": "0x10b"
+          },
+          {
+            "va": "0x4b9fd4",
+            "mnemonic": "push",
+            "operands": "0xa20020"
+          },
+          {
+            "va": "0x4b9fd9",
+            "mnemonic": "push",
+            "operands": "0xb38b70"
+          },
+          {
+            "va": "0x4b9fde",
+            "mnemonic": "call",
+            "operands": "0x404ed0"
+          },
+          {
+            "va": "0x4b9fe3",
+            "mnemonic": "jmp",
+            "operands": "0x4ba006"
+          },
+          {
+            "va": "0x4b9fe5",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [esi]"
+          },
+          {
+            "va": "0x4b9fe7",
+            "mnemonic": "push",
+            "operands": "edx"
+          },
+          {
+            "va": "0x4b9fe8",
+            "mnemonic": "push",
+            "operands": "0xa20170"
+          },
+          {
+            "va": "0x4b9fed",
+            "mnemonic": "push",
+            "operands": "0xa20120"
+          },
+          {
+            "va": "0x4b9ff2",
+            "mnemonic": "push",
+            "operands": "0x10d"
+          },
+          {
+            "va": "0x4b9ff7",
+            "mnemonic": "push",
+            "operands": "0xa20020"
+          },
+          {
+            "va": "0x4b9ffc",
+            "mnemonic": "push",
+            "operands": "0xb38b70"
+          },
+          {
+            "va": "0x4ba001",
+            "mnemonic": "call",
+            "operands": "0x404ea0"
+          },
+          {
+            "va": "0x4ba006",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [ebx + 0x5c]"
+          },
+          {
+            "va": "0x4ba009",
+            "mnemonic": "add",
+            "operands": "esp, 0x18"
+          },
+          {
+            "va": "0x4ba00c",
+            "mnemonic": "lea",
+            "operands": "ecx, [esp + 0x24]"
+          },
+          {
+            "va": "0x4ba010",
+            "mnemonic": "push",
+            "operands": "ecx"
+          },
+          {
+            "va": "0x4ba011",
+            "mnemonic": "mov",
+            "operands": "ecx, ebp"
+          },
+          {
+            "va": "0x4ba013",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x28], eax"
+          },
+          {
+            "va": "0x4ba017",
+            "mnemonic": "call",
+            "operands": "0x4b9d40"
+          },
+          {
+            "va": "0x4ba01c",
+            "mnemonic": "test",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4ba01e",
+            "mnemonic": "je",
+            "operands": "0x4ba031"
+          },
+          {
+            "va": "0x4ba020",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [eax]"
+          },
+          {
+            "va": "0x4ba022",
+            "mnemonic": "test",
+            "operands": "eax, eax"
+          },
+          {
+            "va": "0x4ba024",
+            "mnemonic": "je",
+            "operands": "0x4ba031"
+          },
+          {
+            "va": "0x4ba026",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [eax + 4]"
+          },
+          {
+            "va": "0x4ba029",
+            "mnemonic": "inc",
+            "operands": "edx"
+          },
+          {
+            "va": "0x4ba02a",
+            "mnemonic": "mov",
+            "operands": "dword ptr [eax + 4], edx"
+          },
+          {
+            "va": "0x4ba02d",
+            "mnemonic": "mov",
+            "operands": "edi, eax"
+          },
+          {
+            "va": "0x4ba02f",
+            "mnemonic": "jmp",
+            "operands": "0x4ba056"
+          },
+          {
+            "va": "0x4ba031",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [ebx + 0x5c]"
+          },
+          {
+            "va": "0x4ba034",
+            "mnemonic": "push",
+            "operands": "eax"
+          },
+          {
+            "va": "0x4ba035",
+            "mnemonic": "push",
+            "operands": "0xa20170"
+          },
+          {
+            "va": "0x4ba03a",
+            "mnemonic": "push",
+            "operands": "0xa20120"
+          },
+          {
+            "va": "0x4ba03f",
+            "mnemonic": "push",
+            "operands": "0x112"
+          },
+          {
+            "va": "0x4ba044",
+            "mnemonic": "push",
+            "operands": "0xa20020"
+          },
+          {
+            "va": "0x4ba049",
+            "mnemonic": "push",
+            "operands": "0xb38b70"
+          },
+          {
+            "va": "0x4ba04e",
+            "mnemonic": "call",
+            "operands": "0x404ea0"
+          },
+          {
+            "va": "0x4ba053",
+            "mnemonic": "add",
+            "operands": "esp, 0x18"
+          },
+          {
+            "va": "0x4ba056",
+            "mnemonic": "test",
+            "operands": "edi, edi"
+          },
+          {
+            "va": "0x4ba058",
+            "mnemonic": "lea",
+            "operands": "esi, [edi + 0x10]"
+          },
+          {
+            "va": "0x4ba05b",
+            "mnemonic": "mov",
+            "operands": "dword ptr [esp + 0x1c], 0xffffffff"
+          },
+          {
+            "va": "0x4ba063",
+            "mnemonic": "je",
+            "operands": "0x4ba076"
+          },
+          {
+            "va": "0x4ba065",
+            "mnemonic": "mov",
+            "operands": "eax, dword ptr [edi + 4]"
+          },
+          {
+            "va": "0x4ba068",
+            "mnemonic": "dec",
+            "operands": "eax"
+          },
+          {
+            "va": "0x4ba069",
+            "mnemonic": "mov",
+            "operands": "dword ptr [edi + 4], eax"
+          },
+          {
+            "va": "0x4ba06c",
+            "mnemonic": "jne",
+            "operands": "0x4ba076"
+          },
+          {
+            "va": "0x4ba06e",
+            "mnemonic": "mov",
+            "operands": "edx, dword ptr [edi]"
+          },
+          {
+            "va": "0x4ba070",
+            "mnemonic": "push",
+            "operands": "1"
+          },
+          {
+            "va": "0x4ba072",
+            "mnemonic": "mov",
+            "operands": "ecx, edi"
+          },
+          {
+            "va": "0x4ba074",
+            "mnemonic": "call",
+            "operands": "dword ptr [edx]"
+          },
+          {
+            "va": "0x4ba076",
+            "mnemonic": "mov",
+            "operands": "eax, esi"
+          },
+          {
+            "va": "0x4ba078",
+            "mnemonic": "mov",
+            "operands": "ecx, dword ptr [esp + 0x14]"
+          },
+          {
+            "va": "0x4ba07c",
+            "mnemonic": "pop",
+            "operands": "edi"
+          },
+          {
+            "va": "0x4ba07d",
+            "mnemonic": "pop",
+            "operands": "esi"
+          },
+          {
+            "va": "0x4ba07e",
+            "mnemonic": "pop",
+            "operands": "ebp"
+          },
+          {
+            "va": "0x4ba07f",
+            "mnemonic": "pop",
+            "operands": "ebx"
+          },
+          {
+            "va": "0x4ba080",
+            "mnemonic": "mov",
+            "operands": "dword ptr fs:[0], ecx"
+          },
+          {
+            "va": "0x4ba087",
+            "mnemonic": "add",
+            "operands": "esp, 0x10"
+          }
+        ]
+      },
+      {
+        "name": "text_manager_default_key",
+        "start": "0x4badcc",
+        "end": "0x4badde",
+        "bytes": "8d4e5c688003a200c644242401e8226df4ff",
+        "sha256": "a7589bc081b1735a85f59d437e01aab2259e9bfc6029b3a3a8d9a6b9c3451aa9",
+        "instructions": [
+          {
+            "va": "0x4badcc",
+            "mnemonic": "lea",
+            "operands": "ecx, [esi + 0x5c]"
+          },
+          {
+            "va": "0x4badcf",
+            "mnemonic": "push",
+            "operands": "0xa20380"
+          },
+          {
+            "va": "0x4badd4",
+            "mnemonic": "mov",
+            "operands": "byte ptr [esp + 0x24], 1"
+          },
+          {
+            "va": "0x4badd9",
+            "mnemonic": "call",
+            "operands": "0x401b00"
+          }
+        ]
+      }
+    ],
+    "call_order": [
+      "682FEB event.kind read;682FED compares1 and682FF2 skips this prefix forotherkinds",
+      "682FF4 pushes literalA6E728;682FFD constructs actualCString",
+      "683008push1 translation;68300Apush0 word;68300C/10passesCString;683002readsactualSessionB36550",
+      "683019calls773CE0 before Loading15=1 at683044",
+      "773D10 reads translationlowbyte;truebranch773D24passesactualB43B48fallbackCStringaddress and773D2AreadsTextManagerB36544;773D30calls4B9F40;773D3EstoresreturnedDisplayStringtoSession148",
+      "Only subsequent status timer/diagnostic completion writes14C; callerLoading15 store stays after773CE0success"
+    ]
+  },
+  "sources": {
+    "loader": "Localization::load_v14 three nonrecursive TGI groups:Localization,Localization/SAI,Localization/RandomMap; v14looseoverlaysData.rwd bycasefoldedlogicalpath",
+    "resolved_file_count": 98,
+    "files": [
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_alaska.tgi",
+        "origin": "Data.rwd",
+        "bytes": 382,
+        "sha256": "3a5b742d67947ed64e7ecd8d5bca59339c255bd627525549411afe942e02d620"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_aleutianislands.tgi",
+        "origin": "Data.rwd",
+        "bytes": 761,
+        "sha256": "09fe3ad3a099f1ab3d8178746fc47f6fe5201a068aa39d1c58c9f51462b95146"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_argentina.tgi",
+        "origin": "Data.rwd",
+        "bytes": 613,
+        "sha256": "a885970dac9f525ea24a2c0239839a30615f985064da63fb2018b42d95531415"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_australianewzealand.tgi",
+        "origin": "Data.rwd",
+        "bytes": 741,
+        "sha256": "89fefcb3df2a039ddba085c916a361a041cb70aacfbfcbed6a4c521ae0332d5f"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_belarus.tgi",
+        "origin": "Data.rwd",
+        "bytes": 325,
+        "sha256": "48879120b5f5c7cac6f0db75d0f0d288298a937aac8910275ff56ea23731358d"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_brazil.tgi",
+        "origin": "Data.rwd",
+        "bytes": 512,
+        "sha256": "1eda991537992d6336985cce3c61ee86d6ef5776a5169e6e209b1cc2f2803893"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_caribbean.tgi",
+        "origin": "Data.rwd",
+        "bytes": 817,
+        "sha256": "bbd1289dc55f324fac05c37e91df251496471974d2fecae0664174f61ef15d2a"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_caucasus.tgi",
+        "origin": "Data.rwd",
+        "bytes": 333,
+        "sha256": "4ccb0c9b52fe774f86adb9065c8c1d3adbf3ff4b5a9107d0101660242a251d43"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_centralchina.tgi",
+        "origin": "Data.rwd",
+        "bytes": 367,
+        "sha256": "171f2b5c053150891834ce9f52963d6d33c8e4b1869c95bad795cc3705fdddd3"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_congo.tgi",
+        "origin": "Data.rwd",
+        "bytes": 373,
+        "sha256": "3e13b818c1e8ff8ed1ab484cc30429d704e267ffb90e806d4a3ca606780397c1"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_dutcheastindies.tgi",
+        "origin": "Data.rwd",
+        "bytes": 689,
+        "sha256": "c4ed5eef41c086eedd0225a3b14c3a407bf19abe51ece0078ab84a683ba1bc12"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_eastafrica.tgi",
+        "origin": "Data.rwd",
+        "bytes": 420,
+        "sha256": "38b84432304e105416f2fb670f463151df879196bc12142a5d54ed590ffc61bc"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_easterncanada.tgi",
+        "origin": "Data.rwd",
+        "bytes": 519,
+        "sha256": "7da32d40c609cc575641f8fb434efd512727feee51f984857d9e41a1957bef6f"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_easternchina.tgi",
+        "origin": "Data.rwd",
+        "bytes": 367,
+        "sha256": "f731da9adc3476711fab22992764d576265e77b9a5ac7829af8856395b949898"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_easterneurope.tgi",
+        "origin": "Data.rwd",
+        "bytes": 375,
+        "sha256": "2b71488b39a6af50c4b64c691dc577ed3a9a915505190e20412aeecb182808de"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_easternsiberia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 602,
+        "sha256": "5bae64504133b7534974ac4624581ba0d279c49cc68b3f1dbf63a63fed2ffc73"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_easternunitedstates.tgi",
+        "origin": "Data.rwd",
+        "bytes": 647,
+        "sha256": "63a5ab107d0a242dcb52dc32b845f96909a2d0ba63929ad6373a33b7b47978bb"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_egypt.tgi",
+        "origin": "Data.rwd",
+        "bytes": 309,
+        "sha256": "551512f48b089986c45ec01cd95a041d6ef1e7f8e08dd1f5be2c25b9ee5fa3dd"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_france.tgi",
+        "origin": "Data.rwd",
+        "bytes": 382,
+        "sha256": "521a43358fc993518f9f6c7a9da8ffd2653eb1443f9917918c5482749df0939a"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_frenchcoast.tgi",
+        "origin": "Data.rwd",
+        "bytes": 429,
+        "sha256": "45738ae2ce91b095a6f61449847588659b4c12efa26c0af602618844c4337d90"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_frenchnorthafrica.tgi",
+        "origin": "Data.rwd",
+        "bytes": 561,
+        "sha256": "c4096bea4d209bbef5196de41914ae4450689ffad8ca1b9069a6644f0223d1ee"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_frenchwestafrica.tgi",
+        "origin": "Data.rwd",
+        "bytes": 626,
+        "sha256": "57234640772ac309512ff37725453098b7387d8b3d349df2b80dbeaf933edf55"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_germancoast.tgi",
+        "origin": "Data.rwd",
+        "bytes": 359,
+        "sha256": "4bb634e8a40dda556b2a6217c3beb42ed0e392ddba6a336a49bb4c92e12bc319"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_germany.tgi",
+        "origin": "Data.rwd",
+        "bytes": 325,
+        "sha256": "472634a94b720c6b89a3ba177c27fcad5698d7417e3f0e43367526531faaf303"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_gibraltar.tgi",
+        "origin": "Data.rwd",
+        "bytes": 822,
+        "sha256": "ed8fcc2168abc243db8955919dd956e32da3e8b10631b26653e42ba9bfe39337"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_greatbritain.tgi",
+        "origin": "Data.rwd",
+        "bytes": 651,
+        "sha256": "015fa7c60dd543de130e54bfb86eedd32032cc6c7977a87dc0ae077a6c5af792"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_hawaii.tgi",
+        "origin": "Data.rwd",
+        "bytes": 772,
+        "sha256": "9541c7ec17f7d7614f03f6fbc250b9deca2f1d14f425e626fd632db9c65c5adf"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_india.tgi",
+        "origin": "Data.rwd",
+        "bytes": 437,
+        "sha256": "91a8666cee4ce2d4dc58058729f0b47da87c04757f190c75c581fce885e88849"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_iwojima.tgi",
+        "origin": "Data.rwd",
+        "bytes": 591,
+        "sha256": "fd599a990003025812e5cff1e156a898f28fb544563a2a82a67c46c125c6621b"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_japan.tgi",
+        "origin": "Data.rwd",
+        "bytes": 757,
+        "sha256": "55e975d6123aedb5d8a68f774dbfb29f8caeb88aadd071ec6088b72f0ccb5f94"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_kazakhstan.tgi",
+        "origin": "Data.rwd",
+        "bytes": 349,
+        "sha256": "a44facf24042268369e0502374e145f21b4fd0d2dd11aab364953460fb7e5107"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_libya.tgi",
+        "origin": "Data.rwd",
+        "bytes": 373,
+        "sha256": "cdd9043cef11615a8e7e53e395cebb796213afc8c4a16dce5f85f377b4c88fba"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_madagascar.tgi",
+        "origin": "Data.rwd",
+        "bytes": 556,
+        "sha256": "a15b4c47720c866d2df87be393300ecc42624ab044f573b5b79929cd8fcd578e"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_manchuria.tgi",
+        "origin": "Data.rwd",
+        "bytes": 409,
+        "sha256": "173515e549fba8f615a30a02c65ea9e8ab7e27345f665e354ea2dcb357425661"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_marshallislands.tgi",
+        "origin": "Data.rwd",
+        "bytes": 842,
+        "sha256": "f111cc9bba3f43bd721a84b321a29df1cde940a30d2dd0c5a4d0e9cb42b89cd6"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_mexico.tgi",
+        "origin": "Data.rwd",
+        "bytes": 512,
+        "sha256": "6a44a1d66a13054a652116a4ec08767b082c06744dd16f61ab7da0ff99ebb43c"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_midway.tgi",
+        "origin": "Data.rwd",
+        "bytes": 528,
+        "sha256": "3210b8937362f1d66d44c7647656a7a835229a58e0f5868be4ae6e69cbffcee3"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_newguineasolomonislands.tgi",
+        "origin": "Data.rwd",
+        "bytes": 859,
+        "sha256": "e53359311a319ff65bd0c3905acf97530a5799c8b698898d7e2f11423c7c2af4"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_norwayfinland.tgi",
+        "origin": "Data.rwd",
+        "bytes": 451,
+        "sha256": "c9ce10eb6a79d9b222d56e27396efdd7e8f699fd34c37fa4bb469cbcfc409581"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_palestine.tgi",
+        "origin": "Data.rwd",
+        "bytes": 341,
+        "sha256": "6b8b96e5ffb3a1ad0700292b556c08624a54c35870360062c3109ce7c5413cb4"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_persia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 317,
+        "sha256": "1f18f02b4652ca17d214055a5f019bc565d79936b21e1d449397f171a4f88d43"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_philippines.tgi",
+        "origin": "Data.rwd",
+        "bytes": 777,
+        "sha256": "e50d4dd62c00214549b45fe100be4292e543a83484ee780d4f87917b2719c5eb"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_russia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 356,
+        "sha256": "2ace0eaf8312f9dc30b4931117bc862c6b9bf69ec4114c0721c5640af1f0a486"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_samoa.tgi",
+        "origin": "Data.rwd",
+        "bytes": 757,
+        "sha256": "accf89aedba1fda6f678be2aea4fe79e9e42461366c7257526c33ac6aebd02d8"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_saudiarabia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 429,
+        "sha256": "64d252c0f76afc3d174905419cd1334e9b7a79de5101648961cac0f0c241c881"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_siberia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 325,
+        "sha256": "d41ffdc1fac0de5029ad3a024880f7a498f1a2b405115137735156d79e52231a"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_southafrica.tgi",
+        "origin": "Data.rwd",
+        "bytes": 499,
+        "sha256": "830affea6c57f563c016adb4fcc6dff1b0f5a5397123dcf7994ccdc82f49cd5b"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_southeastasia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 339,
+        "sha256": "b70453092602d141a9e253a7dd5c9c0204d181c8106a8ed119dbd80e3d5f12e9"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_southeasternasia.tgi",
+        "origin": "Data.rwd",
+        "bytes": 780,
+        "sha256": "2ac3fda93badf4013e37f4f3d28b99f38b36d0d8aa86d4adc6487a98e65fac58"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_southerneurope.tgi",
+        "origin": "Data.rwd",
+        "bytes": 529,
+        "sha256": "115d1a3ae882cbfa215b7ad700e6be2eb49a9b9b7e7b01f00292b1ad53917b46"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_ukraine.tgi",
+        "origin": "Data.rwd",
+        "bytes": 325,
+        "sha256": "4b391c905af3720bc9ed9b31d842500d813a201b7a7abbb57909abe3cadc7a41"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_uralmountains.tgi",
+        "origin": "Data.rwd",
+        "bytes": 375,
+        "sha256": "2c0e800b279c761bef1bb5d19ef875ec7a633bfa9ab59e2c792ae1ca4a63ec66"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_venezuela.tgi",
+        "origin": "Data.rwd",
+        "bytes": 409,
+        "sha256": "3b052faf66accc8d82b77a109be8b36fa2048e987189868beeea765da9157e45"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_westerncanada.tgi",
+        "origin": "Data.rwd",
+        "bytes": 447,
+        "sha256": "646e065417e92cd39e57443620b7ffff0c2b2e98fb57704f22280c6eb531bf80"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_westernchina.tgi",
+        "origin": "Data.rwd",
+        "bytes": 367,
+        "sha256": "ffb90112174554d717cc7eec4e342a5d9c123644fc68f448697e2bde44a41e9c"
+      },
+      {
+        "path": "Localization/RandomMap/strings_mg_rmc_westernunitedstates.tgi",
+        "origin": "Data.rwd",
+        "bytes": 581,
+        "sha256": "b545b97013bd1a628cf7323690fe62d0a5aaa3055cd02d1418878ed6c304275b"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_alaska.tgi",
+        "origin": "Data.rwd",
+        "bytes": 618,
+        "sha256": "0e07081be780667aecb8f1c454327a62f9ed1104ba4a5f3470f91da3bca06e9c"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_france.tgi",
+        "origin": "Data.rwd",
+        "bytes": 578,
+        "sha256": "ccb10bb0f6d7ea930728fb9344863e940239f3b38be4b5560b8a6570d688a1cf"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_germany.tgi",
+        "origin": "Data.rwd",
+        "bytes": 551,
+        "sha256": "976be7db915ce088028fb1c38c2c57673a4c6aea164b1625eec3345b4e4e2c18"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_india.tgi",
+        "origin": "Data.rwd",
+        "bytes": 595,
+        "sha256": "d2007ad223d1f870a9c10fccd93daf938a5903f2862e175faa5ab5cfa37f1b14"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_northafrica.tgi",
+        "origin": "Data.rwd",
+        "bytes": 678,
+        "sha256": "2917ae4d6fb724b2379c8f06b7b453b64ec5c503bb1323dfa508e5a5025d8775"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_philippines.tgi",
+        "origin": "Data.rwd",
+        "bytes": 659,
+        "sha256": "2a95b42e3db6eb4b60075bcd9f08f3ef878a1ca52bcda8c70b591fa20fa661c5"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_southerneurope.tgi",
+        "origin": "Data.rwd",
+        "bytes": 626,
+        "sha256": "eab4284240ea034b23874aa6503bdf61a65b0c43723d58ef9539a89db9912d35"
+      },
+      {
+        "path": "Localization/RandomMap/strings_rmc_ukraine.tgi",
+        "origin": "Data.rwd",
+        "bytes": 626,
+        "sha256": "8c563fee6ee8e8e723d28fcdc0035e2beaa8b2bc28a913a1de5c26754c1c239b"
+      },
+      {
+        "path": "Localization/SAI/strings_Germany_Kesselring_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 588,
+        "sha256": "62aebf2f07bd5a54e017c39ba9295fcc888ce14aa8c4f1ca88a6a0bf52196683"
+      },
+      {
+        "path": "Localization/SAI/strings_Germany_Manstein_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 554,
+        "sha256": "5cfdd5dabac45be14b1e024431d8a6d7744ec47af05df3162be158dc7a13d9bf"
+      },
+      {
+        "path": "Localization/SAI/strings_Germany_Rommel_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 520,
+        "sha256": "1a34532855ce490fc1c1966c52a1cf42d83b910cb5dd46f66da33e46249edcef"
+      },
+      {
+        "path": "Localization/SAI/strings_Germany_Rundsted_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 564,
+        "sha256": "c6b788623a507e429af5e73e3a09acb1c093d854954d37b0e6047bf334c0fe4c"
+      },
+      {
+        "path": "Localization/SAI/strings_germany_sai.tgi",
+        "origin": "Data.rwd",
+        "bytes": 1117,
+        "sha256": "c93fb7d2f524d5628e77d465b56d677d09635137d39ce0841b29c1fa2297dc7a"
+      },
+      {
+        "path": "Localization/SAI/strings_Great_Britain_Montgomery_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 630,
+        "sha256": "625c996f17e3bbf6f3c4ab7dd8ffd1010fa62b8098f9fde9e30b3f9b4f0398cb"
+      },
+      {
+        "path": "Localization/SAI/strings_Great_Britain_Mountbatten_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 647,
+        "sha256": "a73bd56f15d5827cf63de7025a58ac0c63a6c0e8fd572f8f363af7dad42f6b1b"
+      },
+      {
+        "path": "Localization/SAI/strings_Great_Britain_Wavell_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 562,
+        "sha256": "f21cf90d713bb7e0f5ec7713873c685c240c50d257adf1e6a0e1a469ab03ac68"
+      },
+      {
+        "path": "Localization/SAI/strings_Great_Britain_Wingate_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 579,
+        "sha256": "783827c098ff053960c6e55b3fffaf6af7b8a7f7abd7eda176bfa746d349771c"
+      },
+      {
+        "path": "Localization/SAI/strings_great_britian_sai.tgi",
+        "origin": "Data.rwd",
+        "bytes": 1220,
+        "sha256": "24e15bdef2a30ec68bad27427f919df7f7699c023eb24057bc99acf561e4135e"
+      },
+      {
+        "path": "Localization/SAI/strings_Japan_Kuribayashi_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 591,
+        "sha256": "49dddbd1e872847f4613e2300ff242ef4057491ff8d2a6c9e1c333a7a4ef788e"
+      },
+      {
+        "path": "Localization/SAI/strings_Japan_Mikawa_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 506,
+        "sha256": "bc5454ae1230d3adb75205fd3affe38ee3f9bd3db71a764f98a691451526ad4f"
+      },
+      {
+        "path": "Localization/SAI/strings_Japan_Nagumo_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 506,
+        "sha256": "e2cba745d7def5bab6f003144f1059c928c997c20e67c4a4125bc898e9dae719"
+      },
+      {
+        "path": "Localization/SAI/strings_japan_sai.tgi",
+        "origin": "Data.rwd",
+        "bytes": 1084,
+        "sha256": "6bba24d5e9711f8dd9b6cd71c9dcf03798cca76d031c4178b8e99ba66d15f1d3"
+      },
+      {
+        "path": "Localization/SAI/strings_Japan_Yamamoto_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 540,
+        "sha256": "d51b19e6ef8bd03e4f5b79b5d2f50968cfa3c19ab1d90f0491a56f933c09739a"
+      },
+      {
+        "path": "Localization/SAI/strings_Russia_Chuikov_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 530,
+        "sha256": "a0bfda4821b7ed3ced8ddd780b81423a3021b2c7d10291be32773b6465be22e9"
+      },
+      {
+        "path": "Localization/SAI/strings_Russia_Konev_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 496,
+        "sha256": "81ac89a0b25abb7243218e39e1bb97b162041ce0f1769b2ec30b8c2c17a77400"
+      },
+      {
+        "path": "Localization/SAI/strings_Russia_Rokossovski_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 598,
+        "sha256": "6b96135007aa5409f1f2f452c20ca533baef71bf400a1844a9679ff7e72d5c05"
+      },
+      {
+        "path": "Localization/SAI/strings_russia_sai.tgi",
+        "origin": "Data.rwd",
+        "bytes": 1102,
+        "sha256": "338e2792f008727498bba4bc98c8ee84be7e203825473b34ec8bb372ae7ba8ae"
+      },
+      {
+        "path": "Localization/SAI/strings_Russia_Zhukov_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 513,
+        "sha256": "b4e3424c3ae637e170603527e469f291538e0bc837793e0d8f2a78dd3a00b629"
+      },
+      {
+        "path": "Localization/SAI/strings_USA_Arnold_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 492,
+        "sha256": "d48a6ed47083938a4736e13cc54d9c6bd3efe5ae8ff01e09c3579dc49af7f7d1"
+      },
+      {
+        "path": "Localization/SAI/strings_USA_Eisenhower_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 560,
+        "sha256": "282f60d02b234c77ef9c9b987a767646116dab08f63fbe5617d7b24165496524"
+      },
+      {
+        "path": "Localization/SAI/strings_USA_Nimitz_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 492,
+        "sha256": "082b8c81a700e77bee091be43b6754cc13a6118d81050cb9f87be66f5f66dd40"
+      },
+      {
+        "path": "Localization/SAI/strings_USA_Patton_SAI.tgi",
+        "origin": "Data.rwd",
+        "bytes": 492,
+        "sha256": "308f3ae7de10dbf5ec654cc3cd53b3397e11b2788e94937c715e0a08b47b7dd9"
+      },
+      {
+        "path": "Localization/SAI/strings_usa_sai.tgi",
+        "origin": "Data.rwd",
+        "bytes": 1026,
+        "sha256": "0938ea5949577a6b1106eeb07281e5db70da8b3ad312ad17a1837650ec18bb0d"
+      },
+      {
+        "path": "Localization/strings_AA.tgi",
+        "origin": "Data.rwd",
+        "bytes": 6577,
+        "sha256": "00709da60878573ffedd67c057c45d68aed9a95a81038ab4136bcff16d2df7fa"
+      },
+      {
+        "path": "Localization/strings_data_AA.tgi",
+        "origin": "Data.rwd",
+        "bytes": 506618,
+        "sha256": "30a800c7e9ce4617dab3ad9e63c520f4f19c0380274bae4982ba31efa2f62125"
+      },
+      {
+        "path": "Localization/strings_expanded_v2.tgi",
+        "origin": "v14 loose",
+        "bytes": 589,
+        "sha256": "80c03d28f81b5c4baaff2004e5f855441b9070e0e8eeb2828118e691b64c321f"
+      },
+      {
+        "path": "Localization/strings_fullscreen.tgi",
+        "origin": "v14 loose",
+        "bytes": 284,
+        "sha256": "45d234ff0a8dc62f62f41ba2a3a9a0d5eabb99a1a7a89be8112fda7a08279ef7"
+      },
+      {
+        "path": "Localization/strings_openspy.tgi",
+        "origin": "v14 loose",
+        "bytes": 221,
+        "sha256": "5c122d8ada6b4821f3c0e1163e502247645ee2040afe47582ea56650bf0a2a4c"
+      },
+      {
+        "path": "Localization/strings_rtse.tgi",
+        "origin": "Data.rwd",
+        "bytes": 62440,
+        "sha256": "856aaf3161ccfbb659abe515d7cd8847bc863ae805e6003136559aa2fab2c895"
+      },
+      {
+        "path": "Localization/strings_rtse_data.tgi",
+        "origin": "Data.rwd",
+        "bytes": 53880,
+        "sha256": "59384845114317c9e59daf9f3cda3ecb2c9d89ed0a385902b560bd63cdf9111a"
+      },
+      {
+        "path": "Localization/strings_rtse_ui.tgi",
+        "origin": "Data.rwd",
+        "bytes": 3666,
+        "sha256": "807807d665e369fba2a539be305f00d49187158a0feab11f6346e46cd4da2a0b"
+      },
+      {
+        "path": "Localization/strings_ui_AA.tgi",
+        "origin": "Data.rwd",
+        "bytes": 58833,
+        "sha256": "0eda5f613dc2b9deafaf60e75276adb8508a5d513ce9cd03099181f428ee8f51"
+      }
+    ],
+    "key_matches": {
+      "app_status_loading_world": [],
+      "app_status_loading_resources": [
+        {
+          "path": "Localization/strings_rtse.tgi",
+          "origin": "Data.rwd",
+          "line": 159,
+          "text": "app_status_loading_resources = \"Loading Resources\"",
+          "sha256": "856aaf3161ccfbb659abe515d7cd8847bc863ae805e6003136559aa2fab2c895"
+        }
+      ],
+      "app_status_waiting_on_other_players": [
+        {
+          "path": "Localization/strings_rtse.tgi",
+          "origin": "Data.rwd",
+          "line": 160,
+          "text": "app_status_waiting_on_other_players = \"Waiting on Other Players\"",
+          "sha256": "856aaf3161ccfbb659abe515d7cd8847bc863ae805e6003136559aa2fab2c895"
+        }
+      ],
+      "app_status_finished": [
+        {
+          "path": "Localization/strings_rtse.tgi",
+          "origin": "Data.rwd",
+          "line": 161,
+          "text": "app_status_finished = \"Finished Loading\"",
+          "sha256": "856aaf3161ccfbb659abe515d7cd8847bc863ae805e6003136559aa2fab2c895"
+        }
+      ],
+      "error_missing_string": [
+        {
+          "path": "Localization/strings_rtse.tgi",
+          "origin": "Data.rwd",
+          "line": 58,
+          "text": "error_missing_string = \"[Missing String]\"",
+          "sha256": "856aaf3161ccfbb659abe515d7cd8847bc863ae805e6003136559aa2fab2c895"
+        }
+      ]
+    }
+  },
+  "owner": {
+    "observed_route": "battle_notifications.event supplies world.evidence().live_text directly to773CE0; Catalog.localization is notconsulted",
+    "retention": "restoration.replace_current_text(text) then into_load_parts\u2192Attempt.live_text\u2192Staged.live_text\u2192live_world_frame.LoadEvidence.live_text. replace_map_strings removes map_origin rows only; global source rows remain.",
+    "caller_path": "crates/aa-client/src/battle_notifications.rs",
+    "caller_sha256_at_review": "39aa4a478f258e15005b6dca9b0d4080981443d13caf1b6a1a4df249f75dbe8b",
+    "loader_path": "crates/aa-runtime/src/localization.rs",
+    "loader_sha256": "387685bdfdc9fb1302d3ca8416ddf73f06d920727d74ecbbb77368d9ab89791c",
+    "status_path": "crates/aa-netcode/src/local_session_status.rs",
+    "status_sha256": "f2e34d03802052878b171bfd079c4374ce6c195c244d379a06b1c880e811e6ce",
+    "root_correction_present_at_report_capture": true,
+    "root_correction_note": "Root corrected the one literal while this read-only audit ran. Candidate2 predecessor is retained by Root; this report pins the corrected current file without editing it."
+  },
+  "narrow_correction": "Use the exact native literal app_status_loading_resources. Do not add an invented loading_world source entry, substitute untranslated English, skip status/Loading15 order, or replace the retained Localization.",
+  "future_missing_key_requirement": "Independent genuine missing keys still need actual4B9F40 flow: keylookup4B9D40; ifabsent andcallerfallbackCStringempty, readcurrentB39940+F4 Bool then404ED0/404EA0 diagnostic; onlythen lookupactualTextManager+5C fallbackkey initializedby4BAD50 toerror_missing_string. Sourcevalue is [Missing String]. If fallbackmissing, a seconddiagnostic occurs. Current runtime Localization.display deliberately rejects this unbound flow; existing native-session-status fixture explicitly seams4B9F40 and doesnotproveit.",
+  "limitations": [
+    "Native byte/read-only disassembly plus source census are not a full nativeUI/loading execution.",
+    "Candidate2 remains immutable; newcandidateGUI/metadata checks belong to Root.",
+    "The currentUVarsF4 diagnostic gate, logger policy/transport, TextManager5C owner and fallback missing-error branch require a separate proof if a genuine missingkey is reached."
+  ]
+}

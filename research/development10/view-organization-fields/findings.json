@@ -1,0 +1,47 @@
+{
+ "schema": 1,
+ "status": "accepted bounded Organization44FDB0 tail; Directory integration separate",
+ "boundary": "44FDDF..44FE3D after separately retained453F10 base",
+ "native": {
+  "paired_rows": 24,
+  "executions": 48,
+  "precision": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "decoded_equal_executed_pins": 37,
+  "seams": [
+   "453F10 separately retained Actor base",
+   "6F7810 allocator transport"
+  ],
+  "object_heap_poison_combinations": 4,
+  "allocator_entry_prefix": true
+ },
+ "rust": {
+  "exact_source_isolated_tests": 2,
+  "passed": 2,
+  "whole_client_check": "not claimed; SDK owns same actual derived construction/Directory caller"
+ },
+ "ownership": "158 array has sole growable item/count owner and native initial capacity14;164/168 typed constructor-null links;16C byte only;170 scalar; no source/global callbacks or fabricated pointer/padding values",
+ "limitations": [
+  "No native OOM/unwind/destructor/heap ABI equivalence",
+  "Portable allocation refusal returns the observed pre-allocation field prefix, not a claim of native allocation failure",
+  "Unused native allocation slots and16D..16F padding remain unknown",
+  "No whole Actor/base/derived Init, Thing+C publication, GPU, AD or application readiness claim"
+ ],
+ "pins": {
+  "crates/aa-client/src/view_organization_fields.rs": "13cbb1563b2d01e17300d70cb441fc9acbe5e8e6870a48f325e8428f4c29aeb4",
+  "crates/aa-client/src/view_organization_fields_tests.rs": "879a663d4fc8ae28fcb4de5a05f33f7c4d231d92e75b9236ab1b0f4b53fd07a9",
+  "research/development10/view-organization-fields/native_organization.py": "76aa82f438cebf93a8e790ca1d2a6d180c786688693d4a3e6157fe15e3481e88",
+  "research/development10/view-organization-fields/native-organization-fields.json": "fc3d7e7280edc98cfd10f0a95072a053ca451a707fb0ea5c8c95c5bd213d97cf",
+  "research/development10/view-organization-fields/audit_organization.py": "7b567d8bf9ed7ecd262fb1942482ee602f28253f9aa9268b2416e53e24426f6c",
+  "research/development10/view-organization-fields/pin-audit.json": "59533b56fb3f08234bf0438cd1260d27b8d3ed22c1e0444ef96fe4d4e4bcf2ae",
+  "research/development10/view-organization-fields/isolated-organization.exe": "b15776342867938c24aa196e3658c7cdecc0e76f409674bba7df591ad0e66a71",
+  "research/development10/view-organization-fields/tests-01.log": "591ff046f430a5fb6bf9ae6697bef6137fafea503c8402c948b3a3edd28c387e",
+  "research/development10/view-organization-fields/native-final-replay.log": "2cdda30ee29418afff9e3fce1b3c12bc9ed0577d464569961de8260ec8181a05",
+  "research/development10/view-organization-fields/pin-final-replay.log": "c1c8cf40e25f8502bfd57f971e0ca1e0f3ca2965b6d97711062576e61ce75680",
+  "research/development10/view-organization-fields/README.md": "a76a4f92b1218c3c31b442c8cae7ebb743ab22c0114b4cc613adb561074a5ede",
+  "research/development10/view-organization-fields/seal.py": "d2b293c9a041963863444089f57948618d509e67ccf1cd624349aadaa893fb15"
+ }
+}

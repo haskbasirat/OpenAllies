@@ -1,0 +1,96 @@
+{
+  "schema": "saved-owner-economy-4cf0f0-v1",
+  "date": "2026-10-16",
+  "native_functions": [
+    "004CF0F0",
+    "00570020:null-owner-return-only"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_rows": 9,
+  "native_executions": 18,
+  "visited_instruction_pins": 26,
+  "images_separately_executed": true,
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "all_original_v14_outputs_equal": true,
+  "new_actual_data_tests_passed": 1,
+  "actual_owner_wrapper_precision_calls": 3,
+  "actual_map": "Campaign/tutorial02.RMP",
+  "actual_owner": 4099,
+  "actual_owner_definition": "regiment_usa_hq_infantry_unpacked",
+  "actual_organization_owners": [
+    {
+      "actor": 4099,
+      "economy_present": false
+    },
+    {
+      "actor": 8130,
+      "economy_present": false
+    }
+  ],
+  "other_actual_economy_allocations_preserved": 29,
+  "absent_e8_not_read": true,
+  "existing_present_refresh_semantics_changed": false,
+  "existing_economy_refresh_implementation_reused": true,
+  "new_full_nonnull_refresh_native_proof": false,
+  "new_actual_owner_economy_present_scenario": false,
+  "existing_economy_integration_retested_here": false,
+  "new_kingdom_flow_initialization": false,
+  "fake_empty_or_initialized_flows": false,
+  "battle_ready": false,
+  "new_release_build": false,
+  "sdk_implementation_used": false,
+  "reused_evidence": "research/skirmish-20261016-saved-economy-integration/README.txt",
+  "initial_rejected_test_assumption": "No natural Organization+Economy+nonnullowner combination was found; test corrected to actual absentEconomy caller, production unchanged",
+  "limitations": [
+    "Native new proof certifies thunk/null-owner/error-entry only, not full nonnull 570020",
+    "Present math, flow error prefixes and allocation behavior depend on unchanged saved_economy_refresh evidence",
+    "No per-record Kingdom Init, Actor Init/PostCreate, full publication, battle or multiplayer completion"
+  ],
+  "files": {
+    "crates/aa-runtime/src/saved_owner_economy.rs": {
+      "bytes": 734,
+      "sha256": "23451373acb979125f0b3388fa0d17b9f2eb784e09061b800378f24423b041e6"
+    },
+    "crates/aa-runtime/tests/saved_owner_economy.rs": {
+      "bytes": 6359,
+      "sha256": "04fd2e9b85c7d0c76042dcfc2d73197d15e1aeb8bf8c6fbb1187c8be750685d0"
+    },
+    "crates/aa-runtime/src/saved_economy_refresh.rs": {
+      "bytes": 38217,
+      "sha256": "ac82a36e8af525863a68a2556b0741f95924feee1a67e857f608533392f47226"
+    },
+    "research/skirmish-20261016-saved-economy-integration/findings.json": {
+      "bytes": 5303,
+      "sha256": "ec20bee2c3c098ccd8d31454cac5468fcb4861315087e10d10af9129f50932dd"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/native_owner_economy.py": {
+      "bytes": 2303,
+      "sha256": "b4605aecb11d99375b3b837578935df5f2b8bd12dc8af9c64353fb640112b0c5"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/native-owner-economy.json": {
+      "bytes": 5929,
+      "sha256": "372a386fa2e3481c250d720002ebd988a3618e407f661e26d07796269efc311a"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/native-generation.log": {
+      "bytes": 140,
+      "sha256": "76522e72ebfd305accda718844cf5cbb4c1f9ac5d24ba29ce1190af0da498565"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/tests-second.log": {
+      "bytes": 1156,
+      "sha256": "53b9e240a9293cdafc218925add24aa6eee5e11bdfcbbe1532ac7801c62dbf12"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/README.txt": {
+      "bytes": 4701,
+      "sha256": "8a87a1b20e05e94221f4cfe53835774606c092f4a753db35fb49a2521c0daa52"
+    },
+    "research/skirmish-20261016-owner-economy-refresh/lib.rs.before": {
+      "bytes": 1615,
+      "sha256": "586a2fc0d74de13714602b0992fa477ee336c38672db1e55c430eebd54b2fb43"
+    }
+  }
+}

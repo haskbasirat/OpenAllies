@@ -1,0 +1,10 @@
+[Text language=Default]
+{
+	ids = map_strings_table
+	name = "RUS_ARCTIC_MAP"
+
+	kingdom_1 = "Side 1"
+	kingdom_0 = "Side 0"
+	map_name = "RUS_ARCTIC_MAP"
+	map_description = "Map Description"
+}

@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Saved GActor::Init4D7230(NULL) coordinator only; mandatory service boundaries, no runtime integration or complete saved initialization claim",
+  "entry": "aa_actors::actor_init_null::initialize(&mut impl World, ActorId, Precision) -> actor_creation::Result<bool>",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_windows_from_pinned_plan": [
+    {
+      "name": "Actor_Init",
+      "start": "0x4d7230",
+      "end_exclusive": "0x4d757b",
+      "sha256": "bec468ac53152f335c635645d860b9b4c5089c3990dd736c081124f7b6c073e7",
+      "identical_in_v14": true
+    },
+    {
+      "name": "null_skips_138",
+      "start": "0x4d7265",
+      "end_exclusive": "0x4d7287",
+      "sha256": "294304e1c16e34c4a1e53a05ad02c9800b9219afd776d45f065aea4d3566eb95",
+      "identical_in_v14": true,
+      "bytes": "85db741e8d7b408bcfe8ed9df2ff84c08bcf75038d4b44e8bfbbf5ff898638010000"
+    },
+    {
+      "name": "null_existing_fx_gate",
+      "start": "0x4d7532",
+      "end_exclusive": "0x4d7564",
+      "sha256": "f1815cf86399d27f87eb740439fd0aadbedb76374abc9df4a07ca1e671934449",
+      "identical_in_v14": true,
+      "bytes": "8b8600010000250000200033c90bc175218b44242485c074088b48243b483c75118b4e046a005681c1e4000000e82c30f5ff"
+    }
+  ],
+  "native": {
+    "rows": 972,
+    "inputs": 162,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "observed_instructions": 386,
+    "default_compare": "passed; unchanged fixture",
+    "executed": "4D7230 coordinator, GTID generation lookup,462E50,45E700,45E710,96D5E0,96CC4C and local arithmetic",
+    "explicit_hooks": "4EBE50,4D1FD0, component virtuals, property, refresh/spatial/SAI/allocator/constructor/FX leaves",
+    "seam_failures": "32 named injected boundaries; native SEH unwind not claimed"
+  },
+  "rust": {
+    "target": "target/s-actor-init-null",
+    "command": "cargo test -p aa-actors --test native_actor_init_null --release --offline --locked -j4",
+    "tests_passed": 2,
+    "fixture_rows_replayed": 972,
+    "diagnostic_refusal_combinations": 9
+  },
+  "proven": [
+    "NULL never writes+138 and retains callback changes",
+    "current component iteration with Mind last and separate current after-init pass",
+    "false AL values and service-error prefixes preserve prior state",
+    "required-ID generation checking and all property/zone/SAI/FX gates",
+    "captured track definition survives later replacement; final FX uses current definition",
+    "repeated track counts/getters and lazy divisor read",
+    "allocator-null stores null144; constructor failure leaves144 unchanged",
+    "native IDIV zero and overflow become explicit errors"
+  ],
+  "unbound": [
+    "Object Init(NULL) implementation and actual world/spatial state services",
+    "all reached component Init and after-init implementations",
+    "required object preparation, attach, property and refresh service bindings",
+    "zone creation/movement, SAI, track allocation/construction and Existing FX",
+    "outer LoadThing bit7, PostCreate, registration and destruction integration"
+  ],
+  "numeric_domain": "finite product with signed32 ftol result; nonfinite/out-of-domain rejected before divisor; no native indefinite/wider conversion parity claim",
+  "change_safety": {
+    "fresh_actor_creation_unchanged": true,
+    "fresh_actor_creation_sha256": "c8671b9bfb0d3c63f0f8767392d3eb973714a070a7c16cce7d23ac25022b4f07",
+    "release_changed": false,
+    "runtime_driver_changed": false,
+    "manifest_or_dependencies_changed": false,
+    "preexisting_failures": "none observed in this scoped task",
+    "new_failures": "none; two scoped Rust tests and default native comparison pass"
+  },
+  "pins": {
+    "crates/aa-actors/src/actor_init_null.rs": "bbc070a81b2e08cbde34048e109d9fb0a7764843da86f24b1c4bc49a25674a7c",
+    "crates/aa-actors/tests/native_actor_init_null.rs": "cb7ec6db4493feb11026ed31a6d40295405d2f39a62332a16283cbb879b11a07",
+    "research/skirmish-20261016-actor-init-null/native_actor_init_null.py": "0bdd603f25deb33950471fff4905c05da372447ad754c69bb8f8edf72f997e43",
+    "research/skirmish-20261016-actor-init-null/native-actor-init-null.json": "7ded00a50cbacab9a96c1598816ea334e736fd9c11d4f8d2805dcb42f486e104",
+    "research/skirmish-20261016-actor-init-null/README.txt": "69377614dd65d6d984fab198022a4d45f92415512e7b27c5e6fed44410c448cc",
+    "research/skirmish-20261016-actor-init-null/native-run.log": "9ceabb91d06dc9bad9d1b24252c5d4195c0d3c6416f276a1de7d110893e6fc19",
+    "research/skirmish-20261016-actor-init-null/native-compare.log": "9ceabb91d06dc9bad9d1b24252c5d4195c0d3c6416f276a1de7d110893e6fc19",
+    "research/skirmish-20261016-actor-init-null/rust-test.log": "79631683e29f88bede635c419cbc4f7880f31cba9b3f789f624b50ad053e8b1a",
+    "research/phase8-ai/native_machine.py": "1aba789e7e72dc2d016623caa22456181c03fcedc3f40dc57bff7fb7bde68c00",
+    "research/skirmish-20261016-saved-flows/lifecycle-proof/next-actor-init-null.json": "016b527bcf00c7e6b110203930c9b6ac98a491103b04290e39070f381dcb9ff6",
+    "backups/source-before-actor-init-null-20261016.zip": "7087d6151da05827c95b3f4f35f3d21a616b43d09dccd6643964dc018fe37d97",
+    "backups/actor-init-null-before-definition-probes-20261016.zip": "ca3752279dce3d9a7f53e3f2fab4b80c860c49a9d090be8afe750ef401265730",
+    "backups/actor-init-null-before-idiv-probe-20261016.zip": "de4f148226548ea3b8c0b8cffa1aa6f77d937e01893ec030657df27318e60736"
+  }
+}

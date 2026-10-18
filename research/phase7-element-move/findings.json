@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Concrete ElementMove Think, entry, exit and small gates; required live services remain explicit",
+  "native_state_cases": 384,
+  "native_numeric_cases": 288,
+  "cross_precision_branch_witnesses": 6,
+  "rust_tests_passed": 3,
+  "validation": [
+    {
+      "command": "cargo test -p aa-mind --test element_move_native -- --nocapture",
+      "exit_code": 0,
+      "seconds": 5.0310000000172295,
+      "log": "rust-tests.log",
+      "sha256": "56876601c7e759f2c309de4278e1e1f723b783f1787bded4fac8836bc9225d05"
+    },
+    {
+      "command": "cargo clippy -p aa-mind --all-targets --no-deps -- -D warnings",
+      "exit_code": 0,
+      "seconds": 3.375,
+      "log": "clippy.log",
+      "sha256": "dc0cb1b0bb43538018d48dc6581cec485be89f6b606c45e59e04f8327a96e965"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-mind/src/element_move.rs": "a450bc131d55449faa374b6e9925c616e3798727345d14ee57aadd390d617773",
+    "crates/aa-mind/tests/element_move_native.rs": "7f0415bbff1b8e9c3028ae262a9144f20ffb6ffa80a20ff382a3b800e171a3dc",
+    "research/phase7-element-move/README.txt": "2cd790320c0629ef9aeaabe49cfe5ad01c256ac7884eff51fff64c034538018c",
+    "research/phase7-element-move/native_element_move.py": "9ef6bb3dad13a9a6d60e39a37156f20660d326985a940c5b26f901d26a4ccc04",
+    "research/phase7-element-move/native-element-move.json": "2149d21c4481612e3b98350251b7243bee3e6041ab7b7741adc7a92ffd5ee1b9",
+    "research/phase7-element-move/rust-tests.log": "56876601c7e759f2c309de4278e1e1f723b783f1787bded4fac8836bc9225d05",
+    "research/phase7-element-move/clippy.log": "dc0cb1b0bb43538018d48dc6581cec485be89f6b606c45e59e04f8327a96e965",
+    "research/phase7-element-move/validation-record.json": "83efdfad562474b4890f282f0a462280485693b17bda184293dc3e4143f154ec",
+    "research/phase7-element-move/record_evidence.py": "99c769e97009d7d16a87de6f3a92ac5d03469f61a6c0babfd711b63250861b79"
+  },
+  "dependency_sha256": {
+    "crates/aa-mind/src/lib.rs": "9e191bb21f8822a11d1ffe7d7a558f4f41342d3fa8dc31b9ac12b0e78eb2d651",
+    "crates/aa-navigation/src/lib.rs": "a5fd7d4f228612a97ff2ae18858f96c87630d934d4701f7e14098fef5387439e",
+    "crates/aa-navigation/src/result_plan.rs": "9dfa30afdfd69313c6cb02019ea24b0ed49dd170397f855343cd43555c4de1a6",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5"
+  },
+  "limits": [
+    "Original outer operation executes, but fixture services are explicit boundaries for world/component/path virtual behavior; first-time SVar registration is not replayed.",
+    "Active state and retained object identity lifetime must survive callbacks; completed effects are not rolled back on failure.",
+    "Runtime must compose actual ResultPlan/continuation/geometry/components; no playable full-world or multiplayer claim.",
+    "Finite arithmetic, explicit PC24/53/64 and ordinary source component representation; no guessed constructor defaults."
+  ],
+  "independent_review": "Pending separate peer; producer does not self-approve."
+}

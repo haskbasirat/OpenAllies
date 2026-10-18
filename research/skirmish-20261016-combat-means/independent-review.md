@@ -1,0 +1,7 @@
+# Independent borrowed combat-mean review
+
+Accepted the bounded borrowed `4BBF90` coordinator. A fresh native replay reproduced the frozen fixture byte for byte: 210 original/v14 rows across PC24/53/64, comprising 150 returns, 54 declared dependency stops and six empty-trim prefixes stopped before unsupported division. Six focused Rust tests passed: two new coordinator tests and four existing native combat-value regressions. The separate instruction audit checked 52 instructions in three byte-identical ranges.
+
+The review checked lazy source reads, current linked-list and ability slots, captured count/definition/reload, independent repeated getters, progressive six-word initialization, sorted trimmed reductions, one discard read, assertion ordering, extended lifetime arithmetic and current-value diagnostic logs. The count-capture probe was strengthened to two abilities plus slot replacement. The direct base-power memory mutation is explicitly a synthetic external intervention.
+
+This is a coordinator with required host storage/getters. It does not bind the complete shared source graph, certify observed native startup/FP/profile context, compute ActorData+1E4 or make a battle playable. Finite arithmetic, explicit seams, allocation/SEH exclusions and the ten-definition subset limitation remain material. See `independent-review.json` for hashes, commands and full qualifications.

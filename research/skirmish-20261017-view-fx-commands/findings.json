@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "status": "author native/pure/actual-command checkpoint accepted; independent source review accepted; reviewer execution addendum pending",
+  "production_frozen": true,
+  "test_source_frozen": true,
+  "blocking_author_findings": [],
+  "source_pins": {
+    "crates/aa-runtime/src/view_fx_command_list.rs": "fb3d74902e1b1d4c6c6986da8381f9d135e68f61751636ac73a095e2db397500",
+    "crates/aa-runtime/src/view_fx_command_list_tests.rs": "6b3509e1f8c37c4f2866a5be133d20da847446f7e6fd2bbbac59d27ca7a79cd9",
+    "crates/aa-runtime/src/view_fx_commands.rs": "44146ef3d0ef6d52c3ff4f69362be8024c277814a66ea51c5ce9cedc3e621bcb",
+    "crates/aa-runtime/src/view_fx_commands_tests.rs": "d95bb2d188a0d7767b0832d65e8ddd183f677e344c8e64c47ea076d21505305f",
+    "crates/aa-runtime/src/fx_graph.rs": "762c40a965e4fc5c3c3207b696500a49e7106be2286b7eb263ba701fb5a9f480",
+    "crates/aa-runtime/src/view_init_world.rs": "f0e3db832926268d227e5ad74e9a3acd8a4752752fbb34a84af1d296fdab594d",
+    "research/skirmish-20261017-view-fx-commands/native_view_fx_commands.py": "de3258c772d8a2600a29a30acbdc41dbb176e9d765545e31dfaac678e649ec69",
+    "research/skirmish-20261017-view-fx-commands/native-view-fx-commands.json": "9b2f65848eec25e926b1d8586719ddf0e436bde4bf62d11730b737b0c579adb2"
+  },
+  "evidence_sha256": {
+    "production-freeze.json": "891c6a3b0e16c608d76a1826f2ed45aeddeae493fd9a452c597865d7973f4cf4",
+    "actual-freeze.json": "104b028a617b1198ce0468c53a6e25164637778d0b717fbbc97ebb3061fee769",
+    "native-view-fx-commands.json": "9b2f65848eec25e926b1d8586719ddf0e436bde4bf62d11730b737b0c579adb2",
+    "native_view_fx_commands.py": "de3258c772d8a2600a29a30acbdc41dbb176e9d765545e31dfaac678e649ec69",
+    "native-immutable-replay-v2.log": "4dc8047b70eb6eff7691b4263fe1503787361a6a32c960426dcd348c075c5c25",
+    "exact-list-tests-v2.exe": "017cc854dd567e224a4cdb8bd7416eaa3531de36b291d68aa449a0c6df344c34",
+    "exact-list-tests-v2.log": "30b5eabe0239a60694e71c9e4723ca4202b525465296099d2cf584be9427d66c",
+    "actual-tests-05.log": "44d75ea8bceadde65f4b9d93b65868ed4e4f24140cb846c2453ec655e2c5c751",
+    "immutable-view-fx-tests.log": "b67a17a2a8a53931923cb24648e3d4697084223aef43fb7a5381840599692dfe",
+    "created-constructor-regression.log": "712e5ae6cbb903218c6aed63dc275958e24349a3e334347eca3d3279c726a5d6",
+    "existing-constructor-regression.log": "8ca123b4b666ebe1b4371d046cfbdc6376ab8fc028fa32d1997f959ec6cf0b8d",
+    "independent-source-review.json": "c4abe9a0e81cca82eb92a90bba1648a9c6198633a81e33066c64fae98f857c4c",
+    "native-function-name-correction.json": "702fb58af8b17cb0070453302e93e2eedc2027d3b398ac7bc2727956128e2d8a",
+    "frozen-view-fx-tests.exe": "b553aa7ebcd621f59289dc67ebbf0bbf9281d335b168d74998ee1a631f9a2e59",
+    "README.txt": "9d71033e391ce376ee5078a26299041aadaa56af533b2a7f974b7349f48e40a5"
+  },
+  "implementation": [
+    "One actual typed E0/E4/E8 command list retained by the same VWorld constructor, validated by its existing actual World witness.",
+    "Command+68 is a sole typed next key; old raw mutable mirror removed. Legacy raw diagnostic exposes null only.",
+    "Original payload Option moves only after reached429020 succeeds; error preserves exact Option and native list prefix. Growable backing has no fixed command cap; native u32 counter wrapping remains.",
+    "The SDK author separately integrated the same client VWorldOwner/ViewToken and manager-detached Option; that client bridge is outside this source/test freeze."
+  ],
+  "verification": {
+    "native": {
+      "append_rows": 90,
+      "constructor_suffix_rows": 3,
+      "distinct_fixture_executions": 186,
+      "images": [
+        "original",
+        "v14"
+      ],
+      "x87_precisions": [
+        24,
+        53,
+        64
+      ],
+      "executed_instruction_pins": 46,
+      "native_producer_successful_child_intercepts": 0,
+      "required_entries": [
+        "429023 before null dereference",
+        "45A940 retained-counter child before required branch"
+      ],
+      "constructor_scope": "442CF0..442D0E stores with explicit EBX0; earlier442C37 xor is static-pinned only. Final replay explicitly sets FPCW for direct suffix.",
+      "runtime_positive_fxl_scope": "Native true/false positive FXL branches are fixture-only; actual runtime binds initial constructor-null FXL60 only."
+    },
+    "author_rust": {
+      "pure_exact_production_source": "2/2 PASS; exact-list-tests-v2",
+      "actual_source_command": "1/1 PASS4.86s; barbed_wire canonical graph and actual constructed Commands, explicit direct laboratory thread/time input.",
+      "frozen_integrated_replay": "3/3 PASS4.93s; two list tests plus same actual source command test.",
+      "existing_constructor_regressions": "Created1/1 PASS0.02s; Existing1/1 PASS0.04s; command raw68 retirement remains compatible.",
+      "binary_sha256": "b553aa7ebcd621f59289dc67ebbf0bbf9281d335b168d74998ee1a631f9a2e59",
+      "all_frozen_source_proof_pins_match": true
+    },
+    "independent_source": {
+      "accepted": true,
+      "report": "independent-source-review.json",
+      "reviewer_native_executions": 0,
+      "reviewer_rust_executions": 0,
+      "execution_addendum_pending": true
+    }
+  },
+  "actual_test_limits": [
+    "Direct source/constructor/ownership laboratory, not natural mission initialization or graphics readiness.",
+    "The same real constructor World identity is bound with an explicit first-prefix child stop; no completed prefix/AD is forged.",
+    "Three source-bound Commands transfer in manager order; a final null produces detached-null prefix and all three remain owned by VWorld.",
+    "Commands retain the same original compiled Graph Arc, source GTID, timestamp and typed links."
+  ],
+  "unbound": [
+    "Actual positive FXL60 virtualBC/45A940 owner.",
+    "Direct attached50C800 by-value delivery owner; current client integration covers50CAB0 initial attachment.",
+    "Active-command Thing GTID remapping43B8E0/428850, separate from actual FX update/render.",
+    "Effect instance/update/render and native uninitialization/destruction work beyond this accepted list ownership scope."
+  ],
+  "corrections": [
+    "Frozen production/source-review limit text accidentally labeled43B8E0 update/render. native-function-name-correction.json identifies actual GTID remapping; no source or native outputs changed."
+  ],
+  "preservation": "No root manifest/lock, original game/assets/saves, releases, external SDK code, OS graphics/security settings or game runtime was changed by this checkpoint. Cargo artifacts and reference evidence are local only."
+}

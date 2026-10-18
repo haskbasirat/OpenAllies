@@ -1,0 +1,120 @@
+CURRENT CONTINUATION CHECKPOINT -- 2026-10-16 / DEVELOPMENT 08
+
+NEW USER PRIORITY AFTER DEVELOPMENT08 (2026-10-16)
+Current follow-up implementation, validation and next blockers are recorded
+in docs/SKIRMISH-CHECKPOINT-20261016.txt, which supersedes the older census below.
+Build faithful skirmish battles first, multiplayer second, campaign last.
+Campaign-specific feature work is deferred. Shared engine work needed by
+skirmish/multiplayer and compatibility checks of shared parsers continue.
+The next test target is the actual DeveloperMaps/(3v3)Firefight.RMP template;
+clean restoration is not a ready battle: original starting-army/placeholder
+preparation, session initialization, ticking, orders/combat/AI/victory remain.
+Development08 remains immutable. New source work is not part of that EXE.
+Planning estimate: weeks of sustained engineering for a faithful playable
+battle, with substantial uncertainty; no committed finish date or percentage.
+
+Read this before older completion estimates. The user brought newer Phase8
+code from another AI, asked to continue it, then requested Development-08.
+The native-only port rule remains authoritative: docs/NATIVE-PORT-RULES.md.
+Do not restore the rejected aa-game/aa-net interim simulation from backups.
+Do not claim 40% or infer game completion from record/test counts.
+
+DELIVERABLE
+release/Development-08/AxisAlliesRust.exe and its same-folder ZIP.
+Read that folder's README.txt, VALIDATION.txt, manifest.json and evidence.
+Default launch is the original TGI front end. Editor/Start Asset Viewer.cmd
+opens the inspector; Start Live Preview.cmd opens isolated infantry preview.
+This is not a complete playable game and not a standalone asset distribution.
+The client still does NOT depend on aa-runtime, aa-netcode or aa-metagame.
+Current native backend progress is not exposed as playable battles.
+Existing native game and Development01-07 are preserved.
+
+BACKUPS AND SOURCE
+No Git repository. Never discard unknown changes assuming Git can restore them.
+backups/source-before-resume-20261016-152607.zip contains source/docs before
+this continuation (99,206,109 bytes). Additional checkpoint:
+backups/round1-before-command-links-20261016-154757.zip.
+The release's source-snapshot.json pins the files present at staging.
+
+COMPLETED NATIVE INTEGRATION
+1. LayoutData producer now feeds real Organization restoration fields and
+   Property contexts. Canonical IDs are not translated twice. Morale source
+   projection executes the original ActorData constructor/loader semantics;
+   all 1,028 installed actor definitions were examined.
+2. Saved localization bytes now follow original no-BOM byte widening. This
+   fixes the two observed GER_Art_Map names; broader font escapes remain open.
+3. Saved Mind commands preserve every scalar/raw byte, pending/current order,
+   nullable definition and owned allocation. All 39 compiled ActorCommandData
+   entries are sourced from native registration. Catalog binds one-hop names
+   in each correct manager; ActorStore moves each command owner once into
+   mind_world::Runtime via bind_restored_commands. A new Runtime caller must
+   make that binding before issuing live commands. No dispatch is guessed.
+4. Saved Element membership runs the native 5705A0 stores and 4D1350 action
+   coordinator until a required contributor is missing. Partial effects are
+   retained, with an explicit error; missing work is not reported as success.
+5. load_tail_world.rs supplies the bounded camera/PostLoad tail from real
+   ActorStore data. world_start remains refused until statistics/snapshot
+   services exist. It does not publish a runnable map.
+6. Native 779F00 launch-settings copy retains non-wire companion fields;
+   lobby staging uses it. Decoder companion identity/reordering, actual
+   playable joining, internet validation and allocation-failure parity remain
+   incomplete. This is not a new working multiplayer feature.
+7. NameList-specific iteration/localization fixes ukraine_city01 without
+   relaxing generic parser rules. Explicit lookup callbacks resolve #keys.
+   The old nine-actor fixture is now read-only by default. The strategic AI
+   fixture selector no longer confuses player and controller fixture files.
+
+ORIGINAL MAP CENSUS (PC53 / InspectPartial, NOT STARTUP ACCEPTANCE)
+qa-output/resume-20261016/final-comparison.json compares the same 80 maps:
+  no failed records + successful PostLoad: 18 -> 20 maps
+  failed records: 1,069 -> 796
+  queued class conversions awaiting native replacement: 7,879 (unchanged)
+  native missing-definition drops: 3,912 (unchanged)
+  native LoadException drops: 128 -> 399
+Additional drops are 143 missing saved ActorData refs and 128 incompatible
+saved layouts (109 no-longer-default, 19 slot-count changes), not restorations.
+The 647 previously blocked command-bearing Minds now load; subsequent action
+contribution stops are exposed. Current failures: 645 saved Mind virtual+B4
+action contributions, 149 Recruit582C40, 2 MobileDeployment575FB0.
+InspectPartial continues after errors: later failures can be cascades.
+Even the 20 clean maps have NOT passed InitForLoadedMap/publication or a match.
+
+EVIDENCE / TESTS
+research/resume-20261016-layouts: source bindings and independent review.
+research/resume-20261016-morale: original getter/producer proof and full census.
+research/resume-20261016-mind-commands: 369 synthetic + 647 real native cases;
+  real cases are the first blocked embedded members of 57 maps, all stop
+  commands. Do not call this every command of every nested member.
+research/resume-20261016-actor-commands: compiled registration, source hashes,
+  six runtime binding tests (including real sources and 288 decoded commands).
+qa-output/resume-20261016/saved-command-ownership.log: four ownership tests.
+qa-output/resume-20261016/mind-world-regression.log: three existing regressions.
+research/resume-20261016-element-attach: eight original/v14 prefix cases;
+  real tutorial02 and existing Organization regressions.
+research/resume-20261016-load-tail: six bounded tail tests and review.
+research/phase8-net-integration: native full settings copy/staging evidence.
+research/phase8-actor-creation/README-name-lists.txt: 15-case NameList oracle.
+qa-output/resume-20261016/name-list-rules.log: 112 aa-rules tests pass;
+  final expanded library fixture rerun: 18 pass (overlapping, not additive).
+qa-output/resume-20261016/name-list-metagame.log: 39 tests pass, exports off.
+Development08 evidence separately lists checks against its actual EXE.
+
+NEXT WORK
+Bind the existing proven Mind action contribution with actual restored owner
+components; port/verify Recruit582C40 and MobileDeployment575FB0 contributors
+and remaining 4D1350 dependencies. Complete real Economy refresh/observer
+lifecycle dependencies before clearing attachment failures. Then class-change
+replacement and InitForLoadedMap publication/statistics/snapshot owners.
+Only after a genuine map/world tick works should the client enable matches.
+
+KNOWN LIMITS
+Unknown saved command reference failures are explicit unsupported errors;
+native caught-exception/drop cursor and intermediate partial-load parity are
+not claimed. ParameterSet ownership is unsupported. Null command definitions
+may load but dispatch refuses them. Other saved Mind subclasses remain open.
+Embedded saved-component source_span metadata uses local rather than absolute
+offsets in some records; native oracle proof independently verified exact bytes
+and recorded corrected offsets. Production provenance metadata is not fixed.
+Real internet/second-PC multiplayer remains untested; no second machine was
+available. Original save compatibility, full campaign/AI and visual parity
+remain incomplete. The historical ~25% estimate is not a measured percentage.

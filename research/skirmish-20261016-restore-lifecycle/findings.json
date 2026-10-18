@@ -1,0 +1,85 @@
+{
+  "scope": "Fresh explicitly managed application loading scope; no existing world, task completion or active SAI",
+  "production_files": {
+    "crates/aa-runtime/src/restore_lifecycle.rs": {
+      "bytes": 11401,
+      "sha256": "33b262198e8d2de0b28a5c79e1cf1ca59fd7dbb82a29daf323c2457c67866600"
+    },
+    "crates/aa-runtime/tests/restore_lifecycle_native.rs": {
+      "bytes": 5016,
+      "sha256": "dc7037445fdc4363c8a04c50d5646aa298dcfb7c39c428731baaad1791886d44"
+    }
+  },
+  "prior_files_overwritten": [],
+  "source_checkpoint": "frozen-owned-source.zip is a post-creation recovery snapshot, not an overwritten-file backup",
+  "api": [
+    "ScopedManagedLoad::default() is Unknown",
+    "ScopedManagedLoad::from_sources(&mut V14Sources, actual_elapsed_millis)->Result<Self>",
+    "ScopedManagedLoad::from_uvars(&ResolvedFile, actual_elapsed_millis) is explicit single-source factory",
+    "ScopedManagedLoad::begin(TaskKind)->Result<InactiveLoad> consumes fresh owner",
+    "InactiveLoad observer_present=true and notify_observer exact inactive no-op",
+    "InactiveLoad::request_world_ready invalidates and returns unbound error"
+  ],
+  "validation": {
+    "rust_tests_passed": 4,
+    "rust_tests_failed": 0,
+    "rust_tests_ignored": 0,
+    "actual_v14_source_test": true,
+    "native_constructor_task_cases": 54,
+    "reused_inactive_callback_cases": 42,
+    "instruction_pins": 519,
+    "precisions": [
+      24,
+      53,
+      64
+    ],
+    "command": "cargo test -p aa-runtime --release --locked --offline -j4 --test restore_lifecycle_native -- --include-ignored",
+    "target": "target/s-restore-lifecycle"
+  },
+  "native_sources": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "uvars_static_source": {
+    "path": "E:\\Games\\Axis and Alies\\reconstruction\\assets\\original\\Data\\UVars.tgi",
+    "sha256": "c2d601af619103b7b2493e2f5a41d96f78bfc4cf8178e51dcb6fff3406489e9d",
+    "goal_priority_lines": [
+      {
+        "line": 502,
+        "text": "\t\tstring GoalPriorityCSV = null"
+      }
+    ]
+  },
+  "limits": [
+    "Default/standalone observer remains Unknown; no fabricated absent",
+    "Supported owner is a fresh source-default scope, not existing original user profile or global application",
+    "Only Sim ctor null-world projection; complete thread/network constructor unported",
+    "Prior active/loaded world teardown must use actual old owner; unsupported here",
+    "Task wrapper prefix ends at MapResource Load; no StartMission/success/ready/activation claim",
+    "Successful OS event/lock/clock/allocation and typed UVar leaves explicit in native harness",
+    "Allocator/OS failure partial effects and configured debug CSV file opening unsupported",
+    "Parent owns module export, Catalog/Attempt/Staged threading and map census; this agent changed no shared files"
+  ],
+  "artifacts": {
+    "frozen-owned-source.zip": {
+      "bytes": 5952,
+      "sha256": "62417cd240ed8ea6e24e26d6a70375c4d982328c7be71e0de9c55fad2a030b3d"
+    },
+    "native-lifecycle.json": {
+      "bytes": 105341,
+      "sha256": "9eb82e5e1209171c80d06a2bd2ee52b23e1d5c98512bde2c31b3e2b31706bc54"
+    },
+    "native_lifecycle.py": {
+      "bytes": 6443,
+      "sha256": "1ad4ba63ff284679cd457ec5300747ace77e1b9222d3cdbbca137f26b3fdb04c"
+    },
+    "README.txt": {
+      "bytes": 6405,
+      "sha256": "0b97c88e670db777b3d7c3cd05206de904ec23086e824e8ea8be0fd313c42330"
+    },
+    "tests.log": {
+      "bytes": 684,
+      "sha256": "4eea09eb9e71f1dce36ea39147ae564dc7aabe588cdabeb455bd825d3d1b89dd"
+    }
+  }
+}

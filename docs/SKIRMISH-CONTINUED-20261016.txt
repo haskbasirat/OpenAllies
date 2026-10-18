@@ -1,0 +1,127 @@
+SKIRMISH CONTINUATION -- 2026-10-16 -- READ AFTER NATIVE-PORT-RULES.md
+
+PRIORITY / RELEASE
+Build faithful skirmish battles, then multiplayer, then campaign. No invented
+simulation or revival of aa-game/aa-net. Development08 and the original/v14
+executables remain unchanged. This is source progress, not a new game EXE.
+The client still does not run a complete battle. No rewrite percentage is
+established by test counts, map counts or the number of ported functions.
+
+COMPLETED IN THIS CONTINUATION
+1. Organization578A30 now reads its actual ordered local AbilityData list and
+   AbilityDefinition+54 BOMBARD bit3. The earlier checkpoint's ActorClass
+   description was incorrect. Reuses completed Performer definitions and native
+   layout locked bytes; it skips unlocked null groups before dereferencing and
+   stops at the first match. Reached shared-definition translation/shadow
+   mismatches remain errors. Real Kursk herd_horse has two unlocked null groups
+   and now reaches a later SAI lifecycle stop. Artillery-positive coverage is
+   explicitly source-derived, not claimed to be a saved Kursk actor.
+2. Added/bound native Research583FC0, Structure589A60, Denizen569C70 action
+   contributors; bound existing Construction565140/565090 to actual restored
+   Structure/Properties, source flags and Settings. Native order/short circuits,
+   state bits, action-mask changes and completed failure prefixes are retained.
+   This is command availability, not research/construction/garrison execution.
+3. Kingdom4E1430/4E1E40 recruitment scans read the actual owned HQ vector.
+   Empty vectors return natively; present HQ573E50 and574BF0/574810 services
+   remain explicit dependencies. No HQ payload or eligibility was invented.
+4. Saved Economy refresh binds only4CF0F0 absent component and570020 null-owner
+   return. Actual nonnull owners still require their initialized Kingdom
+   resource/value owner. Tutorial02 naturally has29 such actors and17 without
+   Economy; the test-injected null case is labeled, not a natural map claim.
+5. Regiment Mind versions2..21 now bind actual GWorld+E0, current Organization
+   formations and ActorData references. Owned path/tracked/engage/join/text
+   state moves once into ActorStore.regiment_owned, with commands preserved.
+   Contextless v0/1 remains supported. RestoredMindParts.mind is Option<Mind>:
+   both Load and action contribution move the actual core into the Arena and
+   return it before propagating errors; no core clone or dummy replacement.
+   Tests verify actual allocated buffers and state nodes survive apply errors.
+   This supports fresh successful Load/staging; native abort/allocator-error
+   partial-store equivalence and live Regiment state execution are unclaimed.
+6. skirmish_start binds original Nation placeholder pairs and RandomData
+   weighted choices with the shared native RNG/explicit precision. Installed
+   source:1,959 Things,5 Nations,56 populated random tables. Canonical source
+   provenance prevents a second Thing translation. Immediate forward/ambiguous
+   historical alias cases are refused. Nation replacement fixups remain
+   deferred in native order. Actual ActorStore owner/Kingdom+234 is required;
+   selected nations are never inferred from Firefight's blank header slots.
+   Replacement destruction/creation/property transfer/publication still errors.
+
+VALIDATION
+Root's final selected tests:12 actors,10 Mind,26 runtime-lib,28 runtime
+integration tests passed. One initial integration test had two expected command
+bytes reversed; production decoding matched native. The failed log remains,
+the assertion now compares native fixture fields, and its final7-test target
+passes. Unaffected earlier integration targets were not needlessly repeated.
+All workspace/all targets compilation passed, including the client; its13
+existing dead-code warnings remain (8 repeated in its test target).
+No cargo test --workspace was run. Strict Clippy was not globally green:
+existing aa-rules/aa-actors/aa-mind style lints stopped scoped attempts, recorded
+in the respective evidence. No generic rules parser/source loader changed,
+so no new whole aa-rules/metagame compatibility run was needed this pass.
+
+Root logs in qa-output/resume-20261016:
+  continued-actors.log; continued-mind.log; continued-runtime-lib.log;
+  continued-runtime-integration.log (includes the initial test-only failure);
+  continued-runtime-final-integration.log (corrected+remaining targets);
+  continued-workspace-check.log.
+Firefight StopOnError still restores2,386 objects and29 actor-owner links with
+no record/conversion/drop errors; PostLoad RNG still ends3627657861. It remains
+a starting-placeholder template, not a playable army or published battle.
+
+Native evidence and precise limitations:
+  research/skirmish-20261016-group-classes/INTEGRATION.txt
+  research/skirmish-20261016-owner-recruitment/
+  research/skirmish-20261016-{research,structure,denizen,construction}-actions/
+  research/skirmish-20261016-saved-economy-entry/
+  research/skirmish-20261016-regiment-context/
+  research/skirmish-20261016-start-bindings/
+Independent group/recruitment/research/structure/Denizen/Regiment/start reviews
+are recorded there. Native-case totals overlap old fixtures; do not add them
+into a game-completion percentage.
+
+FINAL DIAGNOSTIC CENSUS
+See continued-mode1-inventory.json and continued-mode1-comparison.json under
+qa-output/resume-20261016. Both compared inputs use explicit native mode1,
+PC53 and InspectPartial; this fixes the old unspecified-mode comparison caveat.
+InspectPartial continues after errors, so later stops may be cascades. A clean
+map is not publication/gameplay acceptance. Frozen result:20/80 maps complete
+record loading and PostLoad;796 failed records remain. Every previous group/
+Research/Structure stop advanced to728 nonnull-owner Economy570020 callbacks
+and68 unknown SAI observer lifecycle callbacks. The number of clean maps and
+failed records did NOT improve this pass; only their reached dependencies did.
+Pending conversions7,879, missing-definition drops3,912, native LoadException
+drops399 are unchanged. The diagnostic census test passed in107.73 seconds.
+continued-acceptance.json pins the76 selected passing tests, this one census
+test, source changes and comparison. No aa-rules/metagame source or root
+manifest/lock changed, verified against the previous source hashes.
+
+NEXT REQUIRED WORK
+- Bind actual initialized saved Kingdom flows/value services for570020, using
+  their one canonical owner; do not create zero arrays or refresh owners early.
+- Carry an actual managed-session SAI observer owner through load tasks.
+  Normal native managed load is PRESENT INACTIVE, not absent. Standalone
+  Attempt lacks that proof and must keep Unknown. native_load_mode alone
+  cannot establish observer lifetime. Follow-up owner/API evidence:
+  research/resume-20261016-element-attach/observer/owner-binding-followup.json.
+- Finish local launch assignment/task and4FDCE0 StartMission. Compose4FDA70
+  coordinator and skirmish_start helpers with4FD7F0/4FD8C0 replacement capture,
+  4FC500/4FC4A0/4FBA50 destruction, actual fresh creation, property transfer and
+  publication. Supply actual selected Nations, major Kingdom order and start
+  state, resource profiles and the remaining native callbacks.
+- Connect complete world/admin ticks, orders, movement, combat, RTS AI,
+  victory and HUD before enabling skirmish. Concrete Settlement/Wall/HQ,
+  nonempty Structure queue codecs and other required services remain open.
+- Then connect that deterministic world to multiplayer. Existing loopback
+  session tests are not real battle/internet acceptance. No second-PC or
+  separate-connection multiplayer was tested in this continuation.
+
+BACKUPS / CONTINUATION
+Each author backed up assigned files; root backups include
+backups/before-owner-recruitment-20261016/ and
+backups/before-continued-checkpoint-20261016/.
+Final source/evidence archive and hashes are recorded by
+qa-output/resume-20261016/continued-checkpoint-<tag>.json. The archive contains
+source and this continuation's evidence; original assets and older native
+fixtures remain external dependencies. It is not a standalone game package.
+Reproduction scripts:research/resume-20261016/validate_continued.ps1 and
+seal_continued_checkpoint.py. No active child work should remain at handoff.

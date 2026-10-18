@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "status": "author validation passed; independent review not claimed",
+  "production": {
+    "crates/aa-runtime/src/standalone_network.rs": "962f0fca4a591124b061144b0bfff815c7611b8baf6cbfa49d4fd9ba3132f5d0",
+    "crates/aa-runtime/src/standalone_network_tests.rs": "6b52229166fa2e3a022025386a6392c8d9a6482eccf0bbf6a13c8703b284bbf0",
+    "crates/aa-runtime/tests/standalone_network.rs": "da559a9090727739abad45595afaaa0917e4a380983127092ad70b32882f5ed7",
+    "crates/aa-runtime/src/game_spy_manager_gate.rs": "579da731a33b8f329c130f00896ae7f8bfd26b4e8997a5bab29bbb0e19ad0c5a",
+    "crates/aa-runtime/src/restore_lifecycle.rs": "d31fc38194d1ff05d73823443e43b3265c1fbd577cc2a932840e44eb1e75da95",
+    "crates/aa-client/src/windows_reset_os.rs": "b57b168cb9f20cfa917832ece8cf066ee5be432b6988a36ef1570be96703501b"
+  },
+  "native": {
+    "standalone_rows": 126,
+    "standalone_instruction_pins": 302,
+    "manager_field_rows": 48,
+    "manager_field_instruction_pins": 142,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "x87_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "evidence": {
+      "native_standalone.py": "e4f4c7253cb38738608adccdb49354bcae15d6911f24ec8412620bf78a21e8a1",
+      "native-standalone.json": "e5dd469b1424764bceef8e9cbca5c935e368e5acb090709d003de31f985b48da",
+      "author-native-audit.json": "b8066e0bc135b9966702b608d6b6d9d44846fd2bfbe78cd5bab34e6bc8067322",
+      "native_manager_gate.py": "cb1a9d6d08ae52cadea27059e4cb60654583baa2703d0a1b262d62dcf8317369",
+      "native-manager-gate.json": "813e43c55d4eb75953f77893d55eaa0ff1eca20c4dd1475b97bb14ede779e914",
+      "author-manager-gate-audit.json": "a0c53294a35ba1bfefdb100e9bd89f4be561981eca3e4622d572295a9533820c",
+      "actual-source-inputs.json": "1515d521dd25527cf44943bc7109d6e6b36bfba3841c03429f089b6a8bdcd266"
+    }
+  },
+  "tests": {
+    "runtime_standalone": 3,
+    "public_current_application_owner": 1,
+    "exact_source_windows_clock_and_existing_os_tests": 4,
+    "exact_source_manager_field": 1,
+    "logs": {
+      "tests-final-v2.log": "d232d2a88206fb336cad4a5a998392f9756603d1fe17aee1de3755a1e9f09930",
+      "public-owner-tests-final.log": "681877e3784031e3fa167965f1e47c5f6472707f56afb25457690c2223ee69b2",
+      "windows-direct-tests.log": "cf37b3418c7f38cd09ac9f960451b340c10dd079279b0fb0a96d192a4aadfe2b",
+      "gate-direct-tests.log": "deb281d13d8317d2c280e34365e9cb14b287c2af6b688261570ba1af87582fd5"
+    },
+    "whole_unit_snapshot": "The three standalone unit tests compiled before manager-field addition. Final public production integration compiled the current module plus current lifecycle/gate, then passed. Manager field exact-source unit test also passed."
+  },
+  "ownership": "One private network choice in fresh application Sai moves through InactiveLoad to StartupOwner. Repeat/failed choices are retained and refused. Distinct manager+BC projection is present/current, never null inferred from absent port.",
+  "actual_data": {
+    "browser_period": 50,
+    "qr2_period_binary32": 1112014848,
+    "uvar_roots": 3,
+    "same_owned_allocation_on_transfer": true
+  },
+  "backups": {
+    "restore_lifecycle-before-standalone.rs": "c2e6133737d00f6c5b274f8c501182f1b02b1933c056f946bfd72966f7bf6767",
+    "windows_reset_os-before-standalone.rs": "f48637d1393b39870f7fd799f4db71b79d41c16c817eaf956659c042fcc0c1a1"
+  },
+  "scope_limits": [
+    "No Internet/account/manager-worker/network readiness or real mission activation claim.",
+    "GameSpy manager gate is explicit constructor-field projection through787FE0+BC only, conditional on preceding successful dependencies. All other manager fields/services remain unbound.",
+    "785560 leaves B40C9C unchanged; fresh explicit standalone choice proves absence only in this controlled new application. No existing Internet manager may be adopted.",
+    "Production successful Rust allocation only. Native allocator/unwind/reentrant/invalid-alias behavior excluded. Required cutoffs are observations, not simulated C++ exceptions.",
+    "Native queue/thread/lock dispatch of the standalone functor is not ported; this bounded explicit scope runs its constructor body directly.",
+    "Custom inexact QR2 integer requires actual live rounding-control owner; shipped50 is exact. Profiles/console/inherited/unsupported literal forms require actual owners.",
+    "QR2 table projection owns only current registrations50..62 and refuses other prior table keys.",
+    "Actual source tests use declared laboratory OS samples; separate exact-source Windows tests exercise real QPF/QPC and existing Reset/GUID paths."
+  ],
+  "retained_failures": [
+    "glyph-tests-v1 missing root ActorFX WIP file; standalone tests-v1 missing SDK fixture/field typo. Both retained, excluded from passing evidence."
+  ]
+}

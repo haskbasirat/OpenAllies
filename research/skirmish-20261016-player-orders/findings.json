@@ -1,0 +1,62 @@
+{
+  "status": "bounded player-order and admin ownership implementation frozen; concrete local host identity adapter is next separate work",
+  "production_sha256": {
+    "crates/aa-orders/src/commands.rs": "f6a852f82b9436f5b49dd0189115e6f6585a87202fc15ded783c82f0837df424",
+    "crates/aa-orders/src/flow.rs": "229d9b7acf7564b6cd8e6779ad2e85123b0477a8343879ae74bc99de23bf5c72",
+    "crates/aa-orders/src/lib.rs": "47a33a489599d12c170c8cbdd4aca33c3559d0493cc580895ac8389ce1934c0a",
+    "crates/aa-orders/src/net/admin.rs": "2babc67f3d63a2cbd0399479aa54cb9d44b29758314680ce9cac11fea58a860f",
+    "crates/aa-orders/src/net/admin/ordering.rs": "05985b59cc5f335ebc9fec7c407a5329c5a23e61ea94b2cfc598e6ec027dfc79",
+    "crates/aa-orders/tests/admin_ordering_owner.rs": "7cfdab1926859ef682b896e82932a36cd9b85088bfc7f2524445c192707a4794",
+    "crates/aa-runtime/src/player_selection.rs": "00a88f39e29c039b8fc4e3f7b915d852a1a36c44e2ce960e8126db117e7a0430",
+    "crates/aa-runtime/src/player_order_world.rs": "651b20612f33d78f718bf43cfe362c8e950d9f97dabae1417fb52d086df59e39",
+    "crates/aa-runtime/src/player_order_world_tests.rs": "3fed6d30611d41ae3c1b5e4aca5f1241cfdfa8b65255bde152d74c44ff424b56",
+    "crates/aa-runtime/tests/player_order_binding.rs": "52daaea1271d352c082061fd98a9e7fdc707677aa95913560c7fb8fe3096cdab",
+    "crates/aa-runtime/src/mind_world.rs": "a2060e7a1e917a6c36e5058dfd1715a64dc8b32089ac0c2b8674074bed816272"
+  },
+  "native": {
+    "native-player-orders.json": {
+      "sha256": "37920335e7fdd9e3dfa3426550c70fa13bcfb348501b9061e03a39bda6ae926a",
+      "rows": 1206
+    },
+    "native-admin-ordering-owner.json": {
+      "sha256": "6fa09fbf2fffddf75567bce8bd71b985d55a9707bd8c053358f8c4cd83abb4bd",
+      "rows": 114
+    },
+    "native-admin-peer-order.json": {
+      "sha256": "d0f34d916baea83ad201e8e1c1742e3c8fbb33d485a8afee110b3fbfc7c2b43e",
+      "rows": 24
+    },
+    "native-admin-ctor-slots.json": {
+      "sha256": "7269a1a4c847e82dd4f520d6bef9a4c72514e892a9f3db310b953265a7f985a8",
+      "rows": 12
+    }
+  },
+  "unique_instruction_pins": 566,
+  "tests": {
+    "runtime_kernel": "native-kernel-tests-v3.log: 2/2, all1206 rows + stable-list cursor",
+    "actual_source": "actual-source-tests-v4.log: 1/1, actual same completed tutorial02 Bank/ActorStore/Mind/command arenas; controlled action bit5 then required subtype handler stop preserves current clone",
+    "admin_flow": "admin-owner-tests-v8.log: 6 admin owner tests +7 generic commands +6 native parity +1 lockstep +1 every native flow, all passed"
+  },
+  "actual_source_capture": {
+    "file": "actual-source-binding-v2.json",
+    "sha256": "d6df0460b86866fd0960c926fa4f0caa56a9872273855b792f469eb3f885c17b"
+  },
+  "boundaries": [
+    "40EAA0 and optional4DA570 are explicit fixture seams in native permission rows; production default selection remains required",
+    "Singleton/empty list supported; positive group wildcard/current-group/source3C path stops before unbound first positive native store",
+    "No normal UI40EAA0 DevMode source fallback; no privileged player inferred from local Node8/Node2C",
+    "Native4D9B60\u219252C320 reaches real owned Mind and command arenas; actual subtype movement/combat effects still required",
+    "Typed Admin280/284 owner and errors tested; production remote token-to-client/security binding not implemented",
+    "No complete61F210 diagnostic implementation, full movie/transport or battlefield publication claim",
+    "Raw native fixtures are synthetic memory inputs; actual source test uses explicit E4=3/false-gate fixtures and omits Init/PostCreate",
+    "No source parser/SDK/gameplay constants changed; original AA.exe and releases untouched"
+  ],
+  "backups": [
+    "before-commands.rs",
+    "before-mind-world.rs",
+    "before-admin.rs",
+    "before-order-lib.rs",
+    "before-flow.rs"
+  ],
+  "historical_logs": "Earlier failures retained: own test argument-order and cp-scope errors repaired; unrelated root ZoneMap mutability/fx_graph load path snapshots later repaired. No failed capture overwrote a prior fixture."
+}

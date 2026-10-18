@@ -1,0 +1,56 @@
+DEVELOPMENT 10 HOTFIX 01 - CHECKPOINT (2026-10-17)
+DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: UNAVAILABLE
+
+Reported problem and cause
+The sealed Development-10 executable e84889706013c4a110d65d6e1cb02df0176be05e811980d092b2355b0aa0e161
+was exercised through its actual GUI startup button with Fall of Berlin.
+The next scripted screenshot/quit was never processed in a 25-second
+bounded test. The GUI called heavy preparation and joined the resource
+worker synchronously inside update. No pre-activation UI bridge deadlock
+was established. Earlier Development-10 validation did not click Start.
+
+Changes
+The GUI captures the actual ApplicationThread and starts the same simulation
+thread there. A source-only Send job prepares SourceTransfer in the
+background; actual host launch and resource-worker registration stay on
+the application thread. The existing resource-task body remains unchanged.
+Polling accepts completed work without waiting for unfinished computation.
+The GUI pumps its UI queue, repaints and displays wall-clock elapsed time.
+There is one World/Host owner, with no replay, fallback battle or forced
+native readiness. Exiting can still wait for a native resource worker to
+finish cleanup; this is not an interruptible native-loader implementation.
+Generic error-prefix wording is not proof of retention across arbitrary
+panics during ownership transfer. No such panic was observed in this fix.
+
+The global Fog adapter now borrows the same published spatial world and
+uses the original temporary flag, GTID and tile geometry access. A separate
+strict Firefight startup run46 passed Fog and mission camera target setup,
+then stopped in native
+WorldStart (4F1E10): object_active reused a saved-only PostLoad classifier
+which rejects Source::New. No particular failing actor ID is inferred.
+That diagnostic executable is separate from the packaged client; its
+limited source-drift qualifications are in attempt46.result.json.
+
+Validation and next work
+Exact packaged-EXE GUI/CLI/render evidence and its scope are recorded in
+evidence/validation.json. Native instruction replays and focused worker/
+source-job tests verify their specific seams, not a whole battle. The actual
+controller regression was typechecked; no full client-unit-test link is
+claimed. Static asset previews do not prove original Model/View parity.
+
+Finish the reached WorldStart classifier binding, then all further actual
+World/Session/View startup callbacks and readiness notifications. Display
+the same live World, bind picking and orders, and exercise scheduled
+movement, combat, AI and victory before accepting a playable match.
+Skirmish and multiplayer remain ahead of campaign in priority. A second PC
+on a different internet connection is unavailable, so real internet
+multiplayer remains blocked and untested. No defensible full-game
+completion percentage or delivery date has been established.
+
+Continue with docs/NATIVE-PORT-RULES.md,
+research/development10/ACTIVE-SESSION-20261017.md and hotfix validation.
+Build source hashes cover Cargo files and crates. They do not attest every
+external compiler include. Original executable/saves/profile and earlier
+sealed releases are preserved; backups are in the separate backups tree.
+No restricted Gamebryo source archive was integrated.

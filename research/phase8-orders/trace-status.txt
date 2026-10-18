@@ -1,0 +1,2 @@
+      7 {'stopped_before_process', 'native_null_dereference'}
+    350 {'stopped_before_process'}

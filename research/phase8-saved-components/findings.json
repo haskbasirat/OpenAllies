@@ -1,0 +1,494 @@
+{
+ "schema": 1,
+ "area": "phase8-saved-components",
+ "date": "2026-10-15",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "components": {
+  "Organization": {
+   "slot": 7,
+   "size": "0xDC",
+   "vtable": "0xA3D434",
+   "constructor": "0x579BD0 (ported earlier: ground_states::OrganizationState::new)",
+   "load": "0x57D130",
+   "writer": "0x579170",
+   "load_version_max": 10,
+   "callees_ported": [
+    "0x50BCD0 Updatable (check+register callback)",
+    "0x8589B0",
+    "0x4C3180 layout Load",
+    "0x4C3050",
+    "0x4C2E60",
+    "0x4C1DB0",
+    "0x430240",
+    "0x45F180",
+    "0x45D8A0",
+    "0x578300",
+    "0x45D580 (null modifier)",
+    "0x4C2910",
+    "0x4FC200 (around the nested load)",
+    "0x57CBA0 (Organization side; world calls as callbacks)",
+    "0x4E13F0",
+    "0x59E300",
+    "0x4C2D90 (load direction)",
+    "0x4C0BA0",
+    "0x4C09C0",
+    "0x57BFF0",
+    "0x57BF50",
+    "0x577F30"
+   ],
+   "callbacks": "OrganizationWorld trait in crates/aa-actors/src/organization_state.rs (each method cites its native address)",
+   "rust": "crates/aa-actors/src/organization_state.rs::load",
+   "tests": "crates/aa-actors/tests/native_organization_saved.rs"
+  },
+  "Transport": {
+   "slot": 24,
+   "size": "0x60",
+   "vtable": "0xA40100",
+   "constructor": "0x58B9A0",
+   "load": "0x58C810",
+   "writer": "0x58B380",
+   "load_version_max": 6,
+   "callees_ported": [
+    "0x4CD440",
+    "0x4CD3F0",
+    "0x4CD0F0",
+    "0x4C2E60",
+    "0x4C3050",
+    "0x4C2110",
+    "0x4C3180",
+    "0x41D290"
+   ],
+   "rust": "crates/aa-actors/src/transport_state.rs::TransportState::{new,load}",
+   "tests": "crates/aa-actors/tests/native_transport_saved.rs"
+  }
+ },
+ "fixtures": [
+  {
+   "file": "native-organization.json",
+   "sha256": "3bae33e4e1457dbeea5d176c5a1f98d9f3ded96f717c6adab0de7cd0bb6c71ea",
+   "cases": 205,
+   "outcomes": {
+    "ok": 123,
+    "Fatal": 8,
+    "ThrowException": 7,
+    "NullDereference": 3,
+    "Warning": 11,
+    "Assertion": 2,
+    "Truncated": 51
+   },
+   "producer_sha256": "24e68f26762b3103ae257d6e884a401ab43792f848a4bc0aa788673e36ff10d0"
+  },
+  {
+   "file": "native-transport.json",
+   "sha256": "6680288846647f31d99b54d89951ce6a7d77c31f29f2bc7c89dd33efef4cdffb",
+   "cases": 290,
+   "outcomes": {
+    "ok": 185,
+    "Fatal": 1,
+    "ThrowException": 6,
+    "NullDereference": 2,
+    "Truncated": 96
+   },
+   "producer_sha256": "0b1181a7df2c5f87a79fae21f40ce23d8386119df1af165807034b9fe55fe0bf"
+  },
+  {
+   "file": "native-organization-callees.json",
+   "sha256": "0504c21785fbae8e2c5bb020effc3523a4381a6457516d520ca886c008a15f50",
+   "cases": 25,
+   "outcomes": {
+    "ok": 25
+   },
+   "producer_sha256": "631bbfd0e735f5ab22bfd819d7b94f4b02e4644852490b2c68b428cb1d65d81c"
+  },
+  {
+   "file": "native-denizen-inventory.json",
+   "sha256": "0460483a261f07b905c64168167a9faff9fbf3435609e60a71dfed1cc985c200",
+   "cases": 252,
+   "outcomes": {
+    "ok": 229,
+    "Truncated": 23
+   },
+   "producer_sha256": "6578b83597f5440bf119e9f8b9a2d5ff038c5c34a0a274951e9879dbec1e1299"
+  },
+  {
+   "file": "native-actor-names.json",
+   "sha256": "06983305459ad49f3c16b3b503059d70026ad293971d0e2fa3517bb4f6de0f98",
+   "cases": 90,
+   "outcomes": {
+    "ok": 87,
+    "Warning": 3
+   },
+   "producer_sha256": "c373e5e965d08554eed6e7a690b879dd5cef7017a0726e686a44e93fa1f99654"
+  },
+  {
+   "file": "native-transport-requirement.json",
+   "sha256": "032c9e90c7c94f19b5474912c2392f7eee110dbca4b54b1bb7513c3a6c6df5e5",
+   "cases": 8
+  }
+ ],
+ "real_maps": {
+  "source": "real-payloads.json (payload_dump over the 80 original maps)",
+  "sha256": "54172daa565e7941a708b6f4ceabb19c8ae14dacbfa9d8b9c90f9f108f515e97",
+  "organization_payloads": 1082,
+  "organization_versions": {
+   "10": 648,
+   "9": 355,
+   "8": 79
+  },
+  "transport_payloads": 47,
+  "transport_versions": {
+   "6": 10,
+   "5": 18,
+   "4": 19
+  },
+  "transport_replayed_natively_and_in_rust": 47,
+  "organization_replayed": 0,
+  "organization_blocker": "nested member records need the reentrant 4FAE80 record restore and Element Mind (slot 4)"
+ },
+ "proven": [
+  "Organization 57D130 on constructed 579BD0 state: 205 Unicorn cases, every outcome/consumed/callback sequence/state equal in Rust, PC24/PC53/PC64 including PC24-only double-rounding rows",
+  "Transport 58B9A0+58C810: 290 cases incl. all 47 shipped-map payloads, equal in Rust"
+ ],
+ "not_proven": [
+  "effects of the world callbacks (seams; the 579A00 seam stores +40 only)",
+  "real Organization payloads end to end (blocked, see real_maps)",
+  "branches unreachable from 57D130: 4C2910 mismatch branch, 4C1DB0 log, 578300 member-modifier path, 57BF50 +74!=0 branch",
+  "engine stream end-of-file behaviour (Truncated stops at the same read on both sides)",
+  "stream vtable +14 query in 4C2D90 seamed to the load direction"
+ ],
+ "refused_explicitly": [
+  "member slot index >= slot count (57CBA0 out-of-bounds store)",
+  "negative ResourceVector count (4CD133)",
+  "out-of-range LayoutData group/formation indices",
+  "non-finite x87 arithmetic inputs"
+ ],
+ "partial_state_gap": "4C30C3 stores null to Layout+8 before the Unknown-IDS throw; Rust keeps the previous LayoutData",
+ "emulator_caveats": {
+  "page0_guard": "research/phase8-restoration/null_guard.py installed",
+  "allocator": "6F7810 seam, 0xA5 fill, no zeroing",
+  "x87": "only add/mul/div/fcom/fstp (no transcendental ops)",
+  "snan": "no NaN arithmetic inputs; NaN only in compares (B4 clamp, D8)"
+ },
+ "removed_caps": [],
+ "commands": {
+  "oracles": "PYTHONPATH=E:\\Games\\Axis and Alies\\reconstruction\\tools\\python-packages python research/phase8-saved-components/native_{organization,transport}.py",
+  "rust": "CARGO_TARGET_DIR=target/s-saved cargo test -p aa-actors --release --locked --offline -j 4 --test native_organization_saved --test native_transport_saved",
+  "round4": {
+   "oracles": "PYTHONPATH=E:\\Games\\Axis and Alies\\reconstruction\\tools\\python-packages python research/phase8-saved-components/native_{post_load,transport_payload,display_name}.py",
+   "rust": "CARGO_TARGET_DIR=target/s-saved cargo test -p aa-actors --release --locked --offline -j 4",
+   "rules": "AA_GAME_ROOT=E:\\Games\\Axis and Alies CARGO_TARGET_DIR=target/s-saved cargo test -p aa-rules --release --locked --offline -j 4 --test native_display_name -- --include-ignored"
+  },
+  "round5": {
+   "oracles": "PYTHONPATH=E:\\Games\\Axis and Alies\\reconstruction\\tools\\python-packages python research/phase8-saved-components/native_{hq,post_load,load_tail}.py",
+   "rust": "CARGO_TARGET_DIR=target/s-saved cargo test -p aa-actors -p aa-world --release --locked --offline -j 4"
+  }
+ },
+ "sources_sha256": {
+  "crates/aa-actors/src/organization_state.rs": "e6a8b73d96e8f8c28f2d3a7189c3d910eea6a49b4faa9330460a890d39d4dc56",
+  "crates/aa-actors/src/transport_state.rs": "6246c325d791697fe4e6af8baec1ce499990dbb74d221eef0377f5670fec55a6",
+  "crates/aa-actors/src/organization_callees.rs": "855e8d694e34ad3b554c2e0d99ae7e58690135d83606f2bee2fd6320b7407c15",
+  "crates/aa-actors/src/denizen_state.rs": "918286149b63a545af36270b0ddd3954f426fbb2112efe2346d92b3c12463656",
+  "crates/aa-actors/src/actor_names.rs": "5e6f815fc9ade7474945b2fc4cb82ca4c39c523b6e70a58aaf153e594fbab233",
+  "crates/aa-actors/tests/native_organization_saved.rs": "80d2a522e7aaf21048ee040ae23f94a3ad61e9717064d6c5b5bf578d7a03dc6b",
+  "crates/aa-actors/tests/native_transport_saved.rs": "47a88b5a0544c0ca3b8bd4ea1bf5b5b3e32deeeee0c98fb086f08a9feaca6239",
+  "crates/aa-actors/tests/native_saved_organization_callees.rs": "9b20104507c5fca6b49b868d7587fc9c38fbc0393992b590824beb8cae02e9bf",
+  "crates/aa-actors/tests/native_saved_denizen_inventory.rs": "c92fba71dd82435aed91469d2ac8488d4cfe8a5a5e0016f8822178dbb789fbf0",
+  "crates/aa-actors/tests/native_saved_actor_names.rs": "1e35654e01c3324d925fc65774169481454d27791fc450f8dde33c3834974efe"
+ },
+ "machine_sha256": "ec2fc1dc123e82485b8eb08d605d962495a1bf39eb435f65eb64639b5f5d316f",
+ "round2": {
+  "ported": {
+   "0x4CED10": "organization_callees::experience_source",
+   "0x4CEBB0 (+0x57A330, 0x57E010 gate, 0x4364C0 order)": "organization_callees::rank_changed",
+   "0x561760": "organization_callees::body_set_organization",
+   "0x7C7840 (Transport vtable A40100 +20 -> slot 3 Mover, consumer 0x4CFB00)": "transport_state::REQUIRED_COMPONENT",
+   "0x56B720 consumer + 0x56C39E..0x56C45B": "denizen_state::{with_inventory, load_occupants, apply_occupants}"
+  },
+  "recorded_for_other_areas": {
+   "0x5705A0": "combat (mirror of 0x570670)",
+   "0x5784C0": "combat (mirror of 0x578540 loop)",
+   "0x4CEF80": "aa-body property_api (581280/5032D0 source filter)",
+   "0x524B80": "AI agent (CAI.cpp)",
+   "0x4E1200": "economy recruit singles",
+   "0x57DCF0": "combat Performer"
+  },
+  "denizen_real": {
+   "records": 168,
+   "maps": 40,
+   "definitions": [
+    "*_carrier",
+    "*_airfield"
+   ],
+   "all_load_natively": true,
+   "producer_equals_native_constructor": true
+  },
+  "tests": {
+   "crate": "aa-actors",
+   "passed": 52,
+   "failed": 0
+  },
+  "not_proven": [
+   "effects of callbacks 57DCF0, 50B220/50B1C0",
+   "restoration wiring",
+   "Denizen command objects (51B580)"
+  ]
+ },
+ "round3": {
+  "group": "Actor name collision/action-table validation is unavailable (restoration actor_finish.rs; 269 records in inventory-round2)",
+  "native": "GActor::Load tail 0x4D971B..0x4D99C2: +158 required object (858A00), MapString +DC/+E0 validation (4D8CA0, 4D8AB0, 4B9F40, _vswprintf, wcscmp 96CB83, 59E520, 4BAA20, 49AD00, 5A1040), numbered names (+1B0, vt+108, _swscanf 96C99A, 4E4980 on +E8, 4CF1A0)",
+  "no_action_table_step": true,
+  "ported": "crates/aa-actors/src/actor_names.rs: finish, expected_name, numbered_name, format_numbered, scan_decimal, NumberedNameCounters (4E4980)",
+  "oracle": {
+   "file": "native-actor-names.json",
+   "tail_cases": 90,
+   "counter_runs": 2
+  },
+  "crt": "statically linked CRT executed natively; _getptd/_malloc/_free/_lock/_unlock seamed (imports)",
+  "refused": [
+   "swscanf whitespace test of a char >= 0x100 (Windows GetStringTypeW)",
+   "numbered-name formats other than %d then %s",
+   "counter wrap past 2^32"
+  ],
+  "not_proven": [
+   "real-map replay of the affected records (needs [B36544] map strings and ActorData+10 texts)"
+  ],
+  "tests": {
+   "crate": "aa-actors",
+   "passed": 54,
+   "failed": 0
+  }
+ },
+ "round3_part2": {
+  "request": "R3-2: ActorData+10 exactly as 47D960 stores it",
+  "native": "47D960 (+10 = 5B5620(node,\"name\"), +14 = 1); 5B5620 GetLocalized: 5B4750 lookup, \"#\"-prefixed -> 41D390 Right(len-1) -> 4B9F40([B36544]; key, B43B48 empty default); bytes widened per code unit (857210)",
+  "ported": "crates/aa-rules/src/native_display_name.rs (aa_rules::native::display_name): native_stored_name, ActorCatalog::native_display_name",
+  "oracle": {
+   "file": "native-display-name.json",
+   "cases": 14,
+   "parser": "original 5BD080 via research/phase8-restoration/native_tgi_parser.py (read only)"
+  },
+  "real_data": {
+   "keyed": 1768,
+   "literal": 191,
+   "failed": 0
+  },
+  "tests": {
+   "crate": "aa-rules",
+   "test": "native_display_name",
+   "passed": 2,
+   "failed": 0
+  }
+ },
+ "round4_transport_payload": {
+  "native": "58BA90 (summon effect 4CCA70 seam): 4CD440 x2, 56F580 upkeep, 58B2A0 (4CD230, layout reference swap, 4C2190 at refcount 0, +3C filled-group count), 4CF0F0, 405B80",
+  "ported": "TransportState::load_payload + PayloadWorld (transport_state.rs)",
+  "oracle": {
+   "file": "native-transport-payload.json",
+   "cases": 9
+  },
+  "always_returns": true,
+  "hook": "combat summon::apply: layout = 4C2290 copy of ActorData+2F0 default layout when the cargo is an organization; name empty"
+ },
+ "round4": {
+  "request": "PostLoad / PostExisting / publication virtuals after all records restore (HANDOFF steps 4-5)",
+  "driver": "GWorld::Load 4FC600 at 4FD3B3..4FD3F1: 4EFBE0 iterates [B364C0] slots 1..+6000C, virtual +DC per object",
+  "after_driver": [
+   "4F1E10 world start (map settings +A8 in {1,4} and 59E520) - inventory only",
+   "4F5290/4F1C20 VWorldState::InitForLoadedMap - presentation",
+   "4FD47C..4FD781 placeholder replacement - conversion agent"
+  ],
+  "post_existing": "no separate virtual for loaded objects; creation path +E4/+E8 4D7230/+EC 4CF300 is distinct; views: OnVWorldCreated 4F0750",
+  "class_post_load": {
+   "Thing A2A680": "943800",
+   "Team A29780": "943800",
+   "GObject A2A2A0/Area A28A00/Camera A28B88/A28D18/Doodad A28E90": "4EAA30",
+   "GActor A273F0": "4D3560",
+   "GKingdom A299D8": "4E4220",
+   "GGroup A29490 (class 8)": "4DDFA0 unported"
+  },
+  "component_post_load": {
+   "Body": "561DF0",
+   "Properties": "581260",
+   "Supply": "581260",
+   "Denizen": "569F80",
+   "Wall": "58CB40",
+   "Settlement": "586F60 -> 586BC0(0) unported (4F9C10)",
+   "Defender": "5676B0",
+   "Hq": "5736B0",
+   "others": "943800 (verified per 4CF480 constructor; Aircraft vtable is A3AF78)"
+  },
+  "helpers_ported": [
+   "4EFBE0",
+   "4EAA30",
+   "4D3560",
+   "4E4220",
+   "4E1C70",
+   "4E2640",
+   "561B40",
+   "561C60",
+   "4CE6C0",
+   "4D0CD0/4F1430",
+   "567140 (null target)"
+  ],
+  "seams": [
+   "50AC00",
+   "50AC60",
+   "50ACC0",
+   "50B220",
+   "50B1C0",
+   "50B250",
+   "4F02B0+85D840",
+   "404ED0",
+   "5A1040",
+   "vt+12C (4CFF70/4ECC50)",
+   "578DA0",
+   "recruit item vt+8",
+   "52A020 (world call set_mind_command; run natively in the oracle)"
+  ],
+  "rng": "queue 0/1 periodic inserts and 4E2640 draw the same world RNG; pass order fixes the stream",
+  "ported": "crates/aa-actors/src/post_load.rs",
+  "oracle": {
+   "file": "native-post-load.json",
+   "cases": 30,
+   "precisions": [
+    "Double53",
+    "Single24 (2 replicas)",
+    "Extended64 (2 replicas)"
+   ]
+  },
+  "tests": {
+   "crate": "aa-actors",
+   "test": "native_saved_post_load",
+   "passed": 3,
+   "crate_total_passed": 60,
+   "failed": 0
+  },
+  "tutorials": {
+   "file": "tutorial-post-load-inventory.json",
+   "tutorial01": {
+    "Body": 9,
+    "Properties": 15,
+    "Denizen": 2,
+    "Supply": 5,
+    "Defender": 4
+   },
+   "tutorial02": {
+    "Body": 25,
+    "Properties": 27,
+    "Denizen": 4,
+    "Supply": 4,
+    "Defender": 13,
+    "Hq": 2
+   },
+   "unported_reached": "none"
+  },
+  "refused_explicitly": [
+   "GGroup 4DDFA0",
+   "Settlement 586BC0",
+   "567140 attach branch for a live GTID 0",
+   "GActor field reads on non-GActor objects (Undefined)",
+   "GTID 0 in the table (4EFBE0 restart)",
+   "recruit item index past the current count (native null dereference)"
+  ],
+  "not_proven": [
+   "real restored-map pass (needs the complete restoration registry)",
+   "queue helper internals (aa-world)",
+   "4F1E10 / InitForLoadedMap"
+  ],
+  "sources_sha256": {
+   "native_post_load.py": "4c998ab328037492c0861d7a4c4a27a7b84c84ed5b16fdd38bcde9372ba5277a",
+   "native-post-load.json": "8e7fee32f78daa3ab325a0ae2180d38a9e1292e2c684967e0e2cab9a86b1b47f",
+   "native_transport_payload.py": "e59876bf9395316018198f75e98a2388701152fbe16acabc98f5e47b7ce76380",
+   "native-transport-payload.json": "8d1d1b9c163e871abc182f3ede7078b89753536b5145fbcd161ba42522523afe",
+   "native_display_name.py": "2e7cdf9cbb368a0a16cb72f86ae9c5198ac2448ff58c7289b935a6e37cd6771c",
+   "native-display-name.json": "83a41f707b380d6e271ecf98f4d4bf8b62044b36a730b924f2416956a2d7a68d",
+   "tutorial-post-load-inventory.json": "76e6ea17db922e01f412e927808dd1305ff89ddcbfd66beaef9af3b0426f3934",
+   "crates/aa-actors/src/post_load.rs": "4304b4606b0b3555a7212c0b19bc2efb5212c39e9b56372cb7861ae27ae6befe",
+   "crates/aa-actors/tests/native_saved_post_load.rs": "d373175576a749ed60e5bca1f3a9a1de668b63323ecf309350f17fc23f350f1d",
+   "crates/aa-actors/src/transport_state.rs": "8955e2da6a3d7072ce76a72583275d565e91cb7181323dad7a8621ef4f6f9524",
+   "crates/aa-rules/src/native_display_name.rs": "10db88ff1d4fcb7deba39efa6e3de8711a17093aa90b499022e174cfe2e99433"
+  },
+  "updatable_has_50b220": {
+   "native_runs": 8,
+   "semantics": "from the Updatable most recent entry (+4) along the queue BUCKET next (+8); matches any owner; misses the owner entries in other buckets",
+   "helper": "post_load::native_has_scheduled",
+   "differs_from": "aa_world::queues::Queues::has (owner-list test) whenever the Updatable already has entries"
+  }
+ },
+ "round5": {
+  "hq": {
+   "native": "574490 ctor, 574040 Load (50BCD0, 8589B0 <= 3, badge check via vt+108 / [Kingdom+234]+40 with 404F60 HQ.cpp 0x20F, 4D1AF0 legacy list, 5737E0 items, 573750 slot iterator, 766DE0 pending)",
+   "ported": "crates/aa-actors/src/hq_state.rs",
+   "oracle": {
+    "file": "native-hq.json",
+    "cases": 26
+   },
+   "test": "tests/native_saved_hq.rs"
+  },
+  "queues": {
+   "added": [
+    "aa_world::queues::Queues::has_from_owner_head (50B220)",
+    "aa_world::queues::Queues::remove_matching (50B1C0)"
+   ],
+   "oracle": {
+    "file": "native-post-load.json",
+    "updatable_has_50b220": 8,
+    "updatable_remove_50b1c0": 7
+   },
+   "test": "crates/aa-world/tests/native_queue_links.rs",
+   "existing_tests": "unchanged, pass"
+  },
+  "recruit_items": {
+   "items": "RecruitSingle vtable A29694 (+8 available, +C actor, +10 organization)",
+   "virtual_8": "4E0EC0 (+8 = 1)",
+   "4E1C70_minus_one": "578DA0(item, -1) reads and clears Organization+34[-1]: Error::Undefined"
+  },
+  "virtual_12c": {
+   "gobject": "4ECC50",
+   "gactor": "4CFF70 (462E50 +34, 4BB000, zone 2 via 515F40)",
+   "last_kingdom_not_visited": true
+  },
+  "load_tail": {
+   "native": "4FD3F3..4FD47C: gate (+A8 in {1,4}, 59E520) -> 4F1E10 (aa_economy::world_start covers all of it), 4F5290, 4F48E0, 4F1C20, +22C/+230, 404F60",
+   "ported": "crates/aa-actors/src/world_load_tail.rs",
+   "oracle": {
+    "file": "native-load-tail.json",
+    "cases": 24
+   },
+   "test": "tests/native_saved_load_tail.rs"
+  },
+  "settlement": "586BC0 ported (post_load::settlement_create_things; 4F9C10 seam with the GACD block recorded)",
+  "group": "4DDFA0 ported (post_load::group_post_load; 4DDCD0, 552640 seam, zone 7)",
+  "pass_oracle_cases": 42,
+  "zone_creators": {
+   "status": "already ported by the actor-creation agent in component_virtuals.rs (native-component-leaves.json): 566DB0, 585940, 58B0E0, 579DD0, 568070, 58D3B0, 563FE0",
+   "not_zone_creators": {
+    "568040": "predicate over 8 lists (Settlement update 587290)",
+    "563E10": "Character Updatable deferred update (+18)",
+    "58CF50": "Wall Updatable periodic update (+14)"
+   }
+  },
+  "tests": {
+   "aa_actors_passed": 64,
+   "aa_world_passed": 10,
+   "failed": 0
+  },
+  "sources_sha256": {
+   "crates/aa-actors/src/hq_state.rs": "82223e1be4c9f9762772d324b9b8bc148d8d4fb2d7b443efce9a6966697f2a36",
+   "crates/aa-actors/src/post_load.rs": "ef29312d45d54095e746244fd9c44e9dc0c2acf4cf8e99542aa1ff52e1fae9bb",
+   "crates/aa-actors/src/world_load_tail.rs": "936b9f022189fc4d7756f0e42012048d951d0263e454f4b4190df887661fb360",
+   "crates/aa-world/src/queues.rs": "5118eea480df438c50a4c8976d0dab9df33da80e50129eee890f18b43faac093",
+   "crates/aa-actors/tests/native_saved_hq.rs": "3b1970e1b412ba309b357db957ddecfd6836a5a24b9351c698221faf811a94c7",
+   "crates/aa-actors/tests/native_saved_post_load.rs": "64d4feb1ccdb2742540cc496afed3ef9f3f747011e629957b86b9afe2070bc0d",
+   "crates/aa-actors/tests/native_saved_load_tail.rs": "e5227eb88ca45ebe99ad90c5d9b3dd6c12726a16c44ba8d7df0ff01583894071",
+   "crates/aa-world/tests/native_queue_links.rs": "5f41f0bc6d342fddd49f0a6d2f7050fa398fae05247951e8503f035a477a66fe",
+   "native_hq.py": "ac5b9b6d5c79ab9c9d6404cab477c51a7084b52783d25d97c8d75bc39b42c4dd",
+   "native-hq.json": "aa535470e43950a589c67471b8d4135fb102b1d5ce9abeb9f7080b03a7dc2111",
+   "native_post_load.py": "8fcda9d7243c6b0a3dbe3457e00f5192baad12a18f1d1f9abfb819b7326b8f52",
+   "native-post-load.json": "c6812561c044d2fc9540d25250b60af402aaf8094e079e1145b207eca8b7ce25",
+   "native_load_tail.py": "4074ec9d803bc8714dd7c068a999b215b639f9d6d3f9bea3558ce49353046136",
+   "native-load-tail.json": "b75d86c596db6ad27c24755fd0ed06faca9d0cdb2fa8eca2a841a484fb60a5a7"
+  }
+ }
+}

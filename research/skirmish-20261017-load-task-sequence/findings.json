@@ -1,0 +1,55 @@
+{
+  "scope": "Concrete same-owned LoadGameTask+C shared ResourceManager counter glue, not completion/heterogeneous queue certification",
+  "native_counter_kernel": "Existing resource_task author evidence; this checkpoint adds only concrete caller ownership/order",
+  "order": [
+    "Construct Task/Inputs",
+    "Publish SAME Task in Session124",
+    "Acquire actual Task sequence-field lock",
+    "Validate same selected Creator/current source/cached Application Arc",
+    "Reserve opaque SAME queue counter slot",
+    "Store slot on SAME Task",
+    "Insert SAME Job",
+    "Execute Node BeginTask effects"
+  ],
+  "failure_prefix": "Source/depot/lock refusal before assignment retains Session124 and inserts no Job. This is source/ownership review, not arbitrary fault-injection acceptance.",
+  "production": "aa-netcode library check02 PASS28.08s",
+  "source_acceptance": {
+    "asserted_actual_first_sequence": 0,
+    "seconds": 5.42,
+    "result": "PASS1/1",
+    "binary_sha256": "521b5e6cc0943cefe382d48be20759cbeeda11e2836df49cdf88dd4f7cc4a56f",
+    "log": "source-test03.log",
+    "prerequisite_repair": "Initialize actual Catalog.current Localization before source MAPSTRINGS replacement; definition text remains separate",
+    "test": "real_source_windows_and_explicit_host_input_use_same_owners"
+  },
+  "historical": [
+    "production-check01 blocked by foreign transient visual-map type mismatch",
+    "source-test01 accidentally executed stale old test EXE; not evidence for new assertion",
+    "source-test02 current binary stopped at missing actual current text owner before Task+C assertion",
+    "attempt22.inputs.json source-test path/hash corrected by attempt22.source-test-correction.json; playable EXE pin was correct"
+  ],
+  "actual22": "Genuine main launch succeeded with this glue; worker retained Immediate waves nonfinite overlap requirement at1121 completed records. No StartedMission/activation.",
+  "source_pins": [
+    {
+      "path": "crates/aa-netcode/src/local_load_task.rs",
+      "sha256": "2dce3e62d3c225860d3f0da9a9736fad9e3f4d914c58a29a4e35ed3c960b42ae"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_launch_live.rs",
+      "sha256": "a3523fd64d0c00328f1ed59f1d82ed6dc05698af039b4112def89e0bcb9a502d"
+    },
+    {
+      "path": "crates/aa-runtime/tests/local_host_input_source.rs",
+      "sha256": "c75b2a9301d85706900ef32380e7a7603f57ba417fa81680a72bf61badd0a7c0"
+    },
+    {
+      "path": "crates/aa-runtime/src/resource_depot.rs",
+      "sha256": "55e068e683302202d6d24c49208036105f1aa09d9a0ebb2d0ce8033cb4dd4575"
+    },
+    {
+      "path": "crates/aa-runtime/src/resource_task.rs",
+      "sha256": "81ade76721fa5571a1bfaf465b08b4377ac893f674faeb1d3608e513754a495c"
+    }
+  ],
+  "profile": "release lto=false codegen-units16 --locked --offline -j4"
+}

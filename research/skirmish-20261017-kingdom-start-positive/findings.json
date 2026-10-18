@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "status": "author-frozen bounded positive-Commander path; no whole mission claim",
+  "binary": {
+    "path": "commander-tests-final-v4.exe",
+    "sha256": "e30754e9202dfe4ab8f38f1834f2b443a29a9a27175802ebab178cf04bf3a46d"
+  },
+  "source_files": {
+    "crates/aa-runtime/src/kingdom_mission_start.rs": "39dc22b2d500d46a7d1cd26f99889b4656000242104367d3496c4ba416de5d37",
+    "crates/aa-runtime/src/kingdom_mission_start_tests.rs": "b5b9a05a59c6ec184b6f7674b3d3a396f85d295bec8ddc732e820c65ea4005da",
+    "crates/aa-runtime/src/kingdom_start_source.rs": "34cb2025ee856405e481e334e6630c5c288551a2ff6fdfbf9bd7b597fd4c9b0d",
+    "crates/aa-runtime/src/load_mission_variables.rs": "785396aa68fc3ef88bc0fd4b8ea4d42ba64e1092b06d005a367db668d0697e8e",
+    "crates/aa-runtime/src/load_view_variables.rs": "e439c31213dabd9fead4d68cc0a6b1f1a37b3504e4d33d84f8194a8c8aaba174",
+    "crates/aa-runtime/src/load_view_variables_tests.rs": "b3c003837456da33403850639e5682f5c33baadd9e3c35dd940d4888b88cc3b0",
+    "crates/aa-runtime/src/load_property_instances.rs": "89ddfa1550be49269168e31bdae5cbda2ff3f7c16a6084b6e1f1efc6820b955f",
+    "crates/aa-runtime/src/actor_property_focus.rs": "0f9c4dd24d9544356005755fcacdf59e6e63c2266f303381e42a59f56772bc5f"
+  },
+  "tests": [
+    {
+      "path": "tests-final-v4.log",
+      "passed": 5,
+      "sha256": "27443b44379987648065d5f861953cb3ecf79f0a217237b897a6c44c730ceffc"
+    },
+    {
+      "path": "regression-final-v4-configure_world-.log",
+      "passed": 6,
+      "sha256": "26688e86bfb623b1e78161ceb209431629000d0acf6ad4560b7db965f0be5ee2"
+    },
+    {
+      "path": "regression-final-v4-load_mission_start_world-tests.log",
+      "passed": 1,
+      "sha256": "10a322353d6522d0a15489dad034634418e4168f602b179e2f5bf8ce16c538af"
+    },
+    {
+      "path": "regression-final-v4-load_mission_variables-tests.log",
+      "passed": 1,
+      "sha256": "dee93d25c55363b6cae55841bb2f198d8b4981d1b9f6e21e349f62083c6f9998"
+    },
+    {
+      "path": "regression-final-v4-load_view_variables-tests.log",
+      "passed": 2,
+      "sha256": "c34f194aa1fa3e888bee0f24ed78f42112ac9fbbf5072afd90251cc39c566313"
+    },
+    {
+      "path": "regression-final-v4-load_world_rules-tests.log",
+      "passed": 3,
+      "sha256": "19522c5f086574c39d989e23232d448e674ecf84960dd0d9602442d9d294cab7"
+    },
+    {
+      "path": "regression-final-v4-merge_kingdoms_world-tests.log",
+      "passed": 2,
+      "sha256": "7c521e7e6d3450cc0aa786b7dbe632c152e97cfdf943167f0a1e22d4eda05cdb"
+    },
+    {
+      "path": "regression-final-v4-mission_camera_world-tests.log",
+      "passed": 1,
+      "sha256": "5abbed05228ae8a4a85bffb9e0717691ad1ddae2767c513f100360da962100c7"
+    },
+    {
+      "path": "regression-final-v4-mission_finalize_world-tests.log",
+      "passed": 2,
+      "sha256": "39d0a6b6e9b427af5bd9c7c86b4658b7cfea88a364859a45f58b231b1131b6e6"
+    },
+    {
+      "path": "regression-final-v4-resource_creator-tests.log",
+      "passed": 1,
+      "sha256": "9d478ef37eb5361db9c527485a75d331765e07e39335dd04daebb46592cf8f96"
+    }
+  ],
+  "passed": 24,
+  "native": [
+    {
+      "fixture": "native-starting-experience.json",
+      "sha256": "e76df39dff7c59e6e2c8143f084671bac0a9567b46eb23605214d58200a5434c",
+      "producer": "native_starting_experience.py",
+      "producer_sha256": "35ce8fba5fe969559d3ee7c69ceb785eb4388161f0490329f1cd0fecc4f576f0"
+    },
+    {
+      "fixture": "native-faction-properties.json",
+      "sha256": "4eb0d8049b765acce9a4396a00322a071e668153559370fe3560e532f047eade",
+      "producer": "native_faction_properties.py",
+      "producer_sha256": "d4b242a2179f56b6e18eece8a0ae39a77f3a5ef5525dc5ee4015c501129bf86c"
+    },
+    {
+      "fixture": "native-commander-start.json",
+      "sha256": "c0bab8f9955fe08a8228bbd5c0dd4badd704370a92f637b378deaa8ab27a9999",
+      "producer": "native_commander_start.py",
+      "producer_sha256": "01482dd230a7f6cd0b419e4403ad082a1013fe86785efb38fa0c0b638485e60d"
+    }
+  ],
+  "actual_capture": {
+    "path": "actual-source-census-final-v4.json",
+    "sha256": "0bfea09a54a9c945ff4fd6035462b8fd719de042431376cd90bd6f89bb048daf",
+    "factions": 24,
+    "starts": 72,
+    "source_precision": "Double53",
+    "live_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "positive_compatible_nations": 24,
+    "all_faction_property_lists_empty": true
+  },
+  "scope": [
+    "same actual Commander experience owner",
+    "same current StartingExperience SVar State",
+    "same moved Bank source identity",
+    "same Property State and cached shared-loan semantics",
+    "384 original/v14 native positive/prefix rows",
+    "19 additional bounded regression tests"
+  ],
+  "remaining_required": [
+    "positive Faction Property grants and actual game event service",
+    "positive start profile/start technology grant adapter",
+    "invalid-Faction localization service",
+    "successful fresh selected full mission",
+    "playable battle and real multiplayer acceptance"
+  ],
+  "historical": [
+    "v1 constructor-null-Nation source capture",
+    "pre-pin-correction faction fixture excludes later correction"
+  ],
+  "preservation": "Original executable/assets/saves/profiles were not modified. No vendor source integrated."
+}

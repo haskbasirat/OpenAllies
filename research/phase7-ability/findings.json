@@ -1,0 +1,342 @@
+{
+  "schema": 1,
+  "status": "component_native_validation_passed_pending_independent_review_and_runtime_composition",
+  "cases": 2326,
+  "rust_tests": 22,
+  "new_rust_tests": 16,
+  "scopes": [
+    {
+      "name": "performer",
+      "cases": 102,
+      "transitions": 396,
+      "producer": "research/phase7-performer/native_performer.py",
+      "fixture": "research/phase7-performer/native-performer-fixtures.json"
+    },
+    {
+      "name": "admission",
+      "cases": 186,
+      "transitions": 0,
+      "producer": "research/phase7-ability/native_admission.py",
+      "fixture": "research/phase7-ability/native-admission-fixtures.json"
+    },
+    {
+      "name": "execution",
+      "cases": 108,
+      "transitions": 0,
+      "producer": "research/phase7-ability/native_execution.py",
+      "fixture": "research/phase7-ability/native-execution-fixtures.json"
+    },
+    {
+      "name": "projectile",
+      "cases": 60,
+      "transitions": 285,
+      "producer": "research/phase7-ability/native_projectile.py",
+      "fixture": "research/phase7-ability/native-projectile-fixtures.json"
+    },
+    {
+      "name": "constructors",
+      "cases": 69,
+      "transitions": 0,
+      "producer": "research/phase7-performer/native_constructors.py",
+      "fixture": "research/phase7-performer/native-constructor-fixtures.json"
+    },
+    {
+      "name": "weights",
+      "cases": 72,
+      "transitions": 0,
+      "producer": "research/phase7-performer/native_weights.py",
+      "fixture": "research/phase7-performer/native-weight-fixtures.json"
+    },
+    {
+      "name": "dispatch",
+      "cases": 105,
+      "transitions": 0,
+      "producer": "research/phase7-ability/native_dispatch.py",
+      "fixture": "research/phase7-ability/native-dispatch-fixtures.json"
+    },
+    {
+      "name": "launch",
+      "cases": 102,
+      "transitions": 0,
+      "producer": "research/phase7-ability/native_launch.py",
+      "fixture": "research/phase7-ability/native-launch-fixtures.json"
+    },
+    {
+      "name": "surface",
+      "cases": 1104,
+      "transitions": 0,
+      "producer": "research/phase7-surface/native_surface.py",
+      "fixture": "research/phase7-surface/native-surface-fixtures.json"
+    },
+    {
+      "name": "payment",
+      "cases": 366,
+      "transitions": 0,
+      "producer": "research/phase7-payment/native_payment.py",
+      "fixture": "research/phase7-payment/native-payment-fixtures.json"
+    },
+    {
+      "name": "fx",
+      "cases": 52,
+      "transitions": 0,
+      "producer": "research/phase7-fx/native_fx.py",
+      "fixture": "research/phase7-fx/native-fx-fixtures.json"
+    }
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "full_code_ranges": [
+    {
+      "name": "fx_wrapper",
+      "start": "0x4c8500",
+      "end_exclusive": "0x4c8560",
+      "sha256": "3607c58fda849401b30b3818178e5cf20b3e2f71ee29256367caa3b231a157e8",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_request",
+      "start": "0x4294e0",
+      "end_exclusive": "0x4296b0",
+      "sha256": "e3384e7e2bd516767d21b3c13a67f0fff2ae9c6bce199e605ba18d7af7c64e98",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_allegiance",
+      "start": "0x428f40",
+      "end_exclusive": "0x428fb0",
+      "sha256": "5d7f263294556a998f47af645c140c860c904d38af766a3340e236d68b4c2029",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "fx_constructor",
+      "start": "0x428570",
+      "end_exclusive": "0x428620",
+      "sha256": "24db646ccdcb2efa6ae4eadf0b9a97218d5f4513d1db41db4ce781b269de9595",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "shape_projection",
+      "start": "0x46e150",
+      "end_exclusive": "0x46e284",
+      "sha256": "40f840317f6ad9b21e33aa8156c99736d3191936b2cde535cb0fab376973fb30",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "target_hit_surface",
+      "start": "0x4eee60",
+      "end_exclusive": "0x4eef64",
+      "sha256": "fb0b666ed86805228f4ce5b56aa175cabf3c6c44057b1ead3c08bc3bbfb9d633",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "ability_payment",
+      "start": "0x4e2590",
+      "end_exclusive": "0x4e2630",
+      "sha256": "c7c6310fe29be3affdeb70b938c715b701ea15bb910b6c7eddafae72fc259439",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "faction_payment",
+      "start": "0x4cdd90",
+      "end_exclusive": "0x4cddfa",
+      "sha256": "4b38338ea75148042580a607d6790bd0497e6d86158d39044cab099adec04a9e",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "cost_copy",
+      "start": "0x4beb50",
+      "end_exclusive": "0x4bebec",
+      "sha256": "afebb6b4bb21e32d9da5422e23a00ebc3a9f5633e840790e18b1d49de6328145",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "stockpile_debit",
+      "start": "0x4e1690",
+      "end_exclusive": "0x4e16c5",
+      "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "action_constructors",
+      "start": "0x4c8610",
+      "end_exclusive": "0x4c8740",
+      "sha256": "e8fbbb5d9ea4ba10d09e61bcd5a77421953034541f7fcd967e873dd3ddde35b6",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "target_flags",
+      "start": "0x4c5840",
+      "end_exclusive": "0x4c5a90",
+      "sha256": "64d60d69b8da5299f9ebd3ad34cad05bd8334ed03255fcefa3012e7e64f2822e",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "recharge",
+      "start": "0x4c83e0",
+      "end_exclusive": "0x4c8500",
+      "sha256": "7321f84c9ec6716341a787e8e47a85a75eacbfd633aeaa9940a810f4c3303cf2",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "eligibility_availability",
+      "start": "0x4c8740",
+      "end_exclusive": "0x4c8cb0",
+      "sha256": "bf44ec6e54d8ae001b0c6e93c941284f826a606500f5bd5272b652b92669f9f3",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "projectile_launch",
+      "start": "0x4c8cb0",
+      "end_exclusive": "0x4c8f20",
+      "sha256": "c293651c1970317cbdf09626c73bae9bb18e83828337a0dadc7fa4baa56d0032",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "admission",
+      "start": "0x4c8f20",
+      "end_exclusive": "0x4c9550",
+      "sha256": "60a1c95d120aa62e3d3f1aa1c7cee82f0c9eb109473c6551f8d4d74b919993a8",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "execution_area",
+      "start": "0x4c9550",
+      "end_exclusive": "0x4c9eb0",
+      "sha256": "6380558788ad8d65e08d32db0faafc91b375260685380796383d36119b2bc107",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "local_spawn",
+      "start": "0x4be780",
+      "end_exclusive": "0x4be8e0",
+      "sha256": "8389d5f80e5c723f432974fee91e2ac9898699a80a26f2c84d12d6f7c0f17d60",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "utility",
+      "start": "0x4be6c0",
+      "end_exclusive": "0x4be720",
+      "sha256": "297c937e79b0cc375fadc6ba8eb0b8f71842d5ef674a5db7477631f84cf5834c",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "other_utility",
+      "start": "0x57e670",
+      "end_exclusive": "0x57e730",
+      "sha256": "8e3d1942e755bf9eedc8fda8d5a63d3e2ad00ad8824b0f4da0ffea6014190e40",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "performer_dispatch",
+      "start": "0x57e030",
+      "end_exclusive": "0x57e1c0",
+      "sha256": "f4bd5d353325235ad090d97a17c0df65b4cef52ca6aabfc34a2f8d08575eea52",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "performer_begin_start_event",
+      "start": "0x57ed20",
+      "end_exclusive": "0x57f4d0",
+      "sha256": "1a1c28cd512fe3bc8b2fae36492e5eb5aad699379c9932f0cecd609992ca55da",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "performer_ctor",
+      "start": "0x57f4d0",
+      "end_exclusive": "0x57f790",
+      "sha256": "4f2eb24d17cadce9b3d1d12081ce79bc755483645f182636b1574085bbdab082",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "projectile",
+      "start": "0x580660",
+      "end_exclusive": "0x580ff0",
+      "sha256": "323059e8d6fc5de93cd85be8570303e31214049e7ce7953cac84f3f5d7ade5e0",
+      "original_equals_accepted": true
+    }
+  ],
+  "files": {
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251",
+    "crates/aa-body/src/credit.rs": "da6e143de30ed0dafda92243e384aab8bacbbc65f228ab2054b8c6d007bde0bb",
+    "crates/aa-body/src/damage.rs": "7b9e06482bbe61bf7e0ffa9f0d7d8486a047f39f72736f298cf6721ac119d09b",
+    "crates/aa-body/src/dying.rs": "a261c178c3dccf3f92a48a61ca16d1b54d3eef4baef9d24fedd446081a84d2c2",
+    "crates/aa-body/src/experience.rs": "8ff882f5cb1997529db8d8b7d078619e3028c052b7711ab0d2b1c74f29023851",
+    "crates/aa-body/src/lib.rs": "27fd2b7689bcb0fb9bbe5dabb8a07816a975d16ed2b3b9236267eba408895690",
+    "crates/aa-body/src/modifier_load.rs": "99ca219e1c7ffcef433d3ae1629b9da690749ff7a40205cfe9a523841f2e7add",
+    "crates/aa-body/src/promotion.rs": "fa111dec95037b7bae570798ed820433db1a8c9e894c4c7ca7bf24d19089bdf5",
+    "crates/aa-body/src/properties.rs": "dd5722d1e4f9ca48dd01eda70ce30e55e18761265f82d2af299803e6fabe8360",
+    "crates/aa-body/src/property_effects.rs": "62371515364e8a16b8c64e3574732dad74a94f5f66bc693a4d23f0e1565eacd8",
+    "crates/aa-body/src/updates.rs": "5c794739638c9d1cb2e9c15c5ce4007af212261c2b2ffcc393ef5e5925abb091",
+    "crates/aa-combat/Cargo.toml": "f0a19a7d312b06e8b8f626ad3eb2dfa7b024779726c77cd965ae940a52a6c8e8",
+    "crates/aa-combat/src/ability.rs": "0d2d24ad39ef21b0be07f26326518e6f8e6abd593f1569d7dd83144607be7e52",
+    "crates/aa-combat/src/admission.rs": "bad49770747d104c4d7606d3686662a9350469c64bfb2410140395e6a49de51d",
+    "crates/aa-combat/src/constructors.rs": "8d126405b02065ffe08073ab82cbca2dae3a963361c4febe92989bbb1e8bc436",
+    "crates/aa-combat/src/execution.rs": "f6fa1a0cac1560ece427986f7ca5b3c54305de43b76184796bcca0824f423839",
+    "crates/aa-combat/src/fx.rs": "8a8b6c05a70d2d8ebb0307cb3dc2b1f8bbc53a879a963fa21e0be767df2e94a1",
+    "crates/aa-combat/src/launch.rs": "08b3093c8a786a469230b9f0e7756b146ef1a9c4df42e770ac916d77505aef94",
+    "crates/aa-combat/src/lib.rs": "98a7f4a57e121fe791455cfd42cd1f209a0cc634073f8307aab1ea9aafd23be5",
+    "crates/aa-combat/src/payment.rs": "44905b9441c4c55c6260344e89969b221a85e46c5dfc301aadf79779835d23c2",
+    "crates/aa-combat/src/performer.rs": "a3afbaaf759ef78225eab67baca4c59c533e84282e034d892e267bad27668847",
+    "crates/aa-combat/src/periodic.rs": "b64877f557cb9f582117aafc3340e7e230564d422a67445cd1a39f2538089eb4",
+    "crates/aa-combat/src/projectile.rs": "b682c95f544eb37dc7f16148e1c437127a7b521c510eccba80ec18317302e940",
+    "crates/aa-combat/src/surface.rs": "eb443aea28333ca7cad80a41344554098e15ebab27661f97414c77580679d192",
+    "crates/aa-combat/src/types.rs": "f492360a82fa37898aaa4c53dd7df259b45696fd1174f0fd1512949d47c9ae1f",
+    "crates/aa-combat/src/weights.rs": "1c915f08f6951c3c61cef2faa7a7cde4ae9405158282df7574ec338decc9447b",
+    "crates/aa-combat/tests/native_admission.rs": "06b217bc9a90d14260bc43e065869f0c986e4d70cfa2301b9791aabaf67b413b",
+    "crates/aa-combat/tests/native_constructors.rs": "a3d71dfc1bb1479d1d2af77f0aa7ea7638f23515dcc3af7f67634151895332fb",
+    "crates/aa-combat/tests/native_dispatch.rs": "88014bebd5089b6a32ff99addf3c330b1e49f41d798f1b97d4d4face6387556d",
+    "crates/aa-combat/tests/native_execution.rs": "55371f4f2cfc3ba868c6ac6710dbaa036db7968805cb8ecb1654c4ea55bcd4d1",
+    "crates/aa-combat/tests/native_fx.rs": "5c8b4845447877f204726b71000fe153e3a72dd4155e66ed0f08685b73365cd9",
+    "crates/aa-combat/tests/native_launch.rs": "f2f6f806d7df090a0d3104c0a09cfdceeac61b2a70c3ce1740fc0117a1e762b5",
+    "crates/aa-combat/tests/native_payment.rs": "d9177130e2b5e3dc62072730574693cd6713bda51e3138cbaac31fa7549a3d09",
+    "crates/aa-combat/tests/native_performer.rs": "54458bc7db17b3dc949d6a8ed30b7ac6ebaee63e1485c904f0afc81227c59f88",
+    "crates/aa-combat/tests/native_projectile.rs": "10ffcf138ecf4e5c81bc2cabfa7dcca1fb1e84f4769178f977240170ce0faaf8",
+    "crates/aa-combat/tests/native_surface.rs": "0da9695b27cc53e092b0689691525e1755c2df93fd73e321383c15d3104ef251",
+    "crates/aa-combat/tests/native_types.rs": "dc2ebb0ad7d55f3ee05d9097a998723d4d2860883f6f32423241661a3543d788",
+    "crates/aa-combat/tests/native_weapon.rs": "e0bfca6e9463366e9f3301e03620808e876f36ee3b986a3c36a04073991927ed",
+    "crates/aa-combat/tests/native_weights.rs": "0ddeaee8f47ef7bf2457f0a0e574d1f4a2273b05b4a7b4217b6df69ad1aa75a3",
+    "crates/aa-economy/src/binary.rs": "01fb5c714f44626acee9297d557ef1e4d1e976604cf5745f67acf6effa1eaa7f",
+    "crates/aa-economy/src/lib.rs": "74924b6fec26e553af4ba19d35a798918b279c8d41dbc34f35015a3bfd28284e",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-spatial/src/collision.rs": "ab66697d768be3c1bfd174e3524bda64922b11769d742b484c2cf752be61df7a",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase3-terrain/terrain_uv_oracle.py": "a89ed77aae034aed3edb69fee30727f6474a87050cc253213b0e36eb3cef06a3",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase6-combat/original_damage.py": "b7fa2d9c0fe62cbe126eb7f58905f1b107796330d499421590dd9695b60c63c7",
+    "research/phase6-weapon/native_weapon.py": "2204d9b4ab2729190273cc7d960a703f29897eec0f9ba6225ce0c5c0be0d4298",
+    "research/phase7-ability/final-clippy.log": "6964aabee2e8585d0a5d45439374dbc1855c5f25421c803d2835e9b24fa53e14",
+    "research/phase7-ability/final-tests.log": "55b046fcc10572f5580382b99d835162ff2ac23fed7c1ce90ad72302c7f08e80",
+    "research/phase7-ability/full-assembly.txt": "0d7c6f86aac3ccc0af8b1d6229ce9770b840765d108a05c87c662a62d9f44b43",
+    "research/phase7-ability/native-admission-fixtures.json": "f52dbb564a27100013e20023ee640aec345d34a4f85a0d9697f2d7e6eb909541",
+    "research/phase7-ability/native-dispatch-fixtures.json": "29c2f2b0605b049305850af29fff4726e0cdc12964a48232d0d41c13686a4427",
+    "research/phase7-ability/native-execution-fixtures.json": "16186307ca99e44369953241fecdbe5a278a49d155769b5cede68bb6b9e5b248",
+    "research/phase7-ability/native-launch-fixtures.json": "46f0824ad6f249849f60bf88d4d844de57a399e30693d9437375ae97c2301ca9",
+    "research/phase7-ability/native-projectile-fixtures.json": "a82182ae2c25f19ed80c556e5203d84bdb68ccbd9b900464deda875360f8fd30",
+    "research/phase7-ability/native_admission.py": "ca567bb3e933910667ac2212a3d059bc011921957bde05669ad4f8156603a501",
+    "research/phase7-ability/native_dispatch.py": "6fdd9128f8f412613d12b60bd740eb38baf7edd411b4ef37d0215f5ba3c10e40",
+    "research/phase7-ability/native_execution.py": "c23ad61dd896f0869d713205002b119206bc839796cf755b1daf86f477dcbd83",
+    "research/phase7-ability/native_launch.py": "03c310bc2f8b765e41ba70639b2cb27ffc5a0a7f82aadaa4644dbfcf549c51a1",
+    "research/phase7-ability/native_projectile.py": "2ab21a797ff423cfc274ab9cebb9820c454d416db6f68b8d2bd069e9f69d5c73",
+    "research/phase7-ability/README.txt": "8fc4b37d7ee3eb36d92ba19f910ddb252614cd8d034389e43f765f5366092d20",
+    "research/phase7-ability/record_evidence.py": "9a892234a026b3d6cdec34af86f042523b6f8fd9b31c13a112ce18a722b5b7f6",
+    "research/phase7-fx/native-fx-fixtures.json": "ab69d12efc774908fc1020084709f9cab379309a171473904309ee8a9d177a0c",
+    "research/phase7-fx/native_fx.py": "668c00e89d22548e79219a88d0f1e86937b2dc637640a9109bd5c2b6ea98ca68",
+    "research/phase7-payment/native-payment-fixtures.json": "f1ce3b7e2057f1004d479c1029232023065a8e282d19ceb7d07ff512e5fffa4e",
+    "research/phase7-payment/native_payment.py": "89f6a2a6042514a8b08c844948ce74c23abad62ce2cd349c34837fde3025264e",
+    "research/phase7-performer/native-constructor-fixtures.json": "90c0594791ad02980e217f6ff9717bbbfe9f8c40171fd7a35fe4ff0fc86d5b1f",
+    "research/phase7-performer/native-performer-fixtures.json": "f45fa142fa7e16ca4ab580a05acacafe90e2c9ad29255d97a6716e22da636ea1",
+    "research/phase7-performer/native-weight-fixtures.json": "320ed2628e0476ca628df122ef1f7c5823f8b7778276a987262877ffa8904584",
+    "research/phase7-performer/native_constructors.py": "c84f14a02cf47e96cb86cb3e1f92f5ba4036a60724b06fa65d7e0040d5228a91",
+    "research/phase7-performer/native_performer.py": "f54da3063a56938e73caa9063c4a4ce30cee62f5b73a1fcbb5323ff401ddad3c",
+    "research/phase7-performer/native_weights.py": "7485994bca8e447885bcf005b1d26ff222bb44978794940f1253d0ffe66b9cdf",
+    "research/phase7-surface/native-surface-fixtures.json": "83ea49ddb14565a562c9e13ac8c53d3dbe706e70b40f11b5d57b7c91cacf2c99",
+    "research/phase7-surface/native_surface.py": "192ae6e9f6f65088d394c85b351d0a959d468f065148167a07e94919dc421627"
+  },
+  "limits_reference": "research/phase7-ability/README.txt",
+  "commands": [
+    "cargo test -p aa-combat",
+    "cargo clippy -p aa-combat --all-targets -- -D warnings"
+  ],
+  "scope_note": "Full byte windows include adjacent unported code; only named Rust APIs and fixture observations are claimed. This ledger records tests already run; it does not rerun them. Dependency hashes bind the current tested snapshot and are not independent review claims."
+}

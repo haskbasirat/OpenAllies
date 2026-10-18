@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "tests_run": 7,
+  "command": "AA_ASSET_ROOT=<reconstruction> cargo test -p aa-assets -- --include-ignored",
+  "scope": [
+    "Typed malformed-input/path checks",
+    "Native height corner fixtures independently executed in source x86",
+    "Deterministic tutorial scene across1and4 Rayon threads",
+    "Read-only full recovered source audit80maps1847models225851placements"
+  ],
+  "source_sha256": {
+    "crates/aa-assets/Cargo.toml": "8505c62055cdcdf1bcdf7629971d6b4ecfdd7df586772645229fbe8d9c889afb",
+    "crates/aa-assets/src/lib.rs": "a16e59b0c492dc3a96334f73c745b694c172393c7787971a85ce3af5c71ac03e",
+    "crates/aa-assets/src/model.rs": "0760d1b86d627fca2993807d4e55be110c2c5744e500e075331a01cdf02d3eec",
+    "crates/aa-assets/src/store.rs": "5d34b150dbdb09f3da2ce05cc848f8f9baf4388998c01a33f2466f726284ec62",
+    "crates/aa-assets/src/terrain.rs": "38edf3bbeffb298903da0a56a0b0af270d6ff1e4df50b412c2f44052130edaff",
+    "crates/aa-assets/src/types.rs": "b5a194c863d3047580eb4d7a1abbcdfaeb35f0620011a1eaadbea4135326ed6d",
+    "crates/aa-assets/tests/assets.rs": "a9805b4a8fe382dd7a668003b7542a3850480610dc5ca674ef12f105b6deae28",
+    "crates/aa-assets/examples/audit.rs": "98ea81e1dc2020f43c82ca27a1607d2f5290a640f39c91807292166ae79bee38",
+    "crates/aa-assets/recovered-assets-audit.json": "af94e1fb0279686afbf0cb5394aa3915f39f3125b5e8b4b65438963942d13696"
+  },
+  "terrain_metadata_sha256": "1400ac0e014e382c275c8888befb9bc22455eac42dcc8551036c79727f5e0649",
+  "limits": [
+    "No actual native rendering comparison",
+    "No gameplay/animation/LOD/network/save parity claim",
+    "RoundedJSON heights andf64intermediates notbitexactx87",
+    "41developer/trailer maps contain unresolved active terrain metadata"
+  ],
+  "clippy": {
+    "passed": true,
+    "command": "cargo clippy -p aa-assets -p aa-resources --all-targets -- -D warnings"
+  },
+  "latest_verification": "cargo test -p aa-assets -p aa-resources -- --include-ignored:15passed,0failed",
+  "non_behavioral_revision": "Clippy-only cleanup: len%3 predicates use is_multiple_of(3); nativefixture float literals retain exact0x415b999a bits via f32::from_bits."
+}

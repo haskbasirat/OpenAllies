@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "status": "frozen component; no first-map or playable-battle claim",
+  "native_sources": {
+    "point_getter": "4E3E90 -> B3A8C4 (six words)",
+    "session_owner": "[B36550] KKC_Session, distinct timeline B36554",
+    "phase_getter": "76AC90 reads actual Session+F8",
+    "application_prefix": "54EF10 reads actual Session+E4 before World+48",
+    "constructor": "76F890 EBX zero before E4/F8 stores; Windows observed constructor store/return",
+    "state_transition": "77A750 actual retained Session; staging load precedes final change_to_state"
+  },
+  "production_contract": [
+    "PointShape private provenance owner, constructed only from sealed observed startup receipt",
+    "Current Catalog source owner, source fingerprint and sealed numeric target rechecked at construction and reached validate_catalog boundary",
+    "SessionPhase reads actual authoritative Session.state/field_f8 on every call; no scalar copy/default",
+    "Unbound application_state explicitly errors for phase-only implementations"
+  ],
+  "windows_observations": {
+    "separate_processes": 2,
+    "threads_armed_per_process": [
+      62,
+      62
+    ],
+    "word_indices": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        2,
+        3,
+        4,
+        5
+      ]
+    ],
+    "native_writes_before_cutoff": [
+      0,
+      0
+    ],
+    "post_cutoff_same_value_calibration_probes": [
+      4,
+      4
+    ],
+    "observed_point_words": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "copied_support_files_checked": 108,
+    "source_return_rows_compared_to_frozen_capture03": 1028,
+    "source_cv_means_fp_numeric_match_capture03": true,
+    "normal_cleanup_both_runs": true,
+    "remaining_AA_processes": 0,
+    "fp_sse_context_writes": 0
+  },
+  "native_execution": {
+    "original_v14_bytes_equal": true,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "phase_application_prefix_rows": 936,
+    "isolated_constructor_store_rows": 234,
+    "point_getter_rows": 3,
+    "constructor_seam": "isolated MOV with EBX=0 proved separately; not a complete constructor port",
+    "application_scope": "stops before World+48/node access; no dummy world values"
+  },
+  "validation": {
+    "runtime_tests": {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    "actual_session_native_replay_tests": {
+      "passed": 1,
+      "native_rows": 936
+    },
+    "existing_staging_tests": {
+      "passed": 1,
+      "failed": 0
+    },
+    "profile": "release --locked --offline -j4 --config profile.release.lto=false --config profile.release.codegen-units=16",
+    "all_owned_commands_reaped": true,
+    "earlier_pre_guard_compile_failure": "preserved and excluded from successful test claims",
+    "independent_hardware_receipt_review": "accepted bounded observation; no tracer/sealer rerun",
+    "independent_point_source_binding_review": "accepted separately from hardware review"
+  },
+  "limits": [
+    "Point is initial PE zero-fill seed carried through observed source completion and Session constructor; no perpetual native immutability claim",
+    "Neither Windows capture reaches a map, Object::Init or a battle",
+    "New services potentially mutating global must be proved before joining admitted ported load path",
+    "Session getters do not fabricate startup Session or prove its full constructor",
+    "Inherited debugger setup precedes main cleanup try; successful receipts require normal final cleanup",
+    "CreateProcess original two handles live until bounded Python process exit; duplicates explicitly closed",
+    "Focused tests only, not a full runtime/workspace or final EXE validation"
+  ],
+  "pins": {
+    "crates/aa-runtime/src/load_world_globals.rs": "f2e5fefce3272a55ebf8fa3450bd33cd8c69d1ebb2c2425dd93409535a77372d",
+    "crates/aa-runtime/tests/load_world_globals.rs": "2b75ecba42af3c296cd54063c259104027cbd45ec8a6bf55ed7fc5c5776043b1",
+    "crates/aa-netcode/src/lobby.rs": "094ef090459f18bf41cff3c62770467f3fbd479b82b271f5da37e43c9e1fb319",
+    "crates/aa-netcode/tests/session_owner_globals.rs": "1e50fc61f4121bd67802c3c8702697307dec335d7dfeb2819492b90a81534279",
+    "research/skirmish-20261016-load-world-globals/capture_startup_globals.py": "37f96eec15d9fb4ac687cfbc0df69dd15b80dc121181fb3bcd1ff81291ecd81f",
+    "research/skirmish-20261016-load-world-globals/native_globals_proof.py": "f5fd280f3c632721ac432032640dd1793780078d76b98bf07fe218970c3ee917",
+    "research/skirmish-20261016-load-world-globals/native-instructions.json": "b32abeae59fc48aa7f3c08602ac1399e1e3886875a046b7d437ee8d0b83f575f",
+    "research/skirmish-20261016-load-world-globals/seal_startup_reference.py": "fbd1ce0578ac66ae9690ff2b4f149b7ec66accd55acec154278732517336a710",
+    "research/skirmish-20261016-load-world-globals/point-startup-reference.json": "d50ac9ddb3d22d77c933068ebedb0d77fe700e24ec3511141f618ad3b7d15700",
+    "research/skirmish-20261016-load-world-globals/post-process-inventory.json": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f",
+    "research/skirmish-20261016-load-world-globals/runtime-tests.log": "8b7a7b46a68e44a627b9491b002bf296cf94ebaf03a8e5b4f7856a31558af319",
+    "research/skirmish-20261016-load-world-globals/netcode-tests.log": "992d0a57a01bf50b8d3adcda9a2eb0a071b0c629e1affece2db63b996a2e3f5b",
+    "research/skirmish-20261016-load-world-globals/README.txt": "a4182fe41726c9f7f6c288521066a74eca9a86be05a68525861f82367357ba5a",
+    "research/skirmish-20261016-load-world-globals/runtime-tests.before-validate-catalog-freeze.log": "6ab8334fad7ee1c173506d8bb4dccc88ba663a5e9559c784c93e0ffc31fc85ec",
+    "research/skirmish-20261016-load-world-globals/independent-hardware-review.json": "2c64e86c2554aa0561c2f7a5ed291d07c819b4a3eca05886841c68d2c2ba72d6",
+    "research/skirmish-20261016-load-world-globals/capture-01/capture.json": "85e3fcd580f29ce046ac432209ed84e0a64ff6ed3d138d91a01fa2ddbf6f16bc",
+    "research/skirmish-20261016-load-world-globals/capture-02/capture.json": "2f4091d42fafc58a10f6c13a8d22b644764b9d4bba9d21f7a4e425dc67cad1b6",
+    "research/skirmish-20261016-load-world-globals/capture-01/runtime-files.json": "25704eccdadc17c2d6eed967f03a1694e26094e231a3e1f8eca44553bcd9d494",
+    "research/skirmish-20261016-load-world-globals/capture-02/runtime-files.json": "25704eccdadc17c2d6eed967f03a1694e26094e231a3e1f8eca44553bcd9d494",
+    "research/skirmish-20261016-load-zone-entry/point-binding-review.json": "2daefdb4ef99447c5eaf0d323ed97d4fdcdee6bfc7ae911bc27022d32e0d0ced"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "native_cases": 666,
+  "rust_tests": 3,
+  "strict_scoped_clippy": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "ranges": {
+    "soft_descriptor": {
+      "va": "0x4ea0f0",
+      "length": 83,
+      "sha256": "eba784accd88a40bac2706515f869a604d794e0867f4b061268ec7150c6d0c5b"
+    },
+    "ordinary_soft_getter": {
+      "va": "0x4ea020",
+      "length": 7,
+      "sha256": "d51bfde5d36e384151086cc4987b77e83e30fa1c4f7f2fe359a0a7d8a25406f7"
+    },
+    "arrival_caller": {
+      "va": "0x52fe60",
+      "length": 149,
+      "sha256": "fa9a0e47edddec0c1a14fc92c281a0cdece1ef5958033b396c2489d2fe431d48"
+    },
+    "mover_source_receiver_fragment": {
+      "va": "0x577530",
+      "length": 77,
+      "sha256": "4e2048065e082eb0fb51c3a7c2bfff9307fbb33465af2ff225edeeb2b8342ebf"
+    }
+  },
+  "files": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-spatial/src/geometry.rs": "ebe90cc7ada24200bba0c6a5ba4863c834713a6e6f854085c6e5df64bb589932",
+    "crates/aa-spatial/src/lib.rs": "26d5799586a251bf8545368db6c28a066c777d0bf235d2e5ce45c90ba8c6e445",
+    "crates/aa-spatial/src/range.rs": "f805208f1ce6ac30347a2023a69ccb5a46d695a60aec9299280b983f4ecb78cd",
+    "crates/aa-spatial/src/soft_range.rs": "9d3044df9a760f6e4290c31d7665bda1433c66533315e611fd99a383387a4a18",
+    "crates/aa-spatial/tests/soft_range_native.rs": "4f7c071ff5956eed2c838b9b5e2eeb50b3f62f79105da05ec8582e21a0989907",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-range/native_range.py": "357c46d602726c1e1349aeaa07989470f5098d5b2478bd3f62c1c4c12e303fb2",
+    "research/phase7-soft-range/clippy.log": "157c5e00a7944ea5dade73ff94932d0b676aca8322913228edf7468b8583823c",
+    "research/phase7-soft-range/native-soft-range.json": "6e91a8f0e4abeca76c7712289c9423f09130d8d7d56af3a37f4f2681ae789863",
+    "research/phase7-soft-range/native_soft_range.py": "75d11e849836bc6a46bb79375d4c9ea21f73e62d9020cb998550ebc125812016",
+    "research/phase7-soft-range/README.txt": "57fa24a075fe8bb37790a3b8acbda53d76d8f0e834545e66874b951c3486b0d5",
+    "research/phase7-soft-range/tests.log": "c82d1f48763d9d5e4b0cfba5102ff7fbb4bcaa7397a4f0efc47d9ab85dddec17",
+    "research/phase7-soft-range/native_mover_range.py": "cea15ceabfcf20fc12000f925a6c3c02d066b5a992e459cf710f18a1c579d875",
+    "research/phase7-soft-range/native-mover-range.json": "2a84b2ae06f0d263dcf7737d02f279d952dfc5ccc41affb61df1920120ff45dc"
+  },
+  "scope": "README.txt",
+  "runtime_binding": "ActorReader in aa-runtime spatial_world binds ActorStore and ActorAccess to retained immutable source soft shapes. Arrival52FE60 uses target receiver; Mover5774A0 uses source receiver. These are distinct from virtual14 target wrappers.",
+  "mover_receiver_cases": 336,
+  "receiver_order_branch_witnesses": 6
+}

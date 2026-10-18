@@ -1,0 +1,67 @@
+{
+  "status": "owned-compile-contract-passed",
+  "scope": "Safe Rust single owned worker result transfer and same-Arena preWorld source profile facade; no new gameplay/native parity or simulation-thread authorization.",
+  "sources": [
+    {
+      "path": "crates/aa-mapworld/src/restore_components.rs",
+      "sha256": "4c7cc39b9c5ad90821f26e6e3bd63a3ed82ff25ea2251c7353024757a049fe5f",
+      "bytes": 26544
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_players.rs",
+      "sha256": "ac8f313d7a79a4e9d34649d77f8df8fd6cb41e7c3dcb9fa6499a4c97790af1dd",
+      "bytes": 31595
+    },
+    {
+      "path": "crates/aa-runtime/src/load_sai_players_tests.rs",
+      "sha256": "dae0976de02f49d792a4da8400299eb929d3e1efe0b4fd1dbb4306aeebdca5c3",
+      "bytes": 11614
+    },
+    {
+      "path": "crates/aa-runtime/tests/owned_load_send.rs",
+      "sha256": "b7c86a76eeb67920265907b2c088dd96720adbb85b08b6a1080fd55e3ff89e66",
+      "bytes": 512
+    }
+  ],
+  "owned_implementors": {
+    "RestoredMindState": [
+      "aa_runtime::catalog::RestoredMindParts (sole production impl; installed Mind,owned Mind/states/path/regiment/commands/PC)"
+    ],
+    "SessionPlayer": [
+      "aa_netcode::local_bootstrap::PlayerHandle (private Weak allocation/owner tokens and scalar identity)",
+      "unit ExplicitLiveAssociation"
+    ]
+  },
+  "compiler": {
+    "before": "6 E0277 errors exclusively missingSend on the2opaqueownedtraits",
+    "after": "Attempt/Staged/InactiveLoad/StartupOwner requireSend+static compile; aa-netcode actual PlayerHandle and all owned Mind fields typechecked",
+    "profile": "release locked offline production+ownedcontract compile passed23.03s",
+    "broader_test_typecheck": "Blocked by unrelated in-flight fixture, thenworld_objectives_tests.rs7 aa_mapworld::Encoding::Raw; no own errors. Not a passed broad test run."
+  },
+  "ownership": "ResourceWorker<T:Send+static> existingFnOnce/JoinHandle transfersT once. Actual OS parent/child capture/barrier/join code unchanged. No clonedActorStore/Kingdom/SAI and no unsafeSend/Sync implementation added or found in current crates. Send is not Sync and does not authorize concurrent or arbitrary-thread simulation.",
+  "profile_facade": "ProfileContext(Catalog,Bank,&mut SAMEArena) delegatesbind_profiles; count/find returns same owned profiles. No ActorStore/newmanager/registry/slot/controller. ExistingASCII/nonNUL validateddomain and missingNone retained. Added real-source25profile pointer/name/id/count regression; typechecked but not executed bythis followup.",
+  "native": "No arithmetic, RNG, serialization, native branch or data parser changed; existing SAI native proofs remain behavioral authority. Prior frozen source hashes are superseded only by this documented approved type/facade followup.",
+  "logs": [
+    {
+      "path": "research/development10/owned-load-handoff/send-before.log",
+      "sha256": "d4ff99793fb1884a2f9193eb684606367c9919d5dbda2b5f0e149f7789d4da88"
+    },
+    {
+      "path": "research/development10/owned-load-handoff/send-after.log",
+      "sha256": "c9bd75b5b3d378731a7c0a7e9901de30c9b5cf533b26c862f7ef94a399f5be82"
+    },
+    {
+      "path": "research/development10/owned-load-handoff/profile-check.log",
+      "sha256": "a737fd2d5fc32b3d297cc61b622820577bcd87c862c5c29afd8856f89a65fa73"
+    },
+    {
+      "path": "research/development10/owned-load-handoff/all-runtime-test-check.log",
+      "sha256": "1588317620a6d32ffab61e5d966cdef881f73f29859807cecce3c4b459a99e29"
+    },
+    {
+      "path": "research/development10/owned-load-handoff/all-runtime-test-check-v2.log",
+      "sha256": "9f965aa32e53ad65e83a2b9a51164b529a585a0c0ef708f514e899eb8ccc4f89"
+    }
+  ],
+  "preservation": "No originalassets/saves/profiles/releases or workspace manifests/lock modified."
+}

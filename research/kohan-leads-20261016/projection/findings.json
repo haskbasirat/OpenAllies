@@ -1,0 +1,66 @@
+{
+  "schema": "aa-native-projection-producer-v1",
+  "date": "2026-10-16",
+  "scope": "Unchanged original-AA892B7A..892D5E exclusive over stable read-only frustum, explicitPC and required helper54/storage services; not completeSetCameraData",
+  "production_frozen": true,
+  "native_cases": 1536,
+  "inputs": 256,
+  "base_numeric_branch_rows": 960,
+  "dependency_stop_rows": 552,
+  "cache_mutation_rows": 24,
+  "outcomes": {
+    "ok": 984,
+    "missing": 552
+  },
+  "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+  ],
+  "images": [
+    "original",
+    "v14"
+  ],
+  "instruction_byte_pins": 115,
+  "original_v14_output_pairs_equal": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "finite_domain_only": true,
+  "arithmetic_uses_host_floats": false,
+  "shared_lib_change": "One pub mod camera_projection append after rereading; before-file backup retained",
+  "api": {
+    "Frustum": "Rawf32 left/right/top/bottom/near/far plusorthographicbool; no defaults",
+    "Precision": "Explicit Single24/Double53/Extended64",
+    "World": "Required renderer_flag_54,store_word,load_word",
+    "build": "Immediate orderedstores and typedpartialfailure; no output transaction"
+  },
+  "rust_tests_passed": 2,
+  "portable_numeric_refusal_cases": 2,
+  "scoped_clippy": "Completedsuccessfully;3existingaa-runtimelibwarningsoutsidenewprojectionmodule",
+  "client_or_renderer_changed": false,
+  "default_fov_or_zoom_changed": false,
+  "kohan_patch_implementation_integrated": false,
+  "vendor_sdk_implementation_used": false,
+  "not_proven": [
+    "Nonfinite/overflow/divide-zero native arithmetic and exception flags",
+    "Reentrant frustum input mutation",
+    "Concrete helper+54 and D3D device calls",
+    "View/basis/viewport/culling/picking portions and fullSetCameraData",
+    "CameraFOV/current loaded defaults/aspect producer",
+    "Visual/DPI/fullbattle parity or runtime client integration"
+  ],
+  "files": {
+    "crates/aa-runtime/src/camera_projection.rs": "80e4f6c47ff379c804ae9a81ec03b956b6bcda27ad8c16f345bbf97086c9e4a6",
+    "crates/aa-runtime/tests/camera_projection_native.rs": "4fb9d39e43a980ec81005e5e1a5797399c9c2b13665ae93cf37449c06147949f",
+    "crates/aa-runtime/src/lib.rs": "e48cbd865321a0848f48b5dd4a3534352c1856fa1464cc3f192a61a9c34a2cee",
+    "research/kohan-leads-20261016/projection/README.md": "87c14c751b9424b8769ac00b88364648cd3f3c421c23ac055442a3763a067b1f",
+    "research/kohan-leads-20261016/projection/native_projection.py": "6beec1a95dbfa0d2b53c7638c3c7961864d7b3d050ae79b0f6433cc33f655536",
+    "research/kohan-leads-20261016/projection/native-projection.json": "7aee72042b761b330099b1e696e2e646652aaa10485bd9e18a25f02e1c2bad84",
+    "research/kohan-leads-20261016/projection/aa-projection-instructions.txt": "b78dc231fd61633bf6858b34750e80cb685083152537c088f74639328360bd43",
+    "research/kohan-leads-20261016/projection/native-generation-final.log": "1ec5915a62cf4defa9d59b6ad2484162251aa41ba361b779daf099d78fa2dcd4",
+    "research/kohan-leads-20261016/projection/tests.log": "95d1feca7766a2a5c9983d89a2bcc246480a20f5677c569cd3612659c36af1bc",
+    "research/kohan-leads-20261016/projection/tests-final.log": "6affefa28846408e251c0a3d43affad26695602b1d94d50844041f486a6db308",
+    "research/kohan-leads-20261016/projection/clippy.log": "a5533e26ab30ae37cdc45b294e11ace74f788fb2c55f092c88cf39050fda56e8",
+    "research/kohan-leads-20261016/projection/lib.rs.before": "aa6330ab294b993d27f55dde47fa99a1cff540006aaa9e6f4dec60a615894018"
+  }
+}

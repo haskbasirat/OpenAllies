@@ -1,0 +1,140 @@
+LOBBY JOIN PATH OF AA.EXE (private join messages, session snapshot, PlayerJoin decree)
+==================================================================================
+
+Port: crates/aa-netcode/src/lobby.rs. Oracle: research/phase8-net/native_lobby.py ->
+native-lobby.json, replayed by crates/aa-netcode/tests/lobby.rs. Every case runs on the
+original image and on v14 (.text/.rdata overlaid); results and every executed byte window
+are identical in v14 (native-lobby.json v14_result_differences = [], executed_windows all
+v14_identical). The v14 runtime does not patch any of these functions.
+
+1. PRIVATE HISTORY (AdminConn+0xAC) ------------------------------------------------------
+Host join completion 0x753580 (this = joining AdminConn), called at the end of the
+PlayerJoin decree 0x758FD0 on the host only:
+  +0x88 = 1; 0x752300 ResetBackupSendersToClient; 0x752490(AdminNode+0x218)
+  ResetPermanentSendersToClient (private history -> [0,0), private sender bound at 0);
+  static stream 0xB408F4 (created once with 0x400 bytes, 0x767110) zero-filled, position
+  byte 0 bit 3; 0x74C270 session message; 0x74D0A0 finalize; append (0x74EC30 + 0x766FC0);
+  zero-fill again; 0x74C130 admin-state message; finalize; append.
+  Internet games ([0xB3654C]+0xBC): GameSpy CD-key challenge 0x789620 / 0x752990 /
+  0x74E730 -> not ported, Error::Unsupported after both messages are appended.
+Client dispatcher 0x7531A0 (from AdminConn::Update): while begin < end: reader on the packet
+at byte 0 bit 3; kind = 0x411FA0(2) (1 bit); 0 -> 0x74DF50, 1 -> 0x77AAC0 (this = session);
+retire 0x750880(begin + 1). A null packet slot would crash natively (typed error here).
+
+2. ADMIN STATE (kind 0) ---------------------------------------------------------------------
+Writer 0x74C130 (this = AdminConn): 1 bit 0; address of the conn (vfunc 0 0x74B4E0 =
+[conn+0x414]+0x9C, 0x76A7C0: ip, port as two 32-bit words, 0/0 for null); AdminNode +0x200,
++0x204; 0x765F10(AdminNode+0x208) = SessionPlayer id or 0; +0x28C admin time (binary32 bits);
++0x218 next decree packet; synchronizer A 0x77CBE0 (= window end - 1) and 0x573580 (hash).
+Reader 0x74DF50 writes AdminNode +0x29C (0x76A810: interned address or null), +0x248, +0x24C,
++0x250 = 0x76B8F0(id, film 0) (first player with that id that is not a film player, else
+null), +0x28C, +0x20C; 0x77D900(index, hash) on synchronizer A (enabled, file dump, hash,
+window [index+1, index+1)); client clock (AdminNode+0x16C, vtable 0xA91AB4, ctor 0x75FAA0)
+virtual +0xC 0x75FAC0(f32(time - 0.0625), 0.0625): period, offset = f32(now - start), all 32
+samples = offset; +0x158 = &+0x16C; then 0x75FB40(fstp f32(fild(+0x218 - +0x20C - 1) *
+0.0625 + time)): offset = max(sample0, -9999999.0) (x87 compares, NaN keeps), sample1 =
+sample0, sample0 = f32(now - target), offset = sample0 when offset <= sample0 or unordered.
+The target statement is precision dependent (fmul + fadd); PC24, PC53 and PC64 (when the f64
+sum is exact) are ported and oracled.
+Note: the admin-state message's +0x200/+0x204/+0x208 are copied to the client's
++0x248/+0x24C/+0x250 = aa_orders ClientState resume_byte / resume_bit / field_250; +0x250 is
+a SessionPlayer pointer (the decree stream's current SetPlayer player).
+
+3. SESSION SNAPSHOT (kind 1) ----------------------------------------------------------------
+Writer 0x74C270: 1 bit 1, log, KKC_Session::SerializeState(O) 0x76D0B0:
+  launch settings +0x54 and +0x88 (0x76B800), [session+0xC4]+0x20 (id of the most recently
+  created player = the joining player on the host; null crashes), player records (1 bit 1
+  each, then: +0xC ai, address of the player's AdminPeer (vfunc 0: AdminNode -> +0x29C, conn ->
+  NetConn+0x9C), +0xD implicit, +0x20 id, +0x24 kingdom, +0x8 name, +0x18 status, +0x2D,
+  +0x14, +0x10, +0x1C, peer +0x74 player id (0x74EBC0), peer +0x70, +0x34, +0x30, peer +0x3C
+  (2 bits, 0x74B8D0), +0x38, +0x40, +0x3C), terminator bit 0, +0xE4 state (3 bits), +0xE8,
+  [session+0x14]+0x28 info text (0x77DCF0), +0x154, +0xFC, +0x104, +0x108 text, +0x10C,
+  +0x128, +0xCC options (0x77B5A0: name, max players +0xD4, password +0xD0, +0xD8,
+  allow observers +0xDC), +0x158, +0x15C, +0x160 text, +0x164, [+0x170] property table
+  (0x79C720: flag, signed count, entries text + word for a positive count).
+Reader 0x77AAC0 (in this order): +0x54 = 1; 0x7840B0(1, 1, 0) on [+0x80] (state kind 0xC,
+  +0x10 = 1, +0x15 = 1, +0x16 = 0, +0x14 = 0); ChangeToState 0x77A750(1, 0) (seam / trait);
+  launch settings 0x76EBD0 x2; joining id; records: presence, ai, address, implicit, id;
+  id == joining -> AdminNode+0x29C = address (0x74B430) and the player is bound to the node
+  itself; otherwise 0x74BC50: address -> 0x764970 connection (created on first use; action
+  ConnectToPeer), null -> AdminNode+0x2C4 (host conn), or null on the host; new SessionPlayer
+  0x7661D0(conn, id, ai, implicit, 0) (status 2 for AI or the host's conn, else 0); non-AI:
+  0x74AFD0 (peer +8 = +0x2C = player) and 0x74DC10 (peer list +0x2AC, +0x2B4 = 1); appended
+  to the list +0xBC/+0xC0 (pushed to the front only while the tail is null); +0xC8 = 1;
+  record fields as written; the peer's +0x78, +0x74, +0x7C.., +0x70, +0x3C are overwritten
+  (AI records overwrite the host conn's identity on clients). After the list: +0xC9 = 1,
+  +0xC8 = 1, +0xE0 += 1, the state (0x411FA0(6)) is read and DISCARDED (the session stays in
+  the state ChangeToState(1) set), +0xE8, info text -> 0x781DD0 reset and, for a non-empty
+  text, 0x781250 (session info object; actions ResetSessionInfo / ApplySessionInfo, not
+  ported), +0x154, +0xFC, +0x104, +0x108, +0x10C; launch +0xC == 5 ->
+  SendUpdateRMCMapStatus 0x7770B0 (+0x10C set) or SendUpdateMapStatus 0x770B70 (+0x108,
+  +0x104, 1), a false result skips the next checks; launch mode 2 -> 0x770B70(+0x5C file,
+  +0xFC, 0); mode 0 -> 0x7770B0(+0x5C, +0xFC, 0); +0x128; options 0x77B9D0; +0xCA = 1;
+  +0x158, +0x15C, +0x160, +0x164; property table 0x79CC00 (old entries freed, count stored,
+  entries read only for a positive count).
+The reader does not clear the existing player list: a reading session with players keeps
+them and gets the snapshot's players appended (oracle case client_prior_state).
+
+Launch settings (+0x54 / +0x88, ctor 0x76E540): +0 (3 bits / 0x411FA0(6)), +4 mode (same),
++8 file, [+0x14] game settings 0x59EB30 / 0x5A1E90, [+0x18] 0x512DA0 / 0x513230 (map
+settings + byte), [+0x1C] 0x512DF0 / 0x513290 (+ scenario: writer sends the object's +0x38
+name or "", reader 0x59F570 lookup), [+0x20] 0x512E30 / 0x513D20 (+ random-map
+configuration: +8 name or "", reader 0x41EEC0 which returns null for an empty C string
+without searching; + 0x505DE0 / 0x506560 settings), [+0x24], [+0x28] 0x512CB0 / 0x513130,
++0xC (3 bits / 0x411FA0(7)), [+0x2C] launch state 0x784360 / 0x7847B0.
+Map settings 0x512CB0: world conditions +0x20 (0x511BB0 / 0x512070) first, then the map
+header +4 (0x50E200 / 0x510D90), +0x3C, +0x40, +0x44 (0xB3AA24), +0x48 (0xB3AA34), +0x4C.
+Definition references: writer sends def+0xC or the registry count for null; reader
+0x411FA0(count + 1) (a value above the count is a native assertion) -> array entry for an
+index below the count (object definitions additionally need virtual +0x38, 0x76A960),
+otherwise null. World rules: the reader reuses one temporary {null, 1, 0}: a kind that does
+not serialize a value keeps the previous entry's value; a bool replaces only the low byte
+(oracle case launch_rich_default_mode, rule kind 7). Game settings: the extended block
+(+0x3C, +0x40, +0x38, +0x18, +0x1C, entries +0x44) exists only for version (+0xC) > 1; a
+reader with version <= 1 keeps the previous extended fields.
+
+4. PLAYERJOIN DECREE 0x75DA80 -> 0x758FD0 (this = AdminNode) --------------------------------
+  assertion g_session->IsMultiplayer() once (DAT_00B40930; typed error);
+  0x76CCA0 full = humans (not AI, not film) >= max players, or (multiplayer and launch +0xC
+  != 5 and observers not allowed and 0x76C850 free kingdoms <= 0); free kingdoms = active map
+  kingdom records without +0x10, with +0x28, whose 0x77E2B0 info ([session+0x14]) has +5
+  set (null info crashes) and no session player with that kingdom name (wcscmp).
+  Full: log 0xB9E; non-host returns; host: log 0xBA1, target conn (below), +0x420 = 0, conn
+  with a player -> log 0xBA8, else SetDisconnecting inline (+0x89 = 1, +0x90 = NetNode+0x58,
+  +0x8C = 0 game_full, log 0x102F).
+  Not full: info address == AdminNode+0x29C (interned pointer identity; null == null) ->
+  log 0xBB2 (ourselves); target conn: address -> 0x764970 (+0xA0); null -> host conn on a
+  client, NULL on the host (crash -> typed error); +0x420 = 0; conn with a player -> log
+  0xBBB; else id = ++session+0xE8 (wrapping), CreatePlayer 0x773710(id, conn, 0, 0) (list
+  push 0x45F240, +0xC4, +0xC8, log, 0x770280 rated flag), 0x856400 copy + 0x766560 SetName
+  (duplicate names: Format(0x4B9F40("networking_duplicate_name_formate|sd"), name, n) for
+  n = 1, 2, ... while 0x76CE10 finds another player with that name (wcscmp)), UI message
+  0x40BC50(&0xB399B0, 0x1E, Format(0x4B9F40("networking_player_joined|s"), name)), conn +8
+  = +0x2C = player, +0x74..+0x84 = info player id, +0x70 = id, 0x45F240 on AdminNode+0x2AC,
+  +0x2B4 = 1, AutoAssignKingdomToPlayer 0x778D10 (not ported; trait), host only: request
+  TGC_PostPlayerJoinOrderRequest 0x74CA80 (descriptor 307, 0x765F10 player id) and 0x753580.
+  0x770280: with [0xB3654C] and session+0x170: internet and mode 0/2 -> rated = table entry
+  matching the current file (0x76B490) and |crc| (0x79CB60, lower-case compare 0x79C9F0) and
+  humans == players and players > 1; mode 0/1/2/5 and launch +0 in {1, 2}: the active map's
+  "RATED" rule (0x511A60, _wcsicmp) whose low byte differs from rated -> +0xC9 = 1 and
+  0x511AF0 (same lookup by the rule's own name; only a bool rule changes its low byte; WC
+  +0x18 += 1).
+
+5. CAPS -----------------------------------------------------------------------------------
+  0xB408F4 static message stream, 0x400 bytes initial (0x7535CD) -> WireWriter (growable).
+  Player list / vectors / property table: native linked lists and doubling vectors, no cap;
+  Rust Vec bounded on input only by the remaining packet bits (and a caller budget for
+  zero-width definition lists).
+  Session max players (+0xD4) and the 3/4/2-bit wire fields are protocol rules, kept.
+  Client clock 32 samples (0x75FAA0): fixed native layout, only samples 0/1 are used; kept.
+
+6. NOT PORTED / UNTESTED ---------------------------------------------------------------------
+  (round 3: 0x77A750 ChangeToState and 0x778D10 AutoAssignKingdomToPlayer are ported in
+  src/staging.rs, native-launch.json; the kingdom setters 0x777F00 / 0x777CD0 / 0x777610 and
+  KKC_LaunchSettings::operator= 0x779F00 stay traits) 0x770B70 / 0x7770B0 map status sends,
+  0x781DD0 / 0x781250 session info object,
+  0x77E2B0 kingdom info, 0x59F570 / 0x41EEC0 lookups, 0x4B9F40 localization and the
+  CString::Format of the two UI keys: traits / actions with the native semantics above.
+  Internet join challenge (GameSpy): Unsupported. Real NetConn creation 0x7647A0 / 0x763990
+  (connections other than the host connection are synthetic memory in the oracle).
+  No end-to-end network claim.

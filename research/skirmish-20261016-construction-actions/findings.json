@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "New saved Construction565140/565090 adapter reuses existing native pure port",
+  "api": "crate::saved_construction_actions::contribute(&mut SavedActions, actor)",
+  "native_comparisons": 3840,
+  "settings_failure_cases": 6,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "pure_tests_passed": 1,
+  "actual_source_adapter_tests_passed": 1,
+  "actual_source_actor": "ammo_bunker",
+  "actual_source_facts": {
+    "can_raze": false,
+    "structure_parent": null,
+    "properties_flags": 0,
+    "allow_sell_under_siege": false,
+    "upgrade_count": 0,
+    "can_sell": true
+  },
+  "actual_source_map": "DeveloperMaps/(3v3)Firefight.RMP",
+  "restore_mode": "StopOnError (successful full record restoration; not full battle validation)",
+  "source_guards": [
+    "canonical untranslated ActorData identity",
+    "current no-Upgrade source census",
+    "AllowSellUnderSiege WorldRule absent"
+  ],
+  "boundaries": [
+    "present Wall+10 unavailable",
+    "present Settlement+14 unavailable",
+    "585F00 upgrade readiness unavailable",
+    "later live SVar mutation not bound",
+    "constructor and Structure owner identity mismatches rejected"
+  ],
+  "changed_files": [
+    "crates/aa-runtime/src/saved_construction_actions.rs",
+    "crates/aa-runtime/src/lib.rs export",
+    "new scoped evidence folder"
+  ],
+  "preserved": [
+    "old pure module",
+    "old source getter",
+    "old fixture and oracle",
+    "saved_organization_actions.rs",
+    "Research contributor",
+    "original game/assets/saves/profiles",
+    "Development08",
+    "manifests and dependencies"
+  ],
+  "sha256": {
+    "research/skirmish-20261016-construction-actions/native-run.log": "1e8f1fb5411411365203cec266118ea2aa9859e6ecb3ea21fd1066a50e535c34",
+    "research/phase8-restoration/native-construction-actions.json": "c1b99b64a0e9984477967e03d9626e182eb0abb03926f1833fc874af89cbf9c6",
+    "research/phase8-restoration/native_construction_actions.py": "4fafbe7dbcbfa821303f853f7dc2f0bf9cc326120a28ff3833aa3083070e3d8c",
+    "crates/aa-rules/src/construction.rs": "eaa706df9a971a4f351041d69f43664275d2eb6be2dc34e5da21a5bf045a9fed",
+    "crates/aa-runtime/src/saved_construction_actions.rs": "e21b4c9d5a6766b8ff805a6beba1c24f0320b13dbb997828022e7bb080096b1a",
+    "research/skirmish-20261016-construction-actions/native_bridge_validation.py": "ac6dd65ebdc59604cdc82eb2f90ceee7fbbe08387de69e9902abb6e0caa02b3c",
+    "research/skirmish-20261016-construction-actions/native-bridge-validation.json": "53f88543ee68f18da88eea410101bbd26f4757a54b1a45196fa3f4e7b796bfbe",
+    "crates/aa-actors/tests/native_construction_actions.rs": "be05d87636f33b19784152501cfbcc36a3f34f51562ca89de03233b067440d85",
+    "research/skirmish-20261016-construction-actions/pure-tests.log": "68ed14c986f9da15ac0246e8b76516586c114d27b21a295fa81f1e9e5489083d",
+    "crates/aa-actors/src/construction_actions.rs": "ebcd6dcdb81c3eb7e4003376a98471d1519f99be1009ae1cac7b258895856af0",
+    "backups/source-before-saved-construction-actions-20261016.zip": "0ca2067dd944e3f90ad300b89d2837cb82efa2cd17e52384927f4efa919d5544",
+    "research/skirmish-20261016-construction-actions/adapter-tests.log": "6571e22a0ffd4c199f02e6dfcd331ec6ac01e80aa1f8c44f9cd10c0eb7ab6f34",
+    "crates/aa-runtime/src/settings.rs": "70214b629fe928c5a3289a103c3bcb7caac6aa6165680bd615ded02cd4f8d2a6"
+  }
+}

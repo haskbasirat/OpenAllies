@@ -1,0 +1,12 @@
+[Text language=Default]
+{
+	ids = map_strings_table
+	name = "second_cutscene008"
+
+	camera_1 = "Camera 1"
+	kingdom_1 = "Side 1"
+	camera_0 = "Camera 0"
+	kingdom_0 = "Side 0"
+	map_name = "second_cutscene008"
+	map_description = "Map Description"
+}

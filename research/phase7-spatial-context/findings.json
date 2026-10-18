@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Actual554350 constructor source-proven to share5531F0 callee, ordinary immutable actor domain;5522B0 facing setter",
+  "native_constructor_cases": 384,
+  "native_facing_setter_cases": 384,
+  "native_caller_arithmetic_cases": 672,
+  "rust_tests_passed": 3,
+  "validation": {
+    "passed": true,
+    "runs": [
+      {
+        "command": "cargo test -p aa-spatial actor_context::tests -- --nocapture",
+        "exit_code": 0,
+        "seconds": 14.280999999988126,
+        "log": "rust-tests.log",
+        "sha256": "b64205e66d5d07c3fa6f5ab56b20de5e3dcf7f977cd8b381408ab081b93df98c"
+      },
+      {
+        "command": "cargo clippy -p aa-spatial --all-targets --no-deps -- -D warnings",
+        "exit_code": 0,
+        "seconds": 9.234000000025844,
+        "log": "clippy.log",
+        "sha256": "1402173c667ec2a915a156a0f8f1e74042562fac082f244585340dc17f3cdf63"
+      }
+    ]
+  },
+  "source_sha256": {
+    "crates/aa-spatial/src/actor_context.rs": "5590b2ff8d8da07769b7fdb01eca5562a3eb7e9f9e47fb46bfc389f7d389aaf2",
+    "crates/aa-spatial/src/actor_context_tests.rs": "06ea780a85425c154945155aa01c53066e7cf46989bac48b04360c93a23f1def",
+    "research/phase7-spatial-context/README.txt": "e1cd8bb30c6539b9c9450496f5c70ed3f7d166d724366774774ad541fbabe36d",
+    "research/phase7-spatial-context/original_context.py": "98bdf316d8c6c180543db506cb294d7af2ff5a212feda46d5ed3bbde136943a7",
+    "research/phase7-spatial-context/native-context.json": "8f5f0c10ecde3881dd044299c7f3d2b7bec5a07c5d6e78ca106a6c15ada75b0b",
+    "research/phase7-spatial-context/validation-record.json": "bc73c5ab741649f3507942a937d714a4b2468d5128ad6228a3bf31bbe6d7d418",
+    "research/phase7-spatial-context/rust-tests.log": "b64205e66d5d07c3fa6f5ab56b20de5e3dcf7f977cd8b381408ab081b93df98c",
+    "research/phase7-spatial-context/clippy.log": "1402173c667ec2a915a156a0f8f1e74042562fac082f244585340dc17f3cdf63",
+    "research/phase7-spatial-context/record_evidence.py": "dbc54ab54391783cbc73d8f3ca54bec919a4677f1fd7ee3da4ed2e144f5b87f5"
+  },
+  "dependency_sha256": {
+    "crates/aa-spatial/src/query.rs": "d917c606ef350677af5c4e5c04279bb3aa9ade63e52cdc49d9b8512b7c59bab3",
+    "crates/aa-spatial/src/index.rs": "031104bf20fa898e8301edfdb5e3277b0de92bffa39ba21b1936d61f49aa6d97",
+    "crates/aa-spatial/src/index_world.rs": "25831b9b0afe32795bfa136fc043343df868c6c7b7d2376ac22d69ec1854f439",
+    "crates/aa-spatial/src/collision.rs": "ab66697d768be3c1bfd174e3524bda64922b11769d742b484c2cf752be61df7a",
+    "crates/aa-spatial/src/geometry.rs": "ebe90cc7ada24200bba0c6a5ba4863c834713a6e6f854085c6e5df64bb589932",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase7-spatial/original_query.py": "84540a759b9e3def69aada0efa64641b717138fc2216689e575fa5c6bd4e28b1",
+    "research/phase7-spatial/original_index.py": "f268fc14e00552f509ea00434e3126d5cddb6f88414997743ac932d44e88ccb4",
+    "research/phase7-spatial/native-query.json": "4f97f88249f535cea06a2f2a041f54a5fd686710f7af49cd3767fcb39351bd81",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5"
+  },
+  "limits": [
+    "Ordinary immutable actor getters only; derived getter mutation and partially constructed descriptor observation are separate.",
+    "Native default globals are varied and fully overwritten; their startup lifecycle is not implemented by this entry.",
+    "Required definition and query services have no successful defaults; missing actors fail explicitly.",
+    "Caller context and sweep kernels do not claim complete movement-world or multiplayer initialization."
+  ],
+  "independent_review": "Pending separate peer approval."
+}

@@ -1,0 +1,166 @@
+{
+  "status": "author-frozen-validated",
+  "scope": "Native4E93C0 current Kingdom/player/glyph/palette formatter; not completed actual film/launch/WorldReady or playable battle.",
+  "sources": [
+    {
+      "path": "crates/aa-runtime/src/load_kingdom_glyph.rs",
+      "sha256": "88f964976f9d46bd217a900bb0991b37419fee03b0c6444a6674abb5aa34e7ce",
+      "bytes": 12320
+    },
+    {
+      "path": "crates/aa-runtime/src/load_kingdom_glyph_tests.rs",
+      "sha256": "5571eed20d51a32825bdaa43cffbeed326082b9f883ed601d98b1b9a6e157331",
+      "bytes": 9322
+    },
+    {
+      "path": "crates/aa-runtime/src/player_glyph.rs",
+      "sha256": "618b8838b4993e597da763bedb9d3e13dc58444a44a4e634610b63557e47a580",
+      "bytes": 14161
+    }
+  ],
+  "shared_export": "Only appended pub mod load_kingdom_glyph; no exclusive lib.rs freeze.",
+  "native": {
+    "selection_rows": 84,
+    "format_rows": 1608,
+    "color_rows": 18,
+    "selection_color_executed_pins": 322,
+    "crt_executed_pins": 1481,
+    "character_rows": 60,
+    "character_executed_pins": 232,
+    "machines": "Four reused source/CRT image instances in main producer; two image instances in character producer. Rows are function invocations, not fresh-machine counts. Both executables/all3PC.",
+    "seams": "4B2E60 variable lookup,7666C0 player child,48D500 Glyph lookup; CString storage transport; actualCRT96C7EC executes separately with9738A9 C-locale thread-data leaf. Replaced entries are excluded from executed pins."
+  },
+  "actual_palette": {
+    "count": 19,
+    "native_rows": 114,
+    "source_precision": "Double53",
+    "scope": "Actual registered source values/variable owner guards + originalCRT differential, not a completed liveActorStore film call."
+  },
+  "rust_summary": [
+    "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 8.51s"
+  ],
+  "limits": [
+    "Nonfinite RGB and%cFFFF WEOF failure explicitly unsupported",
+    "Positive online-account glyph remains required unless actual peer/manager services exist",
+    "Current Formatter/variables must persist at actual application lifetime",
+    "No completed actual full-map film call or visual/rendering parity claim"
+  ],
+  "artifacts": [
+    {
+      "path": "research/development10/kingdom-glyph/actual-palette-immutable.log",
+      "sha256": "898a25f42f877dfc723af101b985eb1028df4694849acdc259d793c4812b57c7",
+      "bytes": 122
+    },
+    {
+      "path": "research/development10/kingdom-glyph/actual-palette-input.json",
+      "sha256": "979f795a9309aa48f4c5ade1e2d14af5e37336256812c1009518e068aa22abe9",
+      "bytes": 420402
+    },
+    {
+      "path": "research/development10/kingdom-glyph/actual-palette-native.log",
+      "sha256": "898a25f42f877dfc723af101b985eb1028df4694849acdc259d793c4812b57c7",
+      "bytes": 122
+    },
+    {
+      "path": "research/development10/kingdom-glyph/check-01.log",
+      "sha256": "6fe90adfc36f24c31af43f0e893ad9acb46120edecbac61af488e96bf67b846c",
+      "bytes": 2395
+    },
+    {
+      "path": "research/development10/kingdom-glyph/check-02.log",
+      "sha256": "d898514ce57064d58dfda363c9281c2075096b4c539b8cc98784df69095e27bd",
+      "bytes": 11191
+    },
+    {
+      "path": "research/development10/kingdom-glyph/general-contract-source.json",
+      "sha256": "164fa86555abbf0a64e6138a8f923ebbe96d97bb6a3af06b5296ffd6a627ed23",
+      "bytes": 433
+    },
+    {
+      "path": "research/development10/kingdom-glyph/general-contract.log",
+      "sha256": "8f1b2911ca3d8817264bc5c0120fbd84ddc3d2e9ea7b788b34ec632ec8df2faf",
+      "bytes": 41
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-actual-palette.json",
+      "sha256": "a7112c4ef425bd5d305dc3c27a9f51b69979adb5afb21935b1229a778515db51",
+      "bytes": 138893
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-attempt-03.log",
+      "sha256": "532588faad92667f52302612a4feb2227fe7c0735896d028859bef3c572e7c78",
+      "bytes": 1021
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-attempt-04.log",
+      "sha256": "06ae422872e58b6fa45ba19636010acad061f31f54353d0042cff45ec9147d40",
+      "bytes": 961
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-attempt-05.log",
+      "sha256": "4b644e986fab7463ce1623dc509dd902c3b038b1b0c74ec5248e5ca13af4b8ba",
+      "bytes": 162
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-character-author.log",
+      "sha256": "2a75619ee12e726369598d02de4a3a1f6aeaeb26076f7f5ca9a87864b40dc4b4",
+      "bytes": 105
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-character-immutable.log",
+      "sha256": "2a75619ee12e726369598d02de4a3a1f6aeaeb26076f7f5ca9a87864b40dc4b4",
+      "bytes": 105
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-final-immutable.log",
+      "sha256": "4b644e986fab7463ce1623dc509dd902c3b038b1b0c74ec5248e5ca13af4b8ba",
+      "bytes": 162
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-glyph-character.json",
+      "sha256": "cfd6240120ae011f201793c9a74e2bcba9b6f438c937ed7b665ac0db1652919f",
+      "bytes": 25463
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native-kingdom-glyph.json",
+      "sha256": "0cb367dd5dec02a9bdba1c01ebb87c8e925a7dc818d89a340d4fa6d652007ad1",
+      "bytes": 386401
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native_glyph_character.py",
+      "sha256": "110c8ca621b618bc549e7bcad66a426a416b063a99bdd3917c20b40c067b75c7",
+      "bytes": 2173
+    },
+    {
+      "path": "research/development10/kingdom-glyph/native_kingdom_glyph.py",
+      "sha256": "d02c0ed32c049553a32d31ff6ea98928b8d055c6c274ce6df38bb0df013f261e",
+      "bytes": 8208
+    },
+    {
+      "path": "research/development10/kingdom-glyph/README.txt",
+      "sha256": "c8dfb2df23cc55f415ec673464fecb4d3c89b35c3ca8ede4a2522b237a6438a4",
+      "bytes": 4439
+    },
+    {
+      "path": "research/development10/kingdom-glyph/seal_findings.py",
+      "sha256": "7215582f0002e128e16f7cd0d7b7712bfb6d65b31688c75dee8cd5f5fb08e4bd",
+      "bytes": 3476
+    },
+    {
+      "path": "research/development10/kingdom-glyph/tests-01.log",
+      "sha256": "1aaf38b21b0f0afc779491f05e110b5a4307726cef4cd266463a1c63d24d7e32",
+      "bytes": 2623
+    },
+    {
+      "path": "research/development10/kingdom-glyph/tests-02.log",
+      "sha256": "b0b4ae16acdeb8b81a8c84be12e3c4ec5ab920300becb9c6f4d697ec114cafca",
+      "bytes": 14535
+    },
+    {
+      "path": "research/development10/kingdom-glyph/verify_actual_palette.py",
+      "sha256": "ba3b68ca6510fe5bbbf0edcb5b9064705ea89751846024d27b3723dc59a7d0cf",
+      "bytes": 1906
+    }
+  ],
+  "preservation": "No original assets,archives,saves,profiles,releases or workspace manifests/lock modified by this component."
+}

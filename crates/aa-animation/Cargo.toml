@@ -1,0 +1,18 @@
+[package]
+name = "aa-animation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aa-assets = { path = "../aa-assets" }
+aa-actors = { path = "../aa-actors" }
+aa-body = { path = "../aa-body" }
+aa-numeric = { path = "../aa-numeric" }
+aa-simulation = { path = "../aa-simulation" }
+aa-rules = { path = "../aa-rules" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+glam = "0.30"

@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "status": "full derived definition fields compiled/proven in admitted domains; actual positive Texture resource binder and effect execution remain required",
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/fx_graph_subtypes.rs",
+      "sha256": "5c9d79a11a7ae7fc73eb1a9c81178040fae58f290b2181236d570f2324cd0b95"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph_subtypes_tests.rs",
+      "sha256": "7741148d05067fc95626d49ae86eab095ff11738ffeaf8e4a906ec7fae9ca078"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph.rs",
+      "sha256": "f655c824a0b2edd3138be727e6ec993a762ae81e9749d344584b8a416310d958"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph_actor_state.rs",
+      "sha256": "8097571074469681ddb7588f6e3b64099a06f5d8bd2effffe963727371dc1377"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph_sound.rs",
+      "sha256": "0c97cc8c20fe51827589d63bd2895bc2b5b7401c9d2d3f1e83d8381bd5898c30"
+    },
+    {
+      "path": "crates/aa-runtime/src/data_object_request.rs",
+      "sha256": "f39aa12677b63fb3e7bce79921ee5ed70d566a78861b6df052fb1d6c44fb0270"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph_actor_leave_tests.rs",
+      "sha256": "9b966c4162b13e3774b8c1840b61aa1e6667bef4df4616cd78ca31162384d283"
+    },
+    {
+      "path": "crates/aa-runtime/src/fx_graph_tests.rs",
+      "sha256": "d724451b770f3abb9b712f19e2084bce3f9faa5221663748fa2e2a34ccc31851"
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\native_fxc_subtypes.py",
+      "sha256": "59b55553724410a88824fc2086af2e02faeb4018cbad2e5177709af229469400"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\native-fxc-subtypes.json",
+      "sha256": "b1eb66a39319da17e78729c2de2e3b70d43f476ead0c793eb783960eceae68a4"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\build_native.py",
+      "sha256": "767aa4c0dab39c2b10e88dc040cf6d04bc66c9b9bfd02e93c12f5a24b75372be"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\basis-native-type8.py",
+      "sha256": "5eb9600d4063a704b1581cb0e7cdf298bc7654693297905b5b11f34ae10ac6fa"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\build_exact.py",
+      "sha256": "4c77618ada73228476ff0ab50e36505e309adffd9a24a4dfd5f2a8c19008dadd"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\exact_subtypes_host.rs",
+      "sha256": "e31f77671087de313f899a6c68bad3c24adc50b4e1089f83af7e1838f180bfa4"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\exact-source-pins.json",
+      "sha256": "cb11953049b325f31ce0e35cc6eee03aa499b07f7fac9217ea59c391196df1de"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\exact-subtypes-tests.exe",
+      "sha256": "14fe7ba65c13de8d29babca68fa8101fe004eda6c0d184f988846556bd367ae9"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\exact-tests-sealed.log",
+      "sha256": "f1e82249fb1f7db5e0e5a72596d62bfbec08f86ed735a2e4bcfe049b670df204"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\native-immutable01.log",
+      "sha256": "a261632e7e9fc4ba27120b1689f2486ddb6b113cf9bbc8d262242de348d29f6e"
+    },
+    {
+      "path": "research\\skirmish-20261017-fxc-subtypes\\owned-source.diff",
+      "sha256": "3ab6c730bb1839f830fc5c8cc3912a558bada043fd90bce427f75ea0fdad6614"
+    },
+    {
+      "path": "research\\phase8-ai\\native_machine.py",
+      "sha256": "1aba789e7e72dc2d016623caa22456181c03fcedc3f40dc57bff7fb7bde68c00"
+    },
+    {
+      "path": "research\\skirmish-20261017-data-pre-request\\native-request-only-fxc.json",
+      "sha256": "1db661580165e95ae42da3bd19812f722d4de9ce2bf9b12588f39434864f614b"
+    }
+  ],
+  "images": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "native": {
+    "rows": 279,
+    "separate_original_v14_executions": 558,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_instruction_pins": 1086,
+    "immutable_replay": "PASS",
+    "qualification": "Current native_machine excludes seam entries before visitation. No registered observer cutoff is reached by these2/4/5/6/7/9 cases. Getters/enums/lookup/allocation/CString/Texture path and policy remain explicit transports; native factory/constructors/common+derived fields/topology/color arithmetic and vf20 execute."
+  },
+  "constants": [
+    {
+      "address": "0x9FD5D4",
+      "bytes": "00007f43",
+      "meaning": "binary32 255.0 color scale",
+      "both_pe_verified": true
+    }
+  ],
+  "rust": {
+    "exact_current_source": "7/7 PASS2.26s: new279row replay, actual3 V14 units/4 Equipment nodes, existing CreateVFX/PlaySFX/prior-list/factory/type8 regressions",
+    "actual_source_qualification": "Actualusa_infantry_mg/usa_infantry_flame/usa_paratrooper source compiler atPC53. No completed sourceBank, initialized World or runtime execution implied.",
+    "runtime_lib_check": "check-runtime02.log PASS42.08s; later changes restricted to tests/color byte correction/error wording and classifier visibility",
+    "client_test_typecheck": "SDK research/development10/view-object-init/model-payload-check02.log PASS1m08s current source; no full runtime/client Cargo link started here"
+  },
+  "subtypes": {
+    "2": {
+      "kind": "Equipment",
+      "constructor": "42B010",
+      "loader": "42C9D0",
+      "fields": [
+        "action3C EquipmentAction enum",
+        "location40 Bone Data+C",
+        "optional EquipmentType44",
+        "conditional ADD/REPLACE Equipment48"
+      ],
+      "vf20": true
+    },
+    "4": {
+      "kind": "StopSfx",
+      "constructor": "42AE70",
+      "loader": "42C530",
+      "fields": [
+        "Audio3C before missing error"
+      ],
+      "vf20": false
+    },
+    "5": {
+      "kind": "ChangeAspect",
+      "constructor": "42B270",
+      "loader": "42CC30",
+      "fields": [
+        "owned CString3C assigned before nonempty validation"
+      ],
+      "vf20": false
+    },
+    "6": {
+      "kind": "ChangeSkin",
+      "constructor": "42B2D0",
+      "loader": "42CC80",
+      "fields": [
+        "actual Texture3C; empty writesNULL; missing positive warns"
+      ],
+      "vf20": false
+    },
+    "7": {
+      "kind": "CreateRfx",
+      "constructor": "42B090",
+      "loader": "42CD60",
+      "fields": [
+        "actual Texture3C",
+        "actual current push/read1/render0 effects",
+        "AARRGGBB color40/44 via490E50",
+        "blink_count48 signed bits",
+        "AT4C enum before validation"
+      ],
+      "vf20": false
+    },
+    "9": {
+      "kind": "PlayHitEffect",
+      "constructor": "42B1F0",
+      "loader": "42CF40",
+      "fields": [
+        "Bone pivot3C",
+        "Point3 axis40..48",
+        "six GetFixed words4C..60"
+      ],
+      "vf20": false
+    }
+  },
+  "guards": [
+    "Factory emits concrete subtype for every native0..9 and never RequestOnly; complete becomes true only after required derived services succeed.",
+    "Request-only Graph mode still refuses all runtime command constructors, even with complete nodes. Incomplete laboratory marker remains only for guard tests.",
+    "Typed TextureHandle originates only from required real manager callback; no Reference/ordinal/resource-ready substitute. Source-only Bound rejects positive6/7 until resource-aware same-depot borrower exists.",
+    "Node and manager retain earlier allocation/pointer/store prefixes on required errors; no rollback/retry promise.",
+    "Finite scalar/Point/Fixed and finite0..1 color domain; no nonfinite/status-flag/native allocator-failure or invalid enum>=10 parity claim."
+  ],
+  "remaining": [
+    "Actual resource-aware4763C0/5A77E0 source compiler borrower for positive6/7, including same manager ownership and future release semantics",
+    "Positive CreateRFX currentTexture policy/loaded-resource children in same Resource owner",
+    "Runtime execution/renderer effects for these commands; complete source definitions alone do not make battle playable"
+  ]
+}

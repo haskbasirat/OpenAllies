@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "author": "/root/world_startup_gap",
+  "native_entry": "0x004f4590",
+  "native_descriptor_vtable": "0x00a25b28",
+  "source": "Untouched original AA.exe instructions; no SDK implementation",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "scope": "Complete existing-object descriptor wrapper with mandatory coordinator/name/current-storage services; stopped callback-error prefixes",
+  "api": [
+    "aa_spatial::loaded_object_placement::check",
+    "aa_spatial::loaded_object_placement::check_saved"
+  ],
+  "validation": {
+    "paired_rows": 159,
+    "native_executions": 318,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "byte_pinned_visited_native_instructions": 111,
+    "rust_tests": 2,
+    "rust_tests_failed": 0,
+    "strict_scoped_clippy": "passed with --no-deps -- -D warnings",
+    "target": "target/s-loaded-placement"
+  },
+  "production_frozen": true,
+  "shared_edit": "One pub mod loaded_object_placement append in aa-spatial/src/lib.rs, backed up beforehand",
+  "required_unimplemented": [
+    "4F3640 full coordinator and reached geometry/required-object/footprint children",
+    "Actual current-record storage and class dispatch adapter",
+    "Normal-return temporary-name allocation/refcount owner",
+    "Object/Actor/Team/Kingdom Init runtime binding",
+    "Immediate PostCreate and4F9510 registration",
+    "World publication, battle and multiplayer"
+  ],
+  "not_claimed": [
+    "Native SEH/C++ unwind after a failed seam",
+    "Allocation-failure equivalence",
+    "Native placement result parity below the4F3640 test seam",
+    "Full-game or playable-skirmish completion",
+    "Whole-game completion percentage or finish date"
+  ],
+  "caps_changed": [],
+  "manifest_or_dependency_changes": [],
+  "original_files_or_release_changes": [],
+  "files": [
+    {
+      "path": "crates/aa-spatial/src/loaded_object_placement.rs",
+      "bytes": 5617,
+      "sha256": "51a6ded2cdc3041edfdd9dd91ce6c5ed45d1fb74bae6dfadfc5ff41a849dd7c9"
+    },
+    {
+      "path": "crates/aa-spatial/tests/loaded_object_placement_native.rs",
+      "bytes": 8336,
+      "sha256": "3d4840bec98bcaa127a642f8d2f0591da9ca9f68bc72cd1bc5053abaafbca1b9"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/native_loaded_placement.py",
+      "bytes": 7992,
+      "sha256": "5be945c7efbeb0d3ee189f190ac1a4b853d35de576aa632436d1a4de8d4c57c6"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/native-loaded-placement.json",
+      "bytes": 536249,
+      "sha256": "3533fa91321a7f039ae148d02f991804f2a95a33ebeeae63bee3e957b476cce1"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/README.txt",
+      "bytes": 5020,
+      "sha256": "fa78d2f6eef56129dd1af8a22f4a4c32dddbeecc6fb943b0cceef89e6d480be9"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/lib.rs.before",
+      "bytes": 12705,
+      "sha256": "0a54a4a3dc872f778f7f28575e3269a344d6e2c84be6eec502e60985cc85481f"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/native-replay.log",
+      "bytes": 133,
+      "sha256": "bfd75be9711ef1abe2ba64b1f25913991bd04e492cf7a879ab6c46092adbabbb"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/rust-tests.log",
+      "bytes": 824,
+      "sha256": "bd4ad5ac1d2d807952e84eaec66de08da19c7c2452d768d7168536603a509cb6"
+    },
+    {
+      "path": "research/skirmish-20261016-loaded-placement/clippy.log",
+      "bytes": 2227,
+      "sha256": "0d12986d5c892636f974ae43edc5d31a57a139dbd5bd59d1d933752e92d35896"
+    }
+  ]
+}

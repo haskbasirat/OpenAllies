@@ -1,0 +1,19 @@
+
+running 3 tests
+test reset_failure_preserves_prior_index_write_and_later_vectors ... ok
+test flow_reset_matches_original_index_order_growth_and_preserved_suffix ... ok
+test source_tutorial_kingdoms_transfer_resources_without_second_mutable_copy ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.78s
+
+
+running 1 test
+test replacing_an_updatable_cancels_every_old_queue_without_reusing_its_identity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling aa-triggers v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-triggers)
+   Compiling aa-runtime v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-runtime)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.96s
+     Running tests\kingdom_economy.rs (target\debug\deps\kingdom_economy-0a56ac076db57c5c.exe)
+     Running tests\scheduler_owners.rs (target\debug\deps\scheduler_owners-c475e8df2b2d3f80.exe)

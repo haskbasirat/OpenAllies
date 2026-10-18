@@ -1,0 +1,130 @@
+NEXT DIAGNOSTIC BOUNDARY: SAVED ORGANIZATION COMBAT VALUE -- 2026-10-16
+
+Read-only implementation plan. No production code, oracle or test was changed
+or executed for this plan. next-organization-combat-value.json pins the source
+and existing evidence inspected. This is not an implementation/parity approval.
+
+Observed diagnostic
+  qa-output/economy-lifecycle-20261016/managed-mode1-inventory.json and its
+  inventory-comparison.json report80maps,20record-clean,796failed records in
+  60maps, all now stopping at organization_restore.rs combat_value:
+    "5788B0 combat value over the restore shells is unported".
+  Failure identities remain unchanged. Managed scope explicitly supplies a
+  fresh stopped application/SAI lifecycle, native mode1 and elapsed-clock0
+  diagnostic fixture. It is not an observed original elapsed time, old-world
+  transition, activation or actual per-record Init implementation.
+  The80-map run uses InspectPartial; later errors can cascade. Neither its
+  advancement nor20record-clean maps means battle-ready/native-complete load.
+
+Native/portable reuse point
+  Native5788B0 zeros Organization+68 then+6C, visits every member-array slot
+  in order, and rereads count+2C each iteration. Member array is+28.
+  Portable implementation already exists:
+    aa_combat::organization::combat_value
+    crates/aa-combat/src/organization.rs:136
+  Its native proof is native_org_tick.py / native-org-tick-fixtures.json and
+  tests/native_org_tick.rs (existing186-case maintenance proof).
+  No new arithmetic, heuristic combat value or gameplay rule is needed.
+
+Exact saved-owner bindings
+1. Actual in-progress OrganizationState<String> passed to the callback owns
+   members, current layout and output words68/6C. Owner Actor is temporarily
+   outside the registry during Organization Load; use owner_actor directly
+   when its ID is requested. Other members require generation-checked GTIDs
+   in the same IdentityRegistry<RestoredRecord>, not reconstructed duplicates.
+   Verify Organization header.owner is the actual context owner.
+2. member_count is org.members.len(), including null slots; member(i) is
+   raw0 => None, otherwise the actual ActorId. Preserve duplicates and slot
+   order. A stale/non-Actor/nonzero ID errors; it is not a vacant slot.
+3. Occupied member: inspect actual ComponentSlot::Performer (actor+74).
+   Absent Performer contributes neither current nor maximum and MUST NOT
+   fall through to the vacant-slot definition path. Present wrong payload
+   errors. Value is OwnedPerformer.word60 as exact binary32 bits, not mana,
+   an Ability power, mesh count, ActorData+1E4 or a guessed source field.
+4. Native57DC40 follows Performer+4 owner, then that actor's Body at+60.
+   With a Body, use actual BodyState.body.health(+10) and.maximum(+14).
+   Without it, ratio is exactly1. Check Performer.state.owner and Body header
+   ownership; for the supported canonical state they match the actual member.
+   Do not silently use the member's Body when the Performer owner differs.
+   Do not recompute maximum health from ActorData/modifiers at this read.
+   The helper computes (health/maximum)*Performer+60 without an intermediate
+   binary32 ratio store. Native then stores current+68; maximum+6C uses a
+   fresh member/Performer+60 read. The saved adapter must make both reads.
+5. Vacant member: use current org.layout.definition, its native LayoutInfo
+   slot_groups[i] (+28 index), then CURRENT org.layout.parameters[group]
+   (+1C entry). This is the layout selected/replaced by57D130/4C3180, not an
+   ActorData default layout, formation index, member GTID, or renderer layout.
+   Preserve repeated group indices and null parameters. Null parameter =>
+   no contribution. Bad reached index/owner/layout => explicit error.
+6. A nonnull vacant parameter is an existing canonical ActorData identity.
+   Read completed+174 mask; only bit5 (Performer) gates +1E4. A clear bit5
+   needs no combat-value source lookup. When set, maximum adds COMPLETED
+   ActorData+1E4 once for this vacant slot, in binary32 store order. Do not
+   apply Translate a second time to the already resolved canonical identity.
+   Catalog.organization_layout_info already locates canonical layouts directly.
+   RuntimeDefinition.component_mask supplies the component mask where bound.
+
+Additional source/lifecycle dependencies, not already supplied by the above
+  Inspected Catalog.ActorBindings/RuntimeDefinition do not expose a completed
+  ActorData+1E4 arena. Existing aa_combat::combat_value::actor_data_values
+  (4BB590 ->4618B0), definition_value, mean_values, ability_value and
+  performer_value(57E430) are computational ports, not a proven source/runtime
+  arena here. Bind actual source definitions, layout/inventory child order,
+  property/Ability data, means/settings and CRT environment; retain native
+  source-load precision/context. Do not blindly recompute source1E4 using the
+  current restore arithmetic precision if its original loader phase differed.
+  Missing completed source producer stays an error;0 or UNCOMPUTED(-1) is
+  never a stand-in for unavailable source completion.
+
+  OwnedPerformer constructor57F4D0 sets word60=0. Current saved Performer
+  application57F970 does not write word60. Merely reading that stored zero
+  may advance a diagnostic, but does not establish the value the original had
+  after true nested ActorInit/property/Performer refresh. Bind its real producer
+  and required lifecycle at the proper call site, rather than calculate a
+  replacement here. The absence of immediate Init/PostCreate/registration
+  remains the independent major lifecycle blocker described in findings.json.
+
+Storage/partial-error bridge risks
+  The proven routine mutates aa_combat::morale::Organization, while restore
+  owns aa_actors::ground_states::OrganizationState<String>. Avoid manufacturing
+  a general live Organization full of unrelated defaults or cloning/replacing
+  the member/component world to satisfy the broad organization::World trait.
+  Its combat-value path only reaches member_count/member/member_combat/
+  slot_definition; unrelated World methods should remain explicit errors.
+
+  Preferred future change: factor the already-proven sum into a narrow borrowed
+  output/read interface shared by the existing wrapper and saved adapter, so
+  each native+68/+6C store updates the actual org.words immediately. Preserve
+  all native arithmetic and existing oracle coverage; add owned-adapter proof.
+  A two-output projection is a bounded alternative ONLY if both outputs are
+  committed on every Result path, including errors, and no reentrant getter
+  can observe stale actual words. Copy-back-on-success alone is incorrect.
+
+  Zero outputs before any reached-member/layout/source failure. Do not eagerly
+  preflight all bodies/vacant definitions before native resets or compute a
+  batch/snapshot/sorted/parallel sum: an error at slotN must leave completed
+  earlier stores. Preserve raw owned allocations and IDs; take/reinsert is not
+  needed. No source callback mutates member array/Performer here; if a binding
+  allows reentry or mutation, rereads/snapshot equivalence need separate proof.
+  Use explicit LoadContext.pc for the5788B0/57DC40 arithmetic and native f32
+  stores after each add. Missing/nonfinite/zero-divisor unsupported arithmetic
+  errors must retain prefixes; do not clamp, substitute zero or use f64 sums.
+
+Bounded next implementation/checklist
+  A. Add a required saved combat-value service at the existing callback (or
+     narrow direct adapter) carrying the actual owner shell/org/registry and
+     source owner. Bind live slots/Performer/Body lazily with identity checks.
+  B. Bind source mask and completed+1E4 only at the reached vacant-bit5 path;
+     preserve canonical source identity and producer precision/order.
+  C. Share the proven arithmetic with actual partial-store behavior; leave all
+     unrelated maintenance methods and later57CBA0 callbacks explicitly open.
+  D. Future proof: actual saved occupied/vacant/mixed slots, null/wrong/stale
+     components, repeat groups/members, Body-absent ratio1, unequal body health,
+     late missing source, and error-after-current-before-maximum prefixes.
+     Reuse original/v14 numeric fixtures at all3PCs; add exact owned source
+     observations before a combined census. These tests are proposals, not run.
+  E. Independently finish the real per-record LoadThing lifecycle. Do not label
+     advancement through5788B0 as full record Init, world publication or battle.
+
+No production modifications, new oracles, Cargo commands, game launches,
+network tests or release artifacts were made by this planning task.

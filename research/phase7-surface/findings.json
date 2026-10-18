@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "scope": {
+    "name": "surface",
+    "cases": 1104,
+    "transitions": 0,
+    "producer": "research/phase7-surface/native_surface.py",
+    "fixture": "research/phase7-surface/native-surface-fixtures.json"
+  },
+  "rust_tests": 2,
+  "clippy_passed": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "full_ranges": [
+    {
+      "name": "shape_projection",
+      "start": "0x46e150",
+      "end_exclusive": "0x46e284",
+      "sha256": "40f840317f6ad9b21e33aa8156c99736d3191936b2cde535cb0fab376973fb30",
+      "original_equals_accepted": true
+    },
+    {
+      "name": "target_hit_surface",
+      "start": "0x4eee60",
+      "end_exclusive": "0x4eef64",
+      "sha256": "fb0b666ed86805228f4ce5b56aa175cabf3c6c44057b1ead3c08bc3bbfb9d633",
+      "original_equals_accepted": true
+    }
+  ],
+  "files": {
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251",
+    "crates/aa-combat/src/projectile.rs": "b682c95f544eb37dc7f16148e1c437127a7b521c510eccba80ec18317302e940",
+    "crates/aa-combat/src/surface.rs": "eb443aea28333ca7cad80a41344554098e15ebab27661f97414c77580679d192",
+    "crates/aa-combat/tests/native_surface.rs": "0da9695b27cc53e092b0689691525e1755c2df93fd73e321383c15d3104ef251",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-spatial/src/collision.rs": "ab66697d768be3c1bfd174e3524bda64922b11769d742b484c2cf752be61df7a",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-ability/clippy.log": "d35df987284bbac08341b0c150ea99a10f90980c815de88a6f442b1bb390f46d",
+    "research/phase7-ability/rust-tests.log": "5555a6dfd571d91de1a799f812ca89296d563a09142180ac24de998d93d119cf",
+    "research/phase7-surface/README.txt": "823b1f2f2c17c5dad95b4e5d901b482a9c53a5dabe51c7bc42ab92f1d44c45d6",
+    "research/phase7-surface/native-surface-fixtures.json": "83ea49ddb14565a562c9e13ac8c53d3dbe706e70b40f11b5d57b7c91cacf2c99",
+    "research/phase7-surface/native_surface.py": "192ae6e9f6f65088d394c85b351d0a959d468f065148167a07e94919dc421627"
+  },
+  "limits": "See README.txt. Shared full-suite log contains21 tests; this report claims only the named two tests and fixture scope. No runtime integration or rendering claim."
+}

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "native_cases": 52,
+  "rust_tests": 2,
+  "strict_scoped_clippy": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "handler_range": {
+    "address": "0x52d910",
+    "length": 56,
+    "sha256": "dbf07c505fe6edff59acecb1cfa7929c5851e3af4249062e5e37d2fc7fb398d4"
+  },
+  "files": {
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251",
+    "crates/aa-mind/src/construct.rs": "088b56986bccbb516f9bb45a8ac7fb6468949d836354cc8fe89aba07b30299f6",
+    "crates/aa-mind/src/disable_command.rs": "14f4bd9ad307dc538b210d62589ac60766a5db39ffbf5c525d958e55c964c624",
+    "crates/aa-mind/src/lib.rs": "b0490f5ae93dcceb74956afcc9dbae3346da5477475bc7fe5d587460f8f4c2a8",
+    "crates/aa-mind/tests/disable_command_native.rs": "2f1f79541cba0bdf36657a43e1f807217231a1bf6cd9865d68335ec771709ecc",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-disable-command/README.txt": "24112aa7e39dfe49f70824d18b26209eacbcdd0b818c681b9e45bd815648ad16",
+    "research/phase7-disable-command/clippy.log": "e7aa9c62c9eed54c98d6ad4a2fcabd064f29a402235539a508111ce1fbaea9fa",
+    "research/phase7-disable-command/native-disable-fixtures.json": "75a7950b9f6503f333e0ee8ddc58f9e67eb1c84c0aa6b9bd3a106c5d0ba03250",
+    "research/phase7-disable-command/native-handler.asm.txt": "9b36b08c358ffcf13a458114259250b55da821e1e3dd9f06fcbeb8383319b7f5",
+    "research/phase7-disable-command/native_disable.py": "1762db49b5f19b1e6d66693644c384233038b92f285b2af2910ce0b6e336c1bc",
+    "research/phase7-disable-command/tests.log": "fb58433debca85c5a09480a8da0758f41667ba2ace4330a36c9f1153f00039ba",
+    "research/phase7-mind/native_lifecycle.py": "9ee65d159af22e303d088a9a3bb6060373f7766047468762d8da3c66db129ea2"
+  },
+  "limits_reference": "README.txt"
+}

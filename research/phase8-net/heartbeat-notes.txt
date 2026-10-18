@@ -1,0 +1,133 @@
+HEARTBEAT 0x75B820 / ADMINCONN::UPDATE 0x75BD70 - PORT NOTES
+=============================================================
+Rust: crates/aa-netcode/src/heartbeat.rs
+Oracle: native_heartbeat.py -> native-heartbeat.json (1140 cases)
+Replay: crates/aa-netcode/tests/heartbeat.rs
+  CARGO_TARGET_DIR=target/s-netcode-hb cargo test -p aa-netcode --release --locked --offline -j 4 --test heartbeat
+  -> 4 tests pass (1125 state/effect cases + 15 large-window fraction cases).
+Every executed byte window is asserted identical in the v14 image; the
+null-page guard (null_guard.py) is installed: no page-0 access occurred.
+
+1. NATIVE STRUCTURE (all [ORACLE] unless marked)
+------------------------------------------------
+Peer list AdminNode+0x2AC holds the node itself and its AdminConns; vtable
++4 is "as conn" (node 0x4C9FA0 -> 0, conn 0x8D6180 -> this).
+"Server" = AdminNode+0x2C8 == node, "host" = +0x2C4 == node.
+
+0x75B820 heartbeat (frame update 0x75CA70 calls it when NetNode+0x58 >
+AdminNode+0x2DC, next = 1.0/AVar 0x47 + now; scheduling is in aa-runtime):
+  server: for every peer 0x7593E0 (backup requests, 1 bit type: 0 chat
+    0x753940, 1 vote 0x74F890), then 0x75A2C0 DisconnectLostPlayers;
+  server and DAT_00B40934 >= 16 (signed): 0x74F1A0 + 0x752C60, counter = 0;
+    else counter += 1 (also on clients) -> refresh on every 17th server tick;
+  0x75A0C0 ProcessBackupDecrees (2-bit type: 0 status, applied only when not
+    server; 1 chat -> "public_chat|ss"; 2 ignored; 3 = 0x411FA0 assertion,
+    a Rust error);
+  host: 0x74F310 for every conn (status 2 only; 1 when bytes == size;
+    request 305 {player conn+8, 2-bit status, binary32 sent/size}).
+
+Backup request packets (client -> server, peer+0x1C history):
+  chat 0x74F950: 1 bit 0, 16-bit count, count*16 bits (count = low 16 bits
+  of the CString length); vote 0x74C3D0: 1 bit 1, 1 bit vote. Senders
+  0x753410 / 0x7532D0 append to the own +0x1C history, keep end-1000.
+Backup decree packets (server -> all, node+0x224, keep end-200):
+  chat 0x74FA20: 2 bits 1, CString, 32-bit player id (0 = null);
+  status 0x74E530: 2 bits 0, 32 votes (+0x2B8), 32 max patience bits
+  (+0x2BC), per peer 0x74C450: 1 +0x48, 1 +0x49, 1 +0x4A, 1 +0x4B, 32 +0x4C,
+  32 +0x50, 1 +0x30, 1 +0x55, 32 +0x60 (reader 0x74C590 stores ==1 bytes).
+  A client reads one record per entry of ITS list (no count on the wire).
+
+0x74F1A0 lag refresh: votes and max patience (0x74DD80, lagging conns,
+from 0.0, NaN ignored) are taken BEFORE the slots run; per peer slots
++8..+0x20: node 0x5AA2D0 (+0x4C=0), 0x74B270 (+0x50=0), 0x74B2A0 (+0x4B=0),
+0x74B2B0 (+0x49 = NetNode+0x64 byte), 0x74B2D0 (+0x4A=0), 0x74B2F0 (+0x30 =
++0x31 byte), 0x74B300 (+0x48=0); conn 0x74B260 (+0x4C = NetConn+0x38 bits),
+0x74B280 (+0x50 = 0x7642D0 received fraction), 0x74D490 (+0x4B: not
+connected -> 0; else (node+0x228 - 0x7626A0(+0x2AC)) > AVar 0x4F or +0xA8,
+host also (node+0x218 - 0x7626A0(+0xCC)) > AVar 0x4B), 0x74B2C0 (+0x49 =
++0xA9 byte), 0x74B2E0 (+0x4A = !connected), 0x74B2F0, 0x74D5B0 (+0x48 =
+host && node+0x218 != 0x7626A0(+0xCC)). A max over +0x60 into a dead local
+(0x74F221) has no effect. These bytes are exactly the BackupClient inputs of
+aa-runtime's 0x759680 port (all list entries, node included).
+
+0x75A2C0: non-host needs 0x74DE10 (no connected-to-clock, player, non-
+lagging conn with reverse end <= +0xA4) else returns; 0x74DED0 (no lagging
+conn without +0x9C) -> 0x759530(5) -- this fires every server heartbeat
+when nobody lags and clears all votes; staging (session+0xE4 == 1): node's
+own vote -> 0x759530(4); otherwise votes >= (peers with +0x4A clear)/2+1 and
+max patience <= 0.1f (ordered) -> 0x759530(4).
+0x759530: non-host -> SetHost(node), +0x2E0 = 1, request 304 (3 bits of
++0x90); every peer +0x55 = 0; lagging conn with clock and player ->
+0x750CB0 PlayerLeave decree 309 {player, 4-bit reason} executed AT ONCE
+(0x75DAA0 -> 0x755D70 -> ClientLeave 0x755840 changes conns read later in
+the loop: hence Seams::effect gets &mut AdminNode); any dropped + GameSpy
+-> 0x791840; then 0x7501D0 copies reverse decrees [node.end, conn.end) of
+connected conns into the node decree history.
+
+0x75BD70: dt = f32(now - +0x410), > 1.0 -> 1.0, +0x410 = now; server only:
+no lag bits -> +0x44 = f32(dt*0.1f + p) (> 15 -> 15), else f32(p - dt)
+(< 0 -> 0); disconnecting and (now - +0x90) > 2.0 in register -> 0x752110;
+with admin clock, node player and connected: (now - NetConn+0x2C) > 3.0
+(server conn) / > 2.0 (others) in register -> 0x75A250 (connected = 0;
+server conn -> SetServer(node)); host conn -> 0x7531A0 (effect).
+SetServer 0x759790: histories +0x224 and +0x1C emptied at 0, +0x234 = 0;
+becoming server: every peer +0x44 = 15, conns with +0x70 >= node+0x70 get
+0x752300; then 0x74F1A0 and 0x759680. SetHost 0x757010: previous host ->
+"networking_new_host|s" (new host's player); other host -> just +0x2C4;
+self -> 0x74DBC0(1), 0x75FBF0(1.0f/AdminTicksPerSecond, old clock time or
+0), +0x158 = +0x15C, every conn 0x752490(prev host ? +0xA4+1 : 0) and
++0x2C = +8, then +0x2C4.
+
+2. x87 (explicit precision; PC53 is the network thread's mode)
+--------------------------------------------------------------
+Precision independent (one operation on binary32 operands, binary32 store;
+double rounding innocuous for 53 and 64 >= 2*24+2): dt, patience decrease,
+UpdateFileTransferStatus fraction, SetHost period.
+Precision dependent, all exact in Rust for PC24/PC53/PC64:
+  * patience increase (two roundings). PC24 != PC53 proven by 8 targeted
+    cases (3 found by exact search, 5 constructed: dt = 80q*2^-24, q odd).
+    PC53 != PC64 would need the exact sum within 2^-53 (relative) of a
+    binary32 midpoint without being on it. With 0.1f = (2^26+1)/(5*2^27)
+    the product is never within 0.025 grid units of a midpoint (numpy scans
+    of dt significands in [2^16,2^17), [2^20,2^21), [2^23,2^24)) and no
+    usable 29-bit bit run exists in dt*0xCCCCCD for any significand below
+    2^24 (exhaustive scan), so no input was found; the
+    Rust PC64 branch is exact by construction but not oracle-distinguished.
+  * in-register comparisons (now - t) > 2.0 / 3.0: PC24 != PC53 cases
+    (t = 2^-22 - 2^-30) and PC53 != PC64 cases (t = -2^-60) are in the
+    fixture for the disconnect reset and both liveness limits.
+  * received fraction fild/fidiv: exact rational rounding (24, 53->24,
+    64->24); 15 cases with windows up to 2^25+7 entries (counts above 2^24,
+    where int->float conversion would already be inexact).
+NaN: x87 propagation rules are implemented (SDM table 4-7, default NaN
+0xFFC00000) but there are no NaN fixtures (Unicorn does not quiet SNaN
+loads): unproven.
+
+3. CAPS (none is a size limit)
+------------------------------
+  static build streams 0xB408DC / 0xB408E4 / 0xB408F4 / 0xB408FC:
+    0x767110(0x400) initial 1024 bytes, grown by 0x40D420 -> WireWriter
+  backup decree history keep end-200 (0x753AF0, 0x752CC4): protocol rule
+  own backup request history keep end-1000 (0x7533D2, 0x7534D4): protocol rule
+  peer histories 0x74B790(0x400)/(0x100) initial rings (0x752A60) -> History
+  refresh every 17th tick (0x75B867 cmp 0x10), timeouts 2.0/3.0, patience
+    15.0 / 0.1 per s / vote 0.1: rules, kept.
+
+4. SEAMS AND GAPS
+-----------------
+Seams in the oracle (recorded, never invented): name getters 0x766380 /
+0x7667D0 (the native ones are called with the player pointer; a null host
+player in SetHost was only exercised through the stub), text table 0x4B9F40
+(identity), UI 0x40BC50, request gate 0x766CD0 / local player 0x76AC60 /
+SetPlayer 0x766C10 (aa_orders emit_request ports these), sync logs,
+PlayerLeave process 0x75DAA0, channel objects, 0x77B8D0, 0x7626A0 (channel
+acknowledgement position, fixture input), 0x7612D0 / 0x7A6610 (file
+progress input), 0x75FBF0, old clock virtual, 0x74DBC0, 0x759680, 0x7531A0,
+0x791840, timer 0x59ABA0 (log only).
+Rust errors where the native would read garbage or assert: null history
+slot, truncated packet, backup decree type 3, retired history index in the
+reverse-decree copy, TaskStatus +0x90 >= 5 (the 3-bit write has no schema
+304 value), list naming a missing connection.
+Not ported here: ClientLeave 0x755840 and the rest of the PlayerLeave
+execution, private decrees 0x7531A0, the channel objects, 0x759680 (aa-
+runtime), the scheduler 0x75CA70 (aa-runtime), GameSpy.

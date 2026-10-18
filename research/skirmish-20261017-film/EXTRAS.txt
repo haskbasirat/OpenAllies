@@ -1,0 +1,45 @@
+Supplementary511297..51145E trigger objective extras;2026-10-17.
+
+Important correction: Trigger+1C is CONDITIONS head, not a parent pointer.
+540E20 constructs null lists;541410 appends conditions at1C/20 and actions
+at24/28. The actual gate is current enabled34!=0 and conditions head null.
+Same Manager current enabled bytes and definitions' actual conditions/actions
+are used. Only opcode50 kingdom_gains_objective is inspected.
+
+54DE30 constructs two scratch registers ONCE.5422F0/54A5A0 overwrite only
+storage-owned fields, so later zero/one-parameter actions retain preceding
+strings/word/item values. The port preserves this behavior. Storage7 needs
+the actual localized companion; an external key-only unbound companion errors.
+More than two parameters would overwrite the native caller stack and is an
+explicit unsupported input domain, not a new gameplay capacity.
+
+54DAC0 uses named18, raw-generation19, current condition23 or event24. Actions
+have kind2 and therefore write neither manager pointer. Raw lookup has no class
+filter.54DA70 calls real4F1AD0 over OBJECTIVES in current array order, matching
+case-sensitive wcscmp first. It does NOT use MAPSTRINGS or Trigger.strings.
+Thing+18 selects first matching captured parameter.49AD00 executes even if
+that destination is absent; a later error preserves its preceding effects.
+510150 appends localized pairs with duplicates and native order intact.
+
+Concrete capture_current uses the same ActorStore/name table/Manager/current
+Localization and actual world_objectives::State. The latter supplies its
+private lifetime-checked Handle, never a manufactured numeric pointer. Missing
+text-entry creation/fallback remains a reached explicit requirement.
+
+Native fixture90 paired rows/180 separate original-v14 sessions at PC24/53/64,
+263 block pins. Real register construction/conversion, selectors, OBJECTIVES
+lookup, parameter lookup, localized copy and append/growth execute. Named
+4F8F00 and4BAA20 existing text lookup are explicit seams. The table supplied
+at511297 is an explicit already-captured input; this is not full510EB0 source
+capture proof. A null destination is cut off at5113C2 after localized lookup,
+before the native invalid access; heap failure/SEH unwinding is not claimed.
+Twenty duplicate choices test growth, and all reached service prefixes replay.
+
+Rust fixture replay1/1 passed (extras-tests.log). A later production check
+passed with the actual OBJECTIVES trait implementation and direct persistent
+4E93C0 Formatter/glyph-variable/Players adapter (extras-current-bindings-check).
+Those two additive wiring helpers were compiled, not freshly end-to-end run.
+
+Full parameter composition is Team capture, capture_kingdoms_current, then
+film_parameter_extras::capture_current, using the same owners. Complete managed
+Header/resource/recording/battle execution is still pending and not certified.

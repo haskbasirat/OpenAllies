@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Native flow arithmetic through required callbacks to authoritative arrays",
+  "native_functions": {
+    "shortage": {
+      "start": "0x4e1f60",
+      "end": "0x4e2016",
+      "sha256": "6dfde00d4026427eba09bacd124e704c846ac7abed18febaeffcb6766009a823"
+    },
+    "provider": {
+      "start": "0x4e3940",
+      "end": "0x4e39cf",
+      "sha256": "3d0e77be5943d058b68627182b4ba622f12e6c62b9a13c947fa37c145a67e998"
+    },
+    "consumption_vector": {
+      "start": "0x4e48c0",
+      "end": "0x4e4924",
+      "sha256": "9f54a2ad99c640e7db10d29bded06d7aa60c10e07e9a8dfd0f367fc81e347930"
+    },
+    "provider_vector": {
+      "start": "0x4e4930",
+      "end": "0x4e497f",
+      "sha256": "c9fe013d90df1db47d46deaf8de455ba0fe28cc3a3994acdf62ac3e777eeeba4"
+    }
+  },
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_rows": 1026,
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "focused_tests_passed": 3,
+  "existing_arithmetic_regressions_passed": 4,
+  "oracle_default_compare": "passed",
+  "runtime_source_binding": "owned by world_start_stats, not claimed by this module",
+  "actual_storage_behavior": [
+    "no flow clone",
+    "no resize or zero initialization",
+    "native store order",
+    "required lazy source facts",
+    "prefix errors retain prior writes",
+    "distinct native loop counts"
+  ],
+  "numeric_boundaries": [
+    "finite binary32 operands and results",
+    "nearest-even PC24/53/64",
+    "no FPU exception flag claim",
+    "nonfinite and overflow unsupported when reached",
+    "source vector distinct from kingdom arrays"
+  ],
+  "preserved": [
+    "existing Economy methods",
+    "existing oracle and fixture",
+    "runtime files",
+    "original assets and saves",
+    "Development08",
+    "manifests and dependencies"
+  ],
+  "sha256": {
+    "research/skirmish-20261016-borrowed-flows/native-replay.log": "26c5db72aea85f952f7dca958f3ea35dea0dcb9228180cdbc81969c7ec29f999",
+    "crates/aa-economy/tests/fixtures/economy-native-vectors.json": "06beaf43ea3bdf2a929397685992ee8f61f6c1b102e0dba45ecdefe496423320",
+    "research/skirmish-20261016-borrowed-flows/pure-tests.log": "3193687332b07e8c6f9b833530907d88a8ba44523b0c406f8e177b07822cd53f",
+    "research/skirmish-20261016-borrowed-flows/native-borrowed-flows.json": "da7e7de9b002a699b17e7ccb05cc6483973091cfac5b9f8e499784a709062946",
+    "research/skirmish-20261016-borrowed-flows/native.asm.txt": "e577c7ed80aca6f11d5ea2c6e0a88529e8296b23f80018c0d27e76ab4746ba84",
+    "research/skirmish-20261016-borrowed-flows/native_borrowed_flows.py": "3f5969f09b56df717d73653ca035be22393e6eaffcfeed9273c56b7a801da9c6",
+    "research/skirmish-20261016-borrowed-flows/existing-arithmetic-tests.log": "96460cd6e8eee529598c27a58df702aae5101f1d0aa36ba77dca523c3ada476b",
+    "crates/aa-economy/src/borrowed_flows.rs": "6eb0f4bd7b7f4b2710b6a735b4c98686f648b12573a8b1cf4f95df3a31c0e88e",
+    "backups/source-before-borrowed-flows-20261016.zip": "ae6f6a3cb26a2c51e90de1cab936af9b4387a855e7bf020ac67795af9aea36b3",
+    "crates/aa-economy/tests/native_borrowed_flows.rs": "971647a04dcce514b511750a6e20b1f5fb2f150772af45efac273689b41ad349"
+  }
+}

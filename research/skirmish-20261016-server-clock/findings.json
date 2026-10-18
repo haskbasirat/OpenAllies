@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "owner": "/root/builder_source_review",
+  "status": "author complete within finite arithmetic/time-source boundary; independent review pending",
+  "source_pins": "frozen-hashes.json",
+  "native": {
+    "machines": 210,
+    "ordered_steps": 1932,
+    "executed_instruction_pins": 149,
+    "precisions": [
+      24,
+      53,
+      64
+    ],
+    "images": [
+      "original",
+      "v14"
+    ],
+    "fixture_sha256": "e381e7fb051c262f4eb35fc79d44efab7719cf42b73e81644f7bd43d54ebd5d1",
+    "transport_seam": "59ABA0 supplied u32 QPC timer result; no timer-body execution claim"
+  },
+  "rust": {
+    "tests": 2,
+    "failures": 0,
+    "final_log": "../skirmish-20261016-live-clocked/rust-final-compatible.log",
+    "binary": "frozen-server-clock-tests.exe",
+    "binary_sha256": "b487e2e3171d8cf06333efddc153372a8a0310214ac007b551b9073a1b7f1c77"
+  },
+  "proven": [
+    "75FBB0 constructor words",
+    "75FBF0 period-before-input and spill order",
+    "75FC40 cached/QPC branch reads and extended subtraction",
+    "75FCB0 bounded value/equality bits",
+    "75FCF0/75FD70 elapsed limit subtraction",
+    "75FD80 two cached reads, threshold spills and offset/limit updates",
+    "retained prefix on required timer boundary"
+  ],
+  "not_claimed": [
+    "QPC timer producer proof (separate bootstrap owner)",
+    "native nonfinite/SEH semantics",
+    "actual Node58 initialization",
+    "a working network frame",
+    "cloned/default clock owner"
+  ]
+}

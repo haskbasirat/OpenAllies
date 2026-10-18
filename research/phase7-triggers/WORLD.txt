@@ -1,0 +1,45 @@
+World action integration layer
+
+world_program.rs composes the CoreProgram with actual recovered control and
+property admission implementations. The supported world opcodes are:
+43 letterbox,44 screenfade,54 actor technology grant,61/62 Kingdom AI enable/
+disable,63/64 actor AI enable/disable,114 default victory condition.
+
+Presentation uses owned fields with explicit initial state. There is no guessed
+Default. Original541D40/60 pass World+4C to4ED890/4ED8B0, so the resulting
+letterbox fields are World+BC/C0/C4 and fade fields are World+C8/CC/D0. Renderer
+consumption is separate. The first oracle mistakenly observed World+70/+7C,
+which the Rust comparison caught; inspection of the wrapper fixed the native
+observer and production field-offset comments before acceptance.
+
+201 actual546AF0 calls cover all eight actions at three PC modes. Native validity
+checks, argument conversion, raw-ID generation lookup, conditional/current-event
+actor selection, field writes,79E2F0/79E2E0/79E980, stack stop construction and
+4D9B60 routing execute. Actor+154 is null in this corpus; its nonnull reference
+ownership paths are covered separately by phase7-control. Native4CEF10,
+5817A0 and5030F0 execute up to the explicit insertion service.
+
+Seams: named actor/Kingdom lookups with class-valid fixture results; SharedProperty
+lookup with invalid-ID warnings disabled;5035E0 applicability and581630 insertion;
+actor admission and component command handler; core string/dictionary/logging
+and heap services. Their inputs/results are recorded; no world action wrapper
+is replaced. Every final world field and callback order is compared by Rust.
+
+The runtime World must borrow canonical ActorStore/IdentityRegistry/definition
+bank state. Control ObjectKey handles are64-bit; Body's existing32-bit object
+identities use a required checked mapping, never pointer truncation. Raw-ID
+selector paths intentionally have no class filter; named helpers have the
+original class checks. Event/condition Kingdom pointer selectors are explicit
+unsupported errors until those manager contexts are bound. Other unsupported
+opcodes stop the manager. Native selector default cases that really returnnull
+are distinguished from missing implementations.
+
+Two new Rust tests compare the201 native executions and verify a command-handler
+error leaves the AI-disable flag committed, stops the manager and does not retry.
+The production layer does not ship fake successful command/property callbacks.
+It is not a completed live tutorial: the concrete actor store services, opcode
+event producers, additional world actions and renderer still need integration.
+
+Reproduce native_world_program.py then record_findings.py. The shared core
+program changed only helper visibility; manager gained a read-only context-word
+getter. All previous trigger tests are rerun alongside the world-action tests.

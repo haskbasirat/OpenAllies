@@ -1,0 +1,12 @@
+Current C0/Render-list source checkpoint
+
+C0 source/actual Inputs retention, same-current Ui source Bool and13 registered variable references, native712660 render-list constructor only. No completed Camera/Directory/VWorld or activation.
+
+c0_actual_factory: PASS exact current module, real current4004 compiled Catalog/Bank/five-file Settings; seven assertions;183 before/after dependency/source hashes unchanged
+bundle_factory: PASS exact current Inputs/C0/helper-global modules +existing compiled five sibling sources; no Application install in this tiny probe
+runtime_check: check01 passed38.42s; currentcheck03 passed21.16s before render_lists/backend addendum
+aa_ui: 4/4 passed using actual original/v14 source and same current switches
+render_lists: 3/3 exact-source standalone Rust;30 native full positive ctor rows and18 dependency-stop rows
+native: 6 C0 registration exec,24 source-policy exec,6 UVar registration exec,60 full ctor-publication-UI-reset confluence exec,18 render-list lookup stops; all bothPE/allPC where applicable
+
+Open: Camera7016A0 semantic Ni/debug/property graph and directory not yet composed; Indeterminate204 before702380 is never guessed zero; confluence covers explicit read-only laboratory environment only; Snapshot has no producer; private fields prevent renderer fabrication; Actual current Ui variable reads require real UI bridge, not cloned Options values; No playable battle, VWorld AD, real GPU Camera or render integration proven

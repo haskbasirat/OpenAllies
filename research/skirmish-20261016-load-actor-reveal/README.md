@@ -1,0 +1,11 @@
+# Same-allocation Actor64 reveal (bounded)
+
+This checkpoint binds native4EC010 through disjoint borrows of the held Object/Actor. Its Zone remains in ActorShell.zones_148 and is borrowed by the native zone kernel throughout callbacks. The mutable Object+54 and detection-memory arena are never copied or removed. Prior records are held with their real generation marked Loading and restored on every successful or required-error return.
+
+The narrow memory extraction reuses the existing4EBC70 coordinator, allocation owner and recorded v1 fixtures. MemoryRecord is a readonly source/constructor/Loading guard view; it carries references to actual proof and flags, not saved scalar defaults. MemoryServices still reads the same Session phase and canonical source16D receipt lazily. The existing Object28 capture recorder is retained.
+
+Actor virtual1004CED60 reads the actual typed Structure.object_handle_10 before the Wall presence check. Actual2696 has Structure handle0 and no Wall, as captured independently in the Detection v2 actual input. Positive Wall58CB30, nonnull recursive containerActor64 and first-sighting message/SAI remain explicit required boundaries. The ordinary Actor/Kingdom+B4 true and admitted Object+B4 false constructor dispatch is reused from prior native gates. Null Kingdom54EC70/54ECB0 reads fault; this binder refuses that reached native-null case rather than treating it as seen.
+
+`native_actor_reveal.py` executes117 coordinator rows and24 getter rows in both immutable images at all3 precision controls (282 machines). Native memory-return seam is TEST ONLY to prove late16D order; production calls the same concrete memory arena. Separate required-memory rows stop at4EBC70. The fixture records155 genuinely executed address pins plus3 test/required entries. Partial Object+54 stores survive every later required child. Native getter rows execute4CED60 directly; no successful Wall implementation is claimed.
+
+Run Python without `--write` for immutable replay. Rust `load_actor_reveal::tests` replays coordinator call order, all partial word stores and concrete typed Structure getter rows. Final source/test replay and source hashes are recorded in findings.json when sealed. No full Detection/World load or playable battle is certified by this bounded checkpoint.

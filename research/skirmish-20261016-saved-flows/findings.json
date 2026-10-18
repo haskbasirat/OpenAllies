@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "scope": "Saved Kingdom canonical flow storage binding and bounded native source metadata. Not whole Init, battle, or publication.",
+  "passed": true,
+  "files": {
+    "crates/aa-runtime/src/saved_kingdom_flows.rs": "9f277f6fcc9ac4a9605f6a30918995ae14a96cc0a95e07dd646563843f9c20ab",
+    "crates/aa-runtime/tests/saved_kingdom_flows.rs": "49058b7822e3e57fbdd50690fa3d890ba8c818b3181f75d0463b603313821713",
+    "research/skirmish-20261016-saved-flows/native_source_bindings.py": "0de609e2cb5d9e4e1eec2210b27ac3f9b1e9234bfe656f4afdcf0205f8f95214",
+    "research/skirmish-20261016-saved-flows/native-source-bindings.json": "42aca7983f27f776c3825bde8347583a568ba94e49749b9027b8802923c2b7d3",
+    "research/skirmish-20261016-saved-flows/natural-two-map-final.json": "4974bc42989747cd728d213803a69082be35fd0474cd6cc37517f0b31aa88fc7",
+    "research/skirmish-20261016-saved-flows/tests.log": "f7c5ef210e70b536a07ef42f944994244b55e22c2f736fcb1443e5aecd494bee"
+  },
+  "native": {
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "source_integer_settings_cases": 42,
+    "source_alias_cases": 24,
+    "source_instruction_pins": 1140,
+    "flow_replayed_runtime_cases": 876,
+    "borrowed_primitive_total_cases": 1026
+  },
+  "rust": {
+    "tests_failed": 0,
+    "command": "cargo test -p aa-runtime --test saved_kingdom_flows --release --locked --offline -j4 -- --include-ignored --nocapture",
+    "target": "target/s-saved-kingdom-flows",
+    "real_asset_test": true,
+    "tests_passed": 5
+  },
+  "natural": {
+    "flow_capacity_hint": 8,
+    "maps": [
+      "Campaign/tutorial02.RMP",
+      "DeveloperMaps/(3v3)Firefight.RMP"
+    ],
+    "all_three_flow_lengths": 0,
+    "all_bit7_clear": true,
+    "no_state_mutation_in_diagnostic": true,
+    "stockpile_length": 7,
+    "kingdom_counts": [
+      3,
+      7
+    ]
+  },
+  "preserved": [
+    "authoritative SpecialShell storage",
+    "partial stores before later error",
+    "stockpile1C4 values",
+    "allocation identity and capacity metadata",
+    "native source order and explicit precision",
+    "lazy cap lookup after raw store"
+  ],
+  "blocked": [
+    "Actual saved per-record Team/Kingdom Init PostCreate registration chain must run before constructor-only flows can accept resource calls.",
+    "No standalone reset or fallback zeroing authorized or implemented.",
+    "No728 failure clearance, full map publication, battle, multiplayer or campaign claim."
+  ],
+  "source_counts": "B3A660 equals GameData+10, so B3A660+28 is the exact same count word as GameData+38. Use proven source registry count, never vector length.",
+  "source_cap": "Typed Int150 base source then20 original or100v14; exact two source declarations and matching Actor source hashes required. Unknown WorldRule override remains explicit error.",
+  "comment_only_review_correction": "BorrowedKingdom docs now state that B3A660 consumption count aliases the Resource registry count; no behavior changed."
+}

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "status": "bounded_constituents_passed_independent_review_pending",
+  "freeze_sha256": "5fd31408d210e8a58729d5b4dbb424bd002bf2059be2d0d7a2b19efc11ce9c6b",
+  "rust_binary_sha256": "c87465db5056bf1b21e47c8329ee2afbdcaa4f035074a1b70da97ced056e2664",
+  "rust_tests": {"passed": 3, "failed": 0, "seconds": 3.47},
+  "native": {
+    "rows": 261,
+    "executions": 522,
+    "images": ["original", "v14"],
+    "precisions": ["Single24", "Double53", "Extended64"],
+    "constituents": [
+      {"name": "actual_source_direct_actor_constructor_and_identity_scale", "rows": 18, "executions": 36, "instruction_addresses": 533},
+      {"name": "actual_source_direct_defender_constructor", "rows": 6, "executions": 12, "instruction_addresses": 161},
+      {"name": "actual_source_early_construction_action_contributor", "rows": 6, "executions": 12, "instruction_addresses": 349},
+      {"name": "first_defined_organization_slot", "rows": 123, "executions": 246, "instruction_addresses": 52},
+      {"name": "component_requirement_constants_and_structure_state_read", "rows": 108, "executions": 216, "instruction_addresses": 46}
+    ]
+  },
+  "direct_lab_scope": {
+    "initialized_staged_mission": false,
+    "source_precision": "Double53",
+    "direction_table_startup_precision": "Single24 explicit probe",
+    "source_precision_authority": "construct_new_bound validates the same Catalog cache Arc at the binding's explicit PC; it does not itself certify an installed Bank PC",
+    "inputs": "unowned, requestedID0, required0, clock0, phase6, seed0x12345678, variant0; exact original assets",
+    "defender_bank": "explicit fresh laboratory Bank; same actual ActorStore Ability allocator"
+  },
+  "live_entry_scope": {
+    "compiled": true,
+    "initialized_staged_acceptance": false,
+    "source_precision_authority": "map_actor_creation::Source::bind validates the actual moved Staged Bank PC and source universe before requesting the same cached binding",
+    "startup_authority": "borrows sealed StartupInputs selected by the separate PC53 hardware capture, never by source or live worker PC",
+    "parameter_writebacks": "create takes the same mutable ActorParams; callers must not clone/discard queue Params mutations",
+    "full_live_creation_parity_claimed": false
+  },
+  "actual_source_findings": [
+    "gbr_corps is Structure/MobileDeployment and has no Organization bit7",
+    "regiment_gbr_hq_infantry is Organization with primary slot4 and gbr_truck_infantry at that slot group",
+    "Transport requirement7C7840 is slot3 Mover; a mistaken Rust mapping was corrected before freeze using the unchanged native fixture"
+  ],
+  "remaining": [
+    "selected initialized Staged creation acceptance",
+    "full suffix/component/HQ/MobileDeployment and placement integration proof",
+    "positive name/numbering and Character stance/start",
+    "linked Actor creation",
+    "remaining specialized component InitCreate and InitExisting children",
+    "PostCreate, registry/spatial/scene publication, creation FX and failed-initialization destruction",
+    "leader-first Organization member creation and hero traversal",
+    "mutable retained replacement queue integration"
+  ],
+  "artificial_limits": "no fixed native Defender capacity3 limit retained; growable storage. Native component slots, requirements and placement radius10 retain gameplay/format meaning",
+  "gameplay_success_claimed": false,
+  "playable_battle_claimed": false
+}

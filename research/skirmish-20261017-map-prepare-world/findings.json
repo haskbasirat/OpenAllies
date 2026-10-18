@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "scope": "Concrete4FDA70 staged GTID/source/Kingdom/RNG/logging/capture adapter plus immediate404F60 required-warning stop; not complete positive replacement execution or battle",
+  "date": "2026-10-17",
+  "status": "production and tests frozen pending independent review",
+  "source_pc": "completed SAME moved Bank; separately from live precision",
+  "ownership": [
+    "SAME Staged ActorStore/GTID registry and canonical Bank",
+    "actual Kingdom190/Nation234, no guessed null replacement or faction",
+    "same mutable Staged RNG",
+    "borrowed process SyncA/SyncB, lazy required thread/application gate",
+    "actual staged placement or SAME adopted spatial owner; no detached pose",
+    "same actual Property instances, ordered source scan, immediate required diagnostic before later reads/append"
+  ],
+  "implementation": [
+    "New map_prepare_world::run(&mutStaged,&Catalog,&mutSyncLogA,&mutSyncLogB,livePC), now called by separately owned LoadedMap::start_mission",
+    "Opaque internal canonical Thing handle is interned lazily into SAME Bank after actual definition/source/category/Thing proof guards; no new native definition is synthesized",
+    "Actual typed Data virtual38: kinds1/18/20/21 false,2/19 true; unsupported families explicit required",
+    "Queue empty drain is concrete; positive4FC4A0 remains required pending separately authored drain",
+    "Legacy Vec warning wrappers share unchanged capture algorithm with new immediate callback entry"
+  ],
+  "native": [
+    {
+      "fixture": "native-world-leaves.json",
+      "paired_rows": 75,
+      "separate_original_v14_machines": 150,
+      "precisions": [
+        "Single24",
+        "Double53",
+        "Extended64"
+      ],
+      "executed_pins": 75,
+      "successful_seams": [],
+      "scope": "actual4EFBE0, six real Data+38 leaves, empty4FC4A0; positive4FBA50 stopped before body; inspected factory/constructor bytes are separate"
+    },
+    {
+      "fixture": "native-warning-prefix.json",
+      "paired_rows": 9,
+      "separate_original_v14_machines": 18,
+      "executed_pins": 346,
+      "required_stop": "404F60 before body",
+      "scope": "actual parameter/queue constructors,503080 ordered property scan; no later property/required-object/queue append",
+      "declared_transports": [
+        "allocator/delete",
+        "CString manager/empty/free",
+        "ordinary source owner108"
+      ]
+    }
+  ],
+  "proof_correction": {
+    "withdrawn_fixture": "native-world-leaves-before-table-audit.json",
+    "reason": "invented classification-table setup could alias high-slot native pointer into an earlier slot; removed and now validates EVERY occupied native slot against own GTID",
+    "corrected_fixture": "native-world-leaves.json",
+    "corrected_sha256": "dd94753690aa6186ed2646e1d92935ab1341ae008d0ef1e9b5415f8f5823e2e1",
+    "all_case_payloads_and_executed_pins_and_dispatch_metadata_equal_before_after": true,
+    "old_producer_preserved": "native_world_leaves_before_table_audit.py"
+  },
+  "author_tests": [
+    {
+      "binary": "frozen-map-prepare-tests-v3.exe",
+      "log": "author-tests-v3.log",
+      "passed": 3,
+      "ignored": 1,
+      "failed": 0
+    },
+    {
+      "binary": "frozen-map-prepare-tests-v3.exe",
+      "log": "author-actual-03.log",
+      "passed": 1,
+      "failed": 0,
+      "seconds": 12.83,
+      "scope": "actual codec-only Firefight; traverses2386 same GTID/arena entries; preserves allocations/RNG through NULL Nation473370 at all3livePC; separate explicit replacement fixture is NOT native selection"
+    },
+    {
+      "binary": "frozen-legacy-queue-tests.exe",
+      "log": "legacy-queue-actual.log",
+      "passed": 2,
+      "failed": 0,
+      "seconds": 13.07,
+      "scope": "30 original capture/growth/alias/order rows and actual Firefight/current ordered property instance warning/error prefix"
+    }
+  ],
+  "actual_input": {
+    "map": "DeveloperMaps/(3v3)Firefight.RMP",
+    "source_precision": "Double53",
+    "objects": 2386,
+    "rng_before": 3724158463,
+    "rng_after": 3724158463,
+    "source_gtid": 1688,
+    "source_definition": "placeholder_corpsunpacked",
+    "owner_kingdom": 1676,
+    "explicit_replacement": "gbr_corps",
+    "explicit_replacement_only": true,
+    "native_nation_selection_claimed": false,
+    "initialized_world_claimed": false,
+    "full_map_prepare_claimed": false
+  },
+  "additional_narrow_visibility_change": "live_object_init::potentially_visible changed only to pub(crate) for SDK removal adapter; signature/body/MemoryFields unchanged; admitted source/class validation remains caller responsibility",
+  "remaining_required": [
+    "positive4FC4A0/4FBA50 actual destruction, creation, properties and publication (SDK author active)",
+    "404F60 actual runtime diagnostic sink on reached foreign-property/missing-substitution",
+    "actual initialized/configured Kingdom Nation must come from real ConfigureGWorld/Creator prefix before473370; diagnostic codec input has true null",
+    "allocator-failure/C++SEH/unwinding and corrupt native pointer behavior outside portable guard scope"
+  ],
+  "preservation": "Our source changes do not write original/v14 files, saves, release folders, root Cargo.toml or Cargo.lock; source backup copies retained. Parent final checkpoint independently verifies overall workspace preservation.",
+  "no_claims": [
+    "No playable battle",
+    "No full managed map load or full4FDA70 callback-body parity",
+    "No campaign or multiplayer or internet test",
+    "No game exe/release build from this task"
+  ],
+  "pins": "pins.json",
+  "independent_review": "pending external reviewer; do not treat missing review as accepted",
+  "jobs": "All author Rust and immutable native replay commands completed and reaped; no original game process started.",
+  "immutable_native_replays": [
+    {
+      "log": "native-world-replay.log",
+      "passed": true,
+      "paired_rows": 75,
+      "machine_runs": 150,
+      "pins": 75
+    },
+    {
+      "log": "native-warning-replay.log",
+      "passed": true,
+      "paired_rows": 9,
+      "machine_runs": 18,
+      "pins": 346
+    }
+  ]
+}

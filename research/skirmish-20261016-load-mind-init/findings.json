@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "status": "author_verified_pending_independent_review",
+  "scope": "Saved Element529EC0/Regiment51D1B0 InitExisting over actual held owner and real action child, native constant/predicate state getters, native required-error prefixes. No whole record/map/battle completeness claim.",
+  "source_sha256": {
+    "load_mind_init_world.rs": "3f8d748a7a371a625fadfa49f51df4794ac3c85ebe6bf5ad087daf7eb93c2744",
+    "load_mind_init_world_tests.rs": "b729eaa0a95e200f04c34d81f607a8433a3f6f49d4e845dbb8ff3492eeebdf09",
+    "saved_actor_state.rs": "ddb386473a87d32bfd4ba2f36312e2c3277b453e1af908b71247b82aa9431054",
+    "saved_actor_actions.rs": "54093c89110b5a8c5921d45281b6979ee56de79290f8391d17f44cb5ea88fe95",
+    "saved_organization_actions.rs": "6a5ba089ee9388463aff563ccd608f8e80d75c84fa31aab560a68fc1a2a13593",
+    "saved_economy_values.rs": "374914f6f69894b9aecfde392a17468e449512c8244abd00e5799cf06ea1c8b9",
+    "saved_economy_refresh.rs": "8f6022c36d1871700b43f4b64c3065369405ab04115be10df53e847d69510f86",
+    "saved_owner_actions_tests.rs": "51a0432c54890be824f56d46453a85a52455a76d4734d97ae251a24b2e0f1b29"
+  },
+  "evidence_sha256": {
+    "native_mind_init.py": "d3a6369020f39bc3ec3b04e8c1be5462303325a4636e1d1c13d03e0c679fc736",
+    "native-mind-init.json": "e61a955767530f083cb78d32ce3cb5bf33f98ca298b7ecb9e4d93e614d10f8a7",
+    "actual-before-init-v2.json": "dab914caba2d85f18cdf432670cee600a6be8d6c9e6766ddcf49a49ae53ec003",
+    "actual-four-sync-v2.json": "d3dfdb4577dd3a030f396467c2777e81d6770cd1f039bcfe13bf99e84c5f8141",
+    "native-replay-v2.log": "7f5cafb4709ba61506d943eaf39d9c813be3c68ecf25c7c02a6cc7cf80df2b7e",
+    "frozen-aa-runtime-mind-tests.exe": "c60e8f9a8a3211af987fb81d11da4345cbca3a5e4a876bb7f26b20a5a4141b84",
+    "mind-world-init-helper-frozen.rs": "7befdd0bddf5ce1cbbfeca4cc9303afa7796228f9169468e2a1c6812723b5280",
+    "saved-actor-state-split-owner-frozen.rs": "ddb386473a87d32bfd4ba2f36312e2c3277b453e1af908b71247b82aa9431054"
+  },
+  "native": {
+    "rows": 903,
+    "fresh_original_v14_executions": 1806,
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "outcomes": {
+      "requiredResetElement": 27,
+      "required4D4A90": 189,
+      "complete": 69,
+      "required4D16B0": 141,
+      "required4D1350": 153,
+      "requiredStateVirtual20": 297,
+      "requiredResetRegiment": 27
+    },
+    "address_byte_pins": 284,
+    "executed_instruction_pins": 268,
+    "stopped_child_entry_pins": 16,
+    "after_init_vtable_pins": [
+      {
+        "kind": "element",
+        "slot": "0xa35824",
+        "entry": "0x4b2830",
+        "bytes": "30284b00"
+      },
+      {
+        "kind": "regiment",
+        "slot": "0xa335b4",
+        "entry": "0x4b2830",
+        "bytes": "30284b00"
+      },
+      {
+        "kind": "aircraft",
+        "slot": "0xa32724",
+        "entry": "0x4b2830",
+        "bytes": "30284b00"
+      }
+    ],
+    "qualification": "Real coordinator/getters/state body execute; reset/entry/leave/action children stop at actual entries. Unsupported dynamic getters stop at genuine virtual20. No mocked success. Actual context fields captured; unavailable unreached fields poisoned."
+  },
+  "actual": {
+    "owners": [
+      15283,
+      15284,
+      15285,
+      15286
+    ],
+    "definitions": [
+      "herd_horse",
+      "horse",
+      "horse",
+      "horse"
+    ],
+    "calls": 12,
+    "source_and_construction_precision": "Double53",
+    "live_precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "all_completed": true,
+    "same_component_core_states_commands": true,
+    "qualification": "Actual stopped Kursk animals, not military combat units. Diagnostic InspectPartial source restore is not full native Load or whole record lifecycle parity. Real action child uses same actual components/inventory/source/ability owners."
+  },
+  "tests": {
+    "corrected-mind-capture-retry.log": {
+      "passed": 3,
+      "sha256": "24c9da162c414ff7e2743d50e60b89ec45972598ab95b11deb253816aa91738c"
+    },
+    "corrected-mind-immutable-replay.log": {
+      "passed": 1,
+      "sha256": "6ff4fb1330be1159fe3e894f31ca2a00937b683f05aa95fe5903fd050e90c4b8"
+    },
+    "regression-state.log": {
+      "passed": 2,
+      "sha256": "dbfa0d91fc199aa17265955db8964194e63999c5083ba34958afc782a4def453"
+    },
+    "regression-saved-mind.log": {
+      "passed": 1,
+      "sha256": "e19c15a29a73050dc0f72e94546c471bd26bfdcba97ade9e44720bdb9199a364"
+    },
+    "regression-owner-actions-projected.log": {
+      "passed": 1,
+      "sha256": "bd99e61e890531df549140eb508eeb88e8caaedd76ec2e4c9c59a77b12109fac"
+    },
+    "regression-live-mind-world.log": {
+      "passed": 3,
+      "sha256": "b074f9da39c6f7866e3b30867965b9726ae16edf28830f48e66e6040ab08b603"
+    }
+  },
+  "test_profile": {
+    "cargo": [
+      "--release",
+      "--locked",
+      "--offline",
+      "-j4"
+    ],
+    "CARGO_PROFILE_RELEASE_LTO": "false",
+    "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "16",
+    "qualification": "Root-approved test-only optimization override; shipping release profile unchanged. Earlier split-state tests also passed default thin-LTO/codegen1."
+  },
+  "shared_mind_world_addendum": {
+    "tested_pre_command_method_sha256": "7befdd0bddf5ce1cbbfeca4cc9303afa7796228f9169468e2a1c6812723b5280",
+    "current_source_sha256": "a2060e7a1e917a6c36e5058dfd1715a64dc8b32089ac0c2b8674074bed816272",
+    "qualification": "Leader author separately added approved process_command method. Removing exactly that new method/comments reproduces the pinned tested file hash. InitExistingWorld trait/helper/forwarder are unchanged; exact hash-matched snapshot retained."
+  },
+  "corrected_defect": {
+    "entry": "51D690",
+    "native_rule": "Disable.status==2 delegates to12; all other statuses return17 at51D6A1",
+    "failed_log": "final-mind-replay.log",
+    "qualification": "Initial successful execution was not accepted as parity. The native-backed903-row test found the bug; production fixed with fixture unchanged."
+  },
+  "legacy_owner_actions": {
+    "passed_log": "regression-owner-actions-projected.log",
+    "qualification": "Initial failure was zero matching oracle INPUT rows, not output mismatch. Author now explicitly projects only the old bounded oracle component/member fields while preserving/restoring actual allocations. Native expected outputs unchanged; production action files unchanged."
+  },
+  "remaining_required": [
+    "derived empty-stack reset services",
+    "actual state-entry4D4A90 and leave4D16B0 world effects",
+    "unsupported dynamic state virtual20 getters",
+    "Aircraft517C60 flight init",
+    "military/combat/AI/complete battle integration"
+  ],
+  "historical_nonfinal": [
+    "actual-before-init.json",
+    "actual-four-sync.json",
+    "native-mind-init-v1-context-probes.json",
+    "first-sync-capture.log",
+    "final-mind-replay.log"
+  ],
+  "documentation": "README.txt"
+}

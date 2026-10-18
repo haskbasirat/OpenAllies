@@ -1,0 +1,67 @@
+Original replacement-color behavior
+
+Original73A880 sets fixed-function COLOROP13 (BLENDTEXTUREALPHA), ARG1
+TEXTURE2, ARG2 TFACTOR3. ALPHAOP3 (SELECTARG2) selects factor alpha.
+The immediately following739B40 stage MODULATE4 multiplies CURRENT1 by
+DIFFUSE0 for both RGB and alpha. Therefore the plain base/diffuse path is:
+
+  C = (texture.rgb * texture.a + team.rgb * (1-texture.a)) * diffuse.rgb
+  A = team.a * diffuse.a
+
+Texture alpha0 is full team replacement, alpha1 keeps the original texture.
+This mask is not cutout transparency. Native87A3 preprocess clears material
+alpha-blend and alpha-test bits for RepColor. A separate opaque viewer target
+may output alpha1; do not assert native diffuse alpha is always1.
+
+Setter716870 copies supplied teamRGB into a localRGBA and sets alpha1;
+739710 copies that into CustomEffectExtraData+14, while+11 enables RepColor.
+7396B0/C0 read those fields. 702440 converts the factor into packed ARGB;
+the state oracle stubs that color-pack boundary and does not claim to prove
+its rounding. Native optional detail/decal/glow stages and exact lighting,
+color-space, fog and precision are beyond this plain-stage contract.
+
+Evidence: trace_repcolor_states.py executes full73A880/739B40 and actual
+89FF80 state writes in isolated Unicorn. Six cases cover active/inactive,
+missing tag/effect/texture and diffuse-stage ordering. Stage allocation,
+tag lookup, texture binding, RGBA packing and render-state submission are
+explicit stubs; no pixel renderer or driver is executed. The report pins
+every selected original code window and verifies equality with v14.
+
+Direct3D definitions (Microsoft primary documentation):
+https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dtextureop
+https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dta
+https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dtexturestagestatetype
+
+Original palette/default
+
+Data/AVars.tgi declares ReplacementColorDefault=1,1,1. The final entry in
+Game/kingdom_colors.tgi is IDS=default with the same white value, and its
+comment says it is expected by code and listed last for assignment. The
+file has18 other authored colors. original-replacement-palette.json keeps
+their names, raw RGB spelling and spans and verifies each extracted source
+byte against the actual original Data.rwd member. A model-inspector color
+picker is preview state; no map actor kingdom/ownership is inferred.
+
+Tag provenance and propagation limits
+
+871CC0 first tests an existing named extra, then case-insensitively compares
+whole NiStringExtraData values. It does not walk parents. Existing named
+tag presence counts regardless of its Boolean/string payload value.
+Before this,8790B0 scans string extras line-wise with CRLF/end handling and
+splits '='. 877C50 recognizes ten exact-length/case-insensitive names:
+Mod, Eq, Ambient_RepColor, EmRC, RepColor, FastPath, tred, Sg, Sg2, mkf.
+Recognized bare tags become named Boolean true extras; name=value becomes
+named string extras. No arbitrary name-substring matching is justified.
+
+879A90 copies a36-byte parent processing context before walking each object.
+RepColor state/source live at context+4/+8; it can attach a named marker to
+a geometry child without a direct marker. Children receive the updated
+context. But879B72 resets these fields (and shadow state) for a nongeometry
+object before that object's own tags are applied. Therefore a blanket OR
+of all ancestors can overtag descendants through an untagged intermediate
+NiNode. The metadata exporter must reproduce this boundary or clearly
+restrict itself to verified hierarchy cases. An untagged object named
+"Sg01" alone is not proof of a native shadow marker.
+
+No native binary, accepted runtime, profile, original artwork or original
+converted cache was changed by this research.

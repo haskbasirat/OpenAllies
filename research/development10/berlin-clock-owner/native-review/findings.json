@@ -1,0 +1,201 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T16:04:56.001896+00:00",
+  "reviewer": "/root/state_binding_review",
+  "implementation_owner": "/root/builder_source_review",
+  "status": "Native read/source lifetime diagnosis complete; no implementation or Berlin execution acceptance",
+  "observed_error": "4EC4C8 actual GWorld+E0 clock owner",
+  "conclusion": "Before activation the actual clock authority is the same restored Staged.clock. Lend it explicitly through all reached fresh/published memory entrances, and read begin.0 only at the existing first refresh getter. The readonly mission Catalog intentionally owns source capabilities but has lost its immediate-load runtime clock loan.",
+  "native_sites": [
+    {
+      "site": "4F7D2F",
+      "fact": "GWorld constructor publishes its actual THIS to process global B36534; no thread-local or timer substitute is indicated."
+    },
+    {
+      "site": "5A302A/5A3031",
+      "fact": "MapResource worker loads that same B36534 in ECX and calls actual GWorld Load4FC600."
+    },
+    {
+      "site": "4FC6E4/4FC6F3/4FC702/4FC711",
+      "fact": "World Load passes actual DC/E0/E4/E8 destination addresses to stream virtual0; each transfer is four bytes. Rust GWORLD decode and restored clock field order match."
+    },
+    {
+      "site": "4F2871",
+      "fact": "Fresh Init zeroes E0 before load; this constructor fact cannot replace the subsequently loaded or current E0."
+    },
+    {
+      "site": "4EC4AE/4EC4BD/4EC4C8/4EC4D3",
+      "fact": "Refresh reads process GWorld, reads raw E0, stores Record[0], then invokes actual name virtual24. It performs no clock calculation or float conversion."
+    },
+    {
+      "site": "4F9A0D/4F9A1A/4F9A35",
+      "fact": "Live step copies previous E4 into current E0, then computes/stores new E4. After activation authoritative ownership moves into the same ClockedState World clock."
+    }
+  ],
+  "source_lifetime": [
+    "WorldInventory::decode verifies source GWORLD chunk and reads tick/begin/end/step in native DC/E0/E4/E8 order.",
+    "restoration.rs577 constructs NativeClock from those actual saved fields, validates finite values and positive step, then628 loans &clock into immediate Catalog.",
+    "catalog.into_load_parts retires scoped clock references; Attempt::into_staged moves the same clock field. SourceData correctly does not retain it.",
+    "local_skirmish_worker.rs189 constructs a fresh readonly Catalog after post_load, binding Resource/source graphs/Session/execution/settings but no clock; same Staged enters finish_load and start_mission.",
+    "New Catalog None is a missing loan, not evidence that current World time is zero or that no World exists.",
+    "map preparation/startup current source contains no write/reset/advance of Staged.clock. Genuine activation moves that field into aa_world::World, later ClockedState."
+  ],
+  "lazy_gates_and_prefix": [
+    "4EBC70 skips when neither keeps nor eligible; skips null Kingdom slots; reads nonmajor/current existing slots/shared visibility+exploration/alive in native order.",
+    "Timestamp is unnecessary on skipped eligibility, existing-memory retention, deletion, empty Kingdom traversal, or unremembered branches. Do not require clock at public entry.",
+    "4ECA80 guards null/nonmajor Kingdom, alive eligibility or reached dead potential-visible child, and already-populated slot before allocation/refresh.",
+    "If needed, slot table allocation precedes fresh 0x38-byte Record allocation/constructor; then4EC4A0 reads time. Missing time must preserve this allocated but unlinked Record.",
+    "Successful time read/store is first record field mutation; later name/pose/definition/owner/aspect/stats errors preserve timestamp and every earlier field store.",
+    "After successful full refresh, native rereads Kingdom index and publishes the Record into that actual slot, then checks active observer. No earlier slot publication or observer callback.",
+    "Actor64 show/explore and global Fog temporary bit30 clear may already be committed before memory-create/clock failure; no cleanup rollback or extra reads."
+  ],
+  "required_binding": [
+    "Clock loan must come from the same Staged used by fresh actor creation/footprint/Zone/published refresh and global Fog; carry through recursive Actor64 without a scalar snapshot.",
+    "Keep old immediate Catalog loan behavior where retained. Prefer explicit optional &NativeClock in the shared memory carrier; absence errors at native time read after allocation, not eagerly.",
+    "Avoid externally borrowing a child clock across a broad mutable &mut Loaded/Staged call. Thread the disjoint clock field at its actual caller alongside actors/Bank/World.",
+    "No queue clock, source inventory reread, stock clock, cloned NativeClock, captured timestamp, PerformanceTimer, QPC, Session time, map mode, or zero fallback.",
+    "Do not add runtime clock to SourceData/source-transfer cache: transfer deliberately retires the immediate runtime loan before the owning clock moves.",
+    "Existing same source/Bank/PC/proof/generation/layout/published placement preflights remain mandatory portability guards; they do not establish native invalid-pointer fault equivalence."
+  ],
+  "fresh_execution": {
+    "accepted_fixture": "native-clock-read-probe-v2.json",
+    "paired_rows": 21,
+    "native_executions": 42,
+    "executed_instruction_pins": 17,
+    "required_name_entry_pins": 1,
+    "matrix": "Original/v14 x PC24/53/64 x seven explicit finite current E0 words; current E0 changed after ctor, DC/E4/E8 deliberately distinct.",
+    "assertions": "Timestamp equals current E0 bit-for-bit (including signed zero and low bits); required real name entry stops; prior old name, position and definition stay untouched.",
+    "earlier_probe": "An additional42 native executions produced identical numeric rows in v1; two static disassembly starts were found mid-instruction and corrected before accepted v2. No native row or pin was weakened.",
+    "rust_builds_or_runs": 0,
+    "actual_berlin_runs": 0,
+    "crate_edits": 0
+  },
+  "existing_evidence_audited_not_reexecuted": [
+    "native-memory.json: actual4EBC70 iterator/gates and partial4ECA80 create prefix; eligibility/create/delete callbacks explicitly labelled test seams.",
+    "native-memory-refresh.json:252paired/504machines; six actual class vtables/current fields; required name/aspect/stat stops.",
+    "native-memory-publication.json:18paired/36machines; real allocation/refresh/slot publication with explicit eligibility seam, observer stops and later Kingdom index reread probe."
+  ],
+  "limits": [
+    "No exact Berlin caller/actor/time value is derivable from the shared leaf error alone. Earlier fresh MapPrepare/Zone/footprint can reach it before global Fog.",
+    "New probe uses explicit lab fields and real native instructions, not actual map captured current values or whole worker execution.",
+    "Whole load/init/live-step/worker lifecycle facts are static byte-equal PE/source audits and existing bounded evidence, not newly executed end-to-end.",
+    "Builder owns code changes/checks. This report does not certify the fix, startup completion, gameplay, readiness, or a release binary."
+  ],
+  "pins": [
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/catalog.rs",
+      "bytes": 87782,
+      "sha256": "c24441a58218b6a0aa8110d2b3b5e8f2f3eb0cd3c239ce4eeb7fd2af96ad9bc4"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/restoration.rs",
+      "bytes": 44638,
+      "sha256": "54d92b671f88b653134ebeca2177538148b7911383b102fd44907eeebd9a1edd"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/load_store_memory_refresh.rs",
+      "bytes": 16840,
+      "sha256": "91b52d812c0f37ba54439c2d8f2916a7634eb8dd7634541fe047a0b55c79f1c1"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/load_store_fog.rs",
+      "bytes": 28845,
+      "sha256": "73741c7f8ad84127f8b81d8673a3d89d9b8ef85c9bd44d06cc3c5483c38c5b72"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/load_mission_start_world.rs",
+      "bytes": 16860,
+      "sha256": "cc5e1f65555c05d310a642ac3aaea02706ed0119b5d7e3e19953a147c1cbd229"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/stored_actor_reveal.rs",
+      "bytes": 7166,
+      "sha256": "646ec3075edfdcd0c002af11204685c843a447c236e7ced65ad77bd124626747"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/map_actor_footprint.rs",
+      "bytes": 8453,
+      "sha256": "459ae3af2b9635f2db03bb4da42ccde2a48c0ed97f5db56c51ea4d43cd23579e"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-runtime/src/live_world_frame.rs",
+      "bytes": 34729,
+      "sha256": "6b33268f98eb2880353c0e0bc98d093ed73a0c8fa15a32c562a80c0cf4efd257"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review-source/crates/aa-netcode/src/local_skirmish_worker.rs",
+      "bytes": 18092,
+      "sha256": "50d36b6f42fcc594499d8d063cd6f544f64fbe9de9caf72e0ff1bbb341514a7b"
+    },
+    {
+      "path": "crates/aa-mapworld/src/world.rs",
+      "bytes": 10006,
+      "sha256": "16965ed4c51e28c7daa6cca4e2df5bd7adf917dba2b7dcd8a8f00af011ef4e3c"
+    },
+    {
+      "path": "crates/aa-simulation/src/arithmetic.rs",
+      "bytes": 6957,
+      "sha256": "2ed1bfbb72adb059912a926814fade19b55df8b57fcbca88968f6ff3f67a4abf"
+    },
+    {
+      "path": "crates/aa-runtime/src/initial_world_sync.rs",
+      "bytes": 11282,
+      "sha256": "91721f6b6f0ccd2e4e04f4dfd6a246fb7da06b055c33f25be2dc551f3f945506"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_memory.rs",
+      "bytes": 14113,
+      "sha256": "821dbf70901a7e9367ec75683aca414327f280d7e0b0ab187df8cdc7e1b21c05"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-memory/native_memory.py",
+      "bytes": 7462,
+      "sha256": "fd8bd1e09fc08600c5254cdda20a015d40371e71ce734eeb3538ee5123f14a12"
+    },
+    {
+      "path": "research/skirmish-20261016-load-detection-memory/native-memory.json",
+      "bytes": 285548,
+      "sha256": "da1ab923040284f1a35afd5b81ac901c5bbb0e6321e2b8380c42850cc9958a9b"
+    },
+    {
+      "path": "research/skirmish-20261016-store-memory-refresh/native_memory_refresh.py",
+      "bytes": 5896,
+      "sha256": "2088e4b6f86ae31a039e2ab64b3fad744e338e3bf3e5c4f5fa053606dd303e6e"
+    },
+    {
+      "path": "research/skirmish-20261016-store-memory-refresh/native-memory-refresh.json",
+      "bytes": 313568,
+      "sha256": "61cc1c789ad486da98ef12af5597905599452249b92ea105fc302814b0f58cc5"
+    },
+    {
+      "path": "research/skirmish-20261016-store-memory-refresh/native_memory_publication.py",
+      "bytes": 3534,
+      "sha256": "373a713ac15ecc037852c34594860ec6d08ba152b26157be31e1fa22b69c1e2a"
+    },
+    {
+      "path": "research/skirmish-20261016-store-memory-refresh/native-memory-publication.json",
+      "bytes": 41750,
+      "sha256": "ca57b0d6892cfc7b77c249e318a0afda6e9c58736522949f95519262b7a4632d"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/caller-review.json",
+      "bytes": 12339,
+      "sha256": "635f53fbc3afb3271382eb8ad19379f38ffab8b946cfc1d85c9f3f7fd9157636"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/native-review/probe_clock_read.py",
+      "bytes": 4904,
+      "sha256": "1f229ff6af8dfd6ce996cfa581b06eaef024bc8fa2662f45f7313de9846c4ff6"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/native-review/native-clock-read-probe-v2.json",
+      "bytes": 53492,
+      "sha256": "01061882d538a3fe75a378290b524014b661576a01b9f6bc214c75e0f43132d7"
+    },
+    {
+      "path": "research/development10/berlin-clock-owner/native-review/native-owner-dispatch.json",
+      "bytes": 6033,
+      "sha256": "315723f8c7c75adcaf9fa0b1e08fddab6a2f711e05b6cb009c688a4b08baa6d3"
+    }
+  ]
+}

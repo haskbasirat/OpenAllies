@@ -1,0 +1,31 @@
+{
+  "scope": "Actual saved first Kingdom composed Object base, sourcePC53/livePC24/53/64; no whole battle completion claim",
+  "source_files": {
+    "crates/aa-runtime/src/load_object_init_world.rs": "9c7bc7bb9a9591390dedf5dd8b68992a16b37405d66a07314944024fb9f25f92",
+    "crates/aa-runtime/tests/load_object_init_world.rs": "61a1d2eaac3bd38f5fa83fe4fca5513b1b9fc5b454237669a2dd7a552082c824"
+  },
+  "tests": {
+    "load_object_init_world": 1,
+    "live_placement": 3
+  },
+  "actual_capture_sha256": "1badfcf2b7919b7e4b0abadccb676e9718be6f579a33788f310f6c3dc27341b1",
+  "test_log": "../skirmish-20261016-load-placement-children/tests-final.log",
+  "actual_record": 781,
+  "actual_source_precision": "Double53",
+  "live_precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "session_scope": "Real aa_netcode Session field_f8 borrowed directly, initialized from separately proved native constructor store; no whole Session construction parity claim",
+  "remaining": [
+    "diagnostics/memory destruction and positive placement children mandatory",
+    "whole record derived Init/PostCreate/registration independently integrated by root",
+    "no playable battle established by this composed base test"
+  ],
+  "settings_alias_integration": {
+    "evidence": "../skirmish-20261016-world-settings-alias/findings.json",
+    "actual_mode_borrow": true,
+    "affected_regression_tests_passed": 5
+  }
+}

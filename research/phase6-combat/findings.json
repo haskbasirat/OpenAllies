@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Body damage and corpse initialization",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "rust_tests": 13,
+  "focused_historical_health_damage_dying_tests": 8,
+  "native_damage_cases": 219,
+  "native_dying_cases": 84,
+  "historical_body_cases": 270,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-body"
+      ],
+      "exit_code": 0,
+      "log": "body-tests.log",
+      "sha256": "de30ea55c670c94919d4bdbf769e2fad43f5779f3a4080eb1eed5f4f529214c0"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-body",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "943945add9488f46a6af47c633768bfc6bd9b56aca7e806a68f8a5121a127d6c"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-body/Cargo.toml": "a032c2419d7ff4770f42e41b45e1ad038814752efd239dda6f1addf9b2aee3d7",
+    "crates/aa-body/src/lib.rs": "2b1f80a95d899bc66404405b2cd4387b1369d3abe0d0bcb3c23e284d9d96fbf3",
+    "crates/aa-body/src/damage.rs": "7b9e06482bbe61bf7e0ffa9f0d7d8486a047f39f72736f298cf6721ac119d09b",
+    "crates/aa-body/src/dying.rs": "a261c178c3dccf3f92a48a61ca16d1b54d3eef4baef9d24fedd446081a84d2c2",
+    "crates/aa-body/tests/native_parity.rs": "89009916713535946fc8cb6305029c925f3c704eb76b808c53594db89a8de7da",
+    "crates/aa-body/tests/native_damage.rs": "3bfdb836fbcdd66b8b4433248ede2f211336e1f39b33bd1d11b123c8ce0e9604",
+    "crates/aa-body/tests/native_dying.rs": "a38c47ca3eaba1bb094b3d8bb9b57eeda6d0b793780aee56dfd5de73e57b3603",
+    "crates/aa-body/README.md": "756ca110a3a0425c2ed60f939220494618ffb3ab1fe2f618d1635140eeb600d8",
+    "research/phase6-combat/README.txt": "c6c29df65d8877d168a294ecb70973277eb02b8cfd0067170a202b53963c8b93",
+    "research/phase6-combat/inspect_native.py": "a5bb1d361f276715559df3d8083d427a34f8496c87b3c1ea5ce0c5b50932083a",
+    "research/phase6-combat/native-ranges.json": "71c3c048e3ab1d14db2e26e99d2c3bd3199180e7685216c311bafd8419b44d9d",
+    "research/phase6-combat/original_damage.py": "b7fa2d9c0fe62cbe126eb7f58905f1b107796330d499421590dd9695b60c63c7",
+    "research/phase6-combat/damage-native-oracle.json": "9c89e113d7729c5d13bc6a478996e7b2b452d2f35b111541b794ae6e0bee7281",
+    "research/phase6-combat/original_dying.py": "3ec29163fa1d5ac86ee1d42d07a80692dd0d0ac02cfa8cfdfbf8ccff28d4991a",
+    "research/phase6-combat/dying-native-oracle.json": "a5855265f5f2d1f20e913bcdb6ee248e0f08f29cd7df65a4ca6db60b2ca6cbf3"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+  },
+  "scope": [
+    "5625C0 outer damage including required linked/wall dispatch, arithmetic/history, component order, capture-health and death queue selection.",
+    "561E50 source-aware setter with required graph/source resolution, XY-only directionalFX and extended modifier maximum.",
+    "562380 corpse timing, optional ability lifetime, repeated terrain/dimension calls, sink arithmetic and timer/allegiance sequence."
+  ],
+  "limits": [
+    "No fully integrated combat world, implicit graph/component defaults, actor factories, ownership, abilities, timers or death queues.",
+    "Upstream aa-combat and sibling credit/experience modules have separate implementation/evidence scopes; this report does not expand its review to them.",
+    "Explicit finite PC24/53/64; errors are nontransactional and must not trigger automatic retries.",
+    "Native diagnostic logging/string lifetime and invalid native pointer behavior are excluded.",
+    "Visited original byte pins include intercepted seam entry addresses, not execution behind those leaves."
+  ],
+  "peer_review": "independent-review.json and any separate dying review; this producer is not its own review."
+}

@@ -1,0 +1,25 @@
+[
+  {
+    "address": "0xb3d868",
+    "parent": "0xb3d804",
+    "name": "KKC_ResourceManagerTaskLoadGame",
+    "crt": "0x9d0490",
+    "bytes": "6a0068388eb3006804d8b30068144ea400b968d8b300e8a592a3ff6890d79e00"
+  },
+  {
+    "address": "0xb3d804",
+    "parent": "0xb38e54",
+    "name": "KKC_ResourceManagerGWorldTask",
+    "crt": "0x9d03a0",
+    "bytes": "6a0068388eb30068548eb30068684da400b904d8b300e89593a3ff6800d89e00"
+  },
+  {
+    "address": "0xb38e54",
+    "parent": "0xb38e54",
+    "name": "TGC_ResourceManagerTask",
+    "crt": "0x9c8030",
+    "bytes": "6a0068388eb30068548eb300686c349f00b9548eb300e80517a4ff6850cc9e00"
+  }
+]
+B3DAC0 name TGC_ResourceManagerTaskSave
+Clockvf8 0x75fcb0

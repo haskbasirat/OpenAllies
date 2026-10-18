@@ -1,0 +1,130 @@
+AXIS & ALLIES RUST REWRITE - DEVELOPMENT 09 CONTINUATION
+2026-10-16. Read docs/NATIVE-PORT-RULES.md before further work.
+
+PRIORITY AND STATUS
+Skirmish first, multiplayer second, campaign last. The rejected aa-game/aa-net
+simulation stays archived. No overall completion percentage is established.
+Development-09 adds an actual native map-record loading diagnostic to the
+original-menu/asset-viewer client. It is NOT a playable skirmish build.
+The older source checkpoint docs/SKIRMISH-ECONOMY-LIFECYCLE-20261016.txt remains
+the detailed authority for the previous economy, observer and lifecycle work.
+The package's manifest/VALIDATION.txt specify the exact delivered executable,
+tests and limits; no compilation or oracle count proves full game completion.
+
+USER-VISIBLE CHANGE
+Start Asset Viewer.cmd -> Maps -> select a map -> Check map loading.
+A background worker uses real original/v14 rules, Resources and saved records.
+The panel reports the selected source identity, loaded/failed/skipped records,
+queued conversions and the first unsupported operation. It does not execute
+immediate Init/PostCreate, later PostLoad, conversion execution or publication.
+Changing the selection does not relabel an already-running result. Asset loads,
+model inspection and duplicate diagnostic jobs are blocked while it runs.
+CLI: --map-restore-check <map ID or original RMP path>
+Optional --map-restore-report <new.json> refuses to overwrite an existing file.
+Exit 0 means the diagnostic completed; unsupported records may still exist.
+The result schema axis-allies-native-map-check-v1 always says battle_ready=false.
+Each attempt owns its own stopped source-scoped managed load context. Mode1,
+PC53 and elapsed0 are explicit diagnostic inputs, not observed native uptime.
+
+NEW CONNECTED NATIVE SOURCE
+1. aa_combat::organization_combat_value recomputes over borrowed real storage.
+   It preserves initial-count/reset ordering, current-array recapture, member
+   and Performer rereads, lazy body/value reads and vacant-bit5 gating of1E4.
+   306 original/v14 comparisons across PC24/53/64 support the scoped port.
+   research/skirmish-20261016-borrowed-combat-value/
+
+2. aa-runtime saved_organization_combat connects that coordinator to the actual
+   saved Organization, owner Actor, generation-checked registry and current
+   canonical layout slots/parameters. The Catalog computes native component
+   masks without forcing unrelated Ground/Character payloads, caches by source
+   owner/precision and refuses changed/shadowed canonical sources.
+   66 original/v14/all-PC comparisons and12 portable error/identity checks.
+   Nonzero saved Performer/Body probes are explicitly inserted test inputs;
+   observed partial saved Actors still lack actual initialized Performers.
+   Completed ActorData+1E4 remains an explicit error, never a guessed zero.
+   research/skirmish-20261016-saved-org-combat/
+
+3. Organization member-state4D1080 reads actual Actor+104 bit2, including the
+   temporarily executing owner. Missing, loading, stale and non-Actor records
+   fail explicitly. 222 native cases and2 focused tests support this leaf.
+   The tutorial02 record boundary now reaches the missing4D64F0 owner state
+   change. Its regression still checks all8 original membership prefixes.
+   Only the expected boundary assertion was updated; old failed logs retained.
+   research/skirmish-20261016-member-state-bit/
+
+4. aa_actors::actor_init_null ports4D7230's NULL-placement coordinator without
+   reusing the different fresh-creation path. Preserves+138, current component
+   lookups, Track definition/order/arithmetic, allocator-null144 and Mind-last.
+   Mandatory Object/component/world services are not fabricated.
+   972 native cases,9 numeric refusal checks,2 Rust tests, independent review.
+   research/skirmish-20261016-actor-init-null/
+
+5. aa_actors::object_init_null ports4EBE50,4EE700,4EFA40/4EF6A0(NULL) ordering
+   and actual Actor/Kingdom vtable leaves. Loaded-instance placement, geometry,
+   spatial membership, blocking, footprint and visibility remain required.
+   306 paired rows /612 original+v14 executions;2 tests; independent review.
+   research/skirmish-20261016-object-init-null/
+
+6. combat_value_source exports read-only definition_inputs, ability_input and
+   actor_manager_order. It preserves all1028 registrations in native reverse
+   creation order and retains all11 catalog diagnostics. This is an INPUT
+   binder, not a producer of completed1E4/30C/36C values. Tested10 real source
+   definitions across3PC,240 getter calls and60 argument-assembly prefixes.
+   Three Rust tests and narrow independent review passed.
+   research/skirmish-20261016-combat-value-source/
+   Separate settings/means/context proof (42 cases) is under
+   research/skirmish-20261016-combat-source-settings/. Its author did not
+   independently certify their own proof in the source-binder review.
+
+CRITICAL LIFECYCLE GAP - DO NOT WORK AROUND IT
+Native LoadThing4FAE80 calls record+D8Load, then if Thingbit7 is clear calls
+record+E8Init(NULL), checks AL, calls+ECPostCreate(0,1), then4F9510 registration
+BEFORE the next record. Later+DCPostLoad is a separate operation. The runtime
+record diagnostic still omits immediate Init/PostCreate. Its constructor-only
+Kingdom flow arrays remain empty until true ActorInit succeeds. Do not call
+reset_flow_vectors or invent component/source values to make a map pass.
+Actor/Object/Team/Kingdom Init coordinators require actual world services
+before they can be integrated. Conversion queues remain capture-only.
+
+NEXT ENGINE WORK
+* Bind real loaded-object geometry/placement/spatial/visibility services to
+  ObjectInit, then Actor/component Init, PostCreate and per-record registration.
+* Port4D64F0 and reached state/action callbacks from original instructions with
+  explicit native seams; keep partial effects and callback order.
+* Complete real ActorData combat-source dependencies, source means, actual
+  Settlement460940 model-fit radius and completion order before publishing1E4.
+  Source PC24 is an explicit runtime-context hypothesis where noted; do not
+  conflate it with restoration PC53 or claim observed native application time.
+* Execute real conversion drain, PostLoad, mission initialization and ordered
+  simulation ticks before enabling battles. Multiplayer requires actual world
+  transport/save compatibility and separate-PC/internet testing after that.
+* Keep original assets, EXEs, saves, profiles and Development-08 unchanged.
+
+VALIDATION AND REPRODUCTION
+The final managed mode1/PC53/clock0 census retains20/80 record-clean/PostLoad-ok
+maps and60 failing maps,796 failing records and0 map-level load errors.
+The former796 combat-value stops now reach577 missing completed ActorData1E4,
+151 missing4D64F0 state changes and68 missing579A00 leader assignments.
+The same records fail; no new clean map or regression is established.
+Conversion7879 and native LoadException/UnknownThing drops399/3912 remain.
+These counts do not establish immediate Init or battle readiness.
+qa-output/development09/validation.json is the release validation index.
+qa-output/development09/combined/ contains scoped source/build acceptance.
+qa-output/development09/native/ contains runtime regressions and the managed
+80-map census. InspectPartial errors can cascade; clean record sections are
+not initialized worlds. Original/v14 native proof fixtures use explicit seams.
+qa-output/dev09-native-map-check/ contains the6 client diagnostic tests and
+independent review. The source package snapshots Cargo.toml/Cargo.lock and
+crates hashes at staging; it is not a complete source distribution.
+research/package_development_09.py and check_development_09_package.py enforce
+new-folder-only staging, original Development-08/cache preservation, candidate
+identity, no source drift after staging, exact ZIP members/CRC/SHA validation.
+Final artifact hashes and validation are recorded outside the ZIP as well.
+
+LIMITS OF THIS CHECKPOINT
+No complete playable match, AI, campaign, original whole-game saves or network
+interoperability is claimed. UI screenshots/GPU render checks do not certify
+full visual parity, Windows150%DPI input alignment or smoothness/performance.
+No new artificial RAM, VRAM, disk or network cap was introduced. Hardware,
+OS, allocator and physical network limits still apply. This build still needs
+external original Data.rwd and the recovered reconstruction asset tree.

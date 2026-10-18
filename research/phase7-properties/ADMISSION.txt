@@ -1,0 +1,29 @@
+Actor property admission and trigger technology grant
+
+property_admission.rs ports original4CEF10 and541FE0. It does not duplicate
+the separately proven recursive5035E0 applicability algorithm in aa-actors.
+The runtime must bind that predicate to the same ActorStore and bind insertion
+to Instance::new plus actual property_flags::insert on the canonical state.
+
+Native component+78 presence is checked first. Kinds8/10 bypass applicability
+only with actor+98 present. On successful applicability the component pointer
+is reread, so callback replacement is honored. A missing reread component is
+an explicit error rather than attempting the original null-pointer operation.
+The541FE0 wrapper ignores a false4CEF10 admission result, returning true for
+nonnull actor/property; callback errors still stop the portable runtime.
+
+60 native executions exercise flags, admission, replacement, null inputs,
+sources, constructor bit preservation and the technology wrapper. Actual
+5817A0 allocation orchestration and5030F0 instance initialization execute. The
+581630 insertion seam records every initialized instance field and returns
+false to verify outer success is unaffected. This fixture does not claim to
+replay the inner mixed modifiers; that has its own separate evidence.
+
+Two Rust tests compare native events/fields and check component removal and
+post-ownership insertion failure. Prior writes remain committed. A failed
+insertion callback owns any partially committed record and must not discard it.
+Original and v14 source bytes are verified. No original game files are written.
+
+An initial oracle assertion assumed the541FE0 wrapper used caller cleanup;
+original assembly proves ret8, and the corrected oracle checks that exact ABI.
+No production change was needed for this fixture ABI correction.

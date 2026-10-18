@@ -1,0 +1,77 @@
+CURRENT STATUS — DEVELOPMENT 07 / 2026-10-13
+Read ../HANDOFF.txt for the current continuation checkpoint and evidence index.
+The last overall engineering estimate was approximately 25%, still a rough
+judgment with no exact denominator. No 40% or complete-match milestone passed.
+Development07 adds a tested isolated live infantry preview; the client is not
+yet wired to aa-runtime as a complete game. Engine component progress and
+partially integrated restoration work are described in HANDOFF.txt.
+Latest package validation: VALIDATION-07.txt and ../qa-output/build-07/validation.json.
+
+HISTORICAL SNAPSHOT BELOW — DEVELOPMENT 06 (not current completion status)
+RUST REWRITE PROGRESS — DEVELOPMENT 06
+
+Overall engineering estimate: roughly 15–20% of a faithful, complete rewrite.
+This is a broad judgment, not a measured percentage of original code or a
+schedule. The original source and a complete behavioral inventory are not
+available, so there is no exact denominator. Passing many native instruction
+cases establishes the tested component behavior; it does not mean the same
+fraction of a playable game is complete.
+
+A complete playable match is NOT implemented.
+The Windows executable remains a 64-bit development browser for original maps,
+models and animations, with diagnostics for reconstructed engine components.
+Original recovered game assets are required. The executable alone is not a
+standalone whole-game replacement.
+
+Substantial components now implemented and independently reviewed
+- Native endpoint adjustment, tile search, uncached region graph search,
+  region prepass, waypoint construction and movement-result control.
+- Wall-entry/terrain movement costs, cell traversal, bounded dynamic collision,
+  moving-state predicates and fallible ground-movement callbacks.
+- Native height-layer binding and terrain tile decoding from the original maps.
+- Typed inherited definition inputs, category/mask/flag evaluation, new-actor
+  construction prerequisites and distinct saved-object constructor shells.
+- Map/header/world/identity readers, bounded actor component payloads, teams,
+  kingdoms, saved owner references and recruitment-list wire decoding.
+- Weapon-hit calculation through Body damage, periodic healing/damage, death
+  initialization, kill credit, actor value and bounded experience distribution.
+- Stateful recruitment/production queue admission, payment, timing, completion,
+  cancellation/refund and organization accounting callbacks.
+- Native periodic/deferred queue ordering, cancellation and scheduling behavior.
+
+These components preserve native numerical stores, callback ordering and
+documented failure effects. Real world services remain explicit dependencies;
+test callbacks do not stand in for a complete battlefield implementation.
+
+Visible development-browser improvements
+- The corrected road/object planar heading and invisible-marker filtering remain.
+- Original terrain transition masks and material selection now drive preview
+  blending; unresolved/border cases have counted fallbacks.
+- Source alpha/depth states remain, with native geometry transparency sorting
+  and submission policy implemented within the documented static preview scope.
+- Static water uses original frame 0, raw heightfields and saved shoreline
+  geometry, with independent source/native review and GPU checks. Full water
+  animation, lighting and runtime shoreline regeneration are not complete.
+
+Major acceptance milestones still incomplete
+- Live world construction, derived actor/component factories, registry and
+  ownership publication, authoritative commands and scheduler integration.
+- End-to-end movement and combat on actual maps, including attack selection,
+  range/cadence/projectiles and complete production/research effects.
+- AI, formations, supply, morale, fog/line of sight and match victory behavior.
+- Original UI/audio, campaign/tutorial scripting and strategic mode.
+- Complete original saves/replays and real synchronized multiplayer matches.
+- Full rendering fidelity, measured performance acceptance and a standalone
+  whole-game Rust release.
+
+Component evidence and independent reviews are under research/phase6-*.
+See docs/VALIDATION-06.txt for final workspace tests, executable diagnostics,
+visual captures and package checks; these are separate from live-match parity.
+
+Ten concurrent agent slots, including the primary, are available in this
+reloaded session. Parallel implementation and independent review accelerate
+separate work; shared world integration still requires ordered verification.
+
+100% requires original-versus-Rust state and behavior comparisons plus complete
+matches, campaigns, saves and multiplayer acceptance. The original installation,
+existing saves and earlier release folders remain reference material.

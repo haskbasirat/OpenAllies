@@ -1,0 +1,105 @@
+{
+  "schema": "native-borrowed-organization-leader-v1",
+  "date": "2026-10-16",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "functions": [
+    "00579A00",
+    "005797E0",
+    "00578250",
+    "00444A90",
+    "0045D400"
+  ],
+  "rows": 678,
+  "inputs": 113,
+  "images": [
+    "original",
+    "v14"
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "paired_outputs_equal": true,
+  "executed_instruction_pins": 249,
+  "operations": {
+    "compute": 258,
+    "set_leader": 420
+  },
+  "outcomes": {
+    "ok": 504,
+    "native_null": 12,
+    "leader": 24,
+    "store_leader": 6,
+    "element_slot": 12,
+    "member": 12,
+    "primary_slot": 6,
+    "formation": 6,
+    "formation_oriented": 6,
+    "positions": 18,
+    "random": 12,
+    "store_offset": 36,
+    "offset": 12,
+    "owner_mind": 6,
+    "mind_leader_changed": 6
+  },
+  "dependency_stop_rows": 162,
+  "mutation_rows": 30,
+  "rust_replay_passed": true,
+  "existing_formation_tests_passed": 3,
+  "strict_clippy_passed": true,
+  "same_identity_short_circuit": false,
+  "raw_leader_write_precedes_old_element_read": true,
+  "authoritative_storage_required": true,
+  "default_success_callbacks": false,
+  "complete_saved_runtime_adapter": false,
+  "complete_actor_initialization": false,
+  "battle_ready": false,
+  "sdk_implementation_used": false,
+  "limitations": [
+    "Finite supported numeric domain only",
+    "Required RNG/diagnostic/Mind services are explicit oracle seams",
+    "Dependency/mutation probes at ordinary field reads are test seams, not native virtual callbacks",
+    "Saved/live world integration and native Mind+114 implementation remain outside this module",
+    "No whole battle, skirmish or multiplayer claim"
+  ],
+  "files": {
+    "crates/aa-movement/src/borrowed_formation.rs": {
+      "bytes": 6749,
+      "sha256": "de9df121ca4c2c15fe72966f299ea51822f9e1b8b96b1ee537a338beb0eede76"
+    },
+    "crates/aa-movement/tests/borrowed_formation_native.rs": {
+      "bytes": 9950,
+      "sha256": "2e9696d80c77ec366184efee018d35acf9dec4fb27de6dcae3c131dad9c022ac"
+    },
+    "research/skirmish-20261016-borrowed-leader/native-borrowed-leader.json": {
+      "bytes": 2465761,
+      "sha256": "92267232e180df64bbfe9c60f7dd909726451458b7f3933ad66ba4beb3755573"
+    },
+    "research/skirmish-20261016-borrowed-leader/native_borrowed_leader.py": {
+      "bytes": 9123,
+      "sha256": "c138278630a49545625a4393569744abce0dbb502edd5b1f28e7e00cde20723f"
+    },
+    "research/skirmish-20261016-borrowed-leader/native-instructions.txt": {
+      "bytes": 5812,
+      "sha256": "87caf99e24d65afc28aaa0836fc5c66377e852a7ee1720a9e4b4c515bd61122d"
+    },
+    "research/skirmish-20261016-borrowed-leader/README.txt": {
+      "bytes": 5514,
+      "sha256": "11a1754a5e63755d0b81b5faac12d3dc80d15bedfc899ff7e0e4dff6788e5884"
+    },
+    "research/skirmish-20261016-borrowed-leader/tests-final.log": {
+      "bytes": 869,
+      "sha256": "345f27ee8d04e1f4c674eaaa55434f22518b4920722d25edbc569c6030e3dc1d"
+    },
+    "research/skirmish-20261016-borrowed-leader/clippy.log": {
+      "bytes": 636,
+      "sha256": "c249151e0db87a5254b19107432ccf4672f3eff4acd3643435d4228f2b84782c"
+    },
+    "research/skirmish-20261016-borrowed-leader/lib.rs.before": {
+      "bytes": 22411,
+      "sha256": "c083a6cc001cb7597f99745f843465fe254bba0c679a0d5d62435a4cf5bd9298"
+    }
+  }
+}

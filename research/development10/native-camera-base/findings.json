@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "scope": "Same-camera874B40 numeric/known-byte/list owner producer; no nativeABI/globalNiinstancecount/whole7016A0/directory/renderer/VWorld/AD readiness claim.",
+  "source": {
+    "crates/aa-runtime/src/native_camera_base.rs": "72eb93382ae8b95b0e04ccc35f17f06605924d3bb2c6580124368924aa80d843",
+    "crates/aa-runtime/src/native_camera_base_tests.rs": "bc431820caff9431188f40697bb0478f16f28c6f7872f52018212016995e595d"
+  },
+  "evidence": {
+    "native-base.json": "a673bfdba2f538dce5e800155d619f64faabbcd43851fb4a210dd58b53eb5680",
+    "pin-audit.json": "46e1056f1561bd47935a58cd67c8cb624b5108dd5744f1cfeb56ac2ed58cafe0",
+    "native_base.py": "2072c96e2a16c704be4f938c337a8a442e4b49ec7584d4cc40b8c24e55159609",
+    "audit_base.py": "b2c10b299fc142f1035d0c90a3e7a83cf8b17c1f978883aa647b2c526968031d",
+    "make_isolated.py": "1b1e09694aa4a0788f7ab1d909655a18a7d8533b6d59390104550856119e654d",
+    "isolated.rs": "75af150141e2898438e8cf310ef2a0b4777b365c546aba933bc1203f5c06fa1d",
+    "isolated-base-final.exe": "b7fb130a72df37fd9e3a263bf748293e8bd68a7645306984b3c76cf59fdcd01d",
+    "isolated-tests-final.log": "b3c73cbb19a3882bc1afb0ae9531af8254175e219ed6f4c9e12824660d940ecd",
+    "native-final-replay.log": "e45625be7a2b54b27cc67a47b1ec320e414dc8f4f894b32c8b41d9d0f93499e6",
+    "production-check-01.log": "ec89cee383b4746b4ba0fb76bf905c8e14fe493a4e150bfaa31d583422d93609",
+    "README.md": "6603e7a40195555a4954cd9dbe9c630af9cdcf3a1c468bce61c2730f41a594b1"
+  },
+  "native": {
+    "paired_rows": 99,
+    "executions": 198,
+    "decoded_pins": 822,
+    "required_source_read_prefixes": 27
+  },
+  "rust": {
+    "base_tests": 2,
+    "exact_parent_reset_pose_ni_target_base_tests": 10,
+    "production_check": "PASS15.88s; existing warnings retained"
+  },
+  "shared_parent_extension": "Private base Fields+unbound initializer; word/put route owned list metadata without scalar mirrors. revisionArc/targetLinks and other authors methods preserved.",
+  "remaining": [
+    "Actual7016A0 debug/root/property/render-list constructor",
+    "Actual camera directory/captured handle",
+    "Positive current reference/parent/controller mutation if reached",
+    "Actual GPU/view/UI completion"
+  ]
+}

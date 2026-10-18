@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "owner": "/root/builder_source_review",
+  "status": "author complete within bounded scope; independent review pending",
+  "scope": "Actual-owner live clock Services and permanent ClockedState borrowing; no whole-battle readiness certificate",
+  "source_pins": "frozen-hashes.json",
+  "native": {
+    "fixture": "native-live-prefix.json",
+    "sha256": "2b5887f622eb60509a80647747150c69765a28b53aaa5f2481f35cd05f1dcc79",
+    "machines": 216,
+    "executed_instruction_pins": 78,
+    "precisions": [
+      24,
+      53,
+      64
+    ],
+    "images": [
+      "original",
+      "v14"
+    ],
+    "successful_profiler_seam": "41C0E0 instrumentation RET4 only",
+    "required_stops": [
+      "4F96D0 FirstTick",
+      "Windows GetCurrentThreadId"
+    ],
+    "first_tick_or_thread_api_body_successes": 0
+  },
+  "rust": {
+    "focused": 7,
+    "legacy_native_runtime": 5,
+    "legacy_aa_world": 10,
+    "failures": 0,
+    "profile": "release,locked,offline,j4,LTO=false,codegen_units16",
+    "final_log": "rust-final-compatible.log",
+    "legacy_world_log": "rust-world-regressions.log",
+    "binary": "frozen-live-clocked-tests.exe",
+    "binary_sha256": "f419710f3c4e2b1c324c04aaa376ed45564decc37726fbcd44006da025e3033a"
+  },
+  "compatibility_fix": "New field hooks synchronize queue clock views before the same stable_clock guard used by prior effects; unchanged large-tick/signed-rollover native regression now passes.",
+  "ownership": [
+    "clock-free DispatcherState moved once beside actual loaded clock",
+    "permanent ClockedState keeps World,Queues,RNG and stopped latch across borrowed Services",
+    "Runtime.into_state transfers existing latch even on failure",
+    "same SyncA Direct or RefCell loan; lazy gate; release before FirstTick/queue callbacks",
+    "same registration lists and authoritative staged/published placement flags"
+  ],
+  "remaining_required": [
+    "actual root LiveBattle/Driver/Node bindings",
+    "FirstTick concrete music/player owner supplied separately",
+    "zone5147C0 payload effects",
+    "Body561C20 pending callback",
+    "World4F4C40 availability effects",
+    "GTID50C1B0 unlink/lifetime",
+    "Actor removal/retain/destruction virtuals",
+    "world-dependent trigger opcodes",
+    "scheduled updates beyond existing live_scheduler_dispatch proven slice"
+  ],
+  "not_claimed": [
+    "playable battle",
+    "multiplayer test",
+    "completed campaign",
+    "source startup beyond supplied bound owners",
+    "real clock/time defaults",
+    "new successful lifecycle callbacks"
+  ]
+}

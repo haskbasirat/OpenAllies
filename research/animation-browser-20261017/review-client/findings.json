@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "utc": "2026-10-18T16:21:49.583650+00:00",
+  "passed": true,
+  "scope": "Independent read-only production client source review relative to exact sealed HF02 predecessors, plus executed Python-only final-cache structural/hash checks. No Rust test/build, native code, animation sampling, GUI or GPU execution performed by this reviewer. Not final package or full playback acceptance.",
+  "candidate_sha256": "4587442c60b609eddd84deb2d4aaff7d5eb0f312882207e7a2a7a92ba286930e",
+  "production_source_matches_candidate_build_record": true,
+  "source_review_findings": [],
+  "blockers_found": [],
+  "reviewed_behavior": [
+    {
+      "area": "Selection and concurrent loading",
+      "sources": [
+        "crates/aa-client/src/main.rs:780",
+        "crates/aa-client/src/main.rs:880",
+        "crates/aa-client/src/main.rs:1031",
+        "crates/aa-client/src/main.rs:1147"
+      ],
+      "conclusion": "Selection identity uses full rig paths, independently tracks loading and loaded paths, queues the latest clicked animation while a request is pending, and disables clip controls until the loaded path matches the selected path. Short-name ambiguity in CLI resolve is an explicit error; full original source paths disambiguate."
+    },
+    {
+      "area": "Load errors and owner replacement",
+      "sources": [
+        "crates/aa-client/src/main.rs:899",
+        "crates/aa-client/src/animation_preview.rs:197"
+      ],
+      "conclusion": "Worker panics/disconnections and validation/upload failures become visible errors. Starting a load pauses old playback; prior loaded content is explicitly labeled while another selection loads. After a successful renderer epoch replacement, old animation/live/picking owners are cleared before the new sampled pose is adopted. No result can arrive for a second concurrent request because only one receiver is active."
+    },
+    {
+      "area": "Catalog/source safety",
+      "sources": [
+        "crates/aa-client/src/animation_catalog.rs:42",
+        "crates/aa-client/src/animation_catalog.rs:63",
+        "crates/aa-client/src/animation_catalog.rs:155",
+        "crates/aa-client/src/animation_preview.rs:119"
+      ],
+      "conclusion": "Manifest paths reject traversal/absolute/colon/backslash/NUL forms and canonicalize within the manifest directory. Loads require a published path and exact rig digest. Original NIF SHA, paired converted model SHA, audited retained mesh order/name/topology and count checks remain on the inspector path. Final manifest-to-file source/clip identity was independently checked for every rig, rather than assumed from labels."
+    },
+    {
+      "area": "Opacity and visibility",
+      "sources": [
+        "crates/aa-client/src/animation_preview.rs:319",
+        "crates/aa-client/src/animation_preview.rs:372",
+        "crates/aa-client/src/animation_preview.rs:409",
+        "crates/aa-client/src/gpu.rs:1358",
+        "crates/aa-client/src/gpu.rs:1705"
+      ],
+      "conclusion": "A single sampled pose supplies geometry, alpha overrides and visibility. Each frame restores base opacity when an override is absent, then uses a single vertex alpha multiplier because material uniform color remains1. RepColor texture alpha remains a mask; only sourced alpha-controller meshes may use the authored blend bit. Complete input validation precedes update_vertices; draw visibility changes afterward and both opaque/translucent commands honor it. Successful updates invalidate draw-order/bundle caches."
+    },
+    {
+      "area": "Scope isolation and unsupported data",
+      "sources": [
+        "crates/aa-client/src/animation_preview.rs:119",
+        "crates/aa-client/src/animation_preview.rs:386",
+        "crates/aa-client/src/animation_catalog.rs:128"
+      ],
+      "conclusion": "Inspector load_preview/sample_preview is separate from the strict live/runtime asset loader. All unavailable animated sources retain reasons in the UI/CLI; supported geometry timelines retain unsupported effect/controller metadata and warning text. This does not reconstruct particles, events, audio, gameplay selection or battle behavior."
+    }
+  ],
+  "executed_readonly_data_checks": {
+    "path": "research/animation-browser-20261017/review-client/final-cache-structural-review01.json",
+    "bytes": 326942,
+    "sha256": "7f9630cb43d334db690e4e6eb9702dc040670e8ac0f72537faa81329347802cc"
+  },
+  "verified_cache_counts": {
+    "rigs": 786,
+    "clips": 3316,
+    "sources": 2481,
+    "distinct_clip_sources": 1084,
+    "embedded_clips_preserving_all_original_controller_class_counts_and_unique_source_blocks": 618,
+    "clips_with_explicit_unsupported_controllers": 139,
+    "catalog_only_animated_sources": 240,
+    "duplicate_short_model_names": 8
+  },
+  "death_model_coverage": {
+    "hq_death": {
+      "exported": 20,
+      "inventoried": 20
+    },
+    "corps_death": {
+      "exported": 5,
+      "inventoried": 5
+    },
+    "building_death": {
+      "exported": 77,
+      "inventoried": 77
+    }
+  },
+  "HF02_comparison": [
+    {
+      "source": "crates/aa-client/src/main.rs",
+      "HF02_backup": {
+        "path": "backups/source-checkpoint-20261017-animations01/pre-animation-source/crates/aa-client/src/main.rs",
+        "bytes": 51255,
+        "sha256": "95e93a1c9f7ad3e907c1574d26754511d6a1477ab91d754903dd67b47a193ba2"
+      },
+      "unified_diff_lines": 225
+    },
+    {
+      "source": "crates/aa-client/src/animation_preview.rs",
+      "HF02_backup": {
+        "path": "backups/source-checkpoint-20261017-animations01/pre-animation-source/crates/aa-client/src/animation_preview.rs",
+        "bytes": 12678,
+        "sha256": "233c0b79c46faf1cc991fad3045f7f5a68a4b93c5c57d19546e71f75156ea852"
+      },
+      "unified_diff_lines": 451
+    },
+    {
+      "source": "crates/aa-client/src/gpu.rs",
+      "HF02_backup": {
+        "path": "backups/source-checkpoint-20261017-animations01/pre-animation-source/crates/aa-client/src/gpu.rs",
+        "bytes": 103709,
+        "sha256": "c8b01a4df575bc4a2c681c9336c7ac5ff1f29b385b73fb4efb4869acecd47c75"
+      },
+      "unified_diff_lines": 122
+    }
+  ],
+  "exact_candidate_source_files": [
+    {
+      "path": "crates/aa-client/src/main.rs",
+      "bytes": 55411,
+      "sha256": "920ef3d5fae5233d3a7dbcde6598d0919ec60ba1f1dcdcfca5e49c2d5c1219b9"
+    },
+    {
+      "path": "crates/aa-client/src/animation_catalog.rs",
+      "bytes": 8748,
+      "sha256": "6d54f21873ec5c546e55c4336b2e90eb1d6dd9fe4d7f2c1087ce21fc5bc38866"
+    },
+    {
+      "path": "crates/aa-client/src/animation_preview.rs",
+      "bytes": 21732,
+      "sha256": "c10e4bd793d13152787e4c7504b84518fe86f2d65cde2e809a0b2e1ec44760b5"
+    },
+    {
+      "path": "crates/aa-client/src/gpu.rs",
+      "bytes": 109662,
+      "sha256": "dd601b4d23fe2973bb2e71ec8e76fcd56338b635585f2204e716437d8dd562cf"
+    },
+    {
+      "path": "crates/aa-client/src/loading.rs",
+      "bytes": 24514,
+      "sha256": "81ec1d2200cf21fdb4e716d656ecda75c5763915284edbc002691161958b093c"
+    },
+    {
+      "path": "crates/aa-client/src/scene.wgsl",
+      "bytes": 4643,
+      "sha256": "bea69f8d16c3b38b2e008e4d31f2bf4b5ca63f69ce9c4f957a34f83623551e83"
+    },
+    {
+      "path": "crates/aa-animation/src/lib.rs",
+      "bytes": 26066,
+      "sha256": "ef883a7313cbb9c3e458adff0ba8d666882df15b57768afa9e7618ed9d891b31"
+    },
+    {
+      "path": "crates/aa-animation/src/preview.rs",
+      "bytes": 24696,
+      "sha256": "8fa55212d88e34dfeb8274d8ee01a042e17c2f9c2bec2740e01d19b09a51662d"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "qa-output/animation-browser-20261017/build01/build-record.json",
+      "bytes": 370973,
+      "sha256": "4ccc9d88779ab4bb23978b99243c91f4851f6e030e40cfc454caaca2f064548b"
+    },
+    {
+      "path": "research/animation-browser-20261017/review-client/final-cache-structural-review01.json",
+      "bytes": 326942,
+      "sha256": "7f9630cb43d334db690e4e6eb9702dc040670e8ac0f72537faa81329347802cc"
+    },
+    {
+      "path": "research/animation-browser-20261017/export/cache-v2-final/animation-browser-manifest.json",
+      "bytes": 3113357,
+      "sha256": "a2f450c66d921c4007293ac3e0bda26a2aa87eada255865ffb5fc10958f3f2df"
+    },
+    {
+      "path": "research/animation-browser-20261017/inventory/hq-building-deaths.json",
+      "bytes": 2868429,
+      "sha256": "52ab9928fff51928f6b7a7ace0f22bbe216943f871546ca19ef537815f9410d2"
+    },
+    {
+      "path": "research/animation-browser-20261017/export/export_browser.py",
+      "bytes": 20964,
+      "sha256": "b88299f1d6f3b9ca332e07a312312d5d4dfd666e60c4f737b1d277749c8f772f"
+    }
+  ],
+  "limitations": [
+    "No animation sampler, Rust unit binary, native oracle, GUI selection, actual GPU upload/readback or capture was executed by this reviewer. Existing peer test reports were read only and are not reasserted as this review's test results.",
+    "Actual candidate GUI/playback/render receipts must bind the exact EXE and final manifest before task acceptance.",
+    "139 clips retain explicit unsupported controller/effect children;240 animated source assets remain catalog-only. Complete source coverage is not complete original-animation playback.",
+    "Eight short model names are duplicated; the client intentionally requires full source identity for ambiguous CLI names and shows the source path on hover in the GUI.",
+    "Static alpha/visibility source tracing is not native renderer/controller scheduling parity. This reviewer did not re-prove curve mathematics or timing."
+  ]
+}

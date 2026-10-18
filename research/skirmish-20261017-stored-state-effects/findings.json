@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "status": "native constituents proven; stored field bindings compile; new runtime fixture execution pending parent cohort; natural initialized-Actor acceptance pending",
+  "native_proofs": [
+    {
+      "fixture": "native-actor-leave-stops.json",
+      "rows": 366,
+      "native_executions": 732,
+      "executed_pins": 197,
+      "sha256": "d31a8f7b0e05b3482e03ad418838231b2a9de082ec2c91e2d681b6a8970f29a0"
+    },
+    {
+      "fixture": "native-stop-vfx-load.json",
+      "rows": 27,
+      "native_executions": 54,
+      "executed_pins": 79,
+      "sha256": "7d9d1fe93b77d17179abd8dfe52aad6254b4afedfd44ba3ea6f55a5f54d06c5b"
+    }
+  ],
+  "rust_replay_filters": [
+    "fx_graph::actor_state::leave_tests::original_v14_actor_leave_recursive_stop_synthesis_preserves_links_and_order",
+    "fx_graph::actor_state::leave_tests::original_v14_stop_vfx_load_retains_target_before_attached_error"
+  ],
+  "tests": {
+    "aa_body_native_regressions": "7/7 PASS",
+    "new_runtime_replay_execution": "pending",
+    "runtime_cfgtest_source_check": "PASS36.28s"
+  },
+  "sources": {
+    "crates/aa-runtime/src/stored_actor_state_effects.rs": "9b3258c6bdec212ef9e3128cfedfb8aff42b55cabded51bfd008a7391307af84",
+    "crates/aa-runtime/src/stored_state_properties.rs": "2e168c89585ddc6ec4a0d1e9cc4bdf40074f82cc1885a5c518e6de7112ff52e6",
+    "crates/aa-runtime/src/stored_economy_refresh.rs": "ec6407c434c48571c87fa57562c64d328c20e59e3cff62ada1ed8d06054b5b96",
+    "crates/aa-runtime/src/stored_economy_values.rs": "c393973c8bbf4c59cf3c337bc892261418f2df62e17be4d2196d356def54e5e3",
+    "crates/aa-runtime/src/stored_actor_state_fx.rs": "fe0444ec71019e6a606cee7d9beebb61fe5aafecd66305199c5b3f92e4200287",
+    "crates/aa-runtime/src/stored_mind_init_world.rs": "bb5670b9129f9410fa4ebc4370749bc10405bd2f3be0182b99e27ebfb167e9c0",
+    "crates/aa-runtime/src/fx_graph.rs": "25ad7e4ba34bf90f91add64407ad9925a89dd5228d6a2bbe83cd494f4c47dd4e",
+    "crates/aa-runtime/src/fx_graph_actor_state.rs": "3578e0db30c73c6ccced0cc8c8b8b513a4e411bd0d9be209073dfa63a7e6d88e",
+    "crates/aa-runtime/src/fx_graph_actor_leave_tests.rs": "2c91d03a7555bd5d80548597bb4fafbec1058277f8a50a044f4b10e177237f1d",
+    "crates/aa-runtime/src/definition_fx.rs": "625093941c58ed0fa186420b9f87293e3afdbe564687c372b2f481ea0c823a51",
+    "crates/aa-body/src/property_flags.rs": "b450cdf92194317f85de0927585307ccc809939c52ec2c56f353c3506d6b691a",
+    "crates/aa-body/tests/native_property_flags.rs": "86d4e47ce85fbb5157b6d685d140a1502236f43043816d202597ae7b7be7f707"
+  },
+  "limits": "See README.txt; no initialized battle/source-loader/full positive child claim."
+}

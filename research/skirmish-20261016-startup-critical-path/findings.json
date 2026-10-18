@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "author": "/root/world_startup_gap",
+  "scope": "Read-only bounded native battle-startup critical-path source audit; no new execution/parity acceptance",
+  "production_changes": false,
+  "sdk_implementation_used": false,
+  "new_builds": 0,
+  "new_native_executions": 0,
+  "census": {
+    "source": "qa-output/development09/native/managed-mode1-comparison.json",
+    "maps": 80,
+    "record_clean_maps": 20,
+    "failed_records": 796,
+    "missing_completed_1e4": 577,
+    "missing_4d64f0": 151,
+    "missing_579a00": 68,
+    "completed_immediate_init_maps": 0,
+    "publication_ready_maps": 0,
+    "battle_ready_maps": 0
+  },
+  "bounded_object_init_service_groups": 11,
+  "next_module": "4F4590 loaded-object placement wrapper and reached 4F3640 coordinator, retaining mandatory host services",
+  "schedule": "No defensible finish date or overall percentage; calibrate at first initialized world, first ordered simulation and first playable skirmish",
+  "source_pins": [
+    {
+      "path": "research/skirmish-20261016-startup-critical-path/README.md",
+      "bytes": 9704,
+      "sha256": "f6c28e2084e744f506874cb1f3c70d66819231e20d1498e94c74733b53043352"
+    },
+    {
+      "path": "docs/DEVELOPMENT-09-CHECKPOINT.txt",
+      "bytes": 8417,
+      "sha256": "7181ceaf0e60860c128ac81ac491142864eceb304223587a0926838cd19a4d55"
+    },
+    {
+      "path": "docs/GAMEBRYO-REFERENCE-REVIEW-20261016.md",
+      "bytes": 9581,
+      "sha256": "009b0c6d6b8c0acd47396f35ff01a4fdbc13c45be55b0cd51a179019f916dd39"
+    },
+    {
+      "path": "qa-output/development09/native/managed-mode1-comparison.json",
+      "bytes": 63562,
+      "sha256": "65c8bfbcf5cf9cd343e80da208ae875f201c78ee3a11efde59c02a05238599db"
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "bytes": 95650,
+      "sha256": "105d26b90525bfebb29dd850545a46c4d8178cf4d5c948a9cbeb6f3b9942b14f"
+    },
+    {
+      "path": "crates/aa-runtime/src/restoration.rs",
+      "bytes": 24653,
+      "sha256": "95904ee4aec2813749fe7825ffa13f5cea38c18b88215de6e31787dd81b5de90"
+    },
+    {
+      "path": "crates/aa-actors/src/object_init_null.rs",
+      "bytes": 7409,
+      "sha256": "a52ea452bc130036cf3a8ad49fe84f745cfe3e17605992d5c6b77cf39b2cf7d5"
+    },
+    {
+      "path": "crates/aa-actors/src/actor_init_null.rs",
+      "bytes": 9322,
+      "sha256": "bbc070a81b2e08cbde34048e109d9fb0a7764843da86f24b1c4bc49a25674a7c"
+    },
+    {
+      "path": "crates/aa-mapworld/src/team_init.rs",
+      "bytes": 3628,
+      "sha256": "fee8eaceab8df50503bafb708ad2beb9642ea5632bf3cf97df241a9cdd9383e9"
+    },
+    {
+      "path": "crates/aa-economy/src/kingdom_init.rs",
+      "bytes": 9773,
+      "sha256": "a1798f9f94fa6e810c5a094e65a5a0a689458c49f194c1a40d1bb8b2a18542ac"
+    },
+    {
+      "path": "crates/aa-runtime/src/spatial_world.rs",
+      "bytes": 51723,
+      "sha256": "a4a210ca271f3a21bfc537a91b424625bc381ac8c6ff97f5f3e48c170dfe958d"
+    },
+    {
+      "path": "crates/aa-runtime/src/spatial_policy.rs",
+      "bytes": 18334,
+      "sha256": "21c679fd5f8033f24cd6d8caa1a10f5567751776277abc2351efee9f6f87d24b"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "bytes": 85847,
+      "sha256": "b35e480c057df0902e7e2fc281d2360c357c9d7f73a56df823d5539ee6f41016"
+    },
+    {
+      "path": "crates/aa-runtime/src/world_start_world.rs",
+      "bytes": 13110,
+      "sha256": "03720d094675df81cf8304d86bbf853f13c799ccdde588b7d5ae7bdd81dfc89b"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_tail_world.rs",
+      "bytes": 11984,
+      "sha256": "6420f05c30e17ce69bc1fda317190b981068953411038cc3ecb3aefc77c5792c"
+    },
+    {
+      "path": "crates/aa-runtime/src/restore_lifecycle.rs",
+      "bytes": 11401,
+      "sha256": "33b262198e8d2de0b28a5c79e1cf1ca59fd7dbb82a29daf323c2457c67866600"
+    },
+    {
+      "path": "crates/aa-runtime/src/clocked.rs",
+      "bytes": 10198,
+      "sha256": "f591d658c9798c5ecf716491588669f5bc1b6f012e5653b8ed02802f7a1f21fd"
+    },
+    {
+      "path": "crates/aa-runtime/src/simulation.rs",
+      "bytes": 30369,
+      "sha256": "0725b69551d45ba46b17306e1ec06b65c647de4b9a53671a64153dfe440ceb04"
+    },
+    {
+      "path": "crates/aa-runtime/src/skirmish_start.rs",
+      "bytes": 15149,
+      "sha256": "ebb5d8f1b83eea02c0dd88f6d15eeda6aee36c0b022f5a0eb955b52324a613cb"
+    },
+    {
+      "path": "crates/aa-spatial/src/lib.rs",
+      "bytes": 12705,
+      "sha256": "0a54a4a3dc872f778f7f28575e3269a344d6e2c84be6eec502e60985cc85481f"
+    },
+    {
+      "path": "crates/aa-spatial/src/index_world.rs",
+      "bytes": 9588,
+      "sha256": "25831b9b0afe32795bfa136fc043343df868c6c7b7d2376ac22d69ec1854f439"
+    },
+    {
+      "path": "crates/aa-spatial/src/gworld_placement.rs",
+      "bytes": 26536,
+      "sha256": "eb31f6af9bb0a6cd4032af9bafce5c248ec9a6124603c46f55eb6b16c7461de1"
+    },
+    {
+      "path": "crates/aa-spatial/src/height_layers.rs",
+      "bytes": 1778,
+      "sha256": "203e2e10ab521a850323a915eda4187772f8ad518168bef1c186270312df4323"
+    },
+    {
+      "path": "crates/aa-zones/src/detection.rs",
+      "bytes": 14651,
+      "sha256": "bf86108a1e0a7c2856b2d4bd5c7a0b2aa1b5eff78099cf444eac0064acb038d6"
+    },
+    {
+      "path": "../reconstruction/research/native-aa/pseudocode/004f4590.c",
+      "bytes": 2425,
+      "sha256": "1cae7a0a6d9366e5890999b04eb4761cd049e2c2d7e4ad03634189d2d6b9be43"
+    },
+    {
+      "path": "../reconstruction/research/native-aa/pseudocode/004f3640.c",
+      "bytes": 6597,
+      "sha256": "efa945fe7f43f677e503d0a3a2d5390cbb6d533fb774be233c278ddab8374f3a"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "scope": "Verified isolated actual Windows/v14 CRT direction initializer before WinMain. Paired original/v14 static code/oracle correspondence; no separate original-PE Windows hardware capture or complete startup/battle claim.",
+  "module_sha256": "62974d8b408dceff48e2e7ec92f43068ccb686421ba88ea070092e2186fc8cb2",
+  "reference_sha256": "f97ee667f7773c7616b968b926593c06569a7b211122bbc649e6b69e17824e54",
+  "verifier_sha256": "6a56ab652afda9beeb4928102ba6e75c1a819979986c1a057d085e3b9ecc90ad",
+  "capture_sha256": "6e674da7f51963b98e3331a583150f5d5bf760c61ae9bac66322cd7ef66dc18e",
+  "table_sha256": "a0afa5e1cb34b5caedeadf9ced0020bdf3a8b4a5f553da33fe80b018176a1c02",
+  "vectors": 2048,
+  "hardware_entry_return_control_word": 639,
+  "startup_precision": "Double53",
+  "pc24_different_vectors": 433,
+  "rust_tests_passed": 2,
+  "rust_test_binary_sha256": "48a507152d449e44be087b0a5f2668b2691a4e4594840b0900d0b5aed78dc9b7",
+  "read_only_verification_log": "read-only-reference-check-final.log",
+  "rust_test_log": "rust-tests-final.log",
+  "public_constructor_integration": "Application/map_actor_creation compile against the sealed API. A successful complete actor/battle startup is not claimed by these two private verifier tests."
+}

@@ -1,0 +1,1470 @@
+{
+ "schema": 2,
+ "phase": "phase8-economy",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "fpu_policy": "game simulation thread runs at Double53 (CW 0x027F, research/phase8-tick/fpu-precision.md); every oracle runs Single24, Double53 and Extended64; no pinned range executes a transcendental x87 instruction",
+ "oracles": {
+  "build-actor": {
+   "pins": {
+    "build_actor_563160": {
+     "start": "0x563160",
+     "end": "0x563612",
+     "sha256": "0201dbab9470e49b9c90766e35118ba78cb6235975a86ebeda7e74f5f3bb5bde"
+    },
+    "placement_6939B0": {
+     "start": "0x6939B0",
+     "end": "0x693A08",
+     "sha256": "f0772c97463ab9ab54c5894379e0b9e5ca6e6140baf4a5cccde4ea8e8f3be88b"
+    },
+    "construct_afford_562FD0": {
+     "start": "0x562FD0",
+     "end": "0x563153",
+     "sha256": "511462b16bebb81a3d6a4c8b468e0c85f8926b3531d5bad3a3a2ea460485d77b"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "debit_4E1690": {
+     "start": "0x4E1690",
+     "end": "0x4E16C5",
+     "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c"
+    }
+   },
+   "fixtures": 300,
+   "native_executions": 1653
+  },
+  "completion-statistics": {
+   "pins": {
+    "construction_completed_564ED0": {
+     "start": "0x564ED0",
+     "end": "0x564F80",
+     "sha256": "74459a7959c803f154e99a7be728d6c2f17ecfdfd12b734b5df1c11c23f93e8e"
+    },
+    "upgrade_completed_564E10": {
+     "start": "0x564E10",
+     "end": "0x564EA2",
+     "sha256": "1974378377834e70fd7209b3e9bc7d60ee432863b25bc495d82c2444b563dd28"
+    },
+    "scored_58EAB0": {
+     "start": "0x58EAB0",
+     "end": "0x58EAD3",
+     "sha256": "eef22f64ed94a8a2639787b673df72efd5dd86b8590fc06d0573c2a41fe6c542"
+    },
+    "settlement_58EAE0": {
+     "start": "0x58EAE0",
+     "end": "0x58EAF2",
+     "sha256": "5d1049e6e4165900385472ee4742e6027c5aed77dac02f23aca4e28205deee2e"
+    },
+    "structure_class_58EE00": {
+     "start": "0x58EE00",
+     "end": "0x58EE78",
+     "sha256": "e35df84265093577ea1e34e40ede209cb193d201802536e86502256ffec244ef"
+    },
+    "list_begin_45ECA0": {
+     "start": "0x45ECA0",
+     "end": "0x45ECB4",
+     "sha256": "1378a2e53f4a5756328fb922fa5aa475a66b4d64b50370aa09ddb6578efbc592"
+    },
+    "score_add_58E870": {
+     "start": "0x58E870",
+     "end": "0x58E883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    },
+    "definition_add_58D8C0": {
+     "start": "0x58D8C0",
+     "end": "0x58D940",
+     "sha256": "bdf721a0d81d6aca041b468a9fd357858119c9498859c58a4fc152ff53ee0ab0"
+    }
+   },
+   "fixtures": 180,
+   "native_executions": 1590
+  },
+  "construction-finish": {
+   "pins": {
+    "dispatch_566AC0": {
+     "start": "0x566AC0",
+     "end": "0x566BB4",
+     "sha256": "4e6286bcc8e3b5a02fafddc703d4757930a235bd5c65a20f40f376c8a6ac5c9d"
+    },
+    "construction_finished_565B00": {
+     "start": "0x565B00",
+     "end": "0x565F12",
+     "sha256": "acb749c7407b4253ca454db63449e9d38303123bdfa8e6b7b05202f8f5ce8ed7"
+    },
+    "upgrade_finished_566400": {
+     "start": "0x566400",
+     "end": "0x5667E3",
+     "sha256": "d52240253e33e0f2c678451dd15ee87d4b3911674184bf7634c29dc6ef8cd64d"
+    },
+    "founds_settlement_4D18C0": {
+     "start": "0x4D18C0",
+     "end": "0x4D18FD",
+     "sha256": "5127449c81c2260e37fd4d4750cd0ca1dd40e6d5c8941cd76f72cac2f1c36204"
+    },
+    "upgrade_cancel_565700": {
+     "start": "0x565700",
+     "end": "0x565762",
+     "sha256": "7bd1c1fd26993dd96263358d4a7387659ebbd75032073f712d34730130b7cbd6"
+    },
+    "credit_4E39D0": {
+     "start": "0x4E39D0",
+     "end": "0x4E3A4C",
+     "sha256": "a3f520dc7528e527230d77541bc288b5613f0a85674fb9468876806333083997"
+    },
+    "resize_45F180": {
+     "start": "0x45F180",
+     "end": "0x45F1EE",
+     "sha256": "28406bc1a5935949c51e38dc6391faf42942aa7c6888c553fe4f43a04476c058"
+    }
+   },
+   "fixtures": 270,
+   "native_executions": 1278
+  },
+  "construction": {
+   "pins": {
+    "construct_afford_562FD0": {
+     "start": "0x562FD0",
+     "end": "0x563153",
+     "sha256": "511462b16bebb81a3d6a4c8b468e0c85f8926b3531d5bad3a3a2ea460485d77b"
+    },
+    "upgrade_afford_566110": {
+     "start": "0x566110",
+     "end": "0x566353",
+     "sha256": "d0973b80eb64a66222637489d55654dcb09fde38522bf0702426fbbe1a5d363b"
+    },
+    "upgrade_start_566360": {
+     "start": "0x566360",
+     "end": "0x5663F1",
+     "sha256": "26b149f4d491fd27d15d6efca8454693be192cc59aef3ede96fed9b52eae4198"
+    },
+    "upgrade_cancel_565700": {
+     "start": "0x565700",
+     "end": "0x565762",
+     "sha256": "7bd1c1fd26993dd96263358d4a7387659ebbd75032073f712d34730130b7cbd6"
+    },
+    "construction_cancel_5656B0": {
+     "start": "0x5656B0",
+     "end": "0x565700",
+     "sha256": "b5f0385ac63df103ff6ea68ce46a92718a9eb8194faa4a563a6483ff8327bcd4"
+    },
+    "upgrade_list_565770": {
+     "start": "0x565770",
+     "end": "0x565797",
+     "sha256": "ab8434c0c01d40ff1e4e92e8e72c033d7cb4faa141d55dce69877646df11c7aa"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "debit_4E1690": {
+     "start": "0x4E1690",
+     "end": "0x4E16C5",
+     "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c"
+    },
+    "credit_4E39D0": {
+     "start": "0x4E39D0",
+     "end": "0x4E3A4C",
+     "sha256": "a3f520dc7528e527230d77541bc288b5613f0a85674fb9468876806333083997"
+    },
+    "resize_45F180": {
+     "start": "0x45F180",
+     "end": "0x45F1EE",
+     "sha256": "28406bc1a5935949c51e38dc6391faf42942aa7c6888c553fe4f43a04476c058"
+    },
+    "vector_release_637820": {
+     "start": "0x637820",
+     "end": "0x637848",
+     "sha256": "c43c3566c44f4232c048cafeda4f97aab18fb4769e24f77407b9a527d928efdf"
+    }
+   },
+   "fixtures": 243,
+   "native_executions": 1257
+  },
+  "construction-lifecycle": {
+   "pins": {
+    "salvage_565500": {
+     "start": "0x565500",
+     "end": "0x5655B8",
+     "sha256": "cf2c23921d9d4012028f5956f54ba41ab1acd940caa857dc32290ae92841f946"
+    },
+    "sell_565A20": {
+     "start": "0x565A20",
+     "end": "0x565A61",
+     "sha256": "2facd4e8b84f0e3444d68b4306ecbb6331eceedd0f329cb4279e6142521fad07"
+    },
+    "refund_5658C0": {
+     "start": "0x5658C0",
+     "end": "0x565A1C",
+     "sha256": "59324c9f1fb03be736132217ce1bfce3a66e501b45e984fc3132b927a5058d80"
+    },
+    "cancel_command_565860": {
+     "start": "0x565860",
+     "end": "0x5658BB",
+     "sha256": "2802154d821239c7dbfc64426d2d07601978ee5f98a845e8548a8163d02fe5d0"
+    },
+    "dispatch_5667F0": {
+     "start": "0x5667F0",
+     "end": "0x566870",
+     "sha256": "a7ab616a10dd4262050692a64576046ae1234443359374f251bd082c728a89f3"
+    },
+    "tick_566880": {
+     "start": "0x566880",
+     "end": "0x566AC0",
+     "sha256": "8152c25dae2d0e9c4b64e536a33bd680df2a454a3a7afb05b5e7e3d01e11bb33"
+    },
+    "auto_upgrade_due_501570": {
+     "start": "0x501570",
+     "end": "0x5015AF",
+     "sha256": "3680bcf3fcc86f2dab9959d75dc5154dfa01365a0d5628959e1498eee696034c"
+    },
+    "cost_object_4CD160": {
+     "start": "0x4CD160",
+     "end": "0x4CD240",
+     "sha256": "e4aa37c0fc752cdad2ff4f698d2eaf1c0f9a50aa447ca297f950e2d17348bec8"
+    },
+    "cost_positive_4CD000": {
+     "start": "0x4CD000",
+     "end": "0x4CD042",
+     "sha256": "fa92a2d4487927340a4cc96a878539ff8a0f6e57eb5f3e5252df131a58928ec6"
+    },
+    "cost_object_release_4CCF10": {
+     "start": "0x4CCF10",
+     "end": "0x4CCF40",
+     "sha256": "185880e0e1c76b94240f45e3ecf6fda825dde3d0dc8d4423bd785232689231e2"
+    },
+    "upgrade_afford_566110": {
+     "start": "0x566110",
+     "end": "0x566353",
+     "sha256": "d0973b80eb64a66222637489d55654dcb09fde38522bf0702426fbbe1a5d363b"
+    },
+    "upgrade_start_566360": {
+     "start": "0x566360",
+     "end": "0x5663F1",
+     "sha256": "26b149f4d491fd27d15d6efca8454693be192cc59aef3ede96fed9b52eae4198"
+    },
+    "upgrade_cancel_565700": {
+     "start": "0x565700",
+     "end": "0x565762",
+     "sha256": "7bd1c1fd26993dd96263358d4a7387659ebbd75032073f712d34730130b7cbd6"
+    },
+    "construction_cancel_5656B0": {
+     "start": "0x5656B0",
+     "end": "0x565700",
+     "sha256": "b5f0385ac63df103ff6ea68ce46a92718a9eb8194faa4a563a6483ff8327bcd4"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "debit_4E1690": {
+     "start": "0x4E1690",
+     "end": "0x4E16C5",
+     "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c"
+    },
+    "credit_4E39D0": {
+     "start": "0x4E39D0",
+     "end": "0x4E3A4C",
+     "sha256": "a3f520dc7528e527230d77541bc288b5613f0a85674fb9468876806333083997"
+    },
+    "resize_45F180": {
+     "start": "0x45F180",
+     "end": "0x45F1EE",
+     "sha256": "28406bc1a5935949c51e38dc6391faf42942aa7c6888c553fe4f43a04476c058"
+    }
+   },
+   "fixtures": 273,
+   "native_executions": 1467
+  },
+  "kingdom-load": {
+   "pins": {
+    "kingdom_load_properties_4E8A09": {
+     "start": "0x4E8A09",
+     "end": "0x4E8C2F",
+     "sha256": "9613a9761da077931278b27987e733e1c98584dc25b1576345a2dd2f11d49b7d"
+    },
+    "source_check_503080": {
+     "start": "0x503080",
+     "end": "0x50309B",
+     "sha256": "1f9e5603faf6051c0dcfbbaa319467ec75c8b10ccd8b72c95c4747874da850b6"
+    },
+    "grow_4849F0": {
+     "start": "0x4849F0",
+     "end": "0x484A60",
+     "sha256": "a486d21f29c01f1de00276e5a13a9929ad0ee32fb5dd4f07eac90e78aa36dcb3"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 360
+  },
+  "property": {
+   "pins": {
+    "add_property_4E3AD0": {
+     "start": "0x4E3AD0",
+     "end": "0x4E3C22",
+     "sha256": "3fac895e1a7ac5bee181607f597baa4eaa91e34409848ab743092926e06524e6"
+    },
+    "state_add_5036D0": {
+     "start": "0x5036D0",
+     "end": "0x503736",
+     "sha256": "8e078ae725cafe484d1ff7ea7306c643d8bca2401ec5cc885eb00bb11596f6b3"
+    },
+    "record_5030F0": {
+     "start": "0x5030F0",
+     "end": "0x50313B",
+     "sha256": "7d3e3ed36fb59fb768d4bfc27655752573b5f545c6cb8068ba642886252b0b99"
+    },
+    "search_5032D0": {
+     "start": "0x5032D0",
+     "end": "0x50334A",
+     "sha256": "81eb811d2040d5a8a2a651cfd56b408ad3426a106ff51a1e58efaff5860e93c0"
+    },
+    "origin_5031E0": {
+     "start": "0x5031E0",
+     "end": "0x503206",
+     "sha256": "0811735d57e73ac6ad9f035441ad17d6b13cbe1e0ebbe9acc8d993d14bdc1b52"
+    },
+    "append_766DE0": {
+     "start": "0x766DE0",
+     "end": "0x766E37",
+     "sha256": "83323eb62dcf688921b36f840907abe6d6fb13eae399aaa7028de2c64471a13b"
+    },
+    "remove_property_4E23D0": {
+     "start": "0x4E23D0",
+     "end": "0x4E2449",
+     "sha256": "a668d3006302b01a02ed7a61bd080510453588095317f1bd8f95ce6400555e10"
+    },
+    "state_remove_5034F0": {
+     "start": "0x5034F0",
+     "end": "0x5035DC",
+     "sha256": "70f64fa5dc63884a9d9713608807a48c9f6df006fccfb8d8b962e80434cbea89"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 1857
+  },
+  "purchase": {
+   "pins": {
+    "denizen_56D5A0": {
+     "start": "0x56D5A0",
+     "end": "0x56D7BD",
+     "sha256": "30de10dfb5506835a7a640b513d5759f8df6f9da3a4603df795099ed4728e0b2"
+    },
+    "denizen_56D7C0": {
+     "start": "0x56D7C0",
+     "end": "0x56D9F8",
+     "sha256": "9229e417d2dcac3b96a08d3b92f18a07597c53cf1bf51fe265f977ee7863446d"
+    },
+    "denizen_56DA00": {
+     "start": "0x56DA00",
+     "end": "0x56DC50",
+     "sha256": "bb4757f05063896deb33fa18f973170b393f923c6843b8a7f7907be4551000eb"
+    },
+    "attach_gate_574A10": {
+     "start": "0x574A10",
+     "end": "0x574BE2",
+     "sha256": "d09da4f9a80407261922f00acc6b95fe702324c336d8ea3abe6c572788172a4f"
+    },
+    "attach_574C10": {
+     "start": "0x574C10",
+     "end": "0x574DA1",
+     "sha256": "3f5a56a3c06477e7fd19dc357ad4656d4d0ca221c68a22a765519ce45a917094"
+    },
+    "attach_cost_5735D0": {
+     "start": "0x5735D0",
+     "end": "0x57364D",
+     "sha256": "548969f35ad3ca983316820d422dff6c7d3b5fcfbdea220f0b67f5216a67d480"
+    },
+    "scale_4CD770": {
+     "start": "0x4CD770",
+     "end": "0x4CD894",
+     "sha256": "b3a54fee09b187cb6ae60e9364089c7f8e3d19c982d74b50319ab28c6e73309a"
+    },
+    "transport_refund_58BBA0": {
+     "start": "0x58BBA0",
+     "end": "0x58BCAA",
+     "sha256": "8eff4e0a044d79ade3efba0d768ba71a06edac56b94ef36a386238b906c3a791"
+    },
+    "resource_clear_4CD250": {
+     "start": "0x4CD250",
+     "end": "0x4CD268",
+     "sha256": "41f115494489687ecc84640809f6b638d80debd8b0ec63a39bd90c5463c8f178"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "debit_4E1690": {
+     "start": "0x4E1690",
+     "end": "0x4E16C5",
+     "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c"
+    },
+    "credit_4E39D0": {
+     "start": "0x4E39D0",
+     "end": "0x4E3A4C",
+     "sha256": "a3f520dc7528e527230d77541bc288b5613f0a85674fb9468876806333083997"
+    }
+   },
+   "fixtures": 300,
+   "native_executions": 1596
+  },
+  "recruit-pairing": {
+   "pins": {
+    "pair_single_4E1200": {
+     "start": "0x4E1200",
+     "end": "0x4E121A",
+     "sha256": "f33b56864bfc00c559e4b8a47edf0aa55fe4cb3e0ebb345440c49e01718ab55d"
+    }
+   },
+   "fixtures": 120,
+   "native_executions": 120
+  },
+  "registry": {
+   "pins": {
+    "add_actor_4E6180": {
+     "start": "0x4E6180",
+     "end": "0x4E64AE",
+     "sha256": "aa20623124b74317e4f1b7bfa183da7b12b48199f886f690a120b99b7d8decbb"
+    },
+    "counters_4E4470": {
+     "start": "0x4E4470",
+     "end": "0x4E44D5",
+     "sha256": "b2f66bf1efed2728c22025a617ef56a4fb2c2da41894039d30198486967bd9b7"
+    },
+    "remove_actor_4E44E0": {
+     "start": "0x4E44E0",
+     "end": "0x4E48A6",
+     "sha256": "e0674ebf0565c831d7a9a6a4b8c8240e0ec23f01e37cac1d50c401b2c9c180e2"
+    },
+    "supply_add_4E1F00": {
+     "start": "0x4E1F00",
+     "end": "0x4E1F56",
+     "sha256": "e54164398d3b82560c79210a550a16ae88553f75cc00ea0707b4a78bf812e0e7"
+    },
+    "supply_remove_4E38B0": {
+     "start": "0x4E38B0",
+     "end": "0x4E3937",
+     "sha256": "978b25677538534b01a6a2e20a19b98e07fed80783d357c53233fed1bba24ee3"
+    },
+    "oldest_flare_4E1ED0": {
+     "start": "0x4E1ED0",
+     "end": "0x4E1F00",
+     "sha256": "bfbddb3e8128be68c26647c0637c7652c65ecaddd72484a140929bf8678dd923"
+    },
+    "transient_4D1050": {
+     "start": "0x4D1050",
+     "end": "0x4D1079",
+     "sha256": "58552e7c0f2eed2ac9451e6b9d0ac1392a95d98eaa1f854c28be56890db60359"
+    },
+    "origin_5031E0": {
+     "start": "0x5031E0",
+     "end": "0x503206",
+     "sha256": "0811735d57e73ac6ad9f035441ad17d6b13cbe1e0ebbe9acc8d993d14bdc1b52"
+    },
+    "score_58E870": {
+     "start": "0x58E870",
+     "end": "0x58E883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    },
+    "find_single_4E2A60": {
+     "start": "0x4E2A60",
+     "end": "0x4E2AB3",
+     "sha256": "ad187bf800d9924240f7194a36f965df98f781f6319d90eccfef4903817d6c03"
+    },
+    "remove_item_4E2CB0": {
+     "start": "0x4E2CB0",
+     "end": "0x4E2DF8",
+     "sha256": "1bccbc9f6f8c46ce40320c7094eb270d58e5683943353ab05bc03f8e6f554a65"
+    },
+    "add_item_4E4C30": {
+     "start": "0x4E4C30",
+     "end": "0x4E4DC0",
+     "sha256": "c33a4c9d5da1e348a2485912f1ff0dbf0f7d4eeb6a71a97e81539df2246d9b33"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 2625
+  },
+  "requirements": {
+   "pins": {
+    "requirements_5842F0": {
+     "start": "0x5842F0",
+     "end": "0x584491",
+     "sha256": "9bb98433fa23b312dfbacc8f7b4b52a1392a713a65006262c4caa1e9780993b0"
+    },
+    "wrapper_4C5630": {
+     "start": "0x4C5630",
+     "end": "0x4C571F",
+     "sha256": "f96dca917e41311777c84b1c98c7a1fd2234040cd387ca40f44752f6674117a5"
+    },
+    "evaluate_4C5250": {
+     "start": "0x4C5250",
+     "end": "0x4C54A3",
+     "sha256": "657af351a84c8ab79c806241a6ea31094bedd1618086a7f61b86ea642ebd6df2"
+    },
+    "list_append_45F240": {
+     "start": "0x45F240",
+     "end": "0x45F29F",
+     "sha256": "9148db17b2d830081edbb3d2a4685218182dc65816f04024615b9f460aa2d625"
+    }
+   },
+   "fixtures": 450,
+   "native_executions": 1350
+  },
+  "research": {
+   "pins": {
+    "research_refund_583F30": {
+     "start": "0x583f30",
+     "end": "0x583f61",
+     "sha256": "9a638cb6af94d01c3296f9628a57f097a4e95c10c10d57330ac52e58dec9b6d0"
+    },
+    "research_584030": {
+     "start": "0x584030",
+     "end": "0x584052",
+     "sha256": "55c2cb8f037f36bc6fc34f8a3be07a26ea38c23806b4c6b61291a64d877bfd30"
+    },
+    "research_584120": {
+     "start": "0x584120",
+     "end": "0x584210",
+     "sha256": "ff7d0a3db4bacc2c3682909e3da7151d180c1830b371fe15481ae6933a321bdf"
+    },
+    "research_5844A0": {
+     "start": "0x5844a0",
+     "end": "0x584592",
+     "sha256": "98b5cfaa8059ba00c7bd13c1571219aa3749422ce9b5be125645f92c4d31058f"
+    },
+    "research_5845F0": {
+     "start": "0x5845f0",
+     "end": "0x584790",
+     "sha256": "47f112c3e2315299e66b420ebf81023f1ac1685a916959d50ed3dfd0cd7b035f"
+    },
+    "research_584790": {
+     "start": "0x584790",
+     "end": "0x584933",
+     "sha256": "cd8b9b6e82a528dbaf6254b324238b6748b0ba208765edd4d290f2f8dc8b5f1e"
+    },
+    "queue_588A40": {
+     "start": "0x588a40",
+     "end": "0x588a74",
+     "sha256": "ff0a183e41557e43f17cae3016fc0d6ebdd022c643bdc73e350d89a8f7bf7c10"
+    },
+    "queue_589830": {
+     "start": "0x589830",
+     "end": "0x58991a",
+     "sha256": "cd5cb0b9b18d497c00d7a6bd3579bdddab0cd0fece70ffc95704db849296b786"
+    },
+    "queue_589F00": {
+     "start": "0x589f00",
+     "end": "0x589f84",
+     "sha256": "f06f7cb2bed50b0723b4a526bce7efabcb04523d05ad3086b983fe1c67cc7474"
+    },
+    "kingdom_4E2310": {
+     "start": "0x4e2310",
+     "end": "0x4e2359",
+     "sha256": "f265eac396b031aa6dc160ecdfbe382857282f1e6acc0e5ef7fd36ebd7de6326"
+    },
+    "kingdom_4E2360": {
+     "start": "0x4e2360",
+     "end": "0x4e2386",
+     "sha256": "d8d17d31ca0ee6b5dc7d6080639dcd9b9cdb2475e767bb9bbfaa06839644ee00"
+    },
+    "kingdom_4E2390": {
+     "start": "0x4e2390",
+     "end": "0x4e23c7",
+     "sha256": "7c51cd617b6c5990f5549197fbbd736466572b36f839d45cc5786469cc8596a1"
+    },
+    "cost_4C3D70": {
+     "start": "0x4c3d70",
+     "end": "0x4c3e0b",
+     "sha256": "8353298b41ffbd1002cf57fb498219d7bb5de6657bc684ea32124ec81e174819"
+    },
+    "list_remove_4F1430": {
+     "start": "0x4f1430",
+     "end": "0x4f1493",
+     "sha256": "0aac76e66860260b4737a6f1df07139dd1d721454e8bd6e5ba48aa59c3e3e19b"
+    },
+    "score_58E870": {
+     "start": "0x58e870",
+     "end": "0x58e883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    }
+   },
+   "case_runs": 147,
+   "steps": 561
+  },
+  "restriction": {
+   "pins": {
+    "restriction_4E1910": {
+     "start": "0x4E1910",
+     "end": "0x4E1960",
+     "sha256": "ff8cc22d8fa4f2fd4f18e4a897b851dc1c756891fb686397d14b89acf3ced479"
+    },
+    "restriction_4E1810": {
+     "start": "0x4E1810",
+     "end": "0x4E1883",
+     "sha256": "e2c2dbfedc7490bc5f1beb01bbd808b523757b298afdb947f00594ff237f3b78"
+    },
+    "technology_4E1890": {
+     "start": "0x4E1890",
+     "end": "0x4E1903",
+     "sha256": "bb64456c52bb283448d6feebaa87f3831ec810a25c975914f070dec0e1726927"
+    },
+    "manager_4F0400": {
+     "start": "0x4F0400",
+     "end": "0x4F040B",
+     "sha256": "a2d09c77bcd0dc98bf3f4a845f606ce625dfb0086350b4176538f4e3b9b57ce3"
+    },
+    "profile_504560": {
+     "start": "0x504560",
+     "end": "0x504584",
+     "sha256": "ed0fd0001d8ea2de62402d39ca5d177a65d148d5f384960df2fd1c3437d7295e"
+    },
+    "actors_504500": {
+     "start": "0x504500",
+     "end": "0x50452A",
+     "sha256": "8d28e35a3d1383fce6dd20b4a7fdc32528812c52fa8db99877f12896f7994c93"
+    },
+    "technologies_504530": {
+     "start": "0x504530",
+     "end": "0x50455A",
+     "sha256": "0b65ab749ab738f221c3da528baff5faf11d6ad164698cd90832dae241043779"
+    },
+    "lookup_4154D0": {
+     "start": "0x4154D0",
+     "end": "0x41550E",
+     "sha256": "4112df12b12778ab373c1d3a87a724a97453f74556123dd3fab75756058e045d"
+    },
+    "bucket_5043F0": {
+     "start": "0x5043F0",
+     "end": "0x504449",
+     "sha256": "b6b1064f00600bfc25fdeb1ec08d9c0d37d0b74e81e9b29d324bd07f71bd30fd"
+    },
+    "hash_405030": {
+     "start": "0x405030",
+     "end": "0x40506F",
+     "sha256": "57a68ca6c0bdc2a2422dbf69927ce49a57c319436e60be4ef3590b3850ecc2b3"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 2046
+  },
+  "settlement": {
+   "pins": {
+    "can_build_587B60": {
+     "start": "0x587B60",
+     "end": "0x587FC7",
+     "sha256": "81b3d8202e72baec03f6a3dbc353269b26cde72f5284eb1a9a6f5c795400029b"
+    },
+    "affordable_5879B0": {
+     "start": "0x5879B0",
+     "end": "0x587B5A",
+     "sha256": "46bc97a18374b54170fb9285a5c1cf37da96bcfb026e68d08af2927f5038f4b8"
+    },
+    "build_587FD0": {
+     "start": "0x587FD0",
+     "end": "0x5882AD",
+     "sha256": "c42d957e0a8dc97bcb054314535e8d7e8fc8199abf51b3a3cdc35fddeacf80d6"
+    },
+    "paid_store_5657A0": {
+     "start": "0x5657A0",
+     "end": "0x5657AF",
+     "sha256": "11ccb0fb99ba7f2980365fe943df74a0954bbe345f35bfc46951992e0354ffc6"
+    },
+    "paid_5655C0": {
+     "start": "0x5655C0",
+     "end": "0x5656AE",
+     "sha256": "fdbcd5fcdcffc0b35555bddad8c03b14ba3f9c0049a53558f282795df4490929"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "debit_4E1690": {
+     "start": "0x4E1690",
+     "end": "0x4E16C5",
+     "sha256": "9bf846cbd098e2d129d07502e4158a56a403bd2d8fa89aec6c748d079def892c"
+    }
+   },
+   "fixtures": 300,
+   "native_executions": 1662
+  },
+  "settlement-slot": {
+   "pins": {
+    "find_structure_585500": {
+     "start": "0x585500",
+     "end": "0x58557B",
+     "sha256": "961edb6fab620c85db1c92295f944b9cf9cf66e3f59fedfdc2f40248f8da090b"
+    },
+    "structure_match_5890C0": {
+     "start": "0x5890C0",
+     "end": "0x5891F2",
+     "sha256": "a1c230df902eb80e9f65c2d94099c43b9a9fc130c48bc5c4a1da7e03f0997634"
+    },
+    "transient_4D1050": {
+     "start": "0x4D1050",
+     "end": "0x4D1079",
+     "sha256": "58552e7c0f2eed2ac9451e6b9d0ac1392a95d98eaa1f854c28be56890db60359"
+    },
+    "add_structure_586B40": {
+     "start": "0x586B40",
+     "end": "0x586BBE",
+     "sha256": "567c6092d1490e15ccbbaa324d802c353d546aa0b699426b371cb1eb0ce7376d"
+    },
+    "push_93B220": {
+     "start": "0x93B220",
+     "end": "0x93B24D",
+     "sha256": "c2722db6f0a0582c6058dcb01601c2edef0adcebe93946b28c619fd049985ce3"
+    },
+    "append_766DE0": {
+     "start": "0x766DE0",
+     "end": "0x766E37",
+     "sha256": "83323eb62dcf688921b36f840907abe6d6fb13eae399aaa7028de2c64471a13b"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 2022
+  },
+  "start-mission": {
+   "pins": {
+    "start_mission_4E6DB0": {
+     "start": "0x4E6DB0",
+     "end": "0x4E704B",
+     "sha256": "222d6ac896d0442d5b03ec39f2d602b752124ca0844689c2e56b32ce444ca53b"
+    },
+    "credit_4E39D0": {
+     "start": "0x4E39D0",
+     "end": "0x4E3A4C",
+     "sha256": "a3f520dc7528e527230d77541bc288b5613f0a85674fb9468876806333083997"
+    },
+    "faction_4730D0": {
+     "start": "0x4730D0",
+     "end": "0x473107",
+     "sha256": "6bc2a4e0e30438aeb037523d2dcff68b9e88bfb984606f888a8e95ab0f4b7ee8"
+    },
+    "commander_xp_4CDF10": {
+     "start": "0x4CDF10",
+     "end": "0x4CDF59",
+     "sha256": "a06b9ec91ba11bb21d8728de132d1fcc0df277845426930f5f53c4c8a3aef9db"
+    }
+   },
+   "fixtures": 366,
+   "native_executions": 366
+  },
+  "statistics": {
+   "pins": {
+    "ordinary_ctor_58EB60": {
+     "start": "0x58EB60",
+     "end": "0x58EB9A",
+     "sha256": "fd1492383c0897f35d74c000d2592c8d5b329b079dbf0a730f3dc917bea7654f"
+    },
+    "relation_ctor_58D560": {
+     "start": "0x58D560",
+     "end": "0x58D61A",
+     "sha256": "c4245c7cc5429149cc19265de82c0eaf6f8c25b28190fa0673b6ded2a841c217"
+    },
+    "map_ctor_58D4D0": {
+     "start": "0x58D4D0",
+     "end": "0x58D512",
+     "sha256": "23246b04811295b3b0760eb60d72f3aa62a251318b4710e48026465d8b7a6b88"
+    },
+    "map_ctor_58D520": {
+     "start": "0x58D520",
+     "end": "0x58D55F",
+     "sha256": "8166b1314a69719af2efcbda90a39aff88b050931803f521116fba5f5dfac5b5"
+    },
+    "score_add_58E870": {
+     "start": "0x58E870",
+     "end": "0x58E883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    },
+    "relation_add_58D950": {
+     "start": "0x58D950",
+     "end": "0x58D9C7",
+     "sha256": "d5641e6aa2ea079f7c9349b4f75182da95d3758937ef72b4b184c704cd5363c3"
+    },
+    "definition_add_58D8C0": {
+     "start": "0x58D8C0",
+     "end": "0x58D940",
+     "sha256": "bdf721a0d81d6aca041b468a9fd357858119c9498859c58a4fc152ff53ee0ab0"
+    },
+    "map_insert_7BA3C0": {
+     "start": "0x7BA3C0",
+     "end": "0x7BA42B",
+     "sha256": "622914d8adf29123695e31fda3e9dabd66771e74b11c687796ee5a131d6867f7"
+    },
+    "map_rehash_606750": {
+     "start": "0x606750",
+     "end": "0x60683C",
+     "sha256": "7f503d9c26762479558fe03092731fe6c645e828e4ac31a8feb9d6be06d6948c"
+    }
+   },
+   "fixtures": 129,
+   "native_executions": 5829
+  },
+  "statistics-load": {
+   "pins": {
+    "statistics_load_58EE80": {
+     "start": "0x58EE80",
+     "end": "0x58EF5B",
+     "sha256": "432a321c9af70919aaee3fb3d19e04f9904ad716da38dc5cf9ff0140a3bba0a9"
+    },
+    "relation_load_58DBE0": {
+     "start": "0x58DBE0",
+     "end": "0x58DFB0",
+     "sha256": "4f56761fe8f40b56a7e846444807974dba4a63b6d8a146cb4f8706c2abe6ac92"
+    },
+    "version_8589B0": {
+     "start": "0x8589B0",
+     "end": "0x8589FE",
+     "sha256": "fff450927854e59df781d2ca09aefd357ef2f72e7bfdf1bec345f1ca7f497180"
+    },
+    "promote_4E3690": {
+     "start": "0x4E3690",
+     "end": "0x4E37C6",
+     "sha256": "08e59bb2f8479e662a1f7f2547836eabfd78619884685bdcf58e47d13980ab1a"
+    },
+    "mission_reset_58EA00": {
+     "start": "0x58EA00",
+     "end": "0x58EA23",
+     "sha256": "e92aa270219c1f7a2e0681720b23f638758b7821c705f025eaf6d68dc0becf29"
+    },
+    "ordinary_ctor_58EB60": {
+     "start": "0x58EB60",
+     "end": "0x58EB9A",
+     "sha256": "fd1492383c0897f35d74c000d2592c8d5b329b079dbf0a730f3dc917bea7654f"
+    },
+    "relation_ctor_58D560": {
+     "start": "0x58D560",
+     "end": "0x58D61A",
+     "sha256": "c4245c7cc5429149cc19265de82c0eaf6f8c25b28190fa0673b6ded2a841c217"
+    },
+    "map_rehash_606750": {
+     "start": "0x606750",
+     "end": "0x60683C",
+     "sha256": "7f503d9c26762479558fe03092731fe6c645e828e4ac31a8feb9d6be06d6948c"
+    }
+   },
+   "fixtures": 180,
+   "native_executions": 720
+  },
+  "structure-state": {
+   "pins": {
+    "enable_565400": {
+     "start": "0x565400",
+     "end": "0x565442",
+     "sha256": "24b76fac61a723199dcb6e7c7e567e2b75c64db4fe3d77c523e18e2064e2b385"
+    },
+    "disable_564DC0": {
+     "start": "0x564DC0",
+     "end": "0x564E10",
+     "sha256": "22e984ba4592cbe98edd49ee9681a1d9eba24c572d8cf7b0716921ffc4be937b"
+    },
+    "recompute_565140": {
+     "start": "0x565140",
+     "end": "0x5653F1",
+     "sha256": "427510a42ce07b13cd53ff1b514e9fa73179b9136c8de486bca769096aea90de"
+    },
+    "upgrade_available_565090": {
+     "start": "0x565090",
+     "end": "0x565132",
+     "sha256": "d3b7b5cb80fd2e48d220d738c09da17995a9ab07600a0b94973644d38d10ae31"
+    },
+    "settlement_ready_585F00": {
+     "start": "0x585F00",
+     "end": "0x585F56",
+     "sha256": "cf8d8819167ec3db1cda0fc184020d371cd9bf8ece6f4bdee5dbb312f9d53850"
+    },
+    "state_group_4D14C0": {
+     "start": "0x4D14C0",
+     "end": "0x4D1503",
+     "sha256": "05a5a58a98d5f44e8144910821ac4b7bff387d7c8c808b935f454fd13e1bdf06"
+    },
+    "lowest_state_4D0820": {
+     "start": "0x4D0820",
+     "end": "0x4D0855",
+     "sha256": "736d07c1301905574a383e4c8b48814cf14048fb5ceda4d1043573f96af179e5"
+    },
+    "command_bit_517FA0": {
+     "start": "0x517FA0",
+     "end": "0x518004",
+     "sha256": "e4223243a7f1b13c76f4ce61ba1d636f233b2ba93afeb8477804f6d051d1f090"
+    },
+    "settlement_refresh_584E10": {
+     "start": "0x584E10",
+     "end": "0x584E6A",
+     "sha256": "d59bd13268125ebca8c63533cffbe0368dc55f6d6ac45fe3eb71e84e452388c3"
+    },
+    "settlement_clear_584DE0": {
+     "start": "0x584DE0",
+     "end": "0x584E0C",
+     "sha256": "732aefef1f97cdf9d3a63af5e96b05b93a02080f6994b5f5b43ab9e3e3d226ee"
+    }
+   },
+   "fixtures": 900,
+   "native_executions": 900
+  },
+  "supply": {
+   "pins": {
+    "supply_tick_thunk_58B120": {
+     "start": "0x58B120",
+     "end": "0x58B130",
+     "sha256": "a020267442c0d5ac08127f4d43380dcd19b6a135ac53539754f0eaf99fc51262"
+    },
+    "supply_tick_58AE10": {
+     "start": "0x58AE10",
+     "end": "0x58B0CC",
+     "sha256": "ec8a584920175f334f556c0e09faa2edada94c27d763fe07905cb4dac31b6e0f"
+    },
+    "provides_58ACE0": {
+     "start": "0x58ACE0",
+     "end": "0x58ADA3",
+     "sha256": "bbeedbfb29c77ed8ed19c7cccd27542e1f60b9a80d658cdc2943897f8d5ca082"
+    },
+    "relay_chain_58ADB0": {
+     "start": "0x58ADB0",
+     "end": "0x58AE07",
+     "sha256": "e10eb7609d277396f871638ebb49ad58d3f41078741a9fb002ab88c1ef96b152"
+    },
+    "stockpile_in_supply_4D0C90": {
+     "start": "0x4D0C90",
+     "end": "0x4D0CC1",
+     "sha256": "04a20ba92c580ebe9238ff0c7a5d9badbc6c201ceed41caea2923e59405b4ad6"
+    },
+    "in_supply_4D0A80": {
+     "start": "0x4D0A80",
+     "end": "0x4D0C8C",
+     "sha256": "9b4476e3f4a94aeafa279f5c2ae402079aebd5f9362bb78d27f81b8363404bac"
+    },
+    "supply_state_4D7CE0": {
+     "start": "0x4D7CE0",
+     "end": "0x4D7D25",
+     "sha256": "8466897d90f22ffa8664918951cce03a410f24550195c4b9b0ba49301f2dcfa7"
+    },
+    "economy_tick_56F2B0": {
+     "start": "0x56F2B0",
+     "end": "0x56F306",
+     "sha256": "1aece90cfd7df520c4e2c67e1fdf11c187ba33f14342b31bacb7d974a65e6ff9"
+    },
+    "gtid_d0_44DEE0": {
+     "start": "0x44DEE0",
+     "end": "0x44DF17",
+     "sha256": "cc2f4521424e3661c5047c4b3baf7f4a5d4573e531f30278cf6aa1384b529473"
+    },
+    "relay_type_4CE830": {
+     "start": "0x4CE830",
+     "end": "0x4CE84F",
+     "sha256": "7600e2a09956647e8818d75e53f9c5f1fbb1cbfcfb3b49f5880dc85441f97bf8"
+    },
+    "relay_live_4CF2C0": {
+     "start": "0x4CF2C0",
+     "end": "0x4CF2F4",
+     "sha256": "ebae97559af165a5b1061e3ee9ac783d42c6dc967263af2531da4a1a3e1924d2"
+    },
+    "siege_432EF0": {
+     "start": "0x432EF0",
+     "end": "0x432F0A",
+     "sha256": "c6910a0d1d1de4c028175809c450d4982a8272c7ccad86c8d99a06d4a5e07e45"
+    },
+    "definition_529C30": {
+     "start": "0x529C30",
+     "end": "0x529C37",
+     "sha256": "478d198204dc1201c6d9430aa257ec122efc8ed3694922175dea0e90f77f6148"
+    },
+    "suspended_4F0460": {
+     "start": "0x4F0460",
+     "end": "0x4F0475",
+     "sha256": "6150b7a3792d89ed0d2996b6e8cfd15cb4fe6b0a1be98e4905f8fd21f553fbfd"
+    },
+    "zero_9F32DC": {
+     "start": "0x9F32DC",
+     "end": "0x9F32E0",
+     "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+    }
+   },
+   "fixtures": 270,
+   "native_executions": 2064
+  },
+  "tick": {
+   "pins": {
+    "tick_4E9C40": {
+     "start": "0x4E9C40",
+     "end": "0x4E9FBB",
+     "sha256": "bac1f6cdbb5b99921be8daff2555110f5d0da9ab083b25457615c63872513722"
+    },
+    "regen_4E12D0": {
+     "start": "0x4E12D0",
+     "end": "0x4E13E4",
+     "sha256": "758a6cdcd7665f3e4fa2806cc207b269ce0f81b1d9d00627ac1d55a631975414"
+    },
+    "rate_45D5B0": {
+     "start": "0x45D5B0",
+     "end": "0x45D5D2",
+     "sha256": "dd51515b01891bc8875273bfad749dbc51226b345af88a366410ce55df9d9693"
+    },
+    "single_available_4E0EC0": {
+     "start": "0x4E0EC0",
+     "end": "0x4E0EC7",
+     "sha256": "3d66d7f4f06e867fbfd4271d7175b781c21e58fd1c057b7b3162d05a768dc539"
+    },
+    "faction_xp_4CDFD0": {
+     "start": "0x4CDFD0",
+     "end": "0x4CE073",
+     "sha256": "7d4e1bbd543556442cf8a4057ce359131eefb58918e86fde29887751d15f0fd2"
+    },
+    "score_add_58E870": {
+     "start": "0x58E870",
+     "end": "0x58E883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    },
+    "snapshot_timer_4E37D0": {
+     "start": "0x4E37D0",
+     "end": "0x4E3893",
+     "sha256": "127d54f6e791bf43ac3dce2ff3f4d044cb1b75413fb71bf8ce271b8059a340e8"
+    },
+    "production_stats_58ED00": {
+     "start": "0x58ED00",
+     "end": "0x58EDCF",
+     "sha256": "e0a0e8e0aa523a26502feace8d721e7bd8a22c81ae408d5f103b255abd32accd"
+    },
+    "ftol_96CC4C": {
+     "start": "0x96CC4C",
+     "end": "0x96CCC1",
+     "sha256": "5333b186c02836974c6f792303aeb2c00d856316b93ccbbe65f51def6ae661b4"
+    },
+    "single_vtable_A29694": {
+     "start": "0xA29694",
+     "end": "0xA296B0",
+     "sha256": "328558bdd6e74238b1a604fc641fccd00581df8657ffdf915b0e4bd6f5ddfd91"
+    },
+    "zero_9F32DC": {
+     "start": "0x9F32DC",
+     "end": "0x9F32E4",
+     "sha256": "22b6f43bd8d27738d3213f29e96b62d01d9d6c0ab4f9732aaae803186f51eab7"
+    },
+    "hundred_9F2408": {
+     "start": "0x9F2408",
+     "end": "0x9F240C",
+     "sha256": "2238f30df488055daf5e8f362cf904e370011a172d20df193c1b7ae8e5db8e01"
+    },
+    "seconds_to_minutes_A1B268": {
+     "start": "0xA1B268",
+     "end": "0xA1B26C",
+     "sha256": "8b28d83cb5ddc0a51f24f23094cbfa145fee5d22bd205753291d42ccfef0ccc9"
+    },
+    "ratio_threshold_A2A278": {
+     "start": "0xA2A278",
+     "end": "0xA2A27C",
+     "sha256": "0b9d79ff0fc4d0a77ef398763bbe45c445501e826219f2b6a1aa709411ab631d"
+    },
+    "snapshot_period_A028CC": {
+     "start": "0xA028CC",
+     "end": "0xA028D0",
+     "sha256": "fb7614b89815f3ebaaba34a1cbd1fe490c839c39571d6a45e3a3cff5fcb1383c"
+    },
+    "victory_time_B28194": {
+     "start": "0xB28194",
+     "end": "0xB28198",
+     "sha256": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+    }
+   },
+   "fixtures": 414,
+   "native_executions": 1008,
+   "seams": {
+    "0x6F7810": "alloc",
+    "0x6F7430": "free",
+    "0x42D4B0": "event",
+    "0x4E9960": "team_victory",
+    "0x4E9A40": "percentage_victory",
+    "0x58F530": "snapshot_new",
+    "0x45F240": "snapshot_push",
+    "0x4849F0": "vector_grow_unexpected"
+   }
+  },
+  "transfer": {
+   "pins": {
+    "credit_row_4E2080": {
+     "start": "0x4E2080",
+     "end": "0x4E209E",
+     "sha256": "41a4667d9930305e5d8f0045aece322e79dc915e9e7dac30cd88844d3b22f6bb"
+    },
+    "clamp_row_4E1630": {
+     "start": "0x4E1630",
+     "end": "0x4E1687",
+     "sha256": "7f587d7a2c31b44b89b21585524aa1ffe59f26e0f0a23b18516d704ba8d5f1f9"
+    },
+    "debit_row_4E16D0": {
+     "start": "0x4E16D0",
+     "end": "0x4E16E9",
+     "sha256": "8298de30729ea61173bc54e8d753b0bb3c4166d9c73dafebce2205ff203c1cc8"
+    },
+    "steal_4CA680": {
+     "start": "0x4CA680",
+     "end": "0x4CA759",
+     "sha256": "f2c163babd48e412f0b30f250278ff4cbbee0d5fd165c55599277f8e27e4c005"
+    },
+    "target_4C8330": {
+     "start": "0x4C8330",
+     "end": "0x4C8351",
+     "sha256": "8f20c02bce8147ff889f6b419d59db64d45d927c3e2b9e027e794cc8f4dc3354"
+    },
+    "team_command_509840": {
+     "start": "0x509840",
+     "end": "0x50A61C",
+     "sha256": "607d66e05ba7d3a1137c6de3159149c4f8a5ec10c0d4c99547e83ce9e60dbdcd"
+    },
+    "primary_resource_473520": {
+     "start": "0x473520",
+     "end": "0x47355C",
+     "sha256": "6facb47c544e6f0204786bcb84c01469aa425d1e6a4e9541cb887141291adabc"
+    },
+    "display_round_432650": {
+     "start": "0x432650",
+     "end": "0x432669",
+     "sha256": "8263f3ccb5bf738bdf97cbbbca72d54e5cb6b030b705b454d02dfb9b00a66372"
+    },
+    "floor_96D5E0": {
+     "start": "0x96D5E0",
+     "end": "0x96D7D4",
+     "sha256": "18e7aeab4bb96839ab57bddfed54729f1bbccee1425b6d6e65e0824af60f6f02"
+    },
+    "ftol_96CC4C": {
+     "start": "0x96CC4C",
+     "end": "0x96CCC1",
+     "sha256": "5333b186c02836974c6f792303aeb2c00d856316b93ccbbe65f51def6ae661b4"
+    },
+    "ability_afford_4E24B0": {
+     "start": "0x4E24B0",
+     "end": "0x4E2583",
+     "sha256": "eb3d98fb889af555abffc80266e3c5138f8074c4f17a4e371b06bf0f1bef8ce1"
+    },
+    "ability_xp_4CDD60": {
+     "start": "0x4CDD60",
+     "end": "0x4CDD8D",
+     "sha256": "cb76c8e52379f691fec05e4582655d095b459e8aa68ef30185b2667062fde491"
+    },
+    "can_afford_4E20A0": {
+     "start": "0x4E20A0",
+     "end": "0x4E20F7",
+     "sha256": "28826ed32676da550b5c1f78d54b018adf2ba6e1c7591b77625a8408c23cc86a"
+    },
+    "faction_xp_wrapper_4E0FD0": {
+     "start": "0x4E0FD0",
+     "end": "0x4E0FE9",
+     "sha256": "3a077273e36e26636b5abca173dd505b3ca488a0a39afab2e6f06d9f039d83d3"
+    },
+    "faction_xp_4CDFD0": {
+     "start": "0x4CDFD0",
+     "end": "0x4CE073",
+     "sha256": "7d4e1bbd543556442cf8a4057ce359131eefb58918e86fde29887751d15f0fd2"
+    },
+    "score_58E870": {
+     "start": "0x58E870",
+     "end": "0x58E883",
+     "sha256": "54d27fdb11db892ade308d876d292479dd8cc2e9f875ed326c567c251f471eda"
+    },
+    "zero_9F32DC": {
+     "start": "0x9F32DC",
+     "end": "0x9F32E0",
+     "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+    },
+    "half_9FBDB8": {
+     "start": "0x9FBDB8",
+     "end": "0x9FBDBC",
+     "sha256": "d99e58435243d9fef9c88273b8d553b4fba4d0baf8009d29eae74fa99e0d9f57"
+    },
+    "tribute_509440": {
+     "start": "0x509440",
+     "end": "0x509592",
+     "sha256": "d616e4d05f60aba5f8015eaaad76c30606c12751dc9c2195cb8160a0e2fcb44a"
+    },
+    "gtid_432E40": {
+     "start": "0x432E40",
+     "end": "0x432E65",
+     "sha256": "5aad8d7383c1e2118eb9593e6711fdadcce1701e77dffc9332ec2de4d55500c3"
+    }
+   },
+   "fixtures": 273,
+   "native_executions": 1545
+  },
+  "world-start": {
+   "pins": {
+    "world_start_4F1E10": {
+     "start": "0x4F1E10",
+     "end": "0x4F1F6C",
+     "sha256": "50ada86b8b0f10aa953a4f2787808d2b7ad10f2659c0ac99b930eacab5e96cc6"
+    },
+    "kingdom_iterator_4A5BC0": {
+     "start": "0x4A5BC0",
+     "end": "0x4A5BD9",
+     "sha256": "78f948b4edd8d95f8388c399ea91e99eae311dd1024251253e212166c6c9c612"
+    },
+    "kingdom_iterator_4F0680": {
+     "start": "0x4F0680",
+     "end": "0x4F06AC",
+     "sha256": "62b0630e710deca126d386e06f68e2554baa884124b5264c76b18ed64dd4733c"
+    },
+    "promote_4E3690": {
+     "start": "0x4E3690",
+     "end": "0x4E37C6",
+     "sha256": "08e59bb2f8479e662a1f7f2547836eabfd78619884685bdcf58e47d13980ab1a"
+    },
+    "mission_reset_58EA00": {
+     "start": "0x58EA00",
+     "end": "0x58EA23",
+     "sha256": "e92aa270219c1f7a2e0681720b23f638758b7821c705f025eaf6d68dc0becf29"
+    },
+    "gtid_next_4EFBE0": {
+     "start": "0x4EFBE0",
+     "end": "0x4EFC40",
+     "sha256": "5f98cd592925fe7c73cdc6a42792b3f3dd3aa80f73b718e568a8aa1ee2973430"
+    },
+    "field_4CEEC0": {
+     "start": "0x4CEEC0",
+     "end": "0x4CEEC7",
+     "sha256": "ea3cd1075342b22f531a0577961fbca1086c4cbd2cf0b4eb07c67c784ea57b47"
+    },
+    "field_4CEED0": {
+     "start": "0x4CEED0",
+     "end": "0x4CEEDD",
+     "sha256": "c7012e42f3ced21a5e8eac7955d988a1cb9158db379fd7304bad9fef94c2afef"
+    },
+    "snapshot_timer_4E37D0": {
+     "start": "0x4E37D0",
+     "end": "0x4E3893",
+     "sha256": "127d54f6e791bf43ac3dce2ff3f4d044cb1b75413fb71bf8ce271b8059a340e8"
+    }
+   },
+   "fixtures": 360,
+   "native_executions": 360
+  }
+ },
+ "precisions": [
+  "Double53 (0x027F, game default)",
+  "Single24 (0x007F)",
+  "Extended64 (0x037F)"
+ ],
+ "inventory_summary": {
+  "unclassified": {
+   "research-only (probe/seam, no crate port)": 116,
+   "ported+oracle-referenced": 183,
+   "phase8-port": 87,
+   "missing": 125,
+   "referenced-in-crates (no oracle reference found)": 4
+  },
+  "research": {
+   "seam (external callback in current ports)": 5,
+   "phase8-port": 16
+  },
+  "presentation": {
+   "seam (external callback in current ports)": 2
+  },
+  "transfers": {
+   "phase8-port": 5,
+   "missing": 1
+  },
+  "actor-data": {
+   "phase8-port": 1
+  },
+  "construction": {
+   "phase8-port": 25,
+   "seam (external callback in current ports)": 12
+  },
+  "statistics": {
+   "seam (external callback in current ports)": 3,
+   "phase8-port": 8
+  },
+  "kingdom-economy": {
+   "phase8-port": 11,
+   "missing": 1,
+   "ported+oracle-referenced": 5,
+   "research-only (probe/seam, no crate port)": 1
+  },
+  "special-operations": {
+   "seam (external callback in current ports)": 1,
+   "ported+oracle-referenced": 3,
+   "phase8-port": 2
+  },
+  "commander-experience": {
+   "phase8-port": 3
+  },
+  "actor-state": {
+   "seam (external callback in current ports)": 2
+  },
+  "victory": {
+   "seam (external callback in current ports)": 2
+  },
+  "capture": {
+   "ported+oracle-referenced": 1
+  },
+  "purchases": {
+   "phase8-port": 6
+  },
+  "actor-economy": {
+   "phase8-port": 1,
+   "research-only (probe/seam, no crate port)": 3,
+   "ported+oracle-referenced": 6
+  },
+  "production": {
+   "research-only (probe/seam, no crate port)": 8,
+   "ported+oracle-referenced": 10,
+   "missing": 1,
+   "phase8-port": 2,
+   "seam (external callback in current ports)": 1
+  },
+  "crt": {
+   "phase8-port": 2
+  }
+ },
+ "removed_caps": [
+  {
+   "address": "0x48BA89",
+   "original": 10,
+   "what": "stat data manager resource count; statistics production totals inline at stats+0 (float[10])",
+   "rust": "aa_economy::statistics::Statistics::production is a Vec sized to the registry"
+  }
+ ],
+ "proven_behaviours": [
+  "Upkeep-shortage ratio 1 - provided/consumed over STOCKPILED rows plus min(provided,consumed)*cost for UPKEEP rows, x87 accumulators, event 3 percent = _ftol(PC(ratio*100)) only when |ratio-announced| > 0.05f (or previous ratio zero) and ratio > 0; event 4 when previous ratio nonzero and no new overdraw; PC24 vs PC53/64 percent differences are reproduced (e.g. 0.29f reports 28 at PC53, the game default, and 29 at PC24).",
+  "Recruit-single regeneration: eligible when available or both GTIDs dead; one charging index; ActorData+2CC*seconds; index-0 completion leaves charging = 0 (native quirk).",
+  "Commander (kingdom+0x230) experience income seconds*cache+0x180, clamp to [0, FactionData+0x3C] when max >= 0, score 44 only for positive amounts; 4E0FD0 multiplier path.",
+  "Statistics: 60 s snapshot timer, production totals and TECH_BUILDINGS_POSSESSION_TIME += dt*TECH_BUILDINGS_OWNED; relation statistics +0x340 slots 0..4 keyed by definition (58D8C0, indices 57..61) and 5..9 keyed by kingdom (58D950, slot index-52).",
+  "Research request/refund/completion, requirements 5842F0 (outcome 0/1/2 with missing-item description), kingdom AddProperty 4E3AD0 and property removal 4E23D0/5034F0.",
+  "Steal and give resources, tribute (team command 4) with events 0x1F/0x20 even when defeated, faction ability affordability.",
+  "Construction: construct/upgrade affordability, upgrade start/cancel, construction cancel; BuildActor 563160 quotes and debits only after creation and never stores the paid cost; settlement BuildStructure 587FD0 quotes before creation, debits the reread owner and stores the paid cost with 5655C0(cost, 1); enemy-nearby messages are sent whatever the notify flag.",
+  "Construction lifecycle: salvage floor(double(PC(PC(fraction*paid)+0.5))) per row, sell = cancel upgrade then refund+destroy unless destroyed, command dispatch 0x13..0x16, Tick auto-upgrade (501570 interval timer, first 566110(def,1,0) passing) and state 0x20 = (constructing or upgrading) and PC(time - start) < window.",
+  "Supply: EconomyComponent::Tick 56F2B0, supply component tick 58AE10, relay chains 58ADB0 (cycles rejected), in-supply 4D0A80, state 4D7CE0.",
+  "Kingdom registry AddActor 4E6180 / RemoveActor 4E44E0 and the recruit item table 4E2A60/4E2CB0/4E4C30 used by ChangeKingdom 0x4D8450.",
+  "Purchases: denizen air attack/recon, HQ attach cost/gate/payment, transport unload refund.",
+  "Construction completion 566AC0/565B00/566400: settlement founding, CreateComponents failure, kingdom completion 4E4470, statistics, events, triggers, component hand-offs and the 565700 refund on a failed upgrade, in native order.",
+  "Start mission 4E6DB0: stockpile reset (+0 unless > 0, clamped), Commander/profile/start technologies with owned filtering, credits, faction diagnostic, Commander starting experience clamp 4CDF10, including NaN/infinite inputs.",
+  "Restrictions 4E1910/4E1810/4E1890 over native string maps: ASCII case-insensitive keys, last inserted entry wins, null values do not restrict.",
+  "Settlement slots 585500/5890C0/586B40.",
+  "Structure enable 565400 / disable 564DC0 / command recompute 565140 (565090, 585F00, 4D14C0, 517FA0, 584E10, 584DE0) with actor-state writes as seams.",
+  "World start 4F1E10 economy parts: promotion and mission score reset, actor+0x13C = 0x38 and owner statistics tracking walk, forced initial snapshots.",
+  "Harness: page-0 accesses fault unless FS-prefixed (Unicorn FS base 0); three silent null reads fixed, one fixture lost 57 out-of-domain executions.",
+  "Kingdom load economy semantics: 58EE80/58DBE0 statistics loads, 4E3690 promotion + 58EA00 mission score reset, v7+ property loop (source 1..3, legacy world < 0x15 discard with one log)."
+ ],
+ "source_sha256": {
+  "crates/aa-economy/README.md": "7cb754c11d14aa13a358910db77e6bfbbc4cee31ed80bcfc2c4515bedf72732e",
+  "crates/aa-economy/src/binary.rs": "ec7cccf1fd5bcb0794c5af49d48a8729a5b7fbc5c40f33626f69081cde775ce8",
+  "crates/aa-economy/src/kingdom_load.rs": "2583e3084557100040472494589921b5e577764062d51f26c22674ff6a682e30",
+  "crates/aa-economy/src/kingdom_registry.rs": "fb68db1ae62fc4af047ae65d206740510a4622e4b89e9974b8bab02c351dc3c6",
+  "crates/aa-economy/src/kingdom_start.rs": "97bfa2d61989ea4a58a0c8dbbfb26e044da4ecf8bf3387ff7ebe5c379ca67550",
+  "crates/aa-economy/src/lib.rs": "bd4e911d87c0f35155ea857198792aa2c885f9d8dc142780c4c839e347ac287a",
+  "crates/aa-economy/src/restrictions.rs": "7aa7e1515351be5db9a08e23929b643bb907cc880ce859cda3f9ecd6c4402658",
+  "crates/aa-economy/src/statistics.rs": "0f77b23de97fc2d5c6fdf1a137eb3975a44ff2b7dbee19d526a06b506c9cb9fd",
+  "crates/aa-economy/src/supply.rs": "d56d0411bc641d3bf7844b6e4508c5d16c9734c2473c4b483796b27d694ed78d",
+  "crates/aa-economy/src/tick.rs": "29d3d97c0d24d95c8e429d0dc5c80bff4b2805246ce2829cc1b5bb6eab099b53",
+  "crates/aa-economy/src/transfers.rs": "51c321464c53ebe48a03be71c257fc892c30638c79edf821bf7577af15b71a39",
+  "crates/aa-economy/src/world_start.rs": "3971a9741d5068257db8430731bd026820fce52f20d840bc1f87a06ff107da50",
+  "crates/aa-economy/src/x87.rs": "e52e827065e37816264a0afbfbac86836917e1d9659557ada9655b1bb96e6e25",
+  "crates/aa-economy/tests/fixtures/economy-native-vectors.json": "06beaf43ea3bdf2a929397685992ee8f61f6c1b102e0dba45ecdefe496423320",
+  "crates/aa-economy/tests/fixtures/native-completion-statistics-fixtures.json": "a1139bf64dcca7679ef955e402cdb01d6d3f8a79a0f50caf1b8a012c7aa15263",
+  "crates/aa-economy/tests/fixtures/native-kingdom-load-fixtures.json": "e109c5015f5ef49bb57c0093776f1375a272edec839bbc620b910f8ae4b58a8b",
+  "crates/aa-economy/tests/fixtures/native-recruit-pairing-fixtures.json": "2f20a077e712a824285cd11870b790dbe8124b01a33ee9a83ce0da10eb834692",
+  "crates/aa-economy/tests/fixtures/native-registry-fixtures.json": "eb7842f0597307964072972b20e2e207e3b844e35e3f90bae8468c8bee02c7aa",
+  "crates/aa-economy/tests/fixtures/native-restriction-fixtures.json": "a0286382e0f5f1a24813d240086dc499f0b1d436e3ea9d24d9211c8d126b7d3b",
+  "crates/aa-economy/tests/fixtures/native-start-mission-fixtures.json": "b12c22be5e571c8796976105177965c47353dbfd0f3f281d1c3aac19ae5d05e2",
+  "crates/aa-economy/tests/fixtures/native-statistics-fixtures.json": "14c4593cf96f173be0ff7a942efebfba2d29751148cff47873b9a5131fab6ed3",
+  "crates/aa-economy/tests/fixtures/native-statistics-load-fixtures.json": "4a8787de9ede3f4c2f2e82421c3a83bb186ab5fff7c8a5618029b43180660660",
+  "crates/aa-economy/tests/fixtures/native-supply-fixtures.json": "cebf2a3aa95ce1d6fb04615bd66d619ff6fdf616f32f98d5e77f0e8cae51dd7f",
+  "crates/aa-economy/tests/fixtures/native-tick-fixtures.json": "9106d90f5d2ffb9a5845a5b094c288f9c9ff0b728e9989f5daeb54ac590981fd",
+  "crates/aa-economy/tests/fixtures/native-transfer-fixtures.json": "fec65c1a0e857c7b043967501f6c2d03756428b4291a03d0eb7ff44eba4e48b7",
+  "crates/aa-economy/tests/fixtures/native-world-start-fixtures.json": "9577017a81703b7485a8d18f9e05719519cead570ee5909ba60bf6869e47c825",
+  "crates/aa-economy/tests/native_completion_statistics.rs": "c264fc60469aac4e90088d499db014682a93a15441d333673ad775b169e28671",
+  "crates/aa-economy/tests/native_kingdom_load.rs": "91a5dfa3ea6ae2984c9590c59cd229a7b10ecabd18a6f9df8e729ee04ab53752",
+  "crates/aa-economy/tests/native_parity.rs": "3b4048eb48be9c58d085deebe4a845f60d030864319fc7ffa2c72360259dbc04",
+  "crates/aa-economy/tests/native_recruit_pairing.rs": "f2c476d3202e4932cf61a38444bd85375c4196e8858477ceea6ec362bb7220e4",
+  "crates/aa-economy/tests/native_registry.rs": "00442785a7b73090567849944b23ca16c346ff3de368fc3eb1f65d110034149b",
+  "crates/aa-economy/tests/native_restrictions.rs": "64366eb9b3c671ee058c40f7808e3cd7d5ee1d13aa6fe52bc64cf5fffc3827f9",
+  "crates/aa-economy/tests/native_start_mission.rs": "c3f908f7c57d72ecffa3ed1b246b522df9879190ae3c9abd68cf98d617deb4cd",
+  "crates/aa-economy/tests/native_statistics.rs": "cc85388ae3d982462a74d5972d309ba6f444a58aa155614699b79525f6e7dfa9",
+  "crates/aa-economy/tests/native_statistics_load.rs": "91d387f640f91089f1719c59f97013a86426d0e17cda39c9321cc3538157f669",
+  "crates/aa-economy/tests/native_supply.rs": "f18df6deb0737ece942cbe6c8c8650f75b3d79150fe235d71ca9b0da167207d4",
+  "crates/aa-economy/tests/native_tick.rs": "b09dac999da713ff4e9ff6e117124c87ba58bd3226a2810334e8b8a94d0f6739",
+  "crates/aa-economy/tests/native_transfers.rs": "61870fe5d2c64346ed65642bbaa30abb4f6882d71ca7e5689e3f879735486354",
+  "crates/aa-economy/tests/native_world_start.rs": "2be3a741b385cdf511758fd7f77ab558574ada19ba2f11ed22378b51f4c6ca44",
+  "crates/aa-production/src/construction.rs": "b51bd0025471e9a0422bca02ca2c295a018a7d01ad96655d8fef2ddbb3c350b5",
+  "crates/aa-production/src/lib.rs": "2336d6a5a2eec53f86fe7ce131704ed9326232cb31e1886457f3a2d24af53900",
+  "crates/aa-production/src/purchases.rs": "0a2b657753280c46275c67a51850d3e50de87cf914bcf1ecca126516bfc5c03a",
+  "crates/aa-production/src/research.rs": "e488c25e3503889534e3ce0f9b81ec8e99ae0c80295c37d5bb7abec1ac189040",
+  "crates/aa-production/src/structure_state.rs": "6005b13aab607287a420016fc4108c65e3d3ba96ebd8209aab4618d0171f8d42",
+  "crates/aa-production/tests/native_build_actor.rs": "97f6ddb808015875b5eed905eaf1af223191a82c01ef719ddf5e14361ddfe60a",
+  "crates/aa-production/tests/native_construction.rs": "f7a4bab8e6894a3a9c09adf5ecf338a8e3baa71127758487be950b40fef46372",
+  "crates/aa-production/tests/native_construction_finish.rs": "5ebaa2e2a7f16ce56d65e0829592e3254d10f3bb24ceb0afface02095d8d75e2",
+  "crates/aa-production/tests/native_construction_lifecycle.rs": "9da87025f5758385cec979fd9b7f9ff3a7fef09b59a13b89f94c177120fee995",
+  "crates/aa-production/tests/native_properties.rs": "d7770137fef16fa488415708440aacefd371324700e8b3c784e985dcbe955461",
+  "crates/aa-production/tests/native_purchases.rs": "8cc595885630f5cd0740241776dca893e7d88545881948e5c4d37a6f8db47570",
+  "crates/aa-production/tests/native_queue.rs": "30b0e7afaed52216554aa6d479f6a4c14514a111ae9b1f28c03d91cbf128c0da",
+  "crates/aa-production/tests/native_requirements.rs": "099751441fa797e7ea55438c5466c2cd36d3bd48fe27c5baa178f94a31ae2628",
+  "crates/aa-production/tests/native_research.rs": "068c4810b1153c2a87eaded39b736e7d54993e0ccd151da63a863d3b7ea3ad47",
+  "crates/aa-production/tests/native_settlement.rs": "de54d9e814284629d9c73c4fdec6f4e0d88ed106ea5f5da99673044701a55ee8",
+  "crates/aa-production/tests/native_settlement_slots.rs": "dd3d62219da9516e77fe13592602a48202104bba50a82939633a185f9fd756ad",
+  "crates/aa-production/tests/native_structure_state.rs": "7e7ad006bd4b0ec5d10e3eda40e98bf08d0f53253e3b55d576864a68d058f621",
+  "crates/aa-runtime/src/actor_economy_focus.rs": "ec7c333cc8f5f830ed81b4159be831c23226c04e50da792de504321c0606353e",
+  "crates/aa-runtime/src/economy_refresh.rs": "f12bdc449296560f28ce4a9cde85bebad9b047752277f3b6159be7bd7ed60103",
+  "crates/aa-runtime/src/economy_values_world.rs": "936c2fd06cf0ad1db85930aec733def5b7f6fb962a38ec5479992be81933408d",
+  "crates/aa-runtime/src/kingdom_economy.rs": "e1110b924ff0c5030d8e0b47c696e7ae22d1ea4a3e15390fef493aaf10d19a50",
+  "research/phase8-economy/README.txt": "63f0964849cb5c713e6d329c10a5e6e273ab5f815ed8ce4a116575f6bb197c08",
+  "research/phase8-economy/address_scan.py": "e9496c73abb0dcc1fbe62487106f66f6f1483b9ed7eecd74a58907a4784fb6b6",
+  "research/phase8-economy/build_inventory.py": "084d7dd8faaed873845e2769ad8517776e25041c56b544fa5c0d5ba14e1bf6e1",
+  "research/phase8-economy/disasm.py": "d881c2ad74d9e8f526e4bd7b5ea8baa3d0bf9b49296c20e2e008c83c22db4305",
+  "research/phase8-economy/harness.py": "af2ac006ef6ea27de86b2cb968a9edb6f8375c31daa2ca7ac502e015834707af",
+  "research/phase8-economy/inventory.json": "67552bcb69181f55fdd76d04e6899ad387ebfee92166f6da70d735d6c1a9da9c",
+  "research/phase8-economy/native-build-actor-fixtures.json": "4c732ba6a057ae57e4bbdde7483dfad53daa651a4199106053aca7ff4d9ddeca",
+  "research/phase8-economy/native-completion-statistics-fixtures.json": "a1139bf64dcca7679ef955e402cdb01d6d3f8a79a0f50caf1b8a012c7aa15263",
+  "research/phase8-economy/native-construction-finish-fixtures.json": "212efbbdc540eb603ed7e45f96f9cda139aa7530bea89451bea13310f2212b6a",
+  "research/phase8-economy/native-construction-fixtures.json": "0f6e2c348c0bcd7fddd3fba3668c794cb1ea669ff20b127f59b07703c4a66b19",
+  "research/phase8-economy/native-construction-lifecycle-fixtures.json": "542151f186b12da92f890bd80968dae96598f51d22fa33d7884e8cec5142bf6e",
+  "research/phase8-economy/native-kingdom-load-fixtures.json": "e109c5015f5ef49bb57c0093776f1375a272edec839bbc620b910f8ae4b58a8b",
+  "research/phase8-economy/native-property-fixtures.json": "dcb6a299f8f767e6c9a03cf9995d1b928354072d6f9f5a609b0a198e4e393971",
+  "research/phase8-economy/native-purchase-fixtures.json": "dc1fdd30d9e47170ec034075c86df20a2fad08ad60447b6c59a704caf415da02",
+  "research/phase8-economy/native-recruit-pairing-fixtures.json": "2f20a077e712a824285cd11870b790dbe8124b01a33ee9a83ce0da10eb834692",
+  "research/phase8-economy/native-registry-fixtures.json": "eb7842f0597307964072972b20e2e207e3b844e35e3f90bae8468c8bee02c7aa",
+  "research/phase8-economy/native-requirements-fixtures.json": "a2422d255d0af0a6d759b4b2e1ab0ad835052ad62594229cffe9616251c718a4",
+  "research/phase8-economy/native-research-fixtures.json": "73bfd3d8c93f3481b9e771e72deda77c13eecf0085e964ff5d985c6a4cab8d94",
+  "research/phase8-economy/native-restriction-fixtures.json": "a0286382e0f5f1a24813d240086dc499f0b1d436e3ea9d24d9211c8d126b7d3b",
+  "research/phase8-economy/native-settlement-fixtures.json": "921b4c79d807f54909dbd6c199d9e18b71d3f0f2af34da475f6ba2b845b275b7",
+  "research/phase8-economy/native-settlement-slot-fixtures.json": "99a254ab5879ffd5269ab7acbeccf7ee0cd0129670146226d07409adf34a23dc",
+  "research/phase8-economy/native-start-mission-fixtures.json": "b12c22be5e571c8796976105177965c47353dbfd0f3f281d1c3aac19ae5d05e2",
+  "research/phase8-economy/native-statistics-fixtures.json": "14c4593cf96f173be0ff7a942efebfba2d29751148cff47873b9a5131fab6ed3",
+  "research/phase8-economy/native-statistics-load-fixtures.json": "4a8787de9ede3f4c2f2e82421c3a83bb186ab5fff7c8a5618029b43180660660",
+  "research/phase8-economy/native-structure-state-fixtures.json": "3d4f04ff3cdf4bcba336a34243f3342943e1aa941936b095a25ea96c9cadc69a",
+  "research/phase8-economy/native-supply-fixtures.json": "cebf2a3aa95ce1d6fb04615bd66d619ff6fdf616f32f98d5e77f0e8cae51dd7f",
+  "research/phase8-economy/native-tick-fixtures.json": "9106d90f5d2ffb9a5845a5b094c288f9c9ff0b728e9989f5daeb54ac590981fd",
+  "research/phase8-economy/native-transfer-fixtures.json": "fec65c1a0e857c7b043967501f6c2d03756428b4291a03d0eb7ff44eba4e48b7",
+  "research/phase8-economy/native-world-start-fixtures.json": "9577017a81703b7485a8d18f9e05719519cead570ee5909ba60bf6869e47c825",
+  "research/phase8-economy/native_build_actor.py": "15122575a98d454d2cb0efdcf5ac38dbd36b79be8b61b4b3d97ea7baf17b564d",
+  "research/phase8-economy/native_completion_statistics.py": "d95e00491d4155c98a8a3d89e61d779561b5cea12a4c8ae48d3689cc52f8aaf8",
+  "research/phase8-economy/native_construction.py": "e87fc2fcdf951a6db0ec3729b9b7a921ae1a96bd8b62bd95202a5b4e96943dc5",
+  "research/phase8-economy/native_construction_finish.py": "bf579e1c8ac8cae089472a1ab4c6c0397782ae769ca2f6dc1280e6bb4101b9f9",
+  "research/phase8-economy/native_construction_lifecycle.py": "f817d1e9252adab3ec53675200f44836fb86d97651c07274fd2fbfaf53439f53",
+  "research/phase8-economy/native_index.py": "aec7f911306f9a81e8bafe6c41cc3d42336859492f9efe3a623528d8e4c8eb6c",
+  "research/phase8-economy/native_kingdom_load.py": "14d89322816203d3677078c530dab7889eeac5ad96af614017ac0aac8b37d2c6",
+  "research/phase8-economy/native_properties.py": "c7dcb11089d52f0e249104829bbbe796f872de11521c71f03464a4b8da4e2bd0",
+  "research/phase8-economy/native_purchases.py": "8188fa3496ea7b2c8f665397393203d80bda36f78f28fb18e8395f03411e7141",
+  "research/phase8-economy/native_recruit_pairing.py": "70521f709c27c18563cc490a100433d1b89c8fe304f9ea408f78759c1a48e093",
+  "research/phase8-economy/native_registry.py": "4405ce57a2c0e7e6df4469266a044aee28f85d5a60e7ed190561a5383f455d36",
+  "research/phase8-economy/native_requirements.py": "1dbad127c052e80d894636653f8bd8019006d616e4ea2be77640857ce3b11ffe",
+  "research/phase8-economy/native_research.py": "4743521d97816f5e4ce1f800794412a3e3fbc3a1e7c8d41125c6ad01ce14bf44",
+  "research/phase8-economy/native_restrictions.py": "c1c10b9d5cc1eb383c6643d72016182c7fa8556c26016c6699b409682a611248",
+  "research/phase8-economy/native_settlement.py": "436f66f50c01abcb15a9a3f1e6746b199ea6faa20c85badeb7d5f9ad8c4784c0",
+  "research/phase8-economy/native_settlement_slots.py": "3955669750d1cb315a29cf9e007473f56cf8860add9f816af10c3c83c0d1eb6b",
+  "research/phase8-economy/native_start_mission.py": "02b62a9dd6fbbeac9df6904bc61b2f623bb5fc27c619a5ed0e0c69129cca3680",
+  "research/phase8-economy/native_statistics.py": "a1842d3fe2fa2ac003ad56d8fb03e8a85762515b626c40a099957962f2ab7d8f",
+  "research/phase8-economy/native_statistics_load.py": "8cda3827784fd15e5f5d4ec7e4fc097f42aec88ece92ceb7c219bf16fc3f0ac2",
+  "research/phase8-economy/native_structure_state.py": "b6373f66b05f942d60fc68657d6fa70f3d08e32b2af3b37d35e7d55321a6c4f4",
+  "research/phase8-economy/native_supply.py": "758780b099f1f90dbce20a5044732c12dc2a24ba89c5c1401a8426dbc4dd2c47",
+  "research/phase8-economy/native_tick.py": "22e80d954853cb34b9be6025953ad95e1782dd8a10950768e081449c59e0c6dc",
+  "research/phase8-economy/native_transfers.py": "c6142fdb1ad96f29b8ffb2d910193ff74d9f60ef09a9e82b228a5737d399cd1a",
+  "research/phase8-economy/native_world_start.py": "cea9309d86c7675ed453970883e5d165e0ad5114249e8a56cfe8ad62f4b133c2",
+  "research/phase8-economy/record_findings.py": "b6fcda8c330514c22774acba2b5cab71d844b0d1b60ca918d6d836707e8ec855",
+  "research/phase8-economy/requests-to-lead.md": "001d50e1221a45b3eff6a8083dac8e40cde4d8b96e2815273aa1b8d57b6ebf1d"
+ }
+}

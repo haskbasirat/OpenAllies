@@ -1,0 +1,111 @@
+{
+  "scope": "Same held Economy/actual stored Kingdom refresh; no complete load or battle readiness claim",
+  "status": "frozen",
+  "native": {
+    "actual_actors": [
+      784
+    ],
+    "stored_kingdoms": [
+      782
+    ],
+    "runtime_precisions": [
+      24,
+      53,
+      64
+    ],
+    "refresh_rows": 6,
+    "refresh_machines": 12,
+    "source_getter_machines": 30,
+    "executed_address_pins": 558,
+    "intercepted_entry_pins": 7,
+    "entries": [
+      "570020",
+      "5704C0"
+    ],
+    "scope": "Full refresh/vector/Kingdom arithmetic; outer source/predicate seams separately recomputed using original/v14 getters on actual captured graph; allocator/free and Properties-context lookup named seams"
+  },
+  "rust": {
+    "combined_unit_passed": 14,
+    "external_actual_passed": 1,
+    "failed": 0,
+    "fixture_comparison": "Fresh actual immediate-load input/output equals both native entrypoint rows at all3 arithmetic PCs; source PC remains53"
+  },
+  "limits": [
+    "held Kingdom derived owner is unsupported; stored Kingdom path is bound",
+    "Organization stays in its true component slot; no fabricated context",
+    "no flow reset or ActorStore/Kingdom clone",
+    "positive optional callback branches outside existing kernels remain explicit errors"
+  ],
+  "files": [
+    {
+      "path": "crates/aa-runtime/src/load_economy_refresh_world.rs",
+      "sha256": "4a2b02352f3861f085cb5b5af9ffda58237ab1d13983b7fb29a000c1ef01fd8b",
+      "bytes": 4452
+    },
+    {
+      "path": "crates/aa-runtime/tests/load_economy_refresh_world.rs",
+      "sha256": "1b459b3d71e8ebd81e635e901f0824960026685a77e4fcd6ea17c34e223aa1d3",
+      "bytes": 18239
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_economy_values.rs",
+      "sha256": "374914f6f69894b9aecfde392a17468e449512c8244abd00e5799cf06ea1c8b9",
+      "bytes": 16022
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_economy_refresh.rs",
+      "sha256": "79e4d1c1244e9fc46760b173644d3ecac67a8e717e9b92f746b897cf90226b9b",
+      "bytes": 39088
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_state_reentry.rs",
+      "sha256": "2762913d955849ff2eced40f43cc341b91ae00009003cd90bbeadaed52663dbf",
+      "bytes": 12331
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_state_reentry_tests.rs",
+      "sha256": "e658aafc6c183390ef177c626433da841340663843660d4093a56b3db4c31450",
+      "bytes": 11160
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/native_held_refresh.py",
+      "sha256": "239cfbe7f5f4912171df5dc5b3ea97e6b6266e7deb3a8a02f64e3acad75b89b0",
+      "bytes": 4583
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/native-held-refresh.json",
+      "sha256": "521f49467bd4191c39c8f62465c51ef960f945a5886f691235a323839db1fc5b",
+      "bytes": 69644
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/actual-held-input.json",
+      "sha256": "3f8b6c2e95083bf1bbbba90ee39fc15c7581bc29e0a9276d25ae09a4320558fc",
+      "bytes": 592726
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/native-replay-final.log",
+      "sha256": "7eb44f72a2a7c03e6e53e4c86afaa5a17e39bac572c4064c77549f6e425d63cf",
+      "bytes": 205
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/rust-final-external-direct.log",
+      "sha256": "44b263625bf8e8d3fafe2e21c43dd3a6e0854a32351a989da209aec3907ada75",
+      "bytes": 547
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/README.txt",
+      "sha256": "9f11d93bbe809bba73bad5816bd5868cd159e6a39751b77fa628a292fb5ac5b1",
+      "bytes": 3462
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/runtime-combined-v2.log",
+      "sha256": "14aec5b60730be0accd37b1779de66916ee8490c47811d3108182a1cd41f8157",
+      "bytes": 5410
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/runtime-final-v7.log",
+      "sha256": "b4cee88a1e5f527cd50e37ed4cb101d641bc527ca747b42905801ae8716b0754",
+      "bytes": 6519
+    }
+  ]
+}

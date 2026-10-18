@@ -1,0 +1,83 @@
+{
+  "scope": "AudioData selected34/40/4C source projection and46B1D0 Sound requests, plus Sound ctor/typed lookup metadata; not full AudioData loader or playback",
+  "generated_at": "2026-10-17T11:52:26.642654+00:00",
+  "native": {
+    "images": "original/v14, Single24/Double53/Extended64",
+    "main_machines": 6,
+    "sound_ctor_calls": 18,
+    "audio_ctor_calls": 6,
+    "typed_lookup_calls": 48,
+    "request_calls": 1440,
+    "source_suffix_calls": 1872,
+    "main_instruction_pins": 1454,
+    "category_machines": 6,
+    "category_lookup_calls": 36,
+    "category_instruction_pins": 454,
+    "immutable_main_replay": "PASS native-immutable-final.log",
+    "immutable_category_replay": "PASS category-immutable-replay.log",
+    "declared_transports": [
+      "inherited heap/CString/Win32 atomic",
+      "5AD430/5AEA90 named resource Find inputs; no full manager source/class completion",
+      "5AA3F0 request leaf logs or explicit required stop; no decoder",
+      "selected source suffix GetString inputs; real tokenizer/path/append/rate effects execute"
+    ],
+    "entry_stop": "selected46C5C4 source suffix stops before46C67C ldf_length read; each required source stop before append is checked"
+  },
+  "rust": {
+    "exact_production_core_tests": "3/3 PASS0.04s rust-core-final03.log",
+    "request_fixture_rows": 720,
+    "source_fixture_rows": 936,
+    "category_named_lookup_rows": 18,
+    "qualification": "Tiny rustc host includes exact production core and tests plus shared source-path helper. Does not execute runtime Catalog/Manager adapter or Sound Entry ctor unit.",
+    "runtime_production_check": "check03 PASS17.87s; check04 PASS17.44s (driver guards included)",
+    "client_driver_check": "client-driver-check02 PASS27.48s; no game/GPU execution claim",
+    "pending_root_batch": [
+      "resource_sound::tests",
+      "audio_data_pre_request::tests through whole runtime",
+      "resource_task_guards::tests"
+    ]
+  },
+  "ownership": {
+    "Audio": "one application DataState owns canonical Audio directory; no Data20 field for Audio",
+    "Sound": "same resource_depot Application Manager Entry, shared Handle and common Task; native40/41/42 fields retained",
+    "provenance": "sealed PlaySFX+44 cap, same Bank completed source PC/universe, exact Audio mode0 registry/source layers; no runtime latefactory",
+    "failure": "failed source projection retains list prefix and rejects retry; Sound factory class dependency preserves published Entry/task before failing"
+  },
+  "limitations": [
+    "No complete46C3A0 scalar/subtitle/AudioManager ownership or playback",
+    "No Sound59B550 decoder/Miles/audio-clock service or loaded claim",
+    "Whole physical factory59CB00 Sound class/current weight was identified and required after Entry publication; Settlement owns its successor proof/integration separately",
+    "Quoted/control tokenizer forms and unsupported category domain explicitly refuse",
+    "Source source-order field projection begins after unrelated earlier scalar getters; not whole-loader failure-order proof",
+    "No actual farm source preparation or playable battle acceptance from this checkpoint"
+  ],
+  "historical_failures": [
+    {
+      "log": "native-immutable-replay.log",
+      "reason": "producer tuple-vs-JSON-list comparison only; no native value divergence; normalized list shape then regenerated and immutably replayed"
+    },
+    {
+      "log": "rust-core-replay01.log",
+      "reason": "selected legacy ThinLTO serde_json archive for standalone linker; used accepted non-LTO archive for successful replay"
+    }
+  ],
+  "hashes": {
+    "crates/aa-runtime/src/audio_data_pre_request.rs": "630cec0c57c971ecaf8f4ec0845a3114d0e16cd45a686e7ac6a7fedab3416718",
+    "crates/aa-runtime/src/audio_data_request_core.rs": "8cc7db3f78c85c73691721a56b859955c03e57dec5c8289c7a307d6cdce89733",
+    "crates/aa-runtime/src/audio_data_pre_request_tests.rs": "a1e3ea09ee303ff16bb9182196fd4468d3ec3a7bbf3fddf3a4a7aba9c370e6af",
+    "crates/aa-runtime/src/resource_sound.rs": "63a20a0a8ce47847224469c6561bf9d9afa6cd628e0f6a53099162f4f2776195",
+    "crates/aa-runtime/src/resource_sound_tests.rs": "624109a70b546c3c4ebbc730dda9aa52a72903e162bac10659505ccfe7ce03f0"
+  },
+  "fixtures": {
+    "native-audio.json": "7662d393d4a255c0800647f87cb3c33627c8f928feaf0a58dfc117e1fe075ba6",
+    "native-audio-category.json": "13dbf09ed55a81df2f4a60562cd44ac7bf830ce624d2a1cac50b5a1d9ec12e4f"
+  },
+  "producers": {
+    "native_audio.py": "1cfc44b38da2cf78b9d9264b1f6292d4927f002dac56ec68f1ca85a3a87a4be7",
+    "native_audio_category.py": "cf1542bb0f05711868fa522261b25fb72d7504ca85b928a31515ebc97c12a595",
+    "replay_audio.rs": "4ecf6abfbd4cc45a0d7ab7c2a2d20f51710387ed1e1d0bda1716c38873d3a262",
+    "replay-audio.ps1": "804fcef66c48aecc36670eba53f587473d86a3cebe77f726e1c16b6ab00e0681"
+  },
+  "frozen_executable_sha256": "d32f8ab5a503e31412a91cb89f91a441fc10dce0a13ae08371a5626f7ec05be8",
+  "all_owned_commands_reaped": true
+}

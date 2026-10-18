@@ -1,0 +1,14 @@
+"""Source-absence and native caller proof, not a general upgrade graph loader."""
+from pathlib import Path
+import sys,json
+HERE=Path(__file__).resolve().parent;sys.path.insert(0,str(HERE.parents[1]/'research/phase5-actors'))
+from original_creation import Machine,P,V,H
+source=HERE/'construction-inputs.json';data=json.loads(source.read_text());census=data['census'];assert not census['explicit_instances'] and len(census['sources'])==1847
+cases=[];visited={}
+for depth in [0,1,5,0xffffffff]:
+ m=Machine(0x27f);obj=m.alloc(0x5c0);before=bytes(m.u.mem_read(obj,0x5c0));m.invoke(0x4612e0,obj,[obj+0x4c0,0,depth]);assert bytes(m.u.mem_read(obj,0x5c0))==before;cases.append({'depth':depth,'empty_list_unchanged':True});visited.update(m.visited)
+windows=[(0x462c19,0x462c60,'ActorData constructor clears outgoing/direct/all predecessor slots'),(0x467adb,0x467ba9,'Construction Upgrade list registers deferred callback461850 flag0'),(0x461850,0x461863,'Deferred callback calls4606D0'),(0x4606d0,0x4608c0,'Flag0 validates upgrade and prepends outgoing4C0; flag1 writes required_object4E0'),(0x4bb480,0x4bb4cc,'Data postload visits nonempty4C0 lists for predecessor construction'),(0x4612e0,0x461340,'Recursive predecessor builder'),(0x45fae0,0x45fc00,'Predecessor4D0/4C8 insertion and inherited required_object'),(0x565f20,0x565f97,'Construction constructor includes predecessor costs only for Structure withnonempty4D0')]
+pins=[]
+for a,b,meaning in windows:
+ code=P.range(a,b-a);assert code==V.range(a,b-a);pins.append({'start':hex(a),'end':hex(b),'sha256':H(code),'meaning':meaning})
+out={'passed':True,'producer_sha256':H(Path(__file__).read_bytes()),'original_sha256':H(P.b),'v14_sha256':H(V.b),'source_snapshot_sha256':H(source.read_bytes()),'source_counts':{k:len(v)for k,v in census.items()},'native_empty_list_cases':cases,'ranges':pins,'scope':['The parsed complete supplied-source superset has no actual Upgrade node instances. A declaration is not an instance.','Two existing parse omissions have individually hash-checked non-NUL source bytes containing no case-insensitive ASCII Upgrade sequence at all; they cannot add an Upgrade-named node, but their other contents remain unparsed.','Any changed hash, unsupported encoded omitted source, omitted source containing Upgrade, or explicit Upgrade instance rejects the no-predecessor certificate.','Native constructor initializes4C0/4C8/4D0 empty; only authored Upgrade callbacks populate outgoing4C0 and the postload builder maps those to predecessors. Empty recursion executes original code and makes no writes.','Cost values come from separately source/native-proven Economy Cost projection and null-modifier45F4D0. No general nonempty callback ordering or whole Construction gameplay claim.']};path=HERE/'construction-source-evidence.json';path.write_text(json.dumps(out,indent=2)+'\n');print(H(path.read_bytes()))

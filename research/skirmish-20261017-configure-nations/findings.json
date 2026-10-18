@@ -1,0 +1,99 @@
+{
+  "status": "accepted bounded native/source/actual-owner service with scoped tests",
+  "production_scope": [
+    "NEW configure_world_nations.rs +focused tests",
+    "lib export only; Builder owns existing configure_world_values/configure_world integration",
+    "No aa-rules parser/loading changes, manifests, original assets, SDK implementation or releases"
+  ],
+  "native": {
+    "raw": {
+      "paired_cases": 438,
+      "executions": 876,
+      "executed_pins_excluding_explicit_seams": 400,
+      "addresses": [
+        "4E15D0",
+        "4730D0",
+        "573650",
+        "4E3C30",
+        "4E2640",
+        "50EC66..50ECFA",
+        "474B40",
+        "4F02B0",
+        "85D840"
+      ],
+      "explicit_seams": [
+        "6F7810 allocation",
+        "6F7430 free",
+        "77DA70 log transport",
+        "4E0F00 existing Commander constructor/destructor child"
+      ]
+    },
+    "source": {
+      "paired_cases": 81,
+      "executions": 162,
+      "recorded_byte_windows": 4722,
+      "scope": "Original TGI parser/getters/tokenizer/vector writes for Nation factions/selectable and Faction public; actual Nation prologue retained, unrelated art/audio/badge regions skipped",
+      "pin_qualification": "Recorded source windows include inherited transport/throw entries and are not all executed native instructions. Explicit observed skips/cutoffs48C09A,48C9C4,48CB60,48BB4D are excluded from window list; remaining inherited seams are explicit harness services. No full LoadData claim."
+    },
+    "actual": {
+      "paired_world_runs": 3,
+      "machines": 6,
+      "kingdom_calls": 42,
+      "stored_firefight_kingdoms": 7,
+      "precision": [
+        "Single24",
+        "Double53",
+        "Extended64"
+      ],
+      "images": [
+        "original",
+        "v14"
+      ],
+      "scope": "direct helper integration over7 actual stored Firefight Kingdom allocations with completed Bank; not a claim all7 are native Configure major-Kingdom traversal",
+      "results": "All Nation/Faction identities, current RNG stream and A/S log counts equal across both images/allPC"
+    }
+  },
+  "rust": {
+    "focused_passed": 4,
+    "ignored_executed": 1,
+    "filtered": 238,
+    "execution_seconds": 15.76,
+    "command": "AA_GAME_ROOT=<game> cargo test -p aa-runtime --lib configure_world_nations --release --locked --offline -j2 -- --include-ignored",
+    "target": "target/s-graphics-review",
+    "log": "rust-tests-02.log",
+    "prior_failure": "rust-tests-01 retained unrelated Performer FactoryKind import; owner corrected before pass",
+    "check": "aa-runtime --tests check02 passed51.68s"
+  },
+  "guards_and_order": [
+    "234 store precedes existing Commander source/identity refusal",
+    "4730D0 null-Faction succeeds before list/source reads; membership ignores public flag",
+    "Same Bank token owner/source precision, canonical translated lookup checked without authored fallback/reload guesses",
+    "Current Commander identity retained when permitted; incompatible old allocation dropped by existing kernel",
+    "HQ2DC count captured signed once; current entries reread; actual ordinary ActorD8/E8 +component header owner validated",
+    "HQ old badge removal first; -1 reset before later allocation failure; same badge list head order and real RNG",
+    "Faction seed getter logs A then S even when0/1 eligible; only >1 draws; no retry cap",
+    "A/S scopes finish separately; required missing log/source services keep earlier stores/logs"
+  ],
+  "limitations": [
+    "No full ConfigureGWorld/startup/world-loop/player/combat/visual or playable-battle claim",
+    "Positive HQ refresh proven on raw native records; direct actual Firefight helper test begins with genuine empty HQ lists",
+    "Unproved HQ-owner subclasses other than ordinary class3 remain explicit errors",
+    "DataManager reload/noncanonical aliases or missing typed source/Bank owners remain explicit required errors",
+    "Arbitrary concurrent/reentrant allocator/log mutation of exclusively borrowed registry/source is outside supported owner domain",
+    "Commander child implementation is existing previously tested kernel, explicitly hooked in new raw native oracle; ability execution remains governed by its existing unresolved-use guards"
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/configure_world_nations.rs": "b3ec7b704ab9d9436d2196c715c9844fcf5b326a1c12d79cce2fe538589890e5",
+    "crates/aa-runtime/src/configure_world_nations_tests.rs": "8bfe02651a33087ff71750fcae71345b2bb04e487feefcb7e388277dd6df2308",
+    "research/skirmish-20261017-configure-nations/native_configure_nations.py": "64d0058ab2b33aa731dcd30f73b24d9d137d69b516e72544d9f7ea9dde759b5a",
+    "research/skirmish-20261017-configure-nations/native-configure-nations.json": "28679d105c50afab3e0ff6848a2962770e20d1c1fad6028b50d8660622ea20b7",
+    "research/skirmish-20261017-configure-nations/native_nation_source.py": "f64cb7aafc32d41f36bfd285e2fa14e72c32bf037ffa2b40c21ef33d4add9018",
+    "research/skirmish-20261017-configure-nations/native-nation-source.json": "33ed827abc84231c003f6098f04c303dc5b57b6a5f037aa96c7b0ee61af0aa61",
+    "research/skirmish-20261017-configure-nations/native_actual_configure_nations.py": "45ce508b60fc2776a4cc86bcec23f3dbd2bdabdf709956170fd339b19bd2e1d5",
+    "research/skirmish-20261017-configure-nations/native-actual-configure-nations.json": "323f539dbbcf4b3001ccc8c211073cc2046607e4a55837fab3f18e0759ab0d63",
+    "research/skirmish-20261017-configure-nations/actual-source-input.json": "6d213139452949f3b285e93146a86e103f1fac72982fa9d6fcad79d13d7b1a62",
+    "research/skirmish-20261017-configure-nations/rust-tests-02.log": "db884228870080008c5c26666f9198fb45fbce15b560b09780a4e45d87a73bc0",
+    "research/skirmish-20261017-configure-nations/tests-check-02.log": "6dbf978aded18d8acf1728e06e0c37da42e3826ef0a93c968ca4c1433533ee83",
+    "target/s-graphics-review/release/deps/aa_runtime-fd2adeaf3ba2ff05.exe": "7d1cbe50e4b2c4b1840ba1fc22125de5f3c510008a87163705e2d6a18f359fd0"
+  }
+}

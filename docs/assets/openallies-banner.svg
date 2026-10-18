@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">OpenAllies</title>
+  <desc id="d">OpenAllies: Axis &amp; Allies (2004) rewritten in Rust</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1f14"/>
+      <stop offset="0.55" stop-color="#2a2f1d"/>
+      <stop offset="1" stop-color="#14160f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4dc8e"/>
+      <stop offset="0.5" stop-color="#d6ae55"/>
+      <stop offset="1" stop-color="#9c7630"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.035" stroke-width="1"/>
+    </pattern>
+    <symbol id="star" viewBox="-10 -10 20 20">
+      <polygon points="0,-9.5 2.24,-3.09 9.04,-2.94 3.62,1.18 5.59,7.69 0,3.8 -5.59,7.69 -3.62,1.18 -9.04,-2.94 -2.24,-3.09" fill="url(#gold)"/>
+    </symbol>
+  </defs>
+  <rect width="1280" height="320" fill="url(#bg)"/>
+  <rect width="1280" height="320" fill="url(#grid)"/>
+  <!-- map-like contour lines -->
+  <g fill="none" stroke="#d6ae55" stroke-opacity="0.10" stroke-width="2">
+    <path d="M-20 250 C 180 200, 320 290, 520 240 S 860 170, 1060 220 S 1240 260, 1300 230"/>
+    <path d="M-20 275 C 200 230, 340 310, 540 265 S 880 200, 1080 248 S 1250 285, 1300 262"/>
+    <path d="M-20 70 C 160 110, 360 30, 560 80 S 900 130, 1100 70 S 1250 50, 1300 80"/>
+  </g>
+  <!-- frame -->
+  <rect x="18" y="18" width="1244" height="284" rx="6" fill="none" stroke="url(#gold)" stroke-opacity="0.55" stroke-width="2"/>
+  <rect x="26" y="26" width="1228" height="268" rx="4" fill="none" stroke="#d6ae55" stroke-opacity="0.18" stroke-width="1"/>
+  <!-- stars -->
+  <use href="#star" x="575" y="44" width="22" height="22"/>
+  <use href="#star" x="607" y="34" width="30" height="30"/>
+  <use href="#star" x="647" y="44" width="22" height="22"/>
+  <!-- wordmark -->
+  <text x="640" y="170" text-anchor="middle" font-family="Impact, 'Arial Narrow Bold', 'Haettenschweiler', sans-serif" font-size="112" letter-spacing="10" fill="#000000" fill-opacity="0.45">OPENALLIES</text>
+  <text x="636" y="165" text-anchor="middle" font-family="Impact, 'Arial Narrow Bold', 'Haettenschweiler', sans-serif" font-size="112" letter-spacing="10" fill="url(#gold)">OPENALLIES</text>
+  <line x1="330" y1="196" x2="950" y2="196" stroke="url(#gold)" stroke-opacity="0.7" stroke-width="2"/>
+  <text x="640" y="236" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="26" letter-spacing="3" fill="#e9e1c8">A REMAKE OF THE AXIS &amp; ALLIES (2004) RTS</text>
+  <text x="640" y="270" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="18" letter-spacing="2" fill="#bfb69a">rewritten in Rust from the original game's code · 64-bit · multithreaded · no engine limits</text>
+</svg>

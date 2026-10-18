@@ -1,0 +1,74 @@
+{
+  "scope": "actual45 global Fog successor: existing native551F90/551FD0 traversal forwarded to same adopted placement owner",
+  "status": "SOURCE_AND_BOUNDED_TESTS_GREEN_ACTUAL46_PENDING",
+  "recorded_utc": "2026-10-17T15:24:16.8959803+00:00",
+  "implementation": [
+    "Private FogSpatial enum borrows either original pre-adoption SpatialIndex or the SAME adopted mutable SpatialWorld; no flags, pose or index copied.",
+    "Each published read delegates existing PlacementRead::Published validation of current ActorStore generation, forward/reverse spatial key and raw reference.",
+    "Native temporary bit30 writes use same member; setter admits only bit30 and preserves geometry/cached coordinates/other flags/tile nodes.",
+    "Object54 detection word and memory arena remain in same ActorStore. Published memory reads current SpatialWorld placement and lazily uses same Staged InactiveLoad for observer gates.",
+    "Mission caller selects actual SpatialOwner variant; legacy pre-adoption behavior and entry remain available.",
+    "Exact tile/all coordinator source is unchanged (core SHAba42d206e819142869ef5bfd6c791a1d551bee1e4bac29855fdaff7261203672)."
+  ],
+  "validation": {
+    "native": "Independent immutable1728rows/3456original-v14/allPC machines/155pins PASS; actual4EBC70 is explicitly a returning test seam or stopped entry, not new full memory proof.",
+    "core": "Exact current production coordinator extraction:1728native rows,1Rust test PASS0.07s",
+    "member": "Real inserted SpatialIndex member regression1/1PASS: all member fields/tileheads/currentGTID/memberaddress retained, bit30 toggles only; missing key refuses without mutation.",
+    "source": "aa-runtime --tests release/locked/offline -j2 metadata PASS31.61s, no runtime unit link",
+    "adoption_test": "Existing genuine-source ignored adoption regression extended with same-GTID/member/bit30/pose checks; typechecked, not executed in this author turn.",
+    "independent_review": "/root/state_binding_review source-only review green; no reviewer Rust/build/actual runs",
+    "actual": "46 integration no-run building; no new Mission success claim in this receipt."
+  },
+  "limits": [
+    "Modern identity/paired-owner validation is not native invalid-pointer failure-order parity.",
+    "Positive observer/memory callbacks preserve existing required boundaries; no success fabricated.",
+    "No StartedMission, activation, rendering, AD, loading315 or battle frame claimed.",
+    "Initial check01 retained foreign transient Builder compilation failures; current full tests metadata passed after his correction."
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/load_store_fog.rs",
+      "sha256": "73741c7f8ad84127f8b81d8673a3d89d9b8ef85c9bd44d06cc3c5483c38c5b72"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_mission_start_world.rs",
+      "sha256": "cc5e1f65555c05d310a642ac3aaea02706ed0119b5d7e3e19953a147c1cbd229"
+    },
+    {
+      "path": "crates/aa-spatial/src/index.rs",
+      "sha256": "e51fafcc9fdaa8e09fe6547d45050be7fadb3cc8623cd7713dc30d8cdaa3a0ea"
+    },
+    {
+      "path": "crates/aa-spatial/tests/fog_temporary_flag.rs",
+      "sha256": "641c72ac7200abf0575c1380a38e63f78978e9c32b0a0abdb27caf0e1bd0614c"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_store_published_memory_tests.rs",
+      "sha256": "1e5360144267f640a500097889acc5820addd6a81a7d5203ea25d8c73ba6b4a7"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/production-forwarding.diff",
+      "sha256": "71253e06ea65fcd70fd2377adfc20a34dd97f7089430374f58bdb34b16c31925"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/native-fog-replay.log",
+      "sha256": "527577a36c27ed3138b5a332013edd21786d777119f5f1d6b895e0806e8fd494"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/fog-core-replay.log",
+      "sha256": "5cec147a0acc04cdf64714b40ffc0d0c3551f8e7611c5c81bf37eadc359a7cc2"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/fog-core-exact.rs",
+      "sha256": "6e78ade6e49ba2e633593a563a6861ae5f1a3058f80d3d6a919b0e05cf876935"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/spatial-test02.log",
+      "sha256": "2e1a1fe898160c2f1cc7550d7abcedc3af62a3c82855b1fc177168c420464cd8"
+    },
+    {
+      "path": "research/development10/global-fog-adopted/check-tests02.log",
+      "sha256": "72949a84d53063eabb2e2966c3b636b5fc145f16166faa5127921fe75d008f7a"
+    }
+  ]
+}

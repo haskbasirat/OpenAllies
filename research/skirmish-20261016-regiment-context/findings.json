@@ -1,0 +1,180 @@
+{
+  "scope": "Original Regiment saved Load528C20 v2..21 context, single owned containers, actual borrowed Organization, core ownership and one-time ActorStore staging; not live full state execution",
+  "date": "2026-10-16",
+  "status": "implemented-and-focused-tests-passed",
+  "native_functions": [
+    "526260",
+    "528C20",
+    "521C30",
+    "52C580",
+    "4D9C80",
+    "4DACE0",
+    "52D2C0",
+    "4C2D90",
+    "4C2E60",
+    "4BDBA0",
+    "51FE60",
+    "522E60"
+  ],
+  "precision": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "oracles": [
+    {
+      "path": "research/skirmish-20261016-regiment-load/native-regiment.json",
+      "cases": 266,
+      "context_application_images": 240,
+      "sha256": "f0530a2f8371cb30e265238347ae5ac56a333efd6095a1253c912d812fcfb1aa",
+      "existing_evidence": true
+    },
+    {
+      "path": "research/skirmish-20261016-regiment-context/native-formation-context.json",
+      "cases": 120,
+      "sha256": "a2212d64bee6db1370bb067becdd309c7b47c919edd7bdc15e7220dcffdd3cad"
+    },
+    {
+      "path": "research/skirmish-20261016-regiment-context/native-source-context.json",
+      "cases": 3,
+      "sha256": "184af9622fec1d625aee46c098ba9274fae75c74cb66a3db45d493ac8bd49cea",
+      "synthetic_saved_payload": true,
+      "native_registry_pointer_seam": true,
+      "runtime_real_source_registry_resolution_tested_separately": true
+    }
+  ],
+  "tests": [
+    {
+      "command": "cargo test -p aa-mind --test regiment_context_native --test regiment_saved_load_native --test saved_commands_native --test saved_load_native --release --locked --offline -j4",
+      "passed": 10,
+      "failed": 0,
+      "log": "mind-tests.log",
+      "context_images": 243,
+      "formation_cases": 120
+    },
+    {
+      "command": "AA_GAME_ROOT=<game> cargo test -p aa-runtime --test saved_command_ownership --release --locked --offline -j4 -- --include-ignored",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "log": "runtime-tests.log",
+      "real_source_precisions": 3,
+      "actual_source_cases_per_precision": [
+        "successful component Load and staging",
+        "direct after-take range rejection with allocated core buffers preserved",
+        "injected post-success callback failure retains same Mind and owned containers"
+      ]
+    },
+    {
+      "command": "cargo check -p aa-runtime --tests --release --locked --offline -j4",
+      "result": "passed",
+      "log": "shared-check.log"
+    },
+    {
+      "command": "cargo clippy -p aa-mind --test regiment_context_native -p aa-runtime --test saved_command_ownership --release --locked --offline -j4 -- -D warnings",
+      "result": "blocked by existing aa-rules/aa-actors warnings",
+      "log": "clippy.log"
+    },
+    {
+      "command": "cargo clippy -p aa-mind --test regiment_context_native -p aa-runtime --test saved_command_ownership --release --locked --offline -j4 --no-deps -- -D warnings",
+      "result": "blocked by existing aa-mind lints (sai files and earlier regiment_load decoder/basic-apply style); no global Clippy success claimed",
+      "log": "clippy-no-deps.log"
+    }
+  ],
+  "ownership": {
+    "RestoredMindParts.mind": "Option<Mind>; take actual core into temporary Arena and restore Some before propagating every Result error; absent core explicit invalid state",
+    "restored_regiment": "RestoredMindParts.regiment_owned Option<aa_mind::regiment_load::Owned>",
+    "staged_regiment": "ActorStore.regiment_owned BTreeMap<MindId,Owned>; single move from the same restored allocation",
+    "transferred_words": [
+      "A0",
+      "A4",
+      "A8",
+      "AC",
+      "B4",
+      "B8",
+      "148",
+      "1DC",
+      "1E0",
+      "268",
+      "26C",
+      "2BC",
+      "2C0"
+    ],
+    "transferred_bytes": [
+      "B0"
+    ],
+    "transferred_reference_slots": [
+      "9C",
+      "E8",
+      "264"
+    ],
+    "command_ownership": "Existing actual PlainCommand values and global unique IDs retained; pending/current one-owner staging and raw bytes preserved",
+    "context": "owner GTID, actual world begin time, actual current Organization reference from its component slot; no cloned Organization/default layout"
+  },
+  "limitations": [
+    "Fresh successful-load behavior and explicit preflight rejection only; native abort/allocator exception partial writes not claimed.",
+    "Synthetic integration payload uses real source IDS; not represented as an existing original saved game.",
+    "Full live Regiment state handlers, destruction callbacks, save writing, complete map publication and skirmish startup are not claimed by this checkpoint.",
+    "No complete map census or multiplayer/internet test performed by this subtask; root performs combined acceptance separately.",
+    "No original executable, data, release files, saves or profiles modified.",
+    "Strict Clippy is not claimed; dependency-inclusive run has unrelated existing lints."
+  ],
+  "backups": [
+    "backups/regiment-context-before-20261016-171524.zip",
+    "backups/regiment-shared-glue-before-20261016-172523.zip",
+    "backups/regiment-option-mind-before-20261016-172838.zip",
+    "backups/saved_command_ownership-before-regiment-context.rs"
+  ],
+  "source_pins": [
+    {
+      "path": "crates/aa-mind/src/regiment_load.rs",
+      "sha256": "b5d43432ac84ed7dd57ced22b6322c700ca72b9baf3dc7e50595674281d9cb3f"
+    },
+    {
+      "path": "crates/aa-mind/src/regiment_load/context.rs",
+      "sha256": "bbb7833dabc4bbbf4e6d1bb513a7163ea04c0fb8a899013ee354fe8955593044"
+    },
+    {
+      "path": "crates/aa-mind/tests/regiment_context_native.rs",
+      "sha256": "f22372ab2514fea6d712067ed7de3156b2e34fd8355fab9456a00b029aea59c5"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_regiment_mind.rs",
+      "sha256": "8efe7395d30ed17bb0df9966e1f215e257e19bd8d2eafafc93b7cfdc07fbd3df"
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore_components.rs",
+      "sha256": "296bf9f0e7fefe7cd3168c5305e097c33ce8daa54d209d8b8470efe1e8a43e75"
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "sha256": "123a58fa25e31ac41c90f905775abc47ed067ac5e89fb3714082654792d7e7cf"
+    },
+    {
+      "path": "crates/aa-runtime/src/catalog.rs",
+      "sha256": "a9292d7bde4b7d59941df39c093a965d747957849fa2e69b3fb195cab894d0bb"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "sha256": "b35e480c057df0902e7e2fc281d2360c357c9d7f73a56df823d5539ee6f41016"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_mind_actions.rs",
+      "sha256": "87841367c9688d38d97123d8c539b6e45249fca44141019ba61c4b4888ca23a3"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_mind_actions_tests.rs",
+      "sha256": "e1c7506e3bd5414c48bcb57ff787a7e6cbdcd7db1040e5a878c03af5d191cdfa"
+    },
+    {
+      "path": "crates/aa-runtime/tests/saved_command_ownership.rs",
+      "sha256": "c6ac4ba36f78f820f0641791c948814ffa4d0808247458ca1acf2bf183718aae"
+    }
+  ],
+  "independent_review": {
+    "path": "research/skirmish-20261016-regiment-context/independent-review.json",
+    "result": "accepted; no blockers",
+    "sha256": "9c0eff82e5ea50abd22ff3f04e657cea16cf08fda425fb4a134f4ed2b691918e"
+  },
+  "module_registration": "crates/aa-runtime/src/lib.rs: pub mod saved_regiment_mind; appended without other module edits"
+}

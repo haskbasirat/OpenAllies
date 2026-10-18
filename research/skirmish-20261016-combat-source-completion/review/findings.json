@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "reviewer": "/root/builder_source_review",
+  "status": "read_only_native_dependency_audit_complete",
+  "production_edits": false,
+  "scope": "Native prerequisite write/read dependency slice and shortest supported source CV completion path; not acceptance of the forthcoming shared Bank or full startup.",
+  "native_leaf_cases": 54,
+  "images": [
+    "original",
+    "v14"
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "native_kind_virtual30_predicates": 24,
+  "verified_native_constructor_vtable_store_sites": 24,
+  "audit_document": "DEPENDENCY-AUDIT.md",
+  "files": {
+    "DEPENDENCY-AUDIT.md": "4395372dfdb2657584f8cef37a38e26e64c95fdf552dd7759fc9fe71704131e8",
+    "native_prepass_write_audit.py": "c90a6656520b39f6297044c930e416fc51df36613e6b37e1e8ef3f1f79104afd",
+    "native-prepass-write-audit.json": "404ff75a65f0e0b01d8e8d099c9355e4aad860788b93ac0d3307367fca7e13ce",
+    "native-prepass-write-audit.log": "1f3ca6b96ddc56d864c0aa3f2ae904bb65578909fc0a8cd83d5fc9923f49e6c7",
+    "static-vtable30-audit.json": "4565c5d1b84a490b9111e93e3f421d1c4298dc71e9c60b451c41496739cdc8ee"
+  },
+  "conclusion": "The three prerequisite passes have real construction/affiliation/shape/placement effects, but audited reached writes are disjoint from mean/CV inputs on valid typed source objects. A CV-only completion slice is justified only with explicit source dependency ownership; it is not full4BD800 completion.",
+  "main_required_work": [
+    "One canonical provenance-bound immutable dependency Bank and separate progressive mutable cache State",
+    "All1028 native-kind2 manager definitions in reverse registration order plus actual reachable typed child closure",
+    "Completed shared Ability/Property/layout/inventory/body/mover/bias input identity and mutation semantics",
+    "Explicit source FP/CRT, effective10 numeric settings/WorldRules and effectiveCSV scope",
+    "Full manager means before4BB590/4618B0 cache walk, preserving sentinel/early writes/recursive order",
+    "Native full-bank arithmetic comparison before source completion publication"
+  ],
+  "remaining_qualifications": [
+    "Native allocator success is a leaf-proof seam; invalid graphs, arbitrary allocator callbacks and failures are outside this proof.",
+    "Parent passes can fail and maintain lists used outside CV; they were not executed as whole shipped-source passes by this audit.",
+    "Typed ActorData+64 shape is distinct from AbilityDefinition+64 power; raw offset aliasing would invalidate disjointness.",
+    "Observed native startup/profile/FP receipt, complete4BD800, world Init, live Performer values and battle readiness are not supplied."
+  ]
+}

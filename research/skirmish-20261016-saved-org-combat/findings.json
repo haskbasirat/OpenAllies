@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "status": "frozen scoped adapter; focused Rust and independent native replay passed",
+  "api": "aa_runtime::saved_organization_combat::recompute(&Catalog, OrganizationCombatContext)",
+  "native_addresses": [
+    "5788B0",
+    "57DC40"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_windows": {
+    "organization": {
+      "start": "0x5788B0",
+      "end": "0x578931",
+      "sha256": "ab8b7ece2df6418425c11304cc7afa92db159815af9ece572bc2c22f24635a1e"
+    },
+    "weighted_performer": {
+      "start": "0x57DC40",
+      "end": "0x57DC5E",
+      "sha256": "124dcb1ad8bd1e7eaae7a7d3b4503aa73559b6cefeee974b3cd74ca3225f87bf"
+    }
+  },
+  "native_executions": 66,
+  "unmodified_partial_saved_executions": 36,
+  "explicitly_substituted_storage_executions": 30,
+  "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+  ],
+  "source_map": {
+    "path": "E:\\Games\\Axis and Alies\\reconstruction\\assets\\original\\Data\\Maps\\(2v2)Kursk.RMP",
+    "sha256": "28fc1ceb099cd43a7783204082e690306690bffe1557e45e226e1ea04488a8b9"
+  },
+  "unmodified_saved_inputs_have_concrete_performers": false,
+  "test_storage_inputs": {
+    "performer_value": 10,
+    "body_health": 3,
+    "body_maximum": 4,
+    "not_an_observed_native_initialization_receipt": true,
+    "earlier_nonzero_current_on_required_source_error": 7.5,
+    "earlier_nonzero_maximum_on_required_source_error": 10,
+    "checks": [
+      "Body absent",
+      "Body present",
+      "late unavailable source1E4",
+      "null vacancy",
+      "bit5-clear vacancy"
+    ]
+  },
+  "portable_identity_probe_cases": 12,
+  "portable_identity_checks": [
+    "later stale-generation member retains prior nonzero totals",
+    "wrong Performer owner refuses after reset",
+    "wrong Body owner refuses after reset",
+    "wrong active Organization owner refuses before native stores"
+  ],
+  "tests": {
+    "focused_rust": "1 passed, 0 failed; every frozen native row and 12 portable identity cases",
+    "independent_native_replay": "66/66 passed in independent-saved-replay.json",
+    "strict_clippy": "blocked by existing dependency lints; no pass claimed",
+    "runtime_no_deps_clippy": "blocked by existing unrelated aa-runtime source/test lints; no new adapter/test diagnostic"
+  },
+  "binding_contract": [
+    "Actual exclusive Organization storage with immediate68/6C stores on every reached path",
+    "Generation-checked member GTIDs; actual active owner shell while outside registry",
+    "Actual Performer word60 and enforced Performer-owner Body identity",
+    "Current canonical layout slot groups and parameters, without Translate reapplication",
+    "Narrow completed canonical174 mask getter; source1E4 read lazy on bit5 only",
+    "Member/parameter/component containers stable under exclusive Organization and readonly registry; no reentry"
+  ],
+  "required_source_interruption": {
+    "address": "57891A",
+    "before": "FLD ActorData+1E4",
+    "native_cpp_exception_claimed": false,
+    "completed_source_value_supplied": false
+  },
+  "limits": [
+    "Completed canonical ActorData+1E4 producer remains explicitly unavailable",
+    "Current partial Kursk prefix has no concrete Performer; nonzero tests are explicit substituted inputs",
+    "No native immediate per-record Actor Init/PostCreate/publication completion claim",
+    "Fresh managed stopped SAI/application mode1 clock0 context is a diagnostic fixture",
+    "Typed ownership and canonical checks are portable diagnostics, not corrupt-pointer fault/exception parity",
+    "Finite supported numeric inputs and nonzero Body divisor; no arbitrary reentry/container replacement",
+    "No battle completion, original/save/profile mutation, release update or gameplay success claim"
+  ],
+  "backups": "backups/before-saved-org-combat-20261016-183833",
+  "owned_files": [
+    {
+      "path": "crates/aa-runtime/src/saved_organization_combat.rs",
+      "bytes": 7554,
+      "sha256": "a93941917bd20a982b4f34ab30770b43677b2af9755e7320399c8f966fa89ad0"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_organization_combat_tests.rs",
+      "bytes": 19468,
+      "sha256": "6fa3952071ffe90fe78d780b9c2a78ce6efd2a13dbfa9e481cd2986f28fbd2c6"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/native_saved_org_combat.py",
+      "bytes": 4057,
+      "sha256": "ebc8880112f977ae069aa7e702dbe7f0ac761fdb2ffcd0c97a6e41c0cd028e99"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/actual-saved-inputs.json",
+      "bytes": 19371,
+      "sha256": "bd149035e19fe78ef752426e2e950a85a2a568666e1a08de034dd03e2ade22dd"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/native-saved-org-combat.json",
+      "bytes": 55462,
+      "sha256": "815a3580c4b0cf231c9b5be43bc6298f41b28d8d3737d68e5acf320ab0a3161b"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/README.txt",
+      "bytes": 6309,
+      "sha256": "411f957c8d033786351a044b60ab6319a9cafe81e45e2b17188c64ddc3a6785a"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/saved-adapter-tests.log",
+      "bytes": 761,
+      "sha256": "6011349c6e11277cfdc8eb6d3a7c66504cb952c4018f00f0844ae90d5f102174"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/scoped-clippy.log",
+      "bytes": 6993,
+      "sha256": "3be2cb9d5de8e660c0bf38c249b7e4bc28e978bc5190053b95417ab05a0b6404"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/scoped-clippy-existing-allowances.log",
+      "bytes": 8230,
+      "sha256": "ef2fef25e46408c9de104108fc8c2f77429e68e1ab0e01361bd2eee902184756"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/runtime-clippy.log",
+      "bytes": 6744,
+      "sha256": "1cbb67551748aa5f82886b3580c98362977d415be95c353035758f2efd725659"
+    },
+    {
+      "path": "research/skirmish-20261016-saved-org-combat/pin_findings.py",
+      "bytes": 6148,
+      "sha256": "f32314e0dc808437317999c80b70384ee61baab00642cf46f62eb4d4cba67315"
+    }
+  ],
+  "shared_dependency_snapshots": [
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "bytes": 95650,
+      "sha256": "105d26b90525bfebb29dd850545a46c4d8178cf4d5c948a9cbeb6f3b9942b14f"
+    },
+    {
+      "path": "crates/aa-mapworld/src/organization_restore.rs",
+      "bytes": 38804,
+      "sha256": "bb28f252a507f17f768ed23e9b0859c09ca835417d3203f7b0ee8abb51a16215"
+    },
+    {
+      "path": "crates/aa-runtime/src/catalog.rs",
+      "bytes": 59135,
+      "sha256": "8a58d37c8a618b69086de65d3bff6d8ff07ea6069d99a3c44dcd4322e1dd87d0"
+    },
+    {
+      "path": "crates/aa-combat/src/organization_combat_value.rs",
+      "bytes": 5020,
+      "sha256": "dce6235fd61c2203974408f528cebc931374e1c2f46de009e44c8438fa51f14a"
+    },
+    {
+      "path": "research/skirmish-20261016-borrowed-combat-value/findings.json",
+      "bytes": 4451,
+      "sha256": "32327b9e3b1a96fcd5016c29061a8f994cb5bda055fe8a4667c87173d73ee8b6"
+    },
+    {
+      "path": "research/phase8-economy/harness.py",
+      "bytes": 8589,
+      "sha256": "af2ac006ef6ea27de86b2cb968a9edb6f8375c31daa2ca7ac502e015834707af"
+    }
+  ]
+}

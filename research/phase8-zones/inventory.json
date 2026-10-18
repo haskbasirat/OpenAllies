@@ -1,0 +1,4205 @@
+{
+ "schema": 1,
+ "description": "Build research/phase8-zones/inventory.json: the original zone, detection and\nfog-of-war code of AA.exe with role, port status and oracle evidence.\n\nStatus values:\n  proven      ported in crates/aa-zones and executed (>= 2 instructions of its\n              body) by a fixture that a Rust test replays\n  ported      ported, not executed by any fixture (see notes)\n  seam        a named world service in aa-zones (owned elsewhere or later)\n  partial     part of the body ported, the rest a seam (notes)\n  not-ported  identified and documented only (notes give the blocker)\nSizes come from functions.tsv, else from a capstone scan to the int3 padding\n(vtable-only functions Ghidra did not export). Read-only inputs.",
+ "function_count": 247,
+ "status_counts": {
+  "seam": 29,
+  "proven": 189,
+  "not-ported": 21,
+  "partial": 2,
+  "ported": 6
+ },
+ "removed_caps": [
+  {
+   "what": "none in the ported code",
+   "detail": "zone-set intern tables grow without bound natively (auto-grow rehash 514800/514EF0); Rust uses HashMap/Vec"
+  },
+  {
+   "what": "kingdom bits 16 (0xA11740)",
+   "kept": true,
+   "detail": "data layout of the 32-bit fog word (16 explored + 16 visible), the 16-bit supply word and saved games; a rule of the format, not an engine buffer"
+  },
+  {
+   "what": "zone types 9 (actor+0x148 vector size, 9-bit query scan)",
+   "kept": true,
+   "detail": "gameplay rule (zone type set)"
+  }
+ ],
+ "functions": [
+  {
+   "address": "0x432e40",
+   "size": 37,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "GTID lookup of actor+0x50 (first-sighting tail)",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::first_sighting",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4364c0",
+   "size": 73,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "organization member iterator (org+0x28/+0x2C, nulls skipped)",
+   "status": "proven",
+   "rust": "detection::ActorDetectionWorld::organization_members",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x45bc70",
+   "size": 38,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "tile +0x1C GTID -> actor (blocker)",
+   "status": "seam",
+   "rust": "flood::FloodWorld::tile_blocker",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": "GTID registry owner"
+  },
+  {
+   "address": "0x45d790",
+   "size": 34,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "detection range: ActorData+0x1CC raw or through 0x501C30",
+   "status": "proven",
+   "rust": "component::set_zod_radius",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4849f0",
+   "size": 102,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "pointer vector reserve (zone vector growth)",
+   "status": "proven",
+   "rust": "component::create_zone",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4bb000",
+   "size": 23,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "discovery radius 2*tile + settings[+0x74] + 1e-4",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "settings object [B39F58]"
+  },
+  {
+   "address": "0x4cf110",
+   "size": 14,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "kingdom +0x78 +0x1C byte (reveal enemy RZOD flag)",
+   "status": "proven",
+   "rust": "component::DetectionComponentWorld::kingdom_reveal_byte",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4cf210",
+   "size": 83,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor occupancy shape descriptor",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::occupancy_tiles",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": "aa-spatial iterator"
+  },
+  {
+   "address": "0x4d3b80",
+   "size": 199,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor +0x70 visible to kingdom (carrier, own word, organization / +0x80 target)",
+   "status": "proven",
+   "rust": "detection::visible_to",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": "trigger 99 actor_visible_to_kingdom"
+  },
+  {
+   "address": "0x4d3c50",
+   "size": 197,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor +0x74 seen by kingdom",
+   "status": "proven",
+   "rust": "detection::explored_by",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": "trigger 100 actor_explored_to_kingdom"
+  },
+  {
+   "address": "0x4d6350",
+   "size": 321,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "GActor tile change (+0x124): 4EC270, 4D4130, org 579BA0, SAI 7A9D70, move every active zone (515F40), 4CFEA0, +0xCC notifications",
+   "status": "partial",
+   "rust": "component::move_actor_zones",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": "zone loop proven in context; other callees belong to their owners"
+  },
+  {
+   "address": "0x4d69a0",
+   "size": 306,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "KKC_GActor::CreateZone (9-slot vector, 516640)",
+   "status": "proven",
+   "rust": "component::create_zone",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": "actor storage owner keeps ActorZones"
+  },
+  {
+   "address": "0x4d7230",
+   "size": 843,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "GActor activation: type-2 discovery zone (radius 4BB000)",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "caller of 515F40"
+  },
+  {
+   "address": "0x4dcda0",
+   "size": 41,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "type 7 creation",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4e0f90",
+   "size": 29,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "Kingdom: recompute shared vision +0x228 (54EBA0) and supply mask +0x22C (559600)",
+   "status": "proven",
+   "rust": "tile::kingdom_masks",
+   "proven_by": [
+    "native-kingdom-masks.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/kingdom_masks_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4e27d0",
+   "size": 52,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "same for a list",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4e5240",
+   "size": 14,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x30/+0x44 identity (shared stub)",
+   "status": "proven",
+   "rust": "query::contains_leaf/contains_part",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ea0c0",
+   "size": 131,
+   "size_source": "scan",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor +0x6C unexplore(k): clear actor seen bit",
+   "status": "proven",
+   "rust": "detection::unexplore",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ea0d0",
+   "size": 16,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor seen by a vision-sharing kingdom (54EB40 on actor+0x54)",
+   "status": "proven",
+   "rust": "detection::shared_explored",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ea0f0",
+   "size": 83,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor shape descriptor for tile iteration",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::shape_tiles",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": "aa-spatial owns 554DD0/554330"
+  },
+  {
+   "address": "0x4ea150",
+   "size": 119,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "replay the zone sets under the actor onto it (slot +0x58 visit per occupied tile)",
+   "status": "proven",
+   "rust": "detection::refresh_from_tiles",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ea1d0",
+   "size": 37,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor visible to a vision-sharing kingdom or fog off",
+   "status": "proven",
+   "rust": "detection::shared_visible",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ea200",
+   "size": 47,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "tile under actor (+0x44/+0x48)",
+   "status": "seam",
+   "rust": "tile::ZoneWorld::actor_tile",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4eb490",
+   "size": 98,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "detection memory eligibility",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::memory_eligible",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4eb9f0",
+   "size": 68,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "detection memory record constructor (0x38 bytes)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebb80",
+   "size": 168,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "detection memory clear + SAI 79DEB0",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::clear_memory",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebc30",
+   "size": 52,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "detection memory clear when all empty",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebc70",
+   "size": 348,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "detection memory refresh: per kingdom create/delete ghost record",
+   "status": "proven",
+   "rust": "detection::refresh_memory",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebe50",
+   "size": 338,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "KKC_GObject::Init (tile coords, 4EBC70)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebfb0",
+   "size": 24,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor: seen by all (54EA50 0xFFFF) + refresh",
+   "status": "proven",
+   "rust": "detection::set_all_explored",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ebfd0",
+   "size": 24,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor: visible to all (54EA60 0xFFFF) + refresh",
+   "status": "proven",
+   "rust": "detection::set_all_visible",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ec010",
+   "size": 401,
+   "size_source": "scan",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor +0x64 reveal(k, tile explored, visible): actor+0x54 word, container forward, memory refresh, first sighting",
+   "status": "proven",
+   "rust": "detection::reveal",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": "first-sighting tail (432E40/42D490/79EA90/7AD9A0) is the seam ActorDetectionWorld::first_sighting"
+  },
+  {
+   "address": "0x4ec1b0",
+   "size": 179,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor +0x68 hide(k): multi-tile actors stay visible while a shape tile is visible to a sharing kingdom",
+   "status": "proven",
+   "rust": "detection::hide",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/detection_native.rs"
+   ],
+   "notes": "shape iteration 4EA0F0/554DD0/554330 = seam shape_tiles"
+  },
+  {
+   "address": "0x4ec270",
+   "size": 31,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "GObject tile change: clear visible bits, refresh memory, replay zones under the actor (4EA150)",
+   "status": "proven",
+   "rust": "detection::tile_changed",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4ec290",
+   "size": 52,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor: memory refresh on ownership change",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4ec360",
+   "size": 316,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "actor detection copy (replace/upgrade)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x4ec7a0",
+   "size": 722,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "GObject::Load (saved fog word, memory records)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "save format"
+  },
+  {
+   "address": "0x4ee700",
+   "size": 79,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "multi-tile actor test",
+   "status": "seam",
+   "rust": "tile::ZoneWorld::actor_multi_tile",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4f0500",
+   "size": 6,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x10 length 1 (shared return-1 stub)",
+   "status": "proven",
+   "rust": "set::ZonePool::len",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs",
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4f0590",
+   "size": 28,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "solver failure (clears the busy byte)",
+   "status": "ported",
+   "rust": "flood::run_dijkstra",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "start push refused only with a zero limit"
+  },
+  {
+   "address": "0x4f14a0",
+   "size": 54,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "neighbour tile pointer (no bounds check)",
+   "status": "proven",
+   "rust": "flood::linear",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": "outside the tile array -> Error::TileOutside"
+  },
+  {
+   "address": "0x4f2000",
+   "size": 359,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "neighbour validity (opposite, bounds/impassable, +0x1C, corner test)",
+   "status": "proven",
+   "rust": "flood::neighbour_valid",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4f2760",
+   "size": 71,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "neighbour iterator advance",
+   "status": "proven",
+   "rust": "flood::neighbours",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x4f4050",
+   "size": 749,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "generic flood solver run (FIFO)",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/tests/zone_flood_native.rs"
+   ],
+   "notes": "aa-spatial water_areas ports the water-goal instance"
+  },
+  {
+   "address": "0x4f9970",
+   "size": 662,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "IsFogCheatEnabled / cheat fog",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x50acc0",
+   "size": 88,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "updatable schedule (tick delay 1e-4)",
+   "status": "seam",
+   "rust": "component::DetectionComponentWorld::schedule_tick",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x50c4c0",
+   "size": 71,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "zone presentation (UI)",
+   "status": "seam",
+   "rust": "zone::ZoneObjectWorld::presentation",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5147c0",
+   "size": 27,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone effects walk when active (540690 on GWorld+0x244); callers 4F9970, 57C8E0, 57CBA0",
+   "status": "proven",
+   "rust": "solver::effects_pass",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5147e0",
+   "size": 294,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone base destructor (vtable 0xA322B8)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [],
+   "notes": "memory only"
+  },
+  {
+   "address": "0x514800",
+   "size": 262,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union table rehash",
+   "status": "proven",
+   "rust": "set (not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514910",
+   "size": 7,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone base vtable store",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "memory only"
+  },
+  {
+   "address": "0x514920",
+   "size": 9,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +4: state bit0",
+   "status": "ported",
+   "rust": "zone::Zone::state_bit0",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "no fixture executes it"
+  },
+  {
+   "address": "0x514930",
+   "size": 11,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +8: state bit1 (fast circle builder eligible)",
+   "status": "proven",
+   "rust": "zone::Zone::fast_eligible",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514940",
+   "size": 28,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone contained in set (+0x18 with zone actor/flags)",
+   "status": "proven",
+   "rust": "query::tile_has_zone",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514960",
+   "size": 133,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "list subset test (5154E0 deep branch)",
+   "status": "proven",
+   "rust": "set::ZonePool::cons (proved unreachable)",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": "never executed: needs a duplicated leaf"
+  },
+  {
+   "address": "0x5149f0",
+   "size": 112,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x1C first zone (mask, exclude actor, exclude actor+4)",
+   "status": "proven",
+   "rust": "query::first_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514a70",
+   "size": 35,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x18/+0x34 contains(actor, mask)",
+   "status": "proven",
+   "rust": "query::contains",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514aa0",
+   "size": 104,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x20 first enemy zone (AI ZOC/ZOG)",
+   "status": "proven",
+   "rust": "query::first_enemy_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514b10",
+   "size": 104,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x24 first owned zone",
+   "status": "proven",
+   "rust": "query::first_owned_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514b80",
+   "size": 106,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x28 enemy discovery zone with actor+0xB0",
+   "status": "proven",
+   "rust": "query::enemy_discovery_with_b0",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514bb0",
+   "size": 58,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x38 any allied (AI friendly ZOS)",
+   "status": "proven",
+   "rust": "query::any_allied",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514bf0",
+   "size": 55,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x14 any owned by kingdom (mask, exclude)",
+   "status": "proven",
+   "rust": "query::any_owned_by",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514c30",
+   "size": 78,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x5C notify type (tail call 4F3D90)",
+   "status": "proven",
+   "rust": "query::notify_type",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": "4F3D90 is a seam"
+  },
+  {
+   "address": "0x514c80",
+   "size": 43,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone destructor (vtable 0xA3229C slot 0)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "Rust ownership; calls 4F1640"
+  },
+  {
+   "address": "0x514cb0",
+   "size": 24,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +0xC: passes(blocker) (ZOC blocked by non-zero tile blocker)",
+   "status": "proven",
+   "rust": "zone::Zone::passes",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "reached only by the flood solver 53F9F0"
+  },
+  {
+   "address": "0x514cd0",
+   "size": 13,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone flags kept on a dead actor (flags & 0x42)",
+   "status": "proven",
+   "rust": "zone::kept_on_dead_actor",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514ce0",
+   "size": 183,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone release",
+   "status": "proven",
+   "rust": "zone::release",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_moves_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514da0",
+   "size": 91,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "zone effect on an actor entering coverage (enemy test, +0x80 redirect)",
+   "status": "proven",
+   "rust": "zone::enemy_entered",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514e00",
+   "size": 27,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "type-3 zone effect (actor+0x90 component 58CEA0)",
+   "status": "proven",
+   "rust": "zone::type3_effect",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514e20",
+   "size": 27,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "type-8 zone effect (actor+0xD4 component 564300)",
+   "status": "proven",
+   "rust": "zone::type8_effect",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514e40",
+   "size": 79,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +0x18: effect on an enemy actor (ZOG guard / ZOC components)",
+   "status": "proven",
+   "rust": "zone::actor_effect",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514e90",
+   "size": 94,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union table insert",
+   "status": "proven",
+   "rust": "set (not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x514ef0",
+   "size": 207,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf table rehash",
+   "status": "proven",
+   "rust": "set (not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": "growth only, no cap"
+  },
+  {
+   "address": "0x514fc0",
+   "size": 60,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x54 (all leaves)",
+   "status": "proven",
+   "rust": "zone::actor_entered_tile",
+   "proven_by": [
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_enter_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515000",
+   "size": 60,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x58",
+   "status": "proven",
+   "rust": "query::visit",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515040",
+   "size": 86,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x18",
+   "status": "proven",
+   "rust": "query::contains",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5150a0",
+   "size": 75,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x44 part identity",
+   "status": "proven",
+   "rust": "query::contains_part",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5150f0",
+   "size": 91,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x1C",
+   "status": "proven",
+   "rust": "query::first_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515150",
+   "size": 78,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x20",
+   "status": "proven",
+   "rust": "query::first_enemy_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5151a0",
+   "size": 78,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x24",
+   "status": "proven",
+   "rust": "query::first_owned_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5151f0",
+   "size": 73,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x28",
+   "status": "proven",
+   "rust": "query::enemy_discovery_with_b0",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515240",
+   "size": 73,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x2C has actor",
+   "status": "proven",
+   "rust": "query::has_actor",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515290",
+   "size": 86,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x34",
+   "status": "ported",
+   "rust": "query::contains",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": "same body as +0x18"
+  },
+  {
+   "address": "0x5152f0",
+   "size": 73,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x30 leaf identity",
+   "status": "proven",
+   "rust": "query::contains_leaf",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-detection.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515340",
+   "size": 100,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x38",
+   "status": "proven",
+   "rust": "query::any_allied",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5153b0",
+   "size": 99,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x3C (returns list EMPTY)",
+   "status": "proven",
+   "rust": "query::collect_allied",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515420",
+   "size": 100,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x14",
+   "status": "proven",
+   "rust": "query::any_owned_by",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-tiles.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515490",
+   "size": 73,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x40",
+   "status": "proven",
+   "rust": "query::detects",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5154e0",
+   "size": 146,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union structural equality (exact pair or swapped 2-element)",
+   "status": "proven",
+   "rust": "set::ZonePool::cons",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": "deep branch 514960 unreachable with unique actors"
+  },
+  {
+   "address": "0x515580",
+   "size": 60,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x5C",
+   "status": "proven",
+   "rust": "query::notify_type",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5155c0",
+   "size": 86,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x40 detects(kingdom): ZOD owner or RZOD reveal mask",
+   "status": "proven",
+   "rust": "query::detects",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515620",
+   "size": 632,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x54 actor entered: guard/control effects (514DA0), type 3/8 effects, settlement-marker discovery (type 2: explore size + MarkerRevealPadding, mark seen)",
+   "status": "proven",
+   "rust": "zone::leaf_actor_entered",
+   "proven_by": [
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_enter_native.rs"
+   ],
+   "notes": "circle iteration 46E080/432730/554DD0 = seam discovery_tiles"
+  },
+  {
+   "address": "0x5158a0",
+   "size": 160,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x58 visit (replay detection onto an actor)",
+   "status": "proven",
+   "rust": "query::visit",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515940",
+   "size": 39,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone set state bit",
+   "status": "ported",
+   "rust": "zone::Zone::set_state_bit",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "byte shift; callers 566DB0/568040"
+  },
+  {
+   "address": "0x515970",
+   "size": 350,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone::Move (tile x, y, radius)",
+   "status": "proven",
+   "rust": "zone::move_to_tile",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_moves_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515ad0",
+   "size": 200,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +0x14: zone added to tile (actor effects, reveal, occupy)",
+   "status": "proven",
+   "rust": "zone::on_tile_added",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515ba0",
+   "size": 168,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone +0x10: zone removed from tile (hide/unoccupy)",
+   "status": "proven",
+   "rust": "zone::on_tile_removed",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515c50",
+   "size": 53,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "hash table iterator init",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "used by table destructors"
+  },
+  {
+   "address": "0x515c90",
+   "size": 142,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf table remove",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515d20",
+   "size": 177,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union table remove",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515de0",
+   "size": 55,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union table find",
+   "status": "proven",
+   "rust": "set::ZonePool::cons",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x515e20",
+   "size": 72,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "hash table destructor",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "memory only"
+  },
+  {
+   "address": "0x515e70",
+   "size": 72,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "hash table destructor",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "memory only"
+  },
+  {
+   "address": "0x515ec0",
+   "size": 113,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x3C collect allied actors",
+   "status": "proven",
+   "rust": "query::collect_allied",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515f40",
+   "size": 90,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone move by world position (552640 clamp, _ftol, sar)",
+   "status": "proven",
+   "rust": "zone::move_to_position",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_moves_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x515fa0",
+   "size": 79,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf table insert (auto-grow)",
+   "status": "proven",
+   "rust": "set (hash layout not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": "buckets unobservable"
+  },
+  {
+   "address": "0x515ff0",
+   "size": 184,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union constructor (refs children, depth, hash sum)",
+   "status": "proven",
+   "rust": "set::ZonePool::cons",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5160b0",
+   "size": 4,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x10 length",
+   "status": "proven",
+   "rust": "set::ZonePool::len",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs",
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5160c0",
+   "size": 4,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x50 hash sum",
+   "status": "proven",
+   "rust": "set (not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x5160d0",
+   "size": 143,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union destructor (unlink, release head then tail)",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516160",
+   "size": 41,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf unlink (destructor body)",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516190",
+   "size": 17,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x08/+0x2C has actor",
+   "status": "proven",
+   "rust": "query::has_actor",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5161b0",
+   "size": 8,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x50 hash (actor + flags)",
+   "status": "proven",
+   "rust": "set (not modelled)",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x5161c0",
+   "size": 164,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union intern lookup/create (cons)",
+   "status": "proven",
+   "rust": "set::ZonePool::cons",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516270",
+   "size": 30,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union deleting destructor",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516290",
+   "size": 51,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "rebuild prefix onto a new tail",
+   "status": "proven",
+   "rust": "set::ZonePool::rebuild",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5162d0",
+   "size": 107,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf constructor",
+   "status": "proven",
+   "rust": "set::ZonePool::leaf",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516340",
+   "size": 30,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf deleting destructor",
+   "status": "proven",
+   "rust": "set::ZonePool::decref",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516360",
+   "size": 172,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf intern lookup/create (GWorld+0x19C)",
+   "status": "proven",
+   "rust": "set::ZonePool::leaf",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516410",
+   "size": 69,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x48 add",
+   "status": "proven",
+   "rust": "set::ZonePool::add",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516460",
+   "size": 244,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "leaf +0x4C remove (XOR, actor not compared)",
+   "status": "proven",
+   "rust": "set::ZonePool::remove",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516480",
+   "size": 212,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x48 add (OR in place or prepend)",
+   "status": "proven",
+   "rust": "set::ZonePool::add",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x516560",
+   "size": 213,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x4C remove (XOR; absent actor = native memory corruption)",
+   "status": "proven",
+   "rust": "set::ZonePool::remove",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/set.rs"
+   ],
+   "notes": "absent actor -> Error::NativeAbsentActor"
+  },
+  {
+   "address": "0x516640",
+   "size": 113,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "KKC_Zone constructor (actor, flags=1<<type); state +0x16",
+   "status": "proven",
+   "rust": "zone::Zone::new",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x539ac0",
+   "size": 11,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO reset",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x539ad0",
+   "size": 62,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "solver finish (clears the busy byte)",
+   "status": "proven",
+   "rust": "flood",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x539b10",
+   "size": 58,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO functor +0x14 reach + clear +0x24",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x539d20",
+   "size": 61,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO push (neighbour)",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x539db0",
+   "size": 61,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO push (start)",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x539df0",
+   "size": 58,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO entry cell from tile pointer",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53c410",
+   "size": 16,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor +8: advance visit stamp",
+   "status": "proven",
+   "rust": "flood::SolverState::advance",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53c430",
+   "size": 26,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor +0x18: visited this solve",
+   "status": "proven",
+   "rust": "flood (Visits)",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53c570",
+   "size": 17,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "goal/functor base constructor (vtable 0xA365C8)",
+   "status": "proven",
+   "rust": "flood (functor flags)",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53c590",
+   "size": 38,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "impassable test (tile +0x20 bit 0; functor +4 path 54F370 unused here)",
+   "status": "proven",
+   "rust": "flood::blocked",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53c5c0",
+   "size": 97,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "step cost (sqrt2 diagonal) * tile + entry cost",
+   "status": "proven",
+   "rust": "flood::visit_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53c630",
+   "size": 69,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "reach: stamp + arrival direction",
+   "status": "proven",
+   "rust": "flood (Visits)",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": "stamps solve-local"
+  },
+  {
+   "address": "0x53cdf0",
+   "size": 39,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "open list constructor (limit 0x1F9C)",
+   "status": "proven",
+   "rust": "flood::Queue / SolverState::queue_limit",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": "cap removed in production (None); Some(0x1F9C) replays native"
+  },
+  {
+   "address": "0x53ce20",
+   "size": 21,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "open list entry cell",
+   "status": "proven",
+   "rust": "flood::run_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53d090",
+   "size": 183,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "heap sift-up (ties move up), refuse when full",
+   "status": "proven",
+   "rust": "flood::Queue::push",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53d150",
+   "size": 328,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "heap pop (left child only when strictly smaller)",
+   "status": "proven",
+   "rust": "flood::Queue::pop",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53d2a0",
+   "size": 64,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "open list push(x, y, p, cost, h): priority f32(cost + h)",
+   "status": "proven",
+   "rust": "flood::Queue::push",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53d2f0",
+   "size": 73,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "open list reset",
+   "status": "proven",
+   "rust": "flood::run_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53f5b0",
+   "size": 21,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36870/0xA368C0/0xA36820 +0x1C: tile lacks the zone",
+   "status": "proven",
+   "rust": "flood::blocked",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f5d0",
+   "size": 36,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "FIFO pop through tile +0x24 links",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f600",
+   "size": 55,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36820 +0x4C: 54F7F0",
+   "status": "proven",
+   "rust": "flood::fifo_apply",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f610",
+   "size": 39,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36870 +0x4C: 54F670 / 54F690",
+   "status": "proven",
+   "rust": "flood::fifo_apply",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f640",
+   "size": 123,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36910 +0x1C -> 53C590 impassable",
+   "status": "proven",
+   "rust": "flood::blocked",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53f650",
+   "size": 107,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "tile centre in old circle",
+   "status": "proven",
+   "rust": "solver::in_circle",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f6c0",
+   "size": 107,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "tile centre in new circle",
+   "status": "proven",
+   "rust": "solver::in_circle",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f730",
+   "size": 236,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "midpoint circle span rasteriser",
+   "status": "proven",
+   "rust": "solver::circle_spans",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f820",
+   "size": 24,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor +4 start position (zone x, y)",
+   "status": "proven",
+   "rust": "flood",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53f840",
+   "size": 62,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "flood solver constructor at GWorld+0x244 (vtable 0xA36048, FIFO 0xA3602C)",
+   "status": "proven",
+   "rust": "flood::SolverState::new",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": "same class as the aa-spatial water flood solver"
+  },
+  {
+   "address": "0x53f880",
+   "size": 72,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA368C0 +0x4C: 54FA80",
+   "status": "proven",
+   "rust": "flood::fifo_apply",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f890",
+   "size": 56,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "flood solver +4: action on the popped start tile",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f8d0",
+   "size": 159,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "flood solver +0 visit: reach, +0x1C, +0x4C, FIFO push",
+   "status": "proven",
+   "rust": "flood::walk",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f970",
+   "size": 52,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36910 +0x30 cost (FLT_MAX stays)",
+   "status": "proven",
+   "rust": "flood::visit_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53f9b0",
+   "size": 49,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "functor 0xA36910 +0x14 reach (53C630, no +0x24 clear)",
+   "status": "proven",
+   "rust": "flood::run_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x53f9f0",
+   "size": 827,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "ZoneSolver visit neighbour (cost, terrain/blocker tests, add/remove/push)",
+   "status": "proven",
+   "rust": "flood::visit_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53fd30",
+   "size": 167,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span: add zone (new circle minus old)",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": "last map column excluded (native)"
+  },
+  {
+   "address": "0x53fde0",
+   "size": 175,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span: remove zone (old circle minus new)",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53fe90",
+   "size": 103,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "radius adjust (fmod(r, tile) < tile/4 -> raise)",
+   "status": "proven",
+   "rust": "solver::adjust_radius",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53ff00",
+   "size": 135,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span: per-kingdom reveal / hide",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53ff90",
+   "size": 33,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span thunk -> 53FD30",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53ffc0",
+   "size": 33,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span thunk -> 53FDE0",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x53fff0",
+   "size": 33,
+   "size_source": "scan",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "span thunk -> 53FF00",
+   "status": "proven",
+   "rust": "solver::span",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x540020",
+   "size": 369,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "fast builder add/move (two circles)",
+   "status": "proven",
+   "rust": "solver::fast_move",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5401a0",
+   "size": 255,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "fast builder per-kingdom reveal/hide",
+   "status": "proven",
+   "rust": "solver::fast_kingdom_pass",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5402a0",
+   "size": 63,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "ZoneSolver constructor (vtable 0xA36954, queue 53CDF0 at +0x44)",
+   "status": "proven",
+   "rust": "flood::SolverState::new",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [],
+   "notes": "object layout not modelled"
+  },
+  {
+   "address": "0x5402e0",
+   "size": 672,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "ZoneSolver run (Dijkstra over the 53CDF0 heap)",
+   "status": "proven",
+   "rust": "flood::run_dijkstra",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/tests/zone_flood_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x540590",
+   "size": 250,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "zone remove (fast branch or flood 4F4050 + functor 0xA368C0)",
+   "status": "proven",
+   "rust": "solver::remove_zone / flood::remove",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x540690",
+   "size": 63,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "effects walk with functor 0xA36820 (54F7F0 on every zone tile)",
+   "status": "proven",
+   "rust": "flood::effects_pass",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5406d0",
+   "size": 399,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "type-1 reveal-mask change per kingdom (fast 5401A0 or flood functor 0xA36870); this = GWorld+0x244",
+   "status": "proven",
+   "rust": "solver::kingdom_mask_changed / flood::kingdom_pass",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/tests/zone_moves_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x540860",
+   "size": 455,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "ZoneSolver add/move (fast branch 540020 or flood 5402E0)",
+   "status": "proven",
+   "rust": "solver::add_zone / flood::add",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x542950",
+   "size": 165,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "trigger action fog restored in area (554DD0 iteration + 54F930)",
+   "status": "partial",
+   "rust": "tile::restore_fog",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "iteration in aa-spatial; aa-triggers seam fog_restore_tiles"
+  },
+  {
+   "address": "0x545ec0",
+   "size": 1843,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "trigger element registrations (actor_visible/explored_to_kingdom, fog_restored_in_area)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "aa-triggers owns"
+  },
+  {
+   "address": "0x54ea50",
+   "size": 15,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: replace explored half",
+   "status": "proven",
+   "rust": "tile::reset_explored",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": "callers 4EBFB0/54F400 not ported"
+  },
+  {
+   "address": "0x54ea60",
+   "size": 26,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: replace visible half",
+   "status": "proven",
+   "rust": "tile::reset_visible",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ea80",
+   "size": 34,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: set explored",
+   "status": "proven",
+   "rust": "tile::set_explored",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eab0",
+   "size": 40,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: clear explored",
+   "status": "proven",
+   "rust": "tile::set_explored",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eae0",
+   "size": 40,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: set visible",
+   "status": "proven",
+   "rust": "tile::set_visible",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eb10",
+   "size": 46,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: clear visible",
+   "status": "proven",
+   "rust": "tile::set_visible",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eb40",
+   "size": 45,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: explored by a vision-sharing kingdom (+0x228)",
+   "status": "proven",
+   "rust": "tile::shared_explored",
+   "proven_by": [
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": "used by actor detection 4EBC70"
+  },
+  {
+   "address": "0x54eb70",
+   "size": 45,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: visible to a vision-sharing kingdom",
+   "status": "proven",
+   "rust": "tile::shared_visible",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eba0",
+   "size": 201,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "shared-vision mask: bits k and k+16 of allied major kingdoms (kingdom +0x138)",
+   "status": "proven",
+   "rust": "tile::kingdom_masks",
+   "proven_by": [
+    "native-kingdom-masks.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/kingdom_masks_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ec70",
+   "size": 51,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: visible to kingdom",
+   "status": "proven",
+   "rust": "tile::visible",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ecb0",
+   "size": 45,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog word: explored by kingdom",
+   "status": "proven",
+   "rust": "tile::explored",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ed00",
+   "size": 8,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "thunk -> 54ECB0 (tile+0x14)",
+   "status": "ported",
+   "rust": "tile::explored",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x54ed20",
+   "size": 63,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile supply bit set + SAI",
+   "status": "proven",
+   "rust": "tile::occupy",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ef10",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "actor entered tile: gate + set slot +0x54",
+   "status": "proven",
+   "rust": "zone::actor_entered_tile",
+   "proven_by": [
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_enter_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ef40",
+   "size": 49,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile has zone (54EF40)",
+   "status": "proven",
+   "rust": "query::tile_has_zone",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/query.rs",
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54ef80",
+   "size": 50,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile first zone of type (excl actor, excl actor+4)",
+   "status": "proven",
+   "rust": "query::tile_first_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54efc0",
+   "size": 45,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile enemy zone of type (AI: 4 ZOC, 5 ZOG; settlement 5)",
+   "status": "proven",
+   "rust": "query::tile_enemy_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54eff0",
+   "size": 45,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile own zone of type",
+   "status": "proven",
+   "rust": "query::tile_owned_zone",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f020",
+   "size": 17,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile enemy discovery zone with +0xB0",
+   "status": "proven",
+   "rust": "query::tile_enemy_discovery",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f3c0",
+   "size": 29,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog disabled or tile visible to kingdom (AI bombard)",
+   "status": "proven",
+   "rust": "tile::visible_or_no_fog",
+   "proven_by": [
+    "native-zone-tiles.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f3e0",
+   "size": 29,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog disabled or tile visible to a vision-sharing kingdom",
+   "status": "proven",
+   "rust": "tile::shared_visible_or_no_fog",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-detection.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f400",
+   "size": 174,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile: reset explored to all + actor +0x94 (map-wide reveal 551F90/551FD0)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "cheat/reveal-all path"
+  },
+  {
+   "address": "0x54f4b0",
+   "size": 44,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile: reset visible to all + actor +0x98",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "cheat/reveal-all path"
+  },
+  {
+   "address": "0x54f4f0",
+   "size": 227,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile reveal (explore/visible) + SAI + actor +0x64",
+   "status": "proven",
+   "rust": "tile::reveal",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f5e0",
+   "size": 136,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile hide when no detecting zone + SAI + actor +0x68",
+   "status": "proven",
+   "rust": "tile::hide",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f670",
+   "size": 17,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile reveal visible only (54F4F0(k,0,1))",
+   "status": "proven",
+   "rust": "tile::reveal",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f690",
+   "size": 5,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "thunk -> 54F5E0",
+   "status": "proven",
+   "rust": "tile::hide",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f6a0",
+   "size": 75,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile supply bit clear unless another own ZOS",
+   "status": "proven",
+   "rust": "tile::unoccupy",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f7f0",
+   "size": 124,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "zone effects on the tile's actors (types 3,4,5,8)",
+   "status": "proven",
+   "rust": "zone::tile_actor_effects",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f870",
+   "size": 58,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile own supply (bit or other own ZOS)",
+   "status": "proven",
+   "rust": "query::tile_own_supply",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f8b0",
+   "size": 58,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile friendly supply (shared mask or allied ZOS; AI ZOS)",
+   "status": "proven",
+   "rust": "query::tile_friendly_supply",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f8f0",
+   "size": 54,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile collect allied zone actors",
+   "status": "proven",
+   "rust": "query::tile_collect_allied",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54f930",
+   "size": 211,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "fog restored in area: per-tile explored clear + actor +0x6C",
+   "status": "proven",
+   "rust": "tile::restore_fog",
+   "proven_by": [
+    "native-zone-tiles.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": "trigger 542950 iteration is aa-spatial 554DD0/554330"
+  },
+  {
+   "address": "0x54fa10",
+   "size": 111,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile add zone (set +0x48, refcounts, zone +0x14)",
+   "status": "proven",
+   "rust": "solver::tile_add / set::ZonePool::tile_add",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection.json",
+    "native-detection-component.json",
+    "native-zone-enter.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/set.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_sets_native.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x54fa80",
+   "size": 88,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "tile remove zone (set +0x4C, refcounts, zone +0x10)",
+   "status": "proven",
+   "rust": "solver::tile_remove / set::ZonePool::tile_remove",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/lib.rs",
+    "crates/aa-zones/src/set.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_sets_native.rs",
+    "crates/aa-zones/tests/zone_tiles_native.rs"
+   ],
+   "notes": "null set -> Error::NativeNullSet"
+  },
+  {
+   "address": "0x551f90",
+   "size": 49,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "all tiles 54F400",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x551fd0",
+   "size": 59,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "all tiles 54F400 + 54F4B0",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": ""
+  },
+  {
+   "address": "0x552440",
+   "size": 102,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "GMap visit stamp advance (clear all at 0x7FFFFFFF)",
+   "status": "proven",
+   "rust": "flood::SolverState::advance",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x552640",
+   "size": 118,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "clamp world position into the map",
+   "status": "proven",
+   "rust": "zone::clamp_position",
+   "proven_by": [
+    "native-zone-moves.json",
+    "native-zone-flood.json",
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x554ed0",
+   "size": 317,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "neighbour iterator init (functor flags +0x34/+0x3C/+0x40)",
+   "status": "proven",
+   "rust": "flood::neighbours",
+   "proven_by": [
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x559530",
+   "size": 55,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "supply word: kingdom bit",
+   "status": "proven",
+   "rust": "query::supply_bit",
+   "proven_by": [
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x559570",
+   "size": 35,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "supply word: set kingdom bit",
+   "status": "proven",
+   "rust": "tile::occupy",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5595a0",
+   "size": 37,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "supply word: clear kingdom bit",
+   "status": "proven",
+   "rust": "tile::unoccupy",
+   "proven_by": [
+    "native-zone-tiles.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5595d0",
+   "size": 43,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "supply word: & kingdom +0x22C mask",
+   "status": "proven",
+   "rust": "query::supply_shared",
+   "proven_by": [
+    "native-zone-queries.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x559600",
+   "size": 166,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/Map tile zone/fog words",
+   "role": "supply mask: bit k of allied major kingdoms",
+   "status": "proven",
+   "rust": "tile::kingdom_masks",
+   "proven_by": [
+    "native-kingdom-masks.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/tests/kingdom_masks_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x563e10",
+   "size": 197,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "type 8 creation",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x566db0",
+   "size": 225,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "component 0xA3BBD4 +8: ZOC (type 4) creation",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x568040",
+   "size": 35,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "type 5 ZOG creation",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56ea10",
+   "size": 27,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "ZOD radius from ActorData+0x1CC (0x45D790; modifiers 0x501C30 with a context)",
+   "status": "proven",
+   "rust": "component::set_zod_radius",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": "modifier context is a seam"
+  },
+  {
+   "address": "0x56ea30",
+   "size": 107,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "ZOD (type 6) enabled: radius > 0 and actor checks (+0x100 virtual, +0x94/+0x158, +0x90, +0x80)",
+   "status": "proven",
+   "rust": "component::zod_enabled",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56eab0",
+   "size": 99,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "detection component constructor (mask 0, radius 0x45D790(0))",
+   "status": "ported",
+   "rust": "component::DetectionComponent",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "object construction belongs to the component factory"
+  },
+  {
+   "address": "0x56eb40",
+   "size": 206,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "enable/disable a zone index with radius (create 4D69A0, move 515F40, release 514CE0)",
+   "status": "proven",
+   "rust": "component::enable_zone",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56ec10",
+   "size": 122,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "RZOD (type 1) enabled: reveal mask, ActorData+0x1D0 > 0, actor checks",
+   "status": "proven",
+   "rust": "component::rzod_enabled",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56ec90",
+   "size": 293,
+   "size_source": "scan",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "component +0x14 activate (structures; scheduled tick when +0x138; ZOD enable/disable)",
+   "status": "proven",
+   "rust": "component::activate",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56edc0",
+   "size": 507,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "reveal sources: owners of engaging actors (+0x118, +0x130, +0xB0+0x24, 569300, +0x70 with SVar)",
+   "status": "seam",
+   "rust": "component::DetectionComponentWorld::reveal_sources",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs"
+   ],
+   "notes": "lists owned by combat/AI"
+  },
+  {
+   "address": "0x56efc0",
+   "size": 378,
+   "size_source": "functions.tsv",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "RZOD reveal mask recompute (sources, flagged org members, enemy kingdoms with 4CF110 sign bit, minus owner) -> 5406D0",
+   "status": "proven",
+   "rust": "component::update_reveal_mask",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/src/solver.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x56f140",
+   "size": 260,
+   "size_source": "scan",
+   "cluster": "detection component (actor+0xB8)",
+   "role": "detection component tick (structure ZOD from +0x1D0; else ZOD, mask, RZOD)",
+   "status": "proven",
+   "rust": "component::tick",
+   "proven_by": [
+    "native-detection-component.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/component.rs",
+    "crates/aa-zones/tests/detection_component_native.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x5733a0",
+   "size": 149,
+   "size_source": "functions.tsv",
+   "cluster": "Sim/GObject.cpp actor detection",
+   "role": "carrier visibility (carried actors)",
+   "status": "seam",
+   "rust": "detection::ActorDetectionWorld::carrier_visible",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/detection.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x579dd0",
+   "size": 211,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "Organization +0x14: ZOC (type 4)",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x585940",
+   "size": 125,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "component 0xA3EEA0 +8: type 2",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x58ae10",
+   "size": 700,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "SupplyComponent tick: ZOS move/release",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [],
+   "notes": "economy agent"
+  },
+  {
+   "address": "0x58b0e0",
+   "size": 64,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "SupplyComponent +8: ZOS (type 0)",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": "economy agent"
+  },
+  {
+   "address": "0x58cf50",
+   "size": 529,
+   "size_source": "functions.tsv",
+   "cluster": "zone creators / movers (other components)",
+   "role": "type 3 creation",
+   "status": "seam",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/zone.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7a99a0",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region occupied += 1",
+   "status": "seam",
+   "rust": "tile::SaiHook::OccupiedInc",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": "AI agent"
+  },
+  {
+   "address": "0x7a99d0",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region occupied -= 1",
+   "status": "seam",
+   "rust": "tile::SaiHook::OccupiedDec",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7a9a00",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region explored += 1",
+   "status": "seam",
+   "rust": "tile::SaiHook::ExploredInc",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7a9a30",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region visible += 1",
+   "status": "seam",
+   "rust": "tile::SaiHook::VisibleInc",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7a9a60",
+   "size": 46,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region visible -= 1 + white-fog timer 7B8E70",
+   "status": "seam",
+   "rust": "tile::SaiHook::VisibleDec",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7a9a90",
+   "size": 42,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "SAI region explored -= 1",
+   "status": "seam",
+   "rust": "tile::SaiHook::ExploredDec",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x7b8e70",
+   "size": 136,
+   "size_source": "functions.tsv",
+   "cluster": "triggers / cheats / SAI hooks",
+   "role": "white fog timer (ResetWhiteFogTimerPecent)",
+   "status": "not-ported",
+   "rust": "",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/tile.rs"
+   ],
+   "notes": "AI agent"
+  },
+  {
+   "address": "0x855d30",
+   "size": 1395,
+   "size_source": "functions.tsv",
+   "cluster": "Solver/ZoneSolver.cpp",
+   "role": "assertion: zone on impassable start tile (ZoneSolver.cpp 0x26E)",
+   "status": "seam",
+   "rust": "flood::FloodWorld::assert_blocked_start",
+   "proven_by": [],
+   "cited_in": [
+    "crates/aa-zones/src/flood.rs"
+   ],
+   "notes": ""
+  },
+  {
+   "address": "0x969b10",
+   "size": 5,
+   "size_source": "scan",
+   "cluster": "Sim/Zones.cpp KKC_Zone + zone sets",
+   "role": "union +0x08 (return false; shared stub)",
+   "status": "proven",
+   "rust": "set::ZonePool::add",
+   "proven_by": [
+    "native-zone-sets.json",
+    "native-zone-queries.json",
+    "native-zone-tiles.json",
+    "native-zone-moves.json",
+    "native-zone-flood.json"
+   ],
+   "cited_in": [
+    "crates/aa-zones/src/query.rs"
+   ],
+   "notes": ""
+  }
+ ]
+}

@@ -1,0 +1,227 @@
+{
+  "schema": 1,
+  "utc": "2026-10-17T17:24:46.570441+00:00",
+  "passed": true,
+  "scope": "Read-only original archive/extracted-source/cache inventory audit. No crate/assets/source/release edits, exporter invocation, Rust build, native execution or new playback acceptance.",
+  "counts": {
+    "source_files": 2481,
+    "original_nif": 1900,
+    "original_kf": 581,
+    "embedded_animated_nif": 743,
+    "nif_with_embedded_animation_not_browser_listed": 742,
+    "browser_root_rigs": 46,
+    "browser_model_clip_bindings": 85,
+    "browser_unique_kf": 69,
+    "all_recursive_rig_files": 145,
+    "unique_cached_model_sources": 99,
+    "unique_cached_model_kf_pairs": 382,
+    "unique_cached_kf": 98,
+    "original_kf_without_any_cached_clip": 483,
+    "game_rig_files": 58,
+    "game_role_clip_bindings": 317,
+    "building_death_nif": 77,
+    "hq_death_nif": 20,
+    "corps_death_nif": 5,
+    "building_death_nif_listed_in_browser": 0,
+    "embedded_by_category": {
+      "Buildings": 260,
+      "Cutscene": 2,
+      "Doodads": 55,
+      "Effects": 219,
+      "Flares": 8,
+      "MetaGame": 38,
+      "Projectiles": 9,
+      "Special": 2,
+      "SpecialOps": 9,
+      "Trailers": 3,
+      "Units": 134,
+      "Weather": 4
+    },
+    "kf_by_category": {
+      "Buildings": 28,
+      "Cutscene": 13,
+      "Doodads": 10,
+      "Generals": 80,
+      "Shared": 152,
+      "SpecialOps": 11,
+      "Units": 287
+    },
+    "unsupported_controller_classes": {
+      "NiAlphaController": 665,
+      "NiFlipController": 5,
+      "NiLightColorController": 3,
+      "NiLookAtController": 40,
+      "NiMaterialColorController": 14,
+      "NiPSysEmitterCtlr": 672,
+      "NiPSysEmitterInitialRadiusCtlr": 63,
+      "NiPSysEmitterSpeedCtlr": 6,
+      "NiPSysModifierActiveCtlr": 1111,
+      "NiPSysUpdateCtlr": 672,
+      "NiParticleSystemController": 11,
+      "NiPathController": 55,
+      "NiTextureTransformController": 56,
+      "NiVisController": 1
+    },
+    "assets_by_exporter_gap": {
+      "controller:NiAlphaController": 179,
+      "controller:NiFlipController": 5,
+      "controller:NiLightColorController": 1,
+      "controller:NiLookAtController": 20,
+      "controller:NiMaterialColorController": 5,
+      "controller:NiPSysEmitterCtlr": 200,
+      "controller:NiPSysEmitterInitialRadiusCtlr": 26,
+      "controller:NiPSysEmitterSpeedCtlr": 4,
+      "controller:NiPSysModifierActiveCtlr": 116,
+      "controller:NiPSysUpdateCtlr": 200,
+      "controller:NiParticleSystemController": 4,
+      "controller:NiPathController": 22,
+      "controller:NiTextureTransformController": 42,
+      "controller:NiVisController": 1,
+      "quaternion_key_type:3": 26,
+      "scale_key_type:2": 374,
+      "scale_key_type:3": 11,
+      "translation_key_type:2": 3,
+      "translation_key_type:3": 11,
+      "varying_euler_rotation": 699
+    },
+    "embedded_nif_timelines_exported_as_clips": 0,
+    "embedded_nif_timelines_without_source_clip_export": 743
+  },
+  "causes": [
+    {
+      "consumer": "crates/aa-client/src/animation_preview.rs:44",
+      "finding": "available() lists root-level .rig.json only; nested game/ and phase3-staging are absent from the list. manifest.json is used only as a cache-directory sentinel."
+    },
+    {
+      "exporter": "export_original.py",
+      "finding": "Explicitly exports five infantry models and Idle/Jog/Attack1/Die1 only."
+    },
+    {
+      "exporter": "export_families.py",
+      "finding": "Default model-name regex selects Tank|Battleship|Destroyer|Carrier|Artillery|CarArmored; known selected failures reject entire model family. It only exports external View-associated KF sequences, not embedded NIF timelines."
+    },
+    {
+      "exporter": "export_game_rigs.py",
+      "finding": "Selects infantry-marked recovered units and at most six gameplay roles; richer KF families and building NIF timelines are intentionally absent."
+    },
+    {
+      "consumer": "crates/aa-animation/src/lib.rs",
+      "finding": "Rig schema only contains NiKeyframeController node transform tracks; validator admits linear channels plus proven constant Euler bind orientation, not arbitrary embedded property/particle/path/visibility schedules."
+    }
+  ],
+  "recommended_catalog": [
+    "Use authoritative Data.rwd member path + source SHA + source-local block/sequence identity as catalog keys, not basename or invented clips. Preserve all581 KF sources and743 embedded-controller NIF sources, including currently unsupported entries with explicit reasons.",
+    "Separate asset inventory from model/clip associations: KF target-name lists alone do not prove a compatible model; use source TGI declarations/precise native binding, qualified recovered candidate pairs and exact model/source hashes. Do not silently select a model for default Character animations.",
+    "Expose cached game/ rigs through an explicit authoritative cache index, deduplicating staged copies by exact model/clip source identity while retaining distinct original sequence/role names. This alone improves discovery but does not add HQ/death playback.",
+    "Add embedded NIF controller timeline support with exact source target/property/geometry identity, authored ranges/flags/frequency/phase, visibility/alpha/texture/particle behavior and curve implementations before marking full animations playable. Unsupported channels must not be omitted while displaying a falsely complete death animation.",
+    "Prioritize all20 HQ death and5 Corps death NIFs plus77 building death NIFs and119 Pack/Unpack sources; then generals, ambient animals, scenery/weather, effects/projectiles, cutscenes and other authored controller assets. Preserve complete catalog entries even before all playback is implemented."
+  ],
+  "limits": [
+    "Existing parsed controller facts are reused only after exact archive and extracted-file byte hashes match. No new NIF parser or native interpolator was executed.",
+    "Prior recovered TGI associations are candidate evidence; archived aa-game/aa-net behavior is not a source of truth and must not be revived.",
+    "Inventory completeness does not imply animation playback, event/controller scheduling, blending, root motion, battlefield integration or native numeric parity.",
+    "No default duration, replacement keyframe, fabricated wheel/motion clip, basename retargeting, or silently dropped unsupported controller is authorized."
+  ],
+  "inputs": [
+    {
+      "path": "research/phase3-animation/source-inventory.json",
+      "bytes": 24697139,
+      "sha256": "8f33602e4c30910b7a88f3888d857c99d4d8b4b661f12cf0949d0003aa53e99c"
+    },
+    {
+      "path": "research/phase3-animation/animation-catalog.json",
+      "bytes": 4147824,
+      "sha256": "ae5bc10a45f24acab95ca275cecbf16bbe4319327e4872d23ef8d4e9e840d6a3"
+    },
+    {
+      "path": "docs/NATIVE-PORT-RULES.md",
+      "bytes": 7129,
+      "sha256": "984400b097549bfd07f9710d8e912faebcea82a6c18add0f9ddf947ec3a1b21b"
+    },
+    {
+      "path": "crates/aa-client/src/animation_preview.rs",
+      "bytes": 12678,
+      "sha256": "233c0b79c46faf1cc991fad3045f7f5a68a4b93c5c57d19546e71f75156ea852"
+    },
+    {
+      "path": "crates/aa-animation/src/lib.rs",
+      "bytes": 20979,
+      "sha256": "69b8dfba63c38a8588ac94e941ae64bb788c9aa01a887a465c1452683fb88566"
+    },
+    {
+      "path": "crates/aa-animation/tools/inventory_phase3.py",
+      "bytes": 5879,
+      "sha256": "09790b43a2e345f6ae7ac91e1f3832ec41669fa6efe14cd6d1d1db96a749fb0c"
+    },
+    {
+      "path": "crates/aa-animation/tools/build_phase3_catalog.py",
+      "bytes": 9645,
+      "sha256": "ea6e730a74b9e16932213255621bae7ce745e4cb465e47b804dc166fbbec2438"
+    },
+    {
+      "path": "crates/aa-animation/tools/export_original.py",
+      "bytes": 12838,
+      "sha256": "2448950457b8df8d1276f8e03bad0fdb1585e2bbe4d9d4dc1cbc5acc8daf8143"
+    },
+    {
+      "path": "crates/aa-animation/tools/export_families.py",
+      "bytes": 14092,
+      "sha256": "62ecb7498bc55a829ef90d88c921918669697a0550b2de4ea56686f964a5f295"
+    },
+    {
+      "path": "crates/aa-animation/tools/export_game_rigs.py",
+      "bytes": 23448,
+      "sha256": "4e011000674a91092fc06c229e9787c30fea446cd5672d0ced3aab4d94c73018"
+    },
+    {
+      "path": "assets-cache/animation/manifest.json",
+      "bytes": 3268,
+      "sha256": "2f1db6249df071eaed4323bc2de1d06a4efcdfe82243aa31a84f932235a3bab1"
+    },
+    {
+      "path": "assets-cache/animation/families-manifest.json",
+      "bytes": 124235,
+      "sha256": "65427559985b3f8cf2144fca1ac391d9b8a373df26e7588205414cd5121d2b5e"
+    },
+    {
+      "path": "assets-cache/animation/game-rigs.json",
+      "bytes": 164165,
+      "sha256": "2512dcecb56b5a30c4bcb01a795e01836b3ae6bccc7511eae777553fae59f855"
+    },
+    {
+      "path": "assets-cache/animation/promoted-families.json",
+      "bytes": 20522,
+      "sha256": "73e0b50926a051a01d67edcb7c667328a25a194b3c285cf16dad0330dcb1d175"
+    },
+    {
+      "path": "research/animation-browser-20261017/inventory/audit_inventory.py",
+      "bytes": 12252,
+      "sha256": "bf518dfa98fd76cd8d6f1dbbbd1222870a4bffd09c152034fb240c2f72d4cb85"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "research/animation-browser-20261017/inventory/original-source-catalog.json",
+      "bytes": 23840141,
+      "sha256": "b1b424c1fe204ad9af6274abee81f38d702996eaa7915d7fbabc0d347f33fd73"
+    },
+    {
+      "path": "research/animation-browser-20261017/inventory/cache-coverage.json",
+      "bytes": 232632,
+      "sha256": "d560cd719347b3ef0d09da81bf9287b7526504c698de09d8d9bafeabe18f42af"
+    },
+    {
+      "path": "research/animation-browser-20261017/inventory/hq-building-deaths.json",
+      "bytes": 2868429,
+      "sha256": "52ab9928fff51928f6b7a7ace0f22bbe216943f871546ca19ef537815f9410d2"
+    }
+  ],
+  "source_verification": {
+    "installed_archive_selected_member_paths_exact": true,
+    "installed_archive_selected_member_bytes_exact": true,
+    "extracted_source_paths_exact": true,
+    "extracted_source_bytes_exact": true,
+    "new_NIF_parse_performed": false,
+    "new_native_execution_performed": false
+  }
+}

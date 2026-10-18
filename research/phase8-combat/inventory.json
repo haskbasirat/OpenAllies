@@ -1,0 +1,5514 @@
+{
+ "schema": 1,
+ "scope": "Build inventory.json: native AA.exe combat functions and their port status.\n\nCurated from string references (settings-index.json, Body/Organization/UAI\n/CAI source paths), calls.tsv neighbourhoods of the combat roots and the\nexisting phase6/phase7/phase8 evidence. Every address is checked against the\nGhidra function inventory; Rust citations are discovered by searching crates/.\nStatus vocabulary:\n  proven        ported in Rust and replayed against original-code Unicorn fixtures\n  proven-other  proven, but owned by another crate (listed for completeness)\n  seam          deliberately a required world service at this boundary\n  fragment      a proven part of a larger native function (documented scope)\n  not-ported    identified, not ported in Rust yet\n",
+ "counts": {
+  "proven": 275,
+  "proven-other": 42,
+  "not-ported": 10,
+  "seam": 14,
+  "fragment": 5
+ },
+ "functions": [
+  {
+   "address": "0045e090",
+   "role": "Combat value computation (CombatValue* settings)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::ability_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": "Both CRT pow calls run natively in the oracle; the port uses aa-numeric::crt_pow.",
+   "ghidra_name": "FUN_0045e090",
+   "body_bytes": 1251,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "0045e6d0",
+   "role": "Thing extent value (+468/+478/2.0001)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::Extent::value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045e6d0",
+   "body_bytes": 44,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "004618b0",
+   "role": "Thing definition combat value (+1E4/+30C/+36C, recursive)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::definition_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004618b0",
+   "body_bytes": 985,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "004bb590",
+   "role": "Combat value CSV dump (diagnostic)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::actor_data_values",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": "CSV open/header/close are DefinitionWorld seams (diagnostic file output).",
+   "ghidra_name": "FUN_004bb590",
+   "body_bytes": 401,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "004bb850",
+   "role": "Vector insert at index",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value (insert)",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004bb850",
+   "body_bytes": 165,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "004bbf90",
+   "role": "Mean attack/defense values",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::mean_values",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": "Empty trimmed ranges (native NaN means) are rejected explicitly.",
+   "ghidra_name": "FUN_004bbf90",
+   "body_bytes": 1598,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "004be3f0",
+   "role": "Ability power getter (501A30/501AA0)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be3f0",
+   "body_bytes": 47,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/property_flags.rs",
+    "crates/aa-body/tests/native_modifier_tables.rs",
+    "crates/aa-combat/src/ability.rs",
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "004be4b0",
+   "role": "Local recharge getter (501560)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be4b0",
+   "body_bytes": 28,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "004be680",
+   "role": "Local ability first entry +10",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be680",
+   "body_bytes": 41,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "00501a30",
+   "role": "Modifier melee power (+8, +4, clamp +1A4)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-body::properties::ModifierState::power",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501a30",
+   "body_bytes": 104,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-body/tests/native_modifier_power.rs",
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "00501aa0",
+   "role": "Modifier ranged power (+C, +4, clamp +1A4)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-body::properties::ModifierState::power",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501aa0",
+   "body_bytes": 104,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-body/tests/native_modifier_power.rs",
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/tests/native_combat_value.rs"
+   ]
+  },
+  {
+   "address": "0057e430",
+   "role": "Performer combat value (+60)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value::performer_value",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057e430",
+   "body_bytes": 562,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "00869d30",
+   "role": "Bisection with comparator (descending 4BB020)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-combat::combat_value (insert)",
+   "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00869d30",
+   "body_bytes": 129,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-metagame/src/mgai.rs"
+   ]
+  },
+  {
+   "address": "0096d890",
+   "role": "_CIpow dispatch (SSE2 flag B4B340, MXCSR, x87 CW)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-numeric::crt_pow::select_path / ci_pow",
+   "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0096d890",
+   "body_bytes": 84,
+   "cited_in": [
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-mind/src/sai/goal_base.rs",
+    "crates/aa-mind/src/sai/map_analysis.rs",
+    "crates/aa-navigation/src/topology_builder.rs",
+    "crates/aa-numeric/src/crt_pow.rs",
+    "crates/aa-runtime/src/simulation/speed.rs",
+    "crates/aa-runtime/tests/simulation_round2.rs"
+   ]
+  },
+  {
+   "address": "0096d8ed",
+   "role": "_CIpow x87 body",
+   "area": "AI evaluation",
+   "status": "seam",
+   "rust": "aa-numeric::crt_pow::CrtPowError::X87PathUnsupported",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0096d8ed",
+   "body_bytes": 453,
+   "cited_in": [
+    "crates/aa-numeric/src/crt_pow.rs",
+    "crates/aa-runtime/src/simulation/speed.rs"
+   ]
+  },
+  {
+   "address": "00977111",
+   "role": "___libm_error_support (default _matherr 84D110)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-numeric::crt_pow::libm_error_support",
+   "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
+   "note": null,
+   "ghidra_name": "___libm_error_support",
+   "body_bytes": 654,
+   "cited_in": [
+    "crates/aa-numeric/src/crt_pow.rs"
+   ]
+  },
+  {
+   "address": "00977a10",
+   "role": "_CIpow SSE2 entry (operand stores)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-numeric::crt_pow::ci_pow",
+   "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00977a10",
+   "body_bytes": 25,
+   "cited_in": [
+    "crates/aa-numeric/src/crt_pow.rs",
+    "crates/aa-runtime/src/simulation/speed.rs"
+   ]
+  },
+  {
+   "address": "00977a29",
+   "role": "CRT pow SSE2 body (tables AD0BA0..AD44C8)",
+   "area": "AI evaluation",
+   "status": "proven",
+   "rust": "aa-numeric::crt_pow::pow_sse2 (generated by lift_crt_pow.py)",
+   "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00977a29",
+   "body_bytes": 2861,
+   "cited_in": [
+    "crates/aa-numeric/src/crt_pow.rs"
+   ]
+  },
+  {
+   "address": "00428a30",
+   "role": "FXC permanent-VFX search (ChainImmediate/Chain recursion)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::permanent_vfx_present",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00428a30",
+   "body_bytes": 72,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "0042c5e0",
+   "role": "CreateVFX LoadData (+64 = duration != 0)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::FxcFacts",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0042c5e0",
+   "body_bytes": 787,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "00494f30",
+   "role": "VFX LoadData lifetime (+24 permanent)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::FxcFacts",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00494f30",
+   "body_bytes": 396,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "00497a40",
+   "role": "FXC type enum registration",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::FXC_TYPES",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00497a40",
+   "body_bytes": 163,
+   "cited_in": []
+  },
+  {
+   "address": "00497af0",
+   "role": "Ability effect type enum registration",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::effect_kind",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00497af0",
+   "body_bytes": 163,
+   "cited_in": []
+  },
+  {
+   "address": "004bee20",
+   "role": "Ability flags and main power from effects",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities (native_definition_effects)",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004bee20",
+   "body_bytes": 114,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004bef80",
+   "role": "Ability effect dispatch (type, 4CA880 construction, LoadData)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::native_ability_effects",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004bef80",
+   "body_bytes": 210,
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004bf990",
+   "role": "Ability definition LoadData (required_properties tokens at 4C00AB)",
+   "area": "ability definition",
+   "status": "fragment",
+   "rust": "aa-rules::abilities::required_property_tokens / native_required_properties",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": "Its required_properties block 4C00AB..4C023D executed natively (ability_required section).",
+   "ghidra_name": "FUN_004bf990",
+   "body_bytes": 2401,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-rules/src/commander.rs",
+    "crates/aa-rules/src/turrets.rs"
+   ]
+  },
+  {
+   "address": "004c1060",
+   "role": "Modifier type enum registration",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::MODIFIER_TYPES",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c1060",
+   "body_bytes": 163,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004c11e0",
+   "role": "Modifier attribute enum registration",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::terrain_speed::ATTRIBUTES",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c11e0",
+   "body_bytes": 403,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-rules/src/terrain_speed.rs"
+   ]
+  },
+  {
+   "address": "004c4030",
+   "role": "Property modifier list loading (FLAG/ADD/RESIST_DAMAGE/PERIODIC_DAMAGE)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c4030",
+   "body_bytes": 351,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-rules/src/property_inputs.rs"
+   ]
+  },
+  {
+   "address": "004c4f90",
+   "role": "EnchantmentProperty LoadData (technology, duration, type, permanent VFX)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentProperty",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c4f90",
+   "body_bytes": 230,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004c9fd0",
+   "role": "Base effect LoadData (CAPTURE, DESCRIBE_ECONOMY)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::Plain",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004ca010",
+   "role": "Morale effect LoadData (+14 amount)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::Morale",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004ca190",
+   "role": "Steal resources effect LoadData (ResourcesAmount)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::StealResources",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004ca880",
+   "role": "Ability effect construction by kind",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::LoadedEffect",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca880",
+   "body_bytes": 334,
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004cab50",
+   "role": "Heal effect LoadData (+14 amount, +18 heal type)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::Heal",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cab50",
+   "body_bytes": 229,
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004cbbf0",
+   "role": "Enchantment effect LoadData (EnchantmentProperty child)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::Enchantment",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004cc1d0",
+   "role": "Heal type enum (table constructor)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::heal_type",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cc1d0",
+   "body_bytes": 233,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004ccc70",
+   "role": "Damage effect LoadData (+14 damage type, +18 amount)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EffectData::Damage",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004fec70",
+   "role": "ADD modifier LoadData (amount, attribute < 13, repair)",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::add_modifier",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004fec70",
+   "body_bytes": 249,
+   "cited_in": [
+    "crates/aa-body/src/modifier_load.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "00501350",
+   "role": "PERIODIC_DAMAGE modifier LoadData",
+   "area": "ability definition",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier::PeriodicDamage",
+   "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004c9c90",
+   "role": "Area target traversal and max-target sorting",
+   "area": "area damage",
+   "status": "proven",
+   "rust": "aa-combat::execution::use_area",
+   "oracle": "research/phase7-ability/native-execution-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c9c90",
+   "body_bytes": 500,
+   "cited_in": [
+    "crates/aa-combat/src/execution.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "0045dd30",
+   "role": "Definition turret +1F8[i] byte +31",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "performer::TrackWorld::turret_tracks_target",
+   "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045dd30",
+   "body_bytes": 19,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "004be4d0",
+   "role": "Local ability has rank limits",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::rank_allows",
+   "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be4d0",
+   "body_bytes": 24,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "004be4f0",
+   "role": "Local ability rank window",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::rank_allows",
+   "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be4f0",
+   "body_bytes": 38,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "004c81e0",
+   "role": "Ability turret index ([+8]+54)",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "performer::TrackWorld::ability_turret",
+   "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c81e0",
+   "body_bytes": 7,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "004c83e0",
+   "role": "Recharge remaining (reload)",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::admission::recharge_remaining",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c83e0",
+   "body_bytes": 115,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-mind/src/ability_motion.rs",
+    "crates/aa-mind/src/uai_kill.rs"
+   ]
+  },
+  {
+   "address": "004c8650",
+   "role": "Ability instance constructor",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::ability::Ability::new",
+   "oracle": "research/phase7-performer/native-constructor-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8650",
+   "body_bytes": 114,
+   "cited_in": [
+    "crates/aa-actors/src/defender_state.rs",
+    "crates/aa-body/src/dying.rs",
+    "crates/aa-combat/src/ability.rs",
+    "crates/aa-mapworld/src/restore.rs",
+    "crates/aa-runtime/src/catalog.rs"
+   ]
+  },
+  {
+   "address": "004c8b40",
+   "role": "Ability load",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::commander",
+   "oracle": "research/phase7-commander/native-commander-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8b40",
+   "body_bytes": 220,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs",
+    "crates/aa-mapworld/src/performer_restore.rs"
+   ]
+  },
+  {
+   "address": "004cdd90",
+   "role": "Faction XP debit",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::payment::pay",
+   "oracle": "research/phase7-payment/native-payment-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cdd90",
+   "body_bytes": 105,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs",
+    "crates/aa-combat/src/payment.rs",
+    "crates/aa-economy/src/tick.rs"
+   ]
+  },
+  {
+   "address": "004cdfd0",
+   "role": "Commander experience income (shares commander::State::experience)",
+   "area": "cadence",
+   "status": "proven-other",
+   "rust": "aa-economy::tick::add_commander_experience",
+   "oracle": "research/phase8-economy/native-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cdfd0",
+   "body_bytes": 163,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs",
+    "crates/aa-economy/src/tick.rs",
+    "crates/aa-economy/src/transfers.rs"
+   ]
+  },
+  {
+   "address": "004ce0b0",
+   "role": "Commander load",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::commander",
+   "oracle": "research/phase7-commander/native-commander-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs"
+   ]
+  },
+  {
+   "address": "004ce1d0",
+   "role": "Commander constructor",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::commander",
+   "oracle": "research/phase7-commander/native-commander-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ce1d0",
+   "body_bytes": 305,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs"
+   ]
+  },
+  {
+   "address": "004e0f00",
+   "role": "Commander replacement",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::commander",
+   "oracle": "research/phase7-commander/native-commander-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004e0f00",
+   "body_bytes": 133,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs",
+    "crates/aa-mapworld/src/commander_restore.rs",
+    "crates/aa-mapworld/src/restore.rs"
+   ]
+  },
+  {
+   "address": "004e1690",
+   "role": "Stockpile debit",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::payment::pay",
+   "oracle": "research/phase7-payment/native-payment-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004e1690",
+   "body_bytes": 53,
+   "cited_in": [
+    "crates/aa-combat/src/payment.rs",
+    "crates/aa-economy/src/lib.rs"
+   ]
+  },
+  {
+   "address": "004e24b0",
+   "role": "Faction/general ability affordability (Commander XP)",
+   "area": "cadence",
+   "status": "proven-other",
+   "rust": "aa-economy::transfers::can_afford_commander_ability",
+   "oracle": "research/phase8-economy/native-transfer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004e24b0",
+   "body_bytes": 211,
+   "cited_in": [
+    "crates/aa-combat/src/commander.rs",
+    "crates/aa-combat/src/payment.rs",
+    "crates/aa-economy/src/tick.rs",
+    "crates/aa-economy/src/transfers.rs"
+   ]
+  },
+  {
+   "address": "004e2590",
+   "role": "Ability payment",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::payment::pay",
+   "oracle": "research/phase7-payment/native-payment-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004e2590",
+   "body_bytes": 161,
+   "cited_in": [
+    "crates/aa-combat/src/payment.rs"
+   ]
+  },
+  {
+   "address": "0057db90",
+   "role": "Performer InitCreate",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::constructors::init_create",
+   "oracle": "research/phase7-performer/native-constructor-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/constructors.rs",
+    "crates/aa-runtime/src/actor_world.rs"
+   ]
+  },
+  {
+   "address": "0057dc90",
+   "role": "Performer finish",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::finish",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057dc90",
+   "body_bytes": 26,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "0057dcf0",
+   "role": "Performer ability gating by rank",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::gate_by_rank",
+   "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057dcf0",
+   "body_bytes": 151,
+   "cited_in": [
+    "crates/aa-actors/src/organization_callees.rs",
+    "crates/aa-actors/tests/native_saved_organization_callees.rs",
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/tests/native_member_extras.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "0057dd90",
+   "role": "Performer target/turret intention",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::track_target",
+   "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
+   "note": "aa-mind uai_kill/element_move seams may bind this too.",
+   "ghidra_name": "FUN_0057dd90",
+   "body_bytes": 265,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/tests/native_turret_intention.rs",
+    "crates/aa-mind/src/element_move.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_bombard.rs"
+   ]
+  },
+  {
+   "address": "0057dea0",
+   "role": "Performer turret intention clear",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::clear_turret_intentions",
+   "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057dea0",
+   "body_bytes": 50,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/tests/native_turret_intention.rs",
+    "crates/aa-mind/src/element_move.rs",
+    "crates/aa-mind/src/uai_kill.rs"
+   ]
+  },
+  {
+   "address": "0057e360",
+   "role": "Performer context fill",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::fill_context",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057e360",
+   "body_bytes": 197,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "0057e8c0",
+   "role": "Performer use frame",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::use_frame",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057e8c0",
+   "body_bytes": 86,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "0057ed20",
+   "role": "Performer begin animation/use deadlines",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::begin",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057ed20",
+   "body_bytes": 283,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "0057f040",
+   "role": "Performer timed event (use/end/reload)",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::timed_event",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057f040",
+   "body_bytes": 386,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs"
+   ]
+  },
+  {
+   "address": "0057f290",
+   "role": "Performer start attack",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::performer::start",
+   "oracle": "research/phase7-performer/native-performer-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057f290",
+   "body_bytes": 556,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-mind/src/ability_decision.rs",
+    "crates/aa-mind/src/uai_thinks/uai_repair.rs"
+   ]
+  },
+  {
+   "address": "0057f4d0",
+   "role": "Performer constructor",
+   "area": "cadence",
+   "status": "proven",
+   "rust": "aa-combat::constructors::create",
+   "oracle": "research/phase7-performer/native-constructor-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057f4d0",
+   "body_bytes": 690,
+   "cited_in": [
+    "crates/aa-combat/src/constructors.rs",
+    "crates/aa-mapworld/src/restore_components.rs",
+    "crates/aa-rules/src/turrets.rs",
+    "crates/aa-runtime/src/actor_world.rs",
+    "crates/aa-runtime/src/saved_performer.rs"
+   ]
+  },
+  {
+   "address": "004579d0",
+   "role": "Component +34 GTID registry lookup",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::capture::World::resolve",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004579d0",
+   "body_bytes": 38,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs"
+   ]
+  },
+  {
+   "address": "004cebe0",
+   "role": "Capture reward: 5719E0 experience and Mind +188",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::morale::capture_reward",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cebe0",
+   "body_bytes": 97,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/tests/native_capture.rs"
+   ]
+  },
+  {
+   "address": "004ceda0",
+   "role": "Ancestor via wall-segment owner / outer chain",
+   "area": "capture",
+   "status": "proven",
+   "rust": "executed inside 4D1120 oracle",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ceda0",
+   "body_bytes": 53,
+   "cited_in": [
+    "crates/aa-actors/src/construction_actions.rs",
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-mind/src/cai_thinks/siege.rs",
+    "crates/aa-mind/src/sai/map_analysis.rs",
+    "crates/aa-mind/tests/cai_siege_native.rs",
+    "crates/aa-production/src/structure_state.rs"
+   ]
+  },
+  {
+   "address": "004d1120",
+   "role": "Capture eligibility (segments, NOT_CAPTURABLE, +94/+D4, captureable)",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::capture::eligible",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d1120",
+   "body_bytes": 117,
+   "cited_in": [
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "004d5230",
+   "role": "Capture attempt: owner change, announcements, SAI, statistics, reward",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::capture::attempt",
+   "oracle": "research/phase8-combat/native-capture-attempt-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d5230",
+   "body_bytes": 881,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-combat/tests/native_capture.rs",
+    "crates/aa-triggers/src/predicates.rs"
+   ]
+  },
+  {
+   "address": "004d8450",
+   "role": "KKC_GActor::ChangeKingdom (actor virtual +160): ownership change and its economy side effects",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::ownership::change_kingdom",
+   "oracle": "research/phase8-combat/native-change-kingdom-fixtures.json",
+   "note": "Kingdom add/remove actor and recruit singles bind to aa-economy::kingdom_registry.",
+   "ghidra_name": "FUN_004d8450",
+   "body_bytes": 1620,
+   "cited_in": [
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-combat/tests/native_change_kingdom.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-production/src/structure_state.rs"
+   ]
+  },
+  {
+   "address": "004e2a60",
+   "role": "Kingdom recruit single find",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::kingdom_registry::RecruitItemTable::find_single",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004e2a60",
+   "body_bytes": 83,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "004e2cb0",
+   "role": "Kingdom recruit single remove",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::kingdom_registry::RecruitItemTable::remove_single",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004e2cb0",
+   "body_bytes": 328,
+   "cited_in": [
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "004e44e0",
+   "role": "GKingdom::RemoveActor",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::kingdom_registry::remove_actor",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004e44e0",
+   "body_bytes": 955,
+   "cited_in": [
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-economy/src/kingdom_registry.rs"
+   ]
+  },
+  {
+   "address": "004e4c30",
+   "role": "Kingdom recruit single add",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::kingdom_registry::RecruitItemTable::add_single",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004e4c30",
+   "body_bytes": 400,
+   "cited_in": [
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "004e6180",
+   "role": "GKingdom::AddActor",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::kingdom_registry::add_actor",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004e6180",
+   "body_bytes": 811,
+   "cited_in": [
+    "crates/aa-actors/src/world_publication.rs",
+    "crates/aa-actors/tests/native_publication.rs",
+    "crates/aa-combat/src/ownership.rs",
+    "crates/aa-economy/src/kingdom_registry.rs"
+   ]
+  },
+  {
+   "address": "0054bea0",
+   "role": "Capture notification manager (B36520)",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-triggers::predicates::queue_captured",
+   "oracle": null,
+   "note": "Owner aa-triggers: trigger manager B36520 +50 queue prepend of a 54B820 Captured payload (+4 captured +14, +8 source +14, +C source if virtual +A8 else virtual +108, its +14). Not combat.",
+   "ghidra_name": "FUN_0054bea0",
+   "body_bytes": 135,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-triggers/src/predicates.rs",
+    "crates/aa-triggers/tests/capture_native.rs"
+   ]
+  },
+  {
+   "address": "0056acb0",
+   "role": "Component88 ownership transfer",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::walls::transfer_component_88",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0056acb0",
+   "body_bytes": 230,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "00585a20",
+   "role": "Wall segments ownership transfer",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::walls::transfer_wall",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00585a20",
+   "body_bytes": 30,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "0058e890",
+   "role": "Statistics score maximum",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058e890",
+   "body_bytes": 30,
+   "cited_in": [
+    "crates/aa-combat/src/statistics_tracking.rs"
+   ]
+  },
+  {
+   "address": "0058e8b0",
+   "role": "Statistics enter class",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058e8b0",
+   "body_bytes": 291,
+   "cited_in": [
+    "crates/aa-combat/src/statistics_tracking.rs"
+   ]
+  },
+  {
+   "address": "0058ea80",
+   "role": "Statistics classified predicate (+80, !+D8, +A4)",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking::classified",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058ea80",
+   "body_bytes": 43,
+   "cited_in": [
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-combat/tests/native_statistics_tracking.rs",
+    "crates/aa-economy/src/kingdom_registry.rs"
+   ]
+  },
+  {
+   "address": "0058eba0",
+   "role": "Statistics leave class",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058eba0",
+   "body_bytes": 304,
+   "cited_in": [
+    "crates/aa-combat/src/statistics_tracking.rs"
+   ]
+  },
+  {
+   "address": "0058ee00",
+   "role": "Actor statistics classification",
+   "area": "capture",
+   "status": "proven-other",
+   "rust": "aa-economy::statistics::structure_class",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": "Executed natively inside the 58F010 oracle.",
+   "ghidra_name": "FUN_0058ee00",
+   "body_bytes": 120,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-economy/src/statistics.rs",
+    "crates/aa-economy/tests/native_completion_statistics.rs"
+   ]
+  },
+  {
+   "address": "0058efe0",
+   "role": "Statistics untrack",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking::untrack",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058efe0",
+   "body_bytes": 48,
+   "cited_in": [
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-combat/tests/native_statistics_tracking.rs",
+    "crates/aa-economy/src/kingdom_registry.rs"
+   ]
+  },
+  {
+   "address": "0058f010",
+   "role": "Capture statistics on new owner",
+   "area": "capture",
+   "status": "proven",
+   "rust": "aa-combat::statistics_tracking::track",
+   "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
+   "note": "On aa-economy Statistics (add_score); class word actor+13C.",
+   "ghidra_name": "FUN_0058f010",
+   "body_bytes": 585,
+   "cited_in": [
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-combat/tests/native_statistics_tracking.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-economy/src/world_start.rs",
+    "crates/aa-economy/tests/native_world_start.rs"
+   ]
+  },
+  {
+   "address": "00409230",
+   "role": "2D normalize used by directional health FX",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00409230",
+   "body_bytes": 77,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-metagame/src/rmc.rs",
+    "crates/aa-mind/src/element_move_continuation.rs",
+    "crates/aa-mind/src/uai_thinks/uai_sleep.rs",
+    "crates/aa-navigation/src/company_move.rs",
+    "crates/aa-navigation/src/low_path/mod.rs",
+    "crates/aa-navigation/src/solver.rs",
+    "crates/aa-navigation/src/uai_collision.rs",
+    "crates/aa-navigation/tests/company_think_native.rs",
+    "crates/aa-triggers/src/actions.rs",
+    "crates/aa-ui/src/minimap.rs"
+   ]
+  },
+  {
+   "address": "004c0a80",
+   "role": "Damage type presentation load",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::types::load",
+   "oracle": "research/phase6-weapon/native-damage-type-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c0a80",
+   "body_bytes": 287,
+   "cited_in": [
+    "crates/aa-combat/src/types.rs"
+   ]
+  },
+  {
+   "address": "004cef10",
+   "role": "Actor property admission (apply property)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::property_api::apply_property (property_admission::add)",
+   "oracle": "research/phase7-properties/native-admission.json",
+   "note": null,
+   "ghidra_name": "FUN_004cef10",
+   "body_bytes": 94,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-body/src/property_admission.rs",
+    "crates/aa-body/src/property_api.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-production/src/research.rs"
+   ]
+  },
+  {
+   "address": "004d0440",
+   "role": "Recently damaged (UnderSiegeRecentlyDamagedSeconds)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::siege::recently_damaged",
+   "oracle": "research/phase8-combat/native-siege-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d0440",
+   "body_bytes": 106,
+   "cited_in": [
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/tests/native_siege.rs",
+    "crates/aa-mind/src/uai_thinks/aai_escort.rs"
+   ]
+  },
+  {
+   "address": "004d6660",
+   "role": "Actor recovery state (state 0x14) refresh after damage",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::siege::refresh_under_siege",
+   "oracle": "research/phase8-combat/native-siege-fixtures.json",
+   "note": "Sets state 20 under_siege.",
+   "ghidra_name": "FUN_004d6660",
+   "body_bytes": 391,
+   "cited_in": [
+    "crates/aa-combat/src/begin_death.rs",
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/tests/native_siege.rs",
+    "crates/aa-production/src/construction.rs"
+   ]
+  },
+  {
+   "address": "005032d0",
+   "role": "Duplicate property selection",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::periodic::remove_property",
+   "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005032d0",
+   "body_bytes": 122,
+   "cited_in": [
+    "crates/aa-actors/src/state_effects.rs",
+    "crates/aa-body/src/property_api.rs",
+    "crates/aa-combat/src/periodic.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-economy/src/kingdom_start.rs",
+    "crates/aa-production/src/research.rs"
+   ]
+  },
+  {
+   "address": "005034f0",
+   "role": "Property removal",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::periodic::remove_property",
+   "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005034f0",
+   "body_bytes": 236,
+   "cited_in": [
+    "crates/aa-body/src/property_effects.rs",
+    "crates/aa-combat/src/periodic.rs",
+    "crates/aa-production/src/research.rs"
+   ]
+  },
+  {
+   "address": "00561960",
+   "role": "Body field initialization",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::Body::from_resolved",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00561960",
+   "body_bytes": 161,
+   "cited_in": [
+    "crates/aa-actors/src/ground_states.rs",
+    "crates/aa-body/src/lib.rs"
+   ]
+  },
+  {
+   "address": "00561be0",
+   "role": "Damage record copy used by wall propagation",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::damage",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00561be0",
+   "body_bytes": 49,
+   "cited_in": [
+    "crates/aa-body/src/damage.rs"
+   ]
+  },
+  {
+   "address": "00561d40",
+   "role": "Body maximum update with ratio",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::Body::update_resolved_maximum",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00561d40",
+   "body_bytes": 173,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-body/src/updates.rs",
+    "crates/aa-production/src/construction.rs"
+   ]
+  },
+  {
+   "address": "00561e50",
+   "role": "Body source-aware SetHealth and directional health FX",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::Body::set_health_from_source",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00561e50",
+   "body_bytes": 928,
+   "cited_in": [
+    "crates/aa-actors/src/leaf_init.rs",
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-body/src/updates.rs",
+    "crates/aa-combat/src/regeneration.rs"
+   ]
+  },
+  {
+   "address": "00562200",
+   "role": "Body set health and maximum",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::Body::set_health_and_maximum",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00562200",
+   "body_bytes": 135,
+   "cited_in": [
+    "crates/aa-actors/src/init_create.rs",
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-body/src/updates.rs"
+   ]
+  },
+  {
+   "address": "005625c0",
+   "role": "Body DealDamage: propagation, history, health, responses, capture, death queue",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::damage::deal_damage",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_005625c0",
+   "body_bytes": 1500,
+   "cited_in": [
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/engagement.rs",
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-combat/src/shortfall.rs"
+   ]
+  },
+  {
+   "address": "00562ba0",
+   "role": "Body plain heal",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-body::Body::heal_plain",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00562ba0",
+   "body_bytes": 367,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "00562d10",
+   "role": "Body shortfall damage: RNG draw, event-kind-4 DealDamage",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::shortfall::damage",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00562d10",
+   "body_bytes": 242,
+   "cited_in": [
+    "crates/aa-combat/src/shortfall.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "00568d80",
+   "role": "Component88 damage response",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::denizen::on_intruder",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00568d80",
+   "body_bytes": 195,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-combat/tests/native_denizen.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs"
+   ]
+  },
+  {
+   "address": "00569300",
+   "role": "Component88 intruder list front cleanup",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::intruder_near_wall",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00569300",
+   "body_bytes": 97,
+   "cited_in": [
+    "crates/aa-combat/src/walls.rs",
+    "crates/aa-combat/tests/native_walls.rs",
+    "crates/aa-mind/src/cai_guard.rs",
+    "crates/aa-mind/src/uai_thinks/aai_guard.rs",
+    "crates/aa-zones/src/component.rs"
+   ]
+  },
+  {
+   "address": "00569540",
+   "role": "Denizen predicate",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::intruder_near_wall",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": "585280 within-wall geometry on the wall actor +98 is an IntruderWorld seam (wall/geometry owner).",
+   "ghidra_name": "FUN_00569540",
+   "body_bytes": 99,
+   "cited_in": [
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "00569a80",
+   "role": "Component88 damage predicate (recursive, range test)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::denizen::intruder_in_range",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00569a80",
+   "body_bytes": 269,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-combat/tests/native_denizen.rs"
+   ]
+  },
+  {
+   "address": "0056ae70",
+   "role": "Component88 damaged dispatch (569A80/568D80)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::denizen::on_damaged",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": "aa-body Action::Component88Damaged remains a required world action.",
+   "ghidra_name": "FUN_0056ae70",
+   "body_bytes": 70,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-combat/tests/native_denizen.rs"
+   ]
+  },
+  {
+   "address": "00578660",
+   "role": "Organization TickShortfallDamage member loop",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::shortfall::tick",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578660",
+   "body_bytes": 103,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/shortfall.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "005818d0",
+   "role": "Properties periodic tick: expiry, healing, periodic damage",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::periodic::tick",
+   "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005818d0",
+   "body_bytes": 521,
+   "cited_in": [
+    "crates/aa-combat/src/periodic.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "00584cd0",
+   "role": "Outer/wall component last-damage record copy",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::death::outer_damaged",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00584cd0",
+   "body_bytes": 21,
+   "cited_in": [
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-combat/src/death.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "00585160",
+   "role": "Wall component predicate",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::wall_complete",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00585160",
+   "body_bytes": 49,
+   "cited_in": [
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/src/walls.rs",
+    "crates/aa-mind/src/cai_guard.rs",
+    "crates/aa-mind/tests/cai_guard_native.rs",
+    "crates/aa-runtime/src/spatial_world.rs",
+    "crates/aa-spatial/src/gworld_placement.rs",
+    "crates/aa-spatial/tests/gworld_placement_native.rs"
+   ]
+  },
+  {
+   "address": "005851a0",
+   "role": "Wall point-in-polygon test",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::point_within_wall",
+   "oracle": "research/phase8-combat/native-wall-geometry-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005851a0",
+   "body_bytes": 218,
+   "cited_in": [
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "00585280",
+   "role": "Wall within-distance geometry (component88 intruders)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::intruder_within_wall",
+   "oracle": "research/phase8-combat/native-wall-geometry-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00585280",
+   "body_bytes": 183,
+   "cited_in": [
+    "crates/aa-combat/src/walls.rs",
+    "crates/aa-runtime/src/spatial_world.rs",
+    "crates/aa-spatial/src/gworld_placement.rs",
+    "crates/aa-spatial/tests/gworld_placement_native.rs"
+   ]
+  },
+  {
+   "address": "00585ae0",
+   "role": "Wall actor flag 13 refresh (517FA0)",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::refresh_flag13",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00585ae0",
+   "body_bytes": 130,
+   "cited_in": [
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "00586370",
+   "role": "Wall component update",
+   "area": "damage",
+   "status": "proven",
+   "rust": "aa-combat::walls::propagate_under_siege",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00586370",
+   "body_bytes": 244,
+   "cited_in": [
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/src/walls.rs"
+   ]
+  },
+  {
+   "address": "004d7960",
+   "role": "Actor BeginDeath (called by CheckDeath)",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-combat::begin_death::begin_death",
+   "oracle": "research/phase8-combat/native-begin-death-fixtures.json",
+   "note": "Orchestration ported; credit, zone release, announcements, component deaths, wall member, StartDying and removal stay begin_death::World services.",
+   "ghidra_name": "FUN_004d7960",
+   "body_bytes": 886,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/begin_death.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/projectile.rs",
+    "crates/aa-combat/src/walls.rs",
+    "crates/aa-combat/tests/native_begin_death.rs",
+    "crates/aa-metagame/src/resolve.rs",
+    "crates/aa-mind/src/cai_sleep.rs",
+    "crates/aa-mind/src/uai_thinks.rs",
+    "crates/aa-mind/src/uai_thinks/aai_join.rs",
+    "crates/aa-mind/src/uai_thinks/aai_landing.rs",
+    "crates/aa-mind/src/uai_thinks/aai_queued.rs",
+    "crates/aa-mind/src/uai_thinks/aai_takeoff.rs",
+    "crates/aa-mind/tests/aai_attack_native.rs",
+    "crates/aa-mind/tests/aai_escort_native.rs",
+    "crates/aa-mind/tests/aai_guard_native.rs",
+    "crates/aa-mind/tests/aai_join_native.rs",
+    "crates/aa-mind/tests/aai_landing_native.rs",
+    "crates/aa-mind/tests/aai_queued_native.rs",
+    "crates/aa-mind/tests/aai_recon_native.rs",
+    "crates/aa-mind/tests/aai_takeoff_native.rs",
+    "crates/aa-mind/tests/aai_transport_native.rs",
+    "crates/aa-mind/tests/cai_sleep_native.rs",
+    "crates/aa-triggers/src/elements.rs"
+   ]
+  },
+  {
+   "address": "004f1a90",
+   "role": "World death queue push (list head)",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-combat::death::DeathQueue::push",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004f1a90",
+   "body_bytes": 56,
+   "cited_in": [
+    "crates/aa-combat/src/death.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "004f4c40",
+   "role": "World actor removal (removal list)",
+   "area": "death",
+   "status": "proven-other",
+   "rust": "aa-world (removal path)",
+   "oracle": "research/phase8-tick/native-removal-request.json",
+   "note": null,
+   "ghidra_name": "FUN_004f4c40",
+   "body_bytes": 340,
+   "cited_in": [
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-world/tests/removal_request.rs"
+   ]
+  },
+  {
+   "address": "004f65b0",
+   "role": "World phase change: LIFO death drain (CheckDeath) and phase writes",
+   "area": "death",
+   "status": "proven-other",
+   "rust": "aa-world::World::transition",
+   "oracle": "research/phase8-tick/native-removal-request.json",
+   "note": "One drain: aa-world owns 4F65B0; phase8-combat drain fixtures are cross-evidence.",
+   "ghidra_name": "FUN_004f65b0",
+   "body_bytes": 427,
+   "cited_in": [
+    "crates/aa-combat/src/death.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs",
+    "crates/aa-world/src/lib.rs",
+    "crates/aa-world/tests/removal_request.rs"
+   ]
+  },
+  {
+   "address": "004f6760",
+   "role": "World removal request",
+   "area": "death",
+   "status": "proven-other",
+   "rust": "aa-world::World::request_removal",
+   "oracle": "research/phase8-tick/native-removal-request.json",
+   "note": null,
+   "ghidra_name": "FUN_004f6760",
+   "body_bytes": 146,
+   "cited_in": [
+    "crates/aa-combat/src/begin_death.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-economy/src/transfers.rs",
+    "crates/aa-production/src/construction.rs",
+    "crates/aa-runtime/src/clocked.rs",
+    "crates/aa-runtime/tests/removal_request_services.rs",
+    "crates/aa-triggers/src/extended.rs",
+    "crates/aa-triggers/tests/compose/delegate.rs",
+    "crates/aa-triggers/tests/fixture/mod.rs",
+    "crates/aa-world/src/lib.rs",
+    "crates/aa-world/tests/removal_request.rs"
+   ]
+  },
+  {
+   "address": "005617e0",
+   "role": "Corpse sink fraction",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-body::Body::sink_fraction_f32",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_005617e0",
+   "body_bytes": 102,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs"
+   ]
+  },
+  {
+   "address": "00561c20",
+   "role": "Body CheckDeath dispatch",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-body::Body::check_death",
+   "oracle": "research/phase4-body/body-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00561c20",
+   "body_bytes": 49,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/begin_death.rs"
+   ]
+  },
+  {
+   "address": "00562380",
+   "role": "Body StartDying: death ability, corpse, sink, decay timer, allegiance removal",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-body::dying::start_dying",
+   "oracle": "research/phase6-combat/dying-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00562380",
+   "body_bytes": 565,
+   "cited_in": [
+    "crates/aa-body/src/dying.rs",
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/begin_death.rs"
+   ]
+  },
+  {
+   "address": "00584e70",
+   "role": "Wall member killed: queue every segment or the actor",
+   "area": "death",
+   "status": "proven",
+   "rust": "aa-combat::death::wall_member_killed",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00584e70",
+   "body_bytes": 77,
+   "cited_in": [
+    "crates/aa-combat/src/death.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs"
+   ]
+  },
+  {
+   "address": "004ce770",
+   "role": "Award experience (member/leader routing)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience::award",
+   "oracle": "research/phase6-experience",
+   "note": null,
+   "ghidra_name": "FUN_004ce770",
+   "body_bytes": 177,
+   "cited_in": [
+    "crates/aa-body/src/experience.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004d01e0",
+   "role": "Actor value (component sum)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience::actor_value",
+   "oracle": "research/phase6-experience",
+   "note": null,
+   "ghidra_name": "FUN_004d01e0",
+   "body_bytes": 68,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-body/src/experience.rs",
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "004d57c0",
+   "role": "Kill crediting (HandleKillCrediting)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::credit::credit_kill",
+   "oracle": "research/phase6-credit",
+   "note": null,
+   "ghidra_name": "FUN_004d57c0",
+   "body_bytes": 1562,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-combat/src/begin_death.rs",
+    "crates/aa-combat/tests/native_begin_death.rs"
+   ]
+  },
+  {
+   "address": "00571820",
+   "role": "Experience value ratio victim/source*0.5+0.5",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience_amounts::ratio",
+   "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00571820",
+   "body_bytes": 137,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-body/tests/native_experience_amounts.rs"
+   ]
+  },
+  {
+   "address": "005718b0",
+   "role": "Engagement experience (unclamped extended)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience_amounts::engagement",
+   "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005718b0",
+   "body_bytes": 41,
+   "cited_in": [
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-body/tests/native_experience_amounts.rs",
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "005718e0",
+   "role": "Rout experience (clamped)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience_amounts::clamped(Rout)",
+   "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005718e0",
+   "body_bytes": 114,
+   "cited_in": [
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-body/tests/native_experience_amounts.rs",
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "00571960",
+   "role": "Kill experience (clamped)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience_amounts::clamped(Kill); credit.rs",
+   "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00571960",
+   "body_bytes": 114,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-body/tests/native_experience_amounts.rs"
+   ]
+  },
+  {
+   "address": "005719e0",
+   "role": "Capture experience (clamped)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience_amounts::clamped(Capture)",
+   "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005719e0",
+   "body_bytes": 114,
+   "cited_in": [
+    "crates/aa-body/src/experience_amounts.rs",
+    "crates/aa-body/tests/native_experience_amounts.rs"
+   ]
+  },
+  {
+   "address": "00571a60",
+   "role": "Experience apply and promotion",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::promotion",
+   "oracle": "research/phase7-promotion",
+   "note": null,
+   "ghidra_name": "FUN_00571a60",
+   "body_bytes": 483,
+   "cited_in": [
+    "crates/aa-body/src/experience.rs",
+    "crates/aa-body/src/promotion.rs"
+   ]
+  },
+  {
+   "address": "00578710",
+   "role": "Regiment member experience iteration",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience::award",
+   "oracle": "research/phase6-experience",
+   "note": null,
+   "ghidra_name": "FUN_00578710",
+   "body_bytes": 52,
+   "cited_in": [
+    "crates/aa-body/src/experience.rs"
+   ]
+  },
+  {
+   "address": "00578c00",
+   "role": "Regiment component value",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::experience",
+   "oracle": "research/phase6-experience",
+   "note": null,
+   "ghidra_name": "FUN_00578c00",
+   "body_bytes": 247,
+   "cited_in": [
+    "crates/aa-body/src/experience.rs"
+   ]
+  },
+  {
+   "address": "00579600",
+   "role": "Engagement experience tick",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-combat::morale::engagement_experience",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579600",
+   "body_bytes": 96,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs"
+   ]
+  },
+  {
+   "address": "0058d950",
+   "role": "Relation statistic add",
+   "area": "experience",
+   "status": "proven-other",
+   "rust": "aa-economy::statistics::RelationStatistics::add",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0058d950",
+   "body_bytes": 119,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-body/tests/native_credit.rs",
+    "crates/aa-economy/src/statistics.rs",
+    "crates/aa-economy/tests/native_statistics.rs"
+   ]
+  },
+  {
+   "address": "0058e870",
+   "role": "Statistic add (binary32)",
+   "area": "experience",
+   "status": "proven",
+   "rust": "aa-body::credit::increment_stat",
+   "oracle": "research/phase6-credit",
+   "note": null,
+   "ghidra_name": "FUN_0058e870",
+   "body_bytes": 19,
+   "cited_in": [
+    "crates/aa-body/src/credit.rs",
+    "crates/aa-combat/src/capture.rs",
+    "crates/aa-combat/src/payment.rs",
+    "crates/aa-combat/src/statistics_tracking.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-economy/src/statistics.rs",
+    "crates/aa-economy/src/tick.rs",
+    "crates/aa-economy/tests/native_completion_statistics.rs",
+    "crates/aa-economy/tests/native_statistics.rs"
+   ]
+  },
+  {
+   "address": "004c8300",
+   "role": "Ability context initialization",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::performer::Context::new",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8300",
+   "body_bytes": 46,
+   "cited_in": [
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-movement/src/aircraft.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004c8330",
+   "role": "Context target eligibility (actor virtual +B4)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::World::resolve_target / morale::effect_organization",
+   "oracle": "research/phase6-weapon + research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8330",
+   "body_bytes": 33,
+   "cited_in": [
+    "crates/aa-combat/src/lib.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004c9550",
+   "role": "Ability use: phases, payment, area, projectile, attenuation, effects",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::execution::use_ability",
+   "oracle": "research/phase7-ability/native-execution-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c9550",
+   "body_bytes": 1856,
+   "cited_in": [
+    "crates/aa-combat/src/execution.rs",
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004c9eb0",
+   "role": "Ability try-use (CanUse then Use at now)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::reactions::try_use",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c9eb0",
+   "body_bytes": 58,
+   "cited_in": [
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/tests/native_reactions.rs"
+   ]
+  },
+  {
+   "address": "004cf110",
+   "role": "Actor modifier context (actor+78 -> +1C)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "world service; executed in phase6 oracles",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_004cf110",
+   "body_bytes": 14,
+   "cited_in": [
+    "crates/aa-actors/src/construction_actions.rs",
+    "crates/aa-actors/src/economy_values.rs",
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/combat_value.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-combat/tests/native_member_removal.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-mind/src/ability_motion.rs",
+    "crates/aa-mind/src/action_mask.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_repair.rs",
+    "crates/aa-production/src/construction.rs",
+    "crates/aa-production/src/structure_state.rs",
+    "crates/aa-zones/src/component.rs"
+   ]
+  },
+  {
+   "address": "00501530",
+   "role": "Modifier offense preference (+58/+5C/1)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::offensive_modifier; aa-body::properties",
+   "oracle": "research/phase6-weapon/native-weapon-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501530",
+   "body_bytes": 43,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/lib.rs"
+   ]
+  },
+  {
+   "address": "00501650",
+   "role": "First matching damage-type factor",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-body::damage::first_damage_factor",
+   "oracle": "research/phase6-combat/damage-native-oracle.json",
+   "note": null,
+   "ghidra_name": "FUN_00501650",
+   "body_bytes": 51,
+   "cited_in": [
+    "crates/aa-body/src/damage.rs",
+    "crates/aa-mind/src/decision_score.rs"
+   ]
+  },
+  {
+   "address": "00501770",
+   "role": "Modifier OnAttacked defender abilities",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::reactions::defender_abilities",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501770",
+   "body_bytes": 86,
+   "cited_in": [
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/tests/native_reactions.rs"
+   ]
+  },
+  {
+   "address": "0057dbf0",
+   "role": "Offensive factor (organization leader or modifier)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::World::offensive_factor",
+   "oracle": "research/phase6-weapon/native-weapon-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057dbf0",
+   "body_bytes": 76,
+   "cited_in": [
+    "crates/aa-combat/src/lib.rs"
+   ]
+  },
+  {
+   "address": "0057e030",
+   "role": "Performer ability delivery (impulse, mana)",
+   "area": "hit resolution",
+   "status": "proven",
+   "rust": "aa-combat::execution::dispatch_from_performer",
+   "oracle": "research/phase7-ability/native-dispatch-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057e030",
+   "body_bytes": 395,
+   "cited_in": [
+    "crates/aa-combat/src/execution.rs",
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-movement/src/aircraft.rs"
+   ]
+  },
+  {
+   "address": "004364c0",
+   "role": "Organization member iterator (attached-only flag)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "executed in denizen/removal oracles",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004364c0",
+   "body_bytes": 73,
+   "cited_in": [
+    "crates/aa-actors/src/organization_callees.rs",
+    "crates/aa-actors/tests/native_saved_organization_callees.rs",
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_removal.rs",
+    "crates/aa-mind/src/cai_engage_think.rs",
+    "crates/aa-mind/src/cai_thinks/bombard.rs",
+    "crates/aa-mind/src/cai_thinks/join.rs",
+    "crates/aa-mind/src/cai_thinks/repair.rs",
+    "crates/aa-mind/src/uai_thinks/uai_bombard.rs",
+    "crates/aa-mind/tests/cai_engage_think_native.rs",
+    "crates/aa-mind/tests/cai_join_native.rs",
+    "crates/aa-mind/tests/uai_bombard_native.rs",
+    "crates/aa-navigation/src/company_move.rs",
+    "crates/aa-triggers/src/extended.rs",
+    "crates/aa-zones/src/detection.rs"
+   ]
+  },
+  {
+   "address": "004515f0",
+   "role": "XY equality",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::follow_leader",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004515f0",
+   "body_bytes": 45,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-mind/src/uai_thinks/uai_unpack.rs"
+   ]
+  },
+  {
+   "address": "0045d520",
+   "role": "Entrench delay (definition +2EC, / modifier +40 via 5014D0)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::entrench_delay",
+   "oracle": "research/phase8-combat/native-entrench-delay-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045d520",
+   "body_bytes": 34,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_entrench_delay.rs"
+   ]
+  },
+  {
+   "address": "0045d580",
+   "role": "Definition morale value +2C0",
+   "area": "morale",
+   "status": "proven",
+   "rust": "organization::RemovalWorld::morale_value",
+   "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045d580",
+   "body_bytes": 34,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_removal.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "0045d5b0",
+   "role": "Definition regeneration +2CC (5014E0)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::regeneration",
+   "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045d5b0",
+   "body_bytes": 34,
+   "cited_in": [
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-economy/src/tick.rs"
+   ]
+  },
+  {
+   "address": "0045ec60",
+   "role": "Definition +2D8 property list",
+   "area": "morale",
+   "status": "proven",
+   "rust": "organization::RemovalWorld",
+   "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0045ec60",
+   "body_bytes": 20,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "004ce6c0",
+   "role": "Organization actor of an element",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::organization_actor",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ce6c0",
+   "body_bytes": 29,
+   "cited_in": [
+    "crates/aa-actors/src/post_load.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-navigation/src/lib.rs",
+    "crates/aa-production/src/construction.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "004ceb40",
+   "role": "Slayer dispatch (killer membership organization)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::slayer_organization",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ceb40",
+   "body_bytes": 46,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "004cef70",
+   "role": "Property removal by source (581810)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-body::property_api::remove_property",
+   "oracle": "research/phase8-combat/native-property-wrappers-fixtures.json",
+   "note": "0x581810 body is aa-body property_effects::remove (phase7 fixtures).",
+   "ghidra_name": "FUN_004cef70",
+   "body_bytes": 15,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-body/src/property_api.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-economy/src/kingdom_registry.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-production/src/research.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004cfe90",
+   "role": "Actor engaged (+118 nonnull)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "morale::Actor::engaged",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cfe90",
+   "body_bytes": 14,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "004d0a80",
+   "role": "In-supply predicate",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-economy::supply::in_supply",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004d0a80",
+   "body_bytes": 524,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-economy/src/supply.rs"
+   ]
+  },
+  {
+   "address": "004d1050",
+   "role": "Actor +100 bit26 / +104 bit4",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::remove_member",
+   "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d1050",
+   "body_bytes": 41,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-mind/src/cai_thinks/unpack.rs",
+    "crates/aa-mind/tests/cai_unpack_native.rs",
+    "crates/aa-production/src/construction.rs"
+   ]
+  },
+  {
+   "address": "004d1080",
+   "role": "Actor +104 bit2 test",
+   "area": "morale",
+   "status": "proven",
+   "rust": "morale::Actor::flags104",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d1080",
+   "body_bytes": 24,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/src/cai_thinks/pack.rs",
+    "crates/aa-mind/src/cai_thinks/unit_order.rs",
+    "crates/aa-mind/src/cai_thinks/unpack.rs",
+    "crates/aa-mind/src/uai_thinks/uai_sleep.rs",
+    "crates/aa-mind/tests/cai_pack_native.rs",
+    "crates/aa-mind/tests/cai_unpack_native.rs",
+    "crates/aa-mind/tests/uai_sleep_native.rs"
+   ]
+  },
+  {
+   "address": "004d3fa0",
+   "role": "Rout handler: message, breaker morale and rout experience for attackers",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::rout",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d3fa0",
+   "body_bytes": 238,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/tests/native_reactions.rs",
+    "crates/aa-mind/src/cai_rout.rs"
+   ]
+  },
+  {
+   "address": "004d49b0",
+   "role": "Current state descriptor of a group",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-actors::state::group",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004d49b0",
+   "body_bytes": 85,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "004d64f0",
+   "role": "Actor state transition (state 5 mind_exhausted)",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-actors::state",
+   "oracle": null,
+   "note": "Seam here; aa-actors owns it.",
+   "ghidra_name": "FUN_004d64f0",
+   "body_bytes": 357,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/src/state.rs",
+    "crates/aa-actors/src/world_creation.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/begin_death.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/siege.rs",
+    "crates/aa-combat/src/walls.rs",
+    "crates/aa-economy/src/supply.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-movement/src/falling.rs",
+    "crates/aa-movement/src/mover.rs",
+    "crates/aa-production/src/construction.rs",
+    "crates/aa-production/tests/native_structure_state.rs",
+    "crates/aa-runtime/src/mind_world.rs"
+   ]
+  },
+  {
+   "address": "004d7ce0",
+   "role": "State 19 out_of_supply sync",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::supply_state",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d7ce0",
+   "body_bytes": 69,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs",
+    "crates/aa-economy/src/supply.rs"
+   ]
+  },
+  {
+   "address": "004d7da0",
+   "role": "State 40 targeted",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::targeted_state",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d7da0",
+   "body_bytes": 51,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs"
+   ]
+  },
+  {
+   "address": "00501500",
+   "role": "Modifier multiply +44 (morale replenish)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-body::properties::ModifierState::multiply",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501500",
+   "body_bytes": 10,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "00501510",
+   "role": "Modifier divide +48 (engagement loss)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-body::properties::ModifierState::divide",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501510",
+   "body_bytes": 10,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "005147c0",
+   "role": "Marker gate (word8 != -1)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::tick_maintenance",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005147c0",
+   "body_bytes": 27,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-zones/src/flood.rs",
+    "crates/aa-zones/src/solver.rs"
+   ]
+  },
+  {
+   "address": "0051f920",
+   "role": "CAI morale wavering reaction",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-mind::cai_reactions (wavering)",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0051f920",
+   "body_bytes": 200,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-mind/src/cai_engage_think.rs",
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/tests/cai_reactions_native.rs"
+   ]
+  },
+  {
+   "address": "0051f9f0",
+   "role": "CAI morale exhausted reaction",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-mind::cai_reactions (exhausted)",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0051f9f0",
+   "body_bytes": 230,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/src/cai_sleep.rs",
+    "crates/aa-mind/tests/cai_reactions_native.rs"
+   ]
+  },
+  {
+   "address": "00521240",
+   "role": "CAI Rout Think",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-mind::cai_rout",
+   "oracle": null,
+   "note": "Its rout score 52A930 is proven in aa-mind::rout_score.",
+   "ghidra_name": "FUN_00521240",
+   "body_bytes": 342,
+   "cited_in": [
+    "crates/aa-mind/src/cai_rout.rs",
+    "crates/aa-mind/src/rout_score.rs",
+    "crates/aa-mind/src/rout_select.rs",
+    "crates/aa-mind/tests/cai_rout_native.rs"
+   ]
+  },
+  {
+   "address": "00521e10",
+   "role": "CAI retreat (MoraleRetreatPenalty consumer)",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-mind::action_mask::regiment",
+   "oracle": null,
+   "note": "aa-mind identifies 521E10 as the regiment command mask (MoraleRetreatPenalty context).",
+   "ghidra_name": "FUN_00521e10",
+   "body_bytes": 376,
+   "cited_in": [
+    "crates/aa-mind/src/action_mask.rs"
+   ]
+  },
+  {
+   "address": "00543800",
+   "role": "Trigger EffectActorModifyMorale (calls 579750)",
+   "area": "morale",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": "Owned by aa-triggers.",
+   "ghidra_name": "FUN_00543800",
+   "body_bytes": 211,
+   "cited_in": [
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "005617c0",
+   "role": "Body full health predicate",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::regeneration::BodyHealth::full",
+   "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005617c0",
+   "body_bytes": 22,
+   "cited_in": [
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-mind/src/cai_thinks/repair.rs",
+    "crates/aa-mind/src/uai_thinks/uai_repair.rs",
+    "crates/aa-mind/tests/cai_repair_native.rs"
+   ]
+  },
+  {
+   "address": "005705a0",
+   "role": "Membership attach (owner, slot)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::attach_membership",
+   "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005705a0",
+   "body_bytes": 60,
+   "cited_in": [
+    "crates/aa-actors/src/organization_callees.rs",
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_extras.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-mind/src/sai/actor_notify.rs"
+   ]
+  },
+  {
+   "address": "00570670",
+   "role": "Membership detach",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::detach_membership",
+   "oracle": "research/phase8-combat/native-wall-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00570670",
+   "body_bytes": 76,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs"
+   ]
+  },
+  {
+   "address": "00578140",
+   "role": "Morale state (0 exhausted, 1 wavering, 2 steady)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::state",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578140",
+   "body_bytes": 100,
+   "cited_in": [
+    "crates/aa-actors/src/ability_flags.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/tests/native_member_removal.rs",
+    "crates/aa-mind/src/action_mask.rs",
+    "crates/aa-mind/src/cai_engage_think.rs",
+    "crates/aa-mind/src/cai_sleep.rs",
+    "crates/aa-mind/src/cai_states.rs",
+    "crates/aa-mind/tests/action_mask_native.rs",
+    "crates/aa-runtime/src/mind_actions.rs"
+   ]
+  },
+  {
+   "address": "005784c0",
+   "role": "Property propagation to a new member",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::propagate_properties",
+   "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005784c0",
+   "body_bytes": 113,
+   "cited_in": [
+    "crates/aa-actors/src/organization_callees.rs",
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_extras.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "00578540",
+   "role": "Owner-granted property detach",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::remove_member",
+   "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578540",
+   "body_bytes": 102,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_removal.rs"
+   ]
+  },
+  {
+   "address": "005785d0",
+   "role": "Attack efficiency approach to desired",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::attack_efficiency",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005785d0",
+   "body_bytes": 141,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs"
+   ]
+  },
+  {
+   "address": "005786d0",
+   "role": "Morale gain (clamp to maximum, clear exhausted)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::gain",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005786d0",
+   "body_bytes": 60,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "005788b0",
+   "role": "Organization aggregate sums (+68/+6C)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::combat_value",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005788b0",
+   "body_bytes": 129,
+   "cited_in": [
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "00578f10",
+   "role": "Slayer morale gain (kill)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::slayer",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578f10",
+   "body_bytes": 243,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "00579010",
+   "role": "Breaker morale gain (rout)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::breaker",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579010",
+   "body_bytes": 197,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "00579110",
+   "role": "Organization supply-regeneration gate",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::regeneration_gate",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579110",
+   "body_bytes": 95,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs"
+   ]
+  },
+  {
+   "address": "00579660",
+   "role": "Morale loss with gates (mode 6, destructed, flag, immunity, Mind busy)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::lose",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579660",
+   "body_bytes": 236,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/tests/native_morale.rs"
+   ]
+  },
+  {
+   "address": "00579750",
+   "role": "Signed morale modify (trigger effect)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::modify",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579750",
+   "body_bytes": 99,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "005797e0",
+   "role": "Slot refresh",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-movement::formation (ComputeSlotPosition)",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_005797e0",
+   "body_bytes": 404,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-movement/src/formation.rs",
+    "crates/aa-movement/tests/formation_native.rs"
+   ]
+  },
+  {
+   "address": "00579ab0",
+   "role": "Retreat morale penalty",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::retreat_penalty",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579ab0",
+   "body_bytes": 238,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs"
+   ]
+  },
+  {
+   "address": "0057a0a0",
+   "role": "Morale tick: replenish/supply bonus, engagement loss",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::morale::tick",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057a0a0",
+   "body_bytes": 530,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs"
+   ]
+  },
+  {
+   "address": "0057a640",
+   "role": "Recompute +D8 minimum",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::recompute_speed",
+   "oracle": "research/phase8-combat/native-org-speed-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057a640",
+   "body_bytes": 225,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_speed.rs"
+   ]
+  },
+  {
+   "address": "0057ad30",
+   "role": "Organization member spawn at slot (4FBF40)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::regeneration::spawn_member",
+   "oracle": "research/phase8-combat/native-member-spawn-fixtures.json",
+   "note": "Actor creation 4FBF40 is the SpawnWorld::create_actor seam (actor-creation owner).",
+   "ghidra_name": "FUN_0057ad30",
+   "body_bytes": 375,
+   "cited_in": [
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-combat/tests/native_member_spawn.rs",
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-mapworld/tests/fresh_creation.rs"
+   ]
+  },
+  {
+   "address": "0057aeb0",
+   "role": "Organization regroup attempt",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::regeneration::regroup",
+   "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057aeb0",
+   "body_bytes": 334,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-combat/tests/native_regeneration.rs"
+   ]
+  },
+  {
+   "address": "0057b5a0",
+   "role": "Organization regeneration",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::regeneration::regenerate",
+   "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
+   "note": "Member spawn 57AD30, heal 562BA0 and presentation 50C380 are world services.",
+   "ghidra_name": "FUN_0057b5a0",
+   "body_bytes": 515,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/regeneration.rs",
+    "crates/aa-combat/tests/native_regeneration.rs"
+   ]
+  },
+  {
+   "address": "0057c680",
+   "role": "Move organization to leader",
+   "area": "morale",
+   "status": "proven-other",
+   "rust": "aa-actors::element_position::set_position",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0057c680",
+   "body_bytes": 213,
+   "cited_in": [
+    "crates/aa-actors/src/element_position.rs",
+    "crates/aa-combat/src/organization.rs"
+   ]
+  },
+  {
+   "address": "0057c800",
+   "role": "Follow leader",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::follow_leader",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057c800",
+   "body_bytes": 112,
+   "cited_in": [
+    "crates/aa-actors/src/element_position.rs",
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_removal.rs",
+    "crates/aa-combat/tests/native_org_tick.rs",
+    "crates/aa-mapworld/src/organization_restore.rs",
+    "crates/aa-spatial/src/position.rs"
+   ]
+  },
+  {
+   "address": "0057c8e0",
+   "role": "Organization TickMaintenance orchestration",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::tick_maintenance",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": "Calls the proven 57A0A0, 579600, 5785D0, 578660.",
+   "ghidra_name": "FUN_0057c8e0",
+   "body_bytes": 699,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/shortfall.rs",
+    "crates/aa-combat/tests/native_org_tick.rs"
+   ]
+  },
+  {
+   "address": "0057cd70",
+   "role": "Organization member removal (MoraleDeathFactor loss, leader/primary reselection)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::remove_member",
+   "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057cd70",
+   "body_bytes": 922,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_member_removal.rs"
+   ]
+  },
+  {
+   "address": "0057dc40",
+   "role": "Member health-weighted combat value",
+   "area": "morale",
+   "status": "proven",
+   "rust": "aa-combat::organization::combat_value",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057dc40",
+   "body_bytes": 30,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs"
+   ]
+  },
+  {
+   "address": "0058b150",
+   "role": "Watched target finished (+40 == +3C)",
+   "area": "morale",
+   "status": "proven",
+   "rust": "organization::World::watched_target",
+   "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0058b150",
+   "body_bytes": 12,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/tests/native_org_tick.rs"
+   ]
+  },
+  {
+   "address": "00428570",
+   "role": "FX instance constructor",
+   "area": "presentation",
+   "status": "proven",
+   "rust": "aa-combat::fx::emit",
+   "oracle": "research/phase7-fx/native-fx-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00428570",
+   "body_bytes": 176,
+   "cited_in": [
+    "crates/aa-combat/src/fx.rs"
+   ]
+  },
+  {
+   "address": "004294e0",
+   "role": "FX manager request",
+   "area": "presentation",
+   "status": "proven",
+   "rust": "aa-combat::fx::emit",
+   "oracle": "research/phase7-fx/native-fx-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004294e0",
+   "body_bytes": 454,
+   "cited_in": [
+    "crates/aa-combat/src/fx.rs"
+   ]
+  },
+  {
+   "address": "004c8500",
+   "role": "Ability FX request",
+   "area": "presentation",
+   "status": "proven",
+   "rust": "aa-combat::fx::emit",
+   "oracle": "research/phase7-fx/native-fx-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8500",
+   "body_bytes": 96,
+   "cited_in": [
+    "crates/aa-combat/src/fx.rs",
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "0050c380",
+   "role": "Regeneration presentation",
+   "area": "presentation",
+   "status": "seam",
+   "rust": "regeneration::World::present_regeneration",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0050c380",
+   "body_bytes": 29,
+   "cited_in": [
+    "crates/aa-body/src/lib.rs",
+    "crates/aa-combat/src/regeneration.rs"
+   ]
+  },
+  {
+   "address": "0050d070",
+   "role": "Damage-number vector append",
+   "area": "presentation",
+   "status": "proven",
+   "rust": "aa-combat::presentation",
+   "oracle": "research/phase8-combat/native-damage-number-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0050d070",
+   "body_bytes": 56,
+   "cited_in": [
+    "crates/aa-combat/src/presentation.rs"
+   ]
+  },
+  {
+   "address": "0050d0b0",
+   "role": "Damage presentation queue (UI damage numbers)",
+   "area": "presentation",
+   "status": "proven",
+   "rust": "aa-combat::presentation::queue_damage_number",
+   "oracle": "research/phase8-combat/native-damage-number-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0050d0b0",
+   "body_bytes": 106,
+   "cited_in": [
+    "crates/aa-combat/src/presentation.rs",
+    "crates/aa-combat/tests/native_damage_numbers.rs"
+   ]
+  },
+  {
+   "address": "00515f40",
+   "role": "Organization flare",
+   "area": "presentation",
+   "status": "seam",
+   "rust": "organization::World::flare",
+   "oracle": null,
+   "note": "Owner zone/detection solver (Sim/Zones.cpp; phase8-movement cluster Solver/ZoneSolver.cpp): KKC_Zone::Move by world position (552640 clamp, cell shift [B36534]+30 +4, 515970). Not combat.",
+   "ghidra_name": "FUN_00515f40",
+   "body_bytes": 90,
+   "cited_in": [
+    "crates/aa-actors/src/post_load.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-economy/src/supply.rs",
+    "crates/aa-zones/src/zone.rs",
+    "crates/aa-zones/tests/zone_moves_native.rs"
+   ]
+  },
+  {
+   "address": "0046e150",
+   "role": "Shape projection",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::surface::shape_projection",
+   "oracle": "research/phase7-surface/native-surface-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0046e150",
+   "body_bytes": 291,
+   "cited_in": [
+    "crates/aa-combat/src/surface.rs",
+    "crates/aa-navigation/src/uai_collision.rs",
+    "crates/aa-navigation/tests/uai_collision_native.rs"
+   ]
+  },
+  {
+   "address": "0046e4f0",
+   "role": "Placed shape projection",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::surface::placed_projection",
+   "oracle": "research/phase7-surface/native-surface-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0046e4f0",
+   "body_bytes": 79,
+   "cited_in": [
+    "crates/aa-combat/src/surface.rs",
+    "crates/aa-navigation/src/uai_collision.rs",
+    "crates/aa-navigation/tests/uai_collision_native.rs"
+   ]
+  },
+  {
+   "address": "004be780",
+   "role": "Projectile spawn position",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::launch::spawn_position",
+   "oracle": "research/phase7-ability/native-launch-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be780",
+   "body_bytes": 343,
+   "cited_in": [
+    "crates/aa-combat/src/launch.rs"
+   ]
+  },
+  {
+   "address": "004c8140",
+   "role": "Ability copy into projectile",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::projectile::start",
+   "oracle": "research/phase7-ability/native-projectile-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8140",
+   "body_bytes": 26,
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs"
+   ]
+  },
+  {
+   "address": "004c8cb0",
+   "role": "Projectile launch (factory handoff)",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::launch::launch",
+   "oracle": "research/phase7-ability/native-launch-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8cb0",
+   "body_bytes": 622,
+   "cited_in": [
+    "crates/aa-combat/src/launch.rs"
+   ]
+  },
+  {
+   "address": "004eee60",
+   "role": "Ground hit position",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::surface::ground_position",
+   "oracle": "research/phase7-surface/native-surface-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004eee60",
+   "body_bytes": 128,
+   "cited_in": [
+    "crates/aa-combat/src/surface.rs"
+   ]
+  },
+  {
+   "address": "004eeee0",
+   "role": "Target hit position",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::surface::hit_position",
+   "oracle": "research/phase7-surface/native-surface-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004eeee0",
+   "body_bytes": 132,
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs",
+    "crates/aa-combat/src/surface.rs"
+   ]
+  },
+  {
+   "address": "00580660",
+   "role": "Projectile impact (phase2 delivery)",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::projectile::impact",
+   "oracle": "research/phase7-ability/native-projectile-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00580660",
+   "body_bytes": 241,
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs"
+   ]
+  },
+  {
+   "address": "00580920",
+   "role": "Projectile advance (travel, arrival)",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::projectile::advance",
+   "oracle": "research/phase7-ability/native-projectile-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs"
+   ]
+  },
+  {
+   "address": "00580bc0",
+   "role": "Projectile start (duration, prediction)",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::projectile::start",
+   "oracle": "research/phase7-ability/native-projectile-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00580bc0",
+   "body_bytes": 782,
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs"
+   ]
+  },
+  {
+   "address": "00580ed0",
+   "role": "Projectile constructor",
+   "area": "projectiles",
+   "status": "proven",
+   "rust": "aa-combat::projectile::Projectile::new",
+   "oracle": "research/phase7-performer/native-constructor-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00580ed0",
+   "body_bytes": 151,
+   "cited_in": [
+    "crates/aa-combat/src/projectile.rs"
+   ]
+  },
+  {
+   "address": "0046e2d0",
+   "role": "Rectangle inflate range",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_0046e2d0",
+   "body_bytes": 298,
+   "cited_in": [
+    "crates/aa-spatial/src/range.rs"
+   ]
+  },
+  {
+   "address": "0046eb70",
+   "role": "Point/circle/box range",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_0046eb70",
+   "body_bytes": 225,
+   "cited_in": [
+    "crates/aa-spatial/src/range.rs"
+   ]
+  },
+  {
+   "address": "0046f100",
+   "role": "Shape range test dispatcher",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_0046f100",
+   "body_bytes": 290,
+   "cited_in": [
+    "crates/aa-mind/src/element_move.rs",
+    "crates/aa-navigation/src/uai_collision.rs",
+    "crates/aa-runtime/src/spatial_world.rs",
+    "crates/aa-spatial/src/range.rs",
+    "crates/aa-spatial/src/soft_range.rs"
+   ]
+  },
+  {
+   "address": "004be910",
+   "role": "Modified projectile/bombard range",
+   "area": "range",
+   "status": "proven",
+   "rust": "aa-combat::admission (range_value)",
+   "oracle": "research/phase7-ability-motion/native-range-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be910",
+   "body_bytes": 82,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-combat/src/combat_value.rs"
+   ]
+  },
+  {
+   "address": "004c8270",
+   "role": "Effective range with fuzzy range",
+   "area": "range",
+   "status": "proven",
+   "rust": "aa-combat::admission::effective_range",
+   "oracle": "research/phase7-ability-motion/native-range-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8270",
+   "body_bytes": 35,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-mind/src/ability_motion.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_repair.rs"
+   ]
+  },
+  {
+   "address": "004ea030",
+   "role": "Ordinary target shape getter",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": []
+  },
+  {
+   "address": "004ee400",
+   "role": "Actor range descriptor",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_004ee400",
+   "body_bytes": 83,
+   "cited_in": []
+  },
+  {
+   "address": "004ee7c0",
+   "role": "Point/actor range",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_004ee7c0",
+   "body_bytes": 54,
+   "cited_in": [
+    "crates/aa-runtime/src/spatial_world.rs",
+    "crates/aa-spatial/src/range.rs"
+   ]
+  },
+  {
+   "address": "004ee800",
+   "role": "Actor/actor range",
+   "area": "range",
+   "status": "proven-other",
+   "rust": "aa-spatial::range",
+   "oracle": "research/phase7-range/native-range.json",
+   "note": null,
+   "ghidra_name": "FUN_004ee800",
+   "body_bytes": 57,
+   "cited_in": [
+    "crates/aa-runtime/src/spatial_world.rs",
+    "crates/aa-spatial/src/range.rs",
+    "crates/aa-spatial/src/soft_range.rs"
+   ]
+  },
+  {
+   "address": "0057ec80",
+   "role": "Maximum enabled ability range",
+   "area": "range",
+   "status": "proven",
+   "rust": "aa-combat::admission::maximum_range",
+   "oracle": "research/phase7-moving-target/native-maximum-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057ec80",
+   "body_bytes": 146,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-mind/src/moving_target.rs"
+   ]
+  },
+  {
+   "address": "004ea020",
+   "role": "Ordinary soft shape getter",
+   "area": "soft range",
+   "status": "proven-other",
+   "rust": "aa-spatial::soft_range",
+   "oracle": "research/phase7-soft-range/native-soft-range.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-spatial/src/soft_range.rs"
+   ]
+  },
+  {
+   "address": "004ea0f0",
+   "role": "Soft range descriptor",
+   "area": "soft range",
+   "status": "proven-other",
+   "rust": "aa-spatial::soft_range",
+   "oracle": "research/phase7-soft-range/native-soft-range.json",
+   "note": null,
+   "ghidra_name": "FUN_004ea0f0",
+   "body_bytes": 83,
+   "cited_in": [
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-mind/src/element_move.rs",
+    "crates/aa-navigation/src/uai_collision.rs",
+    "crates/aa-navigation/tests/uai_collision_native.rs",
+    "crates/aa-spatial/src/soft_range.rs",
+    "crates/aa-zones/src/detection.rs"
+   ]
+  },
+  {
+   "address": "0052fe60",
+   "role": "Arrival soft-range branch",
+   "area": "soft range",
+   "status": "fragment",
+   "rust": "aa-spatial::soft_range::source_first_in_range",
+   "oracle": "research/phase7-soft-range/native-soft-range.json",
+   "note": null,
+   "ghidra_name": "FUN_0052fe60",
+   "body_bytes": 149,
+   "cited_in": [
+    "crates/aa-spatial/src/soft_range.rs"
+   ]
+  },
+  {
+   "address": "005774a0",
+   "role": "Mover soft-range fragment",
+   "area": "soft range",
+   "status": "fragment",
+   "rust": "aa-spatial::soft_range::source_receiver_in_range",
+   "oracle": "research/phase7-soft-range/native-mover-range.json",
+   "note": null,
+   "ghidra_name": "FUN_005774a0",
+   "body_bytes": 1484,
+   "cited_in": [
+    "crates/aa-movement/src/lib.rs",
+    "crates/aa-movement/src/mover.rs",
+    "crates/aa-runtime/src/movement_world.rs",
+    "crates/aa-spatial/src/soft_range.rs"
+   ]
+  },
+  {
+   "address": "0040bf70",
+   "role": "Player message post (B399B0)",
+   "area": "special operations",
+   "status": "seam",
+   "rust": null,
+   "oracle": null,
+   "note": "UI/message owner.",
+   "ghidra_name": "FUN_0040bf70",
+   "body_bytes": 337,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "00412480",
+   "role": "Tokenizer next token (whitespace, delimiters, quotes)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::required_property_tokens",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00412480",
+   "body_bytes": 811,
+   "cited_in": [
+    "crates/aa-metagame/src/rmc.rs",
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-ui/src/state.rs"
+   ]
+  },
+  {
+   "address": "00424fa0",
+   "role": "Tokenizer constructor (\",\", flags 0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::required_property_tokens",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00424fa0",
+   "body_bytes": 157,
+   "cited_in": [
+    "crates/aa-metagame/src/rmc.rs",
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-ui/src/state.rs"
+   ]
+  },
+  {
+   "address": "0048bc25",
+   "role": "FactionData ability list (4BF990 with actor 0)",
+   "area": "special operations",
+   "status": "fragment",
+   "rust": "aa-rules::abilities::native_faction_ability_effects",
+   "oracle": "aa-rules lib test original_special_operations_resolve (24 Factions, 88 abilities)",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-rules/src/commander.rs"
+   ]
+  },
+  {
+   "address": "004c42d0",
+   "role": "ModifierProperty LoadData (required_properties via 473AD0)",
+   "area": "special operations",
+   "status": "fragment",
+   "rust": "aa-rules::abilities::EnchantmentProperty::required_properties",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": "Only the required_properties deferral (473AD0, vtable A23C38) is in scope.",
+   "ghidra_name": "FUN_004c42d0",
+   "body_bytes": 1040,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs",
+    "crates/aa-rules/src/property_inputs.rs"
+   ]
+  },
+  {
+   "address": "004c4e10",
+   "role": "ModifierProperty required_properties resolver (deferred, 463FA0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::native_required_properties",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c4e10",
+   "body_bytes": 374,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004c86d0",
+   "role": "Ability constructor without local definition (reverse abilities)",
+   "area": "special operations",
+   "status": "proven-other",
+   "rust": "aa-combat::ability::Ability::new (bind property_flags::Effects::create_reverse_ability)",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c86d0",
+   "body_bytes": 112,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-body/src/property_flags.rs",
+    "crates/aa-body/tests/native_modifier_tables.rs",
+    "crates/aa-combat/src/ability.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004c89a0",
+   "role": "Ability summoned GTID list head insert",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon (add_summoned)",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c89a0",
+   "body_bytes": 70,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004c9ef0",
+   "role": "Ability use at world time ([B36534]+E0) -> 4C9550",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::use_ability (FactionWorld::use_ability at world time)",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c9ef0",
+   "body_bytes": 29,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca050",
+   "role": "MoraleEffect Apply (4C8330, 4CE6C0, 5786D0/579660)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::morale::effect_organization + apply_effect",
+   "oracle": "research/phase8-combat/native-morale-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca050",
+   "body_bytes": 83,
+   "cited_in": [
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca0b0",
+   "role": "HealEffect Apply (4CF110/501B70 modifier, 562BA0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::apply_heal",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca0b0",
+   "body_bytes": 115,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca130",
+   "role": "EnchantmentEffect Apply (581280 reject, 581700 add)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::apply_enchantment",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca130",
+   "body_bytes": 87,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca260",
+   "role": "CaptureEffect Apply (4D5230 with record kind 1 reason 7)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::apply_capture (CAPTURE_EFFECT_RECORD)",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": "4D5230 itself is capture::attempt (round 2).",
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca400",
+   "role": "DamageEffect Apply (hit)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::execution (crate::hit)",
+   "oracle": "research/phase7-ability/native-execution-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca400",
+   "body_bytes": 479,
+   "cited_in": [
+    "crates/aa-combat/src/lib.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004ca680",
+   "role": "StealResourcesEffect Apply (target kingdom, min(stock, amount))",
+   "area": "special operations",
+   "status": "proven-other",
+   "rust": "aa-economy::transfers::steal_resources",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004ca680",
+   "body_bytes": 217,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-economy/src/transfers.rs"
+   ]
+  },
+  {
+   "address": "004ca7b0",
+   "role": "Summoned FX event 4 over actor or organization members",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon (summoned_fx)",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ca7b0",
+   "body_bytes": 161,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004caa00",
+   "role": "Summon deferred-resolution object (473AD0 registration)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities (deferred object, executed in the oracle)",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004caa00",
+   "body_bytes": 104,
+   "cited_in": []
+  },
+  {
+   "address": "004cb110",
+   "role": "SummonEffect SummonTransportedActor",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon (summon_transported, transport_entry)",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": "Transport payload 58BA90/4C2290 and the move command are SummonWorld seams (transport/orders owners).",
+   "ghidra_name": "FUN_004cb110",
+   "body_bytes": 1170,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004cb5b0",
+   "role": "Summon failure message (ability_effect_summon_failed)",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::summon_failed",
+   "oracle": null,
+   "note": "UI message 0x11 (ability_effect_summon_failed).",
+   "ghidra_name": "FUN_004cb5b0",
+   "body_bytes": 210,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004cc050",
+   "role": "DescribeEconomyEffect Apply (4E7200 text, 40BF70 message 0xF)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::apply_describe_economy",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": "Text/localisation/post 4E7200/4B9F40/40BF70 stay the DescribeWorld seam (UI/economy owners).",
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004cc2c0",
+   "role": "SummonEffect SummonObject",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon (summon_object)",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": "Creation 4F9C10 is a SummonWorld seam.",
+   "ghidra_name": "FUN_004cc2c0",
+   "body_bytes": 420,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004cc470",
+   "role": "SummonEffect SummonActor",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon (summon_actor)",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": "Creation 4FA030/4FA150 and the attack command 4CA330/4D9B60 are SummonWorld seams.",
+   "ghidra_name": "FUN_004cc470",
+   "body_bytes": 695,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs"
+   ]
+  },
+  {
+   "address": "004cc730",
+   "role": "Summon deferred resolution (427BD0, transport/property validation)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::summon_resolution_checks",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": "A recruit actor with a non-flying transport depends on the deferred-list order: explicit Unsupported.",
+   "ghidra_name": "FUN_004cc730",
+   "body_bytes": 338,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004cc890",
+   "role": "SummonEffect LoadData (object ids, property, controllable, unique flags)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::SummonEffectData (native_summon_effect)",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cc890",
+   "body_bytes": 477,
+   "cited_in": [
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004cca70",
+   "role": "SummonEffect Apply: position/facing, object choice, open position",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::summon::apply",
+   "oracle": "research/phase8-combat/native-summon-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cca70",
+   "body_bytes": 498,
+   "cited_in": [
+    "crates/aa-actors/src/transport_state.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-combat/tests/native_summon.rs"
+   ]
+  },
+  {
+   "address": "004cde00",
+   "role": "KKC_Faction::UseAbility: find ability, context kind 3, admission, use",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::use_ability",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cde00",
+   "body_bytes": 257,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004cef80",
+   "role": "Actor property lookup (581280 -> 5032D0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::property_api::find_actor_property",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cef80",
+   "body_bytes": 17,
+   "cited_in": [
+    "crates/aa-actors/src/organization_callees.rs",
+    "crates/aa-actors/src/organization_state.rs",
+    "crates/aa-actors/tests/native_organization_saved.rs",
+    "crates/aa-body/src/property_api.rs",
+    "crates/aa-mapworld/src/organization_restore.rs"
+   ]
+  },
+  {
+   "address": "004d9b60",
+   "role": "Command issue",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::order_attack / order_move",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004d9b60",
+   "body_bytes": 142,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-economy/src/transfers.rs",
+    "crates/aa-mind/src/cai_thinks/pack.rs",
+    "crates/aa-mind/src/cai_thinks/stack_action.rs",
+    "crates/aa-mind/src/cai_thinks/unpack.rs",
+    "crates/aa-mind/src/command.rs",
+    "crates/aa-mind/src/uai_thinks/uai_sleep.rs",
+    "crates/aa-navigation/src/company_move.rs",
+    "crates/aa-navigation/src/control.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004e7200",
+   "role": "Kingdom economy description text",
+   "area": "special operations",
+   "status": "seam",
+   "rust": null,
+   "oracle": null,
+   "note": "Economy/UI owner.",
+   "ghidra_name": "FUN_004e7200",
+   "body_bytes": 640,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "004f02b0",
+   "role": "World RNG access (with 444A90 direction table)",
+   "area": "special operations",
+   "status": "proven-other",
+   "rust": "aa-movement::formation::random_direction with the GWorld+0xD4 draw (aa-runtime simulation)",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004f02b0",
+   "body_bytes": 57,
+   "cited_in": [
+    "crates/aa-actors/src/post_load.rs",
+    "crates/aa-animation/src/runtime.rs",
+    "crates/aa-combat/src/shortfall.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-mind/src/cai_rout.rs",
+    "crates/aa-mind/src/cai_thinks/rampage.rs",
+    "crates/aa-mind/src/rout_select.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_engage.rs",
+    "crates/aa-movement/src/formation.rs",
+    "crates/aa-navigation/src/lib.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "004f9c10",
+   "role": "World object creation",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::create",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004f9c10",
+   "body_bytes": 1008,
+   "cited_in": [
+    "crates/aa-actors/src/post_load.rs",
+    "crates/aa-actors/src/world_creation.rs",
+    "crates/aa-actors/tests/native_world_creation.rs",
+    "crates/aa-combat/src/launch.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-mapworld/src/class_conversion.rs",
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-mapworld/tests/class_conversion.rs",
+    "crates/aa-mapworld/tests/fresh_creation.rs",
+    "crates/aa-metagame/src/state.rs",
+    "crates/aa-production/src/construction.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004fa030",
+   "role": "World actor creation",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::create",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004fa030",
+   "body_bytes": 117,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-mapworld/tests/fresh_creation.rs",
+    "crates/aa-metagame/src/commands.rs",
+    "crates/aa-metagame/src/positions.rs",
+    "crates/aa-metagame/src/state.rs",
+    "crates/aa-metagame/src/turn.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004fa150",
+   "role": "World organization creation",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::create",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_004fa150",
+   "body_bytes": 259,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-mapworld/src/fresh_creation.rs",
+    "crates/aa-mapworld/tests/fresh_creation.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "004fe6f0",
+   "role": "Immunity added: purge hostile enchantments of that type",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::purge_hostile_enchantments",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004fe6f0",
+   "body_bytes": 156,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/property_flags.rs"
+   ]
+  },
+  {
+   "address": "004feaf0",
+   "role": "Modifier base LoadData (type +8)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities (modifier type at +8)",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004feaf0",
+   "body_bytes": 180,
+   "cited_in": [
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004fed70",
+   "role": "MULTIPLY modifier LoadData",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::multiply_modifier",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004fed70",
+   "body_bytes": 287,
+   "cited_in": [
+    "crates/aa-body/src/modifier_load.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004fee90",
+   "role": "PERIODIC_HEAL modifier LoadData",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier::PeriodicHeal",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "004feec0",
+   "role": "RESOURCE_PRODUCTION modifier LoadData",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::resource_production",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "005010a0",
+   "role": "ENCHANTMENT_IMMUNITY modifier LoadData",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier::EnchantmentImmunity",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "00501150",
+   "role": "ABILITY_EFFECT modifier LoadData (nested effect via 4CA880)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier::AbilityEffect (ability_effect_kind)",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501150",
+   "body_bytes": 305,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/abilities.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "00501410",
+   "role": "REVERSE_ABILITY modifier LoadData",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-rules::abilities::EnchantmentModifier::ReverseAbility",
+   "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-rules/src/ability_load.rs"
+   ]
+  },
+  {
+   "address": "005015c0",
+   "role": "Periodic damage record constructor",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005015c0",
+   "body_bytes": 67,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "00501690",
+   "role": "Periodic damage type getter (tick)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::periodic::periodic_from_tables",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501690",
+   "body_bytes": 21,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "005016b0",
+   "role": "Periodic damage amount getter (tick)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::periodic::periodic_from_tables",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005016b0",
+   "body_bytes": 21,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "005016d0",
+   "role": "Periodic damage source getter (tick)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::periodic::periodic_from_tables",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005016d0",
+   "body_bytes": 25,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "005016f0",
+   "role": "Periodic damage allegiance getter (tick)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::periodic::periodic_from_tables",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005016f0",
+   "body_bytes": 25,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "00501710",
+   "role": "Periodic heal amount getter (tick)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::periodic::periodic_from_tables",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501710",
+   "body_bytes": 19,
+   "cited_in": [
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "005017d0",
+   "role": "Immunity type removal (+68)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005017d0",
+   "body_bytes": 76,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs"
+   ]
+  },
+  {
+   "address": "00501820",
+   "role": "Periodic damage record removal",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501820",
+   "body_bytes": 139,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs"
+   ]
+  },
+  {
+   "address": "005018c0",
+   "role": "Periodic heal removal",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005018c0",
+   "body_bytes": 95,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs"
+   ]
+  },
+  {
+   "address": "00501b70",
+   "role": "Modifier heal amount",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::heal_modifier",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501b70",
+   "body_bytes": 95,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "00501ef0",
+   "role": "Ability-effect list unlink",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501ef0",
+   "body_bytes": 112,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "00501f60",
+   "role": "Resource production add/subtract (+80)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables (production)",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00501f60",
+   "body_bytes": 311,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-body/src/property_flags.rs"
+   ]
+  },
+  {
+   "address": "005023b0",
+   "role": "Reverse ability removal (4CE080)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005023b0",
+   "body_bytes": 144,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/property_flags.rs"
+   ]
+  },
+  {
+   "address": "00502560",
+   "role": "Periodic damage record (+98)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502560",
+   "body_bytes": 220,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "00502640",
+   "role": "Reverse ability add (+B0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502640",
+   "body_bytes": 120,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs",
+    "crates/aa-body/src/property_flags.rs"
+   ]
+  },
+  {
+   "address": "00502700",
+   "role": "Ability-effect list growth (5021E0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502700",
+   "body_bytes": 75,
+   "cited_in": []
+  },
+  {
+   "address": "00502ad0",
+   "role": "Ability-effect list prepend (+8C by AbilityType index)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502ad0",
+   "body_bytes": 85,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/properties.rs"
+   ]
+  },
+  {
+   "address": "00502b30",
+   "role": "ModifierState AddPropertyModifiers (table kinds 3,4,6,7,8,9; 0,1,2,5 via 502A70)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::add_modifier (property_flags dispatch)",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502b30",
+   "body_bytes": 254,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/property_flags.rs",
+    "crates/aa-body/tests/property_tables_integration.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "00502c60",
+   "role": "ModifierState RemovePropertyModifiers",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::modifier_tables::remove_modifier",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00502c60",
+   "body_bytes": 136,
+   "cited_in": [
+    "crates/aa-body/src/modifier_tables.rs",
+    "crates/aa-body/src/property_flags.rs",
+    "crates/aa-body/tests/property_tables_integration.rs",
+    "crates/aa-combat/src/periodic.rs"
+   ]
+  },
+  {
+   "address": "00503140",
+   "role": "Enchantment instance constructor (vtable A2EBE0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "special_ops::EnchantmentWorld::insert_enchantment (fields)",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00503140",
+   "body_bytes": 105,
+   "cited_in": [
+    "crates/aa-body/src/property_effects.rs",
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "005031b0",
+   "role": "Enchantment instance expiry (vtable A2EBE0 slot 0)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::enchantment_expired",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": null,
+   "ghidra_container": null,
+   "note_entry": "not in the Ghidra function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "005033e0",
+   "role": "Enchantment instance allegiance resolve (+18)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "property_flags (InstanceIdentity / ActorInstance)",
+   "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005033e0",
+   "body_bytes": 38,
+   "cited_in": []
+  },
+  {
+   "address": "00552640",
+   "role": "Map interior clamp",
+   "area": "special operations",
+   "status": "proven-other",
+   "rust": "aa-movement::falling::clamp_to_interior",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_00552640",
+   "body_bytes": 118,
+   "cited_in": [
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-mind/src/cai_thinks/explore.rs",
+    "crates/aa-movement/src/falling.rs",
+    "crates/aa-movement/tests/mover_native.rs",
+    "crates/aa-navigation/src/endpoint.rs",
+    "crates/aa-zones/src/tile.rs",
+    "crates/aa-zones/src/zone.rs"
+   ]
+  },
+  {
+   "address": "00554b30",
+   "role": "Open-position search (radius 12)",
+   "area": "special operations",
+   "status": "proven-other",
+   "rust": "aa-spatial::placement::find_placement_within",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_00554b30",
+   "body_bytes": 180,
+   "cited_in": [
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-spatial/src/placement.rs",
+    "crates/aa-triggers/src/actions.rs",
+    "crates/aa-triggers/src/extended.rs"
+   ]
+  },
+  {
+   "address": "00581280",
+   "role": "Properties: find property",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-body::property_api::find_instance (via find_actor_property)",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00581280",
+   "body_bytes": 27,
+   "cited_in": [
+    "crates/aa-actors/src/state_effects.rs",
+    "crates/aa-body/src/property_api.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-production/src/research.rs"
+   ]
+  },
+  {
+   "address": "00581700",
+   "role": "Properties: add property (source, allegiance)",
+   "area": "special operations",
+   "status": "proven",
+   "rust": "aa-combat::special_ops::add_enchantment",
+   "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
+   "note": "581630 insertion is aa-body property_effects::insert_with (proven).",
+   "ghidra_name": "FUN_00581700",
+   "body_bytes": 146,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs"
+   ]
+  },
+  {
+   "address": "0058ba90",
+   "role": "Transport component payload load",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "summon::SummonWorld::load_transport",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0058ba90",
+   "body_bytes": 266,
+   "cited_in": [
+    "crates/aa-actors/src/transport_state.rs",
+    "crates/aa-actors/tests/native_transport_saved.rs",
+    "crates/aa-combat/src/summon.rs",
+    "crates/aa-triggers/src/actions.rs"
+   ]
+  },
+  {
+   "address": "006073c0",
+   "role": "Special-op button availability (UI; calls 4E24B0)",
+   "area": "special operations",
+   "status": "seam",
+   "rust": null,
+   "oracle": null,
+   "note": "UI owner.",
+   "ghidra_name": "FUN_006073c0",
+   "body_bytes": 379,
+   "cited_in": []
+  },
+  {
+   "address": "0061e190",
+   "role": "KKC_FactionUseAbilityOrder execute (TGC_RequestDecreeOrder)",
+   "area": "special operations",
+   "status": "seam",
+   "rust": "commander::use_ability caller",
+   "oracle": null,
+   "note": "Owner: orders/net agent (Orders.h decree path).",
+   "ghidra_name": "FUN_0061e190",
+   "body_bytes": 74,
+   "cited_in": [
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-orders/src/flow_table.rs"
+   ]
+  },
+  {
+   "address": "00432ed0",
+   "role": "Actor +100 bit4",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "engagement",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00432ed0",
+   "body_bytes": 24,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs"
+   ]
+  },
+  {
+   "address": "004ce640",
+   "role": "Element attached to organization",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "engagement::World::element_attached",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004ce640",
+   "body_bytes": 26,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs"
+   ]
+  },
+  {
+   "address": "004cf1b0",
+   "role": "Actor GTID handle",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "executed in denizen/presentation oracles",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004cf1b0",
+   "body_bytes": 43,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-mind/src/cai_thinks/siege.rs",
+    "crates/aa-mind/tests/uai_bombard_native.rs",
+    "crates/aa-movement/src/aircraft.rs",
+    "crates/aa-navigation/src/uai_collision.rs"
+   ]
+  },
+  {
+   "address": "004d0380",
+   "role": "Relation predicate (+7C/+60, flags8 bit11, virtual +84)",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::denizen::on_intruder",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d0380",
+   "body_bytes": 50,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs"
+   ]
+  },
+  {
+   "address": "004d1970",
+   "role": "GTID list head insert (4D0900 node)",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::denizen::on_intruder",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d1970",
+   "body_bytes": 34,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs"
+   ]
+  },
+  {
+   "address": "004d1b40",
+   "role": "Attacked-by node constructor",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "reactions::AttackedBy",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d1b40",
+   "body_bytes": 62,
+   "cited_in": [
+    "crates/aa-combat/tests/native_reactions.rs"
+   ]
+  },
+  {
+   "address": "004d3a70",
+   "role": "Attacker engagement list and engaged message",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::reactions::record_engagement",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d3a70",
+   "body_bytes": 262,
+   "cited_in": [
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/tests/native_reactions.rs"
+   ]
+  },
+  {
+   "address": "004d6190",
+   "role": "Attacked-by list (BombardTargetTimeout) and attacker engagement",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::reactions::attacked_by",
+   "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004d6190",
+   "body_bytes": 339,
+   "cited_in": [
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/tests/native_reactions.rs"
+   ]
+  },
+  {
+   "address": "00517f30",
+   "role": "GTID list contains",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::denizen::on_intruder",
+   "oracle": "research/phase8-combat/native-denizen-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00517f30",
+   "body_bytes": 37,
+   "cited_in": [
+    "crates/aa-combat/src/denizen.rs",
+    "crates/aa-mind/src/uai_thinks/aai_guard.rs",
+    "crates/aa-mind/tests/aai_guard_native.rs"
+   ]
+  },
+  {
+   "address": "0051efb0",
+   "role": "CAI Engage RemoveTarget",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_0051efb0",
+   "body_bytes": 132,
+   "cited_in": [
+    "crates/aa-mind/src/cai_engage.rs",
+    "crates/aa-mind/tests/cai_engage_native.rs"
+   ]
+  },
+  {
+   "address": "0051f040",
+   "role": "CAI Engage ClearTargetList",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_0051f040",
+   "body_bytes": 185,
+   "cited_in": [
+    "crates/aa-mind/src/cai_engage.rs",
+    "crates/aa-mind/src/cai_rout.rs",
+    "crates/aa-mind/tests/cai_engage_native.rs",
+    "crates/aa-mind/tests/cai_rout_enter_native.rs"
+   ]
+  },
+  {
+   "address": "005206a0",
+   "role": "CAI Kill OnEnter",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_005206a0",
+   "body_bytes": 136,
+   "cited_in": [
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/tests/cai_reactions_native.rs"
+   ]
+  },
+  {
+   "address": "00523dd0",
+   "role": "CAI Engage AddTarget (variant)",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_00523dd0",
+   "body_bytes": 193,
+   "cited_in": [
+    "crates/aa-mind/src/cai_engage.rs",
+    "crates/aa-mind/tests/cai_engage_native.rs"
+   ]
+  },
+  {
+   "address": "00523ea0",
+   "role": "CAI Engage AddTarget (variant)",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_00523ea0",
+   "body_bytes": 599,
+   "cited_in": [
+    "crates/aa-mind/src/cai_engage.rs",
+    "crates/aa-mind/tests/cai_engage_native.rs"
+   ]
+  },
+  {
+   "address": "00524c10",
+   "role": "CAI Engage AddTarget",
+   "area": "target acquisition",
+   "status": "seam",
+   "rust": "engagement::World::add_engage_target",
+   "oracle": null,
+   "note": "CAI state machine is Mind (aa-mind) territory.",
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_00524c10",
+   "body_bytes": 349,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs",
+    "crates/aa-mind/src/cai_engage.rs",
+    "crates/aa-mind/src/cai_engage_think.rs",
+    "crates/aa-mind/tests/cai_engage_native.rs",
+    "crates/aa-mind/tests/cai_engage_think_native.rs"
+   ]
+  },
+  {
+   "address": "00527240",
+   "role": "KillTargetIsHighestPriority evaluation",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_00527240",
+   "body_bytes": 392,
+   "cited_in": [
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/tests/cai_reactions_native.rs"
+   ]
+  },
+  {
+   "address": "0052e830",
+   "role": "EngageReactionTimeRange",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_0052e830",
+   "body_bytes": 197,
+   "cited_in": [
+    "crates/aa-mind/src/cai_reactions.rs",
+    "crates/aa-mind/src/uai_thinks/uai_engage.rs",
+    "crates/aa-mind/tests/cai_reactions_native.rs",
+    "crates/aa-mind/tests/uai_engage_native.rs"
+   ]
+  },
+  {
+   "address": "00533c30",
+   "role": "Moving target replan",
+   "area": "target acquisition",
+   "status": "proven-other",
+   "rust": "aa-mind::moving_target",
+   "oracle": "research/phase7-moving-target",
+   "note": null,
+   "ghidra_name": "FUN_00533c30",
+   "body_bytes": 351,
+   "cited_in": [
+    "crates/aa-mind/src/element_move.rs",
+    "crates/aa-mind/src/moving_target.rs"
+   ]
+  },
+  {
+   "address": "005340c0",
+   "role": "UAI decision using ROE rate and AbilityScoreAttackerBonus",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": "Consumer of the proven 570E30.",
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_005340c0",
+   "body_bytes": 1590,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_bombard.rs",
+    "crates/aa-mind/src/uai_thinks/uai_repair.rs",
+    "crates/aa-mind/tests/uai_kill_native.rs"
+   ]
+  },
+  {
+   "address": "00535240",
+   "role": "UAI Kill state Think",
+   "area": "target acquisition",
+   "status": "not-ported",
+   "rust": null,
+   "oracle": null,
+   "note": null,
+   "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
+   "ghidra_name": "FUN_00535240",
+   "body_bytes": 404,
+   "cited_in": [
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/tests/uai_kill_native.rs"
+   ]
+  },
+  {
+   "address": "00536840",
+   "role": "UAI Kill/Engage enemy collision",
+   "area": "target acquisition",
+   "status": "proven-other",
+   "rust": "aa-mind::element_move_continuation",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_00536840",
+   "body_bytes": 649,
+   "cited_in": [
+    "crates/aa-mind/src/element_move_continuation.rs",
+    "crates/aa-navigation/src/uai_collision.rs"
+   ]
+  },
+  {
+   "address": "005707e0",
+   "role": "ROE history vector reallocation",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "Vec growth (capacity not semantic)",
+   "oracle": "research/phase8-combat/native-roe-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005707e0",
+   "body_bytes": 326,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs"
+   ]
+  },
+  {
+   "address": "00570a70",
+   "role": "ROE history prune",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::roe::prune",
+   "oracle": "research/phase8-combat/native-roe-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00570a70",
+   "body_bytes": 139,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-combat/tests/native_roe.rs"
+   ]
+  },
+  {
+   "address": "00570e30",
+   "role": "ROE damage rate",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::roe::rate",
+   "oracle": "research/phase8-combat/native-roe-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00570e30",
+   "body_bytes": 109,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-combat/tests/native_roe.rs",
+    "crates/aa-mind/src/uai_kill.rs"
+   ]
+  },
+  {
+   "address": "00570ea0",
+   "role": "ROE history push (vector)",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::roe::record",
+   "oracle": "research/phase8-combat/native-roe-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00570ea0",
+   "body_bytes": 198,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-combat/tests/native_roe.rs"
+   ]
+  },
+  {
+   "address": "00570f70",
+   "role": "ROE primary damage record on membership component",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::roe::record",
+   "oracle": "research/phase8-combat/native-roe-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00570f70",
+   "body_bytes": 45,
+   "cited_in": [
+    "crates/aa-combat/src/roe.rs",
+    "crates/aa-combat/tests/native_roe.rs"
+   ]
+  },
+  {
+   "address": "00578470",
+   "role": "Attacker within operating radius (definition +304)",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::engagement::within_operating_radius",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578470",
+   "body_bytes": 70,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs",
+    "crates/aa-mind/src/cai_engage_think.rs"
+   ]
+  },
+  {
+   "address": "00578e90",
+   "role": "Organization Mind free (+64/+7C)",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::engagement",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00578e90",
+   "body_bytes": 52,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/src/organization.rs",
+    "crates/aa-mind/src/element_move.rs"
+   ]
+  },
+  {
+   "address": "005790f0",
+   "role": "Actor +100 bit15",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "engagement",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_005790f0",
+   "body_bytes": 26,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs"
+   ]
+  },
+  {
+   "address": "00579490",
+   "role": "Organization OnElementDamaged: reactive engage target",
+   "area": "target acquisition",
+   "status": "proven",
+   "rust": "aa-combat::engagement::element_damaged",
+   "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_00579490",
+   "body_bytes": 239,
+   "cited_in": [
+    "crates/aa-combat/src/engagement.rs",
+    "crates/aa-combat/src/morale.rs",
+    "crates/aa-combat/tests/native_damage_responses.rs",
+    "crates/aa-mind/src/cai_engage.rs"
+   ]
+  },
+  {
+   "address": "004be6c0",
+   "role": "Local ability utility weights",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::weights::maximum",
+   "oracle": "research/phase7-performer/native-weight-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004be6c0",
+   "body_bytes": 95,
+   "cited_in": [
+    "crates/aa-combat/src/weights.rs",
+    "crates/aa-mind/src/ability_motion.rs"
+   ]
+  },
+  {
+   "address": "004c5840",
+   "role": "Target classification flags",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::target_flags",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c5840",
+   "body_bytes": 468,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs"
+   ]
+  },
+  {
+   "address": "004c5a20",
+   "role": "Target filter match",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::target_matches",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c5a20",
+   "body_bytes": 82,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs"
+   ]
+  },
+  {
+   "address": "004c8740",
+   "role": "Ability target eligibility",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::eligible",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8740",
+   "body_bytes": 251,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs"
+   ]
+  },
+  {
+   "address": "004c89f0",
+   "role": "Summoned list cleanup",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::available",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c89f0",
+   "body_bytes": 80,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs"
+   ]
+  },
+  {
+   "address": "004c8a40",
+   "role": "Ability availability (summons, mana, recharge)",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::available",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8a40",
+   "body_bytes": 252,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-mind/src/decision_score.rs"
+   ]
+  },
+  {
+   "address": "004c8f20",
+   "role": "Ability CanUse admission",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::admission::can_use",
+   "oracle": "research/phase7-ability/native-admission-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_004c8f20",
+   "body_bytes": 1381,
+   "cited_in": [
+    "crates/aa-combat/src/admission.rs",
+    "crates/aa-combat/src/performer.rs",
+    "crates/aa-combat/src/reactions.rs",
+    "crates/aa-combat/src/special_ops.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-movement/src/aircraft.rs"
+   ]
+  },
+  {
+   "address": "0052d820",
+   "role": "Ability wait",
+   "area": "weapon selection",
+   "status": "proven-other",
+   "rust": "aa-mind::ability_motion",
+   "oracle": "research/phase7-ability-motion",
+   "note": null,
+   "ghidra_name": "FUN_0052d820",
+   "body_bytes": 225,
+   "cited_in": [
+    "crates/aa-mind/src/ability_motion.rs"
+   ]
+  },
+  {
+   "address": "0052ed30",
+   "role": "Element decision utility",
+   "area": "weapon selection",
+   "status": "proven-other",
+   "rust": "aa-mind::decision_score",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_0052ed30",
+   "body_bytes": 526,
+   "cited_in": [
+    "crates/aa-mind/src/ability_decision.rs",
+    "crates/aa-mind/src/decision_score.rs",
+    "crates/aa-mind/src/uai_kill.rs"
+   ]
+  },
+  {
+   "address": "0052ef40",
+   "role": "Ability pursue",
+   "area": "weapon selection",
+   "status": "proven-other",
+   "rust": "aa-mind::ability_motion",
+   "oracle": "research/phase7-ability-motion",
+   "note": null,
+   "ghidra_name": "FUN_0052ef40",
+   "body_bytes": 201,
+   "cited_in": [
+    "crates/aa-mind/src/ability_motion.rs"
+   ]
+  },
+  {
+   "address": "005307a0",
+   "role": "Element ability decision result (weapon selection)",
+   "area": "weapon selection",
+   "status": "proven-other",
+   "rust": "aa-mind::ability_decision",
+   "oracle": null,
+   "note": null,
+   "ghidra_name": "FUN_005307a0",
+   "body_bytes": 260,
+   "cited_in": [
+    "crates/aa-mind/src/ability_decision.rs",
+    "crates/aa-mind/src/uai_kill.rs",
+    "crates/aa-mind/src/uai_thinks/uai_bombard.rs"
+   ]
+  },
+  {
+   "address": "0057e670",
+   "role": "Maximum other-mask utility",
+   "area": "weapon selection",
+   "status": "proven",
+   "rust": "aa-combat::weights::maximum_other",
+   "oracle": "research/phase7-performer/native-weight-fixtures.json",
+   "note": null,
+   "ghidra_name": "FUN_0057e670",
+   "body_bytes": 178,
+   "cited_in": [
+    "crates/aa-combat/src/weights.rs",
+    "crates/aa-mind/src/ability_decision.rs",
+    "crates/aa-mind/src/ability_motion.rs"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,72 @@
+OWNED RUNTIME WORLD-START ADAPTER VALIDATION -- 2026-10-16
+
+Code under test (root-owned)
+crates/aa-runtime/src/world_start_world.rs
+crates/aa-runtime/src/restoration.rs (StatisticsSnapshotEntry)
+
+Integration test (world_start_stats agent)
+crates/aa-runtime/tests/world_start_world.rs
+
+These tests create real ActorStore, RestoredRecord, SpecialShell, owned component
+and KingdomEconomyLoad instances from explicit native oracle fixture states.
+They are synthetic adapter fixtures, not original-map startup, battle acceptance,
+or multiplayer tests. The separate ignored source test reads installed original
+and v14 data through V14Sources with AA_GAME_ROOT set.
+
+Coverage
+1.132 complete native58F530/58F420 snapshot rows through the runtime's actual
+  Kingdom owner. Native+218 is represented by the actual RecruitItemTable.singles
+  vector, with valid lengths0/1/2/5/17, never a scalar word shadow. Resource
+  arrays belong to the actual SpecialShell vectors. Two existing loaded
+  snapshots remain in order, and the new snapshot is appended after their tail.
+  Snapshot counters are intentionally copied while the authoritative active
+  statistics remain unchanged. Later active mutations do not alter a snapshot.
+  Relation pointers are compared under their portable owner-identity mapping.
+2.240 native58F010 rows with concrete owned Organization/City components,
+  both started states, four component combinations and ten prior categories.
+  The active statistics allocation is retained while values and Actor+13C
+  mutate, ruling out a detached mutable copy. These rows avoid unowned
+  Settlement/HQ/Wall payloads rather than fabricating components for those slots.
+3.360 existing original4F1E10 coordinator rows through the owned adapter:
+  promotion/reset, active actor fields, null kingdom slots, timers, retained
+  snapshots and repeat guard. The old oracle explicitly seams tracking and
+  snapshot creation; the adapter uses componentless actor fixture states there,
+  while the new primitive and adapter fixtures separately prove those effects.
+  The comparison does not claim an exact matching callback trace for inert
+  fixture objects or added real Kingdom identity entries.
+4.Explicit missing-field/identity errors retain prior promotion and actor
+  effects, follow GTID/major-kingdom order, do not publish placeholder snapshots,
+  and preserve the native started guard. This is a safe host-error contract,
+  not native invalid-pointer/access-violation emulation.
+5.Installed-data binding validates four derived formulas/all80 statistic rows,
+  preserving term order and weight bits, and rejects renamed/reordered resource
+  registry identities.
+
+Additional native executions
+native_runtime_tracking.py -> native-runtime-tracking.json:
+  240 rows,480 original/v14 executions at PC24/PC53/PC64.
+native_runtime_snapshots.py -> native-runtime-snapshots.json:
+  132 rows,264 original/v14 executions at PC24/PC53/PC64.
+The broader primitive fixture remains unchanged, including signed/raw+218
+integer boundaries that cannot represent feasible owned Vec lengths.
+
+Review findings fixed by root during integration
+-45F240 appends after the tail. The initial implementation inserted Live at
+ index0, reversing saved/live chronology. Runtime now pushes at the tail.
+ Native snapshot-list.json proves30 original/v14 insertions with only the
+ fresh8-byte allocator seam. Existing duplicates and head identity persist.
+-Kingdom+218 is RecruitItemTable.singles.len(), not SpecialShell.words[218].
+ Runtime and test fixtures now use the one authoritative vector owner.
+
+Getter dispatch evidence
+world-start-getters.json and getter-proof.txt contain54 cases/108 separate
+original/v14 executions, no callback seams: Actor/Kingdom/Group vtable entries,
+4CED60 Structure priority and Wall fallback,4D1E80 owner+E8,and6A71D0 AL=true.
+Unowned Wall and Settlement runtime branches still return explicit errors.
+
+Validation command
+AA_GAME_ROOT="E:/Games/Axis and Alies"
+CARGO_TARGET_DIR=target/s-economy
+cargo test -p aa-runtime --test world_start_world --release --locked --offline
+  -j4 -- --include-ignored --nocapture
+See runtime-tests.log and runtime-findings.json for the final source checkpoint.

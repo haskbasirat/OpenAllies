@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "accepted_author_scope": true,
+  "independent_review": "pending",
+  "scope": "Native Texture loader borrowed field order and child-required prefixes; not a complete Resource/Task/image backend or natural game execution",
+  "new_source_only": true,
+  "runtime_production_check": "passed16.07s current formatted source",
+  "rust": {
+    "exact_production_source_replay": {
+      "passed": 1,
+      "failed": 0,
+      "native_rows": 351,
+      "seconds": 0.04
+    },
+    "full_workspace_build": false,
+    "actual_selected_texture_decoder_executed": false,
+    "natural_world_execution": false
+  },
+  "native": {
+    "rows": 351,
+    "separate_original_v14_executions": 702,
+    "instruction_byte_pins": 732,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "immutable_replay": "passed",
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "executed_functions": [
+      "5A8CD0 Texture load",
+      "5A8B40 filename Source loader",
+      "5A6A10 normalize/postload",
+      "43A920 native next power",
+      "87BAA0/87BAC0 Renderer-first dimension getters",
+      "87BE40 quality setter",
+      "5A4F60 native pointer assignment"
+    ],
+    "explicit_child_seams": [
+      "current named policy values ResourceNoNiTextures/RendererForceLowQualityTextures/RendererUseHighQualityTextures",
+      "SourceTexture create/default allocation/caching",
+      "real selected physical stream and native stream construction/decode/destruction",
+      "resize87C5C0",
+      "renderer-dimension virtual getters",
+      "diagnostic/CString/name formatting transports",
+      "successful destructor/refcount-zero transport"
+    ],
+    "not_established": [
+      "actual current application policy producers (Film agent scope)",
+      "physical source/input provenance and same-manager Source/Pixel arena (State agent scope)",
+      "actual modern decoder or native NiStream decoding equivalence",
+      "native resize algorithm or generated image equivalence",
+      "GPU acceptance, Task completion, source3C readiness or playable battle"
+    ]
+  },
+  "behavior": [
+    "same borrowed Resource fields; no Entry or decoded payload mirror",
+    "separate opaque Source/Pixel identity tokens; retain/release operations explicit",
+    "writable-last-location+child early success before filename/policy/source",
+    "ResourceNoNiTextures exact byte1 forces bit6; other raw values do not",
+    "quality nonzero ForceLow short-circuits UseHigh; absent Source retains native required dereference boundary",
+    "output Source retain precedes stream destruction, then local release and outer pointer assignment/temporary release",
+    "source byte44 written before dimensions; width54 store precedes height getter and height58 store",
+    "zero dimension sets both to16; original dimensions retained through power-of-two resize",
+    "wrapping native memory adjustment occurs before PNG/resize warnings and resize child",
+    "format component reads short-circuit; repeated actual field reads remain lazy",
+    "Source3C replacement follows normalize/account/format gates; old source release precedes field store and new retain",
+    "1024 comparison is signed warning only, not a dimension/storage limit"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/texture_load_kernel.rs",
+      "sha256": "30665726c92633d92c9beaf7d4d1d972b0eae4682b3980b70064b68475f6f78f",
+      "bytes": 15685
+    },
+    {
+      "path": "crates/aa-runtime/src/texture_load_kernel_tests.rs",
+      "sha256": "434639252efefc09f970f9fbe473a55958382454b27f23941293c6acef8f1d00",
+      "bytes": 12178
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/native_texture_load.py",
+      "sha256": "51c1f5c7c87d500d3dce41ed3a9eece291fe7c6804bd7808c593ce4ed768562a",
+      "bytes": 11641
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/native-texture-load.json",
+      "sha256": "637946a8d836420d42e11b3e948446a9ec442939a815e23550c4119b15efbc37",
+      "bytes": 1155030
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/native-immutable-replay.log",
+      "sha256": "8171a36b64390066973881b81869a4ddadd65237fe824d78e8abee77798f2461",
+      "bytes": 125
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/exact-kernel-tests.exe",
+      "sha256": "7c711e74c61527de108ec8dca9d1796d83daf86e135013f17c566e646ca54040",
+      "bytes": 2457088
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/final-exact-compile.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/final-exact-tests.log",
+      "sha256": "3e2c0cf4570c0ac4312a0cd6d51c53338d25716ccddc3a1e6156baac86d88ab9",
+      "bytes": 209
+    },
+    {
+      "path": "research/skirmish-20261017-texture-load-kernel/final-production-check.log",
+      "sha256": "243d33661ab1e39b07cbbc9c95a0f63ebfe1a8837a96d9068220b272c48e8fcc",
+      "bytes": 21257
+    },
+    {
+      "path": "target/s-skirmish-start-review/release/deps/libaa_numeric-55927aa222c0a1ba.rlib",
+      "sha256": "2c31acba9f0f9e9ab2f484094dbfcb5a8a2077cac034341cdc6d1be68242da9f",
+      "bytes": 291556
+    },
+    {
+      "path": "target/s-skirmish-start-review/release/deps/libserde_json-3f0b3bb60c709793.rlib",
+      "sha256": "bbcb41b7cf8d1935fd60e42ecffb75b36c8235426d8cfdd39673c5f551a84ba4",
+      "bytes": 2121754
+    }
+  ]
+}

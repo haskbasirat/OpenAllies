@@ -1,0 +1,309 @@
+{
+  "schema": 1,
+  "status": "bounded_owned_terrain_accepted_by_author",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "map_loads": 240,
+  "original_maps": 80,
+  "precision_controls": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "source_counts": [
+    {
+      "precision": "Single24",
+      "terrains": 144,
+      "variations": 410,
+      "biomes": 8,
+      "files": 156,
+      "translations": 67
+    },
+    {
+      "precision": "Double53",
+      "terrains": 144,
+      "variations": 410,
+      "biomes": 8,
+      "files": 156,
+      "translations": 67
+    },
+    {
+      "precision": "Extended64",
+      "terrains": 144,
+      "variations": 410,
+      "biomes": 8,
+      "files": 156,
+      "translations": 67
+    }
+  ],
+  "native_proofs": [
+    {
+      "fixture": "native-source-find.json",
+      "rows": 3702,
+      "pins": 1080,
+      "sha256": "3dda0409a61673c1784b75941d099d996e849c6a08cd8e00e8795cc5ac868f34"
+    },
+    {
+      "fixture": "native-source-fields.json",
+      "rows": 912,
+      "pins": 42,
+      "sha256": "028fea4dc7629b547b351b66c1afc8787c05ac8d3412b312a390a1473a7da694"
+    },
+    {
+      "fixture": "native-battle-terrain.json",
+      "rows": 3936,
+      "pins": 383,
+      "sha256": "f9512a3c000d2f3c98d13816073e68bd65b093d135a4b37c7741fe1b4789e7a4"
+    }
+  ],
+  "separate_image_witnesses": [
+    {
+      "image": "original",
+      "precision": "Single24",
+      "va": "0x402447",
+      "loaded_byte": "33"
+    },
+    {
+      "image": "original",
+      "precision": "Double53",
+      "va": "0x402447",
+      "loaded_byte": "33"
+    },
+    {
+      "image": "original",
+      "precision": "Extended64",
+      "va": "0x402447",
+      "loaded_byte": "33"
+    },
+    {
+      "image": "v14",
+      "precision": "Single24",
+      "va": "0x402447",
+      "loaded_byte": "66"
+    },
+    {
+      "image": "v14",
+      "precision": "Double53",
+      "va": "0x402447",
+      "loaded_byte": "66"
+    },
+    {
+      "image": "v14",
+      "precision": "Extended64",
+      "va": "0x402447",
+      "loaded_byte": "66"
+    }
+  ],
+  "tests": {
+    "author-final-rust-replay.log": {
+      "passed": 1,
+      "scope": "all80 actualmaps x3PC, source facts, both native PE ground results",
+      "sha256": "56b6ab156c87f61f25e8b8b6165a0c2b8a24874ba3ec3f2eb5b807138e7dd30a"
+    },
+    "existing-height-proofs.log": {
+      "passed": 6,
+      "scope": "native_binding3/native_fixtures2/original_maps1",
+      "sha256": "0a522cee5edbb153f92791a6ae1311dd6aa7ddca7728ecd5e846d84de6cc4a36"
+    },
+    "author-mapworld-proof.log": {
+      "passed": 5,
+      "scope": "terrain4 plus independent lifecycle1",
+      "sha256": "6af19d1f67eafa9eea9a43a991ff3fd2a5396405ec38229d08691275fcdb25c0"
+    },
+    "author-source-pc-guard-replay.log": {
+      "passed": 1,
+      "scope": "final source-PC receipts plus all80 actualmaps x3PC replay, no value code change",
+      "sha256": "6f1736536bf5b59260cc2ce8ad3c445d5fb03d774abdcc20e61083fbe8ad8cca"
+    }
+  },
+  "old_recursive_alias_reference_corrections": [
+    {
+      "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP",
+      "precision": "Single24",
+      "old_fallback": 25938,
+      "native_fallback": 26256,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/DeveloperMaps/cutscene_short_02.rmp",
+      "precision": "Single24",
+      "old_fallback": 34881,
+      "native_fallback": 35127,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP",
+      "precision": "Single24",
+      "old_fallback": 17551,
+      "native_fallback": 17633,
+      "flags_changed": false,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/axis12_hawaii.RMP",
+      "precision": "Single24",
+      "old_fallback": 45451,
+      "native_fallback": 45950,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP",
+      "precision": "Double53",
+      "old_fallback": 25938,
+      "native_fallback": 26256,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/DeveloperMaps/cutscene_short_02.rmp",
+      "precision": "Double53",
+      "old_fallback": 34881,
+      "native_fallback": 35127,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP",
+      "precision": "Double53",
+      "old_fallback": 17551,
+      "native_fallback": 17633,
+      "flags_changed": false,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/axis12_hawaii.RMP",
+      "precision": "Double53",
+      "old_fallback": 45451,
+      "native_fallback": 45950,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/DeveloperMaps/(4FFA)TropicalCruise.RMP",
+      "precision": "Extended64",
+      "old_fallback": 25938,
+      "native_fallback": 26256,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/DeveloperMaps/cutscene_short_02.rmp",
+      "precision": "Extended64",
+      "old_fallback": 34881,
+      "native_fallback": 35127,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/allies02_guadalcanal.RMP",
+      "precision": "Extended64",
+      "old_fallback": 17551,
+      "native_fallback": 17633,
+      "flags_changed": false,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    },
+    {
+      "source": "Maps/TrailerMaps/axis12_hawaii.RMP",
+      "precision": "Extended64",
+      "old_fallback": 45451,
+      "native_fallback": 45950,
+      "flags_changed": true,
+      "aliases": [
+        {
+          "current": null,
+          "previous": "tropical_river01",
+          "query": "tropical_river03"
+        }
+      ]
+    }
+  ],
+  "files": {
+    "crates/aa-runtime/src/battle_terrain.rs": "33bb2c91238161a5b2268027d01ab0e8486feeddef9d186240f6831c7c1ba223",
+    "crates/aa-runtime/src/battle_terrain_tests.rs": "70d8df9cf36f7c5ecb3f4ff31a0fe99761822bbdf6649c9eb9b71ca3ed95b65e",
+    "research/skirmish-20261016-battle-terrain/source-metadata.json": "7c178f1319b3b637c1435c300fdd5cb9621b3b0a0d38de87f5da964be1614de5",
+    "research/skirmish-20261016-battle-terrain/actual-map-inputs.json": "f79ad353a279da5ef3abc7394d0018d5497d61ed70b7e45806ede72939c70732",
+    "research/skirmish-20261016-battle-terrain/native-source-find.json": "3dda0409a61673c1784b75941d099d996e849c6a08cd8e00e8795cc5ac868f34",
+    "research/skirmish-20261016-battle-terrain/native-source-fields.json": "028fea4dc7629b547b351b66c1afc8787c05ac8d3412b312a390a1473a7da694",
+    "research/skirmish-20261016-battle-terrain/native-battle-terrain.json": "f9512a3c000d2f3c98d13816073e68bd65b093d135a4b37c7741fe1b4789e7a4",
+    "research/skirmish-20261016-battle-terrain/native_source_find.py": "2239f267a37e51dc86a16cdabb9d87efeb24ff57a294beeb35d931d24dfbb92a",
+    "research/skirmish-20261016-battle-terrain/native_source_fields.py": "93b22c38755c8f9f0ced49da7b1048c1527d4697a5b7da2649b7358c5fc04c2b",
+    "research/skirmish-20261016-battle-terrain/native_battle_terrain.py": "90d924310065be4c88eb2b1a70671822c9ba282ca2d3bd701032bad5fd1c2569",
+    "research/skirmish-20261016-battle-terrain/README.md": "755a6a3c84497a6df57a30470847d918aa30b2a5e7ba50aaf13671b75605e789"
+  },
+  "boundaries": [
+    "Typed source getter facts are explicit seams in scalar native snippets; full native TGI/texture loading is not executed.",
+    "Actual mapheight arrays are raw hash-checked source; ground native proof has no height/noise answer seam.",
+    "Resolution SVar override rules explicitly refused; none in80originalmaps.",
+    "No Worldstartup/ObjectInit/battle/pathfinding/dynamicterrain/multiplayer completion claim.",
+    "Original assets and release packages unchanged by this work."
+  ]
+}

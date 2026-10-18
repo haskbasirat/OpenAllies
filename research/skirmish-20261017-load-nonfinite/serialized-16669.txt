@@ -1,0 +1,59 @@
+map_source=SourceIdentity { sha256: "c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b", bytes: 231059 }
+definition=waves
+serialized_input=Placement {
+    record_ordinal: 1132,
+    source_span: ByteSpan {
+        offset: 106342,
+        length: 80,
+    },
+    thing_id_utf16: [
+        119,
+        97,
+        118,
+        101,
+        115,
+    ],
+    class_code: 2,
+    serialized_id: 16669,
+    thing: ThingState {
+        version: 2,
+        name_utf16: [],
+        word_1c: 0,
+        position_bits: [
+            1102053337,
+            1128267776,
+            1071644594,
+        ],
+        facing_bits: [
+            4290772992,
+            4290772992,
+            0,
+        ],
+        serialized_flags: 639903752,
+        legacy_version_one_word: None,
+    },
+    object: Some(
+        ObjectState {
+            version: 5,
+            scale_multiplier_bits: 1065353216,
+            variant_index: Some(
+                2,
+            ),
+            associated_object_id: Some(
+                0,
+            ),
+            legacy_word: Some(
+                0,
+            ),
+            nested_count: Some(
+                0,
+            ),
+        },
+    ),
+    actor: None,
+    opaque_tail_span: ByteSpan {
+        offset: 106422,
+        length: 0,
+    },
+    opaque_tail: [],
+}

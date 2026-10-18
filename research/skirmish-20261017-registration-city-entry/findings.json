@@ -1,0 +1,116 @@
+{
+  "scope": "Bounded same-owned registration City515620->564300 adapter; native proof and actual Firefight advance, not complete Load/battle",
+  "native": {
+    "paired_rows": 57,
+    "pins": 235,
+    "fresh_executions": 114,
+    "immutable_replay": "PASS",
+    "fixture_sha256": "6ebc4f5d02c43dff694fc3ed7853cf5007b991243fb6c7c5c5ef86600f97c1a5"
+  },
+  "production_check": "PASS17.70s before final additive checks; final source compiled in actual21 integration build",
+  "new_runtime_storage_tests": "Written and compiled by parent cohort pending reported execution; no local execution claim",
+  "actual21": {
+    "error": "actor creation world service failed: nonfinite input is outside the finite arithmetic domain",
+    "next_gate": [
+      {
+        "attempted": true,
+        "calls": [
+          {
+            "completed": false,
+            "error": "actor creation world service failed: nonfinite input is outside the finite arithmetic domain",
+            "record": 16669,
+            "service": "init_null"
+          }
+        ],
+        "completed": false,
+        "error": "actor creation world service failed: nonfinite input is outside the finite arithmetic domain",
+        "mode": "Immediate",
+        "nested": false,
+        "omitted": false,
+        "output_id": 16669,
+        "saved_id": 16669,
+        "source_ordinal": 1132,
+        "stage": "DynamicThings"
+      }
+    ],
+    "report_sha256": "10bc695c7f7aeeff71a284388764e09ffa6ffc302378ceaa5af344a046bcae4c",
+    "city16098": [
+      {
+        "attempted": true,
+        "calls": [
+          {
+            "completed": true,
+            "error": null,
+            "record": 16098,
+            "service": "init_null"
+          },
+          {
+            "completed": true,
+            "error": null,
+            "record": 16098,
+            "service": "post_create_null_one"
+          },
+          {
+            "completed": true,
+            "error": null,
+            "record": 16098,
+            "service": "register_record_4F9510"
+          },
+          {
+            "completed": true,
+            "error": null,
+            "record": 16098,
+            "service": "object_predicate_B0"
+          },
+          {
+            "completed": true,
+            "error": null,
+            "record": 16098,
+            "service": "definition_publish_one_4296B0"
+          }
+        ],
+        "completed": true,
+        "error": null,
+        "mode": "Immediate",
+        "nested": false,
+        "omitted": false,
+        "output_id": 16098,
+        "saved_id": 16098,
+        "source_ordinal": 567,
+        "stage": "DynamicThings"
+      }
+    ],
+    "completed_record_lifecycles": 1121,
+    "binary_sha256": "bd2c5e3b405bb977ce806de0b751c70a32767e6467dc16cecc2b6342315f2d95",
+    "retained_prefix": "immediate",
+    "run_seconds": 68.04
+  },
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/load_detection_activation.rs",
+      "sha256": "e26b61493c1ac1f2cc9671a571edf7fe282eb05ac7b9f13b532e7833267d6bc3"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_entry.rs",
+      "sha256": "b5fce9a0a68b9b0dcd6f96246aeb1cb49ca0dedf8e27135d19653a075b8feb88"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_registration.rs",
+      "sha256": "19fb2deeb9a225510e7c00b6af53b2cc6505f87c1cd4289ad961f55766ad36b9"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_registration_city_tests.rs",
+      "sha256": "371edb7a09db62b8020c397c8fbb8ef68c8d61c42c0a925e66fbd0a6c0936df7"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world.rs",
+      "sha256": "814250d663542e389a5484cb2486ac64405d72ea83f51f831b47626474830e4e"
+    }
+  ],
+  "limitations": [
+    "Guard, type3, marker children still required at reached native branch",
+    "Independent bounded ownership review was static only",
+    "No StartedMission, activation or fresh Actor/Mind observed",
+    "Actual21 predates separate shared Task+C glue"
+  ]
+}

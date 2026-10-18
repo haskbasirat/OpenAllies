@@ -1,0 +1,166 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Native World name-table mutation/lookup/rehash and concrete shared-store trigger selectors/field views. Full trigger service binding is incomplete.",
+  "native_sequences": 11,
+  "native_transitions": 2569,
+  "rust_tests": 3,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "ranges": [
+    {
+      "address": "0x4f7d00",
+      "size": 1102,
+      "sha256": "a340b4a5a124885c7db3e1cc119b13c00034886ac291233160c91c85f57ed7bf"
+    },
+    {
+      "address": "0x4f94d0",
+      "size": 59,
+      "sha256": "2d802acc3eb191f5886fcdec68309916ab6f3031509e6916bfed0c03caab4838"
+    },
+    {
+      "address": "0x4f9510",
+      "size": 434,
+      "sha256": "6e4badef16d9a8955c643928e5f1c01e6c7a3fea03d4beb8edf1cd8484cf2f01"
+    },
+    {
+      "address": "0x4f7b70",
+      "size": 172,
+      "sha256": "3c792216f2f34b94f7d4747402e579e2f28f8d11bbbad8896a0be4a99b6d217c"
+    },
+    {
+      "address": "0x5c9180",
+      "size": 176,
+      "sha256": "09e42f5bc84becdd7873c3828207126518da39fc0e81864f01f0b4ed15fa6c7b"
+    },
+    {
+      "address": "0x593570",
+      "size": 281,
+      "sha256": "4fc57c6d61aeee4e5737d160e538a64306964d30abf927df08729dd6afedec5d"
+    },
+    {
+      "address": "0x4154d0",
+      "size": 64,
+      "sha256": "cc2518b9b9cc537c4c7b560b8c5abab8cbc4ed684464b2402dcf536f761c9f59"
+    },
+    {
+      "address": "0x5043f0",
+      "size": 81,
+      "sha256": "cdbc29789c8bc7107fb5daad5d2b3e4212228fb2c54229c3c09fe0afa71ae6c8"
+    },
+    {
+      "address": "0x405030",
+      "size": 63,
+      "sha256": "57a68ca6c0bdc2a2422dbf69927ce49a57c319436e60be4ef3590b3850ecc2b3"
+    },
+    {
+      "address": "0x4f8e90",
+      "size": 101,
+      "sha256": "875188a261e0a905be15e4a16ea169ef17de0adf7b2ded9d50282d90b9cf5e74"
+    },
+    {
+      "address": "0x4f8f00",
+      "size": 101,
+      "sha256": "cd18d29ad8027a9167e4308b25c6382410608451e97955c4bf0d0c1d0a0dea60"
+    },
+    {
+      "address": "0x4bedf0",
+      "size": 38,
+      "sha256": "e05355c7fa757a2bf4524e4bcce532e47f4cf5423aa1b7873ed154e1229f2a52"
+    }
+  ],
+  "class_vtables": [
+    {
+      "table": "0xa273f0",
+      "offset": "0xa8",
+      "function": "0x6a71f0",
+      "bytes": "32c0c3"
+    },
+    {
+      "table": "0xa273f0",
+      "offset": "0xb4",
+      "function": "0x6a71d0",
+      "bytes": "b001c3"
+    },
+    {
+      "table": "0xa299d8",
+      "offset": "0xa8",
+      "function": "0x6a71d0",
+      "bytes": "b001c3"
+    },
+    {
+      "table": "0xa299d8",
+      "offset": "0xb4",
+      "function": "0x6a71d0",
+      "bytes": "b001c3"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-runtime",
+        "--test",
+        "names_native",
+        "--test",
+        "trigger_world",
+        "--",
+        "--include-ignored"
+      ],
+      "exit_code": 0,
+      "log": "tests.log",
+      "sha256": "aebf8cedf486742fe5ddb227d89eb5afd3d4836c00d730d72bad089b1a9e65ac"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-runtime",
+        "--test",
+        "names_native",
+        "--test",
+        "trigger_world",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "da31c240cc1c50a9df62a93e7dce3f3940aad3aca7123a9d73dd051930f31824"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-runtime/src/names.rs": "aa1ad70450d9a1648aaff27ac5653e927d74a3c3df225f558656a31f6fa256f4",
+    "crates/aa-runtime/src/trigger_world.rs": "9ad0f62e52a39076907fce783bbe5873f1ffb7c67628528e54dcef4823a59fe3",
+    "crates/aa-runtime/tests/names_native.rs": "39463bbe527c9e0692225005c845a33ded4a84153bff3864d9d052a52df1806a",
+    "crates/aa-runtime/tests/trigger_world.rs": "76818eddd704bd7211781dd20b8f17f27baec95802cb2b106ad23aa5225f4259",
+    "research/phase7-runtime-names/README.txt": "85de84b9ebb8803b3aa4477e1df1a866ca470b6e9eede04c4e5c5f890be4e0d6",
+    "research/phase7-runtime-names/native_names.py": "6c741f7af948ed3bf6012d0021ec3a3a4d22c609c3dd3535bb6c6afbd4aee7cf",
+    "research/phase7-runtime-names/native-names.json": "99bcf84fd50735b62412024952df7097171d3c41e7014da0745f52776b0c9b0b",
+    "research/phase7-runtime-names/record_findings.py": "5b0bccbb36f8972a13705d66fa4f34cb2d873f8c82fd1a819731182faa309067"
+  },
+  "dependency_sha256": {
+    "crates/aa-runtime/src/actor_world.rs": "5270a56dec8bda15955c8c29270dc652e2fb7897e3a2fb25a592907559bd470a",
+    "crates/aa-actors/src/registry.rs": "1f1145230834b47a301dff9cfd9899e7b725ba94196d37739eb95427b07da70c",
+    "crates/aa-triggers/src/world_program.rs": "e657f5bccf690cd872f2623fe8bb59a5626d4b8c0ee1a5562c3fc6fcfba6adeb",
+    "research/phase4-body/original_body.py": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+  },
+  "seams": [
+    "String copy/ref ownership (stable nonfreed UTF16 fixture buffers)",
+    "Heap allocator/free",
+    "CRT thread-locale accessor supplies C locale; native_wcsicmp comparison executes",
+    "4F4C40 later spatial publication; constructor actor class branches false during name publication"
+  ],
+  "limitations": [
+    "ASCII noembedded-null name domain, CRT C-locale compare.",
+    "Absent-name pointer/GTID accidental alias is outside valid logical domain.",
+    "Cross-name hash traversal is not exposed; equal-name ordering including rehash is preserved.",
+    "Publication name branch only; full4F9510 class/spatial registration remains caller-owned.",
+    "Concrete source composition explicitly sets publication order; full tutorial is not claimed.",
+    "Command/property/SAI/membership services still need concrete WorldProgram binding."
+  ],
+  "independent_review": "Peer review pending."
+}

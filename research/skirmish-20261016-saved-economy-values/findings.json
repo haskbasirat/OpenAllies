@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Actual saved Economy native values/caches and lazy17C source binding; not full570020",
+  "api": "View::new(&mut SavedActions,&mut EconomyState,&mut[(ActorId,&mut EconomyState)],Precision)",
+  "methods": [
+    "upkeep_blocked",
+    "provides",
+    "cost_or_upkeep",
+    "production",
+    "parent_organization"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "actual_native_cases": 518,
+  "actual_source_precision": "Double53",
+  "actual_source_actors": 46,
+  "actual_source_definitions": 32,
+  "constructor_native_cases": 6,
+  "constructor_precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "tests": {
+    "new_lazy": 1,
+    "existing_native": 2,
+    "actual_saved_adapter": 1,
+    "failed": 0
+  },
+  "source_sha256": {
+    "crates/aa-runtime/src/saved_economy_values.rs": "4003b57cbc64d771171b3642bfc5d97e0da241cdf1400e75ac5f310e980992b7",
+    "crates/aa-runtime/src/saved_economy_values_tests.rs": "a9cc5bf43a36cd98b2ec567eac4e4d46cee2428b46c7f58b35ddcfe54070475c",
+    "crates/aa-actors/src/economy_values.rs": "dbdd5b8031f546472d2efc2e65188d8efadc3eb0ecd864fd70ad7c3f472b06b9",
+    "crates/aa-actors/tests/economy_lazy_backref.rs": "389df5c14a7693d03b0aadfae2f8a598f6081de2078c15061b959edbd67195e5"
+  },
+  "reused_sha256": {
+    "research/phase7-economy-values/native-values.json": "2531f28cb7ede8a48e3372a51e9a0bccf2c8cfff03fc9da3fe3f43875b7102d8",
+    "research/phase7-economy-values/native-source.json": "98729b36071cf66266bfcb3e64d732fa44f4b0c0b92a40591780dd5bbeb0d774",
+    "research/phase7-economy-values/native_values.py": "af678fea2e9e6ed3f1b6658a53021cf964f0766607ef133eb29bf37abb659be2",
+    "crates/aa-rules/src/native_recruit_backrefs.rs": "21de024e6a9761b234ac186666afd7b9a22d07343bc31d929b1bec9b43055f12",
+    "crates/aa-rules/src/native_mobile_deployment.rs": "1e4edaca4fe23376a777aa55c99be359ac85e3a634a055d7c6f395668f0ba80e",
+    "crates/aa-actors/src/transport_state.rs": "8955e2da6a3d7072ce76a72583275d565e91cb7181323dad7a8621ef4f6f9524",
+    "crates/aa-actors/src/supply_state.rs": "d01a5d894714c985c8aea5266570fbe908b7898abfc9911e2671d20ffeff47e7"
+  },
+  "evidence_sha256": {
+    "actual-saved-input.json": "343a8c8ba3a2485cbf234b58ee80aecb2b32f1a5cc64865219c528d8f993ad05",
+    "native-saved-values.json": "4f855c3adf2b7d167953b33215ba6e2a43c12cfb7811d91372e12a53ecdef541",
+    "native-absent-economy-constructor.json": "14c742d24703a6852933d0db4a064ad813a1422afd4b67e649078687646341f7",
+    "native_saved_values.py": "d575f1fc5f739bc1353942cbac79e61ee0fb840f7448b4d144ead94774247c23",
+    "native-saved.log": "908b490aa093c37bcc2031bf1313913bd35485ee8d0ca68dd26bcddb632bd0b9",
+    "actors-tests.log": "2d3e8077226c32f6b7d60f7658fc47e4e063d35d87046ede5cc36582fb5cd95f",
+    "runtime-tests.log": "81fc95b55b3c0023ca38ccd3d888fd98d494523deb2ab3463f231aa56f0f1f69"
+  },
+  "backups_sha256": {
+    "aa-actors-economy_values-before-lazy.rs": "aecdfeef2490e6948bc3b4239f7f536765607e4dc9cb33adbd16757cef0217a4",
+    "aa-runtime-lib-before-export.rs": "ba1f8579b87a64584b4a86b2355f054b48a62283c778e24e3f0e3fdee521ba0c"
+  },
+  "ownership": "Actual focused/held Economy boxes; explicit presence and same-cache mutation ahead of registry; integrator restores same Box on Result",
+  "source_correction": "501730 reads recruitment backrefs+17C lazily, not transport_actor+184",
+  "native_seams": [
+    "allocator/free",
+    "pure4CF110 Properties-context identity",
+    "nonnull owner fixture and stop at end of570020 inline upkeep gate"
+  ],
+  "limits_changed": [],
+  "remaining": [
+    "Canonical Kingdom flow initialization/full570020",
+    "Full world publication/simulation",
+    "Skirmish/multiplayer",
+    "Malformed-storage fault timing/allocation exhaustion"
+  ],
+  "preserved_failures": [
+    "capture-no-org-economy.log",
+    "native-v14-overlay-failure.log"
+  ],
+  "broad_compatibility": "Root coordinates; not claimed by this scoped run"
+}

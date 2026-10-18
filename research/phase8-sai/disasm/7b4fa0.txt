@@ -1,0 +1,6 @@
+007b4fa0  8b442404             mov eax, dword ptr [esp + 4]
+007b4fa4  50                   push eax
+007b4fa5  8d9180010000         lea edx, [ecx + 0x180]
+007b4fab  52                   push edx
+007b4fac  e89ffcffff           call 0x7b4c50
+007b4fb1  c20400               ret 4

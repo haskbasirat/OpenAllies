@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Original no-BOM C-locale DisplayString byte widening; two developer-map names",
+  "native_addresses": ["856F90", "96CBD7", "9710C6", "971006", "5BEE60", "5BA3C0", "494000", "4BA710", "4B9F40"],
+  "port_files": ["crates/aa-runtime/src/localization.rs"],
+  "test_files": ["crates/aa-runtime/tests/localization_bytes.rs"],
+  "oracle": {
+    "fixture": "native-display-bytes.json",
+    "sha256": "be5c7f12bae09b508dfef08d52cb7b5d3dd492a9babbd102e70cfbb832847b94",
+    "cases": 2,
+    "lookups": 13,
+    "high_byte_values": 128,
+    "instruction_windows": 1274,
+    "original_code_executed": true
+  },
+  "affected_original_map": {
+    "path": "DeveloperMaps/GER_Art_Map.RMP",
+    "sha256": "fac71cca645dfcfeaa5a8787879cb39177c6946588e1d2e7cf7a06fba229949d",
+    "keys": ["name_192", "name_195"],
+    "input_bytes": ["E4", "FC"],
+    "decoded_utf16": ["00E4", "00FC"]
+  },
+  "tests": {
+    "status": "passed",
+    "command": "cargo test -p aa-runtime --release --locked --offline -j 4 --test localization_bytes --test localization -- --include-ignored",
+    "target_dir": "target/s-restore-string",
+    "log": "qa-output/restore-string-tests.log",
+    "passed": 7,
+    "failed": 0,
+    "ignored": 0,
+    "original_asset_tests": ["original_developer_map_chunk_uses_the_same_decoder", "original_tutorial_localization_coverage"]
+  },
+  "limits_removed": [],
+  "open_gaps": [
+    "Actual font escape table semantics for ampersand/backslash remain unsupported",
+    "Non-ASCII UTF-8 BOM mode remains unsupported",
+    "Control bytes and inner quotes outside bound runtime subset",
+    "Duplicate registration order/native fallback and broader language selection unchanged",
+    "No full game or complete developer-map restoration claim"
+  ]
+}

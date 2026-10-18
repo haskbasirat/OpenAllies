@@ -1,0 +1,13 @@
+FAILED FIRST DEBUGGER ATTEMPT — retained evidence
+The first capture used only STATUS_BREAKPOINT (80000003), whereas this x64
+host reports 32-bit breakpoints as STATUS_WX86_BREAKPOINT (4000001F).
+Consequently none of its inserted int3 traps ran their intended handlers:
+there are zero source captures and zero actual folder-redirection events.
+The diagnostic process subsequently faulted. It was terminated and reaped.
+The original capture.json scope text about fresh redirected profile paths is
+NOT established by this attempt. It is a failed setup artifact, not a native
+FP/profile/source completion receipt. The actual original archive hashes were
+rechecked unchanged. No original executable file was patched. Do not count
+this attempt as gameplay validation or claim active profiles were not read.
+Subsequent attempts explicitly handle the WOW64 trap event codes and log the
+observed redirections before accepting a source observation.

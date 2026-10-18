@@ -1,0 +1,22 @@
+    Blocking waiting for file lock on build directory
+   Compiling aa-numeric v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-numeric)
+   Compiling aa-assets v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-assets)
+   Compiling aa-client v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-client)
+   Compiling aa-simulation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-simulation)
+   Compiling aa-trig v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-trig)
+   Compiling aa-navigation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-navigation)
+   Compiling aa-body v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-body)
+   Compiling aa-spatial v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-spatial)
+   Compiling aa-movement v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-movement)
+   Compiling aa-actors v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-actors)
+   Compiling aa-animation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-animation)
+    Finished `test` profile [optimized + debuginfo] target(s) in 26.98s
+     Running unittests src\main.rs (target\debug\deps\AxisAlliesRust-f619c77e0d66d83a.exe)
+
+running 3 tests
+test world_check::tests::an_empty_component_cannot_produce_a_passing_report ... ok
+test world_check::tests::pinned_world_fragments_pass_without_assets_or_graphics ... ok
+test world_check::tests::every_component_reports_a_changed_native_expectation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 31 filtered out; finished in 0.01s
+

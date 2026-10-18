@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "component": "Native periodic/deferred world scheduling",
+  "native_sequences": 69,
+  "native_period_calculations": 150,
+  "rust_tests": 3,
+  "source_sha256": {
+    "crates/aa-world/src/queues.rs": "b91887c6fd56ea3e8b8b98751d3b02c46286940d147e680c5526cbedc8daf0b9",
+    "crates/aa-world/src/lib.rs": "1f6b9238789b5bc15f36ffaf6e60f2716cb0ec53ed71fe6b723aeecbc25175c3",
+    "crates/aa-world/Cargo.toml": "ebd5fb4e7753a88dbee61f260728be0428ac36949e7f64bd40208d3dbe0df18b",
+    "crates/aa-world/tests/queues.rs": "edbbe09ba4d0f08a58f9a40a1bf7e9c36f47a6aa270008f01640ee2b5884ce8a",
+    "research/phase6-queues/native_queues.py": "d97d136e043675d2d0b2fd67b87300ead5e2e980af39e2643787afb499287395",
+    "research/phase6-queues/native-queues.json": "b8947a936288dc1888155e3c798a46088420032af2118fa178b4ef8fbbc67065"
+  },
+  "limitations": [
+    "Caller supplies actual native clock, precision, queue periods and actor availability.",
+    "Host callback behavior, complete world/admin scheduling and save topology are not reconstructed by these containers.",
+    "Nested dispatch is rejected because its shared-cursor contract is not proven; callback failures retain committed effects.",
+    "Native every-thousandth deferred skip, random periodic buckets, head order, cancellation advancement and ten-second deferred clamp are preserved gameplay scheduling behavior.",
+    "Allocation/log/actor callback seams are distinguished from executed native operations; third periodic owner linking is fixture setup."
+  ]
+}

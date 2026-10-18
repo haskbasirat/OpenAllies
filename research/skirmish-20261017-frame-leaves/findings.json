@@ -1,0 +1,88 @@
+{
+  "status": "author_source_frozen_pending_shared_cohort_execution",
+  "captured_at_utc": "2026-10-17T09:25:15.173838+00:00",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "source_snapshots": {
+    "crates/aa-runtime/src/presentation_timing.rs": "92c8636f8f859c11a43278192267eeb1271f03b59cda46834465fe432fa19479",
+    "crates/aa-runtime/src/presentation_timing_tests.rs": "982e7f5c37050fb6491918d2ed72199fe97ad81a5ad7c994173bf48e9eb012ca",
+    "crates/aa-runtime/src/heartbeat_process.rs": "4a14126de4e2f82ed0eaae262fb0b73cc1d694f2f740377fd14345ec287eb184",
+    "crates/aa-runtime/src/restore_lifecycle.rs": "bf8f9b29dd6a2aa2007b4a55ed8756f07a3069091072ad4110483c87c09e4023",
+    "crates/aa-runtime/src/simulation/borrowed.rs": "79c6ff090a6ad9ece4bf4e87871f512ca6af078d22b0d5ace49de79f0ed09998",
+    "crates/aa-runtime/tests/borrowed_driver.rs": "d7940524a94c8b21f1da5aafcc7451171c4a54b579932a59d6cd3d543a2faeb5",
+    "crates/aa-netcode/src/heartbeat.rs": "4a5f4e91e15f40e0bc9cf2f662780d4f35cd32ee4dcf7814356a7902766cb91e",
+    "crates/aa-netcode/src/local_frame_heartbeat.rs": "764258a6857326e73b449d2754a62b69c3cc1fdec40b6a948f53e4ce4fda295f",
+    "crates/aa-netcode/src/local_frame_heartbeat_tests.rs": "7b9cc9128835c69ba98bca09e236c5355335c2a47d53dfba70ff6479095c7112",
+    "crates/aa-netcode/src/local_frame_duration.rs": "dfe1f55f56504bfdb3bdb9bcbeff128f4e1ab869f90a802af3edf9ee5b9fd461",
+    "crates/aa-netcode/src/local_frame_duration_tests.rs": "6840d0e4eb5c68ee9ea1deb811d20c080a9bca84de3e53bf754a9d9f27b8c7a3",
+    "crates/aa-netcode/src/local_frame_end_condition.rs": "e6f3ba21b0a3d29c78aa5467084a35e8fd98b3c4f3fd934296f71d754ed6707b",
+    "crates/aa-netcode/src/local_task_protocol.rs": "7c4f7f22e2facee3e282a9a1df2ecd1b2c51424abfdbaf0779d0a642567ebdaa",
+    "crates/aa-netcode/src/local_host.rs": "23ba4ffab133d41ffef2e5419b83f189b8eec9be29f6ca395d50d5c29791a306",
+    "crates/aa-netcode/src/local_bootstrap.rs": "bdea135385f0571ef73ade32a2bad9bbde70afe8680455d56b4e967bfee07fdf",
+    "crates/aa-netcode/src/local_frame_host.rs": "faf38376c6cca2b87b509e7dae88024994dd1b4dc8a04f43a1977608ce46b45f",
+    "crates/aa-netcode/src/local_all_tasks_services.rs": "2b2ceabc316cd8beee06324803b30c0076a156888581eb51a8c609079bd23981"
+  },
+  "shared_source_note": "Whole-file pins are snapshots; author freeze covers only assigned edits/new files, not concurrent peer changes in these shared files.",
+  "native_proofs": [
+    {
+      "producer": "native_presentation_timing.py",
+      "producer_sha256": "a660df3de8707435890d6cd54ae1c473399a2f8853eb0760b0d52db1207c862e",
+      "fixture": "native-presentation-timing.json",
+      "fixture_sha256": "5bc9e200f38f51176529f4f0e9f2d62116ffc3577dd927b5198dfb425880ded3",
+      "rows": 3048,
+      "constructors": 6,
+      "executed_pin_count": 51,
+      "scope": "Whole ctor41C1F0 and finite41C180 arithmetic;866060 typed f64 input, not real timing backend; precise required time/factor cuts"
+    },
+    {
+      "producer": "native_local_heartbeat.py",
+      "producer_sha256": "e04b008fd0cc35c0bb16466d89184534a96203c9a47eefa14a0cf518cdf6616b",
+      "fixture": "native-local-heartbeat.json",
+      "fixture_sha256": "a5130eb29dc5b521b78b21610ac9fdb0e2346b810faba8667b5d6420345d378a",
+      "rows": 120,
+      "constructors": 0,
+      "executed_pin_count": 1045,
+      "scope": "Actual75B820 self peer; supplied current fields and explicit diagnostic boundary; no native whole Host/clock/frontend proof"
+    },
+    {
+      "producer": "native_frame_duration.py",
+      "producer_sha256": "ab90bb3dcfd4422082890957cb4d30586939a7fa5e76f781662aed200c3933b3",
+      "fixture": "native-frame-duration.json",
+      "fixture_sha256": "ee8e53b44156f3f8015a1a70d6658dc3dc587b31aba03bb935e579e3e535f754",
+      "rows": 792,
+      "constructors": 0,
+      "executed_pin_count": 313,
+      "scope": "Actual752AE0; explicit59ABA0u32 and76F790 callback seams, recorder/playback null; finite initialized nonnegative raw-history windows"
+    },
+    {
+      "producer": "native_frame_end_condition.py",
+      "producer_sha256": "d5a7be7ad31a41509c9e6d4b8900997195276ede1a4ab6f57ae941f4f15c4b24",
+      "fixture": "native-frame-end-condition.json",
+      "fixture_sha256": "aa5dbc9baa3c2389591a64fe5ecbcab1aa293814894fdffdbf4b69f2807ecc04",
+      "rows": 36,
+      "constructors": 0,
+      "executed_pin_count": 17,
+      "scope": "76F600 guard and required76BA90 boundary only, no later Session16E/World/UI effects"
+    }
+  ],
+  "rust": {
+    "isolated_timing": "2/2 passed; exact production file included,3048 rows+6ctors",
+    "current_typecheck": "cargo check -p aa-netcode --lib --tests --release --locked --offline -j4 PASS37.25s; check-frame-leaves-final-v2.log",
+    "pending_shared_cohort": [
+      "local_bootstrap::frame_heartbeat::tests(2)",
+      "local_bootstrap::frame_duration::tests(2)",
+      "local_bootstrap::frame_end_condition::tests(1)",
+      "aa-netcode --test heartbeat",
+      "aa-runtime --test borrowed_driver"
+    ]
+  },
+  "limits": [
+    "No full battle/frame/readiness/activation claim",
+    "Actual frontend must lend retained process owners and diagnostic sink",
+    "41C180 positive enabled writer/real866060+AVar backend unbound",
+    "Positive remote heartbeat services and76F600 HumanOpposition/UI branch remain required",
+    "752AE0 timer/World seams are explicitly typed inputs, not actual platform/wholeWorld execution",
+    "Negative/unretired/overflow raw duration windows explicitly refused; no fixed capacity cap"
+  ],
+  "readme_sha256": "4713c122fa8fd9184d671e1640c66ced5bcf5f39c965b553d590edc87fdfe79e"
+}

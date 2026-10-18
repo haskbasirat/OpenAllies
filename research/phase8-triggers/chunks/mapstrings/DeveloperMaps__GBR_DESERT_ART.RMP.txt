@@ -1,0 +1,10 @@
+[Text language=Default]
+{
+	ids = map_strings_table
+	name = "GBR_DESERT_ART"
+
+	kingdom_1 = "Side 1"
+	kingdom_0 = "Side 0"
+	map_name = "GBR_DESERT_ART"
+	map_description = "Map Description"
+}

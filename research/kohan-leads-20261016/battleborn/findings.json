@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/Ensrick/kohan2-battleborn",
+  "commit": "7f911fa8da5d53c1b7d0264f1a03d0cfab88f250",
+  "tree": "f486540655236cb190d3ddaf4c809db92ee2cca1",
+  "project_scope": "Kohan II gameplay mod and developer tools; no original engine source identified",
+  "selected_text_files": 13,
+  "selected_text_bytes": 127809,
+  "repo_tree_blobs": 170,
+  "engine_source_extension_candidates": [],
+  "license_reading": "MIT grant for author-owned repository content; explicit TimeGate game-content exclusion; GitHub API NOASSERTION",
+  "downloads": "selected UTF-8 text and public metadata only; every size, Git blob SHA-1 and SHA-256 verified",
+  "no_repository_code_executed": true,
+  "no_archive_DLL_exe_map_patch_texture_game_asset_downloaded": true,
+  "no_production_changes": true,
+  "no_mod_balance_ported": true,
+  "combat_value_result": "No4BBF90/4BB590/combat-value formula in selected documents/tools; not a whole-patch-content negative search",
+  "useful_leads": [
+    "Ability-animation reference checking; staticAA4BF990 missing idle/ability diagnostics and equal-duration check",
+    "Strict inherited template fields and brace-less child placement regression themes",
+    "K2 load-order tool is explicitly heuristic; nativeAA exact ordering remains authority",
+    "K2 resource mounting and handshake are author claims requiring AA verification",
+    "TGCK layout corroboration; AA reader already exists, K2 Header/stamp assumptions not portable"
+  ],
+  "NIF_result": "No Gamebryo/NIF/skin/material/billboard/controller implementation in selected text",
+  "AA_static_observation": {
+    "path": "reconstruction/research/native-aa/pseudocode/004bf990.c",
+    "sha256": "731b0ca5f24782b4dfda22729859745f2ab1e3205c68267c5f401c2be36f1524",
+    "scope": "existing static export inspection; no new full4BF990 native execution/parity claim"
+  },
+  "coordination": "qualified AA observation and absence of combat formula sent directly to settlement_completion",
+  "inputs": [
+    {
+      "path": "research\\kohan-leads-20261016\\battleborn\\fetch_references.py",
+      "sha256": "d4a5339537771e0d5baf0b67d6d67501a528dafccdb4cb4f15a2de3ea1bb7a62"
+    },
+    {
+      "path": "research\\kohan-leads-20261016\\battleborn\\REVIEW.md",
+      "sha256": "0c6e19d5f65abbbb85a3f2eaaeb396f1309fbb0c6ad59e3126e11b5b07ee9be9"
+    },
+    {
+      "path": "research\\kohan-leads-20261016\\battleborn\\verification.json",
+      "sha256": "fd3c3c048d57e7dde77a90a23739a9437e03aa481ebcbc5e446e573d56a24b2f"
+    },
+    {
+      "path": "reconstruction/references/kohan-leads-20261016/battleborn/download-manifest.json",
+      "sha256": "ad40a87904211ce8f826d4476b85050ac1ce12c34e2a96295e45d17bdd318936"
+    }
+  ]
+}

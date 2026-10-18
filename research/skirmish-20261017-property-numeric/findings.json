@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "status": "bounded author and independent proofs accepted",
+  "native": {
+    "numeric": {
+      "rows": 66,
+      "provided_rows": 9,
+      "executions": 150,
+      "instruction_addresses": 971
+    },
+    "variables": {
+      "rows": 12,
+      "executions": 24,
+      "instruction_addresses": 168
+    },
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "rust": {
+    "actual_numeric_and_current_cells": "1/1 passed immutable",
+    "prior_property_instance_regression": "1/1 passed immutable",
+    "log": "author-final-immutable.log"
+  },
+  "storage": {
+    "same_held_properties": true,
+    "same_ability_arena": true,
+    "same_world_variable_owner": true,
+    "temporary_instance_arena": false,
+    "source_precision": "actual same Bank Double53; live arithmetic all3PC",
+    "staged_bank": "not supported by this pre-staging binding; missing Catalog Bank is required error"
+  },
+  "guard_rows": {
+    "missing_sources_default_or_absent": 12,
+    "required_mover_or_morale_boundary": 6
+  },
+  "gaps": [
+    "576C70 positive Mover speed/group/Mind",
+    "578300 positive maximum morale",
+    "561D40 positive linked-Body recursion",
+    "post-staging moved-Bank numeric binder",
+    "all prior checkpoint Enchantment/Settlement/positive propagation/FX limitations"
+  ],
+  "historical_correction": "v1 missing-clamp proof did not supply a SVar. Root supplied runtime now correctly reads Multiply index6A/+1A8/default0.05; Add index69/+1A4/default1 remains separate. No ClampSub exists.",
+  "freeze_sha256": "b6272d61e7aa300030af928360648a1d86c03afee49ccdec8f424a198703056d",
+  "independent_review": {
+    "path": "independent-state-binding/independent-review.json",
+    "sha256": "0b214c885752c2ea661945eb4a56470494794806467e824bb8caf2058d1fe742",
+    "numeric_runs": 150,
+    "variable_runs": 24,
+    "actual_numeric_rust": "1/1 passed 8.53s",
+    "prior_instance_rust": "1/1 passed 8.67s",
+    "requested_fixes": []
+  }
+}

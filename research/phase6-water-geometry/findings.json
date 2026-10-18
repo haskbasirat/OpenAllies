@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "status": "Native saved water footprint helper implemented; full80-map original x86 replay passed",
+  "source_files": [
+    "crates/aa-client/src/water_geometry.rs"
+  ],
+  "producer": "research/phase6-water-geometry/native_water_geometry.py",
+  "native_path": {
+    "terrain": "557AD0: after tile records, 7AA9B0 loads region auxiliary state; terrain versions greater than5 then call GMap+5C virtual+4. Original vtableA3AF1C maps that method to55C540.",
+    "region_stream": "7AA9B0 version0 and enabled byte; if enabled, ordered node vector via7BBAF0 and cell vector via7BACF0. Each side entry via7B94A0 is version0 plus four shorts and one word. Runtime region graph publication is not claimed.",
+    "cache_stream": "55C540 version0; vec2 vertex array55B470, u32 index array4CD0F0, count and four-word cell records. Records are x,y,first,last-inclusive.",
+    "lookup": "55B9E0 computes unsigned cell key x+y*GMap.width, invokes55B410 to search collision chains at cache+28, and copies all four recordwords on success.",
+    "render": "7377F0 checks lookup boolean: absent records call7376B0 regular fullquad; present records iterate first..last inclusive through saved index andXYvertex arrays. Existing inverted index range emits no vertices; it is not treated as missing.",
+    "correction": "55B4E0 places shoreline doodads along paths and is not proof of cache triangulation generation."
+  },
+  "validation": {
+    "structural_maps": 80,
+    "nonempty_saved_caches": 9,
+    "empty_saved_caches": 71,
+    "crete_saved_cache": "Empty: last16bytes of TERRAIN are version0,zero vertices,zero indices,zero cell entries. Absolute payload offset697799.",
+    "native_maps": 80,
+    "native_seconds": 149.5,
+    "rust": {
+      "command": "AA_GAME_ROOT=E:/Games/Axis and Alies cargo test -p aa-client water_geometry::tests -- --include-ignored",
+      "passed": 3,
+      "failed": 0,
+      "actual_map_corpus": 80
+    },
+    "clippy": {
+      "command": "cargo clippy -p aa-client --all-targets --no-deps -- -D warnings",
+      "exit_code": 0
+    }
+  },
+  "limits": [
+    "Only serialized region/cache version0 and original TERRAIN v6/v7 suffix contract are supported.",
+    "Region objects are consumed for stream position only; navigation connectivity and runtime publication are not produced.",
+    "Runtime regeneration of shore cache after terrain edits is not implemented or claimed.",
+    "The helper preserves XY footprint only. Native height sampling, per-cell water selection, depth colors and GPU composition belong to water_render and separate evidence.",
+    "Invalid source extents, out-of-range triangle references, nonfinite vertices, duplicate cell records and trailing bytes fail explicitly."
+  ],
+  "hashes": {
+    "crates/aa-client/src/water_geometry.rs": "815ace75eb27967d80ad33450f7d1549914dc14cb4ca1cb35862b61a3fdb0c16",
+    "research/phase6-water-geometry/native_water_geometry.py": "e3f73397fc6f895384b72e16337cf87ddba57bda0cae015f20f076cd6da0f658",
+    "research/phase6-water-geometry/native-water-geometry.json": "e353d003bb2e8700a7d8c2895274ccef459e8d90c2c033206df651dc4a9fb8f0"
+  }
+}

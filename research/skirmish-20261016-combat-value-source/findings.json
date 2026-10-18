@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Immutable source inputs for future native ActorData combat-value completion. No completed1E4/Children30C/Weighted36C arena or gameplay value is exposed.",
+  "passed": true,
+  "files": {
+    "crates/aa-runtime/src/combat_value_source.rs": "65f17058002d56d78872200961b8ab6daf11864732ebc711b29953bd00791bee",
+    "crates/aa-runtime/tests/combat_value_source.rs": "10fb03fbf8afe1ec2646cb0f6970cef1c99999b558952c76729a506b397b19fd",
+    "research/skirmish-20261016-combat-value-source/actual-source-inputs.json": "3759502a6a4a931a547139d28bf1482b338e27eb25038df79ff49c92e640123f",
+    "research/skirmish-20261016-combat-value-source/native_source_inputs.py": "6db655ce5f4b4745d913d4f80c2fd5ffc97e2edae9ee4932c951bcb36d3e7315",
+    "research/skirmish-20261016-combat-value-source/native-source-inputs.json": "1f173047edbeeff15af6d85bb92bb7c0308840e65ddacd59201c2fce2a72d396",
+    "research/skirmish-20261016-combat-value-source/native-run.log": "0df2180a89e6ae21fc717e923bda2528e153507b7cd2b8606d4164ae4e7c1819",
+    "research/skirmish-20261016-combat-value-source/final-tests.log": "dda38266e1d3cc7f2ee1dc14c1474feb8cf9b4d2813ed6a8a4e7ee742ef33f79",
+    "research/skirmish-20261016-combat-source-settings/findings.json": "a5a32ba13b49091d49d04ff9ff47e1c7fd69aaa53e1f01802f5dbc20d1954f4f",
+    "research/skirmish-20261016-combat-source-settings/native-source-context.json": "fbb6c976a0b48feaa451aa5cd0a755745e2016df516560fcc29256fa7e9be80f"
+  },
+  "api": [
+    "definition_inputs(&Catalog,canonical_id,source_precision)->DefinitionInputs",
+    "ability_input(&LoadedAbility)->AbilityLocal",
+    "actor_manager_order(&Catalog)->ActorRegistrationOrder",
+    "ActorRegistrationOrder::require_no_source_diagnostics(): conservative guard, not completion certificate"
+  ],
+  "real_source": {
+    "diagnostic_note": "Includes native syntax notices, not11 asserted load failures. No diagnostics are dropped.",
+    "definitions": 10,
+    "retained_actor_registrations": 1028,
+    "definitions_tested": [
+      "usa_infantry",
+      "gbr_infantry",
+      "ger_infantry",
+      "jpn_infantry",
+      "rus_infantry",
+      "usa_corps",
+      "gbr_corps",
+      "regiment_usa_infantry",
+      "herd_horse",
+      "usa_airfield"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "input_cases": 30,
+    "retained_diagnostics": 11
+  },
+  "new_native": {
+    "static_mapping_ranges": 6,
+    "getter_executions": 240,
+    "explicit_leaf": "45E090 records arguments and returns laboratory values; neither those responses nor native prefix1E4 stores are claimed as real computed combat values.",
+    "definition_argument_prefix_executions": 60,
+    "executed_instruction_pins": 132,
+    "prefix_stop": "461BA0 before Children30C",
+    "images": [
+      "original",
+      "v14"
+    ],
+    "ability_getter_rows": 60
+  },
+  "rust": {
+    "target": "target/s-combat-value-source",
+    "command": "AA_GAME_ROOT set; cargo test -p aa-runtime --test combat_value_source --release --locked --offline -j4 -- --include-ignored --nocapture",
+    "failed": 0,
+    "ignored_not_run": 0,
+    "tests_passed": 3
+  },
+  "source_facts": [
+    "Existing completed ActorBindings/LoadedPerformer supply mask/body/mover/local Ability facts with explicit source precision.",
+    "Manager kind2 order reverses native registration, exact canonical root provenance avoids second Thing translation.",
+    "Property list reuses native_actor_properties historical lookup/head ordering; reloaded/incomplete registered field owners error.",
+    "Organization children preserve default source slot_groups and canonical/null parameters.",
+    "Weighted35C is Denizen Inventory, with native case-sensitive grouped duplicates and signed counts; later constructor behavior classification is not substituted."
+  ],
+  "separate_context_evidence": {
+    "not_counted_as_new_input_cases": true,
+    "facts": "4BCA00 prepend,4BD800 order/PC inheritance,empty UVarCSV cache,main-thread source call chain; no observedWindows/D3DFPCW",
+    "owner": "/root/restore_checkpoint/observer_load_lifecycle",
+    "native_cases": 42
+  },
+  "remaining": [
+    "Completed Settlement460940 model-fit radius and WallSet geometry for global means.",
+    "Actual effective10numeric settings and UVarCSV/WorldRule/profile scope.",
+    "Observed source-thread precision/CRT environment receipt, distinct from restore precision.",
+    "Source diagnostics classification and all reached source owners before full completion.",
+    "FullActorDataCV arena and livePerformer+60 producer.",
+    "Per-record Init/PostCreate, battle publication, skirmish/multiplayer."
+  ],
+  "compatibility": "No aa-rules source/parser files, manifests, original game, saves, releases or runtime Catalog/saved-adapter files edited. Runtime lib.rs oneexport appended; root owns release integration."
+}

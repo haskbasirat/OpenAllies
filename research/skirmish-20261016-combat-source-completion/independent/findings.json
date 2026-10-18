@@ -1,0 +1,100 @@
+{
+  "status": "accepted_bounded",
+  "scope": "Independent review of one Bank-owned native combat-value dependency slice and fixed captured-reference provenance. Not a full 4BD800/source-loader, world, battle, or gameplay readiness certificate.",
+  "reviewer_modified_production": false,
+  "freeze": "final-freeze-v2.json",
+  "final_frozen_files_checked": {
+    "crates/aa-runtime/src/combat_source_completion.rs": "1c344cdaad8c25fd4eb0ad0226c6e5bc2f4449e2537d1762c31a98f740a3cd59",
+    "crates/aa-runtime/src/combat_source_receipt.rs": "a8c072a64dfbd9372addc4d5ecabd93e43dfa069fe21d8f039b5215df5669be0",
+    "crates/aa-runtime/src/combat_value_source_context.rs": "8fe47977fd73d4e830524b3da01097ae6b1073f763496408cd27d0afb1e68e8f",
+    "crates/aa-runtime/src/definitions.rs": "0fb1b9f27b0a710317855d2d2c2c901b2c1958f9e1b722bdc0262270f25e4dfc",
+    "crates/aa-runtime/tests/combat_source_completion.rs": "de596c669b9c5b04759e2a20d013908b246679e8437b935493f8146b5cb1798f",
+    "crates/aa-combat/src/combat_value.rs": "edae2afd73094bc9ea7543a725091dec3e6f35b100fc92462b168f04f88d0cc6",
+    "crates/aa-combat/tests/native_combat_value.rs": "0b4238169d65ad00725d2402206d310ea5a6a1f2a391f2fe6c737717df8d439b",
+    "crates/aa-rules/src/settlement_completion.rs": "96681e582889234ecf8d3dd054f8ff380566416307d298327fa9ec7b4e7d506b",
+    "research\\skirmish-20261016-combat-source-completion\\native_source_completion.py": "fdd499b3712e32bbf2e745a7c2d9a2f3064f6441c1e0d6f474f7e91cb413c50b",
+    "research\\skirmish-20261016-combat-source-completion\\native-source-completion-v3.json": "9cf80416bda9e81edd660dd388fa82dbac4090acf4771d73c407b1096b5ad5d0",
+    "research\\skirmish-20261016-combat-source-completion\\full-source-inputs-v3.json": "e386dce57d010d1507a84a6df60503c47e6785b4d845b057302fb8041a9fc871",
+    "research\\skirmish-20261016-combat-source-completion\\compare_windows_capture.py": "bdcc4368f625c9d0cc95daf14caa2fdf87512cce0095714241b18408c30129a2",
+    "research\\skirmish-20261016-combat-source-completion\\windows-v14-comparison-v3.json": "9fb43ac5b8bcaaf6d17c3c192b3bed11e7d208e099a8dbed39c215e109ee3a7d"
+  },
+  "checks": [
+    {
+      "check": "native immutable replay",
+      "result": "pass",
+      "cases": 6,
+      "images": [
+        "original",
+        "v14"
+      ],
+      "precision": [
+        "Single24",
+        "Double53",
+        "Extended64"
+      ],
+      "values_per_case": 1028,
+      "ordered_events_per_case": 5333,
+      "instruction_pins": 1302,
+      "report": "native-receipt-review-v3.json",
+      "qualification": "Native producer, v3 inputs, fixture and kernel remained unchanged after the host-only install provenance guard repair. The replay report records the earlier host receipt hash; final guarded Rust tests and the final freeze checks cover the repaired host source."
+    },
+    {
+      "check": "independent source/reference encoding",
+      "result": "pass",
+      "source_identities": 1647,
+      "copied_reference_runtime_files": 54,
+      "all_full_component_masks_match_windows": true,
+      "reference_result_sha256": "89c2baaa07597bd227b10e0912e1012a43ac316db5edbc391338b267f4375927"
+    },
+    {
+      "check": "native kernel Rust regressions",
+      "result": "pass",
+      "tests": 4,
+      "log": "cargo-kernel.log"
+    },
+    {
+      "check": "final guarded actual-source completion Rust tests",
+      "result": "pass",
+      "tests": 3,
+      "ignored_included": true,
+      "log": "cargo-completion-guarded.log",
+      "covers": [
+        "whole shipped 1028 definition cache and event order at all precision settings",
+        "observed fixed reference result publication through external and portable verifiers",
+        "destination source/typed-setting receipt transplant refusal before token/state publication",
+        "census and unsupported source dependency guards"
+      ]
+    },
+    {
+      "check": "ownership and publication",
+      "result": "pass",
+      "details": "Non-Clone State is owned by one Bank and moves with it. Stable typed tokens retain native manager order and shared cache identity. Published getters require Complete, sealed FP/CSV provenance and an independently computed complete result fingerprint. Failed computation retains partial stores and refuses retry."
+    },
+    {
+      "check": "archived source diff",
+      "result": "pass",
+      "evidence": "archived-diff-manifest.json",
+      "details": "Real prior archive supplies exact pre-edit bytes. Kernel change only adds required lazy identity-cache binding callback at its native point. No parser change or imported cached-value fallback."
+    }
+  ],
+  "resolved_defect": {
+    "issue": "The initial host install could apply a valid reference receipt to a different destination source/numeric binding if the final combat result happened to remain unchanged.",
+    "repair": "Install revalidates the destination full source fingerprint before mutations and shares the same strict all-ten typed numeric verifier as receipt creation. Regression rejects a changed unrelated source identity and a changed discard raw assignment.",
+    "status": "fixed and final guarded tests passed"
+  },
+  "qualifications": [
+    "The portable verifier attests a fixed embedded reference algorithm/build receipt and current logical inputs/results. It is not observation of the current Rust thread or a running native process.",
+    "Actual observed startup FP state is PC53 in capture03; PC24 and PC64 remain explicit laboratory inputs.",
+    "Input-binding failure may leave previously interned Bank tokens, but installs no State until complete binding succeeds. No transactional rollback claim.",
+    "Nonempty Upgrade/Settlement geometry, shared or externally overwritten Performer abilities and unsupported manager closures refuse explicitly; no fabricated success/default.",
+    "Prerequisite source passes have separately audited CV-disjoint typed nonalias writes; their full non-CV work is not completed by this module.",
+    "Full world lifecycle, restored placement, battle UI/commands, multiplayer and campaign remain outside this acceptance."
+  ],
+  "commands": [
+    "$env:CARGO_TARGET_DIR=\"target/s-graphics-review\"; $env:AA_GAME_ROOT=\"E:\\Games\\Axis and Alies\"; cargo test -p aa-runtime --test combat_source_completion --release --locked --offline -j4 -- --include-ignored",
+    "$env:CARGO_TARGET_DIR=\"target/s-graphics-review\"; cargo test -p aa-combat --test native_combat_value --release --locked --offline -j4",
+    "python research/skirmish-20261016-combat-source-completion/independent/replay_review.py"
+  ],
+  "production_and_author_fixtures_preserved": true,
+  "remaining_blockers_in_reviewed_scope": []
+}

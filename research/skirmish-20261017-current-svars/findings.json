@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "status": "bounded_current_store_source_reset_publication_and_enabled_sync_acceptance_passed",
+  "scope": "Controlled fresh source, no imported profile/console overrides; all231 actual current typed Vars. Not a315/world/battle readiness certificate.",
+  "current_owner": "ONE canonical typed Store<Entry>; all gameplay getters/setters and Combat Values borrow same cells. SAME moved Bank source owner retained.",
+  "constructor": {
+    "registrations": 135,
+    "machines": 6,
+    "pins": 4678,
+    "registration_transport_disclosed": true
+  },
+  "full_source": {
+    "final_registrations": 231,
+    "machines": 6,
+    "pins": 9487,
+    "source_current_comparisons": 693,
+    "registration_transport": false,
+    "source_reference": "svar-field-order/native-full-sources.json"
+  },
+  "setters": {
+    "rows": 201,
+    "native_calls": 402,
+    "machines": 6,
+    "pins": 1390
+  },
+  "reset_publication": {
+    "map_rows": 18,
+    "native_calls": 24,
+    "machines": 6,
+    "pins": 1561,
+    "whole_reset_474c50": true,
+    "whole_publication_512200": true,
+    "explicit_descriptor_and_lookup_transport": true
+  },
+  "rust": {
+    "executor": "/root shared frozen cohort46",
+    "binary": "qa-output\\development10\\runtime-tests46.exe",
+    "binary_sha256": "5479a189fd13aefcec627a84cd7a63c6ddcd2914f9b5d6212b75b1738e2ea56c",
+    "capture_tests": "3/3 PASS7.22s",
+    "immutable_replay": "3/3 PASS5.92s",
+    "logs": [
+      {
+        "path": "research\\skirmish-20261017-current-svars\\runtime46-canonical-svars-capture01.log",
+        "sha256": "041c34497b07f9408416c6a3431f226561f096f93e9254ade432eed57bde0f08"
+      },
+      {
+        "path": "research\\skirmish-20261017-current-svars\\runtime46-canonical_svars-tests.log",
+        "sha256": "d49ae2437ae03900d97573caf860bd55be43106b905b5ceb3b5cdd761ed03399"
+      }
+    ],
+    "enabled_sync": true,
+    "same_cell_raw_cheatfog128": true,
+    "same_moved_bank": true
+  },
+  "limitations": [
+    "WorldRule descriptors are actual-source-bound Rust inputs for native474C50/512200; complete descriptor construction remains separate prior evidence.",
+    "Bounded nonfinite Fixed clamp requires explicit unsupported portable error; actual source assignments are finite. flags0 raw runtime scalar bits remain exact.",
+    "Native host heap/CString/parser line and named lookup transports are disclosed by producers. No allocation/SEH/corrupt-pointer failure parity claim.",
+    "Existing sealed Windows capture supplies ordered registration/type metadata only; no captured current/reset values are imported.",
+    "Simultaneous independent World current stores, arbitrary profile/console overrides and full process reset lifecycle are not certified."
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/canonical_svars.rs",
+      "sha256": "64ecf2107f2d0e971ce12ee0ffbf0fec41b0ee2bdd2a494a7c7dbe724a27f7c0",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\canonical_svars.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/canonical_svars_tests.rs",
+      "sha256": "0fcbb83ef62c00828b466e4b5400e352d659ef3de3d6d43cda92a1bd40eae3e3",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\canonical_svars_tests.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/svar_constructors.rs",
+      "sha256": "9166a3c362ec14a25809627185b89fa5fc63e0ff8cea6c4d1e1265d3f9b4dd9d",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\svar_constructors.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_view_variables.rs",
+      "sha256": "af1b84cbe873d55d53e95d33e14f2bfa57cd3da3c8abfe768e2e9de698bfaf9f",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\load_view_variables.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_combat_variables.rs",
+      "sha256": "383fdadea18cbc630fa175300ef69b876208fd1afb2d6caccbed9dcde76a8ac9",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\load_combat_variables.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_combat_variables_tests.rs",
+      "sha256": "7f726db0936172d80b4f74a85013c03a3a08be402593c7f3891ceb96ce95a820",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\load_combat_variables_tests.rs"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native_constructors.py",
+      "sha256": "2bc1d339defef66684904a07d837b78fa9e43fa35a0955a83b61baa429909713",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native_constructors.py"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native-constructors.json",
+      "sha256": "de6f951d5c8f4809d93249a51d72eb3b731f4eb392f50badc75dad2d2957cfa6",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native-constructors.json"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native_setters.py",
+      "sha256": "d87e46a021018ad3984bce1ac1689b4bc8dba60bd832741836d815f9ed010bae",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native_setters.py"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native-setters.json",
+      "sha256": "9b31909e42ce2b75c1d549d4beb8c78270016a264fdd0fd21d1e8bfb1a26fbe5",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native-setters.json"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native_reset_publication.py",
+      "sha256": "7d69af6fc6878e55f84551c6e2d8adefbcda7613055cd33b9a1f7233eab38b1a",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native_reset_publication.py"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/native-reset-publication.json",
+      "sha256": "b2dd26996596fcd113c056fa84b503b8a4c4300979fa3b60541230ab10e97b20",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native-reset-publication.json"
+    },
+    {
+      "path": "research/skirmish-20261017-current-svars/actual-current-inputs.json",
+      "sha256": "59c6f5b7f530fb9d188c4a0015b5aa6a66a6b52ae3de93c6fe391434a9e42653",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\actual-current-inputs.json"
+    },
+    {
+      "path": "research/skirmish-20261017-svar-field-order/native-full-sources.json",
+      "sha256": "2f8946e02b62c10715478078cda065db8442cc09eb92f1a00c7b62b470dbc4bc",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native-full-sources.json"
+    },
+    {
+      "path": "crates/aa-rules/src/native_field_order.rs",
+      "sha256": "224ccb0c56f3847c36e053e779bf898e181df7ed82412282c54f9909e55cfafa",
+      "snapshot": "research\\skirmish-20261017-current-svars\\source-frozen\\native_field_order.rs"
+    }
+  ],
+  "legacy_current_tests": {
+    "combat_values": "root46 2/2 PASS6.03s",
+    "old_view_variables": "1/2 passes; actual reached only stale expected error message after genuine forged FogOfWar rejection. Test-only exact canonical guard assertion corrected, queued future cohort; no production change, no claim this corrected test reran."
+  }
+}

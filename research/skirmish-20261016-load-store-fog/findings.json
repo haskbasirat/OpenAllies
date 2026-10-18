@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "status": "bounded_checkpoint_passed",
+  "scope": "Actual staged ActorStore global Fog order and first positive memory allocation/time prefix; not complete global Fog or mission",
+  "freeze_sha256": "b82f2f6a70cf224907ac0cc0b9a8a7c3c5f23e8f256f8b42d2caeb174c953c15",
+  "native": {
+    "cases": 1728,
+    "separate_original_v14_runs": 3456,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_address_pins": 154,
+    "intercepted_memory_entry_pins": 1,
+    "memory_return_is_test_only": true,
+    "fixture_sha256": "e056f4f906d1e9c17295f45a6914bbd93981b3e0a033d24ffbbbe1c0fdbec4ce"
+  },
+  "rust": {
+    "coordinator": "1/1 passed",
+    "shared_memory": "2/2 passed",
+    "shared_actor64": "2/2 passed",
+    "shared_predicates": "2/2 passed",
+    "actual_capture": "1/1 passed 56.93s",
+    "actual_immutable": "1/1 passed 61.72s",
+    "test_profile_overrides": {
+      "LTO": false,
+      "codegen_units": 16
+    },
+    "shipping_profile_unchanged": true
+  },
+  "actual": {
+    "records_moved_from_genuine_stopped_attempt": 113,
+    "explored_tiles_before_stop": 741,
+    "total_tiles": 16384,
+    "actor": 28,
+    "native_class": 9,
+    "canonical_definition": "temperate_pine_trees",
+    "kingdom": 781,
+    "record_allocation_count": 1,
+    "slot_count": 3,
+    "timestamp_bits": 0,
+    "stop": "4EC4D3 actual staged Object virtual24 memory-name/refresh owner",
+    "same_object_and_memory_allocation_preserved": true
+  },
+  "unbound": [
+    "positive virtual24 and subsequent complete memory refresh at this checkpoint",
+    "container and active/present observer children",
+    "dead-object visibility",
+    "unsupported class virtuals",
+    "complete scheduler/PostLoad/mission/battle/multiplayer/campaign"
+  ],
+  "logs_sha256": {
+    "native-replay-final.log": "527577a36c27ed3138b5a332013edd21786d777119f5f1d6b895e0806e8fd494",
+    "final-native-row-rust-replay.log": "56138d36d3af2e39ecbce0ff13dc94a4b417aa418131b0d4d982bca99219a000",
+    "actual-staged-prefix-capture-05.log": "4119561c0ae375ba62db33b325776323b5bddd36a2d95cddb609b5011bc16e71",
+    "actual-staged-prefix-immutable.log": "d4612b4519eda1e12b43b8bedaf38f65793c75b2e074870446a86acdd2c88f38",
+    "shared-memory-regression.log": "1b58fdb7052ba374e5d894ad1f7265c9832846d36faa907b78d5a0ccc1962191",
+    "shared-actor64-regression.log": "57f9eae7b46dac5e0edef6f55e4dfb00c3d61bc4ce091352e60536a5f56f1435",
+    "shared-memory-predicate-regression.log": "3b09537477a4694ce61e2b5a14aa665f0d102e9aa68ebc47ddf81aa6b453176e",
+    "shared-special-predicate-regression.log": "3a3aa3743faf6bf0d782e6b72d157584683729cda08a3d7c53a510340f70f3c7"
+  }
+}

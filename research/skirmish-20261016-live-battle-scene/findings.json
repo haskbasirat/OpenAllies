@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "scope": "Read-only native owner-to-renderer bridge, exact raw-map sample correspondence, concrete visibility leaves and source RGB. Not a playable battle.",
+  "date": "2026-10-17",
+  "source_sha256": {
+    "crates/aa-client/src/live_battle_scene.rs": "8cade7c8922b64c1a53967c3f6af32235a7ab1e6f7f4a3a2ae516b0c6f4a5511",
+    "crates/aa-client/src/live_battle_scene_tests.rs": "71b8e12d163f66e8be4aabd7453dc09d8e23c3d1beb9876855591fa084eb1e41",
+    "crates/aa-client/src/live_battle_visibility.rs": "d1408f93e251477019fb2d465500a2fe571de47cd8daefb8a1f711c6996a6938",
+    "crates/aa-client/src/live_battle_visibility_tests.rs": "fe75c89b26db723f9cdd9516add26a1d6b7e963105185ea35e5a0043d5403bc4",
+    "crates/aa-client/src/rendered_map_source.rs": "b87c69ba3fb686ddec41200aef23e7095cccfce5a64bf805f4b5d39f17066678",
+    "crates/aa-client/src/live_scene.rs": "702dcdb136d622a2fcb158af3ddba014cbab309dd33f53b1dd479e75778ed771",
+    "crates/aa-client/src/loading.rs": "52b725962411a4bf07c174f2e08f7c626f969ebebdaf499b365df427e3348c22",
+    "crates/aa-runtime/src/actor_world.rs": "776f2b6cc23ee863330f0b02fcca2f029e0a0d936e815b4ba3e8f9ee6dad66e3",
+    "crates/aa-runtime/src/spatial_world.rs": "7fcc91af66a8438ff6053a5141546f3ec5cff5a9c1b1b65203998d18cf6509e0"
+  },
+  "native": {
+    "visibility": {
+      "rows": 408,
+      "executions": 816,
+      "instruction_pins": 247,
+      "fixture_sha256": "6f29035fea4430cc4fab7282985c533d42bc2118fe194c0cdb3936f57e4c6118",
+      "generator_sha256": "17866f3df2ce98e8df0709d4e5c69587e40ac1a8ac85957e11c5c00256a1829b",
+      "replay_log": "native-visibility-replay.log",
+      "scope": "Unchanged native visibility getters with explicit view-global inputs.\n4EEF70/4EA1D0/4D3B80/4D3C50/54EB40/54EB70/4364C0 execute, including\nactual class vtables and live Organization/Element pointers. Only OS thread\nidentity is seamed. No full renderer, player bootstrap, fog-variable producer,\npositive Flare5733A0 or remembered-model-selection proof is claimed.\n"
+    },
+    "color_load": {
+      "rows": 21,
+      "executions": 42,
+      "instruction_pins": 41,
+      "fixture_sha256": "c7ada3fe10c3023763fa04b25e479f4286d6179b2ef4943fd068803705cab25a",
+      "generator_sha256": "c2d5c01b7499b1086c0390c359e1b8a60a41ff2fb9af48ecd6d6aa4835297205",
+      "replay_log": "native-color-replay.log",
+      "scope": "Unchanged47E0F0 KingdomColor LoadData RGB word stores.\nThe inherited name is empty. Localized-name lookup/assignment and GetPoint3\nare explicit typed-field seams; full TGI parsing, constructor seed, manager\nregistration, default replacement color and renderer routing are not claimed.\n"
+    }
+  },
+  "rust": {
+    "status": "Final six-test replay passed: 6 passed, 0 failed, 0 ignored; 408 native visibility fixture rows replayed; real v14 source/model, actual native source colors, exact map-sample/mesh correspondence and lifetime guards passed.",
+    "command": "cargo test -p aa-client live_scene::battle --release --locked --offline -j4 -- --include-ignored",
+    "target": "target/s-client-dev09",
+    "game_root": "E:/Games/Axis and Alies",
+    "log": "tests-05.log",
+    "log_sha256": "d4970776453f4ea46be00d46a25f7bad73df34695beb0d96259af29ca2f0d947",
+    "all_jobs_reaped": true
+  },
+  "behavior_changes": [
+    "Actual native pose/facing/scale read every collection, required Presentation result, existing transactional publication only after full validation.",
+    "Private per-instance Arc identities with opaque Weak witnesses reject same numeric actor/spatial keys from foreign or dropped/replaced owners; immutable SourceGeometry Arcs compare by ptr_eq. No gameplay fields, IDs, RNG or wire changes.",
+    "Current raw map manifest/chunks/grid/tile/palette/GTID-position prefixes checked; exact raw height/mountain binary32 values replace only in-memory rounded samples and regenerate actual PreparedTerrain before draws. Every apply checks rendered-map hash.",
+    "Concrete native +70/+74/4EEF70 reads actual component/shared-mask owners; positive Flare and missing real view services remain required errors.",
+    "Actual current Kingdom+1E8 canonical Color reference reread on each query; immutable source RGB order/provenance retained."
+  ],
+  "integration_not_done": [
+    "Actual managed map completing all startup and index adoption before public bridge binding.",
+    "Production CurrentView current local Kingdom/VWorldState, mutable FogOfWar variable, thread identity and editor owners.",
+    "Full memory model/definition/owner routing4EAB20/4EACC0/4EAD70 and positive5733A0.",
+    "main.rs live-battle hook, actual managed-World-to-GPU frame smoke test, controllable battle."
+  ],
+  "rendering_scope_limits": [
+    "Raw sample inputs and converted placement prefix are certified; renderer conditional terrain arithmetic is not bit-exact native x87.",
+    "No model/material/texture conversion correctness, complete model coverage, pitch/roll/animation or full memory ghost rendering claim."
+  ],
+  "untouched": [
+    "Original game files",
+    "Recovered source archives/SDK",
+    "On-disk converted assets",
+    "Saves and profiles",
+    "Release/Dev09 artifacts",
+    "Manifests and Cargo.lock",
+    "main.rs"
+  ]
+}

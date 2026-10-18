@@ -1,0 +1,148 @@
+WORLD UPDATE AND TICK SCHEDULER: NATIVE ORDER, NOT COMPLETE GAMEPLAY
+Updated 2026-10-14 (phase8-tick round 2).
+
+Implementation: crates/aa-world (world update, transitions, removal requests,
+queues), crates/aa-runtime/src/clocked.rs (world + queue adapter) and
+crates/aa-runtime/src/simulation.rs (+ simulation/speed.rs) (frame/admin/world
+scheduler). Evidence: research/phase2-world-order, research/phase6-queues,
+research/phase7-runtime, research/phase8-tick (README.txt, findings.json,
+fpu-precision.md). The original x86 executable SHA256 is
+5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26. Every
+executed original range is byte-identical in the accepted v14 native
+3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1; the oracle
+JSON files pin each range and its bytes.
+
+Gameplay leaves (actors, components, manager, decree handlers, network) are
+explicit callbacks/seams everywhere below. No concurrency, sorting, command
+injection or speculative phase labels are introduced.
+
+1. FRAME LOOP AND CLOCKS (aa_runtime::simulation)
+
+TGC_NetNode::Update 0x765410 runs on its own TGC_Thread (callback thunk
+NetNode+0x40, started at 0x41ABDC; not the Direct3D thread). Each call runs
+the admin node frame 0x75CA70, which performs AT MOST ONE simulation step:
+  a. disconnect timeout (+0x2CD, 2.5 s) -> 0x751770 reset   [Unsupported]
+  b. network pump 0x776540, command processing 0x75C9A0
+  c. stop unless running (+0x2C0) and an admin clock (+0x158) exist
+  d. gate = min(GetNextTickEventAdminTime 0x76AF90, admin time +0x28C); a
+     real admin clock below the gate waits (wall clock only delays)
+  e. RenderDumpAVI frame pump 0x76B030 (UVars +0x1C8/+0x1CC)
+  f. 0x76AF90 < admin time (strict) -> WORLD TICK 0x752AE0 -> 0x76F790 ->
+     0x4F9970 (replay record 0x74D640 / replay playback 0x751A40 first);
+     otherwise ADMIN TICK 0x755290 if allowed: host unless in backup mode
+     (session f4 && mode && +0x2D4), client while processed +0x20C < received
+     +0x218
+  g. heartbeat 0x75B820 when due (+0x2DC = 1/NetworkAdminAsyncTicksPerSecond
+     + now); it is network only (backup chat/vote decrees, statistics)
+  h. the server node (+0x2C8) runs the backup-mode decision 0x759680 /
+     SetBackupMode 0x757250.
+Clocks: world GWorld +0xDC tick, +0xE0/+0xE4 begin/end, +0xE8 step =
+1/GameTicksPerGameSecond (shipped 16); admin time +0x28C, +1/16 per admin
+tick (0xA8C084); KKC_Sim timeline 0xB36554 (+0x10..+0x1C game/admin
+interval, +0x20 GameSpeed, +0x24 max 64, +0x28 paused, +0x29 frozen, +0x2C
+game seconds per admin tick = min(2^GameSpeed, 64)/AdminTicksPerSecond via
+SetGameSpeed 0x76F370 / 0x76B230 / CRT pow 0x96D890). The admin/world
+interleaving is a deterministic function of timeline, speed and x87
+precision. Decrees run only in admin ticks (host 0x752E60/0x752EA0, client
+0x74FD10 -> 0x74D710 -> 0x766CE0) or, in replay playback, right before
+0x4F9970. SetFrozen 0x76DD90 resets the timeline with 0x74B180/0x76DCE0.
+
+x87 precision: the authoritative tick runs on the net thread, whose CW is
+the Windows initial 0x027F (PC53); Direct3D (created without
+FPU_PRESERVE) sets PC24 only on the main thread. Static evidence and the
+dynamic check procedure: research/phase8-tick/fpu-precision.md. Precision
+remains an explicit input to World, Queues and Driver.
+
+2. WORLD UPDATE 0x4F9970 (aa_world::World::step)
+
+  1. Fog callback with (SVar fog flag OR world flag).
+  2. Request phase 1; increment optional auxiliary counter.
+  3. Invoke first-tick callback only when the old tick field is zero.
+  4. Increment tick with wrapping32; begin=old end;
+     end=float32(signed new tick * stored step). Stock step is 1/16 second.
+  5. Traverse deferred payload list +1A4 in forward order. Read next AFTER
+     the callback, so tail insertion can be visited in the same pass.
+     Then clear all nodes of this list.
+  6. Queue Update slots +1AC (every tick), +1C0 (1 s), +1D4 (5 s), +1E8
+     (deferred), in that order.
+  7. Request phase 4; call manager +13C (0x54C280).
+  8. Request phase 5; queue Update +208 (deferred).
+  9. Request phase 0; perform retained-list +110 scan.
+Timing instrumentation (0x41C0E0/0x41C110, KKC_TimingStats) is excluded.
+
+3. TRANSITION 0x4F65B0 (World::transition)
+
+An equal old/requested phase returns without draining either queue.
+Leaving phase 1 or 4 sets phase 2 and drains +100. Each node is popped before
+its leaf call; owner's current +60 component is passed to 0x561C20. New
+queued work can be drained during the same transition.
+
+Every unequal transition next sets phase 3 and drains +108 from the head.
+Each object goes through the 0x4F53D0 body: availability callback, virtual
+BC selects classlist 188 removal, otherwise virtual C0 selects classlist178
+removal; if the phase is not 6, virtual 90 then virtual 8C run. A true 8C
+invokes F0(true), ORs object flags with 0x81, then prepends to retained110.
+Otherwise F0(false), registry unlink, E0(true) run. Finally the requested
+phase is stored.
+
+4. RETAINED SCAN
+
+Virtual8C true keeps the node; its next pointer is read after the predicate.
+For false, next is cached before deletion callbacks. The current node is
+unlinked, registry unlink runs, availability/classification runs, then
+F0(false), registry unlink AGAIN, E0(true). The duplicate registry operation
+is native behavior. A head prepended by deletion callbacks waits for a later
+scan.
+
+5. REMOVAL REQUEST 0x4F6760 (World::request_removal; clocked::request_removal)
+
+An object already on +108 is ignored (returns false, no flag change).
+`destroy` sets object flag 2. Outside phases 3/6 (and phase 0 of session
+mode 3) the object is PREPENDED to +108 (0x542A00): the next transition
+drains the newest request first. In phases 3/6 (or 0 in mode 3) it is
+removed now (0x4F53D0, as above) or destroyed now (0x4F5490: virtual B4 and
+the GTID table 0xB364C0 entry for actor+0x158 may redirect to the live
+object; virtual 2C(3), flag 2, availability/classification, F0(false),
+registry unlink, E0(true)). Oracle: research/phase8-tick/
+native-removal-request.json (11 cases). enqueue_back/enqueue_front remain
+laboratory insertions.
+
+6. QUEUES (aa_world::queues)
+
+Periodic queues +1AC/+1C0/+1D4 (vtable A30BE0: Update 0x50B330, add 0x50B2C0
+which draws ONE world RNG value for the bucket); deferred queues +1E8/+208
+(vtable A30C24: Update 0x50B020, add_after 0x50AF10, add_at 0x50BA50). Bucket
+counts ceil(period/step) from World Init 0x4F27E0 (stock 1, 16, 80).
+Deferred dispatch removes an event before its callback and skips every
+1000th callback (native). Updatable registration wrappers check the
+Updatable's own gate virtual first: 0x50AC00 (queue 0), 0x50AC60 (queue 1),
+0x50ACC0/0x50AD20 (queue 3), 0x50AD80 (queue 4); 0x50B250 cancels all.
+
+7. AUTHORITATIVE RNG
+
+World RNG GWorld+0xD4 (seeded by KKC_Sim::CreateGWorld 0x76AA90 through
+0x85D880), accessor 0x4F02B0, draw 0x85D840. Inside a tick it is drawn only
+by callbacks in the dispatch order above and by periodic registrations.
+Census: research/phase8-tick/rng-sites.json.
+
+8. VALIDATION AND LIMITS
+
+aa-world: 12 world-dispatch fixtures (phase2), queue sequences (phase6), 11
+removal-request fixtures (phase8). aa-runtime: native runtime/queue
+fixtures (phase7), 31 frame-driver cases / 776 frames and 180 timeline rows
+(phase8-tick native-tick-driver.json), GameSpeed/pow/admin-clock/SetFrozen
+rows (native-tick-round2.json). Not ported (explicit seams): network pump,
+command processing, decree decoding and handlers, replay record/playback,
+sync-log transport, heartbeat, 0x76F600 end-of-session UI check, 0x41C180
+timing statistics, SAI think. The CRT pow is reproduced exactly for
+integral GameSpeed and at the binary32 store otherwise (sampled, see
+phase8-tick README). Unicorn's x87 transcendentals are binary64-accurate
+only (research/phase8-tick/emulator-limits.json).
+
+List storage grows with work rather than an arbitrary count cap; insertion
+uses fallible reservation. A callback that continually enqueues work can fail
+to terminate, as can the native loop. Callbacks are trusted engine code.
+Errors and panics are not transactional; a failed step or frame stops the
+runtime/driver and is never retried automatically. Invalidating a current or
+cached traversal node returns an error instead of emulating use-after-free.
+No parallel leaf execution is claimed safe.

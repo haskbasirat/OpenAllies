@@ -1,0 +1,59 @@
+{
+  "scope": "Forward actual retained Staged mode binding into readonly tail Catalog; authoritative World owner/comparison unchanged",
+  "before": {
+    "actual24_prefix": "tail",
+    "run_seconds": 79.17,
+    "error": "immediate load world source/precision/mode owner differs",
+    "root_cause": "New readonly Catalog had native_load_mode None, actual loaded World/staged binding Some1",
+    "full_immediate_and_postload": "completed"
+  },
+  "change": "read.native_load_mode = staged.native_load_mode; no constant/default/new mutable owner",
+  "actual25": {
+    "completed_record_lifecycles": 2366,
+    "build_seconds": 93,
+    "run_seconds": 93.39,
+    "retained_prefix": "mission",
+    "binary_sha256": "c36f8d2bef26d67efbb47764fb8041c3b607be5b84606b85888e65bf4dafa485",
+    "next_error": "map preparation host failed: creation world callback failed: fresh componentDenizen InitCreate568750 concrete owner is required (classStandard(Denizen)); earlier effects remain committed",
+    "fresh_actor": {
+      "definition": "ger_corps",
+      "snapshot_sha256": "0e35d35c5f2d0c50aa0d7ac5679f0234f736061ec097a8e522d6ce0deb87ffa4",
+      "phase": "AwaitingInitCreate",
+      "native_kind": 2,
+      "key": 2362,
+      "component_mask": 7974753,
+      "gtid": 1688,
+      "native_class": 3,
+      "mind": "actual Installed Element Mind1"
+    }
+  },
+  "milestones": [
+    "Complete immediate saved-record lifecycle with native caught skips retained",
+    "Successful PostLoad",
+    "Successful load tail and same index adoption",
+    "Successful MapResource return/table retirement",
+    "Actual StartMission entered mapPrepare and first source-created actor; StartedMission not yet minted"
+  ],
+  "limits": [
+    "Passive snapshot is genuine retained failure graph, not an Init entry hook",
+    "Full mutable original replacement Params not retained; actual constructed CreationRecord is",
+    "Snapshot addresses are diagnostic lifetime addresses, not native pointer identities",
+    "Denizen568750 task delegated to Settlement;570020 not reached",
+    "No battle activation/live frame/playable claim"
+  ],
+  "source_pins": [
+    {
+      "path": "crates/aa-netcode/src/local_skirmish_startup.rs",
+      "sha256": "4fcfde57ae3491ebbdad93d8aa3f31af9c07fadc85c061af9e3d776c115bb7f2"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world.rs",
+      "sha256": "2bf544848406eec2614b2a031e078241d499f9668e8b62a702d9b1995d9af244"
+    },
+    {
+      "path": "crates/aa-runtime/tests/playable_battle_startup.rs",
+      "sha256": "dc78c7b7a0961235c45d2b3149311a9090838184aee8ee2e3cc0969824a1d694"
+    }
+  ],
+  "profile": "release lto=false codegen-units16 --locked --offline -j4"
+}

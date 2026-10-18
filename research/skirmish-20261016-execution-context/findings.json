@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "status": "author checks passed; independent review pending",
+  "scope": "actual captured application ID and real ASYNC single-job driver; bounded native caller/constructor fragments and required OS/lock/base/wait seams",
+  "native": {
+    "paired_rows": 48,
+    "executions": 96,
+    "unique_executed_instruction_pins": 471,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "rust": {
+    "captured_identity_tests": 1,
+    "actual_windows_worker_tests": 3,
+    "failed": 0
+  },
+  "created_publication": {
+    "api": "publish(&Catalog,&mut Record,&mut dyn ExecutionIds,&mut State<Command>,flag:u8)",
+    "production_check": "passed",
+    "scope": "root-owned sameManager/heldRecord integration follows; this author seal does not claim actual saved Created events were published",
+    "native_dependencies": "frozen skirmish-20261016-fx-graph compilation/4296B0 command evidence plus existing constructor-vtable/currentE8 getter proofs"
+  },
+  "limitations": [
+    "single-job Rust worker; not full recurrent TGC_Thread signals/manager lifecycle",
+    "native emulator OS inputs are explicit laboratory answers, not actual native Windows execution",
+    "actual Windows Rust tests call real Kernel32 IDs; no dynamic original-game worker CW measurement",
+    "no precision choice from thread name or role",
+    "Created true-application-thread timestamp still requires actual View+8C; view delivery/destruction remain explicit required services",
+    "gameplay/map completion acceptance remains root-owned"
+  ],
+  "hashes": {
+    "crates/aa-runtime/src/execution_context.rs": "97044fdfdfa1baaecafaa081381fb38b8a352e1dffe7f11a07b866c98b6acc7d",
+    "crates/aa-runtime/src/load_creation_fx.rs": "6bd539d6fa58ed9989c53b89eda364d8b407198902ed3f1a751a24e9e3f29b20",
+    "crates/aa-runtime/tests/execution_context.rs": "a0092ddf8aafbbf6bc14875f6cbac8216f7bc85db40e6a85927e53d318f2688f",
+    "crates/aa-runtime/tests/resource_worker.rs": "8302a47c30280aee5972776887a9e249bc53814bc38ce740a952cff058a4154f",
+    "research/skirmish-20261016-execution-context/author-worker-rust-replay-final.log": "64d623cc77cd9a936be2ef831a4b3a53a4c60f1caddd7d99a707030cfaaca7ea",
+    "research/skirmish-20261016-execution-context/native-async-worker.json": "9c99cf0baa71749abf1b91a9ae586873456f92c8e99ffb21852bbf12d92d77e0",
+    "research/skirmish-20261016-execution-context/native-execution-context.json": "f5c2863437916748207d4478111fd637bb129374c005d184a0e3bf0b54f85e75",
+    "research/skirmish-20261016-execution-context/native_async_worker.py": "826a7ec2e43df30d9a1751516abb9ae5cd85ce0c588718f9a35226bb3b19dc5e",
+    "research/skirmish-20261016-execution-context/native_execution_context.py": "fc41c1da71333f5cde32b5384d87dcea87a208adb9a0c06825cd5579ecfd379a",
+    "research/skirmish-20261016-execution-context/README.md": "083f2aed768d040aa75cfae99ec78682cc4c86201403534619cda6a24e497271"
+  }
+}

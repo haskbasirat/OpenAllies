@@ -1,0 +1,265 @@
+SKIRMISH FIRST -- EVIDENCE-BASED INTEGRATION CHECKLIST (2026-10-16)
+
+LATER SOURCE UPDATE:docs/SKIRMISH-CONTINUED-20261016.txt is authoritative.
+The audit below predates the4FDA70 coordinator and skirmish_start Nation/random
+helpers. Those bounded pieces now exist and are tested; full StartMission and
+replacement capture/drain/destruction/creation/publication remain unfinished.
+Development08 is unchanged. This checklist is not a completion percentage.
+
+Scope: continue the original-machine-code Rust port toward a real skirmish,
+then multiplayer. Campaign/strategic-mode work is deferred. This is a source
+and recorded-evidence audit, not new gameplay acceptance, an ETA or a completion
+percentage. Do not revive the rejected aa-game/aa-net implementation.
+
+FIRST MAP
+Use the existing original DeveloperMaps/(3v3)Firefight.RMP unchanged.
+The recovered map catalog describes it as a three-versus-three elimination
+map. It is an authored multiplayer map, not a synthetic two-actor arena.
+Terrain: 128 x 128 cells; original header world extents are 256 x 256 units.
+Original file SHA256:
+  c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b
+
+Final native restoration census:
+  2,377 placement records / 2,386 registered objects including Kingdoms/Teams;
+  zero failed records, zero pending class conversions, zero native drops;
+  PostLoad completed, zero discarded saved updates;
+  RNG 3724158463 before PostLoad -> 3627657861 after PostLoad.
+This is the smallest clean multiplayer candidate in the census. Preserve all
+six authored player slots and the independent kingdom; do not manufacture a
+two-player variant by deleting actors or changing native rules.
+
+Retail-map fallback: (3v3)Stalingrad.RMP, 224 x 224 cells / 448 x 448 units,
+3,068 placement records / 3,078 registered objects, zero failures/conversions/
+drops, successful PostLoad, unchanged PostLoad RNG 2526933173. Whole file SHA256:
+  c3527631dfcd82ca8ed861c4b6a0fc7fd12b04be5133fa9eebba0541a958f5f9
+(2v2)Market_Garden.RMP is also clean but has 5,691 registered objects.
+
+Do not choose BorealForest because its registered count is only eight: that
+1v1 map still has 843 class conversions awaiting native replacement. Golden
+Fields has nine such conversions and six missing-definition drops. A small
+partial world is not a shorter path to faithful gameplay.
+
+STARTING ACTORS ARE NOT YET AN ARMY
+Firefight's recovered class-3 placements are six start_loc markers, six
+placeholder_corpsunpacked, twelve placeholder_bunker, three resource_ammo and
+two resource_oil. Its original RMP diagnostic resolves all 29 saved actor-owner
+references: four actors per major Kingdom (saved IDs 1676..1681), five for the
+independent Kingdom (1694); there are two Teams. Map header nation/faction IDs
+are blank. These are setup inputs for native launch selection and substitution,
+not instructions to render placeholders as completed nation-specific buildings.
+
+No original infantry army should be guessed from these counts. Compare the
+native game's actual final launch state after nations, player assignments,
+starting profiles and stockpiles have been applied. Then port the same creation
+and replacement sequence, including IDs, ownership, properties, queues and RNG.
+
+WHAT ALREADY EXISTS
+- aa-mapworld decodes the original header/IDMGR, Teams, Kingdoms, terrain,
+  actor payloads and ownership. aa-runtime::restoration::Attempt joins the
+  original/v14 catalog, localization, RNG, clock and restored components.
+- Attempt::into_staged preserves canonical ActorStore ownership;
+  Staged::post_load installs saved queues and calls the native-order PostLoad
+  pass. The final census is evidence for this boundary, not a running world.
+- aa-actors ports creation control flow and component leaves;
+  aa-mapworld::fresh_creation binds Object/DynamicDoodad creation, while
+  actor_world has owned ground construction and explicit remaining callbacks.
+- aa-runtime::clocked and simulation, aa-world::queues and aa-simulation
+  contain the native world/admin clock and ordered scheduling machinery.
+- Commands, Mind lifecycle, movement/formation/pathfinding, combat, economy,
+  production, zones and RTS AI have substantial component ports with separate
+  native oracle fixtures. Their World/Effects traits still require integration.
+- aa-netcode has session/staging/order-history code and a NetworkSeams bridge.
+  These are reusable by a real local session before internet work.
+- Development08 displays original menus and assets. aa-client does not depend
+  on aa-runtime or aa-netcode, and RequestCustom/actual match entry remains
+  disabled. Live preview uses its own diagnostic actor/time, not this world.
+
+CRITICAL PATH / ACCEPTANCE CHECKLIST
+
+[x] 1. Reproduce Firefight under StopOnError with original/v14 source inputs.
+    Completed dedicated regression: crates/aa-runtime/tests/skirmish_restore.rs,
+    log qa-output/resume-20261016/skirmish-firefight-and-tail.log. All2,386
+    objects and29 saved actor owners match, no errors/skips/conversions,
+    PostLoad RNG ends3627657861, and publication remains explicitly refused.
+    Saved resource_ammo/resource_oil resolve through original translate.tgi to
+    canonical ammo_bunker/oil_refinery (3 and2 actors respectively).
+    Entry: aa-runtime/src/restoration.rs Attempt::load -> into_staged ->
+    Staged::post_load. Preserve saved ordering, saved clock/RNG and owner IDs.
+    Source evidence: qa-output/resume-20261016/final-inventory.json, whose
+    mode is InspectPartial. A clean entry is a strong candidate, but must be
+    rechecked through the fail-fast path before any publication permission.
+    Acceptance: no record errors, no pending replacements, PostLoad complete,
+    canonical registry and queue owner identities intact. Do not hide SUN or
+    MISC_DATA omissions: restoration.rs explicitly says these remain unrestored.
+
+[ ] 2. Bind actual local skirmish launch/settings and map task.
+    Reuse aa-netcode/src/staging.rs::launch (77A950), change_to_state (77A750),
+    auto_assign_kingdom (778D10), and launch_assignment.rs (779F00).
+    Remaining host calls: 775DB0, 770500, 776B20, 775EE0, timer/freeze/order-version
+    transitions and actual Kingdom assignment. lobby_staging.rs only supplies
+    the settings copy; its Effects::launch_step/load still require real work.
+    Decompiler leads: 776B20 FinalizeLaunchSettings supplies selected seed and
+    setup, 775EE0 CreateLaunchTask selects the map task, and 76BE80 constructs
+    the load-game task via 59E6F0. Trace the selected task/vtable for this
+    skirmish mode before choosing any application/map mode or host flags.
+    Acceptance: original launch settings and same nation/player/Kingdom
+    mapping, source map identity, seed, resources and mode. No dummy session,
+    no editor application state 3 substituted to bypass launch branches.
+
+[ ] 3. Complete loaded-world publication and original mission startup.
+    Staged::init_for_loaded_map currently returns Error::Unported. The bounded
+    load_tail_world.rs adapter supplies only camera/local-player 4FD3F3..4FD47C
+    from explicit SessionFacts/WorldFacts; it is not publication permission.
+    Bind real GWorld +148/+14C slots, head-first Kingdom +284 actor lists,
+    native 59E520 mode flag, source starting-location priorities and map size.
+    Do not reconstruct native lists by sorting IDs or scanning owner references.
+
+    Existing economy leaf: aa-economy/src/world_start.rs::world_start (4F1E10),
+    KingdomStatistics::start_world. Missing runtime calls include statistics
+    tracking 58F010 and snapshot creation/push 58F530/45F240, plus the actual
+    world+274 started guard and kingdom snapshot timer/list owners.
+    Bind authoritative scene/spatial/name/owner registration and every native
+    PostCreate effect before ActorStore placements become Spatial-owned.
+
+    Separate from saved-class conversion: original StartMission 4FDCE0 calls
+    Kingdom start 4E6DB0, ResolvePlaceholdersAndRandomThings 4FDA70, fog/start
+    services and world_start 4F1E10 in native order. Kingdom 4E6DB0 already has
+    aa-economy/src/kingdom_start.rs::start_mission; its inputs must come from
+    actual Kingdom/start profile/Commander/Nation sources and its property
+    effects must call real production/research services.
+    No Rust implementation of 4FDA70 was found in this audit. Native leads:
+    Nation substitution 473370; replacement records 4FD7F0 / 4FD8C0; queue
+    4FC500; final processing 4FC4A0. Preserve original property transfer and
+    placement/GTID behavior rather than replacing by string-prefix heuristics.
+    The mission-start orchestration needs an original/v14 oracle before it
+    can claim fidelity; existing kingdom-start fixtures prove only that leaf.
+
+    Map-preparation leads, when reached: 4FB9E0 / 4FBA10 -> 552100, 4FB640
+    PrepareMapFixStartLocations, 4F6B50, 7ACB00 topology; 4F8FE0 verifies map
+    status. aa-navigation::topology_builder::build ports 7ACB00 but requires
+    the real map host. Do not force map verification flags to success.
+    Acceptance: native-equivalent nation-specific corps/bunkers/start markers,
+    resources and created actors, same ordered queue effects and RNG; no live
+    placeholders or unbound callbacks in the path. Firefight avoids unrelated
+    saved-class conversions, but does not avoid this mission-start substitution.
+
+[ ] 4. Run the genuine first tick, then repeated idle ticks.
+    Connect aa-runtime::simulation::Simulation::step / Driver::frame (75CA70)
+    to clocked::Runtime::step / aa-world GWorld update 4F9970, with native
+    world wrapper 752AE0 -> 76F790 and admin tick 755290. Keep original
+    interleaving: at most one simulation step per driver frame, commands in
+    admin ticks, original world RNG sequence and PC53 simulation arithmetic.
+    `clocked::Services::{effect,predicate,update_component,resolve_handle}`
+    needs a real unified owner; no production implementation was found in
+    aa-client/runtime. Bind Owners::target to the actual component subtype,
+    kingdom tick, managers, fog, triggers, availability and removal lists.
+    Reuse aa-netcode::seams::Network / aa-orders::net::seams::NetworkCore;
+    SessionSeams and GameEffects remain mandatory. Local single-player mode
+    must use the original local-session behavior, not success-returning stubs.
+    Acceptance: trace the first and subsequent original ticks, compare clocks,
+    queues/GTIDs, resources, RNG and actual side effects; explicit stop on a
+    missing leaf, preserving already-committed effects. A clock that advances
+    with no component work is not a successful milestone.
+
+[ ] 5. Issue one authentic move/stop order to an original-created unit/regiment.
+    Order path: aa-orders commands::process_actor/process_selected and
+    deliver_actor_command (4D9B60 admission/routing), then real component
+    dispatch. Bind restored Mind command ownership once with
+    ActorStore::bind_restored_commands before accepting further commands.
+    aa-runtime::mind_world::Services::invoke_command, enter/leave/reset/state,
+    stance/actions and completion callbacks are still required.
+    Reuse aa-navigation control::process and native Element/CAI move state
+    handlers; formation/path results must use actual layout/leader/member data.
+    movement_world::MotionWorld currently binds ground motion, not complete
+    Mover Tick. Wire aa-movement::mover::tick (577E50), including falling,
+    suspension, overlap refresh, zero-speed stop, and active-component gates.
+    Supply PlacementHost/LowPathHost, terrain-speed/property values, collision,
+    terrain/height/zone data and native topology. Do not move a preview model
+    directly as a substitute for an accepted movement command.
+    Acceptance: original-order admission, route/path, formation, collision,
+    arrival/stop state and matching RNG, including blocked-path cases.
+
+[ ] 6. Make the first real attack/damage/death and ongoing economy work.
+    Reuse aa-mind::uai_kill::{choose,think}, CAI engagement, aa-combat::performer
+    lifecycle/timed events and execution::dispatch_from_performer/use_ability,
+    then real aa-body damage/credit and begin_death/removal services.
+    Bind actual owner relationships, zone target visibility, weapon/source
+    definitions, cooldowns, animation timing, projectile/effect ownership,
+    Body health, morale, experience and statistics. Do not approximate damage
+    with a new distance/DPS loop. These traits are component proof boundaries,
+    not evidence of a joined runtime combat path.
+    Use one removal path: aa-world request_removal and its list drain, not a
+    second kill queue. Route kills/capture/economy/trigger events to their real
+    canonical owners; construction/research use aa-production's existing ports.
+    Kingdom supply/resource tick 4E9C40 must be scheduled and share the actual
+    CommanderExperience/statistics storage. Preserve configured v14 caps/rules.
+    Acceptance: native-equivalent damage, killed unit removal, queued event
+    cleanup, resources/supply and credit; no stale identity or fake observer.
+
+[ ] 7. Complete a skirmish before enabling that menu entry.
+    Bind RTS SAI in aa-mind/src/sai (manager::think 7A0080, goal/profile,
+    map analysis and command emitters) to the same world and native order path.
+    This is battle AI; it does not require doing campaign/strategic-mode work.
+    Bind detection/zones, formation, recruitment, construction, research and
+    original elimination/objective/end-condition logic. Include the map's
+    actual triggers; this audit has not established which ones Firefight uses.
+    Add the client dependency and authoritative world-to-renderer snapshots,
+    actual selection/orders and aa-ui::hud::HudWorld. Existing staging/HUD
+    placeholder demo providers must not become the playable session.
+    Acceptance: start an unchanged original map with real chosen setup, move,
+    recruit/build, attack, AI response, win/lose and return to menu without an
+    unsupported callback or invented gameplay. Rendering/AI timing may not
+    mutate simulation ordering. Only then call it a playable skirmish.
+
+[ ] 8. Multiplayer after the same skirmish works locally.
+    Keep native session, request/decree history, deterministic ticks and map/
+    save-transfer paths. Resolve complete launch-setting companion identity
+    on snapshot decode; equal-length lists do not establish correspondence.
+    Bind actual transport and session lifecycle. Test separate processes first,
+    then two Windows PCs and separate internet connections, including hosting,
+    joining, late transfers, disconnect/rejoin and synchronization checks.
+    Component packet/transfer tests are not proof that a match works online.
+    The second PC/separate-internet environment was previously unavailable;
+    leave those checks blocked until real equipment is available. No paid
+    server or subscription is required for this local integration work.
+
+WHERE TO SPEND THE NEXT IMPLEMENTATION PASS
+The shortest next checkpoint is Firefight native load -> real launch setup ->
+publication/startup -> original first tick, with precise failure reporting.
+Keep restored-Mind contributor work for other maps in parallel, but do not
+require repairing all 80 maps or adding campaigns before this vertical slice.
+Session/startup/placeholder binding, world-start statistics/publication and a
+real queue dispatcher are immediate dependencies, not optional polish.
+
+EVIDENCE / LIMITS OF THIS AUDIT
+- qa-output/resume-20261016/final-inventory.json SHA256:
+  0ceb58de7b50e89e0928a6cb2db32dcc692bb4e1d77ec31a1f90318f013deaf2
+  and final-comparison.json: 80-map InspectPartial census at PC53, 20 clean
+  PostLoad entries; no InitForLoadedMap/publication or full match acceptance.
+- Original map catalog and map-actors JSON under reconstruction/game/data;
+  placement JSON is recovery evidence, not the authoritative simulation loader.
+- Read-only Development08 --map-world-check was run for Firefight/Stalingrad
+  during this audit: both exit 0, original header/owners decoded. That diagnostic
+  explicitly does not establish gameplay or mission-start behavior.
+- Rust source paths above and research/phase8-integration-backlog.md. Older
+  request documents can be stale; current source was checked for the named
+  runtime boundaries. New ports by other agents may supersede this snapshot.
+- Native function discovery uses exported pseudocode/calls/string references
+  under reconstruction/research/native-aa. Pseudocode headers identify a
+  different program hash than the current original/v14 reference hashes;
+  treat newly traced function bodies as research leads only. Verify instruction
+  bytes against the pinned executables and generate native oracles before
+  implementing or claiming parity. No fresh Unicorn run was performed here.
+
+Hardware/network limits still exist. Preserve deterministic state and original
+wire/save semantics. Parallelize only work proven independent; do not trade
+away correct startup, ownership, RNG, ticks or gameplay for a progress figure.
+
+BOUNDED FOLLOW-UP AFTER THIS AUDIT (2026-10-16)
+aa-mapworld/src/map_prepare.rs now ports only the 4FDA70 traversal/dispatch
+coordinator against 96 fresh original-code fixture rows; all executed bytes and
+the complete function were verified identical in original/v14. See
+research/skirmish-20261016-map-prepare/README.txt. Nation lookup, random choice,
+replacement parameter capture/drain and actor creation remain required host
+callbacks. No runtime/client binding or mission-ready flag was added, so the
+startup and playable-skirmish checklist gates above remain open.

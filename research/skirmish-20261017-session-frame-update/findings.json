@@ -1,0 +1,86 @@
+{
+  "scope": "Bounded actual Session recurring776540 same-owner path; no activation/gameplay readiness claim",
+  "source_checkpoint": [
+    {
+      "path": "crates/aa-netcode/src/local_session_frame_update.rs",
+      "sha256": "922c59038ed4486265b78b04ff0b6db800d097236343b3984676669d11ca10bb"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_session_frame_update_tests.rs",
+      "sha256": "d3d2f7b5d8a8ab5723171a1e4388647a3063db44dd614eb7bbad02e7bea00c07"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_load_task.rs",
+      "sha256": "a84438971e173005d38a19566924779e16ec7b5b43f3638e8f31d7be026bb39b"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_leave_step.rs",
+      "sha256": "f149372800912ea9c427f2027fed23d3f17f890cf5701485bbebb755efecbc2a"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_host.rs",
+      "sha256": "591e3c13f98157dc87d29484a492ed35f29eed2c368ecf9ab99ef00ab15e8bbd"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_bootstrap.rs",
+      "sha256": "6b65a379bdaf3b22e30565d83f8614c2cad29f50cee8caea8659d996b1cf63e2"
+    },
+    {
+      "path": "research/skirmish-20261017-session-frame-update/native_session_frame_update.py",
+      "sha256": "1a566478482c780111ab4d07ee90650f4fdc0ec21b5626b1bb6bea89c3efca40"
+    },
+    {
+      "path": "research/skirmish-20261017-session-frame-update/native-session-frame-update.json",
+      "sha256": "57230cf309cb2d26889a60a15434c642e90eb73a40dda02cba54503725089789"
+    }
+  ],
+  "native": {
+    "rows": 438,
+    "ctor_integer_interval_rows": 12,
+    "executed_instruction_pins": 97,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "successful_child_seams": 0,
+    "immutable_replay": "PASS",
+    "required_boundaries": [
+      "404F60 completed task diagnostic",
+      "76C960 countdown readiness",
+      "76B570 migration request"
+    ]
+  },
+  "ownership": [
+    "Same SessionFields/TaskSlot/Arc task state mutex; shared775DB0 helper",
+    "Same Node raw2E0 retained by immutable reference; same owner Arc identity",
+    "16C store survives migration request error; no cloned players/clock/logs"
+  ],
+  "checks": [
+    {
+      "command": "cargo check -p aa-netcode --lib --release --locked --offline -j4",
+      "result": "PASS",
+      "seconds": 35.77
+    },
+    {
+      "command": "cargo check -p aa-netcode --lib --tests --release --locked --offline -j4",
+      "result": "PASS",
+      "seconds": 27.66,
+      "log": "typecheck-tests-final-v2.log"
+    }
+  ],
+  "rust_execution": "Pending root aa-netcode shared cohort; two tests typechecked, not executed by author",
+  "host_binding": "Owned by settlement_completion, direct Host.net_pump -> session_frame_update.run; full frame behavior not certified here",
+  "remaining": [
+    "Positive completed task callbacks",
+    "Positive countdown timer/AVar/log/request owner",
+    "Positive migration order request",
+    "Real transport/heartbeat beyond this child",
+    "GUI battle, internet peer tests"
+  ],
+  "qualification": "Full shared files pinned only as checkpoint; no claim of independent approval for unrelated concurrent edits. Constructor zero proof is two real intervals plus static context, not whole75CE80 execution."
+}

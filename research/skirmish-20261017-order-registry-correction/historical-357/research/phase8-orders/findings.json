@@ -1,0 +1,191 @@
+{
+ "schema": 1,
+ "original_image": {
+  "path": "E:\\Games\\Axis and Alies\\AA.exe",
+  "sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26"
+ },
+ "v14_image": {
+  "sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+ },
+ "rust_sources": [
+  {
+   "path": "crates/aa-orders/src/commands.rs",
+   "sha256": "05a0f8690cca67bf2455f319a6e6056e9e6490824e0e351b483444ae00aa9fa4"
+  },
+  {
+   "path": "crates/aa-orders/src/flow.rs",
+   "sha256": "d0e21bb1c5bbf773886d943fc2cdb3b7f0bacd2cbdb10fa3c4019111baa618f2"
+  },
+  {
+   "path": "crates/aa-orders/src/flow_table.rs",
+   "sha256": "d29f5263a4de56fee4955610a7e0fe5c3d20f24092232d43dfc6ec52811fb340"
+  },
+  {
+   "path": "crates/aa-orders/src/lib.rs",
+   "sha256": "1dfa75bbde1e84ff633f2dcdc60621ec12211a5925bdfa6e344d97c1f270a2fc"
+  },
+  {
+   "path": "crates/aa-orders/src/native.rs",
+   "sha256": "61c527a4245fee7e50d7a05bd2223c91defee2dda4c2b472eb43130a3af02e07"
+  },
+  {
+   "path": "crates/aa-orders/src/native_registry.rs",
+   "sha256": "a2550406d270d7dc404ca1a67d469a148295330170594278c798b992ba9a9694"
+  },
+  {
+   "path": "crates/aa-orders/src/net/admin.rs",
+   "sha256": "e4184d6507bf76befe6a8572e6a099b516fecf48c052d275c4cc8abda83a2370"
+  },
+  {
+   "path": "crates/aa-orders/src/net/mod.rs",
+   "sha256": "c1b065a5c570a70ad38dcb1f460c8f5c11c30e5eee8de1998b6562bcfeead147"
+  },
+  {
+   "path": "crates/aa-orders/src/net/seams.rs",
+   "sha256": "a0416ea2317f627a4e95260271ad2c2a671c2eee4b003770c5293d1fd1d8fd47"
+  },
+  {
+   "path": "crates/aa-orders/src/net/sync.rs",
+   "sha256": "084f7f3d2218a3afe24359fa0818af494f60790811fa9bc1d5b51d6c43b60d68"
+  },
+  {
+   "path": "crates/aa-orders/src/net/transport.rs",
+   "sha256": "c83788b88340639caca1c9a55d6d014453b75ce5bb96ad81a99cd702fb4a3541"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/complex.rs",
+   "sha256": "da9ed476e714430ac00c7d4b2babdcd0fea8833397544afa1800d22a639d4e4e"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/editor.rs",
+   "sha256": "91a637092b1c4d216a265b9eff08f7c73e8ee396ee08fd3b5933c1df14a987de"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/game.rs",
+   "sha256": "e1e427685093bfefa858de27229a49d8637c9c205be73d8c30a95a0afe219d1f"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/lobby.rs",
+   "sha256": "121c2a8e34fc08cd3d91cd946f1943430d1694b41c6269f78d4f847c8124cd2b"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/mod.rs",
+   "sha256": "a1befd97bc339cf974f0bdcc3c38b99c79d254e425dc86f8efa7f77149244dec"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/schemas.rs",
+   "sha256": "45c53c2654f32999c824671516546de482271251b2836f18ded9d78a35e55f19"
+  },
+  {
+   "path": "crates/aa-orders/tests/gameplay_orders.rs",
+   "sha256": "e4e29beba3b6664ec34a6b496afc0580c2e1d90806d1ce7bc11ad82d947ea2b9"
+  },
+  {
+   "path": "crates/aa-orders/tests/generic_commands.rs",
+   "sha256": "28365fae59d819196183c4a62b36590a3466af3a728589a78ae1ef8370701b24"
+  },
+  {
+   "path": "crates/aa-orders/tests/native_parity.rs",
+   "sha256": "c0e72410834ed802daca7f3cdea4ad25795ec23629801ed7da1219ba826af36b"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_lockstep.rs",
+   "sha256": "f494e1865859112516d81b618603a82983e21b39fd6358307d3554453bec1855"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_sync.rs",
+   "sha256": "5b2682b08c3c463f25f6b63862c1a433e59517d138b8f64e12f23f228f83bc2e"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_transport.rs",
+   "sha256": "9b23b15dd8d358e71b1abbd7e43967fc4510120730f167a0aa21f09a88b6c5a5"
+  },
+  {
+   "path": "crates/aa-orders/tests/order_flow.rs",
+   "sha256": "2afbb304b1c4e3717ba6991fc561c870bf799c6f45bcbe2ce4e1913214f38784"
+  },
+  {
+   "path": "crates/aa-orders/tests/order_traces.rs",
+   "sha256": "4ea46de677a6ad02a29caafe308e26b9216434edfa8b4ccae08e511c67efaa45"
+  }
+ ],
+ "producers": [
+  {
+   "path": "research/phase8-orders/native_order_traces.py",
+   "sha256": "7c56e4480a07c5031dd8cf2d5e94817368e4956933622b82a4c9099f4d4981b4"
+  },
+  {
+   "path": "research/phase8-orders/native_order_flow.py",
+   "sha256": "85a51837d07f406c2d038354801465c85713c1aecb92462512b07b7d0b63153a"
+  },
+  {
+   "path": "research/phase8-orders/static_calls.py",
+   "sha256": "04a00c31e3a0cb28c88f5d18b8bb152a35511ea11ccc0022e90a9001eb80dc7d"
+  },
+  {
+   "path": "research/phase8-orders/tokens.py",
+   "sha256": "f3e057dc708af6de209216f6096c78f35452c998927d9d049275e7882deb2b36"
+  },
+  {
+   "path": "research/phase8-orders/gen_schemas.py",
+   "sha256": "52afc65349b1b6be517c985f6fc0bc59fbae82624e72907b6c57f9db415314e2"
+  },
+  {
+   "path": "research/phase8-orders/gen_flow_table.py",
+   "sha256": "7d0c59f708017cbf485c2cca73ead3bc89e0caf6040ee5f57a6794b6865f06da"
+  },
+  {
+   "path": "research/phase8-orders/gen_inventory.py",
+   "sha256": "302f3c96606f3bcf84eb835d977bb3be472278a0f6a4c8ef158cad017e6fa2a1"
+  },
+  {
+   "path": "research/phase8-orders/natdis.py",
+   "sha256": "b9b022da8a8099d3e459f126859fcdcd4e4370c553b6ae26687e80d3a50d0a0c"
+  }
+ ],
+ "fixtures": [
+  {
+   "path": "research/phase8-orders/order-traces.json",
+   "sha256": "d7ebea9b772e9addb26bf0d3f739160f6f5def0c6d4027907e4e70ac4927d938"
+  },
+  {
+   "path": "research/phase8-orders/order-flow.json",
+   "sha256": "01da27eeeaccff25890986ff18cef5885bb050e64fd3c204c0ddc9bdcf3a9cc7"
+  },
+  {
+   "path": "research/phase8-orders/static-handler-calls.json",
+   "sha256": "ee2cbb3121ca6f9b8d3e216c6eb2546315c2aeeb6a6a26299e449536d5dc1505"
+  },
+  {
+   "path": "research/phase8-orders/descriptor-write-sites.json",
+   "sha256": "3e34b3dd7f54ac62862030294acdd66a327167e7d9758b478e5dcd787e389d42"
+  },
+  {
+   "path": "research/phase8-orders/inventory.json",
+   "sha256": "49646b6fd831f20d22405d207e6f8a6ca9cc940e4d36c3bc72393a30ec14e2fa"
+  }
+ ],
+ "counts": {
+  "descriptors": 357,
+  "trace_runs": 2856,
+  "trace_runs_decoded": 2839,
+  "trace_runs_native_fault": 17,
+  "flow_cases": 1248,
+  "flow_cases_returned": 1242,
+  "flow_cases_native_fault": 6
+ },
+ "proven": [
+  "all 357 payload encodings (reads, end position, byte re-encode)",
+  "request->decree re-encoding (writes and bytes) except trigger regrouping 293/296 (refused)",
+  "ProcessRequest/decree control flow, sync-log entries, mirror, rejections for all 357 handlers"
+ ],
+ "not_proven": [
+  "order process functions (gameplay/lobby effects) other than phase4/5 ports",
+  "validity rules forced true in the oracle (0x5092F0) and cheat permission rule",
+  "branches requiring game data beyond the declared synthetic environment"
+ ],
+ "tests": [
+  "crates/aa-orders/tests/order_traces.rs",
+  "crates/aa-orders/tests/order_flow.rs"
+ ]
+}

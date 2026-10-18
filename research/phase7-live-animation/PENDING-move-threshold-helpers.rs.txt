@@ -1,0 +1,36 @@
+// Unvalidated draft; resume native fixtures before production integration.
+    ///461190 prepares the kind-2 list in authored insertion order;45DA00
+    ///returns the first inclusive threshold hit. The returned index is the
+    ///original set row, suitable for a canonical scoped animation-bank key.
+    pub fn select_move(&self, set: u32, speed: F32, p: Precision) -> Result<Option<usize>> {
+        let rows = self.for_variant(set)?;
+        let moves = rows.iter().enumerate().filter(|(_, a)| a.timing.kind == 2)
+            .map(|(i, a)| (i, a.timing.walk_distance)).collect::<Vec<_>>();
+        let thresholds = move_thresholds(&moves.iter().map(|(_, d)| *d).collect::<Vec<_>>(), p)?;
+        Ok(select_move_threshold(&thresholds, speed)?.map(|i| moves[i].0))
+    }
+///Native461190 stores each adjacent walk-distance midpoint once; it does not
+///sort this list. The final threshold is the positive finite binary32 maximum.
+pub fn move_thresholds(walk_distances: &[F32], p: Precision) -> Result<Vec<F32>> {
+    let mut out = Vec::with_capacity(walk_distances.len());
+    for pair in walk_distances.windows(2) {
+        out.push(F32(Binary::from_f32_bits(pair[0].0)?
+            .add(&Binary::from_f32_bits(pair[1].0)?, p)?
+            .mul(&Binary::from_f32_bits(0x3f000000)?, p)?.store_f32()?));
+    }
+    if let Some(last) = walk_distances.last() {
+        Binary::from_f32_bits(last.0)?;
+        out.push(F32(0x7f7fffff));
+    }
+    Ok(out)
+}
+///45DA00 finite domain: comparison is inclusive, including signed zero.
+pub fn select_move_threshold(thresholds: &[F32], speed: F32) -> Result<Option<usize>> {
+    let speed = Binary::from_f32_bits(speed.0)?;
+    for (i, threshold) in thresholds.iter().enumerate() {
+        if speed.compare(&Binary::from_f32_bits(threshold.0)?) != Ordering::Greater {
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}

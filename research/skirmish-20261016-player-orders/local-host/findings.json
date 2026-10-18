@@ -1,0 +1,66 @@
+{
+  "status": "bounded concrete local identity/security adapter accepted and frozen; gameplay Effects remain required",
+  "source_sha256": {
+    "crates/aa-netcode/src/local_order_host.rs": "13ab57d8981cca169ff3509163f3ee97cf86a52beddc477e180076b30c6c4cd0",
+    "crates/aa-runtime/tests/local_order_host.rs": "543f4e2486700523b8b27063cc92bb6029b3f7df4ad6461f78e3fa28623f1f24",
+    "crates/aa-orders/src/net/admin.rs": "49a9d07442a04c96fa22b7fd8103e7fb03048f49716be71fe9868259763fb264",
+    "crates/aa-netcode/src/local_bootstrap.rs": "33be02685931762f8351a3ad8bdcc76e1a31f248b89809d0466e00c3e0a4956c",
+    "crates/aa-netcode/src/local_host.rs": "447b3b556c38a7d5a4b76d339a4ef76ed6458568387cca7f01e314e69fe141c9"
+  },
+  "source_ownership": {
+    "new_modules": "local_order_host.rs authored in this scope; same-owner loans in local_bootstrap/local_host belong to saved_state_progress, recorded here as consumed snapshot only",
+    "base_shared_delta": "AdminNode::ordering_context adds disjoint loans of existing canonical284/280 only; no duplicated slots, constants or dispatcher change after base findings.json"
+  },
+  "native": {
+    "fixture": "native-local-order-host.json",
+    "sha256": "bc3f6fd4c940615c787a88e5caf4eed869792f97bb04db6ba5e7c98a00cf281d",
+    "executions": 114,
+    "instruction_pins": 123,
+    "seams": [
+      "404F60 native warning sink only"
+    ],
+    "actual_bodies": [
+      "75D710",
+      "76B8F0",
+      "74B900",
+      "74B400",
+      "8569A0",
+      "74B350",
+      "74B3A0",
+      "766C30",
+      "766C40",
+      "766C50",
+      "766C70"
+    ],
+    "domain": "raw local non-film roster fixtures, source pointer identities normalized to SessionPlayer IDs; not full Node initialization or positive film/remote proof"
+  },
+  "rust_acceptance": {
+    "command": "CARGO_TARGET_DIR=target/s-graphics-review AA_GAME_ROOT=<original game> cargo test -p aa-runtime --test local_order_host --release --locked --offline -j4 -- --ignored",
+    "log": "actual-local-host-tests-v2.log",
+    "result": "1/1 pass 8.94seconds; actual source receipt/Bank, LocalBootstrap constructors+wholeReset+source-backedHost, all3PC",
+    "checks": [
+      "same canonical Admin and A-log allocations",
+      "real own request320 serialized/sealed/history consumed and retired",
+      "ctor-null actual280 produces security rejection and required warning sink",
+      "actual self280 accepts player lookup; same Node2C and284 stores, per-peer208/284 and traversal280 cleanup",
+      "real local version6C, SessionE4, recorder268 getters",
+      "explicit OS tick/GUID/QPC/logger-gate and warning sink fixtures named in test",
+      "no arbitrary successful gameplay/validity/film/abort callback"
+    ]
+  },
+  "required_effects": [
+    "actual OS simulation-thread/application logging gate",
+    "actual warning/diagnostic sink",
+    "gameplay decree86/87 and request-specific validity",
+    "positive film stop/admin2E5 and typed film-player284 allocation identity",
+    "real remote peer token to transport/client owner binding"
+  ],
+  "limitations": [
+    "This is a local identity/security/control-flow checkpoint, not a running battle or all multiplayer/film support",
+    "Native114 raw rows are additional byte-backed authority; full source acceptance covers actual supported fresh-local branches and existing native generic_commands shared-kernel replay remains in base suite",
+    "SessionPlayer handles are resolved by the same owner/slot/id; a live+film id ambiguity refuses the unsupported typed284 domain",
+    "OS and warnings in source test are explicit fixtures; no real UI log/thread or internet test claim",
+    "Effects require real gameplay; no direct teleport, fake AI/true readiness, or current-player inference from Node8/2C",
+    "Older source snapshots failed on in-flight trigger Manager methods; initial unit test location lacked aa-rules dependency and was moved without adding a dependency. Failed logs retained."
+  ]
+}

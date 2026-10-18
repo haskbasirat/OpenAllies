@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "scope": "Native5784C0 live guard/read coordinator; actual saved empty-list and required-instance boundary integration",
+  "production_frozen": true,
+  "native_cases": 294,
+  "instruction_pins": 118,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "scope_counts": {
+    "coordinator": 144,
+    "lookup": 108,
+    "actual_saved": 42
+  },
+  "proven": [
+    "ordered lazy Properties/definition/Experience/kind/disabled guards",
+    "captured owner Properties with live slots/count across explicit callback seams",
+    "fresh org+4 source owner and instance+8 kind reads",
+    "4CEF80/581280/5032D0 first-match query including disabled records, optional source filter and generation validity",
+    "actual tutorial02 slot4 owner/member prefix and constructor-empty Properties",
+    "missing instance/member services required only when native reaches their reads",
+    "same owner shell/Organization/Properties allocation retained"
+  ],
+  "not_proven": [
+    "actual nonempty saved effects",
+    "canonical PropertyData loading",
+    "real4CEF10 admission/insertion/effects",
+    "immediate Init/PostCreate or playable battle",
+    "malformed native pointer exception equivalence",
+    "arbitrary component-destroying reentry"
+  ],
+  "files": {
+    "crates/aa-runtime/src/saved_member_properties.rs": "476c7818f35413ad2f20c8d032a037a7cb6c1c337e9defdef4f2d8ff02c58880",
+    "crates/aa-runtime/src/saved_member_properties_tests.rs": "8e4785246610f0d98eb2af988af07aa6be37fbf0868e15ce9b295db0d211f3ca",
+    "research/skirmish-20261016-member-properties/native_member_properties.py": "e0c87fac7c0afec930e4b8f211d318f1e192c73cda6258f4dbe6ca881dbf9c01",
+    "research/skirmish-20261016-member-properties/actual-saved-inputs.json": "34b0527bc6f370c76b19e3e8b5747931ad6d0349400743bb64e7dd2a304780ab",
+    "research/skirmish-20261016-member-properties/native-member-properties.json": "02cbb2cadb2a779d165dd4b07d3bba41d588eb075b05f8d5c720d1646ce718bd",
+    "research/skirmish-20261016-member-properties/README.txt": "6721a464502dbe01792594031f6b58f9c6936255fb377d0a465378b6ab7b4869",
+    "research/skirmish-20261016-member-properties/pin_findings.py": "29572e75c24bae94eb3038212b690a248cc11f2c80050c706342b25058987545"
+  }
+}

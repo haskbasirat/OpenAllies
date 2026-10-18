@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "status": "finite original x87 compatibility implemented; current-host instruction parity passed; independent review pending",
+  "source": "crates/aa-trig/src/angle.rs",
+  "api": "signed_angle(from:[u32;2],to:[u32;2],precision:aa_numeric::Precision,precision_exception_pending:bool)->Result<u32,crate::Error>",
+  "native_algorithm": [
+    "445400 computes cross at selectedx87precision and storesbinary32. Dot is compared againstzero without a binary32store. No vectornormalization isadded.",
+    "Cross clamps[-1,1]. Native96D780 interior asin computes(1+x)*(1-x),FSQRT,FPATAN; endpointsloadexact80bitconstantB359BA (35c26821a2da0fc9ff3f).",
+    "97792B skipsqwordroundtrip forPC53; otherwise currentstickyPE triggers977837 FSTPqword+reload. The incomingflag is preservedasexplicitinput and can also be setbyangle arithmetic.",
+    "Negative dot applies originalf32+PI or-PI subtraction. Finalbinary32store corresponds to caller5775DA, not a retainedextendedreturnvalue."
+  ],
+  "status_flag_evidence": {
+    "branch_counts": [
+      {
+        "precision": "Single24",
+        "incoming_pe": false,
+        "cases": 268,
+        "qword_roundtrips": 0
+      },
+      {
+        "precision": "Single24",
+        "incoming_pe": true,
+        "cases": 268,
+        "qword_roundtrips": 268
+      },
+      {
+        "precision": "Double53",
+        "incoming_pe": false,
+        "cases": 268,
+        "qword_roundtrips": 0
+      },
+      {
+        "precision": "Double53",
+        "incoming_pe": true,
+        "cases": 268,
+        "qword_roundtrips": 0
+      },
+      {
+        "precision": "Extended64",
+        "incoming_pe": false,
+        "cases": 268,
+        "qword_roundtrips": 0
+      },
+      {
+        "precision": "Extended64",
+        "incoming_pe": true,
+        "cases": 268,
+        "qword_roundtrips": 268
+      }
+    ],
+    "sampled_output_differences": 0,
+    "conclusion": "No outputdifferences inthesepairedfixtures. This is notproofincomingPEisunobservablefor allpossibleinputs; implementationhonorsoriginalbranch andkeepsflaginput."
+  },
+  "safety": [
+    "x86_64-onlycompatibility path; otherarchitecturesreturnUnsupportedPlatform.",
+    "Aligned512byteFXSAVE64/FNINIT/FXRSTOR64 isolates selectedRNprecision/exceptionmask andrestorescallerx87executionenvironment/livex87registerstack andMXCSR. NoOS/thread-setting or globalcodechanges.",
+    "All asm branches reach FXRSTOR; inputNaN/Inf rejectbeforeasm; all memoryoperands point to fixedlocalbuffers. No externalcalls or stack-pointer changes insideasm.",
+    "AX/generalflagsclobber declared. Rust ABI owns normalvolatileXMM registerusage outsideasm; this is floating-environment preservation, not a promise to preserveeveryvolatilegeneral/SIMDregister."
+  ],
+  "checks": [
+    {
+      "command": "cargo test -p aa-trig angle::tests",
+      "passed": true,
+      "tests": 5,
+      "original_clean_cases": 168,
+      "original_sticky_flag_cases": 1608,
+      "hardware_table_comparisons": 24576
+    },
+    {
+      "command": "cargo clippy -p aa-trig --all-targets -- -D warnings",
+      "passed": true
+    },
+    {
+      "check": "lookup-tables.bin equals recovered JSONcos4096 then sin4096 little-endianbinary32",
+      "passed": true
+    }
+  ],
+  "host": {
+    "architecture": "x86_64",
+    "cpu": "11th Gen Intel Core i7-11700KF",
+    "manufacturer": "GenuineIntel",
+    "os": "Windows"
+  },
+  "limits": [
+    "No host transcendental library or approximation is used, but hardwareparitywasverifiedonthishost, not everyx86_64CPU.",
+    "No fullengine FPUlifecycle/flagtracking inferred. Caller suppliesprecisionand incomingPE; aa-numeric doesnottrackexceptionflags.",
+    "Only the supported finite asin path and finalbinary32result are exposed; CRTmatherr/errno/exceptioncallback sideeffects are not reproduced.",
+    "Full movement/pathfinding behavior remainsoutside this module."
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-trig/src/angle.rs",
+      "size": 13254,
+      "sha256": "40c3c28058d013b0d6b9bae0aaeec44493f33f80542d8b93c2e25530a4f5b160"
+    },
+    {
+      "path": "research/phase4-trig-angle/original_angle.py",
+      "size": 3535,
+      "sha256": "b6ccab606882816359bf412e790ad9c001635996df4d1afb7b1252cb92613de0"
+    },
+    {
+      "path": "research/phase4-trig-angle/native_trig_base.py",
+      "size": 5678,
+      "sha256": "9f8611e07400dce7601c51c22ae6417982b31b2ff8ea1cdc455cc94d7614b857"
+    },
+    {
+      "path": "research/phase4-trig-angle/native-angle-status-vectors.json",
+      "size": 492160,
+      "sha256": "41629002e12e6570d52932f8742b62048c2e43416af1f237e391982cd3718605"
+    },
+    {
+      "path": "research/phase4-trig/native-trig-vectors.json",
+      "size": 622846,
+      "sha256": "9673e63455679dda7a8e6a07fabc8d8f059ceb264242cd76f001fb1c067d84f1"
+    },
+    {
+      "path": "research/phase4-trig/lookup-tables.bin",
+      "size": 32768,
+      "sha256": "ed3df2510bb1b975fad59fb71aa1a5c0858e2e3391ee807b2549fe6351a00bb1"
+    },
+    {
+      "path": "research/phase4-rng/original_rng.py",
+      "size": 7109,
+      "sha256": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5"
+    },
+    {
+      "path": "research/engine-baseline/audit_baseline.py",
+      "size": 11405,
+      "sha256": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a"
+    }
+  ]
+}

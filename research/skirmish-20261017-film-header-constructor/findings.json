@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "acceptance_scope": "Bounded author verification only; independent review is separate.",
+  "blocking_findings": [],
+  "api": "film_header_owner::State::from_film_constructor(catalog,&Bank,&mut film_process_metadata::State,FnOnce()->Result<[u32;2],String>)->Result<State,Failure>",
+  "behavior": [
+    "Fresh5A23F0(false), with constructor-empty name/description localized pairs and extents/entries, then actual5A14C0 store order.",
+    "Same mutable process metadata owner receives wrapping header-count increment before required clock. No per-header metadata owner or counter copy.",
+    "Failed clock retains counter and metadata fields, timestamp constructor-zero and byte64 uninitialized. Missing source-completed Bank after clock retains time and byte64, with children absent.",
+    "Successful header owns independent CreatorRules/film_parameters::State and current field storage. No MapHeader/chunk SourceIdentity is fabricated.",
+    "Implements proved film_header_fields::Destination directly; Rules copy only replaces same target record vector after both source/context validations, preserves preceding mode/GameType and following changes."
+  ],
+  "native": {
+    "fixture": "native-header-constructor.json",
+    "fixture_sha256": "274a64eeeb2934330becba04254db7ed7d507ad80f19952ac8d9d197acd87c2a",
+    "paired_rows": 36,
+    "separate_original_v14_machine_runs": 72,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_pins": 2004,
+    "complete_paired_rows": 9,
+    "required_prefix_paired_rows": 27,
+    "complete_rows_construct_two_headers_per_machine": true,
+    "real_bodies": [
+      "5A23F0(false)",
+      "5A14C0",
+      "511DF0 WorldRules/default loops",
+      "50F890 Parameters and child constructors"
+    ],
+    "required_prefixes": [
+      "6FB1F0 before clock body",
+      "511DF0 before Rules constructor",
+      "50F890 before Parameters constructor"
+    ],
+    "successful_transport_seams": "Inherited CString manager/allocator/current-variable lookup/logging plus supplied6FB1F0 low/high return; exact entries retained in fixture. This is not zero-seam full native film startup.",
+    "caller": "caller-inspection.json proves original/v14 bytes and direct static PUSH0 forwarding5A31F1->5A2874. Full5A31D0/5A27A0 not executed here."
+  },
+  "rust": {
+    "source_pins": "production-pins.json",
+    "production_check": "PASS20.92s",
+    "final_build": "PASS58.23s",
+    "actual_test": "PASS1/1,6.60s",
+    "evidence": [
+      "Exact native fresh/clock/Rules-boundary scalar and both localized CString word comparisons.",
+      "Actual source metadata and source-completed Bank; independent current Rules record arrays and whole Parameters owners.",
+      "Real standalone WorldRules copy changes only destination records and leaves second Header unchanged.",
+      "Actual Win32 local FILETIME leaf used for final constructor; total same-process header count5 includes two refused prefixes."
+    ],
+    "frozen_binary": "frozen-film-header-owner-tests.exe",
+    "frozen_binary_sha256": "02f2e805cd4b8112a7253db48dc8fb7ab67a408dc5b88a3dbc0286effde09422"
+  },
+  "limits": [
+    "Constructor allocator/CString allocation-success domain only; native null allocation/SEH/unwind or existing-header reset/destruction not ported by this slice.",
+    "Clock/source refusal prefix tests are required-service boundaries, not native Win32 API error or exception equivalence.",
+    "Optional5A23F0(true) localized map-name/description branch deliberately not represented by this film-only constructor.",
+    "This constructs empty active Parameters counts; full current Kingdom capture/Session entries/source Campaign and pair-aware serialization remain separate mandatory services.",
+    "Fresh Header is not a completed film resource, initialized world, playable battle, multiplayer success or rewrite percentage."
+  ],
+  "preservation": [
+    "Only new Rust/evidence files and additive approved load_world_rules helpers were written. No original game/assets/saves/releases/manifests/lock modified by this slice.",
+    "Prior native fixture v1 retained after evidence metadata-only clarification; transient shared Creator compile failure log retained."
+  ]
+}

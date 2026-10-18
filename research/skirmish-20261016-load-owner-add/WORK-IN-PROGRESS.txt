@@ -1,0 +1,13 @@
+Owner AddActor4E6180 working scope
+
+Production public API: load_owner_add_actor::add_actor(catalog,actualInventory,heldRecord,currentStoredKingdom,pc). Inventory argument newly approved for real Economy helper. Root owns public callsite wiring.
+
+Storage: actual SpecialShell now owns eleven typed class lists plus flare list; raw26C..2C0 and2F8/2FC mirrors retired. Existing vectors2C4/2D0/2DC/2E8, supply_sources264, capital1F8,190 and counter2F4 remain same owners. New combined StoredRegistryWorld kernel accesses actual owners lazily; old Registry API transparently delegates.
+
+Already passed: fresh original/v14 native216 AddActor rows+6 ctor-region runs,494pins; old aa-economy native_registry1/1; old aa-mapworld special_state2/2; constructor migration focused test1. All8 separate diagnostic accepted1/1.
+
+Pending: actual source capture2-test Rust run (source v3 compile in progress), then native_actual producer6 actual tuples and immutable replay. Earlier owned E8 getter error fixed: Actor words are read directly, never Object Record.word. SDK author owns new real Economy refresh(catalog,inventory,record,pc), not wired until approved module is frozen. RequiredStop is private cfg(test) only for bounded caller-prefix proof; production uses Native. Other positive statistics/research/property/organization/destruction services stay required, no fake empty data.
+
+No wholebattle/world readiness claim. Backups before approved shared changes are retained in before/.
+
+Final state: superseded by findings.json; all current owner native/Rust checks passed and production/tests are frozen.

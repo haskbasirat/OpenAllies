@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "status": "CPU UV correction implemented and tested; full native terrain renderer remains incomplete",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "changes": [
+    {
+      "path": "rust-rebuild/crates/aa-assets/src/terrain.rs",
+      "behavior": "Source UV is now [worldX/texture_width,1-worldY/texture_height]. Native fmod removes whole repeats per block; direct whole-map coordinates have the same repeat sampling and remain continuous across cells.",
+      "evidence": "terrain-uv-native-fixtures.json",
+      "tests": "34 original-instruction cases /136 corners, including9 actual palette/cell examples from3 original maps. Rust source_uv matches within2e-5 modulo integer repeats. This is not bit-exact x87 parity."
+    },
+    {
+      "path": "rust-rebuild/crates/aa-assets/src/terrain.rs",
+      "behavior": "Textured vertices use white modulation. Untextured inspection fallback keeps the authored minimap color.",
+      "evidence": "Original0x729F30 normal branch. Client loading.rs already forced white before this change, so this API cleanup does not claim a newly visible color fix."
+    }
+  ],
+  "integration": {
+    "client_api_change": false,
+    "instructions": [
+      "Keep using PreparedTerrain.vertices UVs directly, without model_uv conversion.",
+      "Keep U/V Repeat addressing; current gpu.rs sampler already does this.",
+      "Existing loading.rs white-color safeguard is redundant but compatible.",
+      "No change to mesh dimensions, height policy, indices, placement transforms or material sidecar."
+    ],
+    "invalid_claims": [
+      "No exact native water, blending, terrain lighting, edge/skirt mesh or texture-filtering parity yet.",
+      "No native GPU execution or screenshots performed by this subtask."
+    ]
+  },
+  "packed_terrain_record": {
+    "scope": "Version7, stride8 loader0x557AD0. The old extractor called the dropped bytes tile orientation flags without native evidence.",
+    "fields": [
+      {
+        "offset": 0,
+        "size": 2,
+        "meaning": "Terrain-variation table index",
+        "consumer": "0x557D1D movzx word[record+0]"
+      },
+      {
+        "offset": 2,
+        "size": 2,
+        "meaning": "Opaque serialized cell-state word; loaded conditionally when stream mode allows, not established as render orientation",
+        "consumer": "0x557E84 ->0x54EA50 writes lowword tile+0x14"
+      },
+      {
+        "offset": 4,
+        "size": 1,
+        "meaning": "Index into GMap+0x50 objects, copied to cell+0x2C; pre-v5 maps default this to1 for water type",
+        "consumer": "0x557E98..0x557EC8"
+      },
+      {
+        "offset": 6,
+        "size": 1,
+        "meaning": "Cell flags copied to runtime+0x20; type bits4..6 are then replaced from terrain definition. Bit0 participates in passability recalculation.",
+        "consumer": "0x557D12/0x557D1A,0x557E50..64 and0x54FDC0"
+      }
+    ],
+    "conclusion": "Do not reinterpret record secondword as rotation/mirroring. No per-cell texture rotation established or implemented."
+  },
+  "blending": {
+    "scope": "Source-grounded plan only, not a complete executed blend port.",
+    "evidence": [
+      "0x4B87A0 assigns variation+0x18 priority = terrain.base_priority + variation append ordinal.",
+      "0x729470 chooses the lower-priority terrain among the center and relevant edge/corner neighbor cells.",
+      "0x729760 collects unique3x3 choices, encodes the eight noncenter neighbors as an8-bit mask, sorts layers by ascending priority using0x729230, closes specific corner gaps, and selects mask resources.",
+      "0x72B160 loads textures/AlphaTransitions/Layer0..8.tga from AVars;0x729180 provides identity/rotation/reflection matrices for alpha-mask orientation.",
+      "0x72A280 applies separate source texture and alpha texture transforms. It uses native material blend-state fields; this is not an unproven average of neighboring colors."
+    ],
+    "future_shape": "A separate ordered per-cell TerrainLayer list would need palette_index, exact native mask identity/transform and source UVs; client would use a second UV/mask sampler and proved blend state, or bake an equivalent target. Current single-palette cell batches cannot represent it.",
+    "unresolved": [
+      "Full mask resource selection/catalog and ownership",
+      "GPU alpha equation/filtering/edge sampling",
+      "World-block subdivision and neighboring-block seams"
+    ]
+  },
+  "water": {
+    "scope": "Metadata/source findings only; no guessed water surface or opacity formula implemented.",
+    "evidence": [
+      "0x4B87A0 type2 loads max_depth+0x70,anim_fps+0x74,color+0x78, animation frames+0x94/+0x98 and water doodad fields.",
+      "0x4B8530 reads WaterInfo.terrain_ids, ordered DepthInfo rows(depth,RGB,alpha), appends20-byte records and sorts by depth.",
+      "Templates/template_waterinfo_aa.tgi contains authored curves; base terrain textures alone are not the complete water material."
+    ],
+    "unresolved": [
+      "Water surface height/geometry generation",
+      "Depth-curve interpolation and material composition",
+      "Animation frame selection/time, reflection/specular/doodads"
+    ]
+  },
+  "static_instruction_windows": {
+    "packed_cell_load": {
+      "start": "0x557ce5",
+      "end_exclusive": "0x557f04",
+      "sha256": "df404c703cb1fc218e05bf20729bbf40f2122598f165dca3b7190e507461ab27",
+      "bytes": "8d5cc2068da42400000000837c2410017d038023018b451c0faf4424388b7c24348b4c24148b512803c78d2c400fb603c1e50403ea8945200fb773fa3b7424447c1c6864aea30068a70000006874a3a30068c4c1a200e8d083f9ff83c4108b7c24408b74f70485f60f85e40000008b4424204083f803894424200f8dce0000006898aea3008d4c2428e88d9deaff0fb753fa8b04d75068483bb4008d4c242c518b0d4465b300c644246002e8ab21f6ff8b30518b4ef08b1183ee108964243489642434ff52108b4e0c85c98d560c7c113b06750d8bc6b901000000f00fc10aeb348b4e048b106a02518bc8ff1285c00f84ac0100008b56048950048b4e044103c98bd1c1e90283c6108d7810f3a58bca83e103f3a48b5424648b4c243483c010528901e8339204008b44243083c0f083c40cc6442454018d480c83cafff00fc1114a85d27f088b088b1150ff52048b742428837c241003897424287d0e6a006a00568bcde8727fffffeb178975008b461c8b401c8b4d20c1e00483e18f0bc18945208bcde8f26effff837c2410047c1c8b4c245ce8a266040084c0740f33c0668b43fc8d4d1450e8bf6bffff837c2410057c088a53fe88552ceb0d8b461c83781c027504c6452c018a452c84c074148b5424140fb6c88b42508b04888b4804418948048b4424348b4c24148b7c241c8b511c404783c3083bc289442434897c241c8be90f8c02feffff8b4424388b4d204033f63bc1894424380f8cccfdffff"
+    },
+    "cell_type_passability": {
+      "start": "0x54fdc0",
+      "end_exclusive": "0x54fec0",
+      "sha256": "4f00beeeea680437a685bde9ed00693819c91d0ca95e14b992ed70eefa9c2628",
+      "bytes": "83ec18558b6c2420568bf18b0e3bcd750a5e32c05d83c418c20c0085c9535774058b791ceb0233ff8b4620c1e80483e00785ffc644242c0074078a574c8854242c892e8b551c8b521c8b5e20c1e20483e38f0bd38956208b168b5a1c8b56203bfb0f95c3c1ea0483e2073bc2742e83f802740983f801740432c0eb02b0018b153465b3008b5230807a2c00740f84c0740b890e8bcee8e6f1ffff892e85ff740e8b068b481c8a54242c3a514c7447f6462001740a8b46200d00030000eb348b7e2081e7fffcffff897e208b068b401c8a484c83c04cf6c101750b8bcf81c900010000894e20f60002750b8b46200d0002000089462084db0f84ac0000008b4608"
+    },
+    "blend_neighborhood_choice": {
+      "start": "0x729470",
+      "end_exclusive": "0x729667",
+      "sha256": "b566df6f9bb59f6b6f9fad34e98d2a8fcf0733ef207b34f9f299b2b910ca40e3",
+      "bytes": "8b44240883ec10538b18558b68048b44241c568bf18b4c2428578b388b41048d14408b0103c283f8080f87dc010000ff2485889672008b4c2430518d43ff55508bcee889ffffff8b542430524d89442418558d43ff50e9450100008b442430504d55538bcee866ffffff85ff8bcf741485c00f84870100008b50183b57180f8d7b0100005f5e5d8bc85b83c410c210008b4c2430518d430155508bcee82fffffff8b542430524d89442418558d430150e9eb0000008b44243050554b538bcee80cffffff85ff8bcf74ba85c00f842d0100008b50183b57180f8d210100005f5e5d8bc85b83c410c210008bc75f5e5d5b83c410c210008b442430505543538bcee8cbfeffff85ff8bcf0f8475ffffff85c00f84e80000008b50183b57180f8ddc0000005f5e5d8bc85b83c410c210008b4c2430518d43ff55508bcee890feffff8b542430524589442418558d43ff50eb4f8b442430504555538bcee870feffff85ff8bcf740c85c0740a8b50183b57187d028bc85f5e5d8bc15b83c410c210008b4c2430518d450150538bcee83ffeffff8b54243089442414528d45014350538bcee829feffff894424188b44243050558bce53e817feffff85ff8b4c24148944241c8bc7740c85c9740a8b51183b57187d028bc185c08b4c2418740c85c9740a8b51183b50187d028bc185c08b4c241c740c85c97416"
+    },
+    "blend_layer_masks": {
+      "start": "0x729760",
+      "end_exclusive": "0x7299d0",
+      "sha256": "65db43e3e6979cf4278c44863d3e58e5b0c953353ed7b46156c6e9d37f3e9a92",
+      "bytes": "83ec088b4424145355568bf133db895e248b88d00000008b151865b300db82b0000000894c240cdb44240c8b4c241c8b114ad8c98954240cdb80ac00000057d8c9db442410d8cbdec1d95e288b490449894c2410db442410d8cadb80b0000000d8cadec1d95e2cddd8ddd8eb038d490033ed895c24148b5424248b4c2420528b5424208d4424145051528bce896c2420e87bfcffff8b7e2433d285ff7e118bff8b0c963901741d8b4e24423bd17cf183fd01753b3bdd75378b14bec7420c00000000eb4483fd0175043bdd74468d445d0003c383f8047e01488b14968bc88b420cbf01000000d3e70bc789420ceb248d4c5d0003cb83f9047e0149ba01000000d3e28b0cbe89510c8b56248b0c968901ff46244583fd030f8c59ffffff4383fb030f8c49ffffff8b562468309272006a045256e8883524008b462433ff83c41033db3bc70f8e1f0100008d9b00000000a14099b3008b88980100008039008b2c9e743ca11865b3008b482c8d54241c528b514c8b0c9ae8f5cae7ff8b008945048b44241c3bc774498b50048bc883c0044a3bd78910753a8b116a01ff12eb328b4d008b49208d44241050e8c1cae7ff8b108b4424103bc789550474158b50048bc883c0044a3bd7891075068b016a01ff108b450ca801741aa8027507a804740383c802a801740ba8087507a820740383c808a804740ba810750784c0790383c810a820740ba840750784c0790383c8403bdf89450c7e408b0d1865b3008b49308b04813bc78bf875028b398b470c85c074048b00eb028b078b5424248b4c24205251508bcee806fdffff8945088b570889551c33ffeb06897d08897d1c8b4624433bd80f8ce7feffff5f5e5d5b83c408"
+    },
+    "blend_priority_compare": {
+      "start": "0x729230",
+      "end_exclusive": "0x729258",
+      "sha256": "f1318166c2a7230ccb6875f48c1ee5f11d2485a3ca535ddbb8438ee755f945f9",
+      "bytes": "8b4424048b088b118b4c24088b42188b118b0a8b49183bc17d0483c8ffc333d23bc10f9fc28bc2c3"
+    },
+    "blend_texture_matrix_table": {
+      "start": "0x729180",
+      "end_exclusive": "0x729224",
+      "sha256": "d2543bd30f96739597a64326ae200c6987e19fc30697850ca8a31d39de710f92",
+      "bytes": "8b44240483f81477500fb68014927200ff2485e0917200b86087b200c3b8a087b200c3b8e087b200c3b82088b200c3b86088b200c3b8a088b200c3b8e088b200c3b82089b200c3b86089b200c3b8a089b200c3b8e089b200c3b82087b200c390d9917200979172009d917200a3917200a9917200b5917200bb917200c1917200af917200c7917200cd917200d3917200d99172000001020c030c0c0c0405060c070c0c0c"
+    },
+    "blend_matrix_constants": {
+      "start": "0xb28720",
+      "end_exclusive": "0xb28a20",
+      "sha256": "4fe882a46e7ac5b66c1543ece0d5f68231b560a2ff08fc1d00be9cea0297793f",
+      "bytes": "0000803f000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000000000000000000000000000803f00000000000080bf00000000000000000000803f00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f000080bf00000000000000000000000000000000000080bf000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000803f0000000000000000000080bf00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f0000803f00000000000000000000000000000000000080bf000000000000000000000000000000000000803f000000000000000000000000000000000000803f000080bf000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000803f00000000000000000000803f00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f000080bf000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000000000000000000000000000803f00000000000080bf0000000000000000000080bf00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f00000000000080bf0000000000000000000080bf00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f0000803f00000000000000000000000000000000000080bf000000000000000000000000000000000000803f000000000000000000000000000000000000803f000000000000803f00000000000000000000803f00000000000000000000000000000000000000000000803f000000000000000000000000000000000000803f"
+    },
+    "terrain_loader": {
+      "start": "0x4b87a0",
+      "end_exclusive": "0x4b8e77",
+      "sha256": "7d5fed5f34b3140892f85df0c1d32a0c82ba74dffed6a6cf22ebbbf89aa4cfbd",
+      "bytes": "6aff68db13990064a100000000506489250000000083ec34535556578b7c2454578bf1e89851fcff686cfaa1008bcfe8accb0f006848faa1008bcf884620e84dc90f00d95e506814faa1008bcfe83ec90f00d95e54681cc59f008bcfe8cfcc0f008b0083e81050e8b48af4ff8d581083c404895c24108d44245433ed50b9d0b4b300896c2450895c2458e8f1e9fdff3bc5740a8b003bc574048b00eb0383c8ff83f8ff89461c75128b4e08535168c0f9a100e8e983f5ff83c40c68a4f9a1008bcfe86acc0f00508d4c2414e810d3f4ff8b5c2410396bf4752a8b5608526848f9a1006810f9a100683d01000068d4f8a10068708bb300896e34e832c6f4ff83c418eb2aa13065b3008b88bc05000053e8bc37f7ff3bc589463475128b4e0853516870f8a100e87683f5ff83c40c682c51a1008bcfe8a7ca0f0084c08a464c74040c01eb0224fe682051a1008bcf88464ce88bca0f0084c08a464c74040c02eb0224fd68bcf1a1008d54242c528bcf88464ce81ac30f008b108d4e4089118b50048951048b40088941088b869c0000008d9e940000008d0c003bcd7d0355eb0c3bc57d0351eb05392b7508508bcbe89ec0fcff896b048b461c480f844e020000480f8592020000685cf8a1008bcfe8bec70f00d95e5c6844f8a1008bcfe8afc70f00d95e606824f8a1008bcfe8a0c70f00d95e646810f8a1008bcfe891c70f00d95e7068a4cca0008d4c2438518bcfe87dc20f00d94008d940048b10d95c24208b4c24208bc28954241cd95c24248b542424894c242c894e7c68dcf7a1008bcf8944242c89542434c786840000000000803f894678899680000000e8d1ca0f008b0083e81050e8b688f4ff8d6810896c24186a02c644245401e853d939008b1083c4088bc8ff520c83c0108944245433db538d4424585550c644245802e81fd3f4ff83c40c8d4c2454518b0d3065b300e86cd9fbff8b0d4065b3006a018d54245852e82a600f008be885ed745a8d6424008b86980000008b969c0000008d8e9400000040e858e32a008b4c24144353518d54245c528928e8c5d2f4ff8b0d3065b30083c40c8d44245450e812d9fbff6a018d4c2458518b0d4065b300e8d05f0f008be885ed75aa8b869800000085c075118b5608526870f7a100e86281f5ff83c4086858f7a1008bcfe843c60f00d95e746834f7a1008bcfe8d4c90f008be8c78688000000000000008b45008b48f485c9742f6a10e8f7ec23008bd883c404895c241885dbc644244c037411558bcbe89daffbffc70340f2a10089730cc644244c0268f0f6a1008bcfe8e3c50f00d99e9000000068b4f6a1008bcfe8d1c50f00d99e8c0000008b44245483c0f0c644244c018d480c83cafff00fc1114a85d27f088b088b1150ff52048b44241483c0f0c644244c008d480c83cafff00fc1114a85d27f558b088b1150ff5204eb4b685cf8a1008bcfe877c50f00d95e5c6844f8a1008bcfe868c50f00d95e606824f8a1008bcfe859c50f00d95e6468a0f6a1008bcfe84ac50f00d95e68688cf6a1008bcfe83bc50f00d95e6c68006fa1008bcfe8ccc20f0033db68e454a0008bcf894658895e38897c2438c7442440e454a000895c243ce8f8b50f00894424408d6424003b5c24400f8dba00000085db0f8cb200000068b466a0008d4c2438e8c031f7ff8bc8e879c80f00508d4c2414e81fcff4ffa13065b3008b5c24108b886404000053e82ab3faff8be885ed75128b4e0851536828f6a100e8b57ff5ff83c40c8b9eb00000006a08e875eb230089288958048b8eb400000083c40485c98986b000000075068986b40000006a0c8bcde8feae0000d815dc329f00dfe0f6c44175138b442438d95e3840894424388bd8e94effffff8b442438ddd840894424388bd8e93cffffff837e1c017507c7463817b7d1386a02e868d639008b1083c4048bc8ff520c83c0108944245433db68e8e4a0008bcfc644245004895e3c897c2438c7442440e8e4a000895c243ce8e1b40f00894424403b5c24400f8dad00000085db0f8ca50000008b3d3065b3008b9f5806000081c7580600008d4c2434e8a030f7ff508bcfff531c8bd889731c8b46280346588d7e248943188b47048d68018b47083be88d0c007e263be97e0355eb0d3be87e0351eb06833f007508508bcfe83ebcfcff8b0f896f04895ca9fceb243be97e0355eb0d3be87e0351eb06833f007508508bcfe818bcfcff8b17896f04895caafcd9432c8b442438d8463c40894424388bd8d95e3ce949ffffff8b462885c075118b46085068d0f5a100e8317ef5ff83c4088b4e248b118b44245483c0f0895630c644244c008d480c83cafff00fc1114a85d25f5e5d5b7f088b088b1150ff52048b042483c0f0c744243cffffffff8d480c83cafff00fc1114a85d27f088b088b1150ff52048b4c243464890d0000000083c440c20400"
+    },
+    "water_depth_info_loader": {
+      "start": "0x4b8530",
+      "end_exclusive": "0x4b86cf",
+      "sha256": "8a6b096f6a5920f41e7d6d3373399d8deaac778906d2524f853986c2f3d3b400",
+      "bytes": "6aff689811990064a100000000506489250000000083ec3c538b5c24505556578bf168fc55a1008bcbe872cf0f008b0083e81050e8578df4ff8d681083c404896c245c8b4c246033ff55897c2458e8adecffff3bc7894604750e556818f5a100e8ab86f5ff83c4086804f5a1008bcb895c242cc744243404f5a100897c2430e86cbc0f008bd8895c24348d9b000000003bfb0f8d8b00000085ff0f8c8300000068f8f4a1008d4c242ce83238f7ff8bc8e8fbc40f00d95c243868a4cca0008d442420508d4c2430e81438f7ff8bc8e82dc60f008b088b50048b4008894c2410894c243c68cc09a1008d4c242c895424188944241c8954244489442448e8df37f7ff8bc8e8a8c40f00d95c24488d4c2438518d4e08e8c7eeffff47897c242ce96dffffff8b560c8b460868c06a4b006a145250e8b9474b008d45f083c410c7442454ffffffff8d480c83cafff00fc1114a85d25f5e5d5b7f088b088b1150ff52048b4c243c64890d0000000083c448c20800cccccccccccccccccccccccccccccc6aff683613990064a1000000005064892500000000515355568bf1c70630ba"
+    }
+  },
+  "evidence": [
+    {
+      "path": "rust-rebuild/research/phase3-terrain/terrain_uv_oracle.py",
+      "size": 8994,
+      "sha256": "a89ed77aae034aed3edb69fee30727f6474a87050cc253213b0e36eb3cef06a3"
+    },
+    {
+      "path": "rust-rebuild/research/phase3-terrain/terrain-uv-native-fixtures.json",
+      "size": 87294,
+      "sha256": "28e86c70537aa8b2b058301ae5416a9e9719c64aa34d55cb2380b9180c4de3bb"
+    },
+    {
+      "path": "rust-rebuild/research/phase3-terrain/terrain-uv-native-assembly.txt",
+      "size": 17983,
+      "sha256": "310f28fc0a76e3090ea7b64f88292cd9965f0e54cb153df25fee625bf43046c3"
+    },
+    {
+      "path": "reconstruction/assets/original/Data/Templates/template_terrain.tgi",
+      "size": 7254,
+      "sha256": "b4001c0d767bc15bf441f040dada41a90ab33bc1851f709dab5e9be647874c62"
+    },
+    {
+      "path": "reconstruction/assets/original/Data/Templates/template_waterinfo_aa.tgi",
+      "size": 4313,
+      "sha256": "b5803a7c5b33183218827c1e95c79834d8ca0f887038dcb5fe1caa843a90b158"
+    },
+    {
+      "path": "reconstruction/assets/original/Data/AVars.tgi",
+      "size": 16412,
+      "sha256": "05cee95807de4a2f517d017bd03764a8aa1c49ae4545408ef1de445f39b82263"
+    }
+  ],
+  "implementation": [
+    {
+      "path": "rust-rebuild/crates/aa-assets/src/terrain.rs",
+      "size": 18976,
+      "sha256": "6194df9e1c7ab6d63b56c825023a75adc1ec29d55c3929fbf3ec7f501e8108c7"
+    },
+    {
+      "path": "rust-rebuild/crates/aa-assets/src/types.rs",
+      "size": 7518,
+      "sha256": "4681c9841f9fda2da0f5bd72834b20d65363196e0b95fedce1c1af2443db965d"
+    },
+    {
+      "path": "rust-rebuild/crates/aa-assets/tests/assets.rs",
+      "size": 8711,
+      "sha256": "83d04be9f62413d685efbb86fd76aed32c0b39a649f8f6f9792624056fada1cf"
+    }
+  ],
+  "checks": [
+    {
+      "command": "python research/phase3-terrain/terrain_uv_oracle.py",
+      "passed": true,
+      "cases": 34
+    },
+    {
+      "command": "cargo test -p aa-assets",
+      "passed": true,
+      "tests": 8,
+      "ignored": 1
+    },
+    {
+      "command": "AA_ASSET_ROOT=<reconstruction> cargo test -p aa-assets --test assets recovered_assets_and_path_safety -- --ignored",
+      "passed": true,
+      "tests": 1
+    },
+    {
+      "command": "cargo clippy -p aa-assets --all-targets -- -D warnings",
+      "passed": true
+    }
+  ]
+}

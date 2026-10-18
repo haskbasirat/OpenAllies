@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "status": "author source and evidence frozen; independent review separate",
+  "scope": "Native4F1660 required-placement coordinator and current pre-staging saved-shell adapter; no complete Init or playable-battle claim",
+  "native": {
+    "coordinator_rows": 177,
+    "coordinator_fresh_original_v14_executions": 354,
+    "coordinator_executed_instruction_addresses": 397,
+    "coordinator_intercepted_leaf_entries": 6,
+    "getter_rows": 108,
+    "getter_executed_instruction_addresses": 7,
+    "getter_intercepted_leaf_entries": 0,
+    "precision_modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "runtime_classes_getter_proof": [
+      2,
+      3,
+      4,
+      6,
+      7,
+      9
+    ],
+    "proof_boundaries": [
+      "Coordinator tile iterator, virtual results, zone lookup/overlap,46EF30 result,4D1120 and thread service are explicit seams",
+      "Getter fixture executes actual0C/B0/B4 leaves and pins constructor vtable stores; it does not execute complete constructors",
+      "Actual Berlin test verifies source ownership/refusals/metadata, not successful end-to-end placement using a fabricated completed manager"
+    ]
+  },
+  "rust": {
+    "aa_spatial_all": {
+      "passed": 62,
+      "failed": 0,
+      "ignored": 2,
+      "result_groups": 17,
+      "log": {
+        "path": "research/skirmish-20261016-required-placement/spatial-all-tests.log",
+        "bytes": 9464,
+        "sha256": "c625cca5d0a58cd471ea8d5e5feccbddcdc24b963f4d21b64124611849e83329"
+      }
+    },
+    "runtime_final": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "result_groups": 1,
+      "log": {
+        "path": "research/skirmish-20261016-required-placement/rust-live-tests-final-v3.log",
+        "bytes": 1850,
+        "sha256": "be47f2020c642408bcbac93cf9a05f3e5680fc086a5d56524729d76e1c4276d9"
+      }
+    },
+    "actual_map": "Maps/(2v2)Berlin.RMP",
+    "terrain_metadata_cells_each_precision": 50176,
+    "actual_source_precision": "Double53, independent of current query precision"
+  },
+  "binding": [
+    "Catalog Bank-owned completed reference manager maximum74 and exact source identity guard",
+    "NativeSourceRequirements whole receipt, canonical provenance and actual Bank source-PC equality",
+    "Canonical current component mask/proof/category and actual LoadKind/Object/Actor storage guards",
+    "Persistent generation mapping supplies node identity between callback-free load-field leases",
+    "Current shell/registry supplies flags, pose, Object50 and generation checks",
+    "Actual effective BattleTerrain Variation/TerrainData4C and live ZoneMap sets"
+  ],
+  "remaining": [
+    "Positive Settlement464 source field remains unsupported by its bounded source producer",
+    "Parent100/15C, mobility4D1120, hostility140, zone actors and actual app/thread/global modes remain mandatory services",
+    "Caller must borrow same-world map/index/terrain/zone owners; equal dimensions are not identity authentication",
+    "This adapter is pre-staging load-shell binding, not a post-staging gameplay query service",
+    "No full map Init, tick, battle readiness or renderer parity certification"
+  ],
+  "preservation": "No Cargo/lock, original asset, save, profile, renderer or release edited. Only four new source/test files and module exports for this port.",
+  "production_pins": [
+    {
+      "path": "crates/aa-spatial/src/required_placement.rs",
+      "bytes": 9006,
+      "sha256": "d9f7cec7a00ae9f9a47cdc05b3c722c5ddb0a27f2f45ea6e812aa7d424b89983"
+    },
+    {
+      "path": "crates/aa-spatial/tests/required_placement_native.rs",
+      "bytes": 8959,
+      "sha256": "b76d21352ce3aef6d8d38870167d31fe70b8b7e7d3ab4f4428b84a79d71800e4"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_required_placement.rs",
+      "bytes": 22303,
+      "sha256": "f059cf6f996cb00807af831aa21953f37325a17e6290a671bd7da13751b60d61"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_required_placement_tests.rs",
+      "bytes": 17173,
+      "sha256": "1edfdad6a344a43f183cad17afa1493941eb0dcaa40536263ab038929c4ffc44"
+    }
+  ],
+  "artifact_pins": [
+    {
+      "path": "research/skirmish-20261016-required-placement/native_required_placement.py",
+      "bytes": 11041,
+      "sha256": "ae1ddf1024180e4b39c8edf337de8eeb69ec4835b8a2e9351b06829491c159ad"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-required-placement.json",
+      "bytes": 412641,
+      "sha256": "aa239ba3fcd0f35ac3d04a9761a88152f60623fe4f29ef4fe07f921bf6b5b868"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native_shape_getters.py",
+      "bytes": 2671,
+      "sha256": "5888d2646f1e7a9bd29553cb98ac3b3d6ed46ab28401cab0dae529d23725af7c"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-shape-getters.json",
+      "bytes": 27054,
+      "sha256": "fe2bc786540dd35e8bc318d4dcb21d17981c5ad0fda9a0529b45467ed90cc791"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/inspect_native.py",
+      "bytes": 882,
+      "sha256": "2d11cd5935a63ac96be646c4767c15e2bc20b7cf6dca03fd39def357fdabb628"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-instructions.log",
+      "bytes": 18305,
+      "sha256": "d78135ff407f870d0597f40ba11e642fd7fcd8859d9175bc44669cd92673598a"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-instructions-v2.log",
+      "bytes": 19885,
+      "sha256": "5910659724ff798e9d760b0aaef6b42af867d22016fa74ca62ec571e6a37f04b"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-replay-final.log",
+      "bytes": 139,
+      "sha256": "33e870f57dabf37e2032b281bf6b9fdf30b2c9a942327eb9b1d97befa288fa3e"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/native-shape-replay-expanded.log",
+      "bytes": 112,
+      "sha256": "76a5b91423f9c7df0573a879ffe233356587ec92225de414ac1ddd93c840b8c8"
+    },
+    {
+      "path": "research/skirmish-20261016-required-placement/README.txt",
+      "bytes": 6957,
+      "sha256": "120635053d45353af8a7afa74dbf8921769b193cc1bb900e94f65725b1045a7e"
+    }
+  ]
+}

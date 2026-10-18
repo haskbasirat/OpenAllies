@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "aa-spatial bounded ground-position and terrain query",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_cases": 504,
+  "by_operation": {
+    "query": 234,
+    "move": 42,
+    "commit": 24,
+    "snap": 204
+  },
+  "precision_modes": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "rust_tests": 4,
+  "native_executed_instructions": 531,
+  "source_sha256": {
+    "crates/aa-spatial/Cargo.toml": "39a6896ce07c6e963132d6790c5c5cf4da170687ef1147094a9e1da40434169e",
+    "crates/aa-spatial/src/lib.rs": "bc90f56e0b880c33e2acefc7b55419120c29b5524bafd0506d41a714711fd4b8",
+    "crates/aa-spatial/tests/native_parity.rs": "9019f0b62e1054f443f7aab239dac44d03fedb3c432eb63e0d87418e4dad372a",
+    "crates/aa-spatial/README.md": "c5bea9e8c54deb0ed86792e8a1f35bb9319457bfbda255eea62e2476436e3d8f",
+    "research/phase5-spatial/README.md": "8f84f0116ed06ddee18fd59c36c8c0769de991b88fe743784ba96102f2261088",
+    "research/phase5-spatial/inspect_native.py": "2698a06e2de37c08137b2eac7db5f4d41281583583083eaedeafc94d0322ef95",
+    "research/phase5-spatial/original_spatial.py": "3a5a4f7b9916c3e1391e223f72628ded86de70b480c152633466bf7f0e83ed2a",
+    "research/phase5-spatial/record_evidence.py": "d5974345b71053ea10c229cad6a114d3b625792bb6d63a676e9932a3b69d1e92",
+    "research/phase5-spatial/native-ranges.json": "8046c7a9ec141371b5d3460da5204992341b7c4120f94cf61b17b64ec3bd4fe8",
+    "research/phase5-spatial/native-executed-ranges.json": "6f20219b81c8f5f5609e12bec107d980b1d8b8276d95b63d1d791386a5e56e11",
+    "research/phase5-spatial/native-spatial-fixtures.json": "31788ff509bd88e4727c5b017136be46c89cc58af14f2f3ce0f76f9a963ae034",
+    "research/phase5-spatial/client_samples.rs": "f4a3704d69afb95874ceb94fbe9cf75508182d7692f72452efa2c39ba267480a",
+    "research/phase5-spatial/client-samples.json": "80181d14084b593f1ec329a1973f21dd4eb66cf9f4fed9457c201e922407a07b"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "fc75bfd1ea1750813a5b373edc333784874706a5e0b595c97c50a903605e43a8",
+    "research/phase3-terrain/terrain_uv_oracle.py": "a89ed77aae034aed3edb69fee30727f6474a87050cc253213b0e36eb3cef06a3"
+  },
+  "commands": [
+    {
+      "command": [
+        "C:\\Program Files\\Python312\\python.exe",
+        "E:\\Games\\Axis and Alies\\rust-rebuild\\research\\phase5-spatial\\original_spatial.py"
+      ],
+      "exit_code": 0,
+      "log": "native-oracle.log",
+      "sha256": "3fa7899eb598a5ef88c2d2a9a7bbcdab4104ce428432b27f55dc06bf24e09a06"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-spatial"
+      ],
+      "exit_code": 0,
+      "log": "rust-tests.log",
+      "sha256": "f37bd4f098ac291be1381f8698bcb36cd6e790e449f40a68f9fe2ca7ff099617"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-spatial",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "clippy.log",
+      "sha256": "ced3df040d6d07844ff28b9d05983e46f84920d89328b3a89b0b91fa4a4fd53d"
+    }
+  ],
+  "native_operations": [
+    "4EEB40 ground move",
+    "4F0E50 height query coordination",
+    "4EE5C0 position commit",
+    "4CF210/4EA0F0 shape snapshots",
+    "46EE00 half-cell snapping",
+    "50C250 presentation predicate"
+  ],
+  "seams": [
+    "550190/550210 supplied height samples with native FADD and return ABI",
+    "actor virtual shape/position callbacks",
+    "5539B0 tile ownership",
+    "43B760 presentation leaf"
+  ],
+  "bounds": [
+    "No collision/path solver, heightfield sampler implementation, tile ownership, or rendering implementation.",
+    "Actor callback mutation is re-read at native points; world grid/settings remain stable operation inputs.",
+    "Commit candidate is a distinct copied buffer as in4EEB40; arbitrary aliasing is excluded.",
+    "Bit12 withoutbit21 uninitialized native height rejects; invalid/nonfinite arithmetic and grid domains reject.",
+    "Snapping requires finite positive half-cell/reciprocal and i32 floor results, narrower than general native CRTfloor.",
+    "Operations are nontransactional and cannot be automatically retried after failure.",
+    "No adapter to aa-movement GroundWorld exists; its infallible move callback cannot silently discard spatial Result errors.",
+    "Explicit round-to-nearest PC24/53/64; no process-wide native precision default inferred.",
+    "No live process, GUI, original asset, native runtime, profile or security change."
+  ],
+  "peer_review": "Separate independent-review.json; not included recursively in source ledger."
+}

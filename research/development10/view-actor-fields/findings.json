@@ -1,0 +1,59 @@
+{
+ "schema": 1,
+ "status": "accepted bounded VActor453F10 tail; source integration separate",
+ "boundary": "453F43..4541B7 after separately retained455050 base",
+ "native": {
+  "paired_rows": 99,
+  "executions": 198,
+  "precision": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "decoded_equal_executed_pins": 269,
+  "source_cutoffs": 23,
+  "seams": [
+   "455050 separately owned base",
+   "6F7810 allocation transport",
+   "6F7430 free transport"
+  ],
+  "actual_children": [
+   "source virtual38 4F0500/4C9FA0",
+   "57DBE0/45DC90",
+   "766DE0/4849F0"
+  ]
+ },
+ "rust": {
+  "exact_source_isolated_tests": 2,
+  "passed": 2,
+  "whole_client_check": "Not claimed; SDK owns concrete source/Directory integration. No cold client unit link launched.",
+  "runtime_shared_loan_check": "PASS43.67s: opaque Grid+AC same-owner additions"
+ },
+ "ownership": "BC..154 scalar tail and two sole growable item/list metadata owners; no base copy, count mirror or fake numeric pointer. Unknown fields/padding retained.",
+ "shared_additions": [
+  "live_scene.rs declares newview_actor_fields module after existingview_object_init (approved by SDK owner)",
+  "view_init_prefix.rs crate-only disjoint object_init_parts grid+actualAC byte loan",
+  "view_init_world.rs opaque ObjectInitParts only aggregate-minted after sameWorld validation; lazyAC getter, actualGrid mutable getter, sameWorld guard; no readiness capability"
+ ],
+ "limitations": [
+  "Current B322A4/A8/AC and point globals require real caller owners; module supplies no white/zero defaults",
+  "No455050 base,451F90 derivedInit, source binding, Thing+C publication, GPU or view/application readiness acceptance",
+  "Finite pitch binary32 spill only, no signalling-NaN hardware claim. Raw scalar copies preserve all bits.",
+  "Native pointer/heap ABI, OOM/unwinding and destruction equivalence excluded; Rust growable allocation replaces fixed widths without artificial capacities",
+  "Changing source counts in fixture are explicitly external storage interventions; no invented application callback/reentrancy claim"
+ ],
+ "pins": {
+  "crates/aa-client/src/view_actor_fields.rs": "6ad684d4f5e9272686ba7ffb263075272c4dfb71879a279c04f376870e9e31c0",
+  "crates/aa-client/src/view_actor_fields_tests.rs": "2c88d1cc34059f6b6391e6b8f3d1022a2413b5032a9bdd1c5784ee1300bfaee6",
+  "research/development10/view-actor-fields/native_actor.py": "aa8369d9317db6c86f52db344fdb790260bfc7a64a50ea95e0a401b78299dbc4",
+  "research/development10/view-actor-fields/native-actor-fields.json": "8df9201aebafee422411dbf2bc4018e1a4121ec96b81540f16bf396362d44fae",
+  "research/development10/view-actor-fields/audit_actor.py": "42685f46688059dd2f1775663d12322ba75e2a30f19c4ebda7e1cbb30fa51906",
+  "research/development10/view-actor-fields/pin-audit.json": "7c6afe959480dffbe2e0cdcf024a6377ffd79b2c4898b484a3992b7b9848bb0b",
+  "research/development10/view-actor-fields/isolated-actor-final.exe": "2c49826d34c5185f46cb6119d750b6c868871a132bf5824f9668e7d28ba1877f",
+  "research/development10/view-actor-fields/build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "research/development10/view-actor-fields/tests-final.log": "54cbe93ce80fef936512aad02214eabef89d723c8902b4bf1fef17512b9c95eb",
+  "research/development10/view-actor-fields/native-final-replay.log": "74c037abdf3b18821402124299e7f80c8ad51176a3dd9f39a1f1daca2a4493f5",
+  "research/development10/view-actor-fields/README.md": "17408cd03a60851001ea4b77c97dee21c7474521cda46ba4d71620a75075e8cd",
+  "research/development10/view-actor-fields/runtime-loans-check-01.log": "b3ece87b3ea3e6b6f1e1c38a42ba98a67cd594d88d5925356f045b8cfdff2c7e"
+ }
+}

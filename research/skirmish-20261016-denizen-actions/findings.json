@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "native_contributor": "0x569C70",
+  "helpers": [
+    "0x4CED40",
+    "0x4CED60",
+    "0x58CB30",
+    "0x517FA0"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "base_native_executions": 2154,
+  "actual_saved_native_executions": 12,
+  "tests": {
+    "pure": {
+      "passed": 2,
+      "failed": 0
+    },
+    "actual_saved_adapter": {
+      "passed": 1,
+      "failed": 0,
+      "source_denizens": 2
+    },
+    "actors_clippy": "pass with only two pre-existing named lint allowances: clippy::collapsible_if, clippy::doc_lazy_continuation",
+    "runtime_clippy": "blocked by out-of-scope aa-rules/native_load.rs:878 manual_map lint"
+  },
+  "source_map": {
+    "path": "E:\\Games\\Axis and Alies\\reconstruction\\assets\\original\\Data\\Maps\\Campaign\\tutorial01.RMP",
+    "sha256": "47f01d51dc3048dd020aebd42d292f3a81f300f6429db043bbe2f0a5fdc092d1"
+  },
+  "observable_action_mask_order_proven": true,
+  "raw_unchanged_high_word_store_order_claimed": false,
+  "scope": "Action contributor and saved owned-storage adapter only; not world publication, execution, a battle or a release.",
+  "gaps": [
+    "Present Wall payload remains explicitly unsupported",
+    "No Denizen refresh/tick or command execution",
+    "Malformed-storage exact native fault/read timing unclaimed",
+    "No release or original files changed"
+  ],
+  "files": [
+    {
+      "path": "crates/aa-actors/src/denizen_actions.rs",
+      "bytes": 3649,
+      "sha256": "9e207c10aefafd0cb09a99475b9ea1ade84824fbceef2343b3b894d44c0fb5e1"
+    },
+    {
+      "path": "crates/aa-actors/tests/native_denizen_actions.rs",
+      "bytes": 4106,
+      "sha256": "ac4839beffd5a982a6b4618431192dc2b444e12e57be5bbfe63726fe81d5b23f"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_denizen_actions.rs",
+      "bytes": 9959,
+      "sha256": "6fe0a11113c3dfc4e59e008baa4b203f59abc4da61d450e1f867770da4791098"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/native_denizen_actions.py",
+      "bytes": 5344,
+      "sha256": "9d9264a4adbcee86b370e554688ce6a299f2b14b2aa606a87f559ad51b6d14c2"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/native-denizen-actions.json",
+      "bytes": 2102492,
+      "sha256": "c5b4ea6f255634305e5c4235f5a0e1971f7c21232af5b23b8fddc2835ade7874"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/actual-saved-inputs.json",
+      "bytes": 601,
+      "sha256": "2b8553e6436477997ac9cd5bc988d90861ad4630a8ec53c47fe4e99231d808c8"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/native-saved-denizen-actions.json",
+      "bytes": 13121,
+      "sha256": "e676f1577c7d2c68a29177e3f6156408eaa1453638e7af82d3e9a07f1d2ccae6"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/contributor-instructions.txt",
+      "bytes": 4158,
+      "sha256": "7b2390b5d4de3f5cde41974c90ed84573cfc6e5619147aa4c706d584be2bb573"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/helper-instructions.txt",
+      "bytes": 1499,
+      "sha256": "85aa8a4461ef2a42f0f3f9cd18cff1fb1925207e6d87a2d91e05d59a299d655e"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/pure-test.log",
+      "bytes": 495,
+      "sha256": "51a9127cfc2f3c6120600d26a60abf9e744a3ec633ef7d07280186f8cffeb64f"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/runtime-test.log",
+      "bytes": 589,
+      "sha256": "7970c06531c915419f6d8b64a63f39e286749030be6fd19a1dfc87beb442a55a"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/clippy-scoped.log",
+      "bytes": 732,
+      "sha256": "aa6b4f466ce7c9900c69882f8f006fc5ff81684851d9177534fbd29cffd16b6e"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/clippy-runtime.log",
+      "bytes": 1920,
+      "sha256": "fcfbdce7d408d4c86ebac38151c40b0ab7449c2b5e39d52fc41b8fdfcd408b20"
+    },
+    {
+      "path": "research/skirmish-20261016-denizen-actions/README.txt",
+      "bytes": 4752,
+      "sha256": "fa5c1bedd274f2088a3912ca497343fb898aab26fe772ae289da2b281a9a4c58"
+    }
+  ]
+}

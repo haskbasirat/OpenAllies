@@ -1,0 +1,10 @@
+[Text language=Default]
+{
+	ids = map_strings_table
+	name = "cutscene_short_04_009"
+
+	kingdom_1 = "Side 1"
+	kingdom_0 = "Side 0"
+	map_name = "cutscene_short_04_009"
+	map_description = "Map Description"
+}

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "passed": true,
+  "source_sha256": "40b7227d49a8c75415d9dafc5ded35c58d4fce9c1814fc497b1d20870014b285",
+  "integration_notes_sha256": "bf47fc07b5015551ba3c584878d72eb50fc2904909c263ec58e9a0b6c6cfacf9",
+  "library_review_unchanged": true,
+  "command": "cargo run --manifest-path rust-rebuild/Cargo.toml -p aa-transfer --example loopback_transfer -- rust-rebuild/crates/aa-formats/tests/fixtures/avars-version.original.tgi <crate>/target/loopback-example-proof/avars-version.tgi",
+  "network": "127.0.0.1 ephemeral TCP only",
+  "source_bytes": 732,
+  "destination_bytes": 732,
+  "source_and_destination_sha256": "6cb15962a05d2488e5e5bf627c6bcafff3550851041d617c3f6d8526657ea2ab",
+  "clippy_all_targets_passed": true,
+  "scope": "Local example only; no native game, public listener, original multiplayer or save-schema compatibility claim"
+}

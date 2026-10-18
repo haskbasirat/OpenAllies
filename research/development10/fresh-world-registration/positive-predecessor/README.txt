@@ -1,0 +1,1 @@
+FAILED reconstruction attempt: this file did not match the pinned predecessor SHA4e91d9fa. Do not use it as reviewed source. Use WorldStartup verified reviewed-map-actor-null-only.rs and its reversible-change receipt instead.

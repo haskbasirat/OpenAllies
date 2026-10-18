@@ -1,0 +1,207 @@
+PRESERVATION TARGET: EXPANDED v14, ORIGINAL ARTWORK
+
+The Rust rewrite targets the user's accepted MODIFIED v14 behavior, not a reset
+to the stock 2004 defaults. Original archives/decompiled code are lower-level
+evidence. Loading only the recovered stock rules would silently lose expanded
+caps, sides, maps and later control/compatibility behavior.
+
+Accepted identities
+Native AA.exe:
+  3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1
+v14 runtime manifest (54 files / 1,107,523,614 bytes):
+  90a18261597d7d4db8ba56ebaa2797c18433813e35bf07b825eaddf039cdfccd
+v14 source contract:
+  8355c3454557c565347bbed94c93b518bdfa7601fac4cc2d121cc90727734234
+Verified Rust-side ledger: research/evidence/v14-baseline.json
+  4712a2b4f12c0177f02dd40ea482f3135432e35d98ae8ed9dfea8cccd370132f
+
+The read-only audit verified all 54 current runtime files and compared all ten
+RWD archives with the installed originals. The archives are byte-identical.
+Twenty-three loose Data files are active overrides: eighteen replace existing
+members and five are additions. Full old/new hashes and sizes are in the ledger.
+No existing user profile, preference, credential or save was read or imported.
+
+Exact rule and control differences to preserve
+
+* EconomyLimitedResourceMax: stock20 -> v14 100, in Game/SVars_AA.tgi.
+  This caps provided unit/building capacity; it does not grant 100 earned
+  regiment slots. Existing HQ requirements, attachment limits and prices remain.
+* Start-location building_limit_provided: stock20 ->100, in
+  Special/Things/thing_start_location.tgi. This supplies building capacity.
+* KingdomsMax: stock8 ->16. AVars MultiplayerMaxNumPlayers12 ->16.
+  Broadband connection type maxplayers12 ->16; Modem remains4. Observers consume
+  network connection capacity; do not equate16 sides with proven16 human LAN QA.
+* Template RMC AAAllRMC retains320,384,448,512,576,640 and adds768/1024 square maps;
+  adds optional playable side09..side16 definitions and corresponding labels.
+  Added768 recommends8..12 sides;1024 recommends12..16. Stock staging defaults and
+  campaign/strategic templates were not rewritten by that data modification.
+* Gameplay camera maximum changes native float1.4 ->2.1 (1.5x maximum distance).
+  Min0.7/default1.0 and separate editor/strategic ranges remain native. End/Home
+  and the original wheel/key routes are retained. This is an executable change,
+  not a value recoverable from the stock asset catalog alone.
+* Tactical W/A/S/D joins the original arrow camera controls. Displaced tactical
+  actions move to Alt+the same letter: exactly81 insertions across three action
+  profiles (standard76, visual4, visual_dvorak1). Menu/file-dialog and custom
+  strategic hotkeys remain original; strategic A/D must not be remapped.
+* The later input repair preserves owned, still-held directions across transient
+  native clear/right-click activity. Text/modal/focus/MetaGame guards remain.
+  Native sequence tests cover this; sustained held-key plus right-click was not
+  substantiated by the old GUI tap-only tests. Do not relabel that as live proof.
+* Native simulation remains16 game ticks/second. Expanded transport priorities
+  and larger file-transfer packets do not change game speed or simulation rate.
+
+Other active Data changes
+
+AVars_ClientCadence.tgi adds NetworkBroadcastUseMoreBandwidthThreshold=0
+(compiled stock2). Native fresh-history/file-ready priority and exact-block-tail
+repairs are also needed; that one flag alone was historically insufficient.
+
+AVars_version.tgi omits four startup-logo definitions while retaining their
+video archives and all campaign/menu videos. It also redirects legacy stats/map
+endpoints to OpenSpy and sets unavailable rank URL to typed null.
+AVars_Locale.tgi uses account.openspy.net and typed null for the obsolete MOTD.
+Login UI/localization identifies free unranked OpenSpy; native endpoint/catalog
+logic is a separate patch. The preserved evidence does not certify end-to-end
+Internet authentication/hosting/joining. Do not fabricate those services in Rust.
+
+Five font TGIs replace16 GulimChe references with Malgun Gothic. Latin A&A/Arial
+references remain. The native cmap and pixel-font/DPI fixes are executable logic.
+The options UI adds a Fullscreen checkbox and localized instructions; native
+preview/confirm/timeout/Cancel/persistence logic supplies its behavior.
+
+UVars_Restored.tgi applies initial1024x768 windowed display configuration before
+renderer creation and enables RendererMultithreaded. User UVars load later and
+override display choices. Initial defaults are not existing user preferences.
+
+HD artwork is completely retired in v14: no HDArt payload and no added HD mode
+control or loading hook. Original High Detail Textures/terrain options remain
+stock settings and are not an optional enhanced texture pack.
+
+Native-only preservation evidence
+The ledger pins accepted source proposals for zoom, repaired WASD, text-reset
+dependency rebuilding, Original-only retirement, fullscreen, DPI, LAN discovery
+and OpenSpy. Earlier file-transfer/history fixes and profile isolation remain
+inside the exact accepted native image. A Rust implementation must recreate
+the intended behavior safely; it must not copy native pointer bugs, blindly
+transpile decompiler output, or label a recreated menu as full behavioral parity.
+
+dgVoodoo.conf changes only VRAM256 ->2048 from v13. D3D9 is translated to D3D11
+FL11.0 in that old native package. These are renderer implementation settings,
+not combat/economy rules. A new64-bit Rust renderer may use modern GPU APIs;
+matching original artwork, layouts, effects and gameplay still needs validation.
+LAA/up-to4GiB old-process address-space allowance is not a gameplay mechanic.
+
+Loading policy for a future Rust rules catalog
+1. Read verified original archive members.
+2. Replace matching file bytes with the exact declared v14 loose Data files and
+   add the five declared new files, respecting native resource paths/stages.
+3. Parse inherited templates and native ordering. Do not merge independently
+   named fields as a substitute for whole-file replacement or native inheritance.
+4. Apply independently ported native behavior (zoom/input/transport/UI lifecycle)
+   using its own evidence/tests; the Data overlay does not implement it.
+5. Keep user preferences and saves separate; do not import credentials or claim
+   native RSG compatibility before that decoder/state graph is actually ported.
+
+Current aa-assets loads original terrain/placements/static converted models and
+textures, not gameplay resource/unit/nation/economy rules. That viewer path does
+not itself reset the rule baseline, but a future rule loader must use this ledger.
+Current aa-simulation exposes an explicit provider maximum; v14 callers must
+eventually supply100. Its tests include20 and100 because native arithmetic is
+tested independently of profile selection. The default16Hz evidence is shared.
+
+Current implementation remains a foundation. See PARITY.txt for missing native
+systems. There is no claim that the complete v14 game has already been rebuilt.
+
+Exact loose Data identity appendix (full SHA256; stock absent means addition)
+
+Data/AVars.tgi
+  v14   c2ba65e128d28e2c57353da793fb18f5ebf8b2ad45614558ebf9922ee8f63b7c
+  stock 05cee95807de4a2f517d017bd03764a8aa1c49ae4545408ef1de445f39b82263
+
+Data/AVars_ClientCadence.tgi
+  v14   c4d53b8a9b2f9f97b96063f7028c9a6b44364a0eff9c71ad9682549b72969db4
+  stock absent
+
+Data/AVars_Locale.tgi
+  v14   af3cb82d925399652731303e35bb141ccfbd66c6ad8076ce46d9630eddf622ef
+  stock e36ec9c80882a5080887292b58478c1e051d18ba762b89adc3dcacab84a1da3e
+
+Data/AVars_version.tgi
+  v14   644dc6f0ed4558f55b2e7e39d7c27e0b5f2484046d4ccdc14ee5e9765f476556
+  stock 6cb15962a05d2488e5e5bf627c6bcafff3550851041d617c3f6d8526657ea2ab
+
+Data/Fonts/font_large.tgi
+  v14   927412c978d07069126edc18eb133547eb5ae6816b0fb4c646896c4d1a88c6e1
+  stock 55e4238dd3029547f5abe89ea2ea860c75e26fc74d628a90ef04659b51a4b3e2
+
+Data/Fonts/font_medium.tgi
+  v14   bdf48b7cb91a23c62a874a88836cee728bf86ba47b179fce949d064028b31f97
+  stock ac19b9a724d4c4a99ada7756526fb1d70bf903cff488e3456f756867ab80034e
+
+Data/Fonts/font_metagame.tgi
+  v14   cf7048200d999f30da08c8d11e1a4d664e3a8961d8dfbe6e33cbbc9d59de7090
+  stock 2a7aafbc508bed471362768f0012bbb2887c247d5ae8fc158943381f6c9b431f
+
+Data/Fonts/font_small.tgi
+  v14   92f760efee261a3d9bc3286bcb4093199e8f089820014c682691aa736f34a748
+  stock 6c816270a1737de0feb1fe4e68987f0822294c2cffe267b8e46efe9d6c60e726
+
+Data/Fonts/font_tiny.tgi
+  v14   aece0834caafcf998f81af5a1e6f64e0ff7614e1ebbbf7872f2e6adf7e7bc833
+  stock c058e8a9e30125d7876b37f44d71867204e135e89b180435ec10385270e42106
+
+Data/Game/connection_types.tgi
+  v14   299c6c9736fb9df5e7c2f94b3a59566db5c1fac09f3e8189d7ba187eb2ca2bc3
+  stock ab696f64f461a04b246c50d2e450995b85c115bd699e832e7a39f4591e920f3e
+
+Data/Game/SVars_AA.tgi
+  v14   dd177ace0797f20f8f44e1ff168f5ea6fa8fd7101b5add8d3b1460802352d380
+  stock 74b1ad3747f1264b947938340d3b53ac63b8d43be03d930123fd1cce2c0d212c
+
+Data/Localization/Hotkeys/Actions/hotkeys_standard_aa.txt
+  v14   638a3b11e5ba12e72200a17a16024bdd8c1831e754a1b7c13da19815c33eaafd
+  stock 34026f31e10110b58cefc0ce48a4f046fd84eb4ad3f2dc9afedff71ba488ba5a
+
+Data/Localization/Hotkeys/Actions/hotkeys_visual_aa.txt
+  v14   5e504879f975d71b50e27b81211073c18f6bfa6ae10677dc3ba003263a15f2d7
+  stock f41eaed8587f5c424ece643e5ffc6e99cad1f998771b25095189539f29fe2684
+
+Data/Localization/Hotkeys/Actions/hotkeys_visual_dvorak_aa.txt
+  v14   57a3f31e7ee19aca09368264761a9ab431ec95316cf24e3e5cecc157b7ae4cea
+  stock b67a0943368391e3642433c95726d1fe1b37d7f9e4e938f64d876c6921805a69
+
+Data/Localization/strings_expanded_v2.tgi
+  v14   80c03d28f81b5c4baaff2004e5f855441b9070e0e8eeb2828118e691b64c321f
+  stock absent
+
+Data/Localization/strings_fullscreen.tgi
+  v14   45d234ff0a8dc62f62f41ba2a3a9a0d5eabb99a1a7a89be8112fda7a08279ef7
+  stock absent
+
+Data/Localization/strings_openspy.tgi
+  v14   5c122d8ada6b4821f3c0e1163e502247645ee2040afe47582ea56650bf0a2a4c
+  stock absent
+
+Data/Special/Things/thing_start_location.tgi
+  v14   a7e80e85d4cedc8337f0621e43b2f48abb165437c2e504f853c994d982ce30e4
+  stock 29dae82194df3ac88b64a78b54fba2b1e5e64ed9b7481828232d73c4cc228097
+
+Data/Templates/template_rmc_aa.tgi
+  v14   06ec53b27fa503eee3eda82cd56a66f63e744567ef97e7fd1415cf600fb341a7
+  stock e551f3b371d9d4421e5dac49ff6c6805e524307c9a6a09c128096b7b24e2a9da
+
+Data/UI/Menus/login.tgi
+  v14   7fdc294cca54618dbbf131002f6b6270be92c9f2a16a569f1da159c36a5ec92c
+  stock d985f677111966f625ec043ef02fe663854b1672340b8c58a99257d55c90a853
+
+Data/UI/Menus/staging.tgi
+  v14   fb58cbecf712a5052d9ac3ebf99ffea24518db3acdf996e4734e6d36f481282a
+  stock d5f9ad63d7268ebf410fcf312f808bb46530fb591365347e0634d1d95900ea27
+
+Data/UI/Shared/options_dialog.tgi
+  v14   d5f01b953a78330285c9bfb27ecc2e8365b7dc015246fa793359f0e2e7752c2b
+  stock 4b037befff4d4c4b09c213059a18a951b40bc65bd0d91928d6af641c1ef264a5
+
+Data/UVars_Restored.tgi
+  v14   d957c883d9a3273fef371ca1f52671516b31657c1736e42438a0d4e8cd3c07e2
+  stock absent

@@ -1,0 +1,68 @@
+Numeric property lifetime and Body updates
+=========================================
+
+property_effects.rs owns real property-instance records, Add/Multiply definition
+records, duplicate selection, active state, flag masks, scalar aggregation and
+insertion/removal sequencing. This is separate from the constructor/getter gate.
+
+Insertion executes the native allegiance lookup before duplicate lookup. A
+duplicate definition is appended disabled, with no activation callbacks. An
+active first instance recomputes each numeric descriptor in order, immediately
+dispatches its consequence when the pre-clamp changed flag is true, then applies
+the flag mask, property callback and actor callback. Removing the active first
+duplicate activates the next matching instance without recomputation. Removing
+the last active instance updates flags, dispatches actor/property removal,
+recomputes each descriptor, then releases the detached record. The source filter
+uses resolved generation identities, including native stale-to-null behavior.
+
+Ordinary Add/Multiply sums store binary32 after every matched descriptor.
+Add index11 and Multiply indices21/22 instead select the maximum of base+amount;
+no match produces -1. Multipliers then apply the loaded global minimum, but the
+actor callback gate is the changed flag calculated before that clamp. Signed
+zeros compare equal, preserving the existing scalar bits when no write occurs.
+
+111 original sequences /390 transitions execute the original581630/581810
+control flow, native descriptor methods, aggregation and mask arithmetic across
+PC24/PC53/PC64. The copied native Add/Multiply vtables retain all matching and
+numeric methods; only their actor consequence virtual is replaced. Heap/free,
+actor allegiance, property callbacks, actor consequence callbacks and diagnostic
+logging are explicit seams. Callback mutations are compared in event order.
+Visited byte pins include seam-entry bytes; they do not claim execution behind
+those replaced leaves. Every visited original/v14 byte matches.
+
+NumericModifier.amount is the loaded value: the original Multiply loader flips
+authored indices18/23. modifier_load::numeric now performs that conversion after
+the amount's binary32 field store and resolved attribute lookup. It checks the
+native Add/Multiply index domains, Add repair flag rule and resulting Multiply
+range[-1,5]. Its957 native cases execute4FEC70/4FED70 with only TGI reader,
+attribute lookup, string-copy and base-loading seams. Invalid cases stop at the
+native diagnostic; Rust returns an explicit construction error, without claiming
+equivalence of a partially loaded invalid object. Nonfinite inputs and a repair
+flag on Multiply are explicitly unsupported. TGI parsing remains in aa-rules.
+Only numeric effect kinds1/2 are accepted. A caller may not discard kinds0/3..9
+to construct an apparently supported definition. Full actor consequences remain
+runtime dispatch; identities must remain coherent. Errors retain prior writes,
+and the release callback owns its detached record if external cleanup fails.
+
+updates.rs exposes the proven Body writes used by these consequences and linked
+initialization. The561D40 ratio must be captured before linked recursion. Its
+derived maximum remains extended for scaling and comparison even after the
+binary32 maximum field store. A below-one health write returns before the max
+comparison. Defense refresh executes501B10 only when a modifier context exists.
+
+set_maximum_health_step performs one562200 step, including its actual561E50
+source-aware setter, and returns the epsilon-clamped maximum/health pair. The
+world runtime must re-resolve actor+168 after setter callbacks and iterate the
+next linked Body. The87 native update cases cover complete no-linked-node paths;
+they do not establish full linked-graph integration. Actual derived getters run;
+the preexisting Body health callback fixture supplies the external world seams.
+
+All arithmetic inputs use finite round-to-nearest values. Unsupported handles,
+indices and invalid maxima fail explicitly. These modules do not claim original
+save loading, whole-world integration or full gameplay parity.
+
+Reproduce:
+  python research/phase7-properties/original_effects.py
+  python research/phase7-properties/original_body_updates.py
+  python research/phase7-properties/original_modifier_load.py
+  python research/phase7-properties/record_lifecycle.py

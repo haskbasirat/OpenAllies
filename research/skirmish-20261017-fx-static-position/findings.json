@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "status": "bounded constant and lazy caller binding frozen; full library check blocked by unrelated film_resource_factory owner type migration",
+  "native": {
+    "fixture_sha256": "6567d542d339630e17a75b485c99ef4bc1e442e1a53d5b207b9b6516b5149875",
+    "producer_sha256": "dbce91ed14b57f14a8d8a0e75ad4c2df78488445a19e2d8c491489529e79e3ed",
+    "paired_cases": 180,
+    "executions": 360,
+    "pins": 456,
+    "direct_reference_count": 34,
+    "actual_initialized_bits": [
+      "C2C80000",
+      "C2C80000",
+      "C2C80000"
+    ],
+    "semantic_value": "binary32(-100.0) unset-position sentinel"
+  },
+  "source": {
+    "module": "crates/aa-runtime/src/fx_static_position.rs",
+    "sha256": "674bc7a34647ddcb78ab150ce89a309ec39387eebe457f6192d7f9a096aae76e",
+    "required_effects_span_sha256": "ad78e117e8c35f1fb1ad63a692d673d68e3b7ecac884758903881f23f911f8a4",
+    "wiring": "Only RequiredEffects::enter_fx global_position closure replaces required Err with Ok(fx_static_position::unset_position()) at the existing lazy native constructor read."
+  },
+  "tests": {
+    "focused_exact_module": {
+      "log": "constant-tests.log",
+      "passed": 1,
+      "failed": 0,
+      "qualification": "rustc --test exact production module with its own fixture test; no runtime implementation stub/rewrite"
+    },
+    "library": {
+      "log": "production-check.log",
+      "status": "blocked by three unrelated Creator versus Box<Creator> errors in film_resource_factory.rs91,100,109; no owned compile error; not claimed whole-runtime success"
+    }
+  },
+  "limitations": [
+    "Native direct-reference census is exhaustive over encoded literal addresses in both pinned PEs. It does not claim proof against arbitrary external memory patching or unknown computed aliases.",
+    "Dynamic native constructors/comparators/escaped-address path execute on original mapped sentinel bytes and any write to its12-byte range fails the proof.",
+    "Pointer escape branch42A710->429080 uses explicit fixture allocation/OS/final presentation service; no live View, full application or battle completion claim.",
+    "This is initialized engine sentinel data, not World position, PointShape B3A8C4, source authored default, configuration option or guessed zero.",
+    "The positive state FX path still requires actual app View clock/delivery/destruction if reached; those callbacks remain explicit."
+  ]
+}

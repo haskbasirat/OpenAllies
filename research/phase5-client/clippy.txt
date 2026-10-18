@@ -1,0 +1,18 @@
+    Blocking waiting for file lock on build directory
+    Checking aa-numeric v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-numeric)
+    Checking aa-assets v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-assets)
+   Compiling aa-client v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-client)
+    Checking aa-formats v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-formats)
+    Checking aa-resources v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-resources)
+    Checking aa-orders v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-orders)
+    Checking aa-economy v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-economy)
+    Checking aa-rules v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-rules)
+    Checking aa-trig v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-trig)
+    Checking aa-simulation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-simulation)
+    Checking aa-spatial v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-spatial)
+    Checking aa-navigation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-navigation)
+    Checking aa-body v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-body)
+    Checking aa-movement v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-movement)
+    Checking aa-actors v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-actors)
+    Checking aa-animation v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-animation)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 12.51s

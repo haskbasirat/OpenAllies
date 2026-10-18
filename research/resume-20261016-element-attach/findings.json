@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-16",
+  "scope": "Native Element attachment prefix through first unsupported Recruit582C40 contributor; not complete attachment/gameplay",
+  "source_hashes": {
+    "crates/aa-runtime/src/saved_organization_actions.rs": "4cf2d396fcbd561747eadc3cc635eb371baafc35be507b6ec0fed50b1a7a1e82",
+    "crates/aa-mapworld/src/restore.rs": "e1644b2c0f765ee2996243ced0c65e94adbd35e35dc30a27e5ff1031421e1887",
+    "crates/aa-mapworld/src/organization_restore.rs": "b827657d851849cfd00368dccb443ba4a47367df962f0c67ac5bd170533481f5",
+    "crates/aa-actors/src/organization_state.rs": "0cfc0c817715e0d36a9cad2ef8febde1e8a1139e318888fda35336d469fa3a6f",
+    "crates/aa-actors/tests/native_organization_saved.rs": "18e24bd529fc6908218bba3c9ac4d5af519223d542e0f333e6a1a179b546c9a1",
+    "crates/aa-runtime/tests/element_attach_restore.rs": "6b0a0d0529d091655f618ac6c8c5edc042e755fec73884341b77561fd6422d74",
+    "crates/aa-runtime/src/catalog.rs": "e95eeef2916cf48de3d88bdacf19a6214d0af80572fd6d20d8a7663dd6a79f14"
+  },
+  "native_prefix": {
+    "cases": 8,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "instruction_sites": 92,
+    "sha256": "5ce78da9c38086b338dcb91da771ef281ad3c3a6214cd10d317e8edff18760c9",
+    "boundary": "stop before executing582C40; no native exception claim",
+    "seams": []
+  },
+  "tutorial02": {
+    "owner": 4099,
+    "member": 4100,
+    "slot": 4,
+    "attached": true,
+    "actions": [
+      0,
+      0
+    ],
+    "next_blocker": "Recruit582C40 action contributor",
+    "regression_log": "qa-output/resume-20261016/element-attach-final-test.log"
+  },
+  "full_map_census": "Not repeated; lead owns combined census",
+  "limitations": [
+    "No specialized action contributors, Economy or active SAI simulated",
+    "No cloned/fake Mind arena",
+    "Only bounded prefix has new native execution proof",
+    "All8 new prefix rows have null Element definition; parent traversal and later publication/Economy/observer branches are outside new execution proof"
+  ],
+  "validation": {
+    "tutorial02_and_eight_prefix_replays": "1 test passed",
+    "existing_organization_oracle_replay": "2 tests passed",
+    "logs": {
+      "qa-output/resume-20261016/element-attach-final-test.log": "5e29d336ee3ae6648299dd6d5912e50b30adf68c6f1fa1de42cd0c7ffb4c051b",
+      "qa-output/resume-20261016/organization-callback-signature-test.log": "d3140faae862d563749084ae71f3fd5b9cda3adee90fc9887a8073af7ab0d4a3"
+    }
+  }
+}

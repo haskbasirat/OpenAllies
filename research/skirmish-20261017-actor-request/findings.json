@@ -1,0 +1,61 @@
+{
+  "scope": "selected same-Data Actor8FX/local AbilityDefinition request-source projection; no wholeData/source/View/battle readiness",
+  "frozen_at_utc": "2026-10-17T11:48:54.278239+00:00",
+  "files": {
+    "crates/aa-runtime/src/data_actor_request.rs": "fbfc2e036229d624af518223bcc89d6f9f0b494352f1c5e8db6a09108504db6e",
+    "crates/aa-runtime/src/data_actor_request_tests.rs": "ce455d6839a1928f0d8df5195a570705dc2d9646a238c01312b7ffe352d1d213",
+    "crates/aa-runtime/src/actor_request_core.rs": "f3bbf7e04803f66b9f732dc01e7d68fd942f15cc0e4a1c8034d06f9feb6da0a3",
+    "crates/aa-runtime/src/actor_request_core_tests.rs": "b1011c4b475474d1add107905b1e866499500ff7d5d8261124ff5fbcb7b41d75",
+    "crates/aa-runtime/src/fx_graph_actor_request_source.rs": "9be5f61cbb3d1485125af270e29eb4f6b2e54d60167e693488e9864b5430019f",
+    "research/skirmish-20261017-actor-request/native_actor_request.py": "9ed55d92eb4f5dff8b798c313953e290bd83e3465513b913888bc9e874b7b8a2",
+    "research/skirmish-20261017-actor-request/native-actor-request.json": "2e3656d6dd1aac1632ad3413f1960aa13ab2d1d3f6414ad6c8e716bf0a615f08",
+    "research/skirmish-20261017-actor-request/exact_core_tests.rs": "f70897ae590214d22809ea3e47cb6d45affc77679897b2e16901611afca75310",
+    "research/skirmish-20261017-actor-request/README.txt": "a1af1fe25865a018901cc1ddddfa39e623ad77c434eeaa1088af518481ac61e0"
+  },
+  "integration_snapshot_files": {
+    "crates/aa-runtime/src/data_pre_request.rs": "c143ba6fcf11e13d38c060e99082767882eba3767db3cdc4ec92551d40429d75",
+    "crates/aa-runtime/src/data_object_request.rs": "8a98a4bc4451d49321a8701ff70e641e58f037c54bd1b2f9c1f59bfa12169402",
+    "crates/aa-runtime/src/fx_graph.rs": "52c1d62335f36a7a75365d1e5ab432a2b82793b4810c550a2c2003124a7978da",
+    "crates/aa-runtime/src/fx_graph_actor_state.rs": "8659cf6d58d81dc7e8da1105f034a6340768c6a2f65618ecd0ec2e3621cc5420"
+  },
+  "native": {
+    "fresh_machines": 6,
+    "pc": [
+      24,
+      53,
+      64
+    ],
+    "images": [
+      "original",
+      "v14"
+    ],
+    "enum_constructor_calls": 36,
+    "actor_constructor_calls": 6,
+    "ability_request_runs": 288,
+    "selected_source_interval_runs": 108,
+    "health_validation_runs": 48,
+    "inline_shared_branch_runs": 12,
+    "executed_pins": 1652,
+    "fresh_immutable_replay": "pass"
+  },
+  "verification": {
+    "exact_production_core_tests": "4/4 pass",
+    "runtime_lib_production_check_final_v2": "pass19.50s",
+    "runtime_owner_refusal_test": "saved,not run",
+    "actual_farm_ger_corps_graph_test": "saved ignored,not run",
+    "whole_concrete_source_adapter": "not claimed"
+  },
+  "logs": {
+    "research/skirmish-20261017-actor-request/source-check-final-v2.log": "1ea17f5677a103f128ef81c70224a9c8596fadb45e8416d9c1296afcf4811dce",
+    "research/skirmish-20261017-actor-request/native-replay.log": "ce94d641463faf39a1977240a32deb4b5fbaf123877a3359d3046f8e76437b4f",
+    "research/skirmish-20261017-actor-request/exact-core-tests.log": "7e4e5b9e48f51829ec11d03474e1648674c818eaad67302ba22443e1742611b4"
+  },
+  "limits": [
+    "typed Object49C760 completed-base transport and source getters/iterators explicit",
+    "selected middle-of-loader intervals use explicit enclosing register/stack inputs",
+    "positive42B990 source load required cutoff; existing shared FX compiler not reimplemented",
+    "positive shared ability_IDS requires actual source-order shared allocation owner",
+    "positive derived534 remains required until post-loader writer bound",
+    "no full original source order,decoders,resource barrier,VWorldAD or playable-battle claim"
+  ]
+}

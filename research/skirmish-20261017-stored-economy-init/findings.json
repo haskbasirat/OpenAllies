@@ -1,0 +1,36 @@
+{
+  "scope": "fresh stored56F280 Economy InitExisting field binding, same native kernel as saved adapter",
+  "date": "2026-10-17",
+  "native": {
+    "generated_rows": 48,
+    "retained_actual_saved_rows": 3,
+    "original_v14_all_PC_machines": 102,
+    "executed_instruction_pins": 139,
+    "intercepted_heap_entry_pins": 1,
+    "immutable_replay_passed": true
+  },
+  "checks": {
+    "runtime_lib_release": "passed16.47s",
+    "new_runtime_link": false
+  },
+  "ownership": [
+    "same ActorStore component/header and immutable source constructor binding at Bank sourcePC",
+    "same existing scheduler Owners Target::Component, same intrusive Queues.head; no new token, head mirror, queue clone or RNG",
+    "native pending skips source348; actual true Bool invokes same queue1,data0 add_periodic and RNG",
+    "AfterInit4B2830 admission helper present; generic dispatch owned by Globals"
+  ],
+  "guard_kernel_sha256_ignoring_visibility": "03a43c949c9a79655a2d898d833643bb4102b3dbd8bbdccba8aa65a349ea60fa",
+  "pending": [
+    "First natural fresh-Mission execution is parent/Globals actual32 scope, not yet claimed here",
+    "No broader Actor Init completion or battle-playability claim"
+  ],
+  "files": {
+    "crates/aa-runtime/src/stored_economy_init_world.rs": "4617206750445d8905443e1329fd57d560c839a3b4260e60548742b8c4121bde",
+    "crates/aa-runtime/src/load_economy_init_world.rs": "bb27c92124ac1c11634d2598bd030c2eeb661d25ccdea6b9bc6d944aa0dbf197",
+    "crates/aa-runtime/src/stored_component_init_source.rs": "6f746b26f8834c9a02a0666b5f9b2e4d21391fc2caa29c3248de255bc11416a6",
+    "crates/aa-runtime/src/stored_component_schedule.rs": "9f8f47f1d39852611b19a570ecdf5557ded5c02d8c46d9ece5d96f6e1c983faf",
+    "fresh-economy-check01.log": "fa7709668379994f5fdfab2844dbd71383ff1d1ac9eee8f05e2b9a38ccca1b38",
+    "fresh-economy-native-replay.log": "c98de1aa8e5570025c226881235f574c22500ae1bb05db7e22ccb8c5e1cb0a36",
+    "research/skirmish-20261016-load-economy-init/native-economy-init.json": "9504358016c8e47d71b81830748768bd51b38cede9a131059a482f10cf540769"
+  }
+}

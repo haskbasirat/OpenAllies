@@ -1,0 +1,134 @@
+Film integration checkpoint (2026-10-17; work in progress)
+
+Completed native fixtures, independent from the prior sealed film reports:
+- native-world-creator-extents.json: 162 paired rows /324 original-v14 runs,
+  all3 PCs,5 executed instruction pins. Actual4F28A6..B1 raw DWORD copy;
+  isolated fragment, not full WorldInit. Rust scoped test1/1 passed.
+- native-film-factory.json:36 paired rows /72 runs,19 block pins. Full
+  5A31D0->5A27A0 wrapper executes, but base-resource/chunk construction,
+  Creator clone, fresh Header constructor and whole5A26E0 are explicit required
+  child seams. Rust sequence replay pending current unit executable.
+- native-film-references.json:21 paired rows /42 runs,1213 block pins.
+  Actual4BAD50 nil entry, parsed existing TextData lookup and5A1120 prepend,
+  tail and reference-count effects. Missing keys stop before required warning/
+  creation. Rust2/2 passed (fixture replay +identity mutation/reload guards).
+- native-target-header.json:63 paired postread rows +3 factory and3 caller
+  pairs /138 runs,91 block pins. Factory literalA44368 is UTF16 'new'.
+  Actual5A2D09..1F passes SOURCE resource as argument to TARGET5A2A40.
+  Actual5A2B04 loads this argument into EBP; Header38 overwrite takes SOURCE
+  Resource38, NEVER target's ctorIDS 'new'. Native tests deliberately use
+  different source/target names. Rust unit1/1 passed from frozen tests03.
+- native-film-map-strings.json:405 paired rows /810 runs,67 block pins.
+  Actual59FF28..5A003A late compression/option reads and859B30 execute;
+  builder/depot/wrapper/delete OS leaves are explicitly declared services.
+  Rust396 tail rows1/1 passed;9 dispatcher rows are separate native evidence.
+- native-film-create.json:432 paired rows /864 runs,46 block pins.
+  Full5A3250 branches/currentdepot-tail/finalname405B80 execute. Lock,
+  constructor, resource/depot/diagnostic/publication children are explicit
+  services. New Rust replay is pending successful current unit compilation.
+- native-film-separate-variable.json:48 paired rows /96 runs,19 pins.
+  Actual4017D0 type1/flags10 and4B3190/4B29B0 same current-byte store.
+  Native registereddefaultbyte stays0; shipped UVars source assigns current1.
+  Portable application policy explicitly writes current0 without editing it.
+  New Rust replay is pending successful current unit compilation.
+
+Current integration (production checked; not a completed battle/film claim):
+- Worldcreator_extents is copied from parsed resource88 at WorldInit before
+  mode1 selected-Creator replacement. It is independent of terrain's ceiled
+  GMap extents and source MapHeader display fields.
+- film_world_capture composes retained current Rules, Team then Kingdom then
+  OBJECTIVES extras, actual World extents, same application Campaign owner,
+  actual GlyphRoster and SAI profile fields. No source Header passthrough.
+- film_resource_factory retains cloned current Creator and fresh independent
+  Header, captures current World, then writes Rules.mode3. Its Current facade
+  gives film_create a single World borrow for construction and later name read.
+- target_header owns the reached actual target90 name/extents slice. Native
+  fresh target constructor IDS are separately produced at the proved5A28B0
+  boundary; diagnostics do not manufacture that origin.
+- Localization clones get new allocation identities; Text clones get new row
+  identities. EntryReference detects foreign/cloned/destroyed/reloaded rows,
+  while an actual49AE00 value write preserves the same entry handle. Resource
+  keeps duplicate references in native head-first order without text snapshots.
+- Resource now has one private shared Core for metadata, stream, refs, depots,
+  flags8/requests4/references14. Public Resource is nonClone. Only actual
+  manager code retains/retire aliases; recorder is a nonowning Weak stream.
+  Depot registration and retirement correctness depend on real backend producer.
+- save_header_current is concrete59EA60 over SAME fields: MAP raw zero,
+  current compression read, MAP_HEADER current Header then polymorphic Creator.
+  Its closed sink registers real existing MapString handles; missing-entry
+  warning/create/fallback remains required.
+- File backend retains one backend-opened OSFile, writes only emitted suffixes,
+  flushes same stream, and appends compression footer before Header rewrite and
+  96-byte directory records at close. No growing buffer clone per flush.
+  ChunkFileWriter::flushed_bytes lends finished prefix +live encoder tail.
+  Native zlib inflater representation-equivalence proof remains unchanged;
+  exact original deflater bytes/Windows sharing policy are not claimed.
+
+Still not accepted/end-to-end tested:
+- Actual managed positive full Header capture/film construction.
+- Latest sequence/target/Core/real-file unit tests (build in progress).
+- Actual managed positive complete5A3250/76C310 composition. The native caller
+  kernel and concrete same manager/depot/file facade now exist; backend author
+  owns its separately qualified native location/registry proof.
+- New concrete film_map_strings::Current and film_session_output::Current
+  compose actualHeader+Creator, memoryTextStream, lazycurrentmaptext, actual
+  Kingdom188, samefileflush andrequiredrealNode74D5F0 bridge. These do not
+  mint a World/Session activation witness. Concrete managed execution remains
+  pending a genuine StartedMission.
+- EditorMapStringsSeparate currentfalse is a deliberate portable backend
+  configuration approved by the lead, not observed from the native capture.
+  Full embeddedMAPSTRINGS construction/serialization and unconditional
+  DeleteFileW remain active. Default source declaration remains true.
+- Missing MapString creation/warning/fallback, nonplain TGI formatting beyond
+  the prior native-parser verified representation domain.
+- Actual Session7757F0->76C310->SAI full composition and live battle.
+
+Historical findings.json /parameters-findings.json /kingdoms-writer-findings.json
+/extras-findings.json are sealed earlier scopes; this checkpoint does not
+silently extend their counts or claim that edited current sources share oldpins.
+
+Recent verification / known build limits
+--------------------------------------
+All seven integration native scripts freshly replayed read-only successfully;
+their fixtures were not rewritten. frozen-integration-tests-03.exe SHA256
+3c12f08a2ca10827d313d9797ddf88cb51db1bf6cc4e374da0be9916bb3072da
+passed own factory/tail/Core lifetime/realfile IO/rotation/actualUVar/process
+tests, plus separatetargetHeader1/1 andrawextents1/1. Its broad film_ filter
+also exposed a peer FilmClass expected10/sourceproduced3 assertion, reported
+to that author; no overall-suite pass is claimed.
+Later currentfilm v3 unit compilation stopped on foreign launch_settings_dump
+RefMut dereference E0308, with no ownfilm error and no testsrun. Current
+create/output production snapshots passed; final sourceunit replay remains
+pending after that shared-source correction.
+
+Latest explicit file flush / shared-source retry
+-----------------------------------------------
+native-film-file-flush.json adds9 paired rows/18 original-v14 executions,
+15 executed pins. Actual856DC0 forwards to the backing child's+44; the real
+8764F0 constructor installsAB7980 with+44=8766D0. The latter executes876600
+buffer drain then native FlushFileBuffers. Its FALSE path stops before the
+required native localized error/exception graph. The read-only replay passes,
+fixtureSHAa33d6d04c8a8f770c380e4ad9a7a4e33ca0e8e820ddaa4ad041b62b227d89bf3.
+
+Resource.flush now writes current codec output then calls sync_all on the SAME
+File before Orders readiness. Native close likewise syncs before dropping that
+File. Ordinary per-write persist does not add a durability flush. Rust IO
+errors are explicit; C++ localized exception/unwind behavior is not claimed.
+
+The peer FilmClass assertion was corrected to the real shipped RAMWeight3;
+native fixed VRAMWeight10 is a separate field. Production source binding was
+already correct. No production default changed to accommodate that test.
+The final current Film/direction unit compilation completed in8m32s after the
+foreign launch key and PlacementRecord errors were fixed. Its immutable
+frozen-integration-tests-04.exe SHA256 is
+48a507152d449e44be087b0a5f2668b2691a4e4594840b0900d0b5aed78dc9b7.
+All17 film_ tests passed, including ignored actual-source/backend tests.
+The same binary passed direction2/2, targetHeader1/1 andrawextents1/1.
+Current source snapshots/pins and exact bounded/open scope are recorded in
+integration-final-findings.json. Earlier failure logs remain historical.
+
+The separate actor_creation_startup capability seals actual hardware9C8680
+entry/returnCW027F and all2048 vectors without reading later source-loading PC.
+Its read-only verification passes; full details and current test status are in
+research/skirmish-20261017-direction-startup/README.txt. This is static native
+startup evidence, not a full mission or battle capture.

@@ -1,0 +1,63 @@
+{
+  "scope": "Held Economy InitExisting56F280 and constant AfterInit4B2830; no whole Actor Init/battle acceptance",
+  "status": "frozen",
+  "native": {
+    "generated_rows": 48,
+    "actual_rows": 3,
+    "fresh_original_v14_machines": 102,
+    "executed_address_pins": 139,
+    "intercepted_allocator_entries": 1,
+    "actual": "tutorial02 decoded Actor784, sourcePC53; actual constructor queues/restoredRng, explicit arithmeticPC24/53/64; not a natural whole-immediate-lifecycle claim",
+    "debug_recorders": "Native inactive returns execute at explicit fixture B3655C/B36560 owners; startup/active debug tracing not proved; distinct from SAI B36528"
+  },
+  "rust": {
+    "combined_unit_passed": 14,
+    "failed": 0,
+    "own_init_tests": 2,
+    "actual_rows": 3,
+    "mode": "release/locked/offline/-j4/include-ignored",
+    "fixture_replayed": true
+  },
+  "files": [
+    {
+      "path": "crates/aa-runtime/src/load_economy_init_world.rs",
+      "sha256": "1094317df88ee30da29eff8f81fb48db3abc4c86e1894655a1c58980be017802",
+      "bytes": 4619
+    },
+    {
+      "path": "crates/aa-runtime/src/load_economy_init_world_tests.rs",
+      "sha256": "e59f212e91156f8d2ac6a49b08d520e446a31f90d61df66acdc8c555bf3abd2b",
+      "bytes": 11692
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/native_economy_init.py",
+      "sha256": "50711f37d4c67a82a95a8d850c54652eb760b9aec656f451f6626528db342298",
+      "bytes": 5073
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/native-economy-init.json",
+      "sha256": "9504358016c8e47d71b81830748768bd51b38cede9a131059a482f10cf540769",
+      "bytes": 420913
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/actual-economy-init-current.json",
+      "sha256": "becfbd8ab6dd502b0ce8d42eeadbf64ee80b2f5fbc831bc62e84e574f55759ca",
+      "bytes": 2084569
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/native-replay-current.log",
+      "sha256": "c98de1aa8e5570025c226881235f574c22500ae1bb05db7e22ccb8c5e1cb0a36",
+      "bytes": 179
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/README.txt",
+      "sha256": "7810cb839002ff5684d54c985bbd32330527c10e7988e0abd937d807ea6d61f2",
+      "bytes": 3021
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/runtime-final-v7.log",
+      "sha256": "b4cee88a1e5f527cd50e37ed4cb101d641bc527ca747b42905801ae8716b0754",
+      "bytes": 6519
+    }
+  ]
+}

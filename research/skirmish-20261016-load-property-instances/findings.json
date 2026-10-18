@@ -1,0 +1,54 @@
+{
+  "scope": "bounded actual ordinary Property allocation/attachment and source projection; no complete battle claim",
+  "native_functions": [
+    "5030F0",
+    "5817A0",
+    "581630",
+    "503680",
+    "502B30",
+    "4CEAC0",
+    "5787F0",
+    "486F00",
+    "47D880",
+    "48D4A0/48D500"
+  ],
+  "native_machine_runs": 90,
+  "distinct_pinned_image_bytes": 3009,
+  "freeze": "freeze.json",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "checks": {
+    "author-rules-full.log": {
+      "passed": 151,
+      "failed": 0,
+      "targets": 40,
+      "sha256": "67f861554758bda1e903c26ba80502caa0eeaef2e2541c6c36c7f3ade11ed181"
+    },
+    "author-metagame-full.log": {
+      "passed": 40,
+      "failed": 0,
+      "targets": 22,
+      "sha256": "d26c27965808cc6f8f9670d470151e7f269c11d79964524e827f6996c1287bf4"
+    },
+    "author-body-regression.log": {
+      "passed": 9,
+      "failed": 0,
+      "targets": 4,
+      "sha256": "4d62c84b6f9fd69fdc0530a94e50891d5ee0b2072ec16d60dae1beca271759af"
+    },
+    "author-final-immutable-replay.log": {
+      "passed": 1,
+      "failed": 0,
+      "targets": 1,
+      "sha256": "7b34957b0455039585b91516d151299ab8b09986d118122b08d0c5cb9e0b8139"
+    }
+  },
+  "independent_review": "independent-state-binding/independent-review.json",
+  "independent_review_sha256": "167c71fa2e7853a55fd6367452d785f3a6d73b2ccb3aa28a7ea398711a488127",
+  "open_gaps": [
+    "positive numeric actor children and immediate Flag consequences",
+    "positive Organization4CEF10 and absent concrete Settlement fields",
+    "positive ordinary Property FX graph publication",
+    "unadmitted embedded/EnchantmentProperty source producer and its broader callback/allocation ordering"
+  ]
+}

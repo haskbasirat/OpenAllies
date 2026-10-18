@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "scope": "Native actor economy eligibility56F9A0, supply56F960/4D0C90, recruitability45E5A0, actor/layout/definition resource vectors56FA30/56FB10/56FC20/56F850/56F580/56F660/45F4D0/45F570/45F680, Modifier501730/501A00/5019D0, source economy projection4666C0..466822 and enum462EC0",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_executions": {
+    "resource_gates_vectors_and_caches": 516,
+    "source_loader_fragments": 51,
+    "recruitability_enum_constructor": 1
+  },
+  "enum_registrations": 3,
+  "rust_tests_passed": 5,
+  "strict_clippy": "passed for aa-actors, aa-body, aa-rules --tests -D warnings",
+  "behavior": [
+    "Attached Elements, dead actors and actor states39/21 are excluded by exact production eligibility gates. Organizations use exact recruitability; other actors use source supply_required and ConstructionComponent+18 positive comparison, including native NaN/infinity/signedzero gate behavior.",
+    "ActorData548 is a reverse MobileDeployment relation. Unsupplied actors with an Economy-bearing counterpart use that source definition plus layout slots, without live member production recursion.",
+    "Transport definition flag24 and actor+C0 cached cost/upkeep vectors override normal actor gates before dead/attached checks.",
+    "Cost501730 scales recruitable or transport_actor-bearing definitions. Construction-definition cost uses501A00 and Structure flag13. Modifier flag9 suppresses upkeep. Production Modifier80 adjustment applies only at exact registry count.",
+    "Layout slots preserve native ordered expansion, null slots and Economy-presence checks. Cost propagates the owner modifier context; upkeep and production layout definition values deliberately use null context.",
+    "Production traverses actual live Organization members, rereads member lengths/slots, and caches child values at captured Economy identities only when requested. Duplicate members count repeatedly. Heap frames avoid a Rust recursion depth limit. Invalid actor cycles fail explicitly.",
+    "Every arithmetic operation uses aa-numeric Precision and original binary32 store boundaries; extended comparisons and source vector lengths are preserved. Addition visits min(source,destination) exactly as4CCD80.",
+    "Source reader projects actual resource order proven by existing registry code, the NO/YES/WITH_PRIMARY enum, resolved transport_actor and forward MobileDeployment unpack_to_actor_ids references. Source identities and field provenance remain available.",
+    "Cost projection reuses previously proven dense_cost_words473CB0: all resource slots are initialized to zero, only STOCKPILED fields are read. Upkeep and Production read every registry field. Missing values, invalid types and unsupported source schemas are errors.",
+    "New plain_string_field is separate from the existing strict typed field API and accepts only bounded unquoted ASCII identifiers with coherent inherited string declarations or implicit source assignments. NULL is original empty string; provenance retains base assignment origin. Existing strict field tests remain unchanged and pass."
+  ],
+  "boundaries": [
+    "Root owns runtime570020 and56F310/56F340 integration and actual stockpile adjustment; these helpers alone do not claim live economy completion.",
+    "GateWorld/World getters are pure coherent snapshots. Required actor modifier context4CF110, actual Organization layout slot resolution, typed Transport cache vectors, and actual numeric Modifier80 table must be supplied. No opaque saved handles are interpreted as scalar values.",
+    "Forward unpack_to_actor references are not naively inverted. Multiple original definitions target the same actor (including USA dynamic/amphibious corps trucks); actual loader callback order must establish overwritten native548 inverse. This source module does not assume catalog discovery order.",
+    "Full MobileDeployment4605B0 binding/validation, postload restoration, and live effect-generated Modifier resource tables are outside this port. Native field identities/ranges are pinned separately.",
+    "Arithmetic values must be finite in aa-numeric; the supplied gate itself preserves original nonfinite bit comparison. Missing layout data, invalid resource indices, cycles and service failures report explicit errors rather than falling back to zero or accepted behavior.",
+    "Native source fragment hooks only typed field getters, allocation/free and enum registration observation. FullTGI parser, enum-map implementation and entire464BD0 loader are not claimed by these isolated executions. Scalar conversion/list inheritance use separately proven aa-rules dependencies.",
+    "Original nine-actor source integration covers five faction infantry definitions, USA medium tank, USA infantry regiment, USA corps and USA corps truck; it is not an all-definition runtime loading claim."
+  ],
+  "abi": "Native value executions verify return IP, expected cdecl/thiscall stack and EBX/ESI/EDI/EBP sentinels. Source fragment checks exact stop and balanced stack; enum constructor also verifies nonvolatile registers.",
+  "static_source_ranges": [
+    {
+      "start": "0x464c4d",
+      "end": "0x464d01",
+      "sha256": "082bf076cf49a51e218390ca3312cfc44cb5d0b0387029984e4d2ab9765e966d"
+    },
+    {
+      "start": "0x4666c0",
+      "end": "0x466822",
+      "sha256": "42da75dd3b307c0025db64c6220d6a7cdc4f0b79cd77261c0f72643e68048875"
+    },
+    {
+      "start": "0x468538",
+      "end": "0x4686b3",
+      "sha256": "f6305f0dbd1f69b0ecaf9d5a673f82de6f0ff0dc9e9cc129e63b8673bfb7bbf0"
+    },
+    {
+      "start": "0x4605b0",
+      "end": "0x4606c8",
+      "sha256": "0473157c1e6614c03b12f5cdca34f4bc812e6d05c5031c0a372d8fa6f4befab0"
+    },
+    {
+      "start": "0x462ec0",
+      "end": "0x462fa9",
+      "sha256": "73faf0c567440e2f4a81baed60e7df41e8660ef0d9d78a4507c89bd095223f9a"
+    }
+  ],
+  "pins": {
+    "crates/aa-actors/src/economy_values.rs": "d3164845dc0b25c536f264ff221ab6bf7cb6c3297ed4cc3248ffa38cd506af48",
+    "crates/aa-body/src/economy_modifiers.rs": "af5070553cd150000f4ef2fff4e19060e9c19d203228afc3ff401df1d33e2143",
+    "crates/aa-rules/src/economy_values.rs": "2529183baff6aebdb49b8898bfe0bc9ba1b73afc615ddc6e6f43db2fa30ccc7b",
+    "crates/aa-rules/src/resolved.rs": "d72632d84b49ce3fed08805a4e784840f7d7d48bc9b1a31906255849f7a315dc",
+    "crates/aa-actors/tests/economy_values_native.rs": "4ad5911e76f9f49beadedc0cca31b11f7870e6ca52a76460d86736abc26deaad",
+    "crates/aa-rules/tests/native_economy_values.rs": "89968977188141e4278c96727f5a87ac005779febab881d13777486c2ecf2cb4",
+    "research/phase7-economy-values/native_values.py": "af678fea2e9e6ed3f1b6658a53021cf964f0766607ef133eb29bf37abb659be2",
+    "research/phase7-economy-values/native-values.json": "2531f28cb7ede8a48e3372a51e9a0bccf2c8cfff03fc9da3fe3f43875b7102d8",
+    "research/phase7-economy-values/native_source.py": "a6b4348bc3640fec88514160bd1abd43c5e759e98f4bbf5ef2f5d501034322a5",
+    "research/phase7-economy-values/native-source.json": "98729b36071cf66266bfcb3e64d732fa44f4b0c0b92a40591780dd5bbeb0d774",
+    "research/phase7-economy-values/original-economy-inputs.json": "1f420aa5327c5a6951e39f1c4ca75f41e3a520a97d088a2d2c7e8725fc50fcbc",
+    "crates/aa-rules/src/ability_load.rs": "29f9f715053ec2383cf6f315868bc9004f8465172858e1fa4eb2fddb442b22ed",
+    "research/phase7-definitions/native-ability-arithmetic.json": "8821edc3e5ec0e8bf2cb8f31d37b655f3e0bc6c969652fd23693d85fd791e880",
+    "research/phase7-definitions/native-strings.json": "0b94dbd329e3b16b42f7896ebae721e26788b011e383b70766732c93ce15c607",
+    "research/phase7-economy-values/rust-tests.log": "f1caf0cfae2a417437e068d0e0fd4debc6edfe0e6a7dd5a8e1854d23e5541d6f",
+    "research/phase7-economy-values/clippy.log": "540a370505a79d99201184ef763a8cd23335e5d7a2e592be9fc264da19867b34"
+  }
+}

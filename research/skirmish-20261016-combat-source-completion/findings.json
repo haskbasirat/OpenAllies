@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "status": "bounded_shipped_source_cv_complete_and_independently_accepted",
+  "scope": "One canonical Bank-owned combat-value dependency slice of native4BD800, not full source-loader/world/battle/gameplay completion.",
+  "native_functions": [
+    "4BBF90",
+    "4BB590",
+    "4618B0",
+    "45E090"
+  ],
+  "current_registered_kind2_definitions": 1028,
+  "source_identities": 1647,
+  "native_cases": 6,
+  "native_images": [
+    "original",
+    "v14"
+  ],
+  "native_precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "cache_triples_per_case": 1028,
+  "ordered_events_per_case": 5333,
+  "executed_instruction_pins": 1302,
+  "actual_windows_reference": {
+    "capture": "research/development10/native-source-capture-03/capture.json",
+    "sha256": "dcd61117e17730cd02ce62d27452b98867e3b0675f8e7a2a008f0d63f35f7df6",
+    "scope": "Isolated fresh-profile v14/dgVoodoo captured reference, not current Rust process",
+    "source_entry_cw": 639,
+    "source_entry_sw": 288,
+    "mxcsr": 8125,
+    "crt_sse2_global": 1,
+    "cache_words_compared": 3084,
+    "manager_means_compared": 8,
+    "complete_masks_compared": 1028,
+    "all_match": true,
+    "fp_state_written_by_debugger": false
+  },
+  "runtime_api": [
+    "VerifiedStartupReceipt::verify_embedded_reference",
+    "VerifiedStartupReceipt::verify(TargetFiles)",
+    "combat_source_completion::install",
+    "combat_source_completion::compute",
+    "Bank::combat_source",
+    "Bank::token",
+    "State::completed_values",
+    "State::completed_means",
+    "State::completed_maximum_74"
+  ],
+  "publication_requirements": [
+    "Correct original Catalog source owner and canonical Bank identity",
+    "Sealed fixed captured-reference context and CSV provenance",
+    "Destination full logical source fingerprint and strict all-ten typed numeric revalidation before mutation",
+    "Actual whole root-UVars input set and explicit closed/empty CSV stream",
+    "One progressive State reaches Complete",
+    "Computed whole-cache/means/order/CV-flags fingerprint matches trusted reference"
+  ],
+  "computed_result_sha256": "89c2baaa07597bd227b10e0912e1012a43ac316db5edbc391338b267f4375927",
+  "source_identity_sha256": "aa96125b653b33c0706e240b9bedec545698659a6f59181e9017e4b2e601632d",
+  "tests": [
+    {
+      "log": "final-runtime-tests-v4.log",
+      "result": "pass",
+      "tests": 3,
+      "revision": "final-freeze-v3"
+    },
+    {
+      "log": "final-runtime-tests-v3.log",
+      "result": "pass",
+      "tests": 7,
+      "revision": "final-freeze-v2; only three lazy-if style rewrites followed"
+    },
+    {
+      "log": "kernel-regression.log",
+      "result": "pass",
+      "tests": 4
+    },
+    {
+      "log": "native-completion-run-v3.log",
+      "result": "pass",
+      "cases": 6
+    }
+  ],
+  "clippy": {
+    "status": "not_clean_qualified",
+    "logs": [
+      "final-clippy.log",
+      "final-clippy-no-deps.log"
+    ],
+    "own_three_reported_collapsible_if_errors_fixed_in_final_v3": true,
+    "unrelated_dependency_and_runtime_style_errors_not_edited": true,
+    "no_clean_clippy_claim": true
+  },
+  "independent_review": {
+    "report": "independent/findings.json",
+    "sha256": "a39c07786bc3922bec0770e6052507287c505aebdcdd740e9bf831e42dfe9c81",
+    "final_static_addendum": "independent/final-v3-static-addendum.json",
+    "addendum_sha256": "28d8cf8d5743b1cd96297961bac96a04afeac5741af6abd108cbe0f94f2e649d",
+    "status": "accepted_bounded_all13_final_pins_unchanged"
+  },
+  "prepass_scope": "54 typed nonalias native leaf probes and24 constructor/vtable checks support CV-disjoint omission only; full omitted source passes remain outside completion receipt. Shipped Upgrade instances0/Settlement category21 count0.",
+  "limitations": [
+    "Diagnostic contexts cannot publish native-startup values.",
+    "Reference target is v14 PC53; other PCs are explicit laboratory proof inputs.",
+    "No full4BD800/world lifecycle, battle command, multiplayer or campaign success claim.",
+    "Other corpora with Upgrade/Settlement extents/shared or externally overwritten Performer definitions/preexisting lazy caches/open CSV/unsupported closure refuse explicitly.",
+    "Finite arithmetic and allocator/SEH domains remain bounded.",
+    "Input-binding failure may retain interned tokens; no State is installed until complete binding, and no transaction/rollback claim."
+  ],
+  "prior_failures_retained": [
+    "full-source-test-v1.log",
+    "full-source-test-v2.log",
+    "full-source-test-v3.log",
+    "final-runtime-tests.log",
+    "final-runtime-tests-v2.log"
+  ],
+  "historical_v2_inputs_preserved": true,
+  "v3_detection_correction": "Exactly two mine definition bit22 masks at all three PCs; all source/numeric/CSV and all native values/events otherwise unchanged.",
+  "backup_basis": "backups/source-byro-kohan-20261017-012645.zip contains actual pre-edit shared source bytes; labeled reconstruction matches archived accepted78b3 source-context hash.",
+  "final_freeze": "final-freeze-v3.json",
+  "files": {
+    "crates/aa-runtime/src/combat_source_completion.rs": "ed54f76d9234c9741549f533c3b193efb5b76187f05e109cf913d547d5d79835",
+    "crates/aa-runtime/src/combat_source_receipt.rs": "a8c072a64dfbd9372addc4d5ecabd93e43dfa069fe21d8f039b5215df5669be0",
+    "crates/aa-runtime/src/combat_value_source_context.rs": "8fe47977fd73d4e830524b3da01097ae6b1073f763496408cd27d0afb1e68e8f",
+    "crates/aa-runtime/src/definitions.rs": "0fb1b9f27b0a710317855d2d2c2c901b2c1958f9e1b722bdc0262270f25e4dfc",
+    "crates/aa-runtime/tests/combat_source_completion.rs": "de596c669b9c5b04759e2a20d013908b246679e8437b935493f8146b5cb1798f",
+    "crates/aa-combat/src/combat_value.rs": "edae2afd73094bc9ea7543a725091dec3e6f35b100fc92462b168f04f88d0cc6",
+    "crates/aa-combat/tests/native_combat_value.rs": "0b4238169d65ad00725d2402206d310ea5a6a1f2a391f2fe6c737717df8d439b",
+    "crates/aa-rules/src/settlement_completion.rs": "96681e582889234ecf8d3dd054f8ff380566416307d298327fa9ec7b4e7d506b",
+    "research\\skirmish-20261016-combat-source-completion\\native_source_completion.py": "fdd499b3712e32bbf2e745a7c2d9a2f3064f6441c1e0d6f474f7e91cb413c50b",
+    "research\\skirmish-20261016-combat-source-completion\\native-source-completion-v3.json": "9cf80416bda9e81edd660dd388fa82dbac4090acf4771d73c407b1096b5ad5d0",
+    "research\\skirmish-20261016-combat-source-completion\\full-source-inputs-v3.json": "e386dce57d010d1507a84a6df60503c47e6785b4d845b057302fb8041a9fc871",
+    "research\\skirmish-20261016-combat-source-completion\\compare_windows_capture.py": "bdcc4368f625c9d0cc95daf14caa2fdf87512cce0095714241b18408c30129a2",
+    "research\\skirmish-20261016-combat-source-completion\\windows-v14-comparison-v3.json": "9fb43ac5b8bcaaf6d17c3c192b3bed11e7d208e099a8dbed39c215e109ee3a7d"
+  }
+}

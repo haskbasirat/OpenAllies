@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-16",
+  "scope": "Element attachment observer during the native managed LoadGame lifecycle",
+  "sources": {
+    "original": {
+      "path": "E:\\Games\\Axis and Alies\\AA.exe",
+      "sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26"
+    },
+    "v14": {
+      "path": "E:\\Games\\Axis and Alies\\reconstruction\\native-game\\runtime-expanded-v14\\AA.exe",
+      "sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+    }
+  },
+  "static_proof": {
+    "load_task": "5A4280 calls 76AB80 at 5A4307 before all three loading branches: 5A4323 -> 5A3E20, 5A432F -> 5A3F20, 5A4336 -> 5A3EB0.",
+    "load_chain": "5A3E8E / 5A3F3B / 5A3ECB call 5A2B90; 5A3031 calls 4FC600.",
+    "teardown_chain": "76ABE5 -> 4F8690; 4F89E8 -> 555030; 55506B calls GMap+4C vtable A9D3E4[0]=7ACF30; 7ACF33 -> 7ACE50; 7ACE7C -> 7AC9A0; 7AC9D7 -> 79FF10 when old SAIMap+5 != 0; 79FFC3 clears SAI+20.",
+    "activation_invariant": "7A0D7F calls 7ABC30, which sets SAIMap+5 at 7ABC53, before 7A0E25 sets SAI+20=1.",
+    "completion": "5A435B jumps to 5A442D after successful load; 5A445F -> 5B18C0 publishes task+14 state 2/3; 775E59 requires 2 before 775E76 -> 7757F0; 775B63 / 775BC3 call 7A0D40 for the supported session states.",
+    "windows": 22,
+    "windows_identical_in_original_and_v14": true
+  },
+  "executed_proof": {
+    "function": "007a0c20",
+    "observer_active_byte": 0,
+    "case_count": 42,
+    "passed": 42,
+    "actor_reads": 0,
+    "seams": [],
+    "exact_instruction_count": 7,
+    "precisions": [
+      "PC24",
+      "PC53",
+      "PC64"
+    ],
+    "source_variants": [
+      "original",
+      "v14"
+    ],
+    "actor_pointer_cases": [
+      "00000000",
+      "00000001",
+      "deadbeef",
+      "ffffffff",
+      "21000000",
+      "21000080",
+      "21000fff"
+    ],
+    "memory_contract": "Only observer+20 and stack reads; push EDI is the only write; actor and observer pages unchanged."
+  },
+  "integration_requirement": "Use an explicit inactive observer loading context justified by managed task teardown. Do not silently suppress an active observer; do not bypass earlier Element attachment refresh operations.",
+  "limitations": [
+    "No active SAI classification or teardown/activation code executed.",
+    "No full load task, loaded map, or game session executed.",
+    "No Rust tests/builds run by this evidence producer.",
+    "Static lifecycle audit does not execute the complete lifecycle.",
+    "Arbitrary direct GWorld::Load over an active world is outside this proof.",
+    "Complete SAI behavior is not implemented or proven."
+  ],
+  "artifacts": {
+    "native_observer_lifecycle.py": {
+      "bytes": 11941,
+      "sha256": "feba2c8ad91c2e611a0f2139b9f412d083222232dbb91aad375abcfe3f774ef0"
+    },
+    "README.txt": {
+      "bytes": 6278,
+      "sha256": "0acb3d1e07b42f30927acf7a4e6164c01fb18af297297752e91b49497fda79e8"
+    },
+    "lifecycle-static.json": {
+      "bytes": 377983,
+      "sha256": "8f2f03696919c0ec2a762a2ae539728a5c6166c4d3b82c3235d8fbcbd79bbe5c"
+    },
+    "lifecycle-instructions.txt": {
+      "bytes": 125564,
+      "sha256": "da560634611314ee19016ba3a80a5ab49ee41cf14a75e30f8cd0e234590c5d08"
+    },
+    "inactive-oracle.json": {
+      "bytes": 62909,
+      "sha256": "4981c92c7d5fa0ae01da7a3f3a92bfc760a504aeefbd7aa6ac1da7254bb12557"
+    }
+  }
+}

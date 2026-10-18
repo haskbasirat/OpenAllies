@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "status": "author_frozen_bounded_scalar",
+  "freeze_sha256": "b9b3ad1400c1fe8379cc8c7fe1e0ae72734bf47e11213bf77daaf0e1d572ddbb",
+  "source": "Actual canonical provenance/category/flags and actual SAME moved Bank source PC through Source::bind_in_bank; existing native_creation_definition source API reused unchanged",
+  "native": {
+    "source_rows": 36,
+    "source_original_v14_runs": 72,
+    "source_address_pins": 437,
+    "source_pin_kinds": {
+      "executed": 426,
+      "stopped_native_diagnostic_entry": 1,
+      "actual_list_element_seam": 1,
+      "required_Aspect_resource_loader_seam": 1,
+      "actual_list_count_seam": 1,
+      "actual_child_getter_seam": 1,
+      "typed_bool_getter_seam": 1,
+      "typed_ids_getter_seam": 1,
+      "heap_transport": 2,
+      "CString_allocator_transport": 1,
+      "CRT_wide_comparison_transport": 1
+    },
+    "consumption_rows": 9,
+    "consumption_original_v14_runs": 18,
+    "consumption_executed_pins": 170,
+    "precision": "24/53/64",
+    "scope": "Real ctor aspect-fields slice,49DC40 aspect subsequence,49C670 constructor and49C360 append. Named typed getter/resource/CRT/heap seams. No full resource loader or constructor-completion claim."
+  },
+  "rust": {
+    "scalar_fixture": "1/1 PASS all36rows",
+    "actual_capture": "1/1 PASS34.14s",
+    "actual_immutable": "1/1 PASS32.87s",
+    "binary_sha256": "5bd6183ac85ba29a4234962ea5da9d347223169b4cad05aa9b1b1cd446005cd3"
+  },
+  "actual": {
+    "actors": 113,
+    "explored_tiles": 8403,
+    "tile_count": 16384,
+    "same_allocations": true,
+    "same_moved_bank": true,
+    "catalog_bank_empty": true,
+    "next_required": "Err(Unsupported(\"4CEC90 actual529C30/45D730 modified maximum health\"))",
+    "next_owner": 2696,
+    "next_definition": "weurope_farm6x6_01",
+    "next_record_aspect": 0,
+    "next_record_stats": [
+      1140457472,
+      1140457472,
+      null,
+      null,
+      0
+    ]
+  },
+  "limitations": [
+    "Genuine113-object stopped prefix only; not complete PostLoad/mission/Fog/battle.",
+    "DefaultIndex is scalar-only source projection, never asset loader readiness.",
+    "No construction-list pointer, model count or native address is manufactured.",
+    "No aa-rules parser/source implementation changes.",
+    "Subsequent health-source work may evolve current files; this exact source/binary snapshot remains retained."
+  ]
+}

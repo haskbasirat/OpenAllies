@@ -1,0 +1,208 @@
+{
+  "schema": 1,
+  "status": "author_verified_bounded_refresh",
+  "accepted": true,
+  "blocking_findings": [],
+  "scope": "Concrete native57E430 on actual diagnostic-restored usa_battleship4397: same Performer/Body/Mover/Properties allocations, same AbilityArena, same mutable World.variables CV cells, same Bank manager guards/closed stream; refresh and required-service prefixes only, not completed ActorInit/skirmish/battle.",
+  "production_files": [
+    {
+      "path": "crates/aa-runtime/src/load_performer_value_refresh.rs",
+      "bytes": 14637,
+      "sha256": "44dcd29e30d5982fa21f909afca16e6959b333a5d66406bc7f6e94ddcf0e52cd"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_combat_variables.rs",
+      "bytes": 4512,
+      "sha256": "f0f202eb37598b94829b5ae73c043bda96e3aa56d90d67c0d2f054950ed95d79"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_view_variables.rs",
+      "bytes": 15765,
+      "sha256": "11e3bd38960c78c9856923adab6538575ebf3b5276b256a9f61f5f47d2961ebf"
+    },
+    {
+      "path": "crates/aa-runtime/src/combat_source_completion.rs",
+      "bytes": 31817,
+      "sha256": "c3d3d2e4037ab9a199037368f42491216ef0e04eebc28b93501e471e7d70f6c6"
+    },
+    {
+      "path": "crates/aa-client/src/runtime_fp.rs",
+      "bytes": 2171,
+      "sha256": "3d9f48482081ffaacf2bb2b9f82a6b6dc48e59f9bc1f675fe22e3ac6daed087c"
+    },
+    {
+      "path": "crates/aa-combat/src/combat_value.rs",
+      "bytes": 28725,
+      "sha256": "303a4542a858484616f0f35fa0c461672aee7f3705359c64b75a8f7b109a812a"
+    },
+    {
+      "path": "crates/aa-combat/tests/native_combat_value.rs",
+      "bytes": 21921,
+      "sha256": "7361da5ea89c5d80c5ac23cdff773fc540a78cfb90cb86f8709a07f11a5c1e2b"
+    },
+    {
+      "path": "crates/aa-combat/tests/combat_value_environment.rs",
+      "bytes": 3000,
+      "sha256": "b0ca0605a4cb5ed8cc3b3c135a03f6c6a9c5754f69dea5bb5b4c1e1fa336809d"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_combat_variables_tests.rs",
+      "bytes": 5160,
+      "sha256": "9e60f92538405c19b5dd751d21923f1d9c1370ef762c8066f79e770410bf84a9"
+    },
+    {
+      "path": "crates/aa-runtime/tests/load_performer_value_refresh.rs",
+      "bytes": 18001,
+      "sha256": "948d7d1867a041d0dd6330188e38038b5268c067d0efcd2b84a7283ae8dfd004"
+    }
+  ],
+  "implementation": [
+    "Existing combat_value::ability_value wrapper retains its public signature and delegates the same algorithm to additive lazy current-environment API; every reached normal/diagnostic pow samples separately.",
+    "Current CV cells are private members of the existing load_view_variables::State, initialized only by validated source reset and retained during actual retained WorldRules Owner publication. Flags0 setters retain raw DWORDs including NaN; numeric use separately rejects unsupported domain.",
+    "Runtime numeric getters read current State cells, not immutable completed source numeric snapshot. The same Bank completion State retains the real named-pointer guard flags and constructor-proven closed stream state.",
+    "Actual client current-thread sampler reads fnstcw/stmxcsr/SSE2 without writing control registers; no source-phase CRT or guessed environment fallback.",
+    "Positive property effects require actual supplied Instances; absent/missing/wrong-source owners refuse before native output reset. Earlier completed output stores survive later errors and same component returns on Result paths; no panic/unwind guarantee claimed."
+  ],
+  "evidence": {
+    "current_svar_native": {
+      "paired_cases": 27,
+      "native_executions": 54,
+      "executed_pins": 168,
+      "seams": "Five actual transport seam entry types (CString allocation/assign, named lookup/log transport); source-backed default words explicit, no full profile/TGI loader claim",
+      "fixture": {
+        "path": "research/skirmish-20261017-performer-value/native-current-combat-vars-v2.json",
+        "bytes": 66523,
+        "sha256": "46c9fc17c6bedd98db4f5a24b3ea50ccd1fa6226a2edafea31d447f68cad0192"
+      }
+    },
+    "current_svar_rust": {
+      "tests_passed": 2,
+      "includes": "native raw/reset fixture + same current State move/actual retained Owner publication for tutorial02/Firefight/Berlin; private source/clamp corruption refusal",
+      "log": {
+        "path": "research/skirmish-20261017-performer-value/current-vars-final-tests.log",
+        "bytes": 346,
+        "sha256": "f4ca42e114d05acb5918d8c214084f3bf697365b6dd9eea1494c27bcd482297b"
+      },
+      "binary": {
+        "path": "research/skirmish-20261017-performer-value/frozen-current-vars-tests.exe",
+        "bytes": 37925888,
+        "sha256": "573bb8a63ac2bf614d21d7f7d830d8472097738b09738ea459a7f27566350abe"
+      },
+      "qualification": "This binary predates additive lazy CRT API; exact current-cell/State/manager source hashes match the frozen files. Final Performer binary below reruns actual full source completion with the lazy API and preserves its reference fingerprint."
+    },
+    "combat_rust": {
+      "tests_passed": 6,
+      "ability_native_rows": 480,
+      "includes": "All four pre-existing native combat suites plus2 new reached-environment/prefix tests. Ability rows compare both fixed and lazy APIs and exact normal/CSV sample counts.",
+      "log": {
+        "path": "research/skirmish-20261017-performer-value/lazy-environment-combat-tests.log",
+        "bytes": 955,
+        "sha256": "b1593e17d4eeb9e861d8401b10ec93c6e39d21a673d1a19759dfc784d9017cd3"
+      }
+    },
+    "actual_rust": {
+      "tests_passed": 2,
+      "full_value_rows": 15,
+      "required_environment_rows": 3,
+      "actual_actors": [
+        {
+          "id": 4397,
+          "same_performer_allocation": true
+        }
+      ],
+      "positive_results": 15,
+      "primary_abilities": 4,
+      "secondary_abilities": 2,
+      "source_precision": "Double53",
+      "live_precision": [
+        "Single24",
+        "Double53",
+        "Extended64"
+      ],
+      "phases": [
+        "default",
+        "changed_current_words",
+        "changed_modifier_words",
+        "negative_modifier_default_clamp",
+        "changed_current_clamp"
+      ],
+      "values_double53": {
+        "default": {
+          "bits": 1142330770,
+          "float": 602.3370361328125
+        },
+        "changed_current_words": {
+          "bits": 1145363578,
+          "float": 787.4449462890625
+        },
+        "changed_modifier_words": {
+          "bits": 1143593342,
+          "float": 679.3983154296875
+        },
+        "negative_modifier_default_clamp": {
+          "bits": 1134489353,
+          "float": 317.8674621582031
+        },
+        "changed_current_clamp": {
+          "bits": 1137066053,
+          "float": 396.5021057128906
+        }
+      },
+      "source_fingerprint_unchanged": "89c2baaa07597bd227b10e0912e1012a43ac316db5edbc391338b267f4375927",
+      "current_formula_only_change": true,
+      "current_clamp_only_change": true,
+      "positive_missing_instance_prefix": true,
+      "capture": {
+        "path": "research/skirmish-20261017-performer-value/actual-performer-values.json",
+        "bytes": 86224,
+        "sha256": "12e0877e86e391ff7598221ed4aa08847b3da2c1880e0f6cf757748499685ac5"
+      },
+      "log": {
+        "path": "research/skirmish-20261017-performer-value/performer-final-immutable-replay.log",
+        "bytes": 364,
+        "sha256": "647f3a47bb15a9e3290d9db71a92abec1dd8b99914d10854114fbc043da732ba"
+      },
+      "binary": {
+        "path": "research/skirmish-20261017-performer-value/frozen-performer-refresh-tests.exe",
+        "bytes": 6477312,
+        "sha256": "aeadc4f5e35444c6c1fa5834a598d91d4209886357d2c3544d38490a3525b945"
+      }
+    },
+    "actual_native": {
+      "paired_cases": 15,
+      "native_executions": 30,
+      "executed_pins": 669,
+      "seams": [
+        "constructed-closed manager+4C virtual+14 successful predicate leaf"
+      ],
+      "includes": "57E430,45E090,modifier getters and native SSE2 CRT pow actual bodies in both pinned PE images, all3PC; cached SVar guards from actual owner, not assumed",
+      "fixture": {
+        "path": "research/skirmish-20261017-performer-value/native-actual-performer.json",
+        "bytes": 99602,
+        "sha256": "39c95988294d936cefc95932e8e5a28526227a6f80ceac44d086c7109952a0a0"
+      }
+    },
+    "required_native": {
+      "paired_cases": 12,
+      "native_executions": 24,
+      "executed_pins": 493,
+      "stopped_boundary": "96D890 first/second reached pow; boundary entry pinned separately, body not counted executed",
+      "seams": "Actual captured-cache prefix has no successful seam; separate explicit false-cache variant reaches named-SVar lookup transport",
+      "fixture": {
+        "path": "research/skirmish-20261017-performer-value/native-required-environment.json",
+        "bytes": 77053,
+        "sha256": "808af5de7df47d67f0437eeb474d9f85033b2643a9182fb97f8a0cfc7b3874b2"
+      }
+    }
+  },
+  "limitations": [
+    "Only one actual eligible positive combat Actor is captured, not all maps/actors/abilities; test supplies explicit live modifier/current-cell mutations and marks them as such.",
+    "No completed map Init/PostCreate/startup/tick/AI/input/rendering/network/gameplay claim; direct refresh of diagnostic-restored owners cannot authorize battle publication.",
+    "Native actual value fixture declares a constructed-closed stream predicate seam; stream construction is backed by separate prior source receipt, not replayed by this fixture. Actual nonempty/open CSV stream requires real writer/output prefix and remains unimplemented.",
+    "Property tests do not create a fictitious empty arena. Positive supplied-instance source branch exists but is not exercised by this actual actor (its genuine effects vector is empty); explicit missing-owner test is a synthetic inserted handle.",
+    "Portable source/layout/factory preflight uses stronger structural errors than malformed native fault timing. Numeric nonfinite inputs and host non-SSE2/non-nearest/FTZ/DAZ controls remain required errors.",
+    "No SDK/source archive code integrated; original assets/executables/manifests/lock/releases were not written by this work.",
+    "v1 files and failed/superseded build/capture logs are retained; failed clamp0.25 test input was below CombatDamageMinimum, corrected to30 to expose current clamp-only effect."
+  ],
+  "independent_review": "Pending parent/reviewer; this is author verification, not independent acceptance."
+}

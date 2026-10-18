@@ -1,0 +1,324 @@
+{
+ "schema": 1,
+ "status": "bounded helper/source freeze; actual fresh graph advance pending",
+ "implementation": "New specialized Construction/Detection/Lair InitExisting calls unchanged shared564D80 coordinator over same stored_component_schedule/Staged version/Owners/Queues/RNG. DetectionAfter shares one new storage-independent front kernel with existing held API; fresh adapter creates/borrows same Actor zone6 and delegates actual stored_zone_activation solver with same World248/identities/Bank. No detached runtime, copied zone, reconstructed World, default version, or readiness bit.",
+ "native": {
+  "shared_init_existing_paired_rows": 90,
+  "shared_runs": 180,
+  "shared_executed_pins": 14,
+  "shared_required_entry_pins": 1,
+  "shared_fixture_sha256": "c979af7e3f6bf348ceb7dfa02073d542e3521e4631c568143484c902d25eb4b3",
+  "after_front_paired_rows": 96,
+  "after_front_runs": 192,
+  "after_front_executed_pins": 54,
+  "after_front_decoded": [
+   {
+    "address": "0x529c30",
+    "bytes": "8b4104",
+    "instruction": "mov eax, dword ptr [ecx + 4]"
+   },
+   {
+    "address": "0x529c33",
+    "bytes": "8b4004",
+    "instruction": "mov eax, dword ptr [eax + 4]"
+   },
+   {
+    "address": "0x529c36",
+    "bytes": "c3",
+    "instruction": "ret "
+   },
+   {
+    "address": "0x56ec90",
+    "bytes": "51",
+    "instruction": "push ecx"
+   },
+   {
+    "address": "0x56ec91",
+    "bytes": "56",
+    "instruction": "push esi"
+   },
+   {
+    "address": "0x56ec92",
+    "bytes": "8bf1",
+    "instruction": "mov esi, ecx"
+   },
+   {
+    "address": "0x56ec94",
+    "bytes": "8b4e04",
+    "instruction": "mov ecx, dword ptr [esi + 4]"
+   },
+   {
+    "address": "0x56ec97",
+    "bytes": "8b8100010000",
+    "instruction": "mov eax, dword ptr [ecx + 0x100]"
+   },
+   {
+    "address": "0x56ec9d",
+    "bytes": "2500002000",
+    "instruction": "and eax, 0x200000"
+   },
+   {
+    "address": "0x56eca2",
+    "bytes": "33d2",
+    "instruction": "xor edx, edx"
+   },
+   {
+    "address": "0x56eca4",
+    "bytes": "0bc2",
+    "instruction": "or eax, edx"
+   },
+   {
+    "address": "0x56eca6",
+    "bytes": "8b8138010000",
+    "instruction": "mov eax, dword ptr [ecx + 0x138]"
+   },
+   {
+    "address": "0x56ecac",
+    "bytes": "0f8490000000",
+    "instruction": "je 0x56ed42"
+   },
+   {
+    "address": "0x56ecb2",
+    "bytes": "85c0",
+    "instruction": "test eax, eax"
+   },
+   {
+    "address": "0x56ecb4",
+    "bytes": "0f85f8000000",
+    "instruction": "jne 0x56edb2"
+   },
+   {
+    "address": "0x56ecba",
+    "bytes": "8bce",
+    "instruction": "mov ecx, esi"
+   },
+   {
+    "address": "0x56ecbc",
+    "bytes": "e86faffbff",
+    "instruction": "call 0x529c30"
+   },
+   {
+    "address": "0x56ecc1",
+    "bytes": "8b80d0010000",
+    "instruction": "mov eax, dword ptr [eax + 0x1d0]"
+   },
+   {
+    "address": "0x56ecc7",
+    "bytes": "8b4e04",
+    "instruction": "mov ecx, dword ptr [esi + 4]"
+   },
+   {
+    "address": "0x56ecca",
+    "bytes": "89442404",
+    "instruction": "mov dword ptr [esp + 4], eax"
+   },
+   {
+    "address": "0x56ecce",
+    "bytes": "8b814c010000",
+    "instruction": "mov eax, dword ptr [ecx + 0x14c]"
+   },
+   {
+    "address": "0x56ecd4",
+    "bytes": "83f806",
+    "instruction": "cmp eax, 6"
+   },
+   {
+    "address": "0x56ecd7",
+    "bytes": "7e0d",
+    "instruction": "jle 0x56ece6"
+   },
+   {
+    "address": "0x56ece6",
+    "bytes": "6a06",
+    "instruction": "push 6"
+   },
+   {
+    "address": "0x56ece8",
+    "bytes": "e8b37cf6ff",
+    "instruction": "call 0x4d69a0"
+   },
+   {
+    "address": "0x56ed42",
+    "bytes": "85c0",
+    "instruction": "test eax, eax"
+   },
+   {
+    "address": "0x56ed44",
+    "bytes": "7430",
+    "instruction": "je 0x56ed76"
+   },
+   {
+    "address": "0x56ed46",
+    "bytes": "8bce",
+    "instruction": "mov ecx, esi"
+   },
+   {
+    "address": "0x56ed48",
+    "bytes": "e8e3aefbff",
+    "instruction": "call 0x529c30"
+   },
+   {
+    "address": "0x56ed76",
+    "bytes": "8b4604",
+    "instruction": "mov eax, dword ptr [esi + 4]"
+   },
+   {
+    "address": "0x56ed79",
+    "bytes": "f6400801",
+    "instruction": "test byte ptr [eax + 8], 1"
+   },
+   {
+    "address": "0x56ed7d",
+    "bytes": "7523",
+    "instruction": "jne 0x56eda2"
+   },
+   {
+    "address": "0x56ed7f",
+    "bytes": "d94614",
+    "instruction": "fld dword ptr [esi + 0x14]"
+   },
+   {
+    "address": "0x56ed82",
+    "bytes": "d81ddc329f00",
+    "instruction": "fcomp dword ptr [0x9f32dc]"
+   },
+   {
+    "address": "0x56ed88",
+    "bytes": "dfe0",
+    "instruction": "fnstsw ax"
+   },
+   {
+    "address": "0x56ed8a",
+    "bytes": "f6c441",
+    "instruction": "test ah, 0x41"
+   },
+   {
+    "address": "0x56ed8d",
+    "bytes": "7513",
+    "instruction": "jne 0x56eda2"
+   },
+   {
+    "address": "0x56ed8f",
+    "bytes": "8b4e14",
+    "instruction": "mov ecx, dword ptr [esi + 0x14]"
+   },
+   {
+    "address": "0x56ed92",
+    "bytes": "b001",
+    "instruction": "mov al, 1"
+   },
+   {
+    "address": "0x56ed94",
+    "bytes": "51",
+    "instruction": "push ecx"
+   },
+   {
+    "address": "0x56ed95",
+    "bytes": "8bce",
+    "instruction": "mov ecx, esi"
+   },
+   {
+    "address": "0x56ed97",
+    "bytes": "50",
+    "instruction": "push eax"
+   },
+   {
+    "address": "0x56ed98",
+    "bytes": "6a06",
+    "instruction": "push 6"
+   },
+   {
+    "address": "0x56ed9a",
+    "bytes": "e8a1fdffff",
+    "instruction": "call 0x56eb40"
+   },
+   {
+    "address": "0x56eda2",
+    "bytes": "8b4e14",
+    "instruction": "mov ecx, dword ptr [esi + 0x14]"
+   },
+   {
+    "address": "0x56eda5",
+    "bytes": "32c0",
+    "instruction": "xor al, al"
+   },
+   {
+    "address": "0x56eda7",
+    "bytes": "51",
+    "instruction": "push ecx"
+   },
+   {
+    "address": "0x56eda8",
+    "bytes": "8bce",
+    "instruction": "mov ecx, esi"
+   },
+   {
+    "address": "0x56edaa",
+    "bytes": "50",
+    "instruction": "push eax"
+   },
+   {
+    "address": "0x56edab",
+    "bytes": "6a06",
+    "instruction": "push 6"
+   },
+   {
+    "address": "0x56edad",
+    "bytes": "e88efdffff",
+    "instruction": "call 0x56eb40"
+   },
+   {
+    "address": "0x56edb2",
+    "bytes": "5e",
+    "instruction": "pop esi"
+   },
+   {
+    "address": "0x56edb3",
+    "bytes": "59",
+    "instruction": "pop ecx"
+   },
+   {
+    "address": "0x56edb4",
+    "bytes": "c3",
+    "instruction": "ret "
+   }
+  ],
+  "child_scope": "Front56EC90 stops at actual56EB40/4D69A0 child entry or before attached Data430 read. It supplies no successful child result. Real529C30 getter executes. Original/v14/all3PC equality, actual state100->Actor138, ordinary flags then conditional radius comparison and radius reread for child argument."
+ },
+ "rust": {
+  "exact_current_after_core_tests": 1,
+  "rows": 96,
+  "production_check": "PASS33.57s",
+  "qualifier": "Front probe callbacks stop with required errors; they cannot mint successful zone/solver state. Existing shared564D80 Rust kernel and all existing zone kernels are reused. New fresh storage binding has not yet been exercised by a complete genuine startup result."
+ },
+ "corrections": "The old held adapter cached radius before flags. New common kernel follows actual native state100/Actor138/flags/radius reads; finite admitted outputs are unchanged, and lazy getter/error prefixes are now native-ordered.",
+ "limits": [
+  "Nonzero ordinary Actor138 keeps source430/Denizen/scheduling required rather than inventing a null guard.",
+  "State author owns positive SAI/reveal/component-effect callbacks in actual stored_zone_activation; missing reached services retain zone allocation/prefix.",
+  "No whole Actor Init, mission, View completion or playable-battle certificate.",
+  "Nonfinite comparisons remain outside the existing aa-zones finite input domain."
+ ],
+ "owned_source_sha256": {
+  "crates\\aa-runtime\\src\\stored_detection_init_world.rs": "3622d4ee775bdc1010909dc68253eca903c1c45cb0b2ffc8c383af27ff58e604",
+  "crates\\aa-runtime\\src\\detection_after_core.rs": "55ec2a76b09ee666a76bfa11ef9a6855bbf6c5be5d1a69596bd876d5d3956afd",
+  "crates\\aa-runtime\\src\\detection_after_core_tests.rs": "6e429c59be7c9aa9d88f5d77fe25b3052f918bf1cfeca58e149dbf00bdaa6180"
+ },
+ "shared_whole_file_snapshot_only_sha256": {
+  "crates\\aa-runtime\\src\\load_detection_activation.rs": "1b1b3aa8917f9f2c9ca96d80d953d3e37c6be8b4a3d05d1a5a2cca6fd5afb031",
+  "crates\\aa-runtime\\src\\stored_component_schedule.rs": "0955094c00f09a75441c88a0190a79685837c0a80dadcdbdaac911409090525b",
+  "crates\\aa-runtime\\src\\map_actor_init_existing.rs": "b9b24eb3eec7ed87f10ff4b195db24145a7851dcaf4e097b011ed97348e51056",
+  "crates\\aa-runtime\\src\\lib.rs": "31c261c94e3311db4363d610fac8f2b646da8ab8985900b43d79041d05056756"
+ },
+ "evidence_sha256": {
+  "research\\development10\\stored-detection-init\\native_after_fields.py": "25016b1f7650770285b64705d0afe4374f44b81b8bc5667599b4407e81e74e34",
+  "research\\development10\\stored-detection-init\\native-after-fields.json": "184c959d31c7cc1eeaaa74d45e93cce6e5aeb4405508fa0adc092e45ed627637",
+  "research\\development10\\stored-detection-init\\native-after-generation.log": "7e6a1bb5c35621308dcd1df6b07157a31b519f5430924af6f9fa9a9576bf6829",
+  "research\\development10\\stored-detection-init\\after-native-replay.log": "7e6a1bb5c35621308dcd1df6b07157a31b519f5430924af6f9fa9a9576bf6829",
+  "research\\development10\\stored-detection-init\\shared-schedule-native-replay.log": "630d9590a8877ce4d70b5ae13ac9e59905e21a34c13e952b30d0f9585161af5f",
+  "research\\development10\\stored-detection-init\\exact-core-tests.rs": "e5652f18a024475ff5456990b483efdf029cf595bfd5b6486e68244e9c38cb19",
+  "research\\development10\\stored-detection-init\\exact-core-tests.exe": "5d3c915f130e6cce8eb2309bc4325d1550ef1092edb0e53272c7b37d05c4d119",
+  "research\\development10\\stored-detection-init\\core-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "research\\development10\\stored-detection-init\\core-tests.log": "99b8c638ed33e3e0228e22c70cf71a4abf3d7737ea8dc73760d03a19c24989b2",
+  "research\\development10\\stored-detection-init\\check-01.log": "797f646f9b9ac4a01c2097ede9937108428d7935da27eefb7436d8abe21cf4e7"
+ }
+}

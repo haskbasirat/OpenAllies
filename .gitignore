@@ -1,0 +1,163 @@
+# --- Build output ---------------------------------------------------------
+target/
+**/target/
+*.pdb
+
+# --- Local-only folders ----------------------------------------------------
+# Packaged releases and backups bundle files from the original game.
+/release/
+/backups/
+# QA captures: screenshots of the original game, logs, run output.
+/qa-output/
+# Caches generated from the player's own installed copy of the game.
+/assets-cache/
+
+# --- Data taken from the original game never goes in the repository --------
+# Recorded results of running the original code (oracle fixtures) are
+# regenerated locally by the research scripts from your own AA.exe.
+crates/**/tests/fixtures/
+crates/aa-client/src/vfx/textures/
+crates/aa-client/src/vfx/nif_effects.json
+
+# Research: keep scripts and notes; everything else is local data.
+/research/**
+!/research/**/
+!/research/**/*.py
+!/research/**/*.ps1
+!/research/**/*.md
+!/research/**/*.txt
+!/research/**/*.rs
+!/research/**/Cargo.toml
+!/research/**/findings.json
+!/research/**/inventory.json
+# ...except disassembly listings, logs and copied third-party or snapshot code.
+/research/**/*asm*.txt
+/research/**/*disasm*.txt
+/research/**/*.log
+/research/**/checkpoint*-sources/
+/research/byroredux-*/corpus/
+
+# --- Editor / OS noise --------------------------------------------------------
+.vs/
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+__pycache__/
+*.pyc
+
+# Disassembly / decompiled listings and memory traces of the original program.
+/research/**/*assembly*.txt
+/research/**/*pseudo*.txt
+/research/**/*listing*.txt
+/research/**/asm/
+/research/**/pseudocode/
+/research/**/scratch-*/
+
+# Further listings found by content scan (disassembly or decompiler output).
+/research/development10/application-state-menus/node4-writer-leads.txt
+/research/development10/application-state-menus/user-ready-xrefs.txt
+/research/development10/world-ready-7757f0/native-task-class-references.txt
+/research/development10/world-ready-7757f0/native-warning-copy-callers.txt
+/research/development10/world-ready-7757f0/native-warning-references.txt
+/research/phase6-spatial/heightfield-inspection.txt
+/research/phase6-spatial/independent-terrain-output/assign_variation.txt
+/research/phase6-spatial/independent-terrain-output/loader.txt
+/research/skirmish-20261016-actor-property-core/native-instructions.txt
+/research/skirmish-20261016-borrowed-leader/native-instructions.txt
+/research/skirmish-20261016-denizen-actions/contributor-instructions.txt
+/research/skirmish-20261016-denizen-actions/helper-instructions.txt
+/research/skirmish-20261016-denizen-actions/independent-instructions.txt
+/research/skirmish-20261016-local-bootstrap/begin-playing/766960-instructions.txt
+/research/skirmish-20261016-owner-action-gaps/native-instructions.txt
+/research/skirmish-20261016-recruit-backrefs/instructions.txt
+/research/skirmish-20261016-start-bindings/instructions.txt
+/research/skirmish-20261016-team-init/independent-instructions.txt
+/research/skirmish-20261016-world-start/instructions.txt
+/research/skirmish-20261017-model-resource-load/native-model-suffix.txt
+/research/skirmish-20261017-native-camera/constructor-leads.txt
+/research/skirmish-20261017-svar-field-order/add-var.txt
+/research/skirmish-20261017-svar-field-order/bool-parser.txt
+/research/skirmish-20261017-svar-field-order/field-hash-grow.txt
+/research/skirmish-20261017-svar-field-order/field-hash-insert.txt
+/research/skirmish-20261017-svar-field-order/hash-grow-insert.txt
+/research/skirmish-20261017-svar-field-order/hash-name.txt
+/research/skirmish-20261017-svar-field-order/hash-next.txt
+/research/skirmish-20261017-svar-field-order/insert-field.txt
+/research/skirmish-20261017-svar-field-order/node-constructor.txt
+/research/skirmish-20261017-svar-field-order/settings-loop-tail.txt
+/research/skirmish-20261017-svar-field-order/settings-loop.txt
+/research/skirmish-20261017-svar-field-order/source-construct-prefix.txt
+/research/skirmish-20261017-vworld-resource-context/instructions.txt
+
+# Disassembly with byte columns, found by a second content scan.
+/research/development10/actor-timed-list/children.txt
+/research/development10/view-object-init/replacement-color-registration.txt
+/research/kohan-leads-20261016/projection/aa-projection-instructions.txt
+/research/phase5-actors/definition-mask-instructions.txt
+/research/phase6-spatial/independent-terrain-output/layout.txt
+/research/phase6-spatial/independent-terrain-output/loader_through_tile_input.txt
+/research/phase6-spatial/independent-terrain-output/passability.txt
+/research/phase6-spatial/independent-terrain-output/recompute_all.txt
+/research/phase8-localization/decoder-instructions.txt
+/research/phase8-sai/disasm/4f1430.txt
+/research/phase8-sai/disasm/572040.txt
+/research/phase8-sai/disasm/5720c0.txt
+/research/phase8-sai/disasm/572120.txt
+/research/phase8-sai/disasm/572720.txt
+/research/phase8-sai/disasm/572810.txt
+/research/phase8-sai/disasm/572940.txt
+/research/phase8-sai/disasm/5d8560.txt
+/research/phase8-sai/disasm/7a0080.txt
+/research/phase8-sai/disasm/7a0aa0.txt
+/research/phase8-sai/disasm/7a0d40.txt
+/research/phase8-sai/disasm/7a4230.txt
+/research/phase8-sai/disasm/7a5e10.txt
+/research/phase8-sai/disasm/7ac9a0.txt
+/research/phase8-sai/disasm/7adc60.txt
+/research/phase8-sai/disasm/7af220.txt
+/research/phase8-sai/disasm/7b8e70.txt
+/research/phase8-sai/disasm/7b96e0.txt
+/research/phase8-sai/disasm/7bccb0.txt
+/research/phase8-sai/disasm/7be260.txt
+/research/phase8-sai/disasm/7bfa30.txt
+/research/phase8-sai/disasm/7c0120.txt
+/research/phase8-sai/disasm/7c0870.txt
+/research/phase8-sai/disasm/7c0bd0.txt
+/research/phase8-sai/disasm/7c10b0.txt
+/research/phase8-sai/disasm/7c1220.txt
+/research/phase8-sai/disasm/7c29f0.txt
+/research/phase8-sai/disasm/7c4950.txt
+/research/phase8-sai/disasm/7c4d10.txt
+/research/phase8-sai/disasm/7c5ae0.txt
+/research/phase8-sai/disasm/7c5f80.txt
+/research/phase8-sai/disasm/7c62d0.txt
+/research/phase8-sai/disasm/7c6640.txt
+/research/phase8-sai/disasm/7c6a70.txt
+/research/phase8-sai/disasm/7c6bb0.txt
+/research/phase8-sai/disasm/7c7460.txt
+/research/phase8-sai/disasm/7c7e90.txt
+/research/phase8-sai/disasm/7c8750.txt
+/research/phase8-sai/disasm/7c8af0.txt
+/research/phase8-sai/disasm/7c9710.txt
+/research/phase8-sai/disasm/7c9ce0.txt
+/research/phase8-sai/disasm/7cb640.txt
+/research/phase8-sai/disasm/7cbc40.txt
+/research/phase8-sai/disasm/7d0680.txt
+/research/resume-20261016-element-attach/observer/lifecycle-instructions.txt
+/research/resume-20261016-mind-commands/load-instructions.txt
+/research/skirmish-20261016-actor-init-null/independent-native-instructions.txt
+/research/skirmish-20261016-borrowed-combat-value/native-instructions.txt
+/research/skirmish-20261016-regiment-load/load-instructions.txt
+/research/skirmish-20261017-denizen-init/native-instructions.txt
+/research/skirmish-20261017-fresh-organization-completion/native-4fa150-instructions.txt
+/research/skirmish-20261017-fresh-organization-completion/read-only-actor-data-loader.txt
+/research/skirmish-20261017-fresh-organization-completion/read-only-actor-data-tail.txt
+/research/skirmish-20261017-member-deployment/native-actor-ctor.txt
+/research/skirmish-20261017-mission-start/entry-instructions.txt
+
+# Copies of the original game's runtime folders inside research captures.
+/research/**/runtime/
+/research/**/Data/
+/research/**/Profile/

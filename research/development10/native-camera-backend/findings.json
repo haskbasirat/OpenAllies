@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "status": "bounded-consumer-compiled-no-native-current-camera-producer",
+  "addresses": [
+    "8737B0",
+    "6FE050",
+    "874B40",
+    "50CAB0",
+    "43B870"
+  ],
+  "validation": {
+    "client_tests_typecheck": "PASS36.20s release locked offline -j4",
+    "exact_projection_tests": "2/2 PASS",
+    "existing_native_fixture_total_rows": 150,
+    "completed_native_rows": 144,
+    "usable_conversion_rows": 120,
+    "degenerate_refusal_rows": 24,
+    "required_child_rows_excluded": 6
+  },
+  "scope": [
+    "actual computed Ni matrix/eye/direction to modern GPU uniforms",
+    "same immutable camera packet for geometric picking",
+    "exact viewport/generation/world/renderer staleness guards",
+    "actual ViewToken-to-VWorld command attachment consumer"
+  ],
+  "limitations": [
+    "no public Snapshot producer or completed current camera publication",
+    "no native camera GPU draw executed at this checkpoint",
+    "no native VObject factory/Init/publication completion",
+    "no new native proof generated or independent certification of other authors proofs",
+    "no AD,74FF50,activation or playable battle claim"
+  ],
+  "source_observed": [
+    {
+      "path": "crates/aa-client/src/view_camera_backend.rs",
+      "sha256": "eeb9e0b59f3ed6ddf2d0165888e70e681d986c0351876bb43b6e529549e7894b",
+      "bytes": 3686
+    },
+    {
+      "path": "crates/aa-client/src/view_camera_projection.rs",
+      "sha256": "cf57bf59b26c666c7744f535a8259489f30862aac85f8285d32bb8fcf5871c98",
+      "bytes": 5130
+    },
+    {
+      "path": "crates/aa-client/src/gpu.rs",
+      "sha256": "1e0897effda559449582a57733f80014034d2e87542a645125df7a1cdff605f3",
+      "bytes": 102895
+    },
+    {
+      "path": "crates/aa-client/src/live_scene.rs",
+      "sha256": "0b74b295b1669080335e562c05b5fe5e8bccb1295b4a81ceb5d6cce5a711b2fd",
+      "bytes": 21988
+    },
+    {
+      "path": "crates/aa-client/src/view_world_owner.rs",
+      "sha256": "4ed6bf1732cec546a6f04e7ce15d2920b796cdd28a18ba970d2fcf67ed067c40",
+      "bytes": 5263
+    },
+    {
+      "path": "crates/aa-runtime/src/native_camera_backend.rs",
+      "sha256": "a34bcfb761e748cda9ae4f29f1c9d9bf2c4bde60fbd4745b58bba857ad43b424",
+      "bytes": 2153
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/skirmish-20261017-native-camera/native-camera-ni.json",
+      "sha256": "d374de244cff57e39d25b02ad086b683334d763b38d39c3a674c99a630ba883c",
+      "bytes": 1401364
+    },
+    {
+      "path": "research/development10/native-camera-backend/client-check01.log",
+      "sha256": "3e120b710db80f7d0c246325cdb4f0d43f93e8e20b6a4481b6822aa168b61eaf",
+      "bytes": 1539
+    },
+    {
+      "path": "research/development10/native-camera-backend/client-check02.log",
+      "sha256": "0b2ded318543ed80cad86e2f41517a5fde8954075a59ef1fcb19b5a4c094bde6",
+      "bytes": 66243
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection_test_harness.rs",
+      "sha256": "f461737b66bdc252513f02b9b67f391accce38791b42625e0cb66f6ba4d6352b",
+      "bytes": 165
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection-command.json",
+      "sha256": "d3f135f0f9c2cce3e78143962af5b224d7eddf92dd8e9889a5bd5798a45a3187",
+      "bytes": 1083
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection-build01.log",
+      "sha256": "f1c6d5a111b59024f798cc41f17218cc8a758a0f1099b6cdff89f52c87e81215",
+      "bytes": 550
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection-tests01.log",
+      "sha256": "c483a99f06fb6606340b358165421a045852160a840d3b401da2da81cd93e234",
+      "bytes": 892
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection-build02.log",
+      "sha256": "f1c6d5a111b59024f798cc41f17218cc8a758a0f1099b6cdff89f52c87e81215",
+      "bytes": 550
+    },
+    {
+      "path": "research/development10/native-camera-backend/projection-tests02.log",
+      "sha256": "f296e7212990fc2f79377a2ac0b979e61c4890346e7be9534de37e2f884c5872",
+      "bytes": 330
+    },
+    {
+      "path": "research/development10/native-camera-backend/README.md",
+      "sha256": "8dee9d3f90361ac4a76091af8d853b63743fc7f749657d7d21baf61f88460b33",
+      "bytes": 3081
+    }
+  ]
+}

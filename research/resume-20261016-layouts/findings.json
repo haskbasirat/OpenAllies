@@ -1,0 +1,426 @@
+{
+  "date": "2026-10-16",
+  "scope": "Native Organization LayoutData, pointer identity, source morale and Properties adapter integration",
+  "native": {
+    "layout_load": "0x4C3610",
+    "formation_load": "0x4C34A0",
+    "layout_formation_load": "0x4C32B0",
+    "layout_validation": "0x4C1BE0",
+    "one_hop_find": "0x48D500",
+    "organization_component": "0x466C4F..0x46707C",
+    "element_link": "0x460000",
+    "actor_has_property": "0x45EEF0",
+    "organization_load": "0x57D130",
+    "morale_recompute": "0x578300",
+    "base_morale": "0x45D580",
+    "properties_context": "0x4CF110",
+    "additive_morale_modifier": "0x501C90"
+  },
+  "source_pins": [
+    {
+      "path": "crates/aa-runtime/src/catalog.rs",
+      "before_census_sha256": "4d7be3cfc5c944bdc815b181da6b74d3b3d6f1c8201cd3f0c3f69570c7137d21",
+      "after_census_sha256": "4d7be3cfc5c944bdc815b181da6b74d3b3d6f1c8201cd3f0c3f69570c7137d21",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-mapworld/src/restore.rs",
+      "before_census_sha256": "0a907939c536b6f0ccadf944db65a668377ca54739c983af7ab7969e621f9367",
+      "after_census_sha256": "0a907939c536b6f0ccadf944db65a668377ca54739c983af7ab7969e621f9367",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-mapworld/src/organization_restore.rs",
+      "before_census_sha256": "52d7ff255877d339dbbad894f3529f1cf3edf2e4e286a1bf10d80dbb80ab6c23",
+      "after_census_sha256": "52d7ff255877d339dbbad894f3529f1cf3edf2e4e286a1bf10d80dbb80ab6c23",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-runtime/tests/organization_layout_bindings.rs",
+      "before_census_sha256": "2be826a3064246a53c2842fac23bee2b03d2fc47f5f0e65c6c6d463eec03e98b",
+      "after_census_sha256": "2be826a3064246a53c2842fac23bee2b03d2fc47f5f0e65c6c6d463eec03e98b",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-runtime/tests/restore_inventory.rs",
+      "before_census_sha256": "d7377e45a71792fd339f10191eba5221353b124638c86de8f4e813ea6eae1347",
+      "after_census_sha256": "d7377e45a71792fd339f10191eba5221353b124638c86de8f4e813ea6eae1347",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-rules/src/native_layout_data.rs",
+      "before_census_sha256": "2d6bd8305520e9cbe5efe5a2d1dfb8a4dd695b08a6ec0ac9789d622d00a86168",
+      "after_census_sha256": "2d6bd8305520e9cbe5efe5a2d1dfb8a4dd695b08a6ec0ac9789d622d00a86168",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-rules/src/native_actor_morale.rs",
+      "before_census_sha256": "848f4d4cba2aa49b6786ace2a25223c1fe0e08ada0aeb9d432ed84264670ec8d",
+      "after_census_sha256": "848f4d4cba2aa49b6786ace2a25223c1fe0e08ada0aeb9d432ed84264670ec8d",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-runtime/src/localization.rs",
+      "before_census_sha256": "cbfd2d952535452ac4d2b654d51be47913208b4faa6c11658f1fff3a219aba08",
+      "after_census_sha256": "cbfd2d952535452ac4d2b654d51be47913208b4faa6c11658f1fff3a219aba08",
+      "unchanged_during_census": true
+    },
+    {
+      "path": "crates/aa-runtime/src/restoration.rs",
+      "before_census_sha256": "66cc5000c5b33a1c2678d6bc85540dd1f95e47dd79fd995ce398edc4bbecaade",
+      "after_census_sha256": "66cc5000c5b33a1c2678d6bc85540dd1f95e47dd79fd995ce398edc4bbecaade",
+      "unchanged_during_census": true
+    }
+  ],
+  "native_evidence": [
+    {
+      "path": "research/phase8-layouts/native-layout-data.json",
+      "sha256": "309d0da5502a2ec8de9335999b21511b8320673dba92841be4a86f01eb82e4ea"
+    },
+    {
+      "path": "research/phase8-layouts/native-organization-component.json",
+      "sha256": "5f8acf8a05d2d12ee21dbc010c9ac66176bca6d5f1dd6b8dcff3459109b8a858"
+    },
+    {
+      "path": "research/phase8-definitions/native-definition-registry.json",
+      "sha256": "edee80ef9130567a08205a1a94492c03ecd2b12463c45e9b2ec22f0fd8a16be4"
+    },
+    {
+      "path": "research/phase7-properties/00501c90.asm.txt",
+      "sha256": "f5d8e7482ddc727dc2264b87e17a3e74200c59005dad42722cff6354a74cf7e7"
+    },
+    {
+      "path": "research/resume-20261016-morale/native-morale.json",
+      "sha256": "514e1ca31f6ff1221fd57d481290ec8997e4c34fb2b15477f0a97b7c9dc7d806"
+    }
+  ],
+  "validation_logs": [
+    {
+      "path": "qa-output/resume-20261016/before-inventory-test.log",
+      "sha256": "c06c52495485cb5d791748a30c6192127085daf78f54f1fcfe91e12ed8739780"
+    },
+    {
+      "path": "qa-output/resume-20261016/layout-bindings-test.log",
+      "sha256": "0978ba4f35ea9b1b98c1804451236a062dca912a2d92bcc7d40d15ae01abf671"
+    },
+    {
+      "path": "qa-output/resume-20261016/after-layout-inventory-test.log",
+      "sha256": "ebabd4fdc86069de4747c5ad103acbed196d8200b2eb811267be2d38490b5c4c"
+    },
+    {
+      "path": "qa-output/resume-20261016/organization-modifier-tests.log",
+      "sha256": "59b4dc793121ae7fe06c7b790358410fdcd04f0c59735b5aa3c24c1e6297de6e"
+    },
+    {
+      "path": "qa-output/resume-20261016/layout-morale-integration-tests-final.log",
+      "sha256": "b31262313719f8d2e3863b15131b8b13d79dd0d0cd896b1fb1f110b744a08e34"
+    },
+    {
+      "path": "qa-output/resume-20261016/after-inventory-test.log",
+      "sha256": "7d1d8bcae4f798b41e8ac29fecd8b243c63304067578ed82ebf4eac908369afe"
+    }
+  ],
+  "tests": {
+    "mapworld_properties_adapter": "2 passed; loading owner, member, nonzero deltas/floors, stale IDs, absence/wrong payload/owner",
+    "runtime_layout_source_adapter": "5 passed; native fixture fields/handles, partial registration, one-hop translation, actual setting, all 192 organizations at PC24/53/64",
+    "existing_tutorial_catalog_restoration": "1 passed; original assets and staged owner state",
+    "final_original_map_census": "1 diagnostic test; 80 original RMP files; see final census for actual stops",
+    "fixture_setup_correction": "First integration run's translation test lacked an earlier template file. Fixed fixture source ordering; production source unchanged by this repair; final 6/6 runtime tests passed."
+  },
+  "before": {
+    "path": "qa-output/resume-20261016/before-inventory.json",
+    "sha256": "c11be3dfd9f6384219703dd29820c3036d96d99fde29f2432cfc045dfb1e234a",
+    "mode": "InspectPartial",
+    "map_count": 80,
+    "maps_without_failures": 18,
+    "failed_records": 1069,
+    "converted_records": 7879,
+    "skipped_records_by_cause": {
+      "LoadException": 128,
+      "UnknownThing": 3912
+    },
+    "groups": [
+      {
+        "error": "map input: world callback failed: OrganizationLayoutData +#..+# fields are unavailable",
+        "records": 1067,
+        "map_count": 62,
+        "first": {
+          "definition": "herd_horse",
+          "error": "map input: world callback failed: OrganizationLayoutData +8..+50 fields are unavailable",
+          "map": "(2v2)Kursk.RMP",
+          "saved_id": 15283,
+          "source_ordinal": 4625,
+          "stage": "DynamicThings"
+        }
+      },
+      {
+        "error": "unsupported localization name_#: font escapes or encoded text require native DisplayString decoding",
+        "records": 2,
+        "map_count": 1,
+        "first": {
+          "definition": "ger_paratrooper",
+          "error": "unsupported localization name_192: font escapes or encoded text require native DisplayString decoding",
+          "map": "DeveloperMaps/GER_Art_Map.RMP",
+          "saved_id": 192,
+          "source_ordinal": 48,
+          "stage": "DynamicThings"
+        }
+      }
+    ],
+    "post_load_by_outcome": [
+      {
+        "maps": [
+          "(2v2)Berlin.RMP",
+          "(2v2)Market_Garden.RMP",
+          "(3v3)Saint_lo.RMP",
+          "(3v3)Stalingrad.RMP",
+          "DeveloperMaps/(1v1)BorealForest.RMP",
+          "DeveloperMaps/(1v1)Golden Fields.RMP",
+          "DeveloperMaps/(1v1)MountianPass.RMP",
+          "DeveloperMaps/(2v2)Comrades.RMP",
+          "DeveloperMaps/(2v2)TheMesa.RMP",
+          "DeveloperMaps/(3FFA)AirSupremecy.RMP",
+          "DeveloperMaps/(3v3)Firefight.RMP",
+          "DeveloperMaps/(4FFA)Farmhouses.RMP",
+          "DeveloperMaps/(4v4)NorthernFrance.RMP",
+          "DeveloperMaps/(4v4)Sandstorm.RMP",
+          "DeveloperMaps/AI_Test_Map_1.RMP",
+          "DeveloperMaps/IND_Art_Map.RMP",
+          "TrailerMaps/ABombMap.RMP",
+          "TrailerMaps/ABombMap2.RMP"
+        ],
+        "outcome": "ok"
+      }
+    ],
+    "tutorials": [
+      {
+        "map": "Campaign/tutorial01.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_ger_infantry_recon",
+          "error": "map input: world callback failed: OrganizationLayoutData +8..+50 fields are unavailable",
+          "registered": true,
+          "saved_id": 2092,
+          "source_ordinal": 303,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      },
+      {
+        "map": "Campaign/tutorial02.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_usa_hq_infantry_unpacked",
+          "error": "map input: world callback failed: OrganizationLayoutData +8..+50 fields are unavailable",
+          "registered": true,
+          "saved_id": 4099,
+          "source_ordinal": 434,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      }
+    ]
+  },
+  "preliminary_layout_only": {
+    "path": "qa-output/resume-20261016/after-layout-inventory.json",
+    "sha256": "4be095c3df371ef0fbf41d34f461ce783dca4bfac7765d8377e5ec466dd68705",
+    "mode": "InspectPartial",
+    "map_count": 80,
+    "maps_without_failures": 19,
+    "failed_records": 924,
+    "converted_records": 7879,
+    "skipped_records_by_cause": {
+      "LoadException": 271,
+      "UnknownThing": 3912
+    },
+    "groups": [
+      {
+        "error": "map input: world callback failed: ActorData+#C# morale contribution (#D#) is unported",
+        "records": 924,
+        "map_count": 61,
+        "first": {
+          "definition": "herd_horse",
+          "error": "map input: world callback failed: ActorData+2C0 morale contribution (45D580) is unported",
+          "map": "(2v2)Kursk.RMP",
+          "saved_id": 15283,
+          "source_ordinal": 4625,
+          "stage": "DynamicThings"
+        }
+      }
+    ],
+    "post_load_by_outcome": [
+      {
+        "maps": [
+          "(2v2)Berlin.RMP",
+          "(2v2)Market_Garden.RMP",
+          "(3v3)Saint_lo.RMP",
+          "(3v3)Stalingrad.RMP",
+          "DeveloperMaps/(1v1)BorealForest.RMP",
+          "DeveloperMaps/(1v1)Golden Fields.RMP",
+          "DeveloperMaps/(1v1)MountianPass.RMP",
+          "DeveloperMaps/(2v2)Comrades.RMP",
+          "DeveloperMaps/(2v2)TheMesa.RMP",
+          "DeveloperMaps/(3FFA)AirSupremecy.RMP",
+          "DeveloperMaps/(3v3)Firefight.RMP",
+          "DeveloperMaps/(4FFA)Farmhouses.RMP",
+          "DeveloperMaps/(4v4)NorthernFrance.RMP",
+          "DeveloperMaps/(4v4)Sandstorm.RMP",
+          "DeveloperMaps/AI_Test_Map_1.RMP",
+          "DeveloperMaps/IND_Art_Map.RMP",
+          "TrailerMaps/ABombMap.RMP",
+          "TrailerMaps/ABombMap2.RMP",
+          "TrailerMaps/allies05_monte_cassino.RMP"
+        ],
+        "outcome": "ok"
+      }
+    ],
+    "tutorials": [
+      {
+        "map": "Campaign/tutorial01.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_ger_infantry_recon",
+          "error": "map input: world callback failed: ActorData+2C0 morale contribution (45D580) is unported",
+          "registered": true,
+          "saved_id": 2092,
+          "source_ordinal": 303,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      },
+      {
+        "map": "Campaign/tutorial02.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_usa_hq_infantry_unpacked",
+          "error": "map input: world callback failed: ActorData+2C0 morale contribution (45D580) is unported",
+          "registered": true,
+          "saved_id": 4099,
+          "source_ordinal": 434,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      }
+    ]
+  },
+  "after": {
+    "path": "qa-output/resume-20261016/after-inventory.json",
+    "sha256": "ca77c59d414f92f666c9bd188aa686cc0ef1060c5356f7680f5b3daa289b9bac",
+    "mode": "InspectPartial",
+    "map_count": 80,
+    "maps_without_failures": 20,
+    "failed_records": 796,
+    "converted_records": 7879,
+    "skipped_records_by_cause": {
+      "LoadException": 399,
+      "UnknownThing": 3912
+    },
+    "groups": [
+      {
+        "error": "map input: world callback failed: map input: saved Mind Load requires unported native behaviour: saved Mind current command object (#D#C# virtual+# Load)",
+        "records": 647,
+        "map_count": 57,
+        "first": {
+          "definition": "herd_horse",
+          "error": "map input: world callback failed: map input: saved Mind Load requires unported native behaviour: saved Mind current command object (4D9C80 virtual+8 Load)",
+          "map": "(2v2)Kursk.RMP",
+          "saved_id": 15283,
+          "source_ordinal": 4625,
+          "stage": "DynamicThings"
+        }
+      },
+      {
+        "error": "map input: world callback failed: #A# Element set-organization is unported",
+        "records": 149,
+        "map_count": 25,
+        "first": {
+          "definition": "regiment_gbr_hq_mechanized_unpacked",
+          "error": "map input: world callback failed: 5705A0 Element set-organization is unported",
+          "map": "Campaign/allies01_el_alamein.RMP",
+          "saved_id": 10273,
+          "source_ordinal": 2685,
+          "stage": "DynamicThings"
+        }
+      }
+    ],
+    "post_load_by_outcome": [
+      {
+        "maps": [
+          "(2v2)Berlin.RMP",
+          "(2v2)Market_Garden.RMP",
+          "(3v3)Saint_lo.RMP",
+          "(3v3)Stalingrad.RMP",
+          "DeveloperMaps/(1v1)BorealForest.RMP",
+          "DeveloperMaps/(1v1)Golden Fields.RMP",
+          "DeveloperMaps/(1v1)MountianPass.RMP",
+          "DeveloperMaps/(2v2)Comrades.RMP",
+          "DeveloperMaps/(2v2)TheMesa.RMP",
+          "DeveloperMaps/(3FFA)AirSupremecy.RMP",
+          "DeveloperMaps/(3v3)Firefight.RMP",
+          "DeveloperMaps/(4FFA)Farmhouses.RMP",
+          "DeveloperMaps/(4v4)NorthernFrance.RMP",
+          "DeveloperMaps/(4v4)Sandstorm.RMP",
+          "DeveloperMaps/AI_Test_Map_1.RMP",
+          "DeveloperMaps/IND_Art_Map.RMP",
+          "DeveloperMaps/cutscene_short_03.RMP",
+          "TrailerMaps/ABombMap.RMP",
+          "TrailerMaps/ABombMap2.RMP",
+          "TrailerMaps/allies05_monte_cassino.RMP"
+        ],
+        "outcome": "ok"
+      }
+    ],
+    "tutorials": [
+      {
+        "map": "Campaign/tutorial01.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_ger_infantry_recon",
+          "error": "map input: world callback failed: map input: saved Mind Load requires unported native behaviour: saved Mind current command object (4D9C80 virtual+8 Load)",
+          "registered": true,
+          "saved_id": 2092,
+          "source_ordinal": 303,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      },
+      {
+        "map": "Campaign/tutorial02.RMP",
+        "load_error": null,
+        "first_failure": {
+          "class_code": 3,
+          "completion": "ActorPrefixLoaded",
+          "definition": "regiment_usa_hq_infantry_unpacked",
+          "error": "map input: world callback failed: 5705A0 Element set-organization is unported",
+          "registered": true,
+          "saved_id": 4099,
+          "source_ordinal": 434,
+          "stage": "DynamicThings"
+        },
+        "post_load": null
+      }
+    ]
+  },
+  "limitations": [
+    "InspectPartial continues after failed records; later errors may be cascades. These are not playable-world tests.",
+    "No original native map load was executed end-to-end; the adapters compose existing native-proven primitives and original-source data.",
+    "Canonical ActorData identities shadowed by Thing translations are explicitly unsupported instead of silently retranslated.",
+    "Property contents and remaining Organization world callbacks are not completed by this change.",
+    "Clean restoration/PostLoad does not imply InitForLoadedMap, conversions, publication, battle simulation, campaign, original saves or multiplayer completion.",
+    "The two pre-existing localization failures disappeared in concurrent work; they are not attributed to these layout changes."
+  ],
+  "independent_review": {
+    "path": "research/resume-20261016-layouts/independent-review.json",
+    "sha256": "067e85da83e0d1b00ec813a689f1b371b31a81a8842e71f910709db102430ac6"
+  }
+}

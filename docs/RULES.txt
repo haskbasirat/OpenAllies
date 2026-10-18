@@ -1,0 +1,43 @@
+aa-rules: exact sources and a bounded syntax foundation
+
+The gameplay target is the accepted v14 Original-only native build described in BASELINE.txt. This crate reads original Data.rwd with the exact 23 accepted loose Data overlays, replacing whole files. It ignores all other loose files, Profile, saves, accounts, and credentials. It does not launch or alter the native game.
+
+Source API
+V14Sources::open(original_archive, v14_runtime_root, source_limits) verifies the SHA-256 and size of original Data.rwd and every overlay against the pinned baseline ledger before returning any resource. It uses aa-formats' checked TGCK v2 reader. An invalid/missing overlay is an error, never an excuse to use stock rules. read() uses paths relative to Data, slash-insensitive and ASCII-case-insensitive; returned spelling is preserved. read_original() explicitly inspects stock evidence. Catalog order preserves the archive footer with whole-file replacements and then ledger-ordered additions. This is NOT the engine's loader-stage or inheritance evaluation order.
+
+The archive handle remains open read-only; Windows sharing denies writes/deletion while held. Overlays are verified and retained as small immutable in-memory copies. Source paths reject symlink/reparse ancestors and traversal. Use a controlled source tree: portable filesystem checks cannot make hostile concurrent ancestor renaming race-free on every OS. SourceLimits requires an explicit caller-supplied per-member byte budget, suitable for deriving from aa-resources observed headroom; there is no implicit source-size default. Payload buffers use checked size conversion and fallible reservation. This bounds one rule-reader input, not total engine RAM/VRAM. The local fixtures explicitly allow64MiB per input.
+
+Syntax API
+Document::parse owns the exact source bytes, including comments, line endings and legacy non-UTF8 text. original_bytes() returns those unchanged bytes. The lexer handles comments and quoted strings before brackets/braces; ordered AST nodes preserve headers, explicit versus unbraced bodies, declaration/assignment distinction, repeated keys and raw expression spans. Neither identifiers nor expression text are normalized. text() is only a UTF8 convenience; legacy byte spans can correctly return None. Use bytes(span) for lossless data.
+
+Limits are caller-configurable (default64MiB source,4million tokens,depth256). The input Vec/Into conversion occurs before the parser's byte-limit check; the limit bounds parser work and is not a promise to prevent the caller's input allocation. This is a strict syntax subset. It is not a native tokenizer/semantic evaluator, template or inheritance resolver, translation resolver, expression evaluator, native declaration type checker, or game-rule executor. No gameplay rule is approximated.
+
+Actual local validation
+The local integration suite explicitly opens the original archive and v14 overlay, checks the23-file provenance and original fallback, and verifies these observed raw values:
+- EconomyLimitedResourceMax100 and KingdomsMax16 (stock20 and8).
+- start-location building_limit_provided100; no invented free HQ regiment slots.
+- MultiplayerMaxNumPlayers16; Broadband16, Modem4.
+- Eight map-size declarations in authored order:320,384,448,512,576,640,768,1024; optional playable side09 through side16.
+- Original GameTicksPerGameSecond16 comes from unchanged archive data.
+- Zoom maximum2.1 is checked separately in the exact v14 native image at rawoffset9287. It is NOT represented as a TGI evaluation result.
+The current phase2 corpus checks all1847 resolved .tgi sources byte-for-byte.1835 parse;12 currently return precise syntax errors. research/evidence/rules-phase2-corpus.json and tests/fixtures/phase2-unsupported-tgi-paths.json enumerate them. These include original missing brackets/braces, quoted-string syntax and a delayed opening body. The earlier1834/13 report is retained as phase1 history. Bracket-bearing property-name atoms are now preserved using the original key-scanner evidence. We have not established which malformed-looking forms the native parser tolerates. We do not repair, omit or interpret them. Some are unit/ability files, so the parser is not yet adequate for loading the complete gameplay catalog. Successful parsing is syntax coverage, not native semantic parity.
+
+Run from rust-rebuild:
+cargo test -p aa-rules
+cargo test -p aa-rules --test local_v14 -- --ignored
+The second command needs the locally installed original files and fails when absent; it does not silently skip. The corruption test changes only newly created private temporary copies and checks fail-closed behavior. No shipped rules or user data are modified.
+
+Future work must establish native token/quote tolerance and exact resulting AST for the12 remaining failures, loader stages, case/type/declaration behavior, template/inheritance merge semantics, reference resolution and evaluation before a combat/economy rules catalog can be claimed faithful. aa-simulation remains the separately scoped arithmetic laboratory in PARITY.txt; aa-client remains a recovered-asset viewer. Neither is a full game.
+
+Phase2 native evidence and resource catalog
+Original x86 key scanner5BE8C4..5BE90D was executed in isolated Unicorn on10 inputs, without hooks or live processes. It includes square brackets in key names and stops at equals/semicolon/slash or line end. The Rust extension is deliberately narrower: internal square brackets in property-name atoms, covering shipped key_[ and key_]. It does not claim all scanner behavior is ported. Header tokens still treat brackets structurally. Original/v14 code bytes are equal for this tested range.
+
+Static native evidence explains potential tolerance behind the other failures:5BD080 feeds one line at a time;5BDE30 reads a header to ] or line end; EOF calls5BAEB0 to drain parser state;5BDF80/5BEE60 consume/validate localized string values. The trigger_elements failure is an extra adjacent quote on line355, not an inferred missing final quote. These observations are not complete malformed-file AST or localization oracles. We keep the12 failures explicit, with original hashes, rather than silently balance brackets/braces/quotes.
+
+ResourceCatalog::load_v14(&mut V14Sources) projects six verified files: Game/resource_list.tgi, Templates/template_resource.tgi, Game/resources.tgi, Game/SVars_AA.tgi, Special/Things/thing_start_location.tgi and Game/SVars.tgi. It exposes seven ResourceDefinition rows, ResourceCategory (native0 STOCKPILED,1 UPKEEP,2 LIMITED_CONSUMED), raw IDs/template names, limited_by IDs, derived limited-provider flags, authored PurchaseCost coefficients and separate ordered CostList/UpkeepList/ProductionList defaults. It also exposes v14 limited maximum100, start-location production100 and stockpiled_resource_max99999 from the unchanged Game/SVars.tgi declaration (with no SVars_AA override). Every definition/category/scalar carries fileSHA and original byte span. Raw scalar spelling and exact binary32 bits are retained. The fixed current schema contains integer scalar literals; arbitrary expressions, fractional conversions, unknown categories, duplicate IDs/cost rows or invalid provider links reject.
+
+Native48A350 binds the category enum;48B800 validates the limited_by UPKEEP link, marks the provider, and loads PurchaseCost against registered STOCKPILED IDs. The catalog explicitly verifies the known Resource/category templates and CostList relationship; it is NOT a general TGI inheritance evaluator. No missing ResourceList initial balance is fabricated: those seven declarations have default_value=None, while the authored UpkeepList/ProductionList zero rows remain explicit. Cost rows are keyed by destinationID; absent coefficients are not invented.
+
+resources.tgi order is money,ammo,oil,unit_limit_provided,unit_limit_consumed,building_limit_provided,building_limit_consumed. ResourceList order is money,oil,ammo,unit_limit_provided,unit_limit_consumed,building_limit_consumed,building_limit_provided. Both are exposed as separate ordinals. Neither is asserted to be the native registry index: the remaining insertion/loader-order proof must precede a dense native-order economy mapping. The catalog supplies data to aa-economy; it does not mutate economic state, evaluate upkeep, or prove complete economy/gameplay parity.
+
+Phase2 validation:14 Rust tests (3 typed-schema,7 syntax/source fixtures,4 explicit local integration tests), plus10 unchanged-x86 key-scanner inputs. Current source/report hashes are in research/evidence/rules-phase2-validation.json; phase1 reports remain historical.

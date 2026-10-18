@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "status": "author_frozen_bounded_checkpoint",
+  "freeze_sha256": "c6d22bcc34fff0fbd3bb8cdc6bd855f9416513b29c7c9b607d79ced74f95af83",
+  "native": {
+    "rows": 54,
+    "original_v14_runs": 108,
+    "precision": "24/53/64",
+    "address_byte_pins": 895,
+    "pin_kinds": {
+      "executed": 893,
+      "required_diagnostic_entry": 1,
+      "ASCII_CRT_comparison_transport": 1
+    },
+    "transport_scope": "Named successful CString/heap/ASCII comparison transports and stopped diagnostic entry; not allocator/Win32/unwind equivalence"
+  },
+  "source": {
+    "actual_glyphs": 40,
+    "actual_pc_rows": 120,
+    "lookup": "Actual Glyph registry Find with one-hop translation, canonical provenance/source universe and typed index getter checked",
+    "source_owner": "Immutable private projection shares actual index-ordered AVars/Glyph source bytes, not a second native manager",
+    "override_scope": "Fresh controlled-no-profile/no-console overrides; current shipped marker values38/46/92 plus finite explicit oracle cases, not arbitrary profiles or every marker domain"
+  },
+  "rust": {
+    "escape_and_actual_source": "2/2 immutable PASS4.76s",
+    "actual_staged_fog": "1/1 immutable PASS46.59s",
+    "actual_capture": "1/1 PASS36.92s",
+    "binary_sha256": "05876ac60460b269a8852166b6c6c532b1cdb233b97a36c8b6b790822ce1e911"
+  },
+  "actual_prefix": {
+    "records": 113,
+    "explored_tiles": 2147,
+    "map_tiles": 16384,
+    "same_runtime_memory_allocations": true,
+    "catalog_bank_empty": true,
+    "same_moved_bank_borrowed": true,
+    "hedge_name_utf16": [
+      133,
+      72,
+      101,
+      100,
+      103,
+      101,
+      115
+    ],
+    "next_required": "49B480 actual ObjectData+118 default-aspect source owner",
+    "owner": 2463,
+    "canonical_definition": "temperate_hedges"
+  },
+  "limitations": [
+    "Genuine stopped-load prefix only; does not claim whole PostLoad, mission Fog or playable battle.",
+    "Actual runtime component and detection observers remain required where not implemented.",
+    "No native full renderer/Glyph font rendering proof.",
+    "Existing plain lookup/missing/duplicate semantics retained; unbound escape lookup still refuses.",
+    "Whole shared Catalog and other author files may evolve after this historical snapshot."
+  ]
+}

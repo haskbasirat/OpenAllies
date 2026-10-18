@@ -1,0 +1,40 @@
+
+running 3 tests
+test resources::tests::exact_schema_keeps_orders_costs_and_absent_defaults ... ok
+test resources::tests::expressions_and_unknown_category_do_not_become_guessed_values ... ok
+test resources::tests::bad_provider_graph_and_duplicate_rows_fail ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test actual_corpus_preserves_bytes_and_reports_unsupported_syntax ... ok
+test actual_v14_ordered_resource_catalog ... ok
+test exact_v14_rules_and_stock_fallback ... ok
+test corrupted_or_missing_overlay_cannot_fall_back_to_stock ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.85s
+
+
+running 7 tests
+test duplicate_identifiers_and_unevaluated_expression_are_retained ... ok
+test malformed_and_limited_sources_fail_closed ... ok
+test native_key_scanner_keeps_brackets_inside_property_identifiers ... ok
+test overlay_ledger_is_fixed ... ok
+test legacy_bytes_are_not_lossily_decoded ... ok
+test unbraced_children_keep_order_and_case ... ok
+test quotes_comments_expressions_and_original_bytes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling aa-rules v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-rules)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.88s
+     Running unittests src\lib.rs (target\debug\deps\aa_rules-a5e4e4fbe0451669.exe)
+     Running tests\local_v14.rs (target\debug\deps\local_v14-4b1e1d80ba669065.exe)
+     Running tests\syntax.rs (target\debug\deps\syntax-4cef5b4b619bd499.exe)
+   Doc-tests aa_rules

@@ -1,0 +1,123 @@
+{
+  "scope": "Read-only original/v14 and source investigation of actual46 WorldStart fresh-owner classification; hotfix acceptance source freeze preserved",
+  "status": "LOCAL_FRESH_ACTOR_CLASSIFICATION_IDENTIFIED_IMPLEMENTATION_DEFERRED",
+  "recorded_utc": "2026-10-17T15:38:21.2631850+00:00",
+  "changes": {
+    "crate_writes": 0,
+    "cargo_or_rustc_builds": 0,
+    "game_runs": 0,
+    "new_native_emulations": 0,
+    "research_only": true
+  },
+  "observed": {
+    "run": "actual46 STRICT_FAIL119.65s",
+    "error": "economy laboratory: World(\"post-load world operation failed: a fresh object exists before the PostLoad pass (record sections create none)\")",
+    "caller": "mission_world_start::run -> World.start -> world_start_owned -> WorldStart::object_active -> post_load_world::object_class",
+    "exact_failing_actor_id": "not recorded; no ID inferred from nearby fresh snapshots",
+    "retained": "same Mission graph, World revision1, source/livePC53; prior globalFog and camera returned"
+  },
+  "native": {
+    "worldstart": "4F1EB8 MOV EDX,[ESI];4F1EBA MOV ECX,ESI;4F1EBC CALL[EDX+B4];4F1EC2 TEST AL,AL;4F1EC4 JE4F1EFF",
+    "fresh_actor_constructor": "Actual4D6BB0 executes4D6BE8 C706F073A200: MOV[ESI],A273F0. Existing direct actual-source native constructor oracle has this executed pin,18rows/36original-v14/allPC executions.",
+    "actor_slot": "A273F0+B4=A274A4 D0716A00 ->6A71D0",
+    "true_leaf": "6A71D0 B001C3: MOV AL,1;RET. No instance fields read; EAX high24bits preserved, caller tests AL only.",
+    "false_leaf": "6A71F0 32C0C3: XOR AL,AL;RET. Object2/Doodad9 table+B4 point here in bothPE.",
+    "legacy_group": "Group8 A29490+B4 ->6A71D0, true like Actor3/Kingdom4. Preserve existing saved/Special mapping.",
+    "new_inspection": "Only byte reads and existing oracle inspection in this task. native-pins.json records raw original/v14 equality and exact existing executed ctor pin."
+  },
+  "minimal_post_freeze_change": [
+    "Keep post_load_world::object_class strict: fresh objects are invalid in its earlier saved-record PostLoad phase. Do not make that invariant globally permissive.",
+    "Change only WorldStart::object_active to recognize the actual registered Source::New ordinary Actor constructor owner and return the proven+B4 AL=true for class3. Continue existing saved/Special classification unchanged.",
+    "Use current ObjectKey reverseGTID plus actual Actor+Object storage, LoadKind::Actor, RuntimeDefinition.native_class3 and immutable proof agreement among retained creation record, Thing, RuntimeDefinition and binding. Existing same_proof/source precision helpers can validate these fields without parsing new source objects.",
+    "Mission entry already checks the same moved Bank/source universe; WorldStart has no Catalog/Bank loan. Local field checks must not be described as independently certifying Catalog Arc identity or Bank completion.",
+    "No phase, failure, HP, current flags, registry is_actor bit, spatial state or readiness boolean controls native+B4. Guard corrupted owner/type/proof data with an error; never substitute false.",
+    "Optional future Source::NewObject support is a separate validated class2/9 false branch. These owners intentionally lack ActorBindings; do not apply the Actor3 binding requirement to Object constructors or claim their unpublished factory is ready."
+  ],
+  "important_traps": [
+    "Do not compare immutable creation record.base.saved_id with assigned currentGTID: native-requestedNULL may remain in the record after initialize_object assigned/registers the real identity.",
+    "Do not blindly substitute live_registration::class_predicate for every source: its declared supported domain excludes Group8, while WorldStart native+B4 and existing saved mapping admit Group8=true.",
+    "Do not use post-load enum reinterpretation to create a new saved shell/record; same existing boxed runtime allocation must remain authoritative.",
+    "The failed46 graph has earlier native started274/statistics promotion effects committed by unchanged world_start_owned ordering. A retry of that same graph can take the started early return. This is a source-order consequence, not a newly captured field observation; do not clear/reset it to manufacture completion. Use a fresh real startup after implementing the fix."
+  ],
+  "proof_and_test_gaps": {
+    "existing_native": "The pure+B4 target and fresh constructor vptr store are already independently original/v14-proven. No new gameplay predicate algorithm is needed.",
+    "whole_coordinator": "Existing360 native world-start rows explicitly seam+B4/owner/tracking/snapshot callbacks; they validate coordinator effects/order but do not execute the new Rust Source::New binding.",
+    "getter": "Existing54rows/108original-v14 getter executions have no getter seams;9boolean rows coverActor/Kingdom/Group and high-EAX behavior. Getter probes useDouble53; integer-only leaf has no FP instruction.",
+    "runtime_tests": "Current world_start_world integration fixtures construct ActorStore::from_restored. No Source::New adapter acceptance exists in that filter.",
+    "after_freeze": [
+      "Extend a genuine existing source-backed construct_new_bound +initialize_object test to call the WorldStart predicate on the same registered allocation; retain requestedNULL/assignedGTID distinction. No fabricated Staged/ActorData/source fallback.",
+      "Add poisoned current generation/key, mismatched type/storage/proof/binding-source precision refusals; ensure no mutation during classification.",
+      "Add flags/health/bookkeeping-phase independence for a valid registered Actor; do not require Source::New phase to advertise completed startup.",
+      "Keep savedGroup8=true and savedObject/Team/etc mappings; if future NewObject branch added, test actual typed classes2/9=false.",
+      "Rerun existing360 coordinator cases and earlier error-prefix/started-guard regression; no duplicated WorldStart algorithm.",
+      "Run fresh actual startup47 with new pins; verify next callback/StartedMission honestly. Do not resume or reset the same failed46 graph to bypass prior effects."
+    ]
+  },
+  "independent_review": {
+    "agent": "/root/state_binding_review",
+    "path": "research/development10/world-start-fresh-classification/independent-minimal-classification-review.json",
+    "sha256": "2959e48cdac4578dac2b5528babbd3688a5bc074abb7fbfcfe45d0273afc86bf",
+    "reviewer_new_native_executions": 0,
+    "reviewer_builds": 0,
+    "reviewer_crate_edits": 0
+  },
+  "limits": [
+    "No implementation or source modification during hotfix freeze.",
+    "No fresh-owner classification success, StartedMission, activation, rendering, AD,315 or frame acceptance claimed.",
+    "No exact actor-specific later statistics/Wall/Settlement callback inferred as complete from fixing the class leaf."
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/world_start_world.rs",
+      "sha256": "02b766569fcd0e44b6fe8084cb7722b686f13caba5a12e120fec6f0ab5653c8f"
+    },
+    {
+      "path": "crates/aa-runtime/src/mission_world_start.rs",
+      "sha256": "964f908b23948a9ffff42df5e8ba56109c02c187e3702a8c706e101062510cd3"
+    },
+    {
+      "path": "crates/aa-runtime/src/post_load_world.rs",
+      "sha256": "1a37acd13f239a3d12aa6c0f6585a8f99b087598b8a4bd6c17645641a4d5d184"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "sha256": "43d8c0633887207dc6df3c4ff2d0fbd97cded40ac183c587417f2577b33a4d43"
+    },
+    {
+      "path": "crates/aa-runtime/src/live_registration.rs",
+      "sha256": "317aa31fd29ddab2e648db0eea826872ba1c0f2e259eb295eb1e7be470545309"
+    },
+    {
+      "path": "crates/aa-runtime/tests/world_start_world.rs",
+      "sha256": "5a4a57b0842a0f5db0a2ee2fbb1fa61c7bc83092ec4b9a9488ec9c5230fa4bfa"
+    },
+    {
+      "path": "crates/aa-actors/src/post_load.rs",
+      "sha256": "cb84ee5b5b4e2a0f24b187c9cf916670d9a9255d7ae53d0bc4e3cd0968f21648"
+    },
+    {
+      "path": "crates/aa-economy/src/world_start.rs",
+      "sha256": "d675e2c0b0ad0353a2096572ca43b29e5d781fc78fe3e58dc779f007a4af74ea"
+    },
+    {
+      "path": "research/development10/playable-startup/attempt46.result.json",
+      "sha256": "a783d51dcc855fbbc644dd71a0697ee416310d67df10273a9c6481b5be9e69b2"
+    },
+    {
+      "path": "research/skirmish-20261017-map-actor-creation/native-constructor.json",
+      "sha256": "452295dd5d551fa76b6f44d2d9b1adcc423cde7933a4d31e92e8699687e411d3"
+    },
+    {
+      "path": "research/skirmish-20261016-world-start/world-start-getters.json",
+      "sha256": "322d0b78d8e50144af18f128d0f88dcc4812f603686bc69aa18291f23658609f"
+    },
+    {
+      "path": "research/development10/world-start-fresh-classification/native-pins.json",
+      "sha256": "c1579b5d23be8cab0ccca51bb5212fae20ccc634cf55c4b51ef2212c52c82fb2"
+    },
+    {
+      "path": "research/development10/world-start-fresh-classification/independent-minimal-classification-review.json",
+      "sha256": "2959e48cdac4578dac2b5528babbd3688a5bc074abb7fbfcfe45d0273afc86bf"
+    }
+  ]
+}

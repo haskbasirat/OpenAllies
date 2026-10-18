@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "status": "bounded body operations implemented and native-oracle matched; not a completed damage/death system",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "api": [
+    "Body::from_resolved",
+    "Body::set_health",
+    "Body::set_health_and_maximum",
+    "Body::update_resolved_maximum",
+    "Body::heal_plain",
+    "Body::check_death",
+    "Body::sink_fraction_f32"
+  ],
+  "native_fields": {
+    "Body+04": "owning actor",
+    "Body+10": "current health binary32",
+    "Body+14": "resolved maximum health binary32",
+    "Body+18": "resolved defense binary32",
+    "Body+1C": "dying-start time, initialized-1",
+    "Body+20": "last heal time, initialized-999",
+    "Body+24": "sink duration, initialized0",
+    "Body+28..40": "opaque seven-word damage info, initialized[0,0,0,0,0,0,10]",
+    "Actor+14": "GTID low16slot/high16generation; registry responsibility outside aa-body",
+    "Actor+60": "Body component pointer",
+    "Actor+168": "linked actor GTID requiring original registry generation check",
+    "Data+284": "base health getter input",
+    "Data+288": "base defense getter input",
+    "Data+291": "destructible flag",
+    "Data+29C": "WhenHealth list",
+    "Data+27C/+280": "rot_time/sink_time"
+  },
+  "numeric_contract": {
+    "primitive": "aa-numeric",
+    "modes": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "rounding": "nearest-even only, precision chosen per operation; no assumption of process-wide37F",
+    "setter_ratio": "reciprocal computed at selectedprecision, multiply old/currenthealth, then each ratio storedf32 before health-rule predicates",
+    "restore_ratio": "direct currenthealth/currentmaximum division compared in selectedprecision against suppliedrestorethreshold; no prematuref32 store",
+    "recalculate_ratio": "561D40 stores health/maximum tobinary32 before multiplying binary32 null-kingdom getterresult; positive newmaximum<1 can stillproducehealth1 through originalearlyreturn",
+    "heal_sum": "ordinary562BA0 adds to the health read after notification, then storesf32 before canonicalsetter; overflow beyondfinite arithmetic is explicitlyoutside",
+    "sink": "5617E0 stores elapsedtimef32; subtractrot/dividesink at selectedprecision, then explicitlyobservedbinary32callerstore. Progressmayexceed1."
+  },
+  "callbacks": {
+    "synchronous": true,
+    "nontransactional_error": true,
+    "order": [
+      "storehealth",
+      "optional4D0050actorstance",
+      "conditional4D64F0state39request",
+      "firstmatchingWhenHealth-trigger429290call",
+      "conditional566AC0fullrecovery"
+    ],
+    "mutation_cases": [
+      "stancecallback changeshealth, affecting subsequentdisabledgate",
+      "stancecallback changesmaximum, affectingfullrecovery",
+      "healthFXcallback changeshealth, affectingrecovery",
+      "healnotification changeshealthbeforeaddition andworldclockaftersetter",
+      "deathvirtualcallback marksdestructed but subsequent4D7960 stillruns"
+    ],
+    "leaves_not_implemented": [
+      "4D0050stance propagation",
+      "4D64F0actorstate machine",
+      "429290effectchain execution",
+      "566AC0recovery/construction/upgrade notifications",
+      "50C380healing notification",
+      "actorvirtual+2C and4D7960death scheduling"
+    ]
+  },
+  "support_boundary": [
+    "Finitebinary32body/context inputs; currentmaximumpositive. Sourcevaluesare explicitinputs andnotrawTGIdefaults.",
+    "No validlinkedBody/noattackerFXdirection; nohealerMind+A8damageconversion. These unsupported pathsaretypederrors,not skippedbehavior.",
+    "Null-kingdom derivedmax getter returnsbinary32; modifiedkingdom getter potentiallyextendedresult requires separatefutureboundary.",
+    "No automaticweapon damage formula, armor calculation, capture, killcredit, wall/organizationneighbor propagation or deathability invented.",
+    "Body setter reachingzero is not automaticallykill; original check_death event path is separate."
+  ],
+  "authored_source_notes": {
+    "template": "reconstruction/assets/original/Data/Templates/Components/template_body.tgi",
+    "restore_ratio": "Original Game/SVars.tgi has0.1, Game/SVars_AA.tgi overrides0.51. Environmenttakesresolvednativevalue; fixture0.25isexplicittestinput,notagamedefault.",
+    "live_default_claim": false
+  },
+  "checked_static_windows": {
+    "body_data_load": {
+      "start": "0x4662b8",
+      "end_exclusive": "0x466380",
+      "sha256": "0235671bb062d50783740ebc6251f649c0d583d47d17219ae2cc5a61b03d7819",
+      "bytes": "8b8c24b00000006a00688089a000e845e114008bd885db0f84040300008b957401000083ca01687089a0008bcb899574010000e840ee1400d99d88020000685889a0008bcbe87ef01400683c89a0008bcb888590020000e86cf014006820c79f008bcb888591020000e80aee1400d99d84020000682889a0008bcbe8f8ed1400d99d7c020000681489a0008bcbe8e6ed1400d99d8002000068dc88a0008bcbe8d4ed1400d99da8020000d98584020000d81ddc329f00dfe0f6c4417a118b450850689888a000e8bd"
+    },
+    "full_unported_damage": {
+      "start": "0x5625c0",
+      "end_exclusive": "0x562b9c",
+      "sha256": "3d6a2a8e96746d97a830af9fd4a456d699b6223dd3d7b69a34be1962a5c79378",
+      "bytes": "6aff68c987990064a100000000506489250000000083ec4053558be9c7442408000000008b45048b80680100008b15c064b3008bc881e1ffff0000c1e810663b444a0456752a8b8c8a0400020085c9741f8b496085c974188b7424648b4424608b5c245c6a01565053e892ffffffeb088b5c245c8b742464d9430cd81ddc329f00dfe0f6c4410f8b3c050000578b7d04f64708010f852d05000085f674218b760485f6741a8bcee8c4adefff84c0750b8bcee8895af6ff84c0740432c0eb048a44246c8b8f9000000085c90f84ef00000084c00f84e7000000e892a402008bf885ff0f84d80000008bb79800000085f60f84ca0000008b4704d905dc329f00d980ac040000dae9dfe0f6c4440f8bae0000008b4d04518bcee8732d02008bd885db0f8c950000008b542460528d4c2438e8ebf4ffff8b7f04d987ac0400006a01d84c24446a01538bced95c244ce86e2d020085c07c088b4e248b0481eb0233c085c0741d8b486085c974168b5424688b4424646a0052508d54244052e87ffeffff6a016a00538bcee8332d020085c07c088b4e248b0481eb0233c085c0741d8b486085c974168b5424688b4424646a0052508d54244052e844feffff8b5c24608b43048b15c064b3008bc881e1ffff0000c1e810663b444a0475098b848a04000200eb0233c08b4d048b1150ff92400100008b15c064b3008844246c8b038bc88bf081e1ffff0000c1ee10663b744a04750d8b8c8a04000200894c2460eb08c7442460000000008b4b0c8b5304894424188b4308894c24248b4b188954241c8b5310894424208b4314894c24308b4d04895424288944242ce8f3c8f6ff8bf88a44246484c0897c2414741885ff74148b542420528bcfe815eef9ffd84c2424d95c24248a44246c84c074128d7d28b9070000008d742418f3a58b7c2414d9451053d86424286a016a00518bcdd91c24e8dcf5ffff8a44246c84c074238b4d048b819c00000085c074168b8100010000250000100033d20bc27505e8c13df7ff8b75048b868000000085c074038b40108a4c246c84c9741285c0740e8d4c2418518b487c56e8c76b01008b4d048b11ff92000100008a4c246c84c9746585c074148b55048d4c2418518b889800000052e8dc230200837c242c018b742460754685f6742185ff741dd9442424d81ddc329f00dfe0f6c441750c8b450456508bcfe84ceef9ff8b45048b487085c974178bc18b108d4c2418518bc8ff9220010000eb048b7424608b153465b3008b8a300100008b55048d4424185052e851a7faff85f67417837c242c0375108b4424688b4d0450518bcee81638f7ff8b55048b8a8000000085c9740a8d44241850e8dfe500008b4d04e807c4f6ff85c074138b808800000085c074098d4c2418518bc8eb128b55048b8a8800000085c9740a8d44241850e8a9840000d94510d81ddc329f00dfe0f6c4417a7c8b4d04e841e7f6ff84c074708a44246c84c0744a8d4c2418518b4d0456e83728f7ff84c074386a006a016a006874fca200b9a89ab300e8be14efffd84d14518bcdd91c24e830f4ffff5f5e5d5b8b4c244064890d0000000083c44cc210008b4d04e823dff6ff84c075126a006a016a00680000803f8bcde8fdf3ffffd94510d81ddc329f00dfe0f6c4410f8a200100008a44246c84c00f85b10000008b4d04e8e5def6ff84c00f85a1000000837c242c040f849600000085f674088b46048b4808eb226880c0a0008d4c2470e858f0e9ff8b4c246cc744245800000000c744241001000000d94424248b53048b45048b401483ec08dd1c2452518b0b515068d8b1a3006898b1a300686e0200006858b1a30068708bb300e86d24eaff8a44243c83c42ca801c7442458ffffffff741e8b44246c83c0f08d500c83c9fff00fc10a4985c97f088b088b1150ff52048bcde80571fcff8a889102000084c974528b45048bb09000000085f674368bcee8e79f020085c0742b8b4d04518bcee8d89f02008b8898000000e80d2302005f5e5d5b8b4c244064890d0000000083c44cc210008b55048b0d3465b30052e809eff8ff5f8b4c244c5e5d5b64890d0000000083c44cc21000"
+    },
+    "start_dying_unported": {
+      "start": "0x562380",
+      "end_exclusive": "0x5625b5",
+      "sha256": "d8c45cfdbf2e41dbf2769357e65c5e2aca9b1df28ff2053136be4c1d1cbb9270",
+      "bytes": "64a1000000006aff6898879900506489250000000083ec74568bf18b06ff503884c075248b4e046a00518b0d3465b300e8ab43f9ff5e8b4c247464890d0000000081c480000000c38bcee86178fcff8b80a402000085c00f84a30000008bcee84c78fcff8b80a4020000508d4c2420e85c62f6ff6a028d4c244cc784248400000000000000e8f65ef6ff8b4e04894c24508b11ff9208010000894424548b4604c744246400000000d94024d94020c744241800000000d95c24108b4c2410894c24688b4c2418d95c24148b5424148954246c894c24708b407885c0740f508d54244c528d4c2424e8447af6ff8d4c241cc7842480000000ffffffffe800bcf6ffa13465b3008b88e0000000894e1c8bcee89b77fcffd980800200008b4e04d956248b5108c1ea15f6c2010f8490000000d81ddc329f00dfe0f6c4410f858100000083c1206822010000518b0d3465b300e87be9f8ffd95c24048b46048b0d3465b300682201000083c02050e860e9f8ffd95c2408d9442404d85c2408dfe0f6c441753f8b4e048b11ff5208d81ddc329f00dfe0f6c441752a8b4e048b01ff5008d876248b4e048b11d95c240cff5208d8442404d8642408d874240cd95e24eb02ddd88bcee8e776fcffd9807c020000d84624d905e00da300d8d9dfe0f6c4057a0cddd8c744240800002041eb04d95c24088b4424086a00508d4e08e84087faff8b4e048b11ff920801000085c074138b4e048b0151ff90080100008bc8e86eeff7ff8b4c24785e64890d0000000081c480000000c3"
+    }
+  },
+  "pins": [
+    {
+      "path": "crates/aa-body/Cargo.toml",
+      "size": 398,
+      "sha256": "c3a97ccba784a058da9f7d0f648a32a43108e84ed18f295cda9679a5279a9b49"
+    },
+    {
+      "path": "crates/aa-body/src/lib.rs",
+      "size": 17006,
+      "sha256": "f0b5d052cc60d8e4c61b2c9fbe0c236c55be36c2ac4f13f12410040c49c086a1"
+    },
+    {
+      "path": "crates/aa-body/tests/native_parity.rs",
+      "size": 7249,
+      "sha256": "89009916713535946fc8cb6305029c925f3c704eb76b808c53594db89a8de7da"
+    },
+    {
+      "path": "crates/aa-body/README.md",
+      "size": 2916,
+      "sha256": "15379bb44b819cd398ac1abcbefc61279fd44dedb7fba578ba0d20a953a7d766"
+    },
+    {
+      "path": "research/phase4-body/original_body.py",
+      "size": 13079,
+      "sha256": "3878ded04da9f9194920f91d8008957c470f8bcf141a81afc8ab3495bdc6f4f4"
+    },
+    {
+      "path": "research/phase4-body/body-native-oracle.json",
+      "size": 554510,
+      "sha256": "25e6c8563ee058a09c8579b1fdfe9ebcea09954c28ef802c103c8af7a844eed9"
+    },
+    {
+      "path": "crates/aa-numeric/src/lib.rs",
+      "size": 10288,
+      "sha256": "fa645e03537c5bcdefc53c939ec32b1aae31e43584c536d5327b080913f46437"
+    },
+    {
+      "path": "crates/aa-numeric/tests/native_parity.rs",
+      "size": 3803,
+      "sha256": "94dfc25900bdcf868cf6947fa554e540f113ff1cc703defcd0e21180e44863d6"
+    },
+    {
+      "path": "research/phase4-body/numeric_oracle.py",
+      "size": 3355,
+      "sha256": "f7bc3386b17b7abf18b188e977f3302976e95894cabe88b1375054e440f11256"
+    },
+    {
+      "path": "research/phase4-body/numeric-native-oracle.json",
+      "size": 90993,
+      "sha256": "20a0b927f05a1ac0a83aaa68b89ce90c239784493ed5dfd5cece7dee51c56957"
+    },
+    {
+      "path": "research/phase4-orders/numeric-independent-review.json",
+      "size": 2365,
+      "sha256": "399dfeb1055453a9f02a9f69e23b837d208f1ebf52337dedb1b4a96bcef95075"
+    },
+    {
+      "path": "research/phase4-orders/body-independent-review.json",
+      "size": 3978,
+      "sha256": "990747d777bf4cc97d2553b40af786f4562ff7cd4c604545a4e247e095751ad7"
+    }
+  ],
+  "checks": [
+    {
+      "command": "python research/phase4-body/original_body.py",
+      "passed": true,
+      "original_x86_cases": 270
+    },
+    {
+      "command": "cargo test -p aa-body",
+      "passed": true,
+      "tests": 3
+    },
+    {
+      "command": "cargo clippy -p aa-body --all-targets -- -D warnings",
+      "passed": true
+    },
+    {
+      "command": "cargo test -p aa-numeric",
+      "passed": true,
+      "tests": 3,
+      "synthetic_x87_cases": 234
+    },
+    {
+      "command": "cargo clippy -p aa-numeric --all-targets -- -D warnings",
+      "passed": true
+    }
+  ]
+}

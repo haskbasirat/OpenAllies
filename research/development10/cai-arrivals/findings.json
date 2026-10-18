@@ -1,0 +1,245 @@
+{
+  "schema": 1,
+  "status": "Bounded arrival/native field acceptance; concrete Sleep source typechecked, genuine scheduled Think remains pending.",
+  "owned_sources": [
+    {
+      "path": "crates/aa-mind/src/cai_arrivals.rs",
+      "sha256": "b4576bb379592df1fe8490b85296080932bb5cd3f6d2f80ade8734fbfbb902bf"
+    },
+    {
+      "path": "crates/aa-mind/src/cai_sleep_fields.rs",
+      "sha256": "dbd6fd66cf93f5bf6ab301a7e777e730ee25c0b7cf83ccd452f1aa97bca727fa"
+    },
+    {
+      "path": "crates/aa-mind/tests/cai_arrivals_native.rs",
+      "sha256": "19792c55acc01921f26916f03e596078d4cc3d190c205be61cb5696204621d52"
+    },
+    {
+      "path": "crates/aa-mind/tests/cai_sleep_fields_native.rs",
+      "sha256": "6960768099abde9ff6dab2072131da2cfc5312bd02601bba9a8101d4913a77d9"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_cai_arrivals.rs",
+      "sha256": "dcd15f2058ae12c8a3187188d297693be858c50ca4fbce2a6f573779d6016121"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_regiment_sleep.rs",
+      "sha256": "183cf28534e5de8ecb6e9b8b079239b014dbbef6c1a2256b70a2f420f4763da5"
+    }
+  ],
+  "shared_context_snapshots": [
+    {
+      "path": "crates/aa-mind/src/cai_sleep.rs",
+      "sha256": "a862597e8ee8b47711466f92fb6cfb166dfa7f64c705bdea2739b44f1135c9bc"
+    },
+    {
+      "path": "crates/aa-mind/src/regiment_load/context.rs",
+      "sha256": "be944931a9265b696c2ea096a426482933501daa761b58028587958f627792b0"
+    },
+    {
+      "path": "crates/aa-mind/src/regiment_load.rs",
+      "sha256": "ae4156ca04efe67a70aaca8918d3058f6a83c91cf9973f3b10b13b1de3caa951"
+    },
+    {
+      "path": "crates/aa-mind/src/lib.rs",
+      "sha256": "19f9f45dbf8edfa02347b8a519aac901fd16b9d8065cea11a79cdf42a3114725"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_mind_init_world.rs",
+      "sha256": "c1c8b60360532c7006e4fe82144eae94b085c6a62df40950c2448b78963e19c2"
+    },
+    {
+      "path": "crates/aa-runtime/src/mind_actions.rs",
+      "sha256": "157f28d864db67ada59222325c1ff8aea74a67109527ec3d89fe0e2872f2e7d5"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_member_command.rs",
+      "sha256": "cb815f11c3460c65073beae8a6a516b26865576c7da46dcb23f510bb7d55fa92"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_organization_member_mind.rs",
+      "sha256": "0b011f8fe4a46d0012ab6378e5d0bc17faede42f523035fa97b270c14b6d3336"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "sha256": "e7fcd8369642ff4402637657f41efff0ad843501aee18c0f36675a7ad622bc1b"
+    },
+    {
+      "path": "crates/aa-runtime/tests/saved_command_ownership.rs",
+      "sha256": "ce89a5a1dfe5ce8fa49e8e65985c70cdc3add98fce6e2078a9ddb2c583ffc246"
+    }
+  ],
+  "shared_qualification": "Whole shared hashes pin context only. Builder owns fresh Owned transfer, SavedLeader522890 and4CEDE0 factoring, Root owns real524B80 caller; no exclusive fullfile claim.",
+  "native": {
+    "rows": 912,
+    "executions": 1824,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "pcs": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "distinct_executed_pins": 208,
+    "push_rows": 444,
+    "drain_rows": 30,
+    "refresh_retry_rows": 402,
+    "busy_getter_rows": 36,
+    "static_vtable_words": [
+      {
+        "kind": "base",
+        "vtable": "0xa34418",
+        "word_va": "0xa34490",
+        "word_bytes": "c2ca9600",
+        "entry": "0x96cac2"
+      },
+      {
+        "kind": "element",
+        "vtable": "0xa35810",
+        "word_va": "0xa35888",
+        "word_bytes": "705e5300",
+        "entry": "0x535e70"
+      },
+      {
+        "kind": "regiment",
+        "vtable": "0xa335a0",
+        "word_va": "0xa33618",
+        "word_bytes": "f0716a00",
+        "entry": "0x6a71f0"
+      },
+      {
+        "kind": "aircraft",
+        "vtable": "0xa32710",
+        "word_va": "0xa32788",
+        "word_bytes": "f0716a00",
+        "entry": "0x6a71f0"
+      }
+    ],
+    "qualification": "Native allocation-success path. Seams/stop entries excluded; child cutoffs are required boundaries, not C++ unwinding. Four source vtable words are static pins, separate from executed getter pins. No native process run."
+  },
+  "rust": {
+    "focused_tests": 9,
+    "scopes": [
+      "arrival owner/native push+drain3",
+      "refresh/retry+busy2",
+      "legacy fullSleep1",
+      "saved contextLoad3"
+    ],
+    "test_log": {
+      "path": "research/development10/cai-arrivals/tests-04-final.log",
+      "sha256": "56b8eccab624bd5b60064f4f88d7fa7b40c2a748cb6702658513cb5a2cbb6a52"
+    },
+    "typecheck": {
+      "path": "research/development10/cai-arrivals/check-08-final-tests.log",
+      "sha256": "da8f98ece5b9abd76007a58110715b55fad4f76fd20a8d3e1597dbf2d808557f"
+    },
+    "support": "Tests call exact shared production field/drain kernels and actual constructor/load transfer. Runtime ActorAccess/Sleep binding is typechecked but not a claimed full genuine map tick."
+  },
+  "dependencies": [
+    {
+      "path": "research/phase7-mind/native-constructors.json",
+      "sha256": "199f1ac85a81cbbe47ed412eccf09a07d4c7c1f8e0495eaabe0d1f7abad6ace9"
+    },
+    {
+      "path": "research/phase7-mind/findings.json",
+      "sha256": "67e605e1e69351480613b07d58704a85a17f2b2356d722563420c3393c346216"
+    },
+    {
+      "path": "research/skirmish-20261016-regiment-load/native-regiment.json",
+      "sha256": "f0530a2f8371cb30e265238347ae5ac56a333efd6095a1253c912d812fcfb1aa"
+    },
+    {
+      "path": "research/skirmish-20261016-regiment-context/native-source-context.json",
+      "sha256": "184af9622fec1d625aee46c098ba9274fae75c74cb66a3db45d493ac8bd49cea"
+    },
+    {
+      "path": "research/skirmish-20261016-regiment-context/findings.json",
+      "sha256": "d9cce0aea87eff64f0abab691bc1588d67a1e63287515e1a2f32d4dac29d4bca"
+    },
+    {
+      "path": "research/phase8-ai/native-sleep-think.json",
+      "sha256": "7def7c210f88c2d3f18f74c994d260f8c745da0cd05882cb7b86d62b844a3083"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "research/development10/cai-arrivals/native_arrivals.py",
+      "sha256": "6b26b2405379bab3c36c76d7b2525d79c6724105ae51925a8fc2fba37f23b12f"
+    },
+    {
+      "path": "research/development10/cai-arrivals/native-arrivals.json",
+      "sha256": "a6e930afcd890e60562837f40d7a322f8362da325aba50427942f8fdd649e152"
+    },
+    {
+      "path": "research/development10/cai-arrivals/native-replay.log",
+      "sha256": "30686f5046060e4011ef008f5258f49a2c09ae5799184af06ccafc61a7ec111b"
+    },
+    {
+      "path": "research/development10/cai-arrivals/native_sleep_fields.py",
+      "sha256": "98cac138d0998387926ddef687d5409d0e1d23ba5ba32affdf8398375f7cc178"
+    },
+    {
+      "path": "research/development10/cai-arrivals/native-sleep-fields.json",
+      "sha256": "b93545bced1a3bff69e426c1a27f86e603f8d77de58641b4ef7dd1f3f16275a3"
+    },
+    {
+      "path": "research/development10/cai-arrivals/sleep-fields-replay-final.log",
+      "sha256": "f6a9c466fd3d2da2ffb7da9def1239811dbb239e9fa5923a796e472e9a09079b"
+    },
+    {
+      "path": "research/development10/cai-arrivals/tests-04-final.log",
+      "sha256": "56b8eccab624bd5b60064f4f88d7fa7b40c2a748cb6702658513cb5a2cbb6a52"
+    },
+    {
+      "path": "research/development10/cai-arrivals/check-08-final-tests.log",
+      "sha256": "da8f98ece5b9abd76007a58110715b55fad4f76fd20a8d3e1597dbf2d808557f"
+    },
+    {
+      "path": "research/development10/cai-arrivals/disassemble.py",
+      "sha256": "50153411306d47ab97ed771b02b304e4eae11f811e874e6ffa8c1db19eef0152"
+    },
+    {
+      "path": "research/development10/cai-arrivals/disassembly.txt",
+      "sha256": "26b78c558a686f31b05006653643714dac2dd9eb8937e8328fef0b20fd3b6b9d"
+    },
+    {
+      "path": "research/development10/cai-arrivals/disassemble_sleep.py",
+      "sha256": "1b6fb55ec5b6750cc18adacfe883ae0f10bc75232ec2960d5389303548d7f914"
+    },
+    {
+      "path": "research/development10/cai-arrivals/sleep-disassembly.txt",
+      "sha256": "8b25365b8227c9682f904536501aef6b0ac46c125dac71942b53956c5f75cd71"
+    },
+    {
+      "path": "research/development10/cai-arrivals/disassemble_members.py",
+      "sha256": "db095351801448e69149ccfd8c12a7ccc460454c532a6cc75725672e91fa5e5b"
+    },
+    {
+      "path": "research/development10/cai-arrivals/member-disassembly.txt",
+      "sha256": "c1bf8b678a858594fbf844e380eee08de738e6ab1e2ad59ba9ee28f30cc964d1"
+    },
+    {
+      "path": "research/development10/cai-arrivals/README.txt",
+      "sha256": "719c41a5c160e1304ab007c9dc9f07d7a81051c49a81fd747d9dca5973102abf"
+    }
+  ],
+  "invariants": [
+    "One retained Owned.tracked_words List for each actual Installed MindId; no duplicate scalar head/tail/count or placeholder collection.",
+    "Guarded actual fresh constructor transfer or existing saved owner only; same ActorAccess/Arena/currentActor check before every reached operation.",
+    "GTID payloads preserve zero/duplicates; pushfront sets tail only for empty list; pop last retires tail. Growable Rust LinkedList has no imposed budget.",
+    "Actual drain resolves before unlink/free, then membership/522890 callback; errors retain the literal native prefix.",
+    "Full existing524D70 kernel drives concrete Sleep; no alternative Think algorithm or ready/unfreeze setter.",
+    "522F60 rereads current iterator/mode/flag after callbacks; retry wraps before member dispatch and pending store occurs last.523000 preserves active/close/signedretry lazy order.",
+    "Derived vf78 mapping comes from previously executed concrete constructor identities and read-only vtable words; Element alone reads actual state+54.",
+    "Saved Store-transfer identity test now compares actual first linked-node allocation through borrowed iter(), not a fabricated Vec pointer."
+  ],
+  "remaining_required": [
+    "Natural scheduled Think and actual full battle/frame acceptance are not observed by this checkpoint.",
+    "Positive follow/home loss/exhaustion/SAI and57BF30 relocation remain precise reached services.",
+    "New actual terrain/mission/phase command source loans are separately owned; old run_on_owners compatibility entry may explicitly lack them and must refuse reached positive children.",
+    "Rust allocator behavior/native null-allocation fault and malformed native-pointer prefixes are outside the admitted domain.",
+    "Existing dependency execution counts are not added to new1824 executions; fullSleep prior laboratory defaults remain explicitly qualified."
+  ]
+}

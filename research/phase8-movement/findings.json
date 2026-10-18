@@ -1,0 +1,249 @@
+{
+ "schema": 1,
+ "scope": "Phase 8 round 1: Mover Tick/falling/speed operations, organization formation slots and reassignment, UAI formation-following speed control, all-overlaps query and overlap-list refresh. Round 2: CAI regiment move orders/Think/member dispatch and Element return-to-slot, free placement search, static SAI region-topology builder, aircraft MoveTick, water-area flood fill and paint.",
+ "native_executions": {
+  "native-mover.json": 1251,
+  "native-mover.json launch_speed": 24,
+  "native-formation.json": 477,
+  "native-follow.json": 498,
+  "native-overlaps.json queries": 2304,
+  "native-overlaps.json refreshes": 576,
+  "native-direction-table.json tables": 3,
+  "native-company.json": 756,
+  "native-company-think.json": 660,
+  "native-placement.json searches": 864,
+  "native-placement.json distance searches": 432,
+  "native-aircraft.json": 1281,
+  "native-topology-builder.json synthetic": 44,
+  "native-topology-builder.json real-map": 12,
+  "native-topology-builder-shipped.json maps": 80,
+  "native-water-areas.json": 417,
+  "native-water-areas.json original-map floods": 30,
+  "native-low-path-solve.json": 321,
+  "native-low-path-continuation.json": 69,
+  "native-low-path-result-plan.json": 21,
+  "native-route-cache.json cases": 84,
+  "native-route-cache.json searches": 1092,
+  "native-route-cache.json path costs": 1080,
+  "native-gworld-placement.json seamed templates x3 precisions": 1170,
+  "native-gworld-placement.json composed (real 0x553BA0)": 48,
+  "native-gworld-placement-callers.json 0x53CE40 rows": 1404,
+  "native-gworld-placement-callers.json 0x4F46E0 rows": 1017,
+  "native-uai-collision.json static/thing/tile": "441/126/69"
+ },
+ "native_null_reads_rejected_in_rust": {
+  "native-formation.json": 3,
+  "native-follow.json": 3,
+  "native-company-think.json": 39,
+  "native-water-areas.json": 9,
+  "native-route-cache.json": 12
+ },
+ "helper_findings": [
+  "native-topology-builder-findings.json",
+  "native-water-areas-findings.json",
+  "native-low-path-findings.json",
+  "native-route-cache-findings.json",
+  "native-gworld-placement.json#findings",
+  "native-gworld-placement-callers.json#findings",
+  "native-uai-collision.json#findings"
+ ],
+ "runtime_wiring_compiled_not_oracle_run": [
+  "aa-runtime spatial_world::low_path_world::SpatialLowPathWorld (LowPathWorld)",
+  "aa-runtime spatial_world::low_path_world::SpatialPlacement (0x4F3C40/0x53CE40/0x4F46E0 worlds)",
+  "aa-runtime spatial_world::uai_collision_world (0x46EF30, 0x46F100, 0x531170/0x5312C0, 0x4D6940, 0x4CEDE0 host helpers)"
+ ],
+ "removed_caps": [
+  {
+   "address": "0x57ba80",
+   "original": "32-bit pending-slot mask (assert e<32)",
+   "rust": "exact growable per-slot set; identical below 32 slots"
+  },
+  {
+   "address": "0x7aa8b0",
+   "original": "island flood recursion on the 0x100000-byte main stack",
+   "rust": "explicit heap stack"
+  }
+ ],
+ "kept_limits": [
+  {
+   "address": "0x552cad/0x556570",
+   "value": 254,
+   "why": "water area id is one byte (0xFF = shared)"
+  },
+  {
+   "address": "0x552446",
+   "value": "0x7FFFFFFF",
+   "why": "visit-stamp restart is visible state"
+  },
+  {
+   "address": "0x554b30",
+   "value": "1..=20 rings",
+   "why": "native search rule"
+  },
+  {
+   "address": "0x53a6aa",
+   "value": "depth 32",
+   "why": "low-path search rule (DEPTH_LIMIT)"
+  },
+  {
+   "address": "0x4f2a80",
+   "value": "16x16-tile window, sub shift 2",
+   "why": "explicit WindowConfig::NATIVE; cells are a Vec"
+  }
+ ],
+ "optional_native_limits": [
+  {
+   "address": "0x53cdf0",
+   "value": "0x1F9C queue entries",
+   "rust": "Options::queue_limit (None = unbounded growth)"
+  }
+ ],
+ "explicit_data_inputs": {
+  "LowPathingExaminedMax": 512,
+  "LowPathingIgnoreMovingDepth": 3,
+  "LowPathingAccuracyDepth": 5,
+  "LowPathingWaitMinimum": "2.0",
+  "source": "Data/Game/SVars.tgi lines 95-98; no executable default"
+ },
+ "emulator_caveat_audit": {
+  "fs_base_zero": "page-0 hook now 0..0xFFF, only FS-prefixed [0..3] allowed (harness, topology, placement machines)",
+  "allocator_trap": "UnseamedAllocator on 0x6F7810/0x6F7430/0x6F7700/0x6F7650/0x96E19F/0x96E173/0x96E0F8/0x96D331; never fired",
+  "changed_fixtures": {
+   "native-aircraft.json": "6 rows: first null dereference now 0x0 (was 0x1B0/0x14); events unchanged",
+   "native-water-areas.json": "3 signalling-NaN rows marked emulator_caveat"
+  },
+  "snan_inputs": "only the 3 water rows (neighbour height 0x7F800001)",
+  "stale_code": "all stubs at fresh addresses"
+ },
+ "precision_evidence": {
+  "direction_table": "built after _controlfp(_PC_53) at 0x972c6b (from 0x96bdb7 in _cinit 0x96ec76); PC53 == PC64 output; PC24 differs in 859 words",
+  "topology_builder": "original builder reproduces the topology shipped in 80/80 maps at PC53 and PC64, 0/80 at PC24",
+  "simulation": "lead correction: simulation thread runs PC53 with PE set every tick"
+ },
+ "inventory": {
+  "function_count": 1233,
+  "status_counts": {
+   "yes": 229,
+   "cited": 380,
+   "no": 612,
+   "boundary": 12
+  },
+  "proven_count": 627
+ },
+ "validation": {
+  "tests_command": "CARGO_TARGET_DIR=target/s-movement cargo test -p aa-movement -p aa-navigation -p aa-spatial -p aa-heightfield --release --locked --offline -j 4",
+  "tests": {
+   "passed": 125,
+   "failed": 0,
+   "ignored": 7
+  },
+  "tests_log_sha256": "9fd130509acb8f0be381d4feca320bab982cb5d2dd7f12b72d271866ba4b3e3c",
+  "clippy_command": "CARGO_TARGET_DIR=target/s-movement cargo clippy -p aa-movement -p aa-navigation -p aa-spatial -p aa-heightfield --release --locked --offline -j 4 --all-targets --no-deps -- -D warnings",
+  "clippy_log_sha256": "072ef44eee17184d2e01c345ba1a158bec6d70b46b4791f5ae870801d87f9c91",
+  "fixtures_regenerated_identically": true
+ },
+ "source_sha256": {
+  "crates/aa-movement/src/lib.rs": "c083a6cc001cb7597f99745f843465fe254bba0c679a0d5d62435a4cf5bd9298",
+  "crates/aa-movement/src/mover.rs": "c0a8ac0be65dbd362054a1c51cf290e241165c37efd0c400bd28bd16fc47f3a5",
+  "crates/aa-movement/src/falling.rs": "4a9c9371447c8c710bfa96e45e50374d9f256cd8878c1a43136cc2959cf8e2e5",
+  "crates/aa-movement/src/formation.rs": "b04253d5caa3acb459d243f61c5e38f8a53d04aa17e900a31e96dd85b4d122ee",
+  "crates/aa-movement/tests/mover_native.rs": "8256afcfaf3e1f6da14d29538e40782dfed426011bc6e1215012dac88b8c6c1b",
+  "crates/aa-movement/tests/formation_native.rs": "1439abeba2e926699656a8ef9db0fde427de75e786fd25687c768a8cd488c185",
+  "crates/aa-navigation/src/formation_follow.rs": "0d209c6734b515684fe718779af2147cc7cde719b2f92fd3a165db8bed9a452d",
+  "crates/aa-navigation/tests/formation_follow_native.rs": "302b2c7c67bf6cc7edcadc8a11998ae85c2e1ce5b2ee3ecd624a96490a7458c7",
+  "crates/aa-spatial/src/overlaps.rs": "7a95ae265a4c148c9682640f5fe2c29a826bd9632d8f03cf67773b8ae2079f3a",
+  "crates/aa-spatial/src/overlaps_tests.rs": "80fa1e9ae8e0638e6c11710e801fd1d0ebed7888ce42eb9c3931b2611c26ebdf",
+  "crates/aa-spatial/src/query.rs": "91b7c62a239d4d6b2302c23a068f0f8b8bc3dc7697b25b193aa3f1b8cf756e60",
+  "crates/aa-movement/tests/native_fixtures.rs": "efdb897a1dd650b5e17e381532ec71141ec9296619762b7361ffd0aa84785d6b",
+  "crates/aa-navigation/src/sai_state.rs": "899d5957e1da4323f412dc8c12ccf757c43d85fd840739fd3894cd6a84bfc1fc",
+  "crates/aa-navigation/src/ai_startup.rs": "a8b976204595802ef444438ded7d55da238bf51ec1c622005fff85ca4e99ce58",
+  "crates/aa-navigation/tests/goal_base_fields.rs": "1938903705d4aa314c95f7ed4a2bd74320f6895be07bb8c922ee94ac2d5fc572",
+  "crates/aa-runtime/src/movement_world.rs": "be524bf7290474a2e4892b5026244870f8a3700ecd6f05ea027b73a1bf2a77a2",
+  "crates/aa-navigation/src/company_move.rs": "0be6321bbf2d0d0723f62fe553fa21e484335203ca5cce98ae57904e0653161b",
+  "crates/aa-navigation/tests/company_move_native.rs": "b29b840ce7ff24b114ad25dcfa05ad6e9ee7a85244f8a33f1776281605a9f4fc",
+  "crates/aa-navigation/tests/company_think_native.rs": "378322072914978d8384d746a544055dfd3b2ac82fd0ce7923c1f49c38b89f55",
+  "crates/aa-spatial/src/placement.rs": "851a8f0d13329c7342dc616a9f0c64c2cad2a71ee6dc5b9f429fe8bb403fe70f",
+  "crates/aa-spatial/src/placement_tests.rs": "da70bb90a9dfef6d4a158908205763b1bc602352638a18ec0b02b2b4e939df7e",
+  "crates/aa-movement/tests/trig_constants.rs": "6cd1616605fcd4fc14915aedd9508ab406423928fa0716939711592abd43e2ae",
+  "crates/aa-navigation/src/topology_builder.rs": "b9bf17c340756e5e42ab97eaa57d56e7a65349d9859b08483c52b8031aa2a91d",
+  "crates/aa-navigation/tests/topology_builder_native.rs": "0e3d03486e198857b49872fbdcf7626128fd4b0fbfec69babf157fc5db01b1bd",
+  "crates/aa-movement/src/aircraft.rs": "1561127e956ae768d2fa717d855ba2fe6655ff923488ac28023f39ef30ab38ce",
+  "crates/aa-movement/tests/aircraft_native.rs": "cf85a5a7ffec408a9c5e198168c82587859ec3b6d1c5bf798d2b6d615231c2bf",
+  "crates/aa-spatial/src/water_areas.rs": "654c796cd4eb8678d61cae36e80d4eb94b92ac75bda040f577bdc65950fdd345",
+  "crates/aa-spatial/src/water_areas_tests.rs": "c8aab121a24f4c7a8cbf6c51c9ebccc943d304cdc3937154ef403055043a9146",
+  "crates/aa-spatial/tests/water_areas_native.rs": "153ca5d0e179395df67e26e6e7cfc16c5e79ce1f302aecb6e100153d566a6e59",
+  "crates/aa-heightfield/src/binding.rs": "e802fea7c2734025f8f63b8658c3cb28b332dd36aa9a5c63b74000a54cd30a65",
+  "crates/aa-navigation/src/low_path/mod.rs": "0d172866f78b8a9d69d9fd658ad2c7dbab2bf3c3e9c6b67940441f988930ee72",
+  "crates/aa-navigation/src/low_path/window.rs": "3561970267258a30f73c298e23a22fd3495b9e9e65230fa1a1934cf90986a13f",
+  "crates/aa-navigation/src/low_path/goal.rs": "707e435dc77b2f61c3945fb126fa729ef8473fe91e52e9e5850d54165a3d8a2f",
+  "crates/aa-navigation/src/low_path/search.rs": "825259abc60ebea087750973ec289efda2abad27c8a1c66b969b2d71bc21e634",
+  "crates/aa-navigation/src/low_path/continuation.rs": "f176d59aed0e4b7b8ff455900069a89d71e52736d26987e8687649c1c53bd241",
+  "crates/aa-navigation/tests/low_path_native.rs": "38f3d9d6e61924b5328118f962defd24b60604b870e5d40c3112414455fdc99b",
+  "crates/aa-navigation/src/result_plan.rs": "eff04d7a9b579f8abd33a3cdd49371125742094639547e7b9ae6427881778c12",
+  "crates/aa-navigation/src/route_cache.rs": "ccf7f2022eaa089444594aed6d5351d45194736be28695a3b2b436b0b031aa9f",
+  "crates/aa-navigation/src/region_search.rs": "edee3fc0450f93cf69e2c29278a0d771548b451be0f6110fdea3eb0d40d0ae0b",
+  "crates/aa-navigation/tests/route_cache_native.rs": "b8131a48453d72ffb1b69d431c56086f61f58e7ada8f0774b80cf25009e4d535",
+  "crates/aa-runtime/src/spatial_world.rs": "a4a210ca271f3a21bfc537a91b424625bc381ac8c6ff97f5f3e48c170dfe958d",
+  "crates/aa-spatial/src/gworld_placement.rs": "eb31f6af9bb0a6cd4032af9bafce5c248ec9a6124603c46f55eb6b16c7461de1",
+  "crates/aa-spatial/tests/gworld_placement_native.rs": "ea2807017f731f2d360284a6814294f1954d18348e92855cbe1090986450fdae",
+  "crates/aa-navigation/src/uai_collision.rs": "e821fd49a0ae7f482a52c2a3265e91ae79834b0129522b04fc0fb48c0fbbd359",
+  "crates/aa-navigation/tests/uai_collision_native.rs": "13ac87119bec6a6073651d305e7dfdb774cf5259636ac1220d2b5e9dde331eb5"
+ },
+ "fixture_sha256": {
+  "native-mover.json": "125c30b3ebb0c06cf5bdf3cf86e87e134195481408a82e3281866760ea1fe60c",
+  "native-direction-table.json": "26c9ee6c0b0634b0a5bdc667259a3632f2998a084bc622f2ab7f94e8891d4130",
+  "direction-table.bin": "a0afa5e1cb34b5caedeadf9ced0020bdf3a8b4a5f553da33fe80b018176a1c02",
+  "native-formation.json": "966a1effaad1d0e90e32c2981e5aa291a563579f5234f308e497307a70f3f8b4",
+  "native-follow.json": "9aa06d8b742ec3e6c95541244353be4a7fe31df242598171058743b10d6e3c15",
+  "native-overlaps.json": "945794fcbef692a08fe09596500ef480c0539acc6e5c77c81baa0152ff1ee939",
+  "inventory.json": "910a2d6f54c817f5bd8ed388d8c594119aab71a111b8311aa5aabfc07e8480f8",
+  "native-company.json": "20bc81652e3fedb2b8e7e3f096b3fffd3f4493c2101e10689d56efed3bc9fbd5",
+  "native-company-think.json": "92c229e87761f54d8c946f6863d26e8372ef8d4efec76edae9721208029bead5",
+  "native-placement.json": "390a6a9c0ecb99e87a802916c675b37c599bd0b1ca74d71841e164fbd140c16b",
+  "native-aircraft.json": "8d66ada0bece8fd1dbd99bf6a71f721ae0ba8444d40dae632892409f4283819d",
+  "native-topology-builder.json": "a7166295b01ea8a70d6f008e0e0bbf0c75047be704168e377727f6fc8ba24434",
+  "native-topology-builder-shipped.json": "c7681a367c0e74026b2ad19b64eb048f1947f0c62e811aa51d017eeb1080d405",
+  "native-topology-builder-findings.json": "3ff08601f044f8dbf2a7e376e9516fd5ea9c2090a7d333a158fc963a2def7fd7",
+  "native-water-areas.json": "9f56411b67283b01fc18dd6677798c4df76f12553c5744aae129dbd581d026c7",
+  "native-water-areas-findings.json": "5fa6d38bc071ebc9652210d70e8f9a0006891a7e0c396b21240dbf7406b8e9b5",
+  "native-low-path-solve.json": "b5ecee76fc038419b1d9462505088afc0eed0d26925e629ef519f3296f24f752",
+  "native-low-path-continuation.json": "edbb66ccc20fed5a3b8c62f61001caec22771e4fe631fc4be57f137589059d42",
+  "native-low-path-result-plan.json": "edd3d6c4923f1ebb12deb12ef5d901e68894e32ee3c4f4fb9a94bf0980fd3fcd",
+  "native-low-path-findings.json": "2bad101fde36bde04421ba29b78b252362ebc279b9c60e88dc830ddb1333f5b5",
+  "native-route-cache.json": "d9f63a75e8333b4873ba9e5aac9ba092502b442411de1218efd5f3b6c1589442",
+  "native-route-cache-findings.json": "8761bb4c5c90e7dff541aff60082181badeda7aa26d11d45752da8ab2976361d",
+  "native-gworld-placement.json": "a251bc39a12f4efd04ff03487605942eb1639206838728601f9266b0e4ca950f",
+  "native-gworld-placement-callers.json": "2d2e4e7254a2d0f24d8ac65d1faed7c76c48ccd19ca575ef55a6c0645b50b95e",
+  "native-uai-collision.json": "536f59ee50d98de9778609a5e58b4176920993db49d989cf9f7958db00bb6a2c"
+ },
+ "producer_sha256": {
+  "harness.py": "847aa5c1470e45157d94fdbf92273ca70f35323a8446243056fd9e593ebd0798",
+  "native_mover.py": "31620b799ddaf34e08fafacda4d34b963323adc5f93360e89c99891e23aefd3d",
+  "native_direction_table.py": "eeae69351b900ae92c3d53026e75d8420d75dffbe8dfbf7c20a026aa12be9852",
+  "native_formation.py": "5a3da1a5d1119fb5eeca1b7ddecd3abe142ed64db0efd55101ba99b4a1e379f0",
+  "native_follow.py": "ff8f27162f9f2f10d20b8f4c353fa08b9cd726cfb124f26cb054c7326eefd2b2",
+  "native_overlaps.py": "811b5d5d20c1f154f4075db248bc24f4605b0556aba688b16790b5cc19eb5027",
+  "build_inventory.py": "794193bd1a2057aa74d6b2d172b1c388745117308f7a12446fff9921e772c3ca",
+  "native_company.py": "4da73e38a71522f052c576bc1b866d136580868e7ccdab9b530b442edec08183",
+  "native_company_think.py": "7df679d4d2dda929e4658c3a446987b88984d7a465cefd5d3a0b14f7e1874003",
+  "native_placement.py": "51184c415c4363230ac445f1a7547310650a8e738a0ad79caaac8db49e1d8450",
+  "native_aircraft.py": "e471cc44639d52ba913e08ff4a8963abe206d429675dc83caa2df42b9cbf6ad8",
+  "native_topology_builder.py": "1f9ced6d9a99a8dff0b72bc7ef48809e2ebcf054d1d114171dda1e9690b4249e",
+  "native_water_areas.py": "9db32714257ad941c4abbf0caa76ea2fb3455d245d4e3c855aca6d9c9bb539c4",
+  "native_low_path.py": "b2379698025cc0f87cae914030d1acb02bcee315ad8c328a0369c382e98a1b60",
+  "native_route_cache.py": "808a2b37799a77d8aabb82b553a4c55410b717a74cdce1f56cce6f2e98332fd8",
+  "record_route_cache_findings.py": "77c72ee9bcbcdb9373f0bf8106513203228805649a3e82a292e0189f979266cf",
+  "native_gworld_placement.py": "faf09214bd187ea519c1e7e819fd445da5066597ca917c733a34c1c88227e710",
+  "native_gworld_placement_callers.py": "fff8f39271120059d593cd6515b06a0e4678684e1de866366c2ec2c7a0d6a7de",
+  "native_uai_collision.py": "9b5682fe0a6a07620afd4e46597dc8f6acfbc7bf0bd3b03920b7701ef1f38e11",
+  "record_findings.py": "0683c5afe82ce9aa2527b9838d2dd3d1d39e5cacf337b93e60a32068f6b40318"
+ },
+ "not_claimed": [
+  "runtime integration (aa-runtime still calls the ground step directly; company move, aircraft, topology builder and water areas have no live callers)",
+  "terrain speed producer (aa-rules owner)",
+  "live-game validation",
+  "x87 exception domains beyond the recorded NaN/infinity cases",
+  "callbacks: aircraft 0x55f230/0x560a70/0x55edc0, topology 0x7aa180/0x7ac9a0, water brush stages 0x5526c0/0x559fb0/0x5528f0/0x551140/0x551b40, random-map callers 0x5972f0/0x597530",
+  "80-bit results of FPATAN/FSIN/FCOS/FYL2X (Unicorn computes them via binary64)"
+ ]
+}

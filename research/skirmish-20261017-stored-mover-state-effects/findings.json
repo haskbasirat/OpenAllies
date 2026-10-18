@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "status": "author-frozen",
+  "scope": "Stored Mover real state enter/leave owner wiring; exact existing kernel unchanged. Not natural initialized mission/battle.",
+  "changes": [
+    "Commit actual state before same stored enter_staged/leave_staged callbacks.",
+    "Reread actual state and flags on BOTH callback success/error; verify unchanged GTID generation.",
+    "Bit12 suffix uses callback-updated flag owner via narrow actual placement operation.",
+    "Actions callback loans same Store/Arena, Bank, actual adopted SpatialWorld/current variables; native falling state24 does not call it."
+  ],
+  "verification": {
+    "current_source": "actual-tests-02.log 1/1 passed9.56s, capture unset; build2m14s",
+    "immutable": "exact frozen executable1/1 passed11.16s; capture unset",
+    "source_review": "independent-source-review.json accepted within bounded source-only scope; zero reviewer executions",
+    "kernel_identity": "six shared/saved files unchanged against prior frozen source checkpoint"
+  },
+  "limits": [
+    "Diagnostic component-constructor lab deliberately has no actual World. Concrete state entry now refuses that owner after the real state24 prefix, without later bit12 store.",
+    "No successful positive live state callback, Action callback, natural fresh initialization or complete battle is certified by this lab.",
+    "Native shared Mover/Element proofs remain prior immutable artifacts; no new native executions claimed."
+  ],
+  "sha256": {
+    "crates/aa-runtime/src/stored_mover_init_world.rs": "fcfce92462dbb6a1199642647843e4e96f1a1e0de14f14dbe56b5354b9d32e5d",
+    "crates/aa-runtime/tests/stored_mover_element_init.rs": "c0304c2dd565cd0fa17611c179ab82608a5756e54606928919b3950b8b64b429",
+    "research\\skirmish-20261017-stored-mover-state-effects\\before-pins.json": "37c2e2df7ae837361d4cca844fe2beb4381ada336f30d25060709244edc15210",
+    "research\\skirmish-20261017-stored-mover-state-effects\\shared-kernel-preservation.json": "0adff5478ff95a13a2d4d83cc020f379fdc9a435049a2aac1f4e80ef66c6b755",
+    "research\\skirmish-20261017-stored-mover-state-effects\\independent-source-review.json": "e1ad74fbf045b7f40b1ea3e1a4f3a949fe416327c41ef1cad656a4e2c599f38f",
+    "research\\skirmish-20261017-stored-mover-state-effects\\actual-lab-v2.json": "c89337fbc8f45fc7e3a654ed77d1743d5e8ead15c036947db689e77807ab6d85",
+    "research\\skirmish-20261017-stored-mover-state-effects\\actual-tests-02.log": "f04639ffd8b79c622eadd4f4f1a8cf8a275364f38126e31fa2b6c8d81982ec83",
+    "research\\skirmish-20261017-stored-mover-state-effects\\immutable-actual-replay.log": "18dcfcc802f4ea3e53a6d352dbd036bb96de41e59f658c601a87c43b67c714d6",
+    "research\\skirmish-20261017-stored-mover-state-effects\\frozen-mover-state-tests.exe": "f2c496f0a59234902d1e4273de432e42e1224db2df644d2328ca7b3940e693d7"
+  }
+}

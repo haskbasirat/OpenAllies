@@ -1,0 +1,73 @@
+{
+  "status": "bounded-native-backed-source-producer-accepted",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native": {
+    "producer": "48CF0A..48CF97",
+    "behavior_predicate": "496F30(flags,0): mask00FF0000, plus native types11/12/34 force3C after third getter",
+    "getters": [
+      "5B5380 Boolean",
+      "5B4ED0 Integer"
+    ],
+    "isolated_rows": 648,
+    "parser_requirement_rows": 36,
+    "actual_source_runs": 6,
+    "actual_command_controls": 234,
+    "all_images_and_precisions": true,
+    "unique_instruction_pins": 7900,
+    "seams": [
+      "Isolated fragment: only GetBoolean/GetInteger dependency values/stops supplied; actual496F30 executes.",
+      "Actual source: existing heap/CString/mutex/line-source/template-registry/CRT atexit seams; actual parser/native constructors/enum/manager registration/getters/control fragment execute.",
+      "Parser requirements: A5-filled operator-new fixture; no successful missing-field getter fabricated."
+    ]
+  },
+  "rust": {
+    "command": "CARGO_TARGET_DIR=target/s-graphics-review AA_GAME_ROOT=<game> cargo test -p aa-runtime --test actor_command_ui --release --locked --offline -j4 -- --include-ignored",
+    "passed": 2,
+    "failed": 0,
+    "test_runtime_seconds": 5.3,
+    "actual_source_controls_checked": 234,
+    "isolated_rows_checked": 648
+  },
+  "production": [
+    "NEW actor_command_ui.rs",
+    "NEW tests/actor_command_ui.rs",
+    "appended pub mod actor_command_ui in shared lib.rs"
+  ],
+  "no_aa_rules_changes": true,
+  "public_api": "Source::bind(&Catalog,canonical_ids), completed immutable Controls, seven typed values/provenance; LoadState +fallible Fields preserve partial writes",
+  "source_guards": [
+    "same actual Catalog ActorCatalog owner",
+    "same installed source State/source identities and source precision",
+    "native ActorCommand mode2 manager",
+    "canonical predefined descriptor identity; translated canonical collision refused",
+    "registered node source/provenance and IDS agree",
+    "reloaded roots refused by existing native_data_node",
+    "strict inherited typed fields; no declaration-only/missing value fallback"
+  ],
+  "limits": [
+    "Only +3C..41/+44 fragment; no whole48CD00 loader claim.",
+    "Earlier icon/localization/cursor/VFX/resource services and actual installed mutable command UI objects remain outside scope.",
+    "Does not wire renderer/client/UI, group selection, command permission defaults, selected formation behavior or gameplay order dispatch.",
+    "The39 descriptors are original game command identities, not a cap on live commands.",
+    "Failed declaration-default hypothesis and syntax logs are retained; accepted proof is native-declaration-requirements.json and no zero fallback was added.",
+    "No default parser behavior, manifests, external dependencies, releases or original files changed."
+  ],
+  "hashes": {
+    "crates/aa-runtime/src/actor_command_ui.rs": "9e230ce39d8a26b912d8fb4223a5dd7de41a7e8d00486225621929c88fa90beb",
+    "crates/aa-runtime/tests/actor_command_ui.rs": "ed0c73e7f7372e1d56cf9eca1b374d61b0d872c592c710290533010eb034f3c4",
+    "research/skirmish-20261016-player-orders/command-ui/native_ui_control.py": "0103bb92397c1a52fd6d3710608a4a6124184f8050941668f0546cf840d6e1e2",
+    "research/skirmish-20261016-player-orders/command-ui/native-ui-control.json": "f8ad0ca236728ad047066720d491558da59c0ae36beb61439726f71d7ed01919",
+    "research/skirmish-20261016-player-orders/command-ui/native_declaration_requirements.py": "81dbe493652a94103c3d2257cdb15e23335cf14cefabe33c34dec709c8f5f79a",
+    "research/skirmish-20261016-player-orders/command-ui/native-declaration-requirements.json": "56e63becd6ab83806919faabfd4573d1082446a1b45e0fa1c81451f3f9845824",
+    "research/skirmish-20261016-player-orders/command-ui/native_actual_controls.py": "4ba4f91a160bd922200b24746f340bf9eb382011465641effd0dc33b95502010",
+    "research/skirmish-20261016-player-orders/command-ui/native-actual-controls.json": "262d93d4982ea2582d3d094ca9c0b60361071b5cd5146527a71b7e0a60775be0",
+    "research/skirmish-20261016-player-orders/command-ui/rust-tests.log": "9a185a51a4b889ce5a5e8ff5b54efe0ac12fe677cdf855927e0d669186a5e115",
+    "research/phase8-movement/harness.py": "847aa5c1470e45157d94fdbf92273ca70f35323a8446243056fd9e593ebd0798",
+    "research/resume-20261016-actor-commands/native_actor_commands.py": "52378b0967677e1efa5554ad8bf0e818bbc61ab39eb49fc50149c0bcd706c258",
+    "research/phase8-layouts/layout_machine.py": "dfabfe45b7ae53f099416f610a1bd5c1f9b7221ed68763070806b59bb31e3ea8",
+    "research/phase8-definitions/native_machine.py": "ac9201f377c5e6f3c3d36bfc01cf4a3f825c5680f183a39eae48a8494bcba243",
+    "research/phase8-restoration/native_tgi_parser.py": "f21c88c9bf0ff38962ffd5e1d49b4994493efe374075e31dc48a11a500dd5afd",
+    "research/phase4-actors/trace_registry.py": "5adb3bc8cf17fa8572de0e6cc9c47ab27b67684daab5c8df9440414e2efeb1c0"
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "New bounded Settlement gameplay-shape prefix and source dependency census; no complete source arena or battle startup.",
+  "native_images": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "counts": {
+    "native_shared_prefix": 384,
+    "native_wall_set_validation": 192,
+    "native_initial_radius": 54,
+    "native_optional_child_branch": 12,
+    "hardware_trig_repeated": 96,
+    "scoped_rust_tests": 4,
+    "existing_rules_library_tests_including_ignored": 18,
+    "registered_kind2_actors": 1028,
+    "source_files_hash_checked": 1647,
+    "settlement_actor_registrations": 0,
+    "wall_set_registrations": 0,
+    "native_syntax_notices": 11,
+    "fatal_or_truncating_source_exceptions": 0
+  },
+  "source_changes": [
+    "New aa-rules/settlement_completion module and integration test",
+    "Append one pub mod settlement_completion line after rereading shared lib.rs",
+    "No parser/definition-loading implementation, manifests, lockfile, runtime, original assets/executables/saves/profiles or releases modified"
+  ],
+  "clippy": "ordinary library Clippy passed;5 existing warnings in unchanged native_load/native_display_name; no strict-clean or allowance claim",
+  "critical_path_correction": "No registered SettlementComponent is present in current1028 source registrations, and native optional-child branch skips4640F0 when absent.460940 fitting is not established as a reached shipped-data blocker. Existing saved adapter still explicitly rejects uncompleted canonical ActorData+1E4.",
+  "remaining": [
+    "Complete reached CV settings/profile/means/shared source graph in original order and explicit source-load PC/CRT environment",
+    "Historical load-time WallSet reference identity, if future sources actually use it; current source API is immutable current-registry inputs",
+    "Full4640F0/460940 fitting, CRT behavior and wall-piece placement, if reached",
+    "Source+1E4/+30C/+36C publication and live Performer+60",
+    "Immediate per-record Init/PostCreate, required world services and complete battle startup"
+  ],
+  "hardware_limit": "Physical Intel Family6 Model167 x87 FSIN/FCOS raw80 reference on this machine, not software trig or cross-CPU/application-source-PC proof",
+  "independent_review": {
+    "path": "research/skirmish-20261016-settlement-completion/independent-review.json",
+    "sha256": "e010dd2b7ef9e6035c868ae7d60d470c10a9250ec847b1a41218fd37e3b446ec",
+    "bytes": 6964
+  },
+  "files": [
+    {
+      "path": "crates/aa-rules/src/settlement_completion.rs",
+      "sha256": "93bc0499626a9a7056edc0432388b8d910ac45d927668b1762c16e2a74efc037",
+      "bytes": 12905
+    },
+    {
+      "path": "crates/aa-rules/tests/settlement_completion.rs",
+      "sha256": "c21b012242ca056b5b5bf7938c83d1207b868fa39115ef920caf013506759787",
+      "bytes": 12115
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/clippy.log",
+      "sha256": "d5393874e70e18302d524fcb54bc141085fdc681b39fffeffdf3129593542a0b",
+      "bytes": 3906
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/finalize_evidence.py",
+      "sha256": "80d0669bb303be4726e151c5c48d8879755ee4df1dc9ddfdfa1d9df06e694e06",
+      "bytes": 4080
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/hardware-trig.json",
+      "sha256": "5df4d5c94660cc9a091af60f9bb0451809f1a5a1c845566f8c09b968912413b0",
+      "bytes": 28587
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/hardware-trig.log",
+      "sha256": "97b86d57f06e03a5da32fbec993f2baad755ace35f9d64a0bbd7ba530b2f0854",
+      "bytes": 118
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/hardware_trig.py",
+      "sha256": "cb67337db38398a111b6a40238b4b1ed5ebe644313e7454bdb2c83d0e12f48b9",
+      "bytes": 6177
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-disassembly.txt",
+      "sha256": "8ab933a75753927e00726f14cfa11fa4608e5e1544c61cc45a12540fa9527488",
+      "bytes": 18714
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-real-source-census-v2.json",
+      "sha256": "484c444c85d1a98fa6dd210f8419b8081942487ecf6370816cea3446d894f7d8",
+      "bytes": 1973145
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-real-source-census.json",
+      "sha256": "67b39b112fdf3dc48a923e4ecd8e0fd4372751c750a3215e2a1bac9b04d527bc",
+      "bytes": 4045
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-real-source.log",
+      "sha256": "6f10776c4f4a7c6438580be378edc50e123bbfed43616ec40fbd94be102dfc41",
+      "bytes": 3105
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-source-hashes.json",
+      "sha256": "25d2f081eee2c8469dda8f73a18a25dcd35509412633c788bde85040942ced2c",
+      "bytes": 384
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review-tests-final.log",
+      "sha256": "1dde508027962ee51b0fca70568c47e83ec5f7d7c0d014ce6d343b490ed125e6",
+      "bytes": 568
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/independent-review.json",
+      "sha256": "e010dd2b7ef9e6035c868ae7d60d470c10a9250ec847b1a41218fd37e3b446ec",
+      "bytes": 6964
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/inspect_native.py",
+      "sha256": "18f302b6f500dc64bbdc3f4c855c28774092f733b254737a85cd8c6d5dbf610d",
+      "bytes": 419
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/native-prefix.json",
+      "sha256": "cbc19a2835cb4f20d52831529fffa2ea9ac068a82c6e98578685b9b35762f0a5",
+      "bytes": 1936839
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/native-presence-branch.json",
+      "sha256": "e173acdeee2ce41efb4e2f6a796dfd70d27f63ed4c1401fbd5defc6b12dd3c46",
+      "bytes": 6334
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/native_prefix.py",
+      "sha256": "fdd5cd3e1837fa5c8b3d2baaab146b964000aa4315ac028ab5025fad56c56d0d",
+      "bytes": 7209
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/native_presence_branch.py",
+      "sha256": "168a5b35abf303d4d909f49c3bc4e3ff3f468a8f84ce43fe3b1a9caac2c26839",
+      "bytes": 2632
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/README.txt",
+      "sha256": "4e51d46fdae192a1a8cad6ee875923cea5840847f45dd4edbf78def8e54166b7",
+      "bytes": 8041
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/real-source-census-v2.json",
+      "sha256": "484c444c85d1a98fa6dd210f8419b8081942487ecf6370816cea3446d894f7d8",
+      "bytes": 1973145
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/real-source-census.json",
+      "sha256": "67b39b112fdf3dc48a923e4ecd8e0fd4372751c750a3215e2a1bac9b04d527bc",
+      "bytes": 4045
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/rules-compatibility.log",
+      "sha256": "4921f35ef892280777a7102131a42cd0df29d40a235c67f6fb26e3cd0f3ab74b",
+      "bytes": 1925
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/tests-accepted.log",
+      "sha256": "4622ba26793ec03bca800f4a326c07a0de3258db215a214693cfee3d888b141c",
+      "bytes": 851
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/tests-final.log",
+      "sha256": "b890b78e25b8b775f23a32e9d774f8a5bea0e878c9119be1a608cebf56914d8c",
+      "bytes": 2700
+    },
+    {
+      "path": "research/skirmish-20261016-settlement-completion/tests.log",
+      "sha256": "41b514308709ef2a2ff18a403592ab8fd757ef500e3e7c4adda10515b786a406",
+      "bytes": 3529
+    }
+  ]
+}

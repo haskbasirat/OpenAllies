@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "status": "accepted bounded independent review",
+  "author_findings_sha256": "8972f0374d93845b8408412eb719b1e0cc7494463aac1d68bdbd2bda7228c65a",
+  "source_pins_preserved": {
+    "crates/aa-runtime/src/fx_graph.rs": "5a2a350d74a98881a6fcf2f252d5a278ecb821a6e891dc20e73e4ccc8ca4f326",
+    "crates/aa-runtime/src/fx_graph_actor_state.rs": "738ad5e94de64aaa527d44d65d686a256e76ec729b5b5ad967216741816ee4b1",
+    "crates/aa-runtime/src/fx_graph_actor_state_tests.rs": "287c3aa15b69244192a2a469d52d695d53cbe0ed7c4659708d36e590b7029916",
+    "crates/aa-runtime/src/load_actor_state_fx.rs": "a0bb76c5d64ebc5de50c1c37bf3fb99a1252ac3f4aeac1268b3e5812c7452b30",
+    "crates/aa-runtime/src/load_actor_state_reentry.rs": "fd0b0ff379096ce305d19718f3e1549a82674173c7047e345de78df0126f027b",
+    "crates/aa-runtime/src/load_actor_state_reentry_tests.rs": "b1447ac4006e62389d88478f5d50b22ecab60cac80cec48794d90610a75c0ae7",
+    "crates/aa-runtime/src/load_creation_fx.rs": "5c873f79fc6b614d94e4daaf1d8c8b7b190b2ca631c6f7d0393f941d84e5b29e",
+    "crates/aa-runtime/src/fx_graph_tests.rs": "701dd9da72033f3aef33dce120a14516a8ae53a095a12a78c2c57bed7cf566d0"
+  },
+  "fixture_pins_preserved": {
+    "native-actor-source-boundaries.json": {
+      "sha256": "c490c89e13bfa93987222a2f83754d12d2a62a7b1b60ad953def4776bc583c67",
+      "native_executions": 60
+    },
+    "native-actor-state-fx.json": {
+      "sha256": "6bba0e8e906485a1b213c1116c5f409212b7a6d3e5d798f8337e818d10ea676e",
+      "native_executions": 3456
+    },
+    "native-actual-actor-state-fx.json": {
+      "sha256": "c2ee4ca3ebd71a8db9218d80b8d58409e047ff4fa05ccc4d6a847176c410985b",
+      "native_executions": 510
+    },
+    "native-vfx-active-source.json": {
+      "sha256": "9019bcab81c53ff8ca635772e3a2a259b86f1294a304dbd63648300c7b60e1e6",
+      "native_executions": 288
+    }
+  },
+  "validation": {
+    "fresh_read_only_native_executions": 4314,
+    "native_logs": {
+      "native_actor_state_fx.log": "d153c529185787e9eb11d65e2af32b3f481c650b6082ff32e0a9099ca183dcd3",
+      "native_vfx_active_source.log": "03a007c93a5406011f777449838fc47f500cace14c2b97c58fbafdfcc2be64b3",
+      "native_actor_source_boundaries.log": "7f58ba1d573a98986cb93cca4917f99da59ceff8d7db188fba27ef520234cb06",
+      "native_actual_actor_state_fx.log": "effc6cd99b62477b9b18f5dfcfcb90cf3af5ae0028b56a15b8cffc45cd47402e"
+    },
+    "warm_rust_tests": 3,
+    "warm_binary": "target/s-graphics-review/release/deps/aa_runtime-fd2adeaf3ba2ff05.exe",
+    "warm_binary_sha256": "b03235af4305c8158a950abc3658aeb862417795f5006bd33a9390fae3a997fd",
+    "warm_test_log_sha256": "9bf6e127bf94ddd2cf0e59e72be5834341836e40396bc2529c8c1c9c7883aff6",
+    "no_cold_build": true,
+    "pin_audit_sha256": "8eb051d2d83cf7616fc7d6587ad6d6c5a0604a63a00d1e5df8b1923d2af76c99",
+    "unique_recorded_pins": 902,
+    "unique_executed_instruction_pins": 899,
+    "observed_cutoff_entries_not_executed": [
+      "0x464fe7",
+      "0x465007",
+      "0x494fa0"
+    ]
+  },
+  "static_review": [
+    "Fresh Actor Enter compilation context; entire root-list compilation precedes concrete-state42 validation. Enter->Leave native call copy direction is preserved as separate unported scope.",
+    "Bound source precision is distinct from live execution; canonical provenance held through non-Clone matched Arc capability; publisher validates actual held record/definition before using same presentation owner.",
+    "Active-only predicate before state read, PlaySfx false leaf, permanent-before-duration flag and first-match early return agree with native finite typed source proof. Required getter failures stop without later lazy reads.",
+    "Current position is read before mute; creator/currentThing/actualOSidentity/selected clock precede required B28114 global position. Same real queue owner receives successful command only. Missing global/appView/delivery/destruction services remain errors."
+  ],
+  "limits": [
+    "No full ActorData LoadData, WhenLeave compiler or synthesized StopVFX consumer claim. Actual native copy direction is Enter+194 ->Leave+19C, not reversed.",
+    "Positive state event requires actual B28114 global target position, actual View clock on app thread, attached View delivery/destruction; missing required callbacks remain errors.",
+    "Native fixture allocation/identity/OS/getters/enum lookups are explicit seams; complete source parser and VFX registry service bodies are not claimed by new fixtures.",
+    "Finite typed VFX source duration only; class1 iff permanent equivalence does not certify other full VFX classes or loading services.",
+    "No battle/movement/combat/audio playback/render/network readiness claim.",
+    "Fresh replay reuses frozen declared laboratory producers; independent PE/decode audit and static source review add separate checks. No independent native Windows application execution or positive event playback claim.",
+    "Native observed cutoff instruction bytes are verified but excluded from executed-instruction counts; fixtures retained without alteration.",
+    "This review does not certify full ActorData/VFX loading, every derived VFX class, native allocation/unwind/reentrant lifetimes, unknown required services, or battle readiness."
+  ],
+  "retained_attempt": "pin-audit.log preserves an initial wrong local import root; pin-audit-v2.log is the corrected audit, no producer/source/fixture edited."
+}

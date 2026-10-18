@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "frozen": true,
+  "accepted_bounded_refresh": true,
+  "blocking_findings_in_scope": [],
+  "scope": "Actual held ActorInit Denizen569E40 and Organization5788B0 refresh bridges only; not full component InitExisting, PostCreate, world startup, ordered tick or playable battle",
+  "apis": [
+    "load_denizen_value_refresh::refresh(catalog,&mut Record,live_pc)",
+    "load_organization_value_refresh::refresh(catalog,&mut Record,live_pc)"
+  ],
+  "ownership": "Same real component Boxes temporarily removed and restored on Result success/error; previous scalar stores retained. No cloned shell/list, success-only copyback, or panic/unwind claim.",
+  "source_pc": "Current held source/proof/factory validated against completed Bank source identities and source_precision. Layout, component masks and source health use that PC. Arithmetic receives separate live PC.",
+  "legacy": "Original public saved_organization_combat::recompute unchanged; new private recompute_at_source used only by concrete immediate wrapper.",
+  "validation": {
+    "cargo_production_build": "production-build-current.log passed",
+    "current_cargo_unit_build": "current-unit-replay.log passed1 test with actual test ignored; frozen binary then final replay2/2",
+    "final_rust": "final-immutable-unit-actual-replay.log passes2/2, capture env unset, all141 synthetic native rows plus real tutorial02 allocations/all3PC",
+    "denizen_native": {
+      "pairs": 141,
+      "executions": 282,
+      "executed_pins": 102,
+      "successful_seams": 0
+    },
+    "actual_native": {
+      "pairs": 6,
+      "executions": 12,
+      "executed_pins": 98,
+      "successful_seams": 0
+    },
+    "actual": {
+      "map": "Campaign/tutorial02.RMP",
+      "denizen_owner": 7742,
+      "denizen_source": "usa_airfield",
+      "saved_slots": 6,
+      "positive_source_contributions": true,
+      "organization_owner": 4099,
+      "organization_source": "regiment_usa_hq_infantry_unpacked",
+      "observed_member_slots": 5,
+      "observed_org_current_max": [
+        0,
+        0
+      ],
+      "source_pc": "Double53",
+      "live_pcs": [
+        "Single24",
+        "Double53",
+        "Extended64"
+      ],
+      "fault_probes": "missing canonical Denizen target / missing Org layout with first slot explicitly null retain reset prefix and same Box; all test input fields restored"
+    },
+    "independent_review": "independent-source-review.json covers bounded source/ownership/native replay; does not claim fresh Rust/actual map execution"
+  },
+  "remaining": [
+    "Performer57E430 positive evaluation needs actual runtime variables/settings/CRT/stream and positive property instance owner; frozen source-phase snapshots cannot replace them",
+    "Settlement585650 lacks typed restored component storage; zero source census does not authorize reached no-op",
+    "Other component InitExisting/AfterInit, publication, startup, simulation and full battle acceptance remain root integration work",
+    "Finite supported numeric domain only; actual other held occupants and malformed/non-Actor resolutions remain explicit required errors"
+  ],
+  "prior_failed_attempts": "Earlier failure logs retained, superseded by current Cargo build and2/2 frozen replay; no failed result is counted as passed",
+  "preservation": "No original assets/executables/release or Cargo manifest/lock changes by this agent; existing saved module before-copy retained",
+  "all_jobs_reaped": true,
+  "production_sources": [
+    {
+      "path": "crates/aa-runtime/src/load_denizen_value_refresh.rs",
+      "bytes": 8326,
+      "sha256": "88f5826a11693b90d25a2f766fab58dd8df286ffb75becc8db3cc64b6ca70ace"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_denizen_value_refresh_tests.rs",
+      "bytes": 2153,
+      "sha256": "b80c0c2d33c0d26daa67b7b620a09f99ac03459813f2c2bc4e3a42ec821eca3c"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_actor_value_refresh_actual_tests.rs",
+      "bytes": 12201,
+      "sha256": "fb5b1d9b93f13f1d5a461cbf0879e57bd8711f09602ead1d82274895350670eb"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_organization_value_refresh.rs",
+      "bytes": 1934,
+      "sha256": "f5159aeffadd0472879e362ed063039da4c49c02bdfd0bcd27c256911f641684"
+    },
+    {
+      "path": "crates/aa-runtime/src/saved_organization_combat.rs",
+      "bytes": 8948,
+      "sha256": "5a7a799fe103bc926b2bb51d76812c7cfe6e2f5272943b8487d14f5214221289"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/actual-denizen-value.json",
+      "bytes": 9017,
+      "sha256": "ebf5499296ba73fdb0baf9327056bf8e3104e9e37a933183bbb7fdd15df93953"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/current-unit-replay.log",
+      "bytes": 4442,
+      "sha256": "1ed39344a4641a81fc1abb90fcee805c6928c95919a7f74f6e9f60bd2de373b5"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/final-immutable-unit-actual-replay.log",
+      "bytes": 362,
+      "sha256": "eb7ee28c439bafe44e35ced840cae57d6413333992df8d2bf2c177baf3e4019c"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/frozen-actor-value-tests.exe",
+      "bytes": 36240384,
+      "sha256": "8f155a32d7e72e0b50c5e1e98611545a22a50acb1a4c097a53cafc3e73392366"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/immutable-public-actual-replay.log",
+      "bytes": 216,
+      "sha256": "d753caec809456c6925e77079b13daa22e016b74a2566a013bd55220f2f716f6"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/independent-native-replay.log",
+      "bytes": 149,
+      "sha256": "42f08bf0e369bb24e633bbb2d7e2670d912954a8a6b97a7022682c5e0991d3cb"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/independent-source-review.json",
+      "bytes": 3547,
+      "sha256": "779f947d7a478928aaf20861d1c99c97df541317e3e91bec786c66c0c80a9791"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-actual-generate.log",
+      "bytes": 145,
+      "sha256": "518a43b3638c3b7b6a76bfd6789f191db2e60cbddaef5c92bb6658bb015ca1c8"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-actual-replay.log",
+      "bytes": 145,
+      "sha256": "518a43b3638c3b7b6a76bfd6789f191db2e60cbddaef5c92bb6658bb015ca1c8"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-actual-values.json",
+      "bytes": 11808,
+      "sha256": "9df850627c4f6f1856876230e56de8b9c897769c471f0398e8a7aea03e873bd8"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-denizen-generate.log",
+      "bytes": 149,
+      "sha256": "42f08bf0e369bb24e633bbb2d7e2670d912954a8a6b97a7022682c5e0991d3cb"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-denizen-replay.log",
+      "bytes": 149,
+      "sha256": "42f08bf0e369bb24e633bbb2d7e2670d912954a8a6b97a7022682c5e0991d3cb"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native-denizen-value.json",
+      "bytes": 195031,
+      "sha256": "24d8981589b32d02e9b88286e726b309d7ee5591874a9f3b1a5a0e11f53c924f"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native_actual_values.py",
+      "bytes": 2684,
+      "sha256": "2305438280efb7f11ee0d37936dae267eb6b0730044cbf0cfbada67ebf68694b"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/native_denizen_value.py",
+      "bytes": 4790,
+      "sha256": "b325816e30fa5d8b938a13a9ec89567a81bb703e5273eeced44a9bc0c9d7ad41"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/production-build-current.log",
+      "bytes": 3188,
+      "sha256": "85016381d1a4aac4347174e90e0d3203046287f54224cdc2a8f383608db87530"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/production-build.log",
+      "bytes": 3396,
+      "sha256": "a8658d19dfd7099e04f44dc2f28c0db0990ea18df392f7abf72b93b3fab723a2"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public-actual-capture.log",
+      "bytes": 216,
+      "sha256": "348c9a9bebf1005816c1e239afba399358ef234412c37796c7cc17c4afb3e71f"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public-actual-compile-v2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public-actual-compile.log",
+      "bytes": 833,
+      "sha256": "0bca98b5a2971f516f1e507c373bb4ebee9dbeb30645a9c3acf83c923c31bc0e"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public-actual-values-test.exe",
+      "bytes": 5812736,
+      "sha256": "75a8caf146392767c09b47c2c6217409c4ad6dccf8509a7c75d2c805d8f69966"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public-actual-values-test.pdb",
+      "bytes": 4403200,
+      "sha256": "b9c53d006ee1628967b9a36af48f7f90b0e84dab9892399fb4f04d33d48af9b4"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/public_actual_test_harness.rs",
+      "bytes": 113,
+      "sha256": "c48db1d8479b521f68637addefcc9c17f5fed17f04527e255ba86b7af4eb060b"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/README.txt",
+      "bytes": 4565,
+      "sha256": "950de39ceee9da6e6360604c84021b4f6012c552308e07c45a7387b49de20868"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/saved_organization_combat-before.rs",
+      "bytes": 7687,
+      "sha256": "23c93394a9325af20396599a3dbea57be3dfad4c93a0ea83dec1c0e020f831ee"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/unit-build-current.log",
+      "bytes": 4230,
+      "sha256": "2f42b8f410f95ec6774d8624cd8c4e9767b61bae04433917553762739f9666ff"
+    },
+    {
+      "path": "research/skirmish-20261017-actor-value-refresh/unit-build.log",
+      "bytes": 8853,
+      "sha256": "d362ccc92ac6bd462b7e015e77bfe6354ff9c4a127c1e0cc296c3957db83a31f"
+    }
+  ]
+}

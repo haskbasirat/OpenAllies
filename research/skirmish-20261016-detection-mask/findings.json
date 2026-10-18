@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "status": "native_fragment_and_required_real_source_regressions_passed",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "addresses": {
+    "fresh_constructor": "4624B0",
+    "zero_ebx": "4624E1",
+    "store_control_zero": "462677",
+    "loader": "464BD0",
+    "detection_fragment": [
+      "465011",
+      "465089"
+    ],
+    "control_compare": "465061",
+    "remote_compare": "46506E",
+    "clear_bit22": "46507B",
+    "later_defender_control_store": "4657CA"
+  },
+  "condition": "Clear bit22 iff current+218 <=0 AND retained remote <=0, both ordered. Fresh+218 is constructor0; Defender is loaded later.",
+  "observed_windows": {
+    "capture_sha256": "dcd61117e17730cd02ce62d27452b98867e3b0675f8e7a2a008f0d63f35f7df6",
+    "precision": "Double53",
+    "control_word": 639,
+    "mines": [
+      {
+        "ids": "minefield",
+        "flags_174": 1090145,
+        "fields": {
+          "1e4": 0,
+          "30c": 0,
+          "36c": 0
+        }
+      },
+      {
+        "ids": "beach_mine_pole",
+        "flags_174": 1090145,
+        "fields": {
+          "1e4": 0,
+          "30c": 0,
+          "36c": 0
+        }
+      }
+    ]
+  },
+  "native_rows": 2331,
+  "present_rows": 2304,
+  "absent_rows": 27,
+  "precision": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "required_checks": {
+    "focused-tests.log": {
+      "passed": 4,
+      "test_binaries": 1,
+      "failed": 0,
+      "ignored": 0,
+      "sha256": "668032be939b6afed9657aa036bed87921ca0b114981bb88e014001063f5567e"
+    },
+    "all-rules-tests.log": {
+      "passed": 150,
+      "test_binaries": 40,
+      "failed": 0,
+      "ignored": 0,
+      "sha256": "50d94ce1770ce01ea8a3ffdcb3774f17354cc48ff0ec0779cac61115427ce3e8"
+    },
+    "all-metagame-tests.log": {
+      "passed": 39,
+      "test_binaries": 21,
+      "failed": 0,
+      "ignored": 0,
+      "sha256": "525569cd0894b0a49a81338dbc94f655d319a027220a332aeed58f05d87d799c"
+    }
+  },
+  "profiles": {
+    "focused_detection": "default release: thinLTO, codegen-units1",
+    "all_rules_and_metagame": "release --config profile.release.lto=false --config profile.release.codegen-units=16"
+  },
+  "rust_source_tree_unchanged": true,
+  "rust_source_tree_files": 130,
+  "independent_review": "No independent reviewer acceptance claimed.",
+  "seams": [
+    "5B4410 component lookup returns explicit presence",
+    "5B5130 returns explicit binary32 Fixed values via FLD32/RET4 stub"
+  ],
+  "qualifications": [
+    "Not full464BD0; mask/source projection only, not full loader exception or partial-store parity.",
+    "Fresh mask API only; general nonzero control cases are isolated existing-object branch probes.",
+    "NaN probes validate unordered mask decisions, not sNaN quieting, payload or x87 status.",
+    "Observed Windows masks are PC53; allPC extension is proven by the isolated native fragment.",
+    "No full-battle, multiplayer or arbitrary derived-definition/reload claim.",
+    "Full CV v3 source/regeneration is owned by settlement_completion, not silently substituted here."
+  ],
+  "files": [
+    {
+      "path": "crates/aa-rules/src/native.rs",
+      "sha256": "e5ba2bbbf342e9f3bea8c4056e8dfe0f50712db1463bf631a806399cbcf8b25c"
+    },
+    {
+      "path": "crates/aa-rules/src/native_object_definition.rs",
+      "sha256": "b589637077db86fbb2adcc64809ecf83498bf549b9dc80d5912f6df034c53d20"
+    },
+    {
+      "path": "crates/aa-rules/tests/native_detection_mask.rs",
+      "sha256": "f1fa1be94767199a42fe4035b936457c430f54655ea4d680439480fecb32ef72"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/native_detection_mask.py",
+      "sha256": "1d846a259c4ba3594c3642ae8b6a040522b998f9ce8a1156dae3f4b8dadfef1d"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/native-detection-mask.json",
+      "sha256": "81720ae630567549d42904354874bf2d568a52b68846d73d3112d95799c0d797"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/write_findings.py",
+      "sha256": "bd4e26ffe60c93b06047ec08d689958689126482bbadbbe2d77d7aaf5826fd28"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/constructor-218.asm.txt",
+      "sha256": "21033a883cd1982d414a9c7f88e4ddd5eaa7fe31571f97de34c2e12a08b24400"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/detection-block.asm.txt",
+      "sha256": "77e3e1795030d2486e519e8226cae86bba671c228caf527956ed181951a611d8"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/native-proof.log",
+      "sha256": "85502741c0a8ebcaadff484ccdd943b0c4e08d1f448ce7c6d782acd6274ee34d"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/README.txt",
+      "sha256": "b7e9b0d6cb3df0eca9f63ef80c86a6ca9dddfc9a0227ddc25249bf142fb32c25"
+    },
+    {
+      "path": "research/development10/native-source-capture-03/capture.json",
+      "sha256": "dcd61117e17730cd02ce62d27452b98867e3b0675f8e7a2a008f0d63f35f7df6"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/backups/native.rs.before",
+      "sha256": "7097b7089334316ce9485daa17b418d3ca77e8417b112fd6c71d7bffabe4427e"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/backups/native_object_definition.rs.before",
+      "sha256": "4dffa05b02cd68cb286e9181292912b293624c2b1c0d14a2d3fc80f973eff159"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/final-source-tree-before.json",
+      "sha256": "faca7bb64ad2c90658216602b5bbf328eef387b3e0576ef13acdd16f097cfdbf"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/final-source-tree-after.json",
+      "sha256": "6fa578d9f270492acb7bcaadf282638b5a5e905592a1a0c97f68dad7e28dfca7"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/all-rules-tests.incomplete-before-source-freeze.log",
+      "sha256": "dbbdd54f0fad04bac4c464a712c5acd4320bfb67926a56f6b619e9cc0cb9fe59"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/aborted-before-source-freeze.json",
+      "sha256": "8b3d618d3834e4fbd20646de36a7d13240906671c1164d02b74aeab83674cac4"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/all-rules-tests.earlier-source-root-guard.log",
+      "sha256": "69bac00a9d02b674ec6f65dea8061def5b6d5df40f3751ee6cb4ae5ee8123f9a"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/source-tree.before-latest-root-guard.json",
+      "sha256": "61d4407e07464d06020c7cca7326b9d352c5f6b23b77d40298ddd78998ba0a24"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/focused-tests.log",
+      "sha256": "668032be939b6afed9657aa036bed87921ca0b114981bb88e014001063f5567e"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/all-rules-tests.log",
+      "sha256": "50d94ce1770ce01ea8a3ffdcb3774f17354cc48ff0ec0779cac61115427ce3e8"
+    },
+    {
+      "path": "research/skirmish-20261016-detection-mask/all-metagame-tests.log",
+      "sha256": "525569cd0894b0a49a81338dbc94f655d319a027220a332aeed58f05d87d799c"
+    }
+  ]
+}

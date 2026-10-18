@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review_and_source_binding",
+  "native_sequences": 40,
+  "native_transitions": 280,
+  "rust_tests": 2,
+  "clippy": "passed, scoped no-deps",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "ranges": [
+    {
+      "name": "replace",
+      "address": "0x4e0f00",
+      "end_exclusive": "0x4e0fa0",
+      "sha256": "1c98f43141da8f24e0379aa599b9aa805bb1ded68cac1e88b34fd86714f76f10"
+    },
+    {
+      "name": "constructor",
+      "address": "0x4ce1d0",
+      "end_exclusive": "0x4ce310",
+      "sha256": "2f4f1095f706e559f322df221157edc3eb7c35db2186615349bb66cc0bdec354"
+    },
+    {
+      "name": "destroy",
+      "address": "0x4ce310",
+      "end_exclusive": "0x4ce3a0",
+      "sha256": "3c6fc867041301bfb6f5cd66c70ce6797cf8226edd4f6255c3e0ac103b1b3c26"
+    },
+    {
+      "name": "load",
+      "address": "0x4ce0b0",
+      "end_exclusive": "0x4ce1d0",
+      "sha256": "515a77025f6d5fc41cd74d4b750d4659feddb428969b9d1a5589bf3b121956e1"
+    },
+    {
+      "name": "ability_load",
+      "address": "0x4c8b40",
+      "end_exclusive": "0x4c8c20",
+      "sha256": "2367b4aae6d33b993162585c419492ad5a87fa1af600379349c2d268c35e561a"
+    },
+    {
+      "name": "saved_node_new",
+      "address": "0x4d0900",
+      "end_exclusive": "0x4d0940",
+      "sha256": "b428e00653e15434afdfbe29a9798c54e04af84dacf654624ca248e2a91dcd04"
+    },
+    {
+      "name": "faction_data_load_observed_not_ported_here",
+      "address": "0x48bae0",
+      "end_exclusive": "0x48bfb0",
+      "sha256": "7434808de43aa6e79620d65a444939833522c43faace2b888cfc47ec0ba0055e"
+    }
+  ],
+  "files": {
+    "../reconstruction/tools/map_extract.py": "80d32fef83c050f30e1e9a5802873415feb50f5b2bd5be4c1dcdea3b5af59251",
+    "crates/aa-combat/src/ability.rs": "0d2d24ad39ef21b0be07f26326518e6f8e6abd593f1569d7dd83144607be7e52",
+    "crates/aa-combat/src/commander.rs": "6dc2bab83f8ef1a07be67367a3928ef4d4f9387a3022cf853a3adad1d95ddbd2",
+    "crates/aa-combat/src/constructors.rs": "8d126405b02065ffe08073ab82cbca2dae3a963361c4febe92989bbb1e8bc436",
+    "crates/aa-combat/tests/native_commander.rs": "c224239ff4ab6fdc406b9b6801cf5d978309e512d96fe4b5b281c05e3a0c00fd",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-commander/README.txt": "6ad2eec0d1580aa329932d9bac2de4704cf55a08bb1e7d081313dcdc9a98a61f",
+    "research/phase7-commander/ability_load-asm.txt": "504d4ceaafcbdc5bf30f30b2f155ba7cdc15644a6530ea3105adc399ecb8f45e",
+    "research/phase7-commander/clippy.log": "a21e389aab72fa3b0db1a68416fbaf08d55516bca7c7a022a441664c8b3fa983",
+    "research/phase7-commander/constructor-asm.txt": "8d149839ffc6dde04da0796073b155ea0e525c92330c09a67acd0f1a3a168d6d",
+    "research/phase7-commander/destroy-asm.txt": "33dfc8cd054a845183a4fa6b92a534b618f709fe26cbbea63ce2a82b66aed0f2",
+    "research/phase7-commander/faction-loader.asm.txt": "cd145abde699dc44a379eec906b7d4b826494424a71012a5eb94d277bc54e33a",
+    "research/phase7-commander/faction_data_load_observed_not_ported_here-asm.txt": "6e1569a44687a8dd23045bcb2995e1255bdf4a10bba80dfb386e8296fcdc2d17",
+    "research/phase7-commander/load-asm.txt": "e9431303a85d896be14d6ebbaa3ab48ebe84321683c69777368e59db1adf5f41",
+    "research/phase7-commander/native-commander-fixtures.json": "81ec3455bf045de2316ed12737bf282a4ca37506db363c5c8cff2816ff00577c",
+    "research/phase7-commander/native_commander.py": "6f28afce43ad400c06e16db538891d0dc39762b4b40c3c266d068ea88090ff79",
+    "research/phase7-commander/replace-asm.txt": "361f45569ae9fe3b5966966c5802edecf0c39defc7dcb8964c41f44221fbcd68",
+    "research/phase7-commander/saved_node_new-asm.txt": "342e3aaa4e050d7fa80514285424332068acd4ab3ea1b98a7b6ddb8e34f2a1c5",
+    "research/phase7-commander/tests.log": "4008fde5b77f274f3358ac5934b523096b80cbe5ea657a06d24c70fabb60ed65"
+  },
+  "limits_reference": "README.txt"
+}

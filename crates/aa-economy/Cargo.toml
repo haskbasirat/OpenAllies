@@ -1,0 +1,16 @@
+[package]
+name = "aa-economy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license = "MIT"
+description = "Native-evidence resource arithmetic laboratory, not a complete economy simulation"
+
+[dependencies]
+serde.workspace = true
+num-bigint = "0.4"
+num-traits = "0.2"
+
+[dev-dependencies]
+serde_json.workspace = true

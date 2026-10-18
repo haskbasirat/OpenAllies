@@ -1,0 +1,39 @@
+45F240 snapshot-list append proof, 2026-10-16
+==========================================
+
+native_snapshot_list.py executes original and v14 45F240 with valid initial
+lists of size 0, 1 and 2, then three successive insertions per case. Five
+scenarios include duplicate values, duplicate existing values, null values,
+and FFFFFFFF. All 30 original/v14 insertion calls agree.
+
+Observed behavior:
+- Empty list: the allocated node becomes both head and tail.
+- Nonempty list: the previous tail's next pointer becomes the allocated node;
+  the header's tail becomes that node, whose next pointer is zero.
+- The original head remains unchanged once the list is nonempty.
+- Traversal order is exactly initial values followed by insertion chronology.
+- Duplicate values create separate nodes; there is no deduplication or sorting.
+- Every step records head, tail, allocated-node identity, and traversal values.
+
+For example, starting [33333333,44444444] and inserting 11111111,22222222,
+11111111 yields:
+  [33333333,44444444,11111111]
+  [33333333,44444444,11111111,22222222]
+  [33333333,44444444,11111111,22222222,11111111]
+All values above are hexadecimal words.
+
+Runtime consequence: append new snapshot records to the chronological vector
+with push; inserting at index zero reverses the original list order.
+
+Only seam: cdecl operator new at6F7810 returns fresh8-byte memory filled with
+A5. No getter, insertion, link write, or input read is replaced. The protected
+phase8-ai/native_machine.py guards null dereferences. All 36 executed native
+instruction byte sequences match between original and v14 executables.
+Allocation failure and malformed initial list invariants are outside this
+fixture scope. No Rust production or native game files changed.
+
+Fixture: snapshot-list.json
+SHA256: 4aa672ad7e1747120e431ac9ed1165d33707a343ec21f294f615769ac2ba7a93
+Generator: native_snapshot_list.py
+Original: 5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26
+v14:      3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1

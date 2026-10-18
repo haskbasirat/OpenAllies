@@ -1,0 +1,69 @@
+AXIS & ALLIES RUST -- DEVELOPMENT 08 TEST BUILD
+
+This is an unfinished native Rust reconstruction with the original front end
+and an asset viewer. Complete battles, playable AI, campaigns, original-save
+loading and multiplayer are not available in this executable.
+
+START HERE
+Open AxisAlliesRust.exe for the original main menu. This build includes the
+recovered nation parade videos and globe animation used by the menu.
+
+Use Start Asset Viewer.cmd to open the Maps, Models and Animations browsers.
+Use Start Live Preview.cmd to open the isolated infantry preview directly.
+The menu's Editor entry also opens the asset viewer; it is not a map editor.
+
+WHAT YOU CAN TRY
+- Original menu layouts, Single Player menu navigation, options and credits.
+  Requests that would launch an unfinished match or campaign are disabled.
+- Menu music, UI sounds and audio volume controls when the recovered audio
+  files and a working audio output device are available.
+- Original map/model inspection, including clicking map objects to inspect
+  them. These clicks do not issue gameplay commands.
+- Live preview: USA, Britain, Germany, Japan and Russia infantry; original
+  Idle/Jog/Attack1/Die1 clips; playback, pause/restart, visibility, team color,
+  position and facing. These are diagnostic preview controls, not a battle.
+- Viewer WASD/arrows, mouse-wheel zoom, Home/End zoom endpoints, Q/E model
+  rotation, UI scaling and F11 fullscreen, as applicable to the selected view.
+
+The options dialog is part of the reconstructed front end. Its presence does
+not mean every original graphics, network or gameplay option is connected to
+an implemented runtime. Read VALIDATION.txt for this exact build's checks.
+
+NEW ENGINE WORK AND ITS LIMITS
+Additional original-machine-code ports and regression repairs exist in the
+source workspace, including runtime restoration and metagame systems. They
+are not connected as a playable game mode in this client. Do not interpret
+backend tests or a rendered map as proof of a complete match or original-game
+parity. Remaining animation, lighting, water, shadows and renderer parity gaps
+also remain under development.
+
+ASSET REQUIREMENTS
+Keep this release folder inside the existing Axis and Alies installation and
+keep assets-cache beside the executable. The application discovers the external
+reconstruction folder by looking through its executable/current-directory
+ancestors. You can specify its absolute location with --assets.
+
+The installation still needs original Data.rwd beside reconstruction and the
+recovered assets inside reconstruction: map catalog, original and converted
+maps/models/textures, animation sources, UI/localization/fonts, accepted
+runtime-expanded-v14 overrides, and Skins/Music/Speech assets for original art
+and audio. Menu video frames and audited rendering/animation cache files are
+included in this package; the complete recovered installation is not.
+
+The ZIP is not a standalone full game for a PC without those recovered assets.
+This release does not replace original game files, saves, profiles or older
+Development releases. Rust settings use the separate location
+%APPDATA%\AxisAlliesRust\settings.json.
+
+TECHNICAL
+64-bit Windows executable, Direct3D 12 and Vulkan via wgpu.
+Examples:
+  AxisAlliesRust.exe
+  AxisAlliesRust.exe --viewer
+  AxisAlliesRust.exe --live-preview usa_infantry --clip jog --time 0.5
+  AxisAlliesRust.exe --backend dx12
+  AxisAlliesRust.exe --backend vulkan
+  AxisAlliesRust.exe --assets "E:\Games\Axis and Alies\reconstruction"
+
+manifest.json records packaged file hashes. VALIDATION.txt and evidence contain
+the exact executable hash, checks actually performed and remaining limitations.

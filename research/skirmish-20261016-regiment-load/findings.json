@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-16",
+  "scope": "Saved Regiment Mind decoder v0..21 and contextless applicationv0/v1; v2+ application explicitly unsupported pending real owners.",
+  "native_cases": 266,
+  "real_map_cases": 0,
+  "native_addresses": [
+    "0x526260",
+    "0x528c20",
+    "0x521c30",
+    "0x52c580",
+    "0x52d2c0",
+    "0x4c2d90",
+    "0x4c2e60",
+    "0x51fe60",
+    "0x522e60"
+  ],
+  "tests": {
+    "regiment_saved_load_native": 2,
+    "saved_commands_native": 4,
+    "saved_load_native": 1
+  },
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_seams": "Execute original Regiment constructor526260, state list521C30 and Load528C20.\n\nAll read/version gates, sorted engage insertion51FE60, linked lists, path52D2C0,\njoin vector growth522E60 and formation-index reader4C2D90 execute originally.\nSeams inherited: stream byte source, CString storage/read, allocator/free and\nnamed definition registry lookup. Stream mode+14 explicitly returnsfalse to\nselect native saved-input mode. Worldtime and actual formationtable are supplied\ninputs, not reader seams. Zero ordinary memory accesses fault. Original andv14\ninstructions are checked equal. No FPU arithmetic occurs in this Load.\n",
+  "still_required": [
+    "worldtime word B36534+E0",
+    "Organization LayoutData formation references",
+    "ActorData and CString reference owners",
+    "tracked/path/engage/join runtime owners"
+  ],
+  "files": {
+    "crates/aa-mind/src/regiment_load.rs": "7146db0c7513b7b7b8e201e66e61dd534f093cc3bd3afe97cf63658671d4bdbf",
+    "crates/aa-mind/src/saved_load.rs": "394f25f71b6364897542ed29dc394b4ca51e33f6c9202fbb17ef6121c6b485c5",
+    "crates/aa-mind/src/lib.rs": "44e6ab17cec0af029e4e0bc3b7a5a896100e9639f2f5d5cddedfbded20377b02",
+    "crates/aa-mind/tests/regiment_saved_load_native.rs": "473661cb37c9e5907ab0072b746f40f2efca4f2cd53e1d9273f1ef8525229bf1",
+    "crates/aa-mind/tests/saved_commands_native.rs": "a1075dddfa02dddc81081e551afe37ecf711b2e7c467a1bcf253814587ba3073",
+    "crates/aa-mind/tests/saved_load_native.rs": "17236911d8b15a84564f9c74d2ec3728951c065bd1bfad691aa78d38b4f49953",
+    "crates/aa-runtime/tests/saved_payload_probe.rs": "cf86a56bd1311a31475c757ed6aaea91fc54e71bdc1cb23454c071276ad8218f",
+    "research/skirmish-20261016-regiment-load/load-instructions.txt": "d27b1c7bd03a2d668dc29ca6c79bb631b1ef5815bbd4663ac21b1101a6b976b8",
+    "research/skirmish-20261016-regiment-load/native-regiment.json": "f0530a2f8371cb30e265238347ae5ac56a333efd6095a1253c912d812fcfb1aa",
+    "research/skirmish-20261016-regiment-load/native_regiment.py": "f16b92ac7a236d456338b87803c9142e713cbb0b0727b6fd1d8d154f91813597",
+    "research/skirmish-20261016-regiment-load/README.txt": "a2ad5067cf1ca927dff68da2f585297c75e203e3a7eb6590d3a7b305f38e03ff",
+    "research/skirmish-20261016-regiment-load/tests.log": "90875732e7e72dc187f815bcf9646a9a3bd5a406b41c25cdd30d6973a9e2aa76"
+  }
+}

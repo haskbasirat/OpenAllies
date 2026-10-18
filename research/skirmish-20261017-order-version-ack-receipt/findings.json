@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "status": "author-frozen bounded actual receipt coordinator and same-owner byte bridge",
+  "predecessor_findings_sha256": "305e5d1a7db244f678a16af7660328425c43bda441988d4f731ddbff10985f16",
+  "native": {
+    "images": [
+      "original",
+      "v14"
+    ],
+    "pc": [
+      24,
+      53,
+      64
+    ],
+    "machines": 6,
+    "rows": 216,
+    "executed_and_required_entry_pins_including_actual_crt": 32747,
+    "handler": "766CF0 ->751FC0",
+    "scope": "Real CRT supplies323/handler; actual null guards,8569A0 reads and client6C store run.7515A0/404F60 are named callback boundaries with exact-value CString output or explicit cutoff, not proved child bodies."
+  },
+  "validation": {
+    "aa_orders_regressions": 44,
+    "failed": 0,
+    "ignored": 0,
+    "receipt_tests": 2,
+    "aa_netcode_production_check_seconds": 52.41,
+    "aa_netcode_all_test_typecheck_seconds": 36.9,
+    "new_netcode_tests": "3 saved/typechecked; root warm execution pending, not counted as passes"
+  },
+  "behavior": [
+    "Direct323 is routed separately through actual Admin host/client/film dispatch; no fabricated template Shape or extra decree/mirror/sync.",
+    "LocalOrderingHost resolves actual SessionPlayer284/client+4 and writes SAME LocalClientBorrow6C=1; local source/session allocation identity checked lazily.",
+    "Native diagnostic missing-player/client branches require actual callback. Positive6C write survives later description or diagnostic errors, and Admin queued packet/284 remain retained on failure.",
+    "Actual remote client6C, positive client-description source pair and diagnostic sink are explicit required children. Next source/transport integration is a separate successor."
+  ],
+  "source_pins": [
+    {
+      "path": "crates/aa-orders/src/version_ack.rs",
+      "sha256": "3e62e87abe36501ce332c44d3cb5b3c9cabd0bad392ee4f94de083fbb89ccf44"
+    },
+    {
+      "path": "crates/aa-orders/src/net/admin.rs",
+      "sha256": "162e9f6a591a78b85d1eb14e4904a532c186b4070107476580dcd74d6559153a"
+    },
+    {
+      "path": "crates/aa-orders/src/net/admin/ordering.rs",
+      "sha256": "d618302d43db7ebea626d884273379bb3c7ed1656d3ed3fbc91b712ccd45deee"
+    },
+    {
+      "path": "crates/aa-orders/tests/version_ack_receipt.rs",
+      "sha256": "ababe9f82979b1230bf673e842da3325068b49364e0a37a9a297a874a2573419"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_version_ack_receipt.rs",
+      "sha256": "81ddfa257cf58bcf0a19ddab157e314ff2302bbdeafeae4f674ce46f3930cfd7"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_order_host.rs",
+      "sha256": "7c2c2e547d2c52887ebfcc93e9dab508b7cf2f2c772dd2eea346803bd725392b"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_frame_task_effects.rs",
+      "sha256": "27b0c76d8e4c0b99a0038a5a4bba7f75c0e1fc8f43ad56f000eb54b220f70d7e"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_version_ack.rs",
+      "sha256": "892142d193bc2e5485e284ec907554ce1f159a76e0e1babb87b923de6dd5ebfe"
+    }
+  ],
+  "evidence_pins": [
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/native_receipt.py",
+      "sha256": "95ad88a3598624c09738d764c9760299ed75e1169bfe88704f894bf9a5bbd3c3"
+    },
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/native-receipt.json",
+      "sha256": "e1da459f1a5b525587a1b99f95ccce3c607205ef4bf07fe3b507d4b38070d49e"
+    },
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/native-replay.log",
+      "sha256": "398b3b7f6cdef86d7c0b30ab5603060b03fffee1874f53498a5e56a6df1cbd8e"
+    },
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/rust-tests.log",
+      "sha256": "7f371117f4306a4349bceb6db217cd83c032a777727c52259d328208fc1a52cd"
+    },
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/orders-regression-tests.log",
+      "sha256": "3e772f1d67c835e069af557f85537be6115012e500d97788b33f0c2199384238"
+    },
+    {
+      "path": "research/skirmish-20261017-order-version-ack-receipt/netcode-tests-typecheck.log",
+      "sha256": "3e96f7cfb06ed4a47164489f14f6bc4710eb225330f23b6e679ba2327cb3c4b8"
+    }
+  ],
+  "production_check": {
+    "path": "research/skirmish-20261017-order-registry-correction/receipt-source-check.log",
+    "sha256": "56f04ca75e50a21a30f2b33789d2a0f7bd077c30747359a38757b789444fcc30"
+  }
+}

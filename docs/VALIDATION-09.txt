@@ -1,0 +1,87 @@
+DEVELOPMENT 09 - ACTUAL VALIDATION, 2026-10-16
+
+Windows x64 EXE: AxisAlliesRust.exe (AMD64 PE32+,21905920 bytes)
+SHA256: db8ceac200346462571bb5135948feff86c5f296e4f020c01e3ed743612a9131
+Release build: cargo build -p aa-client --target x86_64-pc-windows-msvc
+--release --locked --offline -j4. Passed in3m51s;13 existing dead-code warnings.
+This is a diagnostic/asset-preview development build, not a playable battle.
+
+COMPLETED CHECKS
+* Workspace/all-target release compilation passed. Combined scoped source
+  acceptance passed205 tests,0 failed,0 ignored: Actor/Object Init4, combat
+  values/tick6, runtime library29, original/v14 rules127, metagame read/compare39.
+  Export remained disabled. All1179 files in that audit stayed unchanged.
+* Additional runtime regressions passed12 tests: minimal canonical masks3,
+  tutorial attachment1 (all8 membership-prefix probes retained), managed-load
+  ownership3, canonical organization layouts5. Source-input binder3 and the
+  narrow member-state leaf2 passed their author/reviewed scoped checks.
+* Native comparisons cover borrowed combat306, saved storage adapter66,
+  ActorInit(NULL)972, ObjectInit(NULL)306 paired rows/612 executions, member
+  state222. Separate evidence states each explicit seam, test substitution,
+  precision and error boundary. These counts do not certify complete Init.
+* Client diagnostic6 tests passed, including actual Firefight/Kursk sources.
+  Independent client/source reviews and native replays are indexed in evidence.
+* Final EXE passed85/85 command-line checks from E:/Games: bounded world24 and
+  mechanics53 cases, asset catalog, actor/economy inputs and all80 map inputs.
+  Totals:225851 placements,11701 owner refs,7512 resolved nonnull,4189 null,
+  328 Kingdoms and21 Teams. This is input decoding, not completed world loading.
+* Six GPU renders passed on RTX3080: Crete/Vulkan, Corps/DX12, recovered actor
+  animation/Vulkan, infantry jog start/half/Vulkan and half/DX12. Jog poses
+  changed images. Four invalid preview argument combinations were rejected.
+  All six images were inspected; no blank/black renderer output. Full visual
+  parity, every model/texture, FPS and long-session stability are not certified.
+* App-owned UI scripts exited cleanly with isolated test preferences. Original
+  menu1440x900, F11 fullscreen2560x1440 and return, Editor/Maps, filtering,
+  busy progress, completed Firefight report and unsupported Kursk report were
+  exercised and screenshots inspected. Firefight:2386 loaded/0 failed.
+  Kursk:4674 loaded/7 failed, first DynamicThings record4625. Report identities
+  survive selection changes. The diagnostic leaves the rendered map alone.
+  The first combined script's second click used an obsolete coordinate after
+  the list expanded; that image proves selection warning only. A corrected
+  separate Kursk script executed the actual diagnostic. Both records retained.
+* The copied release EXE passed Firefight/tutorial02 JSON diagnostic checks,
+  with explicit mode1/PC53/InspectPartial context and battle_ready=false.
+  From unrelated E:/Games, implicit asset discovery also passed without
+  --assets. Writing a new report succeeded; reusing its path was refused and
+  preserved the previous report byte-for-byte. Candidate/copied EXE hashes match.
+* Ten synthetic packaging integrity tests passed. Staging verifies all1853
+  Development-08 files and1811 cached assets before copying. Final sealing
+  checks exact ZIP members, CRC, sizes, SHA256, source/input drift and EXE ID;
+  an independent checker report is stored outside the archive. Read that final
+  report for ZIP hash and exact payload totals. These are integrity checks.
+
+80-MAP NATIVE RECORD CENSUS
+Managed mode1,PC53,elapsed0 fixture,InspectPartial, fresh stopped scope/map.
+Passed the census diagnostic:80 maps,0 map-level load errors,20 record-clean
+and PostLoad-ok maps,60 maps with796 record failures. Same clean maps, failed
+record identities and PostLoad outputs as the preceding checkpoint; no new
+clean map or regression. Former796 combat-value stops now reach577 missing
+completed ActorData+1E4,151 unported4D64F0 state changes,68 unported579A00
+leader assignments. Init/publication/battle-ready maps remain0. InspectPartial
+continues after errors; later errors may cascade. The GUI/CLI record diagnostic
+does not execute the census's separate later PostLoad operation.
+
+PRESERVED FAILURES AND LIMITS
+The previous Element assertion expected an earlier unbound combat callback.
+After that callback/member-state leaf were implemented, its expected error
+moved to4D64F0. Old failed logs remain; only that expectation changed, and the
+final test passes with all membership assertions intact. Strict Clippy remains
+blocked by existing unrelated lints; no globally clean Clippy claim is made.
+
+NOT TESTED / NOT AVAILABLE
+No complete skirmish, AI, multiplayer hosting/joining, save transfer, separate
+internet PCs, campaign progression or original whole-game save interoperability.
+No actual Windows150%DPI or multi-monitor DPI input test in this validation;
+no audio-listening test, FPS/frametime benchmark or full visual parity test.
+Native-details expansion was not clicked; its JSON is covered by CLI/source
+checks. Immediate per-record Init/PostCreate, real world services, completed
+combat source values, conversion execution and whole-world publication remain
+unfinished. Physical hardware/network/OS limits still apply. No completion
+percentage or finish date is established by this build.
+
+Original AA.exe/v14 AA.exe, saves and previous release are preserved. New test
+preferences are isolated under QA. The ZIP requires external original Data.rwd
+and the recovered reconstruction tree; it is not a standalone game for a PC
+without those assets. Full source/evidence backup remains in the workspace's
+backups folder; the package includes its report and source hash snapshot, not
+the full workspace/source/asset tree. See CHECKPOINT.txt for continued work.

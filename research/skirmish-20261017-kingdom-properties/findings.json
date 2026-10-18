@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "status": "bounded author proof passed; independent review pending",
+  "native": {
+    "rows": 45,
+    "executions": 90,
+    "instruction_addresses": 846,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "successful_property_or_effect_seams": false,
+    "leaves": [
+      "heap allocation/free",
+      "4F0400/504530 exact captured restriction key/profile lookup transport"
+    ],
+    "boundaries": [
+      "50312F missing World time after constructor prefix",
+      "4E3BF5 required Data+10 name/GameEventManager before notify"
+    ]
+  },
+  "rust": {
+    "kingdom": "1/1 immutable passed",
+    "prior_instance": "1/1 immutable passed",
+    "prior_numeric": "1/1 immutable passed"
+  },
+  "actual_preparation": {
+    "map": "Campaign/tutorial02",
+    "actor": 2696,
+    "kingdom": 3172,
+    "source_precision": "Double53 same completed Bank",
+    "live_precision": "all3PC",
+    "add_actor_prefix": "actual4E6180 class insertion; later economy1B8 Init still required",
+    "intrinsics": [
+      "vehicle",
+      "infantry",
+      "hq"
+    ],
+    "grants": "four genuine installed source lists explicitly applied in laboratory; saved2697 list is empty"
+  },
+  "storage": {
+    "same_instances_owner": true,
+    "same_actual_318_vector": true,
+    "duplicate_append_before_disable": true,
+    "constructor_before_duplicate": true,
+    "live_actor_allocation_preserved_on_errors": true
+  },
+  "gaps": [
+    "actual technology_gained GameEventManager/name owner",
+    "actual denial logger/name",
+    "class-list callback mutation needs native node owner; precise post-callback refusal retained",
+    "held-Kingdom derived borrow binding",
+    "post-staging moved-Bank binding",
+    "prior positive Enchantment/Settlement/propagation/FX and numeric Mover/morale/linked-Body boundaries"
+  ],
+  "freeze_sha256": "86b2a3c8a945b6f007fff298d83693294d045679fb8d9a86c13c4239398fd04c"
+}

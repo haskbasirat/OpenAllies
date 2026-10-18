@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Native553CE0 endpoint and rectangle sweep using concrete first-hit geometry and required live policy",
+  "native_cases": 1024,
+  "native_corridor_cases": 255,
+  "rust_tests_passed": 2,
+  "validation": {
+    "passed": true,
+    "tests": {
+      "command": "cargo test -p aa-spatial sweep::tests -- --nocapture",
+      "tests_passed": 2,
+      "exit_code": 0,
+      "attribution": "Executed after native1024-case corpus finished; exec session81879, completion053584. Tool outputs retained in task history; no standalone terminal log saved.",
+      "earlier_attempt": "A prior Cargo compile ran before expanded fixture generation completed and embedded the previous768-case file. Its count assertion failed; after producer completion, the unchanged tests passed against1024 cases."
+    },
+    "clippy": {
+      "command": "cargo clippy -p aa-spatial --all-targets --no-deps -- -D warnings",
+      "exit_code": 0,
+      "seconds": 13.75,
+      "log": "clippy.log",
+      "sha256": "43dfc1b66a7d577110f890536e3d4886334720a29f767eb4b578b653466e3bc2"
+    }
+  },
+  "source_sha256": {
+    "crates/aa-spatial/src/sweep.rs": "6cb6c3af6e258ffdff227126e374a3904c0ce326c0360d8b90f471fea5a72dbb",
+    "crates/aa-spatial/src/sweep_tests.rs": "5fcd2d0ee03bca431f5d2344a74cde3512880fd2792334445f039d1dc18173a4",
+    "research/phase7-spatial-sweep/README.txt": "0de4583db44a8d22193f3595f850b1b967ad63ca0a6099673ebaf27a8a40f7fe",
+    "research/phase7-spatial-sweep/original_sweep.py": "e769a75683872bcdbe5073bb2281c59497b59c3dad93be047c6dd8c75de94d65",
+    "research/phase7-spatial-sweep/native-sweep.json": "cc3aac5b8400e19fae2eb35c169db4f2e596bda40a606e3213950c492aa62a37",
+    "research/phase7-spatial-sweep/validation-record.json": "60d4feac30c0828781a7b1376867895fe5ddff4ece12e4a759dc9efb32ffcf5a",
+    "research/phase7-spatial-sweep/clippy.log": "43dfc1b66a7d577110f890536e3d4886334720a29f767eb4b578b653466e3bc2",
+    "research/phase7-spatial-sweep/record_evidence.py": "ee33a7555f9a47e1c825fd4235ebbe411455fcefb03ead3ea0855be099c5f56c"
+  },
+  "dependency_sha256": {
+    "crates/aa-spatial/src/query.rs": "d917c606ef350677af5c4e5c04279bb3aa9ade63e52cdc49d9b8512b7c59bab3",
+    "crates/aa-spatial/src/index.rs": "031104bf20fa898e8301edfdb5e3277b0de92bffa39ba21b1936d61f49aa6d97",
+    "crates/aa-spatial/src/index_world.rs": "25831b9b0afe32795bfa136fc043343df868c6c7b7d2376ac22d69ec1854f439",
+    "crates/aa-spatial/src/shape_overlap.rs": "c0ec60a9e628c4af9e75b0aef004d2efb192f97ffb39e8a75acdae88a8e16a76",
+    "crates/aa-spatial/src/geometry.rs": "ebe90cc7ada24200bba0c6a5ba4863c834713a6e6f854085c6e5df64bb589932",
+    "crates/aa-spatial/src/collision.rs": "ab66697d768be3c1bfd174e3524bda64922b11769d742b484c2cf752be61df7a",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase7-spatial/original_query.py": "84540a759b9e3def69aada0efa64641b717138fc2216689e575fa5c6bd4e28b1",
+    "research/phase7-spatial/original_index.py": "f268fc14e00552f509ea00434e3126d5cddb6f88414997743ac932d44e88ccb4",
+    "research/phase7-spatial/native-query.json": "4f97f88249f535cea06a2f2a041f54a5fd686710f7af49cd3767fcb39351bd81",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5"
+  },
+  "limits": [
+    "Prepared descriptors and live QueryPolicy services are required;554350 caller context is not replaced by5531F0.",
+    "Original endpoint/constructor/first-hit arithmetic executes natively; allocation and prepared actor policy leaves remain explicit fixture services.",
+    "Finite geometry with explicit PC modes and ordinary immutable shapes; no whole-match or restored-map movement claim.",
+    "Errors retain completed descriptor/world effects; first-hit temporary marks clean up without rolling back prior effects."
+  ],
+  "independent_review": "Pending a separate peer; producer does not self-approve."
+}

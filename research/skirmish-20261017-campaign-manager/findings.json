@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "accepted": true,
+  "acceptance_scope": "Bounded author verification; independent review is separate.",
+  "blocking_findings": [],
+  "api": [
+    "GameAppState::from_native_constructor constructs and privately retains ONE campaign_manager::State and private Arc lifetime witness.",
+    "application.campaigns() returns readonly SAME manager; no public constructor/reset/list setter/Clone.",
+    "State::current_4f1310(&GameAppState) and lookup_411790(&GameAppState,create)->Result<Option<Reference>,String>. name_08/index_14 remain reached required positive getters."
+  ],
+  "behavior": [
+    "Native Application Campaign list belongs outer Application+13C/+140/+144, not a native GameAppState field. Rust lifetime composition retains the fresh application table with that application component; witness is identity metadata only.",
+    "Actual static PE words B397CC/D0/D4 are in zero-filled virtual section tail in both source images. Real CRT9C79C0 calls40CAB0, which stores only Application+30 and leaves table zero.",
+    "GameAppState+C is the actual4F1310 mode source. Nonzero returnsNULL; always-following411790(false) reads actual empty list and returnsNULL before dereferencing requested UserSettings CString.",
+    "Mode0/positive create requires actual6F7810/470970 before any append/resource construction. Error retains SAME empty list; no fake positive creation/load, name or index.",
+    "Private table has no writer/reset in admitted code; changing mode or moving the application preserves same table/witness. Existing manager cannot be reconstructed empty from an arbitrary current mode1."
+  ],
+  "native": {
+    "paired_rows": 42,
+    "separate_original_v14_machine_runs": 84,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_pins": 74,
+    "full_empty_capture_paired_rows": 30,
+    "required_positive_prefix_paired_rows": 12,
+    "successful_seams": [
+      "96CAB0 CRT atexit registration only"
+    ],
+    "real_bodies": [
+      "9C79C0/40CAB0 static Application initializer",
+      "651810/40CA60 actual GameAppState constructor",
+      "4F1310/40CEB0",
+      "411790 empty false lookup and pre-allocation positive prefix"
+    ],
+    "required_stop": "6F7810 entry before allocator body,470970 and append",
+    "explicit_fixture_inputs": "Same real651810 allocation installed at Application+FC using independently inspected40CD68 source instruction. Direct mode edits and poisoned requested/settings pointers are test inputs; not full40CB40/Application/console startup.",
+    "fixture_sha256": "e253f09bfc069b6eede06972bab640fd9f7d10d0f54d70586e2b62198d60a6ad"
+  },
+  "rust": {
+    "author_build": "PASS3m00s",
+    "campaign_tests": "PASS2/2,0.01s",
+    "existing_application_regression": "PASS2/2,0.00s; previous constructor/651840/native270-row/error-prefix fixture preserved",
+    "coverage": [
+      "all42 native empty-query/prefix rows",
+      "same owner across moves",
+      "different/dead application refuses before null success",
+      "positive failed producer leaves table empty and later false lookup genuineNULL"
+    ],
+    "frozen_binary": "frozen-campaign-tests.exe",
+    "frozen_binary_sha256": "e056c56f8de93a6cb81da465a77fe53cd796de920b73102623e7399ba676db70"
+  },
+  "limits": [
+    "Fresh application lifetime domain only. Retain actual GameAppState once at app bootstrap; do not replace it per map/session to reset outer static Campaign storage.",
+    "No globally immutable Campaign table claim. Native positive campaign allocation/load/list writers remain required, not no-ops; future bindings must mutate SAME retained manager.",
+    "Application+FC installation is a proved-source fixture store, not execution of full40CB40 initialization. Ordinary constructor/field/effect baselines remain separately verified.",
+    "No Campaign gameplay, full Header capture/serialization/film resource/battle/multiplayer readiness or percentage is claimed."
+  ],
+  "preservation": "New Rust/evidence and authorized additive GameAppState private identity/owner only; prior public mode values/flags/services unchanged. No original game,assets,saves,releases,manifests,lock writes."
+}

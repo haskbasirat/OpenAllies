@@ -1,0 +1,24 @@
+DEVELOPMENT 08 VALIDATION -- 2026-10-16
+
+Executable SHA256: 3d4e80d8aa8fcaf92915c5867b6e390551608f227e65047e12a7f5e3ad6f053e
+
+Passed: Windows x64 release build; all-workspace/all-target compilation;
+51 aa-ui tests; 85 packaged-EXE diagnostics including all80 map inputs;
+six GPU render smoke cases across Vulkan and Direct3D12; four rejected
+invalid command lines. The release build retains13 dead-code warnings.
+
+Five GUI runs exited normally. Screenshots reviewed: original main menu,
+changing movie frames, F11 fullscreen at2560x1440, options, disabled
+Single Player match entries, credits, and Editor opening the asset viewer.
+GUI tests used an isolated APPDATA directory and did not change user settings.
+
+Native source integration and the80-map restoration census are documented
+in evidence/docs/CONTINUATION-20261016.txt. These backend systems are not
+connected as playable game modes in this EXE. Original and v14 AA.exe
+and Development07 EXE/ZIP SHA256 hashes remain unchanged.
+
+Not established: complete battles, AI/campaign, original save loading,
+multiplayer, full original visual parity, or performance improvement.
+Not retested: actual Windows150% DPI, audio listening, second-PC/internet.
+The ZIP requires the existing recovered original assets outside this folder.
+Manifest and evidence pin this exact build and the completed checks.

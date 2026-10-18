@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "scope": "Concrete saved Performer57E000->57DCF0(NULL) and typed4B2830 AfterInit; actual tutorial4097 EMPTY primary list, not whole Actor/world/battle readiness",
+  "frozen": true,
+  "production": {
+    "crates/aa-combat/src/performer.rs": "4125716dcb102088cca9543cce991ae26ea26fd783b25779eb8d03ce3b273565",
+    "crates/aa-runtime/src/load_performer_init_world.rs": "29a8dd7e3369ec5d65d3f25398f54df1031170ce5c8dfe1590fe6babdc314c98",
+    "crates/aa-runtime/src/load_performer_init_world_tests.rs": "a0164b02cb97bbbc49d867d79643fc2c5592bb6b7cfbff413a6536f8fd87ac2b",
+    "crates/aa-runtime/src/load_actor_init_world.rs": "9394340baa0f5e470d633199b59f0c1f446ce4035315a0ac77ce87a7b108a57b"
+  },
+  "native": {
+    "paired_rows": 144,
+    "separate_original_v14_runs": 288,
+    "executed_pins": 87,
+    "inspected_data_source_pins": 6,
+    "stopped_boundary_pins": 1,
+    "successful_seams": 0,
+    "changed_byte_required_tail_rows": 33,
+    "sha256": "51343487aab07ec203a47a3e944da942ce763caad535cabe865f62ffa00e0a3f"
+  },
+  "actual": {
+    "owner": 4097,
+    "definition": "usa_corps",
+    "primary_ability_count": 0,
+    "live_pc_count": 3,
+    "source_precision": "Double53",
+    "same_component_shell_allocation": true,
+    "wrong_owner_refused_before_mutation": true,
+    "rust_capture_sha256": "7ffd7d0433cac187fabffe3e5abb3583f400fefae155e6a13bb250655e74013f",
+    "native_paired_rows": 3,
+    "native_separate_runs": 6,
+    "native_executed_pins": 22,
+    "native_sha256": "1656f265a4c2aecfe55113f423de8553eac815eda020bfb13ce0ace9559a935e"
+  },
+  "tests": {
+    "production_check": "author-check-02.log PASS20.08s",
+    "current_lib_test_build": "author-build-02.log PASS2m51s",
+    "portable_native_prefix": "rust-native-prefix.log PASS1/1",
+    "actual_map_capture": "actual-capture.log PASS1/1 9.25s",
+    "immutable_current_binary_replay": "rust-immutable-replay.log PASS2/2 9.38s, capture env unset",
+    "old_public_rank_wrapper_regression": "legacy-rank-regression.log PASS1/1",
+    "native_immutable": "native-immutable-replay.log PASS144/288",
+    "actual_native_immutable": "actual-native-immutable-replay.log PASS3/6",
+    "frozen_binary": "frozen-performer-init-tests.exe",
+    "frozen_binary_sha256": "7563ee7c95618a9205d43639eec5cc6e72e01b9c13d84e887bae0e1346eef005"
+  },
+  "limits": [
+    "Actual4097 has zero primary Ability handles. Positive signed-bound reads and33 changed-byte cases are synthetic native/commonalgorithm evidence; no natural positive local or full4D1350 tail call was reached by that actual record.",
+    "SourceGetInteger/ctor virtual store/table bytes are inspected pins, not fullsource parser/constructor execution.",
+    "Required4D1350 entry is not executed as a native body. Production calls full actual saved_actor_actions only when changed, after releasing immutable loans; errors retain enabled-byte prefix.",
+    "Library test build01 was blocked by shared depot unsafe-lint snapshot; no test assertions ran. Current fixed shared source was used by build02.",
+    "No full ActorInit, initialized/published world, combat, multiplayer, campaign, rendering improvement, playable battle or release claim. Root owns strict integration and future release.",
+    "Independent review is pending; absent review must not be treated as accepted. Shared lib export snapshot may differ after separately owned additive exports.",
+    "Current Cargo.lock differs from old005510 checkpoint due subsequent workspace dependency changes; exact hashes are retained. This checkpoint did not edit manifests/lock; Root owns other work provenance."
+  ],
+  "preservation": {
+    "manifest_observation": {
+      "Cargo.toml": {
+        "prior_sha256": "59da20d02c06d634f3b41bd5872e0ee0e3a48e151ff6d1487fe942d80e57b8e0",
+        "current_sha256": "59da20d02c06d634f3b41bd5872e0ee0e3a48e151ff6d1487fe942d80e57b8e0",
+        "equal": true
+      },
+      "Cargo.lock": {
+        "prior_sha256": "1c901732ad0f02b822bf85eba5e4a325c19cfb1d4715d6a727b5494cec6bd2e7",
+        "current_sha256": "0f8f512d6066b01dc15f1168731bbc8278d9e25456b011b14d543f0ed7856772",
+        "equal": false
+      }
+    },
+    "no_original_asset_release_or_workspace_manifest_writes_by_this_checkpoint": true,
+    "source_backups": [
+      "performer-before.rs",
+      "actor-init-before.rs"
+    ],
+    "pins_sha256": "ddf7be3842e1fca5a9d9f1bf0bcf2dce58cb4c0750135a41069a304a0285bedc"
+  },
+  "independent_review": {
+    "status": "pending",
+    "accepted": false
+  }
+}

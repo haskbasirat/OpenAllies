@@ -1,0 +1,67 @@
+{
+  "created_utc": "2026-10-17T13:27:34.142376+00:00",
+  "scope": "4EC4A0 same-owner Access extraction for an active Zone loan; unchanged native field kernel",
+  "production": {
+    "path": "crates/aa-runtime/src/load_store_memory_refresh.rs",
+    "sha256": "91b52d812c0f37ba54439c2d8f2916a7634eb8dd7634541fe047a0b55c79f1c1",
+    "bytes": 16840
+  },
+  "predecessor": {
+    "path": "research/skirmish-20261017-zone-memory-access/before-load-store-memory-refresh.rs",
+    "sha256": "c7b6cd239e8bbf576ef30f8cfa8409bf14b410e0b541c6624c1fb23b6465f5bc",
+    "bytes": 17228
+  },
+  "kernel_old_new_equal": true,
+  "kernel_sha256": "2b0965fc164af9facf48e6b6f9890baf41d63b7b73a8754adc880198b304bb36",
+  "changes": [
+    "Owned uses Access read/object_mut/placement over original ObjectFields, components and current placement",
+    "refresh and refresh_with_placement retain their old signatures and delegate through StoreAccess to refresh_access",
+    "RecordId resolves the original Object.memory record on every reached write; no detached record or ActorStore reconstruction",
+    "Original actual-input recorder preserved with Access field reads"
+  ],
+  "validation": [
+    {
+      "kind": "current aa-runtime production check",
+      "result": "PASS",
+      "seconds": 31.94,
+      "log": {
+        "path": "research/skirmish-20261017-zone-memory-access/check02.log",
+        "sha256": "15aca162b928b9f5f51019ee09460226e686331e381119f53f871eee0699b780",
+        "bytes": 28533
+      }
+    },
+    {
+      "kind": "exact unchanged kernel with original fixture tests",
+      "result": "3/3 PASS",
+      "log": {
+        "path": "research/skirmish-20261017-zone-memory-access/exact-kernel-replay.log",
+        "sha256": "68b2d28568c00fba83e7cc81578a254314ebadad65f2fe6ee5bae9ebcb0119c6",
+        "bytes": 335
+      },
+      "binary": {
+        "path": "research/skirmish-20261017-zone-memory-access/exact-memory-kernel-tests.exe",
+        "sha256": "7862eab370878d4316861bbf9bb6075e3a6b06c117687d212985356560148357",
+        "bytes": 1486336
+      }
+    },
+    {
+      "kind": "exact shared reveal coordinator existing117-row fixture",
+      "result": "1/1 PASS",
+      "log": {
+        "path": "research/skirmish-20261017-zone-memory-access/exact-reveal-replay.log",
+        "sha256": "42b95d0483a838706071c084b24c4aa21fb002ae80acc7c3f4822fa54fde51ea",
+        "bytes": 207
+      },
+      "binary": {
+        "path": "research/skirmish-20261017-zone-memory-access/exact-reveal-kernel-tests.exe",
+        "sha256": "c3e7bb384375b84344b832cb794e9a75ea6fc4cd06827f30b498e7606db9eb70",
+        "bytes": 877056
+      }
+    }
+  ],
+  "limits": [
+    "Exact kernel tests execute pure field/callback ordering, not the new Access owner adapter",
+    "No new native process executions, cold unit link, natural startup completion or battle readiness claim",
+    "check01 preserves five in-flight foreign source errors; coherent check02 passed after owner fixes"
+  ]
+}

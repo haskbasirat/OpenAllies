@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-16T22:33:30.770259+00:00",
+  "scope": "Test-only explicit managed partial-record context and preserved native membership-prefix regression; no production changes.",
+  "pins": {
+    "crates/aa-runtime/tests/element_attach_restore.rs": "7fd745c81f2e128be77e834d37b34199105e838e29d374581097e4a62735426f",
+    "backups/test-before-managed-element-attach-20261016.zip": "b5ef35507cc0d511e65dc50a888c73845ebbb5e133d6e85d3a41c4a844700fc5",
+    "qa-output/economy-lifecycle-20261016/accepted-runtime-integration.log": "94ccd4308a779d295a7108830fa27c60bc98246fd6c30a6c47c6ab2a950f58df",
+    "qa-output/economy-lifecycle-20261016/managed-element-attach-tests.log": "5666694b1728d06a8547cabb23589a9153c70871ff29facbf2b6933941150b19",
+    "qa-output/economy-lifecycle-20261016/managed-element-attach.json": "51cd9c1f0c7a7deb0db6df9a9a61a9ccc52801bc40a30e35e8bcf6878be20824",
+    "research/resume-20261016-element-attach/native-attach-prefix.json": "5ce78da9c38086b338dcb91da771ef281ad3c3a6214cd10d317e8edff18760c9",
+    "research/skirmish-20261016-managed-attachment-regression/test-only.diff": "dc36f75a107f5f04dbb9ec5502224763ec8f0025890c7e8aa623abb1b2fd7e86",
+    "research/skirmish-20261016-managed-attachment-regression/element_attach_restore.frozen.rs": "7fd745c81f2e128be77e834d37b34199105e838e29d374581097e4a62735426f",
+    "research/skirmish-20261016-managed-attachment-regression/README.txt": "09f3220dc59a45493db935f5f54f065fde046ea5a2b873ef636f178b4f1ade41"
+  },
+  "test_passed": 1,
+  "membership_prefix_cases": 8,
+  "direct_call_completed": 4,
+  "explicit_group13_failures": 4,
+  "first_event": {
+    "completion": "ActorPrefixLoaded",
+    "error": "map input: world callback failed: 5788B0 combat value over the restore shells is unported",
+    "registered": true,
+    "saved_id": 4099,
+    "source_ordinal": 434,
+    "stage": "DynamicThings"
+  },
+  "context": {
+    "elapsed_clock_fixture_millis": 375,
+    "immediate_Init_PostCreate": "not_executed_by_this_record_diagnostic",
+    "inactive_observer": true,
+    "managed_fresh_scope": true,
+    "native_load_mode": 1,
+    "resource_catalog_bound": true
+  },
+  "publication_ready": false,
+  "superseded_failure": "accepted-runtime-integration.log: standalone Unknown SAI ownership superseded the old generic570020 callback expectation; retained unchanged."
+}

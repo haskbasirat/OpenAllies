@@ -1,0 +1,44 @@
+{
+  "status": "accepted bounded word-producer native proof; Windows sampling compiled/test pending with client cohort",
+  "scope": "Application+34 process word B396C4, native constructor store, activation/deactivation word prefixes, WndProc activation routing; one UI writer and shared read-only atomic Reader",
+  "addresses": {
+    "constructor": "41781A",
+    "activate": "40DAC0..40DAF4",
+    "deactivate": "40DA30..40DA57",
+    "window_messages": "6FD4A0 WM_ACTIVATE/WM_ACTIVATEAPP/WM_SETFOCUS"
+  },
+  "native_exec": 840,
+  "word_rows": 384,
+  "window_message_rows": 33,
+  "original_executed_unique_pins": 117,
+  "v14_executed_unique_pins": 141,
+  "precision": [
+    "PC24",
+    "PC53",
+    "PC64"
+  ],
+  "native_images": {
+    "original": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "rust_tests": {
+    "method": "standalone rustc --test same production module, no full runtime link",
+    "passed": 2,
+    "binary_sha256": "c0994d9ecb631455e0254a20a5b7ae96d72c285bcacaf4bc3ce2fe81d1fb86e1"
+  },
+  "source_receipt": {
+    "crates/aa-runtime/src/application_window_state.rs": "8cf645b050b9a4b1d7a8d05155164e055389de1614865639399ed00eb02d0a3a",
+    "crates/aa-client/src/windows_focus.rs": "4cb686d40b12bf05c25d23a266512e3fe3b94938a80f778957b7e93700d35542",
+    "research/skirmish-20261017-window-focus/native_window_focus.py": "784607707314978081881d93ba4ac611eb8ff847c41b392210e00224b70d0226",
+    "research/skirmish-20261017-window-focus/native-window-focus.json": "024bf1f69eb27d282e3707a3234c5c903dc553e82d3a2e3c07f9564d32b1029f",
+    "research/skirmish-20261017-window-focus/native-focus-rows.rs": "7bd8384b971f81c2794bc7c0fa3902e96882d5d68bf5f0f4e66fcadd4c8163ae",
+    "research/skirmish-20261017-window-focus/rust-tests.log": "aee527093070539221313f5a8a1bfb3b568da9401f4a707a5cd8738864fee363"
+  },
+  "limitations": [
+    "This is not full OnActivate/OnDeactivate: timer/input/capture/log effects after transition stores are not ported here.",
+    "v14 changes40DA30 throughB9E0C0/B9E1C0 input-patch wrapper. Actual wrapper prefix is executed; post-native-return custom input clearing lies outside this word-producer port. Original and v14 pins are independently recorded, not falsely declared all identical.",
+    "Observed transition and common-return cutoff instructions are excluded from executed pins.",
+    "Windows client translation samples actual current foreground process/owned UI HWND/minimized state, not raw native message arrival order. Egui keyboard Focused is not treated as WM_ACTIVATE. No GUI runtime acceptance yet.",
+    "No arbitrary externally concurrent writers, stale HWND reuse, app activation timeline, full view activation or playable battle claim."
+  ]
+}

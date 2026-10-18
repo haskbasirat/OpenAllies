@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "scope": "KKC_VGrid430290/869C30 constructor and42F540 first grid initialization only, actual view-spatial owner atVWorld+94, not keyboard/input",
+  "native": {
+    "paired_rows": 795,
+    "separate_executions": 1590,
+    "block_windows": 32,
+    "fixture": "native-view-grid.json",
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "qualified_transports": "Five explicit current source-global words, heap allocation. Real CRT ceil/truncate and REP zero fill execute. No real process-global seed or future immutability claim."
+  },
+  "rust": {
+    "tests": 2,
+    "rows_replayed": 795,
+    "status": "passed",
+    "log": "rust-replay-01.log",
+    "build": "Standalone rustc wrapper compiles current production module and current tests with already compiled dependencies; reexports actual compiled runtime world_creator_extents type. No whole-runtime build/test claim.",
+    "seconds": 0.03
+  },
+  "storage": "Non-Clone owner with growable typed per-cell list storage. Constructor-unwritten28..9F remains unknown; raw pointer fields are null or owned typed allocations, never fabricated32-bit addresses. Same partial owner is returned on constructor error.",
+  "ordering": "Every source-global read and store prefix is replayed. XYZ globals read six times lazily; changing per-read seeds prove no constructor snapshot. Initialization writes extents and shift, then width and height before required allocation/publication.",
+  "source": "initialize_from_world consumes actual World.creator_extents owner, not final selected Creator or ceiled GMap dimensions; shift remains explicit current caller input.",
+  "limits": "Native allocation pointer width and fixed capacity removed; binary32 extents,32-bit alignment arithmetic and arithmetic right shift remain native.",
+  "remaining": [
+    "Concrete five-word process-global seed producer, including alias/lifetime authority through reached constructor",
+    "43FD1x current UVar shift producer and VWorld caller wiring",
+    "42F860/430410 actual VThing occupancy/unoccupancy, typed view identity integration",
+    "Repeated42F540 old-allocation lifetime",
+    "Native numeric exceptional/out-of-i32 dimension/OOM paths beyond admitted finite domain"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/view_grid_state.rs",
+      "sha256": "83bd4d085419c4eaa47077d9820190fba65a719e02809580d7cbb31790a53a5c",
+      "snapshot": "research\\skirmish-20261017-view-grid\\source-snapshot\\view_grid_state.rs"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_grid_state_tests.rs",
+      "sha256": "09fad12bd2dff377f5a0f88674d6e44ad047605c376c213872adaa6beed626fa",
+      "snapshot": "research\\skirmish-20261017-view-grid\\source-snapshot\\view_grid_state_tests.rs"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\native_view_grid.py",
+      "sha256": "e6e8e395a41cb62bb0b25ee78a9958ca4727b6498441754ff6ddd4011b2c8342"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\native-view-grid.json",
+      "sha256": "342387ea502a58cfa73202337adadc2b68cfbe49c714cf2c51c8878d4440ca1a"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\native-author.log",
+      "sha256": "38d2ae81b79714e35b86e58472098ed823037ad6ea5aac272712159e2e8fe38b"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\production-check-01.log",
+      "sha256": "a9551440f59badda8908ca2149178a6b9c1ca5c8264a3ab0ad46ce605d4d7324"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\replay_harness.rs",
+      "sha256": "7e9793b0509aaf28563af39363dde8fe5341f1432cf8b83c6db1230d307bde7b"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\rustc-replay-build-01.log",
+      "sha256": "d7b7c1f6156979eae10d9941bd658064a1d708e54e79b6e29d38e79c6bb5c000"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\replay-tests.exe",
+      "sha256": "e517c107e3eafefb13a497948b3d4a846e045fe6c616eebbb7b573254f96fc1e"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\rust-replay-01.log",
+      "sha256": "aa55a827e29a9e39355fa34f3b9f0f5ecc9ef75608ab47ec15f0e8b2978759ab"
+    },
+    {
+      "path": "research\\skirmish-20261017-view-grid\\absolute-seed-operands.json",
+      "sha256": "7d5e2a930c4195174756a61ca36d2dd7b8c59480acca78e85258bab9c0ce5546"
+    }
+  ]
+}

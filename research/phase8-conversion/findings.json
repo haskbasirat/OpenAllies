@@ -1,0 +1,182 @@
+{
+ "area": "phase8-conversion: class-changed saved-record conversion (inventory group 1)",
+ "date": "2026-10-15",
+ "rust": {
+  "module": "crates/aa-mapworld/src/class_conversion.rs",
+  "tests": "crates/aa-mapworld/tests/class_conversion.rs",
+  "lib_line": "crates/aa-mapworld/src/lib.rs: pub mod class_conversion;"
+ },
+ "native_addresses": {
+  "4FAE80": "record load; 4FAFA8 class compare; 4FAFB9..4FAFC3 convert condition (saved class 2 and vector non-null); 4FB034..4FB0A4 changed-class warning A2CAB8 (5A1040 at 4FB077); 4FB0A9 class-equal construction",
+  "4F26F0": "0x30 record ctor (+00 IDS, +04 def, +08 saved ID, +0C name, +10 word, +14 position, +20 direction, +2C variant)",
+  "405B80": "CString assign (IDS copy)",
+  "4EA050": "Object fields: 4EF0C0, 8589B0(max 5), 59E300(0.0f) dead scale product, variant word if version>=1 else -1",
+  "4EF0C0": "Thing fields: 8589B0(max 2), name, word, 12-byte position, 12-byte direction, flags word (dead), version-1 extra word (dead)",
+  "8589B0": "data version: signed, v<0 or v>max -> 41DFB0 'Bad data version' (TGC_LoadWarningException)",
+  "4F9840": "vector append (4F60C0 growth, 4F5F20 copy, 4F4340 temp copy)",
+  "4FC340": "section loader: after a null record, 858F50 seek to (position before record)+index length",
+  "4FC600": "map world load: vector new[1] at 4FCE64; 4FC340 x3 at 4FCF17/4FCF2E/4FCF45 with the vector; TEAMS/KINGDOMS 4FCACA/4FCD52 with null; replacement loop 4FD47C..4FD781 after PostLoad (4EFBE0 vf DC), 4F1E10, 4F5290, 4F1C20, [4610] log; vector destroyed 4FD7A3",
+  "A25B1C": "creation parameter block vtable: +0/+4/+8 6A71F0 false, +C 6A71D0 true; fields +04 def, +08..+10 position, +14/+18 direction, +1C name (empty), +20 variant, +24 requested ID",
+  "4F9C10": "KKC_GWorld::CreateGThing: classes 3/8 null (GACD), 4 null (GKCD), 2/5/6/7/9/10 constructors 4EA5E0/4E66D0/4DB610/4DBEE0/4DCB30/4DC450, 0/1/>=11 null dereference at 4F9F6E",
+  "A2CE40": "load_warning_replaced_changed_gclass|s (5A1040 at 4FD721)",
+  "A2CE90": "load_warning_cant_replace_changed_gclass|s (5A1040 at 4FD674)",
+  "5A2B90": "map resource load: try states 0..8, catch 5A312F (TGC_FileException) \u2014 where a conversion 'Bad data version' ends (static)",
+  "4BCA00": "CreateThingData: data class per native kind; vf+30 4F0500 (true) for kinds 1,2,3,18,19,20,21, 4C9FA0 (false) otherwise"
+ },
+ "fixtures": {
+  "native-conversion.json": {
+   "sha256": "93c98f12486ecded00420e081ea6958412876820c531d25621da04b869d550f8",
+   "sections": {
+    "mismatch": 263,
+    "reads": "3 precisions x 186 rows",
+    "append": 59,
+    "section": 11,
+    "replace": 4,
+    "dispatch": 12,
+    "vf30": 24
+   }
+  },
+  "native-conversion-real.json": {
+   "sha256": "5aab3db3c795e7d439c93ae0c160d999990779697763c1272da17bb59f91ec70",
+   "maps": 27,
+   "records": 7879
+  },
+  "real-definitions.json": {
+   "sha256": "046f15f0cc954c2ada0acf74b41ac3a95a968176d54050932d2ad55e51ad091a",
+   "producer": "Rust test dump_real_conversion_definitions (aa-rules native catalog)"
+  }
+ },
+ "real_results": {
+  "converted": 7879,
+  "skipped": 0,
+  "failed": 0,
+  "pairs": {
+   "2->9": 7878,
+   "2->3": 1
+  },
+  "versions": "all Thing v2 / Object v5; 84..108 bytes read; 10 bytes per record skipped by the seek",
+  "create_dispatch": {
+   "ctor 4DCB30 (DynamicDoodad)": 7878,
+   "null 'Actor class requires a GACD' (london_bridge, TrailerMaps/axis08_sealion.RMP saved ID 8089)": 1
+  },
+  "creation_variant": {
+   "explicit": 7182,
+   "minus_one": 697
+  }
+ },
+ "expected_effect_group1": "7,879 failed records -> 0 once restore.rs calls the hook (requests-to-lead.md C1); the fresh creations then depend on the restoration agent's 4F9C10/4DCB30 port; london_bridge ends with the native 'can't replace' warning",
+ "tests": {
+  "command": "AA_GAME_ROOT='E:\\Games\\Axis and Alies' CARGO_TARGET_DIR=target/s-conversion cargo test -p aa-mapworld --release --locked --offline -j 4 --test class_conversion -- --include-ignored",
+  "result": "10 passed (8 default, 2 require AA_GAME_ROOT)",
+  "full_crate": "cargo test -p aa-mapworld --release --locked --offline -j 4: all binaries pass",
+  "clippy": "cargo clippy -p aa-mapworld --tests --no-deps: no warning in class_conversion files"
+ },
+ "proven": [
+  "class decision table",
+  "all reads, order, sizes, version limits and throws",
+  "discarded fields",
+  "append order/copies",
+  "4FC340 seeks after null results (incl. seek back), none after non-null",
+  "A25B1C block contents and variant rule",
+  "warning selection and order",
+  "4F9C10 dispatch per class on the block",
+  "definition vf+30 per data kind",
+  "all 7,879 real records, blocks, warnings"
+ ],
+ "static_only": [
+  "Bad data version propagation to 5A2B90/5A312F (FuncInfo try maps, throw type hierarchy)",
+  "replacement loop position after PostLoad in 4FC600",
+  "sections passing the vector"
+ ],
+ "not_ported_here": [
+  "4F9C10 fresh creation and class constructors (restoration agent)",
+  "record loop wiring (restoration agent)",
+  "native chunk-stream read-past-end error 858C90/858BA0 (explicit ReadPastChunk error)"
+ ],
+ "emulator_caveats": {
+  "null_guard": "installed; only page-0 accesses are the genuine 4F9F6E null dereferences (dispatch classes 0, 1, 11)",
+  "allocator": "6F7810/6F7430/856370 seams; no fault accepted elsewhere",
+  "x87": "only the dead 59E300 fmul; results identical at PC24/PC53/PC64",
+  "code_writes": "none"
+ },
+ "removed_caps": [
+  {
+   "address": "4FC600/4F9840/4F60C0",
+   "native": "conversion vector new[1], doubling growth",
+   "rust": "Vec"
+  },
+  {
+   "address": "4FC35C",
+   "native": "section index block 0x40004 bytes (<= 65,536 entries)",
+   "rust": "noted for the restoration loop (not in this module)"
+  }
+ ],
+ "corrections": [
+  "record +2C is the Object variant, not an owner",
+  "the saved name is not passed to 4F9C10 (empty block name)",
+  "only direction x,y are passed"
+ ],
+ "round2_fresh_creation": {
+  "rust": {
+   "module": "crates/aa-mapworld/src/fresh_creation.rs",
+   "tests": "crates/aa-mapworld/tests/fresh_creation.rs",
+   "lib_line": "crates/aa-mapworld/src/lib.rs: pub mod fresh_creation;"
+  },
+  "builds_on": "aa_actors::world_creation::create (4F9C10 control flow, restoration agent), aa_actors::creation::{construct, select_variant, random_scale}, aa_actors::IdentityRegistry",
+  "native_addresses": {
+   "4DCB30": "DynamicDoodad ctor: 4EA5E0, vtable A28E90, 4DC920(0/1) components (def+174 Disturbable 590160 0x1C, def+178 Breakable 58FE10 0x30)",
+   "4EA5E0": "GObject ctor: 4EF2A0, +38..+5C zero, +40 -1, +4C byte 0, def+108 -> params+20, -1 -> 49B900 draw",
+   "4DCBA0/4E9FC0": "InitCreate: 4EE460 (4EFB70+4F0190 requested / 4EFDB0 allocate, 0x8000 limit), 49B440 scale draw, component vf+4",
+   "5904A0/58F960": "component vf+4: one draw, delay = fraction x compdef+10, 50ACC0 add; Breakable then 50B250 unlink head-first while +18 in {0,1}",
+   "4DC730/4EBE50": "InitExisting: radius, thickness log, 4EFA40 (snap, params write-back, 4EF6A0 placement, 4EE4C0 index, height), 4EB6E0, 4EA150, tile coords, 4F1F70, 4EBC70, component vf+4",
+   "4EF6A0": "placement check: 4F4590 reason 1..7/other; failure log; reasons 1/2 in map mode 2: map warning load_warning_thing_doesnt_fit|sff and success",
+   "4EBA40": "PostCreate: 4D1E10 RET 8; map mode 0 -> 4EB500",
+   "4F9510/4F4C40": "registration: flag bit 31 cleared; city byte def+34 -> GWorld+260 list (assert latch B3CC40)",
+   "4FA030": "CreateGActor: 4F9C10 then IsGActor assertion (B3CC43, line 0x85E)",
+   "4FA150": "CreateOrganization: 4C2BC0/578290/4BE740 slot placement, 4F9C10, IsGActor assertion (B3CC44, 0x880), member spawn 57AD30 (leader first with flag 0, others params+51), 57A730 == 0 -> log 0x8A0 + 4F5490 destroy"
+  },
+  "fixture": {
+   "native-fresh-creation.json": {
+    "sha256": "b6338d937654beb5164c93f96aac4741678c66296aced992c9259449f9ab125c",
+    "creation_cases": 55,
+    "entry_cases": 17
+   }
+  },
+  "tests": {
+   "command": "CARGO_TARGET_DIR=target/s-conversion cargo test -p aa-mapworld --release --locked --offline -j 4 --test fresh_creation",
+   "result": "4 passed"
+  },
+  "proven": [
+   "class 2/9 creation chain: object fields, components, RNG order and values at PC24/53/64, GTID allocation and registration (cursor, highest, count) through IdentityRegistry, parameter write-back, every subsystem call in order with arguments, failure paths (no ID, placement reasons 1..8, mode-2 warning), lists GWorld+8 and +260",
+   "4FA030 / 4FA150 control flow, latches, member spawn order, failure and destroy"
+  ],
+  "seamed": [
+   "placement test 4F4590",
+   "index insert/remove 5536B0/553830 (flag bit 26)",
+   "snap 46EE00",
+   "height 4F0E50",
+   "blocking query 554350/555620",
+   "tile footprint 4EA150",
+   "visibility 4EBC70",
+   "ground paint 4EB500",
+   "scene 43B7D0/43D160",
+   "FX 429080",
+   "queue add GWorld+1E8 vf C / unlink 4F1A70",
+   "destroy 4F5490",
+   "entry cases: 4F9C10, 4C2BC0, 578290, 57AD30, 57A730"
+  ],
+  "not_done": [
+   "actor (class 3) fresh creation composition (4D6BB0/4D6F10/4D7230/4CF300/4CF480)",
+   "classes 4/5/6/7/8/10 constructors",
+   "nonempty instance-name registration in 4F9510",
+   "real-data creation of the 7,878 converted records (definition inputs, request C5)"
+  ],
+  "limits": [
+   {
+    "address": "4EFDB0",
+    "native": "0x8000 live GTIDs",
+    "rust": "kept (aa-actors NATIVE_ADD_LIMIT; 16-bit slot GTIDs are part of the saved format)"
+   }
+  ]
+ }
+}

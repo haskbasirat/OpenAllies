@@ -1,0 +1,77 @@
+DEVELOPMENT 04 — VALIDATION
+
+Final Windows x86-64 release build; Intel i7-11700KF and RTX3080
+-148 Rust workspace tests passed, zero failed or ignored. The full run used
+ --include-ignored with the installed game and recovered asset paths, covering
+ original file fixtures and real GPU allocation/update/material checks.
+-All-target workspace Clippy passed with warnings treated as errors.
+-Formatting checks passed for every changed crate. A separate workspace-wide
+ format check reports pre-existing formatting in two unchanged aa-assets files;
+ this pass did not rewrite those previously reviewed sources.
+-Release --mechanics-check passed53/53 embedded native-reference comparisons.
+ It runs before asset discovery; an independent debug build also passed with
+ an intentionally nonexistent --assets argument. Altering a stored expected
+ result makes the diagnostic report failure in its unit test.
+-Release asset-catalog verification, original authored-USA-infantry inspection
+ and the existing economy diagnostic passed from an unrelated working folder.
+-Six paired headless render comparisons were byte-identical to Development03:
+ GBR Corps, Corps Pack, Oil Depot, tutorial map and disabled-artillery-bunker
+ clip on Vulkan, plus GBR Corps on Direct3D12. The renderer modules were also
+ compared byte-for-byte against the source backup. No visual change is claimed.
+-Nine independent review reports passed; current files matched94 review pins
+ including repeated dependency pins. The broader original/v14 instruction
+ windows are bound by their individual reports.
+
+Native component coverage
+-Actor registry:33 native transition cases and the separate capacity gate;
+ component initialization:85 native scenarios and31 enumeration entries.
+-Body:270 original-instruction cases covering the bounded health/healing/death
+ dispatch operations across three explicit precision modes.
+-Numeric layer:234 synthetic x87 arithmetic cases plus range/error checks.
+-Orders:357 native registrations,45 movement serializer cases,5 process-guard
+ cases and6 complete descriptor-dispatch samples, in addition to prior tests.
+-RNG:11345 original-instruction cases for construction, bounded draws and the
+ explicit binary32 conversion boundary. Seed/draw ownership remains missing.
+-Trig:1452 lookup and480 rotation samples, including2/8 native out-of-table
+ accesses that Rust explicitly rejects. Angle checks cover168 clean-status and
+1608 supplied-status cases. Actual host FSIN/FCOS matched all8192 entries in
+ each of three precision modes (24576 comparisons). Caller FP-state preservation
+ and nonfinite rejection checks passed. This is not proof for every CPU model.
+-Movement:276 comparisons over223 unique native cases:186 order/straight cases
+ across three modes and90 full PC53 ground-step cases. The extended oracle has
+297 executions; its PC24/PC64 turning rows are not accepted provider coverage.
+ The PC53 wrapper rejects other modes before state/callback mutation. Collision,
+ terrain/spatial updates and actor events remain explicit required boundaries.
+
+Packaging and preservation
+The packaging script requires the successful final logs, exact executable hash,
+review reports and unchanged asset-cache hashes. It creates a new Development04
+folder, records per-file SHA256 hashes and validates every ZIP payload and CRC.
+The copied executable receives a separate smoke check after packaging. Package
+and smoke reports are recorded in qa-output/phase4.
+
+Original/v14 executables, save files, profiles and prior release folders were
+not edited. The source was backed up before this pass. Original assets are read
+only; temporary negative-test data is separate. Existing preview windows were
+not closed or controlled. Checks were headless or isolated source/fixture tests.
+
+Remaining limits
+The executable is still an asset/development preview. No complete match,
+pathfinding/world integration, full combat/AI, campaign/strategic mode, original
+save compatibility or real multiplayer session was tested or implemented by
+this pass. Internet tests across separate PCs/connections remain unavailable.
+Live laptop/multi-monitor UI tests were not repeated. Earlier render fidelity
+gaps remain open, and no general gameplay performance improvement is claimed.
+
+Commands and logs
+cargo test --workspace --release --target x86_64-pc-windows-msvc -- --include-ignored
+cargo clippy --workspace --all-targets -- -D warnings
+cargo build --release --target x86_64-pc-windows-msvc -p aa-client
+python research/check_development_04.py
+python research/package_development_04.py
+qa-output/phase4/workspace-tests-final.txt
+qa-output/phase4/workspace-clippy-final.txt
+qa-output/phase4/build-final.txt
+qa-output/phase4/review-pins.json
+qa-output/phase4/executable-check/report.json
+research/phase4-*/ individual evidence and independent reviews

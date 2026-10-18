@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "status": "accepted within frozen bounded scope; no production edits by reviewer",
+  "reviewed_scope": [
+    "Captured MainThread OS ID; same retained identity shared with real single-job ASYNC worker",
+    "Parent registration/release barrier, actual Windows current-ID reads, join/error/panic cleanup",
+    "Frozen Created publisher v1 only, with exact reconstructed pre-extension source"
+  ],
+  "native_replay": {
+    "paired_rows": 48,
+    "executions": 96,
+    "unique_instruction_pins": 471,
+    "all_instruction_bytes_match_original_and_v14": true,
+    "all_pins_individually_decode_as_exact_single_x86_instruction": true,
+    "declared_static_native_seams_excluded": 19,
+    "static_references": 4,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "rust_tests": {
+    "method": "Direct rustc harness includes exact production module and unchanged two author external test files, avoiding unrelated moving workspace modules",
+    "result": "4 passed, 0 failed, 0 ignored",
+    "actual_windows_os_tests": 3,
+    "capture_fixture_tests": 1,
+    "log": "production-source-tests.log",
+    "panic_output": "Expected panic probes are caught and all tests succeed; all worker handles are joined"
+  },
+  "reconstruction": {
+    "path": "load_creation_fx-v1-reconstructed.rs",
+    "sha256": "6bd539d6fa58ed9989c53b89eda364d8b407198902ed3f1a751a24e9e3f29b20",
+    "method": "Remove additive root publish_existing function and ExistingInputs implementation from current file, normalize CRLF to original LF, retain exactly one terminal newline",
+    "qualification": "Reconstructed-only evidence, not a preserved pre-edit backup. Exact SHA equals author-frozen v1 source."
+  },
+  "static_findings": [
+    "No public raw-ID/default/role constructor for captured identity or WorkerIdentity. Each current event ID getter calls actual provider again.",
+    "Worker task is held until successful parent on_created; failures/panics join the same child and do not invoke task. Metadata child-ID capture precedes barrier and is explicitly qualified.",
+    "Created publisher retains actual held record and Loading registry identity; creator E8 resolution checks current generation and stored Thing serialized identity.",
+    "True application-thread Created timestamp remains a required View+8C service. Worker timestamp uses retained actual World+E0 through Catalog.load_clock; no thread-role precision inference.",
+    "4297FD/429803 current-ID compare and both selected timestamp branches match unchanged original/v14 bytes. 429846 loads current caller flag and 429860 reaches50C800. Publisher flag is an explicit caller-owned input, not an inferred constant."
+  ],
+  "limits": [
+    "No full recurrent native TGC_Thread implementation, lock/TLS/priority/exception parity, or native Windows original-game worker floating-point capture claimed.",
+    "Worker callback ownership on task error depends on caller outcome type; this helper is not a whole-map error rollback owner.",
+    "Created author seal contains scoped compilation/source census but not actual 54 saved-event runtime publication acceptance. Root integration must verify that separately.",
+    "Current root ExistingFX/publish_existing and FX Graph extensions were not included or certified.",
+    "Command allocation failure and positive attached-view delivery/destruction remain outside frozen bounded publisher success domain.",
+    "Full cargo package check is separate from the independent exact-module Windows test harness."
+  ],
+  "retained_attempts": [
+    "Initial direct rustc probe omitted serde_json extern and failed before codegen; corrected by linking prebuilt identical dependency.",
+    "rustc-build.log retains first explicit dependency link attempt without thin LTO; it failed to link bitcode-only release dependency.",
+    "rustc-build-lto.log is accepted build using the workspace release thin-LTO settings. No production source changed for these harness corrections."
+  ],
+  "production_hashes": {
+    "crates/aa-runtime/src/execution_context.rs": "97044fdfdfa1baaecafaa081381fb38b8a352e1dffe7f11a07b866c98b6acc7d",
+    "crates/aa-runtime/tests/execution_context.rs": "a0092ddf8aafbbf6bc14875f6cbac8216f7bc85db40e6a85927e53d318f2688f",
+    "crates/aa-runtime/tests/resource_worker.rs": "8302a47c30280aee5972776887a9e249bc53814bc38ce740a952cff058a4154f",
+    "research/skirmish-20261016-execution-context/native_execution_context.py": "fc41c1da71333f5cde32b5384d87dcea87a208adb9a0c06825cd5579ecfd379a",
+    "research/skirmish-20261016-execution-context/native_async_worker.py": "826a7ec2e43df30d9a1751516abb9ae5cd85ce0c588718f9a35226bb3b19dc5e",
+    "research/skirmish-20261016-execution-context/native-execution-context.json": "f5c2863437916748207d4478111fd637bb129374c005d184a0e3bf0b54f85e75",
+    "research/skirmish-20261016-execution-context/native-async-worker.json": "9c99cf0baa71749abf1b91a9ae586873456f92c8e99ffb21852bbf12d92d77e0"
+  },
+  "evidence_hashes": {
+    "load_creation_fx-v1-reconstructed.rs": "6bd539d6fa58ed9989c53b89eda364d8b407198902ed3f1a751a24e9e3f29b20",
+    "native-main-replay.log": "f7d374dfda19a1f10106728ad66f002db06a7bfb1f4cfc46819a684c39bfafca",
+    "native-worker-replay.log": "7f5c340232966f7d900967777a775907f5bbf57d8c13416f784ea525072a94ed",
+    "pin-static-audit.json": "225d0fd04b687fee9c2bdc07b4cbd892d9eec7debfc240ef68debc1aed5df7de",
+    "production-source-tests.log": "dea09c32cf2ba723501bc13fc023d158a3f3519f737bdb791b47ed21d5e6b3c9",
+    "production-source-tests.rs": "6c0f4b9d0988aeb3eafd94003b7f20636f105465d39656c28b9a56a468df350d",
+    "rustc-build-lto.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rustc-build.log": "a38b59815c19df6ef6f6c916e909e6cd513bc38828e1f3fbf06ae0b5163e287f"
+  }
+}

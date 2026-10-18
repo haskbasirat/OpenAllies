@@ -1,0 +1,176 @@
+use aa_actors::{ActorId, components::ComponentSlot, ground_states::EconomyState};
+use aa_mapworld::restore::{OrganizationAttachContext, RestoredComponent, RestoredRecord};
+use aa_numeric::Precision;
+use aa_rules::{
+    actors::ActorCatalog,
+    resources::ResourceCatalog,
+    sources::{SourceLimits, V14Sources},
+    tgi::Limits,
+};
+use aa_runtime::{
+    catalog::Catalog,
+    localization::Localization,
+    restoration::{Attempt, LoadBindings},
+    restore_lifecycle::{ScopedManagedLoad, TaskKind},
+    settings::Settings,
+};
+use serde_json::json;
+use std::sync::Arc;
+#[test]
+#[ignore = "requires AA_GAME_ROOT original/v14 assets"]
+fn saved_owner_economy_dispatch_preserves_actual_allocation_and_flow_errors() {
+    let root = std::path::PathBuf::from(std::env::var_os("AA_GAME_ROOT").unwrap());
+    let mut sources = V14Sources::open(
+        root.join("Data.rwd"),
+        root.join("reconstruction/native-game/runtime-expanded-v14"),
+        SourceLimits {
+            max_member_bytes: 64 * 1024 * 1024,
+        },
+    )
+    .unwrap();
+    let settings = Settings::load_v14(&mut sources, Limits::default()).unwrap();
+    let text = Localization::load_v14(&mut sources, Limits::default()).unwrap();
+    let actors = ActorCatalog::load_v14(&mut sources).unwrap();
+    let resources = Arc::new(ResourceCatalog::load_v14(&mut sources).unwrap());
+    let inactive_load = ScopedManagedLoad::from_sources(&mut sources, 0)
+        .unwrap()
+        .begin(TaskKind::Normal)
+        .unwrap();
+    let map = aa_mapworld::MapArchive::from_bytes(
+        std::fs::read(
+            root.join("reconstruction/assets/original/Data/Maps/Campaign/tutorial02.RMP"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut attempt = Attempt::load_with_bindings(
+        &map,
+        &actors,
+        settings,
+        text,
+        Precision::Double53,
+        u64::MAX,
+        aa_mapworld::restore::RestoreMode::InspectPartial,
+        LoadBindings {
+            native_load_mode: None,
+            inactive_load: Some(inactive_load),
+            resources: Some(resources.clone()),
+        },
+    )
+    .unwrap();
+    assert!(!attempt.report.runtime_publication_ready);
+    let owner = attempt
+        .registry
+        .iter()
+        .find_map(|e| {
+            let a = e.value.loaded()?.shell.actor.as_ref()?;
+            (a.components.present(ComponentSlot::Organization)
+                && a.components.present(ComponentSlot::Economy)
+                && a.words.get(&0xe8).is_some_and(|v| *v != 0))
+            .then_some(e.id)
+        })
+        .expect("actual saved Organization+Economy with nonnull owner");
+    let taken = std::mem::replace(
+        attempt.registry.value_mut(owner).unwrap(),
+        RestoredRecord::Loading,
+    );
+    let RestoredRecord::Actor(mut entity) = taken else {
+        panic!("Actor")
+    };
+    let actor = entity.shell.actor.as_mut().unwrap();
+    let Some(RestoredComponent::Organization(mut organization)) =
+        actor.components.remove(ComponentSlot::Organization)
+    else {
+        panic!("Organization")
+    };
+    let mut catalog = Catalog::new(&actors);
+    catalog.native_load_mode = attempt.native_load_mode;
+    catalog.settings = Some(attempt.settings.clone());
+    catalog.bind_resource_catalog(resources).unwrap();
+    catalog
+        .bind_inactive_load(attempt.inactive_load.as_ref().unwrap())
+        .unwrap();
+    let definition = &entity.definition;
+    let flags = entity.shell.thing.flags;
+    let word_c = entity.shell.thing.word_c;
+    let byte_4c = entity.shell.object.as_ref().unwrap().byte_4c;
+    let mut invoke =
+        |actor: &mut aa_actors::loading::ActorShell<RestoredComponent>,
+         org: &mut aa_actors::ground_states::OrganizationState<String>| {
+            aa_runtime::saved_owner_economy::refresh(
+                &catalog,
+                OrganizationAttachContext {
+                    inventory: &attempt.inventory,
+                    owner,
+                    owner_actor: actor,
+                    owner_definition: definition,
+                    owner_thing_flags: flags,
+                    owner_thing_word_c: word_c,
+                    owner_object_byte_4c: byte_4c,
+                    organization: org,
+                    registry: &mut attempt.registry,
+                    precision: Precision::Double53,
+                },
+            )
+        };
+    let snapshot = |actor: &aa_actors::loading::ActorShell<RestoredComponent>| {
+        let Some(RestoredComponent::Economy(e)) = actor.components.get(ComponentSlot::Economy)
+        else {
+            panic!("Economy")
+        };
+        ((&**e as *const EconomyState) as usize, (**e).clone())
+    };
+    let initial = snapshot(actor);
+    let owner_word = actor.words[&0xe8];
+    let natural = invoke(actor, &mut organization);
+    assert_eq!(
+        snapshot(actor).0,
+        initial.0,
+        "same allocation after natural Result"
+    );
+    let natural_state = snapshot(actor).1;
+    actor.words.insert(0xe8, 0);
+    invoke(actor, &mut organization).unwrap();
+    assert_eq!(
+        snapshot(actor),
+        (initial.0, natural_state.clone()),
+        "null owner must not mutate Economy"
+    );
+    actor.words.remove(&0xe8);
+    let missing = invoke(actor, &mut organization).unwrap_err();
+    assert!(missing.contains("uninitialized"), "{missing}");
+    assert_eq!(snapshot(actor), (initial.0, natural_state.clone()));
+    let Some(RestoredComponent::Economy(economy)) = actor.components.remove(ComponentSlot::Economy)
+    else {
+        panic!("Economy")
+    };
+    invoke(actor, &mut organization).unwrap();
+    assert!(actor.components.get(ComponentSlot::Economy).is_none());
+    actor
+        .components
+        .insert(ComponentSlot::Economy, RestoredComponent::Economy(economy));
+    actor.words.insert(0xe8, owner_word);
+    // Explicit wrong-header probe is refused; original allocation is retained.
+    let Some(RestoredComponent::Economy(e)) = actor.components.get_mut(ComponentSlot::Economy)
+    else {
+        unreachable!()
+    };
+    e.header.owner = ActorId::NULL;
+    let mismatch = invoke(actor, &mut organization).unwrap_err();
+    assert!(mismatch.contains("identity mismatch"), "{mismatch}");
+    assert_eq!(snapshot(actor).0, initial.0);
+    let Some(RestoredComponent::Economy(e)) = actor.components.get_mut(ComponentSlot::Economy)
+    else {
+        unreachable!()
+    };
+    e.header.owner = owner;
+    println!(
+        "{}",
+        json!({"actor":owner.raw(),"definition":definition.proof.id,"natural_error":natural.err(),"natural_before":initial.1,"natural_after":natural_state,"missing_owner_error":missing,"identity_error":mismatch,"same_actual_allocation":true,"absent_and_null_owner_noop":true,"runtime_publication_ready":false,"kingdom_flows_initialized_by_test":false})
+    );
+    actor.components.insert(
+        ComponentSlot::Organization,
+        RestoredComponent::Organization(organization),
+    );
+    *attempt.registry.value_mut(owner).unwrap() = RestoredRecord::Actor(entity);
+}

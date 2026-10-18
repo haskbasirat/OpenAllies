@@ -1,0 +1,86 @@
+Snapshot companion binding -- independent scoped review, 2026-10-16
+
+Result: no blocking findings in the reviewed changes.
+Production files were read only; no implementation or fixture was modified.
+
+Reviewed production
+-------------------
+crates/aa-netcode/src/launch_assignment.rs:
+ Retained::after_snapshot_read and the existing complete-settings assignment.
+crates/aa-netcode/src/lobby_staging.rs:
+ SnapshotOwner construction, read, state transition, invalidation and recovery.
+Read the unchanged lobby/staging reader/copy paths and the native producers to
+check what this adapter actually composes.
+
+Checks
+------
+1. Native post-decode kingdom fields are established, not guessed defaults:
+   original 50F4C0(1) yields empty CString+0C and false byte+68. The actual
+   5104A0 reader assigns from that temporary. Both launch slots decode all six
+   kingdom vectors, so rebuilding all twelve companion vectors is correct.
+
+2. Equal-count replacement is handled correctly. after_snapshot_read builds
+   fresh companion vectors for every header instead of only resizing them.
+   Prior private fields cannot survive through a kingdom's former list index.
+   Native cases cover name replacement/reordering, zero length and growth.
+
+3. Other retained fields come from the correct pre-decode settings owner.
+   Initial ChangeToState(1) can copy Launch88 into Launch before reading the
+   incoming snapshot. The real assignment runs at that point; the final
+   companion rebuild only replaces kingdom companions. An independent fixture
+   invariant check verified all other retained fields for all twelve cases.
+
+4. Partial failure invalidates ownership. take_settings removes the complete
+   pair before either operation, and success reinstalls it only after all work
+   and both companion rebuilds finish. Any propagated error leaves Session,
+   Admin and cursor partial changes intact but denies settings(), copying,
+   replay and into_complete(). This is an explicit safe runtime contract, not
+   a claim of native malformed-packet/allocator-exception equivalence.
+
+5. State-copy and immediate callback order match the native fixtures. The
+   initial event precedes restore assignment; successful decode precedes the
+   later leave-state copy. The latter copies the newly rebuilt companions.
+   Scenario/config lookup and map-status callbacks are compared in order.
+
+Independent validation
+----------------------
+Replayed native_snapshot_companions.py with Path.write_text intercepted in
+memory for its one output file. The freshly produced JSON exactly equalled
+the stored fixture, and no native fixture was rewritten. This re-executed
+twelve complete snapshots on each of original and v14 plus two constructor
+probes. See native-replay.log.
+
+Independently ran:
+ CARGO_TARGET_DIR=target/s-ai-uai
+ cargo test -p aa-netcode --test snapshot_companions
+   --release --locked --offline -j4
+All three tests passed. See rust-tests.log. A separate, unrelated in-progress
+aa-runtime dead-code warning for saved_recruit_actions::contribute was emitted;
+there was no compilation/test failure.
+
+Reviewed hashes remained unchanged through validation:
+ launch_assignment.rs:
+ f7597e94ba6f07d74d4d339985f60eb2e4fa9a889c55d70aa52060f713cbea2a
+ lobby_staging.rs:
+ 9925ef1117ddba59bb487b9b7f04ce0db69ccee84cb79c7d80024e1d26d23f0c
+
+Limits of this approval
+-----------------------
+SnapshotOwner::new checks extents, not historical kingdom identity; callers
+must provide a genuine complete constructed pair. Public low-level Snapshot
+and raw reader users still have to use the owned path or synchronize their
+companions explicitly. This is documented, not automatically enforced outside
+SnapshotOwner.
+
+The fixture covers joining clients from states0/1/2. Separate earlier staging
+fixtures cover other copy/state roles. Required external effects are test
+seams. Deferred LobbyAction dispatch (including ResetSessionInfo and peer
+binding), canonical initial settings construction, actual dispatcher/client
+wiring, map readiness I/O, world publication, match launch and decree effects
+remain integration work. The native reset-session-info event is excluded from
+the immediate callback log and instead checked as a returned action; this
+review does not extend that into a claim of end-to-end action dispatch timing.
+
+No new UDP, two-PC, LAN or internet test was performed by this review. The
+developer's existing loopback tests are separate evidence and are not an
+internet-multiplayer success claim.

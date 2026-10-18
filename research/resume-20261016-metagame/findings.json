@@ -1,0 +1,278 @@
+{
+  "date": "2026-10-16",
+  "cause": "Player fixture starts_with native-mgai-c selector also loaded new controller fixtures. Those worlds have no variant field. Failure was test discovery, not native gameplay implementation.",
+  "backup_source_sha256": "9fc1eccb076b7ec9d2df171193257ddb20fa95a8db4628b18ffa024d3d416933",
+  "preexisting_selector": true,
+  "changed_sources": [
+    "crates/aa-metagame/tests/native_mgai.rs"
+  ],
+  "production_changes": false,
+  "fixture_changes": false,
+  "fresh_native_execution": false,
+  "native_evidence": "Existing pinned Unicorn fixtures and producer schemas; player native function 0x964d30, controller native function 0x945090. Both fixture families continue to be replayed independently.",
+  "fixtures": [
+    {
+      "file": "research\\phase8-metagame\\native-mgai-c0.json",
+      "sha256": "680ee3be2047096d578b2127d25acf2c8ba74ae1845af38b7b73d40fefbfeaee",
+      "family": "player",
+      "worlds": 4,
+      "first_world_fields": [
+        "campaign",
+        "variant",
+        "ai",
+        "ops",
+        "construct",
+        "turns"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-c1.json",
+      "sha256": "c2f44b791a55e813509248057856a5a3df3a2af0eb801fd9cef291396527b81f",
+      "family": "player",
+      "worlds": 4,
+      "first_world_fields": [
+        "campaign",
+        "variant",
+        "ai",
+        "ops",
+        "construct",
+        "turns"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-c2.json",
+      "sha256": "c1de964b3d938060a138c10c3f4b5d0f1db2ad26251d5bc0bb7d39b0204cc0f3",
+      "family": "player",
+      "worlds": 4,
+      "first_world_fields": [
+        "campaign",
+        "variant",
+        "ai",
+        "ops",
+        "construct",
+        "turns"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-c3.json",
+      "sha256": "250d6b96f1e39d4e77ab585d475cbadc1c959f947f6f5a64403aeea3862cd11d",
+      "family": "player",
+      "worlds": 4,
+      "first_world_fields": [
+        "campaign",
+        "variant",
+        "ai",
+        "ops",
+        "construct",
+        "turns"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-c4.json",
+      "sha256": "289d9c2836b36d346ab1569fa6b0df3d3552507a84ed559aed9a82648c516fee",
+      "family": "player",
+      "worlds": 4,
+      "first_world_fields": [
+        "campaign",
+        "variant",
+        "ai",
+        "ops",
+        "construct",
+        "turns"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-controller-c0.json",
+      "sha256": "3c5621e6f9da9914b5656c6fa4146814bfcccc0407f5b121e457f00d23409eeb",
+      "family": "controller",
+      "worlds": 3,
+      "first_world_fields": [
+        "campaign",
+        "cw",
+        "ai",
+        "ops",
+        "tgc",
+        "rng_in",
+        "tick_in",
+        "yields",
+        "stages",
+        "busy",
+        "uninit",
+        "rng_out",
+        "final",
+        "players",
+        "queue"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true,
+        "mgai_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-controller-c1.json",
+      "sha256": "e57926a563b993660a4faa0218d37c79bac575fd0a10e84319a638f0fc0d8990",
+      "family": "controller",
+      "worlds": 3,
+      "first_world_fields": [
+        "campaign",
+        "cw",
+        "ai",
+        "ops",
+        "tgc",
+        "rng_in",
+        "tick_in",
+        "yields",
+        "stages",
+        "busy",
+        "uninit",
+        "rng_out",
+        "final",
+        "players",
+        "queue"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true,
+        "mgai_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-controller-c2.json",
+      "sha256": "d5b2a3a60a7a3f517a80686eb1d47e11662b11c8ccf069cfcc2da5ec8e4416a7",
+      "family": "controller",
+      "worlds": 3,
+      "first_world_fields": [
+        "campaign",
+        "cw",
+        "ai",
+        "ops",
+        "tgc",
+        "rng_in",
+        "tick_in",
+        "yields",
+        "stages",
+        "busy",
+        "uninit",
+        "rng_out",
+        "final",
+        "players",
+        "queue"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true,
+        "mgai_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-controller-c3.json",
+      "sha256": "d225e4750127f0b6530901c40192c207f78b3153c170138be0b39123721fd844",
+      "family": "controller",
+      "worlds": 3,
+      "first_world_fields": [
+        "campaign",
+        "cw",
+        "ai",
+        "ops",
+        "tgc",
+        "rng_in",
+        "tick_in",
+        "yields",
+        "stages",
+        "busy",
+        "uninit",
+        "rng_out",
+        "final",
+        "players",
+        "queue"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true,
+        "mgai_sha256": true
+      }
+    },
+    {
+      "file": "research\\phase8-metagame\\native-mgai-controller-c4.json",
+      "sha256": "b3d56a4503024e39fd71ec1faabbd9507c9d6b829fd90f50d49ae9e06a4d11be",
+      "family": "controller",
+      "worlds": 3,
+      "first_world_fields": [
+        "campaign",
+        "cw",
+        "ai",
+        "ops",
+        "tgc",
+        "rng_in",
+        "tick_in",
+        "yields",
+        "stages",
+        "busy",
+        "uninit",
+        "rng_out",
+        "final",
+        "players",
+        "queue"
+      ],
+      "pinned_sources_match": {
+        "producer_sha256": true,
+        "world_sha256": true,
+        "data_sha256": true,
+        "mgai_sha256": true
+      }
+    }
+  ],
+  "tests": {
+    "targeted": {
+      "passed": 2,
+      "log": "qa-output/resume-20261016/metagame-mgai-regression.log",
+      "player_turns": 112,
+      "player_stages": 873,
+      "player_commands": 889,
+      "player_yields": 3389
+    },
+    "full": {
+      "command": "cargo test -p aa-metagame --release --locked --offline -j4 -- --include-ignored",
+      "env": {
+        "CARGO_TARGET_DIR": "target/s-metagame",
+        "AA_GAME_ROOT": "E:\\Games\\Axis and Alies",
+        "AA_METAGAME_EXPORT": "0"
+      },
+      "passed": 39,
+      "failed": 0,
+      "ignored": 0,
+      "log": "qa-output/resume-20261016/metagame-compatibility-fixed.log"
+    },
+    "fixture_hashes_unchanged_after_run": true
+  }
+}

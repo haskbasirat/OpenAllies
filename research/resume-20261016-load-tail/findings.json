@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-16",
+  "scope": "Bounded post-PostLoad camera/session adapter over actual staged ActorStore. Not world startup or publication.",
+  "native_interval": "4FD3F3..4FD47C",
+  "native_helpers": ["4F5290", "4F48E0", "76AC60", "76AC70", "765E00", "4F1C20", "4CE6C0", "404F60"],
+  "ports_reused": ["aa_actors::world_load_tail::after_post_load"],
+  "files_added": ["crates/aa-runtime/src/load_tail_world.rs", "crates/aa-runtime/tests/load_tail_world.rs"],
+  "shared_edit": "One pub mod load_tail_world line in aa-runtime/src/lib.rs; restoration.rs unchanged.",
+  "oracle": {
+    "file": "research/phase8-saved-components/native-load-tail.json",
+    "origin": "Existing original-x86 Unicorn fixture. This turn replayed it through the new runtime adapter; did not regenerate the native oracle.",
+    "total_cases": 24,
+    "matched_camera_or_native_error_cases": 20,
+    "explicit_unsupported_world_start_cases": ["world_start_mode1", "world_start_mode4"],
+    "not_replayed_missing_owned_settlement": ["by_name_settlement_wins", "player_kingdom"],
+    "precision": ["Single24", "Double53", "Extended64"],
+    "compared": ["Native result/null-dereference outcome on supported paths", "GWorld +22C/+230 binary32 words", "404F60 function, line, format and binary64 argument words"],
+    "not_compared": ["59E520 implementation (explicit caller-supplied fact)", "4F1E10 effects", "full native callback traces", "Settlement runtime state", "source/session fact producers"]
+  },
+  "tests": {
+    "command": "CARGO_TARGET_DIR=target/s-saved cargo test -p aa-runtime --test load_tail_world --release --locked --offline -j 4",
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "log": "research/resume-20261016-load-tail/validation.log",
+    "extra_coverage": ["Current ActorStore pose/name and Element references", "Stale generation-bearing identity errors", "Native membership order wins equal-priority ties", "Live visibility flag changes affect selection", "Missing host inputs only fail when read", "PostLoaded and saved-failure preconditions", "Unresolved native capital word is not interpreted as a GTID", "Camera write before log and signed-zero log argument"]
+  },
+  "explicit_blockers": [
+    "Full 4F1E10 world start needs live +274 and unbound 58F010 statistics tracking / 58F530 and 45F240 snapshot effects",
+    "No actual session or map-settings host state producer is installed",
+    "No runtime producer for ordered world +148 slots, Kingdom +284 membership or ThingData +1B4 priority is installed",
+    "No owned Settlement variant exists for the two settlement-choice fixture cases",
+    "Fresh objects created during PostLoad are not accepted by this bounded staged adapter",
+    "Conversion replacement 4FD47C..4FD781 remains the next separate required stage",
+    "SUN/MISC_DATA, full publication, simulation ticks and playable battles remain outside scope"
+  ],
+  "state_semantics": "CameraState is caller-owned. Missing fields are never defaulted; existing camera state is not cleared by errors. A bounded success must not set runtime_publication_ready.",
+  "engine_caps_removed": [],
+  "hashes": {
+    "crates/aa-runtime/src/load_tail_world.rs": "2746f5bcd4a1e6d640101999f9b0919a5a41c32c48179140e6d931b66c3d7610",
+    "crates/aa-runtime/tests/load_tail_world.rs": "ae6aa30086c8ccfff8ec6806fc00e5b70ea56bc4e515e5bc99fb8440583e2ae7",
+    "research/phase8-saved-components/native-load-tail.json": "b75d86c596db6ad27c24755fd0ed06faca9d0cdb2fa8eca2a841a484fb60a5a7",
+    "research/phase8-saved-components/native_load_tail.py": "4074ec9d803bc8714dd7c068a999b215b639f9d6d3f9bea3558ce49353046136",
+    "crates/aa-actors/src/world_load_tail.rs": "936b9f022189fc4d7756f0e42012048d951d0263e454f4b4190df887661fb360",
+    "research/phase8-economy/native_world_start.py": "cea9309d86c7675ed453970883e5d165e0ad5114249e8a56cfe8ad62f4b133c2"
+  }
+}

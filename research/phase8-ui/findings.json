@@ -1,0 +1,218 @@
+{
+ "schema": 1,
+ "area": "phase8-ui (crates/aa-ui)",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "fixtures": {
+  "native-layout.json": "74e93bd51e70f7dd10acb07c6dc90bd1ff8f81460afb2c15e680ebdf7018255b",
+  "native-decal.json": "2ed1498ad8895f7ce36744c37f94a2991e0c4029934f57ab07bdca0daa7ecb86",
+  "screenshot-match.json": "0aef05cad64dd0a3cb6b3036b63f8bc5357ab3ae7e6b769a20822c8f5bdc479f",
+  "native-text.json": "92ebec961cad82ee97f62a1c5f9fcb284e1dcf0d49b5b9b985a839839769b843",
+  "native-draw.json": "5cfc2e8d01c037f6e667e6a1987f05289e046b0ae0ffd9889c2c41c6bda40794",
+  "native-draw.json.gz": "9328900bf53a8b83a6ea34f1534ae8419a09cd900506981a2f16eca619b8d842"
+ },
+ "native_proven": {
+  "0x5E3150": "bounds parse (CRT __wtof 0x96D3E8 seamed)",
+  "0x5E3370": "bounds resolve (+0x5E2460 clamp, 0x5E1580 clip)",
+  "0x5E34B0": "view-element layout incl. 0x5C1DB0/0x5C1DD0 scale",
+  "0x5E25C0": "state bits and visibility incl. 0x5EE2C0",
+  "0x5E4D00": "when keyword table (instruction stream)",
+  "0x5E5210": "label attribute table (instruction stream)",
+  "0x5E6AB0": "9-slice piece rects (texture size getters 0x5A6430/0x5A64A0 seamed)",
+  "0x5E7790": "directional piece rects (0x5E6D40/0x5E6DC0)",
+  "0x5E7000": "decal aspect fit",
+  "0x7352C0": "GetTextExtent (markup, wrap, stand-ins, missing glyphs); native endless loop reported as Hang",
+  "0x735C00/0x735D20": "reference / world unit measure wrappers",
+  "0x735D50": "ellipsis truncation (0x732C60 visible length, 0x732E60 Left)",
+  "0x735B90": "label rebuild: PreProcessText 0x734120, GetRowStartingXPixels 0x730130, Parse 0x733B10, quad builder 0x730F00, AddQuad 0x72FA00"
+ },
+ "precision": {
+  "default": "PC24 (UI main thread after Direct3D 9 init; confirmed by lead, research/phase8-tick/fpu-precision.md)",
+  "supported": [
+   "PC24",
+   "PC53"
+  ],
+  "resolve_cases_differing_between_pc24_and_pc53": 758
+ },
+ "ported_not_oracle_proven": [
+  "0x5E54A0 when parse/tokenizer 0x412480",
+  "0x5E5780 VE base load",
+  "0x5E5A60 group load",
+  "0x5E81E0 decal load",
+  "0x5E68D0/0x5E8510/0x5E8730 tiled/directional load",
+  "0x5E5BA0 label load",
+  "0x5E4B40/0x5E45A0/0x5E4670 VE factory",
+  "0x5E37A0/0x5EF900 sorted child insert",
+  "0x5E7480 9-slice UV table",
+  "0x5E7EA0 directional UVs",
+  "0x740900 coordinate nudge",
+  "0x73F750/0x73FA20/0x73F1B0/0x73F290 sprite tiling grid",
+  "0x742630/0x742CC0 render lists",
+  "0x490ED0 %s resolution path",
+  "0x5BE9D0 TGI lexer",
+  "0x5BC0A0 TGI header handler",
+  "0x5B57C0 CopyValuesAndSubNodesTo",
+  "0x5B6190 child merge",
+  "0x5B5FC0 clone",
+  "0x5B5C80 AddChild groups",
+  "0x5C5060 UI template list order",
+  "0x5F1D00 widget ctor",
+  "0x5F0080 AddChild",
+  "0x5EFA10 attach",
+  "0x5F2070 Widget::LoadData",
+  "0x5F2C10 panel",
+  "0x5F2D60 top-level",
+  "0x5C0B50 interface",
+  "0x5F2DF0 button",
+  "0x5F29B0 label widget",
+  "0x5F28B0 decal widget",
+  "0x5EDB50 viewport scrollbar",
+  "0x64F730/0x650A80/0x650400 main menu",
+  "0x5C92D0 backdrop update",
+  "0x65B9D0/0x65B340 single player",
+  "0x6E87C0/0x6E88E0/0x6E8580 loading screen",
+  "0x661BC0/0x65D350 staging",
+  "0x61A650/0x6182B0/0x60BAE0 game",
+  "0x615FB0 control panel",
+  "0x708B30 font px size",
+  "0x7072F0/0x7051A0/0x705580 glyph cells",
+  "0x5E2C10 label overrides",
+  "0x4B9F40 localization lookup",
+  "0x5E2B50 pick order",
+  "0x5CAE30 UI render level 0",
+  "0x494000 localized escape processing (&Name., &&, \\c)",
+  "0x61D3B0/0x61D5D0 game menu dialog"
+ ],
+ "inferred": [
+  "render order: tree (painter's) order for menus and dialogs (depth-tested layers); the loading screen without depth test (two lists in order)",
+  "skin layer precedence Skins/<NATION> > v14 loose > Data.rwd",
+  "block comments inside TGI headers are ignored",
+  "backdrop widgets are connected before MainMenuInterface is brought to the front",
+  "hover focuses buttons; release over the pressed button fires its command",
+  "hotkey dispatch from hotkeys_ui.txt: topmost top-level first; MessageBoxAccept/Cancel = first/last button",
+  "list text truncation with grammar_ellipsis; a press outside an open drop-down closes it",
+  "highlight list (<h_on>) drawn as a solid background in the label background_color",
+  "action button decal pressed inset while selected",
+  "regiments hide the SupplyStockpile bar (05/06 screenshots)",
+  "GDI Arial hinted cells of the build machine (Windows 11) equal the original machine at 4..64 px"
+ ],
+ "screenshot_verification": {
+  "main_menu": {
+   "screenshot": "00-start.png",
+   "quads": 21,
+   "matched": 13,
+   "offset_zero_low_error": 13,
+   "labels_with_ink": 10
+  },
+  "single_player": {
+   "screenshot": "01-singleplayer.png",
+   "quads": 17,
+   "matched": 9,
+   "offset_zero_low_error": 9,
+   "labels_with_ink": 6
+  },
+  "staging": {
+   "screenshot": "02-custom.png",
+   "quads": 397,
+   "matched": 338,
+   "offset_zero_low_error": 267,
+   "labels_with_ink": 10
+  },
+  "loading": {
+   "screenshot": "03-launch.png",
+   "quads": 190,
+   "matched": 43,
+   "offset_zero_low_error": 43,
+   "labels_with_ink": 4
+  },
+  "game_hud": {
+   "screenshot": "04-ingame.png",
+   "quads": 39,
+   "matched": 37,
+   "offset_zero_low_error": 29,
+   "labels_with_ink": 0
+  },
+  "game_menu": {
+   "screenshot": "13-quit.png",
+   "quads": 110,
+   "matched": 106,
+   "offset_zero_low_error": 65,
+   "labels_with_ink": 4
+  },
+  "game_regiment": {
+   "screenshot": "05-regiment.png",
+   "quads": 95,
+   "matched": 90,
+   "offset_zero_low_error": 60
+  },
+  "game_corps": {
+   "screenshot": "06-corps.png",
+   "quads": 71,
+   "matched": 67,
+   "offset_zero_low_error": 44
+  },
+  "game_recruit": {
+   "screenshot": "07-recruit.png",
+   "quads": 77,
+   "matched": 72,
+   "offset_zero_low_error": 45
+  },
+  "game_quit": {
+   "screenshot": "13-quit.png",
+   "quads": 162,
+   "matched": 154,
+   "offset_zero_low_error": 103
+  }
+ },
+ "removed_caps": [
+  {
+   "what": "widget max_child_count template field",
+   "native": "performance hint (default 15/50/2)",
+   "port": "growable Vec"
+  },
+  {
+   "what": "font atlas glyph packing",
+   "address": "0x705020",
+   "native": "x/y 9 bits, w/h 7 bits",
+   "port": "no atlas; layout only"
+  }
+ ],
+ "missing": [
+  "HUD: SimpleActor/Settlement/Group displays, tooltips, pinned impact modes, unit border decals/AltBackground, action button state machine, FavoritesDisplay, side panels",
+  "staging SelectablePanel release/drag semantics; ActionPanel ReadyToggle auto-flip flag",
+  "oracle for the sprite tiling grid, widget transitions, animated decal timing, colour modes 1-3",
+  "tooltips, keyboard focus order, native hotkey dispatcher"
+ ],
+ "lead_recorded_not_ported": [
+  "0x76F600 no human opponents remaining message",
+  "0x41C180 KKC_TimingStats diagnostics smoothing"
+ ],
+ "round2": {
+  "status": "aa-client front end built from TGI: main menu, single player, quit/error message box, options dialog (5 pages), credits, loading screen",
+  "ported": {
+   "message_box": "0x66D920 init, 0x66DF90 _Display, 0x66D7C0 buttons",
+   "controls": "slider 0x5DE360/0x5DE800/0x5DD960/0x5DDAC0/0x5DDFB0/0x5DDEB0, advanced slider 0x5DEB20/0x5DEA20, scroll bar 0x5DE560, list box 0x5D4C80/0x5D58E0/0x5D4F30/0x5D4A30/0x5D4030/0x5D50A0, drop-down 0x5D5C30/0x5D3450/0x5D3740/0x5D2DD0/0x5D4390, edit box 0x5D1000/0x5D11F0/0x5CF9B0, viewport 0x5EDAA0/0x5ED2C0/0x5ED560",
+   "options": "0x67B110, 0x6788E0, 0x6792A0, 0x6768D0, 0x674430, 0x6793B0, 0x674480, pages 0x679C70/0x67A830/0x677740/0x677D40/0x943F20 with their ReadSettings/Apply/Cancel/Defaults",
+   "credits": "0x646150, 0x645F70, 0x645BD0, 0x646B50, 0x646C10, 0x646A90, 0x645730, 0x645890, 0x645800",
+   "loading": "0x6E83A0, 0x6E8C00, 0x6E8300, 0x48C050 nation art"
+  },
+  "verification": {
+   "tests": "cargo test -p aa-ui: 15 unit + native_layout 1 + native_decal 3 + message_box 5 + screenshot_layout 5 + round2 7, all pass",
+   "screenshots": "qa-output/native-port/tgi-*.png from research/phase8-ui/scripts/round2-*.json",
+   "options_reference": "reconstruction/native-game/qa/controls-v12-original-default-video.png (original options dialog)"
+  },
+  "emulator_recheck": "page-0 faults except FS:[0], allocator calls fail the case; native-layout.json and native-decal.json regenerated byte-identical"
+ },
+ "round3": {
+  "status": "text measure + draw layout native-proven; staging rows; in-game HUD sub-widgets behind hud::HudWorld; message log, minimap, numeric edit box, edit box scrolling/clipboard/highlight, list double clicks; loading objectives and dynamic-campaign gate",
+  "ported": {
+   "text": "rtext.rs (0x7352C0, 0x735C00, 0x735D20, 0x735D50), rdraw.rs (0x735B90 chain), fonts.rs (0x708B30, 0x7072F0 cells, special glyph images)",
+   "hud": "Init 0x6182B0, EconomyBar 0x603C40/0x602D10/0x602BD0/0x5C9830/0x5C8F10/0x603190/0x602480, EconomicImpact 0x603E70/0x602640/0x6025B0, FactionExperience 0x604130/0x4CE3A0, floaters 0x608600/0x607A50/0x6065D0/0x607FC0/0x606820, idle 0x623520/0x6233C0, TimeMessage 0x5D27B0/0x612010, ObjectDisplay 0x62CBA0, CompanyDisplay 0x630320/0x62EF20/0x62E3B0, CompanyUnits 0x62F550/0x62F690, HQAttached 0x6301C0/0x62D010/0x62E0F0, FormationButtons 0x629AB0/0x628490/0x623D30, UnitProperties 0x629440/0x629620, ActionButtons 0x5F9520/0x5F4540/0x5F4820, StatusBar VE 0x5E3DE0/0x5E61C0/0x5E2FE0/0x5E2100, StatusBarWidget 0x5DEF90/0x5DF0F0/0x5DF010/0x5DF060, movers 0x5C3260/0x5C2800/0x5C3CF0, owner text 0x4E9560/0x4E93C0, economy text 0x5C4CB0/0x5C4BD0, colour wrap 0x731980",
+   "toggles": "toggle click 0x5F11A0 (+0xE8 auto flip; cleared for staging slot Ready 0x69F6AC, formation buttons, Pause 0x61687C)",
+   "editbox": "scroll 0x5CF770, caret 0x5CF9B0, highlight 0x5D0550"
+  },
+  "verification": {
+   "tests": "cargo test -p aa-ui: 17 unit + hud 4 + message_box 1 + native_decal 3 + native_draw 1 (14604 cases) + native_layout 5 + native_text 1 (18328 cases) + round2 7 + round3 6 + screenshot_layout 5, all pass",
+   "screenshots": "qa-output/native-port/r3-compare-02/04/05/06/07/08/13(-panel).png, tgi-r3-*.png"
+  }
+ }
+}

@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "passed": true,
+  "source": {
+    "crates/aa-navigation/src/lib.rs": "a5fd7d4f228612a97ff2ae18858f96c87630d934d4701f7e14098fef5387439e",
+    "crates/aa-navigation/src/action_world.rs": "1624a3c28c363157e8af9f71867c0c5852fcd4c6ac6f1b0e681660ae7460099e",
+    "crates/aa-navigation/tests/native_fixtures.rs": "b71a615467e16bad656a429cc834ce98799890aaa7641564e13fa141ce81bcc7",
+    "crates/aa-mind/src/element_move_continuation.rs": "0fe12310fd8393f9081745f2b3877036f9d640dc6772bad973600426b5d83bae",
+    "crates/aa-mind/tests/continuation_native.rs": "1185f4e398ea32aea3690eb735c683f340c973545d6f6ee7b3ac8bb2d4c7f754",
+    "crates/aa-trig/src/turning.rs": "e50ed9fd88cb93a3dbcaf6e8cd643fd8bdd15c0280e086c89bb253798a283424"
+  },
+  "dependencies": {
+    "crates/aa-mind/src/element_move.rs": "a450bc131d55449faa374b6e9925c616e3798727345d14ee57aadd390d617773",
+    "crates/aa-mind/src/lib.rs": "9e191bb21f8822a11d1ffe7d7a558f4f41342d3fa8dc31b9ac12b0e78eb2d651",
+    "crates/aa-mind/Cargo.toml": "0fecb7386bc7014ed9257398e784e0ba492fcccd35ef4c5ae2fe9588217872e4",
+    "crates/aa-trig/src/lib.rs": "65d8fc7abdc387bd22e7c2a3415fe10eb70856b2d88043f02ac12126a223890d",
+    "crates/aa-trig/src/angle.rs": "40c3c28058d013b0d6b9bae0aaeec44493f33f80542d8b93c2e25530a4f5b160",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/phase4-trig/lookup-tables.bin": "ed3df2510bb1b975fad59fb71aa1a5c0858e2e3391ee807b2549fe6351a00bb1",
+    "research/phase5-navigation/native-navigation-fixtures.json": "230242d6cd119bc395c7688bcaefc8b34c62221126a8705fc64a4007eb7a779c",
+    "research/phase5-navigation/native_oracle.py": "7ce751725d78f235e746e3f1e7012c2da10a90aa7a7814cceeb85e107cc8f699"
+  },
+  "evidence": {
+    "research\\phase7-continuation\\abs_angle-asm.txt": "579a43ea94c83c9cf0feb2383d8d4bfeff61c2c11dc0c8c3680d41ce518a50e5",
+    "research\\phase7-continuation\\acos-asm.txt": "7336733ce39b501bcc1138995d4a3d27e9e7f74819b567aaca3251d1150c8207",
+    "research\\phase7-continuation\\avoid_actor-asm.txt": "adec65e1b4372c791f2c7df334aa910955bbe8b1f8d5b629bbe329e6473ab180",
+    "research\\phase7-continuation\\back_to_path-asm.txt": "9a329f23371bb4067cb85cb1fe0a808c475b91d7d6c1625341fa992999277dfa",
+    "research\\phase7-continuation\\collision_location-asm.txt": "02ac888fcf0f4606b7c596c2a9089bde1ef36b3976f92ec3ddec0b4b43ead3e6",
+    "research\\phase7-continuation\\collision_plan-asm.txt": "8c801f951e02d6aee0cde3c79e6ce1aabd2bd209c39edc54cadc8f6beb869bfc",
+    "research\\phase7-continuation\\collision_probe-asm.txt": "165f6fb9605dd8c49e3c7d43261cef91c1e70f1603a553028a0f18c012d36c6d",
+    "research\\phase7-continuation\\collision_result-asm.txt": "71b22bc2865634bf21b8cf4f969ef12c4ad13702a105f37814506488c9e74784",
+    "research\\phase7-continuation\\constants.json": "2b79a03a812119b18e4fb0e958a3843215a0fb00ff07a86cbbebe545feab9fe9",
+    "research\\phase7-continuation\\continuation-asm.txt": "b0d88e507808063ce86b08c5c0d0f94f08e769f95b17ffc3e47ffd447d7b3934",
+    "research\\phase7-continuation\\continuation-clippy.log": "e5f4c2d52bc2ebc580aeb67c9696d29096cb53caad2aaa5db738dc48d3960c09",
+    "research\\phase7-continuation\\continuation-tests.log": "2163e469578e1d178a47964ca33deef1b0f5138b66936136c9e8d4c38d283a34",
+    "research\\phase7-continuation\\forward_collision-asm.txt": "c835c726e8f1c315bf012b1cc701237a741caa2a16a03d0b23f1e7e60936b2fc",
+    "research\\phase7-continuation\\inspect_native.py": "23533b3c77f6dfcd692f7948eb4e8b0db36838ca7db64b58f33fa5df8efc03fb",
+    "research\\phase7-continuation\\line_intersect-asm.txt": "e7646ab9a7b6821f2e1b6c525c8d381bd781619857779dde5441b2e95fb5235b",
+    "research\\phase7-continuation\\native-continuation.json": "d46680eecd2af69248b3f6ca9054b67acb06a6f9edf7be71660d087eb4d8f18c",
+    "research\\phase7-continuation\\native-offset.json": "c2999d221defdc00d0ebc137e87333e7fd1ccf3c91945cd5030eef87ea0755b8",
+    "research\\phase7-continuation\\native_continuation.py": "5a420e8c55e1c94c6bf51f606208b8f9b838fc137e3dc5a23b92781051a67986",
+    "research\\phase7-continuation\\native_offset.py": "5756ed2f8c2fcbce6e07af2b9f3139d2d79df80c64d48ab9df05fa2421af573d",
+    "research\\phase7-continuation\\navigation-clippy.log": "1442a360c38f724bc380c71a57c7e98bf7899695a74067f801ea6b0f493b5a84",
+    "research\\phase7-continuation\\navigation-tests.log": "7423d2cd7a4554c782075fcb7c3cb1aef87ae8d3078a2cf6ba34372a260b8562",
+    "research\\phase7-continuation\\near_waypoint-asm.txt": "ff42df9ef3ecaff7c6694aa944a07b00fe7e0d7b04408faa0953bade34b4d3bf",
+    "research\\phase7-continuation\\node_construct-asm.txt": "fa3d454212e008753385fcc2b30e94055a3d0493f95e23548fb5fb7593ba0306",
+    "research\\phase7-continuation\\node_prepend-asm.txt": "97b262eefccc79b2e5133db708f2976bedebb001435e282685368c3706c0d4ed",
+    "research\\phase7-continuation\\normalize-asm.txt": "4e14be8d39c8b2349de1a9fedce96943e2c33af21d749ac990ad7fcf474458a7",
+    "research\\phase7-continuation\\provenance.json": "35a41681026c479c59d4f82724b4800ebe1109e01d3d9ed464586ead0a22296b",
+    "research\\phase7-continuation\\README.md": "e55db7ed7ec90966676a02107e3094bcea1e900d97b904ca9a7b2fefd7f677ef",
+    "research\\phase7-continuation\\record_evidence.py": "03b678740dc9a29c9ca1c86e5d3c300fd06f77f310683e9e89755e4ef61e3ec9",
+    "research\\phase7-continuation\\result_path-asm.txt": "d0b15ad46e899316abec55c8c2fb49d89a7b12ba7d48bed8516c58ae5bb877c9",
+    "research\\phase7-continuation\\save_collision-asm.txt": "779ad73a1ea89050121470839bd9d8fee5eb91c42be3bce8889eb79ed61d29e9",
+    "research\\phase7-continuation\\stop_distance-asm.txt": "cc2b247303a837725573de4ca5b94fe2eeaf2cfdd66c4de8d6456289d200f3e1",
+    "research\\phase7-continuation\\trig-clippy.log": "a9ad5a4fef0a0c59a8506770e3b55e01f111a311cd7741e9a2a9652c9edc74ed",
+    "research\\phase7-continuation\\trig-tests.log": "7438dff2b056eccb75abc1c6b9b600cbc70d20737f92db36da13bccb2d95e83b",
+    "research\\phase7-continuation\\wait-asm.txt": "7320b2b262bb0c58b8ce63327d91a854e64af97d3bf1d3ce211774c21b2fab31",
+    "research\\phase7-continuation\\waypoint_offset-asm.txt": "35d07edf626dfa4b5710ab8fa8f5cd742493bbc3e6d28fcb87ef71a9f698069c",
+    "research\\phase7-continuation\\zero_prefix_remove-asm.txt": "cc3f293f29130cefe001319321ba662a534b1b93f2ef26a99ac01cd664289e8f",
+    "research/phase7-continuation/README.md": "7edb99141b3f3ea9014809cddb4f1c1bc4757e23a26c4d078d6f1dd52748aefc"
+  },
+  "validation": {
+    "original_waypoint_cases": 348,
+    "original_continuation_cases": 219,
+    "continuation_by_operation": {
+      "continue": 36,
+      "forward": 21,
+      "collision": 27,
+      "save": 18,
+      "back": 27,
+      "fullback": 90
+    },
+    "existing_action_path_replayed": 255,
+    "rust_tests": 13,
+    "commands": [
+      [
+        "cargo",
+        "test",
+        "-p",
+        "aa-navigation",
+        "--test",
+        "native_fixtures"
+      ],
+      [
+        "cargo",
+        "test",
+        "-p",
+        "aa-mind",
+        "--test",
+        "continuation_native"
+      ],
+      [
+        "cargo",
+        "test",
+        "-p",
+        "aa-trig",
+        "--lib"
+      ],
+      [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-navigation",
+        "--test",
+        "native_fixtures",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-mind",
+        "--test",
+        "continuation_native",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-trig",
+        "--lib",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    ]
+  },
+  "scope": "Exact native kernels with required source-bound world services; see README.md for callback and live-runtime limits. Peer review pending separately.",
+  "documentary_update": "Clarified visited-address pins can include intercepted seam entry bytes; source and fixtures unchanged."
+}

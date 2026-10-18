@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "status": "bounded source/list binding accepted; full shared library test blocked by unrelated newly added fixture at build snapshot",
+  "source": {
+    "crates/aa-runtime/src/definition_technology_properties.rs": "e6ed3713aa6740648cad54d94df0fdbf6f4f258b61e79791ca794529990340e2",
+    "crates/aa-runtime/src/definition_technology_properties_tests.rs": "7488695c7145620c1261c37747a3746b5dbaeabc18761111b9ba6215698ad395",
+    "crates/aa-runtime/src/load_owner_add_actor.rs": "e67fbc04f16b05c6e5ff127d0b4b318be8570c606f94b587f4c2423b3167b806"
+  },
+  "evidence": {
+    "actual-authored-source.json": "9e0c6916e41d0d92f1fc50c3c291abdf76664a39d87e509563005dc0f1545c83",
+    "actual-source-input.json": "487f9e7ca8234d209114df35e6513cdae9503933b81f930830abaf9e8a69f83a",
+    "capture_authored_source.rs": "b6ae17712aa11641db9dc6ebfd3a24f67b5b8d30cea323c51cee5137b7ae7387",
+    "native-actual-technology-properties.json": "8b790693070f2eef78d7667917ef6b929a5a608c309cfe7086c9c44e33a29358",
+    "native-technology-properties.json": "3c6baa2b8027a8da4c8c05c1febd0945d9f9aa28704f5fd7e7b6b920146fda2c",
+    "native-technology-use.json": "b34a9f06c0041adf37c53342d136df90f4337fa5abc5659a58f4ad695915fea0",
+    "native_actual_technology_properties.py": "ff35c2fadba2244298f92dc7d996d5f4aeda6700255173dd235707ee6621215b",
+    "native_technology_properties.py": "f62f5a3dfb9963d74e79f5bb68147af18f95eabba2fac157deef82ed25570b5f",
+    "native_technology_use.py": "9980f09777349df61516dc6133f953b76b6c45ab04e271d29ff4523614a68281",
+    "production-tests-check.log": "605f055336778ee8d3ae9881d9b44230b7ff4c5105f4f1d89dfdd9797d6d09ae",
+    "public-api-tests.log": "ebf6c451e8897818eaa4a5f458208d106c8e2613532f0ab3c9bceafd0efeb173",
+    "public_api_tests.rs": "41a17becdf7183a13db8dbd6f5a385fc8d55b704ddcc42087197ff3791bceb30",
+    "rust-tests.log": "1b5d44cfeb7e90f275a94afeb49c65147cdb7bb6b55814a8eb5f26b0a2e90598"
+  },
+  "fixtures": {
+    "native-actual-technology-properties.json": {
+      "sha256": "8b790693070f2eef78d7667917ef6b929a5a608c309cfe7086c9c44e33a29358",
+      "native_executions": 30
+    },
+    "native-technology-properties.json": {
+      "sha256": "3c6baa2b8027a8da4c8c05c1febd0945d9f9aa28704f5fd7e7b6b920146fda2c",
+      "native_executions": 30
+    },
+    "native-technology-use.json": {
+      "sha256": "b34a9f06c0041adf37c53342d136df90f4337fa5abc5659a58f4ad695915fea0",
+      "native_executions": 96
+    }
+  },
+  "native_executions": 156,
+  "tests": {
+    "public_production_api": {
+      "passed": 2,
+      "failed": 0,
+      "log": "public-api-tests.log",
+      "binary_sha256": "61e51f388e632f2ba8cd000a57b55921a9eed58563808a9c255066201b63fd5e",
+      "production_rlib": {
+        "path": "target/s-graphics-review/release/deps/libaa_runtime-0c448fad447732d7.rlib",
+        "sha256": "efe9e2c29f2d81c9b18e6d23243f36371a00522ee60de3d8413236ed7e650006"
+      },
+      "qualification": "Only public production APIs imported from already compiled runtime rlib. The real test module is reused; no runtime implementation include, no private-guard visibility widening, no mocked Catalog source owner."
+    },
+    "cargo_check_tests": {
+      "log": "production-tests-check.log",
+      "result": "unrelated existing owned_load_send Send bounds fail for SessionPlayer/RestoredMindState, no owned error"
+    },
+    "cargo_lib": {
+      "log": "rust-tests.log",
+      "result": "unrelated new application_strings include missing native-default-string.json at build snapshot; fixture author subsequently landed it; not claimed rerun"
+    }
+  },
+  "actual": {
+    "saved2697": "weurope_farm6x8_01",
+    "head_list": [],
+    "positive_sources": [
+      "assembly_parts",
+      "deployment_crates",
+      "ger_infantry_supplies",
+      "rus_infantry_supplies"
+    ],
+    "shared_property_token": "ger/rus military_gearup_tech share the same Bank identity, no token hardcode"
+  },
+  "limitations": [
+    "No ResearchComponent+558 list substitution:43C is StructureComponent.TechnologyProperty.",
+    "No property4E3AD0 effects/readiness authorization from identities; reached positive effects remain required services.",
+    "Fresh immutable completed-source projection only, not arbitrary shared ActorData reload or partial failed source reconstruction. Property translation source is explicitly refused by existing producer.",
+    "Native parser allocators and canonical Property Find are explicit fixture services. Consumer4E3AD0 is an explicit required service, and terminal observer4E63AE is an observed cutoff pin, not executed terminal instruction.",
+    "No native pointer values/registry ordinal claim for portable Bank tokens; token ordering does not control traversal.",
+    "No full ActorData constructor/load, battle or network readiness claim."
+  ]
+}

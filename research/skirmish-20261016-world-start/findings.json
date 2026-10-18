@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-16",
+  "functions": [
+    "58F010",
+    "58EFE0",
+    "58EBA0",
+    "58E8B0",
+    "58E890",
+    "58EE00",
+    "58F530",
+    "58F420",
+    "58F3C0",
+    "4F1E10"
+  ],
+  "native_executions": 924,
+  "tracking_fixtures": 330,
+  "snapshot_fixtures": 132,
+  "existing_world_start_replays": 360,
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "images": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "pinned_instruction_count": 736,
+  "seams": [
+    "Actor virtual+100 only in new native oracle"
+  ],
+  "storage_expansions": [
+    {
+      "address": "58F530",
+      "resource_rows": 10,
+      "replacement": "Vec sized to actual resource registry"
+    },
+    {
+      "address": "58F420",
+      "derived_rows": 10,
+      "replacement": "Vec sized to derived registry with five legacy alias slots initialized"
+    }
+  ],
+  "limits": [
+    "Finite arithmetic contract only",
+    "Runtime binding and complete match acceptance separate",
+    "Typed source formula registry required; no absent-catalog fallback",
+    "Snapshot wire serialization and native allocation-failure semantics not implemented"
+  ],
+  "sha256": {
+    "crates/aa-economy/src/statistics_live.rs": "733447d671d4bd164f560d0e65a7ede4f4dce9d3f9bd744424f62065f3fcc734",
+    "crates/aa-economy/src/world_start.rs": "d675e2c0b0ad0353a2096572ca43b29e5d781fc78fe3e58dc779f007a4af74ea",
+    "crates/aa-economy/tests/native_statistics_live.rs": "6c075cd4436fc0c44fd6d6b684b5f3216ee0bdba0f8ac5d9e6bcb6158777a3b7",
+    "crates/aa-economy/tests/native_world_start_owned.rs": "0d16efb8be6ea7424379d3e51bf295cb298c6e2c3afe83c8191b089d00d65d02",
+    "research/skirmish-20261016-world-start/native_statistics_live.py": "a76fc293b010e2ab964830f073e4f9da295b4c1a9f216d4527ee9cc7428ce05c",
+    "research/skirmish-20261016-world-start/native-statistics-live.json": "db5b474c87a7a2eca9143bf548ca7ff5b4ad3a92221c5fa70e76e701e5219994"
+  },
+  "validation": {
+    "aa_economy_full_tests_passed": 23,
+    "failed": 0,
+    "ignored": 0,
+    "clippy_all_targets_warnings_denied": "pass"
+  }
+}

@@ -1,0 +1,86 @@
+Phase 6: bounded original water reconstruction
+
+Implemented
+- Original WaterInfo depth/RGB/alpha curve interpolation, including endpoint
+  behavior, native operation ordering and explicit x87 precision. 888 original
+  x86 executions cover authored curves and PC24/53/64. No interpolation weight
+  is prematurely stored to binary32; only output channels are stored.
+- Original regular-cell XY vertices and triangle order. 16 original x86 cases
+  execute 7376B0 with only vertex/index allocation leaves replaced.
+- Static map-preview water uses original first water animation texture, source
+  WaterInfo curve, eight-meter authored TerrainBlockSize UVs, base-height-minus-
+  0.5 surface, and alpha0xED / ZBuffer flags1/function3 (test yes, write no).
+- Native cell selection738280 uses current type2 terrain or first water neighbor
+  in its original eight-cell ring. 4,608 original x86 fragment executions verify
+  every3x3 kind2 pattern at all9positions, including edges and corners.
+- Raw TERRAIN palette binding uses source-ordered native carry/default fallback,
+  active original aliases, original biome default, and verified original TGI
+  hashes. Height query type/noise and selected water material share these exact
+  effective identities. Unknown definitions are not invented as type0.
+- Original GMap+5C serialized geometry comes from the TERRAIN auxiliary suffix.
+  terrain_roads implemented water_geometry.rs; its separate native fixture
+  replays all80 original maps and55B9E0 lookups. Missing cache cells use native
+  regular quads; existing empty cache cells emit no triangles; nonempty cells
+  use original ordered vertex/index arrays.71maps, includingCrete, have empty
+  saved caches;9have authored cache entries. No shoreline polygon is guessed.
+- Original raw HEIGHT_MAP/MOUNTAIN_HEIGHT_MAP chunks are decoded with source
+  MAP_HEADER extents. Existing aa-heightfield550210 and aa-spatial4F0E50 are
+  composed at native store boundaries. The preview explicitly choosesPC24;
+  live engine precision is not claimed. Source grid dimensions are validated.
+- Water batches retain native block/material boundaries and participate in the
+  existing geometry alpha queue. Native static sphere-bound propagation for
+  generated water is not yet recovered; renderer AABB centers are disclosed.
+
+Read-only original evidence
+4B8530 parses WaterInfo terrain identifiers and20-byte depth/color/alpha rows.
+4B6AC0 orders depth rows. 4B7490 resolves the Biome's terrain-pointer WaterInfo.
+4B6E10 interpolates the color with x87 arithmetic and four float32 stores.
+4B87A0 terrain type2 contains animation frame list, rate and color/depth values.
+736AB0 accesses GWorldMap+34 base HEIGHT_MAP through550210, subtracts native
+constant9FBDB8=0.5 and stores surfaceZ. It queries ground4F0E50 flags0x122,
+subtracts ground from surface, then calls WaterInfo interpolation. This is not
+a sea-level-zero guess, nor a separate invented water-height map.
+7376B0 produces regular quad positions and indices0,3,1 /2,1,3.
+7377F0 creates water mesh with upward normals, block-relative XY/block-size UV,
+vertex-color property source2/lighting1, alpha0xED, texture wrap3/filter2/apply2,
+ZBuffer flags1/function3. NiFlipController uses terrain frames and1/anim_fps.
+736D50 constructs texture translation from VTerrain+50/+54 remainders.
+723E00 reads TerrainBlockSize through the AVars cache intoVTerrain+A0; shipped
+AVars.tgi has8. Production metadata pins this source rather than an arbitrary
+UV scale. Source templates/biomes/frames/alias metadata are hashed.
+
+Explicit incomplete areas
+- The saved55B9E0 geometry cache is decoded; its runtime regeneration and edits
+  after original load remain unimplemented.55B4E0 is shoreline doodad placement,
+  not the cache-creation function. The initial preview follows serialized cache
+  contents, and does not claim later dynamic lifecycle parity.
+- First texture frame at static scroll origin only; no runtime NiFlipController,
+  wind/scroll lifecycle, waves/doodads or reflection parity.
+- Source water heights and triangle coordinates retain raw original floats.
+  Arithmetic follows existing native functions with explicitPC24 in this viewer;
+  whole live original rendering/FPU state is not proven. The underlying terrain
+  preview still uses rounded recovered JSON and approximate lattice evaluation,
+  which can cause small water/ground seams independently of this source binding.
+- Existing renderer uses modern sRGB/linear illumination and blending, not the
+  complete native fixed-function lighting/gamma pipeline. The visible water
+  color is consequently still an approximation despite original textures and
+  authored vertex RGB/alpha. No original screenshot pixel-parity claim.
+- Geometry traversal/sphere bounds and surrounding alpha ordering remain subject
+  to the renderer's documented native scenegraph limitations.
+
+Validation
+native-water-vectors.json records original executable hash, complete source byte
+ranges and888 curve+16quad+4,608selection cases. recover_water.py opens native game/assets read
+only and regenerates evidence under research; source game and prior releases
+are unchanged. Client tests cover all vectors and original Crete water coverage,
+surface height, UV range, native cache distinctions and blend/depth settings.
+
+QA notes
+qa-output/phase6/water/crete-static-first.png was a failed visual candidate:
+an initial incorrect grid-vs-per-cell geometry lookup made too few water cells.
+It is retained for evidence, NOT used as validation. Corrected source calls
+native_height_at_grid; the independent coverage test now catches that defect.
+crete-static-grid-fixed.png is the corrected stricter same-ID candidate
+(8,719cells). A later conservative interior subset supported10,901cells.
+These are intermediate snapshots. Final raw-source/native-selection water
+uses14,169Crete water/neighbor cells and its final capture/report is authoritative.

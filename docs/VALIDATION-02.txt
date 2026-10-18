@@ -1,0 +1,44 @@
+DEVELOPMENT 02 — VALIDATION
+
+Passed on this Windows PC with an RTX 3080:
+- 85 Rust tests, including optional original-file and real-GPU tests; none ignored.
+- Workspace/all-target strict Clippy, no warnings.
+- All 80 map GPU load/upload/render/readback checks after the material fixes.
+- All 20 recovered infantry clip GPU render checks after the material fixes.
+- GBRCorps, GBRCorpsPack and GBRDepotOil repaired previews inspected; both
+  Vulkan and Direct3D 12 executed. Pack loses 15 audited shadow helper draws.
+- The GPU test proves pose-buffer writes change rendered pixels, invalid poses
+  are rejected before mutation, and alpha-zero RepColor pixels become opaque
+  team color rather than holes/black geometry.
+- 1,847 models / 11,035 meshes audited against original and converted identities:
+  336 shadow proxies and 1,260 inherited team-mask corrections identified
+  (1,256 corrections on retained meshes).
+- 105 original-data animation reference poses; 150 native economy scenarios with
+  960 operation/state comparisons; 12 native outer-dispatch scenarios; 10 native
+  key-tokenizer cases; 6 native RepColor render-state cases.
+- End-to-end diagnostic loads verified original/v14 resource definitions and
+  produces a 7-money/minute shortage and 1093 balance after the explicit 60-second
+  arithmetic sample; provider caps clamp 150 to 100. These are labelled test inputs.
+
+Important scope
+The animation reference uses decoded original NIF/KF data and independent PyFFI
+skinning math, not a pixel comparison to the running original engine. Native
+instruction fixtures have explicitly documented leaf/environment seams and
+precision modes. The renderer's complete lighting, color-space, LOD, optional
+texture stages and runtime animation-state behavior are not yet native parity.
+
+The active preview was being used by the user, so final checks ran headlessly.
+The current earlier preview was not closed or overwritten. Development 02 is
+delivered in a separate folder; open its executable to see these fixes.
+
+Original saves, user settings, original assets and previous releases were not
+modified. No live multiplayer game or internet service was tested in this pass.
+Full combat/AI/campaign/saves/network play remain unfinished. Separate-internet
+testing still requires the previously unavailable second PC/connection.
+
+Automatic approval review rejected optional cleanup of six private temporary
+test fixture folders with the reason "blocked by policy". Those folders remain
+in Temp. This does not affect the build, original game or user saves.
+
+Detailed logs and images: rust-rebuild/qa-output/phase2/
+Native evidence and independent reviews: rust-rebuild/research/

@@ -1,0 +1,158 @@
+DEVELOPMENT 06 PARITY — NO FULL-GAME PARITY CLAIM
+
+The preservation target is expanded v14, including its 23 data overrides and
+native behavior changes. BASELINE.txt and research/evidence/v14-baseline.json
+identify that target. The original installation, assets, saves, profiles, patches
+and earlier releases remain separate and unchanged.
+
+This build is an asset inspector plus tested engine components. It does not run
+a complete live game world or a full match. No overall completion percentage,
+original-save compatibility or working internet multiplayer is claimed.
+
+Status labels
+PORTED-COMPONENT: production Rust matches scoped original-code fixtures; required
+world services and unsupported native domains are stated by its crate contract.
+SOURCE-INPUT: original bytes/definitions are decoded and source-bound; decoding
+does not create live objects or execute all native load side effects.
+PREVIEW: integrated renderer/inspector behavior, not native screenshot parity.
+DETERMINISTIC-INFRA: new infrastructure tested on its own, not an original format.
+MISSING: no replacement is presented as completed original gameplay.
+
+Verified rendering and source inputs
+System                         Status             Evidence and remaining boundary
+Original maps/models           PREVIEW            80 maps; recovered source placement and models.
+Planar placement/picking        PREVIEW            Native -Y forward basis; pitch/roll/LOD incomplete.
+Initial visibility             PREVIEW            Authored visibility; no gameplay fog/LOS.
+Team masks/material states      PREVIEW            RepColor, alpha/blend/depth; dynamic controllers missing.
+Geometry transparency order     PREVIEW            Native key/queue/sort; static source sphere centers.
+Terrain transition composition  PREVIEW            Native layer/mask/rotation/blend decisions reach GPU.
+Water frame 0                   PREVIEW            Source-bound static water; native/source and GPU checks.
+Infantry/vehicle clip playback  PREVIEW            Inspector playback; runtime selection/events incomplete.
+Typed definition projection     SOURCE-INPUT       Source spans/types/literals; full evaluator missing.
+RMP/TGCK and indexed placements  SOURCE-INPUT       Exact extents, IDs and raw fields; opaque tails retained.
+MAP_HEADER/GWORLD/IDMGR          SOURCE-INPUT       Raw setup/time/RNG/generations; no full startup/restore.
+TEAMS/KINGDOMS/owner references  SOURCE-INPUT       All original map records; runtime owners not published.
+Actor/Properties/recruit wire   SOURCE-INPUT       Proven schemas only; unsupported component codecs explicit.
+Height grids/static TERRAIN     SOURCE-INPUT       80 maps; native sampling/static passability binding.
+
+The transparency helper reproduces native depth-key arithmetic and unstable
+equal-key ordering. The preview's recorded map order is not proven equal to live
+native scenegraph traversal. Static meshes retain authored sphere centers;
+animated meshes use disclosed posed bounds until native sphere propagation is
+recovered. Live renderer precision and all world-transform callbacks remain
+unproven. Terrain passes retain their own native layer order before objects.
+
+Terrain composition now uses original transition textures and native layer
+selection, hashed TransitionSet choice, mask transforms, half-texel mapping and
+first/subsequent blend states. Outermost cells and unresolved/ambiguous metadata
+have explicit reported fallbacks. Modern framebuffer blending does not reproduce
+the original cached offscreen texture's quantization, filtering and gamma.
+Native final lighting, macro/detail stages, skirts and shadows remain incomplete.
+
+Static water uses original frame 0, authored depth/color/alpha curves, native
+regular or saved cached geometry, and raw heightfield queries. The original
+TERRAIN auxiliary suffix/cache is decoded without pretending it creates runtime
+region topology. Missing cache cells and cached-empty cells remain distinct.
+Source/native review and bounded GPU checks passed. Runtime cache regeneration,
+scroll/flip controllers, waves, shoreline lifecycle, reflections and native
+lighting are not implemented. Source-bound static arithmetic is not a claim of
+pixel-identical water, and rounded terrain preview geometry can leave seams.
+
+All 80 original map source prefixes are checked, including 225,851 indexed
+placements and 11,701 actor owner references. Team/Kingdom saved identities are
+generation-checked; header player slots are not substituted for owner handles.
+The complete static TERRAIN corpus has 2,960,384 tiles. These are source/formula
+comparisons, with 720 actual source cells replayed through original tile loading;
+they are not 3 million native executions. Missing active terrain definitions use
+the explicit native carry/default behavior, with missing source ordinals reported.
+Native runtime registries, definition evaluation, post-load fixups, saved region
+restoration and complete component codecs are still required.
+
+Verified engine components
+System                         Status             Evidence and remaining boundary
+Binary arithmetic/trig/RNG      PORTED-COMPONENT   Native precision/stores; world seed/draw ownership required.
+Resource/shortage/stock flow     PORTED-COMPONENT   Actual catalog, supply and lifecycle integration required.
+Outer world/list ordering       PORTED-COMPONENT   Gameplay leaf callbacks and real clocks required.
+Periodic/deferred queues        PORTED-COMPONENT   Native insertion/cancel/dispatch; host callbacks required.
+Packet order/history/consume    PORTED-COMPONENT   Native registry and bounded payloads; session loop missing.
+Identity/component lifecycle    PORTED-COMPONENT   Native generations/order; full factory/restore missing.
+Creation and load shells        PORTED-COMPONENT   Typed definition inputs; publication/fixups missing.
+Owned paths/activation/ActionGo  PORTED-COMPONENT   Prepared path execution; actual world callbacks required.
+Tile solver/materialization     PORTED-COMPONENT   Native heap/ties/cost/ray ordering; live binding missing.
+Region graph/prepass            PORTED-COMPONENT   Ordered supplied topology; topology builder/lookup missing.
+Height sampling/spatial commits PORTED-COMPONENT   Exact arithmetic/order; actual membership required.
+Dynamic collision primitives    PORTED-COMPONENT   Native shapes/predicates; live actor snapshots required.
+Ground Mover                    PORTED-COMPONENT   Fallible native world interfaces; no command shortcut.
+Health/damage/corpse setup       PORTED-COMPONENT   Ordered actor/ability/death callbacks required.
+Weapon hit/periodic properties  PORTED-COMPONENT   Actual Body dispatch; targeting/projectiles missing.
+Kill credit/statistics          PORTED-COMPONENT   Native classification/formulas; reward/world effects required.
+Experience routing              PORTED-COMPONENT   Native actor values/distribution; promotion effects missing.
+Production queue/payment        PORTED-COMPONENT   Timing/pause/cancel/refund; actual fulfillment required.
+Streaming file transfer         DETERMINISTIC-INFRA u64 lengths/bounded buffering/hash; no lobby integration.
+Worker lab/snapshots             DETERMINISTIC-INFRA Exact lab checks; neither native saves nor full simulation.
+
+Tile search preserves first-discovery closing, native neighbor and heap ties,
+endpoint adjustment, path construction and line-of-sight callback order. Region
+search ports the concrete uncached-route path and cached distance values; its
+flag1 cached-route tables and native topology construction remain missing.
+Actual terrain/object memberships and definition-dependent collision/cost inputs
+must be supplied. A decoded selected-unit move is not dispatched straight to
+Mover. No approximate A* or straight-line route is substituted for missing world
+services. Explicit errors do not imply rollback of already committed effects.
+
+Combat includes Body damage propagation and source-aware health, corpse setup,
+weapon-hit and periodic-property callers, kill credit, statistics and experience
+distribution. Native arithmetic and observable callback order are retained.
+Target selection, attack cadence, projectiles, promotion internals, ownership
+changes and complete death/publication effects remain required world services.
+
+Production includes recruitment admission, payment/reservation, queue start and
+poll, pause timing, cancellation, completion and refunds. Completion callbacks
+must create the actual native-equivalent object/research effects; no fake actor
+spawn is supplied. Supply/population/organization registries, command admission,
+outer scheduling and research request/pricing need integration. The periodic and
+deferred world queue ports likewise require actual clocks and callback behavior.
+
+Still required for a replacement game
+- Live world startup, actor/component creation and restoration, native definition
+  evaluation, topology/membership construction, ownership and clock integration.
+- Complete formations, movement/combat behavior, economy/supply, recruitment,
+  construction/capture, morale, research/abilities and fog/visibility/LOS.
+- AI, air/naval systems, runtime animation, missions/tutorial triggers, victory,
+  campaigns and World War II strategic mode.
+- Original UI/audio/editor behavior, native save/replay codecs and lifecycle,
+  lobby/login/hosting/joining, save transfer integration and complete multiplayer.
+- Full native renderer behavior and comparable visual/performance validation.
+
+Diagnostics and evidence
+--mechanics-check and --world-check run embedded native-reference samples with
+explicit synthetic callback boundaries, without requiring original assets.
+--map-world-check <original RMP path> reads source input and reports hashes,
+header/world fields, saved owner/generation checks and height grids. A passed
+input diagnostic does not mean a world was started or a save restored.
+--render-check <new PNG> [--render-frames N] renders the inspection scene and
+refuses to overwrite an existing image. Repeated frames use the same scene and
+camera; timing is CPU encode/submit plus validation, not isolated GPU time or
+gameplay FPS. Final readback completes before the command reports success.
+
+Research component contracts and independent-review reports are under:
+research/phase6-navigation, phase6-pathsearch, phase6-pathcost, phase6-region
+research/phase6-spatial, phase6-collision, phase6-actors, phase6-mapworld
+research/phase6-mapheader, phase6-actor-payloads, phase6-kingdoms, phase6-recruitment
+research/phase6-combat, phase6-weapon, phase6-credit, phase6-experience
+research/phase6-production, phase6-queues, phase6-terrain, phase6-material
+research/phase6-water, phase6-water-geometry, phase6-water-review
+Earlier phase reports retain their historical scopes. A source-pinned oracle
+records which original instructions executed and which leaves were intercepted.
+Matching scoped fixtures is stronger than decompiler reading alone, but does
+not test every game system or a live match. Full-game acceptance still requires
+native-versus-Rust replay/state comparisons across the completed systems.
+
+Resource and preservation policy
+The 64-bit process has no fixed 2/4 GiB game RAM allowance, fixed VRAM allowance
+or bytes-per-second disk/network throttle. Physical hardware, OS/driver limits
+and connection capacity still apply. Available-memory checks, configurable
+headroom and adapter limits are safety inputs, not unlimited-memory guarantees.
+Independent asset work is parallel; authoritative order and RNG consumption must
+remain deterministic. All tests and diagnostics preserve original game files,
+saves, profiles, patches and previous releases.

@@ -1,0 +1,67 @@
+{
+  "scope": "Compiled concrete secondary-Updatable Regiment524910/529D00 adapter and source-aware same-owner ground capability forwarding. Whole scheduled callback execution remains pending.",
+  "production": {
+    "entry": "stored_mind_update::run(catalog,&mut Context,event)",
+    "identity": "Actual Owners Target::Component slot4 inverse mapping, same ActorStore/Arena split, captured Updatable ObjectKey/Mind allocation, actual source Bank and canonical Actor source.",
+    "native_coordinator": "One aa_mind::regiment_update::update; no copied scheduling/update algorithm.",
+    "owners": "Actual frame Bank, spatial index, World variables, presentation, zones, persistent MindRuntime, queues, Owners, RNG, current clock, inventory, terrain, mission and live phase.",
+    "source_forwarding": "think_with_fields -> same derived Sleep -> run_with_fields/stop_with_fields retains actual optional ground capabilities. Legacy explicit-owner wrappers remain unbound only for those previously unavailable fields.",
+    "ground": "57C680 goal prefix uses same portable element_position kernel then actual stored_ground_relocation Context; retained real SyncA scope and presentation presence, mandatory missing positive children.",
+    "post_think": "Current queue head and current Mind.actor flags reread, while scheduling/list cleanup retain original Updatable/list allocation. No second post-Think Arena.actor equality gate."
+  },
+  "validation": {
+    "production_check_01": "PASS32.68s aa-runtime --lib",
+    "production_check_02": "PASS31.99s source-aware Fields batch",
+    "production_and_test_typecheck_03": "PASS1m01s aa-runtime --lib --tests, including concrete relocation forwarding; no test binary linked",
+    "parent_frame_check_attribution": "Builder reports actual aa-netcode frame route check PASS40.29s; not rerun by this author.",
+    "fresh_native_replay": {
+      "result": "PASS",
+      "pairs": 360,
+      "executions": 720,
+      "observed_in_image_pins": 159,
+      "executed_in_image_pins": 156,
+      "in_image_seams": 3,
+      "source": "Root-authored exact native529D00/524910 coordinator fixture, replayed immutably here"
+    },
+    "retained_exact_core_binary_replay": {
+      "result": "PASS2/2",
+      "sha256": "a16d80232947916a4831625261a173e45598ee0eb292979d0ff0fa563ac040b0",
+      "scope": "Root-authored shared portable coordinator with all720 native rows and each reached required-child failure prefix; concrete runtime adapter excluded"
+    },
+    "whole_runtime_links": 0,
+    "whole_scheduled_actual_owner_executions": 0
+  },
+  "remaining_required": [
+    "Positive timed reciprocal Actor+130 lists (Settlement successor assigned).",
+    "Positive523EA0 Engage targets (Builder successor assigned).",
+    "Regiment522270 virtual1A8 (Root successor assigned).",
+    "Non-Regiment scheduled Element/Aircraft derived Update.",
+    "Derived Think types beyond the existing concrete same-owner Sleep.",
+    "Ground children not yet bound: current cell/terrain transitions, interpolation, scheduler effects, history, follower/presentation effects and any missing real SyncA scope."
+  ],
+  "limits": [
+    "No actual first scheduled Regiment tick, natural first battle, gameplay or Development10 completion claim.",
+    "The native coordinator proof explicitly intercepts timed/Engage/Think/schedule/actor virtual callbacks; it is not proof of those concrete adapter effects.",
+    "Source-v1 preserves the exact compiled checkpoint before independently assigned positive-child successors. Shared module snapshots are historical references, not ownership of peer work.",
+    "Existing stored-member-command v1 native fields/command checkpoint remains unchanged historically; source-aware ground forwarding is this separately compiled successor."
+  ],
+  "pins": {
+    "crates/aa-runtime/src/stored_mind_update.rs": "5aebb49f8ecc3ce0b121d96b6e208c967a61944206b9a113399f90c0c9896575",
+    "crates/aa-runtime/src/stored_mind_init_world.rs": "57df382c425e762628d6ef066f957f6930eefbfd35657f2ad9e4a4f34e12045b",
+    "crates/aa-runtime/src/stored_regiment_sleep.rs": "bfe7fdf059797f392e4fff9d31763ee0355a2475fc4e3b49e138ea95f28e4971",
+    "crates/aa-runtime/src/stored_member_command.rs": "172096b7f0c1bc85e5ed7007accc8ae1011bb008da5f7009036792baf4fcf752",
+    "crates/aa-runtime/src/player_order_frame.rs": "3e384a392048472e2ca99c788c9fc709619485ba50010f1203af7b9ef13c4553",
+    "crates/aa-runtime/src/stored_cai_arrivals.rs": "dcd15f2058ae12c8a3187188d297693be858c50ca4fbce2a6f573779d6016121",
+    "crates/aa-runtime/src/live_frame_services.rs": "f0ff48e86d53ef7feede738c225a5d662d2c967acaabb213559eb89282b5e742",
+    "crates/aa-mind/src/regiment_update.rs": "fbc160619166925e6afed51bac82c1169fedd371fc3ccd92c2b01bbc7aacdba5",
+    "crates/aa-mind/tests/native_regiment_update.rs": "b58238945efce2207fbda867fb1e0e053ee12775682ab4f16aa909d66b1fdb10",
+    "research/development10/mind-update/native_regiment_update.py": "0f55917435126366ad456a0cc6b456caaa0493ce264bbbf612b195b4f5081c61",
+    "research/development10/mind-update/native-regiment-update.json": "1a47b5e273c5c56594fd0b886f62b04814542b5ab95c6d7acab26b0ca3504685",
+    "qa-output/development10/mind-update-tests01.exe": "a16d80232947916a4831625261a173e45598ee0eb292979d0ff0fa563ac040b0",
+    "research/skirmish-20261017-stored-member-command/check-update-01.log": "7ac60a67fc99a92c27ddb3f53fa0ccd4cc3fb6e4cfbcd2937b2005b3ebab4bb3",
+    "research/skirmish-20261017-stored-member-command/check-update-02.log": "d08b1fbad8f7d9313e26a0a661df81d74deab86b0a3e523f18555daff2fbe307",
+    "research/skirmish-20261017-stored-member-command/check-update-03.log": "398b8d28b94f57ff0d193e20fe380eeb2ccef8ca320e0760074996c440079457",
+    "research/skirmish-20261017-stored-mind-update/native-immutable-replay.log": "61a10f27cf8e19a1d11d5791d9765fee8e488cf475de2ab713575144cdf3ab36",
+    "research/skirmish-20261017-stored-mind-update/exact-core-replay.log": "67bd1edc9c0abd8591664cb1832cd34bc0e7307b6b198ba39f16436a4ce646cd"
+  }
+}

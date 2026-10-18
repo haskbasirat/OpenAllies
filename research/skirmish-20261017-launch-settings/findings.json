@@ -1,0 +1,214 @@
+{
+  "schema": 1,
+  "status": "accepted bounded launch constructors/current value bindings/diagnostic traversal and nonsaved MAPSTRINGS replacement",
+  "native_authority": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ]
+  },
+  "sources": [
+    {
+      "path": "crates/aa-runtime/src/resource_creator.rs",
+      "sha256": "69dbbd43fb65e95b89d9061d48d4e498a843501af337301fd251e6fd9d45fe2b"
+    },
+    {
+      "path": "crates/aa-runtime/src/launch_creators.rs",
+      "sha256": "f287ae4d6beeed0bd473e1181852f738ae33d27a25045095d9eed92761e31db5"
+    },
+    {
+      "path": "crates/aa-runtime/src/launch_settings_dump.rs",
+      "sha256": "7d96d5766269ba83d91b04d1babb8d80a2533c75961da3d9790cb1c37f7d50ee"
+    },
+    {
+      "path": "crates/aa-runtime/src/launch_settings_dump_tests.rs",
+      "sha256": "8808528f44950c879b62c039b5ecd270efc14ff60e1b41dca95189df46802b62"
+    },
+    {
+      "path": "crates/aa-runtime/src/game_settings_value.rs",
+      "sha256": "bd92fe2ffa7c44de8bd2a66c99be8433ba9cc7aa8f85ab22f252b8b3cb7b7b2c"
+    },
+    {
+      "path": "crates/aa-runtime/src/game_settings_value_tests.rs",
+      "sha256": "f5870d93133fa9cbe2073750e68e7d15703768e6aabc975258888da2bc5adb72"
+    },
+    {
+      "path": "crates/aa-runtime/src/creator_labels.rs",
+      "sha256": "20062ec18ef36c2efdf4a6fea050cac72f20fa77dd698be24d832c3a695d8d08"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_world_rules.rs",
+      "sha256": "414f4cc1fc9d62fc48991d5d881d3ab76390f51e9ba59b03010d5fafb6d3a436"
+    },
+    {
+      "path": "crates/aa-runtime/src/localization.rs",
+      "sha256": "387685bdfdc9fb1302d3ca8416ddf73f06d920727d74ecbbb77368d9ab89791c"
+    },
+    {
+      "path": "crates/aa-runtime/src/restoration.rs",
+      "sha256": "e8bc59aa1cb8ae6b7033fb510ea4d9fced85b991917314dc762378ee51ef84bf"
+    },
+    {
+      "path": "crates/aa-runtime/src/resource_creator_tests.rs",
+      "sha256": "f329959dab0423c61e49f3981f9236be5141331aa0362dcbcf4893ac2cf8c0e2"
+    },
+    {
+      "path": "crates/aa-runtime/tests/game_settings_value_source.rs",
+      "sha256": "b5e1a5087748e8b04a43c3f027e677fc118b3f9c6a8616fcb596c450d78f25b4"
+    },
+    {
+      "path": "crates/aa-runtime/tests/resource_map_cache_source.rs",
+      "sha256": "9d6d518e1c3379907ef551f870590e5e22cfca80145c9cea67c857258ec9c8a1"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "native-launch-constructors.json",
+      "sha256": "beb8d851bd3a4aebd2ff6c5f71414941bf8d3adebf765b4ecd3ff01fbd4bb4f1"
+    },
+    {
+      "path": "native-launch-order.json",
+      "sha256": "072acf06a1d126460ea14c5406c593f8deeb6b21c01a9e6098042ebaf272472c"
+    },
+    {
+      "path": "native-launch-dump.json",
+      "sha256": "5122f1c588d8a53ed6c6a9f96e71e4b98d95ad8bbf43437a648105dde475c86d"
+    },
+    {
+      "path": "native-app-dump.json",
+      "sha256": "cf1eef364bf3929c91bcd5212eee3ca1384bae0c3f2f09e9ec281eede5341ae8"
+    },
+    {
+      "path": "native-closed30.json",
+      "sha256": "5cadfb404309ff13708134a9b199ae3ee8535befb050b5ff11b6026751c5cc74"
+    },
+    {
+      "path": "native-header-pairs.json",
+      "sha256": "b205cc697f2515b49812665434244c36665d6463bf1f0c07b768029575be0faf"
+    },
+    {
+      "path": "native-source-map-strings-guard.json",
+      "sha256": "ecde3f63fa1c36b1ebcae642d3bc958f08480979c0b992a5ff26970cfc233228"
+    },
+    {
+      "path": "native-map-strings-replacement.json",
+      "sha256": "efabab33f10e15136b5d59e0b0ee896572a6dffba3439f14e4602ff748dd8b67"
+    },
+    {
+      "path": "native-actual-launch-dump.json",
+      "sha256": "29270e3bfd741437f1ecb8a2f223ae9f45353af4e97fca6c74d8e2e6ff70660d"
+    },
+    {
+      "path": "actual-dump-inputs.json",
+      "sha256": "a22e84c1e4447c472414679ac8883d4a101d82db303ea09b9d85413b8487560f"
+    }
+  ],
+  "producers": [
+    {
+      "path": "native_actual_launch_dump.py",
+      "sha256": "8d0ae7f3655b64a90b1a3ea62055707b061d9e494d07a34f158939570e0b74f8"
+    },
+    {
+      "path": "native_app_dump.py",
+      "sha256": "2cb90ceb537fb873f066d5d6e8f5387fed28e3f8042b83100f83d980fbf96667"
+    },
+    {
+      "path": "native_closed30.py",
+      "sha256": "cb61ab38f80b65ec0d623aa4e8ac86ea7b112add587fa7d25b472aa85168332f"
+    },
+    {
+      "path": "native_header_pairs.py",
+      "sha256": "0a93b8db5e42588fcc25e28cfccc197f1e14c3ca859c541d3028cbebf3731936"
+    },
+    {
+      "path": "native_launch_constructors.py",
+      "sha256": "fa5c856450761c573f753040e764c3e2d10ce9647679bd684802813ea68d9bfd"
+    },
+    {
+      "path": "native_launch_dump.py",
+      "sha256": "2a83dbd57ce7c119a46aa0f267c5a6da2b57971b1feede9b8e2cdec1cf2877c5"
+    },
+    {
+      "path": "native_launch_order.py",
+      "sha256": "f8011fb2af01a9390e3332d1bf81cfab0b3ad18f69f07deff05352c4b7a3e0c0"
+    },
+    {
+      "path": "native_map_strings_replacement.py",
+      "sha256": "294700f4ae48c833c828f0a14fe8f3d5164c0d5d688b49ed93e003f5c2e41a81"
+    },
+    {
+      "path": "native_source_map_strings_guard.py",
+      "sha256": "9053584ff28acdd915d24af0786247a0e3d93a765ed90fe713dee274f6059782"
+    }
+  ],
+  "logs": [
+    {
+      "path": "rust-capture-05.log",
+      "sha256": "b89e9e2b53e08a120efc607f16e9085ccee8fac903033ac34c9efe1dc73fa73c"
+    },
+    {
+      "path": "rust-native-replay.log",
+      "sha256": "e8cf7cfbf99543a1bb60725d5093e4eda65294d8b273f4141d62ec3cc67272d1"
+    },
+    {
+      "path": "regression-creator.log",
+      "sha256": "fc1c6c1b632b31005ebc4099853ae368d2091b4b71575638899db6e3342b8691"
+    },
+    {
+      "path": "regression-labels.log",
+      "sha256": "7a7eabf37c3f94f0878cbe85f5b086cded0c26f85219c281063554b450dc504d"
+    },
+    {
+      "path": "regression-settings.log",
+      "sha256": "cc4984fdad6c0d40b499067b6ca7c1a9e80f7b22f2b5a01c933779f89071bef8"
+    },
+    {
+      "path": "native-actual-01.log",
+      "sha256": "5cfe7116a7a0c4dcb7c2c963591bb431de72c5e7e83688121c894abd9812df67"
+    }
+  ],
+  "binary": {
+    "path": "E:\\Games\\Axis and Alies\\rust-rebuild\\target\\s-graphics-review\\runtime-launch-stance-cohort-20261017.exe",
+    "sha256": "e2b0e4beb3a1cc71042844476494b07330b2a6c5d0c41f7b918cc9bd859271da",
+    "profile": "release test-only LTO=false/CODEGEN_UNITS16; not a game release"
+  },
+  "validation": {
+    "launch_tests": 4,
+    "creator_regression": 1,
+    "labels_regressions": 4,
+    "current_settings_regressions": 2,
+    "all_passed": true,
+    "actual_source_maps": [
+      "Campaign/tutorial02",
+      "DeveloperMaps/(3v3)Firefight",
+      "(2v2)Berlin"
+    ],
+    "actual_native_runs": 18,
+    "actual_native_pins": 2269,
+    "total_native_runs_across_nine_proofs": 582,
+    "source_starts_with_global_localization_only": true,
+    "raw_mapstrings_chunk_preserved": true
+  },
+  "scope": {
+    "complete_76b420_reset": false,
+    "whole_malformed_rmp_io_seh_or_allocator_behavior": false,
+    "source_header_saved_name_override": false,
+    "missing_text_fallback": false,
+    "arbitrary_language_or_duplicate_text_registration": false,
+    "positive_additional_actor_data_ordinal": false,
+    "positive_property_diagnostic_ordinal": false,
+    "active_battle_or_multiplayer_or_release": false
+  },
+  "backups": {
+    "contemporaneous_directory": "before",
+    "creator_labels_and_load_world_rules": "No contemporaneous pre-edit capture was taken for their narrow objective-companion/read-only-getter additions; no reconstructed file is represented as an original backup.",
+    "shared_restoration_scope": "Only the nonsaved MAPSTRINGS add-to-replace site was edited here; other whole-file content remains parent-owned."
+  },
+  "open_validation": [
+    "External game_settings_value_source and resource_map_cache_source fixture setup edits are awaiting the parent next coherent test cohort.",
+    "Stance source scope is separate; this binary has a recorded Stance capture failure caused by the now-corrected View source path and does not certify Stance."
+  ]
+}

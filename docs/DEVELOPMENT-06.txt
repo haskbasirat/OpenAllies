@@ -1,0 +1,113 @@
+DEVELOPMENT 06 — NATIVE GAMEPLAY COMPONENTS AND TERRAIN RENDERING
+
+This checkpoint substantially advances the Rust engine libraries. It does not
+yet implement a complete playable match. The normal Windows application remains
+the original-asset map/model/animation development browser. Original recovered
+game assets are required; the executable alone is not the complete game.
+Overall completion is a rough engineering estimate of 15–20%.
+
+Movement and collision
+Endpoint adjustment, tile search, uncached region graph search, region-route
+preprocessing, waypoint construction and movement-result control are now
+implemented from the original routines. The search preserves first-discovery
+closure, heap tie order, diagonal collision-query order, native partial-route
+results and distinct floating-point store boundaries. Wall-entry health cost
+and terrain-change penalties are implemented with required world inputs.
+
+Native cell traversal, selected dynamic collision/descriptor/shape predicates,
+moving-state graph queries and ground-update error propagation extend those
+components. Original height chunks are bound to both map height layers, and
+raw terrain tile decoding preserves source variation identities and native
+passability fields. Coverage includes the original 80-map corpus, with sampled
+original-instruction checks distinguished from whole-corpus source comparisons.
+
+Region topology construction and publication, actual-map world-to-region lookup,
+dynamic actor membership and the complete live movement adapter remain open.
+The whole-Solve reference cases use static collision masks with no actor objects
+and disable the region pather. They do not establish live battlefield routing.
+
+Definitions, map loading and ownership
+Typed inherited scalar inputs, native category descriptors, standard definition
+flags/component masks, new-object constructor stages and separate saved-load
+shells are available. Unknown expressions, unsupported factories and ambiguous
+definitions produce explicit errors rather than guessed gameplay defaults.
+
+The map layer decodes source-bound archives, map headers, indexed placements,
+world/identity prefixes and bounded actor component payloads. Team, kingdom and
+recruitment-list readers retain versioned wire fields and source spans. Saved
+owner references use exact generation-bearing identities and native flag gates.
+This is meaningful progress toward restoration, but it does not create complete
+live actors, kingdoms, teams or a running saved match. Full ActorInitCreate,
+derived component factories, runtime ownership registration and remaining saved
+component tails are still required.
+
+Combat and unit lifecycle
+The native weapon-hit calculation now passes an exact damage request into the
+real reconstructed Body implementation. It preserves offensive/defensive flags,
+type modifiers, source/allegiance identity and minimum-damage store order.
+Periodic property expiry, duplicate reenabling, modifier rebuilding boundaries
+and ordered healing/damage dispatch are implemented. Damage-type presentation
+loading is separate from the damage equation.
+
+Body damage/health feedback, linked and wall damage dispatch boundaries, corpse
+initialization, kill-credit sequencing, actor-value calculation and bounded
+experience distribution have independent evidence. Native thresholds, callback
+ordering and earlier effects on failure are retained. Actual ability effects,
+promotion effects, graph/owner lookups, death queues and the live combat world
+remain required services. Attack selection, range, weapon cadence, projectiles
+and complete battle behavior are not implemented by these callers.
+
+Production and scheduling
+The new production component implements recruitment admission, separate quote
+and payment reads, organization accounting, queue insertion, timing, pause/resume,
+completion, failure refunds and cancellation. Its tests use the real economy
+library. Actor/research fulfillment, authored pricing and supply/capacity checks
+remain explicit callbacks; no fabricated unit-spawn behavior is installed.
+
+Native periodic/deferred scheduling preserves ordering, randomized initial
+buckets, owner cancellation, cursor effects and native timing rules. It supplies
+the queue mechanism, not the complete world/admin update loop. Both production
+and scheduling document callback/reentrancy limits and propagate errors without
+claiming rollback of earlier effects.
+
+Roads, terrain and transparency
+The prior planar road/object heading correction remains in both rendering and
+picking. Original invisible-marker filtering, model texture fixes, team masks
+and authored alpha/depth states are preserved.
+
+The preview now uses the native terrain layer planner, transition-set selection,
+original mask textures and recovered mask transforms for terrain blending.
+It replaces abrupt square material edges within the supported direct-multipass
+scope. Border cells and unresolved/equal-priority material cases retain explicit,
+counted fallbacks. Modern linear/sRGB composition does not reproduce every
+original intermediate target, filtering, gamma or lighting detail.
+
+Transparency now follows recovered native queue policy, geometry sort keys,
+tie behavior and submission order. Static model sphere centers come from the
+source material sidecar. Animated bounds, complete scenegraph traversal and
+live original floating-point state remain outside that preview guarantee.
+Extra terrain passes and ordered transparent draws can increase command counts;
+no frame-rate improvement is claimed without comparable measurement.
+
+Static water now uses original texture frame 0, authored color/alpha curves,
+raw heightfields and the saved geometry cache. Independent native/source review
+and GPU captures passed; missing WaterInfo is explicitly counted and skipped.
+Do not treat this as completed animated water: texture animation, scrolling,
+runtime shoreline-cache regeneration and full native lighting remain unfinished.
+
+Evidence, validation and delivery
+The Phase 6 research folders contain original/v14 byte pins, native instruction
+fixtures, Rust comparisons, declared callback boundaries and independent review
+reports. This includes stateful sequences and real library-to-library calls;
+it is not evidence of a fully integrated game. Finite numeric domains and
+explicit precision are documented separately from a live game-thread FPU mode.
+
+docs/VALIDATION-06.txt records workspace tests, executable diagnostics, visual
+checks and package verification. These do not establish live-match parity.
+Development 06
+deliverables belong inside their own release/Development-06 folder. The original
+installation, saves and earlier releases are retained.
+
+AI, full production/supply/research effects, morale, fog, complete match control,
+original UI/audio, campaigns/strategic mode, complete saves/replays and multiplayer
+remain unfinished. docs/NEXT-ENGINE-STEPS.txt records the integration priorities.

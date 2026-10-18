@@ -1,0 +1,145 @@
+{
+  "scope": "ObjectData16D source producer and lazy current-Context binding; no whole initialization/battle acceptance",
+  "status": "frozen source-byte producer/binding; required rules/metagame and scoped runtime checks passed",
+  "native": {
+    "generated_rows": 84,
+    "actual_source_census_rows": 3,
+    "fresh_original_v14_machines": 174,
+    "executed_address_pins": 63,
+    "body_seams": {},
+    "constructor_scope": "49C970..976 explicit ESI/BL store interval only; full49C460 and4BB110 execute",
+    "actual_iterator_scope": "1084-entry all-null source census,56RandomActor; conservative source superset, no runtime registration-ordinal/membership/order claim"
+  },
+  "actual_getters": [
+    {
+      "source_pc": "Single24",
+      "registered_things": 1959,
+      "all_actor_inputs": 1084,
+      "random_actor_inputs": 56,
+      "supported_object_definitions": 1525,
+      "observed_values": [
+        0
+      ]
+    },
+    {
+      "source_pc": "Double53",
+      "registered_things": 1959,
+      "all_actor_inputs": 1084,
+      "random_actor_inputs": 56,
+      "supported_object_definitions": 1525,
+      "observed_values": [
+        0
+      ]
+    },
+    {
+      "source_pc": "Extended64",
+      "registered_things": 1959,
+      "all_actor_inputs": 1084,
+      "random_actor_inputs": 56,
+      "supported_object_definitions": 1525,
+      "observed_values": [
+        0
+      ]
+    }
+  ],
+  "required_checks": {
+    "aa_rules": {
+      "passed": 151,
+      "failed": 0,
+      "ignored": 0
+    },
+    "aa_metagame": {
+      "passed": 39,
+      "failed": 0,
+      "ignored": 0
+    },
+    "mode": "release/locked/offline/-j4/include-ignored;AA_METAGAME_EXPORT=0",
+    "log": "full-rules-metagame.log"
+  },
+  "limits": [
+    "nonempty required-object or Upgrade writers remain unsupported by retained source owner",
+    "positive required-object completion and complete source-loader parity not claimed",
+    "source and runtime numeric precision are distinct",
+    "no original game assets/profiles/native binaries/releases mutated"
+  ],
+  "files": [
+    {
+      "path": "crates/aa-rules/src/native_source_requirements.rs",
+      "sha256": "70d43c41ab036f26367827b61cbac2851f7bfbe8e5392134b8303c4a98fead37",
+      "bytes": 20789
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_services.rs",
+      "sha256": "6fd6ac7435959d9cbdbaf587f6b4b204483f3bb73ee320b7d7eeeea71ecd50a2",
+      "bytes": 15528
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_services_tests.rs",
+      "sha256": "4eec8260109f4be8ee94ad2990ca0d76e747f781b0be3adf4f68a5e9602fb211",
+      "bytes": 8535
+    },
+    {
+      "path": "research/skirmish-20261016-source-memory-byte/native_source_memory.py",
+      "sha256": "c49f71d4c21e9ac058f2e672be61e088473e718db74e956d3f665c577ab45118",
+      "bytes": 4040
+    },
+    {
+      "path": "research/skirmish-20261016-source-memory-byte/native-source-memory.json",
+      "sha256": "efb0494b9926e5c3607913083896ab2542a16ded0b2e33449982e07af091ca0a",
+      "bytes": 23561
+    },
+    {
+      "path": "research/skirmish-20261016-source-memory-byte/actual-source-memory.json",
+      "sha256": "86aba346cf1b4df09b34dea6e3dfab94ec7d119f2185bf912fbcad82e8fc4c54",
+      "bytes": 6433461
+    },
+    {
+      "path": "research/skirmish-20261016-source-memory-byte/native-replay.log",
+      "sha256": "3960a60985ad7f6c7a14098f272f7ae07aee8e5d461d6cee97e098d588fda6e3",
+      "bytes": 167
+    },
+    {
+      "path": "research/skirmish-20261016-source-memory-byte/full-rules-metagame.log",
+      "sha256": "0c67c08e86073ab1a8e9ec3f8592c50eb8e18b440b00492b77649b47df3bf223",
+      "bytes": 497569
+    },
+    {
+      "path": "research/phase8-movement/harness.py",
+      "sha256": "847aa5c1470e45157d94fdbf92273ca70f35323a8446243056fd9e593ebd0798",
+      "bytes": 9020
+    },
+    {
+      "path": "research/skirmish-20261016-live-placement/source-requirements/actual-source-requirements.json",
+      "sha256": "dc209bd57b1f7099d752baa4ff92095627ecd3406b9576f6b90c14c5bc33e2b8",
+      "bytes": 6408906
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/runtime-combined-v2.log",
+      "sha256": "14aec5b60730be0accd37b1779de66916ee8490c47811d3108182a1cd41f8157",
+      "bytes": 5410
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-init/runtime-final-v3.log",
+      "sha256": "51da7fdd4abe1c3869c0ca8aa89b7f05cb874477a4bcb4eea4ef17a00e18f76c",
+      "bytes": 5577
+    },
+    {
+      "path": "research/skirmish-20261016-load-economy-refresh/rust-final-external-direct.log",
+      "sha256": "44b263625bf8e8d3fafe2e21c43dd3a6e0854a32351a989da209aec3907ada75",
+      "bytes": 547
+    }
+  ],
+  "runtime_context": {
+    "successful_tests": [
+      "load_zone_services four tests",
+      "load_actor_state_reentry two tests",
+      "actual held immediate Economy external all3PC"
+    ],
+    "logs": [
+      "research/skirmish-20261016-load-economy-init/runtime-combined-v2.log",
+      "research/skirmish-20261016-load-economy-init/runtime-final-v3.log",
+      "research/skirmish-20261016-load-economy-refresh/rust-final-external-direct.log"
+    ],
+    "qualification": "final-v3 broader diagnostic Economy tests failed stale capture assumptions; those tests do not certify this byte. Source-byte/context tests passed; no whole-world/battle claim."
+  }
+}

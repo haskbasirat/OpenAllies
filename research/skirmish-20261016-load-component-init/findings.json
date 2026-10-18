@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "scope": "Concrete actual held first Kingdom Properties InitExisting6A71D0 and AfterInit4B2830 only; no wholeActor/KingdomInit claim",
+  "frozen": true,
+  "native": {
+    "rows": 3,
+    "fresh_original_v14_machines": 6,
+    "leaf_calls": 12,
+    "executed_address_byte_pins": 3,
+    "seams": [],
+    "allocation_reads": [],
+    "allocation_writes": [],
+    "opaque_storage": "poisoned/unread, not a native saved-allocation reconstruction"
+  },
+  "actual": {
+    "map": "Campaign/tutorial02",
+    "gtid": 781,
+    "canonical_definition": "kingdom",
+    "native_class": 4,
+    "component_mask": 64,
+    "source_precision": "Double53",
+    "live_precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "same_typed_allocation_and_entire_shell_retained": true
+  },
+  "portable_guards": [
+    "registered held Loading owner",
+    "source Bank PC/identity",
+    "canonical flags/category/template/component mask",
+    "actual constructor storage",
+    "actual Properties typed payload/owner",
+    "missing source/slot/staleowner refusals"
+  ],
+  "validation": {
+    "actual_capture": "1/1 pass6.04sec actual-capture-second.log",
+    "final_two_test_replay": "2/2 passed6.86sec at current1d87a255 source; replay-current-guard.log; session22527 reaped",
+    "independent_review": {
+      "status": "accepted within constant/finite-prefix scope; no wholeActor/battle claim",
+      "path": "research\\skirmish-20261016-load-component-init\\independent-props-body\\independent-review.json",
+      "sha256": "c47739ce203c4dc016c7812e5c35d1c17c8557965e47b405b3fb63bf3af2ed66"
+    }
+  },
+  "unbound": [
+    "all other component InitExisting/AfterInit services",
+    "PostCreate581880 initial property application",
+    "fullActor/Kingdom Init",
+    "queues/zones/FX/managers",
+    "playable battle/multiplayer"
+  ],
+  "files": {
+    "crates/aa-runtime/src/load_component_init_world.rs": "1d87a2551fb025a3e1b5fa509ee7a03996883dfb8de31dfb8904e8dd8c064c94",
+    "crates/aa-runtime/src/load_component_init_world_tests.rs": "2663f50956444102f24bfc87e13d104ef61fa6bd378fec429ef37480e68ad3e4",
+    "research/skirmish-20261016-load-component-init/actual-properties.json": "35f723a2585b2734875c3807304154493305cada0017254ef58950195d25dfe5",
+    "research/skirmish-20261016-load-component-init/native-properties-init.json": "f5c2bb62bcabf43e1b98ebaf0bc2c0e635fa3568edf3e2ecfa1004bb9f461f0f",
+    "research/skirmish-20261016-load-component-init/native_properties_init.py": "e6a1e6b25e712794cbabff3dbde43a3efb8f29b7a3e8c8db89c1cc468d14f33f"
+  }
+}

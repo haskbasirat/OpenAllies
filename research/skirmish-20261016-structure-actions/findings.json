@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "scope": "Structure589A60 contributor, ordinary virtuals, owned saved adapter",
+  "date": "2026-10-16",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "functions": {
+    "contributor": {
+      "start": "0x589A60",
+      "end": "0x589B06",
+      "sha256": "637ff78c7d4c28c0a62efd54fa07f05673835e2a0b920ad640cc016a8f510bd3"
+    },
+    "center": {
+      "start": "0x4CE980",
+      "end": "0x4CE99C",
+      "sha256": "46e9dd23a9b39478636c4c1cf40ff20c85c6864d7180bfcbfe7a651008ae6b29"
+    },
+    "parent": {
+      "start": "0x4CE9A0",
+      "end": "0x4CE9BD",
+      "sha256": "a0d3015ea34d98df1a74ed45aa6391d0cb66c5333b289c5383d8981dd2b5d111"
+    },
+    "structure_center": {
+      "start": "0x588990",
+      "end": "0x5889AE",
+      "sha256": "5a936d4ed45675df4916cf42d63fdd1dd1113a7656a1618faac1c9135c5d3c7d"
+    }
+  },
+  "native_cases": 498,
+  "precision_modes": [
+    24,
+    53,
+    64
+  ],
+  "pure_tests_passed": 2,
+  "actual_source_adapter_tests_passed": 1,
+  "oracle_default_compare": "passed",
+  "source_provider": "not needed: no ActorData field reads",
+  "preserved": [
+    "original assets",
+    "saves and profiles",
+    "Development08",
+    "saved_organization_actions.rs"
+  ],
+  "boundaries": [
+    "Settlement+14 owned payload unavailable",
+    "nonempty Structure queue codec and execution unavailable",
+    "parent rebuild dependencies remain required",
+    "no complete match or broad census claim"
+  ],
+  "sha256": {
+    "research/skirmish-20261016-structure-actions/native_structure_actions.py": "0e3ca338f4b785264197d0bb951cbea110096c1729243f84472d15798405445c",
+    "crates/aa-runtime/src/saved_structure_actions.rs": "adc410e5c000afe5d68713af8e5e7238c7b4ac83a39528f070cc7a524f874a0d",
+    "research/skirmish-20261016-structure-actions/native-replay.log": "bd4434dbf0eb526e5a0f928e8c05ed78d1d28c5ec96a8ebd4cd868350c6d5e24",
+    "crates/aa-actors/src/structure_actions.rs": "d4c7ec6c0db66ea31fdcc31037bd742d328b9ca05670ded1ef70b2affc1353d6",
+    "research/skirmish-20261016-structure-actions/pure-tests.log": "60f1f377305b502d413a1e338ee950698738003f009ebe760c26a0a57655f0ed",
+    "research/skirmish-20261016-structure-actions/adapter-tests.log": "813c7f210a15a39e952969985135d469643e2a849c1c351525a28667a6fcc7af",
+    "crates/aa-actors/tests/native_structure_actions.rs": "3bfc33ed334c4852ec815b751bc5400bd94c9ea71482ad23048afcbbcb9351e7",
+    "research/skirmish-20261016-structure-actions/native-structure-actions.json": "fed75980327c8885714d7fafd2aedfab29b8e23184fe7f7db16266d00803f112",
+    "backups/source-before-structure-actions-20261016.zip": "7f5196e581729150dec61c666499c8b579767af777faa098aa14af2894e95014"
+  }
+}

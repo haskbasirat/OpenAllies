@@ -1,0 +1,78 @@
+{
+  "status": "accepted bounded concrete fresh4D7230 binding; no production edit",
+  "scope": "Only create_zone2 and move_zone2 delta versus root0821 predecessor; unchanged reused helper algorithms read-only.",
+  "sources": [
+    {
+      "path": "crates/aa-runtime/src/map_actor_init_existing.rs",
+      "sha256": "76cc2f0ee841a5bc41bcecf47cffaaac07a7af90980bb8e1bfedf3701960c57e"
+    },
+    {
+      "path": "backups/source-checkpoint-20261017-0821/map_actor_init_existing.rs",
+      "sha256": "b9b24eb3eec7ed87f10ff4b195db24145a7851dcaf4e097b011ed97348e51056"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_detection_activation.rs",
+      "sha256": "1b1b3aa8917f9f2c9ca96d80d953d3e37c6be8b4a3d05d1a5a2cca6fd5afb031"
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_zone_activation.rs",
+      "sha256": "71c43c7e5715f61b28c25d3130f73d4450ff39786d7d542baa58529e0ff08084"
+    },
+    {
+      "path": "crates/aa-actors/src/actor_init_existing.rs",
+      "sha256": "208787f52233b4fe9a4e691702cf7b7e05064f4ac7d50840dd336619d760966e"
+    },
+    {
+      "path": "crates/aa-runtime/src/actor_world.rs",
+      "sha256": "71f5be2adf05dbb9eef7d4887af5712f77e9fa7be83bb65fd8d654c25ebda33e"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_zone_globals.rs",
+      "sha256": "e25cd02ca73cffe397274a700766de12634499810a4d49ba288466a194a531db"
+    }
+  ],
+  "checks": [
+    "Delta consists only of two required-service replacements; no other method change.",
+    "Native4D73C2 predicate and associated GTID generation lookup short-circuit create at4D73F3; common parent kernel preserves same laziness.",
+    "create uses actual current ObjectKey->generationActorId, same runtime ActorZones148 and actual World.zone_identities; Zone2 flag is1<<2, not fabricated source flags.",
+    "Flags are reread from authoritative placement owner, not immutable definition flags. No detached/copied Actor or duplicate ZoneMap is constructed.",
+    "Native successful create reaches discovery radius before XY and count; current kernel uses that order and native null-zone error boundary before move.",
+    "move delegates existing515F40 operate_slot with actual same Catalog/Bank/ActorStore/World/InactiveLoad/livePC and sameZone index2; actual identity/type/owner revalidation retained.",
+    "Partial vector/identity/zone writes remain on same owners; no rollback or ready bit. Missing positive child still returns required error.",
+    "Read-only instruction ranges match both original images; no native process/new Cargo link or independent full-init execution."
+  ],
+  "qualification": {
+    "native": "4D6A31/34 skips native Actor+8 read if slot already nonnull.",
+    "adapter": "create_zone2 currently obtains World/live_spatial/placement flags before create_slot_fields checks slot.",
+    "accepted_domain": "Private wrapper is reached only through initialize, which preflights same adopted World at279 and successfully reads same Actor placement/flags in preceding Object Init. Accessors are read-only and current concrete callbacks cannot retire/replace those owners while this bound call proceeds. Thus no new required owner/value or outward effect is introduced in this admitted domain.",
+    "excluded": "Do not advertise general lazy4D69A0 parity for arbitrary unavailable flags/World or arbitrary callback mutation. A reusable general adapter would need lazy flag borrow after slot guard."
+  },
+  "pins": [
+    {
+      "start": "0x4d73bd",
+      "end": "0x4d743a",
+      "sha256": "830fe019d36ce073f3cfe16c3eea579bf5d30022425669523822e687585c1c35",
+      "both_images_identical": true,
+      "label": "native caller predicate/create/radius/position/count/move",
+      "kind": "read-only byte validation; not an execution count"
+    },
+    {
+      "start": "0x4d69a0",
+      "end": "0x4d6abb",
+      "sha256": "2dbb06bf2c9280cc31fa0e54c6c6f35e0095e4ab11468af381fafe731f47eef5",
+      "both_images_identical": true,
+      "label": "native4D69A0 source slot/flag/allocation prefix",
+      "kind": "read-only byte validation; not an execution count"
+    }
+  ],
+  "author_check": {
+    "path": "qa-output/development10/fresh-zone2-check01.log",
+    "sha256": "e655535dcbbcf4b6ea925112d3c11092fd64fbf985224a410315ea12f9611cbe"
+  },
+  "author_check_result": "Production aa-runtime check passed1m17s; not independently rerun.",
+  "limitations": [
+    "No natural selected-map Zone2 success execution reviewed here.",
+    "No full Actor Init, solver/fog/SAI positive-callback or battle acceptance.",
+    "Successful Rust allocation domain only; no native allocator-null equivalence."
+  ]
+}

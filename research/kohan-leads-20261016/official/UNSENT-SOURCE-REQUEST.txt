@@ -1,0 +1,35 @@
+UNSENT LOCAL DRAFT -- no email or form submission is authorized or performed.
+Potential recipient: Lootmax Games general contact, as published at
+https://www.lootmaxgames.com/contact (general@lootmaxgames.com).
+Subject: Authorized TimeGate source / SDK / format-documentation availability
+
+Hello Lootmax Games,
+
+Your official Kohan II announcement says the modernization was rebuilt from
+the original source code. We are researching an independent Rust reconstruction
+of the 2004 Axis & Allies PC game using an existing original installation as
+the behavioral reference. We are not asking for compiled games or credentials.
+
+Could you identify any publicly released or legitimately licensable source,
+SDK, file-format documentation, or developer references that may be available
+for Kohan II or the shared TimeGate technology, and the authorized contact for
+Axis & Allies-specific material? If source access is possible, please specify
+the license, cost (if any), permitted implementation/reference use, distribution
+rights, confidentiality terms, and third-party middleware restrictions before
+any source is provided. A free documentation-only route would also help.
+
+In particular, we would value authorized information about:
+1. Which engine versions and TimeGate modules Kohan II and Axis & Allies share,
+   and the limits of any cross-game compatibility.
+2. Gamebryo NIF material, alpha, controller, skinning, and animation conventions.
+3. Loaded actor/component creation, init/post-create ordering, combat-value
+   producers, and deterministic simulation ordering or floating-point rules.
+4. Original save layouts and multiplayer state/command synchronization.
+
+We do not assume that Kohan rights include Axis & Allies rights or that a
+middleware license covers game-specific source. Please direct us to the
+appropriate rights holder if those materials are outside your authority.
+
+Thank you.
+
+[Sender name/contact deliberately not supplied in this unsent draft.]

@@ -1,0 +1,3 @@
+placements=2377 unsupported=0 source=SourceIdentity { sha256: "c15fd62a581cd36bb8e6131a4ffacba903a62259e0b3c2ae86afee611251e74b", bytes: 231059 }
+ordinal=1132 saved_id=16669 class=2 definition=waves raw_facing=[ffc00000, ffc00000, 00000000]
+nonfinite_facing_records=1

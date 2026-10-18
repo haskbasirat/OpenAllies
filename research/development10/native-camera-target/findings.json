@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "scope": "Concrete same-camera6FF130/6FEDB0 finite numeric/geometry producer with required current source/height/Ni children. No completedcamera/directory/VWorld/AD claim.",
+  "source": {
+    "crates/aa-runtime/src/native_camera_target.rs": "6a9f92dcdbcc8e4ae0cb4eaa2ee4db9a8000730102b019f1a5577b24b735d17c",
+    "crates/aa-runtime/src/native_camera_target_tests.rs": "f9d0eb9f23ff0444cc7ca11ec42389d3c41f26dcf02063913edfe37271d0f57c"
+  },
+  "evidence": {
+    "native-target.json": "79be715ba35d516a136a73072d1a014d9e99dbc8e3215985decde459c27b7b77",
+    "pin-audit.json": "8f1baa634ddb60072006fe9e1f5fed585b1d206e2b0c98e581debc7b39fe8c95",
+    "native_target.py": "4639254fa5c013ef77d57750aee3f993602f680e3d692871144099505f9e7cc5",
+    "audit_target.py": "1932fcf8fe4fa676a77a42deb9ed687231d0935a1a8b1118d22417185a1d4ad3",
+    "make_isolated.py": "07e69b5bfdb083847b45b517cf7c5f274a679bd2f0abb7083fba70187b3eaede",
+    "isolated.rs": "beac658032213cd119539f20bdb41bd82eda2dc2adbe5d3ead288cfd62a76d79",
+    "isolated_full.rs": "93fa23f92fdc4180260d5fda18430e0fc2d5f9531d336615586fb68a04c281de",
+    "isolated-full-camera-v2.exe": "0b1829972d8ac77639427e21d164608ac4bc9a0364c39a118ac3cdd2e4402d5e",
+    "isolated-full-tests-02.log": "d65c6763ca3fd823f61ec8017be8486e7dcc6e04f167d385b478cd1d8fc5d8f8",
+    "isolated-tests-02.log": "32d69a8a84379aa019146389d3d65ca869a5749d7586d8905da4dd749cd8b7cd",
+    "native-final-replay.log": "6294d34def53e4908bdc42e3d5f33f6c45ef5291792a51d427409a70701f2225",
+    "production-check-02.log": "32c39de48b8a09d0940b9683fcc99518df0acc045724637437a425c70dacba25",
+    "README.md": "34afc525a33a82986019e66fc73e9591359921464de7d9df20fdd910ac83635e"
+  },
+  "native": {
+    "paired_rows": 123,
+    "executions": 246,
+    "decoded_pins": 588,
+    "hardware_fsin_transports": 174
+  },
+  "rust": {
+    "child_tests": 2,
+    "current_parent_reset_pose_ni_target_tests": 8,
+    "production_check": "PASS15.20s; warnings retained"
+  },
+  "shared_parent_extension": "Only nested target module, private Links, unbound initializer. Parent revisionArc/unbound_allocation change is the camera author's separately owned extension and was included in authoritative8/8 replay.",
+  "remaining": [
+    "Actual completed7016A0 constructor and shape authority",
+    "Captured actual camera-directory handle",
+    "Concrete current UI/map/World/height services and actual6FE050 owner binding"
+  ]
+}

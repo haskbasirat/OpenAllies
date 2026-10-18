@@ -1,0 +1,80 @@
+{
+  "scope": "Independent source and native review of522890 formation command kernel plus bounded point2 parser successor; no actual stored-member adapter/StartedMission claim.",
+  "conclusion": "No concrete defect found in the reviewed kernel/parser domains.",
+  "verified": [
+    "Captured organization read precedes relocation; captured leader position survives callback while offset reads CURRENT mind organization",
+    "Each destination coordinate stores binary32 before tile lookup",
+    "Zone4 is captured AFTER destination tile callback, reused for member tile without reread",
+    "Member current position reads after activity/Denizen output callback; sleep point is lazy only on Move path",
+    "529F10 preserves PC arithmetic through direct0.25 comparison with no intermediate binary32 FST",
+    "Stop/Move ordinal/flags/payload and actual command destructor native children match576-row fixture",
+    "Point2 digits/dots-prefix extension stays local; scalar and point3 remain strict, actual USA source authored1.5.0 reads1.5"
+  ],
+  "verification": {
+    "accepted_native": {
+      "executions": 576,
+      "observed_pins": 298,
+      "immutable_replay": true,
+      "fixture_sha256": "4877137224825ad96f2810fff17db360c7fd9ffc9095a6997157777f6b91414b"
+    },
+    "accepted_rust_binary": {
+      "sha256": "e4e7610684882bc1ef32e6c2be645131da90b5586a85059986a1a005ad695fc7",
+      "tests": 2,
+      "passed": true,
+      "retained": true
+    },
+    "new_independent_distance_edges": {
+      "rows": 24,
+      "observed_pins": 19,
+      "immutable_replay": true,
+      "fixture_sha256": "ab2cc6e22f3ffd0563ce943604ca1be7460b8678ca4750bf06f3b4377be8776e",
+      "discriminating_rows": 8,
+      "new_append_only_rust_test": "distance_comparison_keeps_x87_result_without_binary32_spill",
+      "rust_execution": "pending Root scoped replay; accepted2-test binary predates this additive test"
+    },
+    "point2_native": {
+      "rows": 63,
+      "runs": 126,
+      "executed_pins": 5262,
+      "immutable_replay": true,
+      "fixture_sha256": "c2def62a0ab530d1b5fba99eeb85e292234c25f147ab78cca6698a062d93085c"
+    },
+    "point2_regressions": "Previously accepted159 aa-rules+40 aa-metagame tests from ad163725 receipt; not reexecuted here"
+  },
+  "limitations": [
+    "Declared native coordinator seams remain geometry tile/zone, relocation, activity/Denizen target and command delivery",
+    "Original576 rows do not mutate captured Zone4 or current position through callbacks; source/disassembly reviewed those ordering obligations",
+    "New24 distance rows cover finite numbers; no nonfinite-domain expansion",
+    "Observed298 parent-fixture pins include intercepted entries as defined by its harness; not advertised as298 executed bodies"
+  ],
+  "files": [
+    {
+      "path": "crates/aa-mind/src/cai_member_command.rs",
+      "sha256": "a8396d7fef6a1388351a27d38f967a771e4b4376ebba741a822baf3c143a6a50"
+    },
+    {
+      "path": "crates/aa-mind/tests/native_member_command.rs",
+      "sha256": "c4bac88759967a6d33d90bb569a89774e32b7c9477a8e8532612735eea5540e8"
+    },
+    {
+      "path": "research/development10/member-command/native_member_command.py",
+      "sha256": "ec2c6f31f629b5664cc43203ade6038024f34e8ce25c44dae6efaecd98b223d0"
+    },
+    {
+      "path": "research/development10/member-command/native-member-command.json",
+      "sha256": "4877137224825ad96f2810fff17db360c7fd9ffc9095a6997157777f6b91414b"
+    },
+    {
+      "path": "crates/aa-rules/src/native.rs",
+      "sha256": "e502434aa7d6046f293e3b0e5d506294e70376db40ff4a4d4bebad1838ed44c1"
+    },
+    {
+      "path": "crates/aa-rules/src/resolved.rs",
+      "sha256": "00044acb931276f88ac1c3ecf7b9d35c5f14f1aa40da4bc7410719ab5f014e08"
+    },
+    {
+      "path": "crates/aa-rules/tests/native_point2_decimal_prefix.rs",
+      "sha256": "7ba86817c74621c5bf1320368ede71a177d0a4a4efa73c8dc936c5482742cd08"
+    }
+  ]
+}

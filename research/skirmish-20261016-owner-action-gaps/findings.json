@@ -1,0 +1,88 @@
+{
+  "schema": "owner-action-required-services-audit-v1",
+  "date": "2026-10-16",
+  "new_production_source": false,
+  "new_test_source": false,
+  "new_native_port_justified": false,
+  "scoped_existing_tests_passed": 6,
+  "fresh_native_executions": 0,
+  "native_static_windows_byte_matched_original_v14": [
+    "4D1350..4D1488",
+    "4CFCC0..4CFD2C",
+    "529D70..529D78"
+  ],
+  "reused_fixture_counts": {
+    "ability_mask_member_scan": 290,
+    "action_publication": 100
+  },
+  "prior_checkpoint_actor": 4099,
+  "prior_checkpoint_components": [
+    "Properties",
+    "Organization"
+  ],
+  "first_owner_inference": "existing Organization57B390 and conditional4CFCC0 only; no new specialized contributor core indicated",
+  "actual_new_owner_runtime_result_claimed": false,
+  "latent_unbound_direct_contributors": [
+    "Flare+C8 virtual+38",
+    "Settlement+98 585AE0 saved adapter"
+  ],
+  "conditional_unbound_publication": [
+    "76C7F0 owner views",
+    "nonnull renderer+54 flags",
+    "50C8E0 selected view"
+  ],
+  "required_nonempty_hq_services": [
+    "573E50",
+    "574BF0/574810"
+  ],
+  "other_required_services": [
+    "Recruit5827B0 eligibility",
+    "Construction585F00 upgrade readiness",
+    "actual Mind/state/source/Ability ownership and setting inputs"
+  ],
+  "properties_or_rank_direct_contributor": false,
+  "fake_success_defaults_allowed": false,
+  "battle_ready": false,
+  "files": {
+    "research/skirmish-20261016-owner-action-gaps/README.txt": {
+      "bytes": 4919,
+      "sha256": "012ddd14aed87bd7c03b3554308af78e753c702561b4d39796cf32fd7e111d7f"
+    },
+    "research/skirmish-20261016-owner-action-gaps/core-regressions.log": {
+      "bytes": 1120,
+      "sha256": "dc8bd2ef6c889ed8a7c24dc578150608fc283a6ed3e7767a75708005c8a12eaf"
+    },
+    "research/skirmish-20261016-owner-action-gaps/native-instructions.txt": {
+      "bytes": 3773,
+      "sha256": "e8743f14a324831df9f326eb88b6c17a2efbedc43889516c92388aeac0982007"
+    },
+    "crates/aa-actors/src/ability_flags.rs": {
+      "bytes": 13308,
+      "sha256": "35510ca0242d8835459279542a4a0431c68ca482527ea4969d71a8674afce732"
+    },
+    "crates/aa-actors/src/action_publication.rs": {
+      "bytes": 1902,
+      "sha256": "1babae67e5a54ae776da41952e6d7f801c07bda7cc0a127cb87cd168753095b7"
+    },
+    "crates/aa-runtime/src/saved_organization_actions.rs": {
+      "bytes": 23520,
+      "sha256": "abf5b2ba931f1eb996f475cb67557eb7e27f4a549d2dd47291805690e8d9b0ce"
+    },
+    "crates/aa-runtime/src/saved_mind_actions.rs": {
+      "bytes": 14448,
+      "sha256": "43724e11fe852c4dc4d4d52f810015065eedf93f6fdaea5eb92d2d7f2c959f98"
+    },
+    "qa-output/public-build-options-20261016/element-attach-final.json": {
+      "bytes": 6996,
+      "sha256": "eba63ec38b5a5e773877293058e7a3801c553e4c4939b8d9a86a6688c18f03bb"
+    },
+    "research/phase7-actor-live/native-ability-flags.json": {
+      "bytes": 686027,
+      "sha256": "54a77b75160753b62a16b561221d0f6198c6941322c10a384583267e4e11fbf1"
+    },
+    "research/phase7-actor-live/native-action-publication.json": {
+      "bytes": 72042,
+      "sha256": "6660ae5a0a0519507bb9b7e14acbf504ef7a6ff313a14ba461c138118391f3aa"
+    }
+  }
+}

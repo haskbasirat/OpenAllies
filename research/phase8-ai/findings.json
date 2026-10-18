@@ -1,0 +1,705 @@
+{
+ "schema": 1,
+ "scope": "Phase8 AI: native AI inventory; SAI goal priority/affordability; SAI enum tables; CAI rout/recover destination scoring and selection; CAI rout Think; retreat/deploy/regroup/exhausted/chasing Think dispatchers; Mind pop/think-base/is-current/arrival primitives; SAI goal engine passes, actor assignment and base goal virtuals; combat-facing CAI target list, reactions and UAI kill; rout OnEnter; sleep, engage and guard Thinks; SAIData profile and ego loaders on the shipped data; SAI actor travel time; SAI dynamic map analysis; the remaining regiment, element and aircraft Mind-state Thinks; regiment Mind member-added.",
+ "fixtures": {
+  "native-sai-tables.json": {
+   "native": "7BDDD0/7BDB70, 7BDCF0, 7BDEA0",
+   "rust": "aa_mind::sai::tables",
+   "test": "cargo test -p aa-mind --test sai_goal_priority_native",
+   "cases": 60,
+   "original_instructions_pinned": 566,
+   "sha256": "2ee64005270ab3f47df20289fe995ed7f02d6abdbea8fa411014718480e21b8f"
+  },
+  "native-goal-priority.json": {
+   "native": "7A5200, 7A3860 (+45D400/85D840)",
+   "rust": "aa_mind::sai::goal_priority",
+   "test": "cargo test -p aa-mind --test sai_goal_priority_native",
+   "cases": 1356,
+   "original_instructions_pinned": 281,
+   "sha256": "e335f93bd769891a253fffe07dd4c47a28b5d9bcb7bc14506de080813cb03af9"
+  },
+  "native-rout-score.json": {
+   "native": "52A930 (+445400 natively, captured)",
+   "rust": "aa_mind::rout_score::score",
+   "test": "cargo test -p aa-mind --test rout_score_native",
+   "cases": 318,
+   "original_instructions_pinned": 1156,
+   "sha256": "557d542e2900267550ea14a1507c0da682df62df6c990f277184030b261d74f7"
+  },
+  "native-rout-select.json": {
+   "native": "52B530 (+52A930, 85DAA0/85DA80)",
+   "rust": "aa_mind::rout_select::select",
+   "test": "cargo test -p aa-mind --test rout_select_native",
+   "cases": 165,
+   "original_instructions_pinned": 1560,
+   "sha256": "a6996843ec5d11e4618a7e4f85484d36019b47650d1610365ba130c73c232cba"
+  },
+  "native-recover-select.json": {
+   "native": "52BB40 (+58AC70, 52A930)",
+   "rust": "aa_mind::recover_select::select",
+   "test": "cargo test -p aa-mind --test recover_select_native",
+   "cases": 150,
+   "original_instructions_pinned": 1372,
+   "sha256": "aec9caecbe67c2e841cf7e1047fb8a64d2eb3e59ba7c2acf17486a35dca72275"
+  },
+  "native-mind-primitives.json": {
+   "native": "52A340, 529E60, 52A000, 52A1F0",
+   "rust": "aa_mind::{pop,think_base,is_current,within_arrival}",
+   "test": "cargo test -p aa-mind --test mind_primitives_native",
+   "cases": 108,
+   "original_instructions_pinned": 117,
+   "sha256": "7baace8a074ff34cab5c142fd45a9426974534ed769c4d77b982b53d7ee770b4"
+  },
+  "native-rout-think.json": {
+   "native": "521240 (+529E60, 52A000, 4F02B0, 529F50, 52A1F0)",
+   "rust": "aa_mind::cai_rout::think",
+   "test": "cargo test -p aa-mind --test cai_rout_native",
+   "cases": 228,
+   "original_instructions_pinned": 218,
+   "sha256": "5c62b22ece7a7b0a7d626d61baa71d76a41a11ebf5e331b6cac968aefe5e8f34"
+  },
+  "native-state-thinks.json": {
+   "native": "51E110, 52DF30, 51DE10, 51E260, 523930 (+52A340)",
+   "rust": "aa_mind::cai_states",
+   "test": "cargo test -p aa-mind --test state_thinks_native",
+   "cases": 67,
+   "original_instructions_pinned": 192,
+   "sha256": "7d6ffa948cb331da293e9ab3b1bc85000f2477d914e2879a66e661f94e784629"
+  },
+  "native-goal-qsort.json": {
+   "native": "96CE20/96CDB0 CRT qsort + 7A30B0",
+   "rust": "aa_mind::sai::crt_qsort, engine::base_priority_order",
+   "test": "cargo test -p aa-mind --test sai_qsort_native",
+   "cases": 52,
+   "original_instructions_pinned": 304,
+   "sha256": "c13b46427a02d67bc6e3452e3f96301989f7fb931d4231fe1e372ede60d452b5"
+  },
+  "native-goal-engine.json": {
+   "native": "7A7700, 7A93B0",
+   "rust": "aa_mind::sai::engine",
+   "test": "cargo test -p aa-mind --test sai_engine_native",
+   "cases": 255,
+   "original_instructions_pinned": 1166,
+   "sha256": "746ec7be673ab26da4a703cba4b6ba1bfae64a77bd51a1807d3717da91d0cdf1"
+  },
+  "native-cai-engage.json": {
+   "native": "521060, 523DD0, 524C10, 51EFB0, 51F040, 523EA0, 51FE60",
+   "rust": "aa_mind::cai_engage",
+   "test": "cargo test -p aa-mind --test cai_engage_native",
+   "cases": 150,
+   "original_instructions_pinned": 651,
+   "sha256": "efae545ff752d3b5857a0661733f3945721dce9325489287a31faf528ade9d6b"
+  },
+  "native-cai-reactions.json": {
+   "native": "51F9F0, 51F920 (+52A810), 5206A0, 52E830, 527240",
+   "rust": "aa_mind::cai_reactions",
+   "test": "cargo test -p aa-mind --test cai_reactions_native",
+   "cases": 248,
+   "original_instructions_pinned": 499,
+   "sha256": "d5c5b82a77be1d0a8c222ce56320e7af39e38e3a205510379c428bc5598bb921"
+  },
+  "native-uai-kill.json": {
+   "native": "5340C0, 535240",
+   "rust": "aa_mind::uai_kill",
+   "test": "cargo test -p aa-mind --test uai_kill_native",
+   "cases": 840,
+   "original_instructions_pinned": 720,
+   "sha256": "c54f74c2d83e46b1c7d3a189ecf39e0f76c5aa3873f0529d27a75086ddfed2c6"
+  },
+  "native-goal-assign.json": {
+   "native": "7A9150, 7A7E30, 7A35D0, 7A3740, 7A7EB0, 7A6C70, 7A3E10, 7A3F30, 7A50E0, 7A33E0, 7AFA40, 56A1F0, 7A6480",
+   "rust": "aa_mind::sai::assign",
+   "test": "cargo test -p aa-mind --test sai_assign_native",
+   "cases": 606,
+   "original_instructions_pinned": 1482,
+   "sha256": "1f03698c6adb9adb28371df6ba8dae511d5b2f7b51b38f0ea23098e231b2171e"
+  },
+  "native-goal-base.json": {
+   "native": "7A3B00, 4A7130 (+96D890 SSE2), 7A4FB0, 7A5020, 7A5080, 7A5600, 7A3D30, 7AFB00, 7A6930, 7A6A90, 7A67B0, 7A0F80",
+   "rust": "aa_mind::sai::goal_base",
+   "test": "cargo test -p aa-mind --test sai_goal_base_native",
+   "cases": 640,
+   "original_instructions_pinned": 1354,
+   "sha256": "c5d76de966d254fb7f090b21580b54ced1a735cdcee0b926430b05ee4f7350f1"
+  },
+  "native-rout-enter.json": {
+   "native": "51F190 (+51F040, 52C0D0)",
+   "rust": "aa_mind::cai_rout::enter",
+   "test": "cargo test -p aa-mind --test cai_rout_enter_native",
+   "cases": 80,
+   "original_instructions_pinned": 149,
+   "sha256": "58ffcba94aefc3e713fb0da99a287b2df60ee41160e6dc82ff249308434bd012"
+  },
+  "native-sleep-think.json": {
+   "native": "524D70 (+52A810)",
+   "rust": "aa_mind::cai_sleep::think",
+   "test": "cargo test -p aa-mind --test cai_sleep_native",
+   "cases": 400,
+   "original_instructions_pinned": 446,
+   "sha256": "7def7c210f88c2d3f18f74c994d260f8c745da0cd05882cb7b86d62b844a3083"
+  },
+  "native-engage-think.json": {
+   "native": "526A70 (+524C10, 4364C0)",
+   "rust": "aa_mind::cai_engage_think::think",
+   "test": "cargo test -p aa-mind --test cai_engage_think_native",
+   "cases": 150,
+   "original_instructions_pinned": 540,
+   "sha256": "df91e9feba1e91740cd3957802abbb504f1677767b71c951244ab260e074738f"
+  },
+  "native-guard-think.json": {
+   "native": "5294F0 (+529C20, 52A810)",
+   "rust": "aa_mind::cai_guard::think",
+   "test": "cargo test -p aa-mind --test cai_guard_native",
+   "cases": 500,
+   "original_instructions_pinned": 646,
+   "sha256": "df3be9d33a90ad39bc66cc3ce3d952e222b67561485fa1cab4660c3f73fbfdf2"
+  },
+  "native-saidata-profile.json": {
+   "native": "4AA430, 4AE3E0 (+47D960, 473AD0, 497220)",
+   "rust": "aa_mind::sai::profile",
+   "test": "cargo test -p aa-mind --test sai_profile_native",
+   "cases": 175,
+   "original_instructions_pinned": 759,
+   "sha256": "de5da71fb69751ffc73ebf0295f18881e2e7d7ec9f9648f01611789a88344e56"
+  },
+  "native-saidata-ego.json": {
+   "native": "4AB9A0, 4A8E00, 4A5C60, 4B0560 (+47D960, 4AD980, 4AF500, 4A5D80, 4AF230, 4AAD80, 4AF8E0, 4A66E0, 4ADF50, 4AB090, 4AAEB0, 4A7C70, 4AFD50, 4AFB60, 4AA1D0, 4A8700, 4AEDC0, 4AF0C0, 4A86D0, 7BA3C0, 606750, 7A6430, 96CE20/4A5C20, 473AD0)",
+   "rust": "aa_mind::sai::ego, ego_lists, native_hash",
+   "test": "cargo test -p aa-mind --test sai_ego_native",
+   "cases": 495,
+   "original_instructions_pinned": 6176,
+   "sha256": "cd07eb885cd0a3e5b91862d9d76514d3b6067d2416d69ff1289fb6b4e3f9fb06"
+  },
+  "native-travel-time.json": {
+   "native": "7A1C10, 7A1B30 (route block 53F320/53E5B0/5C2CD0 = aa_navigation::route_cache::route_cost)",
+   "rust": "aa_mind::sai::travel",
+   "test": "cargo test -p aa-mind --test sai_travel_native",
+   "cases": 600,
+   "original_instructions_pinned": 96,
+   "sha256": "017a2cef9fefb772105e49a436f44cd93a24847091b0fe3bcee33c645dced7b7"
+  },
+  "native-aai-escort.json": {
+   "native": "51CC10 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_escort",
+   "test": "cargo test -p aa-mind --test aai_escort_native",
+   "cases": 900,
+   "original_instructions_pinned": 352,
+   "sha256": "843de990f64d1ed83d7c33271638b176727c41394811bc67ba2996acc36237dc"
+  },
+  "native-aai-guard.json": {
+   "native": "51C900 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_guard",
+   "test": "cargo test -p aa-mind --test aai_guard_native",
+   "cases": 906,
+   "original_instructions_pinned": 384,
+   "sha256": "c201b05b5bad203fe4bafe252ed476f7ca0a484455aa850075b8c2c3fff8fb3f"
+  },
+  "native-aai-join.json": {
+   "native": "518D60 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_join",
+   "test": "cargo test -p aa-mind --test aai_join_native",
+   "cases": 909,
+   "original_instructions_pinned": 334,
+   "sha256": "65bb630869384d2dd3947d53e20c3881de0f54963b52f9bd97b46acd69c42609"
+  },
+  "native-aai-landing.json": {
+   "native": "519750 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_landing",
+   "test": "cargo test -p aa-mind --test aai_landing_native",
+   "cases": 1020,
+   "original_instructions_pinned": 725,
+   "sha256": "299ad93fa6d11f3fa3530c832ddf08dafef9bb299ce501466451ffe17c2b6653"
+  },
+  "native-aai-queued.json": {
+   "native": "519F70 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_queued",
+   "test": "cargo test -p aa-mind --test aai_queued_native",
+   "cases": 120,
+   "original_instructions_pinned": 117,
+   "sha256": "aa8307648524375efa79011168cf7636c99af35d017235db954ce22806fce2c0"
+  },
+  "native-aai-recon.json": {
+   "native": "5180B0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_recon",
+   "test": "cargo test -p aa-mind --test aai_recon_native",
+   "cases": 40,
+   "original_instructions_pinned": 60,
+   "sha256": "213ab382c3064b76d278aa50dc1e2483a67f3089e2d0bdb71e9be7290f3c46cb"
+  },
+  "native-aai-takeoff.json": {
+   "native": "519150 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_takeoff",
+   "test": "cargo test -p aa-mind --test aai_takeoff_native",
+   "cases": 1020,
+   "original_instructions_pinned": 649,
+   "sha256": "5a7da0cd9fbf162f9906f4998b3a058a29a2f12d943fe96e7e87aa6d48ca3cb0"
+  },
+  "native-aai-transport.json": {
+   "native": "5185D0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_transport",
+   "test": "cargo test -p aa-mind --test aai_transport_native",
+   "cases": 120,
+   "original_instructions_pinned": 132,
+   "sha256": "5eddc58312b90486d4839f75463354f3311cfa91b7d2a8656d47bd894833d513"
+  },
+  "native-cai-bombard.json": {
+   "native": "5207F0 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::bombard",
+   "test": "cargo test -p aa-mind --test cai_bombard_native",
+   "cases": 800,
+   "original_instructions_pinned": 496,
+   "sha256": "bc05943e593027d6d730cc3aef9fb5d1b62f5b0842e85598de7900af54b06b9f"
+  },
+  "native-cai-construct.json": {
+   "native": "51DB80 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::construct",
+   "test": "cargo test -p aa-mind --test cai_construct_native",
+   "cases": 200,
+   "original_instructions_pinned": 89,
+   "sha256": "ac9eca416803454cbb4227857b3fb906b657eff562f498346cf1a03c2b6c4d14"
+  },
+  "native-cai-explore.json": {
+   "native": "525D70 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::explore",
+   "test": "cargo test -p aa-mind --test cai_explore_native",
+   "cases": 900,
+   "original_instructions_pinned": 473,
+   "sha256": "7fd88a1d9257d8e9ff41276a444d849bc26419b1d769615e67a3cc99a17a1d2f"
+  },
+  "native-cai-join.json": {
+   "native": "521850 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::join",
+   "test": "cargo test -p aa-mind --test cai_join_native",
+   "cases": 400,
+   "original_instructions_pinned": 323,
+   "sha256": "805de1d24147b177a9eb0ebb391ab3b242d50150dae2fb165528db84eea98ecb"
+  },
+  "native-cai-kill.json": {
+   "native": "520730 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::kill",
+   "test": "cargo test -p aa-mind --test cai_kill_native",
+   "cases": 400,
+   "original_instructions_pinned": 318,
+   "sha256": "5fa91c1a581d9cfa9fdaecc85ef0282d54c86c0e9c188e99829a5c1c12a91e5c"
+  },
+  "native-cai-pack.json": {
+   "native": "527090 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::pack",
+   "test": "cargo test -p aa-mind --test cai_pack_native",
+   "cases": 160,
+   "original_instructions_pinned": 199,
+   "sha256": "7b11e3ecb7d2551ed6f33029350d08ff1ffaebea58364a421665fceab5c7afa6"
+  },
+  "native-cai-rampage.json": {
+   "native": "5267E0 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::rampage",
+   "test": "cargo test -p aa-mind --test cai_rampage_native",
+   "cases": 600,
+   "original_instructions_pinned": 346,
+   "sha256": "bb80f128a04b5245a4598d297b00e463333fb683bc45463376e58fbee2953458"
+  },
+  "native-cai-reform.json": {
+   "native": "51DE70 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::reform",
+   "test": "cargo test -p aa-mind --test cai_reform_native",
+   "cases": 360,
+   "original_instructions_pinned": 129,
+   "sha256": "ce1497149bf76254bb8e097a297f1dd271157216e81bdd77e46c7c16f7597765"
+  },
+  "native-cai-repair.json": {
+   "native": "5239A0 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::repair",
+   "test": "cargo test -p aa-mind --test cai_repair_native",
+   "cases": 700,
+   "original_instructions_pinned": 451,
+   "sha256": "21743c626a9980ac4b5b0ff1eb469b9bc1ed38d2734c54be0acd29368e2cca3b"
+  },
+  "native-cai-siege.json": {
+   "native": "525930 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::siege",
+   "test": "cargo test -p aa-mind --test cai_siege_native",
+   "cases": 900,
+   "original_instructions_pinned": 440,
+   "sha256": "29c2cae7099e3daafd9ca09afff6cbfaf13a3779a84a7ff1565b901073e714fc"
+  },
+  "native-cai-unpack.json": {
+   "native": "526E60 (helper harness native_cai_regiment.py)",
+   "rust": "aa_mind::cai_thinks::unpack",
+   "test": "cargo test -p aa-mind --test cai_unpack_native",
+   "cases": 240,
+   "original_instructions_pinned": 294,
+   "sha256": "8b639bb47bc6eead0a43a6360dab5be4cc56b3445a49f69a531d8741d3998f52"
+  },
+  "native-uai-bombard.json": {
+   "native": "5353E0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_bombard",
+   "test": "cargo test -p aa-mind --test uai_bombard_native",
+   "cases": 909,
+   "original_instructions_pinned": 495,
+   "sha256": "bec0d914ff50c8ec2a43fd771861a1f7584cd3ab5e1cc52af829ab553ec95852"
+  },
+  "native-uai-engage.json": {
+   "native": "536E10 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_engage",
+   "test": "cargo test -p aa-mind --test uai_engage_native",
+   "cases": 600,
+   "original_instructions_pinned": 248,
+   "sha256": "95f3db9d8cb58e4c75fcc57f014cd2d6ba2f4c3af4a6cc3860083c32bef8f8ab"
+  },
+  "native-uai-join.json": {
+   "native": "531AD0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_join",
+   "test": "cargo test -p aa-mind --test uai_join_native",
+   "cases": 240,
+   "original_instructions_pinned": 87,
+   "sha256": "254a67eb78311535b86eee82d807a88507025d09aebee7c4e3ad76502eb7a328"
+  },
+  "native-uai-reattach.json": {
+   "native": "534000 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_reattach",
+   "test": "cargo test -p aa-mind --test uai_reattach_native",
+   "cases": 160,
+   "original_instructions_pinned": 89,
+   "sha256": "321eede5c36ba84dd13984f2369083d625a9c28d38b7267c76e479007f09c272"
+  },
+  "native-uai-repair.json": {
+   "native": "5359D0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_repair",
+   "test": "cargo test -p aa-mind --test uai_repair_native",
+   "cases": 714,
+   "original_instructions_pinned": 191,
+   "sha256": "79297199411ec071c5974e9a2f767e867c0ef2fe78add15ff8344d00e01eec4f"
+  },
+  "native-uai-sleep.json": {
+   "native": "52F950 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_sleep",
+   "test": "cargo test -p aa-mind --test uai_sleep_native",
+   "cases": 762,
+   "original_instructions_pinned": 330,
+   "sha256": "4d67c2595767500b10871418da90ca9b182c5fecb4f4893077d21157bae6609b"
+  },
+  "native-uai-unload.json": {
+   "native": "52F440 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_unload",
+   "test": "cargo test -p aa-mind --test uai_unload_native",
+   "cases": 330,
+   "original_instructions_pinned": 309,
+   "sha256": "4bab982168455a5570b2585579724f80361cba81f1d98c9625f319a647059d20"
+  },
+  "native-uai-unpack.json": {
+   "native": "5372B0 (helper harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::uai_unpack",
+   "test": "cargo test -p aa-mind --test uai_unpack_native",
+   "cases": 540,
+   "original_instructions_pinned": 259,
+   "sha256": "b5f4b3365297075ff0ead5b4e162d84b69e3eeacd0b9e6bdd1c77abe3971059d"
+  },
+  "native-aai-attack.json": {
+   "native": "51B8C0 (+401060, 401290, 445250, 45E790, 46B000, 516720; harness native_uai_harness.py)",
+   "rust": "aa_mind::uai_thinks::aai_attack",
+   "test": "cargo test -p aa-mind --test aai_attack_native",
+   "cases": 1200,
+   "original_instructions_pinned": 703,
+   "sha256": "3f8db09cb90e21ec57c569f5ee1c79556842bffe99533431493fc79535f13298"
+  },
+  "native-actor-notify.json": {
+   "native": "7A0C20",
+   "rust": "aa_mind::sai::actor_notify::notify",
+   "test": "cargo test -p aa-mind --test sai_actor_notify_native",
+   "cases": 680,
+   "original_instructions_pinned": 104,
+   "sha256": "0dbecc4042741964da70460ba639412351f007ee15fb2da441d88df84f3920e8"
+  },
+  "native-member-added.json": {
+   "native": "524B80 (+4D0900)",
+   "rust": "aa_mind::cai_member_added::member_added",
+   "test": "cargo test -p aa-mind --test cai_member_added_native",
+   "cases": 200,
+   "original_instructions_pinned": 60,
+   "sha256": "30ec17606799292e320b8ca1414c98ba7433139233d93c803deea0e206ee5a45"
+  },
+  "native-map-analysis.json": {
+   "native": "7AC0D0 (+7AA5B0, 7A9C60/7A9C80, 7B9180, 7BB480, 7BAC00, 7AE350, 7AD890, 7ADDA0, 4A5E40, 96D890 SSE2, 7ABA70, 7AB940, 7AA620, 45D720, 7B9050, 7BB780, 7BB820, 5C37E0)",
+   "rust": "aa_mind::sai::map_analysis::dynamic_map_analysis",
+   "test": "cargo test -p aa-mind --test sai_map_analysis_native",
+   "cases": 400,
+   "original_instructions_pinned": 2024,
+   "sha256": "aa0cd3b035e78bc19aa599cfd119257daa953b6e3b0193a221c4a1bd5256804d"
+  }
+ },
+ "inventory_summary": {
+  "SAIData": {
+   "range": [
+    "0x4a5000",
+    "0x4b2830"
+   ],
+   "evidence": "Source/Data/SAIData.cpp loaders and goal/ego/recruit TGI keys (4A66E0..4B0560)",
+   "functions": 151,
+   "bytes": 51949,
+   "vtable_only_not_in_functions_tsv": 1,
+   "ported": 30,
+   "oracle_executed": 31,
+   "proven": 26
+  },
+  "Tai": {
+   "range": [
+    "0x515a00",
+    "0x539c40"
+   ],
+   "evidence": "Source/Sim/Tai/{AAI,CAI,Mind,UAI}.cpp between Zones.cpp (515970) and Solver/FloodFill.cpp (539C40)",
+   "functions": 566,
+   "bytes": 130677,
+   "vtable_only_not_in_functions_tsv": 55,
+   "ported": 239,
+   "oracle_executed": 210,
+   "proven": 180
+  },
+  "SAI": {
+   "range": [
+    "0x79d300",
+    "0x7d0a70"
+   ],
+   "evidence": "Source/Sai/{SAI,SAIGoalEngine,SAIMap,SAIPlayer,SAIRegion,Goals/*}.cpp after OfficialMapManager (79CE10)",
+   "functions": 799,
+   "bytes": 202944,
+   "vtable_only_not_in_functions_tsv": 109,
+   "ported": 157,
+   "oracle_executed": 147,
+   "proven": 116
+  },
+  "MGAIData": {
+   "range": [
+    "0x95fd70",
+    "0x960e00"
+   ],
+   "evidence": "MetaGame AI territory/attack/defend importance keys (95FD70..960950)",
+   "functions": 21,
+   "bytes": 3957,
+   "vtable_only_not_in_functions_tsv": 0,
+   "ported": 9,
+   "oracle_executed": 6,
+   "proven": 4
+  },
+  "MGAI": {
+   "range": [
+    "0x962700",
+    "0x96ad80"
+   ],
+   "evidence": "Source/Mgai/{MGAIPlayer,MGAIGoal}.cpp",
+   "functions": 158,
+   "bytes": 32414,
+   "vtable_only_not_in_functions_tsv": 1,
+   "ported": 55,
+   "oracle_executed": 86,
+   "proven": 14
+  },
+  "MindStateMetadata": {
+   "range": [
+    "0x9cdf00",
+    "0x9d0100"
+   ],
+   "evidence": "aai_/cai_/uai_ state metadata CRT initializers 9CDF30..9D00xx",
+   "functions": 42,
+   "bytes": 7898,
+   "vtable_only_not_in_functions_tsv": 0,
+   "ported": 0,
+   "oracle_executed": 41,
+   "proven": 0
+  }
+ },
+ "producers": {
+  "build_inventory.py": "f28cee727faa93066f1a6557b680eff191704a18945a731c6ae45d209877712f",
+  "disasm.py": "afca724451e7d60f8e5489cdfa6933d119c841c5caf99356a89ec9d6aca3cc37",
+  "ego_fields.py": "f617fb9ff6a5cc4e0b837a8ef47cd6246e5352cafc3b3f24692a54d4dbde316a",
+  "lift_loader.py": "68754d5ba8e7ad790081de37de4dbc2ef5610702cc9c278f12e3c2da36b8b5d4",
+  "loader_listing.py": "4bdc0f4d6490b06775030da53c7406d89053e57ed6c93dddfcb0c81a62a4066e",
+  "native_aai_attack.py": "35f2cea2bb5a980184168907f9615f9c73b22fd6f09c95ff4031202407b9c87f",
+  "native_aai_escort.py": "85a9b75716f01129db00e70e7150136c1901d97048a78d89366fcb083f5846a6",
+  "native_aai_guard.py": "392e5fd0aef0690d9fa4d76c6ba7c56f11d36e3202903b9ecb4be2c67420d8a1",
+  "native_aai_join.py": "0631b2accbe7852a8e2a89a845d9af8734e982551f232d618364ee7540e95971",
+  "native_aai_landing.py": "95a229694162ce6062321bf7cc1aabf3cc7103d7798501896d6711f2f1d76191",
+  "native_aai_queued.py": "a19b8d67c4cdbcc63060509eb867422e420c32dc580ae4cbb18415fa91e5be85",
+  "native_aai_recon.py": "7c21f999d740013366fa9ed22e7ab04e9e99989f0609e8c6a69e0825be62d4c2",
+  "native_aai_takeoff.py": "93bf24d956ff23a3d71c7dbf4f55228699812e5cded44b8ceea04afbf33bcc55",
+  "native_aai_transport.py": "ab8faa0b016026622510dee873725304ea156f98bfef37fd0e729edd11c5f9bb",
+  "native_actor_notify.py": "d663769ce105f482e14f8fd5f91eb574efb82df56b9a2541ea4d96ec1a3422bb",
+  "native_cai_bombard.py": "67656df5049f7de5b5de31131103decf97581fe860871f7297f6e67bdf29bae2",
+  "native_cai_construct.py": "5bd36552e96fc2fd06335b49c64b012c708bfeb1665e87fb6d316ca104c1387f",
+  "native_cai_engage.py": "ac99f3b9a244559cf1ddad4eb9470ca7a0b5c7c593e78fdd010ad4e373434c1c",
+  "native_cai_explore.py": "2261f26f20d0623bb3275c7252d7820333c7e3826e817efd648a3ca9a410bc30",
+  "native_cai_join.py": "eafecd45cba5da7a2c5f6f70c481428178cecb210f0c2e71c4f029deb4dbc05a",
+  "native_cai_kill.py": "a8e00dbd46e41ec2354fcdf11a6942042dbc81e6d271ae194a7a33eea386017c",
+  "native_cai_pack.py": "d9b934067f0089c815a8b88b18670098b9ebe59a6f2a8155714b983f7a96adce",
+  "native_cai_rampage.py": "1c9d4c21143c10f6b564a9adbc90f7105b50770b83559db61b92702dddb9e4a7",
+  "native_cai_reactions.py": "e466ea76c4ea30903d655c669e0d7c626bae9c1ee5d2f62874ad97906a4808d5",
+  "native_cai_reform.py": "0d0ec52e79d966251fc4de102eaa8f46965e470f6c84c6b6cba8020382abe5cb",
+  "native_cai_regiment.py": "39b861638252fd6289d1f20ac6f97298d6356b97c739ed8ebb503e96a86a08aa",
+  "native_cai_repair.py": "2160a85c922db8862031876cf3ee9a255001b3f5de55b3ed895117cc8395e36a",
+  "native_cai_siege.py": "dadeac42f6da245119cb5d63668b399f5b3527df8d0ae58f255d85c3dcbea877",
+  "native_cai_unpack.py": "effc9ddbf4bf56bccab76e4549040025c2e04442824eae40bbf53d769a50cbcc",
+  "native_data.py": "6dbc301a567911c2374961e677b4f8db5aec64d9df37e74ffb7b473d48f6615b",
+  "native_engage_think.py": "df5919b6fbdb0d13741d911dbcea867d9bbce951cb7a088f3c192d2d1d359033",
+  "native_goal_assign.py": "5addf10dd239702cc98f15a78e3da83489cc6d883d8198ef5f5db8a57bada818",
+  "native_goal_base.py": "b929d4d9f8dbc64e57b989a07234925bc3369baa23d034a4ca1fc8e596b794e9",
+  "native_goal_engine.py": "4a704712162e41abf6cf1f711019b6d6a6a79ca5649f302e3cb5a853c28a91a8",
+  "native_goal_priority.py": "82d8d05e49ce71e973b34e112800c30c28bdf93427bef4947f1a057da09e0d43",
+  "native_goal_qsort.py": "f417ba15bf1b4bc228df863981b83af8ec023228adccec4c2f642a5edea75d40",
+  "native_guard_think.py": "3ec340c502661c1cd72aeac73b69d0be31ff1f503568e48f4d8101f7958727d9",
+  "native_machine.py": "1aba789e7e72dc2d016623caa22456181c03fcedc3f40dc57bff7fb7bde68c00",
+  "native_map_analysis.py": "e54d179e4ada53c3171d5c9233f12ca7829d8318ac696b2c79904393a3d436df",
+  "native_member_added.py": "cbc20e89c1f5165c684c0dddcbdd1be72e47a0c54e5368c8418aebe983c961fd",
+  "native_mind_primitives.py": "3f55785c40b01b4b53617b4f7976a67981d95cf9764efb943cd4240df07d4486",
+  "native_recover_select.py": "ed5a32415736045f6fda20e3f37a95a70af8ea26fa51b8e648e6cb10f231ea36",
+  "native_rout_enter.py": "9e5d2fe96ab6108bf8d90f9d488cfb7af41418a728da7f2b7b25306cd843e769",
+  "native_rout_score.py": "46a62cd353e4e776d8f32102f53268bd17b36a25f8329ecf0f8eaea043185402",
+  "native_rout_select.py": "f707e2d8cbd12f7049577247ed2f8f5520c056e991a28c9a2391cbc74e8454c4",
+  "native_rout_think.py": "abe19a6a31ad0d5db75f4542add7dd805398a5d4a46874ab33aabcf2405efe18",
+  "native_sai_tables.py": "9521dd4248a614dc2018d924ba7a9888f4c8606ba8861e39a0aff9d980149d68",
+  "native_saidata.py": "7127e831cd3786c713c93c73830d5a97eda8e290dda8c2095be5298da281dd0b",
+  "native_saidata_ego.py": "ec8fe85a78b1b15d117daf752de119258eb8ff269e0df090e4ce288529dcc915",
+  "native_sleep_think.py": "efb97a9e3cf66e4ce81a8e481d48df003bc9b88116e18dde665195ac4db10dc6",
+  "native_state_thinks.py": "d6f9a15184a69ce96a0ec7542d100059efd0a3c3afde0e6e841fc4d3b1d6f70c",
+  "native_travel_time.py": "b96550d4f7c1d432c786c00ea9459cfe60718b3c8c1fea95c5fe6d2fd636460e",
+  "native_uai_bombard.py": "1685469c8b80bcf42f69e2d35684c71a2f65850ad6745d95b22d46d9f0ec7b69",
+  "native_uai_engage.py": "ad2ee79129132807e27bbcf683bf731f1f6e607c74b3595dd2094416c681ab4f",
+  "native_uai_harness.py": "a79186ada04f08a1e53b179daacc01c1f9aa6f5d5c423bf8459177dc1c3cc407",
+  "native_uai_join.py": "d25a5e7cfe80628cafca8b3e567cf0d6d5ad8b7dda0ecfb25c73b021f0374e7d",
+  "native_uai_kill.py": "e39cf710b8bf255f16ee99a36ed52678f8079a13c7ee63460a0b47ab2c514249",
+  "native_uai_reattach.py": "86ed0f4d4f482b956d6ec90d749fa8eb66005def89601745afe504b920f1cb7a",
+  "native_uai_repair.py": "b5457754338df6e7be7a43faf989b8c6bca892da3cef838f5b43bfc06209c696",
+  "native_uai_sleep.py": "46f4347e3ec681448240e96175d064dc487a6dfdc806f497ab77a94e82279067",
+  "native_uai_unload.py": "d87009bdb3f02a18228cc1843a3103cf3c58bee042f00290b627b8fc7b2d9d06",
+  "native_uai_unpack.py": "04fb651346ef317ec15da9e4aa8794ac5e283a0b699f80a9dc57885e93d9269e",
+  "record_evidence.py": "4be19c8889afd733f15a9651cf6bdc0f673ff4033ec95afb181ee249e9faf89a"
+ },
+ "rust_pins": {
+  "crates/aa-mind/src/lib.rs": "f32712bac040c2402945854d285cd0a8c51332a60402afd97044d39d6090b375",
+  "crates/aa-mind/src/x87.rs": "64d639caf979a65d0fb89a487ded95b8705c46c3fcb4868f723a594dfe9ea83c",
+  "crates/aa-mind/src/rout_score.rs": "ef538d56b0c5cfa0eb6c9933165c223e0ed9697e8e34a3adfe1443877fcd897f",
+  "crates/aa-mind/src/rout_select.rs": "e7382c2859d1ca9c1ed8e6fb888b56c0f6ad50451f82892218b8f5fa9659a1f9",
+  "crates/aa-mind/src/recover_select.rs": "f70b013d714fd69462c922c47928b8a22f0242ddf30c2daacb48e60ada87a4f2",
+  "crates/aa-mind/src/cai_rout.rs": "8bdd70464b820a6e5965ed6230a0687a3c2edb911729759e36b61f876954d1dd",
+  "crates/aa-mind/src/cai_states.rs": "b51282aa79d6609e5237b4de2a880229c61f558754b01007dc50f99ead916c8b",
+  "crates/aa-mind/src/sai/mod.rs": "3bd6e66837750f8a0e617e2da19f7acf4a294da64354fe88863ebe466612e043",
+  "crates/aa-mind/src/sai/goal_priority.rs": "96bc1537e162b7546903070167d23e01934a7188cde6d7ad50ab64e03c9e7cb8",
+  "crates/aa-mind/src/sai/tables.rs": "a37ae61249ebd2d85ab2341ee1e9855f6e7251e4f4a20d0ca8918417e1144f75",
+  "crates/aa-mind/tests/sai_goal_priority_native.rs": "84110b0df4a7c70f04635e0dc93771bc646feb5fb30edd01db9a0bcfe3f5b83c",
+  "crates/aa-mind/tests/rout_score_native.rs": "0f8e4515bc792af25d750e4c11a4e875b282ac96be21c53fe15000cb1d84d585",
+  "crates/aa-mind/tests/rout_select_native.rs": "69f5e1cf3e0a851bbb22c0d03ed2f8579d86aa4355aff7c656e83b91494a0a88",
+  "crates/aa-mind/tests/recover_select_native.rs": "9d3fb104f5a3e758ecbdf639807553463f3d748628da0dc36fe387aa5da76029",
+  "crates/aa-mind/tests/mind_primitives_native.rs": "de97345d837272adee9fc572781c249960b47bb12ffcc7dff8b60601c35b1929",
+  "crates/aa-mind/tests/cai_rout_native.rs": "4369eeb1d2223125047b6bda3344572ceb7b6c15716cffed9df8cff9e7eed2d4",
+  "crates/aa-mind/tests/state_thinks_native.rs": "445900014161e75844490ad5c195b870715c2716fe6125b321f20a52ab3fea91",
+  "crates/aa-mind/src/sai/crt_qsort.rs": "651b695d317e9dbbe6130f92ae8d43d3e9a2e48c1d2c214b7d76d0199f561a76",
+  "crates/aa-mind/src/sai/engine.rs": "fab1e84f3e536516c9236aa5b342b45e989ff8b13cbb3f1b75287471010b2f4d",
+  "crates/aa-mind/src/cai_engage.rs": "b1bce8adf3bca3787ee0d73431dbeb198db2934cc6b5ff70680548a1dac0b89e",
+  "crates/aa-mind/src/cai_reactions.rs": "73860bb7de374454598ed9c31232964279de6bb26b4d31e499492551c9320412",
+  "crates/aa-mind/src/uai_kill.rs": "d7d6fc5e053ce2f6b58c4fa46bd2f9da36c8cf206722e488835bf7b3d778b581",
+  "crates/aa-mind/tests/sai_qsort_native.rs": "0ef27c16a5bb7a0b66179ace737c43ada0f620b9a4f73a6bb54b32ffeb138d12",
+  "crates/aa-mind/tests/sai_engine_native.rs": "5e4b2ecf01b93c04d5467f738ddc4bbe70d085e3daaffd83fa263f51ee2348be",
+  "crates/aa-mind/tests/cai_engage_native.rs": "16c9877fb1bac3755db10a88d9e9f2d02388d00b53f9dfc823e0ddc40f3f8f6f",
+  "crates/aa-mind/tests/cai_reactions_native.rs": "1dc685ac40d5b58f36a69a82a53a5f4997900dd829a248cdcdad87540a3a6b56",
+  "crates/aa-mind/tests/uai_kill_native.rs": "fb6ecda38750a352b78cda3d18921c94caa1415026ca556bb1d07cfdea71b02e",
+  "crates/aa-mind/src/sai/assign.rs": "2e41c1f160d0bcd845d70139ed4f65d23ef77131bb6c3ad9bb943865b25f8f61",
+  "crates/aa-mind/src/sai/goal_base.rs": "efddc917311d8e962e20df7fa209246895f2b6d530a88a636645c443949414fa",
+  "crates/aa-mind/src/cai_sleep.rs": "f8f0a829f76fc058d4718150fc73c927d446a4fd6ed613986c8b501049b29b08",
+  "crates/aa-mind/src/cai_engage_think.rs": "9c2bb8eecbf8fbe8b834d61088a6d0875c43d7189f74135cdf0114a8f309898d",
+  "crates/aa-mind/src/cai_guard.rs": "d312406df01ad46f9139159d11c8560c2c158383dfe8a95c57554e03ff8b2140",
+  "crates/aa-mind/tests/sai_assign_native.rs": "626ec59ad28148bced9aaf95ddb20ba834897634112c02184b8c3c6e1f3179b0",
+  "crates/aa-mind/tests/sai_goal_base_native.rs": "259081bb614d958c92c48d1f9469d950fc03ca4a948bc5341384d151abf9523e",
+  "crates/aa-mind/tests/cai_rout_enter_native.rs": "5a90bd5a31b82c9be79cf4303f72c8a246808c3e58476279264e831daf790da1",
+  "crates/aa-mind/tests/cai_sleep_native.rs": "a3510b43c5ebd40ad417f3402a245aa371e0d4dab9218d6229745476da5d9256",
+  "crates/aa-mind/tests/cai_engage_think_native.rs": "43100cca46dad6938bb72371411685909d776dc138c9a7e24e5fa8c15eb676ed",
+  "crates/aa-mind/tests/cai_guard_native.rs": "1dfee003a615154f0d7f395625369230a3e7d326e573b5ba64230afd6a70bec8",
+  "crates/aa-mind/src/sai/data.rs": "1d01d96fac9e33aea8bb105aa0afb3f93bc5753f6b008c4eb7a79bbcb8b2719b",
+  "crates/aa-mind/src/sai/profile.rs": "a803de8f9e0b16a193ac8cd58a104743bcae05f53c2c88b805b2e68cbd246ff1",
+  "crates/aa-mind/src/sai/rules_data.rs": "001c9d41db0b1beb3020ad8222ba7b9aa25095acfed8aec9905cb27ffec4202f",
+  "crates/aa-mind/src/sai/bridge.rs": "403293f7fa419d70d6283e753c057f7360b8f321fdc41f6f78621c886abd9ec2",
+  "crates/aa-mind/src/sai/ego.rs": "b37cee8ca09dd306e50a3b01f0b93750a51b6a8fb33b48b66dd74fcef9f702e4",
+  "crates/aa-mind/src/sai/ego_lists.rs": "c1e1d2a527db7595e7dc600df3ce539fd64e59c2e29366cf41daec63cfcc6938",
+  "crates/aa-mind/src/sai/native_hash.rs": "8dd32e9bc9afda37f59f6ba540af9bd2e7e8d1dfd51a42c5f9004e139cb4ce82",
+  "crates/aa-mind/examples/dump_sai_inputs.rs": "722c303e417324175e2a35e62fc2cddb29531f136736230f319618bad98ca112",
+  "crates/aa-mind/tests/common/mod.rs": "f946c5c2a28225b551b13a219f4924c28d28adf4653498a51131852118951f81",
+  "crates/aa-mind/tests/common/data_host.rs": "6196118a0126705267eae2d13b8ee261cdafcf809c0c69e52f13e31ca64a2d0d",
+  "crates/aa-mind/tests/sai_profile_native.rs": "aebaf7fca8ba5c1a3de6059dec3aca766718602fa86386510553a628a8f4e62b",
+  "crates/aa-mind/tests/sai_ego_native.rs": "53e26964f409df619de91eea3001084efb16a6eb560ce3a7572b1510db0bfb0b",
+  "crates/aa-mind/tests/sai_bridge.rs": "b4f22206a8a0f7f37cc9b939dba0f85a9988d8d70faea3ff4fc6cec885478301",
+  "crates/aa-mind/src/sai/travel.rs": "4d146693f24870455183cf174fa6af9442eade7f93e0499efd17aecad00bf304",
+  "crates/aa-mind/tests/sai_travel_native.rs": "72f05a62b81eed049213250c8cfc712a091d62c8e0f954c7c78a3cc369da0295",
+  "crates/aa-mind/src/cai_member_added.rs": "07f5fc3e45d0fc579dd4574258829950656f2ac1fc183c17d2764d8160d01a99",
+  "crates/aa-mind/src/cai_thinks.rs": "5e0d2e3ff49a760e6da8a659751f74fa2666502837b40576d9b3ac2dbedae0fc",
+  "crates/aa-mind/src/cai_thinks/bombard.rs": "35aec9d700300e3049f93d6c4752f055b5401d786c993e6b6301f29b1785352d",
+  "crates/aa-mind/src/cai_thinks/construct.rs": "1d42670e09f0284bf4e19df10f7452f747c69aef311d9ace818126dd50064547",
+  "crates/aa-mind/src/cai_thinks/explore.rs": "f1d5cf014a88b3efa9bbe7be31e74f356250caf6eec52c44aeb23782037bca3b",
+  "crates/aa-mind/src/cai_thinks/join.rs": "e7aa99312293d11426a907b25bddbc75c0815024f8c0cd2a795e6acb3a8ba1d8",
+  "crates/aa-mind/src/cai_thinks/kill.rs": "7997fa54cd2decb83d1a7b7c82fede623aa753e9165963c29564ccd687a4b76b",
+  "crates/aa-mind/src/cai_thinks/pack.rs": "4645cd6d154d1cc3478b0947e8c402481e1cca6b333ca009540d67d751afed22",
+  "crates/aa-mind/src/cai_thinks/rampage.rs": "55fe12677d21e29e6a9bdcd1357b19b660ef260192530b6abba750f8f797d6e3",
+  "crates/aa-mind/src/cai_thinks/reform.rs": "d27c22a48689b3c0c75d8a452a6b66245ab207dfab40fe96bb23c074eca2cd23",
+  "crates/aa-mind/src/cai_thinks/repair.rs": "4448bfbad182b74cbf4c980e791d0618fadd5aafb6d3bdd091334fde6c78e853",
+  "crates/aa-mind/src/cai_thinks/siege.rs": "740309d3f274f0cfcfd6e5903b1d10582566af3e29690fe3d059566633d74faa",
+  "crates/aa-mind/src/cai_thinks/siege_target.rs": "1ed3dfa9aba38623dd1a7d351a66a31d837c5ae2754c6429fdf5051998cf8422",
+  "crates/aa-mind/src/cai_thinks/stack_action.rs": "5ed52da9f093d4a8744fa8d392cc605b055c4ca6471c2ee3e8ed52868a2febd3",
+  "crates/aa-mind/src/cai_thinks/unit_order.rs": "175a6aba542ed0ba18bdc2c62275acdb888b0db3d8558894d2ccc7b89ccb0048",
+  "crates/aa-mind/src/cai_thinks/unpack.rs": "5900280425ad5f42f45da4a7376bb2de7c42f6dd38579a75b5ca1d5d84f5f9e5",
+  "crates/aa-mind/src/element_move_continuation.rs": "45336e34ba069760e8c27a64e050fea5f4a396b67c4013b4a82a74069f511f05",
+  "crates/aa-mind/src/sai/actor_notify.rs": "8bb73555da2486673974e0a3567a7db07bc5a07912475dc42ea281a9ed973557",
+  "crates/aa-mind/src/sai/map_analysis.rs": "4ee2e4c41a02c14c3b83de34dfbd68d40ef219804d3622622e0c7d00f71ddfbb",
+  "crates/aa-mind/src/uai_thinks.rs": "eacb7a9ecee83aba5c7359ff11b348d4f7a671c6813db21e0eb03047cd073a36",
+  "crates/aa-mind/src/uai_thinks/aai_attack.rs": "e95bb8df69c9d8be2b37d9a0373ad5bb2cbc0ce815171c79b81e46c501d96a52",
+  "crates/aa-mind/src/uai_thinks/aai_escort.rs": "5271170d3ad6681d0f7c84e7f8ff9c72a4f63fb2382bb56fdd28e7c387b6ad5e",
+  "crates/aa-mind/src/uai_thinks/aai_guard.rs": "16c1711d51d5b0e24a3d3080478d157054bce626759fb0d4422c9515510ed17a",
+  "crates/aa-mind/src/uai_thinks/aai_join.rs": "ec2b486f27a7b5b8b369bd62a775fd4e68973da8e7d7fff3114c6d7d6058afc5",
+  "crates/aa-mind/src/uai_thinks/aai_landing.rs": "7ac398c6128da256afa4d77d464fd065735c11359a5825a899d3f622e0ea1af1",
+  "crates/aa-mind/src/uai_thinks/aai_math.rs": "1d6344ce415c9029f5c9e3abd51c9862b4c7cd6dbd8547ce97b3d520763d8b76",
+  "crates/aa-mind/src/uai_thinks/aai_queued.rs": "e1e113a66db7ab556067e744f45127aa818b1d1b46881fc0105ca2cd9ed074a7",
+  "crates/aa-mind/src/uai_thinks/aai_recon.rs": "6c7dab2346d59d22fc2db7815e3ab713c3aa6ea190701eccdc5fb10cc122c174",
+  "crates/aa-mind/src/uai_thinks/aai_takeoff.rs": "9c85968bb77fcbb6d9dff02e7e2558178096d1d92b9803b792df406d2b063b58",
+  "crates/aa-mind/src/uai_thinks/aai_transport.rs": "c8a38949d5fa9211ea0c7a87d9cb44523af07471e764ba84268a0a76813e0d11",
+  "crates/aa-mind/src/uai_thinks/uai_bombard.rs": "392d39b81c15737789cdc8bc21c18cbf420383ca7cb0f4ff9102ed80a696d9fb",
+  "crates/aa-mind/src/uai_thinks/uai_engage.rs": "2b11fdea6af83a54ca7feab44f26aeb6a0af49913666e868f06312a70de22621",
+  "crates/aa-mind/src/uai_thinks/uai_join.rs": "7e1ea81f3668583b38b5e73674e04ad555ff96a04b708105189e851d3e485eb2",
+  "crates/aa-mind/src/uai_thinks/uai_reattach.rs": "3e68b9b716d5bdc7502574445d7cff04de7efdae9baf869dfd964256449dfe7d",
+  "crates/aa-mind/src/uai_thinks/uai_repair.rs": "e973dd8de5e9d3ce365b913dff41998fa521fae88876b0a57fba8d843543d4df",
+  "crates/aa-mind/src/uai_thinks/uai_sleep.rs": "59472b4beef4b2e630e9df8207f10608dc5a0a13a821f6d79f39d41eeae59bd6",
+  "crates/aa-mind/src/uai_thinks/uai_unload.rs": "18f7c7ea8a5bbce3fc76c466aca12a83f420ce760a5d0db463ff1f65ba8081fa",
+  "crates/aa-mind/src/uai_thinks/uai_unpack.rs": "8ea1e7976ce2209fabf98e701361317d58ff8866aadcda667e643b8d8d8d7a7a",
+  "crates/aa-mind/tests/aai_attack_native.rs": "8bdaffeea8bb5d77b52094461a6ae62eb6ae6eea9b11279e65a746fda79071ab",
+  "crates/aa-mind/tests/aai_escort_native.rs": "e4ed6c1473de5167f3dc9f4bc13673d2148dda5873fffefc73e25ed3da603239",
+  "crates/aa-mind/tests/aai_guard_native.rs": "8a787a04838c9be19521e40f95c19d8a622c02c3c29ea85561f44ec11fd7265f",
+  "crates/aa-mind/tests/aai_join_native.rs": "b051e61dea18864fc838df920716fae201d446fcf3db9e7004c6972ae10fb31e",
+  "crates/aa-mind/tests/aai_landing_native.rs": "4dd4328595e44efe539c97cb3ea1e2ee6dcf00340db0df1fe67ad6aece4910c8",
+  "crates/aa-mind/tests/aai_queued_native.rs": "6f8300c7a2197f6c18b20357c77b58347fa8629c2d7f9cff9964da64650012b6",
+  "crates/aa-mind/tests/aai_recon_native.rs": "32c9ac38eb10d0496e4d27f1e023496058115b56a7739a90b8eee69488bd989e",
+  "crates/aa-mind/tests/aai_takeoff_native.rs": "89daa5b013ac184b4a73d1b4a20eb275407acf070b9b2b78983d0a108b82743d",
+  "crates/aa-mind/tests/aai_transport_native.rs": "9f3366a258d7b86936881fddc5b3dd55ad98191903055e3e798cbfe39187f0b7",
+  "crates/aa-mind/tests/cai_bombard_native.rs": "7fd6f0f88c47196f4cba178dcfd5c0c0645c628f3230f1a81e69ebda33833fc9",
+  "crates/aa-mind/tests/cai_construct_native.rs": "ced3a21f9144a734c06d2737be55b5c8b5aa98ccf4972f8de5dc77c43232fb70",
+  "crates/aa-mind/tests/cai_explore_native.rs": "86bcb4df151debc2df5c6543af5912eb2ef25440b48aa662652246aa7512fef8",
+  "crates/aa-mind/tests/cai_join_native.rs": "e7d024eeba358251e8434e847d2716b553f860ceaa5fc33d95e1f17254b3d7ba",
+  "crates/aa-mind/tests/cai_kill_native.rs": "09456ab3553af16bbb44fea33d7959bbf7ea82fe0752fd66ec6609bd94347aa8",
+  "crates/aa-mind/tests/cai_member_added_native.rs": "e91fafc4790b6a8c29f3879a436e8558587144da2ed9b4b75b46e1bd1f44f321",
+  "crates/aa-mind/tests/cai_pack_native.rs": "3f42f9dc6d4af9280f2de250bba951364c51154a50e3e5bff42207562a18df41",
+  "crates/aa-mind/tests/cai_rampage_native.rs": "fc42e6e6df68b6cb0584150bddd02be211387bbeccb7450fea86d13f7764c7ba",
+  "crates/aa-mind/tests/cai_reform_native.rs": "517eb35e297d54d9d2b7e8b1fb9f2975f66491f9ca3cdf202eefe01244f4f496",
+  "crates/aa-mind/tests/cai_repair_native.rs": "23fe214ce3b3caf9b91a93da877457393813642d08d735604dc5504d31223c24",
+  "crates/aa-mind/tests/cai_siege_native.rs": "005cbf7893c7ac424e1e4c4e6d79a2deb775a1a7222960bdffeada174fd15529",
+  "crates/aa-mind/tests/cai_unpack_native.rs": "30b2d859b219a053bd6fd5b0c7d4a16ca541cb49f648c5fc3cca17811133b228",
+  "crates/aa-mind/tests/sai_actor_notify_native.rs": "da28286f8273b75c97738a29396e0ffe175e7360ee92e567c26a030e404f40bc",
+  "crates/aa-mind/tests/sai_map_analysis_native.rs": "b4b45686b84c5ff6c4d306ce3db171ffd55a48e6ec2dc64084e5a8897520b59c",
+  "crates/aa-mind/tests/uai_bombard_native.rs": "72c71c2414f4842b3fbe10658e2fb406ae0e24fbf953ba8803ce1a1a54f03022",
+  "crates/aa-mind/tests/uai_engage_native.rs": "017acd02bd21ccfb6586cf62a0fa2e6d77f44e71b80cb40b830b27ad527a35a8",
+  "crates/aa-mind/tests/uai_join_native.rs": "6857ac1a309063b4bc866eaf12043f7c855e8ba05df41270a0f16347cbe61bf5",
+  "crates/aa-mind/tests/uai_reattach_native.rs": "57fb60d49b281277dcad26dc2e4f86e55dd32880679e2c65877c8b5052ad135c",
+  "crates/aa-mind/tests/uai_repair_native.rs": "d3d63be86fd1c4943c8aaebedafa75177d717ad1ec1ecd62c1484680851a6ce9",
+  "crates/aa-mind/tests/uai_sleep_native.rs": "bf95e5b6e944e5f41cec392eb3105005d01534f0dcd10e6e0532de7f0c8e616b",
+  "crates/aa-mind/tests/uai_unload_native.rs": "8b69c953d6a17db21960e632637f8166de45199e4b42ed13f3a4e7064e29643f",
+  "crates/aa-mind/tests/uai_unpack_native.rs": "2f53b9e1140ff208fd5e3cfdb24d4ed7508e1e5ec1b03283080f4a12f08f0790"
+ },
+ "inputs": {
+  "sai-shipped-inputs.json": "d34f989628947de02f72014709753a27736b477131aeca630380a2bc3488a4c0",
+  "sai-shipped-egos.json": "ac29778259d46b18058399cf797044da61bb32cd0170418c93780f67bb1e1b01"
+ },
+ "inventory_sha256": "206fd34ed41bc796eebb455d776866b7559bf5d1021f8fa34761d6e26b7a2962",
+ "ego_fields_sha256": "f4ad3a629222231b86d96d95e17d7078be1cb5d561d48cc797ab68a434bb1913"
+}

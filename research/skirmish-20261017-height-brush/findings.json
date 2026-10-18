@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "status": "Frozen bounded source/kernel checkpoint; no natural brush/full startup claim from this evidence",
+  "native_functions": [
+    "551140 same-endpoint orchestration",
+    "551050 mode0/1 dispatch",
+    "550B00 finite POINT/CIRCLE/BOX raster",
+    "550660 protected sample gate",
+    "558CE0/559470 pending queue/slope propagation",
+    "558A70 terrain slope/falloff",
+    "550A10 final sample/dirty stores",
+    "550430 notification arithmetic",
+    "550940 relevant HeightMap constructor fields",
+    "4B7E80..4B7EFA TerrainData ctor slice",
+    "4B8955 type branch and4B8966/4B8BAD max_slope first getter/store",
+    "5565D5..E1 actual embedded helper constructor call",
+    "55AAF0 embedded helper constructor",
+    "50C310 phase/map-cache/attached-view gates"
+  ],
+  "production_sha256": {
+    "crates/aa-heightfield/src/brush.rs": "93e7c96b27e13edcc33f8344830dd4fd9d814187ff9752909b8b6f9ed98f5ce6",
+    "crates/aa-runtime/src/height_brush.rs": "e38c62723e03497023052e8e472498f9a92c5d226d79065db7b8c112aba632fc",
+    "crates/aa-runtime/src/height_brush_geometry.rs": "c55727cd4de862a16ea96d7622b59d9cff1eb44bee9a69b268764d37fcd476d9",
+    "crates/aa-runtime/src/battle_terrain.rs": "4e3bc5dc769e626266200e370f1a97ac1c2749837fdf7e1bc63b2a8f736acfa9",
+    "crates/aa-runtime/src/height_brush_tests.rs": "8a7f9ca1f656cff61661482aea4a4062a997f6ee4d1c3e034991667ee5ca424b"
+  },
+  "evidence_sha256": {
+    "native_height_brush.py": "0c0cd211b08aa3f13ba1f5aaf686205eff958b03a14afb4df125e2e9cd782a5e",
+    "native-height-brush.json": "510ab0b7d1a8dee11a0cbebbbc3d11d7c94fbd72e34c31f6e33a9cb6cfe2c1d9",
+    "native_brush_metadata.py": "8335c707f3b4200aece68ae3d8cb1db1c69c7c93ce9dbf388f279632cbef45ec",
+    "native-brush-metadata.json": "f0ea2509162ffd11daae88747ba188c1a3488ed0056d6cf635000b7d70b00ba7",
+    "native-brush-final-replay.log": "c7f24c9a71a3023a69847ff2a8125f736baecc6bb5a9d24178560da1e2dc7a6b",
+    "native-metadata-final-replay.log": "03db634b8ec0ae147d7fa4d6befb283e1f8e0427c6b6eb433fdfb5331ec8598d",
+    "exact_kernel_tests.rs": "d551570df22a65122ff84008e671f566fb22446cfe15f64555f7759c5aa09fe1",
+    "exact-kernel-tests.exe": "5dd946c893c54edd644dfe603e42dc60a5a7218c7280cafc0a4685588050a54f",
+    "exact-build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exact-replay-final.log": "356fd0b84595062aefca49ee77fd3e70385a5710e7a5f1f439cbbaeee63b8b10",
+    "test-dependencies.json": "918ebb6ccf308a04dfb466935d278335b52792f54212e5e34c84c147da3ec6c6",
+    "check02.log": "2570d2c4bb28997bd66b19969636c86b48a9c57e88083a601641118aafc3b8e3",
+    "check-final.log": "2ef1cbef4c7dafa233c3db7222c57c440380696494cb5f7cf8b1c52403d155c4",
+    "check-final-pointer-sized.log": "ec8746df52dda6ca25cf4b1899faf7e8896efe216e4f13b5b53477efaa28aac4",
+    "attempt42-temporary-index-width-receipt.json": "d9106052924b035b8a7b468742987f6c393a41e5ee1888dbb46fca2812064186",
+    "attempt42-temporary-index-width.diff": "31c2b07f96a4effd1cd922ed6904cce4b17993ecd2ece65b1a0f8022a9a39ba2",
+    "reviewed-attempt42-start-brush.rs": "bf7a32db09eb387bd1b963f7bd5b0c87e9976d5a508a958db671dce9c991580b"
+  },
+  "native_brush": {
+    "rows": 75,
+    "executions": 150,
+    "executed_pins": 2050,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "images": [
+      "original",
+      "configured v14"
+    ],
+    "immutable_replay": "native-brush-final-replay.log",
+    "seams": [
+      "6F7810 allocator transport A5 fill /6F7430 free transport; no allocator failure/reuse parity",
+      "404F90 diagnostic presentation recorded then returned"
+    ],
+    "source_inputs": "Explicit synthetic canonical-shaped values, current settings/terrain slope/placement/renderer orientation/caller falloff. No source-loader/map execution claim.",
+    "world_gate": "Explicit phase6 fixture executes real50C310 early return; an explicit separate FxManager is supplied as World130 receiver, no overlapping/missing owner."
+  },
+  "native_metadata": {
+    "source_rows": 36,
+    "notification_rows": 24,
+    "executions": 120,
+    "executed_pins": 334,
+    "stopped_boundary_pins": 5,
+    "scope": "Ctor/type field slices plus realembedded helper ctor and50C310. Both PE/allPC.",
+    "seams": [
+      "5B5130 typed max_slope value transport through actualFLD/RET4 result stub",
+      "6F7810/6F7430 allocator/free transport",
+      "55D1F0 cache build body transported to exercise actual55D790 dirty=1 suffix; not completed RMG/editor proof",
+      "43B240 view child records raw args and low bool byte then returns; no view render completion proof"
+    ],
+    "raw_padding": "50C310 fourth child arg uses lowbyte of an otherwise retained register word; raw_args intentionally preserve upper residue and changed_low_byte is projected separately."
+  },
+  "rust": {
+    "exact_tests": 2,
+    "passed": 2,
+    "current_source": "The standalone harness imports current production brush.rs, geometry.rs and SAME runtime height_brush_tests.rs; no rewritten body mirror.",
+    "dependency_scope": "InitializedHeightfield/numeric/spatial/serde from verified pinned root production rlibs in test-dependencies.json; no fullruntime link.",
+    "coverage": [
+      "all75 actual native output rows match return, every height word, dirty bounds, source lookup/diagnostic order and notifications",
+      "falloff/slope required-service errors retain uncommitted samples and current dirty start",
+      "notification error retains every committed sample and final dirty bound"
+    ],
+    "runtime_check": "check-final.log PASS47.46s before final temporary index widening; subsequent current check stopped only foreign stored_member_command predecessor errors, fixed by its owner after this log. No own error reported."
+  },
+  "owners": {
+    "height": "SAME BattleTerrain.base.state mutated directly; no shadow HeightMap.",
+    "temporary": "Native stack-local pending records translated to growable Vec plus cell\u2192index lookup; first-insertion iteration order preserved, replacement does not change depth. usize index/depth remove an imposed32-bit temporary engine-count limit.",
+    "dirty": "SAME retained private brush State, ctor0; reset-start and committed dirty stores survive errors.",
+    "terrain": "Actual retained immutable Terrain/Variation owners +current effective tile variations; same sourcePC max_slope from fixed getter forMountain/Water, Land retains native constructor0. Existing source JSON projection deliberately unchanged.",
+    "notification": "Opaque MapNotification from realembedded GMap+5C ctor+90=0. No rawsetter. SAME reference lent to Effects.notify unread; caller reads actual phase first then flag then actual FxManager attachedview. Positive cacheclear/attached render remain explicit requirements in caller.",
+    "field_writers": "55D790 sets helper90 after cache build, through552010 from555F20 RMG5925E0/editor6B6000. Those writer paths are not implemented or claimed by this ordinary loadedmap constructor projection."
+  },
+  "caller_scratch": {
+    "author": "independent borrowed_leader_core",
+    "evidence": "research/development10/object-ground/native-ground-scratch-origin.json",
+    "sha256": "70b2ce82e7dfc56391ebc6d7ffb2faeb4d6c272245cc12249a565d48548af6a2",
+    "scope": "Guarded actualfinal42A590 ActorZ residue, sameActor+Params. Corerequires explicit reached input; never substitutes0/currentZ.",
+    "actual_case": 1086590007
+  },
+  "exclusions": [
+    "Mode2 smoothing551D10",
+    "different-endpoint swept5504B0",
+    "positive roundbrush state (constructor isfalse; no rawsetter)",
+    "nonfinite/undefined original integer domain; no hardware FPflag/exception parity",
+    "shapes other than finite POINT/CIRCLE/BOX",
+    "fullMap/Terrain source loader nativeexecution",
+    "actual positive dirty cache55A550 populated child and43B240 renderer integration",
+    "allocator failure/reuse, SEH/unwind equivalence",
+    "no naturally reached actual42, initialProperties11, full mission or playable battle claim"
+  ],
+  "attempt42": "Exact old/current temporary-index-width diff is separately sealed in attempt42-temporary-index-width-receipt.json. Compiler-consumed snapshot unknown; allotherownedproductionfiles exactlymatch inputpins."
+}

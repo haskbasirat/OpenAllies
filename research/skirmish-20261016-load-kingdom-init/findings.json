@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "status": "bounded_concrete_kingdom_team_init_author_accepted",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "native_executions": 324,
+  "unique_executed_instruction_pins": 1004,
+  "source_precision": "Double53",
+  "type_only_addendum": {
+    "previous_source_sha256": "65830ec59d52ab65012dc239f6117b21061b158018a4910e2843e9fd8848021b",
+    "change": "TeamWorld Catalog asset lifetime is independent of its short mutable reborrow; no executable behavior changed.",
+    "compiled_composed_root_observation": "research/development10/immediate-world-05.json",
+    "observation_sha256": "21cc846f3a1e73a9c4726bb3277422decf6db22095b1a42bfba62bc8747d6c1d"
+  },
+  "live_precision": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "actual_kingdom": 781,
+  "actual_map_version": 27,
+  "actual_recruit_source_definitions": 354,
+  "actual_plain_recruits_per_init": 169,
+  "native_service_seams": [
+    "Actor4D7230 success from separately bound actual Actor tail",
+    "restriction4E1810 actual source-context answers",
+    "successful allocator/free",
+    "diagnostic/name sink transport"
+  ],
+  "rust_object_fixture_seam": "Object Init only; actual source-completed Actor and owned Kingdom tail execute",
+  "composed_root_observation": {
+    "path": "research/development10/immediate-world-04.json",
+    "sha256": "a16ac95c8b7531a164e392e48bae1f0f1d716873daadce61f3a6a127a324911e",
+    "scope": "root real terrain/Point/session Object+Actor+Kingdom Init, PostCreate and publication for three actual Kingdoms; separate next dynamic-class boundary"
+  },
+  "tests": {
+    "author-final-capture.log": {
+      "passed": 4,
+      "sha256": "475f112bb0770d3ea3ef8c73c4c3a0ea95c18921fb567c51b731466060ae8033"
+    },
+    "author-final-immutable-rust.log": {
+      "passed": 4,
+      "sha256": "520ae56769c90879230e4b26af97cfed138367cfbcc19e473258f8267af3fb58"
+    },
+    "author-special-state.log": {
+      "passed": 2,
+      "sha256": "a2b295f79938f9dd6842b75889fe58fe506edc60e8712c613663ec00171a458d"
+    }
+  },
+  "files": {
+    "crates/aa-runtime/src/load_kingdom_init_world.rs": "323216cda3cdb29adfa687fbc452a2f1a5a419052eaedd0f4adaa18d7434b070",
+    "crates/aa-runtime/src/load_kingdom_init_world_tests.rs": "2b71417d594c115d7883f0ae8d1665451a048b0173acf8bbb52d956ecb3132c8",
+    "research/skirmish-20261016-load-kingdom-init/README.md": "85ca0bdc67c12a1b907c4c6f480d2d5bb407a58a4c9d4c092416e3b1acb347a0",
+    "research/skirmish-20261016-load-kingdom-init/actual-first-kingdom-final.json": "0a6b90c429dbf8c6b5ef0b7bff78b9cf01f48b5d0c91ca8204b50449e67f052d",
+    "research/skirmish-20261016-load-kingdom-init/author-native-replay.json": "443c5a3a6eb81c73aa61f4977f5ba8a184f4439b17019b19956a7a254f9b0e90",
+    "research/skirmish-20261016-load-kingdom-init/native-actual-kingdom.json": "1d730f6c94948fd5c680510ddc9b7f550b139bda3e2fd4bc3d3a4eb8d761a0e6",
+    "research/skirmish-20261016-load-kingdom-init/native-color-ordinal.json": "538135c83cf95d0ecc1ace8623cef7e74059a9d12a9bb7dd3e5e97ae4e67f251",
+    "research/skirmish-20261016-load-kingdom-init/native-registration.json": "9fa2641efe9dc600db0769cd9d22ec4d0d8207414572297790e00760eed9becf",
+    "research/skirmish-20261016-load-kingdom-init/native-relations-masks.json": "1e1d58257837bda9cb77fe5dec4d371849625c303594ae76e04d67777c20b857",
+    "research/skirmish-20261016-load-kingdom-init/native-team-leaves.json": "36f5078f7187f56f68c2e83e5dacc0942f49fab810e7b6590ee60dee5a7fe30e",
+    "research/skirmish-20261016-load-kingdom-init/native-world-registry-constructor.json": "632e34e61aac0b31a5018026287ae190757899b3a0cb081c11664cbcdd181394",
+    "research/skirmish-20261016-load-kingdom-init/native_actual_kingdom.py": "abf279178b336e8148be15fd7be0b5b362f30257d9c475961b043eb83ed20ef6",
+    "research/skirmish-20261016-load-kingdom-init/native_color_ordinal.py": "189b3a8999e2099452109f13ac4edf26028b8fedea924219cedd0a5b1972082c",
+    "research/skirmish-20261016-load-kingdom-init/native_registration.py": "5fae96866b5da7355c32d79231b5a24cc4734aa59fccd208c25ef72accae7da6",
+    "research/skirmish-20261016-load-kingdom-init/native_relations_masks.py": "eb488fca9b73f6356a7875c4e65d82b0d132048a8f5890c457826cc54664a329",
+    "research/skirmish-20261016-load-kingdom-init/native_team_leaves.py": "39ba8ea45414ac6af359af10724d937a1349e4e8f29ef26b332fa8d2caa08e42",
+    "research/skirmish-20261016-load-kingdom-init/native_world_registry_ctor.py": "f70832dde231f731de680c8a71d3dd0cfc204634dee8370e54d1d044479a193f",
+    "research/skirmish-20261016-load-kingdom-init/replay_native.py": "194fbb54ee5308f3f1bab1e3e60bfe2adb88449f661683cd315e3eab04a893ce"
+  },
+  "boundaries": [
+    "Legacy scheduling, active SAI, changed Team spatial membership and placement-failure diagnostic owners remain explicit required services.",
+    "Sparse/uninitialized or invalid native index domains refuse at reached unsafe dependencies while retaining prior writes.",
+    "Successful allocation only; no heap exhaustion/SEH/reentrancy claim.",
+    "No full world, battle, map completion, multiplayer or original-game save readiness claim.",
+    "Source/TGI producers are actual bound projections with separate native evidence; full native TGI loader is not emulated by this tail oracle.",
+    "Original files and release packages untouched."
+  ]
+}

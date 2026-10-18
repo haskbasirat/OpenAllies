@@ -1,0 +1,128 @@
+{
+  "schema": "aa-gamebryo-model-reference-review-v1",
+  "date": "2026-10-16",
+  "status": "research complete; production unchanged; all proposed native validation remains open",
+  "authoritative_source_rule": "Original AA.exe and source-bound native data/oracles decide behavior. Evaluation headers/docs are navigation/reference only. Later SDK implementations were not read or used for this model review.",
+  "scope": {
+    "sdk_executed": false,
+    "sdk_code_copied": false,
+    "proprietary_source_or_docs_written_into_evidence": false,
+    "production_modified": false,
+    "converted_assets_modified": false,
+    "manifests_or_releases_modified": false,
+    "new_dependencies": false,
+    "native_executable_oracle_run": false,
+    "rust_build_run": false
+  },
+  "evidence": {
+    "report": "REVIEW.md",
+    "citations": "source-citations.json",
+    "original_header_inventory": "native-model-header-inventory.json",
+    "complete_reader_node_inventory": "native-model-node-inventory.json",
+    "detailed_reader_sample": "native-model-metadata-sample.json",
+    "converted_manifest_coverage": "billboard-conversion-coverage.json"
+  },
+  "findings": [
+    {
+      "id": "MODEL-01",
+      "confidence": "direct original-file bytes and current code",
+      "topic": "mixed original NIF versions / loader scope",
+      "observed": "1900 original files: 1859 NIF10.1.0.0, 31 NIF10.0.1.0, 10 NIF4.2.2.0. aa-formats is RWD-only; aa-assets loads flattened converted JSON, not NIF objects. SDK10.1.0.0 executable string match is not full loader compatibility.",
+      "sources": [
+        "SDK-H1",
+        "SDK-H9",
+        "SDK-D8",
+        "RUST-1",
+        "RUST-2",
+        "RUST-3",
+        "NATIVE-1",
+        "CONVERTER-1"
+      ],
+      "native_validation": "Use one or more source-bound examples per file version; establish original/custom registered types, user-defined version, load/link failures and wire widths before a native Rust NIF decoder."
+    },
+    {
+      "id": "MODEL-02",
+      "confidence": "complete existing-reader corpus interpretation plus current converter inspection; no native parity claim",
+      "topic": "camera-facing billboard state discarded",
+      "observed": "354 billboard nodes in 108 of 1900 files; 105 of those files, 340 source billboards, appear in 1847-model converted manifest. LakeLilyFish01 has 9 billboard parents with quad meshes. Current flattened representation loses node mode and rendering-time rotation.",
+      "sources": [
+        "SDK-H10",
+        "SDK-D9",
+        "CONVERTER-1",
+        "RUST-4"
+      ],
+      "priority": "highest concrete scene-node representation gap observed in this review",
+      "native_validation": "Camera sweep LakeLilyFish01 through native AA; locate display routine and prove modes, parent transform order, camera basis and frame timing."
+    },
+    {
+      "id": "MODEL-03",
+      "confidence": "current converter code plus complete existing-reader corpus negative result",
+      "topic": "parent app-cull, switch/LOD and sparse child slots",
+      "observed": "SDK documents subtree app-cull, selected switch child and camera-driven LOD; converter does not preserve these. Complete 1900-file node census finds zero switch/LOD nodes and zero unflagged triangle geometry below app-culled ancestors. No present serialized-corpus defect established for these omissions.",
+      "sources": [
+        "SDK-H11",
+        "SDK-H12",
+        "SDK-H13",
+        "SDK-H14",
+        "SDK-D2",
+        "SDK-D3",
+        "SDK-D5",
+        "SDK-D6",
+        "CONVERTER-1"
+      ],
+      "native_validation": "Only prioritize upon runtime-created/controller-mutated or newly encountered source evidence; preserve original child slots and original AA traversal semantics."
+    },
+    {
+      "id": "MODEL-04",
+      "confidence": "complete existing-reader corpus interpretation and current converter inspection",
+      "topic": "strip primitive accounting differs from visible triangles",
+      "observed": "4,800 strip geometries report 1,005,230 primitives; current reader returns 431,856 nondegenerate triangles including helpers/shadows. LondonBridge 1,636/721 reported strip primitives become 556/350 nondegenerate triangles. Existing parity-preserving conversion is not demonstrated wrong; native primitive ordinals/strip boundaries are lost.",
+      "sources": [
+        "SDK-H5",
+        "SDK-D4",
+        "PYFFI-1",
+        "PYFFI-2",
+        "CONVERTER-1",
+        "RUST-3",
+        "RUST-6"
+      ],
+      "native_validation": "Source-bound AA index query/draw results for multiple strips, degenerate parity, winding, primitive ordinals and malformed lengths; audit primitive counts separately from nondegenerate triangles."
+    },
+    {
+      "id": "MODEL-05",
+      "confidence": "header/doc reference and current code; AA algorithms unproved",
+      "topic": "AABB differs from model/world render spheres and collision volumes",
+      "observed": "aa-assets reconstructs static AABBs. Existing client source-bound sidecar already preserves authored sphere center for sorting, but not full model/world/subtree sphere representation. Generic SDK collision volumes are not proof of AA gameplay collision.",
+      "sources": [
+        "SDK-H2",
+        "SDK-H4",
+        "SDK-H7",
+        "SDK-H8",
+        "SDK-D2",
+        "SDK-D7",
+        "RUST-3",
+        "RUST-4",
+        "CONVERTER-2",
+        "CLIENT-1"
+      ],
+      "native_validation": "Locate AA sphere stream/update/merge/rigid bounds and camera-plane tests; use real centers,radii,nested transforms,zero radius,boundary cases; inspect collision paths separately."
+    },
+    {
+      "id": "MODEL-06",
+      "confidence": "SDK conceptual reference and current converter inspection; no defect found",
+      "topic": "transform and normal conventions require numerical proof",
+      "observed": "Converter bakes and rounds hierarchy transforms into render basis; Rust renormalizes normals. SDK uniform transform/column-vector convention is compatible conceptually but does not establish matrix conversion order or AA float equivalence. Existing actor-facing proof is narrower.",
+      "sources": [
+        "SDK-H3",
+        "SDK-D1",
+        "SDK-D10",
+        "SDK-D2",
+        "CONVERTER-1",
+        "RUST-3",
+        "RUST-5",
+        "NATIVE-FACING"
+      ],
+      "native_validation": "Source-bound unequal nested rotations/scales/translations and raw binary32 values; verify native positions,normals,bounds under actual AA precision before replacing static conversion."
+    }
+  ]
+}

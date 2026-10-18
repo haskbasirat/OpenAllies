@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "status": "source_integration_and_native_binding_passed_pending_independent_review",
+  "source_definitions": 6,
+  "actors_constructed_and_spatially_published": 12,
+  "native_virtual_binding_executions": 20,
+  "source_rust_tests": 2,
+  "strict_scoped_clippy": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "files": {
+    "crates/aa-rules/src/objects.rs": "bf2ee850e1e109a8b45f1fc816a415da505528da818e9f81b04bdee4d6fedcb3",
+    "crates/aa-runtime/Cargo.toml": "7a8b8c1f9624d4d6d1647a10c97eaf7c54a8e1271d8e793766fd27b711eca090",
+    "crates/aa-runtime/src/actor_world.rs": "70634c65cfec5a857d6065c13a802c63a623f6e9dbb4169b2ac4e1519b47397d",
+    "crates/aa-runtime/src/catalog.rs": "7cde8dfadfad1fae84c794783935a9e1c763189516f3f94f23bc383ccbdfa9f6",
+    "crates/aa-runtime/src/definitions.rs": "d10f8c74502b56ab4a5c97b55bd0db51698599be863ccbbcb4707bba402ff9a1",
+    "crates/aa-runtime/src/lib.rs": "2a2d5bc7d129abfe3b873e18819979ce73e87bc3af5dcd4d30f69930620df698",
+    "crates/aa-runtime/src/spatial_world.rs": "e9e7e3ba4091e50d2b91e65d53a965fb5c45a5ab669de8d59c89d610d52334cf",
+    "crates/aa-runtime/tests/spatial_world.rs": "04b66cf0ef514c4d5c0092634b7d0206ee757c886c801cbd00d52284fe3c0004",
+    "crates/aa-spatial/src/index.rs": "031104bf20fa898e8301edfdb5e3277b0de92bffa39ba21b1936d61f49aa6d97",
+    "crates/aa-spatial/src/index_world.rs": "25831b9b0afe32795bfa136fc043343df868c6c7b7d2376ac22d69ec1854f439",
+    "crates/aa-spatial/src/soft_range.rs": "9d3044df9a760f6e4290c31d7665bda1433c66533315e611fd99a383387a4a18",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-runtime-spatial/clippy.log": "cfc07b993c09525fe2f6043a28adb28ebbf2ab7b91d909132bb98d9e1fca9f3d",
+    "research/phase7-runtime-spatial/native-binding-fixtures.json": "a3fd207d9249ad18e031ce6689f466176fb3c0818460c34a22fcc5d9460fe689",
+    "research/phase7-runtime-spatial/native_bindings.py": "46f819f02ed5901ea2f4ad36714ec832f6514b6d51e7cae665d6c02e25ab9d12",
+    "research/phase7-runtime-spatial/original-actor-bindings.json": "ce1eb777b395ddd85756c94c7e19879e95c9a8649c814151708c55de28fadd85",
+    "research/phase7-runtime-spatial/README.txt": "d49ad8dcc1eba425c095329c84471d8c2352aa2e52b08b7944412387c980ad2a",
+    "research/phase7-runtime-spatial/tests.log": "b22640814f9c45bec177e874720a5990ba23d5b8320eca07c2f4df7993e7fc4c"
+  },
+  "scope": "README.txt",
+  "remaining": "Operational transform callbacks/ActorC8 effects and collision policies remain mandatory; no full live match claim.",
+  "adapter_additions": [
+    "ActorReader over ActorStore and ActorAccess; TargetView for genuine4EE800 virtual+14 wrappers.",
+    "split_index returns mut authoritative index plus readonly source/identity bindings.",
+    "Source tests rerun with both ActorAccess geometry views, split maps and stale target generation rejection."
+  ]
+}

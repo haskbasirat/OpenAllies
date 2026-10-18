@@ -1,0 +1,248 @@
+{
+  "schema": 2,
+  "area": "phase8 metagame (World War II strategic mode)",
+  "date": "2026-10-15",
+  "rounds": [
+    1,
+    2
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "metagame_data_sha256": "96a66de6a787b376032cccec6ec3684aa59df1ed272b7c819cafeb2ee57f703b",
+  "fixtures": {
+    "native-battle.json": "4e370e5728f4c1be0d75754bdc9ecd0869de8209cc9a75e71ac2779dbec4d4c6",
+    "native-commands.json": "60458f822ba07227291a4fc04a7948e7ecb30433577bfb626c7e0b4f13d5f024",
+    "native-init.json": "6cb1864545440450da404e797d9d50351e8dfc321a2cbedf1d509a8baf2a8653",
+    "native-launch.json": "255b6c2e0108aaf328077914db452a93677bac94bed9fe8770a00dbeef11839c",
+    "native-mgai-c0.json": "4684117c776b422d79d2207bae671a57320386289a7b25c1051923f4f12db0d9",
+    "native-mgai-c1.json": "c7c70914687dff877a60f1be8ea035a549ca1d24f207d137a0dcc309083b761c",
+    "native-mgai-c2.json": "f96cb6e63f22c05311ff51293cdb4cf1f9413aa167021f8d90faf8df670020c6",
+    "native-mgai-c3.json": "3b9465a7d6d78896ad902ef9f2a2f69281743f7cea6500b120f30c15d78690de",
+    "native-mgai-c4.json": "a9710cb86129e7d2217cae2998be740aaf38ad550483ddc4c749e61f4217e01f",
+    "native-moves.json": "56344b742609c07e1dc973e71e72225c332aa06f49add42ad0acfe2c76603255",
+    "native-path.json": "e037568a3457f4d3f78a777d8fbd83221224375d65ee951859dfb188a731e929",
+    "native-process.json": "6a1a6acb3c1445fe7d662e4c8567c5797ee7a9a6a1d7d5afd026c6e8e2176ff4",
+    "native-qsort.json": "f95d314d63cf09ef9a77c2043317237d46e06ed421184a7314c1afebe60fdd5c",
+    "native-resolve.json": "ca8553fb39b991e55b2ca67bc4698983794eff43a9fc026310d99799971b9976",
+    "native-save.json": "5200672d73316944e3907107c4b164b6edcd5f397f22baf69bc54d2ee75700cb",
+    "native-turn.json": "bf0f15d3491be3473cfbac948a3f7e39d8a66799fe6fcf940117caba1f452b4a",
+    "native-victory.json": "f161cdca3d0b35f29663252fee05612baa9ff78f42a9f96458ac26b0b6dbe75d"
+  },
+  "inventory": {
+    "functions": 1021,
+    "annotated": 340,
+    "ported": 312,
+    "proven_by_oracle": 292
+  },
+  "precision": {
+    "game_precision": "Double53 (x87 PC53)",
+    "basis": "lead policy: simulation/net thread (TGC_NetNode::Update 765410, CW 0x027F) runs PC53; metagame commands are TGC orders executed there and the MGAI yields through the SAI fiber scheduler 79DFF0 inside 765410 (INFERENCE from call structure, no dynamic trace)",
+    "oracle_precisions": [
+      "PC53",
+      "PC24",
+      "PC64"
+    ],
+    "presentation_pc24": "94E610 odds tooltip (main thread)",
+    "unicorn_transcendentals": "only the sin/cos tables 9C8620/9C8640 (TerritoryPositionSolver, not ported); no proven rule depends on them"
+  },
+  "proven_by_oracle_round1": [
+    {
+      "address": "85D840",
+      "rule": "metagame RNG draw",
+      "rust": "rng::MetaGameRng::next_u32"
+    },
+    {
+      "address": "95C7B0",
+      "rule": "destroy behaviour enum table",
+      "rust": "battle::DestroyBehavior::TABLE"
+    },
+    {
+      "address": "93EB70/93EBD0",
+      "rule": "army quick-battle strength",
+      "rust": "BattleContext::army_strength"
+    },
+    {
+      "address": "954FD0",
+      "rule": "defender strength",
+      "rust": "BattleContext::defender_strength"
+    },
+    {
+      "address": "955EB0",
+      "rule": "defending kingdom",
+      "rust": "BattleContext::defending_kingdom"
+    },
+    {
+      "address": "95F270",
+      "rule": "technology bonus",
+      "rust": "BattleContext::technology_bonus"
+    },
+    {
+      "address": "95F2F0",
+      "rule": "odds clamp",
+      "rust": "BattleContext::odds_clamp"
+    },
+    {
+      "address": "95F370",
+      "rule": "attack odds",
+      "rust": "BattleContext::attack_odds"
+    },
+    {
+      "address": "95F480",
+      "rule": "KKC_QuickBattleSolver::SolveBattle",
+      "rust": "BattleContext::solve_battle"
+    },
+    {
+      "address": "954D80,954EB0,954ED0,954EF0,954F10,93EC40,93ECA0,93F080,93F110,93EA90,961810,961840",
+      "rule": "loser-army selection by weakest/strongest/least/most expensive",
+      "rust": "BattleContext::select_army"
+    },
+    {
+      "address": "955420,9554F0,9564F0",
+      "rule": "n-th army of a side, random destroy selection",
+      "rust": "BattleContext::nth_army/random_army"
+    },
+    {
+      "address": "96CE20,96CDB0,961790",
+      "rule": "CRT qsort + shop comparator",
+      "rust": "qsort::msvc_qsort"
+    }
+  ],
+  "proven_by_oracle_round2": [
+    {
+      "area": "InitCreate",
+      "addresses": "939B90 939690 95A100 954A10 954A90 954AE0 955D50 955B70 956140 940100 93F9F0 95A850 954CF0",
+      "rust": "state::MgState::init_create",
+      "fixture": "native-init.json",
+      "cases": "5 campaigns (army positions recorded, not compared)"
+    },
+    {
+      "area": "owner change, victory",
+      "addresses": "955620 959F20 95A6B0 95A350",
+      "rust": "MgState::set_owner/has_won/capital_lost",
+      "fixture": "native-victory.json",
+      "cases": "20 sequences, 240 steps, 104 with a winner"
+    },
+    {
+      "area": "army relocation",
+      "addresses": "940100 956280 956140 93F9F0",
+      "rust": "MgState::enter_territory/remove_from_territory",
+      "fixture": "native-moves.json",
+      "cases": "300 moves"
+    },
+    {
+      "area": "command validation",
+      "addresses": "951D70 9512B0 951480 951710 951770 951800 951890 9519D0 9510F0 950EF0 950CF0 93A320 93F970 (codes per 952EC0)",
+      "rust": "commands::Validator",
+      "fixture": "native-commands.json",
+      "cases": "1800 commands, every code 0..0x15"
+    },
+    {
+      "area": "command processing",
+      "addresses": "954570 954440 954400 9543C0 952B90 952D10 952D90 9537B0 951AA0 93F7A0 93F4B0 93F750",
+      "rust": "commands::Processor",
+      "fixture": "native-process.json",
+      "cases": "1000 cases, 286 executed, 52 upgrades"
+    },
+    {
+      "area": "pathfinder",
+      "addresses": "93FDC0 93FCC0 93FAD0 93EAE0 961550 961350 960FB0 93ED00 960E70 + node store/heap",
+      "rust": "path",
+      "fixture": "native-path.json",
+      "cases": "4900 searches, 2450 army queries, 1750 heuristic ST0 rows"
+    },
+    {
+      "area": "battle results",
+      "addresses": "954130 954220 967530 967390 967290 9673F0 9670D0 9671A0 967040 954F30 956380 956350 940020 938E10 939410 95EFD0",
+      "rust": "resolve",
+      "fixture": "native-resolve.json",
+      "cases": "934 resolves, 173 quick battles, 259 waypoint steps"
+    },
+    {
+      "area": "end turn",
+      "addresses": "952790 9391F0 938DA0 938C90 938A80 9556D0 93FE10 959FB0",
+      "rust": "turn",
+      "fixture": "native-turn.json",
+      "cases": "379 end turns, 1731 auto-captures, 149 new rounds"
+    },
+    {
+      "area": "history log",
+      "addresses": "95EFD0 939410 938A80 95F000 95F100",
+      "rust": "resolve/turn/save",
+      "fixture": "native-resolve.json, native-turn.json, native-save.json",
+      "cases": "battle records appended, cleared, saved, loaded"
+    },
+    {
+      "area": "strategic save format",
+      "addresses": "938EE0 93A3B0 939930 95A470 95AAC0 955160 9565E0 954970 9549C0 93F1A0 9409E0 9402E0 95B020 95B0F0 95F000 95F100 93EEA0 940740",
+      "rust": "save",
+      "fixture": "native-save.json",
+      "cases": "35 saves byte-equal + parse + re-save, 2275 component round trips, 103 error cases"
+    },
+    {
+      "area": "battle generation up to the RTS seam, RTS result",
+      "addresses": "948EF0 947560 946010 9459F0 9466C0 948BD0 506370 93A990",
+      "rust": "launch",
+      "fixture": "native-launch.json",
+      "cases": "900 battles (585 launched, 315 native NULL faults -> Unsupported), 2700 RTS outcomes"
+    },
+    {
+      "area": "MGAI",
+      "addresses": "963430 964D30 962B70 969CB0 96A230 96A4C0 9699B0 9635A0 969180 9690C0 963B70 962F00 963FD0 9649C0 963030 962A40 (+ see inventory)",
+      "rust": "mgai",
+      "fixture": "native-mgai-c0..c4.json",
+      "cases": "112 turns, 873 stage snapshots, 889 commands"
+    }
+  ],
+  "emulator_guards": {
+    "page0": "non-FS access below 0x1000 stops the run (NullAccess)",
+    "allocators": "CRT heap internals, malloc/free/realloc/calloc, engine new/delete/pool trap unless seamed",
+    "imports": "324 IAT slots redirected to an unmapped trap range (unbound RVAs would execute engine code)",
+    "code_rewrite": "trampolines at fresh addresses; no executed code is rewritten",
+    "snan": "no NaN/Inf inputs generated; Rust non-finite x87 results are Unsupported",
+    "rerun_result": "all fixtures unchanged except resolve/turn setup that called 955620(NULL) (NULL deref in 95A850); replaced by a synthetic unowned setup (MgState::clear_owner); outcomes identical"
+  },
+  "key_findings_round2": [
+    "955620 removes the LAST matching entry from the old owner list; 955620(NULL) dereferences NULL in 95A850 (no native un-own transition).",
+    "Defender iterator 955E80 and immobile cleanup 956380 use kingdom vtable+0x138; n-th defender 9554F0 and defender counts use !vtable+0x140.",
+    "954F30 captures every capturable army in the territory, attackers included.",
+    "Retreat target 967040: linked territory of a friend of the old owner with the strictly largest binary32 strength.",
+    "9673F0 gives a NULL retreat waypoint to attackers whose path has <= 1 entry (native crash later in 940020): Unsupported.",
+    "Save reader: unknown IDS throws (41DFB0); event states read and dropped; territory record +08 not restored; kingdom territory lists rebuilt in territory order; re-save differs in 25 of 35 rounds.",
+    "RMC settings +0x1C is an integer midpoint (Ghidra shows a float).",
+    "MGAI attack priority f32(b*(1-f) + f*a); 968C50 importance*(min-1)/(N-1) with no_attack_distance as path budget; 938AC0/959F00 gates army purchases."
+  ],
+  "removed_limits": [
+    {
+      "what": "qsort explicit stack",
+      "native": "30 entries (STKSIZ)",
+      "rust": "Vec"
+    },
+    {
+      "what": "metagame vectors (kingdoms, territories, links, armies, shop rows)",
+      "native": "doubling arrays",
+      "rust": "Vec"
+    },
+    {
+      "what": "path node store / open heap (53E7B0 max 0)",
+      "native": "unlimited (0)",
+      "rust": "Vec"
+    },
+    {
+      "what": "MGAI goal items, launch participants, battle records",
+      "native": "doubling arrays",
+      "rust": "Vec"
+    }
+  ],
+  "gaps": [
+    "Campaign events at runtime (95ADD0/95BE20, effects 95B220..95B9B0) and event-state storage MGState+0x54: Unsupported when present; no shipped campaign has events",
+    "NULL retreat order (9673F0 -> 940020): Unsupported",
+    "TerritoryPositionSolver 959420 (army display positions): needs aa-trig dependency (request 6)",
+    "Save: chunk framing 859150/859030, end-of-chunk behaviour, DYNAMIC_THINGS vs METAGAME load order, duplicate registry IDS, MGState+0x48 writer",
+    "Launch: RMC game settings by id only, RMC loader/sliders not in MetaGameData, CreateExplicitAI name by kingdom index, order-stream gate 766CD0, process_rts_result has no end-to-end oracle",
+    "MGAI controller 944F90/945090 not ported; queued commands not processed during yields in the oracle; stale handles not exercised",
+    "MgState lacks faction (+0x0C), +0x48 string, events (+0x54), help popups, territory visual (+0x20), army-reference snapshots (carried by save.rs/launch.rs structs)",
+    "Kingdom relation virtuals are inputs (KingdomRelations)",
+    "Localized fields not read yet (aa-rules ResolvedNode::localized now available)",
+    "Native crash/hang paths return Unsupported, ported from the listing"
+  ]
+}

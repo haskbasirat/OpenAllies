@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "passed": true,
+  "component": "Owned ExperienceComponent and native rank transitions",
+  "native_cases": 141,
+  "focused_tests": 2,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "aa-body"
+      ],
+      "exit_code": 0,
+      "log": "research/phase7-properties/lifecycle-tests.log",
+      "sha256": "641b7e429d5cd8092bdefa855664926347291a833e5fd6a50489d7c53b6f695b"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "aa-body",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "research/phase7-properties/lifecycle-clippy.log",
+      "sha256": "de235c9a1c2f860295ab2eaa2377405c7d07c9c8571b778e3a73f41a24691805"
+    }
+  ],
+  "source_sha256": {
+    "crates/aa-body/src/promotion.rs": "fa111dec95037b7bae570798ed820433db1a8c9e894c4c7ca7bf24d19089bdf5",
+    "crates/aa-body/tests/native_promotion.rs": "5619f7e3f5ad970a48e19a1209a11f8cb196bfe244564fa6b40d27c5b700f666",
+    "research/phase7-promotion/README.txt": "867b4c163dd97da6743280dcec1cdb7f4ea5da214d5daa0d7c43fa97317e5180",
+    "research/phase7-promotion/inspect_native.py": "549327cb5359f3da7b5871b3da767a01a0553315a6a83845e4f7c3eb607ce752",
+    "research/phase7-promotion/native-ranges.json": "542601295ac194bb3d4989b7aa3bfa3d12c4df868515712236a56b6fa2dbcc95",
+    "research/phase7-promotion/original_promotion.py": "d383ef3bcfa92b69187aa2d737a2dcde0853b58f17ab630693afefb790a0532b",
+    "research/phase7-promotion/native-promotion-fixtures.json": "31dc2663acbeca11d87556ce42baec31341fedf2faff226a9727ab90d56d42ce",
+    "research/phase7-promotion/record_findings.py": "19582234609c4340ad2cb0a42c75c1b2e538e0254755857addeea34364696f74"
+  },
+  "dependency_sha256": {
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "crates/aa-body/src/lib.rs": "27fd2b7689bcb0fb9bbe5dabb8a07816a975d16ed2b3b9236267eba408895690",
+    "crates/aa-body/src/credit.rs": "da6e143de30ed0dafda92243e384aab8bacbbc65f228ab2054b8c6d007bde0bb"
+  },
+  "limitations": [
+    "Actual modifier/rank lifecycle and notification/member/allegiance propagation remain required synchronous effects.",
+    "Rank tables are real inputs; no default current rank or thresholds inferred.",
+    "Failure preserves prior writes; no automatic retry."
+  ],
+  "independent_review": "Separate peer review required.",
+  "checkpoint_rebind": {
+    "producer": "research/phase7-properties/refresh_existing_gates.py",
+    "producer_sha256": "5a951930ef71e5534df4b7d84a0d14b62edd018e27398ae6ab1e126375431a5c",
+    "scope": "Implementation and native comparison test unchanged; added sibling module exports and documentation are rebound after the final22-test aa-body run and strict Clippy. No new native cases or peer acceptance implied.",
+    "full_test_count": 22
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "scope": "Full FXC_PLAY_OBJECT_ANIMATION type8 immutable definition payload (42B130/42CF10) in SAME FX Graph compiler, plus correction of held429080 current View attachment projection",
+  "native": {
+    "type8_rows": 90,
+    "type8_original_v14_all_pc_runs": 180,
+    "type8_executed_pins": 627,
+    "type8_predicates": "actual current vtable20/24/2C execute and return AL0",
+    "attachment_rows": 120,
+    "attachment_original_v14_all_pc_runs": 240,
+    "attachment_executed_pins": 15,
+    "attachment_stop": "429194 before event allocation",
+    "immutable_replays": "both passed"
+  },
+  "tests": {
+    "exact_same_production_compiler_source_slices": "1/1 PASS0.03s; fixture include path only adapted in standalone shim",
+    "exact_same_attachment_guard_and_production_test": "1/1 PASS; no full current View owner fabricated",
+    "production_check": "aa-runtime --lib release locked offline PASS32.79s",
+    "all_tests_checks": "No owned error; check02 stopped passive external runner Result serialization; check03 stopped foreign SpatialIndex.clear_loading_flag save gap",
+    "runtime_parent_cohort_pending": [
+      "full_play_object_animation_loader_matches_native_order_and_failure_prefix",
+      "existing_fx_attachment_uses_current_thing_view_without_data_flag_shortcuts",
+      "actual_ger_corps_full_view_lists_retain_selected_animation_payload",
+      "request_only_and_incomplete_graphs_refuse_every_command_constructor_before_callbacks"
+    ]
+  },
+  "source_behavior": [
+    "shared native base before required object_animation_IDS getter; owned CString3C remains constructor-empty on earlier failure",
+    "no native animation lookup or empty-name validation added",
+    "full type8 can be held by completed full Graph/Command, but animation effect execution/render consumer remains unimplemented",
+    "request-only scope still rejects command construction even when its only node is now a fully loaded type8",
+    "vf20/vf24/vf2C type8 false leaves select no resource/active callback",
+    "held adapter reads same record.shell.thing.word_c; zero skips View reads; nonnull requires actual Directory/View54/vfBC/45C740 owner"
+  ],
+  "attachment_audit": {
+    "previous_misbinding": "record.definition.flags and needs_space_for_settlement_zone falsely substituted immutable Data for current View",
+    "correct_native_owner": "Thing+0C current View; View+54 mask0xC0000 then same View vfBC",
+    "historical_fixture_qualification": "development10/native_existing_fx_command.py variable data/source_flags is a controlled View allocation at Thing+C, not a native ObjectData source producer; its false vfBC service never proves positive attachment",
+    "no_change": "Created4296B0 path unchanged"
+  },
+  "limitations": [
+    "Native typed getters/enums/registry/target parser/CString and successful allocators are explicit services; no native SEH/OOM/CString refcount claim",
+    "No animation effect instance creation/update/renderer consumer is implemented by this source port",
+    "Positive source View attachment remains required; this corrects genuine null branch and refuses unbound current View fields",
+    "Actual ger_corps whole prior View list source test awaits parent runtime cohort",
+    "Parent/Leader successor subtype2/4/5/6/7/9 additions are separate from this historical snapshot and region proof"
+  ],
+  "snapshot": "research/skirmish-20261017-fx-object-animation/source-checkpoint-01",
+  "region_pins": "type8-region-pins.json",
+  "pins": {
+    "crates/aa-runtime/src/fx_graph.rs": "b94683fd1a194b06712e866214e0919ea2a54e7b80c916cae33cd656ee1fcc36",
+    "crates/aa-runtime/src/fx_graph_tests.rs": "62bfce1011258fc4ce1fdad0d04b14afc38ac2c9eff3fb10346f50e3c723e5d3",
+    "crates/aa-runtime/src/fx_graph_sound.rs": "0c97cc8c20fe51827589d63bd2895bc2b5b7401c9d2d3f1e83d8381bd5898c30",
+    "crates/aa-runtime/src/fx_graph_actor_state.rs": "431b0b5365ffa9e5a42917116ba900df47489b52eb9a910b4ca6fb31f08dced1",
+    "crates/aa-runtime/src/fx_graph_actor_leave_tests.rs": "9b966c4162b13e3774b8c1840b61aa1e6667bef4df4616cd78ca31162384d283",
+    "crates/aa-runtime/src/data_object_request.rs": "f39aa12677b63fb3e7bce79921ee5ed70d566a78861b6df052fb1d6c44fb0270",
+    "crates/aa-runtime/src/load_creation_fx.rs": "b9b23911badda9a4e46c19321bdbb9c80385f2c3c972586f1730e1687e245b20",
+    "research/skirmish-20261017-fx-object-animation/native_fx_object_animation.py": "5eb9600d4063a704b1581cb0e7cdf298bc7654693297905b5b11f34ae10ac6fa",
+    "research/skirmish-20261017-fx-object-animation/basis-native-fx-sound.py": "10b60d01e7aff6109db501af612bbf1b4c48277a0136eb8c015e95bf769a889d",
+    "research/skirmish-20261017-fx-object-animation/native-fx-object-animation.json": "c5348bfe280a1052567f525aba069af6487717fe2cac4e3274640e2ad7ae4844",
+    "research/skirmish-20261017-fx-object-animation/native-replay.log": "a4176ce1f866383aea4ae7b4444067c8f80a23909045ed929b798d3993279c28",
+    "research/skirmish-20261017-fx-object-animation/native_source_view_attachment.py": "532f040e1f46b5d43a01218512f97199fe6eae0ae2ad0154a8820f7ceb5e9b79",
+    "research/skirmish-20261017-fx-object-animation/native-source-view-attachment.json": "228781b78c68982cc6d92a6bdc773c052533274c06f3ed31f0c7f128311c5b09",
+    "research/skirmish-20261017-fx-object-animation/attachment-native-replay.log": "9cc5a18a78872002ca796a7f1fe21cf12fe66fc2ed8a5b963042e101ea0f93c2",
+    "research/skirmish-20261017-fx-object-animation/exact-fxc-source-tests.rs": "3a613e914be1d00749fbcf0bc90be104e7de4a6dadde6f8b86c6da9732bb6e77",
+    "research/skirmish-20261017-fx-object-animation/exact-fxc-source-tests.exe": "10fb3f01f0f29b3ee9c084751d90fe8544ca6b3d0f9a1b3ddccdf6ddb0f2758e",
+    "research/skirmish-20261017-fx-object-animation/exact-source-slice-pins.json": "7121be8e0c7584ffcc58d32192be71bca891d94ab2a5614839dff53879a3b1c4",
+    "research/skirmish-20261017-fx-object-animation/exact-core-tests03.log": "d5e4547be358cb7d54384634d75e06875cd9e298f76f90f4efc453fc43c329a3",
+    "research/skirmish-20261017-fx-object-animation/exact-attachment-tests.rs": "7fae47effc38029ec4106a6c2e50a06b2bd65cfd2553974c36294edf8be137f3",
+    "research/skirmish-20261017-fx-object-animation/exact-attachment-tests.exe": "d53fcda3aaf5f07b20aa2d31197b2b4bdaf6361f852c0a1ec83e42730831d0cc",
+    "research/skirmish-20261017-fx-object-animation/exact-attachment-tests.log": "6589ef4e78f6cbd7445e8843ec02dc380af0f96d09393ee0dfe59535fdf89268",
+    "research/skirmish-20261017-fx-object-animation/check-tests02.log": "49acbfd0afb9c7b6e5ca5de3f79d0b3af9334735cf65b261687e617c788e603a",
+    "research/skirmish-20261017-fx-object-animation/check-tests03.log": "b3689eeca93e267bc36626dd1502acc90eb71e683db1f05a02330e860f6f47f1",
+    "research/skirmish-20261017-fx-object-animation/check-lib-final02.log": "084bd479b4c781419b7fbebdc7a3efeab2e8693f39115aa1924e033ffe556376"
+  }
+}

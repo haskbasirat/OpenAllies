@@ -1,0 +1,2 @@
+    Checking aa-rules v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-rules)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.64s

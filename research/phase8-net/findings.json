@@ -1,0 +1,402 @@
+{
+ "schema": 1,
+ "original_image": {
+  "path": "E:\\Games\\Axis and Alies\\AA.exe",
+  "sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26"
+ },
+ "v14_image": {
+  "sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+ },
+ "rust_sources": [
+  {
+   "path": "crates/aa-orders/src/commands.rs",
+   "sha256": "05a0f8690cca67bf2455f319a6e6056e9e6490824e0e351b483444ae00aa9fa4"
+  },
+  {
+   "path": "crates/aa-orders/src/flow.rs",
+   "sha256": "d0e21bb1c5bbf773886d943fc2cdb3b7f0bacd2cbdb10fa3c4019111baa618f2"
+  },
+  {
+   "path": "crates/aa-orders/src/flow_table.rs",
+   "sha256": "d29f5263a4de56fee4955610a7e0fe5c3d20f24092232d43dfc6ec52811fb340"
+  },
+  {
+   "path": "crates/aa-orders/src/lib.rs",
+   "sha256": "1dfa75bbde1e84ff633f2dcdc60621ec12211a5925bdfa6e344d97c1f270a2fc"
+  },
+  {
+   "path": "crates/aa-orders/src/native.rs",
+   "sha256": "61c527a4245fee7e50d7a05bd2223c91defee2dda4c2b472eb43130a3af02e07"
+  },
+  {
+   "path": "crates/aa-orders/src/native_registry.rs",
+   "sha256": "a2550406d270d7dc404ca1a67d469a148295330170594278c798b992ba9a9694"
+  },
+  {
+   "path": "crates/aa-orders/src/net/admin.rs",
+   "sha256": "e4184d6507bf76befe6a8572e6a099b516fecf48c052d275c4cc8abda83a2370"
+  },
+  {
+   "path": "crates/aa-orders/src/net/mod.rs",
+   "sha256": "c1b065a5c570a70ad38dcb1f460c8f5c11c30e5eee8de1998b6562bcfeead147"
+  },
+  {
+   "path": "crates/aa-orders/src/net/seams.rs",
+   "sha256": "a0416ea2317f627a4e95260271ad2c2a671c2eee4b003770c5293d1fd1d8fd47"
+  },
+  {
+   "path": "crates/aa-orders/src/net/sync.rs",
+   "sha256": "084f7f3d2218a3afe24359fa0818af494f60790811fa9bc1d5b51d6c43b60d68"
+  },
+  {
+   "path": "crates/aa-orders/src/net/transport.rs",
+   "sha256": "c83788b88340639caca1c9a55d6d014453b75ce5bb96ad81a99cd702fb4a3541"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/complex.rs",
+   "sha256": "da9ed476e714430ac00c7d4b2babdcd0fea8833397544afa1800d22a639d4e4e"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/editor.rs",
+   "sha256": "91a637092b1c4d216a265b9eff08f7c73e8ee396ee08fd3b5933c1df14a987de"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/game.rs",
+   "sha256": "e1e427685093bfefa858de27229a49d8637c9c205be73d8c30a95a0afe219d1f"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/lobby.rs",
+   "sha256": "121c2a8e34fc08cd3d91cd946f1943430d1694b41c6269f78d4f847c8124cd2b"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/mod.rs",
+   "sha256": "a1befd97bc339cf974f0bdcc3c38b99c79d254e425dc86f8efa7f77149244dec"
+  },
+  {
+   "path": "crates/aa-orders/src/payload/schemas.rs",
+   "sha256": "45c53c2654f32999c824671516546de482271251b2836f18ded9d78a35e55f19"
+  },
+  {
+   "path": "crates/aa-orders/tests/gameplay_orders.rs",
+   "sha256": "e4e29beba3b6664ec34a6b496afc0580c2e1d90806d1ce7bc11ad82d947ea2b9"
+  },
+  {
+   "path": "crates/aa-orders/tests/generic_commands.rs",
+   "sha256": "28365fae59d819196183c4a62b36590a3466af3a728589a78ae1ef8370701b24"
+  },
+  {
+   "path": "crates/aa-orders/tests/native_parity.rs",
+   "sha256": "c0e72410834ed802daca7f3cdea4ad25795ec23629801ed7da1219ba826af36b"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_lockstep.rs",
+   "sha256": "f494e1865859112516d81b618603a82983e21b39fd6358307d3554453bec1855"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_sync.rs",
+   "sha256": "5b2682b08c3c463f25f6b63862c1a433e59517d138b8f64e12f23f228f83bc2e"
+  },
+  {
+   "path": "crates/aa-orders/tests/net_transport.rs",
+   "sha256": "9b23b15dd8d358e71b1abbd7e43967fc4510120730f167a0aa21f09a88b6c5a5"
+  },
+  {
+   "path": "crates/aa-orders/tests/order_flow.rs",
+   "sha256": "2afbb304b1c4e3717ba6991fc561c870bf799c6f45bcbe2ce4e1913214f38784"
+  },
+  {
+   "path": "crates/aa-orders/tests/order_traces.rs",
+   "sha256": "4ea46de677a6ad02a29caafe308e26b9216434edfa8b4ccae08e511c67efaa45"
+  }
+ ],
+ "rust_sources_netcode": [
+  {
+   "path": "crates/aa-netcode/src/channel.rs",
+   "sha256": "e7ec1cd760e652f35d3586227b8922c360bb29df25e08c269523dd4d52376461"
+  },
+  {
+   "path": "crates/aa-netcode/src/file.rs",
+   "sha256": "e03b5cfb050bc90cc3aab5ebe4cd50d240f36d5e07b650b60189250d0f71f474"
+  },
+  {
+   "path": "crates/aa-netcode/src/heartbeat.rs",
+   "sha256": "d25eaeabcf723e0dbbb1adcc81704abb668d89d7fa9edf39a8b6a422c2d2f2f0"
+  },
+  {
+   "path": "crates/aa-netcode/src/history.rs",
+   "sha256": "58f3fd211b39a9e51e42341837d22783a02175fcd2e45ee97bc51700fdc20d72"
+  },
+  {
+   "path": "crates/aa-netcode/src/lib.rs",
+   "sha256": "159c1f644b8fcf96c331220dd6a6db11ee4b2ba2b0a059771071d6dcc24f7310"
+  },
+  {
+   "path": "crates/aa-netcode/src/lobby.rs",
+   "sha256": "bf66e8ad89dde6e0fbd682cc5a9faaa8c9ac8a206e53046461c1dc73d55b6e05"
+  },
+  {
+   "path": "crates/aa-netcode/src/packets.rs",
+   "sha256": "77b67cfb98a70e1f99b3f6b49b6c06c58166ca20ffe1a0c214c9ec586cbd9869"
+  },
+  {
+   "path": "crates/aa-netcode/src/seams.rs",
+   "sha256": "890fe6db192be5919eb10b710a4173c8b7cfafc084c84af5a222a1bd6670cfbe"
+  },
+  {
+   "path": "crates/aa-netcode/src/send.rs",
+   "sha256": "4adfe64191257b51fe8764d8b8669bc5c96fe58603826a30e9cbd9cdd21fc3de"
+  },
+  {
+   "path": "crates/aa-netcode/src/session.rs",
+   "sha256": "442922972d87be6945b29a8d9453b9c77214141d21ae8f87fb368ed80e038eca"
+  },
+  {
+   "path": "crates/aa-netcode/src/speed.rs",
+   "sha256": "713beaa9ae7ecee7af715bb1101df8fa28f031571061ab4be65c3488b89ef90d"
+  },
+  {
+   "path": "crates/aa-netcode/src/udp.rs",
+   "sha256": "999e5900eaa5f059891f2bb9c080474f33da31322833d3180da0c618c100a577"
+  },
+  {
+   "path": "crates/aa-netcode/tests/channel_effects.rs",
+   "sha256": "8535eeaf4e03bdc62b4eed698766099be39475fd4b203d4bed708a16b35d192d"
+  },
+  {
+   "path": "crates/aa-netcode/tests/channels.rs",
+   "sha256": "6bd935d00f4601eb9fe89f2c4f0b45638152e9ad8ab0faa822d0545c0997f811"
+  },
+  {
+   "path": "crates/aa-netcode/tests/connect.rs",
+   "sha256": "7d2eff036c72bcc3a1e5bca54b59b6ca975f1507a91d2ad096dd7de8c74eb3b5"
+  },
+  {
+   "path": "crates/aa-netcode/tests/file_transfer.rs",
+   "sha256": "454a8ebfdfebf60b249f405dd7fd772e142c023971070f2417fc117e24c94775"
+  },
+  {
+   "path": "crates/aa-netcode/tests/heartbeat.rs",
+   "sha256": "ee7b3941b21a7c017f3e5c9b11f7ef0a25d2e56e1e0e49d7cb5aafe7e6e050d1"
+  },
+  {
+   "path": "crates/aa-netcode/tests/lobby.rs",
+   "sha256": "9113ef5cd95ec6b554aa2d9e0f8b04307100173d2708586e91510624a3588123"
+  },
+  {
+   "path": "crates/aa-netcode/tests/loopback.rs",
+   "sha256": "da31e5aa3bd89b67a34bc4679d1cf3123739df96052b4c11e7355562ad5f1edc"
+  },
+  {
+   "path": "crates/aa-netcode/tests/packets.rs",
+   "sha256": "1219d44284d5732068673fdbb71b2ca99f5bf54dad4efd4ed92eeafbfccda65c"
+  },
+  {
+   "path": "crates/aa-netcode/tests/packets_misc.rs",
+   "sha256": "972212fd2b8bf0e1bf8776021045008914cb7966bab3c0d475fa8ffff51a32a4"
+  },
+  {
+   "path": "crates/aa-netcode/tests/send_gate.rs",
+   "sha256": "dfa977f782770a2437129811684efbb3af8e23751e344aab40f6e4dc2c7214b0"
+  },
+  {
+   "path": "crates/aa-netcode/tests/speed.rs",
+   "sha256": "908792633450a4171c013cedc0bb5bab516a6f985a9cbc714fc00f11d47274e2"
+  }
+ ],
+ "producers": [
+  {
+   "path": "research/phase8-net/native_transport.py",
+   "sha256": "3f128609b444ad6a6908b55ce7ab1cd38309a5d30dfd7d9dfd1d92e60337aca1"
+  },
+  {
+   "path": "research/phase8-net/native_sync.py",
+   "sha256": "776b490c3d4ebc004400221fd2002bff86d20bad4751ec6ceff80009f0b587cd"
+  },
+  {
+   "path": "research/phase8-net/native_channels.py",
+   "sha256": "7380f7421651e1471f670b07b4b3ea4ffb79d17e335f848b179957b7cfe901fd"
+  },
+  {
+   "path": "research/phase8-net/native_packets.py",
+   "sha256": "b93909646e4ce1682719684df41d49e03b447ab8864471427c9b4441f40f4709"
+  },
+  {
+   "path": "research/phase8-net/native_packets_misc.py",
+   "sha256": "87e5ad46bd83bd7748708070f64530be55dfda83677c0e21b156c3bc1e8729f8"
+  },
+  {
+   "path": "research/phase8-net/native_connect.py",
+   "sha256": "8f605b51315ef26dfb4cb2898e838af82dbfceddf6a6c3ee7fcab160ac69f6aa"
+  },
+  {
+   "path": "research/phase8-net/native_send_gate.py",
+   "sha256": "2dc2d7f7cd2ae096ae2ed99dea281929b1b6b93e459d7accacf92c0efa198c7f"
+  },
+  {
+   "path": "research/phase8-net/native_speed.py",
+   "sha256": "8dda6f9e5be64d693c72bba95789e30c09417e180a2ebd49155b3b43dc1bb48f"
+  },
+  {
+   "path": "research/phase8-net/native_file_transfer.py",
+   "sha256": "d9daebfbd36f8fc1feb654a2476d377829b50ada15bc112ed3707da27ea79f8b"
+  },
+  {
+   "path": "research/phase8-net/native_heartbeat.py",
+   "sha256": "ef3990ee1f0d19573758b2761247fd8710bcc8fc1a149629093649ef59307cd3"
+  },
+  {
+   "path": "research/phase8-net/native_lobby.py",
+   "sha256": "a0097fa849ff4c295e8d8959a940a6c65b2a784511db57e09beea50c1069381a"
+  },
+  {
+   "path": "research/phase8-net/null_guard.py",
+   "sha256": "49d524aabc0e647c72ea788366b046c667d57dbef4185b31a134916d92f0612c"
+  }
+ ],
+ "fixtures": [
+  {
+   "path": "research/phase8-net/native-transport.json",
+   "sha256": "626214854908dd5d4b11e39432290a3acc7e876b81f19adb92d9857386aca03e"
+  },
+  {
+   "path": "research/phase8-net/native-sync.json",
+   "sha256": "4a02667bccb0cae1ad872d5641db88f7bf3264dbcb4006527f1fc8f15d08e5f1"
+  },
+  {
+   "path": "research/phase8-net/native-channels.json",
+   "sha256": "4414fa1068925a532f43384d75dd8a5ac4820c11d37692bf84ed370d9207127f"
+  },
+  {
+   "path": "research/phase8-net/native-packets.json",
+   "sha256": "15fe0f9a4ae7f91231e870765f39222a04b84e68f56fe2339f5e054c34cdf098"
+  },
+  {
+   "path": "research/phase8-net/native-packets-misc.json",
+   "sha256": "59d6e6deea942b57b53f9600072d41cb47756ed796b228b9f46cab83bf9fb000"
+  },
+  {
+   "path": "research/phase8-net/native-connect.json",
+   "sha256": "ba83d740aeec60f1198aa5379fb4eb9060e12f30fd1981a5dd8054afe16afb0b"
+  },
+  {
+   "path": "research/phase8-net/native-send-gate.json",
+   "sha256": "b38311ca3cd485e99cd3d093c69c9d1211f1477d8c26eb006f10d7ad98a48924"
+  },
+  {
+   "path": "research/phase8-net/native-speed.json",
+   "sha256": "f69a0503adacc9cbd2966a48ad21aaa435ab56da5a4569b1e49c4b720c14c02d"
+  },
+  {
+   "path": "research/phase8-net/native-file-transfer.json",
+   "sha256": "797e537945ddeda2509fdef2e1f0ce7d84974548e71d8aa1fc480c1e54f3008d"
+  },
+  {
+   "path": "research/phase8-net/native-heartbeat.json",
+   "sha256": "118172622130c3c13e55dd72c3945e198178ef4dc2d4bde72739af59cc8c39e2"
+  },
+  {
+   "path": "research/phase8-net/native-lobby.json",
+   "sha256": "efc80d35d9e43edbda8bdb0451cb6c42618685235035729bc80d838ea20fa25a"
+  }
+ ],
+ "counts": {
+  "transport_cases": 199,
+  "transport_reads": 183,
+  "sync_sequences": 36,
+  "sync_operations": 1477,
+  "channel_steps": 103,
+  "packet_steps": {
+   "original": 146,
+   "v14": 146
+  },
+  "misc_packet_cases": {
+   "reconnect": 62,
+   "client_to_backup": 44,
+   "backup_to_client": 54,
+   "empty_bodies": 12,
+   "disconnect_decree": 32
+  },
+  "connect_cases": 31,
+  "send_gate_cases": {
+   "original": 2048,
+   "v14": 2048
+  },
+  "speed_cases": 48,
+  "lobby_cases": {
+   "join_messages": 44,
+   "player_join": 27,
+   "addresses": 9
+  }
+ },
+ "proven": [
+  "datagram header writer/reader 0x764DA0/0x764CA0/0x764BB0/0x764600/0x764550/0x764AF0 at PC24 and PC53",
+  "TGC_Synchronizer 0x77CCB0/0x77DA70/0x77D930/0x77D9D0/0x77DB10/0x77D900/0x77D050",
+  "message-history channels over TGC_BlockSender/Receiver",
+  "admin packet types 2..11 bodies and reader gates incl. bindings 0x752300/0x7523A0/0x752490/0x7525B0, ack dispatcher 0x74B4F0, status 0x74C6D0/0x74C7B0, file generation 0x74C8B0, backlog 0x74BCB0 + v14 caves 0x9EFF40/0x9EFEC0",
+  "Connect 0x750330/0x75BF90 and PlayerJoin request payload 0x77B680",
+  "send gate 0x74BDE0 with 0x74B600/0x74BD80 at PC24/PC53, both images",
+  "SetGameSpeed decree process 0x75D810 bound to Timeline::set_game_speed",
+  "file transfer (see file-transfer-notes.txt)",
+  "heartbeat/update/lag/migration (see heartbeat-notes.txt)",
+  "lobby join path: private messages, session snapshot, host completion, PlayerJoin process (see lobby-notes.txt)"
+ ],
+ "composition_only": [
+  "net::admin and net::seams (aa-orders tests/net_lockstep.rs)",
+  "NetworkSeams adapter (aa-netcode src/seams.rs)",
+  "heartbeat channel effects onto packets.rs (tests/channel_effects.rs)",
+  "LOOPBACK ONLY: host+client threads over 127.0.0.1 UDP, direct and through a lossy/reordering relay, decrees replayed identically and every client synchronizer value validated by the host (tests/loopback.rs); stand-ins for PlayerJoin process 0x758FD0 / session snapshot / admin-state resume"
+ ],
+ "documented_not_ported": [
+  "lobby.rs not yet wired into the loopback (open question on synchronizer resume)",
+  "PlayerJoin duplicate-name cases without native evidence (3)",
+  "launch countdown processes",
+  "ClientLeave 0x755840",
+  "NetNode send selector 0x763EE0 and bandwidth buckets (intentionally not ported)",
+  "SimulatedNetEffects",
+  "GameSpy / NAT negotiation (out of scope)"
+ ],
+ "removed_caps_in_code": [
+  "sent-time and received-flag windows",
+  "order/decree histories",
+  "synchronizer ring",
+  "bitstreams",
+  "64-socket select 0x783D8F",
+  "32 receives per update 0x783DC7",
+  "4096-byte receive buffer 0x783BE5 -> 65535",
+  "4096-byte send buffers 0x76526D/0x765133",
+  "bandwidth token buckets 0x764FA0/0x763E30 (not ported)",
+  "channel/file/history initial capacities 0x100/0x400"
+ ],
+ "kept_rules": [
+  "per-pass send bursts 8/9 (0x74BED7/0x74BF16)",
+  "packet bit targets 0x403/0x603/0x803/0xC03 (v14 file 0x2403), 0x400",
+  "file BlocksPerFrame 20 / BlockSize 64 / MaxPendingBlocks 256",
+  "reorder window 4, ack bits 32, retention 200/1000/100/32"
+ ],
+ "emulator_caveats_rechecked": {
+  "null_guard": "every phase8-net/phase8-orders harness",
+  "trace_runs_masked_by_zero_page": 96,
+  "flow_cases_masked_by_zero_page": 4,
+  "results_changed": 0,
+  "native_faults_confirmed_genuine": "17 trace + 6 flow"
+ },
+ "tests": [
+  "crates/aa-orders/tests/net_transport.rs",
+  "crates/aa-orders/tests/net_sync.rs",
+  "crates/aa-orders/tests/net_lockstep.rs",
+  "crates/aa-netcode/tests/channel_effects.rs",
+  "crates/aa-netcode/tests/channels.rs",
+  "crates/aa-netcode/tests/connect.rs",
+  "crates/aa-netcode/tests/file_transfer.rs",
+  "crates/aa-netcode/tests/heartbeat.rs",
+  "crates/aa-netcode/tests/lobby.rs",
+  "crates/aa-netcode/tests/loopback.rs",
+  "crates/aa-netcode/tests/packets.rs",
+  "crates/aa-netcode/tests/packets_misc.rs",
+  "crates/aa-netcode/tests/send_gate.rs",
+  "crates/aa-netcode/tests/speed.rs"
+ ],
+ "untested": [
+  "real network sessions between machines"
+ ]
+}

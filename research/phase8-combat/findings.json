@@ -1,0 +1,533 @@
+{
+ "schema": 1,
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "harness_sha256": "f2c65e7a7ccdc11927f895a9c2c09ece56b66603a9aacad206fae061d77774f1",
+ "fixtures": [
+  {
+   "file": "native-morale-fixtures.json",
+   "sha256": "23128e2e09fa7611fc74309d6a98c3b9342dc69ea0252851cdfd729a84488119",
+   "producer": "native_morale.py",
+   "producer_sha256": "a41c40ecf831907d16832e849fc889fd0278461c69d3d69afe602a3f6c22785b",
+   "cases": 711,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 33
+  },
+  {
+   "file": "native-experience-amount-fixtures.json",
+   "sha256": "49bbfb482601e07acf1fb93979c541c318fcde22bb4b77dbf59351738bbb02a3",
+   "producer": "native_experience_amounts.py",
+   "producer_sha256": "b76c473b0eafe837f11026f1b2a3745cec1d1cdd4433fbaa4d14639088a3afa2",
+   "cases": 405,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 6
+  },
+  {
+   "file": "native-roe-fixtures.json",
+   "sha256": "3ee0ec536dde93465ccb9c5c8445a5378dcd6fcb883c1058d8b3761145ca930e",
+   "producer": "native_roe.py",
+   "producer_sha256": "571d8cdaf6b05123bfd09ee763fa8e6965a9344e4557b8d3d56e54cae264850e",
+   "cases": 1050,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 12
+  },
+  {
+   "file": "native-damage-response-fixtures.json",
+   "sha256": "73dc1314391f50f3f3eaad3855bb78c24d9905f3f6b11b655942aa505edf3c8d",
+   "producer": "native_damage_responses.py",
+   "producer_sha256": "4ace9309c23874e3385a675548f764e7af4216e9cad418773343895cff81888a",
+   "cases": 198,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 30
+  },
+  {
+   "file": "native-combat-reaction-fixtures.json",
+   "sha256": "21c9a1c1f60be365d795052dcc3482c1a3488c045eb4f016c5591da238ff16e8",
+   "producer": "native_combat_reactions.py",
+   "producer_sha256": "180c95d96fc3729b3f8a176bcf22e8c2c1d1cd02ad9ef4c582501108e3bdd2d2",
+   "cases": 81,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 25
+  },
+  {
+   "file": "native-capture-attempt-fixtures.json",
+   "sha256": "d1d2437d216b51a4043860941fa7c1a89015f272e294fe082805d5111abc44e3",
+   "producer": "native_capture_attempt.py",
+   "producer_sha256": "ddf5be5941147fd1da42f8add8d58129dfd1699e92e8423388323f18bf52f76a",
+   "cases": 17,
+   "extra_sections": {},
+   "precisions": [
+    "Single24"
+   ],
+   "native_windows": 17
+  },
+  {
+   "file": "native-org-tick-fixtures.json",
+   "sha256": "0bdd98b5486be704a6266a6169374123d047db6b60c7696385e6b8eda36bac5e",
+   "producer": "native_org_tick.py",
+   "producer_sha256": "d3df834750cc8bdcc9bcdc07f839dcc81f503eb9c046432431e6c973c0603de9",
+   "cases": 186,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 30
+  },
+  {
+   "file": "native-member-removal-fixtures.json",
+   "sha256": "debe329e98f8f2bedaaeb730ebdc252deb987880547c92585e8fed718b3daf30",
+   "producer": "native_member_removal.py",
+   "producer_sha256": "241bfb8f2fb9374a025a031c225c18f89b9faddb9a68a38af48654957288ed38",
+   "cases": 114,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 31
+  },
+  {
+   "file": "native-siege-fixtures.json",
+   "sha256": "58f84ba1a23453d4a7f9e7b2ca1ce095c015982e56fc8f3384ab9c2b58dae78b",
+   "producer": "native_siege.py",
+   "producer_sha256": "09bd0667130b9ea5877cacdf1dff3ec77ecaf85d103683b243b3f749acb515e3",
+   "cases": 213,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 7
+  },
+  {
+   "file": "native-denizen-fixtures.json",
+   "sha256": "d003a07607efc4635e05ab6112563cd3de66fef2da95b7f35e32c3d6ac738614",
+   "producer": "native_denizen.py",
+   "producer_sha256": "dbb7fd4be09b3b175ffa42e88af3e5062ffe1bc2089454e2549a6e9cb663291f",
+   "cases": 57,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 12
+  },
+  {
+   "file": "native-change-kingdom-fixtures.json",
+   "sha256": "475f616cf69fbe81c79aebcef300f24840a95307200f73233418d802ecbb05f0",
+   "producer": "native_change_kingdom.py",
+   "producer_sha256": "f0e0def28b11adae9cf748b05e722dc64cda6ccda4893071d4217057c809ca90",
+   "cases": 25,
+   "extra_sections": {},
+   "precisions": [
+    "Single24"
+   ],
+   "native_windows": 40
+  },
+  {
+   "file": "native-damage-number-fixtures.json",
+   "sha256": "248eae02fe41b9bd5248a7fd6cad1cdc62993addb4542b2a2a87a8b7f67b2d42",
+   "producer": "native_damage_numbers.py",
+   "producer_sha256": "9b358bdf047c3b4faedf75e721175e750e3e850eb2ee7a031aa319e1e12772d4",
+   "cases": 18,
+   "extra_sections": {},
+   "precisions": [
+    "Double53"
+   ],
+   "native_windows": 5
+  },
+  {
+   "file": "native-crt-pow-fixtures.json",
+   "sha256": "24f33535defb28db6cc7503b1c966bea7ebf7eada3f0d0a4db46f32585c0872c",
+   "producer": "native_crt_pow.py",
+   "producer_sha256": "84b2d4f185b9793195ff35d3fef964d38ebb0e66b42bc79ef15030bf5f0f029b",
+   "cases": 11450,
+   "extra_sections": {
+    "libm_cases": 510,
+    "dispatch_cases": 84
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 7
+  },
+  {
+   "file": "native-combat-value-fixtures.json",
+   "sha256": "5f3cfe5723b5ea2abf2e8eacb4b088270c9487fd0dcc1334e409ff04dce0b3f8",
+   "producer": "native_combat_value.py",
+   "producer_sha256": "a70c8700c0911927704e269fb8c83a4a8e56868ebd366cdb73e0919663cf6ad5",
+   "cases": 480,
+   "extra_sections": {
+    "power_cases": 2412,
+    "mean_cases": 108,
+    "performer_cases": 180,
+    "definition_cases": 180
+   },
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 51
+  },
+  {
+   "file": "native-statistics-tracking-fixtures.json",
+   "sha256": "bddd723defd0c142e5708728d068a66132e857df2c38b1b49403d119ebdfc430",
+   "producer": "native_statistics_tracking.py",
+   "producer_sha256": "4fb5e84496161e809b180e39c650ac3259d098c401bb996d4efa9c40ea936b04",
+   "cases": 1320,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 9
+  },
+  {
+   "file": "native-regeneration-fixtures.json",
+   "sha256": "847de80678fec377a89de1385135329fae0ee859be9edbe36f85fe64bf4b9994",
+   "producer": "native_regeneration.py",
+   "producer_sha256": "d52615397620040aa6d5a5841efc2da0d592f07b0db154fd1bbb6d4104451b2a",
+   "cases": 480,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 14
+  },
+  {
+   "file": "native-entrench-delay-fixtures.json",
+   "sha256": "7f14538e93102dad9cea66cf653a36d95cf810af0b0dc74a6d151ec0771141f5",
+   "producer": "native_entrench_delay.py",
+   "producer_sha256": "253735414ce04c56ff195fe41cf93130c2b3609b1de73304016341b4eb37489a",
+   "cases": 360,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 2
+  },
+  {
+   "file": "native-org-speed-fixtures.json",
+   "sha256": "f464fffccbe90f9d1122e7f21fca4b7eec0d8344b57a9bfc0e068f8a9b76c9dc",
+   "producer": "native_org_speed.py",
+   "producer_sha256": "c8a2a6b350921c6ddf76a090cd1ff6c26f841c03c2da11219d3ef64f24cc045a",
+   "cases": 450,
+   "extra_sections": {},
+   "precisions": [
+    "Double53",
+    "Extended64",
+    "Single24"
+   ],
+   "native_windows": 3
+  },
+  {
+   "file": "native-property-wrappers-fixtures.json",
+   "sha256": "e863faf67fe7b4e5b772213fc46ed847094aa3220e96103bdacd43c12827280b",
+   "producer": "native_property_wrappers.py",
+   "producer_sha256": "a8969d93cb6eff5f3c6f1a99bfbd83916c14f3e419a58eb3d6b72eb20809a71a",
+   "cases": 12,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 2
+  },
+  {
+   "file": "native-ability-effect-fixtures.json",
+   "sha256": "b518ffcaccc6c8aa07e8e8a10b6deb19662adeb57745986937339d1c61ce36c1",
+   "producer": "native_ability_effects.py",
+   "producer_sha256": "1dbc97d359ab5e85504c6e30da415a5c4975486dd923f8a9f8cde6eda1508cf6",
+   "cases": 17,
+   "extra_sections": {
+    "enums": 6,
+    "modifiers": 15,
+    "vfx": 6,
+    "permanent": 8,
+    "create_vfx": 3,
+    "enchantment_property": 3
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 93
+  },
+  {
+   "file": "native-begin-death-fixtures.json",
+   "sha256": "5f4253f5640495e99d6f45c065ae12ae436f1a5577e595ef39186405ac6fd089",
+   "producer": "native_begin_death.py",
+   "producer_sha256": "2dcee37f28568bf3c658725a88a22e054d5a1d0aefd563ad3e39a9b48a8fa6a9",
+   "cases": 160,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 20
+  },
+  {
+   "file": "native-wall-fixtures.json",
+   "sha256": "6338cec63383b7a160640f3dda8e5c03ac19b9e716891279f829f1c8b003ca92",
+   "producer": "native_walls.py",
+   "producer_sha256": "497d6241392c43ebd1a9ca988326fb3d4bc66e1183fa47bd7f1bde4da054cbcb",
+   "cases": 24,
+   "extra_sections": {
+    "sieges": 40,
+    "transfers": 30,
+    "intruders": 30,
+    "detaches": 16
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 24
+  },
+  {
+   "file": "native-member-spawn-fixtures.json",
+   "sha256": "0ce644b290d697c88b660079f85a747b6f670c8dd35818dcc963418ff241f526",
+   "producer": "native_member_spawn.py",
+   "producer_sha256": "643c1eadb335027cfdb0e7b08f5c09b41c2b9b778ae0bf667f20c4176e8ef015",
+   "cases": 40,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 5
+  },
+  {
+   "file": "native-turret-intention-fixtures.json",
+   "sha256": "847c43c483b51ca482ae34874a177a130a7728ac3ef433934de6ea0f33329ca6",
+   "producer": "native_turret_intention.py",
+   "producer_sha256": "90e649478709044c29bb49a37e4169a6bac332d403a568b30c8a2df44ff1934f",
+   "cases": 60,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 8
+  },
+  {
+   "file": "native-special-ops-loading-fixtures.json",
+   "sha256": "f656852069587c31387635c776db959fe9661f331abc4c0f0067b7082aae764f",
+   "producer": "native_special_ops_loading.py",
+   "producer_sha256": "89100634a3eca5cf2146e0279fcc33f6c737ec2d07189bb74b3b09643d997001",
+   "cases": 69,
+   "extra_sections": {
+    "enums": 6,
+    "summons": 17,
+    "required": 283,
+    "ability_required": 283
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 132
+  },
+  {
+   "file": "native-special-ops-effects-fixtures.json",
+   "sha256": "a510bb0e67544fa5d3a87a91cfe619d24d507b13bb3ba282fd5a7255b337a7c7",
+   "producer": "native_special_ops_effects.py",
+   "producer_sha256": "907c24298ef69788fe986b8524ea4a7cb2793f0c9498a4b751e84b66c5e93749",
+   "cases": 40,
+   "extra_sections": {
+    "heal_modifier": 198,
+    "heal": 30,
+    "enchant": 40,
+    "capture": 3,
+    "describe": 3,
+    "find": 40,
+    "find_wrapper": 2,
+    "expiry": 250
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 47
+  },
+  {
+   "file": "native-summon-fixtures.json",
+   "sha256": "e57d04709e8f70d3c6ddaaf9147693e6955ef52e996e535e3fd2b9321e75e06b",
+   "producer": "native_summon.py",
+   "producer_sha256": "d043260cb641e81ca47d1ab411e665c3757704b48418d711cc415875292a6f57",
+   "cases": 160,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 46
+  },
+  {
+   "file": "native-wall-geometry-fixtures.json",
+   "sha256": "db2f2564ae7424ed9b57fab6f9b9db82dabf8da244972a16e19b27ef373a4e0a",
+   "producer": "native_wall_geometry.py",
+   "producer_sha256": "de38ea100dfab5b731d74954577406328d892ab31ccdda52c8f02c71ccad794d",
+   "cases": 400,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 3
+  },
+  {
+   "file": "native-member-extras-fixtures.json",
+   "sha256": "e691ba160fc84c48e0667cce3d17d57141ea44612eea95a433a15754a14ed257",
+   "producer": "native_member_extras.py",
+   "producer_sha256": "b421bba6ff3a6f1b3ad510d2ec285c02584fe0dbeee18c579b903d8e38cb01d9",
+   "cases": 12,
+   "extra_sections": {
+    "propagation": 40,
+    "rank": 40
+   },
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 9
+  },
+  {
+   "file": "native-modifier-tables-fixtures.json",
+   "sha256": "b8ae5313f3814528afe530898f13a15f41505520125c958eeeac790b9c13630e",
+   "producer": "native_modifier_tables.py",
+   "producer_sha256": "1ebf7ebae70563ff5cf884ce63f8fd7d8d2d56359c6ccf7eadbb58607b01c44d",
+   "cases": 120,
+   "extra_sections": {},
+   "precisions": [
+    "n/a (SSE2 binary64)"
+   ],
+   "native_windows": 61
+  }
+ ],
+ "fixture_cases_total": 23583,
+ "inventory_sha256": "292682e3adee28514fd0d43af6f8e9bf2479022f1f13fd67ef208fe647d97162",
+ "inventory_counts": {
+  "proven": 275,
+  "proven-other": 42,
+  "not-ported": 10,
+  "seam": 14,
+  "fragment": 5
+ },
+ "settings_index_sha256": "2d333aafbaf7b2e53a4a9473ee736b5afa9131e7e54b2e8c3125e1287c71b094",
+ "special_ops_census": {
+  "file": "special-ops-census.json",
+  "producer": "special_ops_census.py",
+  "sha256": "17ed04562caa6876f01b6e03360d84479dae106905c11b4963049a714197ceb5",
+  "producer_sha256": "336882e98b5e0f605b1b7bfc27c2187d89764f2651b38a11578c080091a55e2b"
+ },
+ "rust_sources": {
+  "crates/aa-combat/src/lib.rs": "1c23faa551d444ef177aa78c9d6683a72b1b5ad5124a62b336530b284d19d1c6",
+  "crates/aa-combat/src/morale.rs": "7dd06ca56cc96bdb6bf1ba6d0ab0c41b8ac97d43f5323ec4933e816e4f4ffb1e",
+  "crates/aa-combat/src/roe.rs": "c76d2efc8e5addabc0a0fb76b8d8e9b915b9188572ed84a9b8ecfdacc4709143",
+  "crates/aa-combat/src/capture.rs": "325a0c58eaba2e966c4402cc9c1db7fd77cff3e08c7f8d21a04aabf45f4fdd6e",
+  "crates/aa-combat/src/death.rs": "9ae3a7822779999c0cf44c28d14afb3a6438aa70fa9e08452c01f35c78602277",
+  "crates/aa-combat/src/engagement.rs": "223f546a296b95531b1a46c07030ed1bef27800d3bda075c338b6091da906dbe",
+  "crates/aa-combat/src/shortfall.rs": "a56063c562b618ae31620ac3dcfdbb899163c75efc38bb43198db3d26499bf11",
+  "crates/aa-combat/src/reactions.rs": "d528c5f3a570f19b0ec4c473c01ade2b486ca493372a2870cc743bfbc4537943",
+  "crates/aa-combat/src/commander.rs": "63c6ff2b6b1b4807d62419f8be04ecfc99c3b606e7bf5ea73dba55841cdd300d",
+  "crates/aa-combat/src/payment.rs": "b6ca9206699c61aeaf56ad931c4eb4cf7e8449c0a62f3536a1b96d29d3ccc93c",
+  "crates/aa-combat/src/admission.rs": "5957f4649f5750516288efbd50c1674c79112c5e0e0f81fec9ac2de18654c1fc",
+  "crates/aa-combat/src/organization.rs": "23de86645d06db477cedde96012caa5b895793ccf5e8e76463583d971ad966b1",
+  "crates/aa-combat/src/ownership.rs": "03c548334a6e309e8d81cc332df1c6cb2c7ca03455fcd7207182a1efa46af122",
+  "crates/aa-combat/src/siege.rs": "2eb8aaf94becb8daf8fa502e1d1f5843bc0661e97a5f0b1c27bdb319eb8d2e6c",
+  "crates/aa-combat/src/denizen.rs": "1d229e17b9c3696a105ce1858b209ec8f077613c7b4ddf55a4927f6fb642630a",
+  "crates/aa-combat/src/presentation.rs": "0c1cc968bf6768c50e5c5a839e8954a4e84fc0e1b7b70d921b260e771aea1c95",
+  "crates/aa-combat/src/combat_value.rs": "2227b0f05b5ca590fb5faf8d9f5f54ddea92b518967e1ab086c7e8a212a76867",
+  "crates/aa-combat/src/statistics_tracking.rs": "9f7e319cc39ce76a3d9de953d1b109475baeb9c115ed570fc21399de4cb5aa75",
+  "crates/aa-combat/src/regeneration.rs": "ca23cf683b367b64aaef298730958d6c0de5a5365b2c726557cd645ea21f9a50",
+  "crates/aa-combat/src/begin_death.rs": "268d8a8131612c7e332b80aed2e6862c8b7743c7eb5a988532bd6c1dc2845ec1",
+  "crates/aa-combat/src/walls.rs": "82bf0b8785ce4cc9f40de829b132f71ec48166c44be442da451dc8396145c0d6",
+  "crates/aa-combat/src/performer.rs": "b0f255a37adbf7784f488cd77f759b40638a37f0187d9f4c15a3b15beb5440ea",
+  "crates/aa-combat/src/projectile.rs": "c5a7aa26ca2d78bb01e43244cfd92577da158a48dba92a9bf947b47acc294ffc",
+  "crates/aa-combat/src/special_ops.rs": "b6c1d15c9a39cf4ce36a851ea96f9588f661afea48ed6e27accf60d6fabcc1d6",
+  "crates/aa-combat/src/summon.rs": "95ec3ee3deab4f1ba951c75502c372123e5e7461602eac9a244711c3ddcfe63a",
+  "crates/aa-combat/src/execution.rs": "892df07f9dff86e8b7ac75ccc64dc08dd7566a1f2eefda87fcda3fe6125adc73",
+  "crates/aa-combat/src/periodic.rs": "96486fe997a14343a9fb2949c48f04bdc7a04a4dd5bb6e0a0badbfd88ac34d86",
+  "crates/aa-body/src/lib.rs": "96c0781c4fc3fe800d725171385f87377ac7baca5ac5ddc1dc8dd87354746c16",
+  "crates/aa-body/src/experience_amounts.rs": "11f2730be9b3407beb2ec6b95c53e3abf601390782daf828471c9f1557e5a833",
+  "crates/aa-body/src/credit.rs": "b3f1b0f7829d97ed829f3a5bfea6a2ffbb9e5b70b677dd691df2c3b93e4aaf62",
+  "crates/aa-body/src/damage.rs": "e34ab68882966a3a125b0cd98e534c93e79041871b94a8fa8ba53120eeccd0b9",
+  "crates/aa-body/src/property_api.rs": "5fe280ee9301374a9998d45b35f93d989a72d14651117917417d435fa914c36b",
+  "crates/aa-body/src/properties.rs": "8d21decd9ec2c294ea7b9fd5bff102d0a3fbba2a88af25c8216b51b642400f62",
+  "crates/aa-body/src/modifier_tables.rs": "33d0b32afe88a411057c52300df9ff8952ff0ab4f24a6cb8c5ec1e66002b7c99",
+  "crates/aa-body/src/property_flags.rs": "a5dde2253c72f3fb486f3b5a2874838b2fdd41c6862e5448f014cb51d0a69cb8",
+  "crates/aa-body/src/property_effects.rs": "169ca5807771eea5c9e48ef993e7aeebbbcccadb1f1ed0efe0a69ef78f56d26a",
+  "crates/aa-runtime/src/economy_values_world.rs": "9fbe61f700ce264c0d53fa045bc6e60f25f1ac7a738df4a9bcbb1fda25ffc7d2",
+  "crates/aa-numeric/src/crt_pow.rs": "6872b5948550d5624775ee9a577f97070df1fa87c9c985300a36d9c022bc1c1c",
+  "crates/aa-rules/src/abilities.rs": "446f3668ffe24ff8a3f7e360c0c2d7faad96c78e8cae2230a1006cc9abd0e7e1",
+  "crates/aa-rules/src/ability_load.rs": "15d99d726df6d07bd1d46bb7d508e5853cf4827ace3cf23c0d7a3db2c9e77117"
+ },
+ "rust_tests": {
+  "crates/aa-combat/tests/native_morale.rs": "4b0009fae8ac426f21c35deb4c4e9adc22bbf62a4f57e4626a6e2b105a27bdc6",
+  "crates/aa-combat/tests/native_roe.rs": "a34a258cf3bd9cf4e9aa2eab111711c8ef0aa713d5bdd60b24bea8f082d24f90",
+  "crates/aa-combat/tests/native_damage_responses.rs": "c362c28ff1c8b75ba315674c82b327dbea388bb376ac21b4d3fe1cf777832f50",
+  "crates/aa-combat/tests/native_reactions.rs": "ce1c408d0be0d1135107c44d94df0af3464e62d658de6addb09be4a880e757f1",
+  "crates/aa-combat/tests/native_capture.rs": "c830957a42990dc0f58253fad7ceeefa992a98d0a25b82f590911c91e8058858",
+  "crates/aa-combat/tests/native_commander.rs": "01b08f1a0e2f4dee8509e92b19f4426462c5566712be451deb3ece32e35a750f",
+  "crates/aa-combat/tests/native_payment.rs": "63379ecb282b1201affc5e021bbe41ee67e285a2b78f0fc2bfa495c267f2db83",
+  "crates/aa-combat/tests/native_org_tick.rs": "24168a6168ab17175cec8a402331860c678cce6434699dc9a3d80cf428688540",
+  "crates/aa-combat/tests/native_member_removal.rs": "3f0971dad7bc3625e7adb6c2cb912269871ca95326deb30a9570321d83e47aa7",
+  "crates/aa-combat/tests/native_siege.rs": "c97672ad43f81786afbc572d7819a88bb26ce51ae836f173b47ea8ba1a07617e",
+  "crates/aa-combat/tests/native_denizen.rs": "46c0ab809e226afcb9114a54c1b8cb69d170bc2e7b250114fb7c750c887d4f71",
+  "crates/aa-combat/tests/native_change_kingdom.rs": "c8dc52c8db85dd3075b21a69f815e21567a7850861d65f990e3b81b26c9d380b",
+  "crates/aa-combat/tests/native_damage_numbers.rs": "d98b13cd5de76c9a33dd735406ddd9dc868f159897b0aa59c17ff72d3bc68c27",
+  "crates/aa-combat/tests/native_combat_value.rs": "5e8115c34edf6b214aa5aa10caad42735b069eb15421ea46e9b0bbe517d4b897",
+  "crates/aa-combat/tests/native_statistics_tracking.rs": "9b9ae7278893f69475d128b8ca60c8f885a3c3078a847f5efb3c5a5cabaa7926",
+  "crates/aa-combat/tests/native_regeneration.rs": "44a272fb92aeaf6db8c71e38e7e1ccd51d936cc7f4ba8de688ff9bc7737345f7",
+  "crates/aa-combat/tests/native_entrench_delay.rs": "7f049c8e572db46932b754f997b2c927cd71318bada0c559416418d622f011d1",
+  "crates/aa-combat/tests/native_org_speed.rs": "556c0c6e205ad0effbeec3f43e34ceeb7ef39706d6225abeb1c005dce3f3dd9f",
+  "crates/aa-combat/tests/native_begin_death.rs": "40c591bd34b34f06f1714e5242a5698ac1dd340160ce573be2f3ae041d49f29c",
+  "crates/aa-combat/tests/native_walls.rs": "a4f96d7bdfb65951e8b794c67614d96c9e29cb212ca81b447343c71b70a2e202",
+  "crates/aa-combat/tests/native_member_spawn.rs": "4149c1fb3d77e3808360520c536456e99807be16adea15afb414387c06dc3326",
+  "crates/aa-combat/tests/native_turret_intention.rs": "54343fca0d9c5c5591a95dccc1703b2d2d6d2c041571407cabb67eb4069063a3",
+  "crates/aa-combat/tests/native_special_ops.rs": "61e79b8052050d782661919fa31a700823388e77779aab92df6956f1d589be96",
+  "crates/aa-combat/tests/native_summon.rs": "893410218ab07b36d8c7e13215378651e40dd1e3a6b4ea6ea36d3422e90dfd20",
+  "crates/aa-combat/tests/native_member_extras.rs": "bac310a5e41b8759141bb5f7190088726d97f2465fc05826d49661cc63e408a4",
+  "crates/aa-body/tests/native_experience_amounts.rs": "5a238875d931dde41cb360bbde42693fca5480c1f1394808769204ee1f4012dc",
+  "crates/aa-body/tests/native_credit.rs": "7122c673c968dc64e95d93b7c2d8e9d48139193f34c86a9b086896ee61084d22",
+  "crates/aa-body/tests/native_property_wrappers.rs": "fd6e3cc9302fa1fe44b9e62e1e813494e657f445fab9326ff77a7d4c877e7ba3",
+  "crates/aa-body/tests/native_modifier_power.rs": "a30b3ff0969f17425c6c0293b32917b73f2da689e5e317ee740b4befdb831dec",
+  "crates/aa-body/tests/native_modifier_tables.rs": "d079b86a543953a0ac47405a11b3933b6704ed2a9e3b4dac009ff13ffe036e4c",
+  "crates/aa-body/tests/property_tables_integration.rs": "a61b0ede253aace42b34396ce4d2d7fee197fe1e93a7b7b709bf333e46bc93e5",
+  "crates/aa-body/tests/native_properties.rs": "6514a5baa9420084b1ef7b26d42c774093c56507f4c903151d0e50730bf2ca02"
+ },
+ "validation": {
+  "command": "CARGO_TARGET_DIR=target/s-combat cargo test -p aa-combat -p aa-body -p aa-numeric --release --locked --offline -j 4",
+  "result": "119 passed, 0 failed (aa-combat 69, aa-body 37, aa-numeric 13)",
+  "rules_command": "CARGO_TARGET_DIR=target/s-combat cargo test -p aa-rules --release --locked --offline -j 4 --lib abilities",
+  "rules_result": "aa-rules lib abilities: 10 passed (native_fixtures 4, special_ops_fixtures 4, original_data 2: 363 actors; 24 Factions / 88 special-operation abilities)",
+  "rules_clippy": "cargo clippy -p aa-rules --lib --tests --no-deps -- -D warnings: no lint in abilities.rs/ability_load.rs; the only remaining lint is native_load.rs:878 (manual Option::map, not owned here)",
+  "clippy": "CARGO_TARGET_DIR=target/s-combat cargo clippy -p aa-combat -p aa-body -p aa-numeric --release --locked --offline -j 4 --all-targets --no-deps -- -D warnings: exit 0"
+ }
+}

@@ -1,0 +1,50 @@
+
+running 1 test
+test original_construction_costs_have_source_proven_empty_predecessor_graph ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.68s
+
+
+running 1 test
+test original_rus_corps_detection_uses_proven_empty_inventory_guard_range ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.93s
+
+
+running 1 test
+test original_dynamic_doodad_sources_preserve_separate_component_slots ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 2.06s
+
+
+running 1 test
+test original_ground_definitions_bind_real_component_inputs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.88s
+
+
+running 1 test
+test original_ground_creation_inputs_are_bound_and_turrets_stay_gated ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.71s
+
+
+running 1 test
+test original_initial_property_corpus_and_camera_inputs_are_complete_within_scope ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.71s
+
+
+running 1 test
+test original_commander_badges_and_indispensable_are_source_bound ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.52s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.25s
+     Running tests\native_construction.rs (target\debug\deps\native_construction-d93b9bd1fcd4a535.exe)
+     Running tests\native_denizen.rs (target\debug\deps\native_denizen-c8c9aa1475d18364.exe)
+     Running tests\native_doodads.rs (target\debug\deps\native_doodads-c1e7930f83e24a50.exe)
+     Running tests\native_ground.rs (target\debug\deps\native_ground-ee3107748a6c7dde.exe)
+     Running tests\native_init_inputs.rs (target\debug\deps\native_init_inputs-0271f1de648f6943.exe)
+     Running tests\native_property_inputs.rs (target\debug\deps\native_property_inputs-14d27aded8744cfa.exe)
+     Running tests\native_source_extras.rs (target\debug\deps\native_source_extras-0b0d91ea2bc8afbc.exe)

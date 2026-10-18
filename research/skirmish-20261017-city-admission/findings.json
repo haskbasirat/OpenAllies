@@ -1,0 +1,57 @@
+{
+  "result": "PASS bounded City admission/list core; actual positive map candidate not reached",
+  "pins": {
+    "crates/aa-runtime/src/zone_city_admission.rs": "f7b6dea12c22f3f8213d1393ea74dfd3aebf5e70ded568572a638c53df72e66c",
+    "crates/aa-runtime/src/zone_city_admission_tests.rs": "17fec9605d4f3cd626e9a149bbb386059ba2a04aeeed95d1585e57b04ab17015",
+    "crates/aa-runtime/src/load_city_candidate.rs": "30b181660958a561bb011ab810414f142c634d01fa6e199c9bccd9236b69e9b9",
+    "crates/aa-actors/src/city_candidates.rs": "d7cc589094aea9f44d4b9082d535c6a1a29314df9b82a9e02e79765180ec9374",
+    "crates/aa-actors/src/lair_city_state.rs": "861608b58519d49a2958850ae3c612fd0072e89acb7e4da3ab2637dc0b4b759a",
+    "crates/aa-runtime/src/load_detection_init_world.rs": "58d7c48f366410050d896f1d37d3bdc540775129675b0ab0f96d8a6ecfbd46f9",
+    "research/skirmish-20261017-city-admission/native_city_admission.py": "fdbc2675acf3d7ff5ef1068d7ccc61d9645d68a1a6fbad9b16eefa62dcfa220a",
+    "research/skirmish-20261017-city-admission/native-city-admission.json": "d47da4526d3184d0576253e48165bdb1540e695a45098be2f91014b5dc339f51"
+  },
+  "native": {
+    "paired_rows": 132,
+    "separate_executions": 264,
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_instruction_pins": 198,
+    "successful_transport": [
+      "6F7810 allocator(8)"
+    ],
+    "required_stops": [
+      "allocator entry before allocation",
+      "50AC60 actual scheduling entry after candidate publication"
+    ],
+    "immutable_replay_log_sha256": "71f1be8d163f9694bbcd2fe9242ced69ada7d43da39492b6eda56b287bb1331d"
+  },
+  "rust": {
+    "owned_tests": 2,
+    "log_sha256": "ee7c9841032c3f73a21c6104dac031b665773031888afacdfb0cf5a596f917b4",
+    "frozen_binary_sha256": "c7d1059e7c97cdb9a79321f9829d0d0b21159aa7bd35f956da1a76134b59ddaf",
+    "scope": "Exact production core/list include and exact compare_fields body, accepted aa-body/numeric libraries; not whole restored-component adapter execution"
+  },
+  "production_check": {
+    "result": "pass",
+    "seconds": 23.44,
+    "log_sha256": "4e396b600389d82a1eaa9e4436791355f6c7ee475e9253f6a3094d7f839f24ae"
+  },
+  "storage": {
+    "authoritative": "CityState.candidates replaces raw18/1C; accepted saved values10 remains separate",
+    "queue": "Actual Catalog.load_owners/load_queues read and same queue1/RNG scheduling helpers, no Header mirror",
+    "source": "Source::bind retains actual Bank source PC for canonical Body flags"
+  },
+  "limits": [
+    "No full City5647A0 tick port",
+    "No actual map positive major candidate was reached at attempt19",
+    "Positive Settlement payload remains required because the shared component enum has no typed owner",
+    "Native allocator/scheduling exceptions and every private store stop are not claimed; explicit entry-stop prefixes are covered",
+    "Component helpers and queue delegation compiled but not freshly executed in the narrow source-included replay"
+  ],
+  "history": [
+    "First production check found an incorrect aa_rules::TypedValue path; current native::TypedValue::Boolean path fixed before accepted check02"
+  ]
+}

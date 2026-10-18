@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "accepted_bounded": true,
+  "production_sha256": "63a8aad4871922db69fc172fd2bb97653553dacf42122b5b3d80b78798a108d4",
+  "test_sha256": "4ab916e3f8ec60d2e183e7696a084b948f0496479e7c5da4b12d8c6058a220fa",
+  "native": {
+    "memory": {
+      "rows": 42,
+      "machines": 84,
+      "address_byte_pins": 1101,
+      "executed": 1095,
+      "intercepted_entries": 6
+    },
+    "regular_file": {
+      "rows": 12,
+      "machines": 24,
+      "address_byte_pins": 1185,
+      "executed": 1181,
+      "intercepted_entries": 4
+    },
+    "all_precisions": true,
+    "both_original_and_v14": true,
+    "fresh_immutable_replays_passed": true
+  },
+  "rust": {
+    "current_source_binary": "qa-output/development10/runtime-tests42.exe",
+    "binary_sha256": "877755d6c76a1aaf5da6e753bcf4e9da07b12496b0ad807e2619f1df54bf2836",
+    "tests_passed": 4,
+    "duration_seconds": 5.81,
+    "includes_actual_source_constructed_header_creator_shared_application_film_depot_file_backend": true,
+    "root_author_confirmed_current_IO_corrections_in_binary": true
+  },
+  "effects": [
+    "raw MAPSTRINGS without extra prefix",
+    "C-locale byte conversion and every LF gets preceding CR; no BOM",
+    "growable memory beyond initial16KB",
+    "last-dot uppercase.TGI filename",
+    "real Windows same-work-file create/write/delete and native no-share/durability flags",
+    "existing DataFile and dead-Application required refusals retain prior text"
+  ],
+  "not_claimed": [
+    "full5A31D0 managed-world capture",
+    "complete DataFileResource positive lookup/ref/unload/load owner",
+    "native CRT startup/other locale/UTF16/UTF8 modes",
+    "native OOM/SEH/unwind or complete Win32 failure/short-write/handle-inheritance equivalence",
+    "whole map/PostLoad/mission activation or playable battle"
+  ],
+  "freeze_sha256": "f7971c226114ac60a721cb92c2e67566b4ff93908a59361e3a887a19181843ac"
+}

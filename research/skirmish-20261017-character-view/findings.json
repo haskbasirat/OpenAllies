@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "status": "source checkpoint; native parent proof passed; runtime replay/natural acceptance pending",
+  "fixture": {
+    "file": "native-character-view.json",
+    "sha256": "7d7c3494ddbbab45fd1023991eec55c23bd395bef9a94b5ef38edac27073acbe",
+    "rows": 471,
+    "native_executions": 942,
+    "executed_pins": 185
+  },
+  "filter": "stored_character_view::tests::original_v14_character_view_parent_retains_pending_and_property_failure_prefixes",
+  "sources": {
+    "crates/aa-runtime/src/stored_character_view.rs": "839dca3ad6546feee0fb0c39d2cf5f5f59dddc9e19ddda89ed3c9ac4ba4ccc3c",
+    "crates/aa-runtime/src/stored_character_view_tests.rs": "36c133b58ff4889aa5232d025590d517b0bfa904b4973446b8ff7f12910749af",
+    "crates/aa-runtime/src/stored_actor_state_effects.rs": "9b3258c6bdec212ef9e3128cfedfb8aff42b55cabded51bfd008a7391307af84",
+    "crates/aa-runtime/src/stored_mind_init_world.rs": "bb5670b9129f9410fa4ebc4370749bc10405bd2f3be0182b99e27ebfb167e9c0"
+  },
+  "limits": "See README.txt; native child seams and natural-run boundaries are explicit."
+}

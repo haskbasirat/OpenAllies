@@ -1,0 +1,94 @@
+{
+  "status": "bounded source/native/production-check acceptance; not playable or native view/task ready",
+  "native_executions": 1716,
+  "native_unique_executed_pins": 309,
+  "resource_callback_readonly_replay_executions": 108,
+  "standalone_tests_passed": 4,
+  "production_check": "aa-client release locked offline j2 passed 3m28s; no EXE/full-runtime unit link",
+  "production": [
+    {
+      "path": "crates/aa-runtime/src/application_loading.rs",
+      "sha256": "0f6cfe52231d9973586f1f68cd5c70d5d8a5570f0e6788271d10f67ec06530de"
+    },
+    {
+      "path": "crates/aa-runtime/src/application_loading_tests.rs",
+      "sha256": "42a62d99b0804fbc84171d6aec6e99e27f6600f51dfe96f3b1bc2b65764f2dc2"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_resource_task.rs",
+      "sha256": "6238a085102ba5c3ea53bf3fe42b15aa16e384051ed2070223c6ca266de05570"
+    },
+    {
+      "path": "crates/aa-runtime/src/ui_world_init.rs",
+      "sha256": "fa1b2ea870bef820483c5331916c442d9ea5a870e0c1c24bd1f564b16ff48cec"
+    },
+    {
+      "path": "crates/aa-runtime/src/ui_world_init_tests.rs",
+      "sha256": "d3201bc44bd0706c22f9b7cb96cefee63b294bee3c0b37509e97fff0075b040b"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_world_view.rs",
+      "sha256": "22dc3303ac0dc1a1d767141bbdcb8f3a61d7c47a33b2d982c05541ffabd5571a"
+    },
+    {
+      "path": "crates/aa-runtime/src/world_ready_services.rs",
+      "sha256": "cf0d684fe014c936f07107e319bbb4354e02f5d02c9bb6c7d3302872488825ae"
+    },
+    {
+      "path": "crates/aa-runtime/src/view_init_prefix.rs",
+      "sha256": "77d3a3bd3d517dfc12c0c4b6df43d01c599d3b610b79370af39527f7f85277f7"
+    },
+    {
+      "path": "crates/aa-client/src/battle_controller.rs",
+      "sha256": "0f4a36c66dcf84bd2bb5f9117a75b6a733e50d0d13398ebad27b166d744926bc"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/native_loading.py",
+      "sha256": "7cd9009bbda063b8c8352c5b52ef193e044314cefb1c91e2f214b1b6bdd6e6c5"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/native-loading.json",
+      "sha256": "d0294ee801fb6f987a193913825beb4c4124327dc361a4fd5d08bb3a19525a50"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/build_standalone.py",
+      "sha256": "5b56708539f433f14fd628c17ea723851a455dc8ad186cb16d1f0617903a825f"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/standalone-source-pins.json",
+      "sha256": "553371db66c006db12f2c0db67c2f08115d504a0eb8364e6966de929aeef531f"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/all-rust-tests02.log",
+      "sha256": "b8ef57dec933af9aa04af77ce27998c756f3be0a36dcbaf3a31709fc93c825de"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/client-check01.log",
+      "sha256": "5a5e9d8e0ed92ec929d6194c72d4cae25ef09b54b013b7456c9f03b689d116f2"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/native-resource-immutable-replay.log",
+      "sha256": "59fea04c330ff2f96ee4010672dac44610058f644826c8f86cdccdd98e733688"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/native-loading-immutable-replay.log",
+      "sha256": "24f8b347be0b5e4dfbb207336bdeff4a9a737f81a069c6b4a6b775b0b3c5a329"
+    },
+    {
+      "path": "research/skirmish-20261017-ui-world-completion/README.txt",
+      "sha256": "f7bf8cd301eb04c4731017a6c93ac5be711f9e696e43f4cfb63b0cbc49e11521"
+    }
+  ],
+  "scope_exclusions": [
+    "full UI constructor",
+    "full43F0A0 or AD1",
+    "real5AED10 queue/barrier or renderer",
+    "native allocator-null/SEH",
+    "arbitrary callback reentry",
+    "native multiplayer status and Application state OnEnter",
+    "genuine played battle",
+    "final EXE"
+  ]
+}

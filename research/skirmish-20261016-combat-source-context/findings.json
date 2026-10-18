@@ -1,0 +1,215 @@
+{
+  "schema": 1,
+  "passed": true,
+  "scope": "Source-phase ten typed CV inputs, explicitly supplied diagnostic FP/CRT context, and bounded normal/restricted CSV source owner. No completed combat values or startup receipt.",
+  "independent_review": {
+    "path": "research/skirmish-20261016-combat-source-context/independent-review.json",
+    "sha256": "9c088e517f7486f1cc78f1a8f2e0c7969c5f25677f5c7a9b36507d2d90fd0976",
+    "bytes": 10911
+  },
+  "images": {
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "counts": {
+    "native_numeric_cases": 180,
+    "native_csv_cases": 36,
+    "native_restricted_csv_cases": 12,
+    "executed_instruction_pins_both_images": 2489,
+    "focused_rust_tests": 4,
+    "actual_numeric_fields_per_context": 10,
+    "explicit_source_pcs": 3,
+    "actual_root_uvars_inputs": 3,
+    "actual_csv_assignments": 2,
+    "actual_matching_cv_worldrules": 0
+  },
+  "native_profile_correction": "419F72/419F82 supplies4B43B0flags3; Settings+24restricts existing variables toflag16. Rootsource-created CombatValueCSVflags0 ignores this stage. Rootvariable must exist before override binding; otherwise binding explicitly refuses unsupported creation.",
+  "context_limit": "SourceFpContext has no Default and only supplied_diagnostic; every context remains NOT an observed native startup receipt. No restore-PC substitution, active profile import, credential/file discovery or fabricated completedCV.",
+  "preservation": "New aa-runtime module/test +append export only; root exposed existing Catalog source-owner guard. No parser/loader, manifests, lockfile, original images/assets/saves/profiles or releases edited.",
+  "validation_corrections": [
+    "Global lowercase filename set fixes nonadjacent case collision, with regression.",
+    "Settings.raw/source span crosschecked with actual resolved Catalog SVars source; unknown loader diagnostics refused.",
+    "Native hook entry bytes omitted from executed-instruction pins.",
+    "Nativeflags3 profile skip distinguished from normalmode0 overrides.",
+    "Unproved unquoted empty CSV assignment explicitly refused."
+  ],
+  "not_completed": [
+    "Actual source-load FP/CRT/application receipt",
+    "Global means and all reached shared ActorData/Ability source graph completion",
+    "CompletedActorData1E4/30C/36C and livePerformer60",
+    "Nonempty CSV stream output and unsupported text/profile/native variable policies",
+    "Original immediateInit/PostCreate and playablebattlestartup"
+  ],
+  "files": [
+    {
+      "path": "crates/aa-runtime/src/combat_value_source_context.rs",
+      "sha256": "78b3daee8b74ead48e1e6016debf7ea99e7733773b639dbf0894292c8806c36c",
+      "bytes": 19495
+    },
+    {
+      "path": "crates/aa-runtime/tests/combat_value_source_context.rs",
+      "sha256": "98a474b368c220919422fea3bf64ae837579ea60ef1ae581e1c16f794030927e",
+      "bytes": 12697
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/actual-source-inputs-final.json",
+      "sha256": "dd56356868a43803ee7fe56d1b84bcb55fbedb2a62a4abe0a859e7a4a33426af",
+      "bytes": 23592
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/actual-source-inputs.json",
+      "sha256": "003a50d1dd769758ddb21f0c21874f028bc716ad8d67efb57f62716e1a5fdd3c",
+      "bytes": 23491
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/check.log",
+      "sha256": "6ebc9f73d4a6e798de8ff807340c52532ed2fee618995a199669d8a3129eec59",
+      "bytes": 3223
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/clippy-accepted.log",
+      "sha256": "1f84f0af59d619c2f29ce7e26944d770a7c828e8e34c21c0d8cd9938251029f0",
+      "bytes": 2221
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/clippy-final.log",
+      "sha256": "f016a8f32a71e9bc4afbc5df35b32ddb62d421ac352ca94d46d1fa00093b4c0d",
+      "bytes": 2222
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/clippy.log",
+      "sha256": "e8aa167b29f246e757374817b2767a1bda306d65ac9dcab1103cf0a19964a839",
+      "bytes": 4660
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/final-source-export.log",
+      "sha256": "6d08cd12ae570d6a72e2937521a1468abd3049402ba1a9ca8de2590283ec1667",
+      "bytes": 311
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/finalize_evidence.py",
+      "sha256": "487fe5ed935dfca8ba4f0302b608b6ddee39ee7a89b07cdd49014f0a2cda90b1",
+      "bytes": 3891
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-actual-source-inputs-accepted.json",
+      "sha256": "dd56356868a43803ee7fe56d1b84bcb55fbedb2a62a4abe0a859e7a4a33426af",
+      "bytes": 23592
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-actual-source-inputs-final.json",
+      "sha256": "dd56356868a43803ee7fe56d1b84bcb55fbedb2a62a4abe0a859e7a4a33426af",
+      "bytes": 23592
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-actual-source-inputs.json",
+      "sha256": "003a50d1dd769758ddb21f0c21874f028bc716ad8d67efb57f62716e1a5fdd3c",
+      "bytes": 23491
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-native-final.json",
+      "sha256": "74f66cbba93131ff91fdb4806a574930402b64a8605007cf8046dff9465df49b",
+      "bytes": 1419
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-native-final.log",
+      "sha256": "336d64f5c6ee34deb5a122382ed0dea0d6d972dafc34cd3877c70cc536549647",
+      "bytes": 1456
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-native-replay.log",
+      "sha256": "9f5e8c62b80ca981022f59e6f5ba6bd7908b9143137acf86f7d265e38f12c043",
+      "bytes": 129
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-pin-audit.json",
+      "sha256": "5a9b11807cadb6f387516a54d1ec2c2affa2badf1d14a3a92c0d45f70b5678f0",
+      "bytes": 1088
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-static-windows.json",
+      "sha256": "7143be419700186f4addd0c9986363c2b62dee72fe0f4773b78444a3f14ada4f",
+      "bytes": 8358
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-tests-accepted.log",
+      "sha256": "42d9e3e1295b94353e8f553c2cbcf8db0bc5cfb4f2ae947c0d7917ac398c4f16",
+      "bytes": 818
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-tests-final.log",
+      "sha256": "73acafabe6541733860090087af181d13a9332698002914448a61359096c2863",
+      "bytes": 818
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review-tests.log",
+      "sha256": "f71c90691d1c162cce66e298b2438bbd4bcb40716e6e99ed4ad5ea5aba2482ee",
+      "bytes": 3021
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/independent-review.json",
+      "sha256": "9c088e517f7486f1cc78f1a8f2e0c7969c5f25677f5c7a9b36507d2d90fd0976",
+      "bytes": 10911
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/native-context-final.log",
+      "sha256": "59e636d3fdd3915ab98d2094766d66935eae709cb4f2e3001822d062fe5d857b",
+      "bytes": 37
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/native-context.json",
+      "sha256": "07d2f2b505fb6778213d47c4c12d50a3e95885a97207dabdaca2320ac0935ad1",
+      "bytes": 305646
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/native-context.log",
+      "sha256": "68cb902e1b41ceada885d7e755f14c04d4a7c2aea70445b68e2d2b0ecd130215",
+      "bytes": 37
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/native_context.py",
+      "sha256": "458b41205a892c9b297f08c1199d4185202245b4aab37bbfe1b1b430beb126bd",
+      "bytes": 6587
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/probe.py",
+      "sha256": "1642fe035a8e27ee82abd36ac7fb999f2ae5fc026de04b902cc6b78e9f0a874c",
+      "bytes": 746
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/README.txt",
+      "sha256": "c3292b6b8b94dec707750c7c523a2a449c4ae93c64e96a3b92541fa9495169ac",
+      "bytes": 8627
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/static-context.json",
+      "sha256": "440a837c1ef0c0eba44a723f1bb72f95bb89a6e9020c25a8dc714909aa3bd52c",
+      "bytes": 4197
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/static_context.py",
+      "sha256": "f105f0780abc737643a13cf895c674b08dc6746a3b979909f7612fda1d0613e0",
+      "bytes": 1401
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/tests-accepted.log",
+      "sha256": "2839724937e9610140f4b467993a88ab76d0351db398b7857b83e8cba831ae68",
+      "bytes": 821
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/tests-final.log",
+      "sha256": "275da14bf3a106031ed45ef08ac855ba6428527b29c17010ff0bc4b584782fe2",
+      "bytes": 821
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/tests-v2.log",
+      "sha256": "f1800f7f24f8e5b48daff4244399fe89cc60d187ef76f11d07b27b1873668c01",
+      "bytes": 3037
+    },
+    {
+      "path": "research/skirmish-20261016-combat-source-context/tests.log",
+      "sha256": "57f5ca5d4a5d6b338a76db9b44a278549c6b562373c6e8433d33cc3dcaee2beb",
+      "bytes": 2470
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "scope": "Actual Ni shared12-default initialization8C3ED0 guard/property prefix through8C3F20; same references retained by895550/895380. No remainder/type registration or wholeNi init claim.",
+  "native": {
+    "paired_rows": 24,
+    "executions": 48,
+    "executed_instruction_pins": 628,
+    "images": [
+      "original",
+      "v14"
+    ],
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "heap_alloc_free_transport": "explicit seams",
+    "continuation_cutoff": "8C3F20 BEFORE next initialization call881600",
+    "immutable_replay": "PASS"
+  },
+  "hardware": {
+    "fresh_Windows_v14_processes": 2,
+    "watched": [
+      "B43E68",
+      "B43E6C",
+      "B43E70",
+      "B323C0"
+    ],
+    "observed": "Fog0 with no writes from process creation through actual12-default prefix; material1\u21922 via87D2F4",
+    "all_watch_slots_calibrated": "four actual same-value CPU MOVs after sealed cutoff in EACH process",
+    "owned_process_cleanup": "PASSboth; no existing game attach; isolatedprofilepaths; sourcearchivespreserved",
+    "independent_review": "independent-settlement/capture-method-review.json accepted38183504e05426f625c448f05a7a90359ad68e3d58b4a994e865cae25a8f7e4c"
+  },
+  "rust": {
+    "exact_current_combined_tests": "5/5 PASS: properties3 +SharedSet2; all24SharedSetfixture rows replayed",
+    "production_lib_check": "PASS15.42s currentcheck01",
+    "ownership": "ONE retained Factory +12 actual sharedArc<Mutex<Property>> references. New propertysets clone ONLY reference handles, not properties. Camera mustretain this SAME process owner."
+  },
+  "limits": [
+    "Fog observation ends at8C3F20, no perpetual immutableglobal assertion",
+    "portable Vec/Arc allocation replaces nativeheap/ABI/refcount; no NiB45F14 accounting parity",
+    "no positive texture-map payload or fullshader initialization",
+    "underlying Factory counterwrap/source-refusal cases belong separately frozen propertyproof",
+    "no completedCamera/Snapshot/view/AD/frame/battle claim"
+  ],
+  "source_pins": {
+    "crates/aa-runtime/src/native_render_defaults.rs": "89a76d93555b8256f7bdda65be9e5434f80a76a369e9f7b58e9949308bc029a4",
+    "crates/aa-runtime/src/native_render_defaults_tests.rs": "ee050013de8ca99133c7f6ce83aed9fd11ef480973368087db45e96333f95292",
+    "research/development10/native-render-defaults/native_defaults.py": "f4e5f19611415780a56c314574e5ce7eefb6f1c122782d0bbb5f267e20984c0f",
+    "research/development10/native-render-defaults/native-defaults.json": "cd3a1dc9e252e01c8e9ea05425f5aac1bdbaf05ac3434670948220a4ec14ac64",
+    "research/development10/native-render-defaults/hardware-reference.json": "960780239b2e564be6c03e377268c0cc53baa799fcff7a2c59168d3e36e2e123",
+    "research/development10/native-render-defaults/capture_defaults.py": "8e0dace8865a1cf26a4975beec66f1fdbe2cc83ed9bc8d5771a5a83f601835ad",
+    "research/development10/native-render-defaults/capture-01/capture.json": "052a87e1c24f335598f0c90aaff5756efc2864c8e4382c62f0b48e17e7800108",
+    "research/development10/native-render-defaults/capture-02/capture.json": "5785d8ed1aaa773d155b5766fd5c3cbcf7e8258c01f7822e6812b522355ba4bc"
+  }
+}

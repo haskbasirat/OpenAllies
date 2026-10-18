@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "status": "bounded source/test/native/production freeze",
+  "sources": {
+    "crates\\aa-runtime\\src\\stored_actor_registration.rs": "3535578d5cba5fc26b9e4caf09f5b2d85f95259684e247d154082fcda51635bf",
+    "crates\\aa-runtime\\src\\stored_actor_registration_tests.rs": "67352997aae98c681e5009e79522f3103a196e454b43968265ea826ba20b0d4b",
+    "crates\\aa-runtime\\src\\load_actor_registration.rs": "0b377b04fcecf1247b7c077f187a2adf694deb5fc1468419e9d059cbbcb2b078",
+    "crates\\aa-runtime\\src\\load_zone_entry.rs": "201add45eeabf992a928074f0b4cf6bb775f4e9a4e564f60c613136f0d2fb2b6"
+  },
+  "lib_export": "pub mod stored_actor_registration;",
+  "artifacts": {
+    "before-load_actor_registration.rs": "19fb2deeb9a225510e7c00b6af53b2cc6505f87c1cd4289ad961f55766ad36b9",
+    "before-load_zone_entry.rs": "b5fce9a0a68b9b0dcd6f96246aeb1cb49ca0dedf8e27135d19653a075b8feb88",
+    "build_exact_kernel_host.py": "7aceaae5567d27142e3acc88d5b9f83cc30b8baa5b9ff8ccc613389723a7e26c",
+    "exact-build-01.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exact-host-prepare.log": "25201b5694d4b5436fa4122dc6a12a7f096eee2c177e450e8510d59b976c903a",
+    "exact-kernel-source-pins.json": "45ed78b870a97424a5168bb8154e9eeb66c4ea9f618a9a09788791e94d4005b1",
+    "exact-kernel-tests.exe": "84167c2abd2256051712bf5cc4d07e952f5feee62b151c4fbacda7646c0ca66d",
+    "exact-kernel-tests.pdb": "08e815d41a9ef695d34497854034c2105b607907be8deb3205ca841e287851a2",
+    "exact-tests-01.log": "c453b3522e450b9e1eddf9f31f1694114736481c6b37bd850817d92e2f8ef170",
+    "exact_kernel_host.rs": "ac95f19437e8f1ebdbaa449228a2b03a274cdc241a9c8a5c10a3da0b68cd9fcb",
+    "native-entry-generate.log": "8023104775cd181450b01f19252a1c00561220c1b3accd406b57913098d627de",
+    "native-entry-immutable.log": "8023104775cd181450b01f19252a1c00561220c1b3accd406b57913098d627de",
+    "native-entry-prefix.json": "193e433ad3d0fd334ea814925a855f71902423a84d224584017b7b58dda99076",
+    "native-grid-replay.log": "dbe5d4b63608df0357119c247e4638a297705be3b17ad26d0728ad9b5ad56231",
+    "native-registration-replay.log": "5a41cf938e31586d2593139ec2878476984b90ef006f9ad28338ae43c043e393",
+    "native_entry_prefix.py": "5a54b8a4ab3ba75257eae805a56b18ea20e5022428cecc48b392f8d3b026debb",
+    "production-check-01.log": "39f2fc0055d78e8c4f702bf278ba9e1b1b6e3ff7aa20ff18785b51b063ba1cc1",
+    "production-check-02.log": "52ca3c7731921d4f91571bbd2649ea72ca57b1d6496f258cc04b91905f3ad5fd",
+    "README.txt": "c4aaa2d0e1d314cbcb455d1517826b2918cb92311ea8add9c7f7b5b6f984ed97",
+    "replay_registration.py": "fb0f1e982e084eb4346dcc7fb8cfc282a2f4303af4864e80fece3c59bf5b060b"
+  },
+  "source_authority": {
+    "original_aa_exe_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_aa_exe_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+  },
+  "production_check": {
+    "result": "PASS",
+    "seconds": 59.48,
+    "command": "cargo check -p aa-runtime --lib --release --locked --offline -j4",
+    "target": "target/s-skirmish-start-review",
+    "log": "production-check-02.log"
+  },
+  "focused_tests": {
+    "passed": 3,
+    "failed": 0,
+    "seconds": 0.08,
+    "scope": "exact shared production kernels only, not whole actual ActorAccess bridge",
+    "binary_sha256": "84167c2abd2256051712bf5cc4d07e952f5feee62b151c4fbacda7646c0ca66d"
+  },
+  "native": {
+    "new_entered_prefix": {
+      "rows": 108,
+      "executions": 216,
+      "executed_pins": 34,
+      "stopped_boundary_pins": 5,
+      "immutable_replay": "PASS"
+    },
+    "existing_registration": {
+      "executions": 714,
+      "fixture_sha256": "7888c4c3174407a2d66b7b1011a9301808aeffe3f9d25300a1955498677fb464",
+      "immutable_replay": "PASS",
+      "declared_child_seams_preserved": true
+    },
+    "existing_grid": {
+      "rows": 300,
+      "executions": 600,
+      "executed_pins": 932,
+      "fixture_sha256": "bc337316b556c9e82913ceaed7ed14ea4233b6af355bdd6671d17a25053503ec",
+      "immutable_replay": "PASS"
+    }
+  },
+  "actual_new_adapter_execution": {
+    "executed": false,
+    "acceptance_path": "Parent natural selected mission after earlier fresh Mind child; no synthesized World or fabricated positive owners"
+  },
+  "open_gaps": [
+    "Actual positive stored zone slot5/4/3, City8 and reached Detection/discovery callbacks remain required.",
+    "Existing state-effect helper may stop at its own concrete unported children; no ignored state reentry.",
+    "No whole native invalid-pointer/SEH/allocator failure equivalence or full mission/view/battle readiness claim."
+  ],
+  "independent_review": "not yet supplied for this successor",
+  "jobs_remaining": 0
+}

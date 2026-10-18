@@ -1,0 +1,26 @@
+--- before/crates/aa-runtime/src/load_sai_players_tests.rs
++++ after/crates/aa-runtime/src/load_sai_players_tests.rs
+@@ -102,7 +102,22 @@
+     catalog.definition_text=Some(crate::localization::Localization::load_v14(&mut sources,Limits::default()).unwrap());
+     let receipt=crate::combat_source_receipt::VerifiedStartupReceipt::verify_embedded_reference(&catalog,&mut sources).unwrap();
+     crate::combat_source_completion::install(&catalog,&mut sources,receipt.context(),receipt.csv(),receipt.globals()).unwrap();crate::combat_source_completion::compute(&catalog).unwrap();
+-    let bank=catalog.definition_bank.borrow();let mut arena=Arena::constructed();arena.bind_profiles(&catalog,&bank).unwrap();
++    let bank=catalog.definition_bank.borrow();let mut arena=Arena::constructed();
++    {
++        let mut profiles=ProfileContext::new(&catalog,&bank,&mut arena);
++        assert_eq!(profiles.profile_count().unwrap(),25);
++        assert!(profiles.find_profile(&"__unregistered_profile__".encode_utf16().collect::<Vec<_>>()).unwrap().is_none());
++        assert!(profiles.find_profile(&[0]).is_err());assert!(profiles.find_profile(&[0x3a9]).is_err());
++    }
++    let expected=arena.profiles.iter().map(|p|(p.ids().to_owned(),p.name().to_owned(),p as *const Profile)).collect::<Vec<_>>();
++    {
++        let mut profiles=ProfileContext::new(&catalog,&bank,&mut arena);
++        for (id,name,pointer) in expected {
++            let found=profiles.find_profile(&id.to_ascii_uppercase().encode_utf16().collect::<Vec<_>>()).unwrap().unwrap();
++            assert_eq!(found.ids(),id);assert_eq!(found.name(),name);assert_eq!(found as *const Profile,pointer);
++        }
++        assert_eq!(profiles.profile_count().unwrap(),25);
++    }
+     assert_eq!(arena.profiles.len(),25);assert!(!arena.ego_ids.is_empty());assert!(arena.allocations.is_empty());
+     let prior:Value=serde_json::from_str(include_str!("../../../research/phase8-ai/native-saidata-profile.json")).unwrap();
+     for profile in &arena.profiles {

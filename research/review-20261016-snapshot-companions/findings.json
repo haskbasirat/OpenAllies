@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-16",
+  "scope": "Read-only review of complete snapshot companion ownership",
+  "findings": [],
+  "production_changes": false,
+  "independent_native_replay": {
+    "full_snapshots": 24,
+    "constructor_probes": 2,
+    "exact_fixture_match": true,
+    "fixture_rewritten": false
+  },
+  "rust_tests": {
+    "target": "snapshot_companions",
+    "passed": 3,
+    "failed": 0
+  },
+  "not_claimed": [
+    "malformed-native exception parity",
+    "allocation failure parity",
+    "actual deferred LobbyAction dispatch timing",
+    "live match or internet multiplayer"
+  ],
+  "source_pins": {
+    "crates/aa-netcode/src/launch_assignment.rs": "f7597e94ba6f07d74d4d339985f60eb2e4fa9a889c55d70aa52060f713cbea2a",
+    "crates/aa-netcode/src/lobby_staging.rs": "9925ef1117ddba59bb487b9b7f04ce0db69ccee84cb79c7d80024e1d26d23f0c",
+    "crates/aa-netcode/src/lobby.rs": "595729cd9a43eca85aa2c3bc464864cc95f8f8414fd57f02a6e47074ce808271",
+    "crates/aa-netcode/src/staging.rs": "48ea191fee1b09d35cd4f3d31705d9961568cead1adb2e5936fe80f981c61e7e",
+    "crates/aa-netcode/tests/snapshot_companions.rs": "42d1a7b955da12153a4759608c78349b72a7065ed51310c623cea3bfabec7ca4",
+    "research/phase8-net-integration/native_snapshot_companions.py": "4ccc7af179f67dc75665623beaa1b3966be7f5b8954e094945a9ed6bc27b5d54",
+    "research/phase8-net-integration/native-snapshot-companions.json": "33223a51a1be57616d0e4eb55b2a13406eeb47d33bf5209ce95cf1d4b5f62ef1",
+    "research/phase8-net-integration/findings-snapshot.json": "7d792ea8e8d2f2ef5e63c1f9420fe7ba597831eb5804e416710cdcd3fc213b4d"
+  },
+  "evidence": {
+    "native-replay.log": "36c928ba0352d5068536bcd152357f7ad1d80d342fb04b3215a627ddb38be29d",
+    "REVIEW.txt": "1c4a3c0d53dfe55fd9636a5a1b8b7c06b71fba4a6c7d1909842130a9057b32f0",
+    "rust-tests.log": "0af1118c62d69831c1428f34729ae454bcea10b0bd92ab6fbee40cb73dfeeabf"
+  }
+}

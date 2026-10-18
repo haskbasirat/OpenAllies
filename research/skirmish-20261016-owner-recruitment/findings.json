@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Kingdom4E1430/4E1E40 native outer scans and actual saved Kingdom vector binding; not full HQ recruitment",
+  "native_functions": [
+    "4E1430",
+    "4E1E40"
+  ],
+  "native_rows": 600,
+  "native_executions": 1200,
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "pure_tests_passed": 2,
+  "actual_saved_adapter_tests_passed": 1,
+  "source_sha256": {
+    "crates/aa-actors/src/organization_recruitment.rs": "1f1a285263177f7fe771966cf7db9b8e9a913f375da6c7236b9c0691fe810954",
+    "crates/aa-actors/tests/native_owner_recruitment.rs": "654704b2a6ddbddfcbd79a3b12313850039ee072e01e770ec875fec32690a817",
+    "crates/aa-runtime/src/saved_owner_recruitment.rs": "d7c803ff9ec10d7def3addc703f91f08b181d97a9bf52b2753b095b483cc0433"
+  },
+  "evidence_sha256": {
+    "native_owner.py": "40103a46fca823499502db0b237944e498128191076079c79677f9aebd35f48f",
+    "native-owner.json": "1422f9adc97be2202279cbb1e1a39be56819762c44cfbef2d2dd6c81a989ba73",
+    "README.txt": "247902ce003933ec42d35ed19988701878ea87fad5da2695df1ddaabb00a51ac",
+    "tests.log": "34db3592a430328326088f0f448be738bb2b56a42bf1ec22ec698ee14d0f3e84",
+    "runtime-test.log": "579bf4628b438db8da20d42575cf256672ca91968fc049b804dc57aecb46dc93"
+  },
+  "backups": "backups/before-owner-recruitment-20261016",
+  "unsupported": [
+    "Present HQ573E50 eligibility",
+    "Present HQ574BF0/574810 acceptance",
+    "HQ population/publication",
+    "Malformed/null HQ native fault effects"
+  ],
+  "runtime_test_scope": "tutorial02 InspectPartial explicit native mode1 PC53 diagnostic owners; no complete world claim",
+  "error_test_scope": "Rust callback service prefix; not native SEH proof",
+  "artificial_limits_removed": [
+    "No fixed HQ storage capacity introduced; reads owned growable vector"
+  ],
+  "original_or_release_files_modified": false
+}

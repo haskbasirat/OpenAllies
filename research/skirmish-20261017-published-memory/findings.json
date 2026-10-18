@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "status": "bounded_published_memory_complete",
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/load_store_fog.rs",
+      "sha256": "1f35a13e93e42aac15d150ee654a795769812f340edaab856fa8eefea8e144ce"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_store_memory_refresh.rs",
+      "sha256": "c7b6cd239e8bbf576ef30f8cfa8409bf14b410e0b541c6624c1fb23b6465f5bc"
+    },
+    {
+      "path": "crates/aa-runtime/src/load_store_published_memory_tests.rs",
+      "sha256": "158180513bcfb91bd686d429ecb440c2ea9f999de32369ac51e1966c3124685f"
+    },
+    {
+      "path": "research/skirmish-20261017-published-memory/native_memory_count.py",
+      "sha256": "2df470f410f85a8e52828b3dd50e3d1909bd651a9f283dde6e44290c05de69a5"
+    },
+    {
+      "path": "research/skirmish-20261017-published-memory/native-memory-count.json",
+      "sha256": "7988f05ee5a1820ba8f29f132ff51a5f1b722f5304e5d9892b7d9450cf3385ee"
+    },
+    {
+      "path": "research/skirmish-20261017-published-memory/root43-final-replay.log",
+      "sha256": "a9d1011533f44464a1637cdc98c8ed72469772e6865bcb348d262b69b45955cc"
+    },
+    {
+      "path": "qa-output/development10/runtime-tests43.exe",
+      "sha256": "4c87921bbdb63488447c8b117e2a843aee339e1e70e3f7bcbbf8b269578b2cda"
+    },
+    {
+      "path": "research/skirmish-20261017-published-memory/independent-world-startup-source-review.json",
+      "sha256": "225b98bd38c66e8eb79ba79bad1e2d28cbc1328d1998aee465e37c69d40aff5f"
+    },
+    {
+      "path": "research/skirmish-20261017-published-memory/README.txt",
+      "sha256": "0c916b5e8fcd35461c9732ab8d7a43b3b950cf91bcd5225c245ad6811b79c9df"
+    }
+  ],
+  "root_current_rust_replay": {
+    "passed": 1,
+    "failed": 0,
+    "seconds": 23.52,
+    "filter": "load_store_fog::published_tests --include-ignored --nocapture",
+    "executor": "parent/root shared cohort43; no duplicate author execution"
+  },
+  "native_count": {
+    "rows": 18,
+    "machines": 36,
+    "executed": 5
+  },
+  "independent_source_only_review": {
+    "sha256": "225b98bd38c66e8eb79ba79bad1e2d28cbc1328d1998aee465e37c69d40aff5f",
+    "reviewer_fresh_executions": 0,
+    "no_blocking_findings": true
+  },
+  "scope": "same actual source/Bank/ActorStore+published index memory owner and current placement; controlled visibility diagnostic tree28, not full map or mission",
+  "guards": "Published binding preflight is portability validation before native coordinator; not native invalid-pointer error-order equivalence",
+  "gaps": [
+    "full PostLoad/mission startup not certified",
+    "first8C positive memory-clear wrapper not part of this API",
+    "allocator/SEH/Win32 failure parity unclaimed"
+  ]
+}

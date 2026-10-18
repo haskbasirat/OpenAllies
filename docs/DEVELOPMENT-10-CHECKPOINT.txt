@@ -1,0 +1,49 @@
+AXIS & ALLIES RUST DEVELOPMENT 10 — DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: UNAVAILABLE
+
+This source checkpoint continues the faithful original/v14 native-code port.
+It does not replace the rejected interim aa-game/aa-net simulation. Skirmish
+comes first, multiplayer second, campaign last. The original game, profiles,
+saves and Development-08/09 remain separate.
+
+New source work
+- One authoritative combat source cache belongs to the definition Bank and
+  moves with it. All 1,028 original ActorData triples, eight shared means and
+  native list order match an isolated Windows/v14/dgVoodoo startup capture.
+  Its actual source control word is027F (53-bit precision). All three explicit
+  precision-mode emulations are separate evidence, not hardware observations.
+- A sealed compiled reference verifies actual source identities, all ten typed
+  numeric inputs, root UVars and the computed whole-cache fingerprint. The
+  client needs no native DLL/EXE to execute this calculation. The reference is
+  observed; the current Rust client thread is not claimed to be observed.
+- Saved Organization combat reads use the same cache before record loading.
+  Actual member-property list and empty-instance lookup/propagation are bound;
+  unsupported nonempty live effects still stop explicitly.
+- Detection component construction now reproduces the native ordered <=zero
+  branch before Defender initialization, correcting the two minefield masks.
+- Actual map heightfields, source terrain aliases, placement requirements,
+  required-placement coordinator, pre-staging membership ownership, immediate
+  saved-record lifecycle and world registration have additional native ports.
+  These are separately tested modules; they do not constitute a live battle.
+
+Testing the build
+Open AxisAlliesRust.exe for the original menu. Open Start Asset Viewer.cmd,
+choose Maps, select a map and use Check map loading. The check now computes
+the verified shared combat cache before restoring records. Its JSON identifies
+the reference, first unsupported operation and explicitly false battle state.
+Start Live Preview.cmd inspects existing character animation; it is not a
+simulation tick or a movement command. F11 toggles the existing fullscreen.
+
+Current required work
+Complete concrete per-record Actor/Kingdom Init and PostCreate services,
+world/mission startup and conversion execution, then connect authoritative
+clocked updates and live commands to client rendering/input. Selection,
+movement, attacks, economy progression, victory and real multiplayer must be
+accepted in a running match before battles are advertised as playable.
+The diagnostic omission mode is explicit. Missing callbacks never authorize
+publication; compilation and record-clean maps do not imply world readiness.
+
+No trustworthy overall completion percentage or completion date is available.
+Final checks and exact package hashes are in the build's evidence/validation.json and
+manifest.json. Research and continuation details remain in rust-rebuild/docs,
+HANDOFF.txt and qa-output/development10, outside the release ZIP.

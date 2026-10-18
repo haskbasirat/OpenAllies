@@ -1,0 +1,15 @@
+[package]
+name = "aa-world"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+aa-simulation = { path = "../aa-simulation" }
+aa-numeric = { path = "../aa-numeric" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

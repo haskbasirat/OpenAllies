@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "status": "native_and_rust_validation_passed_pending_independent_review",
+  "native_cases": {
+    "wait_pursuit": 213,
+    "target": 42,
+    "effective_range": 144,
+    "total": 399
+  },
+  "focused_rust_tests": 6,
+  "new_rust_tests": 5,
+  "strict_scoped_clippy": true,
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "accepted_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "ranges": {
+    "wait": {
+      "va": "0x52d820",
+      "length": 225,
+      "sha256": "a1c87d9901784a4f960744f26f20b1f068ac43e4a9fdc469a8c5be29e4d567e2"
+    },
+    "pursue": {
+      "va": "0x52ef40",
+      "length": 201,
+      "sha256": "cd6f7b06656f90ddbea82812fc10d85341583af70745b93b3e12024b627776b1"
+    },
+    "target": {
+      "va": "0x576ad0",
+      "length": 79,
+      "sha256": "dcd07c98a27f23bc5812932866a0b4997b419184d34a3fb9118b05e835991e3f"
+    },
+    "range": {
+      "va": "0x4c8270",
+      "length": 35,
+      "sha256": "d02f3fbda9d4971fcb2d89c5bd19fee730d62bb74bc59af438d3b9e6b41e5c72"
+    },
+    "base_range": {
+      "va": "0x4be910",
+      "length": 82,
+      "sha256": "f3a659adfe0682c2c03e39bfce9b4ae2212b4decb1fc18535acee82c19846327"
+    }
+  },
+  "files": {
+    "crates/aa-body/src/properties.rs": "dd5722d1e4f9ca48dd01eda70ce30e55e18761265f82d2af299803e6fabe8360",
+    "crates/aa-combat/src/admission.rs": "792dc5f9522d6632d92334e7f23977607bbbaa6d31e526107fa2143287db2a10",
+    "crates/aa-combat/tests/native_admission.rs": "c5bad73f199b1e5cae6dec871d76e59ed677ab7d20a56ac25061457dde105282",
+    "crates/aa-mind/Cargo.toml": "0fecb7386bc7014ed9257398e784e0ba492fcccd35ef4c5ae2fe9588217872e4",
+    "crates/aa-mind/src/ability_motion.rs": "ae827b845ad157404e6036524accf389d97d9e4283b61f2d82fb03ae107a922b",
+    "crates/aa-mind/src/action.rs": "2e07aacb6a85ac003eef0ecbe8e95aaa65b593da4990314224398c8d34bc4161",
+    "crates/aa-mind/src/construct.rs": "088b56986bccbb516f9bb45a8ac7fb6468949d836354cc8fe89aba07b30299f6",
+    "crates/aa-mind/src/lib.rs": "2b8cc748325f9383936521e172530c6d8340ba9df24d1fc08a2b98230b5a9f3e",
+    "crates/aa-mind/tests/ability_motion_native.rs": "8517dc017b214b7486539dd742dfa500610cd3e30ad83ace00d86ff690eb9b05",
+    "crates/aa-movement/src/lib.rs": "b9ca089db328fa49a1b9e56e51414af73347630513ce4ed3db161f441ff5322a",
+    "crates/aa-movement/src/target.rs": "ed245993655a269cdba39e27cf90ae295cd24cbc816ab67f0275b79a33026398",
+    "crates/aa-movement/tests/target_native.rs": "3e5d21892df2fae112d3966587c777742b2ef8e9b530cacebd10a80204556c55",
+    "crates/aa-numeric/src/lib.rs": "d21be495e2d56aa6eb36eb2044fc9789b6141ca60e3f4f6bdbb2cf427a4f828a",
+    "research/engine-baseline/audit_baseline.py": "c4420cbef2c6404ad1e81a3b427f732d0e21082151acd1a7eaf26a248387753a",
+    "research/phase4-rng/original_rng.py": "10b9da566a3916f50fa3b6a2253a7990af9d4a7b0ebde05328465f5cd31a27a5",
+    "research/phase7-ability/native_admission.py": "ca567bb3e933910667ac2212a3d059bc011921957bde05669ad4f8156603a501",
+    "research/phase7-ability-motion/assembly.txt": "fcf109a0cdd86e4340110115e69082b36a65486a12a2fc9865689c1241839a71",
+    "research/phase7-ability-motion/clippy.log": "5e671c6567f652ed1fcdd563f51d88fd499e1a0708dd5466a8c026502eb02d6f",
+    "research/phase7-ability-motion/combat-tests.log": "c389a821f639bd1234860377bfd5519bf80bb556909af56296df9cbe2b8eb87d",
+    "research/phase7-ability-motion/mind-tests.log": "19dc8ade4abbd297c5cc8c5514b2833e42efba136b39482420afb45b0bf8a7ae",
+    "research/phase7-ability-motion/movement-tests.log": "bb8276317df2825624067a537facb9a7047584c90b5f6eba830c1eeee2ac6cc1",
+    "research/phase7-ability-motion/native-motion-fixtures.json": "ee75e45ab880c50fad7d87ae2a67412dbd7e38ef09cd89603b5f5091ffec0b01",
+    "research/phase7-ability-motion/native-range-fixtures.json": "e45e770ec5a2e00db6813200b4fe67d33df5b79464da5c6e698ab8edcc51a9c9",
+    "research/phase7-ability-motion/native_motion.py": "e3ac2a0fcf664b14d657f756ccd6beaf8dfaa8de02fe8c786d3249d636d22c5d",
+    "research/phase7-ability-motion/native_range.py": "a8d90f6c680bbbdaa27519718e0bd82b8d78445c348fe5708847e6d788eb9856",
+    "research/phase7-ability-motion/README.txt": "b38a419c90886044647597cebac3a754ec930268155644ef18984d0e0ad37471"
+  },
+  "scope": "README.txt",
+  "prior_evidence_note": "The admission source addition and new Mind/Movement module exports change shared file pins; previously implemented algorithms remain unchanged. Historical ledgers are not silently rebound."
+}

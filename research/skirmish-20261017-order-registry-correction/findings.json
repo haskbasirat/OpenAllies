@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "status": "author-frozen correction; historical reports are not broadened",
+  "defect": "Incomplete Ghidra calls.tsv membership caused actual CRT9E65F0 to be incorrectly skipped as a non-order callback.",
+  "native": {
+    "crt_unique_initializers_audited_per_image": 3634,
+    "separately_executed_images": [
+      "original",
+      "v14"
+    ],
+    "registrations": 358,
+    "missing_export_initializer": "0x9e65f0",
+    "new_descriptor": {
+      "id": 323,
+      "name": "OrderVersionAckRequest",
+      "handler": "0x766cf0",
+      "allocation": "0xb40af0"
+    },
+    "unchanged_old_ids": [
+      0,
+      322
+    ],
+    "shifted_old_ids": [
+      323,
+      356
+    ],
+    "shift": 1,
+    "width_bits": 9,
+    "ack_header_machines": 6,
+    "ack_header_cases": 324,
+    "ack_header_executed_pc_pins_including_crt": 32891,
+    "fresh_payload_runs": 2864,
+    "decoded_payload_runs": 2851,
+    "first_native_null_cutoffs": 13,
+    "template_flow_returned_cases": 1242,
+    "template_flow_native_null_cases": 6,
+    "template_shapes": 357
+  },
+  "validation": {
+    "aa_orders_tests": 42,
+    "failed": 0,
+    "ignored": 0,
+    "build_seconds": 17.39,
+    "normalized_existing_generated_schema_bodies_unchanged": 329,
+    "current_netcode_lib_check": "passed; no runtime/client unit link",
+    "new_netcode_owner_tests": "saved2; awaiting root warm cohort, not counted as passes",
+    "immutable_registry_and_ack_replays": "passed"
+  },
+  "scope": [
+    "Real CRT registration supplies every corrected descriptor ordinal/count; no generated Rust ID inventory is used to discover membership.",
+    "Direct766D40 emitter uses same retained NetNode mutex and Admin request stream; no active gate, SetPlayer prefix, payload or sync.",
+    "ID323 has no generic request/decree Shape. Its actual receipt751FC0 is the next separate scope.",
+    "Full old mixed corpus preserved. New bounded8-small-seed corpus stops at first real native null access; no old expected outputs weakened.",
+    "Existing static emitter addresses rekeyed only by native descriptor allocation identity; new766D40 has its own native execution proof.",
+    "No whole CRT, arbitrary indirect registration, full network transport, game startup, native save/profile/film modification or activation claim."
+  ],
+  "source_pins": [
+    {
+      "path": "research/phase4-orders/crt_order_initializers.py",
+      "sha256": "43c936fe3e056d040e7d466a017ccd0146f0667fca49375063351f3e319950ce"
+    },
+    {
+      "path": "research/phase4-orders/recover_orders.py",
+      "sha256": "1c8656b09af74e864ef794c9ecf20856b53cd85aa784212cf971a740a7e05576"
+    },
+    {
+      "path": "research/phase4-orders/gen_registry.py",
+      "sha256": "f37fef44b12445a0c6f2db2d752f3cc96d02cb836ad20c01a9264387bfd23e8e"
+    },
+    {
+      "path": "research/phase8-orders/native_order_traces.py",
+      "sha256": "90582916b6f989af95563048a776c9ea534a39c61b27abcd2e8bb44e227476e1"
+    },
+    {
+      "path": "research/phase8-orders/native_order_flow.py",
+      "sha256": "fd96d1573a9073b8fd429f3ec8d08ceb220705ed92f75dfe69203da4d510848f"
+    },
+    {
+      "path": "research/phase8-orders/gen_schemas.py",
+      "sha256": "01d6b8c4dcab397f302132155d3bad646cd112f7e7aea23196a253c6e0cd1f67"
+    },
+    {
+      "path": "research/phase8-orders/gen_flow_table.py",
+      "sha256": "4c1a792b46f91d156e49275de4f1dc99bd74795d76aee1f6f0fb4a790ab9d561"
+    },
+    {
+      "path": "research/phase8-orders/gen_inventory.py",
+      "sha256": "7a3f69c0bdfa1d17d0569db32bb82a428c00212f21c966e764c914e7596393af"
+    },
+    {
+      "path": "crates/aa-orders/src/native_registry.rs",
+      "sha256": "d923b84a3a6616a601238b0ac3448e0fdee644b991e3877c85b913d8565c6ddb"
+    },
+    {
+      "path": "crates/aa-orders/src/native.rs",
+      "sha256": "e5114aae320fc8b19b1ffcab7d0b768d6bb39e7150dccd2abce2bc86024b5b98"
+    },
+    {
+      "path": "crates/aa-orders/src/flow.rs",
+      "sha256": "f8f5cfe8cd0db9779669a949575db5454908c272f253c293372a9e3fcecbba8c"
+    },
+    {
+      "path": "crates/aa-orders/src/flow_table.rs",
+      "sha256": "14d2c33eda72a0ecae10910c881fc132df4aac35a73dbe485c50a53f13ed3324"
+    },
+    {
+      "path": "crates/aa-orders/src/commands.rs",
+      "sha256": "c952e9209e67bc77eef64f77dca05c9b5b1d60cf9e85433e3626717915b42105"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/schemas.rs",
+      "sha256": "2bf74b502033a8b45f0dfa392470276096fe2cf0dd27c0d38afb10530774deaa"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/mod.rs",
+      "sha256": "1935744e87578b44035943fa0978d52f8a00b1cce782386b72f3330ef6d826ed"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/complex.rs",
+      "sha256": "d35216c6b6a1905e454a10bd9797d5ada4a2ef1d660bb5672de596a87816774a"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/game.rs",
+      "sha256": "e1e427685093bfefa858de27229a49d8637c9c205be73d8c30a95a0afe219d1f"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/lobby.rs",
+      "sha256": "89b082f721430bc42192e52b1e33d12fd2e7370fd5ee96911b63f606d4be6e0a"
+    },
+    {
+      "path": "crates/aa-orders/src/payload/editor.rs",
+      "sha256": "91a637092b1c4d216a265b9eff08f7c73e8ee396ee08fd3b5933c1df14a987de"
+    },
+    {
+      "path": "crates/aa-orders/tests/registry_correction.rs",
+      "sha256": "032797204dfc2457ebc84adb4ffb19d702e002e063af5586f3a3c5a39e4c0e1d"
+    },
+    {
+      "path": "crates/aa-netcode/src/local_version_ack.rs",
+      "sha256": "0d86fbb4183f46979dd4245296f2ea0fde3e5ebcc98e64812fef075340284443"
+    }
+  ],
+  "fixture_and_producer_pins": [
+    {
+      "path": "research/phase4-orders/orders-native-oracle.json",
+      "sha256": "d9ae9925730f88b63e262616c2ee9aaab1fb19f5d57faa735528ac4c855ab137"
+    },
+    {
+      "path": "research/phase4-orders/registry-exploration.json",
+      "sha256": "b58d1a8a2553f407f06fcfde721e89f8cdf19715f7de5737e58806e09bc30d45"
+    },
+    {
+      "path": "research/phase8-orders/order-traces.json",
+      "sha256": "e5ab35ac4f47346f123a750bc45cdbef29563c953126f47da1e7f4bfa7232e9f"
+    },
+    {
+      "path": "research/phase8-orders/order-flow.json",
+      "sha256": "d6635328c30811d1629a95cd4a890b1ba894421ee26faf3fb35bbc7c84d18bff"
+    },
+    {
+      "path": "research/phase8-orders/static-handler-calls.json",
+      "sha256": "39946c8c0cb74bf98a8465f471570beea266c4056bb40a0d1a918101d80c7cf3"
+    },
+    {
+      "path": "research/phase8-orders/descriptor-write-sites.json",
+      "sha256": "473d727e0d345c97b7cb56dc83b30855e059b8719fa1d124a352e2034568c39f"
+    },
+    {
+      "path": "research/phase8-orders/inventory.json",
+      "sha256": "6ae1ab6a009e4424904dc83eeb188782b094db5d30ea42b3cc72987c21b38676"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native_registry_audit.py",
+      "sha256": "f85f776c683d8e1b7512001f068f3260853e7353584d95066abdef9fb4b99fad"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native-registry-audit.json",
+      "sha256": "7d0ef97a4ea1a9a565016ecc25fe1c2fe27dff756910c71990268cd038989b76"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native_version_ack_header.py",
+      "sha256": "18f9036abb04bac66f077e88fcec6282cab0673ba42cec88ce90404dff57fcad"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native-version-ack-header.json",
+      "sha256": "3904b667caa1110e9f595e8310f1522765d7f2b97ba955b2f6b9b543bb7ae348"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/regenerate_traces.py",
+      "sha256": "6e9e11b7760ca878754abccccdbfe59bd62048b3a46018fc470e8d8c7136e29f"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/synthetic-definition-managers.json",
+      "sha256": "e76ee387b15ee22950af3dbbfb74f0c0abe51ba2bda7606363022d46bb04cb1b"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/rekey_emitter_inventory.py",
+      "sha256": "6dbc48391db3fd82ca5395197a6c43ae1a1f4626a9b557cf2e37327f28fd83b1"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/historical-357/manifest.json",
+      "sha256": "0eca42589dc39b48c5548c23be7c735ca0fd1fb630de15cd6c1aa4479ad7370f"
+    }
+  ],
+  "logs": [
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/orders-tests.log",
+      "sha256": "693c1007d56e3d709760805796cdec40812c52bc976edce4a6b3f6b1e6eed12d"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/netcode-source-check.log",
+      "sha256": "5546b74f69a40353ade69aca7c73c3ba7753356c0fc2958b634e0e9216c9fd48"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/netcode-source-check-final.log",
+      "sha256": "e20711c5fcafadb98a218dcda8fd448cfc3a5588b42feaf0e38042f008b5d452"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/registry-replay.log",
+      "sha256": "8ba8b91ccd162484014755a5ba02e4b65a67716b5505d2118711b4560ac0c82f"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/ack-replay.log",
+      "sha256": "5d996542a736593d7e549742b1081083c804d3e8b78eeeb47cfd6acf642baa70"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native-flow.log",
+      "sha256": "2835b1e646ebcec907750022bc364eaac59185c51ebe26f02af63622620fdc9b"
+    },
+    {
+      "path": "research/skirmish-20261017-order-registry-correction/native-traces-bounded.log",
+      "sha256": "18b6088b72690865269af3d03d8d8d11d16ed1d86c3ce0aba4c8b162b846068f"
+    }
+  ]
+}

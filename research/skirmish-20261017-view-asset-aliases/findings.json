@@ -1,0 +1,80 @@
+{
+  "schema": 2,
+  "status": "bounded-current-23-cstring-source-owner-frozen",
+  "source_scope": "same selected23 current cells, actual complete5file wildcard, ControlledNone; not whole AVars manager/profile/app startup",
+  "native": {
+    "paired_rows": 3,
+    "machines": 6,
+    "current_aliases": 23,
+    "constructor_names": 125,
+    "precision": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "executed_pins_per_image": 9637,
+    "separately_intercepted_transport_entries": 9,
+    "immutable_replay": "PASS",
+    "fixture_sha256": "ad35a2011ea27e997a6e84634be788aef0f068721ce635bca436dfe26bfee374",
+    "v14_unrelated_constructor_immediate": "402446, separate per-image bytes; no125current-value equality claim"
+  },
+  "rust": {
+    "exact_frozen_runtime48_sha256": "8e6cece37488c65cf99dfc6cc606b9c2d6ac5863889207d70a80d4af98f2c12b",
+    "current_alias_tests": {
+      "passed": 2,
+      "seconds": 4.43,
+      "capture": false
+    },
+    "actual_composition": {
+      "passed": 1,
+      "seconds": 4.63
+    },
+    "full_rules": {
+      "passed": 155,
+      "failed": 0,
+      "ignored": 0
+    },
+    "full_metagame": {
+      "passed": 40,
+      "failed": 0,
+      "ignored": 0
+    },
+    "explicit_export0": {
+      "passed": 1,
+      "writes": false
+    }
+  },
+  "verified": [
+    "all23nativecurrentstringsandtype4flags0",
+    "actual5sourcefileorderandhashes",
+    "exactsourceprovenance/type/rawguards",
+    "retainedsameallocationprefixonpublicprojectionerror",
+    "incompleteownerrefusal",
+    "sameBankmovedneverreinstalled",
+    "currentrawcountedUTF16setterandoldCStringtemporarylifetime",
+    "unknownprofile/console/unsupportedexpressionrefusal"
+  ],
+  "limits": [
+    "No texture/resource/GPU/VWorld AD/readiness/battle claim",
+    "No arbitrary source expression/allocator failure/native invalid pointer equivalence",
+    "No mutable current field mirrors; immutable source receipts only",
+    "VFXData/Resource backend work excluded"
+  ],
+  "pins": {
+    "crates/aa-runtime/src/view_asset_aliases.rs": "8e2105d44fcee7880413c4f9ca40b1f160eecbaef75124e7685e7eabb0659509",
+    "crates/aa-runtime/src/view_asset_aliases_tests.rs": "bc2867db271a11297fcc5169ce08fbc3dc2a97fb2baa56304cb65ab989ca705b",
+    "crates/aa-rules/src/native_field_order.rs": "fcef24cf4c099210bf94a3e55c2b01a28e333a1968ef16131be0adf3d5999ef7",
+    "crates/aa-rules/src/resolved.rs": "1b5e685e6145bf336df674192dbcb14993af279aad3e45626535d878d5436fb8",
+    "crates/aa-rules/src/actors.rs": "81a191c4915b961cb00af7b0ffd9a7037474aacc046de218126086cf16cc8ef4",
+    "crates/aa-rules/tests/native_field_metadata.rs": "8ff4733a083ab731db16deb8b0ade48835179c7ae6cdcb51efa6955511184889",
+    "research/skirmish-20261017-view-asset-aliases/native_aliases_v2.py": "6ac35a188d39e9d052ec8ef40c57c359f645f6303e60ca0e29badc711192b294",
+    "research/skirmish-20261017-view-asset-aliases/native-aliases-v2.json": "ad35a2011ea27e997a6e84634be788aef0f068721ce635bca436dfe26bfee374",
+    "research/skirmish-20261017-view-asset-aliases/native-v2-immutable.log": "3a1e2113fc8e7a42776c7d9eba0558139425122d1706a0ae73ed79298c11570f",
+    "research/skirmish-20261017-view-asset-aliases/rules-all-v2.log": "9ee5126504773a7aa1e1dd78546ec243a761d65ae27525f711a68794dd8146f7",
+    "research/skirmish-20261017-view-asset-aliases/metagame-all.log": "04e4feb89743d266913b050cae68658db51fc3bd6a5c9fea6243f4de96327b9c",
+    "research/skirmish-20261017-view-asset-aliases/metagame-export0.log": "5fe1cad7ba6cd4bdbfb1203ecfbf42fc8fd122d09f4130d808b3ab2c2772a972",
+    "research/skirmish-20261017-view-asset-aliases/runtime48-view_asset_aliases-tests.log": "d6ed51b83cadd2e01900859d57790449cb9b182d73d2e66c7f17ec50611258cd",
+    "research/skirmish-20261017-view-asset-aliases/runtime48-view_startup_inputs-tests.log": "c3dcd13eb45c4abdf063faef32049eba98de117ae82584e51ad18e7c3db8729f",
+    "research/skirmish-20261017-view-asset-aliases/README.txt": "f56c914ee9518f6f93cfff5a6c45b293aeb51de6d98695760ff6efc880e2f38c"
+  }
+}

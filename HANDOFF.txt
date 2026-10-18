@@ -1,0 +1,412 @@
+
+
+## Development-10 Animations-01 SEALED — 2026-10-18
+Current inspector task completed in release/Development-10-Animations-01. 786 rigs /3316 clips; all20HQ+5Corps/77building deaths represented. 240 animated sources and47 nonlinear quaternion clips remain unsupported. GUI/CPU/GPU/package checks passed; battle UNAVAILABLE, nonstandalone.
+EXE 4587442c60b609eddd84deb2d4aaff7d5eb0f312882207e7a2a7a92ba286930e; ZIP f9fa046ad4e1237029bc34384e043e8410dd26495301934c785dfff1057b85bb.
+Read docs/DEVELOPMENT-10-ANIMATIONS-01-20261018.md for exact scope/evidence/continuation. Previous historical notes below retain their original dated state; HF02 current battle blockers are unchanged.
+
+ACTIVE DEVELOPMENT-10 / PLAYABLE BATTLE WORK, 2026-10-16:
+Current integration addendum (active work, no completed battle/release):
+  immediate-world-06 passed all3 Kingdom lifecycle tails, then Area28 stopped
+  at visibility. The real Kingdom-vector/memory owner now advances pastArea28
+  through10 dynamic records; first strict stop is source16D/GTID130 (its
+  receipt-backed native producer/getter is now implemented and testing).
+  immediate-world-census-01.json is ONLY InspectPartial diagnostics:530/1049
+  complete lifecycles,455 source16D stops,34 creationFX,27 blocking notices,
+  2 EconomyInit and1 DetectionInit. This is NOT a completion percentage.
+  Queue identity regression passed, including instance absent saved-ID table.
+  Native queue Load now occurs SUN ->queues ->MISC; same tokens move toStaged,
+  saved_queue_load receipt prevents Staged::post_load reinstalling queues.
+  World map_mode is stable Box<Option<u32>> plus SameWorldSettings capability;
+  update this SAME Box at eventual taskA8 restoration, never duplicate mode.
+  World retains TailState camera/started ctor owner and clock-FREE dispatcher
+  state (phase/lists). Attempt.clock remains the sole loaded clock; later move
+  it with dispatcher state/queues/RNG through clocked::Runtime::from_parts.
+  Root ActorServices binds actual inventory/Mind Init and concrete state entry.
+  Corrected Mind native903-row comparison found Regiment Sleep returns17 when
+  Disable.status!=2; corrected actual4 owners x3livePC now pass. Earlier12call
+  success was execution evidence before this parity correction.
+  Agents currently own: special memory, source16D/EconomyInit, terrain/blocking,
+  Detection owner, tail/FirstTick music, local bootstrap/Player+28, selection/
+  orders, clock callbacks, live scene/visibility. Root creationFX is unbound.
+  New aa-runtime prod aa-orders/heightfield/zones/serde_json; aa-client netcode;
+  aa-actors zones dependencies are local-only and locked metadata passes.
+  Root current strict next integration is immediate-world-07 (see QA log).
+  WindowsResetOs actual GetTickCount/CoCreateGuid and source localization smoke
+  tests pass, but complete Host/BeginPlaying remain unfinished. No success
+  claims for simulation, unit orders, combat, visible battle or Development10.
+User latest instruction: do not stop until a playable battle works. Do not
+seal a diagnostic-only build as completion. No Development-10 EXE exists yet.
+Current root integration: load_world.rs + Attempt::load_immediate borrow the
+actual application Session, install/compute the verified captured-reference
+source Bank before saved records, and retain terrain/index/zones/registration/
+Kingdom/restriction owners across immediate Init/PostCreate/register callbacks.
+Actual tutorial02 managed record diagnostics now have zero record errors after
+HQ slot30. This is NOT WorldStart, controllable combat, or battle acceptance.
+New tests/immediate_world_load.rs is the active combined native-lifecycle gate;
+its latest results are in qa-output/development10/immediate-world-*.log and
+research/development10/immediate-world-*.json. Missing services must remain
+explicit errors; no fake readiness/defaults or original-engine fallback.
+Nine agents are implementing concrete initialization, placement/zone/state,
+PostLoad/world-start gaps. Existing Development08/09 artifacts are preserved.
+Test-only profile overrides LTO=false/codegen-units16 shorten replay builds;
+final candidate EXE must use the default release profile. Actual separate-PC
+Internet testing remains unavailable. See docs/NATIVE-PORT-RULES.md first.
+AXIS & ALLIES RUST REWRITE — CONTINUATION HANDOFF
+LATEST SOURCE / BYROREDUX AND KOHAN CONTINUATION, 2026-10-16:
+Read docs/BYROREDUX-KOHAN-20261016.md and
+qa-output/byro-kohan-20261016/acceptance.json first. ByroRedux raw Rust parser
+was actually built/run in isolation on16 original models:15 telemetry-clean,
+14 strict block/footer/EOF checks; AirplaneDeath stops16/231 at NiVisData.
+All95 authored alpha records in complete cases match the existing reader.
+New conversion retains optional full alpha flags/threshold; client rejects
+supplied-vs-audited conflicts. Existing assets/render defaults are unchanged.
+No wholesale importer/engine replacement. Matrix transposes and cyclic strip
+orders are classified; controller/playback/full rendering remain unverified.
+Saved owner4D1350 now binds the actual held Actor/Org; first tutorial stop
+advances to member-added5784C0. Borrowed combat-mean producer and actual AA
+projection subroutine are source-verified, but concrete graph/client/world
+bindings remain. Full battle startup/publication/ticks are unfinished.
+The Kohan II original-source claim is verified; public TimeGate source access
+was not found. No developer message was sent. Selected references/evidence,
+independent reviews and verified source backup are indexed in the dated QA.
+Development09/08 and original/v14 binaries remain unchanged; no new EXE.
+Skirmish first, multiplayer second, campaign last. No defensible overall
+completion percentage or finish date; real separate-PC Internet tests blocked.
+
+LATEST SOURCE / PUBLIC-REFERENCE CONTINUATION, 2026-10-16:
+Read docs/SKIRMISH-BUILD-OPTIONS-20261016.txt and
+qa-output/public-build-options-20261016/acceptance.json first, then
+docs/PUBLIC-REFERENCES-20261016.md. Actor+108/+10C now has authoritative
+growable build-target storage, a native list/member/parent coordinator and
+actual saved binding. Canonical Builder source includes1084 standard/derived
+ActorData identities; five engineer lists contain15 targets. Owner Economy
+dispatch reuses the actual existing refresh. Supplied source FP/typed CV/UVar
+binding is explicit and diagnostic; it does NOT complete ActorData+1E4 or
+certify observed native startup. The next tutorial stop is owner4D1350.
+Selected public NifSkope/Niflib/GameSpy/OpenSpy/FOV/AI references are separately
+pinned under reconstruction/references/public-rewrite-20261016. No downloaded
+implementation was executed or copied into runtime. New converted Material
+payloads retain raw texture state; existing payloads/rendering remain unchanged.
+No new EXE or playable battle. Development09 remains preserved. Backups and
+final source/tests/census/preservation pins are in the dated QA backup record.
+Skirmish first, multiplayer second, campaign last; full initialization/world
+publication/live ticks and real two-PC Internet acceptance remain unfinished.
+
+LATEST SOURCE CONTINUATION, 2026-10-16:
+Read docs/SKIRMISH-STATE-LEADER-20261016.txt and
+qa-output/skirmish-state-leader-20261016/acceptance.json first. Saved Actor
+state, borrowed/saved Organization leader and selected-member position
+notifications now connect actual restore storage; loaded placement 4F4590 is
+ported but its real 4F3640/world adapter remains required. Immediate Init,
+PostCreate, full publication and live battle ticks are still unfinished.
+Settlement census correction: 1028 registered actors contain ZERO Settlement
+components and ZERO WallSets; fitting is not a demonstrated reached dependency
+for these shipped sources. Completed ActorData+1E4 still needs real settings,
+CV profile/means, ordered shared source completion and source FP/CRT context.
+Development-09 is preserved and does NOT contain this new source work.
+No new EXE or playable battle is claimed. Skirmish, then multiplayer, then
+campaign. No defensible overall percentage or delivery date is established.
+docs/REWRITE-STATUS-20261016.md lists milestones and intended finished scope.
+Backups/source-skirmish-state-leader-*.zip and the dated QA backup report
+preserve this continuation with verified file hashes.
+
+Reference-review supplement,2026-10-16:
+Read docs/GAMEBRYO-REFERENCE-REVIEW-20261016.md and
+research/gamebryo-reference-review-20261016/ before new asset work. Matching
+evaluation headers/docs provide useful API/type leads; no SDK implementation
+has been integrated. Later SDKs are not native-game behavior authorities.
+Original AA instructions remain authoritative. Runtime/Development09 unchanged.
+Important clarification of the checkpoint's "model-fit" wording: Settlement
+460940 fits gameplay ObjectData+38 shapes from WallSet definitions, not
+Gamebryo NiBound mesh/world spheres. Use the existing object-shape source
+producer and preserve shared definition mutations and exact fitting arithmetic.
+
+Updated 2026-10-16 for Development-09.
+
+LATEST INDEX -- READ FIRST
+docs/DEVELOPMENT-09-CHECKPOINT.txt describes the current native-only source.
+Development-09 is in release/Development-09 with a new x64 Windows EXE, ZIP,
+README, checkpoint and validation. It adds Check map loading in the Maps
+sidebar and a real original/v14 managed record diagnostic CLI. Completed
+battles and multiplayer remain unavailable. Native borrowed Organization
+combat values, saved storage binding, member-state leaf and Actor/Object
+Init(NULL) coordinators progressed; real lifecycle/world services remain
+mandatory. No full-game completion percentage is established.
+Read release/Development-09/VALIDATION.txt and
+qa-output/development09/validation.json for actual tests and untested limits.
+Original game files/profiles/saves and Development-08 remain preserved.
+
+PREVIOUS ECONOMY/LOAD-LIFECYCLE INDEX (HISTORICAL STATUS BELOW)
+Updated 2026-10-16 for the Economy / load-lifecycle source checkpoint.
+
+CURRENT INDEX -- READ FIRST
+The newest continuation is docs/SKIRMISH-ECONOMY-LIFECYCLE-20261016.txt.
+It connects actual saved Economy values/ownership/flow callbacks, canonical
+recruitment backreferences, and an explicit fresh inactive SAI load owner.
+Team and Kingdom Init coordinators are verified but still need real world
+services. The key missing boundary is immediate per-record Init(NULL) and
+PostCreate before registration: record/PostLoad success is not full map load.
+See qa-output/economy-lifecycle-20261016/acceptance.json for scoped checks,
+qualified diagnostic contexts and exact source pins. Skirmish then multiplayer
+then campaign; no new executable or playable battle. Development08 unchanged.
+
+The preceding source continuation is docs/SKIRMISH-CONTINUED-20261016.txt.
+It supersedes the earlier skirmish checkpoint below: AbilityData group binding,
+additional action contributors, owned Regiment v2..21 restoration and native
+Nation/random-selection helpers are connected and tested. Complete battle
+startup/publication and multiplayer remain unfinished; Development08 unchanged.
+After Development08, continued source work and the new user priority are in
+docs/SKIRMISH-CHECKPOINT-20261016.txt. Build skirmish, then multiplayer, then
+campaign. Development08 is unchanged; new source is not in the released EXE.
+docs/CONTINUATION-20261016.txt supersedes the historical status below.
+Development08: release/Development-08/AxisAlliesRust.exe, with same-folder ZIP,
+README, manifest and exact validation. Original TGI menu and asset previews are
+testable; complete battles and multiplayer are not yet connected. Native-only
+restoration/command/settings work continued without reviving the rejected
+interim gameplay implementation. Current map stops and next work are recorded
+in the continuation file; no new overall completion percentage is established.
+
+HISTORICAL DEVELOPMENT07 AND PHASE8 NOTES FOLLOW
+
+READ THIS FIRST
+This document is the current continuation index. The actual Rust source,
+source-pinned evidence and dated validation records remain authoritative.
+It is not a transcript of every experiment or a claim that all behavior has
+been reconstructed. Older docs/PROGRESS.txt, NEXT-ENGINE-STEPS.txt and PARITY.txt
+contain Development06-era material; their older completion statements are
+historical. Development07 did not complete a playable match.
+
+UPDATE 2026-10-14 — NATIVE PORT RESTARTED IN PARALLEL (READ FIRST)
+After Development07 an interim simulation (crates aa-game, aa-net and the
+client's game/, worldwar_ui, save modules) was written from data files
+instead of from AA.exe. The user rejected it: the goal is a rewrite of the
+ORIGINAL game, 64-bit, multithreaded where results cannot change, with no
+artificial engine limits. It was removed from the workspace and archived in
+backups/removed-crates-20261014/ (plus
+backups/source-interim-aa-game-removed-20261014-170707.zip). Do not revive it.
+Rules for all work: docs/NATIVE-PORT-RULES.md. REA via
+research/rea-locked.ps1 (one Ghidra at a time). Phase-8 parallel work areas
+and their files: research/phase8-{restoration,tick,triggers,combat,movement,
+ai,economy,orders,net,ui,metagame}/ (README.txt, inventory/findings,
+requests-to-lead.md). New crates: aa-ui (TGI UI engine port), aa-metagame
+(World War II port), aa-netcode (native session layer and NetworkSeams
+adapter). Cross-area integration items, decisions (simulation x87 precision
+is PC53; UI thread PC24) and ownership splits:
+research/phase8-integration-backlog.md. Phase-8 definition resolution:
+research/phase8-definitions/. The client currently offers the original main menu
+(intro movies, main.tgi layout), Editor (asset viewer) and Options; gameplay
+entries stay disabled until the native world runs an original map.
+Restoration re-run 2026-10-14: tutorial01 still stopped at DynamicThings
+ordinal 130 (saved ID 1220, nonempty Turret source loader).
+Restoration 2026-10-15 (InspectPartial, all 80 maps, PC53): failed records
+18,389 -> 3,701; 5 maps clean; 7,879 class-changed records convert natively
+and 3,912 missing-definition records are skipped natively. Tutorial01 stops
+only at the Organization LayoutData producer (layouts agent, crates/aa-rules
+native_layout_data.rs). PostLoad/publication not started yet. Per-group
+status: research/phase8-restoration/README.txt (Round 2).
+
+WORKSPACE AND TARGET
+Game/reference root: E:\Games\Axis and Alies
+Rust workspace: E:\Games\Axis and Alies\rust-rebuild
+Shell/toolchain: PowerShell, Rust 2024/MSVC, Windows x64, Cargo.lock saved
+alongside the source. This folder was not a Git repository at this checkpoint;
+do not assume uncommitted source changes can be discarded or restored from Git.
+
+The user's long-term goal is a faithful full Rust replacement of the MODIFIED
+native v14 game, with the same gameplay and eventual saves/multiplayer support.
+Use original assets. Remove unnecessary legacy resource/bandwidth ceilings,
+use 64-bit addressing and safe parallel work, while preserving deterministic
+simulation order and original behavior. Hardware and network limits still
+exist; do not promise unlimited resources or parallelize authoritative RNG,
+floating reductions, tick order or interacting actor mutations speculatively.
+
+docs/BASELINE.txt and research/evidence/v14-baseline.json describe the target:
+100 unit/building capacity rules, expanded side/map options, 1.5x farther zoom,
+WASD pan, fullscreen/DPI/control fixes, and original artwork. HD upscaling was
+rejected by the user and removed from the native release target. Read the
+baseline's exact semantics; the capacity settings do not grant free units,
+and expanded configured sides do not establish tested 16-human multiplayer.
+No paid servers/subscriptions. Real second-PC/separate-internet tests were
+unavailable; report them as untested, never fabricate success.
+
+CURRENT DELIVERABLE
+release/Development-07/AxisAlliesRust.exe
+release/Development-07/Start Live Preview.cmd
+release/Development-07/AxisAlliesRust-Development-07.zip
+EXE SHA256: c5bd663998bbbf1840f608a00ab84eea9a7cecd6e8b99e43f0576d9becafe55b
+ZIP SHA256: f31514f63cf0d06d70551676b47b0ca78b060211688aa6958272db094fe46ca0
+ZIP size: 8,994,388 bytes. CRC and every manifest payload hash checked.
+
+This is a development browser/visual preview, not a complete RTS. Maps, Models
+and Animations remain inspectable. New Live preview spawns original infantry
+from USA/GER/GBR/JPN/RUS, with Idle/Jog/Attack1/Die1 source clips, play/pause,
+restart, visibility, color, X/Y position and facing controls. It deliberately
+owns a diagnostic Character, synthetic ID and local preview clock. It is NOT
+connected to the authoritative ActorStore/world or movement/combat orders.
+Road yaw, terrain blending, alpha/depth/transparency fixes, static water,
+fullscreen and DPI controls were already in Development06; do not call them
+new Development07 gameplay features.
+
+The last overall engineering estimate communicated was approximately 25%,
+not a measured percentage and not proof of 40% completion. Do not infer overall
+completion from test counts, decoded map records or the size of the renderer.
+Full battles, AI, campaign/strategic mode, original saves/replays, original
+UI/audio, and synchronized multiplayer remain unfinished. Component support
+does not establish whole-game parity.
+
+ASSET DEPENDENCIES — KEEP THESE
+E:\Games\Axis and Alies\Data.rwd
+E:\Games\Axis and Alies\reconstruction\native-game\runtime-expanded-v14
+E:\Games\Axis and Alies\reconstruction\assets\original\Data
+E:\Games\Axis and Alies\reconstruction\assets\converted
+E:\Games\Axis and Alies\reconstruction\game\data\maps\index.json
+rust-rebuild/assets-cache (49 files are shipped beside the EXE)
+
+--assets points to the reconstruction directory. Source rule loading also
+opens Data.rwd in that directory's parent and uses its v14 overrides. Copying
+only reconstruction or only the ZIP to another PC is insufficient. This ZIP
+is not a standalone whole-game package. Preserve the whole existing workspace
+and original installation for continuation; the release ZIP excludes source
+code, most research and original archives. No credentials are needed for local
+preview work. Native AA.exe, v14 runtime, saves/profiles and prior releases
+were preserved by this Rust build task.
+
+SOURCE MAP
+crates/aa-client: eframe/egui + wgpu Vulkan/DX12 browser, GPU scene, asset loading,
+inspection and presentation. main.rs/live_preview.rs expose the new preview.
+live_scene.rs, live_spawn.rs, live_animation.rs are bounded rendering adapters.
+crates/aa-runtime: partial shared runtime, source catalog, clocks, restoration,
+actor/world services, ownership, spatial integration, economy and scheduling.
+The client currently does NOT depend on aa-runtime or aa-triggers.
+crates/aa-mapworld, aa-formats, aa-rules: original archive/map/component parsing,
+source/v14 definitions, explicit unsupported payloads, and restoration inputs.
+crates/aa-actors, aa-animation, aa-body, aa-combat, aa-mind, aa-production,
+aa-orders, aa-movement, aa-navigation, aa-spatial, aa-heightfield, aa-triggers:
+native-evidence-backed components and required integration services.
+crates/aa-numeric, aa-trig, aa-world, aa-economy, aa-simulation: numeric,
+ordering/clock/resource foundations; their scope is documented separately.
+crates/aa-assets, aa-resources, aa-transfer: asset/resource/transfer foundations.
+Transfer library tests are not evidence of a working multiplayer game.
+
+RUNTIME CONTINUATION — START HERE WHEN DEVELOPMENT IS REQUESTED
+1. Read crates/aa-runtime/src/restoration.rs, catalog.rs and actor_world.rs,
+   and crates/aa-runtime/tests/catalog_restoration.rs. Reuse the existing owned
+   components/registry; do not restart the engine architecture from scratch.
+2. Rerun the bounded real-source restoration test below to establish TODAY'S
+   first unsupported operation. The saved log at
+   research/phase7-runtime/validation/performer-integration.log reported:
+   tutorial01: 134 registered, stop at DynamicThings ordinal130, saved ID1220,
+     nonempty Turret source loader; runtime_publication_ready=false.
+   tutorial02: 113 registered, stop at ordinal109, saved ID2696, Structure
+     specialized factory; runtime_publication_ready=false.
+   IMPORTANT: Structure code/factory and saved loader were added AFTER that
+   log: aa-actors/src/structure_state.rs, owned.rs, and aa-mapworld/src/
+   restore_components.rs; tests/structure.rs covers native cases. Do not
+   reimplement it based on the old log. The nonempty Turret guard still exists
+   in aa-runtime/src/actor_world.rs at handoff. This handoff did not rerun that
+   source restoration test and does not assert a new stop position.
+3. That test deliberately accepts a bounded prefix ending at the first error.
+   A green result does not mean full map restoration or publication succeeded.
+   Inspect report.runtime_publication_ready and events, not just exit status.
+4. Continue native-proven source bindings, concrete component factories/loaders,
+   fixups, PostLoad/PostExisting/publication, then authoritative commands and
+   scheduling. Preserve full generation GTIDs, native identity types, actual
+   definition/view selectors, numerical stores and partial-failure effects.
+   Do not replace missing callbacks, services or payloads with success/defaults.
+5. Bind renderer presentation to completed authoritative actors/clocks, then
+   validate a reproducible actual-map select/move/attack/produce/death/victory
+   path against native traces. The isolated Live preview is not this milestone.
+   Broader roadmap: docs/NEXT-ENGINE-STEPS.txt (historical directions still useful).
+
+PARTIAL WORK / EVIDENCE CAUTIONS
+crates/aa-rules/src/terrain_speed.rs was unfinished source-projection work;
+compilation is not native parity acceptance. Audit before integrating it.
+RESOLVED 2026-10-14: crates/aa-triggers/src/predicates.rs was rewritten in
+phase 8 with oracle-proven event scanners; all 79 trigger element types used by
+the 26 campaign/tutorial missions are native-proven (research/phase8-triggers).
+The earlier compile-only draft warning no longer applies.
+aa-runtime/src/trigger_world.rs supplies bounded name/victory helpers, not a
+complete predicate/control/property runtime adapter. Validate these drafts.
+research/phase7-live-animation/PENDING-move-threshold-helpers.rs.txt preserves
+an unfinished draft excluded from production. Do not silently promote it.
+Live animation currently binds the five infantry rigs/four source clips. Full
+KF acquisition, runtime overrides, blends, root motion and gameplay FX remain
+open. Source Idle/Jog controller flags are40 (loop), Attack1/Die1 are44 (clamp);
+an earlier blanket44 inference was corrected. Never overwrite source flags
+with guessed policy. Consult current live-preview validation and integration.
+Historical independent-review JSON often pins specific earlier source hashes.
+Check those pins before treating a review as acceptance of today's code.
+
+RESEARCH INDEX (relative to rust-rebuild)
+research/phase7-restoration/README.txt — original component/world restoration.
+research/phase7-runtime/validation/ — dated combined-source integration logs.
+research/phase7-actor-live/README.txt — ability/state/property work and open seams.
+research/phase7-runtime-spatial/README.txt — runtime spatial boundaries.
+research/phase7-mind-world/README.txt — bounded Mind/world integration.
+research/phase7-live-scene/INTEGRATION.txt — resident scene bindings.
+research/phase7-live-spawn/INTEGRATION.txt — source-resolved actor publication.
+research/phase7-live-animation/INTEGRATION.txt — authoritative pose adapter.
+research/phase7-live-preview/validation-record.json — isolated GUI preview tests.
+Other research/phase7-* directories contain native probes, findings, scoped
+tests/reviews and unfinished work. Read the relevant scope before reusing it.
+Earlier phase2..phase6 findings remain useful; they are historical checkpoints.
+
+LATEST VALIDATION
+docs/VALIDATION-07.txt; qa-output/build-07/validation.json; package-report.json.
+qa-output/build-07/build-inputs.json pins Cargo files and Rust source for07.
+Workspace release default run: 505 passed,62 ignored, before final GUI changes.
+Final aa-client release defaults: 43 passed,15 ignored (overlaps workspace total).
+Explicit source/GPU preview integration: 1 pass across5 factions/4 clips each;
+strict aa-client test-target Clippy passed. Final release binary compiled with
+5 dead-code warnings for unused component/report interfaces; do not claim a
+warning-free whole-workspace build.
+Final packaged EXE:85 diagnostics including80 raw map inputs;6 Vulkan/DX12
+render smoke cases;4 invalid CLI cases rejected. Actual GUI: default map,
+Live tab/spawn, clip change, pause/restart, visibility, facing and F11 roundtrip.
+Not newly tested: all ignored source/hardware cases, Windows150% DPI, secondPC,
+internet multiplayer, completed matches or full original visual fidelity.
+Native game/Development06 hashes were rechecked unchanged.
+
+COMMANDS (PowerShell, working directory E:\Games\Axis and Alies\rust-rebuild)
+$env:AA_GAME_ROOT='E:\Games\Axis and Alies'
+cargo check --workspace --all-targets --locked
+cargo test --workspace --release --locked -- --test-threads=4
+cargo test -p aa-runtime --release --locked --test catalog_restoration real_infantry_definitions_and_tutorial_restore_share_owned_state -- --ignored --nocapture
+cargo test -p aa-client --release --locked live_preview_gui_path -- --include-ignored --nocapture
+cargo clippy -p aa-client --release --tests --no-deps -- -D warnings
+cargo build --release --locked --target x86_64-pc-windows-msvc -p aa-client
+
+Candidate: target/x86_64-pc-windows-msvc/release/AxisAlliesRust.exe.
+target/release/AxisAlliesRust.exe is a different output path and may be old.
+Do not mix build paths or overwrite a running EXE. Release/LTO tests may take
+several minutes. Cargo jobs in this target tree share a lock; coordinate builds
+instead of having ten agents repeatedly queue duplicate full workspace tests.
+Run relevant tests after changes; do not rerun every historical expensive probe
+just because it exists. Save exact commands, outcomes, ignored scope and hashes.
+
+PACKAGING / BACKUPS
+Keep all deliverables in a NEW release/Development-NN subfolder; next is08 if
+the directory remains unused. Never overwrite the sealed07 EXE/ZIP/manifest.
+research/check_development_06_exe.py is parameterized and usable as85 bounded
+CLI checks with --exe <candidate> --output <NEW folder>; its filename is old.
+research/check_development_07_preview.py runs current packaged render smokes.
+research/package_development_07.py and record_development_07_validation.py pin
+specific07 paths/counts/evidence. Inspect and adapt for a future version; do
+not blindly rerun them or an older packager against new code.
+backups/source-before-development-07-20261013-233102.zip is the pre07 source
+backup, not a snapshot of the final07 source. Current source remains in crates;
+the final07 source inputs are pinned in qa-output/build-07/build-inputs.json.
+backups/docs-before-handoff-20261013-235622.zip preserves docs before this update.
+
+WORKFLOW PREFERENCES
+The user requested parallel agents for faster work; this session offered10
+concurrent slots INCLUDING the primary (at most9 children). Check availability
+in a new chat; do not promise10 extra children or edit global settings blindly.
+Assign separate file ownership and independent review, then integrate in order.
+The broad rewrite was explicitly stopped before the bounded07 build request.
+At this handoff, building/testing07 is complete; no broad rewrite work is running.
+Continue development when the user requests it in the new chat. Do not create
+scheduled work or a new chat merely because this file describes next steps.
+Keep this handoff current after meaningful progress and distinguish tested,
+implemented-but-unintegrated, inferred and blocked behavior in every report.

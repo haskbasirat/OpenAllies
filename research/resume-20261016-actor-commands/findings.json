@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "Code-predefined ActorCommandData type/component/behavior fields; not saved command loading, execution, aliases, or full UI loader",
+  "api": "aa_rules::native::actor_command::predefined_actor_command(&str) -> native::Result<ActorCommandDefinition>",
+  "struct_fields": [
+    "id",
+    "mind_type",
+    "component_slot",
+    "behavior_flags"
+  ],
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "addresses": {
+    "crt_initializer": "0x9cd7e0",
+    "enum_constructor": "0x4da9d0",
+    "enum_registration": "0x4da2f0",
+    "enum_global": "0xb3cba0",
+    "manager_constructor": "0x47f7c0",
+    "registry_global": "0xb3aa58",
+    "manager_offset": "GameData+0x274",
+    "definition_registration": "0x475870",
+    "definition_constructor": "0x4740f0",
+    "register": "0x4b4e60",
+    "saved_lookup": "0x463fa0",
+    "saved_reader": "0x4dab60",
+    "tgi_flag_fragment": [
+      "0x48cf0a",
+      "0x48cf97"
+    ]
+  },
+  "counts": {
+    "builtins": 39,
+    "registered_records": 117,
+    "native_lookups": 30,
+    "authored_flag_loads": 117,
+    "input_files": 9,
+    "authored_v14_ids": 39,
+    "tests_passed": 4,
+    "tests_failed": 0,
+    "tests_ignored": 0
+  },
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "source_sha256": {
+    "crates/aa-rules/src/native_actor_command.rs": "a5568daa4c0224ff53ab269fcc20b3051f4fec9fc683acd1ba53bd6bf067f1ca",
+    "crates/aa-rules/tests/native_actor_command.rs": "5fec0649d85ce8b7512942221712d03b0ed00adb313f0f26b00d06f75e0ee3c3"
+  },
+  "evidence_sha256": {
+    "native_actor_commands.py": "52378b0967677e1efa5554ad8bf0e818bbc61ab39eb49fc50149c0bcd706c258",
+    "native-actor-commands.json": "d2914aa90f02ce1501150fdb732854dfdcd315213abd21bf7731b4c7b807bba7",
+    "source-census.json": "bbe21daff57b3a8aa3ee0c0072973fa7fa1eef2367527aebda86ac711b4d346d",
+    "tests.log": "c117a98cf7386c88c4d96759f6943bd5ddd35c6c48a7f266dd3721df555c49d8"
+  },
+  "original_data_inputs": [
+    {
+      "path": "Templates/template_actor_command.tgi",
+      "sha256": "512f0948b21a4ceccc960094c7edac7520fbf703d696cd0b8df87308d52b9c0e"
+    },
+    {
+      "path": "Game/actor_commands.tgi",
+      "sha256": "c92e3105715dd1e4055eb58f2765246d19e09acd78d2b6cc4ea68969bb5783a1"
+    },
+    {
+      "path": "Game/actor_commands_aa.tgi",
+      "sha256": "b5efce66ab45c02a88703f0932f44f68467702775317cf2fc140239c5489b4a0"
+    },
+    {
+      "path": "Game/ActorCommands/air_recon.tgi",
+      "sha256": "3e0627ecba6d2233974c29d5de70af3352de61eaaca396a80c80ecf15f6338f4"
+    },
+    {
+      "path": "Game/ActorCommands/air_attack.tgi",
+      "sha256": "1caf68293971724799eedc309c8f2388242f6bb687dd5084e6458aa3186bb94a"
+    },
+    {
+      "path": "Game/ActorCommands/bombard.tgi",
+      "sha256": "721d59d48bf05fc3d4c6b99bebb18ee5133f591ba31e6f67ef83adbe28067d5d"
+    },
+    {
+      "path": "Game/ActorCommands/construct.tgi",
+      "sha256": "116fec24948db9e34994dc0a7d8682e4f83a9e44b2dc6d4fcd37f7ca1952516c"
+    },
+    {
+      "path": "Game/ActorCommands/pack.tgi",
+      "sha256": "1d9929f31a454c96988873f92b56fca71a1cab9a6569d085c23511ceb408a459"
+    },
+    {
+      "path": "Game/ActorCommands/unpack.tgi",
+      "sha256": "51d6a2b23baf2d19979e877b49b2f5fc64f146db637bee2e449c5d266e79a534"
+    }
+  ],
+  "identity_policy": "Built-in ASCII case-insensitive names, no trimming or second alias translation; unknown and empty return explicit error",
+  "limits_changed": [],
+  "seams": [
+    "Existing allocation/CString/mutex/line-source harness; guarded null page and C++ throw observation. No command definition values supplied by seams.",
+    "CRT atexit96CAB0 records destructor9ED2F0 without executing shutdown.",
+    "TGI evidence is the exact UI flag fragment, excluding localization/resource/cursor/VFX loading and cleanup."
+  ],
+  "remaining": [
+    "Saved command decoding/interning and runtime binding",
+    "Command subtype execution",
+    "Source Translate resolution owned by caller",
+    "Full ActorCommand UI loader"
+  ]
+}

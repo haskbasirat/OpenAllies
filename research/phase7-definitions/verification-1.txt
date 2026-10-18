@@ -1,0 +1,194 @@
+
+running 3 tests
+test resources::tests::exact_schema_keeps_orders_costs_and_absent_defaults ... ok
+test resources::tests::bad_provider_graph_and_duplicate_rows_fail ... ok
+test resources::tests::expressions_and_unknown_category_do_not_become_guessed_values ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test forged_source_digest_is_not_used_for_provenance ... ok
+test absent_optional_component_is_not_created ... ok
+test expressions_stay_raw_and_list_or_duplicate_resolution_is_explicit ... ok
+test derived_fields_win_and_provenance_points_to_authored_value ... ok
+test missing_base_cycle_and_duplicate_ids_do_not_abort_catalog ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test actual_corpus_preserves_bytes_and_reports_unsupported_syntax ... ignored, requires locally installed original Data.rwd and accepted v14 runtime
+test actual_v14_ordered_resource_catalog ... ignored, requires locally installed original Data.rwd and accepted v14 runtime
+test corrupted_or_missing_overlay_cannot_fall_back_to_stock ... ignored, requires locally installed original Data.rwd and accepted v14 runtime
+test exact_v14_rules_and_stock_fallback ... ignored, requires locally installed original Data.rwd and accepted v14 runtime
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test native_ability_geometry_thresholds_and_validation ... ok
+test original_target_tokenizer_prefixes_wrapping_and_ability_defaults ... ok
+test native_ability_power_recharge_and_resource_cost_stores ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_construction_costs_have_source_proven_empty_predecessor_graph ... ignored, requires original/v14 files via AA_GAME_ROOT
+test construction_upgrade_census_includes_unresolved_templates_and_rejects_omissions ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test original_base_flag_loop_and_component_mask_boundaries_match ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test typed_inheritance_retains_value_and_declaration_provenance_without_coercion ... ok
+test unresolved_required_values_and_performer_lists_remain_explicit ... ok
+test runtime_class_does_not_substitute_for_definition_factory_kind ... ok
+test all_original_category_descriptor_constructors_match_builtin_table ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_rus_corps_detection_uses_proven_empty_inventory_guard_range ... ignored, requires original/v14 files via AA_GAME_ROOT
+test native_denizen_guard_defaults_validation_and_inventory_empty_branch_match ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_dynamic_doodad_sources_preserve_separate_component_slots ... ignored, requires original/v14 files via AA_GAME_ROOT
+test original_doodad_component_stores_mask_and_last_slot_selection ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test original_actor_economy_values_preserve_actual_resource_order_and_pairing_inputs ... ignored, requires original Data.rwd and accepted v14 sources via AA_GAME_ROOT
+test implicit_identifier_strings_keep_origin_and_reject_other_value_types ... ok
+test native_economy_loader_dense_fields_and_recruitability_registration ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+test original_ground_definitions_bind_real_component_inputs ... ignored, requires original Data.rwd and accepted runtime-expanded-v14 via AA_GAME_ROOT
+test original_organization_parameter_binding_validates_real_element_properties ... ok
+test native_layout_expansion_and_detection_finalizers ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_ground_creation_inputs_are_bound_and_turrets_stay_gated ... ignored, requires original/v14 files via AA_GAME_ROOT
+test initial_property_references_keep_native_prepend_order ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test original_nation_badge_count_and_order_are_not_technology_indices ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test soft_null_selects_kind_but_target_null_copies_soft_words ... ok
+test native_plain_string_null_conversion_preserves_source_provenance ... ok
+test original_shape_setters_match_all_precision_cases ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_initial_property_corpus_and_camera_inputs_are_complete_within_scope ... ignored, requires original/v14 files via AA_GAME_ROOT
+test original_property_target_words_and_resistance_stores_are_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test root_registry_lookup_preserves_inheritance_and_rejects_duplicate_ids ... ok
+test integers_and_points_match_original_field_assignment ... ok
+test descendant_child_replacement_matches_native_ancestry_guard ... ok
+test creation_aspect_order_and_stored_weight_total_match_native ... ok
+test inherited_list_order_matches_executed_native_copy ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test original_tgi_assignment_preserves_double_then_float_and_percentage_stores ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test original_commander_badges_and_indispensable_are_source_bound ... ignored, requires original/v14 files via AA_GAME_ROOT
+test unsupported_property_modifiers_are_not_silently_discarded ... ok
+test native_registered_effect_and_property_flag_domains_are_exact ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+test native_eof_closes_plain_nested_bodies_without_synthetic_bytes ... ok
+test native_physical_header_boundary_preserves_source ... ok
+test native_mode_does_not_guess_quotes_delayed_braces_or_extra_closures ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test original_corpus_and_authored_actor_values ... ignored, requires the hash-pinned local original Data.rwd and accepted v14 loose files
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test legacy_bytes_are_not_lossily_decoded ... ok
+test quotes_comments_expressions_and_original_bytes ... ok
+test duplicate_identifiers_and_unevaluated_expression_are_retained ... ok
+test native_key_scanner_keeps_brackets_inside_property_identifiers ... ok
+test malformed_and_limited_sources_fail_closed ... ok
+test unbraced_children_keep_order_and_case ... ok
+test overlay_ledger_is_fixed ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling aa-rules v0.1.0 (E:\Games\Axis and Alies\rust-rebuild\crates\aa-rules)
+    Finished `test` profile [optimized + debuginfo] target(s) in 18.81s
+     Running unittests src\lib.rs (target\debug\deps\aa_rules-b968b1d22a57458d.exe)
+     Running tests\actors.rs (target\debug\deps\actors-a4b8db97723ceb88.exe)
+     Running tests\local_v14.rs (target\debug\deps\local_v14-3930155a35eb090d.exe)
+     Running tests\native_ability_load.rs (target\debug\deps\native_ability_load-931c20f495d4d0ed.exe)
+     Running tests\native_construction.rs (target\debug\deps\native_construction-d93b9bd1fcd4a535.exe)
+     Running tests\native_definition_flags.rs (target\debug\deps\native_definition_flags-0a01774e3ee8d9eb.exe)
+     Running tests\native_definitions.rs (target\debug\deps\native_definitions-6ea8bd4d8143d1b8.exe)
+     Running tests\native_denizen.rs (target\debug\deps\native_denizen-c8c9aa1475d18364.exe)
+     Running tests\native_doodads.rs (target\debug\deps\native_doodads-c1e7930f83e24a50.exe)
+     Running tests\native_economy_values.rs (target\debug\deps\native_economy_values-7b468a8cf8bc7e70.exe)
+     Running tests\native_ground.rs (target\debug\deps\native_ground-ee3107748a6c7dde.exe)
+     Running tests\native_init_inputs.rs (target\debug\deps\native_init_inputs-0271f1de648f6943.exe)
+     Running tests\native_nations.rs (target\debug\deps\native_nations-31dfb2a0bfafbbd8.exe)
+     Running tests\native_objects.rs (target\debug\deps\native_objects-2d3c7cafc98cdbb4.exe)
+     Running tests\native_property_inputs.rs (target\debug\deps\native_property_inputs-14d27aded8744cfa.exe)
+     Running tests\native_resolved.rs (target\debug\deps\native_resolved-86b8e18cdaf16996.exe)
+     Running tests\native_scalars.rs (target\debug\deps\native_scalars-8d751626e1625435.exe)
+     Running tests\native_source_extras.rs (target\debug\deps\native_source_extras-0b0d91ea2bc8afbc.exe)
+     Running tests\native_syntax.rs (target\debug\deps\native_syntax-93106cbe1ed51317.exe)
+     Running tests\phase3_local.rs (target\debug\deps\phase3_local-1b6c841009c7a190.exe)
+     Running tests\syntax.rs (target\debug\deps\syntax-34f19440d9bcc26c.exe)
+   Doc-tests aa_rules

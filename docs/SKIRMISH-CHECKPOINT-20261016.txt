@@ -1,0 +1,125 @@
+SKIRMISH / MULTIPLAYER SOURCE CHECKPOINT -- 2026-10-16
+
+USER PRIORITY
+Skirmish battles first, multiplayer second, campaign last. Campaign-specific
+feature work is deferred. Shared data compatibility checks still cover the
+metagame crate to avoid regressions; that is not campaign development.
+Read docs/NATIVE-PORT-RULES.md and docs/SKIRMISH-MILESTONES-20261016.txt.
+There is no new reliable game-completion percentage or promised finish date.
+Planning estimate remains weeks of sustained work for a faithful playable
+skirmish, then further multiplayer integration/testing. The first real world
+tick and complete battle are not achieved at this checkpoint.
+
+RELEASE STATUS
+Development08 remains unchanged. These source changes are NOT in that EXE.
+No new release was requested after08. Original and v14 AA.exe are unchanged.
+No original profiles, saves, game data or external services were modified.
+
+COMPLETED THIS PASS
+- Dedicated original Firefight StopOnError regression: 2,386 registered objects,
+  all29 saved Actor owners, six authored major slots plus independent Kingdom,
+  no record failures, no class conversions/skips, exact PostLoad RNG3627657861.
+  Source resource_ammo/oil aliases correctly resolve ammo_bunker/oil_refinery.
+  It remains a template with starting-unit placeholders, not a running battle.
+- Native world-start tracking/snapshots58F010/58F530/58F420 and owned4F1E10
+  orchestration now bind actual ActorStore and KingdomEconomyLoad storage.
+  load_tail_world::World accepts explicit WorldStartFacts and calls that adapter.
+  Caller must supply actual +154 Kingdom order, +274 start state and source
+  formulas. Fresh-object publication, Settlement/Wall owners and full mission
+  startup are not supplied by this adapter. Staged::init_for_loaded_map remains
+  explicitly unavailable; do not mark runtime_publication_ready=true.
+- Fixed integration errors found by tests:45F240 appends snapshot chronology;
+  Kingdom+218 is owned RecruitItemTable.singles.len(), not a scalar shadow.
+  StatisticsSnapshotEntry keeps one chronological list of Loaded/Live entries;
+  new snapshots have growable resource/derived arrays. Saved wire layout remains.
+- Saved Mind+B4 action contribution now uses actual owned core/states/commands,
+  Performer/Properties data and source-correct MobileDeployment and Recruit
+  adapters. Error paths return the same owned Mind, not a cloned substitute.
+- Effective FogOfWar uses the separate RULES chunk and definition defaults,
+  not MAP_HEADER or the bare SVar default. RULES is retained with its hash.
+  Native mode must be explicit when required: Catalog.native_load_mode and
+  Attempt::load_with_native_mode. Legacy callers retain None and fail when
+  mode-dependent behavior is reached. The value survives Attempt -> Staged.
+  CString lookups correctly stop at the first NUL before decoding/lookup.
+- Native Recruit582C40 and MobileDeployment575FB0/575BB0/575C00 are source-bound.
+  Eligibility5827B0 and actual recruitment/packing execution remain unbound.
+- Saved Regiment Mind versions0..21 decode; only versions0/1 apply through
+  the contextless owner API. Versions2+ require real world time, formation/
+  ActorData refs and collection owners. Saved::base() supports both subclasses.
+- Native4FDA70 map preparation coordinator preserves placeholder/random
+  traversal and callback order. It still requires Nation substitution, actual
+  weighted selection, replacement batch capture/drain and ActorStore creation.
+- Multiplayer SnapshotOwner rebuilds constructor-owned companion fields after
+  decoding even equal-count/reordered Kingdom entries, preserves other private
+  fields and invalidates the owner on partial failure. Native wire formats are
+  unchanged. Dispatcher/client/world integration and real internet play remain.
+
+VALIDATION
+All-workspace/all-target compilation passed on frozen production; client retains
+13 existing dead-code warnings (8 in its test target). Full workspace tests were
+not run. Full aa-rules real-data/include-ignored:124passed; aa-metagame:39passed,
+including read-only data export comparisons. Logs:
+  qa-output/resume-20261016/skirmish-frozen-workspace-check.log
+  qa-output/resume-20261016/skirmish-rules-compatibility.log
+  qa-output/resume-20261016/skirmish-metagame-compatibility.log
+Additional scoped acceptance (counts overlap, do not add into game completion):
+  Firefight1 and load-tail7 tests, including explicit connected world-start gate;
+  world-start runtime6 tests:240native tracking,132valid-owned snapshot,
+    360coordinator rows, actual source formulas and partial failures;
+  aa-economy23 tests and strict scoped Clippy;
+  saved action runtime7, attachment/layout6, existing Mind-mask2 (219oracle rows);
+  12source-observed original/v14 Element Mind executions;
+  Recruit5 tests with951native source/contributor executions;
+  MobileDeployment10 tests with552action and49pairing native cases;
+  Regiment2 new tests plus5existing saved-Mind regressions,266native cases;
+  map preparation1test replaying96native cases;
+  multiplayer10selected tests incl two UDP loopback modes,24native snapshots
+    and2constructor probes, strict scoped Clippy; independent review passed.
+Native replay proofs and exact limits live under:
+  research/skirmish-20261016-{world-start,recruit-actions,mobile-actions,
+    regiment-load,map-prepare}/
+  research/resume-20261016-saved-mind-actions/
+  research/phase8-net-integration/findings-snapshot.json
+  research/review-20261016-snapshot-companions/
+World-start and saved-Mind independent reviews are in their respective folders;
+Recruit independent review is independent-review-actor-name-lists.json.
+
+FINAL COMBINED MAP CENSUS
+qa-output/resume-20261016/skirmish-mode1-inventory.json and its log passed.
+Explicit diagnostic native load mode1 / PC53 / InspectPartial; the earlier
+baseline had no explicit native mode, so this is not same-session acceptance.
+Qualified comparison: skirmish-mode1-qualified-comparison.json in that folder.
+20/80 maps still complete record+PostLoad; failed-record total remains796.
+All old Mind/Recruit/MobileDeployment stop categories have advanced to:
+  647 Organization578A30 ActorData class-reference group bindings;
+  109 Research583FC0 action contributors;
+  40 Structure589A60 action contributors.
+Unchanged:7,879 queued class conversions;3,912 missing-definition drops;
+399 native LoadException drops. Later diagnostic failures can be cascades.
+Do not call these20 maps battle-ready or infer a rewrite percentage.
+
+NEXT IMPLEMENTATION
+1. Bind578A30 from actual layout group+D locked flags and ordered ActorData
+   +1EC ActorClass refs/+54 flags; existing has_attack_class coordinator exists.
+   Then bind actual4E1430/4E1E40 owner recruitment predicates if reached.
+2. Port/bind Research583FC0 and Structure589A60 contributors; preserve native
+   stores/callback order. Other action contributors/Economy refresh/SAI and
+   presentation remain explicit at their exact boundaries.
+3. Complete actual skirmish session load-task and StartMission4FDCE0:
+   chosen nations, original placeholders, original starting actors, resources,
+   creation/publication, actual major Kingdom lists and world-start state.
+4. Connect verified world/admin ticks, order execution, movement/combat/RTS AI,
+   victory and actual HUD to the client. Only then enable a skirmish button.
+5. Connect the same deterministic world to multiplayer; use loopback tests
+   before real LAN/two-PC/separate-connection acceptance. No second-PC or
+   internet gameplay was tested here. Campaign remains deferred.
+
+BACKUPS / KNOWN LIMITS
+Root baseline backups: backups/before-skirmish-root-20261016-162434/.
+Agents also backed up assigned files; saved-Mind frozen-source.zip and source
+pins are in its evidence folder. Existing Development08/source backups remain.
+Do not assume Git recovery (this workspace is not a Git repository).
+World-start unsupported metadata/component preflight does not claim native
+fault-side-effect ordering; relation identities are scoped to this startup.
+Saved-Mind malformed descriptor access ordering is unclaimed. Allocation
+failures, full runtime publication, full saves and real multiplayer remain open.

@@ -1,0 +1,68 @@
+{
+ "schema": 1,
+ "status": "bounded-class/source accepted; current Manager integration test is saved, not yet executed",
+ "problem": "Farm Audio source reached actual Sound Entry/Task publication then required59CB00 before streaming41/list append.",
+ "implementation": "One Application-retained fresh no-profile source/PC scope is installed only after real source validation. Same Manager lazily owns one typed AudioClass after existing Sound publication. Valid source class creation precedes streaming41; absent policy or source refusal retains Entry/Task and does not mark anything loaded. No raw class ordinal constructor.",
+ "native": {
+  "paired_class_rows": 18,
+  "class_calls": 72,
+  "descriptor_table_runs": 6,
+  "executed_instruction_pins": 736,
+  "precision": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "images": [
+   "original",
+   "v14"
+  ],
+  "transport": "ASCII-to-counted CString, CRT name formatting, current Int lookup and atexit/heap/Win32 support are explicit. Empty valid TypeManager assigns relative ordinal0; not observed full startup registry. Positive variable lookup is called twice by native; fresh immutable source scope excludes intervening current mutations. Cache-hit second59CB00 performs zero variable lookups. Actual Sound bytes remain unchanged."
+ },
+ "rust": {
+  "exact_current_module_tests_passed": 2,
+  "actual_source": "ResourceCacheAudioRAMWeight unique Int10 in UVars.tgi; RAM10/VRAM10; same completed Bank moved from Catalog; empty Bank and unbound/incomplete source contexts refuse.",
+  "dependency_qualification": "Exact current Audio source/class module and original tests are imported directly. Frozen existing runtime rlib supplies Catalog/source-CV support only; this is not a rebuild of the whole current ResourceManager.",
+  "production_check": "cargo check -p aa-runtime --lib release/locked/offline own target PASS19.90s before the later shared dispatch initializer appeared; that initializer now loans the same cache_variables.",
+  "current_cfg_test_check": "All Audio/Manager tests typechecked; full run blocked by foreign data_actor_request_tests.rs29 E0507 move out ofArc. No Cargo link or manager runtime-test success claim.",
+  "pending_manager_filter": "actual_sound_class_is_lazy_after_entry_and_reuses_same_manager_allocation --include-ignored"
+ },
+ "deviation": "User policy removes fixed RAM/VRAM eviction budgets. Growable manager retains typed class, current weights and resource lifetimes. The native zero-budget laboratory fixture is not a native startup-budget observation; no full eviction/accounting parity claim.",
+ "limits": [
+  "No Sound decoding, task completion, audio playback, mission activation, VWorld readiness or playable-battle certificate.",
+  "Profile/console/reloaded variable writers need a genuine current owner; they cannot enter the admitted fresh source policy.",
+  "Zero/negative RAM weights and native throw/OOM prefixes are explicitly outside the proved positive constructor domain."
+ ],
+ "owned_source_sha256": {
+  "crates\\aa-runtime\\src\\resource_audio_class.rs": "bf690308aa28c6cbfbad9460beaf1bbe47678b82b378895975b6047c9b9eff4e",
+  "crates\\aa-runtime\\src\\resource_audio_class_core.rs": "636daccd9fd204e534514d59c2cee6cd12e7ef809966a8e565a1457f88c17ae8",
+  "crates\\aa-runtime\\src\\resource_audio_class_tests.rs": "b344a7d9e0d4f24abfed48dd5f5d9e94b490226f8bf3c9e3cce0a7b8566506bb",
+  "crates\\aa-runtime\\src\\resource_audio_manager_tests.rs": "d1965477a82bfea9d63e8323848fefc7408ad98ba44a81815aa076de1ae92a0c"
+ },
+ "shared_whole_file_snapshot_only_sha256": {
+  "crates\\aa-runtime\\src\\resource_depot.rs": "65e78a398697bd0adbc4ad0e51248d9058525eacd81ad10d15a5fccfab4a42ae",
+  "crates\\aa-runtime\\src\\world_ready_services.rs": "e35486b4f6383a2f0d0deb668e3490c170551392a092adb694975b2435b4b8b5",
+  "crates\\aa-runtime\\src\\lib.rs": "383080643b10deb60bf3231e3067de009eedf0b4f4897911c484a96919f9e8fd"
+ },
+ "evidence_sha256": {
+  "research\\development10\\resource-audio-class\\native_audio_class.py": "05db58b22f9e3d067e659eb23a7cc19d34c6b48601eec6332732ea1827b5e905",
+  "research\\development10\\resource-audio-class\\native-audio-class.json": "b4171b1849dc298778e72ce2ae363b4dee5c5c42e314231c65462dae6b2019ab",
+  "research\\development10\\resource-audio-class\\native-generation-01.log": "c2d6c1827ffb35231c2f341d4c7a2c448b61b657619414643fd946a006278bf8",
+  "research\\development10\\resource-audio-class\\native-replay-01.log": "c2d6c1827ffb35231c2f341d4c7a2c448b61b657619414643fd946a006278bf8",
+  "research\\development10\\resource-audio-class\\audit_audio.py": "a90f635c9310017100c1f4a993a21980e3f24b99592390e4e8da065c3a6de36d",
+  "research\\development10\\resource-audio-class\\pin-audit.json": "500b65928342835ba3daf669727ee319b5348b7e2dbfce98911dc6b2026b468f",
+  "research\\development10\\resource-audio-class\\pin-audit.log": "900ae314713cff8ab0ed91527e34a8a2ba89d7506b00361d0aae206e916e1719",
+  "research\\development10\\resource-audio-class\\exact-source-tests.rs": "9136f22073ae0be54a5b11eeb3da5311e95765b6e4a56fd5a77a00c40410b47a",
+  "research\\development10\\resource-audio-class\\exact-source-tests.exe": "9076ce0cde2ace2d920793a58a820d20e34ead27a90b92ed8653d03b15241a17",
+  "research\\development10\\resource-audio-class\\exact-source-build-03.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "research\\development10\\resource-audio-class\\exact-source-tests-01.log": "b191dcdbfa06871aece84646168438bd6edd63b66ab52dc13addd6a42b268dfa",
+  "research\\development10\\resource-audio-class\\check-01.log": "9f1317b577670ad9819c7100c5fa4eb35b77389e42dc276064bb94fa4e5ac19d",
+  "research\\development10\\resource-audio-class\\typecheck-tests-02.log": "337f210357dbb4f57ed5c65e2c133831919e895b4515910e605f6316dd10b07f"
+ },
+ "compiled_support_sha256": {
+  "target\\native-runtime\\release\\deps\\libaa_runtime-4004dde273efdec2.rlib": "e5e8673488695c41001c00a56810119907604cc6c4bcfcf4e0d80433b4df67f0",
+  "target\\native-runtime\\release\\deps\\libaa_rules-01028b5152c9e32e.rlib": "764929171482d5c9940728216d3ed0125a8430416f60e53cff20b2b7a78e1241",
+  "target\\native-runtime\\release\\deps\\libaa_numeric-55927aa222c0a1ba.rlib": "52a836ceb9e217d1053e3080b47d452bd97944f6215f7d36766ba4013ab8f13e",
+  "target\\native-runtime\\release\\deps\\libserde_json-3f0b3bb60c709793.rlib": "82a2aba517966426964e4330a2be2a9eee81b64f0714567f972427649186f30a"
+ }
+}

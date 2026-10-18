@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "status": "frozen: native parity and focused tests passed; no runtime/gameplay completeness claim",
+  "api": "aa_combat::organization_combat_value::{World,recompute}",
+  "native_addresses": [
+    "5788B0",
+    "57DC40"
+  ],
+  "cases": 306,
+  "images": [
+    "original",
+    "v14"
+  ],
+  "precisions": [
+    "Single24",
+    "Double53",
+    "Extended64"
+  ],
+  "ranges": {
+    "organization": {
+      "start": "0x5788B0",
+      "end": "0x578931",
+      "sha256": "ab8b7ece2df6418425c11304cc7afa92db159815af9ece572bc2c22f24635a1e"
+    },
+    "performer": {
+      "start": "0x57DC40",
+      "end": "0x57DC5E",
+      "sha256": "124dcb1ad8bd1e7eaae7a7d3b4503aa73559b6cefeee974b3cd74ca3225f87bf"
+    },
+    "one": {
+      "start": "0x9F32E0",
+      "end": "0x9F32E4",
+      "sha256": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+    }
+  },
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+  "test_results": {
+    "native_borrowed_combat_value": "1 passed /306 native rows",
+    "native_org_tick": "1 passed; unchanged test and fixture",
+    "strict_clippy": "passed -D warnings, no allowances"
+  },
+  "independent_replay": "../skirmish-20261016-saved-org-combat/independent-pure-replay.json",
+  "read_store_proofs": [
+    "initial count before resets",
+    "per-iteration count reread",
+    "member-array pointer recapture before current store",
+    "fresh second member and Performer; no repeated Body read",
+    "lazy bit5-gated source1E4",
+    "every f32 store and partial-error prefix"
+  ],
+  "limits": [
+    "finite aa_numeric supported arithmetic, nonzero Body divisor",
+    "legacy broad wrapper callback contract retained; borrowed runtime must use new API",
+    "natural saved/runtime integration handled separately",
+    "synthetic dependency cutpoints not native virtual calls",
+    "12 second-dereference rows prove guarded native null faults; Rust returns Invalid"
+  ],
+  "files": {
+    "crates/aa-combat/src/organization_combat_value.rs": "dce6235fd61c2203974408f528cebc931374e1c2f46de009e44c8438fa51f14a",
+    "crates/aa-combat/src/organization.rs": "d925d3ce062a427623f7d29563968bb0a6ae8366dcba25ec438e5cedb008c6c5",
+    "crates/aa-combat/src/lib.rs": "f86d59c06f585940ce2b493c34b505d402514f8f14a3405f4f77889b338355c0",
+    "crates/aa-combat/tests/native_borrowed_combat_value.rs": "968b1c2f9fbd8c0f1d284896e87b591c2bc35914895de6f3835848f853c4d4c0",
+    "crates/aa-combat/tests/native_org_tick.rs": "24168a6168ab17175cec8a402331860c678cce6434699dc9a3d80cf428688540",
+    "research/phase8-combat/native-org-tick-fixtures.json": "0bdd98b5486be704a6266a6169374123d047db6b60c7696385e6b8eda36bac5e",
+    "research/skirmish-20261016-borrowed-combat-value/backups/lib.rs": "1c23faa551d444ef177aa78c9d6683a72b1b5ad5124a62b336530b284d19d1c6",
+    "research/skirmish-20261016-borrowed-combat-value/backups/organization.rs": "23de86645d06db477cedde96012caa5b895793ccf5e8e76463583d971ad966b1",
+    "research/skirmish-20261016-borrowed-combat-value/clippy.log": "4fca946368d907e044ebe4c66c43d1338ff1c4f8ddc4fbb46bb085b2b3c1319c",
+    "research/skirmish-20261016-borrowed-combat-value/native-borrowed-combat-value.json": "7afe2570f62aad0dc0d7770734f2a0ae90b964315f214a845f95ef24393915bd",
+    "research/skirmish-20261016-borrowed-combat-value/native-generation-first-failure.log": "4a37a68bc1c36c075e10da7bda73fc48c210bd6a80ff038aaa1e874b41895f79",
+    "research/skirmish-20261016-borrowed-combat-value/native-generation.log": "5a81e872e65e682e6c7fae9134d8b0e28f9dd13aa7a72183688b00c382d73323",
+    "research/skirmish-20261016-borrowed-combat-value/native-instructions.txt": "0a55112fd074285381b2ccebdee6e60309ed3bbd80111450b7de8eb03730ba81",
+    "research/skirmish-20261016-borrowed-combat-value/native_borrowed_combat_value.py": "0ac6caef77f753e6f56fba1dbb5d41c10b45627795d3421a0a70904f57dba0fb",
+    "research/skirmish-20261016-borrowed-combat-value/README.txt": "2834ad82e46bd0040615db84cad262086b1a0f51b4f9c7bb08b167234a873b44",
+    "research/skirmish-20261016-borrowed-combat-value/tests-final.log": "a9e90d676183f0f6cac55e0e8d408208ed6e3ca1ccfab7aa18d71e9adca0dc24",
+    "research/skirmish-20261016-borrowed-combat-value/tests.log": "005304cd031bd0a33b43b060538f61e2b28f01f142fd827159e1b6c4e9b61cd4"
+  }
+}

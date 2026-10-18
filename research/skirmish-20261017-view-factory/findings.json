@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "accepted_author_scope": true,
+  "independent_review": "pending; do not infer accepted review",
+  "source_freeze_scope": "owned source and narrow VWorldOwner successor; Directory is SDK author scope and may advance independently",
+  "native": {
+    "rows": 195,
+    "separate_executions": 390,
+    "instruction_byte_pins": 554,
+    "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+    "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+    "precisions": [
+      "Single24",
+      "Double53",
+      "Extended64"
+    ],
+    "immutable_replay": "passed",
+    "named_seams": [
+      "59ABA0 profiler timer result",
+      "404F60 diagnostic transport",
+      "successful malloc/free transport",
+      "actual switch-selected derived constructor bodies",
+      "virtual C8 Init and C4 destructor bodies"
+    ],
+    "qualification": "Actual factory switch/source getters/list stores/publication execute; positive model, derived Init, destructor failure, allocator failure/unwind, GPU and battle are not established."
+  },
+  "rust": {
+    "exact_production_source_replay": {
+      "passed": 1,
+      "failed": 0,
+      "fixture_rows": 195,
+      "executable": "exact-order-tests.exe"
+    },
+    "runtime_production_check": "passed 23.95s",
+    "client_production_check": "passed 2m16s",
+    "natural_full_world_or_view_execution": false
+  },
+  "implementation": [
+    "One retained per-VWorld State with error prefix and retry refusal",
+    "Same mutable ViewBindingParts actors/spatial/FX plus actual Kingdom slots and occupied-GTID registry iteration",
+    "50CAB0 first; Kingdom slots before registry; per-child count reread; positive Thing+C skip",
+    "Second source getter in real Directory factory; allocation prefix retained before constructor children",
+    "Actual private Directory Init receipt/update-list insertion before positive Thing+C publication",
+    "Builder integrating same locked UI callback through nonowning revision witness; this checkpoint does not claim that later path ran"
+  ],
+  "explicit_boundaries": [
+    "SDK actual derived constructor and Init457A40/451F90 services",
+    "Actual C4 destruction before null publication",
+    "Muted command428350 destruction",
+    "Active FX GTID remap/update/render after initial append",
+    "No VWorld AD, application/battle readiness, GPU acceptance or completion percentage claimed"
+  ],
+  "pins": [
+    {
+      "path": "crates/aa-runtime/src/view_factory_order.rs",
+      "sha256": "fde7d1280cdada9cc515b40b71ab7df8b80c412980fbe2276280097b8f55c17d",
+      "bytes": 5744
+    },
+    {
+      "path": "crates/aa-runtime/src/view_factory_order_tests.rs",
+      "sha256": "6960f371690e2122375fb0a56066f3bf12b71c40b79aa58314ff427b48588e62",
+      "bytes": 5811
+    },
+    {
+      "path": "crates/aa-runtime/src/view_factory.rs",
+      "sha256": "96a66a6af298a6eb1b618f1470dd246754624175687e44cc42309cfcbbdbb34c",
+      "bytes": 4323
+    },
+    {
+      "path": "crates/aa-client/src/view_world_owner.rs",
+      "sha256": "39cf0aac2cb3cce6e0e6475d8a491c11703cad3c3ec714bbfcb09adaf9f7705e",
+      "bytes": 10115
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/native_view_factory.py",
+      "sha256": "2f16c683f2c44d1e0939c8546f4fa192cc5df79b4643b1a5687233dfdecf8fa4",
+      "bytes": 8559
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/native-view-factory.json",
+      "sha256": "7b85c77eea8b79993030eb0cad22fb10214bb12dd5dfc2ceef9cee3cac1676dd",
+      "bytes": 413127
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/native-immutable-replay.log",
+      "sha256": "80e084c2ab18d2dd27d4fba6b7a50ebe3bd509874fdbcc62bd793633a7f11f4e",
+      "bytes": 119
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/exact-order-tests.exe",
+      "sha256": "69cfe3314c18f58b2536fc6e0d6b95d480cb7611fb59f376f1e7505c37689b00",
+      "bytes": 1475072
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/exact-order-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/exact-order-tests.log",
+      "sha256": "fe10333039e63d90b5430269f8489d5fa07e5614fb6a8c277c3edd5d2bbab5e7",
+      "bytes": 220
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/production-check-01.log",
+      "sha256": "47cd62c96a8b8f1fe6d924e04a6c22530d94ffbb120ef33dacf6b9b23bb8d57c",
+      "bytes": 24328
+    },
+    {
+      "path": "research/skirmish-20261017-view-factory/client-check-01.log",
+      "sha256": "9327da9c34b09df2d4b7b76651aa834f340e0edc3056da48069d24f0601cd40a",
+      "bytes": 99126
+    }
+  ]
+}

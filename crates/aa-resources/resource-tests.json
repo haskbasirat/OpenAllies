@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "tests_run": 8,
+  "test_execution": "cargo test -p aa-resources:8passed,0failed; examplescompiled",
+  "current_machine_query": "memory_report example linked to built aa-resources/serde_json via rustc; queryonly/no asset allocation",
+  "source_sha256": {
+    "crates/aa-resources/Cargo.toml": "f17c37976d503972c7388a13affc9c9f0aec60640b6d115d61f93ea8b344d543",
+    "crates/aa-resources/src/lib.rs": "1dc7fda310d663649a6fceeb28f178ea532c1932a20dfeb57ea1b16690b7c216",
+    "crates/aa-resources/tests/budget.rs": "a8695df18d62160e4b842650e62d346ddc20f3867c1510cec0812051ebf96f14",
+    "crates/aa-resources/examples/memory_report.rs": "bd1776480b49d72f45d993715601866d176821276a2987e4110cc7fd0fc23a74",
+    "crates/aa-resources/README.md": "f63710435ffc3f65adffe763adbf76b0865e00494352379a02ab4f7f559d8e3e",
+    "crates/aa-resources/current-machine-memory.json": "07095fa65a22f96cc9eae1384907740c4f22d6fc309f0d916eb46dc40e1d97bd"
+  },
+  "limits": [
+    "Volatile nonatomictwoAPIobservation, noreservation orlaterallocationguarantee",
+    "Policy fractions are configurable, notWindowsrequirements",
+    "No actualVRAMbudgetquery orGPUresidency guarantee",
+    "Caller must include simultaneousdecoded/mip/geometry/stagingadditionalbytes"
+  ],
+  "clippy": {
+    "passed": true,
+    "command": "cargo clippy -p aa-assets -p aa-resources --all-targets -- -D warnings"
+  },
+  "latest_verification": "cargo test -p aa-assets -p aa-resources -- --include-ignored:15passed,0failed",
+  "non_behavioral_revision": "Clippy-only cleanup: Windows structure sizes assigned in Default-based initializers; identical API inputs."
+}

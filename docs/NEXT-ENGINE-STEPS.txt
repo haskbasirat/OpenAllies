@@ -1,0 +1,96 @@
+CURRENT CONTINUATION ENTRY POINT — ../HANDOFF.txt (Development07, 2026-10-13)
+Read the handoff before this historical roadmap. Several phase7 component
+factories/services now exist, so do not reimplement items from this older list
+without inspecting current source. Rerun the actual source restoration report
+to find the first remaining blocker; test success alone does not mean a fully
+restored/published world. The07 client still provides isolated previews only.
+
+HISTORICAL ROADMAP — CONTINUATION AFTER DEVELOPMENT 06
+
+Target: preserve accepted v14 gameplay while replacing the runtime in Rust.
+No full playable-match milestone has passed. Reuse the verified components and
+their required service contracts; do not connect them through guessed defaults.
+Final checkpoint validation and static-water review are recorded separately.
+
+1. Complete live world construction and actor publication.
+   Use the source-bound map/header/terrain/height/identity inventory and typed
+   definition evaluation already implemented. Finish ActorInitCreate, derived
+   component factories/getters, spatial insertion and registry publication in
+   the original order. Native category kind, runtime class, definition identity
+   and saved GTID are distinct values. Do not substitute placement indexes or
+   display names. Complete runtime Kingdom/Team objects and ownership updates;
+   the new wire readers and owner inventory do not perform those live effects.
+   Preserve source spans and unsupported chunks until their readers are proven.
+
+2. Bind authoritative commands and world scheduling to those live objects.
+   Existing selected/actor command payloads and process guards need registry,
+   authorization, selection and complete right-click behavior. Wire periodic
+   and deferred queues to the actual world/admin clocks and actor callbacks.
+   Preserve source tick order, RNG draws, cancellation/cursor effects and native
+   timing rules. Keep numeric precision explicit until the real simulation FPU
+   lifecycle is established. Callbacks can fail after effects; neither ignore
+   errors nor automatically replay a partially committed operation.
+
+3. Complete actual-map routing and movement integration.
+   Endpoint, tile search/cost, region search/prepass, materialization, ResultPlan,
+   prepared-waypoint execution and ground movement are available components.
+   Implement native region topology construction, world-to-region lookup and
+   remaining cached-route behavior from source. Bind dynamic collision shapes,
+   tile membership, ownership, terrain definitions and height services to the
+   live world. A serialized region reference is not published runtime topology.
+   Validate commands through route creation, ownership, movement and spatial
+   notifications on original maps, including blocked, partial and failed routes.
+   Existing whole-Solve cases cover static masks without live actor objects.
+
+4. Complete combat execution and lifecycle effects.
+   Use the native weapon-hit, Body damage, periodic properties, dying, kill-credit
+   and bounded experience components. Implement attack selection, range/cadence,
+   projectiles, weapon/action definition registration and complete modifier/ability
+   services. Bind linked/wall actor graphs, allegiance, capture/death queues and
+   promotion effects to actual actors. Required callbacks must produce original
+   effects in original order, not just acknowledge success. Compare multi-unit
+   combat state and RNG/event streams against the native game before declaring
+   a playable combat milestone.
+
+5. Finish production, organizations and remaining match systems.
+   The queue now handles requests, admission, payment, timing, completion and
+   cancellation/refunds. Supply/capacity/pricing and unit/research fulfillment
+   remain required world services. Connect the scheduler, economy, owners,
+   organization membership and factories without bypassing those checks.
+   Research admission/pricing and complete supply, formations, morale, fog/line
+   of sight, AI, objectives and victory behavior still need implementation.
+
+6. Reach one reproducible end-to-end skirmish, then broaden coverage.
+   Build a running match from original definitions/maps through selection,
+   movement, attacks, building/recruitment, death and victory. Record native and
+   Rust state/event traces for the same input stream. Add the original UI/audio,
+   campaign/tutorial scripts and strategic mode with their own acceptance cases.
+   A preview that renders every model is not this milestone.
+
+7. Restore complete saves/replays and synchronized multiplayer.
+   Current archive and bounded component readers are prerequisites, not complete
+   saved-match restoration. Implement all runtime fixups, remaining component
+   payloads, complete save writing and deterministic replay before claiming save
+   compatibility. Then bind the command protocol and transfer library to real
+   lobby/session synchronization and reconnection. Login, hosting, joining,
+   save transfer and match tests across separate internet connections remain
+   required; no such Rust multiplayer acceptance has passed.
+
+Visual continuation
+The road/object planar heading fix, invisible-marker filtering, terrain mask
+blending and bounded native transparency queue are retained. Complete pitch/roll,
+road projection, animated material controllers/skin bounds, native illumination,
+gamma/cache behavior, borders, detail stages and shadows remain fidelity work.
+Static water source/footprint work has independent review and GPU captures;
+animation, scroll/wind, dynamic shoreline regeneration and complete lighting are
+separate future work. Keep failed and intermediate captures labeled as such.
+
+Release and performance acceptance
+Finish docs/VALIDATION-06.txt with actual final test totals, executable diagnostics,
+visual checks and package checks; do not infer a pass from component reports.
+The Rust executable still requires the original recovered assets. Keep each
+deliverable inside its own release folder and preserve the original game, saves
+and prior releases. Measure loading, frame pacing and resource use on comparable
+scenes before claiming gains. A 64-bit process and dynamic storage remove some
+old implementation ceilings; they do not remove physical hardware limits or
+justify changing simulation behavior for speed.

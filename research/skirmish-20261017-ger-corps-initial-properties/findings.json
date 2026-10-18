@@ -1,0 +1,80 @@
+{
+  "created_utc": "2026-10-17T13:28:31.497144+00:00",
+  "scope": "Actual ger_corps initial11 source and existing runtime binding audit before natural PostCreate",
+  "result": "No new positive-child implementation required for this exact source list; natural execution remains pending",
+  "evidence": [
+    {
+      "path": "research/skirmish-20261017-ger-corps-initial-properties/source_probe.rs",
+      "sha256": "212753837225d7191c056a7ca5ab23aedc3730fcd7aa4b4d8503e75b0cf350ad",
+      "bytes": 3122
+    },
+    {
+      "path": "research/skirmish-20261017-ger-corps-initial-properties/source-probe-v2.exe",
+      "sha256": "45a300656581c205b521412730a95449726b67a7ec00db3fb989b04928fd668e",
+      "bytes": 3264000
+    },
+    {
+      "path": "research/skirmish-20261017-ger-corps-initial-properties/actual-source.json",
+      "sha256": "8413f23ffa827b97b803af8d4b1e4ce17332baf914e9e5442caa203d60c6a7e7",
+      "bytes": 10786
+    },
+    {
+      "path": "research/skirmish-20261017-ger-corps-initial-properties/source-summary.json",
+      "sha256": "a2fbd0a5db9fd8ec866ad32f8f3109f74cf142a304ac9558ae643d07712dcab1",
+      "bytes": 3212
+    }
+  ],
+  "source_probe": "PASS5.38s; actual V14 sources, validated completed source Bank moved once from Catalog, actual native_actor_properties and registered State definitions; no Actor/World or instance insertion",
+  "initial_order": [
+    "air_support",
+    "armorhqproduction",
+    "mechhqproduction",
+    "mg",
+    "money",
+    "economic_building",
+    "nation_ger",
+    "corpshq",
+    "nation_ger",
+    "mobile_building",
+    "building"
+  ],
+  "findings": [
+    "Same registered Bank Property tokens retained; duplicate nation_ger remains in source order",
+    "First10 entries have no numeric/flag/table modifiers; all11 have no WhenAdded/WhenRemoved FX and zero performer CV bias",
+    "building alone has supported Resistance armor_piercing amount0x3e4ccccd and Immunity ench_type_radiation table modifiers",
+    "Current mask7974753 omits Organization, Settlement, Mover and Character, so their absent-component branches skip natively",
+    "Initial5817A0 grants intentionally bypass4CEF10 admission; the first3 required corpshq values are not a reason to reject these initial grants",
+    "Duplicate nation_ger appends an actual disabled instance through503680; it is not deduplicated away",
+    "Same-owner Performer refresh remains the common enabled-instance tail; no second current State/Bank is made"
+  ],
+  "audited_current_sources": [
+    {
+      "path": "crates/aa-runtime/src/fresh_post_create_world.rs",
+      "sha256": "6c09230311785a9f7d18d88a73471093d025ab6520d7e37cef2562787b85d934",
+      "bytes": 9743
+    },
+    {
+      "path": "crates/aa-runtime/src/staged_property_instances.rs",
+      "sha256": "90341a896df84e6036424eecb145cc23c069965950d7f5d9e2473a1ecb556c35",
+      "bytes": 11081
+    },
+    {
+      "path": "crates/aa-runtime/src/staged_property_admission.rs",
+      "sha256": "af787aac7cf4e48c4e8c6d303399421ee975fc094f04e326d695fa18b3d639e7",
+      "bytes": 11032
+    },
+    {
+      "path": "crates/aa-runtime/src/stored_performer_refresh.rs",
+      "sha256": "e6202f25b501251046b007d1cd5e5dcb3238f7e6e6e6e7f66b1c9cdb06677250",
+      "bytes": 13791
+    }
+  ],
+  "limits": [
+    "No production changes made for this audit",
+    "No retained original mutable replacement Params property count exists in actual39; unknown is not asserted empty",
+    "Constructed17CREATE_VFX is a separate conditional prefix before PostCreate",
+    "Positive ground deformation, City, Organization, Settlement, numeric modifiers and nonempty Property FX outside this exact source domain retain their own required children",
+    "Actual40 stopped earlier at DetectionAfter Zone6; natural initial11 has not executed",
+    "Direct probe is pinned by source/executable/output; the build dependency directory later evolved, so no retrospective frozen whole-rlib claim"
+  ]
+}

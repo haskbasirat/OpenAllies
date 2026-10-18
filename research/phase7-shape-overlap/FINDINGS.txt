@@ -1,0 +1,45 @@
+Original gameplay footprint overlap
+
+crates/aa-spatial/src/shape_overlap.rs provides
+overlaps(&geometry::Placement,&geometry::Placement,Precision)->Result<bool>.
+This is the native 46EF30 gameplay calculation required by spatial queries; it
+does not derive shapes from model geometry or apply visual scale.
+
+46EF30 first selects the greater shape kind, then larger radius for equal kinds.
+It retains the native float32 relative-position/local-frame stores and compares
+facing numerically, so signed-zero facing values use the equal-facing branch.
+Point/circle and box/circle leaves retain their original strict/inclusive edge
+rules. Circle comparisons add epsilon to squared distance. Equal-facing boxes
+use 46D9C0's four comparisons and original 0x38D1B717 epsilon.
+
+Different-facing boxes use 46E7D0->46DD10 mode0 followed by 46E810. The constructor
+doubles authored maxX/maxY rather than replacing bounds with a radius, centering
+asymmetric bounds, or normalizing facing. It produces three consecutive corners.
+The fourth corner, relative edges, selected corner, and eight signed projections
+follow the original operation order, including asymmetric float32 stores while
+other values remain in explicit x87 precision. The rotated test does not receive
+the equal-facing epsilon. Degenerate and nonunit finite facing are not silently
+repaired into new gameplay shapes.
+
+native_overlap.py executes unchanged original x86 with no arithmetic, geometry,
+comparison, branch or constructor hooks. It pins all executed instruction ranges
+and confirms their bytes match the preserved v14 exe. The fixture contains:
+- 13,200 full-dispatch comparisons across all four native shape kinds;
+- 174 exact three-corner constructor outputs, including asymmetric bounds and
+  coordinate/dimension scales from 2^-50 through 2^50;
+- 420 direct rotated-projection predicates;
+- 220 shared-input witnesses whose native result differs among PC24/53/64.
+Contact probes vary positions by adjacent binary32 values. Ordinary, rotated,
+opposite, signed-zero and degenerate facing cases are included. The tests compare
+all native bit patterns/predicates, not an independently guessed geometric rule.
+
+Scope: round-to-nearest finite arithmetic with explicit precision. Point equality
+uses the PE zero-initialized vector at B279C0/B279C4; its full global initialization
+lifecycle is not replayed. Only constructor mode0 reached by 46EF30 is exposed.
+Other constructor modes, unsupported shape kinds and nonfinite/out-of-domain
+arithmetic are not guessed; portable APIs return errors. This module is not a
+complete movement solver or proof of live-world FPU lifecycle/collision ownership.
+
+Four focused Rust tests cover original dispatch, exact footprints, direct SAT and
+invalid numeric/shape inputs. Final test and Clippy logs are stored alongside this
+report. Producer evidence is separate from the requested independent review gate.

@@ -1,0 +1,73 @@
+{
+ "schema": 1,
+ "status": "accepted bounded AD completion guard/store; no whole Init success proof",
+ "native": {
+  "paired_rows": 54,
+  "reviewer_executions": 108,
+  "executed_pins": 1,
+  "store_bytes": "c686ad00000001",
+  "fixture_sha256": "d768f70282788f231e6894f523aaeb3d26ca82c16776afcbf87880e9bc00bcb6",
+  "producer_sha256": "9c2f9e9d9f5c938de317d6cdf7424604ed5e591371a9af0e5e1122db018ec133"
+ },
+ "rust": {
+  "exact_source_isolated_tests": 4,
+  "passed": 4,
+  "scope": "Original prefix/store tests plus reviewer private-prefix guard/foreign-World/AC-callback test. Does not construct fake full World/asset/GPU positives or execute the aggregate all-positive path."
+ },
+ "static_guard_matrix": [
+  [
+   "aggregate phase",
+   "TailCpuComplete only after captured camera/diagnostic/aux/helper/trigger collection+request all return Ok"
+  ],
+  [
+   "World/source",
+   "same World Witness and prefix; real assets.require_initialized checks completed phase, same World and current Catalog/Bank source identities"
+  ],
+  [
+   "scene/backend",
+   "require_renderer repeats CPU completion/same World and retained renderer validation against current semantic State"
+  ],
+  [
+   "terrain/height",
+   "actual retained height required; TerrainBinding.validate(world,height) rechecks concrete World/height/backend correlation"
+  ],
+  [
+   "tail children",
+   "actual auxiliary12C/helper10C presence and trigger list complete&&!stopped"
+  ],
+  [
+   "final store",
+   "crate-only prefix method repeats prefix/World checks; single AD=1, then aggregate Complete"
+  ],
+  [
+   "AC/resource",
+   "completion never writes AC; separate resource_callback_5b355d checks same World and clears only AC"
+  ]
+ ],
+ "qualifications": [
+  "The native oracle executes one AD store and stops at43FF3D; no earlier43F0A0 child or later task/UI success is inferred.",
+  "The Rust harness imports original prefix/store source and its original tests directly; only unrelated world_revision cfg(test) block is omitted in a labeled production-body copy.",
+  "Aggregate phase/asset/renderer/terrain/tail guards and actual caller ordering were reviewed statically, not claimed independently executed as a complete view.",
+  "AC remains unchanged by completion; later resource task callback/barrier and Loading/74FF50 protocol are separately required.",
+  "Current client still has an explicit required43F1D4 asset boundary before its private full-scene helper; this report does not bypass it.",
+  "No production edit or full/cold Cargo link was performed."
+ ],
+ "guard_body_sha256": "2356e2262af531569258d6a826d1ad1f60e4542a8a6d395cf906a154eaa6c317",
+ "source_snapshots": {
+  "crates\\aa-runtime\\src\\view_init_world.rs": "9330139cc3f1bd28574b835f0c0e4c8054cfd5017e3945901b6df165d192534f",
+  "crates\\aa-runtime\\src\\view_init_prefix.rs": "91e37c6c266630d0bb6b5c79a60c6ff1d6e7978aba11eb4de71cc4fc1e2aa2fa",
+  "crates\\aa-runtime\\src\\view_assets.rs": "94a732a55424c793021ba85a300362d45e1648360388a277f16f0294f4f8cc09",
+  "crates\\aa-runtime\\src\\view_scene_init.rs": "23c89d4a6dac2a765cae09dd17af20c65c2acaa295d57b95bfde13602071cf87",
+  "crates\\aa-runtime\\src\\view_trigger_vfx.rs": "1090e2fa4bf7904ebbb6e95a3037ba203f8b58ea7a1a2b4d8f09bab5b9b994d2",
+  "crates\\aa-client\\src\\battle_view_startup.rs": "7836a5037d7eb3d836d8e4e432e98c5476089f07b4db9a1e4db70eeb10a78569"
+ },
+ "evidence": {
+  "prepare_rust.py": "f4d969b200f6b6c258597ffa36c024f9e6be8e868f87220ba749fd58cf6d9d80",
+  "rust-harness-pins.json": "87133542aa0dc334598a492cea965615e48d78539f5b49d30c744b3597c20776",
+  "rust-store-review.exe": "4679579e63fb761fef5a41c5c37ad0b99057c9a08586f08d7ec48bdc4bedf8ef",
+  "rust-build.log": "3bf227e92918c92a7ca1825c74f267a7af12b37b405caa5aabdf4f27f124a830",
+  "rust-tests.log": "25381f3d0603e2d12f5acabd523f92483d232a3c97946ee27d6b8eced042edf8",
+  "native-replay.log": "74082fa977bad648aee7c92331a5801e35c4ecd2025dc7709f75299965edb83a",
+  "seal_review.py": "730e01a828add0615fc9d262301157a946e557660aeccf549e91067c94faf227"
+ }
+}

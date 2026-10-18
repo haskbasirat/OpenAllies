@@ -1,0 +1,188 @@
+FAITHFUL RUST REWRITE — ECONOMY AND LOAD LIFECYCLE, 2026-10-16
+
+Read docs/NATIVE-PORT-RULES.md first. This source checkpoint supersedes
+docs/SKIRMISH-CONTINUED-20261016.txt for the areas below. Historical records
+remain preserved. Priority: skirmish, multiplayer, campaign. Do not revive
+the rejected aa-game/aa-net interim simulation. No overall game percentage
+is established by source coverage, fixture counts or map codec success.
+
+USER-VISIBLE STATUS
+Development-08 is unchanged. This continuation adds verified backend source,
+not a playable battle or a new Windows EXE. Complete skirmish startup, active
+simulation, network integration and original save writing remain incomplete.
+Do not enable the battle UI based on the record-loading results below.
+
+CRITICAL LIFECYCLE CORRECTION
+Native LoadThing4FAE80 calls each record's virtual+D8 Load, then (when Thing
+flag7 is clear) virtual+E8 Init(NULL), checks its low AL, calls virtual+EC
+PostCreate(0,1), and registers it through4F9510 before the next record.
+Later virtual+DC PostLoad is a separate operation. The current Rust record
+diagnostic still omits this immediate Init/PostCreate sequence. Its successful
+record sections and later PostLoad do NOT certify native world loading.
+
+This explains the empty canonical Kingdom flow arrays. Firefight's7 and
+tutorial02's3 real Kingdoms all have flag7 clear, stockpiles of length7, but
+constructor-only flow arrays1A0/1AC/1B8 of length0 (capacity hint8). Original
+Kingdom4E5DF0 first requires Actor4D7230 success, then logging/legacy work,
+then zeroes the flows in native order before later lifecycle operations.
+Never call reset_flow_vectors as a production workaround or infer native
+initialization from a map version, resource count, or present Kingdom.
+Evidence: research/skirmish-20261016-saved-flows/lifecycle-proof/ and
+research/skirmish-20261016-saved-flows/natural-two-map-final.json.
+
+CONNECTED SOURCE
+1. Native recruitment backreferences (+17C) now have a completed canonical
+   producer, not a proxy using the different transport_actor+184 field.
+   It preserves deferred callback order, translations and native duplicates.
+   All1028 source actors,327 nonempty lists and906 callbacks were captured
+   across both executable images and all3 precision modes. Independent review
+   accepted270 synthetic plus6 actual-source native graphs.
+   API: ActorCatalog::native_recruit_backrefs(pc); Catalog caches by precision.
+   Evidence: research/skirmish-20261016-recruit-backrefs/.
+
+2. Economy value getters borrow the actual saved components, including a
+   focused Economy and ancestor Economies temporarily executing outside their
+   registry slots. They preserve logical component presence and cache writes;
+   no copied state or dummy absent slot replaces the component. Properties,
+   Supply, Transport, Organization member/layout and lazy+17C reads are bound
+   only on reached paths. The Cost branch's+17C lookup is lazy, after the native
+   recruitment predicate. An absent Economy's source vectors/flags are proven
+   by the native ActorData constructor, not guessed defaults.
+   Evidence: research/skirmish-20261016-saved-economy-values/ (518 source/native
+   value comparisons over46 saved actors,32 canonical definitions).
+
+3. Saved570020 refresh takes and always returns the same owned Economy Box on
+   every Result path. Parent recursion reborrows actual ancestor components.
+   Upkeep/provider changes mutate the real Kingdom SpecialShell arrays through
+   aa-economy::borrowed_flows; earlier stores survive later errors. Empty
+   constructor arrays fail at the first reached read/write. Stockpiles are not
+   replaced. Native partial-store, finite arithmetic and lazy cap behavior are
+   replayed across original/v14 and PC24/53/64.
+   Resource manager B3A660 is GameData+10: B3A660+28 and GameData+38 are the SAME
+   count word. Source metadata uses the proven registry, never vector length.
+   Provider maximum comes from the exact typed source settings and is read
+   lazily after the raw provider store. Unknown WorldRule overrides remain
+   errors. No new memory, bandwidth, disk or VRAM cap was introduced.
+   Evidence: research/skirmish-20261016-{borrowed-flows,saved-flows,
+   saved-economy-integration}/. The initialized fixture and two natural HQ
+   callbacks have native570020 replays. The nested parent-error test is an
+   explicitly injected ownership test, not a natural recursive-gameplay claim.
+
+4. A non-Clone owned fresh managed-load scope now proves the SAI observer is
+   present but inactive. It owns synchronization storage and constructor-empty
+   containers, validates real UVars source, and retains the explicit constructor
+   clock/private seed. The private SAI RNG is NOT the world's saved RNG.
+   Standalone diagnostics remain Unknown. Existing-world teardown, activation,
+   actual worker execution and mission start are not supplied by this scope.
+   LoadBindings moves the capability and immutable Resource source Arc through
+   Attempt->Staged. Mismatched/invalidated tokens fail before record loading.
+   Catalog caches reject changed source owners, and observer calls reject
+   changed modes. Tests retain owner identity and Firefight PostLoad RNG.
+   Evidence: research/skirmish-20261016-restore-lifecycle/ and the independent
+   root-bindings-review.json under saved-flows/lifecycle-proof/.
+
+5. Live resource getters no longer retranslate resolved canonical Actor or
+   OrganizationLayout identities. Shadowed Actors are explicitly refused
+   until registered-identity field resolution is available; native layout
+   slots read canonical rows and current live parameters. Regression cases
+   cover chained/shadow translations at all3 precision modes plus real data.
+
+ADDITIONAL VERIFIED COORDINATORS, STILL REQUIRING WORLD SERVICES
+* aa-mapworld::team_init implements saved Team4E68C0/base4EFA40(NULL) ordering.
+  Team virtual+C4E3E90 consumes no arguments;46EE00 uses the existing stacked
+  Thing+20/tile-size arguments. Native placement, snap, spatial membership,
+  height and diagnostic delivery remain mandatory services. Firefight's actual
+  Teams stop at absent4EF6A0 placement.240 native cases plus144 independent
+  cases and source-bound tests do not prove successful real-world Team Init.
+  Evidence: research/skirmish-20261016-team-init/.
+* aa-economy::kingdom_init implements whole4E5DF0 ordering with required
+  callbacks: Actor Init first, native flow-store order, live Team/list/count
+  changes, UNIT19 then TRUCK42 recruitment iteration, SAI/world and major
+  Kingdom relation operations.99 paired fixture rows/198 native executions
+  and independent review accepted the coordinator. No runtime binding yet.
+  Evidence: research/skirmish-20261016-kingdom-init/.
+* map_replacement_queue captures native object/actor conversion queues using
+  the existing creation records and actual properties/owner/transform source.
+  It preserves queue order and native conditional saved-ID retention.30 native
+  cases cover the supported capture. The full4FBA50 destruction/create/drain
+  and publication are still unavailable.
+  Evidence: research/skirmish-20261016-map-replacement-queue/.
+
+VALIDATION INDEX
+Combined acceptance and exact source hashes:
+  qa-output/economy-lifecycle-20261016/acceptance.json
+Reproducible scoped commands:
+  research/economy-lifecycle-20261016/validate.ps1
+  research/economy-lifecycle-20261016/summarize.py
+  qa-output/economy-lifecycle-20261016/run-inventory-contexts.ps1
+Do not overwrite existing logs. New run names/QA folders are required.
+The rule/metagame checks use AA_GAME_ROOT and include ignored real-data tests.
+Metagame export is disabled; existing generated data is compared, not rewritten.
+Workspace/all-target compilation is included; existing client warnings remain.
+No whole-workspace cargo test or globally clean Clippy is claimed.
+Final scoped acceptance:71 selected source tests,127 aa-rules real-data and
+native tests,39 aa-metagame read/compare tests,4 diagnostic-context tests and
+3 separate80-map census tests passed. Both superseded failures and the outer
+census source-guard rejection remain retained and qualified below.
+Acceptance SHA256:cc8bb43d571682f6e51d5368313c92d9d8fea14a7ebd44ec8e82e7f39c18b4e7.
+
+The diagnostic census has3 explicitly different contexts: standalone,
+Resource metadata only, and fresh managed observer+Resources. All use native
+mode1, InspectPartial and PC53. Managed elapsed0 is an explicit constructor
+clock fixture, not observed application time. Each map/reload owns a fresh
+stopped scope; this is not old-world teardown. Compare inputs before comparing
+failure totals. No context executes immediate per-record Init/PostCreate.
+All3 contexts retain20/80 maps without record/PostLoad failures. Standalone
+and Resource-only each report796 unknown-SAI failures; managed context gets
+past that boundary and reports796 failures at5788B0 Organization combat value
+over the restore shells. Conversion7879 and native drops399/3912 are unchanged.
+The direct570020 tests' empty-flow stop is a later dependency; the full managed
+record diagnostic currently stops before reaching it. None is battle-ready.
+
+Census source guard qualification: test-only additions to saved_economy_refresh
+changed its whole-file hash during the run. Exact starting/final snapshots,
+the test-only diff and an independently verified identical production prefix
+are retained in inventory-source-drift-audit.json. The outer script rejects
+whole-file immutability; individual census test results are separate. Do not
+hide the rejection or present the entire source file as unchanged.
+
+One initial managed test compile failed because unwrap_err required Debug on
+the successful owner type. The test now inspects err().unwrap(); passing final
+logs supersede it, and the failed log is preserved. Scoped author/reviewer
+harness corrections are preserved in each area's evidence.
+The first combined integration run also preserved7 passing tests before an
+older Element-attachment assertion expected the former unbound Economy entry.
+The diagnostic now explicitly supplies its required load context and verifies
+the next actual boundary; remaining binaries and the corrected test have
+separate acceptance logs. No production callback was bypassed to pass it.
+
+NEXT REQUIRED WORK
+1. Bind real Team placement/snap/spatial/height services and port Actor4D7230
+   with NULL saved-load parameters. Existing init_existing assumes nonnull
+   creation params and is not a drop-in replacement: NULL retains Actor+138,
+   changes placement/FX conditions, and must use real component owners.
+   Read the pinned next-actor-init-null plan in saved-flows/lifecycle-proof/.
+2. Bind the reviewed Kingdom Init coordinator to canonical storage, actual
+   Team membership, recruitment definitions, major slots and required services.
+3. Insert immediate Init/PostCreate/registration in the actual per-record
+   driver; preserve false/drop and flag7 alternate behavior. Re-run map
+   diagnostics with the complete lifecycle, not a flow-reset shortcut.
+   In parallel, bind5788B0 Organization combat values to the actual saved
+   Body/Performer/definition/layout owners; existing native scalar helpers
+   do not justify a zero combat value or detached successful snapshot.
+   Performer word60 is constructor-zero and its saved Load does not supply
+   the missing initialization. Read next-organization-combat-value.json in
+   lifecycle-proof/ before wiring that diagnostic boundary.
+4. Finish startup statistics/managers, class-conversion queue drain, visibility,
+   scheduling and active native battle publication. Existing world_start and
+   skirmish_start helpers are not a complete startup driver.
+5. Connect real commands/ticks/combat/AI into skirmish, then native networking.
+   Separate-PC/separate-internet multiplayer remains unavailable and untested.
+   Campaign remains last. Real save writing compatibility is still unproven.
+
+PRESERVATION
+Original/v14 executables, assets, profiles, saves and Development08 are not
+modified. Final backup/checkpoint report paths and archive SHA are recorded
+in qa-output/economy-lifecycle-20261016/checkpoint-*.json. The source archive
+includes this continuation's evidence but depends on original assets and older
+oracle fixtures retained in the workspace; it is not a redistributable game.

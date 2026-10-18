@@ -1,0 +1,17 @@
+..\reconstruction\research\native-aa\pseudocode\0042d130.c:98:        (*(char *)(DAT_00b36534 + 0x275) == '\0')) && (7 < *(int *)(DAT_00b36534 + 0xdc))) {
+..\reconstruction\research\native-aa\pseudocode\004361b0.c:19:  if ((*(char *)(param_1 + 0x84) != '\0') && (*(char *)(DAT_00b36534 + 0x275) == '\0')) {
+..\reconstruction\research\native-aa\pseudocode\004f1080.c:22:    *(char *)(param_1 + 0x275) = param_2;
+..\reconstruction\research\native-aa\pseudocode\004f27e0.c:188:  *(undefined1 *)(param_1 + 0x275) = 0;
+..\reconstruction\research\native-aa\pseudocode\004f7d00.c:150:  *(undefined1 *)((int)param_1 + 0x275) = 0;
+..\reconstruction\research\native-aa\pseudocode\004fc600.c:259:    *(undefined1 *)((int)param_1 + 0x275) = 0;
+..\reconstruction\research\native-aa\pseudocode\006fe670.c:15:      ((uVar1 = DAT_00b36534, *(char *)(DAT_00b36534 + 0x275) == '\0' &&
+..\reconstruction\research\native-aa\pseudocode\006fe9c0.c:12:  if ((cVar1 == '\0') && ((DAT_00b36534 == 0 || (*(char *)(DAT_00b36534 + 0x275) == '\0')))) {
+..\reconstruction\research\native-aa\pseudocode\006ff220.c:24:        ((*(char *)(DAT_00b36534 + 0x275) == '\0' && (*(int *)(DAT_00b36550 + 0xe4) != 3)))))) {
+..\reconstruction\research\native-aa\pseudocode\0070edf0.c:57:    *(undefined1 *)(unaff_ESI + 0x275) = 1;
+..\reconstruction\research\native-aa\pseudocode\0070ef50.c:96:  *(undefined1 *)((int)param_1 + 0x275) = 0;
+..\reconstruction\research\native-aa\pseudocode\0073a560.c:9:  if ((((*(char *)(param_1 + 0x191) != '\0') && (*(char *)(DAT_00b36510 + 0x275) == '\0')) &&
+..\reconstruction\research\native-aa\pseudocode\0076ad10.c:12:  if ((cVar1 != '\0') && ((DAT_00b36534 == 0 || (*(char *)(DAT_00b36534 + 0x275) == '\0')))) {
+..\reconstruction\research\native-aa\pseudocode\0076b2f0.c:13:      (DAT_00b3979c == 0xe)) && ((DAT_00b36534 == 0 || (*(char *)(DAT_00b36534 + 0x275) == '\0'))))
+..\reconstruction\research\native-aa\pseudocode\0076b3a0.c:9:  if (((DAT_00b36534 == 0) || (*(char *)(DAT_00b36534 + 0x275) == '\0')) &&
+..\reconstruction\research\native-aa\pseudocode\0076f530.c:15:  if ((((DAT_00b36534 == 0) || (*(char *)(DAT_00b36534 + 0x275) == '\0')) && (iVar2 != 0)) &&
+..\reconstruction\research\native-aa\pseudocode\007a0080.c:32:     ((0 < *(int *)(DAT_00b36534 + 0xdc) && (*(char *)(DAT_00b36534 + 0x275) == '\0')))) {
