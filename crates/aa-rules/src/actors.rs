@@ -89,6 +89,8 @@ pub(crate) struct ResolutionCache {
     pub(crate) definitions: std::sync::Mutex<BTreeMap<String, std::sync::Arc<Result<Vec<Vec<Vec<usize>>>, String>>>>,
     /// Node address -> resolver path, for this instance only (never cloned).
     pub(crate) addresses: std::sync::OnceLock<std::collections::HashMap<usize, Vec<usize>>>,
+    /// Successful per-definition query results (see `query_memo`).
+    pub(crate) memo: crate::query_memo::QueryMemo,
 }
 impl Clone for ResolutionCache {
     fn clone(&self) -> Self {
@@ -100,6 +102,7 @@ impl Clone for ResolutionCache {
             thing_ids: std::sync::Mutex::new(thing_ids),
             definitions: std::sync::Mutex::new(definitions),
             addresses: std::sync::OnceLock::new(),
+            memo: self.memo.clone(),
         }
     }
 }
@@ -798,6 +801,59 @@ impl ActorCatalog {
             opaque_sources_without_field_names: opaque,
         })
     }
+    /// Every resolver root whose source is exactly `source`, ascending: the
+    /// matches of a linear scan over the roots, in scan order. The resolver
+    /// is private and immutable after loading, so this index never changes.
+    pub(crate) fn roots_with_source(&self, source: &Provenance) -> &[usize] {
+        self.resolution_cache
+            .memo
+            .roots_by_source
+            .get_or_init(|| {
+                let mut out: std::collections::HashMap<Provenance, Vec<usize>> =
+                    std::collections::HashMap::new();
+                for (index, node) in self.resolver.roots.iter().enumerate() {
+                    out.entry(node.source.clone()).or_default().push(index);
+                }
+                out
+            })
+            .get(source)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+    /// A shared copy of `sources`, equal to it at the time of this call (an
+    /// unchanged list returns the same allocation again, so callers holding
+    /// copies of one catalog's sources can recognise each other's copies).
+    pub fn sources_snapshot(&self) -> std::sync::Arc<Vec<SourceIdentity>> {
+        let memo = &self.resolution_cache.memo.sources_snapshot;
+        let mut slot = match memo.lock() {
+            Ok(slot) => slot,
+            Err(_) => return std::sync::Arc::new(self.sources.clone()),
+        };
+        if let Some(snapshot) = slot.as_ref()
+            && **snapshot == self.sources
+        {
+            return std::sync::Arc::clone(snapshot);
+        }
+        let snapshot = std::sync::Arc::new(self.sources.clone());
+        *slot = Some(std::sync::Arc::clone(&snapshot));
+        snapshot
+    }
+    /// First root with exactly this source (`roots.iter().position(..)`).
+    pub(crate) fn root_with_source(&self, source: &Provenance) -> Option<usize> {
+        self.roots_with_source(source).first().copied()
+    }
+    /// The selection and category check every per-definition query performs
+    /// first (same errors), then the root of the selected entry's source.
+    pub(crate) fn selected_root(&self, id: ThingRef<'_>) -> crate::native::Result<Option<usize>> {
+        use crate::native::Error;
+        let actor = self
+            .select(id)
+            .ok_or_else(|| Error::Unsupported(format!("missing actor {id}")))?;
+        if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
+            return Err(Error::Unsupported(reason.clone()));
+        }
+        Ok(self.root_with_source(&actor.source))
+    }
     /// Resolve one typed native field through the proved ancestry/child merge
     /// subset. Unknown source/load-order ambiguity remains an explicit error.
     pub fn native_field<'a>(
@@ -814,12 +870,17 @@ impl ActorCatalog {
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));
         }
-        let node = self
-            .resolver
-            .roots
-            .iter()
-            .find(|n| n.source == actor.source)
+        let root = self
+            .root_with_source(&actor.source)
             .ok_or_else(|| Error::Unsupported("actor source node unavailable".into()))?;
+        let key = (root, precision.significand_bits());
+        let memo = &self.resolution_cache.memo.fields;
+        if let Some(hit) = crate::query_memo::lock(memo)
+            .and_then(|m| m.get(&key).and_then(|m| m.get(path)).cloned())
+        {
+            return Ok(hit);
+        }
+        let node = &self.resolver.roots[root];
         let parts: Vec<_> = path.split('.').collect();
         let (name, children) = parts
             .split_last()
@@ -828,11 +889,15 @@ impl ActorCatalog {
             .resolver
             .path_layers(node, children)
             .map_err(Error::Unsupported)?;
-        ResolvedNode {
+        let result = ResolvedNode {
             catalog: self,
             layers,
         }
-        .field(name, precision)
+        .field(name, precision);
+        if let (Ok(value), Some(mut memo)) = (&result, crate::query_memo::lock(memo)) {
+            memo.entry(key).or_default().insert(path.to_owned(), value.clone());
+        }
+        result
     }
 
     /// Presence of an ordinary resolved child; optional declarations alone do
@@ -850,18 +915,28 @@ impl ActorCatalog {
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));
         }
-        let node = self
-            .resolver
-            .roots
-            .iter()
-            .find(|n| n.source == actor.source)
+        let root = self
+            .root_with_source(&actor.source)
             .ok_or_else(|| Error::Unsupported("actor source unavailable".into()))?;
-        Ok(self
+        let key = (root, crate::query_memo::path_key(path));
+        let memo = &self.resolution_cache.memo.node_sources;
+        if let Some(hit) = crate::query_memo::lock(memo).and_then(|m| m.get(&key).cloned()) {
+            return Ok(hit);
+        }
+        let node = &self.resolver.roots[root];
+        let sources: Vec<Provenance> = self
             .resolver
             .path_layers(node, path)
             .map_err(Error::Unsupported)?
             .iter()
             .map(|n| n.source.clone())
-            .collect())
+            .collect();
+        if let Some(mut memo) = crate::query_memo::lock(memo) {
+            memo.insert(key, sources.clone());
+        }
+        Ok(sources)
     }
 }
+#[cfg(test)]
+#[path = "query_memo_tests.rs"]
+mod query_memo_tests;

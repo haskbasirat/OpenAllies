@@ -7,7 +7,7 @@ fn unprepared_foreign_destroyed_actor_source_never_mints_empty_lists(){
     assert!(state.actor_ability_count(&data,false).is_err());
     assert!(state.actor_ability_count(&data,true).is_err());
     assert!(state.actor_extra_ability_2a4(&data).is_err());
-    assert!(state.actor_settlement_534(&data).is_err());
+    assert!(state.actor_deployment_534(&data).is_err());
     let foreign=State::from_native_constructor();assert!(foreign.actor_ability_count(&data,false).is_err());
     drop(state);assert!(foreign.actor_extra_ability_2a4(&data).is_err());
 }

@@ -331,7 +331,8 @@ fn run_source_fixture(moved:bool) {
             assert_eq!(orders::resolve_thing_reference(&catalog,&store,bank,ThingCheck::B4,id.slot()).unwrap(),Some(id.slot()));
             let absent=(0..=u16::MAX).find(|slot|!store.identities().iter().any(|entry|entry.id.slot()==*slot)).unwrap();
             assert_eq!(orders::resolve_thing_reference(&catalog,&store,bank,ThingCheck::B4,absent).unwrap(),None);
-            assert!(orders::resolve_thing_reference(&catalog,&store,bank,ThingCheck::B0,id.slot()).is_err());
+            //Actual Actor vtable+B0 is 6A71D0 (`mov al,1; ret`): ordinary Things pass.
+            assert_eq!(orders::resolve_thing_reference(&catalog,&store,bank,ThingCheck::B0,id.slot()).unwrap(),Some(id.slot()));
             assert!(catalog.definition_bank.borrow().combat_source().is_err());
             Ok(())
         }).unwrap();

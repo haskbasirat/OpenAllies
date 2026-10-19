@@ -28,9 +28,16 @@ pub(crate) const RENDER_LIST_NAMES: [&str; 13] = [
 ];
 pub(crate) const INPUT_SPECS:&[crate::uvars::Def]=&[
  crate::uvars::Def{name:"CameraScrollSpeed",kind:crate::uvars::Kind::Float,default:"2",range:Some((1.,20.))},
+ //41F9D0 401A10 registrations: default 0.25 range [0,20]; default 20 range [1,30].
+ crate::uvars::Def{name:"CameraScrollAcceleration",kind:crate::uvars::Kind::Float,default:"0.25",range:Some((0.,20.))},
+ crate::uvars::Def{name:"CameraScrollSpeedMax",kind:crate::uvars::Kind::Float,default:"20",range:Some((1.,30.))},
  crate::uvars::Def{name:"CameraScrollEdgePadding",kind:crate::uvars::Kind::Int,default:"4",range:Some((0.,10.))},
  crate::uvars::Def{name:"CameraScalePan",kind:crate::uvars::Kind::Float,default:"10",range:None},
+ //401710 registrations without range: +2C/+30 default 10, +38 default 90 (flags 0x10).
+ crate::uvars::Def{name:"CameraScalePitch",kind:crate::uvars::Kind::Float,default:"10",range:None},
+ crate::uvars::Def{name:"CameraScaleYaw",kind:crate::uvars::Kind::Float,default:"10",range:None},
  crate::uvars::Def{name:"CameraScaleZoom",kind:crate::uvars::Kind::Float,default:"0.5",range:None},
+ crate::uvars::Def{name:"CameraRotateSpeed",kind:crate::uvars::Kind::Float,default:"90",range:None},
  crate::uvars::Def{name:"MapDefaultWidth",kind:crate::uvars::Kind::Int,default:"128",range:Some((16.,512.))},
  crate::uvars::Def{name:"MapDefaultHeight",kind:crate::uvars::Kind::Int,default:"128",range:Some((16.,512.))},
  crate::uvars::Def{name:"CameraRotate",kind:crate::uvars::Kind::Bool,default:"false",range:None},

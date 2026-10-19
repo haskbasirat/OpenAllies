@@ -154,6 +154,31 @@ impl Definitions {
     pub fn catalog(&self) -> &Catalog {
         &self.catalog
     }
+    /// Arithmetic owner for ONE native call over the actual retained Kingdom
+    /// vectors (e.g. 4E9C40). `stockpiled_maximum` is the current SVar
+    /// EconomyStockpileResourceMax that the native call reads; `precision` is
+    /// the calling thread's x87 PC. The caller writes `state()` back to the same
+    /// vectors before any other reader; no second persistent Economy exists.
+    pub fn call_view(
+        &self,
+        state: State,
+        stockpiled_maximum: F32Bits,
+        precision: Precision,
+    ) -> Result<Economy> {
+        Ok(Economy::new(
+            self.catalog.clone(),
+            state,
+            Limits {
+                provided_maximum: self.limits.provided_maximum,
+                stockpiled_maximum,
+            },
+            match precision {
+                Precision::Single24 => X87Precision::Single24,
+                Precision::Double53 => X87Precision::Double53,
+                Precision::Extended64 => X87Precision::Extended64,
+            },
+        )?)
+    }
     /// Ownership conversion only, after the real Init reset. A constructor's
     /// zero-length flow arrays do not qualify; no resource defaults are supplied.
     /// Validation failure retains the entire original state. After success the

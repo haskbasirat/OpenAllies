@@ -1,0 +1,195 @@
+//! The AA.exe NiStream loader registry and the ported class loaders.
+//!
+//! `REGISTERED` is every (name, create function) pair the original start-up
+//! registers with RegisterLoader 880490 (NiMain 8C3ED0, NiAnimation 865CA0,
+//! NiParticle 89AB50/89ACA0), with the NiRTTI class the create function
+//! builds. A `None` loader is a registered class whose LoadBinary is not
+//! ported: loading it is an explicit [`NifError::UnportedClass`].
+use super::stream::Stream;
+use super::{Fields, NifError};
+
+mod controller;
+mod extra;
+mod geometry;
+mod particle;
+mod property;
+mod scene;
+mod skin;
+mod texture;
+
+pub(crate) type LoadFn = fn(&mut Stream, &mut Fields) -> Result<(), NifError>;
+
+pub(crate) struct Class {
+    pub registered: &'static str,
+    pub name: &'static str,
+    /// The native create function (documentation and audit only).
+    #[allow(dead_code)]
+    pub create: u32,
+    pub load: Option<LoadFn>,
+}
+
+/// The old-style particle classes registered by the NiParticle start-up
+/// 89AB50. The post-process function 8E93B0 (registered by 89B090) collects
+/// the particle systems they drive (8E80F0) and converts them (8E8E60) into
+/// NiPSys objects after linking; that conversion is not ported.
+pub(crate) const OLD_PARTICLE_CLASSES: [&str; 9] = [
+    "NiGravity",
+    "NiParticleBomb",
+    "NiParticleColorModifier",
+    "NiParticleGrowFade",
+    "NiParticleMeshModifier",
+    "NiParticleRotation",
+    "NiParticleSystemController",
+    "NiPlanarCollider",
+    "NiSphericalCollider",
+];
+
+pub(crate) static REGISTERED: [Class; 143] = [
+    Class { registered: "NiAlphaAccumulator", name: "NiAlphaAccumulator", create: 0x00895e10, load: None },
+    Class { registered: "NiAlphaController", name: "NiAlphaController", create: 0x008c2950, load: Some(controller::data_controller) },
+    Class { registered: "NiAlphaProperty", name: "NiAlphaProperty", create: 0x0087cfa0, load: Some(property::alpha) },
+    Class { registered: "NiAmbientLight", name: "NiAmbientLight", create: 0x0090ff50, load: Some(scene::light) },
+    Class { registered: "NiAutoNormalParticles", name: "NiParticles", create: 0x00867db0, load: Some(geometry::geometry) },
+    Class { registered: "NiAutoNormalParticlesData", name: "NiParticlesData", create: 0x008c3170, load: Some(particle::particles_data) },
+    Class { registered: "NiBSPNode", name: "NiBSPNode", create: 0x0090f840, load: None },
+    Class { registered: "NiBillboardNode", name: "NiBillboardNode", create: 0x008a36c0, load: Some(scene::billboard_node) },
+    Class { registered: "NiBinaryExtraData", name: "NiBinaryExtraData", create: 0x008c58e0, load: Some(extra::binary) },
+    Class { registered: "NiBltSource", name: "NiBltSource", create: 0x0090fc10, load: None },
+    Class { registered: "NiBoneLODController", name: "NiBoneLODController", create: 0x008c2030, load: None },
+    Class { registered: "NiBooleanExtraData", name: "NiBooleanExtraData", create: 0x0090f920, load: Some(extra::boolean) },
+    Class { registered: "NiCamera", name: "NiCamera", create: 0x00874ec0, load: Some(scene::camera) },
+    Class { registered: "NiClusterAccumulator", name: "NiAlphaAccumulator", create: 0x00895e10, load: None },
+    Class { registered: "NiCollisionSwitch", name: "NiNode", create: 0x008678b0, load: Some(scene::node) },
+    Class { registered: "NiColorData", name: "NiColorData", create: 0x008c1070, load: Some(controller::color_data) },
+    Class { registered: "NiColorExtraData", name: "NiColorExtraData", create: 0x00908c60, load: None },
+    Class { registered: "NiColorExtraDataController", name: "NiColorExtraDataController", create: 0x008b9020, load: None },
+    Class { registered: "NiControllerManager", name: "NiControllerManager", create: 0x0089c4b0, load: None },
+    Class { registered: "NiControllerSequence", name: "NiControllerSequence", create: 0x00883630, load: None },
+    Class { registered: "NiDirectionalLight", name: "NiDirectionalLight", create: 0x00888f90, load: None },
+    Class { registered: "NiDitherProperty", name: "NiDitherProperty", create: 0x00889870, load: Some(property::single_flag) },
+    Class { registered: "NiExtraData", name: "NiExtraData", create: 0x0087b2f0, load: Some(extra::extra) },
+    Class { registered: "NiFlipController", name: "NiFlipController", create: 0x0087cc70, load: Some(controller::flip) },
+    Class { registered: "NiFloatData", name: "NiFloatData", create: 0x008c0d70, load: Some(controller::float_data) },
+    Class { registered: "NiFloatExtraData", name: "NiFloatExtraData", create: 0x0090ec40, load: None },
+    Class { registered: "NiFloatExtraDataController", name: "NiFloatExtraDataController", create: 0x008b9760, load: None },
+    Class { registered: "NiFloatsExtraData", name: "NiFloatsExtraData", create: 0x00908f30, load: None },
+    Class { registered: "NiFloatsExtraDataController", name: "NiFloatsExtraDataController", create: 0x008b93a0, load: None },
+    Class { registered: "NiFogProperty", name: "NiFogProperty", create: 0x00889ad0, load: None },
+    Class { registered: "NiGeomMorpherController", name: "NiGeomMorpherController", create: 0x008c0c60, load: None },
+    Class { registered: "NiGravity", name: "NiGravity", create: 0x008e1850, load: Some(particle::gravity) },
+    Class { registered: "NiIntegerExtraData", name: "NiIntegerExtraData", create: 0x0087b0e0, load: Some(extra::integer) },
+    Class { registered: "NiIntegersExtraData", name: "NiIntegersExtraData", create: 0x0090e960, load: None },
+    Class { registered: "NiKeyframeController", name: "NiKeyframeController", create: 0x008c0730, load: Some(controller::data_controller) },
+    Class { registered: "NiKeyframeData", name: "NiKeyframeData", create: 0x008bf700, load: Some(controller::keyframe_data) },
+    Class { registered: "NiKeyframeManager", name: "NiKeyframeManager", create: 0x008bf610, load: None },
+    Class { registered: "NiLODNode", name: "NiLODNode", create: 0x0090e480, load: None },
+    Class { registered: "NiLightColorController", name: "NiLightColorController", create: 0x008bdf00, load: Some(controller::light_color) },
+    Class { registered: "NiLines", name: "NiLines", create: 0x00893040, load: None },
+    Class { registered: "NiLinesData", name: "NiLinesData", create: 0x008d7e20, load: None },
+    Class { registered: "NiLookAtController", name: "NiLookAtController", create: 0x008bdb00, load: Some(controller::look_at_or_material_color) },
+    Class { registered: "NiMaterialColorController", name: "NiMaterialColorController", create: 0x008bc710, load: Some(controller::look_at_or_material_color) },
+    Class { registered: "NiMaterialProperty", name: "NiMaterialProperty", create: 0x0087d370, load: Some(property::material) },
+    Class { registered: "NiMeshPSysData", name: "NiMeshPSysData", create: 0x008e7a00, load: None },
+    Class { registered: "NiMeshParticleSystem", name: "NiMeshParticleSystem", create: 0x008e7d90, load: None },
+    Class { registered: "NiMorphData", name: "NiMorphData", create: 0x008bce60, load: None },
+    Class { registered: "NiNode", name: "NiNode", create: 0x008678b0, load: Some(scene::node) },
+    Class { registered: "NiPSysAgeDeathModifier", name: "NiPSysAgeDeathModifier", create: 0x008e72a0, load: Some(particle::psys_age_death) },
+    Class { registered: "NiPSysBombModifier", name: "NiPSysBombModifier", create: 0x008cbbe0, load: None },
+    Class { registered: "NiPSysBoundUpdateModifier", name: "NiPSysBoundUpdateModifier", create: 0x008e7050, load: Some(particle::psys_bound_update) },
+    Class { registered: "NiPSysBoxEmitter", name: "NiPSysBoxEmitter", create: 0x008e6db0, load: Some(particle::psys_box_emitter) },
+    Class { registered: "NiPSysColliderManager", name: "NiPSysColliderManager", create: 0x008cb990, load: Some(particle::psys_modifier_link) },
+    Class { registered: "NiPSysColorModifier", name: "NiPSysColorModifier", create: 0x008e69e0, load: Some(particle::psys_modifier_link) },
+    Class { registered: "NiPSysCylinderEmitter", name: "NiPSysCylinderEmitter", create: 0x008e66a0, load: Some(particle::psys_cylinder_emitter) },
+    Class { registered: "NiPSysData", name: "NiPSysData", create: 0x008e5f90, load: Some(particle::psys_data) },
+    Class { registered: "NiPSysDragFieldModifier", name: "NiPSysDragFieldModifier", create: 0x008e57a0, load: None },
+    Class { registered: "NiPSysDragModifier", name: "NiPSysDragModifier", create: 0x008e5220, load: Some(particle::psys_drag) },
+    Class { registered: "NiPSysEmitterCtlr", name: "NiPSysEmitterCtlr", create: 0x0089cd20, load: Some(particle::psys_emitter_ctlr) },
+    Class { registered: "NiPSysEmitterCtlrData", name: "NiPSysEmitterCtlrData", create: 0x008e4d80, load: Some(particle::psys_emitter_ctlr_data) },
+    Class { registered: "NiPSysEmitterDeclinationCtlr", name: "NiPSysEmitterDeclinationCtlr", create: 0x008e4c40, load: None },
+    Class { registered: "NiPSysEmitterInitialRadiusCtlr", name: "NiPSysEmitterInitialRadiusCtlr", create: 0x008e4b40, load: Some(particle::psys_emitter_ctlr) },
+    Class { registered: "NiPSysEmitterLifeSpanCtlr", name: "NiPSysEmitterLifeSpanCtlr", create: 0x008e4a40, load: None },
+    Class { registered: "NiPSysEmitterPlanarAngleCtlr", name: "NiPSysEmitterPlanarAngleCtlr", create: 0x008e4940, load: None },
+    Class { registered: "NiPSysEmitterSpeedCtlr", name: "NiPSysEmitterSpeedCtlr", create: 0x008e4840, load: Some(particle::psys_emitter_ctlr) },
+    Class { registered: "NiPSysGravityModifier", name: "NiPSysGravityModifier", create: 0x008cae70, load: Some(particle::psys_gravity) },
+    Class { registered: "NiPSysGravityStrengthCtlr", name: "NiPSysGravityStrengthCtlr", create: 0x008e46e0, load: None },
+    Class { registered: "NiPSysGrowFadeModifier", name: "NiPSysGrowFadeModifier", create: 0x008e4280, load: Some(particle::psys_grow_fade) },
+    Class { registered: "NiPSysMeshEmitter", name: "NiPSysMeshEmitter", create: 0x008c92c0, load: Some(particle::psys_mesh_emitter) },
+    Class { registered: "NiPSysMeshUpdateModifier", name: "NiPSysMeshUpdateModifier", create: 0x008e3ed0, load: None },
+    Class { registered: "NiPSysModifierActiveCtlr", name: "NiPSysModifierActiveCtlr", create: 0x008e3c10, load: Some(particle::psys_emitter_ctlr) },
+    Class { registered: "NiPSysPlanarCollider", name: "NiPSysPlanarCollider", create: 0x008c85e0, load: Some(particle::psys_planar_collider) },
+    Class { registered: "NiPSysPositionModifier", name: "NiPSysPositionModifier", create: 0x008e3990, load: Some(particle::psys_position) },
+    Class { registered: "NiPSysResetOnLoopCtlr", name: "NiPSysResetOnLoopCtlr", create: 0x008e37c0, load: None },
+    Class { registered: "NiPSysRotationModifier", name: "NiPSysRotationModifier", create: 0x008e3300, load: Some(particle::psys_rotation) },
+    Class { registered: "NiPSysSpawnModifier", name: "NiPSysSpawnModifier", create: 0x008e2620, load: Some(particle::psys_spawn) },
+    Class { registered: "NiPSysSphereEmitter", name: "NiPSysSphereEmitter", create: 0x008e24a0, load: Some(particle::psys_sphere_emitter) },
+    Class { registered: "NiPSysSphericalCollider", name: "NiPSysSphericalCollider", create: 0x008c7b80, load: Some(particle::psys_spherical_collider) },
+    Class { registered: "NiPSysTurbulenceFieldModifier", name: "NiPSysTurbulenceFieldModifier", create: 0x008e1c00, load: None },
+    Class { registered: "NiPSysUpdateCtlr", name: "NiPSysUpdateCtlr", create: 0x008e19f0, load: Some(particle::psys_update_ctlr) },
+    Class { registered: "NiPalette", name: "NiPalette", create: 0x008c5cd0, load: None },
+    Class { registered: "NiParticleBomb", name: "NiParticleBomb", create: 0x008e12f0, load: None },
+    Class { registered: "NiParticleColorModifier", name: "NiParticleColorModifier", create: 0x008e0e10, load: Some(particle::particle_color_modifier) },
+    Class { registered: "NiParticleGrowFade", name: "NiParticleGrowFade", create: 0x008e0a20, load: Some(particle::particle_grow_fade) },
+    Class { registered: "NiParticleMeshModifier", name: "NiParticleMeshModifier", create: 0x008e0830, load: Some(particle::particle_mesh_modifier) },
+    Class { registered: "NiParticleMeshes", name: "NiParticleMeshes", create: 0x0090e040, load: Some(geometry::geometry) },
+    Class { registered: "NiParticleMeshesData", name: "NiParticleMeshesData", create: 0x0090df30, load: Some(particle::particle_meshes_data) },
+    Class { registered: "NiParticleRotation", name: "NiParticleRotation", create: 0x008e0220, load: Some(particle::particle_rotation) },
+    Class { registered: "NiParticleSystem", name: "NiParticleSystem", create: 0x0089e820, load: Some(particle::particle_system) },
+    Class { registered: "NiParticleSystemController", name: "NiParticleSystemController", create: 0x008ccc10, load: Some(particle::particle_system_controller) },
+    Class { registered: "NiParticles", name: "NiParticles", create: 0x00867db0, load: Some(geometry::geometry) },
+    Class { registered: "NiParticlesData", name: "NiParticlesData", create: 0x008c3170, load: Some(particle::particles_data) },
+    Class { registered: "NiPathController", name: "NiPathController", create: 0x008bc620, load: Some(controller::path) },
+    Class { registered: "NiPixelData", name: "NiPixelData", create: 0x00875ce0, load: Some(texture::pixel_data) },
+    Class { registered: "NiPlanarCollider", name: "NiPlanarCollider", create: 0x008dff30, load: None },
+    Class { registered: "NiPointLight", name: "NiPointLight", create: 0x0089b250, load: Some(scene::point_light) },
+    Class { registered: "NiPosData", name: "NiPosData", create: 0x008bb080, load: Some(controller::pos_data) },
+    Class { registered: "NiRangeLODData", name: "NiRangeLODData", create: 0x0090d770, load: None },
+    Class { registered: "NiRendererSpecificProperty", name: "NiRendererSpecificProperty", create: 0x0088a760, load: None },
+    Class { registered: "NiRollController", name: "NiRollController", create: 0x008baf40, load: None },
+    Class { registered: "NiRotatingParticles", name: "NiParticles", create: 0x00867db0, load: Some(geometry::geometry) },
+    Class { registered: "NiRotatingParticlesData", name: "NiParticlesData", create: 0x008c31c0, load: Some(particle::rotating_particles_data) },
+    Class { registered: "NiScreenGeometry", name: "NiScreenGeometry", create: 0x0090cc90, load: None },
+    Class { registered: "NiScreenGeometryData", name: "NiScreenGeometryData", create: 0x0090a030, load: None },
+    Class { registered: "NiScreenLODData", name: "NiScreenLODData", create: 0x0090cf00, load: None },
+    Class { registered: "NiScreenPolygon", name: "NiScreenPolygon", create: 0x008880e0, load: None },
+    Class { registered: "NiScreenSpaceCamera", name: "NiScreenSpaceCamera", create: 0x0090f2a0, load: None },
+    Class { registered: "NiScreenTexture", name: "NiScreenTexture", create: 0x008888e0, load: None },
+    Class { registered: "NiSequence", name: "NiSequence", create: 0x00886220, load: None },
+    Class { registered: "NiSequenceStreamHelper", name: "NiSequenceStreamHelper", create: 0x008bade0, load: None },
+    Class { registered: "NiShadeProperty", name: "NiShadeProperty", create: 0x00889ec0, load: None },
+    Class { registered: "NiSkinData", name: "NiSkinData", create: 0x009096b0, load: Some(skin::skin_data) },
+    Class { registered: "NiSkinInstance", name: "NiSkinInstance", create: 0x008c3b60, load: Some(skin::skin_instance) },
+    Class { registered: "NiSkinPartition", name: "NiSkinPartition", create: 0x0087d940, load: Some(skin::skin_partition) },
+    Class { registered: "NiSortAdjustNode", name: "NiSortAdjustNode", create: 0x0090cb00, load: None },
+    Class { registered: "NiSourceCubeMap", name: "NiSourceCubeMap", create: 0x0090c460, load: None },
+    Class { registered: "NiSourceTexture", name: "NiSourceTexture", create: 0x0087bf80, load: Some(texture::source_texture) },
+    Class { registered: "NiSpecularProperty", name: "NiSpecularProperty", create: 0x0088a090, load: Some(property::single_flag) },
+    Class { registered: "NiSphericalCollider", name: "NiSphericalCollider", create: 0x008df7d0, load: None },
+    Class { registered: "NiSpotLight", name: "NiSpotLight", create: 0x0090be30, load: None },
+    Class { registered: "NiStencilProperty", name: "NiStencilProperty", create: 0x00889390, load: Some(property::stencil) },
+    Class { registered: "NiStringExtraData", name: "NiStringExtraData", create: 0x008c56e0, load: Some(extra::string) },
+    Class { registered: "NiStringsExtraData", name: "NiStringsExtraData", create: 0x00887610, load: Some(extra::strings) },
+    Class { registered: "NiSwitchNode", name: "NiSwitchNode", create: 0x0090b5b0, load: None },
+    Class { registered: "NiSwitchStringExtraData", name: "NiSwitchStringExtraData", create: 0x0090aff0, load: None },
+    Class { registered: "NiTextKeyExtraData", name: "NiTextKeyExtraData", create: 0x008ba8f0, load: Some(extra::text_keys) },
+    Class { registered: "NiTextureEffect", name: "NiTextureEffect", create: 0x0086bc40, load: None },
+    Class { registered: "NiTextureTransformController", name: "NiTextureTransformController", create: 0x008b8ac0, load: Some(controller::texture_transform) },
+    Class { registered: "NiTexturingProperty", name: "NiTexturingProperty", create: 0x0086cf00, load: Some(property::texturing) },
+    Class { registered: "NiTriShape", name: "NiTriShape", create: 0x0087fc20, load: Some(geometry::geometry) },
+    Class { registered: "NiTriShapeData", name: "NiTriShapeData", create: 0x008d0650, load: Some(geometry::tri_shape_data) },
+    Class { registered: "NiTriShapeDynamicData", name: "NiTriShapeDynamicData", create: 0x0089fd30, load: None },
+    Class { registered: "NiTriStrips", name: "NiTriStrips", create: 0x0088add0, load: Some(geometry::geometry) },
+    Class { registered: "NiTriStripsData", name: "NiTriStripsData", create: 0x008d0f80, load: Some(geometry::tri_strips_data) },
+    Class { registered: "NiUVController", name: "NiUVController", create: 0x00894bf0, load: None },
+    Class { registered: "NiUVData", name: "NiUVData", create: 0x008ba110, load: None },
+    Class { registered: "NiVectorExtraData", name: "NiVectorExtraData", create: 0x0090aaf0, load: None },
+    Class { registered: "NiVertWeightsExtraData", name: "NiVertWeightsExtraData", create: 0x008c4770, load: None },
+    Class { registered: "NiVertexColorProperty", name: "NiVertexColorProperty", create: 0x0087b6a0, load: Some(property::vertex_color) },
+    Class { registered: "NiVisController", name: "NiVisController", create: 0x008b9e80, load: Some(controller::data_controller) },
+    Class { registered: "NiVisData", name: "NiVisData", create: 0x008b9920, load: Some(controller::vis_data) },
+    Class { registered: "NiWireframeProperty", name: "NiWireframeProperty", create: 0x0086e750, load: None },
+    Class { registered: "NiZBufferProperty", name: "NiZBufferProperty", create: 0x0088a2e0, load: Some(property::zbuffer) },
+];
+
+pub(crate) fn by_name(name: &[u8]) -> Option<&'static Class> {
+    REGISTERED.iter().find(|c| c.registered.as_bytes() == name)
+}

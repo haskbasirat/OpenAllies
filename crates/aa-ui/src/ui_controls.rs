@@ -880,6 +880,26 @@ impl Ui {
         Some(path)
     }
 
+    /// AddChild at the head of its key group (vtable+0xD4, `0x5F0080` with
+    /// `front`) to the widget at `parent`, activated like [`Ui::attach`].
+    pub fn attach_front(&mut self, parent: &str, child: Widget) -> Option<String> {
+        let tag_name = child.name.trim_start_matches('/').to_string();
+        let p = self.widget_mut(parent)?;
+        let active = p.flags & wf::ACTIVE != 0;
+        p.add_child_front(child);
+        // the new child is the first of its name among equal keys
+        let p = self.widget(parent)?;
+        let segs = child_segments(p);
+        let key = p.children.iter().find(|c| c.name.trim_start_matches('/').eq_ignore_ascii_case(&tag_name))?.key;
+        let idx = p.children.iter().position(|c| c.key >= key && c.name.trim_start_matches('/').eq_ignore_ascii_case(&tag_name))?;
+        let path = format!("{parent}/{}", segs[idx]);
+        if active {
+            self.layout();
+            self.activate_rec(&path);
+        }
+        Some(path)
+    }
+
     /// Viewport refresh (`0x5ED6B0`): total = sum of the item heights,
     /// the slider page = the item panel height, scroll bar update, layout.
     pub fn viewport_refresh(&mut self, path: &str) {

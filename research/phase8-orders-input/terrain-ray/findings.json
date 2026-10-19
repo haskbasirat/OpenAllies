@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "area": "phase8-orders-input / terrain ray 0x71D840",
+  "status": "ported; v3 480/480 and v4 3276/3276 native rows replay exactly at PC24/PC53/PC64 (official aa-runtime test command: 4 passed)",
+  "rust": {
+    "module": "crates/aa-runtime/src/player_order_input/terrain_ray.rs",
+    "tests": "crates/aa-runtime/src/player_order_input/terrain_ray_tests.rs",
+    "entry": "intersect_71d840<T: Terrain>(&T, eye [u32;3], direction [u32;3], secondary Option<&mut [u32;3]>, margin i32, Precision) -> Result<Outcome, String>",
+    "reused": [
+      "crate::native_camera::ni::normalize (0x42D750)",
+      "aa_navigation::low_path::segment_parameter_53a3a0 (0x53A3A0)"
+    ]
+  },
+  "native_ported": [
+    "71D840",
+    "42D750",
+    "869C60",
+    "869C30",
+    "42ED60",
+    "71C930",
+    "53A3A0",
+    "71AB10",
+    "53A7D0",
+    "42EE20",
+    "42EE70",
+    "860680",
+    "71ADC0",
+    "96DB7A/_trandisp2 9791C0 table B350F0 (FPREM 96DB84, zero dividend 977754)",
+    "5E8910",
+    "71D570",
+    "71A320",
+    "71B9B0",
+    "7151C0",
+    "436310",
+    "875610",
+    "736E70",
+    "736C60",
+    "71CD30"
+  ],
+  "constants": {
+    "B40420 (71C930 static, guarded once)": "0x38D1B717",
+    "AB7800": "0x38D1B717",
+    "A88AC8": "0x38D1B717",
+    "A03078": "0x3C23D70A",
+    "A033BC": "0x3E800000",
+    "9FBDB8": "0x3F000000",
+    "9FD38C": "0x358637BD",
+    "9FD478/9FD474": "+-2^31"
+  },
+  "oracles": {
+    "v3": {
+      "file": "research/skirmish-20261017-terrain-ray/native-ray-v3.json",
+      "sha256": "6cd5a54b6f5dd9bbd09d10f45772ee3fe78a68386618721d19a7d37dbcd52885",
+      "rows": 480,
+      "passed": {
+        "Single24": 160,
+        "Double53": 160,
+        "Extended64": 160
+      }
+    },
+    "v4": {
+      "file": "research/phase8-orders-input/terrain-ray/native-terrain-ray-v4.json",
+      "sha256": "83e761b2524746a03c7d123295ac36cbf3abcbd4cc142ea5996dadeb9b6a1fc4",
+      "rows": 3276,
+      "native_fault_rows": 27,
+      "passed": {
+        "Single24": 1092,
+        "Double53": 1092,
+        "Extended64": 1092
+      },
+      "executed_pins": 2087
+    }
+  },
+  "coverage_v4_missing": {
+    "71D840": [
+      "0x71dc89 padding",
+      "0x71de14/0x71de5e beyond +-2^31 -> 0 (inline)"
+    ],
+    "71B9B0": [
+      "0x71ba08/0x71ba0f padding"
+    ],
+    "5E8910": [
+      "0x5e8954.. zero determinant (unreachable after degenerate check)"
+    ],
+    "42EE20/42EE70": [
+      "0x42ee55/0x42eea5 beyond +-2^31 -> 0"
+    ],
+    "42D750": [
+      "0x42d79a.. zero-length direction (71D840 then reads undefined locals: Rust error)"
+    ]
+  },
+  "mutants": {
+    "total": 25,
+    "detected": 18,
+    "undetected_equivalent_or_masked": [
+      "fmod zero sign",
+      "END side order",
+      "forward edge sum PC24",
+      "minor start stored",
+      "436310 threshold equality",
+      "71C930 dy stored",
+      "875610 r0 stored"
+    ]
+  },
+  "removed_caps": [],
+  "open_gaps": [
+    "Live Terrain adapter: TerrainMap/cell constructors 723E00, 723960, 71B8F0, 71B610 not ported (dimensions, block split, block min/max, vertex arithmetic, terrain min/max source, owner normals).",
+    "Block loading state (+0xBC loaded byte, +0x44 mesh pointer) has no Rust owner.",
+    "Per-block water NiTriShape (+0x90/+0x9C) not constructed from game data; only the query is proven.",
+    "Nonfinite values, binary32 overflow and parallel rays are errors, not modelled native behaviour."
+  ]
+}

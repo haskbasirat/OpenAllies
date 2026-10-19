@@ -122,7 +122,7 @@ impl PointShape {
         startup: &VerifiedStartupReceipt,
     ) -> Result<Self, String> {
         catalog.require_source_owner()?;
-        if combat_receipt::source_fingerprint(&catalog.actors.sources)
+        if combat_receipt::catalog_source_fingerprint(catalog)
             != combat_receipt::SOURCES_SHA256
         {
             return Err("point startup destination source identities differ".into());
@@ -161,7 +161,7 @@ impl PointShape {
     /// attest a different or subsequently edited destination source target.
     pub fn validate_catalog(&self, catalog: &Catalog<'_>) -> Result<(), String> {
         catalog.require_source_owner()?;
-        if combat_receipt::source_fingerprint(&catalog.actors.sources)
+        if combat_receipt::catalog_source_fingerprint(catalog)
             != self.provenance.source_identities_sha256
         {
             return Err("point owner destination source identities differ".into());

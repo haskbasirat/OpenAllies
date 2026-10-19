@@ -46,7 +46,8 @@ impl<S:Services> crate::view_factory_order::Fields for Current<'_,'_,S>{
     fn publish_view(&mut self,id:ActorId,view:Option<Self::View>)->Result<()>{self.key(id)?;self.services.publish_view(&mut self.world,id,view)}
     fn next_thing(&mut self,cursor:&mut u32)->Result<Option<ActorId>>{
         let first=if *cursor==0{1}else{(*cursor&0xffff)+1};
-        let found=self.world.actors.identities().iter().find(|entry|u32::from(entry.id.slot())>=first);
+        //Entries sit at their own slot, ascending: the first at or after `first`.
+        let found=self.world.actors.identities().iter_from(first as usize).next();
         let id=found.map(|entry|entry.id);*cursor=id.map_or(0,ActorId::raw);Ok(id)
     }
     fn thing_has_view(&mut self,id:ActorId)->Result<bool>{

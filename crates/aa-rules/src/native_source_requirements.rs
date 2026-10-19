@@ -263,12 +263,38 @@ impl ActorCatalog {
                 "source requirements registered projection differs from the complete private Thing-root set",
             ));
         }
+        // Indexes over this call's borrowed data; each lookup yields exactly
+        // the matches (in order) of the linear filter it replaces.
+        let mut actors_by_source: std::collections::HashMap<&Provenance, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (index, actor) in self.actors.iter().enumerate() {
+            actors_by_source.entry(&actor.source).or_default().push(index);
+        }
+        let mut identity_counts: std::collections::HashMap<(&str, &str), usize> =
+            std::collections::HashMap::new();
+        for identity in &self.sources {
+            *identity_counts
+                .entry((identity.path.as_str(), identity.sha256.as_str()))
+                .or_default() += 1;
+        }
+        let mut roots_by_source: std::collections::HashMap<&Provenance, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (index, node) in roots.iter().enumerate() {
+            if let Some(source) = node.first_source() {
+                roots_by_source.entry(source).or_default().push(index);
+            }
+        }
         for node in &roots {
             let sources = node.sources();
             let root = sources
                 .first()
                 .ok_or_else(|| invalid("private Thing root provenance missing"))?;
-            let mut matching = self.actors.iter().filter(|actor| &actor.source == root);
+            let mut matching = actors_by_source
+                .get(root)
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+                .iter()
+                .map(|&index| &self.actors[index]);
             let actor = matching
                 .next()
                 .ok_or_else(|| invalid("private Thing root omitted from registered projection"))?;
@@ -287,13 +313,10 @@ impl ActorCatalog {
                 ));
             }
             for source in &sources {
-                if self
-                    .sources
-                    .iter()
-                    .filter(|identity| {
-                        identity.path == source.path && identity.sha256 == source.sha256
-                    })
-                    .count()
+                if identity_counts
+                    .get(&(source.path.as_str(), source.sha256.as_str()))
+                    .copied()
+                    .unwrap_or(0)
                     != 1
                 {
                     return Err(invalid(
@@ -307,9 +330,12 @@ impl ActorCatalog {
         let mut registered_random_actors = 0;
         let mut settlement_category_objects = 0;
         for (ordinal, registered) in self.actors.iter().enumerate() {
-            let mut candidates = roots
+            let mut candidates = roots_by_source
+                .get(&registered.source)
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
                 .iter()
-                .filter(|n| n.sources().first() == Some(&registered.source));
+                .map(|&index| &roots[index]);
             let node = candidates.next().ok_or_else(|| {
                 invalid(format!(
                     "registered source requirements root unavailable: {}",

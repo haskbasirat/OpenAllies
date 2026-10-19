@@ -369,3 +369,4 @@ pub mod creation_placement;
 pub mod required_placement;
 pub mod rectangle_actors;
 pub mod doodad_clear;
+pub mod circle_actors;

@@ -18,7 +18,7 @@ pub struct ActorView{data:Data}
 fn actor_node<'a>(catalog:&'a Catalog<'_>,d:&RuntimeDefinition)->Result<ResolvedNode<'a>>{
     let mut found=None;
     for tag in ["Thing","Unit","Projectile","VFX"]{
-        for node in catalog.actors.resolved_definitions(tag).map_err(|e|e.to_string())?{
+        for node in catalog.actors.resolved_definitions_at(tag,&d.proof.source).map_err(|e|e.to_string())?{
             if node.sources().first()==Some(&d.proof.source){
                 if found.is_some(){return Err("Actor view canonical source position is ambiguous".into())}
                 found=Some(node);

@@ -21,15 +21,120 @@ use std::{cell::RefCell, collections::BTreeMap};
 type Result<T> = std::result::Result<T, String>;
 pub type Directory =
     directory::Directory<aa_ui::uvars::CameraRenderListSwitch, gpu::camera_device::Reference>;
+#[path = "battle_camera_input.rs"]
+pub mod input;
+#[path = "battle_orders_hud.rs"]
+pub mod orders_hud;
 ///One process directory owns the SAME material/default Factory across missions.
+///The KKC_UI camera controls (UI+40/+48, KKC_Input impulses) are retained on
+///this same owner because every control reads/mutates *B40048 directly.
 pub struct Process {
     directory: Directory,
+    controls: Option<input::Native>,
+    ///The KKC_UI box state's +4 screen polygon (5CD850..5CCA30). Camera+168
+    ///holds the same allocation while it is attached.
+    screen_box: Option<native_camera::screen::Polygon>,
 }
 impl Process {
     pub fn from_application_constructor() -> Result<Self> {
         Ok(Self {
             directory: Directory::from_fresh_native_process()?,
+            controls: None,
+            screen_box: None,
         })
+    }
+    pub fn controls(&self) -> Option<&input::Native> {
+        self.controls.as_ref()
+    }
+    ///One observed UI frame through the ported native camera controls. The
+    ///hotkey file is the actual Data/Localization/Hotkeys/hotkeys_core.txt.
+    pub fn input_frame(
+        &mut self,
+        op: &Operation<'_, '_, '_>,
+        frame: &input::Frame,
+        gates: &mut input::Gates<'_>,
+    ) -> Result<Vec<aa_runtime::native_camera::input::Trace>> {
+        if self.controls.is_none() {
+            let text = op.frontend.call(|context| {
+                let bytes = context
+                    .ui
+                    .store
+                    .root
+                    .read("Localization/Hotkeys/hotkeys_core.txt")
+                    .map_err(|e| format!("hotkeys_core.txt: {e}"))?;
+                Ok(aa_ui::data::decode(&bytes))
+            })?;
+            self.controls = Some(input::Native::new(&text, frame.client)?);
+        }
+        let handle = self.directory.current_handle()?;
+        self.directory.camera(&handle)?.normalized_state()?;
+        let mut camera = CameraOps {
+            directory: &mut self.directory,
+            handle,
+            op,
+        };
+        let mut vars = InputVars { op };
+        self.controls
+            .as_mut()
+            .expect("constructed above")
+            .frame(frame, gates, &mut vars, &mut camera, op.pc)
+    }
+    ///Current target/zoom words for diagnostics (24C/250/254, 208, 2BC, 2B8).
+    pub fn current_pose_words(&self) -> Result<[u32; 6]> {
+        let h = self.directory.current_handle()?;
+        let mut out = [0; 6];
+        for (i, o) in [0x24c, 0x250, 0x254, 0x208, 0x2bc, 0x2b8].into_iter().enumerate() {
+            out[i] = self.directory.word_captured(&h, o)?;
+        }
+        Ok(out)
+    }
+    pub fn screen_box(&self) -> Option<&native_camera::screen::Polygon> {
+        self.screen_box.as_ref()
+    }
+    ///The box/facing camera children one orders frame reached, in order, on
+    ///`*B40048`. `tracker` is the UI+58 tracker as 5CCA80 read it (both box
+    ///children are reached in the frame's tracker step: the cursor after
+    ///5BF2B0 and the left press before this frame's events).
+    pub fn orders_children(
+        &mut self,
+        children: &[orders_hud::Child],
+        tracker: native_camera::screen::Tracker,
+        viewport: [i32; 2],
+        seeds: Option<[u32; 3]>,
+        pc: Precision,
+    ) -> Result<()> {
+        use orders_hud::Child;
+        for child in children {
+            match child {
+                Child::BoxBegin => {
+                    let h = self.directory.current_handle()?;
+                    self.directory.set_byte_214_captured(&h, 1)?;
+                    let seeds = seeds.ok_or("5CD850 B43CF8 seed vector is not bound")?;
+                    let polygon = self.directory.new_screen_box_5cd850(seeds, tracker, viewport, pc)?;
+                    //5CD9A8..5CD9D0: +4 replaces (releases) the previous polygon.
+                    self.screen_box = Some(std::sync::Arc::clone(&polygon));
+                    self.directory.attach_screen_polygon_captured_5cd7e0(&h, &polygon)?;
+                }
+                Child::BoxFrame => {
+                    let polygon = self.screen_box.as_ref().ok_or("5CCA80 box state +4 polygon is NULL")?;
+                    let mut polygon = polygon.lock().map_err(|_| "screen box owner poisoned")?;
+                    native_camera::screen::update_5cca80(&mut polygon, tracker, viewport, pc)?;
+                }
+                Child::BoxEnd => {
+                    let h = self.directory.current_handle()?;
+                    self.directory.set_byte_214_captured(&h, 0)?;
+                    //874350(NULL) finds no attached NULL slot to clear.
+                    if let Some(polygon) = self.screen_box.take() {
+                        self.directory.detach_screen_polygon_captured_874350(&h, &polygon)?;
+                    }
+                }
+                Child::FacingLock | Child::FacingUnlock => {
+                    let h = self.directory.current_handle()?;
+                    self.directory.set_byte_214_captured(&h, u8::from(*child == Child::FacingLock))?;
+                }
+            }
+        }
+        Ok(())
     }
     pub fn directory(&self) -> &Directory {
         &self.directory
@@ -324,5 +429,117 @@ impl aa_runtime::view_init_world::TailCamera for Target<'_, '_, '_, '_> {
         }
         self.process
             .look_at_captured_6ff130(self.captured, xy, self.op)
+    }
+}
+
+///*B40048 camera operations for the native controls: the SAME current
+///directory camera, its retained Current services and UI RPC adapters.
+struct CameraOps<'a, 'b, 'source, 'execution> {
+    directory: &'a mut Directory,
+    handle: directory::Handle,
+    op: &'a Operation<'b, 'source, 'execution>,
+}
+impl aa_runtime::native_camera::input::Camera for CameraOps<'_, '_, '_, '_> {
+    fn word(&mut self, offset: u32) -> Result<u32> {
+        self.directory.word_captured(&self.handle, offset)
+    }
+    fn byte_214(&mut self) -> Result<u8> {
+        self.directory.byte_captured(&self.handle, 0x214)
+    }
+    fn developer_6fe9c0(&mut self) -> Result<bool> {
+        let current = self.op.current()?;
+        self.directory.developer_captured_6fe9c0(&self.handle, &current)
+    }
+    fn pan_700500(&mut self, millis: u32, direction: [u32; 2]) -> Result<()> {
+        //Reached UVar cells are captured before the first camera store, so
+        //an unbound cell refuses the input without failing the camera.
+        for offset in [0x28, 0x18, 0x24, 0xa8, 0xac] {
+            native_camera_current::Frontend::current_uvar(&self.op.frontend, offset)?;
+        }
+        let mut current = self.op.current()?;
+        self.directory.pan_captured_700500(
+            &self.handle,
+            millis,
+            direction,
+            &mut Pan(&self.op.frontend),
+            &mut current,
+            self.op.pc,
+        )
+    }
+    fn zoom_7005f0(&mut self, value: u32) -> Result<()> {
+        let result = self.directory.set_zoom_captured_7005f0(
+            &self.handle,
+            value,
+            &mut Zoom(&self.op.frontend),
+            self.op.pc,
+        );
+        //40E0A0 changed the SAME UVar34 cell; later reads must see it.
+        self.op.frontend.values.borrow_mut().remove(&0x34);
+        result
+    }
+    fn pose_6ff220(&mut self, center: [u32; 3], yaw: u32, pitch: u32, zoom: u32) -> Result<()> {
+        let current = self.op.current()?;
+        self.directory
+            .pose_captured_6ff220(&self.handle, &current, center, yaw, pitch, zoom, self.op.pc)
+    }
+    fn rotate_6feba0(&mut self, yaw: u32, pitch: u32) -> Result<()> {
+        self.directory
+            .rotate_about_target_captured_6feba0(&self.handle, yaw, pitch, self.op.pc)
+    }
+    fn look_at_6ff200(&mut self, xy: [u32; 2]) -> Result<()> {
+        let mut current = self.op.current()?;
+        self.directory
+            .look_at_captured_6ff130(&self.handle, xy, &mut current, self.op.pc)
+    }
+}
+///UVar fast-table B39940 / AVars B39990 reads for the controls.
+struct InputVars<'a, 'b, 'source, 'execution> {
+    op: &'a Operation<'b, 'source, 'execution>,
+}
+impl aa_runtime::native_camera::input::Variables for InputVars<'_, '_, '_, '_> {
+    fn uvar(&mut self, offset: u32) -> Result<u32> {
+        let name = match offset {
+            0x1c => "CameraScrollAcceleration",
+            0x20 => "CameraScrollSpeedMax",
+            0x2c => "CameraScalePitch",
+            0x30 => "CameraScaleYaw",
+            0x38 => "CameraRotateSpeed",
+            _ => return native_camera_current::Frontend::current_uvar(&self.op.frontend, offset),
+        };
+        //Not in aa-ui's strict camera fast table yet: the current UVars.tgi
+        //overlay value of the SAME UI owner, refused outside its 41F9D0 range.
+        self.op.frontend.call(move |context| {
+            let vars = &context.ui.uvars;
+            let def = vars
+                .def(name)
+                .ok_or_else(|| format!("UVar {name} is not registered in the current UI owner"))?;
+            if !matches!(def.kind, aa_ui::uvars::Kind::Float) {
+                return Err(format!("UVar {name} is not a Float"));
+            }
+            let raw = vars.get_str(name);
+            let value: f32 = raw
+                .trim()
+                .parse()
+                .map_err(|_| format!("UVar {name} current value `{raw}` is not a Float"))?;
+            if !value.is_finite()
+                || def.range.is_some_and(|(lo, hi)| f64::from(value) < lo || f64::from(value) > hi)
+            {
+                return Err(format!("UVar {name} current value is outside its native range"));
+            }
+            Ok(value.to_bits())
+        })
+    }
+    fn avar(&mut self, offset: u32) -> Result<u32> {
+        let current = self.op.current()?;
+        directory::ReadOnlyInputs::avar(&current, offset)
+    }
+    fn avar_range(&mut self, offset: u32) -> Result<[u32; 2]> {
+        Err(format!(
+            "AVar{offset:X} registered range (+14/+18) has no ported source owner"
+        ))
+    }
+    fn metagame_40cee0(&mut self) -> Result<bool> {
+        let current = self.op.current()?;
+        directory::ReadOnlyInputs::metagame_40cee0(&current)
     }
 }

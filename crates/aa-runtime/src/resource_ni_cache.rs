@@ -37,6 +37,21 @@ impl State{
   self.entries.push(Entry{identity,resource:resource.clone(),root,filename:resource.logical_ids().into(),size,previous:self.tail,next:None,hash});
   if let Some(tail)=self.tail{self.entries[tail].next=Some(ordinal)}else{self.head=Some(ordinal)}self.tail=Some(ordinal);Ok(handle)
  }
+ ///59DAB0 then85C2B0 on the SAME Resource+3C entry (Model vf40 5A6560,
+ ///Sequence vf40 5A6530): unlink from the B3D7A0 head+20/tail+24 list exactly
+ ///as 59DAB0 does, then release the entry's root/filename. Pool and string
+ ///frees are host ownership drops; the stale EntryHandle can never validate.
+ pub(crate) fn remove_59dab0(&mut self,handle:&EntryHandle,resource:&Handle)->Result<()>{
+  self.validate(handle,resource)?;let i=handle.ordinal;let(previous,next)=(self.entries[i].previous,self.entries[i].next);
+  if self.head==Some(i){self.head=next}
+  if self.tail==Some(i){self.tail=previous}
+  if let Some(p)=previous{self.entries[p].next=next}
+  if let Some(n)=next{self.entries[n].previous=previous}
+  let entry=&mut self.entries[i];entry.previous=None;entry.next=None;entry.root=None;entry.identity=Arc::new(());Ok(())
+ }
+ ///Resources reachable from the list head, in list order (test).
+ #[cfg(test)]
+ pub(crate) fn linked(&self)->Vec<Handle>{let mut out=vec![];let mut at=self.head;while let Some(i)=at{out.push(self.entries[i].resource.clone());at=self.entries[i].next}out}
  pub(crate) fn validate(&self,handle:&EntryHandle,resource:&Handle)->Result<()>{
   self.require(resource)?;if !Weak::ptr_eq(&handle.application,&self.application){return Err("foreign Ni cache entry Application".into())}
   let entry=self.entries.get(handle.ordinal).ok_or("Ni cache entry absent")?;

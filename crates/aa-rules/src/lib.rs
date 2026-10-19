@@ -29,3 +29,4 @@ pub mod settlement_completion;
 pub mod native_builder_data;
 pub mod native_member_property_data;
 pub mod native_source_requirements;
+mod query_memo;

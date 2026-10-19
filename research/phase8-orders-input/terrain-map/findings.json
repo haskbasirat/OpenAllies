@@ -1,0 +1,78 @@
+{
+ "schema": 1,
+ "area": "phase8-orders-input / TerrainMap B36518 constructors for 0x71D840",
+ "status": "ported; native-terrain-map.json replays with no mismatch at PC24/PC53/PC64 (official player_order_input command: 13 passed)",
+ "rust": {
+  "module": "crates/aa-runtime/src/player_order_input/terrain_map.rs",
+  "tests": "crates/aa-runtime/src/player_order_input/terrain_map_tests.rs",
+  "constructor": "TerrainMap::for_world(&live_world_frame::World, &view_heightfield::State, &view_grid_variables::State, quad: impl FnOnce()->Result<i32,String>) -> Result<TerrainMap,String>",
+  "trait": "impl terrain_ray::Terrain for TerrainMap (Block: terrain_ray::TerrainBlock)",
+  "residency_api": [
+   "load_block",
+   "release_block",
+   "report_absent",
+   "update_725340",
+   "invalidate_water_71ffa0",
+   "rebuild_water"
+  ]
+ },
+ "native_ported": [
+  "721330 (fields read by 71D840)",
+  "723E00 7241CE..724455, 724657, 72464B..7246A9, 7252AF",
+  "723D30",
+  "723960",
+  "736E20",
+  "71B8F0",
+  "720AD0..720C79",
+  "71B610",
+  "4316A0 (sample word only)",
+  "71A690",
+  "71A750",
+  "725340 725429..725438",
+  "721030 (+44)",
+  "7208D0 720A93 water branch",
+  "737470",
+  "738280 (+9C flag)",
+  "71FFA0 (+14F)"
+ ],
+ "oracle": {
+  "file": "research/phase8-orders-input/terrain-map/native-terrain-map.json",
+  "sha256": "1bf78e7015adefa91e46686b90b0e0ea96a89627dd1caa1297a0243c1106452c",
+  "producer_sha256": "de7dfa540f5136f3207de63e11bc6fa50d173d798b36202aba844287248ff9c1",
+  "rows": 57,
+  "operations": 795,
+  "rays": 1440,
+  "executed_pins": 5045,
+  "passed": {
+   "Single24": {
+    "constructions": 16,
+    "construction_errors": 3,
+    "operations": 265,
+    "rays": 480
+   },
+   "Double53": {
+    "constructions": 16,
+    "construction_errors": 3,
+    "operations": 265,
+    "rays": 480
+   },
+   "Extended64": {
+    "constructions": 16,
+    "construction_errors": 3,
+    "operations": 265,
+    "rays": 480
+   }
+  }
+ },
+ "block_loading": "meshes (+44) are lazy: camera-frustum visibility 4312F0/430E50/430710 -> 42FF50/42FE10 -> 7212D0 -> 720AD0 (state 2) and 7211F0 -> 721030 (leaving state 2, resource count 0), synchronous on the main thread; +BC = 1 once at 7252AF. 71D840 depends on render state (mesh vs 71CD30 and map +8C/+90 = fold over loaded blocks). Not deterministic from World data; Rust reports Residency::Unreported as errors.",
+ "normals": "map +04 (0,0,1), +10 (1,0,0), +1C (0,1,0) from 721330, never rewritten; block owner normals = [+40] = map",
+ "map_extremes": "723E00 discards the 721330 heightfield limits (+20/+24) and starts at +-FLT_MAX; 71A690 folds each loaded block, 71A750 recomputes over all blocks when +C0",
+ "open_gaps": [
+  "camera visibility pass 4312F0/430E50/430710/42FF50/42FE10 (residency owner)",
+  "7377F0 per-block water geometry (water triangles of +9C=1 blocks are errors)",
+  "855D30 assertion handler (723E00 assertions are errors)",
+  "71CFC0 vertex refresh after 431390 heightfield updates (no Rust heightfield update path)",
+  "for_world/load_block not run against a live World in tests",
+  "no mutation suite"
+ ]
+}

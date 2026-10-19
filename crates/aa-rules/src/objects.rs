@@ -84,6 +84,28 @@ impl ActorCatalog {
         precision: Precision,
     ) -> Result<ObjectDefinition> {
         let id = id.into();
+        // A successful result depends only on the selected root (query_memo),
+        // apart from `id`, which keeps the caller's spelling.
+        let root = self.selected_root(id).ok().flatten();
+        let key = root.map(|root| (root, precision.significand_bits()));
+        let memo = &self.resolution_cache.memo.object_definitions;
+        if let Some(hit) = key.and_then(|key| crate::query_memo::lock(memo)?.get(&key).cloned()) {
+            return Ok(ObjectDefinition {
+                id: id.ids.into(),
+                ..hit
+            });
+        }
+        let result = self.native_object_definition_uncached(id, precision);
+        if let (Some(key), Ok(value), Some(mut memo)) = (key, &result, crate::query_memo::lock(memo)) {
+            memo.insert(key, value.clone());
+        }
+        result
+    }
+    fn native_object_definition_uncached(
+        &self,
+        id: crate::actors::ThingRef<'_>,
+        precision: Precision,
+    ) -> Result<ObjectDefinition> {
         if !matches!(self.native_category(id)?.native_kind, 1 | 2 | 20 | 21) {
             return Err(Error::Unsupported(
                 "object shape loader requires ObjectData/ActorData/DynamicDoodadData".into(),

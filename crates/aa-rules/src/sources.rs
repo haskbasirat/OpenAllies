@@ -77,6 +77,8 @@ pub struct V14Sources {
     limits: SourceLimits,
     /// Built once at open: the archive and overlays never change afterwards.
     catalog: Vec<CatalogEntry>,
+    /// `lookup_key` -> catalog rows with that key, ascending (built on first use).
+    lookup_keys: std::sync::OnceLock<std::collections::HashMap<String, Vec<usize>>>,
 }
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -172,6 +174,7 @@ impl V14Sources {
             lookup,
             limits,
             catalog: Vec::new(),
+            lookup_keys: std::sync::OnceLock::new(),
         };
         sources.catalog = sources.build_catalog();
         Ok(sources)
@@ -184,6 +187,35 @@ impl V14Sources {
     /// The same rows and order as [`Self::catalog`], borrowed.
     pub fn catalog_entries(&self) -> &[CatalogEntry] {
         &self.catalog
+    }
+    /// The native resource-lookup key of a catalog path, as aa-runtime's
+    /// `resource_map_cache::normalized_key` computes it from the path's UTF-16
+    /// units: cut at the first NUL, ASCII only (else no key), every `\` made
+    /// `/`, ASCII lowercase.
+    pub fn lookup_key(path: &str) -> Option<String> {
+        let text = path.split('\0').next().unwrap_or("");
+        if !text.is_ascii() {
+            return None;
+        }
+        Some(text.replace('\\', "/").to_ascii_lowercase())
+    }
+    /// Clones of the catalog rows whose path has `lookup_key` equal to `key`,
+    /// in catalog order (the rows a filter over `catalog()` would keep).
+    pub fn rows_with_lookup_key(&self, key: &str) -> Vec<CatalogEntry> {
+        self.lookup_keys
+            .get_or_init(|| {
+                let mut out: std::collections::HashMap<String, Vec<usize>> =
+                    std::collections::HashMap::new();
+                for (index, row) in self.catalog.iter().enumerate() {
+                    if let Some(key) = Self::lookup_key(&row.logical_path) {
+                        out.entry(key).or_default().push(index);
+                    }
+                }
+                out
+            })
+            .get(key)
+            .map(|rows| rows.iter().map(|&index| self.catalog[index].clone()).collect())
+            .unwrap_or_default()
     }
     fn build_catalog(&self) -> Vec<CatalogEntry> {
         let mut result = Vec::new();

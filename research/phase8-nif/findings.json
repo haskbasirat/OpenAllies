@@ -1,0 +1,147 @@
+{
+ "schema": 1,
+ "scope": "AA.exe NiStream NIF reader: native oracle over every shipped NIF and the aa-formats port.",
+ "inventory": {
+  "files": 1900,
+  "version_counts": {
+   "04020200/0": 10,
+   "0a000100/0": 31,
+   "0a010000/0": 1859
+  },
+  "headers": {
+   "0a010000": "Gamebryo File Format, Version 10.1.0.0",
+   "0a000100": "NetImmerse File Format, Version 10.0.1.0",
+   "04020200": "NetImmerse File Format, Version 4.2.2.0"
+  },
+  "note": "All .nif members of Data.rwd; identical to the extracted loose copies; user version is read only for >= 10.0.1.8."
+ },
+ "native": {
+  "loaded": 1900,
+  "aborted": 0,
+  "executed_blocks": 4627,
+  "executed_sha256": "1034477f4ea56be992900af8e85ab0b58aab5e5af483ae54b16f2126461ad87f",
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+ },
+ "ported": {
+  "stream": {
+   "LoadHeader": "8810F0",
+   "GetLine": "876020",
+   "LoadStream": "881BD0",
+   "class table": "881960",
+   "groups": "880BB0",
+   "inline class (old)": "881AF0",
+   "top-level": "8812F0",
+   "loader map hash/compare": "8EB090/8EB0C0",
+   "LoadCString": "880EE0",
+   "ReadLinkID": "880A40",
+   "ReadMultipleLinkIDs": "880AA0",
+   "push count": "880B70",
+   "NiPoint3/NiMatrix3/NiQuaternion/NiPoint2/NiBound/NiTransform": "869420/870C10/871530/869CD0/8C5470/8752E0"
+  },
+  "classes": {
+   "NiObject": "86A8E0",
+   "NiObjectNET": "86B090",
+   "NiAVObject": "86F150",
+   "NiNode": "866130",
+   "NiBillboardNode": "8A3710",
+   "NiDynamicEffect": "89C8B0",
+   "NiLight": "89B5E0",
+   "NiPointLight": "89B2A0",
+   "NiCamera": "8746F0",
+   "NiGeometry": "8689E0",
+   "NiGeometryData": "8AC0B0",
+   "NiTriBasedGeomData": "87FA50",
+   "NiTriShapeData": "8D0800",
+   "NiTriStripsData": "8D1160",
+   "NiProperty": "86A550",
+   "NiAlphaProperty": "87CFD0",
+   "NiVertexColorProperty": "87B710",
+   "NiZBufferProperty": "88A320",
+   "NiDither/SpecularProperty": "88A0C0",
+   "NiStencilProperty": "8893E0",
+   "NiMaterialProperty": "87D3C0",
+   "NiTexturingProperty": "86CF20 (maps 86D720/86D8B0/86D9B0, transform 8A6830)",
+   "NiExtraData": "87B430",
+   "NiString/Integer/Boolean/Binary/Strings/TextKey ExtraData": "8C5590/87B110/90F980/8C5920/887710/8BAAA0",
+   "NiSourceTexture": "87BFA0",
+   "NiPixelData": "875D30 (format 869A80)",
+   "NiTimeController": "89F070",
+   "NiKeyframe/Vis/AlphaController": "8BFD00",
+   "NiLookAt/MaterialColorController": "8BDB40",
+   "NiLightColorController": "8BE200",
+   "NiPathController": "8BBC00",
+   "NiFlipController": "87C980",
+   "NiTextureTransformController": "8B8980",
+   "keys": "B45DC0 table: 863A50 860E30 865B10 863DF0 861BC0 864E70 864160 862AB0 8655B0 8634C0(8633D0) 863740, bool 8EA520",
+   "NiKeyframe/Float/Pos/Color/VisData": "8BF9D0/8C0E30/8BB180/8C1130/8B9A30",
+   "NiSkinInstance/Data/Partition": "8C3810/9096F0/87ECC0 (87E650)",
+   "old particles": "8C3370 (+0x3C from 8C31C0/90DF30), 90DB60, 8CDB90, 91B3A0, 8E0240, 8E0330, 8E0A80, 8E0B00, 8E1870",
+   "NiPSys": "89E230 8E6300 910670 8E9C00 8C7310 8E6E80 8E66E0 8E24D0 8C92E0 910BB0 8C8660 8C7BB0 8CB4C0 8CB880 8E7180 8E74B0 8E2F50 8E35B0 8E4460 8E54E0 8E94C0 8B8B60 8E1A30 8E4EA0"
+  },
+  "link": {
+   "NiObjectNET": "86B0E0",
+   "NiAVObject": "86F3A0",
+   "NiNode": "8678D0",
+   "NiTimeController": "89F160"
+  },
+  "version_branches": [
+   "NiAVObject flags: <4.1.0.11, <4.1.0.12, <5.0.0.1 transforms; <5.0.0.19 velocity/old bound; <10.0.1.2 flags&0x3F (full flags to B43E0C)",
+   "NiProperty <10.0.1.2: flags word to B43DC8, subclasses mask it",
+   "NiTimeController ==10.0.1.1 byte, <10.0.1.1 shift, <10.0.1.2 &0x1F (B44624), <10.0.1.3 |0x20",
+   "NiGeometryData: >=10.0.1.16 keep/compress, <4.1.0.0 u32 presence, >=10.0.0.2 data flags before normals, NBT tripling, <5.0.0.10 UV word",
+   "NiTriShape/StripsData >=10.0.1.17 presence bytes",
+   "NiSourceTexture <10.0.1.4 layout",
+   "NiPixelFormat >=10.0.1.11 tiling word, ==10.0.1.0 0x10000 flag",
+   "NiTexturingProperty <3.3.0.13 slot shift, raw presence byte pushed, >=5.0.0.17 shader maps, map >=10.0.1.10 transform",
+   "NiDynamicEffect >=10.0.1.14 affected nodes",
+   "NiCamera <10.0.1.2 flags from B43E0C, >=10.0.1.5 ortho",
+   "NiObjectNET/NiExtraData <5.0.0.11 single link / size",
+   "NiObject >=5.0.0.6 group"
+  ]
+ },
+ "proofs": [
+  {
+   "test": "crates/aa-formats/tests/nif_native_corpus.rs",
+   "fixture": "native-nif-corpus.tsv",
+   "fixture_sha256": "396eb739d3bc64f196d1c70d26a12a186f0ec7bba5fc95758550aef0feefa11b",
+   "result": "1900/1900 identical read traces, classes, link IDs/counts, pop sequences, top-level objects"
+  },
+  {
+   "test": "crates/aa-formats/tests/nif_native_fields.rs",
+   "fixture": "native-nif-fields.tsv",
+   "fixture_sha256": "f318bae37e26b3f5346ed5a4cc1ab8fc79c8d0bd403b1fe75a91ffcb3e5cf2e6",
+   "result": "1900/1900 native object graph records identical (4 post-processed files by class)"
+  },
+  {
+   "test": "crates/aa-client model_payload_backend::graph_fields::tests::native_projection_matches_the_former_sidecars",
+   "result": "the three former PyFFI sidecars equal the load-time native projection (property lists in native head-first order)"
+  }
+ ],
+ "gaps": [
+  "8E93B0 old-particle post-process conversion (4 files) is refused",
+  "texture palette identity (8806D0/8806C0/880A00)",
+  "AddExtraData naming/order (86AE60/86AC80)",
+  "PostLinkObject side effects",
+  "model graph JSON missing for 265 aliased-AV models"
+ ],
+ "producers": {
+  "native_nif_load.py": "b11bacad7aac714588252cee31d08ce9ba73d730aaa2f05bd9527f502ab0e569",
+  "native_nif_corpus.py": "40badb7178e5534ddaf4325c12f74c6c7026b803de73f0adc61c010ce7a1fd4b",
+  "native_nif_fields.py": "c6abada0d10001efad3f205dd2b48768e57b9b784fa9b959bdea12a16a16051d",
+  "corpus_tsv.py": "e7caea16b6023054677db832ca5ffe4450b0555aca6df1a8e3933a59bf536ee5",
+  "compare_trace.py": "9b5176257ce243c11671eab785ad0c92336b854d857a1b089fc763b9376a23d9"
+ },
+ "fixtures": {
+  "native-nif-corpus.json": "7b8bf4c2cfdc47211e3578ba5e3ab9a3ecdc20a8599ed5fba4c647cb95699a0d",
+  "native-nif-corpus.tsv": "396eb739d3bc64f196d1c70d26a12a186f0ec7bba5fc95758550aef0feefa11b",
+  "native-nif-samples.json": "d2a65dfc330439c9d1816887e7631375911ae65175f3e966d8291a0747c4c35f",
+  "native-nif-fields.tsv": "f318bae37e26b3f5346ed5a4cc1ab8fc79c8d0bd403b1fe75a91ffcb3e5cf2e6",
+  "native-nif-fields-samples.json": "a588aea8a150e53d0c2e8f0a2ee461efdbcbdcf017160d24d1f3cd7802081db6"
+ },
+ "next_blocker": {
+  "firefight": "Special/Things/ThingStartLocation/ThingStartLocation.nif (10.0.1.0): Plane01 NiKeyframeController, native flags 0x2C (file 0x0C)",
+  "berlin": "Doodads/Temperate/TemperateTrees/TemperatePineTree01.nif (10.1.0.0): Object03 NiKeyframeController, flags 0x28",
+  "native_path": "87AA10 model processing calls NiAVObject::Update 86E8D0 at 87ABC0 with (0, 1): NiNode UpdateDownwardPass 866EB0 -> 866BE0 controller update before world data; the backend refuses any node controller (supported())."
+ }
+}

@@ -105,6 +105,26 @@ impl<'owners,'run> FactoryInit<'owners,'run>{
 }
 pub struct Parts<'a,A>{pub native:&'a mut view_init_world::State<ViewHandle,A>,pub directory:&'a mut ViewDirectory,pub token:ViewToken}
 impl<A> VWorldOwner<A>{
+    ///43EC60's VWorld+208 request-queue segment over this SAME allocation and
+    ///the locked World: the per-UI-frame VWorld update 43FF60 (vtable 9FDFF8+C)
+    ///reaches it while VWorld+AD is set. Data vf1C gates; Data vf18(1) releases.
+    pub fn drain_ready_requests_43ec60(&mut self,world:&mut World<'_>,catalog:&aa_runtime::catalog::Catalog<'_>,
+        depot:&mut aa_runtime::resource_depot::Application,
+        services:&mut dyn super::view_directory::ReleaseServices)->Result<()>{
+        self.directory.require_world(world)?;self.token().opaque_handle()?;
+        let directory=&mut self.directory;
+        world.with_view_binding(|parts|directory.drain_ready_requests_43ec60(&parts,catalog,depot,services).map_err(|e|format!("{e:#}")))
+            .map_err(anyhow::Error::msg)
+    }
+    ///The orders input's view/actor leaves over this SAME directory and the
+    ///World's ActorStore/spatial owner (battle_orders_input::Live::views).
+    ///`context` carries the Session/UI words; without it those leaves err.
+    pub fn order_views<'s>(&'s mut self,world:&'s World<'_>,context:Option<&'s super::view_directory::OrderContext>)
+        ->Result<super::view_directory::DirectoryViews<'s>>{
+        self.directory.require_world(world)?;self.token().opaque_handle()?;
+        let parts=world.presentation_parts().map_err(anyhow::Error::msg)?;
+        super::view_directory::DirectoryViews::new(&mut self.directory,parts.actors,parts.spatial,parts.variables,context)
+    }
     pub fn token(&self)->ViewToken{ViewToken(Arc::downgrade(&self.allocation))}
     pub fn native(&self)->&view_init_world::State<ViewHandle,A>{&self.native}
     pub fn directory(&self)->&ViewDirectory{&self.directory}
@@ -146,14 +166,17 @@ impl<A> VWorldOwner<A>{
         initialization:Option<FactoryInit<'_,'_>>)->Result<aa_runtime::view_factory::Report>{
         self.directory.require_world(world)?;
         let token=self.token();token.opaque_handle()?;
-        let mut services=Factory{native:&mut self.native,directory:&mut self.directory,token:&token,catalog,inputs,diagnostics,initialization};
+        let mut services=Factory{native:&mut self.native,directory:&mut self.directory,token:&token,catalog,inputs,diagnostics,initialization,
+            census_failed:Vec::new()};
         let state=&mut self.factory;
         world.with_view_binding(|parts|aa_runtime::view_factory::run(state,parts,&mut services)).map_err(anyhow::Error::msg)
     }
 }
 struct Factory<'a,'assets,'run,A,D>{native:&'a mut view_init_world::State<ViewHandle,A>,directory:&'a mut ViewDirectory,
     token:&'a ViewToken,catalog:&'a aa_runtime::catalog::Catalog<'assets>,
-    inputs:&'a aa_runtime::view_startup_inputs::Inputs,diagnostics:&'a mut D,initialization:Option<FactoryInit<'a,'run>>}
+    inputs:&'a aa_runtime::view_startup_inputs::Inputs,diagnostics:&'a mut D,initialization:Option<FactoryInit<'a,'run>>,
+    ///Views whose Init failed under the diagnostic census (never in normal runs).
+    census_failed:Vec<ViewHandle>}
 impl<A,D:FactoryDiagnostics> aa_runtime::view_factory::Services for Factory<'_,'_,'_,A,D>{
     type View=ViewHandle;
     fn begin_diagnostic(&mut self)->std::result::Result<(),String>{self.diagnostics.begin()}
@@ -187,6 +210,7 @@ impl<A,D:FactoryDiagnostics> aa_runtime::view_factory::Services for Factory<'_,'
                 Err(error) if std::env::var_os("AA_STARTUP_CENSUS").is_some()
                     &&std::env::var_os("AA_STARTUP_CENSUS_CONTINUE").is_some()=>{
                     log::warn!("view census: {error}");
+                    self.census_failed.push(view);
                     Ok(false)
                 }
                 other=>other,
@@ -194,6 +218,12 @@ impl<A,D:FactoryDiagnostics> aa_runtime::view_factory::Services for Factory<'_,'
         }else{self.directory.initialize_bound(p,self.catalog,view).map_err(|e|e.to_string())}
     }
     fn destroy_view(&mut self,p:&mut aa_runtime::live_world_frame::ViewBindingParts<'_>,view:ViewHandle,free:u32)->std::result::Result<(),String>{
+        //Census only: a view the census failed is left allocated (diagnostic
+        //leak) so traversal continues; its object publishes no view.
+        if let Some(index)=self.census_failed.iter().position(|v|*v==view){
+            self.census_failed.swap_remove(index);
+            return Ok(());
+        }
         self.directory.destroy_bound(p,self.catalog,view,free).map_err(|e|e.to_string())
     }
     fn view_flags(&mut self,p:&aa_runtime::live_world_frame::ViewBindingParts<'_>,view:ViewHandle)->std::result::Result<u32,String>{

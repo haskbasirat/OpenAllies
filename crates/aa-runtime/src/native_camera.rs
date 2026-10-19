@@ -14,6 +14,9 @@ type Result<T> = std::result::Result<T,String>;
 #[path="native_camera_render_lists.rs"]pub mod render_lists;
 #[path="native_camera_quad.rs"]pub mod quad;
 #[path="native_camera_directory.rs"]pub mod directory;
+#[path="native_camera_input.rs"]pub mod input;
+#[path="native_camera_hotkeys.rs"]pub mod hotkeys;
+#[path="native_camera_screen.rs"]pub mod screen;
 
 ///One move-only field allocation; no Clone/Default/Deserialize/raw-word ctor.
 #[derive(Clone,Copy)]struct Word{bits:u32,known:u32}

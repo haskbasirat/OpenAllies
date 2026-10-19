@@ -268,7 +268,7 @@ struct Live<'a, 'r, 'c, 'm, R, S> {
 impl<R:PlacementRecord,S:CreationServices<R>> Live<'_, '_, '_, '_, R, S> {
     fn source_precision(&self) -> Result<Precision> {
         self.catalog.require_source_owner().map_err(fail)?;
-        self.record.with_bank(self.catalog,|bank|{let source=bank.combat_source().map_err(fail)?;if source.source_identities()!=self.catalog.actors.sources.as_slice(){return Err(fail("placement source FP owner differs from Catalog"))}Ok(source.source_precision())})
+        self.record.with_bank(self.catalog,|bank|{let source=bank.combat_source().map_err(fail)?;if !crate::catalog_lookups::same_sources(self.catalog,source.source_identities()){return Err(fail("placement source FP owner differs from Catalog"))}Ok(source.source_precision())})
 }
     fn id(&self, token: u32) -> Result<String> {
         self.record.with_bank(self.catalog,|bank|{let entry=bank.entry(token).map_err(fail)?;if entry.key.domain!="actordefinition"{return Err(fail("placement definition token domain differs"))}Ok(entry.key.name.clone())})

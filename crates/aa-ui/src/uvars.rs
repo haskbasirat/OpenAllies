@@ -133,6 +133,33 @@ pub const DEFS: &[Def] = &[
     d("MetaGameUIPurchaseConfirm", Bool, "true", None),
 ];
 
+/// UVars with no code registration in AA.exe: their only native references
+/// are the lookups inside 4DA570 (4BE130/4BE150 kind 1, 4B2E60 kind 4), and
+/// the records are created from `Data/UVars.tgi` (`bool
+/// SwapRightClickWithAltRightClick = false`, `string
+/// HotkeyAltRightClickCommand = retreat`; User/UVars.tgi on top through
+/// [`UVars::apply_overrides`]). No code default exists: without the source
+/// declaration there is no record.
+pub const SWAP_RIGHT_CLICK_WITH_ALT_RIGHT_CLICK: &str = "SwapRightClickWithAltRightClick";
+pub const HOTKEY_ALT_RIGHT_CLICK_COMMAND: &str = "HotkeyAltRightClickCommand";
+
+/// The record a source declaration creates for one of the variables above:
+/// its kind follows the declared type (`bool` kind 1, `string` kind 4);
+/// any other declaration creates a record of a kind 4DA570 does not read.
+fn source_created_order_variable(key: &str, decl: Option<&str>) -> Option<(&'static str, Kind)> {
+    let name = [SWAP_RIGHT_CLICK_WITH_ALT_RIGHT_CLICK, HOTKEY_ALT_RIGHT_CLICK_COMMAND]
+        .into_iter()
+        .find(|n| n.eq_ignore_ascii_case(key))?;
+    let kind = match decl.map(|t| t.trim().to_ascii_lowercase()).as_deref() {
+        Some("bool") => Bool,
+        Some("string") => Str,
+        Some("int") => Int,
+        Some("float") => Float,
+        _ => return None,
+    };
+    Some((name, kind))
+}
+
 /// Parse a TGI number (`80%` = 0.8).
 pub fn parse_number(s: &str) -> Option<f64> {
     let t = s.trim().trim_end_matches('f');
@@ -201,6 +228,9 @@ impl UVars {
             for f in &node.fields {
                 if let Some(raw) = &f.raw {
                     let key = f.name.to_ascii_lowercase();
+                    if let Some((name,kind))=source_created_order_variable(&key,f.decl.as_deref()) {
+                        v.defs.insert(key.clone(),d(name,kind,"",None));
+                    }
                     if v.defs.contains_key(&key) && !crate::view_variables::State::contains(&key) {
                         v.defaults.insert(key, crate::node::unquote(raw).trim().to_string());
                     }
@@ -284,11 +314,11 @@ impl UVars {
         let raw=self.raw(name).ok_or("camera render-list current variable absent")?.trim();
         if raw.eq_ignore_ascii_case("true")||raw=="1"{Ok(true)}else if raw.eq_ignore_ascii_case("false")||raw=="0"{Ok(false)}else{Err("camera render-list current Bool conversion unbound".into())}
     }
-    ///Strict current camera UVar fast table: exactly the eight proved native
+    ///Strict current camera UVar fast table: exactly the thirteen proved native
     ///registrations, actual source/current Maps, no missing-value fallback.
     pub fn camera_input_word(&self,offset:u32)->Result<u32,String>{
         self.camera_source.require()?;
-        let name=match offset{0x18=>"CameraScrollSpeed",0x24=>"CameraScrollEdgePadding",0x28=>"CameraScalePan",0x34=>"CameraScaleZoom",0xa8=>"MapDefaultWidth",0xac=>"MapDefaultHeight",0xb4=>"CameraRotate",0x288=>"EditorCameraUnlocked",_=>return Err("unbound native camera UVar fast-table offset".into())};
+        let name=match offset{0x18=>"CameraScrollSpeed",0x1c=>"CameraScrollAcceleration",0x20=>"CameraScrollSpeedMax",0x24=>"CameraScrollEdgePadding",0x28=>"CameraScalePan",0x2c=>"CameraScalePitch",0x30=>"CameraScaleYaw",0x34=>"CameraScaleZoom",0x38=>"CameraRotateSpeed",0xa8=>"MapDefaultWidth",0xac=>"MapDefaultHeight",0xb4=>"CameraRotate",0x288=>"EditorCameraUnlocked",_=>return Err("unbound native camera UVar fast-table offset".into())};
         let spec=crate::camera_source::INPUT_SPECS.iter().find(|s|s.name==name).unwrap();
         if !self.def(name).is_some_and(|d|d.kind==spec.kind){return Err("camera current UVar type absent/different".into())}
         let raw=self.raw(name).ok_or("camera current UVar value absent")?.trim();
@@ -306,6 +336,42 @@ impl UVars {
         self.set_f32("CameraScaleZoom",value);Ok(())
     }
     pub fn camera_variable_source_files(&self)->&[crate::view_variables::SourceFile]{self.camera_source.files()}
+    ///`[B39940]+0x250` (registration index 0x94, `UnitAcknowledgement`, Bool,
+    ///default true): the byte 436850 (selection voice) and 61EEF0
+    ///(acknowledgement voice) test before speaking.
+    pub fn unit_acknowledgement_current(&self)->Result<bool,String>{
+        if !self.def("UnitAcknowledgement").is_some_and(|d|d.kind==Kind::Bool){return Err("UVar 0x94 UnitAcknowledgement Bool definition absent".into())}
+        let raw=self.raw("UnitAcknowledgement").ok_or("UVar 0x94 UnitAcknowledgement current value absent")?.trim();
+        if raw.eq_ignore_ascii_case("true")||raw=="1"{Ok(true)}else if raw.eq_ignore_ascii_case("false")||raw=="0"{Ok(false)}
+        else{Err("UVar 0x94 UnitAcknowledgement noncanonical current Bool".into())}
+    }
+    ///4DA570 -> 4BE130/4BE150: the current byte of the source-created kind-1
+    ///record SwapRightClickWithAltRightClick. A missing record (no source
+    ///declaration) or one of another kind is the native NULL/wrong-record
+    ///fault, never a false fallback.
+    pub fn swap_right_click_with_alt_right_click_current(&self)->Result<bool,String>{
+        let name=SWAP_RIGHT_CLICK_WITH_ALT_RIGHT_CLICK;
+        match self.def(name).map(|d|d.kind){
+            Some(Kind::Bool)=>{},
+            Some(_)=>return Err("4BE130 UVar SwapRightClickWithAltRightClick record is not kind 1 (bool)".into()),
+            None=>return Err("4BE130 UVar SwapRightClickWithAltRightClick record absent (no Data/UVars.tgi declaration)".into()),
+        }
+        let raw=self.raw(name).ok_or("4BE150 UVar SwapRightClickWithAltRightClick current value absent")?.trim();
+        if raw.eq_ignore_ascii_case("true")||raw=="1"{Ok(true)}else if raw.eq_ignore_ascii_case("false")||raw=="0"{Ok(false)}
+        else{Err("4BE150 UVar SwapRightClickWithAltRightClick noncanonical current Bool".into())}
+    }
+    ///4DA570 -> 4B2E60: the current UTF-16 text (record+0x10) of the
+    ///source-created kind-4 record HotkeyAltRightClickCommand.
+    pub fn hotkey_alt_right_click_command_current(&self)->Result<Vec<u16>,String>{
+        let name=HOTKEY_ALT_RIGHT_CLICK_COMMAND;
+        match self.def(name).map(|d|d.kind){
+            Some(Kind::Str)=>{},
+            Some(_)=>return Err("4B2E60 UVar HotkeyAltRightClickCommand record is not kind 4 (string)".into()),
+            None=>return Err("4B2E60 UVar HotkeyAltRightClickCommand record absent (no Data/UVars.tgi declaration)".into()),
+        }
+        let raw=self.raw(name).ok_or("4B2E60 UVar HotkeyAltRightClickCommand current value absent")?;
+        Ok(raw.encode_utf16().collect())
+    }
     ///Current same-owner UVar67, read at40B733 after diagnostics/sound.
     pub fn message_maximum_lines_current(&self)->Result<i32,String>{
         self.message_source.require()?;
@@ -573,5 +639,27 @@ mod tests {
         }
         let warning=crate::view_variables::DATA_MISSING_RESOURCE_WARNING.to_ascii_lowercase();
         assert!(!values.values.contains_key(&warning));assert!(!values.defaults.contains_key(&warning));
+    }
+
+    #[test]
+    fn right_click_order_variables_are_source_created() {
+        // Data/UVars.tgi: `string HotkeyAltRightClickCommand = retreat`,
+        // `bool SwapRightClickWithAltRightClick = false`.
+        let mut store=TgiStore::new(crate::fs::DataRoot::workspace_default());
+        let mut values=UVars::load(&mut store);
+        assert_eq!(values.swap_right_click_with_alt_right_click_current(),Ok(false));
+        assert_eq!(values.hotkey_alt_right_click_command_current(),Ok("retreat".encode_utf16().collect()));
+        // User/UVars.tgi on top of the source record.
+        let user=BTreeMap::from([(SWAP_RIGHT_CLICK_WITH_ALT_RIGHT_CLICK.to_owned(),"true".to_owned())]);
+        values.apply_overrides(&user);
+        assert_eq!(values.swap_right_click_with_alt_right_click_current(),Ok(true));
+        // No code registration: without the source declaration no record exists.
+        let bare=UVars::default();
+        assert!(bare.swap_right_click_with_alt_right_click_current().is_err());
+        assert!(bare.hotkey_alt_right_click_command_current().is_err());
+        assert!(DEFS.iter().all(|d|!d.name.eq_ignore_ascii_case(SWAP_RIGHT_CLICK_WITH_ALT_RIGHT_CLICK)&&!d.name.eq_ignore_ascii_case(HOTKEY_ALT_RIGHT_CLICK_COMMAND)));
+        // A declaration of another type creates a record 4DA570 rejects.
+        assert_eq!(source_created_order_variable("hotkeyaltrightclickcommand",Some("int")),Some((HOTKEY_ALT_RIGHT_CLICK_COMMAND,Int)));
+        assert_eq!(source_created_order_variable("swaprightclickwithaltrightclick",None),None);
     }
 }

@@ -134,6 +134,14 @@ pub trait TickWorld {
     fn percentage_victory_check(&mut self) -> Result<(), EconomyError>;
     /// `0x58F530` snapshot construction and `0x45F240` push into kingdom+0x338.
     fn statistics_snapshot(&mut self) -> Result<(), EconomyError>;
+    /// The same `0x58F530` call inside [`Economy::tick`], given the kingdom+0x32C
+    /// statistics exactly as they stand at `0x4E37D0` (after `0x4CDFD0`, before
+    /// `0x58ED00` adds this tick's production). A live owner implements this to
+    /// copy those statistics; the default keeps laboratory implementors unchanged.
+    fn statistics_snapshot_of(&mut self, statistics: &Statistics) -> Result<(), EconomyError> {
+        let _ = statistics;
+        self.statistics_snapshot()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,6 +283,15 @@ pub fn advance_snapshot_timer(
     precision: X87Precision,
     world: &mut impl TickWorld,
 ) -> Result<(), EconomyError> {
+    advance_snapshot_timer_with(state, seconds, precision, || world.statistics_snapshot())
+}
+
+fn advance_snapshot_timer_with(
+    state: &mut TickState,
+    seconds: F32Bits,
+    precision: X87Precision,
+    snapshot: impl FnOnce() -> Result<(), EconomyError>,
+) -> Result<(), EconomyError> {
     finite(&[seconds, state.snapshot_timer])?;
     let accumulated = b(seconds)
         .add(&b(state.snapshot_timer), precision)
@@ -286,7 +303,7 @@ pub fn advance_snapshot_timer(
     state.snapshot_timer = b(accumulated)
         .sub(&b(SNAPSHOT_PERIOD_BITS), precision)
         .store_f32()?;
-    world.statistics_snapshot()
+    snapshot()
 }
 
 impl Economy {
@@ -376,7 +393,9 @@ impl Economy {
             world.percentage_victory_check()?;
         }
         if let Some(statistics) = statistics {
-            advance_snapshot_timer(state, input.seconds, precision, world)?;
+            advance_snapshot_timer_with(state, input.seconds, precision, || {
+                world.statistics_snapshot_of(statistics)
+            })?;
             accumulate_production_statistics(
                 statistics,
                 input.seconds,

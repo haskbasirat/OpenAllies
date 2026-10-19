@@ -109,7 +109,7 @@ impl Source {
     fn bank_precision(catalog:&Catalog<'_>,bank:&crate::definitions::Bank)->Result<Precision,String>{
         catalog.require_source_owner()?;
         let state=bank.combat_source()?;
-        if state.source_identities()!=catalog.actors.sources.as_slice(){return Err("ObjectData FX source FP owner differs".into())}
+        if !crate::catalog_lookups::same_sources(catalog,state.source_identities()){return Err("ObjectData FX source FP owner differs".into())}
         Ok(state.source_precision())
     }
     fn bind_at(catalog:&Catalog<'_>,definition:&RuntimeDefinition,source_precision:Precision,portrait:bool)->Result<Self,String>{

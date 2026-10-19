@@ -1,7 +1,8 @@
 //!Selected immutable ActorData request fields from464BD0, including each
 //!AbilityData's actual linked AbilityDefinition five-list context4BF840.
 //!This does not complete unrelated Ability/Actor LoadData or global source
-//!ordering. Positive unresolved shared definitions and derived534 stay required.
+//!ordering. Positive unresolved shared definitions stay required. +534 is the
+//!MobileDeployment forward unpack target (464BD0 block,4605B0), see deployment.
 use super::{Data,State,Result};
 use crate::{catalog::Catalog,definitions::Bank,fx_graph::{self,Graph},
     fx_graph::actor_request_source::Group,resource_depot::{Resources,Backend},resource_objects::ModelPolicy};
@@ -10,6 +11,8 @@ use aa_rules::{actors::ResolvedNode,resources::Provenance};
 use std::sync::Arc;
 #[path="actor_request_core.rs"]
 pub(crate) mod core;
+#[path="actor_deployment_534.rs"]
+pub(crate) mod deployment;
 
 #[derive(Clone)]
 pub struct Ability { data:Data, list:usize,index:usize }
@@ -17,6 +20,11 @@ struct AbilityFields { source:Vec<Provenance>,graph:Option<Arc<Graph>> }
 pub(super) struct Fields {
     definition:RuntimeDefinition,pairs:[Option<Arc<Graph>>;4],abilities:[Vec<AbilityFields>;3],
     step:usize,complete:bool,preparing:bool,failed:Option<String>,partial:Option<fx_graph::Failure>,pending_ability:Option<Vec<Provenance>>,
+    ///The464BD0 MobileDeployment block of THIS actor (None: no component).
+    mobile_block:Option<deployment::Block>,
+    ///+534: None until the post-LoadData475230/4605B0 pass ran; then the
+    ///forward target or the4624B0 null.
+    deployment_534:Option<Option<RuntimeDefinition>>,
 }
 #[cfg(test)]
 #[path="data_actor_request_tests.rs"]
@@ -25,7 +33,7 @@ impl std::fmt::Debug for Fields{
     fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.debug_struct("ActorRequestFields").field("id",&self.definition.proof.id).field("step",&self.step).field("complete",&self.complete).field("failed",&self.failed).finish()}
 }
 impl Fields{
-    fn constructed(definition:&RuntimeDefinition)->Self{Self{definition:definition.clone(),pairs:[None,None,None,None],abilities:[vec![],vec![],vec![]],step:0,complete:false,preparing:false,failed:None,partial:None,pending_ability:None}}
+    fn constructed(definition:&RuntimeDefinition)->Self{Self{definition:definition.clone(),pairs:[None,None,None,None],abilities:[vec![],vec![],vec![]],step:0,complete:false,preparing:false,failed:None,partial:None,pending_ability:None,mobile_block:None,deployment_534:None}}
 }
 fn error(e:impl std::fmt::Display)->String{e.to_string()}
 fn root<'a>(catalog:&'a Catalog<'_>,d:&RuntimeDefinition)->Result<ResolvedNode<'a>>{
@@ -38,7 +46,8 @@ impl State{
     fn ready_actor_fields(&self,data:&Data)->Result<&Fields>{let f=self.actor_fields(data)?;if !f.complete{return Err(f.failed.clone().unwrap_or_else(||"Actor request source projection unfinished".into()))}Ok(f)}
     ///Run once in the actual pre-World source-resource interval. The selected
     ///ordering is root pair, Character animations, Performer, Defender, Mover,
-    ///Body OnDeathAbility/health pair, then Portal. Graph/Resource failures
+    ///Body OnDeathAbility/health pair, Portal, then the MobileDeployment+534
+    ///source writer (no target is loaded here). Graph/Resource failures
     ///retain preceding same-owner allocations; this is not whole LoadData.
     pub fn prepare_actor_request_fields(&mut self,catalog:&Catalog<'_>,bank:&Bank,d:&RuntimeDefinition,
         resources:&mut Resources<'_>,policy:&mut impl ModelPolicy)->Result<()>{
@@ -92,9 +101,25 @@ impl State{
                     self.actor_fields_mut(&data)?.step+=1;
                 }
             }
+            //464BD0 46852F..4686D9 on THIS actor's own component (468538 follows
+            //Portal 46832A natively too). Its410C40 fails this definition and so
+            //the whole source preparation. The475230/4605B0 deferred pass runs
+            //only after every LoadData: complete_deferred_links_475230.
+            if self.actor_fields(&data)?.step==7{
+                let mask=d.component_mask.ok_or("Actor mask174 absent")?;
+                let block=match actor.child(deployment::COMPONENT).map_err(error)?{
+                    Some(scope)=>{
+                        let block=deployment::read_block(&mut deployment::Node{node:&scope,pc})?;
+                        deployment::validate_block(&block,&d.proof.id)?;Some(block)
+                    }
+                    None=>None,
+                };
+                if (mask&deployment::MOBILE_DEPLOYMENT_BIT!=0)!=block.is_some(){return Err("ActorData+174 bit19 and MobileDeploymentComponent source differ".into())}
+                let f=self.actor_fields_mut(&data)?;f.mobile_block=block;f.step=8;
+            }
             //The exact source precision is checked by every graph/compiler;
             //no live-frame precision is substituted for it.
-            let _=pc;self.actor_fields_mut(&data)?.complete=true;Ok(())
+            self.actor_fields_mut(&data)?.complete=true;Ok(())
         })();
         self.actor_fields_mut(&data)?.preparing=false;
         if let Err(error)=&result{self.actor_fields_mut(&data)?.failed=Some(error.clone());}result
@@ -146,8 +171,49 @@ impl State{
         graph.require_in_bank(catalog,bank)?;
         core::request_ability(delta,mode,|offset,delta,mode|self.request_fx_list(catalog,bank,&graph,graph.actor_request_roots(offset)?,resources,backend,delta,mode))
     }
-    pub(crate) fn actor_settlement_534(&self,data:&Data)->Result<Option<RuntimeDefinition>>{
+    ///The completed Graph holding one of the eight Actor FX pair lists, for
+    ///45DF40/45EF20's 428900/428950 (same roots45DD80's 4288B0 requests).
+    pub(crate) fn actor_fx_graph(&self,data:&Data,offset:u32)->Result<Option<Arc<Graph>>>{
+        let pair=core::PAIR_OFFSETS.iter().position(|&v|v==offset).ok_or("Actor FX offset is not one of8 actual FX pairs")?/2;
+        Ok(self.ready_actor_fields(data)?.pairs[pair].clone())
+    }
+    ///The SAME linked AbilityDefinition five-list Graph4BE420 requests, for4BE450/4BE480.
+    pub(crate) fn actor_ability_graph(&self,catalog:&Catalog<'_>,bank:&Bank,ability:&Ability)->Result<Arc<Graph>>{
+        let graph=self.ready_actor_fields(&ability.data)?.abilities.get(ability.list).and_then(|v|v.get(ability.index)).and_then(|a|a.graph.as_ref()).ok_or("Ability handle outside completed same Data allocation")?.clone();
+        graph.require_in_bank(catalog,bank)?;Ok(graph)
+    }
+    ///45DF17: the completed+534 of THIS Data, read only after45DF0B saw bit19.
+    ///Null for the pack side (packable buildings) and every non-mobile actor.
+    pub(crate) fn actor_deployment_534(&self,data:&Data)->Result<Option<RuntimeDefinition>>{
         let f=self.ready_actor_fields(data)?;
-        if f.definition.component_mask.ok_or("Actor mask174 absent")?&(1<<19)!=0{return Err("45DD80 positive ActorData534 requires actual derived SettlementData source writer".into())}Ok(None)
+        if f.step!=8{return Err("ActorData+534 MobileDeployment source writer unfinished".into())}
+        f.deployment_534.clone().ok_or_else(||"ActorData+534 requires the post-LoadData475230/4605B0 deferred pass".into())
+    }
+    ///475230 after the data files load: the whole deferred reference pass
+    ///(aa_rules::native_mobile_deployment, Unicorn-proven), then +534 of every
+    ///prepared ActorData. A deferred410C40 therefore follows every LoadData
+    ///error, as natively. Repeating it recomputes the same cached links.
+    pub fn complete_deferred_links_475230(&mut self,catalog:&Catalog<'_>,bank:&Bank)->Result<()>{
+        let pc=bank.combat_source()?.source_precision();
+        let mobile=catalog.native_mobile_deployment_data(pc)?;
+        let tokens:Vec<u64>=self.entries.iter().filter(|(_,e)|e.actor_requests.as_ref().is_some_and(|f|f.complete)).map(|(t,_)|*t).collect();
+        for token in tokens{
+            let f=self.entries.get(&token).and_then(|e|e.actor_requests.as_ref()).ok_or("prepared ActorData request fields disappeared")?;
+            let mask=f.definition.component_mask.ok_or("Actor mask174 absent")?;
+            let id=f.definition.proof.id.clone();
+            let present=mask&deployment::MOBILE_DEPLOYMENT_BIT!=0;
+            let target=match deployment::forward_534(mask,&id,f.mobile_block.as_ref(),present.then_some(&*mobile))?{
+                Some(target_id)=>{
+                    let target=catalog.resolve_registered(&target_id,pc)?;
+                    if target.proof.category.native_kind!=2||!target.proof.id.eq_ignore_ascii_case(&target_id){
+                        return Err("4605B0 ActorData+534 target is not its registered ActorData allocation".into())
+                    }
+                    Some(target)
+                }
+                None=>None,
+            };
+            self.entries.get_mut(&token).and_then(|e|e.actor_requests.as_mut()).ok_or("prepared ActorData request fields disappeared")?.deployment_534=Some(target);
+        }
+        Ok(())
     }
 }

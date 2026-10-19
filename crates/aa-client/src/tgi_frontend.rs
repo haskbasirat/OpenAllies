@@ -670,3 +670,104 @@ pub fn paint(
         }
     }
 }
+
+#[cfg(test)]
+mod frame_growth_tests {
+    use super::*;
+    use eframe::egui;
+    fn root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(3).unwrap().join("reconstruction")
+    }
+    struct Frame {
+        indices: usize,
+        vertices: usize,
+        commands: usize,
+        ms: f64,
+    }
+    fn run_frames(front: &mut TgiFrontend, over_battle: bool, frames: usize) -> Vec<Frame> {
+        let ctx = egui::Context::default();
+        let mut tex = UiTextures::new(&root());
+        let mut video = MenuVideo::new(None);
+        let mut out = Vec::new();
+        for i in 0..frames {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0))),
+                time: Some(i as f64 / 60.0),
+                ..Default::default()
+            };
+            let start = std::time::Instant::now();
+            let output = ctx.run(input, |ctx| {
+                if over_battle {
+                    front.frame_over_battle(ctx, &mut tex, &mut video, None, true);
+                } else {
+                    front.frame(ctx, &mut tex, &mut video, None, true);
+                }
+            });
+            let primitives = ctx.tessellate(output.shapes, output.pixels_per_point);
+            let ms = start.elapsed().as_secs_f64() * 1000.0;
+            let (mut indices, mut vertices) = (0, 0);
+            for p in &primitives {
+                if let egui::epaint::Primitive::Mesh(m) = &p.primitive {
+                    indices += m.indices.len();
+                    vertices += m.vertices.len();
+                }
+            }
+            let commands = front.ui.draw_list().commands.len();
+            out.push(Frame { indices, vertices, commands, ms });
+        }
+        out
+    }
+    fn report(label: &str, frames: &[Frame]) {
+        let first = &frames[1];
+        let last = frames.last().unwrap();
+        let mean = frames[1..].iter().map(|f| f.ms).sum::<f64>() / (frames.len() - 1) as f64;
+        eprintln!("{label}: frame1 indices={} vertices={} commands={}; last indices={} vertices={} commands={}; mean {mean:.2} ms",
+            first.indices, first.vertices, first.commands, last.indices, last.vertices, last.commands);
+        for f in &frames[1..] {
+            assert_eq!((f.indices, f.vertices, f.commands), (first.indices, first.vertices, first.commands), "{label} per-frame geometry grew");
+        }
+    }
+    ///The two Loading pages a long load shows: the pre-bind TGI page and the
+    ///native-menus LoadingScreen forest over the battle frame.
+    #[test]
+    #[ignore = "requires installed original/v14 UI data"]
+    fn long_loading_frames_draw_a_constant_tree() {
+        let mut front = TgiFrontend::new(&root());
+        front.loading("(2v2)Berlin", "app_status_loading_resources");
+        let frames = run_frames(&mut front, false, 400);
+        report("pre-bind Loading page", &frames);
+        let mut front = TgiFrontend::new(&root());
+        let (ui, menus) = front.native_parts();
+        let selectors = menus.bind(ui, &["money".to_string(), "ammo".to_string()]).unwrap();
+        menus.show(ui, &selectors.loading).unwrap();
+        let frames = run_frames(&mut front, true, 400);
+        report("native LoadingScreen over battle", &frames);
+        {
+            let ui = &mut front.ui;
+            let time = |label: &str, f: &mut dyn FnMut()| {
+                let start = std::time::Instant::now();
+                for _ in 0..400 {
+                    f();
+                }
+                eprintln!("  {label}: {:.3} ms", start.elapsed().as_secs_f64() * 1000.0 / 400.0);
+            };
+            time("ui.update", &mut || ui.update(1000));
+            time("ui.layout", &mut || ui.layout());
+            time("ui.draw_list", &mut || {
+                ui.draw_list();
+            });
+            //The cached draw list equals one built with every cache cleared.
+            let cached = serde_json::to_value(ui.draw_list()).unwrap();
+            let screen = ui.screen;
+            ui.set_screen(aa_ui::layout::Screen { width: screen.width + 1, height: screen.height });
+            ui.set_screen(screen);
+            ui.layout();
+            let fresh = serde_json::to_value(ui.draw_list()).unwrap();
+            assert_eq!(cached, fresh, "cached draw list differs from a fresh rebuild");
+        }
+        let (ui, menus) = front.native_parts();
+        menus.show(ui, &selectors.game).unwrap();
+        let frames = run_frames(&mut front, true, 200);
+        report("native Game interface over battle", &frames);
+    }
+}

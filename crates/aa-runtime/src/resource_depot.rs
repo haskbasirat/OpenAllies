@@ -68,6 +68,8 @@ struct Manager {
     model_class:Option<crate::resource_model_class::ModelClass>,
     ni_cache:crate::resource_ni_cache::State,
     texture_objects:crate::resource_texture_owner::State,
+    ///KKC_ResourceCacheManager at native ResourceManager+9C.
+    cache:cache::State,
     warnings: Vec<String>,
     ///Native404FC0 calls reached by a caught missing-source path, in order.
     missing_resource_diagnostics: Vec<MissingResourceDiagnostic>,
@@ -114,6 +116,19 @@ fn missing_resource_level(warning: u8) -> u32 {
 fn require_no_unbound_view_invalidation(resources:&BTreeMap<String,ViewResourceRegistration>)->Result<()> {
     if !resources.is_empty(){return Err("5ACA50 modern view/model residency requires actual native class/refcounts and same-owner GPU unload; new+80 retained".into());}
     Ok(())
+}
+///5ACA50 over the SAME Manager+60 namespace, reached only after5AE0A0 has
+///copied the changed+80 subfolder. Map/Film private owners have no generic
+///insertion API; Map B3D7DC->B38E24 and Film B3D7F0->B3D7DC->B38E24 never
+///reach B3D990 and skip before +4/+8. Concrete entries take the exact native
+///per-entry predicate. Bucket order is unobservable while every entry skips.
+fn invalidate_namespace_5aca50(maps:&resource_map_cache::State,films:&BTreeMap<String,Resource>,
+    resources:&BTreeMap<String,crate::resource_objects::Entry>,view_resources:&BTreeMap<String,ViewResourceRegistration>)->Result<(usize,usize)>{
+    let maps=maps.keys().count();
+    let films=films.values().count();
+    require_no_unbound_view_invalidation(view_resources)?;
+    crate::resource_model_unload::invalidate_5aca50(resources.values())?;
+    Ok((maps,films))
 }
 ///Move-only same-application registration retained by the actual View owner.
 ///This does not certify native Ni class/refcounts, Init, upload, or readiness.
@@ -164,6 +179,7 @@ impl Application {
                 audio_class:None,
                 model_class:None,
                 ni_cache:crate::resource_ni_cache::State::from_fresh_application(&origin),
+                cache:cache::State::default(),
                 texture_objects:crate::resource_texture_owner::State::from_fresh_application(&origin),
                 warnings: Vec::new(),
                 missing_resource_diagnostics: Vec::new(),
@@ -255,10 +271,11 @@ impl Application {
     ///Read-only capability to the SAME Data allocation owner, independent of
     ///mutable source/depot sibling loans. Retaining it cannot keep App alive.
     pub fn source_graphs(&self)->SourceGraphsRead{SourceGraphsRead{application:Arc::downgrade(&self.origin),state:Arc::clone(&self.data_requests)}}
-    ///43F0F1->5AE0A0 over this SAME manager. All currently admitted cache
-    ///entries are typed MapResource/FilmResource allocations, including map
-    ///Pending/Failed prefixes. Their class chains exclude NiAVObjResource,
-    ///so5ACA50 skips each before reading flags/counts or unloading anything.
+    ///43F0F1->5AE0A0 over this SAME manager. Map/Film allocations (including
+    ///map Pending/Failed prefixes) and Texture/Sequence/Sound entries have
+    ///class chains without NiAVObjResource B3D990, so5ACA50 skips each before
+    ///reading flags/counts. A Model is unloaded only when it is a cached
+    ///(bit5) unrequested (signed count<=0) entry; see resource_model_unload.
     ///A modern GPU cache may not be silently attached to this closed namespace.
     pub fn set_vworld_resource_context(
         &mut self,
@@ -270,20 +287,37 @@ impl Application {
         let mut manager = self.manager.lock().map_err(|_| "resource manager lock poisoned")?;
         let Manager { films, resources, texture_subfolder_80,view_resources, .. } = &mut *manager;
         texture_subfolder_80.assign_and_invalidate(&input.units, || {
-            //These private owners have no generic insertion API. Native
-            //Map B3D7DC->Resource B38E24 and Film B3D7F0->Map chains cannot
-            //reach the unrelated NiAVObj descriptor B3D990. Bucket order
-            //has no observable effect when EVERY entry takes that skip.
-            let maps = self.maps.keys().count();
-            let films = films.values().count();
-            require_no_unbound_view_invalidation(view_resources)?;
-            if resources.values().any(|v|v.handle.kind()==crate::resource_objects::Kind::Model){
-                return Err("5ACA50 actual Model Resource requires same-owner unload; new+80 retained".into());
-            }
-            //Texture B3D97C->Resource B38E24 is not NiAVObj B3D990 and skips.
-
-            Ok((maps, films))
+            invalidate_namespace_5aca50(&self.maps, films, resources, view_resources)
         })
+    }
+    ///43F0F1->5AE0A0 with the actual resource backend: every 5ACA50-eligible
+    ///cached unrequested NiAVObj Resource is unloaded through 5ABFF0 after
+    ///the +80 assignment, in this namespace's traversal order.
+    pub fn set_vworld_resource_context_with(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &crate::definitions::Bank,
+        biome: &crate::vworld_resource_context::Biome,
+        backend: &mut impl Backend,
+    ) -> Result<crate::vworld_resource_context::Update> {
+        let input = crate::vworld_resource_context::Input::bind(catalog, bank, biome)?;
+        let mut eligible = Vec::new();
+        let update = {
+            let mut manager = self.manager.lock().map_err(|_| "resource manager lock poisoned")?;
+            let Manager { films, resources, texture_subfolder_80, view_resources, .. } = &mut *manager;
+            let maps = &self.maps;
+            texture_subfolder_80.assign_and_invalidate(&input.units, || {
+                let counts = (maps.keys().count(), films.values().count());
+                require_no_unbound_view_invalidation(view_resources)?;
+                eligible = crate::resource_model_unload::eligible_handles_5aca50(resources.values());
+                Ok(counts)
+            })?
+        };
+        let mut resources = self.resources();
+        for handle in &eligible {
+            resources.unload_5abff0(handle, backend)?;
+        }
+        Ok(update)
     }
     ///A copied diagnostic value, never another mutable manager authority.
     pub fn vworld_texture_subfolder(&self) -> Result<Vec<u16>> {
@@ -913,6 +947,37 @@ impl Depot for FilmDepot<'_, '_> {
         assert_eq!(resources.len(),1);
         assert!(!context.assign_and_invalidate(&next,||panic!("equal native prefix skips invalidation")).unwrap().changed);
     }
+    ///The Firefight (Tropical) prefix: constructed/requested/loaded Models and
+    ///other classes skip; only a cached unrequested Model reaches5ABFF0.
+    #[test]fn namespace_5aca50_skips_uncached_models_and_refuses_cached_unload() {
+        use crate::resource_objects::{Entry,SourceFile};
+        let origin=Arc::new(());let priority=crate::resource_task::DefaultPriority::from_fresh_application(&origin);
+        let source=|name:&str|SourceFile::from_catalog(&aa_rules::sources::CatalogEntry{logical_path:name.into(),size:0,
+            origin:aa_rules::sources::Origin::OriginalArchive{member_index:0}});
+        let ids=|name:&str|name.encode_utf16().collect::<Vec<_>>();
+        let mut resources=BTreeMap::new();
+        let mut model=Entry::model(&origin,ids("Units/a.nif"),source("Units/a.nif"),&priority).unwrap();
+        model.attach_selected_source(source("Units/a.nif")).unwrap();
+        resources.insert("units/a.nif".to_string(),model);
+        let mut requested=Entry::model(&origin,ids("Units/b.nif"),source("Units/b.nif"),&priority).unwrap();
+        requested.requests4=1;requested.flags8|=7;
+        resources.insert("units/b.nif".to_string(),requested);
+        let mut texture=Entry::texture(&origin,ids("Art/c.dds"),source("Art/c.dds"),&priority).unwrap();
+        texture.flags8|=0x21;
+        resources.insert("art/c.dds".to_string(),texture);
+        let maps=resource_map_cache::State::constructed();let films=BTreeMap::new();let views=BTreeMap::new();
+        let mut context=crate::vworld_resource_context::State::constructed();
+        let tropical="Tropical".encode_utf16().collect::<Vec<_>>();
+        let update=context.assign_and_invalidate(&tropical,||invalidate_namespace_5aca50(&maps,&films,&resources,&views)).unwrap();
+        assert!(update.changed);assert_eq!((update.maps_examined,update.films_examined),(0,0));
+        assert_eq!(resources["units/a.nif"].flags8,0x400);assert_eq!(resources["units/b.nif"].requests4,1);
+        //A released+cached entry (bit5, count0) cannot be produced by the
+        //port yet; when it exists the native unload is required, +80 kept.
+        resources.get_mut("units/b.nif").unwrap().requests4=0;resources.get_mut("units/b.nif").unwrap().flags8|=0x20;
+        let arctic="Arctic".encode_utf16().collect::<Vec<_>>();
+        let error=context.assign_and_invalidate(&arctic,||invalidate_namespace_5aca50(&maps,&films,&resources,&views)).unwrap_err();
+        assert!(error.contains("5ABFF0")&&error.contains("Units/b.nif"),"{error}");assert_eq!(context.current(),arctic);
+    }
 }
 
 ///A scoped loan of the actual generic ResourceManager/source backend. This
@@ -932,7 +997,7 @@ impl Resources<'_>{
     fn source(&self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank)->Result<()>{
         catalog.require_source_owner()?;
         let fields=bank.combat_source()?;fields.completed_means()?;
-        if fields.source_identities()!=catalog.actors.sources.as_slice(){return Err("Resource factory actual Bank/source owner differs".into());}
+        if !crate::catalog_lookups::same_sources(catalog,fields.source_identities()){return Err("Resource factory actual Bank/source owner differs".into());}
         Ok(())
     }
     ///5AD430/5AEA90 cached part; every successful lookup increments actual14,
@@ -962,7 +1027,7 @@ impl Resources<'_>{
                 if path.try_exists().map_err(|e|e.to_string())?{return Err("5AEA90 actual work-directory Resource requires retained writable depot/class loader".into());}
             }
         }
-        let matches=self.sources.catalog().into_iter().filter(|v|resource_map_cache::normalized_key(&v.logical_path.encode_utf16().collect::<Vec<_>>()).as_ref()==Ok(&key)).collect::<Vec<_>>();
+        let matches=self.sources.rows_with_lookup_key(&key);
         if matches.is_empty(){return Ok(None)}
         let [selected]=matches.as_slice()else{return Err("actual accepted Resource source file is ambiguous".into())};
         let kind=crate::resource_objects::class_for_name(ids)?.ok_or("5AEA90 actual source class constructor remains required")?;
@@ -1436,6 +1501,16 @@ pub trait Backend:crate::resource_task::Services{
     ///NiSequence. The concrete backend must dispatch on the SAME Handle kind.
     fn model_after_base_3c_in(&mut self,_resources:&mut Resources<'_>,_resource:&crate::resource_objects::Handle)->Result<()>{Err("5A5410 actual Ni cache entry after flagsOR6 is required".into())}
     fn double_request_warning(&mut self,_resource:&crate::resource_objects::Handle,_count:i32)->Result<()>{Err("5AA3F0 actual double-request diagnostic404FC0 is required".into())}
+    ///5AC3D0 reads the SAME current indexed UVar54 ResourceCaching cell
+    ///([B39940]+D8) only when flags+8 bit3 is clear.
+    fn resource_caching_54(&mut self,_resource:&crate::resource_objects::Handle)->Result<u8>{Err("5AC3D0 actual current indexed UVar54 ResourceCaching is required".into())}
+    ///5AC3D0/5ABFF0 manager+3C guard around an unload (+20 uses enter_request).
+    fn enter_unload_3c(&mut self,_resource:&crate::resource_objects::Handle)->Result<()>{Err("5AC3D0/5ABFF0 actual ResourceManager+3C guard is required".into())}
+    fn leave_unload_3c(&mut self,_resource:&crate::resource_objects::Handle)->Result<()>{Err("5AC3D0/5ABFF0 actual ResourceManager+3C guard release is required".into())}
+    ///404F60/404F90 ResourceManager release/unload diagnostics, in call order.
+    fn release_log(&mut self,_resource:&crate::resource_objects::Handle,_log:&release::ReleaseLog)->Result<()>{Err("ResourceManager release/unload 404F60/404F90 diagnostic sink is required".into())}
+    ///5A6560 calls 73D4B0(+40) for a Model whose flags+8 bit17 is set.
+    fn detach_model_root_73d4b0(&mut self,_resource:&crate::resource_objects::Handle)->Result<()>{Err("5A6560 bit17 actual 73D4B0 NiAVObject detach is required".into())}
 }
 struct ResourceCallbacks<'a,'r,B>{resources:&'a mut Resources<'r>,backend:&'a mut B}
 impl<B:Backend+crate::resource_task::DispatchServices>crate::resource_task::DispatchServices for ResourceCallbacks<'_,'_,B>{
@@ -1460,8 +1535,10 @@ impl<B:Backend>crate::resource_task::Services for ResourceCallbacks<'_,'_,B>{
     fn loaded_diagnostic(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.loaded_diagnostic(r)}
     fn leave_load(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.leave_load(r)}
     fn enter_request(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.enter_request(r)}
-    fn cached_resource_59bfa0(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.cached_resource_59bfa0(r)}
-    fn cached_resource_virtual2c(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.cached_resource_virtual2c(r)}
+    ///5B0270 under +20: the SAME manager's 59BFA0 cache removal.
+    fn cached_resource_59bfa0(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.resources.cache_remove_59bfa0(r)}
+    ///vf2C of all four admitted classes is the actual RET leaf 4B2830.
+    fn cached_resource_virtual2c(&mut self,_r:&crate::resource_objects::Handle)->Result<()>{Ok(())}
     fn leave_request(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.leave_request(r)}
     fn request_diagnostic(&mut self,r:&crate::resource_objects::Handle,i:bool)->Result<()>{self.backend.request_diagnostic(r,i)}
     fn removing_from_queue_diagnostic(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.removing_from_queue_diagnostic(r)}
@@ -1470,6 +1547,8 @@ impl<B:Backend>crate::resource_task::Services for ResourceCallbacks<'_,'_,B>{
     fn timing_enabled_40eaa0(&mut self)->Result<bool>{self.backend.timing_enabled_40eaa0()}
     fn block_diagnostic(&mut self,r:&crate::resource_objects::Handle,d:crate::resource_task::BlockDiagnostic)->Result<()>{self.backend.block_diagnostic(r,d)}
     fn block_till_ready_5b1fd0(&mut self,t:&crate::resource_task::Task,q:&crate::resource_task::TaskQueue)->Result<()>{self.backend.block_till_ready_5b1fd0(t,q)}
+    fn enter_manager_5abb30(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.enter_manager_5abb30(r)}
+    fn leave_manager_5abb50(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.leave_manager_5abb50(r)}
 }
 fn block_resource(task:&crate::resource_task::Task,queue:&crate::resource_task::TaskQueue,services:&mut impl crate::resource_task::Services)->Result<()>{
     if services.resource_flags8(task.resource())?&1==0{
@@ -1478,6 +1557,10 @@ fn block_resource(task:&crate::resource_task::Task,queue:&crate::resource_task::
     }
     Ok(())
 }
+#[path="resource_cache.rs"]
+mod cache;
+#[path="resource_release.rs"]
+pub mod release;
 #[cfg(test)]
 #[path="resource_texture_load_tests.rs"]
 mod texture_load_tests;

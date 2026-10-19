@@ -1,0 +1,175 @@
+{
+ "schema": 1,
+ "scope": "Loading AppState6 -> Game AppState4 entry, UserReady, Game interface construction/Show. Application-state evidence only; no playable battle, no live HUD data.",
+ "native_flow": {
+  "main_loop": "410E70: 40FBE0 drains notifications to current node +1C; current node +10 tick; 5C92D0 UI update; 5C7AC0 render",
+  "loading_node": {
+   "ctor": "0x682DE0",
+   "vtable": "0xA6E6A4",
+   "tick_10": "0x682EE0",
+   "enter_14": "0x682E70",
+   "leave_18": "0x40CAA0",
+   "event_1c": "0x682FD0",
+   "finished_28": "0x682DB0"
+  },
+  "game_node": {
+   "ctor": "0x608C60 (copies 0xB3974C)",
+   "vtable": "0xA56C00",
+   "tick_10": "0x4B2830 RET",
+   "enter_14": "0x608C80 jmp 0x40CA80",
+   "leave_18": "0x5E8900 jmp RET",
+   "event_1c": "0x414620",
+   "finished_28": "0x943800 ret 4"
+  },
+  "main_node": {
+   "ctor": "0x6E7FF0",
+   "vtable": "0xA7ED98",
+   "enter_14": "0x40CA80",
+   "leave_18": "0x4B2830 RET",
+   "event_1c": "0x414D60 jmp 0x414620",
+   "finished_28": "0x943800"
+  },
+  "game_interface": {
+   "global": "0xB3974C = Application+0xBC",
+   "ctor": "0x61A650",
+   "vtable": "0xA5B0B0",
+   "init_c8": "0x6182B0 (called by KKC_Application::Init at 0x41AA7A)",
+   "on_connected_48": "0x60BAE0",
+   "update_0c": "0x612010",
+   "initialized_e8": "0x4B2830 RET"
+  },
+  "user_ready": "ReadyButton command UserReady -> 0x6E80F0: Application+E4 (40D970) +16 = 1, no AppState test",
+  "ready_prompt": "LoadingScreen update 0x6E8C00: ReadyButton hidden && +17 && !+16 -> app_status_finished, show ReadyButton",
+  "loading_tick": "0x682EE0: +15 && +17 && +16 -> (AD && Session+F4 -> waiting status), 0x76ACA0(AD) -> 0x74FF50 Node+90 = 3/4, 0x74E970 request; +17 = 0; then +14 -> 0x40CE10(+C, 0, 0)",
+  "skirmish_launch": "selected-map confirmation launches kind 6 with +C = 4, +10 = 1: +16 is not preset, the ReadyButton press is required",
+  "kind9": "0x775BF0 all tasks complete (after the 304/315 task protocol) pushes notification kind 9 and unfreezes the simulation; 0x682FD0 sets Loading+14",
+  "set_state_6_to_4": "0x40CE10: diagnostic, Loading OnLeave 0x40CAA0 (+8 = 0), +110 = 6, +10C = 4, Game OnEnter 0x40CA80 -> Show 0x5C0440(1) on the Game interface"
+ },
+ "waits_for": [
+  "VWorld initialization (notification kind 1 -> 0x40CF00 -> UI 0x5C3000 -> 0x43F0A0) finished with VWorld+AD = 1",
+  "the VWorld resource task callback 0x5B3550 (Loading+17)",
+  "the ReadyButton press (Loading+16)",
+  "the 304 task status -> 315 -> 0x775BF0 protocol, notification kind 9 (Loading+14)",
+  "the next Loading tick 0x682EE0"
+ ],
+ "oracle": {
+  "producer": "research/development10/game-state-entry/native_game_state.py",
+  "fixture": "research/development10/game-state-entry/native-game-state.json",
+  "fixture_sha256": "e5b3c511e90b990ab8eed7d46fb3da3480436282548a794b29b2a3b44f241cb7",
+  "executions": 1584,
+  "images": [
+   "original 5d2548a2...",
+   "v14 3bda77d7..."
+  ],
+  "precisions": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "executed_instruction_pins": 146,
+  "seams": [
+   "0x401B00",
+   "0x773CE0",
+   "0x76ACA0",
+   "0x404F60",
+   "0x5C0440"
+  ],
+  "rust_replay": "aa-client battle_notifications::game_state_tests (node_slots_are_the_native_vtables, native_loading_to_game_set_state_rows: 792 rows)"
+ },
+ "rust_changes": {
+  "crates/aa-client/src/battle_notifications.rs": "native node slot table drives OnEnter/OnLeave/event prefix/menu-finished; Game vf28 943800; UserReady without AppState test; Game interface built from native Resource registry; current_state()",
+  "crates/aa-client/src/battle_menus.rs": "Game interface via aa_ui::hud::Hud::construct (Init 6182B0) at bind; Show runs Hud::on_connected (60BAE0); Game +E8 RET; draw-list dump in the ignored test",
+  "crates/aa-client/src/battle_controller.rs": "application_state(); queued UserReady presses; distinct game-frame stop message; in-game status text",
+  "crates/aa-client/src/frontend.rs": "status box moves to the top-right in AppState 4",
+  "crates/aa-ui/src/hud.rs": "Hud::construct / on_connected / bind_resources split; Hud::show unchanged"
+ },
+ "tests": {
+  "aa-client game_state_tests + menu test": "3 passed (client-game-state-tests01.log)",
+  "aa-client all non-ignored": "147 passed, 29 ignored (client-all-tests01.log)",
+  "aa-ui all": "all passed (aa-ui-all-tests01.log)"
+ },
+ "real_run": {
+  "folder": "qa-output/development10/game-state-entry/hud01/berlin",
+  "executable_sha256": "4f382e4952412f2fa5725d3040463e60f1e971f431e814c33db48e8a3e9eb2ff",
+  "reached": "SetState 0->2, 2->6, World view creation end (7970 views)",
+  "stop": "Native view initialization stopped: selected Model requires exact source-bound property/effect field projection (model_graph_fields.rs; model-native-fields index has 3 sources)",
+  "game_state_reached": false,
+  "screenshot": "qa-output/development10/game-state-entry/hud01/berlin/after-2640s.png"
+ },
+ "open_gaps": [
+  "Game interface update 0x612010 and children's live-World reads (local kingdom 0x5C1760 -> Session 0x76AC70 -> player 0x765E00; economy +1A0/+1AC/+1B8/+1C4; faction experience player+230; idle 0x6233C0; selection; action buttons) need read accessors in aa-netcode/aa-runtime",
+  "Game OnConnected 0x60BAE0 world reads (0x5C1760+1F0 visibility) not ported",
+  "LoadingScreen OnConnected 0x6E8730 -> refresh 0x6E83A0 not bound in the native-menus path",
+  "KKC_UI::Reskin 0x5C3DC0 nation skin not bound",
+  "after SetState 4 the live frames run the unfrozen simulation; any unported child stops with 'Native game frame stopped'"
+ ],
+ "continuation_20261019": {
+  "read_accessors": {
+   "crates/aa-netcode/src/local_hud_reads.rs": "local_player_kingdom_76ac70, session_state_e4, session_multiplayer_f4, sim_paused_28, session_phase_f8, session_launch_mode_58, session_status_148, local_player_present_76ac60, game_settings_68_texts, local_player_creator_nation_50dc00, local_player_selection_empty",
+   "crates/aa-runtime/src/hud_world_reads.rs": "kingdom_shell, kingdom_economy (+1A0/+1AC/+1B8/+1C4), kingdom_shortage_ratio_1f0, kingdom_commander_experience_230, view_time_8c, economy_limited_resource_max"
+  },
+  "game_update_612010": {
+   "port": "crates/aa-ui/src/game_interface_update.rs",
+   "oracle": "research/development10/game-state-entry/native_game_update.py",
+   "fixture": "native-game-update.json",
+   "fixture_sha256": "894557bcc9f8442711e3aad39e86f4be2e9a923e9c4f59d81331ab69414be63d",
+   "executions": 1848,
+   "pins": 452,
+   "rust_replay": "crates/aa-ui/tests/native_game_update.rs (924 rows)",
+   "binding": "crates/aa-client/src/battle_game_hud.rs LiveFrame/GameServices; battle_notifications drain AppState4; battle_menus game_update"
+  },
+  "loading_refresh_6e8730_6e83a0_6e8300": {
+   "port": "crates/aa-ui/src/loading_refresh.rs",
+   "oracle": "native_loading_refresh.py",
+   "fixture": "native-loading-refresh.json",
+   "fixture_sha256": "5203c02b7260d03326054ef4906e29600deb7c3230349f53b988881e6f1764cc",
+   "executions": 1272,
+   "pins": 314,
+   "precision_independent": true,
+   "rust_replay": "crates/aa-ui/tests/native_loading_refresh.rs (212 rows)",
+   "binding": "battle_menus show_connected from the SetState(6) LoadingFrame"
+  },
+  "hud_children": "aa-ui Hud split: construct/on_connected/bind_resources/update_children with fallible LiveWorld; attach/detach of Game-owned children. EconomyBar/FactionExperience/TimeMessage bound to live reads; ObjectDisplay None and no EconomicImpact while the selection is empty.",
+  "not_bound": [
+   "612010 children 60BA50, 427E60, 60B9D0 (logged once)",
+   "camera information text (AppState 7, explicit error)",
+   "banner colours (no banner producer, explicit error if reached)",
+   "5DC780 functor selection events (logged)",
+   "faction abilities, static groups, idle-button scan, action buttons (logged once)",
+   "5C1760 UI+1E0/VWorld+13C/film fallbacks (explicit errors)",
+   "Loading kind 0 campaign art/objectives and kind 4 dynamic art (explicit errors)",
+   "KKC_UI::Reskin 5C3DC0: no writer of UI+13E found"
+  ],
+  "ui_frame_cost": {
+   "test": "aa-client tgi_frontend::frame_growth_tests (headless egui, 400 frames each)",
+   "indices_per_frame": {
+    "pre_bind_loading": 1422,
+    "native_loading": 1614,
+    "game": 330
+   },
+   "constant": true,
+   "draw_list_ms": {
+    "before": 1.85,
+    "after": 0.12
+   },
+   "fixes": [
+    "per raw texture path resolution cache in Ui::tex_size (cleared on set_screen/set_skin)",
+    "two-frame label rebuild cache keyed by every 735B90 input"
+   ],
+   "equivalence": "cached draw list equals a fresh rebuild (asserted)"
+  },
+  "memory_run_hud02": {
+   "folder": "qa-output/development10/game-state-entry/hud02/berlin",
+   "working_set_mb": 1768,
+   "private_mb": 1963,
+   "gpu_dedicated_mb": 207,
+   "flat_from_s": 146,
+   "to_s": 2705
+  },
+  "deploy534_panic": "index count 3678 in a 49152-byte buffer after 'Acquiring a texture failed with a generic error': wgpu device loss, not UI growth",
+  "camera_items": {
+   "frontend.rs": "observe_input routed while Status::AwaitingNativeView (jobs only run then; no queue growth before activation)",
+   "aa-ui camera UVars": "INPUT_SPECS + camera_input_word offsets 1C/20/2C/30/38 checked against research/phase8-ui/scratch-options/uvars.tsv registrations"
+  }
+ }
+}

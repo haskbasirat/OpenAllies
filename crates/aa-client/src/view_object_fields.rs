@@ -63,6 +63,12 @@ impl Fields {
     pub(super) fn grid_store(&mut self,offset:u32,value:u32)->Result<()> {
         ensure!(matches!(offset,0x54|0x68),"VGrid cannot mutate another native view field");self.store(offset as usize,value)
     }
+    ///+54 bit28: the 45B530 Data pre-request is still owed a release.
+    pub(super) fn request_pending(&self)->Result<bool>{Ok(self.flags()?&0x10000000!=0)}
+    ///45B720 / 45BCA0: `and [+54], 0EFFFFFFFh` after the Data vf18(1).
+    pub(super) fn clear_request_pending(&mut self)->Result<()>{self.store(0x54,self.flags()?&!0x10000000)}
+    ///+54 written by the UIWorldState selection paths (set_flags_54).
+    pub(super) fn set_flags_54(&mut self,flags:u32)->Result<()>{self.flags()?;self.store(0x54,flags)}
     ///45BBA0, shared actual virtual8C for VThing/Object/Actor/Organization/Camera.
     ///The caller lends the current native Thing+8 owner at the reached read.
     pub(super) fn refresh_thing_flag14(&mut self,thing_flags:u32)->Result<()> {

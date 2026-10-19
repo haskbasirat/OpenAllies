@@ -11,6 +11,8 @@ use aa_numeric::Precision;
 mod core;
 #[path="actor_animation_damage_filter.rs"]
 mod damage_filter;
+#[path="actor_animation_release.rs"]
+pub(crate) mod release;
 type Result<T>=std::result::Result<T,String>;
 ///461F70 reads the SAME [B36530]+3A4 vector for every death Animation of
 ///this ActorData load; it is built on first use only (no lookup, no read).

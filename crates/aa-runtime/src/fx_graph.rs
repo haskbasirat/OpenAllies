@@ -488,7 +488,8 @@ pub struct Graph {
     owner: String,
     source: Provenance,
     precision: Precision,
-    sources: Vec<SourceIdentity>,
+    ///Shared copy of the catalog sources (catalog_lookups::catalog_universe).
+    sources: std::sync::Arc<Vec<SourceIdentity>>,
     kind: GraphKind,
     request_only: bool,
 }
@@ -809,14 +810,13 @@ impl Graph {
         bank: &crate::definitions::Bank,
     ) -> Result<()> {
         catalog.require_source_owner()?;
-        if catalog.actors.sources != self.sources {
+        if !crate::catalog_lookups::same_sources(catalog, &self.sources) {
             return Err("FX graph source universe differs".into());
         }
         let current = catalog
-            .actors
-            .actors
-            .iter()
-            .find(|a| a.id.eq_ignore_ascii_case(&self.owner))
+            .lookups()
+            .actor_position(catalog.actors, &self.owner)
+            .map(|index| &catalog.actors.actors[index])
             .ok_or("FX graph owner missing")?;
         if current.source != self.source {
             return Err("FX graph owner source changed".into());
@@ -920,8 +920,8 @@ impl Graph {
             error,
             partial: Draft::new(),
         };
-        let mut inputs = Bound::new(
-            catalog.actors,
+        let mut inputs = Bound::for_catalog(
+            catalog,
             source.source_precision(),
             source.definition_source().clone(),
         )
@@ -958,7 +958,7 @@ impl Graph {
             owner: source.canonical_id().into(),
             source: source.definition_source().clone(),
             precision: source.source_precision(),
-            sources: catalog.actors.sources.clone(),
+            sources: crate::catalog_lookups::catalog_universe(catalog),
             kind: GraphKind::View(kind),
             request_only,
         })
@@ -972,6 +972,9 @@ struct Bound<'a> {
     owner: Provenance,
     targets: Option<TargetDomain>,
     textures: Option<Box<dyn texture::Textures+'a>>,
+    ///Indexes of the Catalog that lent `actors` (equal results, see
+    ///catalog_lookups); None takes the linear scans.
+    lookups: Option<&'a crate::catalog_lookups::Lookups>,
 }
 impl<'a> Bound<'a> {
     fn new(actors: &'a ActorCatalog, pc: Precision, owner: Provenance) -> Result<Self> {
@@ -982,7 +985,25 @@ impl<'a> Bound<'a> {
             owner,
             targets: None,
             textures: None,
+            lookups: None,
         })
+    }
+    ///Same as `new(catalog.actors, ..)`, with that Catalog's lookup indexes.
+    fn for_catalog(catalog: &'a Catalog<'_>, pc: Precision, owner: Provenance) -> Result<Self> {
+        let mut bound = Self::new(catalog.actors, pc, owner)?;
+        bound.lookups = Some(catalog.lookups());
+        Ok(bound)
+    }
+    ///`actors.sources.iter().position(|s| s.path.eq_ignore_ascii_case(path))`.
+    fn source_position(&self, path: &str) -> Option<usize> {
+        match self.lookups {
+            Some(lookups) => lookups.source_position(self.actors, path),
+            None => self
+                .actors
+                .sources
+                .iter()
+                .position(|s| s.path.eq_ignore_ascii_case(path)),
+        }
     }
     fn value(&self, node: &ResolvedNode<'_>, name: &str) -> Result<TypedValue> {
         node.field(name, self.pc)
@@ -992,10 +1013,7 @@ impl<'a> Bound<'a> {
     fn before_owner(&self, source: &Provenance) -> Result<bool> {
         let position = |p: &Provenance| -> Result<(usize, usize)> {
             Ok((
-                self.actors
-                    .sources
-                    .iter()
-                    .position(|s| s.path.eq_ignore_ascii_case(&p.path))
+                self.source_position(&p.path)
                     .ok_or("FX source position missing")?,
                 p.span.start,
             ))
@@ -1005,6 +1023,91 @@ impl<'a> Bound<'a> {
     ///48D2D0 inserts each one-hop translation when its root is processed.
     ///42C070/4BDB70 see only roots already reached at this owner's LoadData.
     fn translated(&self, manager: &str, ids: &str) -> Result<String> {
+        //The outcome reads only the immutable catalog plus this key, so a
+        //completed lookup (value or error) is replayed for the same key.
+        let Some(lookups) = self.lookups else {
+            return self.translated_uncached(manager, ids);
+        };
+        let key = crate::catalog_lookups::TranslationKey {
+            precision: self.pc.significand_bits(),
+            owner: self
+                .source_position(&self.owner.path)
+                .map(|position| (position, self.owner.span.start)),
+            manager: manager.into(),
+            ids: ids.into(),
+        };
+        if let Some(hit) = lookups.translation(self.actors, &key) {
+            return hit;
+        }
+        let result = self.translated_uncached(manager, ids);
+        lookups.store_translation(self.actors, key, &result);
+        result
+    }
+    ///Every Translate root's inputs at this precision, read once per Catalog.
+    fn translate_rows(&self) -> Option<std::rc::Rc<Result<Vec<crate::catalog_lookups::TranslateRow>>>> {
+        let lookups = self.lookups?;
+        lookups.translate_rows(self.actors, self.pc.significand_bits(), || {
+            let nodes = self
+                .actors
+                .resolved_definitions("Translate")
+                .map_err(|e| e.to_string())?;
+            Ok(nodes
+                .iter()
+                .map(|node| {
+                    let text = |name: &str| -> Result<String> {
+                        match self.value(node, name)? {
+                            TypedValue::String { value, .. } => Ok(value),
+                            _ => Err(format!("Translate {name} is not string")),
+                        }
+                    };
+                    crate::catalog_lookups::TranslateRow {
+                        source: match node.first_source() {
+                            None => Err("FX Translate source missing".into()),
+                            Some(source) => self
+                                .source_position(&source.path)
+                                .map(|position| (position, source.span.start))
+                                .ok_or_else(|| "FX source position missing".into()),
+                        },
+                        kind: text("node"),
+                        ids_old: text("ids_old"),
+                        ids_new: text("ids_new"),
+                    }
+                })
+                .collect())
+        })
+    }
+    fn translated_uncached(&self, manager: &str, ids: &str) -> Result<String> {
+        //Same loop over the prepared rows: each read surfaces its value or
+        //error exactly where the loop below would perform it.
+        if let Some(rows) = self.translate_rows() {
+            let rows = rows.as_ref().as_ref().map_err(Clone::clone)?;
+            let owner = self
+                .source_position(&self.owner.path)
+                .map(|position| (position, self.owner.span.start));
+            let mut found = None;
+            for row in rows {
+                let source = row.source.clone()?;
+                let owner = owner.ok_or("FX source position missing")?;
+                if source > owner {
+                    continue;
+                }
+                let kind = row.kind.clone()?;
+                let same = if manager == "VFX" {
+                    aa_rules::actors::native_load::THING_TAGS
+                        .iter()
+                        .any(|k| k.eq_ignore_ascii_case(&kind))
+                } else {
+                    kind.eq_ignore_ascii_case(manager)
+                };
+                if same && row.ids_old.clone()?.eq_ignore_ascii_case(ids) {
+                    if found.is_some() {
+                        return Err("FX duplicate historical translation root".into());
+                    }
+                    found = Some(row.ids_new.clone()?);
+                }
+            }
+            return Ok(found.unwrap_or_else(|| ids.into()));
+        }
         let mut found = None;
         for node in self
             .actors
@@ -1043,15 +1146,17 @@ impl<'a> Bound<'a> {
         Ok(found.unwrap_or_else(|| ids.into()))
     }
     fn canonical_node(&self, source: &Provenance) -> Result<ResolvedNode<'a>> {
+        //resolved_definitions_at returns the tag's same error, or exactly the
+        //roots declared at `source` (whose first layer is that root) in order.
         for tag in aa_rules::actors::native_load::THING_TAGS {
-            for node in self
+            if let Some(node) = self
                 .actors
-                .resolved_definitions(tag)
+                .resolved_definitions_at(tag, source)
                 .map_err(|e| e.to_string())?
+                .into_iter()
+                .next()
             {
-                if node.sources().first() == Some(source) {
-                    return Ok(node);
-                }
+                return Ok(node);
             }
         }
         Err("FX canonical source root is absent".into())
@@ -1066,6 +1171,10 @@ pub(crate) struct OwnerLookups<'a>(Bound<'a>);
 impl<'a> OwnerLookups<'a> {
     pub(crate) fn new(actors: &'a ActorCatalog, pc: Precision, owner: Provenance) -> Result<Self> {
         Bound::new(actors, pc, owner).map(Self)
+    }
+    ///Same as `new(catalog.actors, ..)`, with that Catalog's lookup indexes.
+    pub(crate) fn for_catalog(catalog: &'a Catalog<'_>, pc: Precision, owner: Provenance) -> Result<Self> {
+        Bound::for_catalog(catalog, pc, owner).map(Self)
     }
     ///416370 Audio Find.
     pub(crate) fn audio(&mut self, ids: &str) -> Result<Option<Reference>> {
@@ -1168,12 +1277,17 @@ impl<'a> Inputs for Bound<'a> {
         }
         if manager == "VFX" {
             let ids = self.translated(manager, ids)?;
-            let Some(found) = self
-                .actors
-                .actors
-                .iter()
-                .find(|a| a.id.eq_ignore_ascii_case(&ids))
-            else {
+            let found = match self.lookups {
+                Some(lookups) => lookups
+                    .actor_position(self.actors, &ids)
+                    .map(|index| &self.actors.actors[index]),
+                None => self
+                    .actors
+                    .actors
+                    .iter()
+                    .find(|a| a.id.eq_ignore_ascii_case(&ids)),
+            };
+            let Some(found) = found else {
                 return Ok(None);
             };
             if !self.before_owner(&found.source)? {
@@ -1207,10 +1321,7 @@ impl<'a> Inputs for Bound<'a> {
                     .cloned()
                     .ok_or("Bone root source missing")?;
                 Ok((
-                    self.actors
-                        .sources
-                        .iter()
-                        .position(|s| s.path.eq_ignore_ascii_case(&source.path))
+                    self.source_position(&source.path)
                         .ok_or("Bone source index missing")?,
                     source.span.start,
                 ))
@@ -1328,6 +1439,9 @@ mod subtypes;
 #[cfg(test)]
 #[path = "fx_graph_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "fx_graph_lookup_tests.rs"]
+mod lookup_tests;
 
 ///4293C0/4286E0's separate event: copied source position, target=NULL and
 /// native global target position, current state word54 and active-only byte58.

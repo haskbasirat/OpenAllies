@@ -234,11 +234,14 @@ impl<S: mind_world::Services, P: Spatial, G: Globals, E: Groups> TryActorCommand
             .map(|entry| entry.id))
     }
     fn permit(&mut self, actor: &ActorId, command: &mut u32) -> Result<bool> {
-        orders::authorize_actor_with_bank(self.catalog, self.banks,
+        // 61E237 vt+150(NULL, &cmd, false) = 4CF430: a default command is
+        // guessed by 4DA570 on this same arena command (completion persists).
+        orders::authorize_actor_arena_with_bank(self.catalog, self.banks,
             &self.world.actors,
             self.spatial,
+            &mut self.world.runtime.commands,
+            *command,
             *actor,
-            check(self.world.runtime.commands.value(*command))?,
             self.globals,
         )
     }
@@ -272,6 +275,11 @@ impl<S: mind_world::Services, P: Spatial, G: Globals, E: Groups> TryActorCommand
         )
     }
     fn deliver(&mut self, actor: &ActorId, command: &mut u32) -> Result<()> {
+        // 61E220 never stores the 4CF430-guessed definition (no 4D9A90), so a
+        // permitted default command reaches 4D9B70 with command+08 null.
+        if check(self.world.runtime.commands.value(*command))?.definition.is_none() {
+            return required("4D9B70 [null command+08]+18: 61E220 delivers a 4DA570-guessed default command without its definition (native fault)");
+        }
         orders::deliver_with_bank(self.catalog, self.banks, self.world, self.arena, *command, Some(*actor)).map(drop)
     }
 }
@@ -368,7 +376,10 @@ impl<S: mind_world::Services, P: Spatial, G: Globals, D: Diagnostics, V: View>
         // before the optional default-definition lookup and diagnostics.
         orders::actor_word_with_bank(self.catalog, self.banks, &self.world.actors, actor, 0xe8)?;
         if check(self.world.runtime.commands.value(*command))?.flags & (1 << 6) == 0 {
-            return required("61F210 first selected actor's actual4DA570 default command");
+            // 61F3D8: 4DA570(cmd, first actor, false). The definition only
+            // names the diagnostic; its 4DA994 completion stays on the command.
+            orders::guess_arena_with_bank(self.catalog, self.banks, &self.world.actors,
+                &mut self.world.runtime.commands, *command, actor, false, self.globals)?;
         }
         self.diagnostics.selection(
             self.catalog,

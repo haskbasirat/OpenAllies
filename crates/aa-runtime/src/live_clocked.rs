@@ -124,6 +124,9 @@ pub struct Services<'a> {
     pub triggers: &'a mut Manager,
     pub trigger_program: &'a mut CoreProgram,
     pub first_tick: &'a mut dyn FirstTick,
+    /// World+4C Sun owner for bound world trigger opcodes; None keeps their
+    /// explicit missing-service error.
+    pub sun: Option<crate::live_updates::trigger_program::SunServices<'a>>,
 }
 fn fail(error: impl std::fmt::Display) -> aa_world::Error {
     aa_world::Error::Callback(format!("live native world: {error}"))
@@ -216,7 +219,7 @@ impl clocked::Services for Services<'_> {
         &mut self,
         effect: Effect,
         world: &mut World,
-        _: &mut Queues,
+        _queues: &mut Queues,
         _: &mut NativeRng,
     ) -> aa_world::Result<()> {
         match effect {
@@ -225,8 +228,15 @@ impl clocked::Services for Services<'_> {
             Effect::Manager => {
                 self.trigger_program.time_bits = world.clock.begin.0;
                 self.trigger_program.precision = world.clock_precision;
+                let mut program = crate::live_updates::trigger_program::Program {
+                    core: &mut *self.trigger_program,
+                    sun: self.sun.as_mut(),
+                    queues: &mut *_queues,
+                    owners: self.owners,
+                    now: world.clock.begin.0,
+                };
                 self.triggers
-                    .update(self.trigger_program)
+                    .update(&mut program)
                     .map(|_| ())
                     .map_err(fail)
             }

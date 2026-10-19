@@ -73,6 +73,11 @@ pub struct LoadSpatial {
     bindings: Vec<Binding>,
     definitions: BTreeMap<u32, Arc<SourceGeometry>>,
     next_key: ActorKey,
+    /// The last `fields` result of each other held record, with the record's
+    /// registry version at that time. `fields` reads only the binding and its
+    /// geometry (both immutable once created) and that record, so while the
+    /// version is unchanged the result is the same (see `member_fields`).
+    member_cache: std::collections::HashMap<ActorKey, ((u64, u64), Member)>,
 }
 
 /// A second real allocation held outside its matching Loading registry entry
@@ -193,6 +198,7 @@ impl LoadSpatial {
             bindings: vec![],
             definitions: BTreeMap::new(),
             next_key: 1,
+            member_cache: std::collections::HashMap::new(),
         })
     }
     pub fn index(&self) -> &SpatialIndex {
@@ -243,7 +249,7 @@ impl LoadSpatial {
         let source_pc = {
             let bank = catalog.definition_bank.try_borrow().map_err(required)?;
             let source = bank.combat_source().map_err(required)?;
-            if source.source_identities() != catalog.actors.sources.as_slice() {
+            if !crate::catalog_lookups::same_sources(catalog, source.source_identities()) {
                 return Err(required("membership source FP owner differs from Catalog"));
             }
             source.source_precision()
@@ -345,6 +351,32 @@ impl LoadSpatial {
         self.next_key = next;
         Ok(key)
     }
+    /// `fields` of another binding's held registry record. A result is reused
+    /// only while that record's registry version is unchanged, i.e. the
+    /// record has not been installed, removed, swapped or mutably borrowed
+    /// since: then every input of `fields` is unchanged. Errors are never
+    /// cached; they are recomputed in binding order like before.
+    fn member_fields(
+        &self,
+        cache: &mut std::collections::HashMap<ActorKey, ((u64, u64), Member)>,
+        binding: &Binding,
+        registry: &aa_actors::registry::IdentityRegistry<RestoredRecord>,
+        stale: &str,
+    ) -> Result<Member> {
+        let entry = registry.get(binding.id).ok_or_else(|| required(stale))?;
+        let version = registry.version(binding.id);
+        if let (Some(version), Some((cached, member))) = (version, cache.get(&binding.key))
+            && *cached == version
+        {
+            return Ok(member.clone());
+        }
+        let (shell, definition) = record_fields(&entry.value)?;
+        let member = self.fields(binding, shell, definition)?;
+        if let Some(version) = version {
+            cache.insert(binding.key, (version, member.clone()));
+        }
+        Ok(member)
+    }
     fn fields(
         &self,
         binding: &Binding,
@@ -412,20 +444,24 @@ impl LoadSpatial {
     ) -> Result<()> {
         let key = self.prepare(catalog, record)?;
         let mut fields = Vec::with_capacity(self.bindings.len());
-        for binding in &self.bindings {
-            let (shell, definition) = if binding.id == record.owner {
-                (&*record.shell, record.definition)
-            } else {
-                record_fields(
-                    &record
-                        .registry
-                        .get(binding.id)
-                        .ok_or_else(|| required("indexed generation is not current"))?
-                        .value,
-                )?
-            };
-            fields.push(self.fields(binding, shell, definition)?);
-        }
+        let mut cache = std::mem::take(&mut self.member_cache);
+        let built = (|| -> Result<()> {
+            for binding in &self.bindings {
+                if binding.id == record.owner {
+                    fields.push(self.fields(binding, &*record.shell, record.definition)?);
+                } else {
+                    fields.push(self.member_fields(
+                        &mut cache,
+                        binding,
+                        record.registry,
+                        "indexed generation is not current",
+                    )?);
+                }
+            }
+            Ok(())
+        })();
+        self.member_cache = cache;
+        built?;
         let mut lease = self.index.lease_load_fields(fields)?;
         let result = lease.index_mut().refresh_membership(key, true);
         // The membership kernel retains the current member throughout. Commit
@@ -575,22 +611,26 @@ impl LoadSpatial {
         }
         self.prepare(catalog, record)?;
         let mut fields = Vec::with_capacity(self.bindings.len());
-        for binding in &self.bindings {
-            let (shell, definition) = if binding.id == record.owner {
-                (&*record.shell, record.definition)
-            } else if let Some(extra) = extra.as_deref().filter(|e| e.owner == binding.id) {
-                (&*extra.shell, extra.definition)
-            } else {
-                record_fields(
-                    &record
-                        .registry
-                        .get(binding.id)
-                        .ok_or_else(|| required("query indexed generation is not current"))?
-                        .value,
-                )?
-            };
-            fields.push(self.fields(binding, shell, definition)?);
-        }
+        let mut cache = std::mem::take(&mut self.member_cache);
+        let built = (|| -> Result<()> {
+            for binding in &self.bindings {
+                if binding.id == record.owner {
+                    fields.push(self.fields(binding, &*record.shell, record.definition)?);
+                } else if let Some(extra) = extra.as_deref().filter(|e| e.owner == binding.id) {
+                    fields.push(self.fields(binding, &*extra.shell, extra.definition)?);
+                } else {
+                    fields.push(self.member_fields(
+                        &mut cache,
+                        binding,
+                        record.registry,
+                        "query indexed generation is not current",
+                    )?);
+                }
+            }
+            Ok(())
+        })();
+        self.member_cache = cache;
+        built?;
         let bindings = QueryBindings {
             bindings: &self.bindings,
             definitions: &self.definitions,
@@ -619,6 +659,33 @@ impl LoadSpatial {
             } else if let Some(extra) = extra.as_deref_mut().filter(|e| e.owner == id) {
                 extra.shell.thing.flags = flags;
             } else {
+                // Storing an equal word changes nothing; skip the mutable
+                // borrow then (same panics on the same impossible storage).
+                let unchanged = match &record
+                    .registry
+                    .get(id)
+                    .expect("prevalidated query generation")
+                    .value
+                {
+                    RestoredRecord::Thing(v)
+                    | RestoredRecord::Object(v)
+                    | RestoredRecord::Actor(v) => v.shell.thing.flags == flags,
+                    RestoredRecord::Kingdom(v) => {
+                        v.runtime
+                            .as_ref()
+                            .expect("prevalidated Kingdom query shell")
+                            .base
+                            .thing
+                            .flags
+                            == flags
+                    }
+                    _ => unreachable!(
+                        "prevalidated query storage cannot change through immutable policy"
+                    ),
+                };
+                if unchanged {
+                    continue;
+                }
                 match record
                     .registry
                     .value_mut(id)

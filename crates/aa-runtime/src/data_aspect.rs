@@ -23,6 +23,8 @@ mod fields;
 mod size_fields;
 #[path = "data_aspect_rename.rs"]
 mod rename;
+#[path = "data_aspect_release.rs"]
+mod release;
 use rename::{TextureRename, TextureRenames};
 #[cfg(test)]
 #[path = "data_aspect_tests.rs"]
@@ -114,17 +116,17 @@ fn texture_request_name(name: &Option<String>) -> Result<Option<Vec<u16>>> {
 fn node<'a>(catalog: &'a Catalog<'_>, d: &RuntimeDefinition) -> Result<ResolvedNode<'a>> {
     let mut selected = None;
     for tag in ["Thing", "Unit", "Projectile", "VFX"] {
+        //resolved_definitions_at: the tag's same error, else exactly its roots
+        //whose first source is this one, in order (filtering every root).
         for n in catalog
             .actors
-            .resolved_definitions(tag)
+            .resolved_definitions_at(tag, &d.proof.source)
             .map_err(|e| e.to_string())?
         {
-            if n.sources().first() == Some(&d.proof.source) {
-                if selected.is_some() {
-                    return Err("Aspect canonical source position is ambiguous".into());
-                }
-                selected = Some(n);
+            if selected.is_some() {
+                return Err("Aspect canonical source position is ambiguous".into());
             }
+            selected = Some(n);
         }
     }
     let n = selected.ok_or("Aspect canonical registered source absent")?;

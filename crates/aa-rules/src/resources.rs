@@ -18,7 +18,7 @@ pub enum CatalogError {
     Schema(String),
 }
 type Result<T> = std::result::Result<T, CatalogError>;
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Provenance {
     pub path: String,
     pub sha256: String,

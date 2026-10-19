@@ -141,7 +141,7 @@ impl VerifiedStartupReceipt {
                 ));
             }
         }
-        if source_fingerprint(&catalog.actors.sources) != SOURCES_SHA256 {
+        if catalog_source_fingerprint(catalog) != SOURCES_SHA256 {
             return Err(
                 "logical definition source identities differ from the captured reference binding"
                     .into(),
@@ -250,6 +250,16 @@ pub(crate) fn require_reference_numeric(numeric: &context::NumericBindings<'_, '
 fn text(out: &mut Vec<u8>, value: &str) {
     out.extend_from_slice(&(value.len() as u64).to_le_bytes());
     out.extend_from_slice(value.as_bytes());
+}
+/// `source_fingerprint(&catalog.actors.sources)`: computed once per Catalog
+/// while it borrows its immutable source owner (catalog_lookups).
+pub(crate) fn catalog_source_fingerprint<'c>(
+    catalog: &'c crate::catalog::Catalog<'_>,
+) -> std::borrow::Cow<'c, str> {
+    match catalog.lookups().source_fingerprint(catalog.actors) {
+        Some(digest) => std::borrow::Cow::Borrowed(digest),
+        None => std::borrow::Cow::Owned(source_fingerprint(&catalog.actors.sources)),
+    }
 }
 /// Stable native-loader source-order identity encoding; excludes physical
 /// paths, includes logical spelling, content hash and resolver member origin.

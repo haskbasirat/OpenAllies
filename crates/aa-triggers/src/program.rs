@@ -104,7 +104,9 @@ impl CoreProgram {
     }
     /// Native54D9E0 followed by the caller's binary32 store. Missing variables
     /// produce the native diagnostic and actual zero return, not guessed data.
-    pub(crate) fn value(&mut self, manager: &Manager, parameter: &Parameter) -> Result<u32> {
+    /// Native 54D9E0 numeric register (literal, float or trigger variable),
+    /// returned as the binary32 bits its callers store.
+    pub fn value(&mut self, manager: &Manager, parameter: &Parameter) -> Result<u32> {
         match parameter.item_index {
             1 => arithmetic(Binary::from_i32(word(parameter)? as i32).store_f32()),
             2 => {

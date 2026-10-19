@@ -74,6 +74,24 @@ pub fn zoom_6fe470(camera:&mut State,zoom:u32,direction:[u32;3],p:Precision)->Re
  camera.put(0x234,x);camera.put(0x238,y);camera.put(0x5c,x);
  let z=f(add(&z_delta,&b(camera.word(0x248)?)?,p)?)?;camera.put(0x23c,z);camera.put(0x60,y);camera.put(0x64,z);Ok(())
 }
+///6FEBA0 (5CCF00 drag rotation): 6FE3B0 rotation without 6FEA20 limits,
+///870720 basis, then the target is moved so the camera position +240..+248
+///stays fixed: d=(z248-z254)/sin(pitch2B8) (0 when the binary32 difference
+///is zero), XY products stored before their adds, the Z product extended.
+pub fn rotate_about_target_6feba0(camera:&mut State,globals:&Globals,yaw:u32,pitch:u32,p:Precision)->Result<()>{
+ rotate_about_target_prefix_6feba0(camera,globals,yaw,pitch,p)?;super::ni::update_6fe050(camera,&mut super::ni::RequiredChildren,p)
+}
+///6FEBA0 up to (excluding) its final 6FE050 NiCamera update.
+pub(crate) fn rotate_about_target_prefix_6feba0(camera:&mut State,globals:&Globals,yaw:u32,pitch:u32,p:Precision)->Result<()>{
+ rotate(camera,globals,yaw,pitch,p)?;let direction=basis(camera,p)?;
+ let height=f(sub(&b(camera.word(0x248)?)?,&b(camera.word(0x254)?)?,p)?)?;
+ let distance=if b(height)?.is_zero(){b(0)?}else{let sine=aa_trig::turning::small_sin_cos(camera.word(0x2b8)?,p).map_err(|e|e.to_string())?.0;div(&b(height)?,&sine,p)?};
+ let x=f(mul(&b(direction[0])?,&distance,p)?)?;let y=f(mul(&b(direction[1])?,&distance,p)?)?;let z=mul(&distance,&b(direction[2])?,p)?;
+ let tx=f(add(&b(x)?,&b(camera.word(0x240)?)?,p)?)?;let ty=f(add(&b(y)?,&b(camera.word(0x244)?)?,p)?)?;let tz=f(add(&z,&b(camera.word(0x248)?)?,p)?)?;
+ camera.put(0x24c,tx);camera.put(0x250,ty);camera.put(0x254,tz);
+ let zoom=camera.word(0x208)?;zoom_6fe470(camera,zoom,direction,p)
+}
+#[cfg(test)]#[path="native_camera_rotate_tests.rs"]mod rotate_tests;
 pub fn set_pose_6ff220(camera:&mut State,globals:&Globals,world:&mut impl Services,mut center:[u32;3],mut yaw:u32,mut pitch:u32,mut zoom:u32,p:Precision)->Result<()>{
  if camera.byte(0x214)?!=0{return Ok(())}constrain(camera,world,&mut yaw,&mut pitch,&mut zoom,p)?;
  if camera.byte(0x33c)?!=0&&(camera.word(0x2c0)?==0||(!world.world_editor_275()?&&world.session_state_e4()?!=3)){center[2]=f(world.map_height_550210([center[0],center[1]])?)?}

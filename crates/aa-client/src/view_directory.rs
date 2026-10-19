@@ -14,6 +14,9 @@ use super::view_object_fields::{self,Fields};
 #[path="view_object_binding.rs"]
 mod object_binding;
 pub use object_binding::InitContext;
+#[path="view_order_leaves.rs"]
+mod order_leaves;
+pub use order_leaves::{DirectoryViews,OrderContext};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord)]
 pub struct ViewHandle(usize);
@@ -24,7 +27,7 @@ impl ViewSource {
     pub fn bind(catalog:&Catalog<'_>,bank:&Bank,d:&RuntimeDefinition)->Result<Self> {
         catalog.require_source_owner().map_err(anyhow::Error::msg)?;
         let owner=bank.combat_source().map_err(anyhow::Error::msg)?;
-        ensure!(owner.source_identities()==catalog.actors.sources.as_slice(),"view source Bank belongs to another Catalog");
+        ensure!(aa_runtime::catalog_lookups::same_sources(catalog,owner.source_identities()),"view source Bank belongs to another Catalog");
         let canonical=catalog.actors.find(&d.proof.id).context("view source canonical Thing absent")?;
         ensure!(canonical.id.eq_ignore_ascii_case(&d.proof.id)&&canonical.source==d.proof.source
             &&canonical.template_chain==d.proof.template_chain&&catalog.actors.native_category(&d.proof.id)?==d.proof.category
@@ -94,6 +97,9 @@ pub struct ViewDirectory {
     requests:VecDeque<ViewHandle>,
     ///Sole native VWorld9C/A0 updated-view list, in head-first order.
     updates:VecDeque<ViewHandle>,
+    ///58CB30 identities: one per view+10 Data allocation (canonical id and
+    ///source), append-only so an identity is never reused.
+    data_identities:Vec<(String,aa_rules::resources::Provenance)>,
 }
 pub struct UploadRequest {ticket:Arc<Ticket>,request:SpawnActor,binding:ModelBinding,
     residency:aa_runtime::resource_depot::ViewResourceWitness,selected:SelectedModel}
@@ -176,7 +182,8 @@ impl ViewDirectory {
     pub(crate) fn require_world(&self,world:&World<'_>)->Result<()>{let p=Parts::world(world)?;self.validate(p.actors,p.spatial,p.revision,p.map)}
     fn allocation(parts:&Parts<'_>)->Result<Self>{
         Ok(Self {actors:parts.actors.identity_witness(),spatial:parts.spatial.identity_witness(),
-            revision:parts.revision.witness(),map:parts.map.clone(),next:1,sequence:0,entries:BTreeMap::new(),requests:VecDeque::new(),updates:VecDeque::new()})
+            revision:parts.revision.witness(),map:parts.map.clone(),next:1,sequence:0,entries:BTreeMap::new(),requests:VecDeque::new(),updates:VecDeque::new(),
+            data_identities:Vec::new()})
     }
     fn validate(&self,actors:&ActorStore,spatial:&SpatialWorld,revision:&ConstructedWorldRevision,map:&SourceIdentity)->Result<()> {
         ensure!(self.actors.is_for(actors)&&self.spatial.is_for(spatial)&&self.revision.is_for(revision)&&&self.map==map,
@@ -472,6 +479,120 @@ impl ViewDirectory {
     }
 }
 fn append_request<V>(queue:&mut VecDeque<V>,value:V)->Result<()> {queue.try_reserve(1)?;queue.push_back(value);Ok(())}
+///One queued view's two native callbacks during the VWorld+208 drain.
+trait RequestDrain{
+    type Entry:Clone;
+    ///View vf74: 45B140 (VObject, VActor and organization views alike) tail
+    ///jumps to its Data+10 vf1C.
+    fn ready_74(&mut self,entry:&Self::Entry)->Result<bool>;
+    ///45B720: Data vf18(1), then +54 &= ~bit28.
+    fn release_45b720(&mut self,entry:&Self::Entry)->Result<()>;
+}
+///43EC60 segment 43ED1A..43ED53: while the head cell's view is ready, release
+///it and unlink that head (50C510). The first not-ready view ends the walk;
+///a repeated allocation is checked and released again. A Rust callback error
+///leaves the head cell in place (the native callbacks cannot fail).
+fn drain_ready_43ec60<W:RequestDrain>(queue:&mut VecDeque<W::Entry>,w:&mut W)->Result<()>{
+    while let Some(front)=queue.front().cloned(){
+        if !w.ready_74(&front)?{break}
+        w.release_45b720(&front)?;
+        queue.pop_front();
+    }
+    Ok(())
+}
+///One view's 45BCA0 request prefix.
+trait UninitRequest{
+    ///+54 bit28
+    fn pending(&mut self)->Result<bool>;
+    ///Data vf18(1)
+    fn release(&mut self)->Result<()>;
+    ///+54 &= ~bit28
+    fn clear(&mut self)->Result<()>;
+}
+///45BCA0..45BCCB: a view still owing its pre-request releases it, clears
+///bit28, then 43C490 -> 4F1430 removes the FIRST cell holding this view from
+///[B36538]+208 (nothing when absent).
+fn uninit_request_45bca0<E,W:UninitRequest>(queue:&mut VecDeque<E>,w:&mut W,is_view:impl Fn(&E)->bool)->Result<()>{
+    if !w.pending()?{return Ok(())}
+    w.release()?;w.clear()?;
+    if let Some(index)=queue.iter().position(is_view){queue.remove(index);}
+    Ok(())
+}
+pub use aa_runtime::data_pre_request::request::release::{ReleaseServices,RequiredReleaseServices};
+struct DynServices<'a>(&'a mut dyn ReleaseServices);
+impl ReleaseServices for DynServices<'_>{
+    fn release_14(&mut self,resources:&mut aa_runtime::resource_depot::Resources<'_>,
+        handle:&aa_runtime::resource_objects::Handle,delta:u32)->std::result::Result<(),String>{
+        self.0.release_14(resources,handle,delta)
+    }
+}
+///The SAME directory, World loan, Data/Resource application and release owner.
+struct Requests<'a,'b,'w,'c>{directory:&'a mut ViewDirectory,p:&'b ViewBindingParts<'w>,catalog:&'b Catalog<'c>,
+    application:&'a mut aa_runtime::resource_depot::Application,services:&'a mut dyn ReleaseServices}
+impl Requests<'_,'_,'_,'_>{
+    ///View+10: the current definition of this view's own allocation.
+    fn definition(&self,handle:ViewHandle)->Result<RuntimeDefinition>{
+        let entry=self.directory.bound_entry(self.p,self.catalog,handle)?;
+        Ok(self.p.actors.object(entry.key)?.definition.clone())
+    }
+    fn release_data(&mut self,handle:ViewHandle)->Result<()>{
+        let definition=self.definition(handle)?;
+        let (catalog,bank)=(self.catalog,self.p.definitions);
+        let services=&mut *self.services;
+        self.application.with_data_pre_request_resources(|data,resources|
+            data.release_object(catalog,bank,&definition,resources,&mut DynServices(services),1)).map_err(anyhow::Error::msg)
+    }
+    fn fields(&mut self,handle:ViewHandle)->Result<&mut Fields>{
+        self.directory.entries.get_mut(&handle).context("native view allocation absent")?
+            .native_fields.as_mut().context("native view fields absent")
+    }
+}
+impl RequestDrain for Requests<'_,'_,'_,'_>{
+    type Entry=ViewHandle;
+    fn ready_74(&mut self,handle:&ViewHandle)->Result<bool>{
+        let definition=self.definition(*handle)?;
+        let (catalog,bank)=(self.catalog,self.p.definitions);
+        self.application.with_data_pre_request_resources(|data,resources|data.object_ready(catalog,bank,&definition,resources))
+            .map_err(anyhow::Error::msg)
+    }
+    fn release_45b720(&mut self,handle:&ViewHandle)->Result<()>{
+        self.release_data(*handle)?;
+        self.fields(*handle)?.clear_request_pending()
+    }
+}
+struct Uninit<'r,'a,'b,'w,'c>{requests:&'r mut Requests<'a,'b,'w,'c>,handle:ViewHandle}
+impl UninitRequest for Uninit<'_,'_,'_,'_,'_>{
+    fn pending(&mut self)->Result<bool>{self.requests.fields(self.handle)?.request_pending()}
+    fn release(&mut self)->Result<()>{self.requests.release_data(self.handle)}
+    fn clear(&mut self)->Result<()>{self.requests.fields(self.handle)?.clear_request_pending()}
+}
+impl ViewDirectory{
+    ///The VWorld+208 request-queue segment of the VWorld update 43EC60, which
+    ///43FF60 (VWorld vtable 9FDFF8+C, the per-UI-frame update) runs while
+    ///VWorld+AD is set. Readiness is Data vf1C; release is Data vf18(1)
+    ///through `services` (RequiredReleaseServices until 5AA550 lands).
+    pub fn drain_ready_requests_43ec60(&mut self,p:&ViewBindingParts<'_>,catalog:&Catalog<'_>,
+        application:&mut aa_runtime::resource_depot::Application,services:&mut dyn ReleaseServices)->Result<()>{
+        let parts=Parts::binding(p);self.validate(parts.actors,parts.spatial,parts.revision,parts.map)?;
+        let mut queue=std::mem::take(&mut self.requests);
+        let result=drain_ready_43ec60(&mut queue,&mut Requests{directory:self,p,catalog,application,services});
+        //Every reached unlink is retained; on error the head cell stays.
+        self.requests=queue;
+        result
+    }
+    ///The 45BCA0 request prefix of a VThing uninit (vtable+CC chain, e.g.
+    ///VActor 452D10 -> VObject 458CE0 -> 45BCA0). The caller must already
+    ///have run the derived uninit parts that precede 45BCA0 natively.
+    pub fn uninit_request_45bca0(&mut self,p:&ViewBindingParts<'_>,catalog:&Catalog<'_>,handle:ViewHandle,
+        application:&mut aa_runtime::resource_depot::Application,services:&mut dyn ReleaseServices)->Result<()>{
+        let parts=Parts::binding(p);self.validate(parts.actors,parts.spatial,parts.revision,parts.map)?;
+        let mut queue=std::mem::take(&mut self.requests);
+        let mut requests=Requests{directory:self,p,catalog,application,services};
+        let result=uninit_request_45bca0(&mut queue,&mut Uninit{requests:&mut requests,handle},|v|*v==handle);
+        self.requests=queue;
+        result
+    }
+}
 impl UploadRequest {
     pub fn upload(self,store:&AssetStore,settings:LoadSettings,live:&mut LiveScene,
         renderer:&mut SceneRenderer,objects:&mut SceneObjects)->Result<UploadReceipt> {
@@ -495,6 +616,52 @@ impl UploadRequest {
             assert_eq!(select(kind,c["type"].as_u64().unwrap()as u32,mask).unwrap(),row["output"]["selected"].as_u64().unwrap()as u32);
         }
         fn is_send<T:Send>(){}is_send::<UploadRequest>();is_send::<UploadReceipt>();
+    }
+    ///research/skirmish-20261019-view-request-queue: original 43ED1A..43ED53
+    ///(with real 45B720/50C510) and 45BCA0..45BCCB (real 43C490/4F1430).
+    #[test]fn native_request_queue_drain_and_uninit_replay(){
+        use serde_json::{Value,json};
+        let fixture:Value=serde_json::from_str(include_str!("../../../research/skirmish-20261019-view-request-queue/native-view-request-queue.json")).unwrap();
+        struct Lab<'a>{c:&'a Value,flags:BTreeMap<String,u32>,trace:Vec<Value>,checks:BTreeMap<String,usize>,view:String}
+        impl Lab<'_>{fn release(&mut self,v:&str){self.trace.push(json!({"call":"release","view":v,"delta":1}));}}
+        impl RequestDrain for Lab<'_>{
+            type Entry=(usize,String);
+            fn ready_74(&mut self,e:&(usize,String))->Result<bool>{
+                let n=self.checks.entry(e.1.clone()).or_insert(0);let answers=self.c["ready"][&e.1].as_array().unwrap();
+                let answer=answers[(*n).min(answers.len()-1)].as_u64().unwrap()!=0;*n+=1;
+                self.trace.push(json!({"call":"vf74","view":e.1}));Ok(answer)
+            }
+            fn release_45b720(&mut self,e:&(usize,String))->Result<()>{
+                self.release(&e.1);*self.flags.get_mut(&e.1).unwrap()&=!0x10000000;
+                self.trace.push(json!({"call":"free","cell":e.0}));Ok(())
+            }
+        }
+        impl UninitRequest for Lab<'_>{
+            fn pending(&mut self)->Result<bool>{Ok(self.flags[&self.view]&0x10000000!=0)}
+            fn release(&mut self)->Result<()>{let v=self.view.clone();Lab::release(self,&v);Ok(())}
+            fn clear(&mut self)->Result<()>{let v=self.view.clone();*self.flags.get_mut(&v).unwrap()&=!0x10000000;Ok(())}
+        }
+        let mut rows=0;
+        for case in fixture["cases"].as_array().unwrap(){
+            let (c,o)=(&case["input"],&case["output"]);
+            let flags=c["views"].as_object().unwrap().iter().map(|(k,v)|(k.clone(),v.as_u64().unwrap() as u32)).collect();
+            let mut lab=Lab{c,flags,trace:vec![],checks:BTreeMap::new(),view:c["uninit"].as_str().unwrap_or("").into()};
+            let cells:VecDeque<(usize,String)>=c["queue"].as_array().unwrap().iter().enumerate().map(|(i,v)|(i,v.as_str().unwrap().to_string())).collect();
+            let remaining:Vec<(usize,String)>=if c["kernel"]=="drain"{
+                let mut q=cells;drain_ready_43ec60(&mut q,&mut lab).unwrap();q.into_iter().collect()
+            }else{
+                //4F1430 frees the removed cell: the cell absent afterwards.
+                let mut q=cells.clone();let view=lab.view.clone();
+                uninit_request_45bca0(&mut q,&mut lab,|e|e.1==view).unwrap();
+                if let Some((i,_))=cells.iter().find(|e|!q.contains(e)){lab.trace.push(json!({"call":"free","cell":i}));}
+                q.into_iter().collect()
+            };
+            let queue:Vec<&str>=remaining.iter().map(|(_,v)|v.as_str()).collect();
+            let tail=remaining.last().map(|(i,_)|json!(i)).unwrap_or(Value::Null);
+            assert_eq!(json!({"trace":lab.trace,"queue":queue,"tail":tail,"flags":lab.flags}),*o,"{}",c["label"]);
+            rows+=1;
+        }
+        assert_eq!(rows,66);
     }
     #[test]fn native_request_list_fifo_retains_repeated_view_allocations(){
         let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../research/development10/native-view-request-queue.json")).unwrap();

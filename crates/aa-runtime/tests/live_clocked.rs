@@ -79,6 +79,8 @@ fn real_field_owners_and_disabled_logger_preserve_first_tick_error_prefix() {
         owners: &owners,
         spatial: &mut spatial,
         registration: &mut registration,
+        //No World+4C Sun owner: opcode 46 keeps its explicit required error.
+        sun: None,
         fields: Fields {
             svar_fog_cheat: &fog,
             world_fog_cheat: &world_fog,
@@ -151,6 +153,8 @@ fn enabled_logger_is_same_owner_and_reads_required_gate_before_phase_or_counter(
         owners: &owners,
         spatial: &mut spatial,
         registration: &mut registration,
+        //No World+4C Sun owner: opcode 46 keeps its explicit required error.
+        sun: None,
         fields: Fields {
             svar_fog_cheat: &fog,
             world_fog_cheat: &fog,
@@ -327,6 +331,8 @@ fn later_empty_dispatch_reuses_loaded_manager_program_and_same_sync_log() {
         owners: &owners,
         spatial: &mut spatial,
         registration: &mut registration,
+        //No World+4C Sun owner: opcode 46 keeps its explicit required error.
+        sun: None,
         fields: Fields {
             svar_fog_cheat: &fog,
             world_fog_cheat: &fog,
@@ -418,6 +424,8 @@ fn original_and_v14_prefix_matches_all_fog_counter_log_and_precision_inputs() {
             owners: &owners,
             spatial: &mut spatial,
             registration: &mut registration,
+            //No World+4C Sun owner: opcode 46 keeps its explicit required error.
+            sun: None,
             fields: Fields {
                 svar_fog_cheat: &svar,
                 world_fog_cheat: &fog,
@@ -507,6 +515,8 @@ fn shared_sync_owner_loan_ends_before_first_tick_and_network_uses_same_log() {
         owners: &owners,
         spatial: &mut spatial,
         registration: &mut registration,
+        //No World+4C Sun owner: opcode 46 keeps its explicit required error.
+        sun: None,
         fields: Fields {
             svar_fog_cheat: &fog,
             world_fog_cheat: &fog,

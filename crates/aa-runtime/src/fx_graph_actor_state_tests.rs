@@ -102,7 +102,7 @@ fn graph(nodes: &[Value]) -> Arc<Graph> {
             span: aa_rules::tgi::Span { start: 0, end: 0 },
         },
         precision: Precision::Double53,
-        sources: Vec::new(),
+        sources: std::sync::Arc::new(Vec::new()),
         kind: GraphKind::ActorEnter,
         request_only: false,
     })

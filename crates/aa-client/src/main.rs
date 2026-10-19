@@ -16,6 +16,7 @@ mod battle_presentation;
 mod battle_ui_bridge;
 mod battle_menus;
 mod battle_notifications;
+mod battle_orders_input;
 mod battle_view_startup;
 mod view_screen_state;
 mod authored_rules;

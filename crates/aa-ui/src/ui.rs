@@ -22,6 +22,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Every input of one label text rebuild (bit patterns of the floats).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct LabelKey {
+    text: String,
+    font: String,
+    rect: [u32; 4],
+    clip: [u32; 4],
+    justify: u8,
+    multiline: bool,
+    color: [u32; 4],
+    background: [u32; 4],
+    scroll: u32,
+}
+
 /// The label view element fields the text rebuild reads.
 #[derive(Clone, Debug)]
 pub struct LabelSpec<'a> {
@@ -141,6 +155,18 @@ pub struct Ui {
     /// Ellipsis sizes per font id (`font+0x10/+0x14`).
     ellipsis_cache: HashMap<u32, [f32; 2]>,
     tex_size_cache: HashMap<String, Option<(u32, u32)>>,
+    /// Raw texture path -> resolved canonical path and size. The data layers
+    /// do not change while a screen size/skin is current, so the resolution
+    /// (`0x490ED0`) and file lookups run once per path instead of per frame.
+    tex_raw_cache: HashMap<String, (String, Option<(u32, u32)>)>,
+    /// Label text rebuilds (`0x735B90`) of the last two draw lists, keyed by
+    /// every input of the rebuild. The original keeps a label's text object
+    /// until its text or area changes; a frame that draws the same label
+    /// reuses the identical result instead of rebuilding it. Entries not
+    /// drawn for a whole frame are dropped, so this never grows.
+    label_cache: HashMap<LabelKey, Arc<crate::rdraw::DrawnText>>,
+    label_cache_previous: HashMap<LabelKey, Arc<crate::rdraw::DrawnText>>,
+    label_cache_precision: Precision,
     pub(crate) hovered: Option<String>,
     pub(crate) pressed: Option<String>,
     pub events: Vec<UiEvent>,
@@ -253,6 +279,10 @@ impl Ui {
             char_sets: Vec::new(),
             ellipsis_cache: HashMap::new(),
             tex_size_cache: HashMap::new(),
+            tex_raw_cache: HashMap::new(),
+            label_cache: HashMap::new(),
+            label_cache_previous: HashMap::new(),
+            label_cache_precision: Precision::Pc24,
             hovered: None,
             pressed: None,
             events: Vec::new(),
@@ -377,9 +407,12 @@ impl Ui {
         if screen.width != self.screen.width || screen.height != self.screen.height {
             self.ui_fonts = None;
             self.ellipsis_cache.clear();
+            self.label_cache.clear();
+            self.label_cache_previous.clear();
         }
         self.screen = screen;
         self.tex_size_cache.clear();
+        self.tex_raw_cache.clear();
     }
 
     /// The font atlas tables of the current screen size.
@@ -482,6 +515,43 @@ impl Ui {
     pub fn set_skin(&mut self, nation: Option<&str>, skins_root: impl Into<std::path::PathBuf>) {
         self.store.root.set_skin(nation, skins_root);
         self.tex_size_cache.clear();
+        self.tex_raw_cache.clear();
+        self.label_cache.clear();
+        self.label_cache_previous.clear();
+    }
+
+    /// [`Ui::label_rebuild`] through the two-frame cache used by the draw list.
+    fn label_rebuild_cached(&mut self, text: &str, l: &LabelSpec) -> Arc<crate::rdraw::DrawnText> {
+        if self.label_cache_precision != self.precision {
+            self.label_cache.clear();
+            self.label_cache_previous.clear();
+            self.label_cache_precision = self.precision;
+        }
+        let bits = |v: [f32; 4]| v.map(f32::to_bits);
+        let key = LabelKey {
+            text: text.to_string(),
+            font: l.font.to_string(),
+            rect: bits([l.rect.l, l.rect.t, l.rect.r, l.rect.b]),
+            clip: bits(l.clip),
+            justify: match l.justify {
+                crate::ve::Justify::Left => 0,
+                crate::ve::Justify::Center => 1,
+                crate::ve::Justify::Right => 2,
+            },
+            multiline: l.multiline,
+            color: bits(l.color),
+            background: bits(l.background),
+            scroll: l.scroll.to_bits(),
+        };
+        if let Some(hit) = self.label_cache.get(&key) {
+            return hit.clone();
+        }
+        let drawn = match self.label_cache_previous.remove(&key) {
+            Some(hit) => hit,
+            None => Arc::new(self.label_rebuild(text, l)),
+        };
+        self.label_cache.insert(key, drawn.clone());
+        drawn
     }
 
     // ------------------------------------------------------------ layout
@@ -497,6 +567,15 @@ impl Ui {
     // ------------------------------------------------------------ drawing
 
     fn tex_size(&mut self, raw: &str) -> (String, Option<(u32, u32)>) {
+        if let Some(hit) = self.tex_raw_cache.get(raw) {
+            return hit.clone();
+        }
+        let resolved = self.tex_size_uncached(raw);
+        self.tex_raw_cache.insert(raw.to_string(), resolved.clone());
+        resolved
+    }
+
+    fn tex_size_uncached(&mut self, raw: &str) -> (String, Option<(u32, u32)>) {
         let path = crate::fs::resolve_resolution_path(raw, self.screen.width, |p| self.store.root.exists(p));
         let canonical = self.store.root.canonical(&path).unwrap_or_else(|| {
             if path.starts_with('/') { path.clone() } else { format!("/{path}") }
@@ -554,6 +633,8 @@ impl Ui {
             }
         }
         self.root = root;
+        // labels this list drew stay cached for the next one; the rest leave
+        self.label_cache_previous = std::mem::take(&mut self.label_cache);
         // Two render lists (0x743750): non-blended sprites (0x742CC0: blend
         // off, z-write on) render before blended ones (0x742630: blend on,
         // z-write off); every view element takes a layer from one pre-order
@@ -720,7 +801,7 @@ impl Ui {
                         background,
                         scroll: l.scroll_px,
                     };
-                    let drawn = self.label_rebuild(&text, &spec);
+                    let drawn = self.label_rebuild_cached(&text, &spec);
                     let fonts = self.ui_fonts();
                     let mut faces: Vec<crate::draw::TextFace> = Vec::new();
                     let mut glyphs = Vec::new();
