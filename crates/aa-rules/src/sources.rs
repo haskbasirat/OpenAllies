@@ -75,6 +75,8 @@ pub struct V14Sources {
     overlays: Vec<Overlay>,
     lookup: BTreeMap<String, usize>,
     limits: SourceLimits,
+    /// Built once at open: the archive and overlays never change afterwards.
+    catalog: Vec<CatalogEntry>,
 }
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -164,16 +166,26 @@ impl V14Sources {
                 bytes,
             });
         }
-        Ok(Self {
+        let mut sources = Self {
             archive,
             overlays,
             lookup,
             limits,
-        })
+            catalog: Vec::new(),
+        };
+        sources.catalog = sources.build_catalog();
+        Ok(sources)
     }
     /// Footer order, replaced in place; added files follow pinned ledger order.
     /// Catalog order is NOT native evaluation order.
     pub fn catalog(&self) -> Vec<CatalogEntry> {
+        self.catalog.clone()
+    }
+    /// The same rows and order as [`Self::catalog`], borrowed.
+    pub fn catalog_entries(&self) -> &[CatalogEntry] {
+        &self.catalog
+    }
+    fn build_catalog(&self) -> Vec<CatalogEntry> {
         let mut result = Vec::new();
         for (index, entry) in self.archive.entries().iter().enumerate() {
             if let Some(&o) = self.lookup.get(&entry.path().to_ascii_lowercase()) {

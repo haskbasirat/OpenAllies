@@ -79,6 +79,24 @@ impl State {
         cap: &RegisteredReference<'_>,
         resources: &mut Resources<'_>,
     ) -> Result<()> {
+        self.prepare_with_policy(
+            catalog,
+            bank,
+            cap,
+            resources,
+            &mut crate::resource_objects::RequiredTexturePolicy,
+        )
+    }
+    ///Same loader; a missing sound takes 59B4B0's caught path, which reads
+    ///the current DataCompatibilityMode/DataMissingResourceWarning cells.
+    pub fn prepare_with_policy(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &Bank,
+        cap: &RegisteredReference<'_>,
+        resources: &mut Resources<'_>,
+        texture_policy: &mut impl crate::resource_objects::TexturePolicy,
+    ) -> Result<()> {
         let (node, pc, folder) = source(catalog, bank, cap)?;
         let reference = cap.reference();
         let key = reference.id.to_ascii_lowercase();
@@ -112,6 +130,7 @@ impl State {
                     pc,
                     folder: &folder,
                     resources,
+                    texture_policy,
                 },
                 &mut entry.lists,
                 category == 1 || category == 2,
@@ -173,26 +192,28 @@ impl Default for State {
         Self::new()
     }
 }
-struct Loading<'a, 'assets, 'node, 'r> {
+struct Loading<'a, 'assets, 'node, 'r, T> {
     catalog: &'a Catalog<'assets>,
     bank: &'a Bank,
     node: &'a ResolvedNode<'node>,
     pc: Precision,
     folder: &'a str,
     resources: &'a mut Resources<'r>,
+    texture_policy: &'a mut T,
 }
-impl core::SourceWorld for Loading<'_, '_, '_, '_> {
+impl<T: crate::resource_objects::TexturePolicy> core::SourceWorld for Loading<'_, '_, '_, '_, T> {
     type Sound = Handle;
     fn text(&mut self, list: usize) -> Result<String> {
         text(self.node, ["leadin", "files", "fallout"][list], self.pc)
     }
     fn resource(&mut self, token: &str, streaming: bool) -> Result<Handle> {
         let path = crate::data_pre_request::path::relative(self.folder, token)?;
-        self.resources.sound_59b4b0(
+        self.resources.sound_59b4b0_with_policy(
             self.catalog,
             self.bank,
             &path.encode_utf16().collect::<Vec<_>>(),
             streaming,
+            &mut *self.texture_policy,
         )
     }
     fn standard_rate(&mut self, sound: &Handle) -> Result<()> {

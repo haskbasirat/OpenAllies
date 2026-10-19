@@ -78,18 +78,19 @@ pub struct ObjectDefinition {
 }
 
 impl ActorCatalog {
-    pub fn native_object_definition(
+    pub fn native_object_definition<'a>(
         &self,
-        id: &str,
+        id: impl Into<crate::actors::ThingRef<'a>>,
         precision: Precision,
     ) -> Result<ObjectDefinition> {
+        let id = id.into();
         if !matches!(self.native_category(id)?.native_kind, 1 | 2 | 20 | 21) {
             return Err(Error::Unsupported(
                 "object shape loader requires ObjectData/ActorData/DynamicDoodadData".into(),
             ));
         }
         let source = self
-            .find(id)
+            .select(id)
             .ok_or_else(|| Error::Unsupported(format!("missing actor {id}")))?
             .source
             .clone();
@@ -178,7 +179,7 @@ impl ActorCatalog {
             soft.clone()
         };
         Ok(ObjectDefinition {
-            id: id.into(),
+            id: id.ids.into(),
             source,
             height,
             scale_min,
@@ -214,11 +215,12 @@ impl ActorCatalog {
     /// Original ObjectData49DC40: when variations are disabled, AspectNormal
     /// loads first, followed by the ordered Aspect list.49C360 stores the total
     /// after each addition. This snapshot does not substitute model mesh counts.
-    pub fn native_creation_definition(
+    pub fn native_creation_definition<'a>(
         &self,
-        id: &str,
+        id: impl Into<crate::actors::ThingRef<'a>>,
         precision: Precision,
     ) -> Result<CreationDefinition> {
+        let id = id.into();
         let object = self.native_object_definition(id, precision)?;
         let view = self
             .resolved_actor(id)?

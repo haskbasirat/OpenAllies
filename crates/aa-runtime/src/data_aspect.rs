@@ -21,6 +21,9 @@ use aa_rules::{
 mod fields;
 #[path = "data_aspect_size_fields.rs"]
 mod size_fields;
+#[path = "data_aspect_rename.rs"]
+mod rename;
+use rename::{TextureRename, TextureRenames};
 #[cfg(test)]
 #[path = "data_aspect_tests.rs"]
 mod tests;
@@ -68,10 +71,45 @@ struct Input {
     sources: Vec<Provenance>,
     model: Vec<u16>,
     visual_radius: u32,
-    skin_paths: [String; 2],
+    ///46A180 results for +30 skin / +34 glow: the exact5A79F0 name, or
+    ///None for the native early null (empty source, no request).
+    skin_paths: [Option<String>; 2],
     texture_paths: Vec<String>,
     resource_prefix: String,
+    ///Aspect+4. 46A180 flag1 formats with Aspect+0 (this source's
+    ///resource_prefix copy) + Aspect+4, without the model's '/' rule.
+    aspect_prefix: String,
+    ///Aspect+3C TextureRename list, head first. Retained for later46A180
+    ///flag0 callers (46AE20 loaded-Model texture names).
+    renames: TextureRenames,
     folder: String,
+}
+impl Input {
+    ///46A180 on this Aspect: flag1 (skin/glow) or flag0 (46AE20). `folder`
+    ///is the 0xB36530 source context current at the call.
+    pub(crate) fn texture_name_46a180(
+        &self,
+        source: &str,
+        flag: bool,
+        folder: &str,
+    ) -> Result<Option<String>> {
+        let prefix = format!("{}{}", self.resource_prefix, self.aspect_prefix);
+        self.renames
+            .texture_name_46a180(source, flag.then_some(prefix.as_str()), folder)
+    }
+}
+///One stored46A180 name as its5A79F0 child receives it. The empty name a
+///positive source can produce (rename/format to nothing) is still a native
+///request; its5A77E0 behaviour is unproven, so it is refused explicitly.
+fn texture_request_name(name: &Option<String>) -> Result<Option<Vec<u16>>> {
+    match name {
+        None => Ok(None),
+        Some(name) if name.is_empty() => Err(
+            "5A79F0 empty Texture name from a positive46A180 source requires actual5A77E0 proof"
+                .into(),
+        ),
+        Some(name) => Ok(Some(name.encode_utf16().collect())),
+    }
 }
 fn node<'a>(catalog: &'a Catalog<'_>, d: &RuntimeDefinition) -> Result<ResolvedNode<'a>> {
     let mut selected = None;
@@ -139,28 +177,15 @@ fn input(
         TypedValue::Scalar(v) if v.field_type == ScalarType::Float => v.bits,
         _ => return Err("Aspect visual radius64 requires native Float source".into()),
     };
-    let rename = n.children("TextureRename").map_err(|e| e.to_string())?;
-    let texture_path = |key: &str| -> Result<String> {
-        let mut s = text(n, key, p)?;
-        //46A180 returns null BEFORE traversing even a positive rename list.
-        if s.is_empty() {
-            return Ok(s);
-        }
-        //469D10 substring replacement has a separately required positive
-        //source proof; do not silently use the unrenamed path.
-        if !rename.is_empty() {
-            return Err(
-                "46A180 positive TextureRename requires actual469D10 source producer".into(),
-            );
-        }
-        let joined = if aspect_prefix.starts_with('/') {
-            aspect_prefix.clone()
-        } else {
-            format!("{prefix}{aspect_prefix}")
-        };
-        s = super::path::expand(&s, &joined)?;
-        super::path::relative(folder, &s)
-    };
+    //46A8A0 reads every TextureRename child (substring_from into node+0,
+    //then substring_to into node+4) after weight and before skin/glow.
+    let mut renames = vec![];
+    for child in n.children("TextureRename").map_err(|e| e.to_string())? {
+        renames.push(TextureRename {
+            from: text(&child, "substring_from", p)?.encode_utf16().collect(),
+            to: text(&child, "substring_to", p)?.encode_utf16().collect(),
+        });
+    }
     let mut texture_paths = vec![];
     for path in view
         .children("TextureSearchPath")
@@ -180,16 +205,24 @@ fn input(
         }
         texture_paths.push(super::path::relative(folder, &path)?);
     }
-    Ok(Input {
+    let mut input = Input {
         ids: text(n, "IDS", p)?,
         sources: n.sources(),
         model: model.encode_utf16().collect(),
         visual_radius,
-        skin_paths: [texture_path("skin")?, texture_path("glow")?],
+        skin_paths: [None, None],
         texture_paths,
         resource_prefix: prefix,
+        aspect_prefix,
+        renames: TextureRenames::from_source_order(renames),
         folder: folder.into(),
-    })
+    };
+    //46A180(skin,1) ->+30, then46A180(glow,1) ->+34, with this source's
+    //folder as the current 0xB36530 context.
+    let skin = input.texture_name_46a180(&text(n, "skin", p)?, true, folder)?;
+    let glow = input.texture_name_46a180(&text(n, "glow", p)?, true, folder)?;
+    input.skin_paths = [skin, glow];
+    Ok(input)
 }
 impl Row {
     fn constructed_banner() -> Self {
@@ -291,14 +324,13 @@ impl State {
                 return Err("pending Aspect immutable source changed".into());
             }
             while row.skin_stage < 2 {
-                let ids = &input.skin_paths[row.skin_stage];
-                let handle = if ids.is_empty() {
-                    None
-                } else {
+                let handle = if let Some(ids) =
+                    texture_request_name(&input.skin_paths[row.skin_stage])?
+                {
                     let found = resources.texture_5a77e0_with_policy(
                         catalog,
                         bank,
-                        &ids.encode_utf16().collect::<Vec<_>>(),
+                        &ids,
                         1,
                         texture_policy,
                     )?;
@@ -311,6 +343,8 @@ impl State {
                         return Err("5A79F0 final original Texture request remains required".into());
                     }
                     found
+                } else {
+                    None
                 };
                 row.skins[row.skin_stage] = handle;
                 row.skin_stage += 1;
@@ -322,13 +356,16 @@ impl State {
                         crate::object_animation_set::Set::from_native_constructor(&data),
                     );
                 }
-                row.animations.as_mut().unwrap().load_source_node(
+                //5A80D0 caught missing-Sequence path (DataCompatibilityMode)
+                //returns NULL and49DA40 skips that ObjectAnimation.
+                row.animations.as_mut().unwrap().load_source_node_with_policy(
                     catalog,
                     bank,
                     &animations[row.animation_stage],
                     &input.resource_prefix,
                     &input.folder,
                     resources,
+                    texture_policy,
                 )?;
                 row.animation_stage += 1;
             }
@@ -384,9 +421,12 @@ impl State {
                 sources,
                 model,
                 visual_radius: 0,
-                skin_paths: [String::new(), String::new()],
+                skin_paths: [None, None],
                 texture_paths: vec![],
                 resource_prefix: String::new(),
+                //46A650 BannerAspect never builds a TextureRename list.
+                aspect_prefix: String::new(),
+                renames: TextureRenames::default(),
                 folder: banner_folder,
             });
             row.skins = [skin, None];

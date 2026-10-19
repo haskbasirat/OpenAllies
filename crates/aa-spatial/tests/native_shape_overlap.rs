@@ -73,7 +73,21 @@ fn unsupported_numeric_inputs_do_not_invent_overlap_results() {
         match which {
             0 => a.shape.kind = 4,
             1 => a.position[0] = f32::NAN.to_bits(),
-            2 => a.facing[1] = f32::INFINITY.to_bits(),
+            2 => {
+                a.facing[1] = f32::INFINITY.to_bits();
+                // Case 0 is point/point: 46EF30 only FUCOMPP-compares these
+                // facings and 46F006 keeps shapes 0/1 out of the rotated
+                // branch. Unmodified native 46EF30 (original and v14, all
+                // three PCs, research/skirmish-20261017-load-nonfinite/
+                // native_overlap_unused.py run()) returns the finite result.
+                assert_eq!(
+                    shape_overlap::overlaps(&a, &c.b, c.precision).unwrap(),
+                    c.result
+                );
+                // A box consumes its facing in the local-frame transform:
+                // nonfinite arithmetic stays outside the ported domain.
+                a.shape.kind = 2;
+            }
             _ => a.shape.bounds[2] = f32::NAN.to_bits(),
         }
         assert!(shape_overlap::overlaps(&a, &c.b, c.precision).is_err());

@@ -9,7 +9,12 @@ use aa_rules::{actors::ResolvedNode,native::{TypedValue,ScalarType},resources::S
 use aa_numeric::Precision;
 #[path="actor_animation_core.rs"]
 mod core;
+#[path="actor_animation_damage_filter.rs"]
+mod damage_filter;
 type Result<T>=std::result::Result<T,String>;
+///461F70 reads the SAME [B36530]+3A4 vector for every death Animation of
+///this ActorData load; it is built on first use only (no lookup, no read).
+type DamageTypes=std::cell::OnceCell<Result<damage_filter::Registry>>;
 struct FxOwner{session:Option<fx_graph::animation_source::Session>,graph:Option<Graph>}
 type Set=core::Set<Handle,FxOwner>;
 ///A read-only identity into ONE completed source owner, never a raw resource
@@ -62,7 +67,8 @@ impl Source{
     }
     fn load_inner(&mut self,catalog:&Catalog<'_>,bank:&Bank,definition:&RuntimeDefinition,resources:&mut Resources<'_>,texture_policy:&mut impl crate::resource_objects::TexturePolicy)->Result<()>{
         self.data.require_live()?;self.layout.require_data(&self.data)?;
-        if !matches!(definition.native_class,3|4){return Err("Actor Animation requires actual ActorData class".into())}
+        //ActorData::LoadData source fields: data kind2 (GROUP is class8).
+        if definition.proof.category.native_kind!=2{return Err("Actor Animation requires ActorData definition data".into())}
         let proof=crate::definition_fx::Source::bind_in_bank(catalog,bank,definition)?;
         let pc=proof.source_precision();self.definition=Some(definition.clone());self.precision=Some(pc);self.universe=catalog.actors.sources.clone();
         let actor=catalog.actors.resolved_actor(&definition.proof.id).map_err(error)?;
@@ -77,9 +83,10 @@ impl Source{
         let prefix=text(&view,"resource_prefix",pc)?;
         let normalized=definition.proof.source.path.replace('\\',"/");let folder=normalized.rsplit_once('/').map_or("",|(d,_)|d);
         let base_nodes=character.children("Animation").map_err(error)?;
+        let damage_types=DamageTypes::new();
         for node in &base_nodes{
             let set=self.sets[base].as_mut().unwrap();let before=set.rows.len();
-            set.load(&prefix,false,&mut Current::new(catalog,bank,definition,node,folder,resources,texture_policy,pc),pc)?;
+            set.load(&prefix,false,&mut Current::new(catalog,bank,definition,node,folder,resources,texture_policy,pc,&damage_types),pc)?;
             if set.rows.len()!=before{self.graph_order.push((base,before));}
         }
         for scope in character.children("AspectAnimationSet").map_err(error)?{
@@ -89,13 +96,13 @@ impl Source{
             self.sets[index]=Some(Set::constructed());
             let set=self.sets[index].as_mut().unwrap();
             for node in scope.children("Animation").map_err(error)?{
-                let before=set.rows.len();set.load(&prefix,false,&mut Current::new(catalog,bank,definition,&node,folder,resources,texture_policy,pc),pc)?;
+                let before=set.rows.len();set.load(&prefix,false,&mut Current::new(catalog,bank,definition,&node,folder,resources,texture_policy,pc,&damage_types),pc)?;
                 if set.rows.len()!=before{self.graph_order.push((index,before));}
             }
             //463F10 reparses the SAME base source with inherit=true. It does
             //not clone completed base Animation or FX allocations.
             for node in &base_nodes{
-                let before=set.rows.len();set.load(&prefix,true,&mut Current::new(catalog,bank,definition,node,folder,resources,texture_policy,pc),pc)?;
+                let before=set.rows.len();set.load(&prefix,true,&mut Current::new(catalog,bank,definition,node,folder,resources,texture_policy,pc,&damage_types),pc)?;
                 if set.rows.len()!=before{self.graph_order.push((index,before));}
             }
         }
@@ -137,20 +144,27 @@ impl Source{
         })
     }
 }
-struct Current<'a,'source,'node,'resource,T>{catalog:&'a Catalog<'source>,bank:&'a Bank,definition:&'a RuntimeDefinition,node:&'a ResolvedNode<'node>,folder:&'a str,resources:&'a mut Resources<'resource>,texture_policy:&'a mut T,pc:Precision,cues:Option<Vec<ResolvedNode<'node>>>}
+struct Current<'a,'source,'node,'resource,T>{catalog:&'a Catalog<'source>,bank:&'a Bank,definition:&'a RuntimeDefinition,node:&'a ResolvedNode<'node>,folder:&'a str,resources:&'a mut Resources<'resource>,texture_policy:&'a mut T,pc:Precision,cues:Option<Vec<ResolvedNode<'node>>>,damage_types:&'a DamageTypes}
 impl<'a,'source,'node,'resource,T> Current<'a,'source,'node,'resource,T>{
-    fn new(catalog:&'a Catalog<'source>,bank:&'a Bank,definition:&'a RuntimeDefinition,node:&'a ResolvedNode<'node>,folder:&'a str,resources:&'a mut Resources<'resource>,texture_policy:&'a mut T,pc:Precision)->Self{Self{catalog,bank,definition,node,folder,resources,texture_policy,pc,cues:None}}
+    #[allow(clippy::too_many_arguments)]
+    fn new(catalog:&'a Catalog<'source>,bank:&'a Bank,definition:&'a RuntimeDefinition,node:&'a ResolvedNode<'node>,folder:&'a str,resources:&'a mut Resources<'resource>,texture_policy:&'a mut T,pc:Precision,damage_types:&'a DamageTypes)->Self{Self{catalog,bank,definition,node,folder,resources,texture_policy,pc,cues:None,damage_types}}
 }
 impl<T:crate::resource_objects::TexturePolicy> core::Source<Handle,FxOwner> for Current<'_,'_,'_,'_,T>{
     fn string(&mut self,key:&str)->Result<String>{text(self.node,key,self.pc)}
-    fn resource(&mut self,expanded:&str)->Result<Option<Handle>>{let path=crate::data_pre_request::path::relative(self.folder,expanded)?;self.resources.sequence_5a80d0(self.catalog,self.bank,&path.encode_utf16().collect::<Vec<_>>()).map(Some)}
+    fn resource(&mut self,expanded:&str)->Result<Option<Handle>>{let path=crate::data_pre_request::path::relative(self.folder,expanded)?;self.resources.sequence_5a80d0_with_policy(self.catalog,self.bank,&path.encode_utf16().collect::<Vec<_>>(),&mut *self.texture_policy)}
     fn fixed(&mut self,key:&str)->Result<u32>{number(self.node,key,self.pc,ScalarType::Fixed)}
     fn boolean(&mut self,key:&str)->Result<u8>{self.node.field(key,self.pc).map_err(error)?.ok_or("Actor Animation Bool source absent")?.boolean().map(|v|v as u8).map_err(error)}
     fn integer(&mut self,key:&str)->Result<i32>{match self.node.field(key,self.pc).map_err(error)?{Some(TypedValue::Integer{value,..})=>Ok(value),_=>Err("Actor Animation requires native Int field".into())}}
     fn resolve_kind(&mut self,value:&str)->Result<i32>{
         let kind=core::registered_kind(value);if kind>=0{Ok(kind)}else{Err("497020 requires actual additional Animation alias registration or unknown-kind diagnostic boundary".into())}
     }
-    fn validate_damage_filter(&mut self,_:i32)->Result<()>{Err("461F70 positive death damage_filter requires actual DamageFilterData+2C registry".into())}
+    ///4620A6..4620EC on the DamageType vector of THIS ActorData's file time.
+    ///Hit: nothing further stored. Miss: the native 410C40 diagnostic.
+    fn validate_damage_filter(&mut self,filter:i32)->Result<()>{
+        let registry=self.damage_types.get_or_init(||damage_filter::Registry::at_actor_load(self.catalog.actors,&self.definition.proof.source,self.pc)).as_ref().map_err(Clone::clone)?;
+        if registry.contains(filter){return Ok(())}
+        Err(damage_filter::invalid_filter(&text(self.node,"ids",self.pc)?,&self.definition.proof.id,filter))
+    }
     fn begin_fx(&mut self)->Result<FxOwner>{Ok(FxOwner{session:Some(fx_graph::animation_source::Session::new(self.catalog,self.bank,self.definition,self.node)?),graph:None})}
     fn append_fx(&mut self,context:&mut FxOwner,list:core::FxList)->Result<usize>{
         let session=context.session.as_mut().ok_or("Actor Animation FX compiler was already moved")?;

@@ -1,0 +1,85 @@
+{
+ "schema": 1,
+ "area": "ObjectAnimation positive CreateVFX/PlaySFX source children",
+ "date": "2026-10-18",
+ "root_cause": "49CF80 (and 49D0A0) were explicit stubs in object_animation_set.rs; 51 pre-World Object/Actor source preparations stopped there.",
+ "native": {
+  "49D900": "after start_max calls 49D0A0(node) then 49CF80(node); appends follow in 49DA40",
+  "49CF80": "5B4220 PlaySFX count; per index: 49B630 grow (zeroed pairs), count+1 before 42BE10 child; 5B54D0 sfx_ids; empty -> null without 416370; 416370 ECX=[[B36530]+584]; nonempty miss -> 410C40 Unknown IDS '%s' for data manager '%s' (manager+20) before store; store +0; null -> 410C40 Unknown sfx '%s' specified by object animation '%s'; 5B5380 looping -> +4 byte",
+  "49D0A0": "5B4220 CreateVFX count; per index: 877EA0 grow, count+1 before 42BE10 child; 5B54D0 vfx_ids; 4BDB70 ECX=[[B36530]+C] -> +0, null -> Unknown vfx; 5B54D0 location; 42C070 ECX=[[B36530]+580] -> Data+C or -1 -> +4, <0 -> Unknown location",
+  "same_lookups_as_fxc": {
+   "416370": "42C3C0 PlaySFX",
+   "4BDB70": "42C5E0 CreateVFX",
+   "42C070": "42C5E0 CreateVFX"
+  },
+  "410C40": "always throws (96BEF5)",
+  "42C070_empty": "42C08A returns null before any manager access",
+  "readers": {
+   "49B7E0": "request loop reads only +1C Sequence",
+   "49B720": "animation start reads +2C pairs for 7474F0 playback (not ported)"
+  },
+  "timing": "49DA40 runs inside the owner's parse-time LoadData (464BD0/4718B0/4922E0 -> 49DC40 -> 49C670 -> 46A8A0)",
+  "483A40": "copies the first dispatched root's name into an empty manager+20"
+ },
+ "oracle": {
+  "producer": "native_object_animation_children.py",
+  "fixture": "native-object-animation-children.json",
+  "cases": 24,
+  "loads": 144,
+  "machines": 6,
+  "precisions": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "images": [
+   "original",
+   "v14"
+  ],
+  "executed_pins": 1436,
+  "seams": [
+   "5B54D0",
+   "5B5380",
+   "5B4AE0",
+   "5B4220",
+   "42BE10",
+   "4763C0",
+   "5A80D0",
+   "416370",
+   "4BDB70",
+   "42C070 nonempty",
+   "410C40",
+   "855D30"
+  ],
+  "replay": "native-replay01.log PASS (compare mode)"
+ },
+ "rust": {
+  "object_animation_core.rs": "49D0A0/49CF80 loops; Animation vfx(+20)/sfx(+2C) pair vectors; Source trait seams",
+  "object_animation_set.rs": "production Source via fx_graph::OwnerLookups at owner position; owner = containing registered Thing root",
+  "fx_graph.rs": "OwnerLookups wraps the same Bound::find Audio/VFX/Bone",
+  "fx_graph_sound.rs": "audio_manager_name for the 410C40 unknown-IDS text",
+  "tests": [
+   "object_animation_core_tests.rs: 3 oracle replays (old 120 loads + 54 requests, new 144 loads)",
+   "object_animation_set_tests.rs: ignored AA_GAME_ROOT lab over the 51 owners"
+  ]
+ },
+ "verification": {
+  "runtime-object-animation-tests01.log": "lib object_animation: 4 passed, 1 ignored",
+  "runtime-fx-aspect-tests01.log": "lib fx_graph+data_aspect: 16 passed, 6 ignored",
+  "runtime-real-data-lab01.log": "51 owners, 57 positive PlaySFX Animations bound registered Audio at owner position; prepare_object_aspects Ok for all 51",
+  "runtime-object-animation-tests02.log": "lib object_animation after Sequence policy: 4 passed, 2 ignored",
+  "runtime-real-data-lab02.log": "PlaySFX lab PASS (51 owners/57 Animations); missing Sequence lab PASS: 4 Animations of tropical_bamboothicket/tropical_grasstall skipped under explicit DataCompatibilityMode=1, mode 0 rethrows, no policy -> required error"
+ },
+ "removed_caps": [],
+ "open": [
+  "owner position derived from the containing registered root; template-authored Animation with positive children is an explicit error; data_aspect.rs could pass d.proof.source instead",
+  "manager+20 name = registry tag Audio once a registered Audio root precedes the owner; earlier is an explicit error",
+  "FX find(VFX) also reads the VFX cutscene flag (template default exists); 4BDB70 does not",
+  "42BC40 Too many nodes (index > 9999999) not modelled",
+  "no ObjectAnimation playback, AudioData/Sound preparation for these SFX, or VFX creation claimed; no shipped ObjectAnimation CreateVFX child exists"
+ ],
+ "missing_sequence": {
+  "rust": "Set::load_source_node_with_policy -> Resources::sequence_5a80d0_with_policy; NULL skips the Animation in the unchanged kernel (49DA40)",
+  "pending_caller_change": "data_aspect.rs ~359: load_source_node(...) -> load_source_node_with_policy(..., resources, texture_policy)"
+ }
+}

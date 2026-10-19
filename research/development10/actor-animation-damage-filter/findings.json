@@ -1,0 +1,82 @@
+{
+ "scope": "461F70 death Animation damage_filter lookup in DamageType DataManager [B36530]+3A4; registry built by actual 481410/483A40/481570/481630/4C0870/4C0A80",
+ "files": {
+  "crates/aa-runtime/src/actor_animation_damage_filter.rs": "76296dd991589a94bddfa493c0a003790d86de875a8eecd95efdef28ab6aa5e1",
+  "crates/aa-runtime/src/actor_animation_damage_filter_tests.rs": "2bf1fb2e9a3d3d55289ec860d60916cf18198ed4f3fca307b460727797502e80",
+  "crates/aa-runtime/src/actor_animation_source.rs": "bd3ad2dfc03db19b90c1101abdf8060c64237a9aa260a3a45a95e3e3429e8e89",
+  "research/development10/actor-animation-damage-filter/native_damage_filter.py": "b9cbcb736fe90ffd946b3e95b0096794b523bb30e7db48421919e85261a55b29",
+  "research/development10/actor-animation-damage-filter/native-damage-filter.json": "f5bdeec8714f892bb59f12e4e15008621792d2dd716f849ff998334f94addbc2",
+  "research/development10/actor-animation-damage-filter/README.txt": "210a3f77555eac244ae937755774c74470570bb603971f3fed60e4140743e4ba"
+ },
+ "addresses": {
+  "lookup": "4620A6..4620EC (hit 4620EF, miss 410C40 fmt A05200)",
+  "filter_store": "462066..462076 Animation+28 before lookup",
+  "skip": "-1 and 0x29A (666) never read +3A4",
+  "manager": "GameData+3A4 = 481410(0xB, mode0) at 48AA55..48AA7F, vtable A0CFE4, vector +24/+28, singleton B3AAF8",
+  "damage_type": "4C0870 ctor (0x30, vtable A228D0, +2C uninitialized); 4C0A80 LoadData: glyph 48D500 on [B36530]+3BC throws before +2C; +2C=damage_filter; negative throws after store",
+  "timing": "ActorData A05540[0]=464BD0 called from 4BDC50 inside its file dispatch"
+ },
+ "native": {
+  "machines": 6,
+  "precisions": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "images": [
+   "original",
+   "v14"
+  ],
+  "lookup_cases_per_machine": 95,
+  "real_definition_cases_per_machine": 66,
+  "executed_pins": 8945,
+  "real_vector": [
+   [
+    "gunfire",
+    0,
+    0
+   ],
+   [
+    "flame",
+    1,
+    1
+   ],
+   [
+    "explosive",
+    2,
+    2
+   ],
+   [
+    "armor_piercing",
+    3,
+    2
+   ]
+  ]
+ },
+ "verification": {
+  "oracle_readonly_replay": "pass (native-replay-01.log)",
+  "cargo test -p aa-runtime --lib actor_animation --include-ignored (AA_GAME_ROOT)": "7/7 pass",
+  "cargo test -p aa-rules --lib native_load": "1/1 pass (unchanged crate)",
+  "cargo build -p aa-runtime --lib": "pass, no new warnings",
+  "real_v14_census": "68 blocked definitions: projected vector equals native real vector, every death filter (0/1/2; -1/666 skipped) hits, 463440 core + 461190 finalize pass with Sequence/FX transports"
+ },
+ "seams": [
+  "48D500 Glyph Find (fixture handles for ch_gun/ch_fire/ch_explosive/ch_ap)",
+  "4B9F40 localized text lookup",
+  "Animation typed node getters/Sequence/relative path (prior producer transports)",
+  "fixture pre-fill 0xCDCDCDCD at DamageTypeData+2C on 4C0870 entry"
+ ],
+ "removed_caps": [
+  {
+   "address": "48AA72",
+   "value": "0xB initial DamageType vector capacity",
+   "rust": "canonical NativeDataRegistry Vec"
+  }
+ ],
+ "limits": [
+  "Glyph registry content is a seam; Rust checks the canonical Glyph registry and file order",
+  "48D660 truncation after a DamageType 4C0A80 throw is refused, not modeled",
+  "DamageType declared in the Actor own file, file loaded twice, or Glyph translation for the name are explicit errors",
+  "no claim for full ActorData load, Resource/FX compilation or later consumers of Animation+28"
+ ]
+}

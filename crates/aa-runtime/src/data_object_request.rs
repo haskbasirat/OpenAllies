@@ -62,7 +62,7 @@ fn source_node<'a>(catalog: &'a Catalog<'_>, d: &RuntimeDefinition) -> Result<Re
     for tag in ["Thing", "Unit", "Projectile", "VFX"] {
         for node in catalog
             .actors
-            .resolved_definitions(tag)
+            .resolved_definitions_at(tag, &d.proof.source)
             .map_err(|e| e.to_string())?
         {
             if node.sources().first() == Some(&d.proof.source) {
@@ -252,13 +252,14 @@ impl State {
                 let index = self.object_request_fields(data)?.next_reference;
                 //Source compilation has completed the reference fields. Type source
                 //Resource40/Audio pointers are prepared in this pre-World interval only.
-                self.prepare_graph_node(
+                self.prepare_graph_node_with_textures(
                     catalog,
                     bank,
                     &graph,
                     graph.node_id(index)?,
                     resources,
                     policy,
+                    texture_policy,
                 )?;
                 self.object_request_fields_mut(data)?.next_reference += 1;
             }
@@ -311,13 +312,14 @@ impl State {
             .clone();
         source.visit_graphs(catalog, bank, |graph| {
             for index in 0..graph.nodes().len() {
-                self.prepare_graph_node(
+                self.prepare_graph_node_with_textures(
                     catalog,
                     bank,
                     graph,
                     graph.node_id(index)?,
                     resources,
                     policy,
+                    texture_policy,
                 )?;
             }
             Ok(())
@@ -368,6 +370,28 @@ impl State {
         resources: &mut Resources<'_>,
         policy: &mut impl ModelPolicy,
     ) -> Result<()> {
+        self.prepare_graph_node_with_textures(
+            catalog,
+            bank,
+            graph,
+            id,
+            resources,
+            policy,
+            &mut crate::resource_objects::RequiredTexturePolicy,
+        )
+    }
+    ///Same node preparation; the policy supplies the current variable cells
+    ///that the caught missing-sound path (59B4B0) reads.
+    pub(crate) fn prepare_graph_node_with_textures(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &Bank,
+        graph: &Graph,
+        id: NodeId,
+        resources: &mut Resources<'_>,
+        policy: &mut impl ModelPolicy,
+        texture_policy: &mut impl crate::resource_objects::TexturePolicy,
+    ) -> Result<()> {
         graph.require_in_bank(catalog, bank)?;
         match graph.node_kind(id).ok_or("FXC request node kind absent")? {
             fx_graph::FxcKind::CreateVfx => {
@@ -386,7 +410,8 @@ impl State {
             fx_graph::FxcKind::PlaySfx => {
                 if let Some(cap) = graph.registered_reference(id, 0x44)? {
                     cap.require_audio_reference(catalog, bank)?;
-                    self.audio_data.prepare(catalog, bank, &cap, resources)?;
+                    self.audio_data
+                        .prepare_with_policy(catalog, bank, &cap, resources, texture_policy)?;
                 }
             }
             fx_graph::FxcKind::StopVfx

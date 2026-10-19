@@ -33,7 +33,8 @@ impl World<'_> {
     }
     fn resolve(gtid: u32) -> Option<u32> {
         let slot = gtid & 0xffff;
-        (gtid >> 16 == 5 && (1..=8).contains(&slot)).then_some(slot - 1)
+        // Lazy: a null origin (0, slot 0) must not evaluate slot - 1.
+        (gtid >> 16 == 5 && (1..=8).contains(&slot)).then(|| slot - 1)
     }
 }
 impl RegistryWorld for World<'_> {

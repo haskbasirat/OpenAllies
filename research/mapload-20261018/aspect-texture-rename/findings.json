@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "area": "pre-world source preparation: Aspect TextureRename (gbr_brigade_engineer)",
+  "failure_before": "46A180 positive TextureRename requires actual469D10 source producer",
+  "addresses": {
+    "49C670": "ObjectData Aspect append: 46A510 ctor, 469A70 (+44 = ObjectData+B4), 46A8A0, 49C360",
+    "46A510": "Aspect ctor: +0 copy of ObjectData+B0 resource_prefix, +3C/+40 null",
+    "46A8A0": "Aspect source load; TextureRename nodes {+0 from,+4 to,+8 next} prepended to +3C, +40 first node; skin->46A180(,1)->+30, glow->46A180(,1)->+34",
+    "46A180": "empty source -> 0; copy; for node in +3C list: 469D10; flag1 405D60(copy, 4108C0(+0,+4)) else assign; 4763C0; return 5A79F0(name, +44)",
+    "469D10": "CStringT::Replace(pszOld, pszNew) on counted UTF-16",
+    "46AE20": "loaded Model extra textures: 46A180(model texture name, 0) per texture (second consumer of the list)",
+    "401330/4011E0/401260": "PrepareWrite2 / Fork / Reallocate (run natively against the CString manager service)"
+  },
+  "oracle": {
+    "producer": "research/mapload-20261018/aspect-texture-rename/native_aspect_texture_rename.py",
+    "fixture": "research/mapload-20261018/aspect-texture-rename/native-aspect-texture-rename.json",
+    "fixture_sha256": "b195a7a2c86d61a35ec18ebbec6ea9038d2079e81c86fb40dfbb27c1f3c70e2e",
+    "images": ["original", "v14"],
+    "precisions": ["Single24", "Double53", "Extended64"],
+    "replace_rows": 35,
+    "loader_cases": 7,
+    "machines": 252,
+    "pinned_instructions": 1226,
+    "logs": ["native-author01.log", "native-replay01.log"]
+  },
+  "proven": [
+    "469D10 count/result units for 33 rows; 2 embedded-NUL grow rows publish unwritten storage (Rust refuses)",
+    "46A8A0 list order: head = last source child, renames applied in reverse source order",
+    "46A180 has no '/' aspect_prefix rule for skin/glow (the model path has one)",
+    "46A180 empty source returns 0 with no request; a positive source renamed/formatted to empty still requests 5A79F0(\"\")",
+    "Real gbr_brigade_engineer: rename list [DeathArcticBase->Base], skin request Buildings/GBR/GBRBrigadeEngineer/GBRBrigadeEngineerBase.dds, glow null, NIF names unchanged under flag0"
+  ],
+  "rust": {
+    "files": [
+      "crates/aa-runtime/src/data_aspect.rs",
+      "crates/aa-runtime/src/data_aspect_rename.rs",
+      "crates/aa-runtime/src/data_aspect_rename_tests.rs",
+      "crates/aa-runtime/src/data_aspect_tests.rs"
+    ],
+    "behaviour_change": "skin/glow prefix is resource_prefix+aspect_prefix without the former '/' rule (no real data sets aspect_prefix); a positive source producing an empty 5A79F0 name is now an explicit error instead of a silent null",
+    "tests": "cargo test -p aa-runtime --lib --offline data_pre_request -- --include-ignored (AA_GAME_ROOT set): 35 passed, see rust-data-pre-request-include-ignored01.log and rust-aspect-tests02.log",
+    "actual_gbr_brigade_engineer": "prepare_object_aspects completes: 5 Aspect rows, renames [DeathArcticBase->Base], skin Buildings/GBR/GBRBrigadeEngineer/GBRBrigadeEngineerBase.dds, glow null",
+    "test_lab_fix": "actual_source_aspect_retains_model_biome_and_second_view_factory_allocation now installs the fresh cache-variable scope before moving the Bank (it failed with 59CB00 policy absent, unrelated to renames)"
+  },
+  "removed_caps": [],
+  "open": [
+    "405D60 beyond one %s/%% stays the restricted path::expand domain",
+    "4763C0 folder: definition source folder assumed as current 0xB36530 context (existing assumption)",
+    "5A79F0 empty-name request refused explicitly (5A77E0 empty-name behaviour unproven)",
+    "469D10 negative memmove balance guarded as error; unreachable in a brute-force search up to length 10",
+    "46AE20 Model texture enumeration remains the existing explicit error"
+  ]
+}

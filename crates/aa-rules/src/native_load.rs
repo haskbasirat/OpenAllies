@@ -579,6 +579,8 @@ pub fn load_files(
         diagnostics: Vec::new(),
         actors: Vec::new(),
         lookup: BTreeMap::new(),
+        registered: BTreeMap::new(),
+        resolution_cache: Default::default(),
         resolver: Resolver::default(),
         native_data: BTreeMap::new(),
     };
@@ -804,6 +806,7 @@ pub fn load_files(
     // Registry slots follow registration order; then 427BD0 translations.
     for (id, slot) in &things.registry {
         catalog.lookup.insert(id.clone(), *slot);
+        catalog.registered.insert(id.clone(), *slot);
     }
     for old in things.translations.keys() {
         match things.find(old) {

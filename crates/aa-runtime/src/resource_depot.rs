@@ -69,6 +69,8 @@ struct Manager {
     ni_cache:crate::resource_ni_cache::State,
     texture_objects:crate::resource_texture_owner::State,
     warnings: Vec<String>,
+    ///Native404FC0 calls reached by a caught missing-source path, in order.
+    missing_resource_diagnostics: Vec<MissingResourceDiagnostic>,
     texture_subfolder_80: crate::vworld_resource_context::State,
     ///Modern backend residency is not silently classified as native Ni. Its
     ///registration remains until a real unload owner is implemented, even if
@@ -76,6 +78,39 @@ struct Manager {
     view_resources:BTreeMap<String,ViewResourceRegistration>,
 }
 struct ViewResourceRegistration {definition:aa_rules::resources::Provenance,leases:Vec<Weak<()>>}
+///The log channel object a native404FC0 call receives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiagnosticChannel {
+    ///B38C28, also used by5A6E90's missing-Texture diagnostic.
+    ResourceB38C28,
+    ///B38B98, used by the AudioResource.cpp diagnostics.
+    AudioB38B98,
+}
+///One native404FC0(channel,level,file,line,function,format,name) call made
+///by a caught missing-source path, with every argument kept. 404FC0 itself
+///only forwards to the channel's vf4 writer when level<=channel+C. It changes
+///no game state, so these records are only diagnostics, never a resource.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissingResourceDiagnostic {
+    pub channel: DiagnosticChannel,
+    pub level: u32,
+    pub file: &'static str,
+    pub line: u32,
+    pub function: &'static str,
+    pub format: &'static str,
+    pub ids: Vec<u16>,
+}
+impl MissingResourceDiagnostic {
+    ///The text after the single native `%s` is filled with the requested name.
+    pub fn message(&self) -> String {
+        self.format.replacen("%s", &String::from_utf16_lossy(&self.ids), 1)
+    }
+}
+///405D20/5A6E90 level: DataMissingResourceWarning true gives1, false10
+///(`neg al; sbb eax,eax; and eax,-9; add eax,10`).
+fn missing_resource_level(warning: u8) -> u32 {
+    if warning != 0 { 1 } else { 10 }
+}
 fn require_no_unbound_view_invalidation(resources:&BTreeMap<String,ViewResourceRegistration>)->Result<()> {
     if !resources.is_empty(){return Err("5ACA50 modern view/model residency requires actual native class/refcounts and same-owner GPU unload; new+80 retained".into());}
     Ok(())
@@ -131,6 +166,7 @@ impl Application {
                 ni_cache:crate::resource_ni_cache::State::from_fresh_application(&origin),
                 texture_objects:crate::resource_texture_owner::State::from_fresh_application(&origin),
                 warnings: Vec::new(),
+                missing_resource_diagnostics: Vec::new(),
                 texture_subfolder_80: crate::vworld_resource_context::State::constructed(),
                 view_resources:BTreeMap::new(),
             }),
@@ -140,6 +176,11 @@ impl Application {
     }
     pub fn sources_mut(&mut self) -> &mut V14Sources {
         &mut self.sources
+    }
+    ///Copies of the native404FC0 calls made so far by caught missing-source
+    ///paths (5A80D0 and59B4B0/59B280), in call order.
+    pub fn missing_resource_diagnostics(&self) -> Result<Vec<MissingResourceDiagnostic>> {
+        Ok(self.manager.lock().map_err(|_| "Resource manager lock poisoned")?.missing_resource_diagnostics.clone())
     }
     ///Actual completed pre-World source interval. The context is installed
     ///once before any Model allocation, and never inferred from source roots.
@@ -906,7 +947,7 @@ impl Resources<'_>{
         Ok(None)
     }
     fn find_typed(&mut self,ids:&[u16],expected:crate::resource_objects::Kind)->Result<crate::resource_objects::Handle>{
-        self.find_typed_optional(ids,expected)?.ok_or_else(||"5130A0 actual requested Resource source file is missing".into())
+        self.find_typed_optional(ids,expected)?.ok_or_else(||format!("5130A0 actual requested Resource source file is missing: {}",String::from_utf16_lossy(ids)))
     }
     fn find_typed_optional(&mut self,ids:&[u16],expected:crate::resource_objects::Kind)->Result<Option<crate::resource_objects::Handle>>{
         use crate::resource_objects::{Entry,Kind,SourceFile};
@@ -1048,16 +1089,61 @@ impl Resources<'_>{
     ///and Texture factories it does not consult current biome subfolder80 or
     ///a rendering policy. The SAME manager publishes/returns its typed KF
     ///allocation; decoder/request completion remains a later real operation.
+    ///Without a current-variable policy a genuinely absent source cannot take
+    ///5A80D0's catch path; use [`Self::sequence_5a80d0_with_policy`].
     pub fn sequence_5a80d0(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,ids:&[u16])->Result<crate::resource_objects::Handle>{
         self.source(catalog,bank)?;
-        self.find_typed(ids,crate::resource_objects::Kind::Sequence)
+        self.find_typed_optional(ids,crate::resource_objects::Kind::Sequence)?.ok_or_else(||format!(
+            "5130A0 actual requested Resource source file is missing: {}; 5A80D0 catches this TGC_MissingResourceException and needs current UVar61 DataCompatibilityMode/DataMissingResourceWarning (sequence_5a80d0_with_policy)",
+            String::from_utf16_lossy(ids)))
+    }
+    ///KKC_NiSeqResource::GetNiSeqResource 5A80D0, the only Sequence factory
+    ///of Animation463B50 and ObjectAnimation49DA40 (neither has a try block).
+    ///It calls5A7750(name,1) in try state0 (FuncInfo AEED7C) with ONE catch,
+    ///`TGC_MissingResourceException&` (B28008) at5A8115. 5A7750 throws that
+    ///type through425210 only when5AD430 and5AEA90 both find nothing; its
+    ///wrong-class4252A0 throws TGC_CorruptResourceException, which escapes.
+    ///The handler reads byte [B39940]+F4 (UVar61 DataCompatibilityMode, the
+    ///SAME cell5A7976 reads). Zero rethrows (96BEF5(0,0)). Otherwise405D20
+    ///reads B3994C "DataMissingResourceWarning" (the SAME lookup5A6E90
+    ///inlines), calls404FC0(B38C28,level,"Missing animation resource '%s'
+    ///- disabling animation") and returns NULL (5A816E `xor eax,eax`).
+    ///463B50 then constructs the Animation with that NULL sequence; 49DA40
+    ///skips its ObjectAnimation allocation. The policy supplies only the two
+    ///current variable reads; nothing is published for the missing name.
+    pub fn sequence_5a80d0_with_policy(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,ids:&[u16],
+        policy:&mut impl crate::resource_objects::TexturePolicy)->Result<Option<crate::resource_objects::Handle>>{
+        self.source(catalog,bank)?;
+        if let Some(handle)=self.find_typed_optional(ids,crate::resource_objects::Kind::Sequence)?{return Ok(Some(handle))}
+        if policy.data_compatibility_mode_current()?==0{
+            return Err(format!("5130A0 missing Sequence source {}; native DataCompatibilityMode is zero and 5A80D0 rethrows",String::from_utf16_lossy(ids)));
+        }
+        let level=missing_resource_level(policy.data_missing_resource_warning_current()?);
+        self.record_missing_diagnostic(MissingResourceDiagnostic{channel:DiagnosticChannel::ResourceB38C28,level,
+            file:".\\Source\\resource\\NiResource.cpp",line:0x6c6,function:"KKC_NiSeqResource::GetNiSeqResource",
+            format:"Missing animation resource '%s' - disabling animation",ids:ids.to_vec()})?;
+        Ok(None)
+    }
+    fn record_missing_diagnostic(&self,diagnostic:MissingResourceDiagnostic)->Result<()>{
+        self.manager.lock().map_err(|_|"Resource manager lock poisoned")?.missing_resource_diagnostics.push(diagnostic);Ok(())
+    }
+    ///The SAME manager's caught missing-source404FC0 records, in call order.
+    pub fn missing_resource_diagnostics(&self)->Result<Vec<MissingResourceDiagnostic>>{
+        Ok(self.manager.lock().map_err(|_|"Resource manager lock poisoned")?.missing_resource_diagnostics.clone())
     }
     ///59B1F0(hard1), then59B4B0: a category1/2 request writes streaming41
     ///only after the SAME generic cached/source allocation passes its type
     ///test. A cache wrong-class failure retains its preceding14 increment.
+    ///Without a current-variable policy a genuinely absent source cannot take
+    ///59B4B0's catch path; use [`Self::sound_59b4b0_with_policy`].
     pub fn sound_59b4b0(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,ids:&[u16],streaming:bool)->Result<crate::resource_objects::Handle>{
         self.source(catalog,bank)?;
-        let handle=self.find_typed(ids,crate::resource_objects::Kind::Sound)?;
+        let handle=self.find_typed_optional(ids,crate::resource_objects::Kind::Sound)?.ok_or_else(||format!(
+            "5130A0 actual requested Resource source file is missing: {}; 59B4B0 catches this TGC_MissingResourceException and needs current UVar61 DataCompatibilityMode/DataMissingResourceWarning (sound_59b4b0_with_policy)",
+            String::from_utf16_lossy(ids)))?;
+        self.finish_sound_59b4b0(catalog,bank,handle,streaming)
+    }
+    fn finish_sound_59b4b0(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,handle:crate::resource_objects::Handle,streaming:bool)->Result<crate::resource_objects::Handle>{
         //59CB00 follows the SAME Entry/task namespace publication. A class
         //source refusal retains that prefix before streaming41/list append.
         self.require_sound_class_accounting(catalog,bank,&handle)?;
@@ -1065,6 +1151,58 @@ impl Resources<'_>{
             entry.sound.as_mut().ok_or("59B4B0 actual Sound allocation is required")?.streaming41=1;Ok(())
         })?;}
         Ok(handle)
+    }
+    ///59B4B0 with its actual catch. It calls59B1F0(name,1) in try state0
+    ///(FuncInfo AED848) with ONE catch, `TGC_MissingResourceException&`
+    ///(B28008) at59B502; 46BB60, its only caller, has no try block. The
+    ///handler reads byte [B39940]+F4 (UVar61 DataCompatibilityMode, the SAME
+    ///cell5A7976 reads). Zero rethrows (96BEF5(0,0)). Otherwise it returns
+    ///59B280(name,streaming) = KKC_AudioResource::GetDefaultResource:
+    ///405370 on B3994C "DataMissingResourceWarning" (the SAME lookup5A6E90
+    ///inlines), 404FC0(B38B98,level,"Missing audio resource '%s' - replacing
+    ///with default"), then410CB0 on B39988 reads the string AVar
+    ///DefaultAudioResource (DefaultAudioStreamingResource when streaming) and
+    ///59B1F0(that name,1) finds it. That inner find runs inside the handler,
+    ///so ITS absence escapes uncaught. Streaming stores +41=1 on the default.
+    ///The missing name itself is never published.
+    pub fn sound_59b4b0_with_policy(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,ids:&[u16],streaming:bool,
+        policy:&mut impl crate::resource_objects::TexturePolicy)->Result<crate::resource_objects::Handle>{
+        self.source(catalog,bank)?;
+        if let Some(handle)=self.find_typed_optional(ids,crate::resource_objects::Kind::Sound)?{
+            return self.finish_sound_59b4b0(catalog,bank,handle,streaming)
+        }
+        if policy.data_compatibility_mode_current()?==0{
+            return Err(format!("5130A0 missing Sound source {}; native DataCompatibilityMode is zero and 59B4B0 rethrows",String::from_utf16_lossy(ids)));
+        }
+        let level=missing_resource_level(policy.data_missing_resource_warning_current()?);
+        self.record_missing_diagnostic(MissingResourceDiagnostic{channel:DiagnosticChannel::AudioB38B98,level,
+            file:".\\Source\\resource\\AudioResource.cpp",line:0x3e,function:"KKC_AudioResource::GetDefaultResource",
+            format:"Missing audio resource '%s' - replacing with default",ids:ids.to_vec()})?;
+        let name=self.default_audio_resource_410cb0(catalog,bank,streaming)?;
+        let handle=self.find_typed_optional(&name,crate::resource_objects::Kind::Sound)?.ok_or_else(||format!(
+            "59B280 default Sound source {} is missing; its 59B1F0 throw inside the 59B4B0 handler is uncaught",String::from_utf16_lossy(&name)))?;
+        self.finish_sound_59b4b0(catalog,bank,handle,streaming)
+    }
+    ///410CB0 on B39988 for the AVar string59B280 names. Read from the
+    ///canonical AVars* declarations (Settings.app_variables, the same source
+    ///as language_ids) only inside the installed fresh no-profile variable
+    ///window; a second assignment would need the native override order.
+    fn default_audio_resource_410cb0(&self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,streaming:bool)->Result<Vec<u16>>{
+        let scope=self.cache_variables.as_ref().ok_or("59B280 410CB0 requires the installed fresh no-profile variable window")?;
+        scope.require(catalog,bank)?;
+        let name=if streaming{"DefaultAudioStreamingResource"}else{"DefaultAudioResource"};
+        let settings=catalog.settings.as_ref().ok_or("59B280 410CB0 public AVars Settings owner absent")?;
+        let rows=settings.app_variables.get(&name.to_ascii_lowercase()).ok_or_else(||format!("59B280 410CB0 could not find var '{name}'"))?;
+        let [row]=rows.as_slice() else{return Err(format!("59B280 410CB0 {name} has several AVars assignments; native override order is required"))};
+        if !row.field_type.as_deref().is_some_and(|t|t.eq_ignore_ascii_case("string")){return Err(format!("59B280 410CB0 {name} requires a native String declaration"))}
+        if !scope.variable_files().iter().any(|v|v.path==row.source.path&&v.sha256==row.source.sha256){
+            return Err(format!("59B280 410CB0 {name} declaration lies outside the fresh variable window"))
+        }
+        //5BDF80: only a value whose first character is '"' is quoted, and
+        //the quote ends at the next '"'.
+        let value=match row.raw.strip_prefix('"'){Some(rest)=>rest.split('"').next().unwrap_or_default(),None=>row.raw.as_str()};
+        if value.is_empty()||!value.is_ascii()||value.contains('\0'){return Err(format!("59B280 410CB0 {name} value lies outside the proved plain ASCII name domain"))}
+        Ok(value.encode_utf16().collect())
     }
     fn require_sound_class_accounting(&mut self,catalog:&Catalog<'_>,bank:&crate::definitions::Bank,handle:&crate::resource_objects::Handle)->Result<()>{
         handle.require_application(self.origin)?;
@@ -1343,3 +1481,6 @@ fn block_resource(task:&crate::resource_task::Task,queue:&crate::resource_task::
 #[cfg(test)]
 #[path="resource_texture_load_tests.rs"]
 mod texture_load_tests;
+#[cfg(test)]
+#[path="resource_depot_missing_tests.rs"]
+mod missing_tests;

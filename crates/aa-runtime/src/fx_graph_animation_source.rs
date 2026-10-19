@@ -39,7 +39,34 @@ impl Session {
         if definition.proof.category.native_kind != 2 {
             return Err("Animation FX owner requires actual ActorData".into());
         }
-        contains(&definition.proof.template_chain, animation)?;
+        //The Animation is one of THIS ActorData's CharacterComponent Animation
+        //nodes (base or AspectAnimationSet). Those nodes are often declared in
+        //a component template (AAInfantryCharacterComponent) outside the root
+        //template chain, so compare the resolved node itself, not root spans.
+        let actor = catalog
+            .actors
+            .resolved_actor(aa_rules::actors::ThingRef::registered(&definition.proof.id))
+            .map_err(|e| e.to_string())?;
+        let character = actor
+            .child("CharacterComponent")
+            .map_err(|e| e.to_string())?
+            .ok_or("Animation FX owner has no CharacterComponent")?;
+        let wanted = animation.sources();
+        let mut owned = character
+            .children("Animation")
+            .map_err(|e| e.to_string())?
+            .iter()
+            .any(|node| node.sources() == wanted);
+        for scope in character.children("AspectAnimationSet").map_err(|e| e.to_string())? {
+            owned |= scope
+                .children("Animation")
+                .map_err(|e| e.to_string())?
+                .iter()
+                .any(|node| node.sources() == wanted);
+        }
+        if !owned {
+            return Err("Animation FX node is not an Animation of its owning CharacterComponent".into());
+        }
         Ok(Self {
             definition: definition.clone(),
             animation: animation.sources(),

@@ -48,7 +48,7 @@ fn whole_native_doodad_load_and_two_slot_factory_match() {
         assert_eq!(c.vtable, 0xa28e90);
         assert_eq!(c.slots, [0, 0]);
         assert!(
-            DynamicDoodad::default()
+            DynamicDoodad::<u32>::default()
                 .components
                 .iter()
                 .all(Option::is_none)
