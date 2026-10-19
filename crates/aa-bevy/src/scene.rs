@@ -25,8 +25,8 @@ use std::sync::Mutex;
 pub const TITLE: &str = "Axis & Allies - Bevy test (Development 12)";
 const TERRAIN_SHADER: Handle<Shader> = uuid_handle!("6f1d2c4b-8a3e-4f57-9b1c-2e7d5a9c0b13");
 /// Team colours mixed into team-masked textures (display choice).
-const PLAYER_TEAM: [u8; 3] = [178, 34, 30];
-const NEUTRAL_TEAM: [u8; 3] = [120, 120, 112];
+pub const PLAYER_TEAM: [u8; 3] = [178, 34, 30];
+pub const NEUTRAL_TEAM: [u8; 3] = [120, 120, 112];
 
 type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMask>;
 
@@ -50,6 +50,7 @@ impl MaterialExtension for TerrainMask {
     }
 }
 
+#[derive(Clone)]
 struct Args {
     assets: PathBuf,
     rigs: PathBuf,
@@ -109,11 +110,10 @@ fn parse_args() -> Result<Args> {
 /// Everything decoded before the window opens.
 #[derive(Resource)]
 struct Loaded {
+    store: AssetStore,
+    rigs: PathBuf,
     scene: PreparedScene,
     terrain: Vec<terrain::Draw>,
-    hq: Option<PreparedModel>,
-    tank: Option<PreparedModel>,
-    infantry: Option<Arc<AnimatedAsset>>,
     images: Option<Vec<((String, Kind), Image)>>,
     failures: Vec<String>,
     hq_at: Vec2,
@@ -125,34 +125,15 @@ fn model(store: &AssetStore, path: &str) -> Result<PreparedModel> {
     Ok(store.load_model(path)?.prepare()?)
 }
 
-fn kind(m: &aa_assets::Material, team: [u8; 3]) -> Kind {
+pub fn kind(m: &aa_assets::Material, team: [u8; 3]) -> Kind {
     if m.team_color_mask { Kind::Team(team) } else { Kind::Color }
 }
 
-fn load(args: &Args) -> Result<Loaded> {
+fn load(args: &Args, map_id: &str) -> Result<Loaded> {
     let start = Instant::now();
     let store = AssetStore::open(&args.assets)?;
-    let scene = store.load_scene(&args.map, HeightMode::NativeConditional)?;
+    let scene = store.load_scene(map_id, HeightMode::NativeConditional)?;
     let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
-    let hq = model(&store, "Buildings/RUS/RUSCorps/RUSCorps.nif").map_err(|e| eprintln!("HQ model: {e:#}")).ok();
-    let tank = model(&store, "Units/RUS/RUSTankMedium/RUSTankMedium.nif").map_err(|e| eprintln!("tank model: {e:#}")).ok();
-    let infantry = match AnimatedAsset::load(args.rigs.join("RUSInfantry.rig.json")) {
-        Ok(mut asset) => {
-            // Same material source as the client's animation path: the static model.
-            if let Ok(model) = model(&store, &asset.source) {
-                if model.meshes.len() == asset.meshes.len() {
-                    for (rig, mesh) in asset.meshes.iter_mut().zip(&model.meshes) {
-                        rig.material = mesh.material.clone();
-                    }
-                }
-            }
-            Some(Arc::new(asset))
-        }
-        Err(e) => {
-            eprintln!("infantry rig: {e:#}");
-            None
-        }
-    };
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
         .map
@@ -179,27 +160,12 @@ fn load(args: &Args) -> Result<Loaded> {
             }
         }
     }
-    for m in hq.iter().chain(tank.iter()) {
-        for mesh in &m.meshes {
-            if let Some(t) = &mesh.material.texture {
-                requests.add(t, kind(&mesh.material, PLAYER_TEAM));
-            }
-        }
-    }
-    if let Some(a) = &infantry {
-        for mesh in &a.meshes {
-            if let Some(t) = &mesh.material.texture {
-                requests.add(t, kind(&mesh.material, PLAYER_TEAM));
-            }
-        }
-    }
     let (images, failures) = textures::decode(&store, requests);
     Ok(Loaded {
+        store: store.clone(),
+        rigs: args.rigs.clone(),
         scene,
         terrain,
-        hq,
-        tank,
-        infantry,
         images: Some(images),
         failures,
         hq_at,
@@ -208,33 +174,72 @@ fn load(args: &Args) -> Result<Loaded> {
     })
 }
 
-/// Everything the battle scene loads before the window opens.
+/// The battle scene: loads the map in AppState::Loading (background thread)
+/// and draws it in AppState::Battle.
 pub struct ScenePlugin {
-    loaded: Mutex<Option<Loaded>>,
-    shot: Option<(PathBuf, f32)>,
+    args: Args,
 }
 
-/// Parse the command line and load the scene (before the window opens).
+/// Parse the command line (the map itself loads in AppState::Loading).
 pub fn prepare() -> Result<ScenePlugin> {
-    let args = parse_args()?;
-    let loaded = load(&args)?;
-    Ok(ScenePlugin { loaded: Mutex::new(Some(loaded)), shot: args.shot })
+    Ok(ScenePlugin { args: parse_args()? })
+}
+
+#[derive(Resource, Clone)]
+struct SceneArgs(Args);
+
+/// The background load started on entering AppState::Loading.
+#[derive(Resource)]
+struct LoadTask(Arc<Mutex<Option<std::result::Result<Loaded, String>>>>);
+
+fn start_loading(mut commands: Commands, args: Res<SceneArgs>, setup: Option<Res<session::PendingSetup>>, mut progress: ResMut<session::LoadProgress>) {
+    let map = setup.map(|s| s.0.map_id.clone()).unwrap_or_else(|| args.0.map.clone());
+    *progress = session::LoadProgress { fraction: 0.0, status: format!("Loading {map}"), error: None };
+    let slot = Arc::new(Mutex::new(None));
+    let out = slot.clone();
+    let args = args.0.clone();
+    std::thread::spawn(move || {
+        let result = load(&args, &map).map_err(|e| format!("{e:#}"));
+        *out.lock().unwrap() = Some(result);
+    });
+    commands.insert_resource(LoadTask(slot));
+}
+
+fn poll_loading(mut commands: Commands, task: Option<Res<LoadTask>>, mut progress: ResMut<session::LoadProgress>, mut next: ResMut<NextState<session::AppState>>) {
+    let Some(task) = task else { return };
+    let Some(result) = task.0.lock().unwrap().take() else { return };
+    commands.remove_resource::<LoadTask>();
+    match result {
+        Ok(loaded) => {
+            progress.fraction = 1.0;
+            commands.insert_resource(loaded);
+            next.set(session::AppState::Battle);
+        }
+        Err(e) => {
+            error!("battle load failed: {e}");
+            progress.error = Some(e);
+            next.set(session::AppState::Menu);
+        }
+    }
 }
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        let loaded = self.loaded.lock().unwrap().take().expect("scene plugin built twice");
         app.add_plugins(MaterialPlugin::<TerrainMaterial>::default())
             .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
             .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: 420.0, ..default() })
-            .insert_resource(loaded)
+            .insert_resource(SceneArgs(self.args.clone()))
+            .init_resource::<session::LoadProgress>()
+            .add_systems(OnEnter(session::AppState::Loading), start_loading)
+            .add_systems(Update, poll_loading.run_if(in_state(session::AppState::Loading)))
             .add_systems(OnEnter(session::AppState::Battle), setup)
-            .add_systems(Update, (units::animate, units::walk, hud).run_if(in_state(session::AppState::Battle)));
+            .add_plugins(crate::battle_view::BattleViewPlugin)
+            .add_systems(Update, (crate::demo_world::drive.before(crate::battle_view::sync_actors), hud).run_if(in_state(session::AppState::Battle)));
         let _ = app.world_mut().resource_mut::<Assets<Shader>>().insert(
             TERRAIN_SHADER.id(),
             Shader::from_wgsl(include_str!("terrain_mask.wgsl"), "aa_bevy/terrain_mask.wgsl"),
         );
-        if let Some((path, seconds)) = self.shot.clone() {
+        if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
     }
@@ -263,7 +268,7 @@ fn screenshot(mut commands: Commands, time: Res<Time>, mut plan: ResMut<ShotPlan
 #[derive(Component)]
 struct HudText;
 
-fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> StandardMaterial {
+pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> StandardMaterial {
     // Same alpha decisions as the client's `loading::material`.
     let blend = m.native_render_state.map_or(m.alpha_blend || m.opacity < 1.0, |s| s.alpha_flags & 1 != 0);
     let cutoff = if m.team_color_mask { 0.0 } else { m.alpha_test };
@@ -289,7 +294,7 @@ fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> Standard
     }
 }
 
-fn model_mesh(mesh: &aa_assets::PreparedMesh) -> Mesh {
+pub fn model_mesh(mesh: &aa_assets::PreparedMesh) -> Mesh {
     let mut out = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
     out.insert_attribute(Mesh::ATTRIBUTE_POSITION, mesh.vertices.iter().map(|v| v.position).collect::<Vec<_>>());
     out.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mesh.vertices.iter().map(|v| v.normal).collect::<Vec<_>>());
@@ -407,6 +412,7 @@ fn setup(
                 .unwrap_or(0.0)
         })
         .collect();
+    let world_heights = corners.clone();
     let ground = move |x: f32, z: f32| {
         let (gx, gy) = ((x / cell).clamp(0.0, gw as f32), (-z / cell).clamp(0.0, gh as f32));
         let (x0, y0) = (gx.floor() as u32, gy.floor() as u32);
@@ -417,64 +423,11 @@ fn setup(
     };
     let hq_at = loaded.hq_at;
     let hq_y = ground(hq_at.x, hq_at.y);
-    // Display-only HQ at the first start location, with soldiers and a tank.
-    if let Some(hq) = &loaded.hq {
-        for (mesh, material) in model_parts(hq, PLAYER_TEAM, &tex, &mut meshes, &mut materials) {
-            commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::from_xyz(hq_at.x, hq_y, hq_at.y)));
-        }
-    }
-    if let Some(asset) = &loaded.infantry {
-        let mats: Vec<_> = asset
-            .meshes
-            .iter()
-            .map(|m| {
-                let t = m.material.texture.as_ref().and_then(|t| tex.get(&(t.clone(), kind(&m.material, PLAYER_TEAM))).cloned());
-                materials.add(standard(&m.material, t))
-            })
-            .collect();
-        let idle = units::clip_index(asset, "InfantryIdle").unwrap_or(0);
-        let jog = units::clip_index(asset, "InfantryJog").unwrap_or(0);
-        let attack = units::clip_index(asset, "InfantryAttack1").unwrap_or(idle);
-        // Idle squad in a line in front of the HQ.
-        for (clip, row, phase) in [(idle, 0.0, 0.0), (attack, 1.6, 0.4)] {
-            let Ok(handles) = units::group_meshes(asset, &mut meshes) else { break };
-            commands.spawn(units::PoseGroup { asset: asset.clone(), clip, phase, meshes: handles.clone() });
-            for i in 0..6 {
-                let x = hq_at.x - 6.0 + i as f32 * 2.0;
-                let z = hq_at.y + 12.0 + row;
-                let y = ground(x, z);
-                let transform = Transform::from_xyz(x, y, z);
-                for (mesh, material) in handles.iter().zip(&mats) {
-                    commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform));
-                }
-            }
-        }
-        // Jogging squad circling the HQ.
-        if let Ok(handles) = units::group_meshes(asset, &mut meshes) {
-            commands.spawn(units::PoseGroup { asset: asset.clone(), clip: jog, phase: 0.0, meshes: handles.clone() });
-            for i in 0..8 {
-                let offset = Vec2::new((i % 2) as f32 * 1.6 - 0.8, (i / 2) as f32 * 1.8);
-                for (mesh, material) in handles.iter().zip(&mats) {
-                    commands.spawn((
-                        Mesh3d(mesh.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::default(),
-                        units::LoopPath { center: hq_at, radius: 16.0, speed: 3.5, angle: 0.0, offset },
-                    ));
-                }
-            }
-        }
-    }
-    if let Some(tank) = &loaded.tank {
-        for (mesh, material) in model_parts(tank, PLAYER_TEAM, &tex, &mut meshes, &mut materials) {
-            commands.spawn((
-                Mesh3d(mesh),
-                MeshMaterial3d(material),
-                Transform::default(),
-                units::LoopPath { center: hq_at, radius: 26.0, speed: 6.0, angle: 2.0, offset: Vec2::ZERO },
-            ));
-        }
-    }
+    // Display test world: aa-play actors drawn by battle_view (no gameplay yet).
+    let (battle, loops) = crate::demo_world::build(gw, gh, cell, world_heights, hq_at, PLAYER_TEAM);
+    commands.insert_resource(battle);
+    commands.insert_resource(loops);
+    commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs));
     // Sun with cascaded shadows over the battlefield.
     commands.spawn((
         DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: std::env::var_os("AA_BEVY_NO_SHADOWS").is_none(), ..default() },
