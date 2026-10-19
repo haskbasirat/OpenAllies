@@ -20,6 +20,12 @@ pub enum AppState {
 #[derive(Resource, Clone, Debug)]
 pub struct PendingSetup(pub SkirmishSetup);
 
+/// Set together with `PendingSetup` when the player chose Random Map: the
+/// loader generates the map from these original options instead of loading
+/// `SkirmishSetup::map_id`.
+#[derive(Resource, Clone, Debug)]
+pub struct PendingRandomMap(pub aa_play::mapgen::RandomMapParams);
+
 /// Loader progress for the original loading screen.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct LoadProgress {

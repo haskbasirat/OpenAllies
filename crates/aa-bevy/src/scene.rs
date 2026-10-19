@@ -113,6 +113,8 @@ struct Loaded {
     store: AssetStore,
     rigs: PathBuf,
     scene: PreparedScene,
+    /// The generator's game map for a random map (an original map loads its own).
+    game_map: Option<aa_play::GameMap>,
     terrain: Vec<terrain::Draw>,
     images: Option<Vec<((String, Kind), Image)>>,
     failures: Vec<String>,
@@ -129,10 +131,70 @@ pub fn kind(m: &aa_assets::Material, team: [u8; 3]) -> Kind {
     if m.team_color_mask { Kind::Team(team) } else { Kind::Color }
 }
 
-fn load(args: &Args, map_id: &str) -> Result<Loaded> {
+/// Where the battle map comes from.
+#[derive(Clone)]
+enum MapSource {
+    /// An original map, e.g. "(2v2)Berlin".
+    File(String),
+    /// The original random map generator with the setup screen's options.
+    Random(aa_play::mapgen::RandomMapParams),
+}
+
+/// A generated map as a scene: its terrain plus every scenery model.
+fn generated_scene(args: &Args, store: &AssetStore, params: &aa_play::mapgen::RandomMapParams) -> Result<(PreparedScene, aa_play::GameMap)> {
+    let root = args.assets.parent().context("the install root above the reconstruction folder")?;
+    let generated = aa_play::mapgen::generate(params, root)?;
+    let terrain = generated.terrain.prepare(HeightMode::NativeConditional)?;
+    let mut models = std::collections::BTreeMap::new();
+    let mut instances = Vec::new();
+    let mut warnings = Vec::new();
+    for (i, g) in generated.scenery.iter().enumerate() {
+        let Some(model) = &g.model else { continue };
+        let key = model.replace('\\', "/").to_lowercase();
+        if !models.contains_key(&key) {
+            match store.load_model(model).map_err(anyhow::Error::from).and_then(|m| m.prepare().map_err(anyhow::Error::from)) {
+                Ok(prepared) => {
+                    models.insert(key.clone(), prepared);
+                }
+                Err(e) => {
+                    warnings.push(aa_assets::AssetWarning { source: model.clone(), message: format!("{e:#}") });
+                    continue;
+                }
+            }
+        }
+        instances.push(aa_assets::PreparedInstance {
+            source_index: i,
+            instance_id: i as u32,
+            thing_id: g.thing_id.clone(),
+            position: aa_assets::native_to_render(g.position),
+            yaw_radians: g.yaw,
+            scale: g.scale,
+            model_key: Some(key),
+        });
+    }
+    let placements = aa_assets::PlacementMap {
+        id: "random".into(),
+        source: "generated".into(),
+        expected_records: 0,
+        actors: Vec::new(),
+        types: std::collections::BTreeMap::new(),
+        errors: Vec::new(),
+        limitations: Vec::new(),
+    };
+    let scene = PreparedScene { map: aa_assets::MapAsset { terrain: generated.terrain, placements }, terrain, instances, models, warnings };
+    Ok((scene, generated.map))
+}
+
+fn load(args: &Args, source: &MapSource) -> Result<Loaded> {
     let start = Instant::now();
     let store = AssetStore::open(&args.assets)?;
-    let scene = store.load_scene(map_id, HeightMode::NativeConditional)?;
+    let (scene, game_map) = match source {
+        MapSource::File(id) => (store.load_scene(id, HeightMode::NativeConditional)?, None),
+        MapSource::Random(params) => {
+            let (scene, map) = generated_scene(args, &store, params)?;
+            (scene, Some(map))
+        }
+    };
     let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
@@ -142,6 +204,7 @@ fn load(args: &Args, map_id: &str) -> Result<Loaded> {
         .iter()
         .find(|p| p.thing_id == "start_loc")
         .map(|p| Vec2::new(p.render_position()[0], p.render_position()[2]))
+        .or_else(|| game_map.as_ref().and_then(|m| m.start_locations.first()).map(|p| Vec2::new(p.x, -p.y)))
         .unwrap_or(Vec2::new(scene.terrain.bounds.max[0] * 0.5, scene.terrain.bounds.min[2] * 0.5));
     let mut requests = textures::Requests::default();
     for draw in &terrain {
@@ -165,6 +228,7 @@ fn load(args: &Args, map_id: &str) -> Result<Loaded> {
         store: store.clone(),
         rigs: args.rigs.clone(),
         scene,
+        game_map,
         terrain,
         images: Some(images),
         failures,
@@ -192,9 +256,23 @@ struct SceneArgs(Args);
 #[derive(Resource)]
 struct LoadTask(Arc<Mutex<Option<std::result::Result<Loaded, String>>>>);
 
-fn start_loading(mut commands: Commands, args: Res<SceneArgs>, setup: Option<Res<session::PendingSetup>>, mut progress: ResMut<session::LoadProgress>) {
-    let map = setup.map(|s| s.0.map_id.clone()).unwrap_or_else(|| args.0.map.clone());
-    *progress = session::LoadProgress { fraction: 0.0, status: format!("Loading {map}"), error: None };
+fn start_loading(
+    mut commands: Commands,
+    args: Res<SceneArgs>,
+    setup: Option<Res<session::PendingSetup>>,
+    random: Option<Res<session::PendingRandomMap>>,
+    mut progress: ResMut<session::LoadProgress>,
+) {
+    let map = match (&random, &setup) {
+        (Some(r), _) => MapSource::Random(r.0.clone()),
+        (None, Some(s)) => MapSource::File(s.0.map_id.clone()),
+        (None, None) => MapSource::File(args.0.map.clone()),
+    };
+    let label = match &map {
+        MapSource::File(id) => id.clone(),
+        MapSource::Random(r) => format!("random map {}", r.rmc),
+    };
+    *progress = session::LoadProgress { fraction: 0.0, status: format!("Loading {label}"), error: None };
     let slot = Arc::new(Mutex::new(None));
     let out = slot.clone();
     let args = args.0.clone();
