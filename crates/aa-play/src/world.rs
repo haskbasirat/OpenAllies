@@ -1,0 +1,225 @@
+//! Battle state shared by every system. Shared file: change only by agreement
+//! (add fields, never repurpose them).
+use crate::data::{DefId, GameData, Resources};
+use crate::map::GameMap;
+use glam::{Vec2, Vec3};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+pub type KingdomId = u32;
+/// Index into `World::actors`; never reused within a battle.
+pub type ActorId = u32;
+/// Index into `World::orgs`; never reused within a battle.
+pub type OrgId = u32;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Controller {
+    Human,
+    /// Computer opponent with the original difficulty index.
+    Computer(u8),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Kingdom {
+    pub id: KingdomId,
+    pub name: String,
+    pub nation: String,
+    pub team: u32,
+    pub color: [u8; 3],
+    pub controller: Controller,
+    pub stockpile: Resources,
+    /// Per-minute rates last computed by the economy (for the HUD).
+    pub income: Resources,
+    pub unit_limit: f32,
+    pub units_used: f32,
+    pub defeated: bool,
+}
+
+/// What an organization or a single actor has been told to do.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum Order {
+    #[default]
+    Idle,
+    Move { to: Vec2, attack_move: bool },
+    Attack { target: ActorId },
+    /// Truck driving to a spot to unpack into its building.
+    Deploy { at: Vec2, facing: f32 },
+}
+
+/// Presentation hint for the renderer (which original clip to play).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Activity {
+    #[default]
+    Idle,
+    Moving,
+    Attacking,
+    Dying,
+    Dead,
+    Packing,
+    Unpacking,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Motion {
+    pub velocity: Vec2,
+    pub speed: f32,
+    /// Remaining waypoints (native ground points), nearest first.
+    pub path: Vec<Vec2>,
+    /// Where formation or orders want this actor to stand.
+    pub goal: Option<Vec2>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Combat {
+    pub target: Option<ActorId>,
+    /// Seconds until each weapon (Def::weapons order) can fire again.
+    pub recharge: Vec<f32>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Actor {
+    pub id: ActorId,
+    pub def: DefId,
+    pub kingdom: Option<KingdomId>,
+    /// Native position: X/Y ground, Z height.
+    pub pos: Vec3,
+    /// Facing angle in radians about Z (0 = native +X).
+    pub facing: f32,
+    pub health: f32,
+    pub alive: bool,
+    /// Removed from the battle (corpse gone, truck unpacked into a building...).
+    pub removed: bool,
+    pub org: Option<OrgId>,
+    pub slot: Option<u16>,
+    pub motion: Motion,
+    pub combat: Combat,
+    pub activity: Activity,
+    /// Battle time (s) when `activity` last changed, for animation phase.
+    pub activity_since: f32,
+    pub order: Order,
+    /// Production queue of a building/HQ: (def, seconds left).
+    pub queue: Vec<(DefId, f32)>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Organization {
+    pub id: OrgId,
+    pub def: DefId,
+    pub kingdom: KingdomId,
+    pub members: Vec<ActorId>,
+    /// HQ building this regiment is attached to (supply), if any.
+    pub hq: Option<ActorId>,
+    pub order: Order,
+    /// Formation centre and facing the members hold their slots around.
+    pub anchor: Vec2,
+    pub heading: f32,
+    pub morale: f32,
+    pub experience: f32,
+    pub alive: bool,
+}
+
+/// Player input and computer-opponent decisions, applied at the start of a tick.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Command {
+    Move { kingdom: KingdomId, units: Vec<Unit>, to: Vec2, attack_move: bool },
+    Attack { kingdom: KingdomId, units: Vec<Unit>, target: ActorId },
+    Stop { kingdom: KingdomId, units: Vec<Unit> },
+    Recruit { kingdom: KingdomId, building: ActorId, def: DefId },
+    CancelRecruit { kingdom: KingdomId, building: ActorId, index: usize },
+    Deploy { kingdom: KingdomId, truck: ActorId, at: Vec2, facing: f32 },
+    Pack { kingdom: KingdomId, building: ActorId },
+}
+
+/// What a player selects and orders: a whole regiment or a single actor
+/// (building, truck, HQ).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Unit {
+    Org(OrgId),
+    Actor(ActorId),
+}
+
+/// Things that happened this tick, for the HUD message log, sound and effects.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Event {
+    Recruited { kingdom: KingdomId, org: Option<OrgId>, actor: Option<ActorId> },
+    Fired { shooter: ActorId, target: ActorId, weapon: u32 },
+    Hit { target: ActorId, damage: f32 },
+    Died { actor: ActorId },
+    OrgDestroyed { org: OrgId },
+    Deployed { building: ActorId },
+    Routed { org: OrgId },
+    KingdomDefeated { kingdom: KingdomId },
+    Victory { team: u32 },
+    /// A command was refused, with the original reason when known.
+    Refused { kingdom: KingdomId, reason: String },
+}
+
+pub struct World {
+    pub data: Arc<GameData>,
+    pub map: Arc<GameMap>,
+    pub tick: u64,
+    /// Battle time in seconds (tick * DT).
+    pub time: f32,
+    pub kingdoms: Vec<Kingdom>,
+    pub actors: Vec<Actor>,
+    pub orgs: Vec<Organization>,
+    pub events: Vec<Event>,
+    /// Deterministic random numbers (seeded at setup).
+    pub rng: u64,
+    pub winner: Option<u32>,
+}
+
+impl World {
+    pub fn empty(data: Arc<GameData>, map: Arc<GameMap>, seed: u64) -> Self {
+        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None }
+    }
+    pub fn spawn_actor(&mut self, def: DefId, kingdom: Option<KingdomId>, pos: Vec3, facing: f32) -> ActorId {
+        let id = self.actors.len() as ActorId;
+        let health = self.data.def(def).health;
+        let weapons = self.data.def(def).weapons.len();
+        self.actors.push(Actor {
+            id,
+            def,
+            kingdom,
+            pos,
+            facing,
+            health,
+            alive: true,
+            removed: false,
+            org: None,
+            slot: None,
+            motion: Motion::default(),
+            combat: Combat { target: None, recharge: vec![0.0; weapons] },
+            activity: Activity::Idle,
+            activity_since: self.time,
+            order: Order::Idle,
+            queue: Vec::new(),
+        });
+        id
+    }
+    pub fn actor(&self, id: ActorId) -> Option<&Actor> {
+        self.actors.get(id as usize).filter(|a| !a.removed)
+    }
+    pub fn actor_mut(&mut self, id: ActorId) -> Option<&mut Actor> {
+        self.actors.get_mut(id as usize).filter(|a| !a.removed)
+    }
+    pub fn set_activity(&mut self, id: ActorId, activity: Activity) {
+        let time = self.time;
+        if let Some(a) = self.actors.get_mut(id as usize) {
+            if a.activity != activity {
+                a.activity = activity;
+                a.activity_since = time;
+            }
+        }
+    }
+    /// xorshift64*: deterministic for replays and network play.
+    pub fn random(&mut self) -> f32 {
+        self.rng ^= self.rng >> 12;
+        self.rng ^= self.rng << 25;
+        self.rng ^= self.rng >> 27;
+        ((self.rng.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 40) as f32) / (1u64 << 24) as f32
+    }
+    pub fn ground(&self, p: Vec2) -> Vec3 {
+        Vec3::new(p.x, p.y, self.map.height_at(p))
+    }
+}

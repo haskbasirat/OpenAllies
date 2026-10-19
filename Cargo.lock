@@ -27,7 +27,7 @@ dependencies = [
  "aa-numeric",
  "aa-rules",
  "aa-simulation",
- "glam",
+ "glam 0.30.10",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -82,7 +82,7 @@ dependencies = [
  "egui-wgpu",
  "embed-resource",
  "env_logger",
- "glam",
+ "glam 0.30.10",
  "image",
  "log",
  "pollster",
@@ -234,6 +234,22 @@ dependencies = [
 name = "aa-orders"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-play"
+version = "0.1.0"
+dependencies = [
+ "aa-assets",
+ "aa-mapworld",
+ "aa-navigation",
+ "aa-numeric",
+ "aa-rules",
+ "anyhow",
+ "glam 0.32.1",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1419,6 +1435,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+dependencies = [
+ "serde_core",
 ]
 
 [[package]]
