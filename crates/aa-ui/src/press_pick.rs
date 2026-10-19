@@ -163,6 +163,8 @@ pub struct UiPick {
     /// Pick/draw path of every widget (`Root/Game/...`).
     pub paths: Vec<String>,
     pub classes: Vec<WidgetClass>,
+    /// The minimap quad of every minimap widget (GetQuad 0x5E9270).
+    pub minimap_quads: Vec<Option<[[u32; 2]; 3]>>,
     /// The root widget (UI+0x74) and its root group.
     pub root: usize,
     pub root_group: usize,
@@ -178,8 +180,10 @@ pub enum PressTarget {
     /// The VWorld widget `DAT_00B36538` (`UI/Shared/VWorld.tgi:VWorld`, the
     /// Game interface's head child after `0x60BAE0` -> `0x43B490`).
     VWorld,
-    /// A widget whose vt+0x90 is true: the minimap class (vtable A4ED20).
-    MiniMap { path: String },
+    /// A widget whose vt+0x90 is true: the minimap class (vtable A4ED20),
+    /// with its MiniMapVE quad (GetQuad 0x5E9270, binary32 bits) as the
+    /// press saw it (0x5D74B0 maps the cursor through it).
+    MiniMap { path: String, quad_bits: [[u32; 2]; 3] },
     /// Any other widget.
     Widget { path: String, class: WidgetClass },
 }
@@ -189,7 +193,8 @@ impl UiPick {
         let Some(w) = widget else { return PressTarget::None };
         let path = self.paths[w].clone();
         if self.classes[w] == WidgetClass::MiniMap {
-            return PressTarget::MiniMap { path };
+            let quad_bits = self.minimap_quads[w].unwrap_or([[0; 2]; 3]);
+            return PressTarget::MiniMap { path, quad_bits };
         }
         if path.eq_ignore_ascii_case(VWORLD_PATH) {
             return PressTarget::VWorld;
@@ -228,6 +233,14 @@ impl Builder<'_> {
         self.out.arena.widgets.push(PickWidget { parent_08: parent, flags_24: w.flags, vt_7c_true: false, top_14: top });
         self.out.paths.push(path.clone());
         self.out.classes.push(w.class);
+        let quad = match w.control.as_deref() {
+            Some(crate::controls::Control::MiniMap(m)) => {
+                let rect = w.sub_ve.as_ref().map(|v| v.layout.outer.rect).unwrap_or(w.root.outer.rect);
+                Some(crate::minimap::quad(m, rect).map(|(x, y)| [x.to_bits(), y.to_bits()]))
+            }
+            _ => None,
+        };
+        self.out.minimap_quads.push(quad);
         let group = self.out.arena.ves.len();
         // the root group (0x5E3D80, +0xD0 = 1): vt+0x30 0x5E2AE0 -> 0x5E25C0
         // with no `when`, i.e. 0x5EE2C0 of the owner
@@ -292,7 +305,7 @@ impl Ui {
     pub fn press_pick(&self) -> UiPick {
         let mut b = Builder {
             ui: self,
-            out: UiPick { arena: Arena::default(), paths: Vec::new(), classes: Vec::new(), root: 0, root_group: 0, focus_8c: None },
+            out: UiPick { arena: Arena::default(), paths: Vec::new(), classes: Vec::new(), minimap_quads: Vec::new(), root: 0, root_group: 0, focus_8c: None },
         };
         let root_path = self.root.name.trim_start_matches('/').to_string();
         let root_group = b.widget(&self.root, root_path.clone(), None);

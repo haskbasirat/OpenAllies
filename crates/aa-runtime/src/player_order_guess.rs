@@ -418,13 +418,13 @@ pub fn guess_command_data<W: World + ?Sized>(
 /// [`World`] over the actual ActorStore, canonical ActorCommand definitions
 /// and the same Bank used by the permission code.
 /// The two UVars come from [`super::Globals`] (default: required owner).
-pub(crate) struct Live<'a, 'store, 'src, G: ?Sized> {
+pub(crate) struct Live<'a, 'src, A: ?Sized, G: ?Sized> {
     pub catalog: &'a Catalog<'src>,
     pub banks: &'a dyn super::Banks,
-    pub actors: &'a ActorAccess<'store>,
+    pub actors: &'a A,
     pub globals: &'a mut G,
 }
-impl<G: ?Sized> Live<'_, '_, '_, G> {
+impl<A: super::ActorRead + ?Sized, G: ?Sized> Live<'_, '_, A, G> {
     fn class(&self, id: ActorId) -> super::Result<u32> {
         let key = self.actors.key(id).ok_or_else(|| super::Error::Required("4DA570 current object generation".into()))?;
         Ok(super::check(self.actors.object(key))?.definition.native_class)
@@ -462,7 +462,7 @@ impl<G: ?Sized> Live<'_, '_, '_, G> {
         Ok(source.source_precision())
     }
 }
-impl<G: super::Globals + ?Sized> World for Live<'_, '_, '_, G> {
+impl<A: super::ActorRead + ?Sized, G: super::Globals + ?Sized> World for Live<'_, '_, A, G> {
     type Object = ActorId;
     type Organization = ActorId;
     type Kingdom = ActorId;
@@ -638,12 +638,12 @@ fn controls_in_bank(
 }
 
 /// 4CF040/4E52D0/4E10F0 reads over the live Kingdom/Team derived fields.
-struct Relations<'a, 'store, 'src> {
+struct Relations<'a, 'src, A: ?Sized> {
     catalog: &'a Catalog<'src>,
     banks: &'a dyn super::Banks,
-    actors: &'a ActorAccess<'store>,
+    actors: &'a A,
 }
-impl Relations<'_, '_, '_> {
+impl<A: super::ActorRead + ?Sized> Relations<'_, '_, A> {
     fn special(&self, id: ActorId, class: u32) -> super::Result<&aa_mapworld::special_state::SpecialShell> {
         let key = self.actors.key(id).ok_or_else(|| super::Error::Required("4DA570 relation current Kingdom/Team generation".into()))?;
         let entity = super::check(self.actors.entity(key))?;
@@ -677,7 +677,7 @@ impl Relations<'_, '_, '_> {
             .ok_or_else(|| super::Error::Required(format!("4DA570 relation +{offset:X} vector slot {slot}")))
     }
 }
-impl crate::relations::borrowed::Read for Relations<'_, '_, '_> {
+impl<A: super::ActorRead + ?Sized> crate::relations::borrowed::Read for Relations<'_, '_, A> {
     type Id = ActorId;
     type Error = super::Error;
     fn kingdom_team(&self, id: ActorId) -> super::Result<Option<ActorId>> {
@@ -711,10 +711,10 @@ impl crate::relations::borrowed::Read for Relations<'_, '_, '_> {
 /// 4DA570 over one live PlainCommand: the 4DA994 completion needs a
 /// command+14 Object-definition token (B39F58 registry), which has no
 /// portable owner yet, so a completion is an explicit error.
-pub(crate) fn guess_plain_with_bank<G: super::Globals + ?Sized>(
+pub(crate) fn guess_plain_with_bank<A: super::ActorRead + ?Sized, G: super::Globals + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn super::Banks,
-    actors: &ActorAccess<'_>,
+    actors: &A,
     globals: &mut G,
     command: &mut crate::mind_world::PlainCommand,
     actor: ActorId,
@@ -766,6 +766,18 @@ pub fn guess_wire_in_bank<G: super::Globals + ?Sized>(
         return required("4DA994 command+14 Object-definition token (B39F58 registry) for the type-4 completion");
     }
     Ok(outcome.guessed)
+}
+
+/// [Kingdom+188] (the kingdom number 61F210 prints as `K%d`) over the same
+/// live Kingdom derived fields the 4E52D0 relation reads use.
+pub(crate) fn kingdom_slot_188<A: super::ActorRead + ?Sized>(
+    catalog: &Catalog<'_>,
+    banks: &dyn super::Banks,
+    actors: &A,
+    kingdom: ActorId,
+) -> super::Result<u32> {
+    use crate::relations::borrowed::Read as _;
+    Relations { catalog, banks, actors }.kingdom_slot(kingdom)
 }
 
 #[cfg(test)]

@@ -100,3 +100,47 @@ pub fn selected(catalog:&Catalog<'_>,parts:GameplayOrderLoans<'_>,wire:&aa_order
 ///The decoder is shared with86/87's existing native decree binding. It must
 ///complete before any mutable gameplay World loan is acquired.
 pub fn decoded(descriptor:usize,fields:&[aa_orders::payload::Field])->Result<Decoded,String>{decree::from_fields(descriptor,fields).map_err(|e|e.to_string())}
+///[`decoded`] with flag bit1 (61EBA0's 76A960 Object-definition reference):
+///the current `[B39F58]+28` Thing-manager count is read only when the
+///decoded eleven-bit mask carries bit1.
+pub fn decoded_in(catalog:&Catalog<'_>,descriptor:usize,fields:&[aa_orders::payload::Field])->Result<Decoded,String>{
+    let object_bit=matches!(fields.first(),Some(aa_orders::payload::Field::Bounded{n:0x800,value})if value&2!=0);
+    let objects=if object_bit{Some(decree::object_reference::object_registry_count_b39f58(catalog)?)}else{None};
+    decree::from_fields_with_objects(descriptor,fields,objects).map_err(|e|e.to_string())
+}
+///61F210's description and 4D9A40's sync dump on the actual owners: the
+///SAME retained synchronizer A loan, the host's 61F210 reads/sink and the
+///SAME moved Bank loan the decree kernel uses. No step has a default.
+struct FrameDiagnostics<'a,'bank,'sync,S:?Sized>{bank:&'a DefinitionBankLoan<'bank>,sync:crate::live_clocked::SyncBinding<'sync>,
+    sources:&'a mut S,precision:aa_numeric::Precision}
+impl<S:decree::describe::Sources+?Sized> decree::Diagnostics for FrameDiagnostics<'_,'_,'_,S>{
+    fn selection(&mut self,_:&Catalog<'_>,_:&ActorAccess<'_>,_:&mind_world::Commands,_:&impl crate::player_selection::View,_:u32,_:bool)->orders::Result<()>{
+        Err(orders::Error::Required("61F210 description needs the decree kernel's 4DA570 result (describe)".into()))
+    }
+    fn command_sync(&mut self,commands:&mind_world::Commands,command:u32)->orders::Result<()>{
+        let value=commands.value(command).map_err(|e|orders::Error::Required(e.to_string()))?;
+        orders::command_sync::sync_command_4d9a40(&mut self.sync,orders::command_sync::COMMAND_LABEL,Some(value)).map_err(orders::Error::Required)
+    }
+    fn describe(&mut self,catalog:&Catalog<'_>,actors:&ActorAccess<'_>,commands:&mind_world::Commands,
+        view:&impl crate::player_selection::View,command:u32,empty:bool,guessed:Option<u32>)->orders::Result<()>{
+        decree::describe::describe_61f210(catalog,self.bank,actors,commands,view,command,empty,guessed,self.sources,self.precision)
+    }
+}
+///Accepted86 with its actual diagnostics: 61F210's description (host reads
+///and 404F90 sink in `sources`) and 4ED360's 4D9A40 dump on synchronizer A
+///(`sync`, the retained [B3655C] owner and its OS/application gate).
+#[allow(clippy::too_many_arguments)]
+pub fn selected_with<S:decree::describe::Sources+?Sized>(catalog:&Catalog<'_>,parts:GameplayOrderLoans<'_>,wire:&aa_orders::commands::CommandWire,
+    globals:&mut impl orders::Globals,slot:&u32,view:&mut impl crate::player_selection::View,
+    sync:crate::live_clocked::SyncBinding<'_>,sources:&mut S)->Result<aa_orders::commands::SelectedOutcome,String>{
+    let precision=parts.precision;
+    let bank=DefinitionBankLoan::new(parts.definitions);
+    let fields=RefCell::new(Fields{spatial:parts.spatial,variables:parts.variables,random:parts.rng,
+        clock:parts.clock,inventory:parts.inventory,presentation:parts.presentation,zones:parts.zones,
+        terrain:Some(parts.terrain),mission:Some(parts.mission),phase:Some(parts.phase),current_settings:parts.current_settings});
+    let spatial=SpatialRead(&fields);let mut services=Services{catalog,bank:&bank,fields:&fields,pc:parts.precision};
+    let(arena,actors)=parts.actors.split_minds();
+    let mut world=mind_world::World{actors,runtime:parts.mind_runtime,queues:parts.queues,owners:parts.owners,services:&mut services};
+    let mut diagnostics=FrameDiagnostics{bank:&bank,sync,sources,precision};
+    decree::issue_selected_in_bank(catalog,&bank,&mut world,arena,&spatial,globals,&mut diagnostics,slot,view,wire).map_err(|e|e.to_string())
+}

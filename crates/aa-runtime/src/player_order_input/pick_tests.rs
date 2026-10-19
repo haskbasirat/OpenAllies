@@ -112,6 +112,7 @@ fn centroid_points(points: &[[u32; 2]], p: Precision) -> [u32; 2] {
         fn actor_view_0c(&mut self, _: usize) -> Result<Option<usize>> { unreachable!() }
         fn root_view_4ce6c0(&mut self, _: usize) -> Result<Option<usize>> { unreachable!() }
         fn voiced_436600(&mut self, _: usize) -> Result<Option<Option<usize>>> { unreachable!() }
+        fn actor_virtual_150(&mut self, _: usize, _: &mut aa_orders::commands::CommandWire) -> Result<bool> { unreachable!() }
         fn selection_sound_436850(&mut self, _: usize) -> Result<()> { unreachable!() }
         fn command_masks_437eb0(&mut self, _: &[usize], _: super::super::ui_world::StaticRef, _: &mut [u32; 4]) -> Result<()> { unreachable!() }
         fn brush_changed_42d4d0(&mut self) -> Result<()> { unreachable!() }

@@ -25,6 +25,8 @@ mod size_fields;
 mod rename;
 #[path = "data_aspect_release.rs"]
 mod release;
+#[path = "data_aspect_texture.rs"]
+mod texture;
 use rename::{TextureRename, TextureRenames};
 #[cfg(test)]
 #[path = "data_aspect_tests.rs"]
@@ -61,8 +63,17 @@ struct Row {
     animations: Option<crate::object_animation_set::Set>,
     animation_stage: usize,
     source_ready: bool,
+    ///+4C
     extra_count: u32,
+    ///+54
     extra_requested: bool,
+    ///+48 data / +50 capacity (46AE20 loaded-Model extra Textures).
+    extras: texture::Extras<Handle>,
+    ///The 5A4ED0 Model+7C value the last successful46AE20 read, with its
+    ///Model. +7C is written only by 5A7DB0 (0), the5A99C0 load from that
+    ///Model's immutable source and the uncalled5A91E0; unload (vf40/vf54)
+    ///keeps it, so469BB0/469C50's later read of the SAME Model equals it.
+    extra_model_count: Option<(Handle, i32)>,
     context_sensitive: bool,
     unique: bool,
     ground_size: [u32; 2],
@@ -248,6 +259,8 @@ impl Row {
             source_ready: false,
             extra_count: 0,
             extra_requested: false,
+            extras: texture::Extras::constructed(),
+            extra_model_count: None,
             context_sensitive: true,
             unique: false,
             ground_size: [0; 2],
@@ -326,25 +339,19 @@ impl State {
                 return Err("pending Aspect immutable source changed".into());
             }
             while row.skin_stage < 2 {
+                //46A180's5A79F0(name, Aspect+44 = &ObjectData+B4, never NULL).
                 let handle = if let Some(ids) =
                     texture_request_name(&input.skin_paths[row.skin_stage])?
                 {
-                    let found = resources.texture_5a77e0_with_policy(
-                        catalog,
-                        bank,
-                        &ids,
-                        1,
-                        texture_policy,
-                    )?;
-                    if found.is_none() && !input.texture_paths.is_empty() {
-                        return Err(
-                            "5A79F0 actual skin search-path miss coordinator required".into()
-                        );
-                    }
-                    if found.is_none() {
-                        return Err("5A79F0 final original Texture request remains required".into());
-                    }
-                    found
+                    texture::request_5a79f0(&ids, Some(&input.texture_paths), |name, flags| {
+                        resources.texture_5a77e0_with_policy(
+                            catalog,
+                            bank,
+                            name,
+                            flags,
+                            texture_policy,
+                        )
+                    })?
                 } else {
                     None
                 };
@@ -612,6 +619,7 @@ impl State {
             resources,
             policy,
             backend: &mut backend,
+            texture_policy: &mut RequiredTexturePolicy,
             suppressed: &mut self.aspect_assertion_suppressed,
         };
         fields::resolve(&mut world)?;
@@ -638,6 +646,7 @@ impl State {
     }
     ///46AEC0 through actual Resource/Sequence vf10/vf0C services. No native
     ///loaded/bounds bits are inferred from source presence or modern uploads.
+    ///A loaded Model's46AE20 texture misses stop at the required policy.
     pub fn request_aspect(
         &mut self,
         catalog: &Catalog<'_>,
@@ -647,6 +656,33 @@ impl State {
         resources: &mut Resources<'_>,
         policy: &mut impl ModelPolicy,
         backend: &mut impl Backend,
+        delta: u32,
+        mode: u32,
+    ) -> Result<()> {
+        self.request_aspect_with_texture_policy(
+            catalog,
+            bank,
+            aspect,
+            biome,
+            resources,
+            policy,
+            backend,
+            &mut RequiredTexturePolicy,
+            delta,
+            mode,
+        )
+    }
+    ///46AEC0 with the caller's actual Texture policy for46AE20's5A79F0.
+    pub fn request_aspect_with_texture_policy(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &Bank,
+        aspect: &Aspect,
+        biome: Option<&Biome>,
+        resources: &mut Resources<'_>,
+        policy: &mut impl ModelPolicy,
+        backend: &mut impl Backend,
+        texture_policy: &mut impl crate::resource_objects::TexturePolicy,
         delta: u32,
         mode: u32,
     ) -> Result<()> {
@@ -675,11 +711,200 @@ impl State {
                 resources,
                 policy,
                 backend,
+                texture_policy,
                 suppressed: &mut self.aspect_assertion_suppressed,
             },
             delta,
             mode,
         )
+    }
+    ///46AF70, called by45A780 before the Aspect Model is used: Model vf18
+    ///when not loaded, then46AE20(+18, 1) when +54 is clear. Its +54
+    ///assertion (latch B3A747) is unreachable after a successful46AE20.
+    pub fn block_aspect_textures_46af70(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &Bank,
+        aspect: &Aspect,
+        resources: &mut Resources<'_>,
+        backend: &mut impl Backend,
+        texture_policy: &mut impl crate::resource_objects::TexturePolicy,
+    ) -> Result<()> {
+        let row = self.completed_row_mut(catalog, bank, aspect)?;
+        texture::block_46af70(&mut Block {
+            row,
+            catalog,
+            bank,
+            resources,
+            backend,
+            texture_policy,
+        })
+    }
+    fn completed_row_mut(
+        &mut self,
+        catalog: &Catalog<'_>,
+        bank: &Bank,
+        aspect: &Aspect,
+    ) -> Result<&mut Row> {
+        self.entry(&aspect.data)?;
+        let object = self
+            .entries
+            .get_mut(&aspect.data.token)
+            .unwrap()
+            .aspects
+            .as_mut()
+            .ok_or("Aspect allocation owner absent")?;
+        super::validate_object_data(catalog, bank, &object.definition)?;
+        if !object.complete {
+            return Err("Aspect source fields have not completed".into());
+        }
+        object
+            .rows
+            .get_mut(aspect.index)
+            .ok_or_else(|| "Aspect index absent".into())
+    }
+}
+///46AE20 on one completed Row with the actual Resource services.
+fn request_extra_46ae20(
+    row: &mut Row,
+    catalog: &Catalog<'_>,
+    bank: &Bank,
+    resources: &mut Resources<'_>,
+    backend: &mut impl Backend,
+    texture_policy: &mut impl crate::resource_objects::TexturePolicy,
+    delta: u32,
+    mode: u32,
+) -> Result<()> {
+    let model = row
+        .model
+        .clone()
+        .ok_or("46AE20 Model28 is null (native null dereference)")?;
+    let Row {
+        input,
+        extras,
+        extra_count,
+        extra_requested,
+        ..
+    } = &mut *row;
+    let input = input.as_ref().ok_or("46AE20 Aspect source fields absent")?;
+    let count = texture::extra_46ae20(
+        extras,
+        extra_count,
+        extra_requested,
+        input,
+        &mut ExtraWorld {
+            model: &model,
+            catalog,
+            bank,
+            resources,
+            backend,
+            texture_policy,
+            search: &input.texture_paths,
+        },
+        delta,
+        mode,
+    )?;
+    row.extra_model_count = Some((model, count));
+    Ok(())
+}
+struct ExtraWorld<'a, 'source, 'manager, B, T> {
+    model: &'a Handle,
+    catalog: &'a Catalog<'source>,
+    bank: &'a Bank,
+    resources: &'a mut Resources<'manager>,
+    backend: &'a mut B,
+    texture_policy: &'a mut T,
+    search: &'a [String],
+}
+impl<B: Backend, T: crate::resource_objects::TexturePolicy> texture::ExtraServices
+    for ExtraWorld<'_, '_, '_, B, T>
+{
+    type Texture = Handle;
+    fn model_texture_count(&mut self) -> Result<i32> {
+        self.resources.with_entry(self.model, |e| {
+            let m = e.model.as_ref().ok_or("5A4ED0 Resource is not an actual Model")?;
+            Ok(m.words78_7c[1] as i32)
+        })
+    }
+    fn model_texture(&mut self, index: usize) -> Result<(Vec<u16>, Vec<u16>)> {
+        self.resources.with_entry(self.model, |e| {
+            let m = e.model.as_ref().ok_or("5A5590 Resource is not an actual Model")?;
+            let (full, raw) = m
+                .slots80
+                .get(index)
+                .ok_or("5A5590/5A55A0 index beyond the Model+80 storage")?;
+            Ok((full.to_vec(), raw.to_vec()))
+        })
+    }
+    fn folder(&mut self) -> Result<String> {
+        texture::game_data_folder_4(self.catalog)
+    }
+    fn request_5a79f0(&mut self, name: &[u16]) -> Result<Option<Handle>> {
+        let Self {
+            catalog,
+            bank,
+            resources,
+            texture_policy,
+            search,
+            ..
+        } = self;
+        texture::request_5a79f0(name, Some(*search), |name, flags| {
+            resources.texture_5a77e0_with_policy(catalog, bank, name, flags, &mut **texture_policy)
+        })
+    }
+    fn request_10(&mut self, texture: &Handle, delta: u32, mode: u32) -> Result<()> {
+        self.resources
+            .request_10(texture, delta as i32, mode, self.backend)
+    }
+}
+struct Block<'a, 'source, 'manager, B, T> {
+    row: &'a mut Row,
+    catalog: &'a Catalog<'source>,
+    bank: &'a Bank,
+    resources: &'a mut Resources<'manager>,
+    backend: &'a mut B,
+    texture_policy: &'a mut T,
+}
+impl<B: Backend, T: crate::resource_objects::TexturePolicy> texture::BlockServices
+    for Block<'_, '_, '_, B, T>
+{
+    fn model_loaded(&mut self) -> Result<bool> {
+        let model = self
+            .row
+            .model
+            .as_ref()
+            .ok_or("46AF70 Model28 is null (native null dereference)")?;
+        Ok(self.resources.flags_08(model)? & 1 != 0)
+    }
+    fn block_18(&mut self) -> Result<()> {
+        let model = self.row.model.clone().ok_or("46AF70 Model28 is null")?;
+        self.resources.block_18(&model, self.backend)
+    }
+    fn requested_54(&mut self) -> Result<bool> {
+        Ok(self.row.extra_requested)
+    }
+    fn count_18(&mut self) -> Result<u32> {
+        Ok(self.row.count)
+    }
+    fn extra_46ae20(&mut self, delta: u32, mode: u32) -> Result<()> {
+        request_extra_46ae20(
+            self.row,
+            self.catalog,
+            self.bank,
+            self.resources,
+            self.backend,
+            self.texture_policy,
+            delta,
+            mode,
+        )
+    }
+    fn assertion_latched(&mut self) -> Result<bool> {
+        //B3A747 is image zero and changes only by a completed855D30, which
+        //this port never completes (it stops below), so it stays false.
+        Ok(false)
+    }
+    fn assert_extra_requested(&mut self) -> Result<()> {
+        Err("46AF70 m_extra_textures_requested assertion (AspectData.cpp:0x1C9) requires actual855D30 feedback; latch B3A747 unported".into())
     }
 }
 pub(crate) struct Layout {
@@ -706,7 +931,7 @@ impl crate::resource_objects::TexturePolicy for RequiredTexturePolicy {}
 struct RequiredBackend;
 impl crate::resource_task::Services for RequiredBackend {}
 impl Backend for RequiredBackend {}
-struct Bound<'a, 'source, 'manager, P, B> {
+struct Bound<'a, 'source, 'manager, P, B, T> {
     row: &'a mut Row,
     catalog: &'a Catalog<'source>,
     bank: &'a Bank,
@@ -714,9 +939,12 @@ struct Bound<'a, 'source, 'manager, P, B> {
     resources: &'a mut Resources<'manager>,
     policy: &'a mut P,
     backend: &'a mut B,
+    texture_policy: &'a mut T,
     suppressed: &'a mut bool,
 }
-impl<P: ModelPolicy, B: Backend> fields::World for Bound<'_, '_, '_, P, B> {
+impl<P: ModelPolicy, B: Backend, T: crate::resource_objects::TexturePolicy> fields::World
+    for Bound<'_, '_, '_, P, B, T>
+{
     type Model = Handle;
     type Biome = BiomeIdentity;
     fn context_sensitive(&mut self) -> Result<bool> {
@@ -804,8 +1032,17 @@ impl<P: ModelPolicy, B: Backend> fields::World for Bound<'_, '_, '_, P, B> {
         self.resources
             .request_10(handle, delta as i32, mode, self.backend)
     }
-    fn request_extra(&mut self, _: u32, _: u32) -> Result<()> {
-        Err("Aspect loaded Model extra-texture46AE20 requires actual embedded-texture owner".into())
+    fn request_extra(&mut self, delta: u32, mode: u32) -> Result<()> {
+        request_extra_46ae20(
+            self.row,
+            self.catalog,
+            self.bank,
+            self.resources,
+            self.backend,
+            self.texture_policy,
+            delta,
+            mode,
+        )
     }
     fn count(&mut self) -> Result<u32> {
         Ok(self.row.count)

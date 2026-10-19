@@ -45,6 +45,22 @@ pub struct Frame {
     ///behind a running camera job keep their real inter-frame times.
     pub counter: Option<i64>,
 }
+impl Frame {
+    ///5C92F0 consumes every KKC_Input event queued since the previous frame
+    ///(59A500 queue, filled by WndProc) in ONE native UI frame, then polls the
+    ///cursor once (59AD30). The port's native frame is one presentation job
+    ///(one rendered snapshot), so a UI frame observed while a job is pending
+    ///joins the next native frame: every event in order (no press or release
+    ///is dropped), and the latest cursor, client, gates and QPC frame time.
+    pub fn coalesce(&mut self, next: Frame) {
+        self.events.extend(next.events);
+        self.cursor = next.cursor;
+        self.client = next.client;
+        self.presented = next.presented;
+        self.windowed = next.windowed;
+        self.counter = next.counter;
+    }
+}
 fn modifier_flags(m: &egui::Modifiers) -> u32 {
     (if m.alt { hotkeys::ALT } else { 0 })
         | (if m.shift { hotkeys::SHIFT } else { 0 })

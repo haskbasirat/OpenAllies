@@ -13,6 +13,8 @@ fn native_ordinary_constructor_fields_before_source_projection() {
         assert_eq!(row.count, n["18"]);
         assert_eq!(row.extra_count, n["4c"]);
         assert_eq!(row.extra_requested, n["54"] == 1);
+        assert_eq!(row.extras.data.is_none(), n["48"] == 0);
+        assert_eq!(row.extras.capacity, n["50"]);
         assert_eq!(row.model.is_none(), n["28"] == 0);
         assert_eq!(row.biome.is_none(), n["24"] == 0);
         assert_eq!(row.skins[0].is_none(), n["30"] == 0);
@@ -258,6 +260,8 @@ fn native_banner_constructor_and_ground_size_copy_fields_match() {
         assert_eq!(actual.count, initial["18"]);
         assert_eq!(actual.extra_count, initial["4c"]);
         assert_eq!(u8::from(actual.extra_requested), initial["54"]);
+        assert_eq!(actual.extras.data.is_none(), initial["48"] == 0);
+        assert_eq!(actual.extras.capacity, initial["50"]);
         assert_eq!(u8::from(actual.context_sensitive), initial["1c"]);
         assert_eq!(u8::from(actual.unique), initial["68"]);
         assert_eq!(

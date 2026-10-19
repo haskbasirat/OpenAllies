@@ -147,6 +147,26 @@ impl NifFile {
         Ok(out)
     }
 
+    /// NiControllerSequence::LinkObject 883730: the controller of each block,
+    /// SetAt(i) in the +0x2C array sized by the block count (NULL kept).
+    pub fn sequence_controllers(&self, object: usize) -> Result<Vec<Option<usize>>, NifError> {
+        let o = &self.objects[object];
+        if o.class != "NiControllerSequence" {
+            return Err(NifError::Unsupported("controller blocks of a non-NiControllerSequence"));
+        }
+        let blocks = o.fields.list("blocks").ok_or(NifError::Unsupported("883650 blocks"))?;
+        blocks
+            .iter()
+            .map(|b| match b {
+                super::Value::Record(fields) => match fields.iter().find(|x| x.name == "controller").map(|x| &x.value) {
+                    Some(super::Value::Link(l)) => Ok(self.link_index(*l)),
+                    _ => Err(NifError::Unsupported("883650 block controller link")),
+                },
+                _ => Err(NifError::Unsupported("883650 block record")),
+            })
+            .collect()
+    }
+
     /// The object a single-link field resolves to.
     pub fn linked(&self, object: usize, field: &str) -> Option<usize> {
         self.objects[object].fields.link(field).and_then(|l| self.link_index(l))

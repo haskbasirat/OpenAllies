@@ -51,7 +51,7 @@ fn the_world_is_picked_only_outside_drawn_hud_elements() {
     let centre = (((mm[0] + mm[2]) / 2.0) as i16, ((mm[1] + mm[3]) / 2.0) as i16);
     let picked = ui.press_target_5c3bc0(centre.0, centre.1);
     assert!(matches!(picked, PressTarget::MiniMap { .. }), "{picked:?}");
-    // the economy bar along the top is HUD
+    // the economy bar is HUD
     let bar = rect(&ui, &format!("{GAME}/EconomyBar"));
     let bar_pixel = (((bar[0] + bar[2]) / 2.0) as i16, ((bar[1] + bar[3]) / 2.0) as i16);
     assert!(matches!(ui.press_target_5c3bc0(bar_pixel.0, bar_pixel.1), PressTarget::Widget { .. }));

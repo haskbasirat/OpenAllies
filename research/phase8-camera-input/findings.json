@@ -260,9 +260,13 @@
    "summary": "real-run-orders.json",
    "runs": [
     "qa-output/phase8-orders-camera/orders-run01/berlin",
-    "qa-output/phase8-orders-camera/orders-run02/berlin"
+    "qa-output/phase8-orders-camera/orders-run02/berlin",
+    "qa-output/phase8-orders-camera/orders-run03-hud/berlin"
    ],
-   "result": "48 orders UI frames with button messages; each stops in 0x43C550 -> 0x43C4B0 -> 0x71D840 (TerrainMap unbound) before any event; VWorld+AD true, 43EC60 Ok every job"
-  }
+   "result": "48 orders UI frames with button messages; each stops in 0x43C550 -> 0x43C4B0 -> 0x71D840 (TerrainMap unbound) before any event; VWorld+AD true, 43EC60 Ok every job",
+   "run03": "16 button messages in 13 native frames (coalesced, none dropped); all stop in 0x43C550 -> 0x71D840"
+  },
+  "input_queue": "one pending native frame: UI frames observed while a job is pending coalesce (events/messages/press picks in order, latest cursor/gates/QPC); test frames_queued_behind_a_job_join_one_native_frame_in_order",
+  "hud_leaves_wiring": "orders_hud::Leaves forwards HUD methods to battle_menus::hud_orders::HudOrderLeaves; UI thread world_under_cursor + HudFrame::observe need battle_presentation::observe_input_hud(ctx, ui) (frontend line reported, mirror only)"
  }
 }

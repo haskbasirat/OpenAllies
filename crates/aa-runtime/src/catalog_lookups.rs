@@ -19,6 +19,8 @@ use std::{
 type Result<T> = std::result::Result<T, String>;
 
 pub struct Lookups {
+    /// Distinct for every Lookups value (never reused within the process).
+    id: u64,
     /// Address of the ActorCatalog these indexes describe (never dereferenced).
     actors: usize,
     /// Lowercase source path -> first index in `ActorCatalog::sources`.
@@ -36,6 +38,21 @@ pub struct Lookups {
     numeric: RefCell<Vec<NumericMemo>>,
     /// Per field precision: every Translate root's inputs (see [`TranslateRow`]).
     translate_rows: RefCell<HashMap<u64, std::rc::Rc<Result<Vec<TranslateRow>>>>>,
+    /// Per field precision: the ordered Bone roots (see [`BoneTable`]).
+    bone_tables: RefCell<HashMap<u64, std::rc::Rc<Result<BoneTable>>>>,
+}
+/// fx_graph's Bone Find inputs at one precision: the Bone roots in their
+/// stable source order with each IDS read (value or error), the first row
+/// where that ordered scan stops with an error (an IDS read error or a
+/// repeated IDS), and the first row of each lowercase IDS.
+pub(crate) struct BoneTable {
+    pub(crate) rows: Vec<BoneRow>,
+    pub(crate) first_problem: Option<(usize, String)>,
+    pub(crate) first_row: HashMap<String, usize>,
+}
+pub(crate) struct BoneRow {
+    pub(crate) ids: Result<String>,
+    pub(crate) sources: Vec<aa_rules::resources::Provenance>,
 }
 /// One Translate root as `fx_graph` reads it: its source position and span
 /// start (or the error reading them gives), and its `node`/`ids_old`/
@@ -69,7 +86,9 @@ pub(crate) struct TranslationKey {
 }
 impl Lookups {
     pub(crate) fn new(actors: &ActorCatalog) -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         Self {
+            id: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             actors: actors as *const ActorCatalog as usize,
             source_positions: OnceCell::new(),
             actor_positions: OnceCell::new(),
@@ -78,7 +97,26 @@ impl Lookups {
             numeric: RefCell::new(Vec::new()),
             universe: OnceCell::new(),
             translate_rows: RefCell::new(HashMap::new()),
+            bone_tables: RefCell::new(HashMap::new()),
         }
+    }
+    /// The Bone table for this precision, built once by `build` (None when
+    /// `actors` is not the owner).
+    pub(crate) fn bone_table(
+        &self,
+        actors: &ActorCatalog,
+        precision: u64,
+        build: impl FnOnce() -> Result<BoneTable>,
+    ) -> Option<std::rc::Rc<Result<BoneTable>>> {
+        if !self.is_for(actors) {
+            return None;
+        }
+        if let Some(table) = self.bone_tables.borrow().get(&precision) {
+            return Some(std::rc::Rc::clone(table));
+        }
+        let table = std::rc::Rc::new(build());
+        self.bone_tables.borrow_mut().insert(precision, std::rc::Rc::clone(&table));
+        Some(table)
     }
     /// The Translate rows for this precision, built once by `build` (None
     /// when `actors` is not the owner).
@@ -144,6 +182,11 @@ impl Lookups {
         let mut numeric = self.numeric.borrow_mut();
         numeric.retain(|memo| memo.precision != precision);
         numeric.push(NumericMemo { precision, rows, values });
+    }
+    /// Identity of this value: equal ids mean the same Lookups (and so the
+    /// same immutable source owner, still borrowed).
+    pub(crate) fn id(&self) -> u64 {
+        self.id
     }
     pub(crate) fn is_for(&self, actors: &ActorCatalog) -> bool {
         self.actors == actors as *const ActorCatalog as usize
@@ -230,6 +273,10 @@ pub fn same_sources(catalog: &crate::catalog::Catalog<'_>, sources: &[SourceIden
         return true;
     }
     sources == catalog.actors.sources.as_slice()
+}
+/// `a == b`; the same allocation (and length) is equal without comparing.
+pub fn same_slices(a: &[SourceIdentity], b: &[SourceIdentity]) -> bool {
+    (std::ptr::eq(a.as_ptr(), b.as_ptr()) && a.len() == b.len()) || a == b
 }
 #[cfg(test)]
 #[path = "catalog_lookups_tests.rs"]

@@ -120,6 +120,8 @@ struct Entry {
     resource40: Resource40,
     aspects: Option<aspect::Object>,
     actor_view_source:Option<actor_view_source::Fields>,
+    ///ActorData+25C/+260 TrackInfo list of 464BD0 (source prepass).
+    actor_tracks:Option<actor_view_source::track_info::Prepared>,
     object_requests:Option<request::Object>,
     actor_animations:Option<Arc<crate::actor_animation_source::Source>>,
     actor_requests:Option<actor_request::Fields>,
@@ -378,7 +380,7 @@ impl State {
                 crate::resource_objects::Kind::Model => {
                     Some(resources.model_5a8520(catalog, bank, input.ids(), policy)?)
                 }
-                crate::resource_objects::Kind::Sequence | crate::resource_objects::Kind::Sound => {
+                crate::resource_objects::Kind::Sequence | crate::resource_objects::Kind::Sound | crate::resource_objects::Kind::TerrainBlock => {
                     return Err("VFX Resource40 cannot contain a Sequence/Sound resource".into());
                 }
             };
@@ -526,6 +528,7 @@ impl State {
                     resource40: Resource40::Unbound,
                     aspects: None,
                     actor_view_source:None,
+                    actor_tracks:None,
                     object_requests:None,
                     actor_animations:None,
                     actor_requests:None,

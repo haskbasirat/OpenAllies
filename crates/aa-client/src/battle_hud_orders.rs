@@ -24,11 +24,11 @@
 //! queued in native order as [`Presentation`] requests after the native
 //! early-outs, for their audio/VFX owners (none bound yet: each request is
 //! reported as unpresented).
-use crate::battle_orders_input::{HudLeaves, Message, Observed, Result, View};
+use crate::battle_orders_input::{CursorQuery, HudLeaves, Message, Observed, Result, View};
 use aa_orders::commands::CommandWire;
 use aa_runtime::player_order_input::{
     event::{code, flag, Event},
-    states::{CameraSlot, CommandDefinition},
+    states::{CameraSlot, CommandDefinition, Widget},
     ui_world::StaticRef,
 };
 use aa_ui::press_pick::PressTarget;
@@ -183,8 +183,6 @@ pub enum Presentation {
 pub struct HudOrderState {
     /// UI+0x60 as replayed on this thread.
     ui_60: Option<PressTarget>,
-    /// GameInterface+0xD8 default state +4 (`0x5E0690`'s pressed widget).
-    state_4: Option<PressTarget>,
     /// `[[B36530]+0x298][index]` as loaded (39 predefined ActorCommands).
     definitions: Option<Vec<CommandDefinition>>,
     /// UIWorldState+0x30 brush +8 (`0x42D4D0`): the action buttons' refresh
@@ -216,6 +214,8 @@ pub struct HudOrderLeaves<'a, 'c> {
     /// Session+E4 (0x436850 speaks only when it is not 3).
     session_e4: std::result::Result<u32, String>,
     catalog: Option<&'a aa_runtime::catalog::Catalog<'c>>,
+    /// `[[B36534]+0x30]+0xC/+0x10`: the world extents 0x5D74B0 scales by.
+    map_size: Option<[u32; 2]>,
 }
 
 impl<'a, 'c> HudOrderLeaves<'a, 'c> {
@@ -239,7 +239,14 @@ impl<'a, 'c> HudOrderLeaves<'a, 'c> {
             dropped: application_kind_b396c0 == 3,
             session_e4,
             catalog,
+            map_size: None,
         }
+    }
+    /// The world extents `[[B36534]+0x30]+0xC/+0x10` (binary32 bits) for the
+    /// minimap order point 0x5D74B0.
+    pub fn with_map_size_b36534(mut self, size: Option<[u32; 2]>) -> Self {
+        self.map_size = size;
+        self
     }
     fn ui_60(&self) -> PressTarget {
         self.state.ui_60.clone().unwrap_or(PressTarget::None)
@@ -289,7 +296,7 @@ impl<'a, 'c> HudOrderLeaves<'a, 'c> {
             // Root (A52C60) vt+0x34 0x5EFC70: no mouse hotkey -> false
             PressTarget::VWorld => self.hotkeys(e).map(|()| false),
             PressTarget::None => Err("0x5EFFF0 on a NULL widget (native NULL dereference)".into()),
-            PressTarget::MiniMap { path } => Err(format!("0x5EFFF0 minimap chain {path}: vt+0x34 0x5D77A0 runs in the UI thread's minimap")),
+            PressTarget::MiniMap { path, .. } => Err(format!("0x5EFFF0 minimap chain {path}: vt+0x34 0x5D77A0 runs in the UI thread's minimap")),
             PressTarget::Widget { path, .. } => Err(format!("0x5EFFF0 HUD widget chain {path}: its verdict belongs to the UI thread")),
         }
     }
@@ -323,34 +330,19 @@ fn camera_owner<T>(what: &str) -> Result<T> {
 }
 
 impl HudLeaves for HudOrderLeaves<'_, '_> {
-    /// `0x5E0690` on the default state (GameInterface+0xD8).
+    /// The chains of `0x5E0690` (0x5E06E8..0x5E0759) after the machine's +4
+    /// prefix: UI+0x60's chain and Root's, or with UI+0x60 NULL the focus
+    /// head's and Root's. The machine calls it only for VWorld or NULL.
     fn widget_route_5e0690(&mut self, e: &Event) -> Result<bool> {
         self.sync_to(e)?;
         let ui_60 = self.ui_60();
-        let none = |t: &PressTarget| *t == PressTarget::None;
-        if e.code == code::LEFT && e.flags & flag::RELEASED != 0 {
-            // a left release whose press +4 is NULL or another widget is
-            // swallowed
-            match &self.state.state_4 {
-                Some(s4) if *s4 == ui_60 && !none(s4) => {}
-                _ => {
-                    self.state.state_4 = None;
-                    return Ok(true);
-                }
-            }
-        }
-        if (e.code == code::LEFT && e.flags & flag::PRESSED != 0) || e.code == code::LEFT_DOUBLE {
-            self.state.state_4 = (!none(&ui_60)).then(|| ui_60.clone());
-        }
-        if !none(&ui_60) {
-            // UI+0x60 chain, then Root's own chain (5EFC70: no mouse hotkey)
+        if ui_60 != PressTarget::None {
             if self.chain(&ui_60, e)? {
                 return Ok(true);
             }
             self.hotkeys(e)?;
             return Ok(false);
         }
-        // UI+0x60 NULL: the focus head's chain, then Root's
         if !self.frame.focus_is_game {
             return Err("0x5E0690 focus chain [UI+0x8C]: the focus head is a dialog, routed by the UI thread".into());
         }
@@ -395,11 +387,22 @@ impl HudLeaves for HudOrderLeaves<'_, '_> {
     fn camera_frame_8(&mut self) -> Result<()> {
         camera_owner("UI+0xC0 vt+8")
     }
-    fn map_world_5d74b0(&mut self, _cursor: [i32; 2]) -> Result<[u32; 2]> {
-        Err("0x5D74B0 minimap world XY: minimap presses are routed by the UI thread's minimap (observe marks them HUD)".into())
+    /// `0x5D74B0` on UI+0x60 (the minimap): GetQuad 0x5E9270, the cursor
+    /// (int -> binary32) through Inverse 0x5D73E0 to (u, v), then
+    /// `x = u * [[B36534]+0x30]+0xC`, `y = v * ...+0x10` (fmul, fstp dword).
+    fn map_world_5d74b0(&mut self, cursor: [i32; 2]) -> Result<[u32; 2]> {
+        let PressTarget::MiniMap { quad_bits, .. } = self.ui_60() else {
+            return Err("0x5D74B0 reached with UI+0x60 not the minimap".into());
+        };
+        let quad = quad_bits.map(|[x, y]| (f32::from_bits(x), f32::from_bits(y)));
+        let size = self.map_size.ok_or("[[B36534]+0x30]+0xC/+0x10 world extents are not bound")?;
+        let (u, v) = aa_ui::minimap::inverse(&quad, (cursor[0] as f32, cursor[1] as f32));
+        Ok([(u * f32::from_bits(size[0])).to_bits(), (v * f32::from_bits(size[1])).to_bits()])
     }
+    /// B279C0/B279C4: zero-initialized .data words with no writer in the
+    /// image (only reads; research/phase4-orders "original zero constants").
     fn map_auxiliary_b279c0(&mut self) -> Result<[u32; 2]> {
-        Err("B279C0/B279C4 minimap order words: minimap presses are routed by the UI thread".into())
+        Ok([0, 0])
     }
     /// The default state's vt+8 tail (0x620648..0x62074D). Without
     /// GameInterface+0x12C (EconomicImpact) it does nothing; with UI+0x60
@@ -412,6 +415,30 @@ impl HudLeaves for HudOrderLeaves<'_, '_> {
             return Ok(());
         }
         Err("0x620640 EconomicImpact target preview: needs the UIWorldState selection head, 0x436510 and the 0x4363B0 hovered target, which HudLeaves does not pass".into())
+    }
+    /// 0x620648..0x62074D over the machine's reads.
+    fn cursor_feedback_620640_with(&mut self, query: &mut dyn CursorQuery) -> Result<()> {
+        // GameInterface+0x12C EconomicImpact (absent without the AVar)
+        if !self.frame.economic_impact {
+            return Ok(());
+        }
+        // Every branch that does not reach 0x603B50 ends in the hide test
+        // EconomicImpact+0xD4 == this state, which only that show stores.
+        if query.pressed_widget_60() != Widget::World || query.multiple_436510() {
+            return Ok(());
+        }
+        let head = query.head_8();
+        let target = query.hovered_target_4363b0()?;
+        let (Some(head), Some(target)) = (head, target) else { return Ok(()) };
+        let head_actor = query.actor_45b7a0(head)?;
+        let target_actor = query.actor_45b7a0(target)?;
+        if !head_actor || !target_actor {
+            return Ok(());
+        }
+        if !query.actor_can_34(head, 4)? {
+            return Ok(());
+        }
+        Err("0x6206EC actor+0x108 list, target actor+4 and entry+0x4E0 (EconomicImpact show 0x603B50): no live accessor".into())
     }
     fn selection_sound_436850(&mut self, v: View) -> Result<()> {
         if self.session_e4.clone()? == 3 || !self.unit_acknowledgement()? {
@@ -521,13 +548,13 @@ mod tests {
             PressPick { code: 0x101, flags: 1, x: 300, y: 200, target: PressTarget::VWorld },
         ]);
         let mut state = HudOrderState::default();
-        // the HUD press set +4 natively; here the leaf saw it first through
-        // the right press's replay, so +4 is still NULL and the release is
-        // swallowed exactly as 0x5E0690 does for a NULL +4
+        // the machine owns +4; the VWorld chain declines
         let mut l = HudOrderLeaves::new(&mut state, &f, &observed, 0, Ok(2), None);
         assert_eq!(l.widget_route_5e0690(&event(0x101, 1, 300, 200)), Ok(false));
         assert_eq!(l.ui_60(), PressTarget::VWorld);
-        assert_eq!(l.widget_route_5e0690(&event(0x100, 2, 300, 200)), Ok(true));
+        assert_eq!(l.widget_route_5e0690(&event(0x100, 2, 300, 200)), Ok(false));
+        assert_eq!(l.map_auxiliary_b279c0(), Ok([0, 0]));
+        assert!(l.map_world_5d74b0([1, 1]).is_err());
         // a widget pick for a HUD press
         let observed = Observed { messages: vec![button(0x100, 1, 5, 700)], ..Default::default() };
         let f = frame(vec![PressPick { code: 0x100, flags: 1, x: 5, y: 700, target: hud("Root/Game/X") }]);

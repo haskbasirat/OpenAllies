@@ -315,7 +315,10 @@ struct CameraUniform {
     eye: [f32; 4],
     light: [f32; 4],
     team_color: [f32; 4],
-    /// x,y: 1/map size (native metres); z: fog enabled; w: unused.
+    /// Native terrain fog (crate::view_fog_presentation): x TerrainMap+A0
+    /// world units per block, y +12C pixels per block; z stays 0 (the
+    /// skinned/particle shaders test it: the original applies the fog
+    /// texture effect only under the TerrainBlock nodes); w: enabled.
     fog: [f32; 4],
     model_root:[[f32;4];4],
     root_inverse:[[f32;4];4],
@@ -394,6 +397,7 @@ pub struct SceneRenderer {
     fog_texture: wgpu::Texture,
     fog_size: [u32; 2],
     fog_params: [f32; 4],
+    fog_revision: Option<u64>,
     pub dynamic: Option<dynamic::DynamicLayer>,
     pub particles: Option<particles::ParticleLayer>,
     pub clear_color: [f64; 3],
@@ -565,6 +569,7 @@ impl SceneRenderer {
             fog_texture,
             fog_size: [1, 1],
             fog_params: [0.0; 4],
+            fog_revision: None,
             dynamic: None,
             particles: None,
             clear_color: [0.065, 0.085, 0.08],
@@ -694,34 +699,45 @@ impl SceneRenderer {
         })
     }
 
-    /// Fog of war brightness grid (row-major, native +y rows) over the map.
-    /// `None` disables the fog term.
-    pub fn set_fog(&mut self, grid: Option<(&[u8], [u32; 2], [f32; 2])>) {
-        match grid {
-            None => {
-                self.fog_params = [0.0; 4];
-            }
-            Some((data, size, map_size)) => {
-                if size != self.fog_size {
-                    let device = &self.state.device;
-                    self.fog_texture = Self::make_fog_texture(device, &self.state.queue, size, data);
-                    self.fog_size = size;
-                    self.camera_binding = Self::make_camera_binding(
-                        device,
-                        &self.camera_layout,
-                        &self.camera_buffer,
-                        &self.fog_texture,
-                        &self.fog_sampler,
-                    );
-                    // The cached bundle captured the old camera binding.
-                    self.cached_bundle = None;
-                    self.cached_direction = None;
-                } else {
-                    Self::write_fog(&self.state.queue, &self.fog_texture, size, data);
-                }
-                self.fog_params = [1.0 / map_size[0], 1.0 / map_size[1], 1.0, 0.0];
-            }
+    /// Native terrain fog of war: the map-wide image of the per-TerrainBlock
+    /// 0x71C290 pixel grids ([`aa_runtime::view_terrain_fog::TerrainFog::compose`]).
+    /// scene.wgsl applies it to TerrainBlock geometry with the 0x720AD0
+    /// texture-effect projection; `None` disables it. The texture is written
+    /// only when the image revision changes.
+    pub fn set_fog(&mut self, fog: Option<&aa_runtime::view_terrain_fog::FogImage>) -> Result<()> {
+        // No block has a +124 grid yet: the original draws no TerrainBlock.
+        let Some(fog) = fog.filter(|f| f.pixels_per_block != 0) else {
+            self.fog_params = [0.0; 4];
+            self.fog_revision = None;
+            return Ok(());
+        };
+        anyhow::ensure!(fog.pixels_per_block >= 2 && fog.block_size_a0 > 0, "terrain fog image has no block grid");
+        anyhow::ensure!(
+            fog.luminance.len() as u64 == u64::from(fog.size[0]) * u64::from(fog.size[1]),
+            "terrain fog image size differs from its pixels"
+        );
+        let limit = self.state.device.limits().max_texture_dimension_2d;
+        anyhow::ensure!(fog.size[0] <= limit && fog.size[1] <= limit, "terrain fog image exceeds the device texture size");
+        if fog.size != self.fog_size {
+            let device = &self.state.device;
+            self.fog_texture = Self::make_fog_texture(device, &self.state.queue, fog.size, &fog.luminance);
+            self.fog_size = fog.size;
+            self.camera_binding = Self::make_camera_binding(
+                device,
+                &self.camera_layout,
+                &self.camera_buffer,
+                &self.fog_texture,
+                &self.fog_sampler,
+            );
+            // The cached bundle captured the old camera binding.
+            self.cached_bundle = None;
+            self.cached_direction = None;
+        } else if self.fog_revision != Some(fog.revision) {
+            Self::write_fog(&self.state.queue, &self.fog_texture, fog.size, &fog.luminance);
         }
+        self.fog_revision = Some(fog.revision);
+        self.fog_params = [fog.block_size_a0 as f32, fog.pixels_per_block as f32, 0.0, 1.0];
+        Ok(())
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -954,11 +970,13 @@ impl SceneRenderer {
                         .terrain_mask
                         .as_ref()
                         .map_or([0.0; 4], |m| m.rows[0]),
-                    terrain_v: d
-                        .material
-                        .terrain_mask
-                        .as_ref()
-                        .map_or([0.0; 4], |m| m.rows[1]),
+                    terrain_v: {
+                        // .w (unused by the mask rows): this draw is TerrainBlock
+                        // geometry, which the native fog texture effect covers.
+                        let mut v = d.material.terrain_mask.as_ref().map_or([0.0; 4], |m| m.rows[1]);
+                        v[3] = f32::from(d.material.terrain_layer);
+                        v
+                    },
                 };
                 let mat_buffer = upload_buffer(
                     device,

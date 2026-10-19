@@ -77,7 +77,8 @@ pub struct LoadSpatial {
     /// registry version at that time. `fields` reads only the binding and its
     /// geometry (both immutable once created) and that record, so while the
     /// version is unchanged the result is the same (see `member_fields`).
-    member_cache: std::collections::HashMap<ActorKey, ((u64, u64), Member)>,
+    /// Indexed by binding key (dense: next_key counts up from 1).
+    member_cache: Vec<Option<((u64, u64), Member)>>,
 }
 
 /// A second real allocation held outside its matching Loading registry entry
@@ -198,7 +199,7 @@ impl LoadSpatial {
             bindings: vec![],
             definitions: BTreeMap::new(),
             next_key: 1,
-            member_cache: std::collections::HashMap::new(),
+            member_cache: Vec::new(),
         })
     }
     pub fn index(&self) -> &SpatialIndex {
@@ -358,24 +359,41 @@ impl LoadSpatial {
     /// cached; they are recomputed in binding order like before.
     fn member_fields(
         &self,
-        cache: &mut std::collections::HashMap<ActorKey, ((u64, u64), Member)>,
+        cache: &mut Vec<Option<((u64, u64), Member)>>,
         binding: &Binding,
         registry: &aa_actors::registry::IdentityRegistry<RestoredRecord>,
         stale: &str,
     ) -> Result<Member> {
+        self.ensure_member_fields(cache, binding, registry, stale)?;
+        Ok(cache[binding.key as usize].as_ref().expect("ensured binding fields").1.clone())
+    }
+    /// Leaves `cache[binding.key]` holding exactly what `member_fields` returns.
+    fn ensure_member_fields(
+        &self,
+        cache: &mut Vec<Option<((u64, u64), Member)>>,
+        binding: &Binding,
+        registry: &aa_actors::registry::IdentityRegistry<RestoredRecord>,
+        stale: &str,
+    ) -> Result<()> {
         let entry = registry.get(binding.id).ok_or_else(|| required(stale))?;
-        let version = registry.version(binding.id);
-        if let (Some(version), Some((cached, member))) = (version, cache.get(&binding.key))
-            && *cached == version
+        let version = registry
+            .version(binding.id)
+            .expect("a current registry entry has a version");
+        let slot = binding.key as usize;
+        if cache
+            .get(slot)
+            .and_then(Option::as_ref)
+            .is_some_and(|(cached, _)| *cached == version)
         {
-            return Ok(member.clone());
+            return Ok(());
         }
         let (shell, definition) = record_fields(&entry.value)?;
         let member = self.fields(binding, shell, definition)?;
-        if let Some(version) = version {
-            cache.insert(binding.key, (version, member.clone()));
+        if cache.len() <= slot {
+            cache.resize_with(slot + 1, || None);
         }
-        Ok(member)
+        cache[slot] = Some((version, member));
+        Ok(())
     }
     fn fields(
         &self,
@@ -443,31 +461,64 @@ impl LoadSpatial {
         record: &mut Record<'_>,
     ) -> Result<()> {
         let key = self.prepare(catalog, record)?;
-        let mut fields = Vec::with_capacity(self.bindings.len());
         let mut cache = std::mem::take(&mut self.member_cache);
-        let built = (|| -> Result<()> {
+        //Same fields, computed (or reused, see member_fields) in binding order
+        //with the same first error; the lease then borrows them in that order.
+        let built = (|| -> Result<Option<Member>> {
+            let mut own = None;
             for binding in &self.bindings {
                 if binding.id == record.owner {
-                    fields.push(self.fields(binding, &*record.shell, record.definition)?);
+                    own = Some(self.fields(binding, &*record.shell, record.definition)?);
                 } else {
-                    fields.push(self.member_fields(
+                    self.ensure_member_fields(
                         &mut cache,
                         binding,
                         record.registry,
                         "indexed generation is not current",
-                    )?);
+                    )?;
                 }
             }
-            Ok(())
+            Ok(own)
         })();
+        let own = match built {
+            Ok(own) => own,
+            Err(error) => {
+                self.member_cache = cache;
+                return Err(error);
+            }
+        };
+        let leased = {
+            let fields: Vec<&Member> = self
+                .bindings
+                .iter()
+                .map(|binding| {
+                    if binding.id == record.owner {
+                        own.as_ref().expect("current binding fields were computed")
+                    } else {
+                        &cache[binding.key as usize]
+                            .as_ref()
+                            .expect("ensured binding fields")
+                            .1
+                    }
+                })
+                .collect();
+            match self.index.lease_load_fields_by_ref(&fields) {
+                Ok(mut lease) => {
+                    let result = lease.index_mut().refresh_membership(key, true);
+                    // The membership kernel retains the current member throughout. Commit
+                    // flags even if an error followed list writes or the native bit26 store.
+                    lease
+                        .index()
+                        .member(key)
+                        .map(|member| member.actor.flags)
+                        .map(|flags| (flags, result))
+                }
+                Err(error) => Err(error),
+            }
+        };
         self.member_cache = cache;
-        built?;
-        let mut lease = self.index.lease_load_fields(fields)?;
-        let result = lease.index_mut().refresh_membership(key, true);
-        // The membership kernel retains the current member throughout. Commit
-        // flags even if an error followed list writes or the native bit26 store.
-        record.shell.thing.flags = lease.index().member(key)?.actor.flags;
-        drop(lease);
+        let (flags, result) = leased?;
+        record.shell.thing.flags = flags;
         result.map_err(Error::from)
     }
 

@@ -108,10 +108,9 @@ frontend-routing.patch line; run_camera_gui.py drives --ui-script)
   battle_controller view-initialization stop.
 
 Real-run integration findings (fixed in battle_presentation/battle_camera_input)
-- Input frames must stay separate native UI frames: merging a key press and
-  its release (the --ui-script hook sends them in consecutive frames) into one
-  job made BeginScroll/EndScroll cancel before the scroller update. Each queued
-  frame now runs as its own 5C92F0 frame with its observed QPC counter.
+- (Superseded 2026-10-19, see "Input queue" below.) Run04 ran each egui UI
+  frame queued behind a job as its own 5C92F0 frame; that queue grew without
+  limit while a job was pending.
 - The 59AD30 rectangle is the whole client window; mapping the cursor onto the
   letterboxed image made the fullscreen screen edge fall outside it.
 - A snapshot superseded by the next camera job's store was a fatal renderer
@@ -259,3 +258,40 @@ Real GUI runs, orders integration (run_orders_gui.py; summary real-run-orders.js
 - The only other ERROR is the battle_controller view-initialization stop
   (5A94F0 BoundingSphere fallback), unrelated to this path; presentation and
   the frame loop continue.
+
+Input queue and HUD routing (2026-10-19, follow-up)
+- 5C92F0 consumes every KKC_Input event queued since the previous frame
+  (59A500, filled by WndProc) in one native UI frame and polls the cursor once
+  (59AD30). The port's native frame is one presentation job (one rendered
+  snapshot), so a UI frame observed while a job is pending now joins the next
+  native frame (camera_input::Frame::coalesce, OrdersInput::coalesce): every
+  key/wheel/button/modifier message in order (none dropped), the latest
+  cursor/client/gates and QPC frame time; Input+0xC keeps the last reported
+  cursor; the HUD frame keeps UI+0x60 before its first press and appends the
+  press picks. The queue therefore holds at most one frame. Consequence, as in
+  the original at that frame rate: a key press and its release observed within
+  one pending job cancel before the scroller update (BeginScroll/EndScroll in
+  the same frame). Test: battle_presentation
+  frames_queued_behind_a_job_join_one_native_frame_in_order.
+- HUD leaves: orders_hud::Leaves forwards the HUD methods to the HUD owner's
+  battle_menus::hud_orders::HudOrderLeaves (Session+E4, B396C0, the bound
+  Catalog); the UI thread computes hud_orders::world_under_cursor(ui, cursor)
+  for observe and HudFrame::observe with a PressTracker kept beside Window.
+  This needs the aa-ui tree: battle_presentation::observe_input_hud(ctx, ui).
+  The old observe_input(ctx) still feeds the camera but queues no orders frame
+  (logged once). Frontend change for the HUD owner (applied in the private
+  mirror only):
+    self.battle_presentation.observe_input(ctx);
+  ->
+    {let(ui,_)=self.tgi.native_parts();self.battle_presentation.observe_input_hud(ctx,ui);}
+- Live.terrain stays None until the terrain-visibility owner reports its call
+  (player_order_input::terrain_map needs the 4312F0 visibility pass to report
+  block residency).
+- Real run orders-run03-hud (private mirror = real sources + the frontend
+  observe_input_hud line above; Berlin, 438 s, exit 0): 16 button messages of
+  two sequences arrived in 13 native frames (three frames carry two messages
+  that were observed while a job was pending): none dropped, order kept. Each
+  frame still stops at 0x43C550 -> 0x71D840 (TerrainMap unbound) before the
+  HUD leaves are consulted; VWorld+AD true, 43EC60 Ok on every job. The view
+  leaves get startup.order_context (Session/UI words read before the
+  AdminNode loan) through order_views_with.

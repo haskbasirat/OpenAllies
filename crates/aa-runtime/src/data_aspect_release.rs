@@ -6,7 +6,6 @@ struct Bound<'a, R> {
     row: &'a mut Row,
     res: &'a mut R,
 }
-const EXTRA: &str = "469BB0/469C50 +54 loaded-Model extra textures need the unported 46AE20 +48 owner";
 impl<R: ResourceRelease> k::AspectRelease for Bound<'_, R> {
     type Resource = Handle;
     fn count(&mut self) -> Result<u32> {
@@ -52,11 +51,17 @@ impl<R: ResourceRelease> k::AspectRelease for Bound<'_, R> {
         self.row.extra_requested = false;
         Ok(())
     }
-    fn extra_count(&mut self, _: &Handle) -> Result<i32> {
-        Err(EXTRA.into())
+    ///5A4ED0 Model+7C of the SAME Model the last 46AE20 read (see
+    ///Row::extra_model_count for why that value is the live one).
+    fn extra_count(&mut self, model: &Handle) -> Result<i32> {
+        match &self.row.extra_model_count {
+            Some((read, count)) if read.same_identity(model) => Ok(*count),
+            _ => Err("469BB0/469C50 Model+7C read needs this Model's 46AE20 count".into()),
+        }
     }
-    fn extra(&mut self, _: usize) -> Result<Handle> {
-        Err(EXTRA.into())
+    ///+48[index]+0
+    fn extra(&mut self, index: usize) -> Result<Handle> {
+        self.row.extras.texture(index).cloned()
     }
 }
 impl State {

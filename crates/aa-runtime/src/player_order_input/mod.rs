@@ -17,7 +17,10 @@
 //! * Right click builds a KKC_GActorCommand (0x4D9C80) and sends
 //!   KKC_TellSelectedCommandOrderRequest 84 ([`command`]).
 pub mod command;
+pub mod command_mask_world;
+pub mod command_masks;
 pub mod event;
+pub mod order_world;
 pub mod pick;
 pub mod requests;
 pub mod states;

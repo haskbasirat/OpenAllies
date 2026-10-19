@@ -58,12 +58,6 @@ pub fn set_facing(wire: &mut CommandWire, xy: [u32; 2]) {
 /// The order-side effects of the UI. `player` is always the local
 /// 0x5C0E10 player in these paths.
 pub trait Orders {
-    /// 0x61E150 for the local player: UIWorldState vt+0x18 = 0x436950,
-    /// i.e. any selected actor's vt+0x150(local kingdom, &cmd, 1), with the
-    /// 0x25/0x26 static-group special case for explicit commands.
-    /// The actor virtual may complete the command (0x4DA570's type-4 branch
-    /// sets flag 2 and +0x14), so the wire is mutable.
-    fn can_send_436950(&mut self, wire: &mut CommandWire) -> Result<bool>;
     /// 0x61EEF0's acknowledgement voice (sound option B39940+0x250): the
     /// 0x436600 voiced object, attack voice +0xDC when flag 1 is set and the
     /// target (0x530F10) vt+0x140(local kingdom) holds, else move voice +0xD4.
@@ -77,10 +71,11 @@ pub trait Orders {
     fn marker_43db10(&mut self, xy: [u32; 2]) -> Result<()>;
 }
 
-/// 0x61EEF0 for the local player, preceded by the caller's 0x61E150 when the
-/// caller makes one (`checked`). Returns whether the request was emitted.
-pub fn send_61eef0(orders: &mut impl Orders, wire: &mut CommandWire) -> Result<bool> {
-    if !orders.can_send_436950(wire)? {
+/// 0x61EEF0 for the local player after its own CanSend (`can_send`: the
+/// UIWorldState vt+0x18 0x436950 answer, [`super::ui_world::State::can_send_436950`]).
+/// Returns whether the request was emitted.
+pub fn send_61eef0(orders: &mut impl Orders, wire: &mut CommandWire, can_send: bool) -> Result<bool> {
+    if !can_send {
         orders.diagnostic_61eef0(wire, false)?;
         return Ok(false);
     }

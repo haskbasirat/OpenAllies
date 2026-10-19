@@ -74,7 +74,7 @@ pub fn normalized_facing(
     ])
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Member {
     /// Opaque runtime identity, distinct in meaning from the saved GTID.
     pub key: ActorKey,
@@ -102,6 +102,9 @@ mod loading_flag_tests;
 #[cfg(test)]
 #[path = "index_unused_fields_tests.rs"]
 mod unused_fields_tests;
+#[cfg(test)]
+#[path = "index_lookup_tests.rs"]
+mod lookup_tests;
 
 #[cfg(test)]
 mod native_tests {
@@ -463,7 +466,14 @@ pub struct SpatialIndex {
     /// `tile_rectangle` accepted during load-field validation, and its result.
     /// tile_rectangle is a pure function of (grid, placement, precision), and
     /// grid/precision never change after `new`, so equal words give it again.
-    checked_rects: std::collections::HashMap<ActorKey, ([u32; 10], crate::geometry::TileRect)>,
+    checked_rects: std::collections::HashMap<
+        ActorKey,
+        ([u32; 10], crate::geometry::TileRect),
+        std::hash::BuildHasherDefault<KeyHasher>,
+    >,
+    /// Bookkeeping only, never read as fields: the map a dropped load lease
+    /// held, kept so the next lease can reuse its unchanged entries.
+    parked: BTreeMap<ActorKey, Member>,
     nodes: Vec<Option<Node>>,
     free_nodes: Vec<NodeKey>,
     /// Native GThing+10 intrusive query links. Shared across nested queries;
@@ -473,6 +483,26 @@ pub struct SpatialIndex {
     events: Vec<Event>,
 }
 
+/// Multiplicative hash for the integer keys of bookkeeping maps (only looked
+/// up, never iterated, so no observable order depends on it).
+#[derive(Default)]
+pub(crate) struct KeyHasher(u64);
+impl std::hash::Hasher for KeyHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0.rotate_left(5) ^ u64::from(byte)).wrapping_mul(0x517c_c1b7_2722_0a95);
+        }
+    }
+    fn write_u32(&mut self, value: u32) {
+        self.0 = (self.0.rotate_left(5) ^ u64::from(value)).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.0 = (self.0.rotate_left(5) ^ value).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
 /// Temporary field bindings for a pre-staging load operation. The persistent
 /// index retains only identity/tile/node ownership between these leases; reads
 /// of an unbound member remain explicit errors. No pose/flags survive drop.
@@ -489,7 +519,9 @@ impl LoadFields<'_> {
 }
 impl Drop for LoadFields<'_> {
     fn drop(&mut self) {
-        self.index.members.clear();
+        //`members` is left empty exactly as before; its allocation is parked
+        //for reuse by the next lease_load_fields_by_ref.
+        self.index.parked = std::mem::take(&mut self.index.members);
     }
 }
 impl SpatialIndex {
@@ -569,6 +601,16 @@ impl SpatialIndex {
                 "load field lease overlaps persistent/live fields".into(),
             ));
         }
+        //Strictly ascending keys cannot repeat, so the only possible errors
+        //are validations, raised in the same order; the map is then bulk-built
+        //from the already sorted rows. Otherwise insert one by one as before.
+        if fields.windows(2).all(|pair| pair[0].key < pair[1].key) {
+            for member in &fields {
+                self.validate_load_fields(member)?;
+            }
+            self.members = fields.into_iter().map(|member| (member.key, member)).collect();
+            return Ok(LoadFields { index: self });
+        }
         let mut members = BTreeMap::new();
         for member in fields {
             self.validate_load_fields(&member)?;
@@ -577,6 +619,58 @@ impl SpatialIndex {
             }
         }
         self.members = members;
+        Ok(LoadFields { index: self })
+    }
+    /// `lease_load_fields(fields.iter().map(|m| (*m).clone()).collect())`,
+    /// cloning only the members that differ from the previous lease's map.
+    pub fn lease_load_fields_by_ref(&mut self, fields: &[&Member]) -> Result<LoadFields<'_>> {
+        if !self.members.is_empty() {
+            return Err(Error::World(
+                "load field lease overlaps persistent/live fields".into(),
+            ));
+        }
+        if !fields.windows(2).all(|pair| pair[0].key < pair[1].key) {
+            return self.lease_load_fields(fields.iter().map(|m| (*m).clone()).collect());
+        }
+        //Ascending keys cannot repeat: validations are the only possible
+        //errors, in the same order, before any field is installed.
+        for member in fields {
+            self.validate_load_fields(member)?;
+        }
+        //Turn the parked map into exactly {key: member} for `fields`.
+        let mut map = std::mem::take(&mut self.parked);
+        let mut stale = Vec::new();
+        let mut added = Vec::new();
+        {
+            let mut parked = map.iter_mut().peekable();
+            for member in fields {
+                while let Some((key, _)) = parked.peek() {
+                    if **key < member.key {
+                        stale.push(**key);
+                        parked.next();
+                    } else {
+                        break;
+                    }
+                }
+                match parked.peek_mut() {
+                    Some((key, slot)) if **key == member.key => {
+                        if **slot != **member {
+                            **slot = (*member).clone();
+                        }
+                        parked.next();
+                    }
+                    _ => added.push(*member),
+                }
+            }
+            stale.extend(parked.map(|(key, _)| *key));
+        }
+        for key in stale {
+            map.remove(&key);
+        }
+        for member in added {
+            map.insert(member.key, member.clone());
+        }
+        self.members = map;
         Ok(LoadFields { index: self })
     }
     /// One-time staging transfer attaches the actual moved placement fields to
@@ -694,7 +788,8 @@ impl SpatialIndex {
             members: BTreeMap::new(),
             references: BTreeMap::new(),
             reference_slots: BTreeMap::new(),
-            checked_rects: std::collections::HashMap::new(),
+            checked_rects: std::collections::HashMap::default(),
+            parked: BTreeMap::new(),
             nodes: Vec::new(),
             free_nodes: Vec::new(),
             query_links: BTreeMap::new(),

@@ -38,7 +38,7 @@ impl StagingData {
         //77DFD0,77E0C0,77E430 walk these actual zero-length owned arrays.
         Ok(None)
     }
-    fn position_77e1f0(&self, name: &[u16]) -> Result<Option<(u32, u32)>> {
+    pub(super) fn position_77e1f0(&self, name: &[u16]) -> Result<Option<(u32, u32)>> {
         if prefix(name).is_empty() {
             return Ok(Some((u32::MAX, u32::MAX)));
         }

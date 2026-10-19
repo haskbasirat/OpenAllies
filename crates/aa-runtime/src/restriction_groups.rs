@@ -51,6 +51,10 @@ pub struct LoadedRestrictionGroups {
     source_actors: Vec<CanonicalSource>,
     property_owner: Arc<NativeLayoutData>,
     source_precision: Precision,
+    /// Bookkeeping only: the catalog_lookups id whose immutable source owner
+    /// last matched `source_files`/`source_actors` (both fixed at
+    /// construction), so that comparison need not be repeated for it.
+    source_checked: std::sync::atomic::AtomicU64,
 }
 
 fn key(units: &[u16]) -> Result<String, String> {
@@ -345,6 +349,7 @@ impl LoadedRestrictionGroups {
             source_actors,
             property_owner: properties,
             source_precision,
+            source_checked: std::sync::atomic::AtomicU64::new(0),
         })
     }
     pub fn profiles(&self) -> &RestrictionProfiles {
@@ -368,7 +373,7 @@ impl LoadedRestrictionGroups {
             .map_err(|e| e.to_string())?
             .combat_source()
             && (state.source_precision() != self.source_precision
-                || state.source_identities() != catalog.actors.sources.as_slice())
+                || !crate::catalog_lookups::same_sources(catalog, state.source_identities()))
         {
             return Err(
                 "restriction groups source PC/identities differ from the installed Bank".into(),
@@ -378,13 +383,22 @@ impl LoadedRestrictionGroups {
         if !Arc::ptr_eq(&properties, &self.property_owner) {
             return Err("restriction groups use another Property source arena".into());
         }
-        let files: Vec<_> = catalog
-            .actors
-            .sources
-            .iter()
-            .map(|s| (s.path.clone(), s.sha256.clone()))
-            .collect();
-        if files != self.source_files {
+        //The rest compares only the immutable source owner with fields fixed at
+        //construction: once it matched for this owner, it matches again.
+        let lookups = catalog.lookups();
+        let owner = lookups.is_for(catalog.actors);
+        if owner
+            && self.source_checked.load(std::sync::atomic::Ordering::Relaxed) == lookups.id()
+        {
+            return Ok(());
+        }
+        let sources = &catalog.actors.sources;
+        if sources.len() != self.source_files.len()
+            || sources
+                .iter()
+                .zip(&self.source_files)
+                .any(|(s, (path, sha))| s.path != *path || s.sha256 != *sha)
+        {
             return Err("restriction groups source universe changed".into());
         }
         if catalog.actors.actors.len() != self.source_actors.len()
@@ -400,6 +414,10 @@ impl LoadedRestrictionGroups {
                 })
         {
             return Err("restriction groups canonical source registration changed".into());
+        }
+        if owner {
+            self.source_checked
+                .store(lookups.id(), std::sync::atomic::Ordering::Relaxed);
         }
         Ok(())
     }

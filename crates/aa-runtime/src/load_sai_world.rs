@@ -61,6 +61,29 @@ pub fn initialize_manager<'a, W: startup::World<Fields<'a>>>(
     startup::initialize_fields(&mut fields, &mut world)
 }
 
+/// The SAME started manager split into the startup field lease and its
+/// disjoint collections, for 7A0C20 classifications reached on the live World
+/// (a creation loan). No manager field is copied.
+pub(crate) fn split_live(manager: &mut Sai) -> (Fields<'_>, Collections<'_>) {
+    (
+        Fields {
+            ready: &mut manager.ready,
+            revision: &mut manager.revision,
+            word6c: &mut manager.word_6c,
+            word70: &mut manager.word_70,
+        },
+        Collections {
+            players: &mut manager.players,
+            players_4c: &mut manager.players_4c,
+            players_54: &mut manager.players_54,
+            commands: &mut manager.commands,
+            general_powers: &mut manager.general_powers,
+            rng: &mut manager.rng,
+            vector90: &mut manager.vector_90,
+        },
+    )
+}
+
 /// Sole loaded SAI-map owner. The topology's tile_rectangles are native tile
 /// +10 identities; ZoneMap owns the disjoint +4/+14/+18 fields of those tiles.
 /// No Clone/Default/raw topology constructor is provided by this adapter.

@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "subject": "UIWorldState command masks 0x437EB0 (+0x20..+0x2C), actor vt+0x154 = 0x4CE680 and Research 0x5845A0",
+  "fixture": "native-command-masks.json",
+  "fixture_sha256": "cbfc50ed629eb3474d47043b1d403d6230c063460e4966550d9f4000b53aaf91",
+  "producer": "native_command_masks.py",
+  "runs": ["original/Single24", "original/Double53", "original/Extended64", "v14/Single24", "v14/Double53", "v14/Extended64"],
+  "runs_identical": true,
+  "replay": "native-replay01.log (byte-identical)",
+  "rows": {"masks": 900, "masks_native_faults": {"0x438142 NULL +0x40": 25, "0x437F5C NULL definition": 23}, "research_5845a0": 240, "vt154": 720},
+  "coverage": {
+    "437EB0": "238/242 (unexecuted 0x437F3F/0x4380DD dead NULL-head re-tests, 0x437F4C/0x4380EA NULL tail with non-NULL head)",
+    "45B7A0": "16/16", "4364C0": "24/28 (filter byte 1 Element test, never requested)", "96D710": "15/15",
+    "5845A0": "38/38", "4CE680": "26/26", "4CF120": "45/45", "4D1F90": "15/15", "6A71F0": "2/2", "969B10": "2/2"
+  },
+  "native_addresses": {
+    "437EB0": "command_masks::command_masks_437eb0 / command_masks_in_place_437eb0",
+    "45B7A0": "command_masks::actor_45b7a0 (view+0x14, thing vt+0xB4)",
+    "4364C0": "inlined: non-NULL Organization+0x28 members (filter byte 0)",
+    "96D710": "__allshl (counts >= 64 give 0)",
+    "4CE680": "command_masks::virtual_154_4ce680 (vt+0x154 of A273F0, A29490, A299D8)",
+    "5845A0": "command_masks::research_available_5845a0",
+    "5C0E30": "MaskLeaves::local_kingdom_5c0e30 (caller supplied: [B36550] ? 76AC70 : NULL)",
+    "B36530+0x298": "MaskLeaves::non_group_3c (live: guess::Live::definition .non_group_3c)"
+  },
+  "vtables": {
+    "GActor A273F0 (class 3)": {"0x154": "0x4CE680", "0x20": "0x4CF120", "0x34": "0x4D1F90", "0xB4": "0x6A71D0", "0x134": "0x4D1E90"},
+    "GGroup A29490 (class 8)": {"0x154": "0x4CE680", "0x20": "0x4CF120", "0x34": "0x4D1F90", "0xB4": "0x6A71D0", "0x134": "0x4D1E90"},
+    "GKingdom A299D8 (class 4)": {"0x154": "0x4CE680", "0x20": "0x4CF120", "0x34": "0x4D1F90", "0xB4": "0x6A71D0", "0x134": "0x4E5240"},
+    "Object A2A2A0 (class 2) and primary vtables of classes 5/6/7/9/10": {"0xB4": "0x6A71F0 (false)", "0x20": "0x969B10 (false)"}
+  },
+  "callers_of_437EB0": ["0x438370 add", "0x438430 remove", "0x438560 group +0x18 change", "0x438AD0 deselect", "0x439E90 SaveGroup",
+    "0x43A1C0 per-frame update (tail jump; caches 5C0E10->765E00 player+0x28 kingdom in +0x4C)", "0x50C8E0 <- 0x4CFCC0 simulation notification"],
+  "rust": {
+    "kernel": "crates/aa-runtime/src/player_order_input/command_masks.rs",
+    "live_world": "crates/aa-runtime/src/player_order_input/command_mask_world.rs",
+    "tests": ["command_masks::tests::native_437eb0_rows_replay", "command_masks::tests::native_5845a0_rows_replay",
+      "command_masks::tests::native_vt154_rows_replay", "command_masks::tests::coverage_is_complete_on_reachable_paths",
+      "command_mask_world::tests::live_command_mask_leaves_bind_actual_definitions (AA_GAME_ROOT)"]
+  },
+  "open_gaps": [
+    "GGroup (class 8) selected things: every read after vt+0xB4 errors (order helpers bind only classes 3/4)",
+    "0x5844A0 for a non-empty ActorData+0x558 research list: no live research admission owner on this path",
+    "UIWorldState+0x4C and the 0x43A1C0 per-frame caller are not in ui_world.rs",
+    "0x5C0E30 local kingdom is supplied by the caller (session owner)",
+    "native ActorData+0x558 list order vs catalog file order is unproven (matters only once 0x5844A0 is bound)"
+  ]
+}

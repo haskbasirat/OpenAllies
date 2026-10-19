@@ -21,8 +21,6 @@ use aa_formats::nif::{is_kind_of,NifFile,Value};
 use std::collections::BTreeMap;
 type Result<T>=std::result::Result<T,String>;
 const TAGS:[&str;10]=["Mod","Eq","Ambient_RepColor","EmRC","RepColor","FastPath","tred","Sg","Sg2","mkf"];
-///The seven NiTexturingProperty descriptor slots the processing reads.
-const SLOTS:usize=7;
 fn text(bytes:Option<&[u8]>)->Result<String>{
  let bytes=bytes.unwrap_or(&[]);let bytes=bytes.split(|&b|b==0).next().unwrap_or(&[]);
  if !bytes.is_ascii(){return Err("actual native non-ASCII name conversion is required".into())}
@@ -70,18 +68,21 @@ fn flags_read(nif:&NifFile,i:usize)->Result<u32>{
 }
 fn property(nif:&NifFile,block:usize)->Result<Property>{
  let o=&nif.objects[block];if !is_kind_of(o.class,"NiProperty"){return Err(format!("NiAVObject property link to {}",o.class))}let f=&o.fields;
- let mut slots=vec![];let mut shader_textures=0;
+ let mut slots=vec![];let mut shader_maps=vec![];let mut shader_textures=0;
  if o.class=="NiTexturingProperty"{
-  let maps=f.list("maps").ok_or("86CF20 maps absent")?;
-  for k in 0..SLOTS{slots.push(match maps.get(k){Some(Value::Record(m))=>{
+  //The native map array (every slot index 86CF20 stores, absent maps NULL)
+  //and the shader map array (+0x44).
+  let descriptor=|v:&Value|->Result<Option<Descriptor>>{match v{Value::Record(m)=>{
    let link=m.iter().find(|x|x.name=="source").and_then(|x|match x.value{Value::Link(l)=>nif.target(l),_=>None});
    let filter=m.iter().find(|x|x.name=="filter").and_then(|x|match x.value{Value::U32(v)=>Some(v),_=>None}).ok_or("86D720 filter absent")?;
-   let texture=link.map(|t|field_text(nif,t,"file_name").map(|b|text(Some(&b)))).flatten().transpose()?;
-   Some(Descriptor{texture,source:link.map(|t|t as u32),filter})}
-   _=>None})}
+   let texture=link.and_then(|t|field_text(nif,t,"file_name")).map(|b|text(Some(&b))).transpose()?;
+   Ok(Some(Descriptor{texture,source:link.map(|t|t as u32),filter}))}
+   _=>Ok(None)}};
+  for m in f.list("maps").ok_or("86CF20 maps absent")?{slots.push(descriptor(m)?);}
+  for m in f.list("shader_maps").unwrap_or(&[]){shader_maps.push(descriptor(m)?);}
   shader_textures=f.u32("shader_map_count").unwrap_or(0);
  }
- Ok(Property{kind:o.class.into(),block:block as u32,flags:if o.class=="NiAlphaProperty"{flags_read(nif,block)?}else{0},slots,shader_textures,extras:extras(nif,block)?,
+ Ok(Property{kind:o.class.into(),block:block as u32,flags:if o.class=="NiAlphaProperty"{flags_read(nif,block)?}else{0},slots,shader_textures,shader_maps,extras:extras(nif,block)?,
   generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None})
 }
 pub(super) fn document(nif:&NifFile,source:&str,source_sha256:&str,converted_sha256:String,material_audit_sha256:String,mesh_mapping:serde_json::Value)->Result<Document>{

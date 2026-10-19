@@ -305,14 +305,28 @@ pub struct OrderContext{
     can_process:Result<bool>,
     ui_kingdom_1e0:Result<Option<ActorId>>,
     performance_disable_doodads:Result<Option<u8>>,
+    swap_right_click_4be150:Result<bool>,
+    hotkey_alt_right_click_4b2e60:Result<Vec<u16>>,
 }
 impl OrderContext{
     ///`kingdom_76ac70` is ActualActivatedSession::local_player_kingdom_76ac70,
     ///`ui_kingdom_1e0` the 5C3000-written UI field, `performance_disable_doodads`
     ///the UVar manager (B39938) raw byte (None: no record).
+    #[allow(clippy::too_many_arguments)]
     pub fn new(session_e4:u32,local_player:bool,kingdom_76ac70:Result<Option<ActorId>>,phase_f8:u32,
-        can_process:Result<bool>,ui_kingdom_1e0:Result<Option<ActorId>>,performance_disable_doodads:Result<Option<u8>>)->Self{
-        Self{session_e4,local_player,kingdom_76ac70,phase_f8,can_process,ui_kingdom_1e0,performance_disable_doodads}
+        can_process:Result<bool>,ui_kingdom_1e0:Result<Option<ActorId>>,performance_disable_doodads:Result<Option<u8>>,
+        swap_right_click_4be150:Result<bool>,hotkey_alt_right_click_4b2e60:Result<Vec<u16>>)->Self{
+        Self{session_e4,local_player,kingdom_76ac70,phase_f8,can_process,ui_kingdom_1e0,performance_disable_doodads,
+            swap_right_click_4be150,hotkey_alt_right_click_4b2e60}
+    }
+    ///76AC70 as 436950 reads it through 5C0E30 before each vt+150.
+    pub(crate) fn kingdom_76ac70(&self)->Result<Option<ActorId>>{self.kingdom_76ac70.clone()}
+    ///4CF430's globals: 40EAA0, 76AC90 and the two right-click UVars.
+    pub(crate) fn order_globals(&self)->crate::battle_orders_input::UiOrderGlobals{
+        crate::battle_orders_input::UiOrderGlobals{can_process_40eaa0:self.can_process.clone(),
+            session_phase_76ac90:Ok(self.phase_f8),
+            swap_right_click_with_alt_right_click_4be150:self.swap_right_click_4be150.clone(),
+            hotkey_alt_right_click_command_4b2e60:self.hotkey_alt_right_click_4b2e60.clone()}
     }
 }
 
@@ -322,6 +336,10 @@ pub(crate) struct Live<'a>{
     pub actors:&'a ActorStore,
     pub spatial:&'a SpatialWorld,
     pub variables:&'a load_view_variables::State,
+    ///GWorld+275 (4F2BE4 resets it; the World's runtime field owner).
+    pub runtime_fields:&'a aa_runtime::load_world_runtime_fields::State,
+    ///ObjectData+16D (49C460) of the World's source requirements.
+    pub source_fields:&'a aa_rules::native_source_requirements::NativeSourceRequirements,
     pub context:Option<&'a OrderContext>,
 }
 const NO_CONTEXT:&str="orders Session/UI context was not supplied (bind DirectoryViews with an OrderContext)";
@@ -406,9 +424,7 @@ impl Reads for Live<'_>{
     ///+48 85FAA9 captured on that same thread: the comparison is equal.
     fn current_thread_is_main_b364d4(&mut self)->Result<bool>{self.context()?;Ok(true)}
     fn cheat_fog_1bc(&mut self)->Result<bool>{Ok(self.variables.cheat_fog_enabled())}
-    fn world_275(&mut self)->Result<bool>{
-        Err("4F0943 GWorld+275 (load_world_runtime_fields) is not exposed by live_world_frame::PresentationParts".into())
-    }
+    fn world_275(&mut self)->Result<bool>{Ok(*self.runtime_fields.fog_cheat_word()!=0)}
     fn performance_disable_doodads(&mut self)->Result<bool>{
         self.context()?.performance_disable_doodads.clone()?.map(|b|b!=0)
             .ok_or_else(||"4B2E60 found no UVar PerformanceDisableDoodads record; 45BC20 dereferences its NULL result".into())
@@ -425,8 +441,9 @@ impl Reads for Live<'_>{
     fn data_mask_174(&mut self,t:ActorId)->Result<u32>{
         self.object(t)?.definition.component_mask.ok_or_else(||"ActorData+174 component mask is absent".into())
     }
-    fn data_16d(&mut self,_:ActorId)->Result<u8>{
-        Err("4EA3AB ObjectData+16D (49C460): the World's NativeSourceRequirements is not exposed by live_world_frame::PresentationParts".into())
+    fn data_16d(&mut self,t:ActorId)->Result<u8>{
+        let id=&self.object(t)?.definition.proof.id;
+        self.source_fields.byte(id,0x16d).map_err(text)
     }
     fn visible_70(&mut self,t:ActorId,k:Option<ActorId>,deep:bool)->Result<bool>{
         NativeVisibility::new(&Fog(self.variables)).visible_to(self.actors,t,k,deep).map_err(|e|format!("{e:#}"))
@@ -524,7 +541,8 @@ mod tests{
     fn n(v:&Value,default:u64)->u64{v.as_u64().unwrap_or(default)}
     impl Reads for Case<'_>{
         type T=u32;
-        type V=String;
+        ///The published view, named by its Thing.
+        type V=u32;
         fn session_e4(&mut self)->Result<Option<u32>>{Ok(Some(n(&self.c["session"]["state"],0) as u32))}
         fn local_player_76ac60(&mut self)->Result<bool>{Ok(self.c["session"]["local_player"]==true)}
         fn player_kingdom_765e00(&mut self)->Result<Option<u32>>{Ok(self.id(&self.c["session"]["kingdom"]))}
@@ -589,9 +607,9 @@ mod tests{
             let leader=&self.thing(t)["leader"];
             Ok((!leader.is_null()).then(||self.id(leader)))
         }
-        fn view_c(&mut self,t:u32)->Result<Option<String>>{
+        fn view_c(&mut self,t:u32)->Result<Option<u32>>{
             let name=&self.names[t as usize];
-            Ok(self.c["views"].as_array().is_some_and(|v|v.iter().any(|x|x==name)).then(||name.clone()))
+            Ok(self.c["views"].as_array().is_some_and(|v|v.iter().any(|x|x==name)).then_some(t))
         }
     }
     fn view(r:&mut Case<'_>)->(Option<u32>,Data,u32){
@@ -602,11 +620,9 @@ mod tests{
     ///45B7A0 over the oracle's vtables (vt+B4).
     fn b4(r:&mut Case<'_>,t:u32)->bool{gactor(r.class(t).unwrap())}
     ///ui_world.rs select_owner_640b40 composed from these leaves.
-    fn select_640b40(r:&mut Case<'_>,t:u32)->Result<Option<String>>{
-        let own=r.names[t as usize].clone();
-        let owner=if b4(r,t){link_16c_view(r,t)?.unwrap_or(own)}else{return Ok(Some(own))};
-        let o=r.names.iter().position(|x|*x==owner).unwrap() as u32;
-        if !b4(r,o){return Ok(Some(owner))}
+    fn select_640b40(r:&mut Case<'_>,t:u32)->Result<Option<u32>>{
+        let o=if b4(r,t){link_16c_view(r,t)?.unwrap_or(t)}else{return Ok(Some(t))};
+        if !b4(r,o){return Ok(Some(o))}
         if let Some(container)=link_94_view(r,o)?{return Ok(Some(container))}
         if hidden_4549c0(r,o)?{return r.view_c(o)}
         let organization=r.component(o,0x7c)?;
@@ -649,13 +665,13 @@ mod tests{
                 }
                 "437650"=>{
                     let t=r.id(&c["thing"]).unwrap();
-                    let own=r.names[t as usize].clone();
-                    let result=if b4(&mut r,t){link_16c_view(&mut r,t).unwrap().unwrap_or(own)}else{own};
-                    assert_eq!(json!(result),o["result"],"{c}");rows(&mut counts,leaf);continue;
+                    let result=if b4(&mut r,t){link_16c_view(&mut r,t).unwrap().unwrap_or(t)}else{t};
+                    assert_eq!(r.name(Some(result)),o["result"],"{c}");rows(&mut counts,leaf);continue;
                 }
                 "640b40"=>{
                     let t=r.id(&c["thing"]).unwrap();
-                    assert_eq!(json!(select_640b40(&mut r,t).unwrap()),o["result"],"{c}");
+                    let result=select_640b40(&mut r,t).unwrap();
+                    assert_eq!(r.name(result),o["result"],"{c}");
                     assert_eq!(json!(r.trace),o["trace"],"{c}");rows(&mut counts,leaf);continue;
                 }
                 "5e05d0"=>{
@@ -665,12 +681,14 @@ mod tests{
                 }
                 "436600"=>{
                     let selection:Vec<u32>=c["selection"].as_array().unwrap().iter().map(|v|r.id(v).unwrap()).collect();
-                    let mut result=selection.first().map(|t|r.names[*t as usize].clone());
+                    let mut result=selection.first().copied();
                     for t in &selection{
                         if b4(&mut r,*t){if let Some(voiced)=voiced_436600(&mut r,*t).unwrap(){result=voiced;break}}
                     }
-                    assert_eq!(json!(result),o["result"],"{c}");rows(&mut counts,leaf);continue;
+                    assert_eq!(r.name(result),o["result"],"{c}");rows(&mut counts,leaf);continue;
                 }
+                //view+9C NULL: 453470 returns with no call (the leaves' no-op).
+                "453470"=>{assert_eq!(o["returned"],true);assert_eq!(o["trace"],json!([]));rows(&mut counts,leaf);continue;}
                 other=>panic!("{other}"),
             };
             assert_eq!(value,o["value"],"{c}");
@@ -678,7 +696,7 @@ mod tests{
             rows(&mut counts,leaf);
         }
         fn rows(counts:&mut BTreeMap<String,usize>,leaf:&str){*counts.entry(leaf.to_string()).or_default()+=1}
-        assert_eq!(counts.values().sum::<usize>(),773,"{counts:?}");
+        assert_eq!(counts.values().sum::<usize>(),775,"{counts:?}");
         //Every reference to the relation/default globals is a load.
         for(global,initial) in [("0xb28158","0x2"),("0xb2815c","0x3"),("0xb3cc00","uninitialized (zero-filled)"),("0xb3cc24","uninitialized (zero-filled)")]{
             assert_eq!(fixture["globals"][global]["initial"],initial);

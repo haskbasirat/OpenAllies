@@ -39,6 +39,7 @@ pub(crate) fn native_class_chain(kind: Kind) -> &'static [u32] {
         Kind::Model => &[0xb3d990, 0xb3d968, 0xb38e24],
         Kind::Sequence => &[0xb3d9a4, 0xb3d968, 0xb38e24],
         Kind::Sound => &[0xb3d76c, 0xb38e24],
+        Kind::TerrainBlock => &[0xb4040c, 0xb38e24],
     }
 }
 

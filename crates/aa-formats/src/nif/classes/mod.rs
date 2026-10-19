@@ -64,7 +64,7 @@ pub(crate) static REGISTERED: [Class; 143] = [
     Class { registered: "NiColorExtraData", name: "NiColorExtraData", create: 0x00908c60, load: None },
     Class { registered: "NiColorExtraDataController", name: "NiColorExtraDataController", create: 0x008b9020, load: None },
     Class { registered: "NiControllerManager", name: "NiControllerManager", create: 0x0089c4b0, load: None },
-    Class { registered: "NiControllerSequence", name: "NiControllerSequence", create: 0x00883630, load: None },
+    Class { registered: "NiControllerSequence", name: "NiControllerSequence", create: 0x00883630, load: Some(controller::controller_sequence) },
     Class { registered: "NiDirectionalLight", name: "NiDirectionalLight", create: 0x00888f90, load: None },
     Class { registered: "NiDitherProperty", name: "NiDitherProperty", create: 0x00889870, load: Some(property::single_flag) },
     Class { registered: "NiExtraData", name: "NiExtraData", create: 0x0087b2f0, load: Some(extra::extra) },

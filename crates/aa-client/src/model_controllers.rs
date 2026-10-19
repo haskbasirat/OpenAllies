@@ -538,11 +538,20 @@ mod trig{
  ///(f32 sin h, f32 cos h).
  pub(super) fn sin_cos_f32(h:&Binary)->Result<(u32,u32)>{
   if h.is_zero(){let negative=h.to_x87_extended_bits().is_some_and(|b|b>>79&1!=0);return Ok((if negative{0x8000_0000}else{0},0x3f80_0000))}
+  //|h| < 2^-30: sin h = h (1 - d) and cos h = 1 - e with d, e < 2^-61, far
+  //inside half a binary32 ulp of h (an exact binary32 value) and of 1.0.
+  let bits=h.to_x87_extended_bits().ok_or("FSIN/FCOS operand outside the extended domain")?;
+  if (((bits>>64)&0x7fff) as i64)-16383< -30{
+   let s=h.store_f32().map_err(|e|e.to_string())?;
+   if Binary::from_f32_bits(s).map_err(|e|e.to_string())?.compare(h)!=std::cmp::Ordering::Equal||s&0x7f80_0000==0{return Err(format!("FSIN/FCOS of a small operand that is not a normal binary32 value ({bits:#x})"))}
+   return Ok((s,0x3f80_0000));
+  }
   let x=to_fixed(h)?;
   let k=if x>=0{(x+PIO2/2)/PIO2}else{(x-PIO2/2)/PIO2};
   let r=x-k*PIO2;let(s,c)=series(r);
   let(sin,cos)=match k.rem_euclid(4){0=>(s,c),1=>(c,-s),2=>(-s,-c),_=>(-c,s)};
-  Ok((decided(sin,x)?,decided(cos,x)?))
+  let detail=|e:String|format!("{e} (operand {:#x})",h.to_x87_extended_bits().unwrap_or(0));
+  Ok((decided(sin,x).map_err(detail)?,decided(cos,x).map_err(detail)?))
  }
  #[cfg(test)]mod tests{
   use super::*;
@@ -658,7 +667,7 @@ mod trig{
    match replay(nif,pc){
     Ok(text)=>{if format!("{:x}",Sha256::digest(text.as_bytes()))==digest{matched+=1;if nif.objects.iter().any(|o|is_kind_of(o.class,"NiTimeController")){controllers_matched+=1}}else{
      if only.is_some(){std::fs::write(here.join("../../target/model-update-rust.json"),&text).unwrap();}differ.push(format!("{path} {pc:?}"))}}
-    Err(reason)=>{*unported.entry(reason).or_default()+=1;}
+    Err(reason)=>{if reason.contains("FSIN")||reason.contains("not ported")&&!reason.starts_with("native "){eprintln!("{path} {pc:?}: {reason}");}*unported.entry(reason).or_default()+=1;}
    }
   }
   eprintln!("matched {matched} file/precision updates ({controllers_matched} with time controllers); outside the ported domain: {unported:#?}");

@@ -293,6 +293,26 @@ impl World {
     pub fn from_native_constructor(clock: NativeClock, precision: Precision) -> Self {
         Self::from_loaded_dispatcher(DispatcherState::from_native_constructor(), clock, precision)
     }
+    /// Lend the same phase/list/event owner back out as a DispatcherState for
+    /// a synchronous load-shaped callee (fresh creation on a started World).
+    /// The lists are moved, not copied; [`Self::restore_dispatcher`] must put
+    /// the returned owner back before this World dispatches again.
+    pub fn lend_dispatcher(&mut self) -> DispatcherState {
+        DispatcherState {
+            phase: self.phase,
+            lists: std::mem::replace(&mut self.lists, std::array::from_fn(|_| VecDeque::new())),
+            next_node: self.next_node,
+            events: std::mem::take(&mut self.events),
+        }
+    }
+    /// Return a lent owner, including any phase/list/event changes it made.
+    pub fn restore_dispatcher(&mut self, state: DispatcherState) {
+        let DispatcherState { phase, lists, next_node, events } = state;
+        self.phase = phase;
+        self.lists = lists;
+        self.next_node = next_node;
+        self.events = events;
+    }
     /// Move the exact phase/list owner beside the one actual loaded clock.
     pub fn from_loaded_dispatcher(
         state: DispatcherState,

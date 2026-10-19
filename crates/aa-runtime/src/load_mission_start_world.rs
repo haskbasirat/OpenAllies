@@ -135,10 +135,11 @@ fn finish_load_inner<S: SessionRead + ?Sized>(
         crate::load_world::SpatialOwner::Loading(None) => return Err("load tail spatial transfer is incomplete".into()),
     }
     if !staged.report.conversions.is_empty() {
-        return Err(
-            "4FD47C conversion tail requires real4F9C10 fresh creation; retained queue is nonempty"
-                .into(),
-        );
+        let ids: Vec<String> = staged.report.conversions.records().iter()
+            .map(|r| String::from_utf16_lossy(&r.thing_id_utf16)).collect();
+        return Err(format!(
+            "4FD47C conversion tail requires real4F9C10 fresh creation; retained queue is nonempty: {ids:?}"
+        ));
     }
     // Empty is a fact read from the same conversion owner. Running the kernel
     // takes its native no-iteration branch; no create callback is fabricated.

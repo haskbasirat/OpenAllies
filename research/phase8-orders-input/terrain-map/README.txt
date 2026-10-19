@@ -101,8 +101,12 @@ BLOCK LOADING ANSWER (+44 mesh, +BC loaded byte)
 
 PUBLIC API (terrain_map.rs)
   TerrainMap::for_world(world: &live_world_frame::World, height: &view_heightfield::State,
-      grid: &view_grid_variables::State, quad: impl FnOnce() -> Result<i32, String>)
-      -> Result<TerrainMap, String>
+      grid: &view_grid_variables::State, quad: impl FnOnce() -> Result<i32, String>,
+      pc: Precision) -> Result<TerrainMap, String>
+    (update 2026-10-19: `pc` added; 723960 now also runs the 71AFD0 block sphere +E8..+F4 over
+    the World GroundSurface (4F0E50 flags 0x122/0x123), proven by
+    ../terrain-visibility. The residency owner is now crates/aa-runtime/src/terrain_visibility.rs
+    (4312F0 port). It reports every block absent at construction and drives load/release.)
     Borrows: World +3C/+40 (presentation_parts().creator_extents), the GMap gtile size
     (presentation_parts().terrain.grid.cell_size, i.e. [GWorld+30]+8), the SAME completed
     VWorld+BC heightfield (samples_for_world; a SampleWitness and World witness are retained,

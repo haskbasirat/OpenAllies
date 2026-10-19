@@ -26,6 +26,15 @@ pub trait AttachmentEffects<T> {
 pub struct Broadcast {text:Vec<u16>}
 impl Broadcast {pub fn text(&self)->&[u16] {&self.text}}
 
+/// The reached child of a type-1 message in 50C600 (case 1 at 50C63E):
+/// 427950 on the script processor `[B36500]` with the message CString+48 and
+/// flag 0, which evaluates the text immediately (426C20 TGC_ScriptProcessor::
+/// Eval, statement by statement through 425E80). The implementation is the
+/// actual script/UI command owner; it cannot reach this manager.
+pub trait BroadcastDelivery {
+    fn script_eval_427950(&mut self,text:&[u16],flag:u8)->Result<()>;
+}
+
 /// Native+8/+C list is authoritative. T is an actual owned compiled command,
 /// never a source-count placeholder. There is no Clone/Default capability.
 pub struct State<T> {
@@ -86,6 +95,26 @@ impl<T> State<T> {
             self.append_broadcast(&"WaitWorld".encode_utf16().collect::<Vec<_>>())?;
         }
         self.append_broadcast(text)
+    }
+    ///50C750 on World+130, the first child of 43EC60 (43ECE9): every entry of
+    ///the +10 array is passed to 50C600 in index order while the index differs
+    ///from the count +14 (reread each iteration), then +14 = 0. The +1C
+    ///enabled byte and the +18 capacity are untouched, so a later 50D120 does
+    ///not insert WaitWorld again. Only type-1 entries have a Rust producer
+    ///(50D120); 50C600's other cases (432E40/43B270, 440190, 4408A0,
+    ///43CD00/43CC50) have none, so they cannot be reached here. A refused child
+    ///keeps the array and its count (native has no failure edge); the
+    ///successful prefix of deliveries stays committed. Returns the number
+    ///of delivered entries.
+    ///Proof: research/phase8-vworld-update section messages_50c750.
+    pub fn deliver_broadcasts_50c750(&mut self,delivery:&mut impl BroadcastDelivery)->Result<usize> {
+        let mut index=0;
+        while index!=self.broadcasts.len() {
+            delivery.script_eval_427950(self.broadcasts[index].text(),0)?;
+            index+=1;
+        }
+        self.broadcasts.clear();
+        Ok(index)
     }
     fn append_broadcast(&mut self,text:&[u16])->Result<()> {
         self.broadcasts.try_reserve(1).map_err(|e|e.to_string())?;
@@ -180,6 +209,51 @@ mod tests {
             assert_eq!(serde_json::json!(u8::from(owner.enabled_1c())),row["output"]["enabled"]);
             assert!(owner.pending().next().is_none());
         }
+    }
+    ///research/phase8-vworld-update messages_50c750: original 50C750/50C600
+    ///over arrays of type-1 entries (the only kind with a Rust producer). Rows
+    ///with other kinds are native reference for their future producers.
+    #[test]
+    fn native_broadcast_walk_50c750() {
+        let fixture=crate::vworld_update::tests_fixture::load();
+        let rows=fixture["messages_50c750"].as_array().unwrap();
+        assert_eq!(rows.len(),42);
+        struct Sink(Vec<serde_json::Value>,Option<usize>);
+        impl BroadcastDelivery for Sink {
+            fn script_eval_427950(&mut self,text:&[u16],flag:u8)->Result<()> {
+                if self.1==Some(self.0.len()) {return Err("explicit 427950 refusal".into());}
+                self.0.push(serde_json::json!(["427950",String::from_utf16(text).unwrap(),flag]));Ok(())
+            }
+        }
+        let mut replayed=0;
+        for row in rows {
+            let messages=row["input"]["messages"].as_array().unwrap();
+            if messages.iter().any(|m|m["kind"]!=1) {continue;}
+            let mut owner=State::<u32>::from_native_constructor();
+            for m in messages {owner.append_broadcast(&m["text"].as_str().unwrap().encode_utf16().collect::<Vec<_>>()).unwrap();}
+            let enabled=owner.enabled_1c();
+            let mut sink=Sink(Vec::new(),None);
+            let delivered=owner.deliver_broadcasts_50c750(&mut sink).unwrap();
+            assert_eq!(serde_json::json!(sink.0),row["output"]["trace"],"{row}");
+            assert_eq!(owner.broadcasts().len() as u64,row["output"]["count"].as_u64().unwrap());
+            assert_eq!(delivered,messages.len());
+            assert_eq!(owner.enabled_1c(),enabled);
+            replayed+=1;
+        }
+        assert_eq!(replayed,24);
+        //A refused child keeps the array and count; the delivered prefix stays.
+        let mut owner=State::<u32>::from_native_constructor();
+        owner.broadcast(&"TriggerListUpdate".encode_utf16().collect::<Vec<_>>()).unwrap();
+        let mut sink=Sink(Vec::new(),Some(1));
+        assert!(owner.deliver_broadcasts_50c750(&mut sink).is_err());
+        assert_eq!(sink.0.len(),1);
+        assert_eq!(owner.broadcasts().len(),2);
+        //After a successful walk a new 50D120 appends without a second WaitWorld.
+        let mut sink=Sink(Vec::new(),None);
+        assert_eq!(owner.deliver_broadcasts_50c750(&mut sink).unwrap(),2);
+        owner.broadcast(&"again".encode_utf16().collect::<Vec<_>>()).unwrap();
+        assert_eq!(owner.broadcasts().len(),1);
+        assert_eq!(owner.broadcasts()[0].text(),"again".encode_utf16().collect::<Vec<_>>().as_slice());
     }
     #[test]
     fn native_view_attachment_drain_and_required_child_prefixes() {

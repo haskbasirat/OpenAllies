@@ -747,6 +747,10 @@ impl native::World<DefinitionRef, String> for Bound<'_, '_> {
         ).map_err(error)
     }
     fn sai_present(&self) -> Result<bool> {
+        //[B36528] is the started application's manager during a live loan.
+        if self.staged.inactive_load.is_none() && self.staged.live_sai.is_some() {
+            return Ok(true);
+        }
         self.staged
             .inactive_load
             .as_ref()
@@ -754,7 +758,26 @@ impl native::World<DefinitionRef, String> for Bound<'_, '_> {
             .observer_present()
             .map_err(error)
     }
-    fn sai_notify(&mut self, _: ObjectKey) -> Result<()> {
+    fn sai_notify(&mut self, key: ObjectKey) -> Result<()> {
+        if self.staged.inactive_load.is_none() && self.staged.live_sai.is_some() {
+            //7A0C20 on the started manager: the SAME classification port used
+            //by SAI startup, over the live map lists, slots and player arena.
+            self.check(key)?;
+            let Staged { live_sai, load_world, actors, definitions, .. } = &mut *self.staged;
+            let live = live_sai.as_mut().expect("checked live SAI loan");
+            let world = load_world.as_mut().ok_or(required("fresh7A0C20 actual World absent"))?;
+            let id = actors.id(key).ok_or(required("fresh7A0C20 actual Actor GTID absent"))?;
+            let crate::load_world::SpatialOwner::Adopted(adoption) = &world.spatial else {
+                return Err(required("fresh7A0C20 actual published spatial owner absent"));
+            };
+            let (mut fields, collections) = crate::load_sai_world::split_live(&mut live.engine);
+            return crate::load_sai_actor::notify_with_world(
+                self.catalog, definitions, actors, &adoption.world, id, &mut fields,
+                collections.players, &mut live.players, &mut world.sai_map, collections.vector90,
+                &world.kingdoms,
+            )
+            .map_err(error);
+        }
         let scope = self
             .staged
             .inactive_load

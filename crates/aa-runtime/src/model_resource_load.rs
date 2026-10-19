@@ -1,7 +1,7 @@
 //!5A99C0 on the SAME Model Entry. Native scalar/publication order belongs to
 //!model_load_kernel; retained selected bytes and graph payload never set flags.
 use crate::{model_load_kernel as native,resource_depot::Resources,resource_objects::Handle,
- resource_model_payload::{Input,Payload,Metadata}};
+ resource_model_payload::{Input,Payload,Metadata,Selection}};
 use aa_numeric::Precision;
 pub type Result<T>=std::result::Result<T,String>;
 pub trait Backend:crate::resource_objects::ModelPolicy{
@@ -14,6 +14,24 @@ pub trait Backend:crate::resource_objects::ModelPolicy{
  fn skip_loaded_model_bounds(&mut self)->Result<u8>{Err("5A99C0 actual indexed UVar54 current owner is required".into())}
  fn profile_stage(&mut self,_resource:&Handle,_label:&'static str)->Result<()>{Err("actual model diagnostic/timing sink is required".into())}
  fn display_profile(&mut self,_resource:&Handle)->Result<()>{Err("41C3F0 actual model timing display is required".into())}
+ ///5A94F0 404ED0(B38C28) diagnostics, in call order.
+ fn selection_diagnostic_404ed0(&mut self,_resource:&Handle,_diagnostic:SelectionDiagnostic)->Result<()>{Err("5A94F0 actual 404ED0 selection diagnostic sink is required".into())}
+}
+///The two reached 5A94F0 404ED0 calls (level 1 on channel B38C28).
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum SelectionDiagnostic{
+ ///0x56F, only when Resource flags+8 bit11 is set.
+ NoSelectionBox,
+ ///0x57D, after the fallback cuboid was stored.
+ BoundingSphereIncorrect,
+}
+impl SelectionDiagnostic{
+ pub const FILE:&'static str=".\\Source\\resource\\NiResource.cpp";
+ pub const FUNCTION:&'static str="KKC_NiAVObjResource::ComputeSelectionCuboid";
+ pub const CHANNEL:u32=0xb38c28;
+ pub const LEVEL:u32=1;
+ pub fn line(&self)->u32{match self{Self::NoSelectionBox=>0x56f,Self::BoundingSphereIncorrect=>0x57d}}
+ pub fn format(&self)->&'static str{match self{Self::NoSelectionBox=>"Object model has no selection box: %s",Self::BoundingSphereIncorrect=>"Bounding sphere for art is incorrect: %s"}}
 }
 pub(crate) struct Call{state:native::State,input:Option<Input>,payload:Option<Payload>,metadata:Option<Metadata>,names:Option<Vec<Vec<u16>>>}
 impl Call{fn new()->Self{Self{state:native::State::new_call(),input:None,payload:None,metadata:None,names:None}}}
@@ -62,7 +80,19 @@ impl<B:Backend>native::Fields for Fields<'_,'_,B>{
  fn prepare_effect(&mut self,code:u32)->Result<()>{self.payload()?.prepare_effect(code)}
  fn skip_loaded_bounds(&mut self)->Result<u8>{self.backend.skip_loaded_model_bounds()}
  fn controllers(&mut self)->Result<bool>{self.payload()?.controllers()}
- fn selection_cuboid(&mut self)->Result<()>{let words=self.payload()?.selection_cuboid()?;self.resources.with_entry(self.resource,|e|{e.model.as_mut().ok_or("actual Model absent")?.words4c_60=words;Ok(())})}
+ fn selection_cuboid(&mut self)->Result<()>{
+  let store=|f:&mut Self,words:[u32;6]|f.resources.with_entry(f.resource,|e|{e.model.as_mut().ok_or("actual Model absent")?.words4c_60=words;Ok(())});
+  match self.payload()?.selection_5a94f0()?{
+   Selection::Geometry(words)=>store(self,words),
+   Selection::RootSphere(sphere)=>{
+    if (native::Fields::word(self,8)?>>11)&1!=0{self.backend.selection_diagnostic_404ed0(self.resource,SelectionDiagnostic::NoSelectionBox)?;}
+    let fallback=crate::resource_model_bounds::selection_from_sphere(sphere,self.pc)?;
+    store(self,fallback.cuboid)?;
+    if fallback.incorrect{self.backend.selection_diagnostic_404ed0(self.resource,SelectionDiagnostic::BoundingSphereIncorrect)?;}
+    Ok(())
+   }
+  }
+ }
  fn wrap_root(&mut self)->Result<()>{self.payload()?.wrap_root()}
  fn update_root(&mut self)->Result<()>{self.payload()?.update_root()}
  fn property_name_length(&mut self)->Result<u32>{self.resources.with_entry(self.resource,|e|Ok(e.model.as_ref().ok_or("actual Model absent")?.name8c.len()as u32))}

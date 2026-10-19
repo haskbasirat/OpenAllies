@@ -22,6 +22,14 @@ pub trait MetadataPolicy{
     fn graph_diagnostic(&mut self,_filename:&[u16],_node:&str,_line:u32)->Result<()>{Err("879A90 reached graph diagnostic service is required".into())}
 }
 struct UnboundPolicy;impl MetadataPolicy for UnboundPolicy{}
+///5A94F0's two outcomes as reached in the SAME graph after its Update(0,0).
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum Selection{
+    ///5A96B2: the NiGeometry selection node's transformed vertex extents.
+    Geometry([u32;6]),
+    ///5A95CF: no NiGeometry of that name; the root world bound (center, radius).
+    RootSphere([u32;4]),
+}
 ///Implemented by the actual decoded source/graph backend. Positive operations
 ///must alter or inspect that same object; defaults mark reached missing children.
 pub trait Model:std::fmt::Debug+Send+Sync{
@@ -36,6 +44,12 @@ pub trait Model:std::fmt::Debug+Send+Sync{
     fn prepare_effect(&mut self,_code:u32)->Result<()>{Err("871BC0/871B60/871B40 actual graph preparation is required".into())}
     fn controllers(&self)->Result<bool>{Err("5A9840 actual first-Bone texturing descriptor-slot3 query is required".into())}
     fn selection_cuboid(&mut self)->Result<[u32;6]>{Err("5A94F0 actual selection cuboid is required".into())}
+    ///5A94F0 vf40 GetObjectByName(Bone selection_box) + RTTI NiGeometry (B43CF0)
+    ///test, then vf48 Update(0,0): either the selection geometry's cuboid (the
+    ///node is then unlinked by 6FF850) or the root's world bound for the
+    ///BoundingSphere fallback. The default keeps backends that only port the
+    ///geometry branch.
+    fn selection_5a94f0(&mut self)->Result<Selection>{self.selection_cuboid().map(Selection::Geometry)}
     fn wrap_root(&mut self)->Result<()>{Err("867690 actual model root wrapper is required".into())}
     fn update_root(&mut self)->Result<()>{Err("86E8D0 actual model update is required".into())}
     fn apply_named_property(&mut self,_name:&[u16])->Result<()>{Err("5EDE60/4D1E10 actual named model property is required".into())}
@@ -86,6 +100,7 @@ impl Payload{
     pub fn prepare_effect(&self,code:u32)->Result<()>{self.with(|o|o.prepare_effect(code))}
     pub fn controllers(&self)->Result<bool>{self.with(|o|o.controllers())}
     pub fn selection_cuboid(&self)->Result<[u32;6]>{self.with(|o|o.selection_cuboid())}
+    pub fn selection_5a94f0(&self)->Result<Selection>{self.with(|o|o.selection_5a94f0())}
     pub fn wrap_root(&self)->Result<()>{self.with(|o|o.wrap_root())}
     pub fn update_root(&self)->Result<()>{self.with(|o|o.update_root())}
     pub fn apply_named_property(&self,name:&[u16])->Result<()>{self.with(|o|o.apply_named_property(name))}

@@ -16,7 +16,10 @@ mod object_binding;
 pub use object_binding::InitContext;
 #[path="view_order_leaves.rs"]
 mod order_leaves;
-pub use order_leaves::{DirectoryViews,OrderContext};
+#[path="view_streaming_objects.rs"]
+mod streaming;
+pub use streaming::{CurrentData,DataLifecycle,ModelLifecycle,StreamingObjects,UnportedModelLifecycle};
+pub use order_leaves::{DirectoryViews,OrderContext,WorldFields};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord)]
 pub struct ViewHandle(usize);
@@ -93,6 +96,9 @@ struct TypedVObject {
 pub struct ViewDirectory {
     actors:ActorStoreWitness,spatial:SpatialWorldWitness,revision:Witness,map:SourceIdentity,
     next:usize,sequence:u64,entries:BTreeMap<ViewHandle,TypedVObject>,
+    ///Each entry's actor -> its handle. `entries` only grows (one insert site,
+    ///which refuses a second entry per actor) and `actor` is never rewritten.
+    actor_handles:BTreeMap<ActorId,ViewHandle>,
     ///Sole actual VWorld208/20C request-list owner; duplicates retain FIFO order.
     requests:VecDeque<ViewHandle>,
     ///Sole native VWorld9C/A0 updated-view list, in head-first order.
@@ -100,6 +106,13 @@ pub struct ViewDirectory {
     ///58CB30 identities: one per view+10 Data allocation (canonical id and
     ///source), append-only so an identity is never reused.
     data_identities:Vec<(String,aa_rules::resources::Provenance)>,
+    ///VWorld+94 +100 On / +108 Near lists (VThing +4/+8/+C links) and the
+    ///B39BB8 +24..+40 counters 42F670 rotates.
+    streaming:aa_runtime::view_streaming::Lists<ViewHandle>,
+    streaming_stats:aa_runtime::view_streaming::Stats,
+    ///Completed 42F670 passes: before the first, the lists and +18 are the
+    ///constructor's, not the swept state.
+    streaming_passes:u64,
 }
 pub struct UploadRequest {ticket:Arc<Ticket>,request:SpawnActor,binding:ModelBinding,
     residency:aa_runtime::resource_depot::ViewResourceWitness,selected:SelectedModel}
@@ -182,8 +195,9 @@ impl ViewDirectory {
     pub(crate) fn require_world(&self,world:&World<'_>)->Result<()>{let p=Parts::world(world)?;self.validate(p.actors,p.spatial,p.revision,p.map)}
     fn allocation(parts:&Parts<'_>)->Result<Self>{
         Ok(Self {actors:parts.actors.identity_witness(),spatial:parts.spatial.identity_witness(),
-            revision:parts.revision.witness(),map:parts.map.clone(),next:1,sequence:0,entries:BTreeMap::new(),requests:VecDeque::new(),updates:VecDeque::new(),
-            data_identities:Vec::new()})
+            revision:parts.revision.witness(),map:parts.map.clone(),next:1,sequence:0,entries:BTreeMap::new(),actor_handles:BTreeMap::new(),requests:VecDeque::new(),updates:VecDeque::new(),
+            data_identities:Vec::new(),streaming:aa_runtime::view_streaming::Lists::from_constructor(),
+            streaming_stats:aa_runtime::view_streaming::Stats::default(),streaming_passes:0})
     }
     fn validate(&self,actors:&ActorStore,spatial:&SpatialWorld,revision:&ConstructedWorldRevision,map:&SourceIdentity)->Result<()> {
         ensure!(self.actors.is_for(actors)&&self.spatial.is_for(spatial)&&self.revision.is_for(revision)&&&self.map==map,
@@ -218,11 +232,12 @@ impl ViewDirectory {
         //43C426 null-Init boundary remains distinct from the source getter.
         if !(2..=26).contains(&source.view_type){return Ok(None)}
         ensure!(object.thing.word_c==0,"native factory current Thing+C is already published");
-        ensure!(!self.entries.values().any(|v|v.actor==id),"native factory already retains this Thing's allocation/prefix");
+        ensure!(!self.actor_handles.contains_key(&id),"native factory already retains this Thing's allocation/prefix");
         let next=self.next.checked_add(1).context("portable view handle exhaustion")?;
         let sequence=self.sequence.checked_add(1).context("view allocation sequence exhaustion")?;
         let handle=ViewHandle(self.next);let ticket=Arc::new(Ticket{handle,sequence,map:self.map.clone()});
         let view_type=source.view_type;
+        self.actor_handles.insert(id,handle);
         self.entries.insert(handle,TypedVObject{actor:id,key,source,ticket,backend:None,native_fields:None,publication:None,
             residency:None,constructor_complete:false,init:Init::NotStarted,updated:false,
             model:None,render_payload:None,
@@ -341,7 +356,7 @@ impl ViewDirectory {
             //means no new upload request; it certifies no absence of old views.
             return Ok(None);
         }
-        let handle=self.entries.iter().find_map(|(h,v)|(v.actor==id).then_some(*h))
+        let handle=self.actor_handles.get(&id).copied()
             .context("backend request requires its actual native factory allocation first")?;
         let entry=self.entries.get(&handle).context("native factory allocation absent")?;
         ensure!(object.thing.word_c==0||object.thing.word_c==handle.raw(),"backend request current Thing+C names another allocation");

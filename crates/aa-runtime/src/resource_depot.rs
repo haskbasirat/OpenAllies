@@ -1033,7 +1033,7 @@ impl Resources<'_>{
         let kind=crate::resource_objects::class_for_name(ids)?.ok_or("5AEA90 actual source class constructor remains required")?;
         let source=SourceFile::from_catalog(selected);
         let resource_ids=ids.iter().copied().take_while(|&v|v!=0).map(|v|if v==92{47}else{v}).collect();
-        let mut entry=match kind{Kind::Texture=>Entry::texture(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Model=>Entry::model(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Sequence=>Entry::sequence(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Sound=>Entry::sound(self.origin,resource_ids,source.clone(),self.priority)?};
+        let mut entry=match kind{Kind::Texture=>Entry::texture(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Model=>Entry::model(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Sequence=>Entry::sequence(self.origin,resource_ids,source.clone(),self.priority)?,Kind::Sound=>Entry::sound(self.origin,resource_ids,source.clone(),self.priority)?,Kind::TerrainBlock=>return Err("5AEA90 dynamic TerrainBlock has no source-file constructor".into())};
         entry.attach_selected_source(source)?;
         let handle=entry.handle.clone();
         let mut manager=self.manager.lock().map_err(|_|"Resource manager lock poisoned")?;
@@ -1121,6 +1121,29 @@ impl Resources<'_>{
     }
     ///457A40 reads this SAME model field only after its current flags8bit2.
     pub fn model_radius_64(&self,handle:&crate::resource_objects::Handle)->Result<u32>{self.with_entry(handle,|v|v.model.as_ref().map(|v|v.radius64).ok_or_else(||"Resource is not actual Model allocation".into()))}
+    ///723D30 for block (x,y): construct the 723960 base Entry and publish it
+    ///through 5ACEC0 under manager+20: flags bit4 (set) inserts it into the
+    ///SAME name hash (5AC1C0), then 59CB00 class accounting (the cache class
+    ///row materialises on first use; weights only fed the removed caps). The
+    ///terrain owner keeps the rest of the 723960 object. Request with
+    ///request_0c (721180's vf0C after its children), Load via its own
+    ///7212D0, Release with release_14 (7211F0's 5AA550 part).
+    pub fn register_terrain_block_5acec0(&mut self,x:i32,y:i32,backend:&mut impl Backend)->Result<crate::resource_objects::Handle>{
+        let entry=crate::resource_objects::Entry::terrain_block(self.origin,x,y,self.priority)?;
+        let handle=entry.handle.clone();let key=resource_map_cache::normalized_key(handle.logical_ids())?;
+        backend.enter_request(&handle)?;
+        let result=(||->Result<()>{
+            let mut manager=self.manager.lock().map_err(|_|"Resource manager lock poisoned")?;
+            if entry.flags8&0x10==0{return Err("5ACEC0 TerrainBlock without bit4 is outside the 723960 constructor".into())}
+            if manager.resources.contains_key(&key)||manager.films.contains_key(&key)||self.maps.contains_key(&key)||manager.view_resources.contains_key(&key){
+                return Err("5AC1C0 second Resource of the same name requires the native duplicate-node order".into())
+            }
+            manager.resources.insert(key,entry);Ok(())
+        })();
+        let cleanup=backend.leave_request(&handle);result?;cleanup?;Ok(handle)
+    }
+    ///+4C..+60 as stored by 5A94F0 (selection cuboid min XYZ, max XYZ).
+    pub fn model_selection_cuboid_4c(&self,handle:&crate::resource_objects::Handle)->Result<[u32;6]>{self.with_entry(handle,|v|v.model.as_ref().map(|v|v.words4c_60).ok_or_else(||"Resource is not actual Model allocation".into()))}
     pub fn model_payload_40(&self,handle:&crate::resource_objects::Handle)->Result<Option<crate::resource_model_payload::Payload>>{self.with_entry(handle,|e|{let payload=e.model.as_ref().ok_or("actual Model allocation required")?.source40.clone();if let Some(payload)=&payload{payload.require_resource(handle)?}Ok(payload)})}
     ///5A63D0's current source pointer. Accepted physical-source allocations
     ///have a read-only selected depot; positive writable-child delegation must
@@ -1334,18 +1357,18 @@ impl Resources<'_>{
         let queue=self.tasks;
         let mut service=ResourceCallbacks{resources:self,backend};
         if delta==1{
-            if count>1{if mode==4{return block_resource(&task,queue,&mut service)}return Ok(());}
+            if count>1{if mode==4{return block_vf18(&task,queue,&mut service)}return Ok(());}
             crate::resource_task::Services::enter_request(&mut service,handle)?;
             let check=(||->Result<bool>{
                 let flags=crate::resource_task::Services::resource_flags8(&mut service,handle)?;
                 if flags&0x20==0&&flags&1!=0||task.queued10()?{
                     service.backend.double_request_warning(handle,count)?;
-                    if mode==4{block_resource(&task,queue,&mut service)?;}Ok(true)
+                    if mode==4{block_vf18(&task,queue,&mut service)?;}Ok(true)
                 }else{Ok(false)}
             })();
             let cleanup=crate::resource_task::Services::leave_request(&mut service,handle);
             let skip=check?;cleanup?;if skip{return Ok(())}
-        }else if count>delta{if mode==4{return block_resource(&task,queue,&mut service)}return Ok(());}
+        }else if count>delta{if mode==4{return block_vf18(&task,queue,&mut service)}return Ok(());}
         task.request_5b0270(queue,mode,&mut service)
     }
     pub fn block_18(&mut self,handle:&crate::resource_objects::Handle,backend:&mut impl Backend)->Result<()>{
@@ -1439,6 +1462,10 @@ impl Resources<'_>{
     }
     pub(crate) fn retain_source_texture(&self,source:&crate::resource_texture::SourceTexture)->Result<()>{self.with_texture_objects(|a|{let key=a.key(source)?;a.retain_source(key)})}
     pub(crate) fn release_source_texture(&self,source:&crate::resource_texture::SourceTexture)->Result<()>{self.with_texture_objects(|a|{let key=a.key(source)?;a.release_source(key)})}
+    ///87C5C0 on the SAME arena (see resource_texture_owner::resize_87c5c0).
+    pub fn resize_texture_source_87c5c0(&mut self,source:&crate::resource_texture::SourceTexture,target:[u32;2])->Result<Option<crate::resource_texture::SourceTexture>>{
+        self.with_texture_objects(|a|{let key=a.key(source)?;let new=a.resize_87c5c0(key,target)?;a.reference(new).map(Some)})
+    }
     pub fn source_reference_count(&self,source:&crate::resource_texture::SourceTexture)->Result<u32>{self.with_texture_objects(|a|{let key=a.key(source)?;a.source_refs(key)})}
     pub fn source_mode_48(&self,source:&crate::resource_texture::SourceTexture)->Result<u32>{self.with_texture_objects(|a|{let key=a.key(source)?;a.source_mode(key)})}
     ///Actual Source vf40 pixel publication, before Resource source3C and load
@@ -1501,6 +1528,8 @@ pub trait Backend:crate::resource_task::Services{
     ///NiSequence. The concrete backend must dispatch on the SAME Handle kind.
     fn model_after_base_3c_in(&mut self,_resources:&mut Resources<'_>,_resource:&crate::resource_objects::Handle)->Result<()>{Err("5A5410 actual Ni cache entry after flagsOR6 is required".into())}
     fn double_request_warning(&mut self,_resource:&crate::resource_objects::Handle,_count:i32)->Result<()>{Err("5AA3F0 actual double-request diagnostic404FC0 is required".into())}
+    ///TerrainBlock vf54 71B5F0 (terrain owner), reached by its 5AC3D0 unload.
+    fn terrain_unload_71b5f0(&mut self,_resource:&crate::resource_objects::Handle)->Result<()>{Err("71B5F0 actual TerrainBlock vf54 unload (terrain owner) is required".into())}
     ///5AC3D0 reads the SAME current indexed UVar54 ResourceCaching cell
     ///([B39940]+D8) only when flags+8 bit3 is clear.
     fn resource_caching_54(&mut self,_resource:&crate::resource_objects::Handle)->Result<u8>{Err("5AC3D0 actual current indexed UVar54 ResourceCaching is required".into())}
@@ -1521,7 +1550,8 @@ impl<B:Backend+crate::resource_task::DispatchServices>crate::resource_task::Disp
 impl<B:Backend>crate::resource_task::Services for ResourceCallbacks<'_,'_,B>{
     fn current_thread(&mut self)->Result<crate::resource_task::ThreadHandle>{self.backend.current_thread()}
     fn enter_load(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.enter_load(r)}
-    fn load_resource_4c(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.load_resource_4c_in(self.resources,r)}
+    ///TerrainBlock vf4C is the actual 4F0500 `mov eax,1; ret` leaf.
+    fn load_resource_4c(&mut self,r:&crate::resource_objects::Handle)->Result<()>{if r.kind()==crate::resource_objects::Kind::TerrainBlock{return Ok(())}self.backend.load_resource_4c_in(self.resources,r)}
     fn after_resource_3c(&mut self,r:&crate::resource_objects::Handle)->Result<()>{
         self.resources.with_entry(r,|v|{let old=v.flags8;v.flags8=old|4;v.flags8=old|6;Ok(())})?;
         if matches!(r.kind(),crate::resource_objects::Kind::Model|crate::resource_objects::Kind::Sequence){
@@ -1549,6 +1579,12 @@ impl<B:Backend>crate::resource_task::Services for ResourceCallbacks<'_,'_,B>{
     fn block_till_ready_5b1fd0(&mut self,t:&crate::resource_task::Task,q:&crate::resource_task::TaskQueue)->Result<()>{self.backend.block_till_ready_5b1fd0(t,q)}
     fn enter_manager_5abb30(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.enter_manager_5abb30(r)}
     fn leave_manager_5abb50(&mut self,r:&crate::resource_objects::Handle)->Result<()>{self.backend.leave_manager_5abb50(r)}
+}
+///5AA3F0's vf18: 5AAE10 for the four file classes, the terrain owner's
+///7212D0 for a TerrainBlock (its explicit Load call, not this nested path).
+fn block_vf18(task:&crate::resource_task::Task,queue:&crate::resource_task::TaskQueue,services:&mut impl crate::resource_task::Services)->Result<()>{
+    if task.resource().kind()==crate::resource_objects::Kind::TerrainBlock{return Err("5AA3F0 nested TerrainBlock vf18 requires the terrain owner's 7212D0".into())}
+    block_resource(task,queue,services)
 }
 fn block_resource(task:&crate::resource_task::Task,queue:&crate::resource_task::TaskQueue,services:&mut impl crate::resource_task::Services)->Result<()>{
     if services.resource_flags8(task.resource())?&1==0{

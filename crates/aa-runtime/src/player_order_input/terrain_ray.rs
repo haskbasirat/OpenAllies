@@ -233,14 +233,14 @@ fn idiv(value: i32, divisor: i32) -> Result<i32> {
 
 /// NiPlane: normal words and constant word (0x869C60 copies them unchanged).
 #[derive(Clone, Copy)]
-struct Plane {
-    normal: [u32; 3],
-    constant: u32,
+pub(crate) struct Plane {
+    pub(crate) normal: [u32; 3],
+    pub(crate) constant: u32,
 }
 
 /// 0x42ED60(origin*, direction*, out*, accept_behind). `None` is AL=0 with
 /// no store: a zero normal/direction dot, or t < 0 without the flag.
-fn plane_42ed60(
+pub(crate) fn plane_42ed60(
     plane: &Plane,
     origin: [u32; 3],
     direction: [u32; 3],

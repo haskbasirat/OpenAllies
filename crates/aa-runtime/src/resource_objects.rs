@@ -11,6 +11,10 @@ pub enum Kind {
     Model,
     Sequence,
     Sound,
+    ///KKC_RTerrainBlockResource (descriptor B4040C -> Resource B38E24, CRT
+    ///9E4130): the dynamic "Dynamic/Terrain x%d y%d" blocks of 723D30. No
+    ///source file; vf4C is 4F0500 (returns 1), flags+8 bit3 refuses caching.
+    TerrainBlock,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceFile {
@@ -82,6 +86,17 @@ impl Handle {
                 kind,
                 ids,
                 source: Some(source),
+            }),
+        }
+    }
+    ///723960's dynamic Resource: name only, never a source file.
+    fn new_dynamic(origin: &Arc<()>, kind: Kind, ids: Vec<u16>) -> Self {
+        Self {
+            application: Arc::downgrade(origin),
+            identity: Arc::new(Identity {
+                kind,
+                ids,
+                source: None,
             }),
         }
     }
@@ -201,6 +216,28 @@ impl Entry {
         self.locations.push(Location::Physical(source));
         self.flags8 &= !0x16;
         Ok(())
+    }
+    ///723D30 -> 723960: the 5AA890 base fields (flags+8 0x10 "no location",
+    ///counts 0, own TaskLoad retained once) then 723960's `or [esi+8],8`.
+    pub(crate) fn terrain_block(origin: &Arc<()>, x: i32, y: i32, priority: &crate::resource_task::DefaultPriority) -> Result<Self> {
+        let ids = format!("Dynamic/Terrain x{x} y{y}").encode_utf16().collect();
+        let handle = Handle::new_dynamic(origin, Kind::TerrainBlock, ids);
+        let task = crate::resource_task::Task::construct_for_resource(&handle, priority)?;
+        task.retain_in_resource_5aa944()?;
+        Ok(Self {
+            handle,
+            requests4: 0,
+            flags8: 0x10 | 8,
+            memory0c: 0,
+            memory10: 0,
+            references14: 0,
+            task: Arc::new(task),
+            locations: Vec::new(),
+            texture: None,
+            model: None,
+            sequence: None,
+            sound: None,
+        })
     }
     pub(crate) fn increment_reference14(&mut self) -> u32 {
         self.references14 = self.references14.wrapping_add(1);

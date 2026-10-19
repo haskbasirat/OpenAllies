@@ -11,7 +11,7 @@
 //! The memo belongs to one catalog instance; a clone starts empty.
 use crate::{
     native::{CategoryDescriptor, TypedValue},
-    objects::ObjectDefinition,
+    objects::{CreationDefinition, ObjectDefinition},
     resources::Provenance,
 };
 use std::{
@@ -37,6 +37,13 @@ pub(crate) struct QueryMemo {
     pub(crate) object_definitions: Mutex<HashMap<(usize, u64), ObjectDefinition>>,
     /// (root, is_actor, precision bits) -> `native_base_flags` value.
     pub(crate) base_flags: Mutex<HashMap<(usize, bool, u64), (u32, Vec<TypedValue>)>>,
+    /// (root, precision bits) -> `native_creation_definition` value; its `id`
+    /// is the caller's spelling and is replaced on every hit.
+    pub(crate) creation_definitions: Mutex<HashMap<(usize, u64), CreationDefinition>>,
+    /// (addresses of up to four layers, layer count, precision bits) -> field
+    /// name -> `ResolvedNode::field` value. Layers are nodes of this catalog's
+    /// immutable resolver, so their addresses identify them for its lifetime.
+    pub(crate) node_fields: Mutex<HashMap<([usize; 4], u8, u64), HashMap<String, Option<TypedValue>>>>,
     /// root -> resolver paths of `resolved_actor`'s layers.
     pub(crate) actor_layers: Mutex<HashMap<usize, Vec<Vec<usize>>>>,
     /// Last shared copy of `ActorCatalog::sources` (see `sources_snapshot`).

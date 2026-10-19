@@ -91,6 +91,8 @@ fn memoized_queries_equal_uncached_queries_on_the_real_catalog() {
                             uncached(|| format!("{:?}", catalog.native_final_flags(thing, pc))));
                         same("object", format!("{:?}", catalog.native_object_definition(thing, pc)),
                             uncached(|| format!("{:?}", catalog.native_object_definition(thing, pc))));
+                        same("creation", format!("{:?}", catalog.native_creation_definition(thing, pc)),
+                            uncached(|| format!("{:?}", catalog.native_creation_definition(thing, pc))));
                         for is_actor in [false, true] {
                             same("base", format!("{:?}", catalog.native_base_flags(thing, is_actor, pc)),
                                 uncached(|| format!("{:?}", catalog.native_base_flags(thing, is_actor, pc))));
@@ -110,6 +112,36 @@ fn memoized_queries_equal_uncached_queries_on_the_real_catalog() {
         }
     }
     assert!(checked > 6000, "{checked}");
+    // ResolvedNode::field on roots and their View/component children.
+    let names = ["IDS", "category", "name", "height", "resource_prefix", "aspects_as_variations",
+        "speed_max", "health", "cutscene", "missing_field", "blocking_shape", "model"];
+    let mut nodes_checked = 0usize;
+    for pass in 0..2 {
+        for tag in crate::actors::native_load::THING_TAGS.iter().chain(["Translate", "Audio", "SVars"].iter()) {
+            for root in catalog.resolved_definitions(tag).unwrap_or_default() {
+                let mut nodes = vec![root.clone()];
+                for child in ["View", "Size", "MoverComponent", "BodyComponent"] {
+                    if let Ok(Some(node)) = root.child(child) {
+                        nodes.push(node);
+                    }
+                }
+                for node in &nodes {
+                    for name in names {
+                        for pc in pcs {
+                            let name = if pass == 0 { name.to_string() } else { name.to_ascii_lowercase() };
+                            assert_eq!(
+                                format!("{:?}", node.field(&name, pc)),
+                                uncached(|| format!("{:?}", node.field(&name, pc))),
+                                "{tag} {name}"
+                            );
+                            nodes_checked += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(nodes_checked > 100_000, "{nodes_checked}");
     // A clone starts with an empty memo and still agrees.
     let clone = catalog.clone();
     for id in ids.iter().take(200) {

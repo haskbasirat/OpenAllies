@@ -335,6 +335,7 @@ pub mod native_render_defaults;
 mod view_environment_projection;
 mod view_texture_effect;
 pub mod resource_sequence;
+pub mod sequence_resource_load;
 pub mod object_animation_set;
 
 pub mod view_visual_map;
@@ -416,3 +417,12 @@ pub mod player_order_input;
 pub mod catalog_lookups;
 pub mod live_updates;
 pub mod hud_world_reads;
+pub mod terrain_visibility;
+pub mod terrain_water_cache;
+pub mod creator_staging_rows;
+pub mod audio_manager;
+pub mod view_streaming;
+pub mod vworld_update;
+pub mod view_flags_service;
+
+pub mod view_terrain_fog;

@@ -2,6 +2,9 @@
 //!scalar fields and the two actual growable lists, not base/Thing/Data/Init.
 use anyhow::{Result,Context,ensure};
 use aa_numeric::Binary;
+#[path="view_actor_tracks.rs"]pub(crate) mod tracks;
+///Track+10: the ActorData+25C entry's 5A77E0 Texture pointer.
+pub(crate) type TrackTexture=aa_runtime::resource_objects::Handle;
 
 pub(crate) trait Sources{
     fn global_word(&mut self,address:u32)->Result<u32>;
@@ -42,9 +45,11 @@ impl<T> Array<T>{
 ///native fields/padding have no default value and cannot be read as zero.
 pub(crate) struct Fields{
     words:[Option<u32>;39],turrets:Option<Array<Turret>>,secondary:Option<Array<Secondary>>,complete:bool,
-    ///Allocated Track storage remains private and unconstructed if42D7B0
-    ///refuses. Native144 is not published until every constructor returns.
-    pending_tracks:Option<Vec<std::mem::MaybeUninit<[u32;29]>>>,
+    ///A Track allocation whose42D7B0 iterator did not complete keeps its
+    ///constructed prefix privately; native144 is published only afterwards.
+    pending_tracks:Option<tracks::Pending<TrackTexture>>,
+    ///451F90+144: the published Track array (its pointer is not a scalar).
+    tracks:Option<tracks::Array<TrackTexture>>,
 }
 pub(crate) struct Failure{pub fields:Fields,pub error:anyhow::Error}
 impl std::fmt::Debug for Failure{
@@ -52,7 +57,7 @@ impl std::fmt::Debug for Failure{
 }
 impl Fields{
     pub(crate) fn construct(s:&mut impl Sources)->std::result::Result<Self,Failure>{
-        let mut fields=Self{words:[None;39],turrets:None,secondary:None,complete:false,pending_tracks:None};
+        let mut fields=Self{words:[None;39],turrets:None,secondary:None,complete:false,pending_tracks:None,tracks:None};
         match fields.construct_inner(s){Ok(())=>Ok(fields),Err(error)=>Err(Failure{fields,error})}
     }
     fn store(&mut self,offset:usize,word:u32){self.words[(offset-0xbc)/4]=Some(word)}
@@ -89,17 +94,32 @@ impl Fields{
         ensure!(matches!(offset,0xc8|0xcc|0xd0|0xd4|0xd8|0xdc|0xe0|0xe4|0xe8|0xec|0xf0|0xf4|0xf8|0xfc|0x118|0x11c|0x120|0x124|0x148|0x14c),"VActor Init scalar outside proven451F90 stores");
         self.store(offset,word);Ok(())
     }
-    pub(crate) fn construct_pending_tracks(&mut self,count:i32)->Result<std::convert::Infallible>{
+    ///451F90 45207D..4520C3: allocation and42D7B0 iterator after the+148
+    ///store. The array is returned unpublished; see view_actor_tracks.
+    pub(crate) fn construct_tracks(&mut self,count:i32,globals:&mut impl tracks::Globals)->Result<tracks::Array<TrackTexture>>{
         self.require_constructed()?;
         ensure!(count>0&&self.word(0x148)?==Some(count as u32),"451F90 Track allocation count store differs");
-        ensure!(self.pending_tracks.is_none(),"451F90 Track constructor prefix already retained");
-        let count=count as usize;count.checked_mul(0x74).and_then(|v|v.checked_add(4)).context("portable Track array address overflow")?;
-        let mut storage=Vec::new();storage.try_reserve_exact(count).context("portable Track array allocation failed")?;
-        storage.resize_with(count,std::mem::MaybeUninit::uninit);self.pending_tracks=Some(storage);
-        anyhow::bail!("42D7B0 actual VActor Track constructor required after retained allocation and148 count")
+        ensure!(self.pending_tracks.is_none()&&self.tracks.is_none(),"451F90 Track allocation already retained");
+        match tracks::Array::construct(count,globals){
+            Ok(array)=>Ok(array),
+            Err(pending)=>{let error=anyhow::anyhow!("{:#}",pending.error);self.pending_tracks=Some(pending);Err(error)}
+        }
     }
+    ///4520C5: +144 = the constructed array.
+    pub(crate) fn publish_tracks(&mut self,array:tracks::Array<TrackTexture>)->Result<()>{
+        self.require_constructed()?;
+        ensure!(self.tracks.is_none()&&self.pending_tracks.is_none(),"451F90 Track array already published");
+        ensure!(self.word(0x148)?==Some(array.header()),"451F90 Track array count differs from+148");
+        self.tracks=Some(array);Ok(())
+    }
+    ///4520E0..4520F2: 42D830(+144 + i*0x74, this VActor, 45E710(i)).
+    pub(crate) fn initialize_track(&mut self,index:usize,info:&aa_runtime::data_pre_request::actor_view_source::track_info::TrackInfo<TrackTexture>)->Result<()>{
+        self.tracks.as_mut().context("42D830 requires the published+144 Track array")?.initialize(index,info)
+    }
+    pub(crate) fn tracks(&self)->Option<&tracks::Array<TrackTexture>>{self.tracks.as_ref()}
     pub(crate) fn word(&self,offset:usize)->Result<Option<u32>>{
         ensure!((0xbc..=0x154).contains(&offset)&&offset%4==0,"VActor scalar outside tail");
+        if offset==0x144&&self.tracks.is_some(){return Ok(None)}
         for(start,array)in [(0x128,self.turrets.as_ref().map(|a|(a.items.len(),a.native_capacity,a.allocated))),(0x134,self.secondary.as_ref().map(|a|(a.items.len(),a.native_capacity,a.allocated)))]{
             if (start..=start+8).contains(&offset){
                 return Ok(array.and_then(|(len,cap,allocated)|match offset-start{0=>(!allocated).then_some(0),4=>u32::try_from(len).ok(),8=>u32::try_from(cap).ok(),_=>None}));

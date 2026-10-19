@@ -93,6 +93,12 @@ fn allocate(format: [u32; 9], mut w: u32, mut h: u32, levels: u32, first: usize)
     Ok(result)
 }
 
+///875AC0 for a PixelData created by 87C280 (resize): the source format words
+///and level count at the new top-level size.
+pub(crate) fn allocate_875ac0(format: [u32; 9], w: u32, h: u32, levels: u32) -> Result<Layout> {
+    allocate(format, w, h, levels, 0)
+}
+
 pub(crate) fn read(data: &[u8], reader: Reader, mode48: u32) -> Result<Layout> {
     match reader {
         Reader::Dds => dds(data, mode48),

@@ -259,6 +259,69 @@ fn mind_state(world: &aa_runtime::live_world_frame::World<'_>, gtid: u32) -> ser
 /// local player's first Mover/Element/Mind Actor. `pack`: the explicit
 /// command 34 (KKC "pack", component 19) to its first MobileDeployment Actor.
 /// `cmdN`: explicit command N to its first owned class3 Actor.
+/// Fresh-creation probe on the SAME live World (see `Frame::probe_create_actor`).
+/// The catalog borrows the live Session (+F8/+E4), the CRT sampler and the
+/// SAME SyncA/SyncS loggers with the native sync gate, as the frame does.
+#[allow(clippy::too_many_arguments)]
+fn spawn_probe(
+    session: &mut ActualActivatedSession,
+    time: &mut NodeTime<windows_reset_os::PerformanceTimer>,
+    identity: &aa_runtime::simulation_execution::SimulationIdentity,
+    source: &Arc<ActorCatalog>,
+    resources: Option<&Arc<ResourceCatalog>>,
+    settings: Settings,
+    load_mode: Option<u32>,
+    ids: &str,
+) -> Result<serde_json::Value, String> {
+    use aa_actors::components::ComponentSlot as Slot;
+    let (host, world, services) = session.parts();
+    let local_player = host.snapshot().local_player;
+    //The local player's corps (MobileDeployment) and its owner Kingdom.
+    let mut corps = None;
+    {
+        let spatial = world.spatial()?;
+        for entry in world.actors().identities().iter() {
+            let Ok(object) = world.actors().object(entry.value) else { continue };
+            let Ok(components) = object.components() else { continue };
+            if object.definition.native_class == 3 && components.present(Slot::MobileDeployment) {
+                let owner = object.actor.as_ref().and_then(|a| a.words.get(&0xe8)).copied().unwrap_or(0);
+                let p = world.actors().placement(entry.value, spatial).map_err(|e| e.to_string())?;
+                corps = Some((entry.id.raw(), owner, p.position_bits, p.facing_bits));
+                break;
+            }
+        }
+    }
+    let (corps, owner, position, facing) = corps.ok_or("no MobileDeployment corps")?;
+    let at = [(f32::from_bits(position[0]) - 15.0).to_bits(), position[1], position[2]];
+    let cells = local_bootstrap::frame_host::Cells::from_runtime(host.runtime_borrow().map_err(|e| e.to_string())?, time)
+        .map_err(|e| e.to_string())?;
+    let frame = world.borrow_frame();
+    let os = RefCell::new(windows_reset_os::WindowsThreadIds);
+    let mut gate_a = || identity.sync_gate(&mut *os.try_borrow_mut().map_err(|e| e.to_string())?, || {
+        let f = frame.sai_sync_flags()?;
+        Ok(Some([f[0], f[1]]))
+    });
+    let mut gate_s = || identity.sync_gate(&mut *os.try_borrow_mut().map_err(|e| e.to_string())?, || {
+        let f = frame.sai_sync_flags()?;
+        Ok(Some([f[0], f[1]]))
+    });
+    let players = cells.players().try_borrow().map_err(|e| e.to_string())?;
+    let mut sync_s = cells.same_s().try_borrow_mut().map_err(|e| e.to_string())?;
+    let mut catalog = catalog_for(source, resources, settings, load_mode)?;
+    //The SAME live Session+F8/E4 owner, lent as the worker lends it at load.
+    catalog.bind_load_session(&*players);
+    //The same current-thread CRT sampler the worker binds for load arithmetic.
+    catalog.bind_runtime_environment(runtime_fp::sample);
+    catalog.bind_configuration_sync(aa_runtime::live_clocked::SyncBinding::Shared { owner: cells.same_a(), gate: &mut gate_a })?;
+    catalog.bind_configuration_sync_s(aa_runtime::live_clocked::SyncBinding::Direct(aa_runtime::live_clocked::SyncLog {
+        owner: &mut **sync_s,
+        gate: &mut gate_s,
+    }))?;
+    let parts = services.parts(&catalog)?;
+    let result = frame.probe_create_actor(&catalog, parts.startup, ids, at, [facing[0], facing[1]], owner);
+    Ok(serde_json::json!({"ids":ids,"local_player":local_player,"corps":corps,"owner":owner,
+        "position":at,"result":format!("{result:?}"),"gtid":result.ok().flatten()}))
+}
 /// Harness Globals for the direct World-level decree probe: every reached
 /// gate read is reported as an explicit error, except Session+F8 phase.
 struct ProbeGlobals { phase: u32 }
@@ -304,7 +367,9 @@ fn issue_order(session: &mut ActualActivatedSession, kind: &str, catalog: Option
         if object.definition.native_class != 3 || wanted_owner.is_some_and(|o| o != owner) { continue }
         let Ok(components) = object.components() else { continue };
         let slots: Vec<String> = components.iter().map(|(s, _)| format!("{s:?}")).collect();
-        owned.push(serde_json::json!({"gtid":identity.id.raw(),"id":object.definition.proof.id,"slots":slots}));
+        let word = |o: u32| object.actor.as_ref().and_then(|a| a.words.get(&o)).copied();
+        owned.push(serde_json::json!({"gtid":identity.id.raw(),"id":object.definition.proof.id,"slots":slots,
+            "actions_f0_f4":[word(0xf0),word(0xf4)],"state_100_104":components.state.low.to_string()+"/"+&components.state.high.to_string()}));
         let eligible = match kind {
             "move" => components.present(Slot::Mover) && components.present(Slot::Element) && components.present(Slot::Mind),
             "pack" => components.present(Slot::MobileDeployment),
@@ -735,6 +800,14 @@ fn live_skirmish_ticks_census() {
             let mut order_rows = vec![];
             for tick in 0..ticks {
                 for (_, kind) in schedule.iter().filter(|(t, _)| *t == tick) {
+                    if let Some(ids) = kind.strip_prefix("spawn:") {
+                        //Creation probe beside the local player's corps: its
+                        //Denizen deployment offset (-10, 0) minus 5 units.
+                        let report = spawn_probe(&mut activated.session, &mut activated.time, &identity, &activated.source, resources.as_ref(), settings.clone(), load_mode, ids)?;
+                        if let Some(gtid) = report["gtid"].as_u64() { activated.move_unit = Some(gtid as u32); }
+                        order_rows.push(serde_json::json!({"tick":tick,"spawn":report}));
+                        continue;
+                    }
                     let history = |s: &mut ActualActivatedSession| s.parts().0.order_node_mut().map(|a|
                         serde_json::json!({"requests":[a.requests.begin(),a.requests.end()],"decrees":[a.decrees.begin(),a.decrees.end()]}))
                         .unwrap_or(serde_json::Value::Null);
@@ -781,7 +854,7 @@ fn live_skirmish_ticks_census() {
                         identity.sync_gate(
                             &mut *os.try_borrow_mut().map_err(|e| e.to_string())?,
                             || {
-                                let f = frame.sai_sync_flags();
+                                let f = frame.sai_sync_flags()?;
                                 Ok(Some([f[0], f[1]]))
                             },
                         )

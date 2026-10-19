@@ -9,6 +9,8 @@ use aa_runtime::{catalog::Catalog,live_world_frame::World,server_clock::TimeSour
     simulation_execution::Execution,ui_world_init,view_assets,view_grid_state,view_init_prefix,world_ready_services::Application};
 
 type Result<T>=std::result::Result<T,String>;
+#[path="vworld_frame.rs"]
+mod vworld_frame;
 #[derive(Debug)]
 pub enum Diagnostic{
     ///Actual59ABA0 input retained by the concrete modern diagnostic sink.
@@ -34,27 +36,85 @@ impl State{
             scene:crate::battle_scene_startup::State::not_attempted()})
     }
     pub fn native_view(&self)->&VWorldOwner<view_assets::State>{&self.view}
-    ///battle_orders_input::Live::views for one orders frame.
+    ///battle_orders_input::Live::views for one orders frame, without the
+    ///Session/UI words (those leaves are explicit errors); see order_views_with.
     pub fn order_views<'s>(&'s mut self,world:&'s World<'_>)->Result<crate::live_scene::view_directory::DirectoryViews<'s>>{
-        self.view.order_views(world).map_err(|e|format!("{e:#}"))
+        self.view.order_views(world,None,None).map_err(|e|format!("{e:#}"))
     }
-    ///One native UI frame's 43EC60 VWorld+208 request segment (the 43FF60
-    ///VWorld update calls it after its camera children). Release is Data
-    ///vf18(1) -> Resource vf14 5AA550 through the SAME ResourceManager and the
-    ///actual resource-task backend (guards, UVar54, diagnostics).
+    ///battle_orders_input::Live::views with the frame's [`Self::order_context`];
+    ///actor_virtual_150 then errs (use order_views_with_catalog).
+    pub fn order_views_with<'s>(&'s mut self,world:&'s World<'_>,context:&'s crate::live_scene::view_directory::OrderContext)
+        ->Result<crate::live_scene::view_directory::DirectoryViews<'s>>{
+        self.view.order_views(world,Some(context),None).map_err(|e|format!("{e:#}"))
+    }
+    ///As order_views_with, plus the frame's Catalog for 4CF430 (actor_virtual_150).
+    pub fn order_views_with_catalog<'s>(&'s mut self,world:&'s World<'_>,context:&'s crate::live_scene::view_directory::OrderContext,
+        catalog:&'s Catalog<'_>)->Result<crate::live_scene::view_directory::DirectoryViews<'s>>{
+        self.view.order_views(world,Some(context),Some(catalog)).map_err(|e|format!("{e:#}"))
+    }
+    ///The orders frame's Session (E4, Node+8, 76AC70, F8, 40EAA0), UI+1E0 and
+    ///UVar PerformanceDisableDoodads words, read from their actual owners
+    ///before the AdminNode loan (call it before session.parts()).
+    pub fn order_context(&self,session:&ActualActivatedSession,bridge:&battle_ui_bridge::Client,
+        execution:&mut Execution<'_>)->crate::live_scene::view_directory::OrderContext{
+        let kingdom=session.local_player_kingdom_76ac70().map_err(|e|e.to_string());
+        let can_process=session.host().can_process_40eaa0(||bridge.call(&mut *execution,|c|c.ui.uvars.dev_mode_current()));
+        let doodads=bridge.call(&mut *execution,|c|Ok(c.ui.uvars.view_bool_raw("PerformanceDisableDoodads")));
+        let swap=bridge.call(&mut *execution,|c|c.ui.uvars.swap_right_click_with_alt_right_click_current());
+        let hotkey=bridge.call(&mut *execution,|c|c.ui.uvars.hotkey_alt_right_click_command_current());
+        crate::live_scene::view_directory::OrderContext::new(session.session_state_e4(),session.local_player_present_76ac60(),
+            kingdom,session.session_phase_f8(),can_process,self.ui.kingdom_1e0().map(|k|k.copied()),doodads,swap,hotkey)
+    }
+    ///One native UI frame of the VWorld while VWorld+AD is set: 5C92F0's
+    ///43AB30, then the widget tree's 43FF60 -> 43EC60 (vworld_frame.rs). The
+    ///43EC60 VWorld+208 segment releases through Data vf18(1) -> Resource vf14
+    ///5AA550 with the SAME ResourceManager and resource-task backend. This
+    ///entry lends neither the B396C4 reader nor ApplicationViews; children
+    ///that need them refuse explicitly (see update_vworld_frame).
     pub fn update_view_requests_43ec60(&mut self,source:&std::sync::Arc<aa_rules::actors::ActorCatalog>,
         session:&mut ActualActivatedSession,bridge:&battle_ui_bridge::Client,execution:&mut Execution<'_>,pc:Precision)->Result<()>{
+        self.update_vworld_frame(source,session,bridge,execution,None,None,pc)
+    }
+    ///update_view_requests_43ec60 with the frame's application window reader
+    ///(76B120's B396C4) and ApplicationViews (current camera, B36518).
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_vworld_frame(&mut self,source:&std::sync::Arc<aa_rules::actors::ActorCatalog>,
+        session:&mut ActualActivatedSession,bridge:&battle_ui_bridge::Client,execution:&mut Execution<'_>,
+        focus:Option<&aa_runtime::application_window_state::Reader>,views:Option<&mut ApplicationViews>,pc:Precision)->Result<()>{
         let mut catalog=Catalog::new(source);
         let resources=session.world().evidence().resource_source.as_ref()
             .ok_or("VWorld request queue actual Resource source owner absent")?;
         catalog.bind_resource_catalog(std::sync::Arc::clone(resources))?;
         catalog.settings=Some(session.world().presentation_parts()?.settings.clone());
         catalog.native_load_mode=session.world().evidence().native_load_mode;
+        let session_f4=session.session_multiplayer_f4();
         let(host,world,application)=session.parts();
+        vworld_frame::run(vworld_frame::Loans{host,world,application,catalog:&catalog,view:&mut self.view,bridge,execution,
+            focus,views,session_f4,pc})
+    }
+    ///One VWorld update's 4312F0 (43EC60 at 43ED0A): `pass` runs the terrain
+    ///visibility owner's 42EED0/430E50/42FF50 with these objects as its
+    ///BlockObjects (42FAD0 per active block before 720080, then 42F670), over
+    ///the SAME World, directory, VGrid, heightfield and Data/Resource driver.
+    #[allow(clippy::too_many_arguments)]
+    pub fn stream_views_4312f0(&mut self,source:&std::sync::Arc<aa_rules::actors::ActorCatalog>,
+        session:&mut ActualActivatedSession,bridge:&battle_ui_bridge::Client,execution:&mut Execution<'_>,
+        model:&mut dyn crate::live_scene::view_directory::ModelLifecycle,pc:Precision,
+        pass:impl FnOnce(&World<'_>,&mut crate::live_scene::view_directory::StreamingObjects<'_>)->Result<()>)->Result<()>{
+        let mut catalog=Catalog::new(source);
+        let resources=session.world().evidence().resource_source.as_ref()
+            .ok_or("view streaming actual Resource source owner absent")?;
+        catalog.bind_resource_catalog(std::sync::Arc::clone(resources))?;
+        catalog.settings=Some(session.world().presentation_parts()?.settings.clone());
+        catalog.native_load_mode=session.world().evidence().native_load_mode;
+        let(host,world,application)=session.parts();
+        let parts=world.presentation_parts()?;
         let guards=application.depot_mut().resource_task_guards();
-        let mut backend=crate::battle_resource_tasks::Current::new(bridge,execution,guards,pc).with_session(host);
-        self.view.drain_ready_requests_43ec60(world,&catalog,application.depot_mut(),
-            &mut aa_runtime::resource_depot::release::ManagerRelease(&mut backend)).map_err(|e|format!("{e:#}"))
+        let driver=crate::battle_resource_tasks::Current::new(bridge,execution,guards,pc).with_session(host);
+        let mut data=crate::live_scene::view_directory::CurrentData{catalog:&catalog,bank:parts.definitions,biome:parts.view_biome,
+            application:application.depot_mut(),driver:std::cell::RefCell::new(driver)};
+        let mut objects=self.view.streaming_objects(world,model,&mut data,pc).map_err(|e|format!("{e:#}"))?;
+        pass(world,&mut objects)
     }
     pub fn ui_fields(&self)->&ui_world_init::State<ActorId>{&self.ui}
     pub fn diagnostics(&self)->&[Diagnostic]{&self.diagnostics}

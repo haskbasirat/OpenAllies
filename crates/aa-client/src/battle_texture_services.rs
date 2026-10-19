@@ -94,6 +94,10 @@ impl texture_resource_load::Backend for Current<'_,'_>{
         log::debug!("closing actual selected Texture input: {}",String::from_utf16_lossy(resource.logical_ids()));
         Ok(())
     }
-    // Unsupported direct reload/resize/assert callbacks retain the trait's
-    // precise reached errors; no guessed source or image is substituted.
+    ///5A6A10 -> 87C5C0/87C280 power-of-two pad on the SAME texture arena.
+    fn resize_87c5c0(&mut self,resources:&mut Resources<'_>,source:&SourceTexture,target:[u32;2])->Result<Option<SourceTexture>>{
+        resources.resize_texture_source_87c5c0(source,target)
+    }
+    // Unsupported direct reload/assert callbacks retain the trait's precise
+    // reached errors; no guessed source or image is substituted.
 }

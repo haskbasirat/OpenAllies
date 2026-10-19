@@ -1,0 +1,13 @@
+
+running 1 test
+test live_skirmish_ticks_census ... E:\Games\Axis and Alies\rust-rebuild\research\live-battle-ticks\nfrance-move-01\attempt.launch.json
+E:\Games\Axis and Alies\rust-rebuild\research\live-battle-ticks\nfrance-move-01\attempt.worker.json
+FAILED
+
+failures:
+
+failures:
+    live_skirmish_ticks_census
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 43.91s
+

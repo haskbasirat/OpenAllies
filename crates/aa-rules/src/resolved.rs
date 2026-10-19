@@ -159,6 +159,29 @@ impl ResolvedNode<'_> {
         }))
     }
     pub fn field(&self, name: &str, precision: Precision) -> Result<Option<TypedValue>> {
+        // A field value is a pure function of the layers (nodes of the
+        // catalog's immutable resolver), the name and the precision.
+        let key = (self.layers.len() <= 4).then(|| {
+            let mut addresses = [0usize; 4];
+            for (slot, layer) in addresses.iter_mut().zip(&self.layers) {
+                *slot = *layer as *const Definition as usize;
+            }
+            (addresses, self.layers.len() as u8, precision.significand_bits())
+        });
+        let memo = &self.catalog.resolution_cache.memo.node_fields;
+        if let Some(key) = &key
+            && let Some(hit) = crate::query_memo::lock(memo)
+                .and_then(|m| m.get(key).and_then(|m| m.get(name)).cloned())
+        {
+            return Ok(hit);
+        }
+        let result = self.field_uncached(name, precision);
+        if let (Some(key), Ok(value), Some(mut memo)) = (key, &result, crate::query_memo::lock(memo)) {
+            memo.entry(key).or_default().insert(name.to_owned(), value.clone());
+        }
+        result
+    }
+    fn field_uncached(&self, name: &str, precision: Precision) -> Result<Option<TypedValue>> {
         let layers = &self.layers;
         let path = name;
         if layers.is_empty() {

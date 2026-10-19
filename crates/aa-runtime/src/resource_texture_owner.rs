@@ -104,6 +104,83 @@ mod tests {
             );
         }
     }
+    ///research/development10/texture-resize: 87C5C0/87C280/875AC0 executed
+    ///natively over the real 42x42 icons and synthetic layouts at every PC.
+    #[test]
+    fn native_87c5c0_pads_layout_and_texels_all_pc() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../research/development10/texture-resize/native-texture-resize.json"
+        ))
+        .unwrap();
+        let words = |v: &serde_json::Value| -> Vec<u32> { serde_json::from_value(v.clone()).unwrap() };
+        let rgba = |bytes: &[u8], bpp: u32| -> Vec<u8> {
+            match bpp {
+                4 => bytes.to_vec(),
+                3 => bytes.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 0xff]).collect(),
+                _ => unreachable!(),
+            }
+        };
+        let mut checked = 0;
+        for row in fixture["rows"].as_array().unwrap() {
+            let input = &row["input"];
+            let format: [u32; 9] = serde_json::from_value(input["format"].clone()).unwrap();
+            let (widths, heights, offsets) = (words(&input["widths"]), words(&input["heights"]), words(&input["offsets"]));
+            let bpp = input["bpp"].as_u64().unwrap() as u32;
+            let bytes = hex(input["bytes"].as_str().unwrap());
+            let origin = Arc::new(());
+            let resource = laboratory_resource(&origin);
+            let mut owner = State::from_fresh_application(&origin);
+            let levels = if (0..=1).contains(&format[0]) {
+                (0..widths.len())
+                    .map(|l| PixelLevel::rgba8(widths[l], heights[l], rgba(&bytes[offsets[l] as usize..offsets[l + 1] as usize], bpp)).unwrap())
+                    .collect()
+            } else {
+                vec![PixelLevel::rgba8(widths[0], heights[0], vec![0; widths[0] as usize * heights[0] as usize * 4]).unwrap()]
+            };
+            let pixel = PixelId(owner.pixels.len());
+            owner.pixels.push(Some(Pixel {
+                refs4: 0,
+                payload: Payload::Default(Arc::new(PixelData::from_decoded_levels(levels).unwrap())),
+                layout: PixelLayout { format, widths: widths.clone(), heights: heights.clone(), offsets: offsets.clone(), stride: bpp },
+            }));
+            let key = owner.allocate_source(&resource, Some(resource.logical_ids().to_vec()), Some(pixel)).unwrap();
+            let target: [u32; 2] = serde_json::from_value(row["target"].clone()).unwrap();
+            //Before renderer init B323B0 is 1: the new source's vf4C is required.
+            assert!(owner.resize_87c5c0(key, target).is_err());
+            owner.renderer_init_710433();
+            if !(0..=1).contains(&format[0]) {
+                assert!(owner.resize_87c5c0(key, target).unwrap_err().contains("unwritten"), "{}", row["name"]);
+                continue;
+            }
+            let new = owner.resize_87c5c0(key, target).unwrap();
+            assert_ne!(new, key);
+            let out = &row["output"];
+            let p = owner.pixel(owner.pixels(new).unwrap().unwrap()).unwrap();
+            assert_eq!(serde_json::json!(p.layout.format), out["format"], "{}", row["name"]);
+            assert_eq!(serde_json::json!(p.layout.widths), out["widths"]);
+            assert_eq!(serde_json::json!(p.layout.heights), out["heights"]);
+            assert_eq!(serde_json::json!(p.layout.offsets), out["offsets"]);
+            assert_eq!(serde_json::json!(p.layout.stride), out["bpp"]);
+            assert_eq!(serde_json::json!(p.refs4), out["refs"]);
+            let native = hex(out["bytes"].as_str().unwrap());
+            let o = words(&out["offsets"]);
+            for (l, level) in p.payload.data().levels().iter().enumerate() {
+                assert_eq!(level.pixels(), rgba(&native[o[l] as usize..o[l + 1] as usize], bpp).as_slice(), "{} level {l}", row["name"]);
+            }
+            let s = owner.source(new).unwrap();
+            assert_eq!(serde_json::json!(s.prefs), row["source"]["prefs"]);
+            assert_eq!(serde_json::json!(s.refs4), row["source"]["refs"]);
+            assert!(s.filename38.is_none() && s.renderer2c.is_none());
+            //87C280 never touches the old PixelData's count or texels.
+            assert_eq!(owner.pixel(pixel).unwrap().refs4, 1);
+            assert_eq!(owner.source(key).unwrap().pixel40, Some(pixel));
+            checked += 1;
+        }
+        assert_eq!(checked, 7 * 3);
+    }
+    fn hex(text: &str) -> Vec<u8> {
+        (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap()).collect()
+    }
     #[test]
     fn weak_pixel_witness_allows_actual_cpu_discard_and_rejects_other_source() {
         let origin = Arc::new(());
@@ -141,17 +218,19 @@ mod tests {
 enum Payload {
     Default(Arc<PixelData>),
     Decoded(Arc<DecodedTexture>),
+    ///87C280's padded copy of another PixelData.
+    Padded(Arc<PixelData>),
 }
 impl Payload {
     fn data(&self) -> &PixelData {
         match self {
-            Self::Default(v) => v,
+            Self::Default(v) | Self::Padded(v) => v,
             Self::Decoded(v) => v.pixels(),
         }
     }
     fn owner(&self) -> Arc<PixelData> {
         match self {
-            Self::Default(v) => Arc::clone(v),
+            Self::Default(v) | Self::Padded(v) => Arc::clone(v),
             Self::Decoded(v) => v.pixels_owner(),
         }
     }
@@ -189,6 +268,8 @@ pub(crate) struct State {
     discard_app_pixels_b43f20: u8,
     pub(crate) resize_memory_b3d8e4: u32,
     pub(crate) missing_direct_b3d8f0: bool,
+    ///B323B4 FormatPrefs (image words 6,2,3; no writer is reached).
+    format_prefs_b323b4: [u32; 3],
 }
 impl State {
     pub(crate) fn from_fresh_application(application: &Arc<()>) -> Self {
@@ -207,6 +288,7 @@ impl State {
             discard_app_pixels_b43f20: 0,
             resize_memory_b3d8e4: 0,
             missing_direct_b3d8f0: false,
+            format_prefs_b323b4: [6, 2, 3],
         }
     }
     pub(crate) fn renderer_init_710433(&mut self) {
@@ -341,6 +423,68 @@ impl State {
             },
         }));
         self.allocate_source(resource, None, Some(key))
+    }
+    ///87C5C0 from 5A6A10: a NEW NiSourceTexture (87BDD0 constructor, B323B4
+    ///prefs at +20..+28) whose Pixel40 is 87C280's PixelData: 875AC0 layout at
+    ///`target` with the old format words and level count; for every level and
+    ///target texel, x < old width and y < old height copies the old texel,
+    ///anything else stores 5A6A10's +0.0 border (type 0 three bytes, type 1
+    ///four; other format types leave allocator bytes and stay explicit). This
+    ///is a top-left pad, never a scale. The decoded RGBA view follows the
+    ///same texels (a type-0 border reads as opaque black). With B323B0 set
+    ///(before 710433) the new source's vf4C renderer create would follow and
+    ///stays explicit. PixelData+4C revision has no port reader.
+    pub(crate) fn resize_87c5c0(&mut self, key: SourceId, target: [u32; 2]) -> Result<SourceId> {
+        if self.load_on_create_b323b0 != 0 {
+            return Err("87C5C0 with B323B0 set requires the new source's vf4C renderer create".into());
+        }
+        let old = self.pixels(key)?.ok_or("87C5C0 Pixel40 is NULL")?;
+        let resource = self.source(key)?.resource.clone();
+        let (format, widths, heights, data) = {
+            let p = self.pixel(old)?;
+            (p.layout.format, p.layout.widths.clone(), p.layout.heights.clone(), p.payload.owner())
+        };
+        let border: [u8; 4] = match format[0] {
+            0 => [0, 0, 0, 0xff],
+            1 => [0, 0, 0, 0],
+            other => return Err(format!("87C280 leaves PixelFormat type {other} border bytes unwritten; unproven")),
+        };
+        let levels = u32::try_from(widths.len()).map_err(|e| e.to_string())?;
+        let layout = crate::texture_pixel_layout_core::allocate_875ac0(format, target[0], target[1], levels)?;
+        let old_levels = data.levels();
+        if old_levels.len() != widths.len() {
+            return Err("87C280 old decoded levels differ from its native PixelData levels".into());
+        }
+        let mut padded = Vec::with_capacity(old_levels.len());
+        for (l, level) in old_levels.iter().enumerate() {
+            let (ow, oh, nw, nh) = (widths[l], heights[l], layout.widths[l], layout.heights[l]);
+            if level.width() != ow || level.height() != oh {
+                return Err("87C280 old decoded level differs from its native dimensions".into());
+            }
+            let source = level.pixels();
+            let mut out = Vec::new();
+            out.try_reserve(nw as usize * nh as usize * 4).map_err(|e| e.to_string())?;
+            for y in 0..nh {
+                for x in 0..nw {
+                    if x < ow && y < oh {
+                        let at = (y as usize * ow as usize + x as usize) * 4;
+                        out.extend_from_slice(&source[at..at + 4]);
+                    } else {
+                        out.extend_from_slice(&border);
+                    }
+                }
+            }
+            padded.push(PixelLevel::rgba8(nw, nh, out)?);
+        }
+        let pixel = PixelId(self.pixels.len());
+        self.pixels.push(Some(Pixel {
+            refs4: 0,
+            payload: Payload::Padded(Arc::new(PixelData::from_decoded_levels(padded)?)),
+            layout: PixelLayout { format, widths: layout.widths, heights: layout.heights, offsets: layout.offsets, stride: layout.stride },
+        }));
+        let new = self.allocate_source(&resource, None, Some(pixel))?;
+        self.source_mut(new)?.prefs = self.format_prefs_b323b4;
+        Ok(new)
     }
     pub(crate) fn retain_source(&mut self, key: SourceId) -> Result<()> {
         let s = self.source_mut(key)?;

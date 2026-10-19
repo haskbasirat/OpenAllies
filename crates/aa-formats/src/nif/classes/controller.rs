@@ -278,3 +278,27 @@ pub(crate) fn vis_data(s: &mut Stream, f: &mut Fields) -> R {
     }
     Ok(())
 }
+
+/// NiControllerSequence::LoadBinary 883650 (no version branch): NiObject,
+/// the name (+0x0C), the text-key name (+0xA8), the text-key link, the
+/// block count (SetSize of the +0x14 name array) and per block the target
+/// name (stored in the +0x14 array) and the controller link. LinkObject
+/// 883730 pops the text keys (+0x10), then SetAt(i) each controller in the
+/// +0x2C array sized by the block count.
+pub(crate) fn controller_sequence(s: &mut Stream, f: &mut Fields) -> R {
+    object(s, f)?;
+    f.put("name", Value::Str(s.cstring()?));
+    f.put("text_keys_name", Value::Str(s.cstring()?));
+    f.put("text_keys", Value::Link(s.link_id()?));
+    let count = s.u32()?;
+    f.put("block_count", Value::U32(count));
+    let mut blocks = Vec::new();
+    for _ in 0..count {
+        let mut b = Fields::default();
+        b.put("target_name", Value::Str(s.cstring()?));
+        b.put("controller", Value::Link(s.link_id()?));
+        blocks.push(Value::Record(b.0));
+    }
+    f.put("blocks", Value::List(blocks));
+    Ok(())
+}

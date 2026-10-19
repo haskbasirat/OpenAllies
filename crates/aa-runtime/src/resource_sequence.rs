@@ -10,6 +10,8 @@ pub(crate) struct Fields{
     pub(crate) word44:u32,
     pub(crate) word48:u32,
     pub(crate) value4c:u32,
+    ///The decoded root behind source40 (sequence_resource_load, 5A8190).
+    pub(crate) root40:Option<crate::sequence_resource_load::SequencePayload>,
 }
 impl Entry {
     ///9D0710 registers this actual5A5FB0 factory under B3D9A4, with base
@@ -21,7 +23,7 @@ impl Entry {
         let task=crate::resource_task::Task::construct_for_resource(&handle,priority)?;
         task.retain_in_resource_5aa944()?;
         Ok(Self{handle,requests4:0,flags8:0x10,memory0c:0,memory10:0,references14:0,task:Arc::new(task),locations:Vec::new(),
-            texture:None,model:None,sound:None,sequence:Some(Fields{source3c:None,source40:None,word44:0,word48:0,value4c:0x3f800000})})
+            texture:None,model:None,sound:None,sequence:Some(Fields{source3c:None,source40:None,word44:0,word48:0,value4c:0x3f800000,root40:None})})
     }
 }
 #[cfg(test)]

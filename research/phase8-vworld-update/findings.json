@@ -1,0 +1,49 @@
+{
+ "schema": 1,
+ "package": "VWorld per-frame update driver (43FF60 -> 43EC60, 43AB30, 50C750/50C600, 4318E0)",
+ "images": {
+  "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+  "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1"
+ },
+ "fixture": "native-vworld-update.json",
+ "producer": "native_vworld_update.py",
+ "proven": [
+  {"address": "0043FF60", "what": "child order and gates: AD return after 5EEC70, lazy +140 (6F7810 0x88 + 4341A0), +174 ordered-positive gate, B39F70 bit-0 guard with 59AA70/59AB60/96CAB0(9ECE40), 59ABA0 unsigned ms * 0.001f against +174, 85D840 x2 (first fraction stored binary32, second kept at PC), [GWorld+30]+C/+10 products for 6FF130(x,y), 59AB60 restart, 701590, 43DA00, B36518 gate for 43C4B0 into +184 (+178 normal out), 43EC60, 43A1C0([+13C]), 71FAC0([B36518]), 4361B0([+140])", "rows": 511, "rust": "vworld_update::update_43ff60"},
+  {"address": "0041C0E0/0041C110", "what": "argument 5 stores nothing and does not reach 866060", "rows": 512, "rust": "no operation in update_43ff60"},
+  {"address": "0043EC60", "what": "IsGWorldValid() test order under the B39F64 latch (855D30 AL stored back), child order 50C750, 43A400, 4318E0, 4312F0, 725340, +208 segment, E8 read then FX loop", "rows": 42, "rust": "vworld_update::world_view_43ec60"},
+  {"address": "0043AB30", "what": "+90 = t - old +8C, +8C = t, +88 = t - E0 (FST keeps the unrounded difference), +84 = (t - E0)/(E4 - E0) when the span > binary32 1e-4 else 0", "rows": 432, "rust": "vworld_update::view_time_43ab30"},
+  {"address": "0076B120", "what": "timeline gate (F4, B396C4 bit 1, !SinglePlayerAutoPause), paused/frozen keep +34, RenderDumpAVI stores 76B080, slope/74B180 interpolation raises +34, clamp to E0 then E4", "rows": 1842, "rust": "vworld_update::sim_time_76b120"},
+  {"address": "0050C750/0050C600", "what": "index walk while index != reread count, then count 0; type 1 = 427950(msg+48, 0) on [B36500]", "rows": 24, "rust": "fx_manager::State::deliver_broadcasts_50c750"},
+  {"address": "00431E10", "what": "count+1, growth over capacity, four words at count-1", "rows": 270, "rust": "view_heightfield::State::append_rect_431e10"},
+  {"address": "004318E0/00431390", "what": "per-rect floor/ceil (binary64 argument, both CRT paths) and clamps, binary32 row/column accumulation, 4F0E50(x,y,0x122) samples, +20 min / +24 max with unordered or equal storing", "rows": 270, "rust": "view_heightfield::State::update_rects_4318e0"},
+  {"address": "0043DA00", "what": "keep test order +AE, +54 & 0xC0000, vt+BC, +19C > 0 (signed); 43CF00 before unlink and free", "rows": 42, "rust": "vworld_update::prune_43da00"}
+ ],
+ "native_reference_only": [
+  "50C600 kinds 0 (432E40/43B270), 2 (440190), 3 (4408A0), 4 (432E40, 43CD00(def, thing+C, 0, B43CF8, 0, 0) or 43CC50(def, msg+2C, msg+38, 0, 0) when msg+28 is 0; result+50 = msg+44), 5 (nothing): no Rust producer",
+  "43FF60 with a null 6F7810 result: +140 stays 0 and 4361B0 receives null (native fault)",
+  "43EC60 +208 loop and E0 FX loop step traces (package 3/4 owners)"
+ ],
+ "domain_limits": [
+  "431390 refuses a floor/ceil outside signed 32 bits (native keeps the low word of the 64-bit 96CC4C result)",
+  "Binary arithmetic refuses non-finite inputs (NaN/inf words) in 43AB30/76B120/431390",
+  "43DA00: 43CF00's own code does not reference +98; its virtual children are not proven free of +98 accesses (the Rust walk rereads the list each iteration)"
+ ],
+ "client_refusals": {
+  "5EEC70": "VWorld widget base update (UI+D0 +64/+68 fade, DummyVE A50D28 vt+30 5E25C0 state bits, +28 children) has no aa-ui entry point",
+  "4341A0/4361B0": "+140 KKC minimap (712D60 KKC_RMinimap, 7130E0 layers from 9FD5AC, 4360F0/434AD0/432F60/712C60) not ported",
+  "701590": "camera developer: no native_camera entry point",
+  "43C4B0": "needs the current camera and a bound 71D840 TerrainMap query (view_pointer::project_43c4b0 exists)",
+  "43A1C0": "orders developer: UIWorldState per-frame update has no entry point",
+  "71FAC0/725340/4312F0": "the client binds no TerrainMap/TerrainVisibility (TerrainMap::update_725340, terrain_visibility::update_4312f0, BattleViewStartup::stream_views_4312f0 exist)",
+  "43A400": "scene light from World+54..+B8 (43A390, 7178E0, 73A430, 73C240) not ported",
+  "427950": "TGC_ScriptProcessor 426C20 has no Rust owner (WaitWorld handler 43C910, TriggerListUpdate handler 6E4E50)",
+  "43ED5D": "FX command loop (package 4)",
+  "855D30": "assertion log/dialog not ported (reached only when IsGWorldValid fails)",
+  "43CF00/43D190": "deferred view removal not ported (the +98 list has no producer)",
+  "RandomLookAt": "B39F68/B39714/[GWorld+30]/6FF130 owners not bound (+174 has no writer: 43C150 is a script command)",
+  "76B120": "B396C4 needs the window reader (update_vworld_frame); the unfrozen path needs 74B180 and a Sim+34 writer"
+ },
+ "removed_caps": [
+  {"address": "00431910", "original": "VWorld+BC rect array initial capacity 10", "rust": "Vec growth (431E10/4319A0 policy, not a limit)"}
+ ]
+}

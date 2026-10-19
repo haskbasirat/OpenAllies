@@ -76,6 +76,78 @@ nodes keep the native stored flags, property order and controller flags.
 model_graph_fields.rs computes the property/effect/geometry field projection
 at load time for every model (the 3-model sidecar is only a test fixture now).
 
+Native model update (controllers, world transforms, bounds)
+----------------------------------------------------------
+native_model_update.py  loads every shipped NIF with the original NiStream at
+                        PC24 (0x007F), PC53 (0x027F) and PC64 (0x037F), runs
+                        the start-up initializers 9E8380/9E83A0 (B45E38/B45E3C)
+                        at PC53 and the original NiAVObject::Update 86E8D0
+                        (0.0, 1) on the first top-level object (87ABC0, the
+                        first model-processing update with controllers), and
+                        records per object: NiAVObject flags, local, world
+                        and world bound; NiMaterialProperty words; controller
+                        clock words +0x20..+0x2C and +0x40; NiKeyframeController
+                        and NiAlphaController last-key indices; Euler per-axis
+                        last keys; the B44630.. clock cache (own column). Reads
+                        of .bss bytes nothing wrote are logged per file: only
+                        zero-initialised never-written globals (B43CF8, B43E68,
+                        B43F20), the clock cache, CRT fmod/mbc state and the
+                        texture/user-version globals the loader already reads.
+                        -> native-model-update.tsv (5700 rows: 5688 ok, 12
+                        post-processed), native-model-update-samples.json.
+
+Rust: crates/aa-client/src/model_controllers.rs (module of
+model_payload_backend.rs): 866BE0 (Property chains via 86A520, then the own
+chain), NiKeyframeController::Update 8C0200, NiAlphaController::Update
+8C2740, DontDoUpdate 87C780, the aa-animation port of the clock 89E9B0, key
+search 860890/861000/862170, float linear 8B7CC0 and quadratic 8B7CE0,
+position linear 863D10 and quadratic 861720 (+ load fill 861900), rotation
+linear 864120 (blend 8B7F80 + normalize 8B7E20, load fill 862490), Euler
+862FE0 (871130 FSIN/FCOS enclosure, 870E80), 4465A0 quaternion -> matrix,
+and the metadata visitor 872650/8785D0 (APP_INIT diagnostic 0x64E, largest
+stop time into metadata +4). The backend runs the controllers in preorder
+before each source object's world transform in the updates with controllers
+(87ABC0 and 5AA0DD) and writes the target locals / material alpha.
+Test model_payload_backend::controllers::tests::
+every_shipped_model_update_matches_the_native_update (ignored; needs
+AA_GAME_ROOT): 3615 file/precision updates identical to the native digest
+(831 with time controllers); the rest are explicit unported domains (skins,
+NiBillboardNode, NiCamera, NiParticleSystem, dynamic effects, LookAt/Path/
+MaterialColor/TextureTransform/Vis controllers, multi-key TBC rotations in
+USAInfantryCorpse03.nif, the 4 post-processed files).
+
+Load-time model graph: crates/aa-client/src/model_native_graph.rs builds the
+source graph of every selected model from the native object graph (root =
+the first top-level object, as 5A7120/5A7175 take it; NiNode child slots
+after the 867C40/86EA10/866DF0 re-parenting, computed in aa-formats
+link::link_children). The assets-cache graph JSON is no longer read. The 265
+models without a former projection are the 265 files whose footer lists a
+second top-level object that is also a child of the first (PyFFI walked it
+twice); natively no object is linked twice in the corpus. Test
+model_payload_backend::tests::native_graph_matches_every_former_projection:
+all 1582 former projections are reproduced field by field (PyFFI's "" for a
+NULL LoadCString descriptor name normalised).
+
+KF files (sequence resources)
+-----------------------------
+581 .kf members: 568 x 10.1.0.0, 13 x 10.0.1.0; classes NiControllerSequence
+(the one top-level object), NiTextKeyExtraData, NiKeyframeController,
+NiKeyframeData. NiControllerSequence::LoadBinary 883650 / LinkObject 883730
+are ported (classes/controller.rs, link.rs sequence_controllers).
+NIF_CORPUS_EXT=.kf runs native_nif_corpus.py / corpus_tsv.py /
+native_nif_fields.py over them -> native-kf-corpus.json/.tsv,
+native-kf-fields.tsv (+ samples); the aa-formats tests
+every_shipped_kf_matches_the_native_stream_reader and
+every_shipped_kf_builds_the_native_object_graph compare all 581 (the field
+records now include NiTextKeyExtraData keys, so the 101 NIFs with text keys
+were refreshed in native-nif-fields.tsv).
+native_kf_length.py runs the original 5A5650 ComputeLatestTimeController on
+each natively loaded root (404ED0 as a recording seam) ->
+native-kf-length.tsv; aa-client sequence_decode::tests compares lengths and
+reported lines for all 581 (7 files report 0x733, total length 0).
+The resource load 5A8190 is aa-runtime sequence_resource_load.rs; the
+decode service 5A7230 + 5A5650 is aa-client sequence_decode.rs.
+
 Open gaps (explicit errors, not ported)
 ---------------------------------------
 * Old-style particle systems: 8E93B0 (registered by 89B090) converts them
@@ -90,6 +162,9 @@ Open gaps (explicit errors, not ported)
 * Native out-of-range class indices, group IDs, link IDs, short reads and
   oversized stack buffers (class names > 255, > 15 pixel-data mipmaps) are
   errors here; the native code has undefined behaviour there.
-* Model graph projection (assets-cache/model-native-graphs) exists for 1582
-  of the 1847 audited models; the 265 with an AV object linked twice have
-  none (native NiNode SetAt 867C40 re-parents through 86EA10).
+* Controllers other than NiKeyframeController/NiAlphaController, multi-key
+  TBC rotation/position/float keys, quadratic rotation keys, and the reverse
+  cycle bit (the shared 89E9B0 cache does not key it) are explicit errors.
+  87C780's second comparison uses the unrounded 89E9B0 result; when the
+  stored result equals +0x2C it is an explicit error (never reached at the
+  model-processing time 0).

@@ -63,8 +63,9 @@ pub enum Widget {
     /// A widget whose vt+0x90 is true (the minimap); 0x5D74B0 maps the
     /// cursor to a world XY on it.
     Map,
-    /// Any other widget (HUD).
-    Other,
+    /// Any other widget (HUD), with an identity the UI thread assigns (the
+    /// widget allocation): 0x5E0690 compares its +4 with UI+0x60 by pointer.
+    Other(u32),
 }
 
 /// The +0xC0 slot as far as world input sees it.
@@ -102,6 +103,19 @@ pub struct CommandDefinition {
     pub flags_2c: u32,
 }
 
+/// What 0x620640 reads from the UI manager and VWorld+0x13C before its
+/// actor reads: UI+0x60 (0x62066A), 0x436510, the +8 head object and the
+/// +0x10 hovered object whose vt+0x54 (0x4363B0) is the target. The
+/// mapping [`ui_world::State::pick_target_6409a0`] is left to the caller so
+/// it runs only where the native code reaches 0x4363B0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CursorSelection<V> {
+    pub pressed_60: Widget,
+    pub multiple_436510: bool,
+    pub head_8: Option<V>,
+    pub hovered_10: Option<V>,
+}
+
 /// Everything the states read besides the selection manager and orders.
 pub trait Host: Scene + Orders {
     /// DAT_00B36518 != 0 (43C550 / the VWorld per-frame pointer update).
@@ -109,8 +123,11 @@ pub trait Host: Scene + Orders {
     /// 0x43C4B0(pixel, secondary) with the current camera; the secondary
     /// land point is written by 0x71D840 where it writes it.
     fn project_43c4b0(&mut self, pixel: [i32; 2], secondary: &mut [u32; 3]) -> Result<[u32; 3]>;
-    /// 0x5E0690: the non-modal widget routing (UI+0x60 chain, then the root
-    /// chain) used by the default state for events it does not take.
+    /// 0x5E06E8..0x5E0759, the chains of 0x5E0690 after the machine's +4
+    /// step ([`Machine::default_pressed_4`]): the UI+0x60 chain then Root's,
+    /// or with UI+0x60 NULL the focus head [UI+0x8C] chain then Root's.
+    /// Called only with UI+0x60 VWorld or NULL (a HUD widget's and the
+    /// minimap's chain are their UI-thread handlers).
     fn widget_route_5e0690(&mut self, e: &Event) -> Result<bool>;
     /// vt+0x64(x, y) of a non-world UI+0x60 widget (base 0x5EDE60: NULL).
     fn widget_pick_64(&mut self, x: i32, y: i32) -> Result<Option<Self::View>>;
@@ -138,8 +155,9 @@ pub trait Host: Scene + Orders {
     /// 0x459600 on the 0x4363B0 target view after an attack order was sent
     /// (its +0x98 flash time).
     fn flash_459600(&mut self, view: Self::View) -> Result<()>;
-    /// The default state's per-frame cursor feedback (0x620648..0x62074D).
-    fn cursor_feedback_620640(&mut self) -> Result<()>;
+    /// The default state's per-frame tail 0x620648..0x62074D (EconomicImpact
+    /// preview) with the UI-manager and UIWorldState fields it reads.
+    fn cursor_feedback_620640(&mut self, selection: CursorSelection<Self::View>) -> Result<()>;
     /// Presentation children (no simulation effect): box rectangle 0x5CD850 /
     /// per-frame 0x5CCA80 / removal 0x5CCA30, facing
     /// begin 0x689380, drag start 0x688AE2..0x688B25, per-frame 0x688A43 and
@@ -166,6 +184,9 @@ pub struct Machine<V> {
     box_event: Option<Event>,
     facing: Facing,
     default_c4: bool,
+    /// GameInterface+0xD8 +4: the widget of the last left press 0x5E0690
+    /// saw (NULL = [`Widget::None`]; constructor 0).
+    default_4: Widget,
     pointer: view_pointer::State,
     selection: Selection<V>,
 }
@@ -201,6 +222,7 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
             box_event: None,
             facing: Facing::from_constructor_6232f0(),
             default_c4: true,
+            default_4: Widget::None,
             pointer: view_pointer::State::from_vworld_constructor(),
             selection: Selection::from_constructor_640640(),
         }
@@ -355,7 +377,14 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
             let mut adapter = Adapter { machine_current: self.current(host)?, single: self.single_selected(), widget: self.pressed_60, planes: None, host: &mut *host };
             self.selection.update_hover_436650(&mut adapter, x, y)?;
         }
-        host.cursor_feedback_620640()
+        let s = &self.selection;
+        let selection = CursorSelection {
+            pressed_60: self.pressed_60,
+            multiple_436510: s.multiple_436510(),
+            head_8: s.selected().first().copied(),
+            hovered_10: s.hovered_10(),
+        };
+        host.cursor_feedback_620640(selection)
     }
 
     // ---- events ----
@@ -466,10 +495,20 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
             self.pop_self(host, m)?;
             return Ok(true);
         }
+        // A mouse event reaching the top state is swallowed (vt+0x28)
+        // whatever the UI+0x60 chain answers, so for it the chain is only its
+        // own effects: VWorld's hotkey chain here, a HUD widget's or the
+        // minimap's handlers on the UI thread.
+        if self.top() == Some(m) && e.flags & flag::MOUSE != 0 {
+            if self.pressed_60 == Widget::World {
+                host.pressed_widget_chain_5efff0(e)?;
+            }
+            return Ok(true);
+        }
         if self.pressed_60 != Widget::None && host.pressed_widget_chain_5efff0(e)? {
             return Ok(true);
         }
-        Ok(self.top() == Some(m) && e.flags & flag::MOUSE != 0)
+        Ok(false)
     }
 
     // ---- default state (+0xC4 = GameInterface+0xD8) ----
@@ -489,8 +528,8 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
                 if Leaves::actor_present_14(host, target)? && Leaves::actor_45b7a0(host, target)? {
                     command::set_target_4d9bf0(&mut wire, Some(host.actor_handle_14(target)?));
                     // 0x61E150 then 0x61EEF0 (which checks again).
-                    if host.can_send_436950(&mut wire)? {
-                        command::send_61eef0(host, &mut wire)?;
+                    if self.can_send_436950(host, &mut wire)? {
+                        self.send_61eef0(host, &mut wire)?;
                         host.flash_459600(target)?;
                     }
                     return Ok(true);
@@ -507,7 +546,7 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
         if map {
             let aux = host.map_auxiliary_b279c0()?;
             command::set_facing(&mut wire, aux);
-            command::send_61eef0(host, &mut wire)?;
+            self.send_61eef0(host, &mut wire)?;
             host.marker_43db10(xy)?;
             return Ok(true);
         }
@@ -527,9 +566,21 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
                 }
             }
         }
-        command::send_61eef0(host, &mut wire)?;
+        self.send_61eef0(host, &mut wire)?;
         host.marker_43db10(xy)?;
         Ok(true)
+    }
+    /// 0x61E150 / 0x61EEF0's CanSend for the local player: [VWorld+0x13C]
+    /// vt+0x18 = 0x436950.
+    fn can_send_436950<H: Host<View = V>>(&self, host: &mut H, wire: &mut CommandWire) -> Result<bool> {
+        let mut adapter = Adapter { machine_current: self.current(host)?, single: self.single_selected(), widget: self.pressed_60, planes: None, host: &mut *host };
+        self.selection.can_send_436950(&mut adapter, wire)
+    }
+    /// 0x61EEF0 for the local player (the 5C0E10 test holds): its own
+    /// 0x436950, then voice, 0x61E960 and the diagnostics.
+    fn send_61eef0<H: Host<View = V>>(&self, host: &mut H, wire: &mut CommandWire) -> Result<bool> {
+        let can_send = self.can_send_436950(host, wire)?;
+        command::send_61eef0(host, wire, can_send)
     }
     /// 0x5CD190: a left press or double click on the world opens the click
     /// state (vt+0x28 = 0x6203A0 -> GameInterface+0xDC) with the event.
@@ -539,7 +590,29 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
             self.click_event = Some(*e);
             return Ok(true);
         }
-        host.widget_route_5e0690(e)
+        self.route_5e0690(host, e)
+    }
+    /// 0x5E0690 on the default state: a left release whose +4 is NULL or
+    /// another widget than UI+0x60 clears +4 and is taken; a left press or
+    /// double click stores UI+0x60 in +4; then the chains (UI+0x60 and Root,
+    /// or the focus head [UI+0x8C] and Root). A HUD widget's and the
+    /// minimap's chain is their handler on the UI thread, which takes it.
+    fn route_5e0690<H: Host<View = V>>(&mut self, host: &mut H, e: &Event) -> Result<bool> {
+        if e.code == code::LEFT && e.released() && (self.default_4 == Widget::None || self.default_4 != self.pressed_60) {
+            self.default_4 = Widget::None;
+            return Ok(true);
+        }
+        if (e.code == code::LEFT && e.pressed()) || e.code == code::LEFT_DOUBLE {
+            self.default_4 = self.pressed_60;
+        }
+        match self.pressed_60 {
+            Widget::Other(_) | Widget::Map => Ok(true),
+            Widget::World | Widget::None => host.widget_route_5e0690(e),
+        }
+    }
+    /// GameInterface+0xD8 +4 (0x5E0690's pressed widget).
+    pub fn default_pressed_4(&self) -> Widget {
+        self.default_4
     }
 
     // ---- click state (GameInterface+0xDC) ----
@@ -625,8 +698,8 @@ impl<V: Copy + Eq + std::fmt::Debug> Machine<V> {
         // vt+0x3C = 0x6210B0, then 0x5E0890.
         let (mut wire, marker) = self.facing.finish_6210b0()?;
         // 0x6211BB 0x61E150, then 0x61EEF0 (which checks again); bl = 1.
-        if host.can_send_436950(&mut wire)? {
-            command::send_61eef0(host, &mut wire)?;
+        if self.can_send_436950(host, &mut wire)? {
+            self.send_61eef0(host, &mut wire)?;
             host.marker_43db10(marker)?;
         }
         self.pop_self(host, Modal::Facing)?;
@@ -693,6 +766,7 @@ impl<H: Host> Leaves for Adapter<'_, H> {
         actor_view_0c(v: Self::View) -> Result<Option<Self::View>>;
         root_view_4ce6c0(v: Self::View) -> Result<Option<Self::View>>;
         voiced_436600(v: Self::View) -> Result<Option<Option<Self::View>>>;
+        actor_virtual_150(v: Self::View, w: &mut CommandWire) -> Result<bool>;
         selection_sound_436850(v: Self::View) -> Result<()>;
         brush_changed_42d4d0() -> Result<()>;
         vworld_list_changed_4325c0() -> Result<()>;
@@ -762,7 +836,7 @@ impl<H: Host> ui_world::Host for Adapter<'_, H> {
                 let single = self.single;
                 pick::pick_at_pixel_43dc70(self, [x, y], single)
             }
-            Widget::Map | Widget::Other => self.host.widget_pick_64(x, y),
+            Widget::Map | Widget::Other(_) => self.host.widget_pick_64(x, y),
         }
     }
     /// 0x5C1E70: vt+0x20 of the current state (box 0x6A71F0 false; click,

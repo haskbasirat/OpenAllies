@@ -27,12 +27,17 @@ functions use. One canonical record per streamed object:
                   (+0x20..+0x28), static (+0x44 u8)
   NiTexturingProperty apply mode (+0x20), maps (+0x2C data, +0x34 size; map:
                   source +4, clamp +8, filter +0xC, UV set +0x10)
+  NiTextKeyExtraData  keys (+0x10 count, +0x14 array; key: time +0, text +4)
+  NiControllerSequence name (+0x0C), text-key name (+0xA8), text keys
+                  (+0x10), target names (+0x18 data, +0x20 size), controllers
+                  (+0x30 data, +0x38 size)
 Object references are stream indices (None for NULL, 'x' for a pointer that
 is not a streamed object). Files the old-particle post-process rewrites are
 recorded by class only.
 
 Output (--write): native-nif-fields.tsv (path, digest of the canonical JSON
-records) and native-nif-fields-samples.json (full records of named samples).
+records) and native-nif-fields-samples.json (full records of named samples);
+with NIF_CORPUS_EXT=.kf, native-kf-fields.tsv / native-kf-fields-samples.json.
 """
 from pathlib import Path
 import sys, json, hashlib, struct, time
@@ -165,6 +170,17 @@ def dump(m, objects, classes):
                 mp = m.r(data + 4 * k)
                 maps.append(None if mp == 0 else [ref(m.r(mp + 4))] + words(mp + 8, 3))
             r.append(['maps', maps])
+        if c == 'NiTextKeyExtraData':
+            n, keys = m.r(p + 0x10), m.r(p + 0x14)
+            r.append(['keys', [[m.r(keys + 8 * k), cstr(m.r(keys + 8 * k + 4))] for k in range(n)]])
+        if c == 'NiControllerSequence':
+            r.append(['name', cstr(m.r(p + 0xc))])
+            r.append(['text_keys_name', cstr(m.r(p + 0xa8))])
+            r.append(['text_keys', ref(m.r(p + 0x10))])
+            data, size = m.r(p + 0x18), m.r(p + 0x20)
+            r.append(['targets', [cstr(m.r(data + 4 * k)) for k in range(size)]])
+            data, size = m.r(p + 0x30), m.r(p + 0x38)
+            r.append(['sequence_controllers', [ref(m.r(data + 4 * k)) for k in range(size)]])
         records.append(r)
     return records
 
@@ -172,7 +188,7 @@ def dump(m, objects, classes):
 _PAIRS = None
 VT_NAMES = None
 TAB, NL = chr(9), chr(10)
-POST_PROCESSED = {r['path']: bool(r['destroyed']) for r in json.loads((HERE / 'native-nif-corpus.json').read_bytes())['rows']}
+POST_PROCESSED = {r['path']: bool(r['destroyed']) for r in json.loads((HERE / (C.PREFIX + '-corpus.json')).read_bytes())['rows']}
 
 
 def vtable_names(pairs):
@@ -221,13 +237,13 @@ def main():
     refresh = [a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--refresh=')]
     if refresh:
         # Recompute only the named files and merge them into the stored TSV.
-        old = dict(l.split(TAB) for l in (HERE / 'native-nif-fields.tsv').read_text().splitlines()[1:])
+        old = dict(l.split(TAB) for l in (HERE / (C.PREFIX + '-fields.tsv')).read_text().splitlines()[1:])
         for job in jobs:
             if job[0] in refresh:
                 path, digest, _ = one(job)
                 old[path] = digest
         tsv = ('path' + TAB + 'fields_sha256' + NL + ''.join(k + TAB + old[k] + NL for k in sorted(old, key=str.lower))).encode()
-        (HERE / 'native-nif-fields.tsv').write_bytes(tsv)
+        (HERE / (C.PREFIX + '-fields.tsv')).write_bytes(tsv)
         print(json.dumps(dict(refreshed=refresh, sha256=sha(tsv))))
         return
     started = time.perf_counter()
@@ -243,10 +259,10 @@ def main():
     tsv = ('path\tfields_sha256\n' + ''.join('%s\t%s\n' % r for r in rows)).encode()
     sraw = (json.dumps(dict(schema=1, scope=__doc__, samples=samples), separators=(',', ':')) + '\n').encode()
     if write:
-        (HERE / 'native-nif-fields.tsv').write_bytes(tsv)
-        (HERE / 'native-nif-fields-samples.json').write_bytes(sraw)
+        (HERE / (C.PREFIX + '-fields.tsv')).write_bytes(tsv)
+        (HERE / (C.PREFIX + '-fields-samples.json')).write_bytes(sraw)
     else:
-        assert (HERE / 'native-nif-fields.tsv').read_bytes() == tsv
+        assert (HERE / (C.PREFIX + '-fields.tsv')).read_bytes() == tsv
     print(json.dumps(dict(files=len(rows), seconds=round(time.perf_counter() - started, 1), sha256=sha(tsv))))
 
 

@@ -86,6 +86,8 @@ impl State{
             for (pair,group)in [(1,Group::Mover),(2,Group::Body),(3,Group::Portal)]{
                 if self.actor_fields(&data)?.step==pair+3{
                     let scope=actor.child(group.component().unwrap()).map_err(error)?;
+                    //464BD0 TrackInfo (465DA4) precedes the Mover FX lists.
+                    if group==Group::Mover{self.prepare_actor_track_infos(catalog,bank,d,&data,&actor,pc,resources,texture_policy)?;}
                     if group==Group::Body && let Some(body)=&scope && let Some(ability)=body.child("OnDeathAbility").map_err(error)?{
                         self.prepare_actor_ability(catalog,bank,d,&data,2,&ability,resources,policy,texture_policy)?;
                     }

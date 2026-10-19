@@ -125,4 +125,26 @@ fn indexed_lookups_equal_linear_scans_on_the_real_catalog() {
         }
     }
     assert!(compared > 500, "{compared}");
+
+    // Bone Find over the prepared ordered table equals the full ordered scan.
+    let bones = actors.resolved_definitions("Bone").unwrap();
+    let mut bone_ids: Vec<String> = bones.iter().map(|n| text(n, "IDS")).collect();
+    bone_ids.extend(bone_ids.clone().iter().map(|s| s.to_ascii_uppercase()));
+    bone_ids.extend(["missing_bone".to_string(), String::new()]);
+    let mut bone_checks = 0;
+    for pc in [Precision::Double53, Precision::Single24] {
+        for owner in &owners {
+            let mut plain = Bound::new(&actors, pc, owner.clone()).unwrap();
+            let mut fast = Bound::for_catalog(&catalog, pc, owner.clone()).unwrap();
+            for ids in bone_ids.iter().step_by(2) {
+                assert_eq!(
+                    format!("{:?}", fast.find("Bone", ids)),
+                    format!("{:?}", plain.find("Bone", ids)),
+                    "Bone {ids}"
+                );
+                bone_checks += 1;
+            }
+        }
+    }
+    assert!(bone_checks > 20, "{bone_checks}");
 }

@@ -243,6 +243,28 @@ impl ActorCatalog {
         precision: Precision,
     ) -> Result<CreationDefinition> {
         let id = id.into();
+        // A successful result depends only on the selected root (query_memo),
+        // apart from `id`, which keeps the caller's spelling.
+        let root = self.selected_root(id).ok().flatten();
+        let key = root.map(|root| (root, precision.significand_bits()));
+        let memo = &self.resolution_cache.memo.creation_definitions;
+        if let Some(hit) = key.and_then(|key| crate::query_memo::lock(memo)?.get(&key).cloned()) {
+            return Ok(CreationDefinition {
+                id: id.ids.into(),
+                ..hit
+            });
+        }
+        let result = self.native_creation_definition_uncached(id, precision);
+        if let (Some(key), Ok(value), Some(mut memo)) = (key, &result, crate::query_memo::lock(memo)) {
+            memo.insert(key, value.clone());
+        }
+        result
+    }
+    fn native_creation_definition_uncached(
+        &self,
+        id: crate::actors::ThingRef<'_>,
+        precision: Precision,
+    ) -> Result<CreationDefinition> {
         let object = self.native_object_definition(id, precision)?;
         let view = self
             .resolved_actor(id)?
