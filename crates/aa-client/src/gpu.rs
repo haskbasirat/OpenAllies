@@ -9,6 +9,9 @@ use std::sync::{Arc,Weak,atomic::{AtomicU64,Ordering}};
 pub mod camera_device;
 #[path="native_texture_gpu.rs"]
 pub mod native_texture;
+/// Terrain fog of war and object visibility over the live battle owners.
+#[path="view_fog_presentation.rs"]
+pub mod fog_presentation;
 
 ///Nonowning certificate of the exact GPU renderer allocation and uploaded
 ///scene. Reload changes the sole epoch; dropping the renderer expires it.
@@ -315,7 +318,7 @@ struct CameraUniform {
     eye: [f32; 4],
     light: [f32; 4],
     team_color: [f32; 4],
-    /// Native terrain fog (crate::view_fog_presentation): x TerrainMap+A0
+    /// Native terrain fog (fog_presentation): x TerrainMap+A0
     /// world units per block, y +12C pixels per block; z stays 0 (the
     /// skinned/particle shaders test it: the original applies the fog
     /// texture effect only under the TerrainBlock nodes); w: enabled.

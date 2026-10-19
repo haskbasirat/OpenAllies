@@ -349,7 +349,10 @@ fn live_berlin_rus_corps_recruit_order() {
             let settings = activated.session.world().presentation_parts()?.settings.clone();
             let resources = activated.session.world().evidence().resource_source.clone();
             let load_mode = activated.session.world().evidence().native_load_mode;
-            let catalog = catalog_for(&activated.source, resources.as_ref(), settings, load_mode)?;
+            //An owning handle of the SAME source: the frame loop below needs
+            //`activated` mutably while this catalog is alive.
+            let source = Arc::clone(&activated.source);
+            let catalog = catalog_for(&source, resources.as_ref(), settings, load_mode)?;
             let window = aa_runtime::application_window_state::ApplicationWindowState::from_native_constructor();
             let focus = window.reader();
             let identity = execution.identity();

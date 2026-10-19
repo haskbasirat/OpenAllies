@@ -768,14 +768,20 @@ impl<H: Host> Leaves for Adapter<'_, H> {
         voiced_436600(v: Self::View) -> Result<Option<Option<Self::View>>>;
         actor_virtual_150(v: Self::View, w: &mut CommandWire) -> Result<bool>;
         selection_sound_436850(v: Self::View) -> Result<()>;
+        local_kingdom_765e00() -> Result<Option<u64>>;
+        view_of_handle_b364c0(h: u32) -> Result<Option<Option<Self::View>>>;
+        player_wildcard_byte_50() -> Result<bool>;
         brush_changed_42d4d0() -> Result<()>;
         vworld_list_changed_4325c0() -> Result<()>;
         vworld_ad() -> Result<bool>;
         floater_remove_42eb10(v: Self::View) -> Result<()>;
         floater_update_453470(v: Self::View) -> Result<()>;
     }
-    fn command_masks_437eb0(&mut self, s: &[Self::View], g: ui_world::StaticRef, m: &mut [u32; 4]) -> Result<()> {
-        self.host.command_masks_437eb0(s, g, m)
+    fn command_masks_437eb0(&mut self, s: &[Self::View], k: Option<u64>, g: Option<bool>, m: &mut [u32; 4]) -> Result<()> {
+        self.host.command_masks_437eb0(s, k, g, m)
+    }
+    fn kingdom_groups_34c(&mut self, k: u64) -> Result<Vec<ui_world::KingdomGroup>> {
+        self.host.kingdom_groups_34c(k)
     }
     fn requests(&mut self) -> &mut dyn super::requests::Requests<Self::View> {
         self.host.requests()

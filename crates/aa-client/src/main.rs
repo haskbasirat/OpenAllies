@@ -52,6 +52,8 @@ mod windows_focus;
 #[cfg(windows)]
 mod windows_reset_os;
 mod view_flags_service;
+mod audio_miles;
+mod audio_native;
 
 use aa_assets::AssetStore;
 use anyhow::{Context, Result, bail};

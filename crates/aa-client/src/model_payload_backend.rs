@@ -23,6 +23,10 @@ mod preprocessed;
 mod metadata_flow;
 #[path="model_controllers.rs"]
 mod controllers;
+#[path="model_skin.rs"]
+mod skin;
+#[path="model_skin_partition.rs"]
+mod skin_partition;
 #[path="model_native_graph.rs"]
 mod native_graph;
 #[path="model_selection.rs"]
@@ -46,7 +50,7 @@ fn finite(words:impl IntoIterator<Item=u32>)->Result<()>{if words.into_iter().an
  #[serde(skip)]property_state:Option<Arc<[PropertySource;12]>>,
  #[serde(skip)]effects_updated:bool,
 }
-#[derive(Debug,Deserialize,PartialEq,Eq)]struct Property{kind:String,block:u32,#[serde(default)]flags:u32,#[serde(default)]slots:Vec<Option<Descriptor>>,#[serde(default)]shader_textures:u32,#[serde(default)]shader_maps:Vec<Option<Descriptor>>,#[serde(default)]extras:Vec<serde_json::Value>,#[serde(skip)]generated:BTreeMap<String,Extra>,#[serde(skip)]material:Option<[u32;14]>,#[serde(skip)]alpha_threshold:Option<u8>,#[serde(skip)]vertex_color:Option<[u32;2]>,#[serde(skip)]controllers:Option<Vec<graph_fields::Controller>>}
+#[derive(Debug,Deserialize,PartialEq,Eq)]struct Property{kind:String,block:u32,#[serde(default)]flags:u32,#[serde(default)]slots:Vec<Option<Descriptor>>,#[serde(default)]shader_textures:u32,#[serde(default)]shader_maps:Vec<Option<Descriptor>>,#[serde(default)]extras:Vec<serde_json::Value>,#[serde(skip)]generated:BTreeMap<String,Extra>,#[serde(skip)]material:Option<[u32;14]>,#[serde(skip)]alpha_threshold:Option<u8>,#[serde(skip)]vertex_color:Option<[u32;2]>,#[serde(skip)]controllers:Option<Vec<graph_fields::Controller>>,#[serde(skip)]unique_base:bool}
 #[derive(Clone,Debug,Deserialize,PartialEq,Eq)]struct Descriptor{texture:Option<String>,source:Option<u32>,filter:u32}
 #[derive(Debug,Deserialize)]struct Controller{kind:String,flags:u32,stop:u32}
 #[derive(Debug,Deserialize)]struct Texture{block:u32,filename:Option<String>,extras:Vec<serde_json::Value>,#[serde(skip)]generated:BTreeMap<String,Extra>}
@@ -204,7 +208,7 @@ impl Selected{
  }
  fn source(&self)->Result<&SourceContext>{self.source.as_ref().ok_or_else(||"model requires same preWorld canonical Bone source context".into())}
  fn geometry(n:&Node)->bool{matches!(n.kind.as_str(),"NiTriShape"|"NiTriStrips")}
- fn supported(&self,i:usize)->Result<()>{let n=&self.graph.nodes[i];if n.skin{return Err(format!("selected NIF actual {} skin graph requires skin transforms",n.name))}if !matches!(n.kind.as_str(),"NiNode"|"NiTriShape"|"NiTriStrips"){return Err(format!("selected NIF actual {} {} graph processing is required",n.kind,n.name))}Ok(())}
+ fn supported(&self,i:usize)->Result<()>{let n=&self.graph.nodes[i];if !matches!(n.kind.as_str(),"NiNode"|"NiTriShape"|"NiTriStrips"){return Err(format!("selected NIF actual {} {} graph processing is required",n.kind,n.name))}Ok(())}
  fn order(&self)->Vec<usize>{let mut out=vec![];let mut work=vec![self.root];while let Some(i)=work.pop(){if self.graph.nodes[i].detached{continue}out.push(i);work.extend(self.graph.nodes[i].children.iter().rev().flatten().copied());}out}
  fn geometry_data(&self,i:usize)->Result<&Geometry>{let block=self.graph.nodes[i].data_block.ok_or("actual GeometryData source pointer is NULL")?;self.data.get(&block).ok_or_else(||"actual GeometryData allocation is absent".into())}
  //86EA70 reads THIS object's A4 list. It does not search its parents.
@@ -258,15 +262,37 @@ impl Selected{
  }
  fn update_inner(&mut self,mut runtime:Option<&mut controllers::Runtime>)->Result<()>{
   let order=self.order();
-  let blocks:BTreeMap<usize,usize>=if runtime.is_some(){self.graph.nodes.iter().enumerate().filter_map(|(i,n)|n.source_block.map(|b|(b as usize,i))).collect()}else{BTreeMap::new()};
+  let blocks:BTreeMap<usize,usize>=self.graph.nodes.iter().enumerate().filter_map(|(i,n)|n.source_block.map(|b|(b as usize,i))).collect();
   for &i in &order{self.supported(i)?;
    if let(Some(runtime),Some(block))=(runtime.as_deref_mut(),self.graph.nodes[i].source_block){
     let properties:Vec<usize>=self.graph.nodes[i].property_blocks.iter().map(|&b|b as usize).collect();
     let mut targets=ControllerTargets{nodes:&mut self.graph.nodes,blocks:&blocks,properties:&mut self.properties};
     runtime.update_object(&self.nif,block as usize,&properties,0,&mut targets)?;
    }
-   let n=&self.graph.nodes[i];let world=match n.parent{Some(p)=>math::compose_world(self.graph.nodes[p].world.ok_or("NIF parent transform is not current")?,n.local,self.pc)?,None=>n.local};let sphere=if Self::geometry(n){self.geometry_data(i)?.sphere.map(|sphere|math::transform_sphere(&world,sphere,self.pc)).transpose()?}else{None};self.graph.nodes[i].world=Some(world);self.graph.nodes[i].world_sphere=sphere;}
+   let n=&self.graph.nodes[i];let world=match n.parent{Some(p)=>math::compose_world(self.graph.nodes[p].world.ok_or("NIF parent transform is not current")?,n.local,self.pc)?,None=>n.local};self.graph.nodes[i].world=Some(world);
+   //868020: a skin's 8C3A90 bound (bones' world transforms of this moment)
+   //replaces the GeometryData model bound (+0x10) first.
+   if Self::geometry(&self.graph.nodes[i])&&self.graph.nodes[i].skin{
+    let block=self.graph.nodes[i].source_block.ok_or("868020 skinned geometry without its source object")? as usize;
+    let model=skin::geometry_model_bound(&self.nif,block,&|b|self.world_of_block(&blocks,b),self.pc)?;
+    let data=self.graph.nodes[i].data_block.ok_or("868020 skinned geometry without GeometryData")?;
+    self.data.get_mut(&data).ok_or("868020 GeometryData allocation absent")?.sphere=Some(model);
+   }
+   let n=&self.graph.nodes[i];let sphere=if Self::geometry(n){self.geometry_data(i)?.sphere.map(|sphere|math::transform_sphere(&world,sphere,self.pc)).transpose()?}else{None};self.graph.nodes[i].world_sphere=sphere;}
   for &i in order.iter().rev(){if Self::geometry(&self.graph.nodes[i]){continue}let children=self.graph.nodes[i].children.clone();let mut sphere=None;for child in children.into_iter().flatten(){let c=&self.graph.nodes[child];if c.detached{continue}if let Some(s)=c.world_sphere{if f32::from_bits(s[3])==0.0{continue}if let Some(current)=sphere.as_mut(){math::merge_sphere(current,s,MERGE_EPSILON,self.pc)?}else{sphere=Some(s)}}}self.graph.nodes[i].world_sphere=sphere;}Ok(())
+ }
+ ///The current world transform of a source object (the NiAVObject
+ ///constructor identity before its first update).
+ fn world_of_block(&self,blocks:&BTreeMap<usize,usize>,block:usize)->Result<[u32;13]>{
+  let i=*blocks.get(&block).ok_or("skin bone is not a source NiAVObject of this model")?;Ok(self.graph.nodes[i].world.unwrap_or(IDENTITY))
+ }
+ ///878630/878790: the world transform, or for a skin the inverse (8751F0)
+ ///of its 877F40 skin-to-root transform.
+ fn bounds_transform(&self,i:usize)->Result<[u32;13]>{
+  let n=&self.graph.nodes[i];if !n.skin{return n.world.ok_or_else(||"raw NIF world transform absent".into())}
+  let blocks:BTreeMap<usize,usize>=self.graph.nodes.iter().enumerate().filter_map(|(i,n)|n.source_block.map(|b|(b as usize,i))).collect();
+  let block=n.source_block.ok_or("877F40 skinned geometry without its source object")? as usize;
+  skin::invert(&skin::geometry_skin_to_root(&self.nif,block,&|b|self.world_of_block(&blocks,b),self.pc)?,self.pc)
  }
  fn find_name(&self,name:&[u16])->Option<usize>{self.order().into_iter().find(|&i|self.graph.nodes[i].name.encode_utf16().eq(name.iter().copied()))}
  ///879A90 texture maps of THIS object's NiTexturingProperty (86EA70(8)):
@@ -298,6 +324,34 @@ impl Selected{
   if let Some(row)=self.texture_rows.iter_mut().find(|row|ascii_equal(&row.name,&name)){row.total=row.total.wrapping_add(1)}else{self.texture_rows.try_reserve(1).map_err(|e|e.to_string())?;self.texture_rows.push(TextureUse{name:name.clone(),total:1,particles:0});}
   if !texture.extras.iter().any(|v|v["extra_name"]=="otn"||(v["is_string"]==true&&v["value"].as_str().is_some_and(|value|value.eq_ignore_ascii_case("otn"))))&&!texture.generated.contains_key("otn"){texture.generated.insert("otn".into(),Extra::Text(name));}
   Ok(())
+ }
+ ///878340 from the root with 87BE50("", B323B4), the blank NiSourceTexture
+ ///T: every NiTexturingProperty (86EA70(8)) whose "bt" extra is present
+ ///(871CC0) and whose base map exists gets T as the base map texture
+ ///(729380); then the base map NiSourceTexture name (+0x38) is counted
+ ///against the texture-name vector (_stricmp 970817); NiNode children are
+ ///visited in slot order. Returns the names whose count is not 0, in vector
+ ///order. The file name of T is empty and matches no collected name;
+ ///whether T exists (87BECF, load-on-create B323B0) does not change the
+ ///counts, and unique_base records the replacement (the base descriptor no
+ ///longer names the file texture).
+ fn unique_textures_878340(&mut self,names:&[Vec<u16>])->Result<Vec<Vec<u16>>>{
+  let mut counts=vec![0u32;names.len()];
+  for i in self.order(){
+   let Some(p)=self.property(i,"NiTexturingProperty")else{continue};let block=p.block;
+   let property=self.properties.get_mut(&block).ok_or("878340 same Property allocation absent")?;
+   let base_present=property.slots.first().is_some_and(Option::is_some);
+   if property.generated.contains_key("bt")&&base_present{property.unique_base=true;if let Some(Some(d))=property.slots.first_mut(){d.source=None;d.texture=None;}}
+   if property.unique_base{continue}
+   let Some(source)=property.slots.first().and_then(|d|d.as_ref()).and_then(|d|d.source)else{continue};
+   if self.nif.objects.get(source as usize).ok_or("878340 texture link escapes the object array")?.class!="NiSourceTexture"{continue}
+   let texture=self.texture_objects.get(&source).ok_or("878340 SourceTexture owner absent")?;
+   let name=texture.filename.as_ref().ok_or("87844E _stricmp with the NULL file name of an internal SourceTexture")?;
+   if !name.is_ascii(){return Err("878340 non-ASCII texture-name comparison is required".into())}
+   let name=name.encode_utf16().collect::<Vec<_>>();
+   if let Some(k)=names.iter().position(|n|ascii_equal(n,&name)){counts[k]=counts[k].wrapping_add(1);}
+  }
+  Ok(names.iter().zip(&counts).filter(|(_,c)|**c!=0).map(|(n,_)|n.clone()).collect())
  }
  fn attach_base_texture(&mut self)->Result<()>{let names=self.texture_rows.iter().map(|row|row.name.clone()).collect::<Vec<_>>();let used=self.texture_rows.iter().map(|row|row.total!=row.particles).collect::<Vec<_>>();let selected=select_base_texture(&self.filename,&names,&used)?;
   for i in self.order(){let Some(p)=self.property(i,"NiTexturingProperty")else{continue};let source=p.slots.first().and_then(Option::as_ref).and_then(|d|d.source);let name=source.map(|b|self.texture_objects.get(&b).ok_or("base descriptor SourceTexture allocation absent")).transpose()?.and_then(|t|t.filename.as_ref());
@@ -337,7 +391,6 @@ impl Model for Selected{
   self.processing=true;
   preprocessed::lookup(&mut Preprocessed{model:self,policy})?;
   self.work=Some(MetadataWork{bounds:math::Bounds::empty_processing(),stop:0,blend:false});
-  if has_skin{return Err("87AA10 has-skin unique texture/clone path requires concrete skin graph".into())}
   self.prepare_native_metadata_graph()?;
   self.update()?;let mut contexts:Vec<Option<metadata_flow::Context>>=vec![None;self.graph.nodes.len()];
   for i in self.order(){self.supported(i)?;
@@ -350,9 +403,17 @@ impl Model for Selected{
    let(context,add_replacement)=metadata_flow::enter(inherited,i,Self::geometry(&self.graph.nodes[i]),own_sg,own_sg_two,replacement);contexts[i]=Some(context);
    if context.shadow&&Self::geometry(&self.graph.nodes[i]){let version=self.graph.nodes[i].extras.iter().find(|e|e["extra_name"]=="Sgv"&&e["kind"]=="NiIntegerExtraData").and_then(|e|e["integer"].as_i64());if version!=Some(1){return Err("879A90 positive shadow geometry needs actual8CF490 conversion/Sgv diagnostic".into())}}
    if Self::geometry(&self.graph.nodes[i]){
+    //87A189: a skin with skin data and a skin partition reads the named
+    //WarningsCheckPartitions flag (unless B43E88 or reused metadata); set,
+    //8794D0 checks the partitions (diagnostics only, not ported).
+    if self.graph.nodes[i].skin&&!self.source()?.remove_base_mapping_current()?{
+     let block=self.graph.nodes[i].source_block.ok_or("87A189 skinned geometry without its source object")? as usize;
+     let instance=self.nif.linked(block,"skin_instance").ok_or("87A189 skin instance absent")?;
+     if self.nif.linked(instance,"data").is_some_and(|d|self.nif.linked(d,"partition").is_some())&&policy.warnings_check_partitions_current()?!=0{return Err("8794D0 WarningsCheckPartitions skin partition checks are not ported".into())}
+    }
     let remove=policy.renderer_remove_normals_current()?;if remove!=0{let block=self.graph.nodes[i].data_block.ok_or("87A1E5 actual GeometryData pointer is NULL")?;let data=self.data.get_mut(&block).ok_or("87A1E5 actual GeometryData allocation absent")?;data.normals=None;let fields=data.fields.as_mut().ok_or("8ABEC0 actual GeometryData fields unbound")?;if fields.vertices_present{if data.vertices.is_empty(){return Err("8ABEC0 empty GeometryData sphere needs actual vertex-pointer/global-center owners".into())}data.sphere=Some(math::sphere_from_vertices(&data.vertices,None,self.pc)?);}fields.flags=metadata_flow::replacement_flags(fields.flags,1,0);}
     if !context.shadow&&!self.source()?.remove_base_mapping_current()?{let fields=self.geometry_data(i)?.fields.as_ref().ok_or("actual TriBasedGeometryData source fields absent")?;let triangles=fields.triangles.ok_or("actual TriBasedGeometryData triangle count unbound")?;if fields.count as u32>2*triangles as u32{policy.graph_diagnostic(&self.filename,&self.graph.nodes[i].name,0x4ab)?;}}
-    let n=&self.graph.nodes[i];if !context.shadow{let block=n.data_block.ok_or("878630 actual GeometryData pointer NULL")?;let data=self.data.get(&block).ok_or("878630 actual GeometryData allocation absent")?;let fields=data.fields.as_ref().ok_or("878630 actual GeometryData fields absent")?;if !fields.vertices_present&&fields.count!=0{return Err("878630 positive count with actual NULL vertex pointer requires native invalid-memory boundary".into())}self.work.as_mut().ok_or("actual metadata allocation absent")?.bounds.include_geometry(&n.world.ok_or("raw NIF world transform absent")?,&data.vertices,n.flags&1!=0,self.pc)?;}
+    let n=&self.graph.nodes[i];if !context.shadow{let block=n.data_block.ok_or("878630 actual GeometryData pointer NULL")?;let data=self.data.get(&block).ok_or("878630 actual GeometryData allocation absent")?;let fields=data.fields.as_ref().ok_or("878630 actual GeometryData fields absent")?;if !fields.vertices_present&&fields.count!=0{return Err("878630 positive count with actual NULL vertex pointer requires native invalid-memory boundary".into())}let t=self.bounds_transform(i)?;let(vertices,hidden)=(&self.data[&block].vertices,n.flags&1!=0);self.work.as_mut().ok_or("actual metadata allocation absent")?.bounds.include_geometry(&t,vertices,hidden,self.pc)?;}
    }
    if context.shadow{if replacement{policy.graph_diagnostic(&self.filename,&self.graph.nodes[i].name,0x4ca)?;}}else if context.replacement_owner.is_some(){
     if add_replacement{self.graph.nodes[i].generated.insert("RepColor".into(),Extra::Boolean(1));}
@@ -364,10 +425,16 @@ impl Model for Selected{
    self.collect_node_textures(i)?;
   }
   if let Some(height)=self.work.as_mut().ok_or("actual metadata allocation absent")?.bounds.begin_footprint(){
-   for i in self.order(){let n=&self.graph.nodes[i];if !Self::geometry(n){continue}let mut ancestor=Some(i);let mut equipment=false;while let Some(j)=ancestor{equipment|=self.tagged(j,"Eq");ancestor=self.graph.nodes[j].parent;}if !equipment{let block=n.data_block.ok_or("878790 actual GeometryData pointer NULL")?;let data=self.data.get(&block).ok_or("878790 actual GeometryData allocation absent")?;self.work.as_mut().ok_or("actual metadata allocation absent")?.bounds.include_footprint_at_height(&n.world.ok_or("raw NIF world transform absent")?,&data.vertices,n.flags&1!=0,height,FOOTPRINT_THRESHOLD,self.pc)?;}}
+   for i in self.order(){let n=&self.graph.nodes[i];if !Self::geometry(n){continue}let mut ancestor=Some(i);let mut equipment=false;while let Some(j)=ancestor{equipment|=self.tagged(j,"Eq");ancestor=self.graph.nodes[j].parent;}if !equipment{let block=n.data_block.ok_or("878790 actual GeometryData pointer NULL")?;let data=self.data.get(&block).ok_or("878790 actual GeometryData allocation absent")?;let t=self.bounds_transform(i)?;let(vertices,hidden)=(&self.data[&block].vertices,n.flags&1!=0);self.work.as_mut().ok_or("actual metadata allocation absent")?.bounds.include_footprint_at_height(&t,vertices,hidden,height,FOOTPRINT_THRESHOLD,self.pc)?;}}
   }
   self.attach_base_texture()?;
-  let names=Arc::new(self.texture_rows.iter().map(|row|row.name.clone()).collect::<Vec<_>>());
+  let mut names=self.texture_rows.iter().map(|row|row.name.clone()).collect::<Vec<_>>();
+  //87ADCF: with Resource flags+8 bit 0x8000 the unique-texture pass 878340
+  //recounts the base maps after replacing every "bt" one; a nonempty
+  //result replaces pptn and metadata +0x20 (an empty one keeps both). The
+  //ppd extra of 8780A0 points at the same metadata (+0x10), so it sees +0x20.
+  if has_skin{let unique=self.unique_textures_878340(&names)?;if !unique.is_empty(){names=unique;}}
+  let names=Arc::new(names);
   let work=self.work.as_ref().ok_or("actual metadata allocation absent")?;let bounds=&work.bounds;
   let m=Metadata{byte1:0,word4:work.stop,radial8:bounds.radial,max_z0c:bounds.max_z,min_z10:bounds.min_z,footprint14:bounds.footprint[0],footprint18:bounds.footprint[1],footprint1c:bounds.footprint[2],texture_count20:u32::try_from(names.len()).map_err(|e|e.to_string())?,byte24:u8::from(work.blend)};
   let metadata=Arc::new(m);let n=&mut self.graph.nodes[self.root];
@@ -471,7 +538,7 @@ fn descriptor_slot_three(nodes:&[Node],properties:&BTreeMap<u32,Property>,select
  #[test]fn base_texture_selector_and_same_property_mutation_match_native(){
   let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../research/skirmish-20261017-model-resource-load/native-model-base-texture.json")).unwrap();
   let wide=|v:&serde_json::Value|v.as_str().unwrap().encode_utf16().collect::<Vec<_>>();
-  let property=|initial:&serde_json::Value|Property{kind:"NiTexturingProperty".into(),block:17,flags:0,slots:vec![],shader_textures:0,shader_maps:vec![],extras:initial.as_array().unwrap().iter().map(|v|serde_json::json!({"extra_name":v[0],"kind":"NiBooleanExtraData","value":v[1]})).collect(),generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None};
+  let property=|initial:&serde_json::Value|Property{kind:"NiTexturingProperty".into(),block:17,flags:0,slots:vec![],shader_textures:0,shader_maps:vec![],extras:initial.as_array().unwrap().iter().map(|v|serde_json::json!({"extra_name":v[0],"kind":"NiBooleanExtraData","value":v[1]})).collect(),generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None,unique_base:false};
   let projection=|p:&Property|{let mut rows=p.extras.iter().map(|e|serde_json::json!({"name":e["extra_name"],"value":e["value"],"boolean_vtable":e["kind"]=="NiBooleanExtraData"})).collect::<Vec<_>>();rows.extend(p.generated.iter().map(|(name,v)|match v{Extra::Boolean(value)=>serde_json::json!({"name":name,"value":value,"boolean_vtable":true}),_=>panic!("unexpected base-texture extra")}));rows.sort_by(|a,b|a["name"].as_str().cmp(&b["name"].as_str()));serde_json::Value::Array(rows)};
   for row in fixture["rows"].as_array().unwrap(){match row["kind"].as_str().unwrap(){
    "choice"=>{let input=&row["input"];let names=input["names"].as_array().unwrap().iter().map(wide).collect::<Vec<_>>();let used=input["used"].as_array().unwrap().iter().map(|v|v.as_bool().unwrap()).collect::<Vec<_>>();let selected=select_base_texture(&wide(&input["file"]),&names,&used).unwrap();let expected=row["selected_index"].as_u64().map(|i|names[i as usize].clone());assert_eq!(selected,expected,"{input}");},
@@ -485,7 +552,7 @@ fn descriptor_slot_three(nodes:&[Node],properties:&BTreeMap<u32,Property>,select
   let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../research/development10/view-object-init/native-model-texturing-query.json")).unwrap();
   for row in fixture["rows"].as_array().unwrap(){let case=&row["input"];let mut properties=BTreeMap::new();let mut nodes=vec![];
    let mut append=|slots:&serde_json::Value|{let index=nodes.len();let block=index as u32;let mut n:Node=serde_json::from_value(serde_json::json!({"kind":"NiNode","name":"explicit native query operand","parent":null,"hierarchy":[],"local":IDENTITY,"flags":0,"children":[],"vertices":[],"sphere":null,"skin":false,"shadow":false,"team":false,"tags":[],"properties":[],"controllers":[],"extras":[],"data_block":null})).unwrap();
-    if !slots.is_null(){n.property_blocks.push(block);properties.insert(block,Property{kind:"NiTexturingProperty".into(),block,flags:0,slots:slots.as_array().unwrap().iter().map(|v|if v.as_u64().unwrap()!=0{Some(Descriptor{source:None,texture:None,filter:0xdeadbeef})}else{None}).collect(),shader_textures:0,shader_maps:vec![],extras:vec![],generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None});}nodes.push(n);index};
+    if !slots.is_null(){n.property_blocks.push(block);properties.insert(block,Property{kind:"NiTexturingProperty".into(),block,flags:0,slots:slots.as_array().unwrap().iter().map(|v|if v.as_u64().unwrap()!=0{Some(Descriptor{source:None,texture:None,filter:0xdeadbeef})}else{None}).collect(),shader_textures:0,shader_maps:vec![],extras:vec![],generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None,unique_base:false});}nodes.push(n);index};
    append(&case["own"]);let children=case["children"].as_array().unwrap().iter().map(|slots|if slots.is_null(){None}else{Some(append(slots))}).collect();nodes[0].children=children;
    assert_eq!(descriptor_slot_three(&nodes,&properties,case["found"].as_bool().unwrap().then_some(0)),row["output"].as_bool().unwrap());
   }

@@ -596,6 +596,10 @@ impl Command {
     pub(crate) fn set_view_next(&mut self, next: Option<crate::view_fx_command_list::Key>) {
         self.view_next = next;
     }
+    ///4289A0 writes +3C (last view time); other runtime writers use this too.
+    pub(crate) fn set_word(&mut self, offset: u32, value: u32) {
+        self.words.insert(offset, value);
+    }
 }
 ///4296B0's real current owners, read lazily in native order. The caller must
 /// provide current OS thread identity and retained App+48, not a guessed role.

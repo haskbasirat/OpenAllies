@@ -3,6 +3,7 @@ use serde_json::{json,Value};
 struct Payload { next:Option<Key>, poisoned:bool }
 impl Message for Payload {
     fn set_next(&mut self,next:Option<Key>){self.next=next;self.poisoned=false;}
+    fn next(&self)->Option<&Key>{self.next.as_ref()}
 }
 #[test]
 fn original_v14_43b870_links_null_and_retention_prefixes_match_all_precisions(){

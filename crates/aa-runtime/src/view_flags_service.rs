@@ -77,6 +77,92 @@ pub trait ActionMaskPublication {
     fn command_masks_437eb0(&mut self, loans: &mut HudLoans<'_, '_, '_, '_>) -> Result<()>;
 }
 
+/// The VWorld part: view+0x54 at an actor's Thing+0xC (the client's
+/// ViewDirectory entry; see aa-client view_flags_service.rs).
+pub trait ViewFlags {
+    fn view_flags_54(&self, actor: ActorId, key: ObjectKey, thing_c: usize) -> Result<u32>;
+}
+/// The GWorld / Session part (the netcode Session players and the World).
+pub trait SessionPublication {
+    fn world_phase_d8(&self) -> Result<u32>;
+    fn world_word_48(&self) -> Result<u32>;
+    fn map_settings_mode_a8(&self) -> Result<u32>;
+    fn world_kingdom_slots(&self) -> Result<Vec<Option<ActorId>>>;
+    fn application_state_e4(&self) -> Result<u32>;
+    fn local_player_76ac60(&self) -> Result<Option<PlayerRef>>;
+    fn player_name_24(&self, player: PlayerRef) -> Result<Vec<u16>>;
+    fn player_kingdom_765e00(&self, player: PlayerRef) -> Result<Option<ActorId>>;
+    fn session_players_bc(&self) -> Result<Vec<PlayerRef>>;
+    fn player_view_state_50(&mut self, player: PlayerRef)
+        -> Result<Option<(&mut crate::player_view_state::State, &mut dyn Globals)>>;
+}
+/// The game UIWorldState part ([B36538]+0x13C).
+pub trait UiPublication {
+    /// +0x08 nodes' views (Thing+0xC handles), head first.
+    fn ui_selection_8(&self) -> Result<Vec<usize>>;
+    /// 0x437EB0 now: [`HudLoans::command_masks_437eb0`] with the UI's own
+    /// +0x08 list, +0x4C, [+0x40]+0x18 and 0x5C0E30, then store +0x20..+0x2C.
+    fn command_masks_437eb0(&mut self, loans: &mut HudLoans<'_, '_, '_, '_>) -> Result<()>;
+}
+/// The three parts lent together for one simulation callback. A part that
+/// is absent (`ui: None`) is an explicit error when native reaches it.
+pub struct Composed<'a> {
+    pub view: &'a dyn ViewFlags,
+    pub session: &'a mut dyn SessionPublication,
+    pub ui: Option<&'a mut dyn UiPublication>,
+}
+fn ui_missing<T>() -> Result<T> {
+    Err("[B36538]+0x13C game UIWorldState owner is not lent to this callback (0x50C944 / 0x50C7D0)".into())
+}
+impl ActionMaskPublication for Composed<'_> {
+    fn world_phase_d8(&self) -> Result<u32> {
+        self.session.world_phase_d8()
+    }
+    fn world_word_48(&self) -> Result<u32> {
+        self.session.world_word_48()
+    }
+    fn map_settings_mode_a8(&self) -> Result<u32> {
+        self.session.map_settings_mode_a8()
+    }
+    fn world_kingdom_slots(&self) -> Result<Vec<Option<ActorId>>> {
+        self.session.world_kingdom_slots()
+    }
+    fn application_state_e4(&self) -> Result<u32> {
+        self.session.application_state_e4()
+    }
+    fn local_player_76ac60(&self) -> Result<Option<PlayerRef>> {
+        self.session.local_player_76ac60()
+    }
+    fn player_name_24(&self, player: PlayerRef) -> Result<Vec<u16>> {
+        self.session.player_name_24(player)
+    }
+    fn player_kingdom_765e00(&self, player: PlayerRef) -> Result<Option<ActorId>> {
+        self.session.player_kingdom_765e00(player)
+    }
+    fn session_players_bc(&self) -> Result<Vec<PlayerRef>> {
+        self.session.session_players_bc()
+    }
+    fn player_view_state_50(&mut self, player: PlayerRef)
+        -> Result<Option<(&mut crate::player_view_state::State, &mut dyn Globals)>> {
+        self.session.player_view_state_50(player)
+    }
+    fn view_flags_54(&self, actor: ActorId, key: ObjectKey, thing_c: usize) -> Result<u32> {
+        self.view.view_flags_54(actor, key, thing_c)
+    }
+    fn ui_selection_8(&self) -> Result<Vec<usize>> {
+        match &self.ui {
+            Some(ui) => ui.ui_selection_8(),
+            None => ui_missing(),
+        }
+    }
+    fn command_masks_437eb0(&mut self, loans: &mut HudLoans<'_, '_, '_, '_>) -> Result<()> {
+        match &mut self.ui {
+            Some(ui) => ui.command_masks_437eb0(loans),
+            None => ui_missing(),
+        }
+    }
+}
+
 /// The simulation owners 0x437EB0 reads when 0x50C8E0 runs it inside a
 /// simulation callback: the SAME Catalog, moved definition Bank, ActorStore
 /// loan and spatial owner as the rebuilding 0x4D1350.

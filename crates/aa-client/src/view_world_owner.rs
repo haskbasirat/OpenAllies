@@ -131,6 +131,10 @@ impl<A> VWorldOwner<A>{
             Some(catalog)=>views.with_order_150(Box::new(move|slot,kingdom,wire,globals|{
                 let parts=world.presentation_parts()?;
                 crate::battle_orders_input::actor_virtual_150_between_frames(catalog,&parts,slot,kingdom,wire,globals)
+            })).with_order_masks(Box::new(move|selected,thing_14,k76,k4c,group,globals|{
+                let parts=world.presentation_parts()?;
+                aa_runtime::player_order_input::command_mask_world::command_masks_between_frames(
+                    catalog,&parts,globals,k76,selected,thing_14,k4c,group)
             })),
         })
     }
@@ -219,7 +223,7 @@ impl<A,D:FactoryDiagnostics> aa_runtime::view_factory::Services for Factory<'_,'
         if let Some(init)=self.initialization.as_mut(){
             let object=self.native.object_init_parts_for(p.revision)?;
             let mut context=super::view_directory::InitContext::new(object,&mut *init.application,init.client,
-                &mut *init.execution,init.request_policy,init.precision).with_replacement_color(self.inputs.replacement_color());
+                &mut *init.execution,init.request_policy,init.precision).with_replacement_color(self.inputs.replacement_color()).with_seeds(self.inputs.seeds());
             if let Some(session)=init.session{context=context.with_session(session);}
             let result=self.directory.initialize_bound_with(p,self.catalog,view,&mut context).map_err(|e|e.to_string());
             //Diagnostic census only (AA_STARTUP_CENSUS + _CONTINUE): record the

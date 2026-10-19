@@ -107,7 +107,7 @@ impl Env<String, String> for TestEnv {
         if !self.alive(&name) {
             return Ok(None);
         }
-        let voice = spec["voice"].as_str().ok_or("object without +4 voice owner")?;
+        let Some(voice) = spec.get("voice").and_then(Value::as_str) else { return Ok(Some(0)) };
         Ok(Some(self.voice_ids.iter().position(|v| v == voice).unwrap() as u32 + 1))
     }
     fn owner_relation(&mut self, handle: u32) -> Result<Option<u32>> {
@@ -426,8 +426,9 @@ fn replay(row: &Value) {
 
 #[test]
 fn native_audio_manager_fixture_replays() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../research/phase8-audio/native-audio-manager.json");
-    let text = std::fs::read_to_string(path).expect("research/phase8-audio/native-audio-manager.json");
+    let path = std::env::var("AA_AUDIO_FIXTURE")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../research/phase8-audio/native-audio-manager.json").into());
+    let text = std::fs::read_to_string(&path).expect("research/phase8-audio/native-audio-manager.json");
     let fixture: Value = serde_json::from_str(&text).unwrap();
     let rows = fixture["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 63);

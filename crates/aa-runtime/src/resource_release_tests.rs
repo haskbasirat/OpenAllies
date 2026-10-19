@@ -37,6 +37,7 @@ fn entry(origin: &Arc<()>, priority: &crate::resource_task::DefaultPriority, row
         Kind::Model => Entry::model(origin, ids, source(&name), priority),
         Kind::Sequence => Entry::sequence(origin, ids, source(&name), priority),
         Kind::Sound => Entry::sound(origin, ids, source(&name), priority),
+        Kind::TerrainBlock => unreachable!("the release fixture has no dynamic rows"),
     }
     .unwrap();
     e.flags8 = u(&row["flags"]);
@@ -201,6 +202,18 @@ impl Services for Lab<'_> {
         self.events.extend(["lock:04".into(), "lock:20".into(), "lock:3c".into()]);
         Ok(())
     }
+    fn enter_load(&mut self, _: &Handle) -> Result<()> {
+        self.events.push("lock:load".into());
+        Ok(())
+    }
+    fn leave_load(&mut self, _: &Handle) -> Result<()> {
+        self.events.push("unlock:load".into());
+        Ok(())
+    }
+    fn loaded_diagnostic(&mut self, h: &Handle) -> Result<()> {
+        self.events.push(format!("loaded:{}", String::from_utf16_lossy(h.logical_ids())));
+        Ok(())
+    }
     fn request_diagnostic(&mut self, h: &Handle, immediate: bool) -> Result<()> {
         self.request_events(h, immediate);
         Ok(())
@@ -240,6 +253,10 @@ impl Backend for Lab<'_> {
     }
     fn detach_model_root_73d4b0(&mut self, _: &Handle) -> Result<()> {
         self.events.push("detach_73d4b0".into());
+        Ok(())
+    }
+    fn terrain_unload_71b5f0(&mut self, _: &Handle) -> Result<()> {
+        self.events.push("vf54_71b5f0".into());
         Ok(())
     }
 }
@@ -515,4 +532,70 @@ fn request_release_and_cached_rerequest_round_trip() {
     let m = app.manager.lock().unwrap();
     let c = m.cache.class(Kind::Model).unwrap();
     assert_eq!((c.lru.len(), c.ram_used0c, c.ram_peak10, m.cache.ram_used30), (0, 0, 0x40, 0));
+}
+
+fn terrain() -> serde_json::Value {
+    serde_json::from_str(include_str!("../../../research/development10/resource-terrain-block/native-terrain-block.json")).unwrap()
+}
+///723D30/723960/5ACEC0 facts: class chain, 4F0500, memory words and flags.
+#[test]
+fn terrain_block_constructor_class_and_memory_match_native_all_pc() {
+    let native = terrain();
+    assert_eq!(native["format"], "Dynamic/Terrain x%d y%d");
+    assert_eq!(native["class_name"], "KKC_RTerrainBlockResource");
+    assert_eq!(native["vtable"][19], "0x4f0500");
+    assert_eq!(native["vtable"][21], "0x71b5f0");
+    assert_eq!(native["vtable"][16], "0x5aa700");
+    assert_eq!(native["vtable"][15], "0x5aa6f0");
+    let origin = Arc::new(());
+    let priority = crate::resource_task::DefaultPriority::from_fresh_application(&origin);
+    for row in native["rows"].as_array().unwrap() {
+        let out = &row["output"];
+        let chain: Vec<u32> = out["class_"]["vf4_chain"].as_array().unwrap().iter().map(|v| u32::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap()).collect();
+        assert_eq!(crate::resource_model_unload::native_class_chain(Kind::TerrainBlock), chain.as_slice());
+        assert_eq!(out["class_"]["vf4c"], 1);
+        for (n, m) in [17u32, 33, 0, 0x10000].iter().zip(out["memory"].as_array().unwrap()) {
+            let e = Entry::terrain_block(&origin, 3, 7, *n, &priority).unwrap();
+            assert_eq!(serde_json::json!([e.memory0c, e.memory10]), m["memory"]);
+            assert_eq!(serde_json::json!(e.flags8), m["flags"]);
+            assert_eq!(String::from_utf16_lossy(e.handle.logical_ids()), "Dynamic/Terrain x3 y7");
+            assert!(e.handle.source_file().is_none() && e.requests4 == 0 && e.references14 == 0);
+            assert_eq!(e.task.references4().unwrap(), 1);
+        }
+        //5ACEC0: bit4 inserts by name, 59CB00 always, both under +20.
+        assert_eq!(out["publish"][0], serde_json::json!([["lock20"], ["5AC1C0_insert", 5], ["59CB00_class", 156], ["unlock20"]]));
+        assert_eq!(out["publish"][1], serde_json::json!([["lock20"], ["59CB00_class", 156], ["unlock20"]]));
+    }
+}
+///Registration, the immediate (mode 4) request through the generic
+///5AA3F0/5B0270/5B1910 path and the release through 5AA550/5AEE70/5AC3D0
+///(bit3: never cached) on the SAME manager.
+#[test]
+#[ignore = "requires AA_GAME_ROOT for the Application source backend"]
+fn terrain_block_registration_request_and_release_round_trip() {
+    let root = std::path::PathBuf::from(std::env::var_os("AA_GAME_ROOT").unwrap());
+    let files = aa_rules::sources::V14Sources::open(root.join("Data.rwd"), root.join("reconstruction/native-game/runtime-expanded-v14"),
+        aa_rules::sources::SourceLimits { max_member_bytes: u64::MAX }).unwrap();
+    let mut app = super::super::Application::from_sources(files);
+    let current = Arc::new(crate::execution_context::ApplicationThread::capture(&mut LabOs(0x1234)).unwrap());
+    let mut lab = Lab { manager: &app.manager, events: vec![], caching: 1, current: Arc::clone(&current), hook: None };
+    let mut resources = Resources {
+        origin: &app.origin, sources: &mut app.sources, maps: &mut app.maps, manager: &app.manager,
+        priority: &app.resource_priority, tasks: &app.resource_tasks, cache_variables: &app.cache_variables,
+        model_source_context: &app.model_source_context,
+    };
+    let h = resources.register_terrain_block_5acec0(3, 7, 17, &mut lab).unwrap();
+    assert_eq!(lab.events, ["lock:20", "unlock:20"]);
+    assert!(resources.register_terrain_block_5acec0(3, 7, 17, &mut lab).is_err());
+    assert_eq!((resources.flags_08(&h).unwrap(), resources.requests_04(&h).unwrap()), (0x18, 0));
+    lab.events.clear();
+    resources.request_0c(&h, 1, 4, &mut lab).unwrap();
+    assert_eq!(lab.events, ["lock:20", "unlock:20", "request:true:Dynamic/Terrain x3 y7", "lock:load", "loaded:Dynamic/Terrain x3 y7", "unlock:load"]);
+    assert_eq!((resources.flags_08(&h).unwrap(), resources.requests_04(&h).unwrap()), (0x1f, 1));
+    lab.events.clear();
+    resources.release_14(&h, 1, &mut lab).unwrap();
+    assert_eq!(lab.events, ["lock:20", "log20:0x69b:Dynamic/Terrain x3 y7", "lock:3c", "vf54_71b5f0", "log20:0x523:Dynamic/Terrain x3 y7", "unlock:3c", "unlock:20"]);
+    assert_eq!((resources.flags_08(&h).unwrap(), resources.requests_04(&h).unwrap()), (0x1c, 0));
+    let m = app.manager.lock().unwrap();
+    assert!(m.cache.class(Kind::TerrainBlock).is_none());
 }

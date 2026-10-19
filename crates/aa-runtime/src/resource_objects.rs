@@ -218,8 +218,9 @@ impl Entry {
         Ok(())
     }
     ///723D30 -> 723960: the 5AA890 base fields (flags+8 0x10 "no location",
-    ///counts 0, own TaskLoad retained once) then 723960's `or [esi+8],8`.
-    pub(crate) fn terrain_block(origin: &Arc<()>, x: i32, y: i32, priority: &crate::resource_task::DefaultPriority) -> Result<Self> {
+    ///counts 0, own TaskLoad retained once), 723CE1 5AA270(n*n*0x22, same)
+    ///with n = +C8 = TerrainMap+A4, then 723CED's `or [esi+8],8`.
+    pub(crate) fn terrain_block(origin: &Arc<()>, x: i32, y: i32, map_a4: u32, priority: &crate::resource_task::DefaultPriority) -> Result<Self> {
         let ids = format!("Dynamic/Terrain x{x} y{y}").encode_utf16().collect();
         let handle = Handle::new_dynamic(origin, Kind::TerrainBlock, ids);
         let task = crate::resource_task::Task::construct_for_resource(&handle, priority)?;
@@ -228,8 +229,8 @@ impl Entry {
             handle,
             requests4: 0,
             flags8: 0x10 | 8,
-            memory0c: 0,
-            memory10: 0,
+            memory0c: map_a4.wrapping_mul(map_a4).wrapping_mul(0x22),
+            memory10: map_a4.wrapping_mul(map_a4).wrapping_mul(0x22),
             references14: 0,
             task: Arc::new(task),
             locations: Vec::new(),

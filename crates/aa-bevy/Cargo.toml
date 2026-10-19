@@ -1,0 +1,33 @@
+[package]
+name = "aa-bevy"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+# Presentation experiment: draws the original map, models and animation rigs
+# with Bevy so the engine can be judged. No gameplay runs in this binary.
+[[bin]]
+name = "AxisAlliesBevy"
+path = "src/main.rs"
+
+[dependencies]
+aa-assets = { path = "../aa-assets" }
+aa-animation = { path = "../aa-animation" }
+anyhow = "1"
+bevy = "=0.19.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+rayon = "1.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
+# termcolor feature, which breaks the wgpu-27 naga the client builds when both
+# are compiled in one workspace. Keeping Bevy apart leaves the client unchanged.
+[workspace]
+resolver = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"

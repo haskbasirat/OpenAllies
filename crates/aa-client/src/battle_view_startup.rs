@@ -116,6 +116,15 @@ impl State{
         let mut objects=self.view.streaming_objects(world,model,&mut data,pc).map_err(|e|format!("{e:#}"))?;
         pass(world,&mut objects)
     }
+    ///The view-cell half of one 4312F0 (ViewCellHooks for the terrain
+    ///visibility pass): `planes` are the current camera's +19C..+1F8.
+    pub fn view_cells<'s>(&'s mut self,world:&'s World<'_>,planes:[[u32;4];6],
+        model:&'s mut dyn crate::live_scene::view_directory::ModelLifecycle,
+        data:&'s mut dyn crate::live_scene::view_directory::DataLifecycle,pc:Precision)
+        ->Result<crate::live_scene::view_directory::ViewCells<'s>>{
+        let objects=self.view.streaming_objects(world,model,data,pc).map_err(|e|format!("{e:#}"))?;
+        Ok(crate::live_scene::view_directory::ViewCells{objects,planes})
+    }
     pub fn ui_fields(&self)->&ui_world_init::State<ActorId>{&self.ui}
     pub fn diagnostics(&self)->&[Diagnostic]{&self.diagnostics}
     pub fn initialize<T:MillisecondTimer>(&mut self,session:&mut ActualActivatedSession,catalog:&Catalog<'_>,

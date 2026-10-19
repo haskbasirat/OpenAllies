@@ -194,3 +194,78 @@ fn by_reference_lease_equals_cloned_vector_lease() {
     }
     assert!(compared >= 400, "{compared}");
 }
+
+/// The reference part of the validation memo: with references retired,
+/// re-registered under other generations/keys and members whose reference
+/// is stale, validate_load_fields keeps giving exactly the direct answer.
+#[test]
+fn load_validation_memo_follows_reference_changes() {
+    let fixture = fixture();
+    let mut checked = 0;
+    for case in fixture["cases"].as_array().unwrap().iter().take(8) {
+        let mut index = index_for(case);
+        let members: Vec<Member> = case["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| serde_json::from_value(m.clone()).unwrap())
+            .collect();
+        if members.is_empty() {
+            continue;
+        }
+        for member in &members {
+            let _ = index.register_load_reference(member.key, member.reference);
+        }
+        let direct = |index: &SpatialIndex, member: &Member| -> std::result::Result<(), String> {
+            if index.resolve_reference(member.reference) != Some(member.key) {
+                return Err("load spatial world error: load fields do not match the registered generation".into());
+            }
+            tile_rectangle(&index.grid, &member.placement(false), index.precision)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        };
+        let mut state = 0x2468_ace1u32 ^ members.len() as u32;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        };
+        for step in 0..3000u32 {
+            let member = &members[next() as usize % members.len()];
+            match next() % 6 {
+                0 => index.retire_reference(member.reference),
+                1 => {
+                    let _ = index.register_load_reference(member.key, member.reference);
+                }
+                2 => {
+                    // Another generation of the same slot, or another key.
+                    let other = &members[next() as usize % members.len()];
+                    let reference = member.reference.wrapping_add(0x1_0000 * (next() % 2));
+                    index.retire_reference(member.reference);
+                    let _ = index.register_load_reference(other.key, reference);
+                }
+                _ => {}
+            }
+            let mut variant = member.clone();
+            if next() % 4 == 0 {
+                variant.reference = variant.reference.wrapping_add(0x1_0000);
+            }
+            if next() % 5 == 0 {
+                variant.actor.position[1] = variant.actor.position[1].wrapping_add(0x0008_0000);
+            }
+            let expected = direct(&index, &variant);
+            let actual = index.validate_load_fields(&variant).map_err(|e| e.to_string());
+            assert_eq!(actual.is_ok(), expected.is_ok(), "step {step}: {actual:?} {expected:?}");
+            if let (Err(a), Err(e)) = (&actual, &expected) {
+                if e.contains("generation") {
+                    assert!(a.contains("load fields do not match the registered generation"), "{a}");
+                } else {
+                    assert_eq!(a, e);
+                }
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked > 1000, "{checked}");
+}

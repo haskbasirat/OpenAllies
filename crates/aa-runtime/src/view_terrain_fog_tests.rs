@@ -305,7 +305,7 @@ fn frames_7208d0_725340_match_native() {
                 assert_eq!(got, want["block"], "seed {} {p:?} step {step}", c["seed"]);
             } else {
                 let k = step["kingdom"].as_str().map(|k| if k == "k" { "k" } else { "j" });
-                clock.update_725340(&mut globals, u(&step["time_ms"]), k, u(&c["gray_64"]), u(&step["fog_debug"]) as u8, p).unwrap();
+                clock.update_725340(&mut globals, Ok(u(&step["time_ms"])), Ok(k), u(&c["gray_64"]), Ok(u(&step["fog_debug"]) as u8), p).unwrap();
                 let got = json!({"b403c8": globals.fog_debug_b403c8, "b403c9": globals.reblend_b403c9,
                     "b285d4": globals.explored_b285d4, "w138": clock.seconds_138, "w13c": clock.delta_13c,
                     "kingdom_140": clock.kingdom_140});
@@ -375,7 +375,7 @@ impl ViewReads for Obj<'_> {
 fn view_virtuals_match_native() {
     for (key, thing) in [("view", false), ("thing_view", true)] {
         for (_, c, o) in cases(key) {
-            let v = ViewWords { thing_14: thing, flags_54: u(&c["flags_54"]), position_38: [c.get("x").map_or(0, u), c.get("y").map_or(0, u)] };
+            let v = ViewWords { thing_14: thing, flags_54: u(&c["flags_54"]), position_38: Some([c.get("x").map_or(0, u), c.get("y").map_or(0, u)]) };
             let a = u(&c["a"]) != 0;
             let mut r = Obj { c, calls: Vec::new() };
             assert_eq!(u8::from(object::visible_45bf20(&mut r, &v, a).unwrap()), u(&o["vt50"]) as u8, "{c}");

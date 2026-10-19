@@ -95,6 +95,16 @@ impl Execution<'_> {
         self.identity().sync_gate(self.os, sai_flags)
     }
 }
+///The same retained simulation thread lends its live OS-ID provider to
+///work bound on it (for example 4296B0 under a fresh 42A590 on that thread).
+impl crate::execution_context::ExecutionIds for Execution<'_> {
+    fn current_os_thread_id(&mut self) -> Result<u32, String> {
+        self.os.current_thread_id()
+    }
+    fn application_os_thread_id(&self) -> u32 {
+        self.identity.application.id()
+    }
+}
 type Job<S> = Box<dyn FnOnce(&mut S, &mut Execution<'_>) + Send + 'static>;
 
 ///Move-only result transport for one queued operation. This is not a native

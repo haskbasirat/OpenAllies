@@ -133,21 +133,53 @@ impl SimTime for Sim<'_> {
     }
 }
 
-/// 427950 on `[B36500]` for each World+130 type-1 message.
-struct Script {
+/// The 50C600 children for each World+130 entry. 427950 has no script
+/// processor; kinds 0/2/3/4 have no live Rust producer yet and their children
+/// no client owner. The product refuses each one; the look-ahead records it
+/// and continues as if the child had no effect (diagnostic, not native).
+struct Messages {
     look_ahead: bool,
     texts: Vec<String>,
 }
-impl aa_runtime::fx_manager::BroadcastDelivery for Script {
+impl Messages {
+    fn refuse<T>(&mut self, child: String, neutral: T) -> Result<T> {
+        if !self.look_ahead {
+            return Err(child);
+        }
+        log::warn!("native 50C750 look-ahead: {child} (recorded, not native state)");
+        Ok(neutral)
+    }
+}
+impl aa_runtime::fx_manager::BroadcastDelivery for Messages {
+    type Thing = ();
+    type Vfx = ();
+    fn thing_432e40(&mut self, handle: u32) -> Result<Option<()>> {
+        self.refuse(format!("432E40 [B364C0] view lookup of handle {handle:#010x} has no client owner"), None)
+    }
+    fn thing_record_43b270(&mut self, view: u64, _: Option<()>, _: &[u32; 7]) -> Result<()> {
+        self.refuse(format!("43B270 damage number on attached view {view} has no client owner"), ())
+    }
     fn script_eval_427950(&mut self, text: &[u16], flag: u8) -> Result<()> {
         let text = String::from_utf16_lossy(text);
-        if !self.look_ahead {
-            return Err(format!("427950 Eval(`{text}`, {flag}) on [B36500]: TGC_ScriptProcessor 426C20 has no Rust owner"));
-        }
-        //Look-ahead only: the command is recorded, never executed.
-        log::warn!("native 50C750 look-ahead: 427950 Eval(`{text}`, {flag}) recorded without a script processor");
+        let child = format!("427950 Eval(`{text}`, {flag}) on [B36500]: TGC_ScriptProcessor 426C20 has no Rust owner");
+        self.refuse(child, ())?;
         self.texts.push(text);
         Ok(())
+    }
+    fn mission_result_440190(&mut self) -> Result<()> {
+        self.refuse("440190 VWorld mission result messages (HUD) have no client owner".into(), ())
+    }
+    fn team_victory_4408a0(&mut self) -> Result<()> {
+        self.refuse("4408A0 VWorld team victory message (HUD) has no client owner".into(), ())
+    }
+    fn attached_vfx_43cd00(&mut self, definition: u64, _: ()) -> Result<Option<()>> {
+        self.refuse(format!("43CD00 attached VFX (definition {definition:#x}) is the FX package's, not bound"), None)
+    }
+    fn detached_vfx_43cc50(&mut self, definition: u64, _: [u32; 3], _: [u32; 3]) -> Result<Option<()>> {
+        self.refuse(format!("43CC50 detached VFX (definition {definition:#x}) is the FX package's, not bound"), None)
+    }
+    fn vfx_time_50(&mut self, _: (), _: u32) -> Result<()> {
+        self.refuse("VFX view +50 store has no client owner".into(), ())
     }
 }
 
@@ -240,7 +272,7 @@ impl Services for Frame<'_, '_, '_> {
         Err(format!("855D30 assertion `{expression}` ({file}:{line}) reached; its log/dialog result is not ported"))
     }
     fn world_messages_50c750(&mut self) -> Result<()> {
-        let mut script = Script { look_ahead: self.look_ahead, texts: Vec::new() };
+        let mut script = Messages { look_ahead: self.look_ahead, texts: Vec::new() };
         let delivered = self.loans.world.with_view_binding(|p| p.presentation.deliver_broadcasts_50c750(&mut script))?;
         if delivered > 0 {
             log::info!("native 50C750: World+130 count {delivered} -> 0; 427950 received {:?}", script.texts);

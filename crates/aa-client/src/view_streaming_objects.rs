@@ -48,6 +48,13 @@ pub trait DataLifecycle{
     fn release_18(&mut self,definition:&RuntimeDefinition,delta:u32)->Result<()>;
     fn model_74_78(&mut self,model:&Handle)->Result<[u32;2]>;
 }
+///No Data/Resource driver was lent to this update: each read is an error.
+pub struct UnboundData;
+impl DataLifecycle for UnboundData{
+    fn request_14(&mut self,_:&RuntimeDefinition,_:u32,_:u32)->Result<()>{Err("45B45D view+10 Data vt+14: no Data/Resource driver was lent to this VWorld update".into())}
+    fn release_18(&mut self,_:&RuntimeDefinition,_:u32)->Result<()>{Err("45BB78 view+10 Data vt+18: no Data/Resource driver was lent to this VWorld update".into())}
+    fn model_74_78(&mut self,_:&Handle)->Result<[u32;2]>{Err("42FB62 vt+3C/+40 Model+74/+78: no Resource owner was lent to this VWorld update".into())}
+}
 ///The actual Data/Resource application and resource-task driver.
 pub struct CurrentData<'a,'c,'e>{
     pub catalog:&'a Catalog<'c>,pub bank:&'a Bank,pub biome:Option<&'a aa_runtime::vworld_resource_context::Biome>,
@@ -94,8 +101,20 @@ impl<'a> StreamingObjects<'a>{
         data:&'a mut dyn DataLifecycle,pc:Precision)->Self{
         Self{directory,actors,grid,height,revision,model,data,pc}
     }
-    ///The SAME VWorld+BC heightfield, for the terrain pass beside this one.
+    ///The SAME VWorld+BC heightfield and VWorld+94 VGrid, for the terrain
+    ///pass beside this one.
     pub fn heightfield(&self)->&'a view_heightfield::State{self.height}
+    pub fn grid(&self)->&'a view_grid_state::State<ViewHandle>{self.grid}
+}
+///aa_runtime::terrain_visibility::ViewCellHooks: these objects with the
+///VWorld+94 +A0..+FC planes 42EED0 copies from the camera this pass.
+pub struct ViewCells<'a>{pub objects:StreamingObjects<'a>,pub planes:[[u32;4];6]}
+impl aa_runtime::terrain_visibility::ViewCellHooks for ViewCells<'_>{
+    fn sweep_42fad0(&mut self,index:[i32;2],block_size_a0:i32,state_b8:u32)->Result<()>{
+        let block=TerrainBlockCell{column_ac:index[0],row_b0:index[1],state_b8,size_a0:block_size_a0};
+        self.objects.sweep_42fad0(block,&self.planes)
+    }
+    fn traverse_42f670(&mut self)->Result<()>{self.objects.traverse_42f670()}
 }
 impl StreamingObjects<'_>{
     fn entry(&self,v:ViewHandle)->Result<&super::TypedVObject>{

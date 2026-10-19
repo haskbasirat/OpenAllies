@@ -29,7 +29,7 @@ use aa_runtime::player_order_input::{
     pick::{Model, Scene},
     requests::{AdminRequests, Counts, Requests},
     states::{self, CameraSlot, CommandDefinition, Machine, Widget},
-    ui_world::{Leaves, StaticRef},
+    ui_world::{KingdomGroup, Leaves, StaticRef},
 };
 use aa_orders::commands::CommandWire;
 use aa_numeric::Precision;
@@ -221,6 +221,38 @@ pub trait ViewLeaves {
         let _ = (v, wire);
         Err("0x436950 actor vt+0x150 (0x4CF430 on the live World): not bound by the view owner".into())
     }
+    /// UIWorldState 0x437EB0 over the live World (see
+    /// [`command_masks_between_frames`]): +0x20..+0x2C in place. The default
+    /// is only 0x437EB0's own empty-selection branch (stores 0, returns).
+    fn command_masks_437eb0(&mut self, selected: &[View], kingdom_4c: Option<u64>, group_40_byte_18: Option<bool>, masks: &mut [u32; 4]) -> Result<()> {
+        let _ = (kingdom_4c, group_40_byte_18);
+        *masks = [0; 4];
+        if selected.is_empty() {
+            return Ok(());
+        }
+        Err("0x437EB0 command masks of a selection over the live World: not bound by the view owner".into())
+    }
+    /// 0x43A1C0 / 0x439BF0: 0x765E00(0x5C0E10()), the local player's
+    /// kingdom (player+0x28) as its ActorId raw value; None while there is
+    /// no GWorld or no Node+8 player.
+    fn local_kingdom_765e00(&mut self) -> Result<Option<u64>> {
+        Err("0x765E00(0x5C0E10()) local player kingdom: not bound by the view owner".into())
+    }
+    /// 0x439BF0: `[kingdom+0x34C][0..+0x350]` group records in order.
+    fn kingdom_groups_34c(&mut self, kingdom: u64) -> Result<Vec<KingdomGroup>> {
+        let _ = kingdom;
+        Err("0x439BF0 Kingdom+0x34C group records: not bound by the view owner".into())
+    }
+    /// 0x439BF0: B364C0 of a group member handle (None: unresolved), then
+    /// the object's +0x0C view.
+    fn view_of_handle_b364c0(&mut self, handle: u32) -> Result<Option<Option<View>>> {
+        let _ = handle;
+        Err("0x439BF0 B364C0 member handle -> object +0x0C view: not bound by the view owner".into())
+    }
+    /// 0x439E58: `[[0x5C0E10()+0x50]+0x24]+0x18`.
+    fn player_wildcard_byte_50(&mut self) -> Result<bool> {
+        Err("0x439E58 [[player+0x50]+0x24]+0x18 wildcard byte: not bound by the view owner".into())
+    }
 }
 
 /// The HUD/widget, presentation and audio leaves (HUD, camera and audio
@@ -245,6 +277,8 @@ pub trait HudLeaves {
         self.cursor_feedback_620640()
     }
     fn selection_sound_436850(&mut self, v: View) -> Result<()>;
+    /// Superseded: 0x437EB0 is ported (`player_order_input::command_masks`)
+    /// and runs through [`ViewLeaves::command_masks_437eb0`]; not called.
     fn command_masks_437eb0(&mut self, selected: &[View], group: StaticRef, masks: &mut [u32; 4]) -> Result<()>;
     fn brush_changed_42d4d0(&mut self) -> Result<()>;
     fn vworld_list_changed_4325c0(&mut self) -> Result<()>;
@@ -372,10 +406,18 @@ impl Leaves for ViewsOnly<'_> {
     }
     not_views! {
         selection_sound_436850(v: View) -> Result<()>;
-        command_masks_437eb0(s: &[View], g: StaticRef, m: &mut [u32; 4]) -> Result<()>;
         brush_changed_42d4d0() -> Result<()>;
         vworld_list_changed_4325c0() -> Result<()>;
         vworld_ad() -> Result<bool>;
+    }
+    fn command_masks_437eb0(&mut self, s: &[View], k: Option<u64>, g: Option<bool>, m: &mut [u32; 4]) -> Result<()> {
+        self.0.command_masks_437eb0(s, k, g, m)
+    }
+    views_only! {
+        local_kingdom_765e00() -> Result<Option<u64>>;
+        kingdom_groups_34c(k: u64) -> Result<Vec<KingdomGroup>>;
+        view_of_handle_b364c0(h: u32) -> Result<Option<Option<View>>>;
+        player_wildcard_byte_50() -> Result<bool>;
     }
     fn requests(&mut self) -> &mut dyn Requests<View> {
         unreachable!("0x6409A0 emits no request")
@@ -546,6 +588,42 @@ pub fn actor_virtual_150_between_frames(
     order_world::actor_virtual_150(catalog, parts.actors, parts.spatial, parts.definitions, actor, kingdom_76ac70, wire, globals)
 }
 
+/// What a [`ViewLeaves::command_masks_437eb0`] implementation calls: the
+/// 0x437EB0 kernel over the World's presentation parts (read-only), each
+/// selected view's `actor+0x14` slot resolved in the SAME ActorStore.
+/// `kingdom_76ac70` is the 0x5C0E30 value (the view owner's OrderContext;
+/// None without a session), `kingdom_4c` the UIWorldState+0x4C cache the
+/// leaf receives from the machine (0x43A1C0's 0x765E00 kingdom),
+/// `globals` the same [`UiOrderGlobals`] as vt+0x150 (0x40EAA0, 0x76AC90).
+#[allow(clippy::too_many_arguments)]
+pub fn command_masks_between_frames(
+    catalog: &aa_runtime::catalog::Catalog<'_>,
+    parts: &aa_runtime::live_world_frame::PresentationParts<'_>,
+    views: &mut dyn ViewLeaves,
+    selected: &[View],
+    kingdom_76ac70: Option<aa_actors::ActorId>,
+    kingdom_4c: Option<aa_actors::ActorId>,
+    group_40_byte_18: Option<bool>,
+    globals: &mut UiOrderGlobals,
+) -> Result<[u32; 4]> {
+    use aa_runtime::player_order_input::{command_mask_world, order_world};
+    command_mask_world::command_masks_between_frames(
+        catalog,
+        parts,
+        globals,
+        Ok(kingdom_76ac70),
+        selected,
+        |v| {
+            let slot = views.actor_slot_14(v)?;
+            order_world::actor_for_slot(parts.actors, slot)
+                .map(Some)
+                .ok_or_else(|| "0x437EB0: the view's actor+0x14 slot has no live identity".to_string())
+        },
+        kingdom_4c,
+        group_40_byte_18,
+    )
+}
+
 /// B43CF8..B43D00, the vector 0x59A6E0 copies into the event before 0x71D840,
 /// read from the SAME retained seed owner the view constructors read
 /// (`view_startup_inputs::...::seeds()`).
@@ -671,8 +749,14 @@ impl Leaves for Host<'_, '_> {
         vworld_list_changed_4325c0() -> Result<()>;
         vworld_ad() -> Result<bool>;
     }
-    fn command_masks_437eb0(&mut self, s: &[View], g: StaticRef, m: &mut [u32; 4]) -> Result<()> {
-        self.live.hud.command_masks_437eb0(s, g, m)
+    fn command_masks_437eb0(&mut self, s: &[View], k: Option<u64>, g: Option<bool>, m: &mut [u32; 4]) -> Result<()> {
+        self.live.views.command_masks_437eb0(s, k, g, m)
+    }
+    views! {
+        local_kingdom_765e00() -> Result<Option<u64>>;
+        kingdom_groups_34c(k: u64) -> Result<Vec<KingdomGroup>>;
+        view_of_handle_b364c0(h: u32) -> Result<Option<Option<View>>>;
+        player_wildcard_byte_50() -> Result<bool>;
     }
     fn requests(&mut self) -> &mut dyn Requests<View> {
         self

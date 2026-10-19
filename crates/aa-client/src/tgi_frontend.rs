@@ -16,6 +16,9 @@
 //! Keys: Escape/Enter go to the focused edit box or open drop-down first,
 //! then to the UI hotkeys (Data/Localization/Hotkeys/hotkeys_ui.txt).
 
+#[path = "custom_game.rs"]
+pub mod custom_game;
+
 use crate::menu_video::MenuVideo;
 use crate::ui_tex::{UiTextures, Variant};
 use aa_ui::draw::{Blend, DrawKind, DrawList};

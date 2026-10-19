@@ -24,6 +24,15 @@ impl State {
 }
 impl Message for Command {
     fn set_next(&mut self, next: Option<Key>) { self.set_view_next(next); }
+    fn next(&self) -> Option<&Key> { self.view_next() }
+}
+///43EC60's FX segment operations (view_fx_execute.rs).
+impl State {
+    pub(crate) fn list_mut(&mut self) -> &mut List<Command> { &mut self.list }
+    pub(crate) fn pop_head_43ed60(&mut self) -> Option<Key> { self.list.pop_head() }
+    pub(crate) fn reappend_43eda0(&mut self, key: Key) -> Result<(), String> { self.list.reappend(key) }
+    pub(crate) fn command_mut(&mut self, key: &Key) -> Option<&mut Command> { self.list.get_mut(key) }
+    pub(crate) fn free_6f7430(&mut self, key: &Key) -> Option<Command> { self.list.free(key) }
 }
 
 #[cfg(test)]

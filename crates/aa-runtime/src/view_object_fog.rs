@@ -25,6 +25,19 @@ pub struct GMapWords {
     pub tiles: usize,
 }
 
+impl GMapWords {
+    /// The SAME World GMap the live Detection tick writes (aa-zones keeps
+    /// GMap +4 shift, +C/+10 extents and +1C/+20 tile counts).
+    pub fn from_zones(zones: &aa_zones::tile::ZoneMap) -> Result<Self> {
+        let g = zones.geometry;
+        let tiles = usize::try_from(g.width).ok().zip(usize::try_from(g.height).ok()).and_then(|(w, h)| w.checked_mul(h));
+        if tiles != Some(zones.tiles.len()) {
+            return Err("GMap +1C * +20 differs from the zone tile array".into());
+        }
+        Ok(Self { shift: g.shift, extent_bits: g.extent_bits, width: g.width, tiles: zones.tiles.len() })
+    }
+}
+
 /// The VObject words the two virtuals read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ViewWords {
@@ -32,8 +45,9 @@ pub struct ViewWords {
     pub thing_14: bool,
     /// view+54 flags.
     pub flags_54: u32,
-    /// view+38 / +3C position (binary32), read only by the Thing-less path.
-    pub position_38: [u32; 2],
+    /// view+38 / +3C position (binary32), read only by the Thing-less path
+    /// (None: not lent by the caller, an error where 0x45BFA5 reads it).
+    pub position_38: Option<[u32; 2]>,
 }
 
 /// Reads of 0x45BF20 / 0x45BD40.
@@ -122,10 +136,11 @@ pub fn visible_45bf20<R: ViewReads>(r: &mut R, v: &ViewWords, a: bool) -> Result
         return r.thing_visible_5c(k, a);
     }
     let g = r.gmap()?;
-    if !inside_4282a0(&g, v.position_38)? {
+    let xy = v.position_38.ok_or("45BFA5 reads view+38/+3C, which the caller did not lend")?;
+    if !inside_4282a0(&g, xy)? {
         return Ok(false);
     }
-    let tile = tile_42a530(&g, v.position_38)?;
+    let tile = tile_42a530(&g, xy)?;
     tile_visible(r, tile, k)
 }
 

@@ -21,6 +21,10 @@ use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, String>;
 
+///Actor+144 TrackInfo position histories (50AB10) of this World.
+#[path = "position_histories.rs"]
+pub mod position_histories;
+
 /// No Clone/Default: the same list, index, zone map and Kingdom arrays move
 /// from Catalog to Attempt to Staged. They are never reconstructed by GTID sort.
 pub struct World {
@@ -61,6 +65,8 @@ pub struct World {
     pub(crate) placement_clearance_bits: Option<u32>,
     /// Same singleton made by the verified native constructor-input producer.
     pub(crate) sun: crate::sun_state::State,
+    ///Actor+144 objects constructed by 50AB10 for fresh actors.
+    pub(crate) position_histories: position_histories::Owner,
     sun_loaded: bool,
     pub(crate) misc:crate::saved_misc::State,
     misc_loaded:bool,
@@ -236,7 +242,7 @@ impl World {
             sync_counters:crate::initial_world_sync::Counters::from_loaded_world(&inventory.world),restrictions, point,
             mind_runtime:crate::mind_world::Runtime::from_fresh_application_interval(),
             map_mode, resource_load:Some(resource_load), global_settings_mode,
-            placement_clearance_bits:None, sun, sun_loaded:false, misc,misc_loaded:false,
+            placement_clearance_bits:None, sun, position_histories:position_histories::Owner::new(), sun_loaded:false, misc,misc_loaded:false,
             tail:crate::load_tail_source::TailState::from_world_constructor(),
             dispatcher:Some(aa_world::DispatcherState::from_native_constructor()),
             updatable_lifetime,

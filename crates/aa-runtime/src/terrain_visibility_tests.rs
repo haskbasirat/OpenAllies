@@ -145,7 +145,9 @@ struct Tally {
     frames: usize,
     view_calls: usize,
     footprints: usize,
-    footprint_errors: usize,
+    /// Footprints whose native words hold +-infinity or NaN (masked x87
+    /// overflow / invalid results), matched word for word.
+    nonfinite_footprints: usize,
     rays: usize,
 }
 
@@ -273,6 +275,9 @@ fn native_4312f0_visibility_frames_and_rays() {
             match vis.footprint() {
                 Some(Ok(points)) => {
                     entry.footprints += 1;
+                    if native_footprint.iter().any(|w| nonfinite(*w)) {
+                        entry.nonfinite_footprints += 1;
+                    }
                     for (i, w) in points.iter().flatten().enumerate() {
                         if let Some(w) = w {
                             if *w != native_footprint[i] {
@@ -281,14 +286,7 @@ fn native_4312f0_visibility_frames_and_rays() {
                         }
                     }
                 }
-                Some(Err(e)) => {
-                    // The Rust 71D840 refuses binary32 overflow where the
-                    // native stores an infinity (map extremes still +-FLT_MAX).
-                    entry.footprint_errors += 1;
-                    if !(e.contains("overflow") && native_footprint.iter().any(|w| nonfinite(*w))) {
-                        diffs.push(format!("footprint error {e} with native {native_footprint:x?}"));
-                    }
-                }
+                Some(Err(e)) => diffs.push(format!("footprint error {e} with native {native_footprint:x?}")),
                 None => diffs.push("footprint never computed".into()),
             }
             if !diffs.is_empty() {
@@ -311,7 +309,7 @@ fn native_4312f0_visibility_frames_and_rays() {
     eprintln!("4312F0 replay per precision: {tally:#?}");
     assert!(failures.is_empty(), "{} mismatches, first: {:#?}", failures.len(), &failures[..failures.len().min(6)]);
     for (pc, t) in &tally {
-        assert!(t.frames > 0 && t.rays > 0, "{pc}: {t:?}");
+        assert!(t.frames > 0 && t.rays > 0 && t.footprints == t.frames, "{pc}: {t:?}");
     }
 }
 

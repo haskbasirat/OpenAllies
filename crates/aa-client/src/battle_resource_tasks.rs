@@ -408,6 +408,11 @@ impl aa_runtime::resource_model_payload::MetadataPolicy for Current<'_,'_>{
     }
     fn preprocessed_data_missing_warning_current(&mut self)->Result<u8>{self.bridge.call(self.execution,|context|context.ui.avars.preprocessed_data_missing_warning_current())}
     fn preprocessed_data_wrong_version_warning_current(&mut self)->Result<u8>{self.bridge.call(self.execution,|context|context.ui.avars.preprocessed_data_wrong_version_warning_current())}
+    fn warnings_check_partitions_current(&mut self)->Result<u8>{
+        //405D20 throws for a missing name; only a canonical Bool source value is accepted.
+        self.bridge.call(self.execution,|context|{let raw=context.ui.uvars.get_str("WarningsCheckPartitions");let raw=raw.trim();
+            if raw.eq_ignore_ascii_case("true")||raw=="1"{Ok(1)}else if raw.eq_ignore_ascii_case("false")||raw=="0"{Ok(0)}else{Err("87A1B7 source-created WarningsCheckPartitions current Bool is absent".into())}})
+    }
 }
 impl aa_runtime::resource_objects::TexturePolicy for Current<'_, '_> {
     fn data_compatibility_mode_current(&mut self) -> Result<u8> {

@@ -1,0 +1,37 @@
+{
+ "area": "action-mask publication 0x4CFCC0 branches 2/3 (package 10)",
+ "native": {
+  "0x4CFCC0": "branch1 Element+10 -> 529D70 (jmp 4D1350 on [Org+7C]+4); branch2 vf108 && (i8)Object+4C>0 -> 76C7F0([B36550], vf108); branch3 Thing+C && view+54 bit17 -> 50C8E0(actor), ecx=[B36534]+130 unused",
+  "0x76C7F0": "Session+BC nodes {player,next}: (765E00==owner || 765E00()==NULL) && player+50 -> 4ECD70(player+50)",
+  "0x765E00": "[B36534]==NULL ? NULL : player+28",
+  "0x4ECD70": "zero +10..+1C; head NULL returns; phase1 per index<0x27 (def+3C skip when head/tail things differ; vt+40 true -> ANY (+0x23 needs 5845A0(thing+B4)), false -> clear ALL); phase2 kingdom && distinct head/tail: count<=2 of vt20(1)&&(!vtB4||vt134(kingdom)); group+20 && count==2 -> |= 0x40 (group+18) or 0x20 into +14,+1C",
+  "vt+40": "0x887B50 (xor al,al; ret 8) for A273F0 A299D8 A29490 A2A2A0 A29780 A28A00 A28B88 A28E90 A28D18",
+  "0x50C8E0": "[B36534]+D8==6 return; Thing+C, bit17, vf108, 4F5290 nonnull; vf108==4F5290 (both re-called); Thing+C re-read; 50C7D0([[B36538]+13C], view) -> 437EB0",
+  "0x50C7D0": "UIWorldState+8 nodes {view,next}: first equal view -> AL=1",
+  "0x4F5290": "aa_actors::world_load_tail::local_kingdom (existing); NULL [GWorld+28] behaves as mode 0 (4F52D6 -> 4F52E9)"
+ },
+ "oracle": {
+  "producer": "native_action_mask_publication.py",
+  "fixture": "native-action-mask-publication.json",
+  "runs": ["original/v14 x Single24/Double53/Extended64, identical rows"],
+  "rows": {"masks": 106, "owners": 48, "selected": 102, "publish": 64, "native_faults": 12},
+  "full_coverage": ["4CFCC0", "529D70", "76C7F0", "765E00", "4ECD70", "50C8E0", "76AC60", "76AC70", "4BEDF0", "96CB83", "4D1E80", "4D1E90", "4E5240", "887B50", "6A71D0", "969B10"],
+  "unexecuted": "96D710 >=64 shift; padding 50C7DD/4F48FD; CString clone/free slow paths (4012C0, 4F5290, 4F48E0); 6A71F0",
+  "seams": ["4CF120 (vt+20 raw EAX)", "5845A0 (NULL falls through to the original prologue)", "4D1350", "437EB0 (proved in ../command-masks)", "synthetic vtable +20/+40/+B4/+134", "CString manager +10/+4"]
+ },
+ "rust": {
+  "kernels": "crates/aa-runtime/src/action_mask_publication.rs (aa_runtime::view_flags_service::native)",
+  "service": "crates/aa-runtime/src/view_flags_service.rs ActionMaskPublication, ViewFlags/SessionPublication/UiPublication + Composed, HudLoans::command_masks_437eb0",
+  "binding": "crates/aa-runtime/src/stored_actor_actions.rs rebuild_on_owners_publishing; Bound.publication",
+  "client": "crates/aa-client/src/view_flags_service.rs DirectoryFlags + DirectoryViewFlags (ViewFlags)",
+  "tests": "crates/aa-runtime/src/action_mask_publication_tests.rs"
+ },
+ "open": [
+  "stored_mind_init_world::Bound / player_order_frame::Fields / live_element_mind must carry an optional publication and call rebuild_on_owners_publishing",
+  "ViewDirectory impl DirectoryFlags (view_directory.rs owner)",
+  "SessionPublication over the netcode Session players (+28, +50 VWorldState) and GWorld fields",
+  "UiPublication over the battle-orders UIWorldState (needs a public 437EB0 refresh on player_order_input::ui_world::State)",
+  "VWorldState+20 group producer (CurrentGroup has none; non-NULL group is an explicit error)"
+ ],
+ "removed_caps": []
+}

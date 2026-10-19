@@ -18,7 +18,7 @@ pub use object_binding::InitContext;
 mod order_leaves;
 #[path="view_streaming_objects.rs"]
 mod streaming;
-pub use streaming::{CurrentData,DataLifecycle,ModelLifecycle,StreamingObjects,UnportedModelLifecycle};
+pub use streaming::{CurrentData,DataLifecycle,ModelLifecycle,StreamingObjects,UnboundData,UnportedModelLifecycle,ViewCells};
 pub use order_leaves::{DirectoryViews,OrderContext,WorldFields};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord)]

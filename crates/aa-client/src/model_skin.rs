@@ -52,3 +52,35 @@ pub(crate) fn model_bound(bones:&[([u32;13],[u32;4])],root_transform:&[u32;13],r
  for(world,bound)in rest{let t=math::transform_sphere(world,*bound,pc)?;math::merge_sphere(&mut s,t,MERGE_EPSILON,pc)?;}
  math::transform_sphere(&skin_to_root(root_transform,root_parent_world,pc)?,s,pc)
 }
+
+///868020 for a skinned NiGeometry of the native object graph: 8C3A90 over
+///its NiSkinInstance (+0xD0): bones (+0x14) with the skin data bones' bind
+///bounds (+0x48 array, +0x34 of each), the skin data root transform
+///(+0x10) and the root parent (+0x10 of the instance). `world` gives an
+///object's current world transform.
+pub(crate) fn geometry_model_bound(nif:&aa_formats::nif::NifFile,geometry:usize,world:&dyn Fn(usize)->Result<[u32;13]>,pc:Precision)->Result<[u32;4]>{
+ let skin=nif.linked(geometry,"skin_instance").ok_or("868020 geometry without a skin instance")?;
+ let instance=&nif.objects[skin];if instance.class!="NiSkinInstance"{return Err(format!("skin instance link to {}",instance.class))}
+ let data=nif.linked(skin,"data").ok_or("8C3A9E NULL skin data")?;let parent=nif.linked(skin,"root_parent").ok_or("8C3AFA NULL skin root parent")?;
+ let d=&nif.objects[data].fields;
+ let root:[u32;13]=d.f32s("root_transform").ok_or("9096F0 root transform absent")?.try_into().map_err(|_|"skin root transform words")?;
+ let bones:Vec<usize>=instance.fields.links("bones").ok_or("8C3810 bone links absent")?.iter().map(|&l|nif.target(l).ok_or_else(||"8C3AD3 NULL bone".to_string())).collect::<Result<_>>()?;
+ let list=d.list("bone_list").ok_or("9096F0 bone list absent")?;
+ if list.len()!=bones.len(){return Err("8C3ABB skin data bone count differs from the instance bone array".into())}
+ let mut pairs=Vec::with_capacity(bones.len());
+ for(&b,record)in bones.iter().zip(list){
+  let aa_formats::nif::Value::Record(r)=record else{return Err("skin bone record".into())};
+  let get=|n:&str|r.iter().find(|x|x.name==n).map(|x|&x.value);
+  let c=match get("center"){Some(aa_formats::nif::Value::F32s(w))if w.len()==3=>[w[0],w[1],w[2]],_=>return Err("skin bone bound centre".into())};
+  let radius=match get("radius"){Some(aa_formats::nif::Value::F32(w))=>*w,_=>return Err("skin bone bound radius".into())};
+  pairs.push((world(b)?,[c[0],c[1],c[2],radius]));
+ }
+ model_bound(&pairs,&root,&world(parent)?,pc)
+}
+///877F40 for a skinned NiGeometry of the native object graph.
+pub(crate) fn geometry_skin_to_root(nif:&aa_formats::nif::NifFile,geometry:usize,world:&dyn Fn(usize)->Result<[u32;13]>,pc:Precision)->Result<[u32;13]>{
+ let skin=nif.linked(geometry,"skin_instance").ok_or("877F40 geometry without a skin instance")?;
+ let data=nif.linked(skin,"data").ok_or("877F57 NULL skin data")?;let parent=nif.linked(skin,"root_parent").ok_or("877F46 NULL skin root parent")?;
+ let root:[u32;13]=nif.objects[data].fields.f32s("root_transform").ok_or("9096F0 root transform absent")?.try_into().map_err(|_|"skin root transform words")?;
+ skin_to_root(&root,&world(parent)?,pc)
+}

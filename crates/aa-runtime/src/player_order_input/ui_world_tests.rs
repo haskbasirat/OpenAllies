@@ -211,7 +211,19 @@ impl Leaves for Mock<'_> {
         self.events.push(json!(["sound", actor]));
         Ok(())
     }
-    fn command_masks_437eb0(&mut self, _: &[usize], _: StaticRef, _: &mut [u32; 4]) -> Result<()> {
+    fn local_kingdom_765e00(&mut self) -> Result<Option<u64>> {
+        unreachable!("not in this oracle")
+    }
+    fn kingdom_groups_34c(&mut self, _: u64) -> Result<Vec<super::super::ui_world::KingdomGroup>> {
+        unreachable!("not in this oracle")
+    }
+    fn view_of_handle_b364c0(&mut self, _: u32) -> Result<Option<Option<usize>>> {
+        unreachable!("not in this oracle")
+    }
+    fn player_wildcard_byte_50(&mut self) -> Result<bool> {
+        unreachable!("not in this oracle")
+    }
+    fn command_masks_437eb0(&mut self, _: &[usize], _: Option<u64>, _: Option<bool>, _: &mut [u32; 4]) -> Result<()> {
         self.flush();
         self.events.push(json!(["masks"]));
         Ok(())

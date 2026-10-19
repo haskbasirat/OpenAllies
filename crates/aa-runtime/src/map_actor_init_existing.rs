@@ -824,15 +824,63 @@ impl native::World<DefinitionRef, String> for Bound<'_, '_> {
         }
         Ok(out)
     }
+    ///`[[B39AB0]+1C]` and `[[B39AB0]+28]`: SVar registrations 7
+    ///(GameTicksPerGameSecond, fixed) and 10 (TickCountPerTrackPlacement,
+    ///int) of the SAME current SVar owner.
     fn track_settings(&self) -> Result<(u32, i32)> {
-        Err(required(
-            "fresh actual TrackInfo source poll-period settings",
-        ))
+        let variables = &self.world()?.variables;
+        let current = |ordinal: u32, name: &str| -> Result<crate::load_view_variables::CurrentValue<'_>> {
+            let registration = variables
+                .registrations()
+                .nth(ordinal as usize)
+                .ok_or(required("fresh4D7230 TrackInfo SVar registration absent"))?;
+            if registration.ordinal() != ordinal || registration.name() != name {
+                return Err(error(format!("[B39AB0] registration {ordinal} is not {name}")));
+            }
+            variables.current(ordinal as usize).map_err(error)
+        };
+        let scale = match current(7, "GameTicksPerGameSecond")? {
+            crate::load_view_variables::CurrentValue::Fixed(v) => *v,
+            _ => return Err(required("GameTicksPerGameSecond is not the fixed kind")),
+        };
+        let divisor = match current(10, "TickCountPerTrackPlacement")? {
+            crate::load_view_variables::CurrentValue::Int(v) => *v as i32,
+            _ => return Err(required("TickCountPerTrackPlacement is not the int kind")),
+        };
+        Ok((scale, divisor))
     }
-    fn track_updatable(&mut self, _: ObjectKey, _: i32) -> Result<()> {
-        Err(required(
-            "fresh50AB10 actual TrackInfo allocation/queue owner",
-        ))
+    ///4D74FD..4D752C: `6F7810(0x20)`, `50AB10(actor, period)` (one 4F02B0
+    ///seed log and 85D840 draw on the World RNG), then Actor+144.
+    fn track_updatable(&mut self, a: ObjectKey, period: i32) -> Result<()> {
+        let id = self.id(a)?.raw();
+        let (_, interval) = self.track_settings()?;
+        let catalog = self.catalog;
+        let staged = &mut *self.staged;
+        let rng = &mut staged.rng;
+        let history = crate::load_world::position_histories::construct_50ab10(period, interval, || {
+            crate::configure_world::random_word(catalog, rng)
+        })
+        .map_err(error)?;
+        staged
+            .load_world
+            .as_mut()
+            .ok_or(required("fresh50AB10 actual World owner absent"))?
+            .position_histories
+            .insert(id, history)
+            .map_err(error)?;
+        let slot = staged
+            .actors
+            .object_mut(a)
+            .map_err(error)?
+            .actor
+            .as_mut()
+            .and_then(|v| v.words.get_mut(&0x144))
+            .ok_or(required("fresh native initialized Actor+144 absent"))?;
+        if *slot != 0 {
+            return Err(required("fresh4D752C Actor+144 already holds a history"));
+        }
+        *slot = id;
+        Ok(())
     }
     fn state_low(&self, a: ObjectKey) -> Result<u32> {
         self.check(a)?;
