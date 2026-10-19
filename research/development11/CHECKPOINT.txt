@@ -1,0 +1,36 @@
+DEVELOPMENT 11 CHECKPOINT
+DIAGNOSTIC / UNFINISHED
+BATTLE STATUS: NOT PLAYABLE YET (startup stops in view initialization)
+
+Build
+- Release profile, x86_64-pc-windows-msvc, built from the source commit in
+  STAGING.json (public repository haskbasirat/OpenAllies).
+- cargo build -p aa-client --bin AxisAlliesRust --target x86_64-pc-windows-msvc --release --locked --offline
+
+Real-run startup (Test skirmish from Single Player > Custom), this build
+- Berlin: start click 19:19:17, all 1,959 definitions prepared 19:19:25,
+  InitVWorld 19:19:34, World view creation end (7,970 views) 19:19:38,
+  first battle frame 19:19:39 (22 s). Stop: 5A5410 actual Sequence root
+  owner is required.
+- Firefight (identical source, label-only rebuild before this one): first
+  battle frame 19 s after the click, 2,361 views created. Stop: 87AA10
+  has-skin unique texture/clone path requires concrete skin graph.
+- Each frame also logs explicit refusals that are being ported: the VGrid
+  view-cell sweep accessor (42FAD0/42F670), VWorld view time 43AB30, and a
+  first-frame 71D840 footprint overflow while map extremes are +-FLT_MAX.
+
+In progress (ported and proven against the original under Unicorn, not yet
+reachable in a real run because startup stops first)
+- Loading -> Game transition, ReadyButton, Game HUD update, Loading page.
+- Camera input (hotkeys, edge scroll, zoom), selection and orders
+  (picking, box, double click, control groups, right click, CanSend).
+- Terrain map and 4312F0 visibility pass.
+- Live world ticks (GWorld 4F9970) with economy, minds, sun, triggers;
+  recruit spawning and movement are being ported.
+- Resource release and cache, dynamic terrain resources.
+
+Next stops being ported
+- Animation sequence (KF) decoder 5A5520/5A5410 and skinned models 87AA10.
+- VGrid view-cell culling and the VObject show/hide lifecycle (HQ and unit
+  models), the full VWorld per-frame driver, fog of war, FX commands,
+  audio, AI opponents and the custom-game lobby.

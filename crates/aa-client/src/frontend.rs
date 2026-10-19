@@ -298,7 +298,7 @@ impl Shell {
         self.backdrop(ctx);
         let mut next=None;let mut start=false;
         egui::Window::new("Skirmish startup preview").anchor(egui::Align2::CENTER_CENTER,egui::Vec2::ZERO).resizable(false).collapsible(false).default_width(560.0).show(ctx,|ui| {
-            ui.colored_label(egui::Color32::from_rgb(255,185,110), "Development 10: playable battles are unfinished.");
+            ui.colored_label(egui::Color32::from_rgb(255,185,110), "Development 11: playable battles are unfinished.");
             ui.label("Choose an original map to test the current startup path.");
             let current=self.skirmish_map.as_ref().and_then(|id|self.store.maps().iter().find(|m|&m.id==id));
             egui::ComboBox::from_label("Map").selected_text(current.map(|m|m.name.as_str()).unwrap_or("Select a map")).width(380.0).show_ui(ui,|ui| {
@@ -368,7 +368,7 @@ impl Shell {
             egui::Area::new(egui::Id::new("battle_startup_status"))
                 .anchor(corner,offset).show(ctx,|ui|{
                     egui::Frame::popup(ui.style()).show(ui,|ui|{
-                        ui.label("Development 10 — battle map");
+                        ui.label("Development 11 — battle map");
                         ui.label(self.battle.message());
                         if ui.button("Main menu").clicked(){next=Some(Screen::MainMenu);}
                     });
