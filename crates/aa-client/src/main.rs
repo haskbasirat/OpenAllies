@@ -64,7 +64,7 @@ use std::{
     time::Instant,
 };
 
-const TITLE: &str = "Axis & Allies — Rust Development 10 Map Loading 1";
+const TITLE: &str = "Axis & Allies — Rust Development 11";
 
 #[derive(Default)]
 struct Options {
@@ -996,7 +996,7 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("status").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.strong("AXIS & ALLIES / RUST RECONSTRUCTION");
-                ui.label("Development 10 · original asset inspection");
+                ui.label("Development 11 · original asset inspection");
                 if ui.checkbox(&mut self.fullscreen,"Fullscreen (F11)").changed() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
                 }
