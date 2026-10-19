@@ -48,6 +48,7 @@ version = "0.1.0"
 dependencies = [
  "aa-animation",
  "aa-assets",
+ "aa-play",
  "anyhow",
  "bevy",
  "image",
@@ -66,6 +67,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-combat"
+version = "0.1.0"
+dependencies = [
+ "aa-body",
+ "aa-economy",
+ "aa-numeric",
+ "aa-spatial",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-economy"
+version = "0.1.0"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
 name = "aa-formats"
 version = "0.1.0"
 
@@ -74,6 +96,23 @@ name = "aa-heightfield"
 version = "0.1.0"
 dependencies = [
  "aa-numeric",
+ "serde",
+ "sha2",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-mapworld"
+version = "0.1.0"
+dependencies = [
+ "aa-actors",
+ "aa-body",
+ "aa-combat",
+ "aa-economy",
+ "aa-numeric",
+ "aa-rules",
+ "aa-simulation",
+ "flate2",
  "serde",
  "sha2",
  "thiserror 2.0.21",
@@ -90,12 +129,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-navigation"
+version = "0.1.0"
+dependencies = [
+ "aa-numeric",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aa-numeric"
 version = "0.1.0"
 dependencies = [
  "num-bigint",
  "num-traits",
  "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-play"
+version = "0.1.0"
+dependencies = [
+ "aa-assets",
+ "aa-mapworld",
+ "aa-navigation",
+ "aa-numeric",
+ "aa-rules",
+ "anyhow",
+ "glam 0.32.1",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

@@ -1,0 +1,19 @@
+[package]
+name = "aa-play"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Playable Axis & Allies battle simulation that follows the original game's logic and data (behaviour-faithful, not byte-exact)"
+
+[dependencies]
+aa-rules = { path = "../aa-rules" }
+aa-mapworld = { path = "../aa-mapworld" }
+aa-assets = { path = "../aa-assets" }
+aa-numeric = { path = "../aa-numeric" }
+aa-navigation = { path = "../aa-navigation" }
+anyhow = "1"
+glam = { version = "0.32", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
