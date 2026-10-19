@@ -84,8 +84,9 @@ fn node<'a>(actors: &'a ActorCatalog, source: &Provenance) -> Result<ResolvedNod
     //source position; do not call resolved_actor/native_category with its IDS.
     let mut selected = None;
     for tag in ["Thing", "Unit", "Projectile", "VFX"] {
+        //Same candidates and errors as filtering resolved_definitions(tag).
         for candidate in actors
-            .resolved_definitions(tag)
+            .resolved_definitions_at(tag, source)
             .map_err(|e| e.to_string())?
         {
             if candidate.sources().first() == Some(source) {
@@ -201,21 +202,10 @@ impl Effect {
         };
         //A shared Data re-Load can replace this pointer. The current resolved
         //node is not a substitute for its missing type-specific load order.
-        let mut declarations = 0usize;
-        for tag in aa_rules::actors::native_load::THING_TAGS {
-            for candidate in catalog
-                .actors
-                .resolved_definitions(tag)
-                .map_err(|e| e.to_string())?
-            {
-                if let Some(TypedValue::String { value, .. }) =
-                    candidate.field("IDS", pc).map_err(|e| e.to_string())?
-                    && value.eq_ignore_ascii_case(&self.id)
-                {
-                    declarations += 1;
-                }
-            }
-        }
+        let declarations = catalog
+            .actors
+            .thing_ids_declarations(&self.id, pc)
+            .map_err(|e| e.to_string())?;
         if declarations != 1 {
             return Err("VFX Resource40 requires actual shared reload/field owner".into());
         }

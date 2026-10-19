@@ -62,7 +62,7 @@ impl State{
                     Ok(graph)=>self.actor_fields_mut(&data)?.pairs[0]=Some(Arc::new(graph)),
                     Err(failure)=>{let e=failure.error.clone();self.actor_fields_mut(&data)?.partial=Some(failure);return Err(e)}
                 }
-                let graph=self.actor_fields(&data)?.pairs[0].as_ref().unwrap().clone();self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy)?;
+                let graph=self.actor_fields(&data)?.pairs[0].as_ref().unwrap().clone();self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy,texture_policy)?;
                 self.actor_fields_mut(&data)?.step=1;
             }
             if self.actor_fields(&data)?.step==1{self.prepare_actor_animation_requests_with_textures(catalog,bank,d,resources,policy,texture_policy)?;self.actor_fields_mut(&data)?.step=2;}
@@ -87,7 +87,7 @@ impl State{
                             Ok(graph)=>self.actor_fields_mut(&data)?.pairs[pair]=Some(Arc::new(graph)),
                             Err(failure)=>{let e=failure.error.clone();self.actor_fields_mut(&data)?.partial=Some(failure);return Err(e)}
                         }
-                        let graph=self.actor_fields(&data)?.pairs[pair].as_ref().unwrap().clone();self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy)?;
+                        let graph=self.actor_fields(&data)?.pairs[pair].as_ref().unwrap().clone();self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy,texture_policy)?;
                     }
                     self.actor_fields_mut(&data)?.step+=1;
                 }
@@ -99,8 +99,9 @@ impl State{
         self.actor_fields_mut(&data)?.preparing=false;
         if let Err(error)=&result{self.actor_fields_mut(&data)?.failed=Some(error.clone());}result
     }
-    fn prepare_actor_request_graph(&mut self,catalog:&Catalog<'_>,bank:&Bank,graph:&Graph,resources:&mut Resources<'_>,policy:&mut impl ModelPolicy)->Result<()>{
-        for i in 0..graph.nodes().len(){self.prepare_graph_node(catalog,bank,graph,graph.node_id(i)?,resources,policy)?;}Ok(())
+    fn prepare_actor_request_graph(&mut self,catalog:&Catalog<'_>,bank:&Bank,graph:&Graph,resources:&mut Resources<'_>,policy:&mut impl ModelPolicy,
+        texture_policy:&mut impl crate::resource_objects::TexturePolicy)->Result<()>{
+        for i in 0..graph.nodes().len(){self.prepare_graph_node_with_textures(catalog,bank,graph,graph.node_id(i)?,resources,policy,texture_policy)?;}Ok(())
     }
     fn prepare_actor_ability(&mut self,catalog:&Catalog<'_>,bank:&Bank,d:&RuntimeDefinition,data:&Data,list:usize,
         ability:&ResolvedNode<'_>,resources:&mut Resources<'_>,policy:&mut impl ModelPolicy,texture_policy:&mut impl crate::resource_objects::TexturePolicy)->Result<()>{
@@ -120,7 +121,7 @@ impl State{
         if list==0{self.actor_fields_mut(data)?.abilities[list].push(AbilityFields{source:ability.sources(),graph:Some(graph.clone())});}
         else{self.actor_fields_mut(data)?.abilities[list].last_mut().unwrap().graph=Some(graph.clone());}
         self.actor_fields_mut(data)?.pending_ability=None;
-        self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy)
+        self.prepare_actor_request_graph(catalog,bank,&graph,resources,policy,texture_policy)
     }
     pub(crate) fn actor_fx_request(&mut self,catalog:&Catalog<'_>,bank:&Bank,data:&Data,offset:u32,
         resources:&mut Resources<'_>,backend:&mut impl Backend,delta:u32,mode:u32)->Result<()>{

@@ -38,14 +38,25 @@ pub fn resolve_definition(
     use aa_rules::native::Error;
     let id = String::from_utf16(id_utf16)
         .map_err(|_| Error::Unsupported("definition ID has unpaired UTF16 units".into()))?;
+    resolve_thing(catalog, aa_rules::actors::ThingRef::find(&id), precision)
+}
+/// The same descriptor for an explicitly selected allocation. With
+/// [`aa_rules::actors::ThingRef::registered`] this is the allocation 4BDC50
+/// loads (vf0 LoadData) even when a later Thing translation shadows its IDS.
+pub fn resolve_thing(
+    catalog: &aa_rules::actors::ActorCatalog,
+    id: aa_rules::actors::ThingRef<'_>,
+    precision: aa_numeric::Precision,
+) -> aa_rules::native::Result<ResolvedDefinition<DefinitionProof>> {
+    use aa_rules::native::Error;
     let source = catalog
-        .find(&id)
+        .select(id)
         .ok_or_else(|| Error::Unsupported(format!("missing definition {id}")))?;
-    let category = catalog.native_category(&id)?;
-    let flag_word = catalog.native_final_flags(&id, precision)?;
+    let category = catalog.native_category(id)?;
+    let flag_word = catalog.native_final_flags(id, precision)?;
     // KINGDOM also uses ActorData (native_kind2), although its runtime class is4.
     let (_, base_flag_inputs) =
-        catalog.native_base_flags(&id, category.native_kind == 2, precision)?;
+        catalog.native_base_flags(id, category.native_kind == 2, precision)?;
     Ok(ResolvedDefinition {
         native_class: category.runtime_class,
         flag_word,

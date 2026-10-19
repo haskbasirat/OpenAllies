@@ -521,7 +521,40 @@ impl ActorCatalog {
     /// Authored root instances with inherited fields, in supplied source order.
     /// This does not imply native registry order or successful runtime creation.
     pub fn resolved_definitions(&self, kind: &str) -> Result<Vec<ResolvedNode<'_>>> {
-        self.resolver
+        // The catalog is immutable after loading: replay the cached outcome
+        // (same nodes, same order, same error) instead of re-resolving.
+        let key = kind.to_ascii_lowercase();
+        let poisoned = || Error::Unsupported("resolution cache poisoned".into());
+        let cached = self
+            .resolution_cache
+            .definitions
+            .lock()
+            .map_err(|_| poisoned())?
+            .get(&key)
+            .cloned();
+        if let Some(cached) = cached {
+            return match &*cached {
+                Ok(rows) => rows
+                    .iter()
+                    .map(|paths| {
+                        Ok(ResolvedNode {
+                            catalog: self,
+                            layers: paths
+                                .iter()
+                                .map(|path| {
+                                    self.resolver.node_at(path).ok_or_else(|| {
+                                        Error::Unsupported("cached layer path unavailable".into())
+                                    })
+                                })
+                                .collect::<Result<_>>()?,
+                        })
+                    })
+                    .collect(),
+                Err(message) => Err(Error::Unsupported(message.clone())),
+            };
+        }
+        let computed: Result<Vec<ResolvedNode<'_>>> = self
+            .resolver
             .roots
             .iter()
             .filter(|n| !n.template && n.name.eq_ignore_ascii_case(kind))
@@ -534,7 +567,126 @@ impl ActorCatalog {
                         .map_err(Error::Unsupported)?,
                 })
             })
+            .collect();
+        let entry = match &computed {
+            Ok(nodes) => {
+                let addresses = self
+                    .resolution_cache
+                    .addresses
+                    .get_or_init(|| self.resolver.node_paths());
+                nodes
+                    .iter()
+                    .map(|node| {
+                        node.layers
+                            .iter()
+                            .map(|layer| addresses.get(&(*layer as *const Definition as usize)).cloned())
+                            .collect::<Option<Vec<_>>>()
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .map(Ok)
+            }
+            Err(Error::Unsupported(message)) => Some(Err(message.clone())),
+            Err(_) => None,
+        };
+        // A layer outside the resolver tree is never cached; recompute then.
+        if let Some(entry) = entry {
+            self.resolution_cache
+                .definitions
+                .lock()
+                .map_err(|_| poisoned())?
+                .insert(key, std::sync::Arc::new(entry));
+        }
+        computed
+    }
+    /// `resolved_definitions(kind)` restricted to the roots declared exactly at
+    /// `source` (a resolved root's first layer is its own declaration). It
+    /// returns the same error as the full call when any `kind` root fails to
+    /// resolve; that whole-tag outcome is computed once and cached.
+    pub fn resolved_definitions_at(
+        &self,
+        kind: &str,
+        source: &crate::resources::Provenance,
+    ) -> Result<Vec<ResolvedNode<'_>>> {
+        self.tag_resolves(kind)?;
+        self.resolver
+            .roots
+            .iter()
+            .filter(|n| !n.template && n.name.eq_ignore_ascii_case(kind) && n.source == *source)
+            .map(|node| {
+                Ok(ResolvedNode {
+                    catalog: self,
+                    layers: self
+                        .resolver
+                        .layers(node, &mut Vec::new())
+                        .map_err(Error::Unsupported)?,
+                })
+            })
             .collect()
+    }
+    /// Number of non-template Thing-tag roots (`native_load::THING_TAGS`, in
+    /// that order) whose typed `IDS` is a String equal to `id` ignoring ASCII
+    /// case. Same result and error as walking `resolved_definitions` for each
+    /// tag and reading `IDS`; computed once per precision and cached.
+    pub fn thing_ids_declarations(&self, id: &str, precision: Precision) -> Result<usize> {
+        let bits = precision.significand_bits();
+        let poisoned = || Error::Unsupported("resolution cache poisoned".into());
+        let cached = self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.get(&bits).cloned();
+        let census = match cached {
+            Some(census) => census,
+            None => {
+                let census = (|| -> Result<std::collections::BTreeMap<String, usize>> {
+                    let mut counts = std::collections::BTreeMap::new();
+                    for tag in super::native_load::THING_TAGS {
+                        for node in self.resolved_definitions(tag)? {
+                            if let Some(TypedValue::String { value, .. }) = node.field("IDS", precision)? {
+                                *counts.entry(value.to_ascii_lowercase()).or_insert(0) += 1;
+                            }
+                        }
+                    }
+                    Ok(counts)
+                })()
+                .map_err(|e| match e {
+                    Error::Unsupported(message) => message,
+                    other => other.to_string(),
+                });
+                self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.insert(bits, census.clone());
+                census
+            }
+        };
+        match census {
+            Ok(counts) => Ok(counts.get(&id.to_ascii_lowercase()).copied().unwrap_or(0)),
+            Err(message) => Err(Error::Unsupported(message)),
+        }
+    }
+    fn tag_resolves(&self, kind: &str) -> Result<()> {
+        let key = kind.to_ascii_lowercase();
+        let cached = self
+            .resolution_cache
+            .tags
+            .lock()
+            .map_err(|_| Error::Unsupported("resolution cache poisoned".into()))?
+            .get(&key)
+            .cloned();
+        let outcome = match cached {
+            Some(outcome) => outcome,
+            None => {
+                let outcome = match self.resolved_definitions(kind) {
+                    Ok(_) => None,
+                    Err(Error::Unsupported(message)) => Some(message),
+                    Err(other) => Some(other.to_string()),
+                };
+                self.resolution_cache
+                    .tags
+                    .lock()
+                    .map_err(|_| Error::Unsupported("resolution cache poisoned".into()))?
+                    .insert(key, outcome.clone());
+                outcome
+            }
+        };
+        match outcome {
+            None => Ok(()),
+            Some(message) => Err(Error::Unsupported(message)),
+        }
     }
     /// Find an unambiguous authored registry ID. Duplicate IDs remain errors;
     /// native registration order and overwrite behavior are not inferred.
@@ -597,9 +749,10 @@ impl ActorCatalog {
             ))),
         }
     }
-    pub fn resolved_actor(&self, id: &str) -> Result<ResolvedNode<'_>> {
+    pub fn resolved_actor<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>) -> Result<ResolvedNode<'_>> {
+        let id = id.into();
         let actor = self
-            .find(id)
+            .select(id)
             .ok_or_else(|| Error::Unsupported(format!("missing actor {id}")))?;
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));

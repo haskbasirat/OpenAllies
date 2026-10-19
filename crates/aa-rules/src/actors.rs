@@ -74,6 +74,83 @@ pub struct LiteralReferenceCensus {
     pub references: Vec<LiteralReferenceInput>,
     pub opaque_sources_without_field_names: Vec<SourceIdentity>,
 }
+/// Interior cache for [`ActorCatalog`]; cloning copies the computed entries.
+#[derive(Debug, Default)]
+pub(crate) struct ResolutionCache {
+    /// Lowercase tag -> None when every root of that tag resolves, else the
+    /// first Unsupported message `resolved_definitions` would return.
+    pub(crate) tags: std::sync::Mutex<BTreeMap<String, Option<String>>>,
+    /// Precision significand bits -> lowercase Thing IDS -> declaration count
+    /// over every Thing-tag root, or the error that census returns.
+    pub(crate) thing_ids: std::sync::Mutex<BTreeMap<u64, Result<BTreeMap<String, usize>, String>>>,
+    /// Lowercase tag -> each resolved root's layers as resolver paths (root
+    /// index, then child indices), or the Unsupported message. Paths are
+    /// structural, so they stay valid in a clone.
+    pub(crate) definitions: std::sync::Mutex<BTreeMap<String, std::sync::Arc<Result<Vec<Vec<Vec<usize>>>, String>>>>,
+    /// Node address -> resolver path, for this instance only (never cloned).
+    pub(crate) addresses: std::sync::OnceLock<std::collections::HashMap<usize, Vec<usize>>>,
+}
+impl Clone for ResolutionCache {
+    fn clone(&self) -> Self {
+        let tags = self.tags.lock().map(|t| t.clone()).unwrap_or_default();
+        let thing_ids = self.thing_ids.lock().map(|t| t.clone()).unwrap_or_default();
+        let definitions = self.definitions.lock().map(|t| t.clone()).unwrap_or_default();
+        Self {
+            tags: std::sync::Mutex::new(tags),
+            thing_ids: std::sync::Mutex::new(thing_ids),
+            definitions: std::sync::Mutex::new(definitions),
+            addresses: std::sync::OnceLock::new(),
+        }
+    }
+}
+/// How a Thing IDS selects its ThingData allocation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThingLookup {
+    /// Original 427BD0: the Thing translation map first, then the registry.
+    Find,
+    /// The registry only: the allocation registered under this IDS.
+    Registered,
+}
+/// A Thing IDS plus the lookup that selects its allocation. Plain `&str`
+/// arguments keep the original Find semantics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThingRef<'a> {
+    pub ids: &'a str,
+    pub lookup: ThingLookup,
+}
+impl<'a> ThingRef<'a> {
+    pub fn find(ids: &'a str) -> Self {
+        Self { ids, lookup: ThingLookup::Find }
+    }
+    pub fn registered(ids: &'a str) -> Self {
+        Self { ids, lookup: ThingLookup::Registered }
+    }
+}
+impl<'a> From<&'a str> for ThingRef<'a> {
+    fn from(ids: &'a str) -> Self {
+        Self::find(ids)
+    }
+}
+impl<'a> From<&&'a str> for ThingRef<'a> {
+    fn from(ids: &&'a str) -> Self {
+        Self::find(ids)
+    }
+}
+impl<'a> From<&&'a String> for ThingRef<'a> {
+    fn from(ids: &&'a String) -> Self {
+        Self::find(ids)
+    }
+}
+impl<'a> From<&'a String> for ThingRef<'a> {
+    fn from(ids: &'a String) -> Self {
+        Self::find(ids)
+    }
+}
+impl std::fmt::Display for ThingRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.ids)
+    }
+}
 #[derive(Clone, Debug, Serialize)]
 pub struct ActorCatalog {
     pub sources: Vec<SourceIdentity>,
@@ -81,6 +158,14 @@ pub struct ActorCatalog {
     pub actors: Vec<ActorDefinition>,
     #[serde(skip)]
     lookup: BTreeMap<String, usize>,
+    /// The Thing registry alone (4BCA00 slots), before any 427BD0 Thing
+    /// translation is consulted. Keyed like `lookup`.
+    #[serde(skip)]
+    registered: BTreeMap<String, usize>,
+    /// Memoized whole-tag resolution outcomes. The catalog is immutable after
+    /// loading, so a cached outcome equals recomputing it.
+    #[serde(skip)]
+    pub(crate) resolution_cache: ResolutionCache,
     #[serde(skip)]
     resolver: Resolver,
     /// Generic DataManager registries of the native-order load, keyed by
@@ -220,7 +305,27 @@ struct Resolver {
     source_hashes_valid: bool,
 }
 impl Resolver {
-    fn node_at(&self, path: &[usize]) -> Option<&Definition> {
+    /// Every node's resolver path, keyed by its address in this resolver.
+    pub(crate) fn node_paths(&self) -> std::collections::HashMap<usize, Vec<usize>> {
+        fn walk(
+            node: &Definition,
+            path: &mut Vec<usize>,
+            out: &mut std::collections::HashMap<usize, Vec<usize>>,
+        ) {
+            out.insert(node as *const Definition as usize, path.clone());
+            for (index, child) in node.children.iter().enumerate() {
+                path.push(index);
+                walk(child, path, out);
+                path.pop();
+            }
+        }
+        let mut out = std::collections::HashMap::new();
+        for (index, root) in self.roots.iter().enumerate() {
+            walk(root, &mut vec![index], &mut out);
+        }
+        out
+    }
+    pub(crate) fn node_at(&self, path: &[usize]) -> Option<&Definition> {
         let (first, rest) = path.split_first()?;
         let mut node = self.roots.get(*first)?;
         for &child in rest {
@@ -407,6 +512,8 @@ impl ActorCatalog {
             diagnostics: Vec::new(),
             actors: Vec::new(),
             lookup: BTreeMap::new(),
+            registered: BTreeMap::new(),
+            resolution_cache: ResolutionCache::default(),
             resolver: Resolver::default(),
             native_data: BTreeMap::new(),
         };
@@ -547,14 +654,31 @@ impl ActorCatalog {
                 }
             } else {
                 catalog.lookup.insert(key(&id), catalog.actors.len());
+                catalog.registered.insert(key(&id), catalog.actors.len());
             }
             catalog.actors.push(entry);
         }
         catalog.resolver = resolver;
         catalog
     }
+    /// Original 427BD0 Find: a translated IDS selects its target only.
     pub fn find(&self, id: &str) -> Option<&ActorDefinition> {
         self.lookup.get(&key(id)).map(|&i| &self.actors[i])
+    }
+    /// The allocation registered under exactly this IDS: the pointer 4BCA00
+    /// returns and 4BDC50 passes to vf0 LoadData. Later Thing translations do
+    /// not change it (`chaparral_wall` stays its own allocation although Find
+    /// returns `temperate_walls`). Use it to re-identify a definition that was
+    /// already resolved; resolve authored references with [`Self::find`].
+    pub fn registered(&self, id: &str) -> Option<&ActorDefinition> {
+        self.registered.get(&key(id)).map(|&i| &self.actors[i])
+    }
+    pub fn select<'a>(&self, thing: impl Into<ThingRef<'a>>) -> Option<&ActorDefinition> {
+        let thing = thing.into();
+        match thing.lookup {
+            ThingLookup::Find => self.find(thing.ids),
+            ThingLookup::Registered => self.registered(thing.ids),
+        }
     }
     /// A conservative whole-input syntax census, including otherwise ambiguous
     /// templates. Absence across this superset proves no Construction Upgrade
@@ -676,15 +800,16 @@ impl ActorCatalog {
     }
     /// Resolve one typed native field through the proved ancestry/child merge
     /// subset. Unknown source/load-order ambiguity remains an explicit error.
-    pub fn native_field(
+    pub fn native_field<'a>(
         &self,
-        id: &str,
+        id: impl Into<ThingRef<'a>>,
         path: &str,
         precision: aa_numeric::Precision,
     ) -> crate::native::Result<Option<crate::native::TypedValue>> {
         use crate::native::Error;
+        let id = id.into();
         let actor = self
-            .find(id)
+            .select(id)
             .ok_or_else(|| Error::Unsupported(format!("missing actor {id}")))?;
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));
@@ -712,14 +837,15 @@ impl ActorCatalog {
 
     /// Presence of an ordinary resolved child; optional declarations alone do
     /// not instantiate a component. This does not evaluate a component mask.
-    pub fn native_node_sources(
+    pub fn native_node_sources<'a>(
         &self,
-        id: &str,
+        id: impl Into<ThingRef<'a>>,
         path: &[&str],
     ) -> crate::native::Result<Vec<Provenance>> {
         use crate::native::Error;
+        let id = id.into();
         let actor = self
-            .find(id)
+            .select(id)
             .ok_or_else(|| Error::Unsupported(format!("missing actor {id}")))?;
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));

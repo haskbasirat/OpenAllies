@@ -254,6 +254,25 @@ fn text(out: &mut Vec<u8>, value: &str) {
 /// Stable native-loader source-order identity encoding; excludes physical
 /// paths, includes logical spelling, content hash and resolver member origin.
 pub fn source_fingerprint(sources: &[SourceIdentity]) -> String {
+    // Startup checks this for every placed object against the same immutable
+    // source list. Reuse the last digest only for an identical input.
+    thread_local! {
+        static LAST: std::cell::RefCell<Option<(Vec<SourceIdentity>, String)>> =
+            const { std::cell::RefCell::new(None) };
+    }
+    if let Some(hit) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(input, _)| input.as_slice() == sources)
+            .map(|(_, digest)| digest.clone())
+    }) {
+        return hit;
+    }
+    let digest = compute_source_fingerprint(sources);
+    LAST.with(|last| *last.borrow_mut() = Some((sources.to_vec(), digest.clone())));
+    digest
+}
+fn compute_source_fingerprint(sources: &[SourceIdentity]) -> String {
     let mut out = b"AA source identities v1\0".to_vec();
     out.extend_from_slice(&(sources.len() as u64).to_le_bytes());
     for source in sources {

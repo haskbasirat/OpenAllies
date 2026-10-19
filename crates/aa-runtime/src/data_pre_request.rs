@@ -25,15 +25,15 @@ type Result<T> = std::result::Result<T, String>;
 
 ///ObjectData includes source-only PORTRAIT(kind1/class0). That descriptor
 ///never admits a runtime Thing instance and must not be changed toclass2.
-///Existing instance-class Source binding is unchanged for all other classes.
+///Every other ObjectData-derived definition is validated by its data kind:
+///LoadData does not depend on the runtime class it later creates.
 pub(crate) fn validate_object_data(
     catalog: &Catalog<'_>,
     bank: &Bank,
     d: &RuntimeDefinition,
 ) -> Result<Precision> {
     if d.native_class != 0 {
-        return crate::live_object_init::Source::bind_in_bank(catalog, bank, d)
-            .map(|s| s.source_precision())
+        return crate::live_object_init::Source::definition_load_precision(catalog, bank, d)
             .map_err(|e| e.to_string());
     }
     catalog.require_source_owner()?;
@@ -43,9 +43,9 @@ pub(crate) fn validate_object_data(
         return Err("ObjectData-only source Bank universe differs".into());
     }
     let p = source.source_precision();
-    let actual = aa_mapworld::bootstrap::resolve_definition(
+    let actual = aa_mapworld::bootstrap::resolve_thing(
         catalog.actors,
-        &d.proof.id.encode_utf16().collect::<Vec<_>>(),
+        aa_rules::actors::ThingRef::registered(&d.proof.id),
         p,
     )
     .map_err(|e| e.to_string())?;
@@ -66,7 +66,7 @@ pub(crate) fn validate_object_data(
     //LoadShell, ObjectKey, replacement class or copied pose is constructed.
     catalog
         .actors
-        .native_object_definition(&d.proof.id, p)
+        .native_object_definition(aa_rules::actors::ThingRef::registered(&d.proof.id), p)
         .map_err(|e| e.to_string())?;
     Ok(p)
 }

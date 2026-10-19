@@ -282,7 +282,8 @@ impl crate::actors::ActorCatalog {
     /// registry initializer. This validates authored category text independently
     /// of an untrusted serialized runtime class. Registry ordinal comes from
     /// the actual native assignment/append, not from a sorted source list.
-    pub fn native_category(&self, id: &str) -> Result<CategoryDescriptor> {
+    pub fn native_category<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>) -> Result<CategoryDescriptor> {
+        let id = id.into();
         match self.native_field(id, "category", Precision::Double53)? {
             Some(TypedValue::String { value, .. }) => CATEGORIES
                 .iter()
@@ -294,13 +295,14 @@ impl crate::actors::ActorCatalog {
             ))),
         }
     }
-    pub fn native_class(&self, id: &str) -> Result<u32> {
+    pub fn native_class<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>) -> Result<u32> {
         Ok(self.native_category(id)?.runtime_class)
     }
     /// Complete known Thing/Object/standardActor definition flag writes, based
     /// on independently resolved category. Other derived data classes remain
     /// unsupported rather than assuming they use the same flag finalizer.
-    pub fn native_final_flags(&self, id: &str, precision: Precision) -> Result<u32> {
+    pub fn native_final_flags<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>, precision: Precision) -> Result<u32> {
+        let id = id.into();
         let category = self.native_category(id)?;
         match category.native_kind {
             // DynamicDoodadData4922E0 calls ObjectData49DC40 and leaves its
@@ -399,12 +401,13 @@ impl crate::actors::ActorCatalog {
     /// Typed Flags child -> native base ThingData+1C. ActorData's later flag
     /// adjustments are a separate step; this return must not be mislabeled as
     /// the final actor definition flags.
-    pub fn native_base_flags(
+    pub fn native_base_flags<'a>(
         &self,
-        id: &str,
+        id: impl Into<crate::actors::ThingRef<'a>>,
         is_actor: bool,
         precision: Precision,
     ) -> Result<(u32, Vec<TypedValue>)> {
+        let id = id.into();
         let mut values = [false; 18];
         let mut provenance = Vec::new();
         for (i, (name, _)) in THING_FLAGS.iter().enumerate() {

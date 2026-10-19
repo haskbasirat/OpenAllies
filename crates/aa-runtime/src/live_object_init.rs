@@ -198,6 +198,31 @@ impl Source {
         if !matches!(definition.native_class, 2 | 3 | 4 | 6 | 7 | 9) {
             return Err(Error::Unsupported("current Object Init class virtuals"));
         }
+        Self::bind_definition_in_bank(catalog, bank, definition)
+    }
+    /// Definition-load precision only. The DataManager factory selects the
+    /// ObjectData49DC40-derived LoadData by data kind (ObjectData1,
+    /// ActorData2, Camera20, DynamicDoodad21), not by the runtime class the
+    /// definition later creates (GROUP is ActorData/class8). This validates
+    /// the same canonical identity, category, final flags and inherited
+    /// geometry, and returns no Init Source, so no Init virtual is admitted.
+    pub(crate) fn definition_load_precision(
+        catalog: &crate::catalog::Catalog<'_>,
+        bank: &crate::definitions::Bank,
+        definition: &RuntimeDefinition,
+    ) -> Result<Precision> {
+        if !matches!(definition.proof.category.native_kind, 1 | 2 | 20 | 21) {
+            return Err(Error::Unsupported(
+                "definition load requires ObjectData-derived data kind",
+            ));
+        }
+        Self::bind_definition_in_bank(catalog, bank, definition).map(|s| s.source_precision)
+    }
+    fn bind_definition_in_bank(
+        catalog: &crate::catalog::Catalog<'_>,
+        bank: &crate::definitions::Bank,
+        definition: &RuntimeDefinition,
+    ) -> Result<Self> {
         catalog.require_source_owner().map_err(Error::World)?;
         let owner = bank.combat_source().map_err(Error::World)?;
         if owner.source_identities() != catalog.actors.sources.as_slice() {
@@ -207,9 +232,13 @@ impl Source {
         }
         let pc = owner.source_precision();
         let id = &definition.proof.id;
+        //Re-identify the SAME resolved allocation by its registered IDS. For
+        //every unshadowed IDS this equals Find; a translated-away registered
+        //Thing (chaparral_wall) keeps its own source.
+        let thing = aa_rules::actors::ThingRef::registered(id);
         let canonical = catalog
             .actors
-            .find(id)
+            .select(thing)
             .ok_or_else(|| Error::World(format!("Object Init definition {id} is absent")))?;
         if !canonical.id.eq_ignore_ascii_case(id)
             || canonical.source != definition.proof.source
@@ -217,12 +246,12 @@ impl Source {
             || definition.proof.category.runtime_class != definition.native_class
             || catalog
                 .actors
-                .native_category(id)
+                .native_category(thing)
                 .map_err(|e| Error::World(e.to_string()))?
                 != definition.proof.category
             || catalog
                 .actors
-                .native_final_flags(id, pc)
+                .native_final_flags(thing, pc)
                 .map_err(|e| Error::World(e.to_string()))?
                 != definition.flags
         {
@@ -232,7 +261,7 @@ impl Source {
         }
         let geometry = catalog
             .actors
-            .native_object_definition(id, pc)
+            .native_object_definition(thing, pc)
             .map_err(|e| Error::World(e.to_string()))?;
         Ok(Self {
             id: id.clone(),

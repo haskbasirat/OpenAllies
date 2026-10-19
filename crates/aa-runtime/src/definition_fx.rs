@@ -8,7 +8,7 @@
 use crate::catalog::Catalog;
 use aa_mapworld::restore::RuntimeDefinition;
 use aa_numeric::Precision;
-use aa_rules::{native::TypedValue, resources::Provenance};
+use aa_rules::resources::Provenance;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
@@ -114,8 +114,14 @@ impl Source {
     }
     fn bind_at(catalog:&Catalog<'_>,definition:&RuntimeDefinition,source_precision:Precision,portrait:bool)->Result<Self,String>{
         catalog.require_source_owner()?;
-        if !matches!(definition.native_class, 2 | 3 | 4 | 6 | 7 | 9) && !portrait {
-            return Err("ObjectData FX source requires a proved Object class".into());
+        //ObjectData49DC40 reads the View FX lists for every ObjectData-derived
+        //data kind; the runtime class created later (GROUP is class8) is not
+        //an input to this source producer.
+        let proved_class = matches!(definition.native_class, 2 | 3 | 4 | 6 | 7 | 9);
+        let object_data = matches!(definition.proof.category.native_kind, 1 | 2 | 20 | 21)
+            && definition.native_class != 0;
+        if !(proved_class || object_data || portrait) {
+            return Err("ObjectData FX source requires ObjectData-derived definition data".into());
         }
         let proof = &definition.proof;
         let canonical = catalog
@@ -124,18 +130,21 @@ impl Source {
             .iter()
             .find(|a| a.id.eq_ignore_ascii_case(&proof.id))
             .ok_or("ObjectData FX canonical identity is absent")?;
+        //4BDC50 passes the registered allocation to vf0 LoadData, so a later
+        //Thing translation of this IDS does not change the source read here.
+        let thing = aa_rules::actors::ThingRef::registered(&proof.id);
         let found = catalog
             .actors
-            .find(&proof.id)
+            .select(thing)
             .ok_or("ObjectData FX canonical lookup is absent")?;
         if !found.id.eq_ignore_ascii_case(&canonical.id) || found.source != canonical.source {
-            return Err("ObjectData FX canonical source is shadowed by Thing translation".into());
+            return Err("ObjectData FX registered allocation differs from its canonical entry".into());
         }
         if canonical.source != proof.source
             || canonical.template_chain != proof.template_chain
             || catalog
                 .actors
-                .native_category(&proof.id)
+                .native_category(thing)
                 .map_err(|e| e.to_string())?
                 != proof.category
             || proof.category.runtime_class != definition.native_class
@@ -143,28 +152,16 @@ impl Source {
             return Err("ObjectData FX canonical definition/source differs".into());
         }
         // Constructor-empty is not the correct proof for a reloaded shared list.
-        let mut declarations = 0usize;
-        for tag in aa_rules::actors::native_load::THING_TAGS {
-            for node in catalog
-                .actors
-                .resolved_definitions(tag)
-                .map_err(|e| e.to_string())?
-            {
-                if let Some(TypedValue::String { value, .. }) = node
-                    .field("IDS", source_precision)
-                    .map_err(|e| format!("FX reload census {:?}: {e}", node.sources()))?
-                    && value.eq_ignore_ascii_case(&proof.id)
-                {
-                    declarations += 1;
-                }
-            }
-        }
+        let declarations = catalog
+            .actors
+            .thing_ids_declarations(&proof.id, source_precision)
+            .map_err(|e| format!("FX reload census: {e}"))?;
         if declarations != 1 {
             return Err("ObjectData FX requires actual shared reload/list ownership".into());
         }
         let actor = catalog
             .actors
-            .resolved_actor(&proof.id)
+            .resolved_actor(thing)
             .map_err(|e| e.to_string())?;
         let view = actor.child("View").map_err(|e| e.to_string())?;
         let mut lists = Vec::new();

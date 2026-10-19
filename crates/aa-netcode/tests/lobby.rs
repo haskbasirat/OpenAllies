@@ -269,6 +269,29 @@ impl PeerModel {
     }
 }
 
+/// Session fields added for the launch/staging ports (+0xF8, +0x100, +0x118,
+/// +0x11C, +0x169..+0x16C) and launch settings +0x30. native_lobby.py
+/// read_session does not record them; its session block is zero-filled and
+/// build_launch stores an empty +0x30 CString. A write hook on that block over
+/// every case of both images (0x753580, 0x7531A0, 0x75DA80 -> 0x758FD0) saw no
+/// native write to these words, so they must keep their input values; every
+/// recorded field is still compared with the native result.
+const UNRECORDED_SESSION: [&str; 8] = [
+    "field_f8", "field_100", "launch_countdown", "host_countdown", "flag_169", "flag_16a", "flag_16b", "flag_16c",
+];
+fn recorded_session(session: &Session, input: &Session, name: &str) -> Value {
+    let (mut out, input) = (json!(session), json!(input));
+    for key in UNRECORDED_SESSION {
+        assert_eq!(out[key], input[key], "{name}: unrecorded session {key}");
+        out.as_object_mut().unwrap().remove(key).unwrap();
+    }
+    for launch in ["launch", "launch_88"] {
+        assert_eq!(out[launch]["text_30"], input[launch]["text_30"], "{name}: unrecorded {launch} text_30");
+        out[launch].as_object_mut().unwrap().remove("text_30").unwrap();
+    }
+    out
+}
+
 const CALLBACKS: [&str; 4] = ["scenario", "random_map", "change_to_state", "map_status"];
 const ACTIONS: [&str; 3] = ["connect", "reset_session_info", "apply_session_info"];
 fn only(events: &Value, kinds: &[&str]) -> Vec<Value> {
@@ -375,7 +398,7 @@ fn native_join_messages() {
             }
             assert_eq!(Value::Array(ends), c["ends"], "{name}: end positions");
         }
-        assert_eq!(json!(session), c["session"], "{name}: client session");
+        assert_eq!(recorded_session(&session, &de(&client["session"]), name), c["session"], "{name}: client session");
         assert_eq!(json!(admin), c["admin"], "{name}: client admin");
         let s = json!({"enabled": sync.enabled, "file_dump": sync.file_dump, "hash": sync.hash, "begin": sync.begin(), "end": sync.end()});
         assert_eq!(s, c["sync"], "{name}: synchronizer A");
@@ -629,7 +652,7 @@ fn native_player_join() {
         } else {
             assert_eq!(status, "ok", "{name}");
         }
-        assert_eq!(json!(session), r["session"], "{name}: session");
+        assert_eq!(recorded_session(&session, &de(&case["session"]), name), r["session"], "{name}: session");
         for (key, c) in &h.conns {
             let native = &r["conns"][format!("{}:{}", key.0, key.1)];
             let mine = json!({"accepted": c.admin.accepted, "joined_player": c.admin.base.player,

@@ -125,7 +125,10 @@ impl Controller {
             }
             if self.status==Status::AwaitingNativeView {
                 match engine.poll_notifications(self.request.as_ref().map(|r|r.map_id.as_str()).unwrap_or("")){
-                    Ok(Some(Some(error)))|Err(error)=>self.message=format!("Native view initialization stopped: {error}"),
+                    Ok(Some(Some(error)))|Err(error)=>{
+                        if !self.message.starts_with("Native view initialization stopped"){log::error!("native view initialization stopped: {error}");}
+                        self.message=format!("Native view initialization stopped: {error}")
+                    },
                     Ok(Some(None))=>self.message="Application notifications processed; native view/task protocol remains authoritative.".into(),
                     Ok(None)=>{},
                 }
@@ -139,7 +142,7 @@ impl Controller {
                         .and_then(|request|engine.start_notifications(&request.map_id));
                     match start{
                         Ok(())=>self.message="Processing native application notifications".into(),
-                        Err(error)=>self.message=format!("Native view initialization stopped: {error}"),
+                        Err(error)=>{log::error!("native view initialization stopped: {error}");self.message=format!("Native view initialization stopped: {error}")},
                     }
                 }
                 Ok(Some(Some(error))) | Err(error) => {

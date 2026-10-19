@@ -111,6 +111,23 @@ pub(super) fn find_audio(bound: &Bound<'_>, ids: &str) -> Result<Option<Referenc
     }))
 }
 
+///483A40 copies the first dispatched root's name into the empty manager+20.
+///48DB60 registers this manager under the tag "Audio" (A0E65C) and every
+///shipped Audio root spells it so. A name before any registered Audio root
+///reached this owner, or another authored tag spelling, is not proved here.
+pub(super) fn audio_manager_name(bound: &Bound<'_>) -> Result<String> {
+    let registry = bound
+        .actors
+        .native_data_registry("Audio")
+        .ok_or("actual FX Audio registry missing")?;
+    for entry in &registry.entries {
+        if bound.before_owner(&entry.source)? {
+            return Ok(registry.manager.clone());
+        }
+    }
+    Err("483A40 Audio manager name before its first root at this owner is unproved".into())
+}
+
 #[cfg(test)]
 #[path = "fx_graph_sound_tests.rs"]
 mod tests;

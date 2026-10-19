@@ -307,8 +307,10 @@ impl Graph {
             error,
             partial: Draft::new(),
         };
-        if !matches!(definition.native_class, 3 | 4) {
-            return Err(failure("WhenEnter requires actual ActorData class".into()));
+        //464BD0 is ActorData::LoadData: selected by data kind2, including
+        //GROUP (runtime class8), not by the runtime class created later.
+        if definition.proof.category.native_kind != 2 {
+            return Err(failure("WhenEnter requires ActorData definition data".into()));
         }
         let source = ObjectFxSource::bind(catalog, definition).map_err(failure)?;
         Self::compile_actor_enter_source(catalog, definition, source, false)
@@ -340,8 +342,10 @@ impl Graph {
             error,
             partial: Draft::new(),
         };
-        if !matches!(definition.native_class, 3 | 4) {
-            return Err(failure("WhenEnter requires actual ActorData class".into()));
+        //464BD0 is ActorData::LoadData: selected by data kind2, including
+        //GROUP (runtime class8), not by the runtime class created later.
+        if definition.proof.category.native_kind != 2 {
+            return Err(failure("WhenEnter requires ActorData definition data".into()));
         }
         let node = catalog
             .actors

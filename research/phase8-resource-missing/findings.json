@@ -1,0 +1,49 @@
+{
+ "schema": 1,
+ "scope": "5130A0-family missing-source failures in pre-World Object/Actor source preparation (Berlin census: 13 definitions)",
+ "verdict": "case (b) for all 13: every requested file is absent from the original install, and the native factory wrapper catches TGC_MissingResourceException itself",
+ "depots_checked": [
+  "E:/Games/Axis and Alies/Data.rwd (13428 members, Data-manifest.json, same size as the v14 runtime copy)",
+  "reconstruction/native-game/runtime-expanded-v14/Data (23 accepted v14 overlays plus loose tree)",
+  "reconstruction/assets/original/Data (full extraction)",
+  "Music.rwd, Speech.rwd, Video.rwd manifests",
+  "autoexec depots EngineData/, data/ (absent from the install), Userdata work depot"
+ ],
+ "lookup": "ASCII case-insensitive, slash-normalized (resource_map_cache::normalized_key); no case/extension/folder variant exists either",
+ "requests": [
+  {"definitions": ["cow"], "path": "Units/Ambient/Cow/Cowjog.kf", "rule": "Template Animation kf = %s%s.kf, resource_prefix Cow/Cow + IDS jog", "nearest_member": "Units/Ambient/Cow/deadcowjog.kf", "factory": "5A80D0 via 463B50"},
+  {"definitions": ["horse"], "path": "Units/Ambient/Horse/Horsejog.kf", "rule": "%s%s.kf, Horse/Horse + jog", "nearest_member": null, "factory": "5A80D0 via 463B50"},
+  {"definitions": ["fish"], "path": "Units/Ambient/Fish/Fishdie1.kf", "rule": "%s%s.kf, Fish/Fish + die1", "nearest_member": null, "factory": "5A80D0 via 463B50"},
+  {"definitions": ["sheep_ewe", "sheep_ram"], "path": "Units/Ambient/Sheep/SheepFidget2.kf", "rule": "explicit kf = Sheep/SheepFidget2.kf (line 33)", "nearest_member": "Units/Ambient/Sheep/SheepFidget1.kf", "factory": "5A80D0 via 463B50"},
+  {"definitions": ["usa_infantry_dummy"], "path": "Units/USA/USAInfantryFlame/USAInfantryFlameJogKneel.kf", "rule": "explicit kf (line 114); lines 121 IdleAttackKneel and 127 Attack1Kneel are also absent (archive has ...KneelJog/KneelIdleAttack/KneelAttack1)", "factory": "5A80D0 via 463B50"},
+  {"definitions": ["jpn_battleship", "jpn_battleship_dynamic"], "path": "Units/JPN/GJPNBattleship/JPNBattleshipRecoil5.kf", "rule": "explicit kf = GJPNBattleship/JPNBattleshipRecoil5.kf (line 488, stray G; Units/JPN/JPNBattleship/JPNBattleshipRecoil5.kf exists)", "factory": "5A80D0 via 49DA40 (Aspect ObjectAnimation)"},
+  {"definitions": ["ger_bunker_aa"], "path": "Buildings/GER/GERBunkerAA/GERBunkerAADisabledRecoil1.kf", "rule": "explicit kf (line 140, AAAspectDisabled)", "nearest_member": "GERBunkerAARecoil1.kf", "factory": "5A80D0 via 49DA40"},
+  {"definitions": ["ger_bunker_artillery"], "path": "Buildings/GER/GERBunkerArtillery/GERBunkerArtilleryDisabledRecoil1.kf", "rule": "explicit kf (line 143, AAAspectDisabled)", "nearest_member": "GERBunkerArtilleryRecoil1.kf", "factory": "5A80D0 via 49DA40"},
+  {"definitions": ["tropical_bamboothicket"], "path": "Doodads/Tropical/TropicalBamboo/TropicalBamboo01Rustle.kf", "rule": "explicit kf; no .kf exists under Doodads/Tropical", "factory": "5A80D0 via 49DA40"},
+  {"definitions": ["tropical_grasstall"], "path": "Doodads/Tropical/TropicalGrassTall/TropicalTallGrass.kf", "rule": "explicit kf (3 Aspects)", "factory": "5A80D0 via 49DA40"},
+  {"definitions": ["rus_rocket_truck"], "path": "Audio/Sounds/RUS/Attack/RUSRocketTruck01.wav", "rule": "Audio rus_rocket_truck (sounds_combat_aa.tgi:518) files = RUSRocketTruck01.wav, RUSRocketTruck02.wav; both absent", "factory": "59B4B0 via 46BB60"}
+ ],
+ "native": {
+  "5A80D0": "KKC_NiSeqResource::GetNiSeqResource; try{5A7750(name,1)} FuncInfo AEED7C, one catch TGC_MissingResourceException& (B28008) at 5A8115. Handler: byte [[B39940]+F4] (UVar61 DataCompatibilityMode) zero -> 96BEF5(0,0) rethrow; else 405D20(B39938,'DataMissingResourceWarning'), 404FC0(B38C28, warn?1:10, NiResource.cpp, 0x6C6, GetNiSeqResource, \"Missing animation resource '%s' - disabling animation\", name), continuation 5A816E returns 0",
+  "59B4B0": "try{59B1F0(name,1)} FuncInfo AED848, one catch TGC_MissingResourceException& (B28008) at 59B502. Handler: UVar61 zero -> rethrow; else return 59B280(name,streaming)",
+  "59B280": "KKC_AudioResource::GetDefaultResource: 405370(B3994C,'DataMissingResourceWarning'), 404FC0(B38B98, warn?1:10, AudioResource.cpp, 0x3E, GetDefaultResource, \"Missing audio resource '%s' - replacing with default\", name), 410CB0(B39988,'DefaultAudioResource' or 'DefaultAudioStreamingResource'), 59B1F0(that,1) (inside the handler, so its own miss escapes), streaming stores +41=1 on the default",
+  "throws": "425210 (Unable to find) ThrowInfo AD9DA0: TGC_MissingResourceException, TGC_NonFatalException, TGC_Exception. 4252A0 (Not a) ThrowInfo AD9E00: TGC_CorruptResourceException, ... (not caught by these handlers)",
+  "callers": "463B50 (Animation set loader) passes the returned NULL sequence to 463440 unchecked; 49DA40 skips the ObjectAnimation allocation when NULL; 46BB60 appends only a nonzero sound. None of 463B50/49DA40/46BB60 has a try block (FuncInfo ADC81C, AE1D2C, ADCEE0)",
+  "variables": "UVars.tgi flag DataCompatibilityMode = true; UVars_AA.tgi flag DataMissingResourceWarning = false (level 10); AVars.tgi DefaultAudioResource = audio/Default/SoundDefault.wav, DefaultAudioStreamingResource = audio/Default/StreamDefault.wav (both members exist)"
+ },
+ "fixtures": {"file": "fixtures.json", "sha256": "a98c0e30b40d07e5e34a78cb0ebce9168f1c97392a53c4149094941acbf0e9aa", "rows": 24,
+  "producer": "native_missing_catch.py", "producer_sha256": "c8a4b1319a15dbefe31f4d5110b8d57c22cc139c3c82ed503bb9448112d212b2",
+  "cases": "factory {5A80D0, 59B4B0 non-streaming, 59B4B0 streaming} x DataCompatibilityMode {0,1} x DataMissingResourceWarning {0,1} x {present, missing}; executed instructions byte-checked against original and v14 images; static EH tables identical in both"},
+ "rust": {
+  "file": "crates/aa-runtime/src/resource_depot.rs",
+  "added": ["Resources::sequence_5a80d0_with_policy", "Resources::sound_59b4b0_with_policy", "Resources/Application::missing_resource_diagnostics", "MissingResourceDiagnostic", "DiagnosticChannel"],
+  "kept": "sequence_5a80d0 / sound_59b4b0 (no policy) still refuse a genuine miss, now naming the path and the required policy entry point",
+  "tests": "crates/aa-runtime/src/resource_depot_missing_tests.rs: native_missing_catch_fixture_replay, census_missing_names_take_native_catch_paths, actual_pre_world_missing_source_census (all #[ignore], AA_GAME_ROOT)"
+ },
+ "open": [
+  "Callers still use the policy-less factories: actor_animation_source.rs:147, object_animation_set.rs:68 (+ load_source_node signature and its caller data_aspect.rs:359), audio_data_pre_request.rs:191 (+ State::prepare and data_object_request.rs prepare_graph_node / data_actor_request.rs:103 policy threading). Those files are owned by other sessions; see README.txt",
+  "404FC0 is retained as a record in the Resource manager; emitting it on the B38C28/B38B98 channel (and channel threshold +C) is the client's job",
+  "DefaultAudioResource is read from the AVars source declaration (Settings.app_variables) inside the fresh no-profile variable window, like ResourceCacheAudioRAMWeight and LanguageIDS; a later runtime 412070 assignment of that AVar is not modelled",
+  "The C++ exception dispatch itself (__CxxFrameHandler, RaiseException) is reproduced, not executed, in the oracle"
+ ]
+}

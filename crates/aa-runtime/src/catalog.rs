@@ -703,9 +703,9 @@ impl<'a> Catalog<'a> {
         }
         state.completed_values(token)
     }
-    pub fn object_creation(
+    pub fn object_creation<'t>(
         &self,
-        id: &str,
+        id: impl Into<aa_rules::actors::ThingRef<'t>>,
         precision: Precision,
     ) -> Result<aa_actors::creation::ObjectDefinition, String> {
         let value = self
@@ -1814,16 +1814,41 @@ impl RestoreDefinitions for Catalog<'_> {
             .is_some_and(|id| self.actors.find(&id).is_some()))
     }
     fn resolve(&self, id_utf16: &[u16], precision: Precision) -> Result<RuntimeDefinition, String> {
-        let base = bootstrap::resolve_definition(self.actors, id_utf16, precision)
+        let id = String::from_utf16(id_utf16)
+            .map_err(|_| "definition ID has unpaired UTF16 units".to_string())?;
+        self.resolve_thing(aa_rules::actors::ThingRef::find(&id), precision)
+    }
+}
+impl Catalog<'_> {
+    /// The allocation registered under exactly this IDS, which 4BDC50 hands
+    /// to vf0 LoadData, even when a later Thing translation makes Find return
+    /// another allocation. Authored references still resolve through Find.
+    pub fn resolve_registered(&self, id: &str, precision: Precision) -> Result<RuntimeDefinition, String> {
+        self.resolve_thing(aa_rules::actors::ThingRef::registered(id), precision)
+    }
+    fn resolve_thing(
+        &self,
+        thing: aa_rules::actors::ThingRef<'_>,
+        precision: Precision,
+    ) -> Result<RuntimeDefinition, String> {
+        let base = bootstrap::resolve_thing(self.actors, thing, precision)
             .map_err(|e| e.to_string())?;
         let id = &base.definition.id;
         let kind = base.definition.category.native_kind;
+        //From here the allocation is named by its own registered IDS.
+        let own = aa_rules::actors::ThingRef::registered(id);
         let object = if matches!(kind, 1 | 2 | 20 | 21) {
-            Some(self.object_creation(id, precision)?)
+            Some(self.object_creation(own, precision)?)
         } else {
             None
         };
         if kind == 2 {
+            let found = self.actors.find(id).map(|found| &found.source);
+            if found != Some(&base.definition.source) {
+                return Err(format!(
+                    "registered ActorData {id} is shadowed by a Thing translation; its ActorBindings are keyed by Find"
+                ));
+            }
             return Ok(self.actor_bindings(id, precision)?.definition.clone());
         }
         let component_mask = None;

@@ -88,15 +88,32 @@ pub(crate) fn prepare(
     let current = Current { bridge, execution: RefCell::new(execution) };
     let (mut model, mut texture) = (Model(&current), Texture(&current));
     let mut completed = 0;
+    //Diagnostic census (AA_STARTUP_CENSUS=<new JSON path>): record every
+    //failing definition instead of stopping at the first. The attempt still
+    //fails afterwards; no failed definition is treated as prepared.
+    let census = std::env::var_os("AA_STARTUP_CENSUS").map(std::path::PathBuf::from);
+    let mut failures = Vec::new();
     for entry in &catalog.actors.actors {
-        let canonical = catalog.actors.find(&entry.id)
+        //4BDC50 hands the allocation 4BCA00 just registered to vf0 LoadData.
+        //A later Thing translation (chaparral_wall -> temperate_walls) changes
+        //Find, not which allocation loads, so select it by registered IDS.
+        let thing = aa_rules::actors::ThingRef::registered(&entry.id);
+        let registered = catalog.actors.select(thing)
             .ok_or_else(||format!("registered source Data {} is not available by its identity",entry.id))?;
-        if canonical.id != entry.id || canonical.source != entry.source {
-            return Err(format!("native source registered identity {} ({}:{}) is shadowed by final Thing lookup to {}; registered-identity source projection is required",
-                entry.id,entry.source.path,entry.source.span.start,canonical.id));
+        if registered.id != entry.id || registered.source != entry.source {
+            return Err(format!("native source registered identity {} ({}:{}) differs from its registry slot {}",
+                entry.id,entry.source.path,entry.source.span.start,registered.id));
         }
-        let category = catalog.actors.native_category(&entry.id)
-            .map_err(|error| format!("native source category {} ({}): {error}", entry.id, entry.source.path))?;
+        let category = match catalog.actors.native_category(thing) {
+            Ok(category) => category,
+            Err(error) => {
+                let error = format!("native source category {} ({}): {error}", entry.id, entry.source.path);
+                if census.is_none() { return Err(error) }
+                failures.push(serde_json::json!({"id": entry.id, "source": entry.source.path,
+                    "line": entry.source.span.start, "kind": null, "error": error}));
+                continue;
+            }
+        };
         //The other ThingData factories have their own source loaders. This
         //does not manufacture ObjectData for VFX/Projectile/other descriptors.
         if !matches!(category.native_kind, 1 | 2 | 20 | 21) {
@@ -105,7 +122,7 @@ pub(crate) fn prepare(
         let result = (|| -> Result<()> {
             //Resolve before the immutable Bank loan. ActorBindings is the
             //existing canonical cache, not a replacement RuntimeDefinition.
-            let definition = catalog.resolve(&entry.id.encode_utf16().collect::<Vec<_>>(), precision)?;
+            let definition = catalog.resolve_registered(&entry.id, precision)?;
             if definition.proof.id != entry.id || definition.proof.source != entry.source {
                 return Err("native source resolver changed the actual registered Data allocation".into());
             }
@@ -117,11 +134,36 @@ pub(crate) fn prepare(
             })
         })();
         if let Err(error) = result {
-            return Err(format!("native Object/Actor source preparation stopped at {} ({}:{}; kind{}; completed{}): {error}",
-                entry.id, entry.source.path, entry.source.span.start, category.native_kind, completed));
+            if census.is_none() {
+                return Err(format!("native Object/Actor source preparation stopped at {} ({}:{}; kind{}; completed{}): {error}",
+                    entry.id, entry.source.path, entry.source.span.start, category.native_kind, completed));
+            }
+            log::warn!("startup census: {} ({}; kind{}): {error}", entry.id, entry.source.path, category.native_kind);
+            failures.push(serde_json::json!({"id": entry.id, "source": entry.source.path,
+                "line": entry.source.span.start, "kind": category.native_kind,
+                "class": category.runtime_class, "category": category.name, "error": error}));
+            continue;
         }
         completed += 1;
         log::debug!("native Object/Actor source prepared {} ({completed})", entry.id);
+    }
+    if let Some(path) = census {
+        let report = serde_json::json!({"stage": "pre-World Object/Actor source preparation",
+            "registered": catalog.actors.actors.len(), "prepared": completed,
+            "failed": failures.len(), "failures": failures});
+        let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+        std::fs::write(&path, text).map_err(|e| format!("startup census report {}: {e}", path.display()))?;
+        //AA_STARTUP_CENSUS_CONTINUE=1 is a look-ahead diagnostic only: later
+        //stages then run with the failed definitions still unprepared, so
+        //their errors may include consequences of these failures.
+        let look_ahead = std::env::var_os("AA_STARTUP_CENSUS_CONTINUE").is_some();
+        if !failures.is_empty() && look_ahead {
+            log::warn!("startup census look-ahead: continuing past {} failed definitions; this attempt is diagnostic only",
+                failures.len());
+        } else if !failures.is_empty() {
+            return Err(format!("startup census: {} of {} definitions failed source preparation; report {}",
+                failures.len(), catalog.actors.actors.len(), path.display()));
+        }
     }
     Ok(Report { definitions: completed })
 }

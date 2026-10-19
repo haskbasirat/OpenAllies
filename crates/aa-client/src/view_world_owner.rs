@@ -179,7 +179,18 @@ impl<A,D:FactoryDiagnostics> aa_runtime::view_factory::Services for Factory<'_,'
             let mut context=super::view_directory::InitContext::new(object,&mut *init.application,init.client,
                 &mut *init.execution,init.request_policy,init.precision).with_replacement_color(self.inputs.replacement_color());
             if let Some(session)=init.session{context=context.with_session(session);}
-            self.directory.initialize_bound_with(p,self.catalog,view,&mut context).map_err(|e|e.to_string())
+            let result=self.directory.initialize_bound_with(p,self.catalog,view,&mut context).map_err(|e|e.to_string());
+            //Diagnostic census only (AA_STARTUP_CENSUS + _CONTINUE): record the
+            //failure and take the native Init-false path (destroy, publish none)
+            //so every remaining view still reports. Never a playable world.
+            match result{
+                Err(error) if std::env::var_os("AA_STARTUP_CENSUS").is_some()
+                    &&std::env::var_os("AA_STARTUP_CENSUS_CONTINUE").is_some()=>{
+                    log::warn!("view census: {error}");
+                    Ok(false)
+                }
+                other=>other,
+            }
         }else{self.directory.initialize_bound(p,self.catalog,view).map_err(|e|e.to_string())}
     }
     fn destroy_view(&mut self,p:&mut aa_runtime::live_world_frame::ViewBindingParts<'_>,view:ViewHandle,free:u32)->std::result::Result<(),String>{

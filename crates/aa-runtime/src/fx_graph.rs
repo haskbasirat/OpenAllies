@@ -930,7 +930,7 @@ impl Graph {
         inputs.textures = textures;
         let actor = catalog
             .actors
-            .resolved_actor(source.canonical_id())
+            .resolved_actor(aa_rules::actors::ThingRef::registered(source.canonical_id()))
             .map_err(|e| failure(e.to_string()))?;
         let view = actor.child("View").map_err(|e| failure(e.to_string()))?;
         let mut draft = Draft::new();
@@ -1055,6 +1055,36 @@ impl<'a> Bound<'a> {
             }
         }
         Err("FX canonical source root is absent".into())
+    }
+}
+///The SAME parse-time DataManager Finds as FXC LoadData, lent to another
+///native source loader that runs inside its owner's LoadData (ObjectAnimation
+///49D0A0/49CF80). Both callers use identical manager slots and calls:
+///416370 on [B36530]+584 (42C3C0), 4BDB70 on [B36530]+C and 42C070 on
+///[B36530]+580 (42C5E0). No second registry search exists here.
+pub(crate) struct OwnerLookups<'a>(Bound<'a>);
+impl<'a> OwnerLookups<'a> {
+    pub(crate) fn new(actors: &'a ActorCatalog, pc: Precision, owner: Provenance) -> Result<Self> {
+        Bound::new(actors, pc, owner).map(Self)
+    }
+    ///416370 Audio Find.
+    pub(crate) fn audio(&mut self, ids: &str) -> Result<Option<Reference>> {
+        self.0.find("Audio", ids)
+    }
+    ///The Audio manager+20 name read by a 410C40 unknown-IDS diagnostic.
+    pub(crate) fn audio_manager(&self) -> Result<String> {
+        sound::audio_manager_name(&self.0)
+    }
+    ///4BDB70 VFX Thing Find.
+    pub(crate) fn vfx(&mut self, ids: &str) -> Result<Option<Reference>> {
+        self.0.find("VFX", ids)
+    }
+    ///42C070 Bone Find, then the found Bone Data+C.
+    pub(crate) fn bone(&mut self, ids: &str) -> Result<Option<u32>> {
+        match self.0.find("Bone", ids)? {
+            None => Ok(None),
+            Some(found) => found.ordinal.map(Some).ok_or_else(|| "Bone Data+C ordinal absent".into()),
+        }
     }
 }
 impl<'a> Inputs for Bound<'a> {
