@@ -14,8 +14,22 @@ pub enum AppState {
 }
 
 /// The custom battle the setup screen asked for; the loader builds `Battle`.
+/// Flow: the UI inserts this and sets AppState::Loading; the lead's loader
+/// builds the battle in the background, updates `LoadProgress`, inserts
+/// `Battle` and sets AppState::Battle (or AppState::Menu with `error` set).
 #[derive(Resource, Clone, Debug)]
 pub struct PendingSetup(pub SkirmishSetup);
+
+/// Loader progress for the original loading screen.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct LoadProgress {
+    /// 0..1.
+    pub fraction: f32,
+    /// Status text key or message.
+    pub status: String,
+    /// Set when loading failed; the UI shows it and returns to the menus.
+    pub error: Option<String>,
+}
 
 /// The running battle.
 #[derive(Resource)]

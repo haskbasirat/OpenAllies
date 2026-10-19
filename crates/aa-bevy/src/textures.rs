@@ -59,7 +59,7 @@ pub fn upload(images: Vec<((String, Kind), Image)>, failures: Vec<String>, asset
     Loaded { handles, failures }
 }
 
-fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {
+pub fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {
     let path = store.resolve_url(url)?;
     let mut rgba = image::open(&path)?.to_rgba8();
     if let Kind::Team(team) = kind {

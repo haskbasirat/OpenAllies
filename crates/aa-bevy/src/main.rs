@@ -1,6 +1,8 @@
 //! Axis & Allies on Bevy: app wiring. Owner: UI (menus, HUD, camera, input).
 //! The battle scene (lead) is added as `scene::ScenePlugin`.
+mod battle_view;
 mod camera;
+mod demo_world;
 mod scene;
 mod session;
 mod terrain;
@@ -26,8 +28,8 @@ fn main() -> anyhow::Result<()> {
         ..default()
     }))
     .add_plugins(scene)
-    // Until the original menus are drawn in Bevy, start straight in the battle.
-    .insert_state(session::AppState::Battle)
+    // Until the original menus are drawn in Bevy, start straight in loading (Berlin).
+    .insert_state(session::AppState::Loading)
     .add_systems(Update, session::step_battle)
     .add_systems(Update, camera::update.run_if(in_state(session::AppState::Battle)));
     app.run();
