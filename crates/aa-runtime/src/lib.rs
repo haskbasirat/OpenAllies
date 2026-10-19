@@ -426,3 +426,5 @@ pub mod vworld_update;
 pub mod view_flags_service;
 
 pub mod view_terrain_fog;
+pub mod view_fx_execute;
+pub mod audio_data_fields;

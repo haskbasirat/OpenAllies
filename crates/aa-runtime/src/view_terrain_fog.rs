@@ -157,6 +157,25 @@ impl FogVariables {
         }
         Ok(Self::constructor())
     }
+    /// The same rule over the World's Settings projection of the v14
+    /// `AVars*.tgi` members ([`crate::settings::APP_VARIABLE_FILES`], the
+    /// 419C50 wildcard load): the constructor values while no member
+    /// declares one of the three names. The battle startup builds every AVar
+    /// owner with `NativeOverrides::ControlledNone` (no profile/console
+    /// writer), the only scope this answers for.
+    pub fn from_settings(settings: &crate::settings::Settings) -> Result<Self> {
+        for name in AVAR_NAMES {
+            if let Some(rows) = settings.app_variables.get(&name.to_ascii_lowercase()) {
+                if let Some(row) = rows.first() {
+                    return Err(format!(
+                        "terrain fog AVar {name} is assigned in {}; its native scalar parse is not bound",
+                        row.source.path
+                    ));
+                }
+            }
+        }
+        Ok(Self::constructor())
+    }
 }
 
 // ------------------------------------------------------------ the map --
@@ -178,8 +197,18 @@ impl<K: Copy + Eq> MapFog<K> {
     /// AVar64 word and `fog_debug_31` the UVar31 ViewShowFogDebug byte. The
     /// RenderDrawRegionLines, +BF, +C0 (TerrainMap::update_725340), +101,
     /// 0x72EF70 and +14C branches between them read and write none of these.
-    pub fn update_725340(&mut self, g: &mut Globals, milliseconds: u32, kingdom: Option<K>, gray: u32, fog_debug_31: u8, p: Precision) -> Result<()> {
+    /// A read that fails stops here with the native writes before it done.
+    pub fn update_725340(
+        &mut self,
+        g: &mut Globals,
+        milliseconds: Result<u32>,
+        kingdom: Result<Option<K>>,
+        gray: u32,
+        fog_debug_31: Result<u8>,
+        p: Precision,
+    ) -> Result<()> {
         g.reblend_b403c9 = 0;
+        let milliseconds = milliseconds.map_err(|e| format!("725340 59ABA0 B396E0: {e}"))?;
         // 0x72535D..0x72537D.
         let mut t = Binary::from_i32(milliseconds as i32);
         if (milliseconds as i32) < 0 {
@@ -189,6 +218,7 @@ impl<K: Copy + Eq> MapFog<K> {
         let delta = n(t.sub(&b(self.seconds_138)?, p))?;
         self.delta_13c = st(&delta)?;
         self.seconds_138 = st(&t)?;
+        let kingdom = kingdom.map_err(|e| format!("725340 5C0E50: {e}"))?;
         if kingdom != self.kingdom_140 {
             self.kingdom_140 = kingdom;
             g.reblend_b403c9 = 1;
@@ -197,7 +227,7 @@ impl<K: Copy + Eq> MapFog<K> {
         let gray = n(b(gray)?.mul(&b(SCALE_9FD5D4)?, p))?;
         g.explored_b285d4 = ftol(&gray, "725340 b285d4")? as u8;
         // 0x72546D..0x725489.
-        if g.fog_debug_b403c8 != fog_debug_31 {
+        if g.fog_debug_b403c8 != fog_debug_31.map_err(|e| format!("725340 UVar31 ViewShowFogDebug: {e}"))? {
             g.fog_debug_b403c8 = u8::from(g.fog_debug_b403c8 == 0);
             g.reblend_b403c9 = 1;
         }
@@ -699,6 +729,9 @@ pub struct TerrainFog<K> {
     /// Per block: the +B8 state and mesh residency last observed after a
     /// 0x42FF50 pass (both 0/absent after 0x723E00).
     observed: Vec<(u32, bool)>,
+    /// Counts grid creations, releases and 0x71C290 blends (the image
+    /// revision; a grid's own +124+4C count restarts with each 720AD0).
+    changes: u64,
 }
 
 impl<K: Copy + Eq> TerrainFog<K> {
@@ -728,10 +761,33 @@ impl<K: Copy + Eq> TerrainFog<K> {
             blocks: (0..count).map(|cell| BlockFog::from_723960(map.block_index(cell))).collect(),
             clock: MapFog::from_721330(),
             observed: vec![(0, false); count],
+            changes: 0,
         })
+    }
+    /// [`Self::for_map`] with the quad size read back from the map's own
+    /// blocks: every 0x723960 block copies TerrainMap+AC into +D4 and +A8
+    /// into +CC, so block 0 answers the +AC the map was built with (UVar0 at
+    /// 0x72422B), not the possibly changed current UVar0.
+    pub fn for_built_map(map: &TerrainMap, gtile_bits: u32, tiles: [i32; 2]) -> Result<Self> {
+        use crate::player_order_input::terrain_ray::{Terrain, TerrainBlock};
+        let block = Terrain::block(map, 0)?;
+        let quad_size_ac = block.quad_size()?;
+        let fog = Self::for_map(map, gtile_bits, quad_size_ac, tiles)?;
+        if block.quads()? != fog.layout.quads_a8 {
+            return Err("TerrainBlock +CC differs from TerrainMap +A8".into());
+        }
+        Ok(fog)
     }
     pub fn d0(&self) -> i32 {
         self.d0
+    }
+    pub fn block_size_a0(&self) -> i32 {
+        self.block_size_a0
+    }
+    /// The [`FogImage::revision`] of the current grids, without composing:
+    /// it changes with every grid creation, release and 0x71C290 blend.
+    pub fn revision(&self) -> u64 {
+        self.changes
     }
     fn check_map(&self, map: &TerrainMap) -> Result<()> {
         if !self.map.upgrade().is_some_and(|id| std::sync::Arc::ptr_eq(&id, map.identity())) {
@@ -755,6 +811,7 @@ impl<K: Copy + Eq> TerrainFog<K> {
         let d0 = self.d0;
         let block = self.blocks.get_mut(cell).ok_or("block index outside the TerrainMap")?;
         block.grid = Some(grid_720ad0(d0, quad_size_uvar0, vars.pixels_per_meter_61, p)?);
+        self.changes = self.changes.wrapping_add(1);
         Ok(())
     }
     /// 0x71CCB0's +141 = 1.
@@ -765,6 +822,7 @@ impl<K: Copy + Eq> TerrainFog<K> {
     /// 0x721030(0): +124 freed (and +128); +88, +10C and +118 remain.
     pub fn release_721030(&mut self, cell: usize) -> Result<()> {
         self.blocks.get_mut(cell).ok_or("block index outside the TerrainMap")?.grid = None;
+        self.changes = self.changes.wrapping_add(1);
         Ok(())
     }
 
@@ -807,7 +865,13 @@ impl<K: Copy + Eq> TerrainFog<K> {
         let delta = self.clock.delta_13c;
         for &cell in vis.active() {
             let state = vis.block(cell).ok_or("active block outside the map")?.state_b8;
-            self.blocks[cell].update_7208d0(state, self.d0, globals, delta, r, p)?;
+            let block = &mut self.blocks[cell];
+            let before = block.grid.as_ref().map(|g| g.revisions);
+            let result = block.update_7208d0(state, self.d0, globals, delta, r, p);
+            if block.grid.as_ref().map(|g| g.revisions) != before {
+                self.changes = self.changes.wrapping_add(1);
+            }
+            result?;
         }
         Ok(())
     }
@@ -835,10 +899,9 @@ impl<K: Copy + Eq> TerrainFog<K> {
         let mut luminance = Vec::new();
         luminance.try_reserve_exact(w as usize * h as usize).map_err(|_| "fog texture allocation failed")?;
         luminance.resize(w as usize * h as usize, 0);
-        let mut revision = 0u64;
-        for (i, block) in self.blocks.iter().enumerate() {
+        let revision = self.revision();
+        for block in &self.blocks {
             let Some(grid) = &block.grid else { continue };
-            revision = revision.wrapping_add(u64::from(grid.revisions)).wrapping_mul(31).wrapping_add(i as u64 + 1);
             let [c, r] = block.index;
             for y in 0..size {
                 let row = (r * size + y) as usize * w as usize + (c * size) as usize;

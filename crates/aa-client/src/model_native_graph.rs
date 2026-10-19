@@ -83,7 +83,7 @@ fn property(nif:&NifFile,block:usize)->Result<Property>{
   shader_textures=f.u32("shader_map_count").unwrap_or(0);
  }
  Ok(Property{kind:o.class.into(),block:block as u32,flags:if o.class=="NiAlphaProperty"{flags_read(nif,block)?}else{0},slots,shader_textures,shader_maps,extras:extras(nif,block)?,
-  generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None})
+  generated:BTreeMap::new(),material:None,alpha_threshold:None,vertex_color:None,controllers:None,unique_base:false})
 }
 pub(super) fn document(nif:&NifFile,source:&str,source_sha256:&str,converted_sha256:String,material_audit_sha256:String,mesh_mapping:serde_json::Value)->Result<Document>{
  //5A716B: no top-level object; 711540: the first one is not an NiAVObject.
@@ -123,6 +123,6 @@ pub(super) fn document(nif:&NifFile,source:&str,source_sha256:&str,converted_sha
  let mut reached:BTreeMap<usize,Vec<usize>>=BTreeMap::new();for(k,n)in nodes.iter().enumerate(){if let Some(p)=n.parent{reached.entry(p).or_default().push(k);}}
  for(k,n)in nodes.iter_mut().enumerate(){let mut it=reached.remove(&k).unwrap_or_default().into_iter();n.children=nulls[k].iter().map(|&null|if null{None}else{it.next()}).collect();}
  let textures=nif.objects.iter().enumerate().filter(|(_,o)|o.class=="NiSourceTexture").map(|(i,o)|->Result<Texture>{Ok(Texture{block:i as u32,
-  filename:if o.fields.u8("use_external").unwrap_or(0)!=0{Some(text(o.fields.string("file_name").flatten())?)}else{None},extras:extras(nif,i)?,generated:BTreeMap::new()})}).collect::<Result<Vec<_>>>()?;
+  filename:if o.fields.u8("use_external").unwrap_or(0)!=0{o.fields.string("file_name").flatten().map(|f|text(Some(f))).transpose()?}else{None},extras:extras(nif,i)?,generated:BTreeMap::new()})}).collect::<Result<Vec<_>>>()?;
  Ok(Document{schema:2,source:source.into(),source_sha256:source_sha256.into(),converted_sha256,material_audit_sha256,version:nif.version,roots:vec![Some(0)],nodes,textures,mesh_mapping})
 }

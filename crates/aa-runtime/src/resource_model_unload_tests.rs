@@ -31,6 +31,7 @@ fn entry(origin: &Arc<()>, priority: &crate::resource_task::DefaultPriority, kin
         Kind::Model => "nif",
         Kind::Sequence => "kf",
         Kind::Sound => "wav",
+        Kind::TerrainBlock => unreachable!("5ACA50 fixture has no dynamic rows"),
     });
     let source = crate::resource_objects::SourceFile::from_catalog(&aa_rules::sources::CatalogEntry {
         logical_path: name.clone(),
@@ -43,6 +44,7 @@ fn entry(origin: &Arc<()>, priority: &crate::resource_task::DefaultPriority, kin
         Kind::Model => Entry::model(origin, ids, source, priority),
         Kind::Sequence => Entry::sequence(origin, ids, source, priority),
         Kind::Sound => Entry::sound(origin, ids, source, priority),
+        Kind::TerrainBlock => unreachable!("5ACA50 fixture has no dynamic rows"),
     }
     .unwrap();
     entry.flags8 = flags;

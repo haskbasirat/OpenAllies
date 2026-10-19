@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "package": "gap-plan order 9: Aspect extra (external) textures 46AE20 and 46AF70 BlockTillLoaded; 469BB0/469C50 over +48",
+  "addresses": {
+    "46AE20": "n = 5A4ED0 Model+7C; n != +4C -> 46ADD0 and per element +0 = 46A180(5A5590(i), 0), +4 = 5A55A0(i); vf10(delta, mode) on every +0 < n; +54 = 1",
+    "46ADD0/46A450": "+48 {data, +4C count, +50 capacity}: grow to n, double, or first array; existing vector min 4; +0 copied verbatim, 469CF0 constructs only +4",
+    "46AF70": "vf18 when Model flags+8 bit0 clear; 46AE20(+18, 1) when +54 clear; 855D30 m_extra_textures_requested (AspectData.cpp 0x1C9) unless latch B3A747",
+    "5A79F0": "5A77E0(name,1); per non-empty owner path: 85ABB0(path, 859B70(name)) ('.' paths add 85A550 dir and 85A030); 5A77E0(candidate,1); then 5A77E0(name,0)",
+    "48D660": "only writer of GameData+4 (85A550 of each 48D970 file); in play = directory of the last index file translate.tgi = empty",
+    "469BB0/469C50": "Model+7C and +48[i]+0 (kernels proven in research/skirmish-20261019-data-release-ready)"
+  },
+  "oracle": {
+    "producer": "research/mapload-20261018/aspect-extra-textures/native_aspect_extra_textures.py",
+    "fixture": "research/mapload-20261018/aspect-extra-textures/native-aspect-extra-textures.json",
+    "fixture_sha256": "022e92c439491785c6f0e6d8c89210049bd8f8e412e0ef9ff94356af7176122e",
+    "rows": {"search_5a79f0": 13, "extra_46ae20_sequences": 9, "block_46af70": 12},
+    "machines": 204,
+    "pinned_instructions": 1657,
+    "logs": ["native-author01.log", "native-replay01.log"]
+  },
+  "rust": {
+    "files": [
+      "crates/aa-runtime/src/data_aspect_texture.rs",
+      "crates/aa-runtime/src/data_aspect_texture_tests.rs",
+      "crates/aa-runtime/src/data_aspect.rs",
+      "crates/aa-runtime/src/data_aspect_release.rs",
+      "crates/aa-runtime/src/data_aspect_tests.rs"
+    ],
+    "api": [
+      "State::request_aspect (unchanged signature; 46AE20 Texture misses stop at the required Texture policy)",
+      "State::request_aspect_with_texture_policy (46AEC0 with an actual Texture policy)",
+      "State::block_aspect_textures_46af70 (for 45A780, package 3)"
+    ],
+    "behaviour_change": "skin/glow 5A79F0 now runs the TextureSearchPath list and the final 5A77E0(name,0) instead of stopping at a direct miss"
+  },
+  "open": [
+    "'.'-relative TextureSearchPath (85A030) is an explicit error; shipped paths are all '/'-absolute",
+    "469BB0/469C50 reuse the Model+7C value 46AE20 read for the SAME Model; a live read needs a Model+7C accessor on ResourceRelease (data_release_kernels.rs, not owned)",
+    "B3A747 latch not stored; the 46AF70 assertion path is an explicit error (unreachable after a returning 46AE20)",
+    "empty 5A79F0 names stay refused",
+    "real-data lab uses the shipped GBRBrigadeEngineer.nif texture names from a byte scan, no NIF decode in aa-runtime"
+  ]
+}

@@ -28,3 +28,4 @@ pub mod terrain_ray;
 pub mod terrain_map;
 pub mod ui_world;
 pub mod x87;
+pub mod x87_masked;

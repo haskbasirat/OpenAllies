@@ -293,7 +293,8 @@ pub trait Env<R, X>: Clock {
     fn on_view_thread(&mut self) -> Result<bool>;
     /// B364C0 handle -> object +20..+28; None when stale.
     fn object_position(&mut self, handle: u32) -> Result<Option<[u32; 3]>>;
-    /// B364C0 handle -> object +4 (voice owner identity); None when stale.
+    /// B364C0 handle -> object +4 (voice owner identity, 0 when null);
+    /// None when the handle is stale.
     fn object_voice_owner(&mut self, handle: u32) -> Result<Option<u32>>;
     /// B364C0 handle -> None when stale; else Some(relation) where relation
     /// is 2 without a 5C0E50 local kingdom, else object vt+144(local).
@@ -720,6 +721,9 @@ impl<R: Clone + PartialEq + std::fmt::Debug, X> Manager<R, X> {
         }
         let Some(owner) = env.object_voice_owner(object)? else { return Ok(false) };
         if voice {
+            if owner == 0 {
+                return Err("746410 reads +5BC of a null object+4 voice owner".into());
+            }
             self.inst_mut(id)?.voice_5c = Some(owner);
             if self.miles.voices_5bc.contains(&owner) {
                 return Ok(false);

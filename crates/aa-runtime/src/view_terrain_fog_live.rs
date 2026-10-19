@@ -31,6 +31,11 @@ pub struct FrameWords {
     pub fog_debug_31: Result<u8>,
     pub terrain_grid_100: Result<u8>,
     pub alpha_transitions_102: Result<u8>,
+    /// 0x5C0E10 (object virtuals): B36550 non-NULL and 0x76AC60.
+    pub local_player_5c0e10: Result<bool>,
+    /// The byte of the lazily looked-up UVar record PerformanceDisableDoodads
+    /// (0x45BBD0; None: no record, which 0x45BC20 dereferences).
+    pub performance_disable_doodads: Result<Option<u8>>,
 }
 
 /// [`super::Reads`] over one World's presentation loans.
@@ -142,5 +147,13 @@ impl<K: Copy + Eq> super::TerrainFog<K> {
             return Err("zone GMap and BattleTerrain gtile sizes differ".into());
         }
         Self::for_map(map, parts.terrain.grid.cell_size, quad_size_ac, [g.width, g.height])
+    }
+    /// [`Self::for_world`] with the map's own +AC ([`super::TerrainFog::for_built_map`]).
+    pub fn for_built_world(map: &crate::player_order_input::terrain_map::TerrainMap, parts: &PresentationParts<'_>) -> Result<Self> {
+        let g = parts.zones.geometry;
+        if g.tile_size_bits != parts.terrain.grid.cell_size {
+            return Err("zone GMap and BattleTerrain gtile sizes differ".into());
+        }
+        Self::for_built_map(map, parts.terrain.grid.cell_size, [g.width, g.height])
     }
 }

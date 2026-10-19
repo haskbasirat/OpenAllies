@@ -120,7 +120,24 @@ pub struct State<V> {
     next_group_id: u64,
     candidate_class_50: u32,
     selection_class_54: u32,
+    /// +0x4C: the local kingdom 0x43A1C0 last saw (constructor 0).
+    kingdom_4c: Option<u64>,
+    /// +0x1D: the group-rebuild request the simulation's view notifier sets
+    /// (0x50C2E7 / 0x50C9D3); 0x43A1C0 clears it (constructor 0).
+    groups_changed_1d: bool,
 }
+
+/// One Kingdom+0x34C group record as 0x439BF0 reads it: +0x00 name (the
+/// CString 0x439010 copies), +0x0C/+0x10 member handles (B364C0), +0x18.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KingdomGroup {
+    pub name: Vec<u16>,
+    pub members: Vec<u32>,
+    pub byte_18: bool,
+}
+
+/// 0x4385E0's name of the +0x44 wildcard group (0x438E10, literal 0x9FD6D0).
+pub const WILDCARD_NAME: &str = "static_group_wildcard_name";
 
 /// The data leaves and effects of the selection manager, named after the
 /// native routine, field or virtual slot each stands for. None has a
@@ -198,8 +215,11 @@ pub trait Leaves {
     /// 0x436850: the selection acknowledgement (application state, sound
     /// option, 0x58CB30 voice and 0x42A590).
     fn selection_sound_436850(&mut self, view: Self::View) -> Result<()>;
-    /// 0x437EB0: recompute +0x20..+0x2C from the selection.
-    fn command_masks_437eb0(&mut self, selected: &[Self::View], static_40: StaticRef, masks: &mut [u32; 4]) -> Result<()>;
+    /// 0x437EB0 ([`super::command_masks`]): recompute +0x20..+0x2C in place
+    /// (native partial stores when a leaf fails) from the selection +8 and the
+    /// +0x40 group's +0x18 byte (None: +0x40 NULL). Its +0x4C kingdom is the
+    /// 0x43A1C0 per-frame cache ([`State::kingdom_4c`]).
+    fn command_masks_437eb0(&mut self, selected: &[Self::View], kingdom_4c: Option<u64>, group_40_byte_18: Option<bool>, masks: &mut [u32; 4]) -> Result<()>;
     /// UIWorldState+0x30 brush 0x42D4D0 (brush+8 = 1).
     fn brush_changed_42d4d0(&mut self) -> Result<()>;
     /// `VWorld+0x140 != NULL`, then 0x4325C0(3) on it.
@@ -212,6 +232,20 @@ pub trait Leaves {
     fn floater_update_453470(&mut self, view: Self::View) -> Result<()>;
     /// The selection-request emitters.
     fn requests(&mut self) -> &mut dyn Requests<Self::View>;
+
+    // ---- per-frame 0x43A1C0 and the group rebuild 0x439BF0 ----
+    /// 0x765E00(0x5C0E10()): the local player's kingdom (player+0x28; NULL
+    /// while GWorld B36534 is NULL), as an identity.
+    fn local_kingdom_765e00(&mut self) -> Result<Option<u64>>;
+    /// `[kingdom+0x34C][0..+0x350]`: the kingdom's group records in order.
+    fn kingdom_groups_34c(&mut self, kingdom: u64) -> Result<Vec<KingdomGroup>>;
+    /// B364C0 of a member handle (generation word table+4+2*slot, object
+    /// table+0x20004+4*slot): None when it does not resolve, else the
+    /// object's +0x0C view.
+    fn view_of_handle_b364c0(&mut self, handle: u32) -> Result<Option<Option<Self::View>>>;
+    /// `[[0x5C0E10()+0x50]+0x24]+0x18`: the byte 0x439E58 copies into the
+    /// +0x44 wildcard group.
+    fn player_wildcard_byte_50(&mut self) -> Result<bool>;
 }
 
 /// The UI-manager and VWorld hooks: implemented by the state machine
@@ -265,12 +299,14 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
             command_masks_20: [0; 4],
             groups: Vec::new(),
             static_40: StaticRef::None,
-            wildcard_44: StaticGroup::new(0, Vec::new(), Vec::new()),
+            wildcard_44: StaticGroup::new(0, WILDCARD_NAME.encode_utf16().collect(), Vec::new()),
             rebuilding_48: None,
             links_150: Vec::new(),
             next_group_id: 1,
             candidate_class_50: 0,
             selection_class_54: 0,
+            kingdom_4c: None,
+            groups_changed_1d: false,
         }
     }
     /// A manager holding `selected` (head first) and `hovered` (+0x10), for
@@ -531,6 +567,11 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
     pub fn deselect_438df0<H: Host<View = V>>(&mut self, host: &mut H, view: V) -> Result<()> {
         let owner = Self::select_owner_640b40(host, Some(view))?
             .ok_or("0x438AD0 reached with a NULL owner (native NULL dereference at 0x59E240)")?;
+        self.remove_438ad0(host, owner)
+    }
+    /// 0x438AD0(view): SelectionRemove request (0x59E240 -> 0x436B90),
+    /// 0x438430, 0x4374D0, 0x437EB0, the brush 0x42D4D0, VWorld+0x140 0x4325C0(3).
+    fn remove_438ad0<H: Host<View = V>>(&mut self, host: &mut H, owner: V) -> Result<()> {
         host.requests().remove_436b90(owner, None)?;
         // 0x438430
         if let Some(index) = self.selected.iter().position(|v| *v == owner) {
@@ -548,10 +589,12 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
         host.vworld_list_changed_4325c0()
     }
     fn refresh_masks_437eb0<H: Host<View = V>>(&mut self, host: &mut H) -> Result<()> {
-        let mut masks = self.command_masks_20;
-        host.command_masks_437eb0(&self.selected, self.static_40, &mut masks)?;
-        self.command_masks_20 = masks;
-        Ok(())
+        let group = match self.static_40 {
+            StaticRef::None => None,
+            StaticRef::Wildcard => Some(self.wildcard_44.byte_18),
+            StaticRef::Group(i) => Some(self.groups.get(i).ok_or("UIWorldState+0x40 names no +0x34 group")?.byte_18),
+        };
+        host.command_masks_437eb0(&self.selected, self.kingdom_4c, group, &mut self.command_masks_20)
     }
     /// 0x4374D0.
     fn refresh_static_4374d0<H: Host<View = V>>(&mut self, host: &mut H) -> Result<()> {
@@ -636,6 +679,129 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
             StaticRef::Wildcard => self.wildcard_44.byte_18,
             StaticRef::Group(i) => self.groups.get(i).map(|g| g.byte_18).unwrap_or(false),
         }
+    }
+    /// 0x43A1C0, the per-frame update VWorld 0x440159 calls on VWorld+0x13C:
+    /// every selected object whose vt+0x10 (0x640660) fails is removed by
+    /// 0x438AD0 (the next node is read before the call); then when +0x1D is
+    /// set or the local kingdom 0x765E00(0x5C0E10()) differs from +0x4C:
+    /// +0x4C = it, +0x1D = 0, 0x439BF0, 0x4374D0; then the +0x30 brush's
+    /// 0x4B2830 (`ret`) and the tail jump to 0x437EB0.
+    pub fn update_43a1c0<H: Host<View = V>>(&mut self, host: &mut H) -> Result<()>
+    where
+        V: Ord,
+    {
+        for view in self.selected.clone() {
+            if !Self::selectable_640660(host, Some(view))? {
+                self.remove_438ad0(host, view)?;
+            }
+        }
+        let kingdom = host.local_kingdom_765e00()?;
+        if self.groups_changed_1d || self.kingdom_4c != kingdom {
+            self.kingdom_4c = kingdom;
+            self.groups_changed_1d = false;
+            self.rebuild_groups_439bf0(host)?;
+            self.refresh_static_4374d0(host)?;
+        }
+        self.refresh_masks_437eb0(host)
+    }
+    /// +0x4C (0x43A1C0's cache; the 0x437EB0 kingdom).
+    pub fn kingdom_4c(&self) -> Option<u64> {
+        self.kingdom_4c
+    }
+    /// +0x1D = 1: the simulation's view notifier (0x50C2B0 after 0x43B200,
+    /// 0x50C970) asks 0x43A1C0 to rebuild the groups.
+    pub fn request_group_rebuild_1d(&mut self) {
+        self.groups_changed_1d = true;
+    }
+    /// 0x438510: destroy every +0x34 group (0x438240: 0x436D00 unlinks its
+    /// members through 0x451860), count +0x38 = 0. +0x40 is not touched.
+    fn clear_groups_438510<H: Leaves<View = V>>(&mut self, host: &mut H) -> Result<()> {
+        for index in 0..self.groups.len() {
+            for member in self.groups[index].members.clone() {
+                // 0x451860 while the group still counts its members: the
+                // 0x4385B0 release finds it nonempty.
+                host.floater_remove_42eb10(member)?;
+                self.links_150.retain(|(v, _)| *v != member);
+            }
+        }
+        self.groups.clear();
+        Ok(())
+    }
+    /// 0x439BF0: 0x438510, then with a local kingdom a UI group per
+    /// Kingdom+0x34C record (0x439010 copies the name, +0x18 copied), each
+    /// resolved member's view linked by 0x453520 and lower-bound inserted
+    /// (0x869D30 / 0x4E1AB0); a group with members is appended to +0x34,
+    /// an empty one destroyed; then +0x44's +0x18 from the player and 0x4374D0.
+    fn rebuild_groups_439bf0<H: Host<View = V>>(&mut self, host: &mut H) -> Result<()>
+    where
+        V: Ord,
+    {
+        self.clear_groups_438510(host)?;
+        let Some(kingdom) = host.local_kingdom_765e00()? else { return Ok(()) };
+        for record in host.kingdom_groups_34c(kingdom)? {
+            let id = self.next_group_id;
+            self.next_group_id += 1;
+            let mut building = StaticGroup::new(id, record.name.clone(), Vec::new());
+            building.byte_18 = record.byte_18;
+            for handle in record.members {
+                let Some(object) = host.view_of_handle_b364c0(handle)? else {
+                    return Err(format!(
+                        "0x439D09 assertion (line 0x344): Kingdom+0x34C group member handle {handle:#x} does not resolve"
+                    ));
+                };
+                let Some(view) = object else { continue };
+                // 0x453520: 0x452A90(old group, view, 1) when +0x150 is set.
+                if let Some(old) = self.group_of_150(view) {
+                    let removed = if old == id {
+                        building.members.iter().position(|m| *m == view).map(|at| {
+                            building.members.remove(at);
+                        })
+                    } else {
+                        self.group_index(old).and_then(|index| {
+                            let members = &mut self.groups[index].members;
+                            members.iter().position(|m| *m == view).map(|at| {
+                                members.remove(at);
+                            })
+                        })
+                    };
+                    if removed.is_some() {
+                        self.unlink_view_451860(host, view)?;
+                    }
+                }
+                self.links_150.retain(|(v, _)| *v != view);
+                self.links_150.push((view, id));
+                host.floater_update_453470(view)?;
+                let at = building.members.partition_point(|m| *m < view);
+                building.members.insert(at, view);
+            }
+            if !building.members.is_empty() {
+                self.groups.push(building);
+            }
+        }
+        self.wildcard_44.byte_18 = host.player_wildcard_byte_50()?;
+        self.refresh_static_4374d0(host)
+    }
+    /// 0x438560(name, byte) (the simulation's 0x50C410 after its 0x4F5290
+    /// local-kingdom, [B36534]+D8 != 6 and 0x43AAF0 gates): the current
+    /// group +0x40 when its name equals `name` (wcscmp) gets +0x18 = `byte`
+    /// and 0x437EB0; otherwise the +0x34 group 0x4375F0 finds by name gets
+    /// +0x18 = `byte` alone.
+    pub fn set_group_byte_438560<H: Host<View = V>>(&mut self, host: &mut H, name: &[u16], byte: bool) -> Result<()> {
+        let current = match self.static_40 {
+            StaticRef::None => None,
+            StaticRef::Wildcard => Some(&mut self.wildcard_44),
+            StaticRef::Group(i) => Some(self.groups.get_mut(i).ok_or("UIWorldState+0x40 names no +0x34 group")?),
+        };
+        if let Some(group) = current {
+            if group.name == name {
+                group.byte_18 = byte;
+                return self.refresh_masks_437eb0(host);
+            }
+        }
+        if let Some(group) = self.groups.iter_mut().find(|g| g.name == name) {
+            group.byte_18 = byte;
+        }
+        Ok(())
     }
     /// UIWorldState 0x439E90 SaveGroup(name), reached from the console
     /// command KKC_GameInterface::CommandSaveGroup 0x60D8F0 (after its

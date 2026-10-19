@@ -393,3 +393,46 @@ fn real_selection_phase_one_is_zero() {
         }
     }
 }
+
+struct NoGlobals;
+impl Globals for NoGlobals {
+    fn can_process_40eaa0(&mut self) -> crate::player_order_world::Result<bool> {
+        Err(crate::player_order_world::Error::Required("40EAA0".into()))
+    }
+    fn session_phase_76ac90(&mut self) -> crate::player_order_world::Result<u32> {
+        Err(crate::player_order_world::Error::Required("76AC90".into()))
+    }
+}
+struct NoSpatial;
+impl Spatial for NoSpatial {
+    fn placement(&self, _: ActorId) -> crate::actor_world::Result<crate::actor_world::PlacementState> {
+        Err(crate::actor_world::Error::Missing("test spatial"))
+    }
+    fn publish(&mut self, _: ActorId, _: crate::actor_world::PlacementState) -> crate::actor_world::Result<()> {
+        Err(crate::actor_world::Error::Missing("test spatial"))
+    }
+}
+
+/// The live VWorldState binding: the four zero stores precede everything;
+/// an empty selection reads nothing else; a selected identity that is not a
+/// current Thing is refused at its first virtual (vt+0x40), after the zeros.
+#[test]
+fn live_view_state_binding_zeroes_then_refuses_stale_things() {
+    use aa_rules::{actors::native_load::{NativeLoadReport, load_files}, tgi::Limits};
+    let actors = load_files(vec![], Limits::default(), &mut NativeLoadReport::default());
+    let catalog = Catalog::new(&actors);
+    let mut store = crate::actor_world::ActorStore::new();
+    let (_, access) = store.split_minds();
+    let mut bank = catalog.definition_bank.borrow_mut();
+    let loan = DefinitionBankLoan::new(&mut bank);
+    let mut state = crate::player_view_state::State::construct(None, |_| Ok(Vec::new())).unwrap();
+    state.mask_words_10_1c = GARBAGE;
+    rebuild_view_state_4ecd70(&catalog, &loan, &access, &NoSpatial, &mut NoGlobals, &mut state).unwrap();
+    assert_eq!(state.mask_words_10_1c, [0; 4]);
+    state.selected.prepend(ActorId::from_raw(0x0001_0005)).unwrap();
+    state.mask_words_10_1c = GARBAGE;
+    let error = rebuild_view_state_4ecd70(&catalog, &loan, &access, &NoSpatial, &mut NoGlobals, &mut state).unwrap_err();
+    assert!(error.contains("current generation"), "{error}");
+    // Phase 1 index 0 had already ORed its ALL bit when vt+0x40 refused.
+    assert_eq!(state.mask_words_10_1c, [0, 0, 1, 0]);
+}

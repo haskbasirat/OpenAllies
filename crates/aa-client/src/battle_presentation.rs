@@ -108,8 +108,6 @@ pub struct State {
     orders: Arc<Mutex<battle_orders_input::Orders>>,
     ///The HUD owner's per-battle simulation-thread state.
     hud_orders: Arc<Mutex<hud_orders::HudOrderState>>,
-    ///observe_input ran without the HUD tree, so no orders frame was queued.
-    orders_unrouted: bool,
     last_orders_error: Option<String>,
     last_view_request_error: Option<String>,
     last_vworld_ad: Option<bool>,
@@ -138,7 +136,6 @@ impl State {
             orders_input: Vec::new(),
             orders: Arc::new(Mutex::new(battle_orders_input::Orders::new())),
             hud_orders: Arc::new(Mutex::new(hud_orders::HudOrderState::default())),
-            orders_unrouted: false,
             last_orders_error: None,
             last_view_request_error: None,
             last_vworld_ad: None,
@@ -147,30 +144,17 @@ impl State {
             last_terrain_status: None,
         }
     }
-    ///Collect this UI frame's real input for the native camera controls only.
-    ///Selection/order input needs the HUD tree's press verdict: without it no
-    ///orders frame is queued (see observe_input_hud).
-    pub fn observe_input(&mut self, ctx: &egui::Context) {
-        self.observe(ctx, None);
-    }
     ///Collect this UI frame's camera and selection/order input. `ui` is the
     ///aa-ui HUD drawn over the battle image (0x5C3BC0 press pick). Call once
     ///per update before `poll`; frames observed while a job is pending join
     ///the next native frame (Frame::coalesce), so the queue stays one frame.
     pub fn observe_input_hud(&mut self, ctx: &egui::Context, ui: &aa_ui::ui::Ui) {
-        self.observe(ctx, Some(ui));
-    }
-    fn observe(&mut self, ctx: &egui::Context, ui: Option<&aa_ui::ui::Ui>) {
         let Some(pixels) = self.pixels else { return };
         let frame = camera_input::observe(ctx, ctx.content_rect(), pixels, self.presented);
         match self.input.last_mut() {
             Some(last) => last.coalesce(frame),
             None => self.input.push(frame),
         }
-        let Some(ui) = ui else {
-            self.orders_unrouted = true;
-            return;
-        };
         //Native client pixels of the presented image (equal to the content
         //rect unless the window aspect differs from the fixed target).
         let image = self.image_rect(ctx.content_rect());
@@ -224,11 +208,6 @@ impl State {
             }
             if self.error.is_some() || controller.status() != &Status::AwaitingNativeView {
                 return;
-            }
-            if std::mem::take(&mut self.orders_unrouted) && self.last_orders_error.is_none() {
-                let error = "frontend calls observe_input without the HUD tree (observe_input_hud): no selection/order frame is queued";
-                log::error!("native orders input not routed: {error}");
-                self.last_orders_error = Some(error.into());
             }
             let Some(viewport) = self.viewport.as_ref().map(Arc::clone) else { return };
             let map_id=controller.request().map(|r|r.map_id.clone()).unwrap_or_default();
@@ -306,8 +285,8 @@ impl State {
                 let mut terrain_status = None;
                 if vworld_ad {
                     if let terrain_owner::Slot::Built(owner) = &mut *terrain {
-                        let startup = loans.view_startup.as_ref().expect("checked above");
-                        match terrain_visibility_4312f0(owner, loans.session, loans.application_views, startup) {
+                        let startup = loans.view_startup.as_mut().expect("checked above");
+                        match terrain_visibility_4312f0(owner, loans.source, loans.session, loans.application_views, startup, &bridge, execution) {
                             Ok(()) => terrain_status = Some(owner.status()),
                             Err(error) => terrain_error = terrain_error.or(Some(error)),
                         }
@@ -319,7 +298,10 @@ impl State {
                 //and the frame loop continues.
                 let view_request_error = if vworld_ad {
                     let startup = loans.view_startup.as_mut().expect("checked above");
-                    startup.update_view_requests_43ec60(loans.source, loans.session, &bridge, execution, aa_numeric::Precision::Double53).err()
+                    //The full 43FF60/43EC60 driver (vworld_frame.rs) with this frame's
+                    //B396C4 reader and ApplicationViews lent.
+                    startup.update_vworld_frame(loans.source, loans.session, &bridge, execution, Some(loans.focus),
+                        Some(&mut *loans.application_views), aa_numeric::Precision::Double53).err()
                 } else { None };
                 let startup = loans.view_startup.as_ref().expect("checked above");
                 let world = loans.session.world();
@@ -627,27 +609,35 @@ fn build_terrain_43fe0f(
         }
         Ok(None) => None,
         Err(error) => {
-            *slot = terrain_owner::Slot::Failed(error.clone());
+            *slot = terrain_owner::Slot::Failed;
             Some(format!("43FE0F/43FE26 TerrainMap construction: {error}"))
         }
     }
 }
 
-///0x4312F0 + 0x725340 on the current camera, the SAME World, VWorld+BC and
-///the VWorld+94 VGrid.
+///0x4312F0 + 0x725340 on the current camera (`*[B40048]`), the SAME World
+///and VWorld+BC, with the view owner's StreamingObjects as the 0x42FAD0 /
+///0x42F670 object side (its model virtuals are the view owner's explicit
+///refusals until the model instance owner is bound).
 #[cfg(windows)]
+#[allow(clippy::too_many_arguments)]
 fn terrain_visibility_4312f0(
     owner: &mut terrain_owner::Owner,
-    session: &aa_netcode::local_bootstrap::world_ready::ActualActivatedSession,
+    source: &Arc<aa_rules::actors::ActorCatalog>,
+    session: &mut aa_netcode::local_bootstrap::world_ready::ActualActivatedSession,
     views: &mut crate::live_scene::world_owner::ApplicationViews,
-    startup: &crate::battle_view_startup::State,
+    startup: &mut crate::battle_view_startup::State,
+    bridge: &crate::battle_ui_bridge::Client,
+    execution: &mut aa_runtime::simulation_execution::Execution<'_>,
 ) -> Result<(), String> {
-    let native = startup.native_view().native();
-    let height = native.heightfield().ok_or("4312F0 VWorld+BC heightfield absent")?;
-    let grid = native.prefix().grid().ok_or("4312F0 VWorld+94 VGrid absent")?;
+    let pc = aa_numeric::Precision::Double53;
     let (camera, _) = views.camera_and_visual_map();
     let words = aa_runtime::terrain_visibility::CameraWords::current(camera.directory())?;
-    owner.update_4312f0_725340(session.world(), height, grid, &words, aa_numeric::Precision::Double53)
+    let mut model = crate::live_scene::view_directory::UnportedModelLifecycle;
+    startup.stream_views_4312f0(source, session, bridge, execution, &mut model, pc, |world, objects| {
+        let height = objects.heightfield();
+        owner.update_4312f0_725340(world, height, &words, objects, pc)
+    })
 }
 
 fn aspect_fit(available: egui::Rect, pixels: [u32; 2]) -> egui::Rect {

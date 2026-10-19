@@ -274,6 +274,7 @@ impl Resources<'_> {
                         m.source40 = None;
                     } else if let Some(s) = &mut e.sequence {
                         s.source40 = None;
+                        s.root40 = None;
                     } else {
                         return Err("5A7CF0 requires an actual Ni allocation".into());
                     }

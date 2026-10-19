@@ -47,6 +47,34 @@ pub struct DirectoryViews<'a>{
     directory:&'a mut ViewDirectory,actors:&'a ActorStore,spatial:&'a SpatialWorld,
     variables:&'a load_view_variables::State,world:WorldFields<'a>,context:Option<&'a OrderContext>,
     order_150:Option<Box<Order150<'a>>>,
+    order_masks:Option<Box<OrderMasks<'a>>>,
+}
+///437EB0 on the SAME World and Catalog
+///(player_order_input::command_mask_world::command_masks_between_frames):
+///selection, its view+14 Things, the 5C0E30 kingdom, UIWorldState+4C, the
+///+40 group's +18 byte and 4CF430's globals.
+pub type OrderMasks<'a>=dyn FnMut(&[ViewHandle],&mut dyn FnMut(ViewHandle)->Result<Option<ActorId>>,Result<Option<ActorId>>,
+    Option<ActorId>,Option<bool>,&mut crate::battle_orders_input::UiOrderGlobals)->Result<[u32;4]>+'a;
+///The 437EB0 binding: an empty selection is 437EB0's own store-0 branch; a
+///non-empty one resolves each view+14 from `things` (selection order) when
+///the kernel reads it, with UIWorldState+4C and the context's globals.
+fn masks_437eb0(selected:&[ViewHandle],things:&[Result<ActorId>],context:Option<&OrderContext>,cache_4c:Option<u64>,group:Option<bool>,
+    call:Option<&mut OrderMasks<'_>>,masks:&mut [u32;4])->Result<()>{
+    if selected.is_empty(){*masks=[0;4];return Ok(())}
+    let context=context.ok_or("0x437EB0: orders Session/UI context was not supplied")?;
+    let call=call.ok_or("0x437EB0: World/Catalog binding was not supplied")?;
+    let mut globals=context.order_globals();
+    let mut thing_14=|v:ViewHandle|->Result<Option<ActorId>>{
+        let i=selected.iter().position(|x|*x==v).ok_or("0x437EB0 read +0x14 of a view outside UIWorldState+8")?;
+        things[i].clone().map(Some)
+    };
+    //437EB0 reads the +0x4C word 43A1C0 cached; it must be this World's 765E00(5C0E10()).
+    let kingdom_4c=context.kingdom_4c()?;
+    if kingdom_4c.map(|k|u64::from(k.raw()))!=cache_4c{
+        return Err(format!("0x437EB0: UIWorldState+0x4C cache {cache_4c:?} is not the World's local kingdom {kingdom_4c:?}"))
+    }
+    *masks=call(selected,&mut thing_14,context.kingdom_76ac70(),kingdom_4c,group,&mut globals)?;
+    Ok(())
 }
 ///4CF430 on the SAME World and Catalog (battle_orders_input::actor_virtual_150_between_frames).
 pub type Order150<'a>=dyn FnMut(u16,Option<ActorId>,&mut aa_orders::commands::CommandWire,&mut crate::battle_orders_input::UiOrderGlobals)
@@ -61,7 +89,7 @@ impl<'a> DirectoryViews<'a>{
     pub fn new(directory:&'a mut ViewDirectory,actors:&'a ActorStore,spatial:&'a SpatialWorld,
         variables:&'a load_view_variables::State,world:WorldFields<'a>,context:Option<&'a OrderContext>)->anyhow::Result<Self>{
         anyhow::ensure!(directory.actors.is_for(actors)&&directory.spatial.is_for(spatial),"orders view leaves use another World allocation");
-        Ok(Self{directory,actors,spatial,variables,world,context,order_150:None})
+        Ok(Self{directory,actors,spatial,variables,world,context,order_150:None,order_masks:None})
     }
     ///A view of a destroyed Thing would have been uninited natively (its +14
     ///cleared); that uninit chain is not ported, so it is refused here.
@@ -95,6 +123,8 @@ impl<'a> DirectoryViews<'a>{
     }
     ///Bind 4CF430 for actor_virtual_150 (order_views_with does this).
     pub fn with_order_150(mut self,call:Box<Order150<'a>>)->Self{self.order_150=Some(call);self}
+    ///Bind 437EB0 for command_masks_437eb0 (order_views_with_catalog does this).
+    pub fn with_order_masks(mut self,call:Box<OrderMasks<'a>>)->Self{self.order_masks=Some(call);self}
     fn swept(&self)->Result<()>{
         if self.directory.streaming_passes==0{return Err("VGrid On list / VThing+18: no 4312F0 -> 42F670 streaming pass has run in this World".into())}
         Ok(())
@@ -197,6 +227,11 @@ impl ViewLeaves for DirectoryViews<'_>{
     fn actor_can_34(&mut self,v:ViewHandle,index:u32)->Result<bool>{let thing=self.entry(v)?.actor;world::can_34(&mut self.live(),thing,index)}
     ///VGrid+100 from its +0 tail through VThing+8 (43D240's 42EEC0 order), as
     ///the 42FAD0/42F670 streaming passes linked it.
+    ///UIWorldState 437EB0 over the World: +20..+2C from the selection +8.
+    fn command_masks_437eb0(&mut self,selected:&[ViewHandle],kingdom_4c:Option<u64>,group_40_byte_18:Option<bool>,masks:&mut [u32;4])->Result<()>{
+        let things:Vec<Result<ActorId>>=selected.iter().map(|v|self.entry(*v).map(|e|e.actor)).collect();
+        masks_437eb0(selected,&things,self.context,kingdom_4c,group_40_byte_18,self.order_masks.as_deref_mut(),masks)
+    }
     ///436950's vt+0x150(5C0E30(), &cmd, 1): 4CF430 over the World.
     fn actor_virtual_150(&mut self,v:ViewHandle,wire:&mut aa_orders::commands::CommandWire)->Result<bool>{
         let slot=self.actor_slot_14(v)?;
@@ -267,5 +302,39 @@ mod tests{
         }
         assert_eq!(rows,240);
         assert!(thing_b4(11).is_err());
+    }
+    ///A non-empty selection reaches the World's 437EB0 with its view+14
+    ///Things (read lazily, errors kept), 5C0E30, UIWorldState+4C, the group
+    ///byte and the context's 40EAA0/76AC90; the masks are its result.
+    #[test]fn command_masks_binding_runs_a_selection_through_the_world_call(){
+        let k=ActorId::from_raw(0x0003_0011);
+        let context=OrderContext::new(0,true,Ok(Some(k)),7,Ok(true),Ok(None),Ok(Some(0)),Ok(false),Ok(vec![]));
+        let (a,b)=(ViewHandle(4),ViewHandle(9));
+        let things=[Ok(ActorId::from_raw(0x0001_0002)),Err("view+14 Thing was destroyed".to_string())];
+        let mut seen=Vec::new();
+        let mut call=|s:&[ViewHandle],thing:&mut dyn FnMut(ViewHandle)->Result<Option<ActorId>>,k76:Result<Option<ActorId>>,
+            k4c:Option<ActorId>,group:Option<bool>,g:&mut crate::battle_orders_input::UiOrderGlobals|->Result<[u32;4]>{
+            use aa_runtime::player_order_world::Globals;
+            seen.push(format!("{s:?} {:?} {:?} {k76:?} {k4c:?} {group:?} {:?} {:?}",thing(s[0]),thing(s[1]),g.can_process_40eaa0().ok(),g.session_phase_76ac90().ok()));
+            Ok([1,2,3,4])
+        };
+        let mut masks=[9;4];
+        let cache=Some(u64::from(k.raw()));
+        masks_437eb0(&[a,b],&things,Some(&context),cache,Some(true),Some(&mut call),&mut masks).unwrap();
+        assert_eq!(masks,[1,2,3,4]);
+        assert_eq!(seen,[format!("{:?} Ok(Some(ActorId(65538))) Err(\"view+14 Thing was destroyed\") Ok(Some({k:?})) Some({k:?}) Some(true) Some(true) Some(7)",[a,b])]);
+        let mut empty=[5;4];
+        masks_437eb0(&[],&[],None,None,None,None,&mut empty).unwrap();
+        assert_eq!(empty,[0;4]);
+        let mut call_err=|_:&[ViewHandle],_:&mut dyn FnMut(ViewHandle)->Result<Option<ActorId>>,_:Result<Option<ActorId>>,
+            _:Option<ActorId>,_:Option<bool>,_:&mut crate::battle_orders_input::UiOrderGlobals|->Result<[u32;4]>{
+            Err("0x438128 vt+0x134 0x4D1E90 on a GGroup (A29490): the GROUP layout is not bound".into())
+        };
+        let stale=masks_437eb0(&[a],&things[..1],Some(&context),Some(1),None,Some(&mut call_err),&mut masks).unwrap_err();
+        assert!(stale.contains("+0x4C cache"),"{stale}");
+        let err=masks_437eb0(&[a],&things[..1],Some(&context),cache,None,Some(&mut call_err),&mut masks).unwrap_err();
+        assert!(err.contains("GGroup"),"{err}");
+        let film=OrderContext::new(3,true,Ok(None),0,Ok(false),Ok(None),Ok(Some(0)),Ok(false),Ok(vec![]));
+        assert!(masks_437eb0(&[a],&things[..1],Some(&film),None,None,Some(&mut call_err),&mut masks).unwrap_err().contains("765E00"));
     }
 }

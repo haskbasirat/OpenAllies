@@ -462,15 +462,18 @@ pub struct SpatialIndex {
     /// Inverse of `references`: object -> its slots, ascending. Changed only
     /// together with `references` (insert_reference/remove_reference).
     reference_slots: BTreeMap<ActorKey, std::collections::BTreeSet<u16>>,
-    /// Bookkeeping only: the last placement words of each key that
-    /// `tile_rectangle` accepted during load-field validation, and its result.
-    /// tile_rectangle is a pure function of (grid, placement, precision), and
-    /// grid/precision never change after `new`, so equal words give it again.
+    /// Bookkeeping only: per key, the last load-field validation that passed:
+    /// its placement words, reference and `reference_epoch`, and the
+    /// rectangle. tile_rectangle is a pure function of (grid, placement,
+    /// precision) and grid/precision never change after `new`; the reference
+    /// check reads only `references`, unchanged while the epoch is unchanged.
     checked_rects: std::collections::HashMap<
         ActorKey,
-        ([u32; 10], crate::geometry::TileRect),
+        ([u32; 10], u32, u64, crate::geometry::TileRect),
         std::hash::BuildHasherDefault<KeyHasher>,
     >,
+    /// Bookkeeping only: counts every change to `references`.
+    reference_epoch: u64,
     /// Bookkeeping only, never read as fields: the map a dropped load lease
     /// held, kept so the next lease can reuse its unchanged entries.
     parked: BTreeMap<ActorKey, Member>,
@@ -550,6 +553,7 @@ impl SpatialIndex {
     }
     /// `references.insert`, keeping `reference_slots` its exact inverse.
     fn insert_reference(&mut self, slot: u16, value: (u16, ActorKey)) {
+        self.reference_epoch += 1;
         if let Some((_, old)) = self.references.insert(slot, value) {
             self.forget_slot(old, slot);
         }
@@ -557,6 +561,7 @@ impl SpatialIndex {
     }
     /// `references.remove`, keeping `reference_slots` its exact inverse.
     fn remove_reference(&mut self, slot: u16) {
+        self.reference_epoch += 1;
         if let Some((_, old)) = self.references.remove(&slot) {
             self.forget_slot(old, slot);
         }
@@ -570,6 +575,21 @@ impl SpatialIndex {
         }
     }
     fn validate_load_fields(&mut self, member: &Member) -> Result<()> {
+        //The words of member.placement(false): soft shape, facing, position.
+        let s = &member.soft;
+        let words = [
+            s.kind, s.radius_bits, s.bounds[0], s.bounds[1], s.bounds[2], s.bounds[3],
+            member.actor.facing[0], member.actor.facing[1],
+            member.actor.position[0], member.actor.position[1],
+        ];
+        let checked = self.checked_rects.get(&member.key).copied();
+        if let Some((checked_words, reference, epoch, _)) = checked
+            && checked_words == words
+            && reference == member.reference
+            && epoch == self.reference_epoch
+        {
+            return Ok(());
+        }
         if self.resolve_reference(member.reference) != Some(member.key) {
             return Err(Error::World(
                 "load fields do not match the registered generation".into(),
@@ -578,17 +598,12 @@ impl SpatialIndex {
         //5534F0 reads facing only for boxes and never reads Z. A circle's
         //saved facing may contain native NaN bits: retain those raw words.
         //The actual geometry operation validates each numeric input it uses.
-        let placement = member.placement(false);
-        let s = &placement.shape;
-        let words = [
-            s.kind, s.radius_bits, s.bounds[0], s.bounds[1], s.bounds[2], s.bounds[3],
-            placement.facing[0], placement.facing[1], placement.position[0], placement.position[1],
-        ];
-        if self.checked_rects.get(&member.key).is_some_and(|(checked, _)| *checked == words) {
-            return Ok(());
-        }
-        let rect = tile_rectangle(&self.grid, &placement, self.precision)?;
-        self.checked_rects.insert(member.key, (words, rect));
+        let rect = match checked {
+            Some((checked_words, _, _, rect)) if checked_words == words => rect,
+            _ => tile_rectangle(&self.grid, &member.placement(false), self.precision)?,
+        };
+        self.checked_rects
+            .insert(member.key, (words, member.reference, self.reference_epoch, rect));
         Ok(())
     }
     /// A synchronous operation may read these actual borrowed-field snapshots,
@@ -789,6 +804,7 @@ impl SpatialIndex {
             references: BTreeMap::new(),
             reference_slots: BTreeMap::new(),
             checked_rects: std::collections::HashMap::default(),
+            reference_epoch: 0,
             parked: BTreeMap::new(),
             nodes: Vec::new(),
             free_nodes: Vec::new(),

@@ -1128,8 +1128,8 @@ impl Resources<'_>{
     ///terrain owner keeps the rest of the 723960 object. Request with
     ///request_0c (721180's vf0C after its children), Load via its own
     ///7212D0, Release with release_14 (7211F0's 5AA550 part).
-    pub fn register_terrain_block_5acec0(&mut self,x:i32,y:i32,backend:&mut impl Backend)->Result<crate::resource_objects::Handle>{
-        let entry=crate::resource_objects::Entry::terrain_block(self.origin,x,y,self.priority)?;
+    pub fn register_terrain_block_5acec0(&mut self,x:i32,y:i32,map_a4:u32,backend:&mut impl Backend)->Result<crate::resource_objects::Handle>{
+        let entry=crate::resource_objects::Entry::terrain_block(self.origin,x,y,map_a4,self.priority)?;
         let handle=entry.handle.clone();let key=resource_map_cache::normalized_key(handle.logical_ids())?;
         backend.enter_request(&handle)?;
         let result=(||->Result<()>{
@@ -1417,7 +1417,9 @@ impl Resources<'_>{
         let e=manager.resources.get(&key).filter(|e|e.handle.same_identity(handle)).ok_or("5A5410 actual Resource differs")?;
         if e.flags8&0x100!=0{return Ok(())}
         let size=crate::resource_ni_cache::weighted_size(e.memory0c,pc)?;
-        let root=match handle.kind(){crate::resource_objects::Kind::Model=>e.model.as_ref().ok_or("5A5410 Model fields absent")?.source40.clone(),crate::resource_objects::Kind::Sequence=>{if e.sequence.as_ref().ok_or("5A5410 Sequence fields absent")?.source40.is_some(){return Err("5A5410 actual Sequence root owner is required".into())}None},_=>return Err("5A5410 actual Ni class required".into())};
+        //5A5410 caches the SAME +40 root: the Model NiAVObject or 5A8190's
+        //decoded NiControllerSequence (NULL leaves the entry rootless).
+        let root=match handle.kind(){crate::resource_objects::Kind::Model=>e.model.as_ref().ok_or("5A5410 Model fields absent")?.source40.clone().map(crate::resource_ni_cache::Root::Model),crate::resource_objects::Kind::Sequence=>{let s=e.sequence.as_ref().ok_or("5A5410 Sequence fields absent")?;if s.source40.is_some(){Some(crate::resource_ni_cache::Root::Sequence(s.root40.clone().ok_or("5A5410 Sequence +40 is set without its decoded root")?))}else{None}},_=>return Err("5A5410 actual Ni class required".into())};
         let entry=manager.ni_cache.append(handle,root,size)?;manager.ni_cache.validate(&entry,handle)?;
         let e=manager.resources.get_mut(&key).expect("same cache-locked Resource");
         if let Some(model)=&mut e.model{model.source3c=Some(entry)}else if let Some(sequence)=&mut e.sequence{sequence.source3c=Some(entry)}else{return Err("5A5410 Ni fields changed".into())}Ok(())

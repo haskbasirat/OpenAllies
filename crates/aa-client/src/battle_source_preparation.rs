@@ -82,6 +82,12 @@ pub(crate) fn prepare(
     execution: &mut Execution<'_>,
 ) -> Result<Report> {
     application.validate(catalog)?;
+    //The battle map's later authored-visibility pass loads the rule sources
+    //once on the UI thread; start that same load in the background now.
+    let _ = bridge.call(execution, |context| {
+        context.load_settings.visibility.prefetch(context.load_settings.memory_policy);
+        Ok(())
+    });
     let precision = catalog.definition_bank.try_borrow()
         .map_err(|_| "native source precision Bank is already borrowed")?
         .combat_source()?.source_precision();

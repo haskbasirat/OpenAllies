@@ -98,7 +98,11 @@ impl Leaves for Mock {
         actor_view_0c(usize) -> Result<Option<usize>>;
         voiced_436600(usize) -> Result<Option<Option<usize>>>;
         selection_sound_436850(usize) -> Result<()>;
-        command_masks_437eb0(&[usize], StaticRef, &mut [u32; 4]) -> Result<()>;
+        command_masks_437eb0(&[usize], Option<u64>, Option<bool>, &mut [u32; 4]) -> Result<()>;
+        local_kingdom_765e00() -> Result<Option<u64>>;
+        kingdom_groups_34c(u64) -> Result<Vec<crate::player_order_input::ui_world::KingdomGroup>>;
+        view_of_handle_b364c0(u32) -> Result<Option<Option<usize>>>;
+        player_wildcard_byte_50() -> Result<bool>;
         brush_changed_42d4d0() -> Result<()>;
         vworld_list_changed_4325c0() -> Result<()>;
         vworld_ad() -> Result<bool>;

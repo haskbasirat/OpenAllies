@@ -7,8 +7,7 @@
 //!
 //! * 0x42D750 normalize (reused: `native_camera::ni::normalize`),
 //!   0x869C60/0x869C30 NiPlane constructors, 0x42ED60 plane intersection,
-//! * 0x71C930 margin-rectangle clip with 0x53A3A0 segment parameters
-//!   (reused: `aa_navigation::low_path::segment_parameter_53a3a0`),
+//! * 0x71C930 margin-rectangle clip with 0x53A3A0 segment parameters,
 //!   0x71AB10 clamp, 0x53A7D0 containment, 0x42EE20/0x42EE70 block column/row
 //!   (and their inline copies at 0x71DDE2..0x71DE71) with 0x860680 binary32
 //!   truncation, 0x71ADC0 block at point, CRT `_CIfmod` 0x96DB7A,
@@ -17,14 +16,20 @@
 //!   triangle plane, 0x875610 containment) with the optional water child
 //!   0x736E70/0x736C60, and the absent-mesh 0x71CD30 flat-block fallback.
 //!
+//! Register values are [`Reg`]: the game runs with every x87 exception
+//! masked, so an overflowing binary32 store writes +-infinity and an invalid
+//! operation yields the real indefinite NaN, exactly like the native code
+//! (e.g. the first frame's corner casts while TerrainMap +8C/+90 are still
+//! +FLT_MAX/-FLT_MAX). Each `test ah, mask; jcc` idiom keeps its unordered
+//! outcome ([`at_least`] / [`at_most`] where a NaN takes the failing branch).
+//!
 //! Every value is read through [`Terrain`] / [`TerrainBlock`]; a missing
 //! datum is an error, never a default. Native paths that read undefined
 //! memory (parallel ray against the TerrainMap up plane: 0x71D8BD reads the
 //! unwritten 0x42ED60 locals; 0x71CD30 clamps an unwritten caller point) are
 //! errors. The returned AL is native data only: 0x43C4B0 ignores it.
-use aa_navigation::low_path::segment_parameter_53a3a0;
-use aa_numeric::{Binary, Precision};
-use std::cmp::Ordering;
+use super::x87_masked::{Reg, Relation};
+use aa_numeric::Precision;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -196,33 +201,46 @@ impl Out<'_> {
     }
 }
 
-fn b(word: u32) -> Result<Binary> {
-    Binary::from_f32_bits(word).map_err(|e| format!("71D840 binary32 {word:#010x}: {e}"))
+/// `FLD m32` (also every `Fop m32` operand).
+fn b(word: u32) -> Result<Reg> {
+    Reg::load_f32(word).map_err(|e| format!("71D840 {e}"))
 }
-fn st(value: &Binary) -> Result<u32> {
+/// `FST/FSTP m32`: +-infinity past binary32 range (overflow masked).
+fn st(value: &Reg) -> Result<u32> {
     value.store_f32().map_err(|e| format!("71D840 binary32 store: {e}"))
 }
-fn add(a: &Binary, c: &Binary, p: Precision) -> Result<Binary> {
-    a.add(c, p).map_err(|e| e.to_string())
+fn add(a: &Reg, c: &Reg, p: Precision) -> Result<Reg> {
+    a.add(c, p)
 }
-fn sub(a: &Binary, c: &Binary, p: Precision) -> Result<Binary> {
-    a.sub(c, p).map_err(|e| e.to_string())
+fn sub(a: &Reg, c: &Reg, p: Precision) -> Result<Reg> {
+    a.sub(c, p)
 }
-fn mul(a: &Binary, c: &Binary, p: Precision) -> Result<Binary> {
-    a.mul(c, p).map_err(|e| e.to_string())
+fn mul(a: &Reg, c: &Reg, p: Precision) -> Result<Reg> {
+    a.mul(c, p)
 }
-fn div(a: &Binary, c: &Binary, p: Precision) -> Result<Binary> {
-    a.div(c, p).map_err(|e| e.to_string())
+fn div(a: &Reg, c: &Reg, p: Precision) -> Result<Reg> {
+    a.div(c, p)
 }
-fn less(a: &Binary, c: &Binary) -> bool {
-    a.compare(c) == Ordering::Less
+/// Ordered `a < c`: `test ah,1; jne` / `test ah,5; jnp` taken only for C0
+/// alone (an unordered compare takes the other branch).
+fn less(a: &Reg, c: &Reg) -> bool {
+    a.relation(c) == Relation::Less
 }
-fn greater(a: &Binary, c: &Binary) -> bool {
-    a.compare(c) == Ordering::Greater
+/// Ordered `a > c`: `test ah,0x41; je` / `test ah,0x41; jne` not taken.
+fn greater(a: &Reg, c: &Reg) -> bool {
+    a.relation(c) == Relation::Greater
 }
-/// FABS. Only compared afterwards, so the sign of zero is immaterial.
-fn abs(value: Binary) -> Binary {
-    if value.is_negative_nonzero() { value.negated() } else { value }
+/// Ordered `a >= c`, false when unordered (`test ah,1; jne fail`).
+fn at_least(a: &Reg, c: &Reg) -> bool {
+    matches!(a.relation(c), Relation::Greater | Relation::Equal)
+}
+/// Ordered `a <= c`, false when unordered (`test ah,0x41; jp fail`).
+fn at_most(a: &Reg, c: &Reg) -> bool {
+    matches!(a.relation(c), Relation::Less | Relation::Equal)
+}
+/// FABS.
+fn abs(value: Reg) -> Reg {
+    value.abs()
 }
 /// `cdq; idiv`: divide error (#DE) for a zero divisor or INT_MIN / -1.
 fn idiv(value: i32, divisor: i32) -> Result<i32> {
@@ -265,10 +283,11 @@ pub(crate) fn plane_42ed60(
     Ok(Some([x, y, st(&add(&b(z)?, &o[2], p)?)?]))
 }
 
-/// 0x71C930/0x53A7D0 containment: min <= v <= max on both axes.
+/// 0x71C930/0x53A7D0 containment: min <= v <= max on both axes (ordered:
+/// a NaN coordinate is outside).
 fn inside_53a7d0(rect: &[u32; 4], point: [u32; 2]) -> Result<bool> {
     let (x, y) = (b(point[0])?, b(point[1])?);
-    Ok(!less(&x, &b(rect[0])?) && !greater(&x, &b(rect[2])?) && !less(&y, &b(rect[1])?) && !greater(&y, &b(rect[3])?))
+    Ok(at_least(&x, &b(rect[0])?) && at_most(&x, &b(rect[2])?) && at_least(&y, &b(rect[1])?) && at_most(&y, &b(rect[3])?))
 }
 
 /// 0x71AB10: clamp to [min, max]; a store happens only past a bound.
@@ -284,8 +303,35 @@ fn clamp_71ab10(rect: &[u32; 4], point: &mut [u32; 2]) -> Result<()> {
     Ok(())
 }
 
+/// 0x53A3A0(a, c, s, e, out): the a-c segment parameter against the s-e
+/// segment. `e.x - s.x` and the determinant are stored binary32, the other
+/// differences stay in registers; both stored parameters must lie in
+/// [0, 1] (ordered, so a NaN fails), a zero determinant fails (a NaN one
+/// continues: `test ah,0x44; jp`). Same operation order as
+/// `aa_navigation::low_path::segment_parameter_53a3a0`, which rejects the
+/// nonfinite words 0x71C930 passes here.
 fn segment_53a3a0(a: [u32; 2], c: [u32; 2], s: [u32; 2], e: [u32; 2], p: Precision) -> Result<Option<u32>> {
-    segment_parameter_53a3a0(a, c, s, e, p).map_err(|e| format!("53A3A0: {e}"))
+    let ey = sub(&b(e[1])?, &b(s[1])?, p)?;
+    let dx = sub(&b(c[0])?, &b(a[0])?, p)?;
+    let dy = sub(&b(c[1])?, &b(a[1])?, p)?;
+    let ex = b(st(&sub(&b(e[0])?, &b(s[0])?, p)?)?)?;
+    let determinant = b(st(&sub(&mul(&dx, &ey, p)?, &mul(&ex, &dy, p)?, p)?)?)?;
+    if determinant.is_zero() {
+        return Ok(None);
+    }
+    let ay = sub(&b(a[1])?, &b(s[1])?, p)?;
+    let ax = sub(&b(a[0])?, &b(s[0])?, p)?;
+    let inverse = div(&b(ONE)?, &determinant, p)?;
+    let t1 = st(&mul(&sub(&mul(&ay, &ex, p)?, &mul(&ax, &ey, p)?, p)?, &inverse, p)?)?;
+    let t2 = st(&mul(&sub(&mul(&ay, &dx, p)?, &mul(&ax, &dy, p)?, p)?, &inverse, p)?)?;
+    let (zero, one) = (b(ZERO)?, b(ONE)?);
+    for t in [t1, t2] {
+        let t = b(t)?;
+        if !at_least(&t, &zero) || !at_most(&t, &one) {
+            return Ok(None);
+        }
+    }
+    Ok(Some(t1))
 }
 
 /// 0x71C930(p0*, p1*): clip the segment to the rectangle (minx, miny, maxx,
@@ -317,7 +363,7 @@ fn clip_71c930(rect: &[u32; 4], p0: &mut [u32; 2], p1: &mut [u32; 2], p: Precisi
     let dx = b(st(&sub(&b(p1[0])?, &b(p0[0])?, p)?)?)?;
     let dy = sub(&b(p1[1])?, &b(p0[1])?, p)?;
     let (x0, y0) = (b(p0[0])?, b(p0[1])?);
-    let place = |s: &Binary| -> Result<[u32; 2]> {
+    let place = |s: &Reg| -> Result<[u32; 2]> {
         Ok([st(&add(&mul(&dx, s, p)?, &x0, p)?)?, st(&add(&mul(s, &dy, p)?, &y0, p)?)?])
     };
     if count == 2 {
@@ -372,15 +418,19 @@ fn block_at_71adc0<T: Terrain>(terrain: &T, point: [u32; 2]) -> Result<&T::Block
 /// CRT `_CIfmod` 0x96DB7A through `_trandisp2` 0x9791C0 (table 0xB350F0):
 /// valid/valid runs the exact FPREM loop 0x96DB84; a zero (or x87 denormal)
 /// dividend returns +0.0 (0x977754, FLDZ); a zero divisor is the domain
-/// error path 0x9777F6, an error here.
-fn fmod_96db7a(x: &Binary, y: &Binary) -> Result<Binary> {
+/// error path 0x9777F6, an error here. A nonfinite operand takes the
+/// `_trandisp2` special-value path, not ported (an error).
+fn fmod_96db7a(x: &Reg, y: &Reg) -> Result<Reg> {
+    let (Some(x), Some(y)) = (x.finite(), y.finite()) else {
+        return Err("71D840 fmod 0x96DB7A of a nonfinite operand: the CRT _trandisp2 special-value path is not ported".into());
+    };
     if y.is_zero() {
         return Err("71D840 fmod by a zero block size reaches the CRT domain error".into());
     }
     if x.is_zero() {
-        return Ok(Binary::from_i32(0));
+        return Ok(Reg::from_i32(0));
     }
-    x.remainder_trunc(y).map_err(|e| e.to_string())
+    x.remainder_trunc(y).map(Reg::Finite).map_err(|e| e.to_string())
 }
 
 /// 0x5E8910(p1, p2, p3, p4, out): the p1-p2 segment parameter against the
@@ -402,7 +452,7 @@ fn crossing_5e8910(p1: [u32; 2], p2: [u32; 2], p3: [u32; 2], p4: [u32; 2], p: Pr
         p,
     )?;
     let t = b(st(&div(&numerator, &denominator, p)?)?)?;
-    if less(&t, &b(ZERO)?) || greater(&t, &b(ONE)?) {
+    if !at_least(&t, &b(ZERO)?) || !at_most(&t, &b(ONE)?) {
         return Ok(None);
     }
     let x = st(&add(&mul(&dx, &t, p)?, &b(p1[0])?, p)?)?;
@@ -463,7 +513,7 @@ fn contains_875610(point: [u32; 3], a: [u32; 3], c1: [u32; 3], c2: [u32; 3], p: 
     let (epsilon, zero) = (b(CONTAIN_EPSILON)?, b(ZERO)?);
     for (l0, r0, l1, r1) in [(&r1, &s1, &r0, &s0), (&q1, &e2, &q0, &e1), (&w1, &e4, &w0, &e3)] {
         let sum = add(&add(&mul(l0, r0, p)?, &mul(l1, r1, p)?, p)?, &epsilon, p)?;
-        if less(&sum, &zero) {
+        if !at_least(&sum, &zero) {
             return Ok(false);
         }
     }
@@ -491,7 +541,7 @@ fn side_71a320(block: &impl TerrainBlock, side: Side, eye: [u32; 3], direction: 
             block.index_x()?.wrapping_add(1).wrapping_mul(block.quad_size()?).wrapping_mul(block.quads()?),
         ),
     };
-    let plane = Plane { normal, constant: st(&Binary::from_i32(constant))? };
+    let plane = Plane { normal, constant: st(&Reg::from_i32(constant))? };
     match plane_42ed60(&plane, eye, direction, true, p)? {
         None => Ok(false),
         Some(hit) => Ok(less(&b(hit[2])?, &b(block.max_height()?)?)),
@@ -573,8 +623,8 @@ fn flat_71cd30(block: &impl TerrainBlock, eye: [u32; 3], direction: [u32; 3], ou
     let column = block.index_x()?;
     let size = quads.wrapping_mul(quad_size);
     let epsilon = b(FLAT_EPSILON)?;
-    let low = |v: i32| st(&sub(&Binary::from_i32(v), &epsilon, p)?);
-    let high = |v: i32| st(&add(&Binary::from_i32(v), &epsilon, p)?);
+    let low = |v: i32| st(&sub(&Reg::from_i32(v), &epsilon, p)?);
+    let high = |v: i32| st(&add(&Reg::from_i32(v), &epsilon, p)?);
     let x0 = low(column.wrapping_mul(size))?;
     let x1 = high(column.wrapping_add(1).wrapping_mul(quads).wrapping_mul(quad_size))?;
     let row = block.index_y()?;
@@ -626,9 +676,10 @@ fn block_query_71d570<T: Terrain>(
 /// 0x71D840 with its seven native arguments. `direction` is the by-value
 /// triple (normalized in place by 0x42D750 first); `secondary` is the
 /// optional sixth pointer (stores only when present); `margin` is the
-/// signed seventh argument. Errors cover undefined native reads, unproven
-/// numeric domains (nonfinite values, binary32 overflow, idiv faults) and
-/// missing terrain data.
+/// signed seventh argument. Infinities and NaNs follow the masked x87
+/// responses ([`Reg`]); errors cover undefined native reads, unproven
+/// domains (signaling NaN words, a nonfinite fmod operand, extended
+/// exponent overflow, idiv faults) and missing terrain data.
 pub fn intersect_71d840<T: Terrain>(
     terrain: &T,
     eye: [u32; 3],
@@ -651,12 +702,12 @@ pub fn intersect_71d840<T: Terrain>(
         return Ok(out.finish(true));
     }
     let inset = b(RECT_INSET)?;
-    let low = st(&Binary::from_i32(margin))?;
+    let low = st(&Reg::from_i32(margin))?;
     let rect = [
         low,
         low,
-        st(&sub(&Binary::from_i32(terrain.width()?.wrapping_sub(margin)), &inset, p)?)?,
-        st(&sub(&Binary::from_i32(terrain.height()?.wrapping_sub(margin)), &inset, p)?)?,
+        st(&sub(&Reg::from_i32(terrain.width()?.wrapping_sub(margin)), &inset, p)?)?,
+        st(&sub(&Reg::from_i32(terrain.height()?.wrapping_sub(margin)), &inset, p)?)?,
     ];
     let mut p0 = [top[0], top[1]];
     let mut p1 = [bottom[0], bottom[1]];
@@ -689,7 +740,7 @@ pub fn intersect_71d840<T: Terrain>(
         }
         return Ok(out.finish(false));
     }
-    if b(p0[0])?.compare(&b(p1[0])?).is_eq() && b(p0[1])?.compare(&b(p1[1])?).is_eq() {
+    if b(p0[0])?.relation(&b(p1[0])?) == Relation::Equal && b(p0[1])?.relation(&b(p1[1])?) == Relation::Equal {
         // 0x71DAC6: degenerate clipped segment.
         out.point(0, p0[0]);
         out.point(1, p0[1]);
@@ -704,8 +755,8 @@ pub fn intersect_71d840<T: Terrain>(
     let world = |a: u32, c: u32| if x_major { [a, c] } else { [c, a] };
     let size = terrain.block_size()?;
     let signed = |back: bool| if back { size.wrapping_neg() } else { size };
-    let step_major = st(&Binary::from_i32(signed(less(&b(end[0])?, &b(start[0])?))))?;
-    let minor_register = Binary::from_i32(signed(less(&b(end[1])?, &b(start[1])?)));
+    let step_major = st(&Reg::from_i32(signed(!at_least(&b(end[0])?, &b(start[0])?))))?;
+    let minor_register = Reg::from_i32(signed(!at_least(&b(end[1])?, &b(start[1])?)));
     let step_minor = st(&minor_register)?;
     let zero = b(ZERO)?;
     let major_forward = greater(&b(step_major)?, &zero);
@@ -722,11 +773,11 @@ pub fn intersect_71d840<T: Terrain>(
     if counter != 0 {
         'walk: loop {
             counter = counter.wrapping_sub(1);
-            let size_word = st(&Binary::from_i32(size))?;
+            let size_word = st(&Reg::from_i32(size))?;
             let block_size = b(size_word)?;
             let major_start = st(&sub(&b(a)?, &fmod_96db7a(&b(a)?, &block_size)?, p)?)?;
             let minor_start = sub(&b(c)?, &fmod_96db7a(&b(c)?, &block_size)?, p)?;
-            let minor_end = add(&Binary::from_i32(size), &minor_start, p)?;
+            let minor_end = add(&Reg::from_i32(size), &minor_start, p)?;
             let edge = if less(&b(step_major)?, &zero) {
                 major_start
             } else {

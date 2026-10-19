@@ -272,6 +272,7 @@ fn spawn_probe(
     settings: Settings,
     load_mode: Option<u32>,
     ids: &str,
+    execution: &mut dyn aa_runtime::execution_context::ExecutionIds,
 ) -> Result<serde_json::Value, String> {
     use aa_actors::components::ComponentSlot as Slot;
     let (host, world, services) = session.parts();
@@ -312,6 +313,8 @@ fn spawn_probe(
     catalog.bind_load_session(&*players);
     //The same current-thread CRT sampler the worker binds for load arithmetic.
     catalog.bind_runtime_environment(runtime_fp::sample);
+    //The SAME simulation thread's OS-ID provider (4296B0 under fresh 42A590).
+    catalog.bind_load_execution(execution)?;
     catalog.bind_configuration_sync(aa_runtime::live_clocked::SyncBinding::Shared { owner: cells.same_a(), gate: &mut gate_a })?;
     catalog.bind_configuration_sync_s(aa_runtime::live_clocked::SyncBinding::Direct(aa_runtime::live_clocked::SyncLog {
         owner: &mut **sync_s,
@@ -803,7 +806,7 @@ fn live_skirmish_ticks_census() {
                     if let Some(ids) = kind.strip_prefix("spawn:") {
                         //Creation probe beside the local player's corps: its
                         //Denizen deployment offset (-10, 0) minus 5 units.
-                        let report = spawn_probe(&mut activated.session, &mut activated.time, &identity, &activated.source, resources.as_ref(), settings.clone(), load_mode, ids)?;
+                        let report = spawn_probe(&mut activated.session, &mut activated.time, &identity, &activated.source, resources.as_ref(), settings.clone(), load_mode, ids, &mut *execution)?;
                         if let Some(gtid) = report["gtid"].as_u64() { activated.move_unit = Some(gtid as u32); }
                         order_rows.push(serde_json::json!({"tick":tick,"spawn":report}));
                         continue;

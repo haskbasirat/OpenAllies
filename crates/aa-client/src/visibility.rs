@@ -8,7 +8,7 @@ use aa_rules::{
     resources::Provenance,
 };
 use anyhow::{Result, ensure};
-use std::{collections::BTreeMap, path::PathBuf, sync::OnceLock};
+use std::{collections::BTreeMap, path::PathBuf, sync::{Arc, OnceLock}};
 
 #[derive(Clone)]
 struct AuthoredVisibility {
@@ -101,15 +101,29 @@ pub struct Stats {
 
 pub struct Visibility {
     root: PathBuf,
-    catalog: OnceLock<std::result::Result<Catalog, String>>,
+    catalog: Arc<OnceLock<std::result::Result<Catalog, String>>>,
 }
 
 impl Visibility {
     pub fn new(store: &AssetStore) -> Self {
         Self {
             root: store.root().to_owned(),
-            catalog: OnceLock::new(),
+            catalog: Arc::new(OnceLock::new()),
         }
+    }
+    /// Start the same one-time catalog resolution `apply` performs (same
+    /// root, same policy, same sources) on a background thread, so a later
+    /// `apply` finds it done or waits for it instead of loading on its caller.
+    pub fn prefetch(&self, policy: MemoryPolicy) {
+        if self.catalog.get().is_some() {
+            return;
+        }
+        let (root, catalog) = (self.root.clone(), Arc::clone(&self.catalog));
+        let _ = std::thread::Builder::new()
+            .name("authored-visibility".into())
+            .spawn(move || {
+                catalog.get_or_init(|| resolve(&root, policy));
+            });
     }
 
     /// Resolve once per loader from source-hashed original/v14 definitions. A
@@ -127,15 +141,16 @@ impl Visibility {
         );
         let catalog = self
             .catalog
-            .get_or_init(|| {
-                crate::authored_rules::load(store.root(), policy)
-                    .map(Catalog::from_actors)
-                    .map_err(|e| format!("{e:#}"))
-            })
+            .get_or_init(|| resolve(store.root(), policy))
             .as_ref()
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         Ok(catalog.apply(scene))
     }
+}
+fn resolve(root: &std::path::Path, policy: MemoryPolicy) -> std::result::Result<Catalog, String> {
+    crate::authored_rules::load(root, policy)
+        .map(Catalog::from_actors)
+        .map_err(|e| format!("{e:#}"))
 }
 
 #[cfg(test)]

@@ -35,7 +35,27 @@ live_scene::view_directory::order_leaves::tests):
 Kingdom, visibility, seen-record and link leaves: see
 ../skirmish-20261019-view-order-world/README.txt.
 
-Still explicit errors: on_list_100 / proximity_18 (VGrid traversal 42F670
-and camera cell sweep 42FAD0 / 45B330 are not ported), flash_459600 (no
-shared owner of the global B396E0 timer), and the model developer's
-model_78, selection_radius_469ac0, update_model_86e8d0.
+Bound through the World and Catalog (order_views_with_catalog):
+  actor_virtual_150     436950's vt+0x150: battle_orders_input::
+                        actor_virtual_150_between_frames (4CF430) with the
+                        OrderContext 5C0E30 kingdom, 40EAA0, 76AC90 and the
+                        right-click UVars (SwapRightClickWithAltRightClick,
+                        HotkeyAltRightClickCommand) read through the bridge.
+  command_masks_437eb0  UIWorldState 437EB0: command_mask_world::
+                        command_masks_between_frames with the selection's
+                        view+14 Things, 5C0E30, UIWorldState+4C (43A1C0's
+                        765E00(5C0E10()): the local player's +28; NULL player
+                        and Session state 3 are errors), the +40 group's +18
+                        byte and the same globals. An empty selection is
+                        437EB0's own store-0 branch. Every kernel refusal
+                        (GGroup class 8, 5844A0 research admission, NULL +40
+                        with two commandable objects at 438142) stays an
+                        error. Test: order_leaves::tests::
+                        command_masks_binding_runs_a_selection_through_the_world_call.
+  on_list_100 / proximity_18   the view streaming owners
+                        (../skirmish-20261019-view-streaming), after a 42F670
+                        pass has run.
+
+Still explicit errors: flash_459600 (no shared owner of the global B396E0
+timer), and the model developer's model_78, selection_radius_469ac0,
+update_model_86e8d0.

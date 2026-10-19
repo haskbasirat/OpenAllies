@@ -114,7 +114,11 @@ fn centroid_points(points: &[[u32; 2]], p: Precision) -> [u32; 2] {
         fn voiced_436600(&mut self, _: usize) -> Result<Option<Option<usize>>> { unreachable!() }
         fn actor_virtual_150(&mut self, _: usize, _: &mut aa_orders::commands::CommandWire) -> Result<bool> { unreachable!() }
         fn selection_sound_436850(&mut self, _: usize) -> Result<()> { unreachable!() }
-        fn command_masks_437eb0(&mut self, _: &[usize], _: super::super::ui_world::StaticRef, _: &mut [u32; 4]) -> Result<()> { unreachable!() }
+        fn command_masks_437eb0(&mut self, _: &[usize], _: Option<u64>, _: Option<bool>, _: &mut [u32; 4]) -> Result<()> { unreachable!() }
+        fn local_kingdom_765e00(&mut self) -> Result<Option<u64>> { unreachable!() }
+        fn kingdom_groups_34c(&mut self, _: u64) -> Result<Vec<super::super::ui_world::KingdomGroup>> { unreachable!() }
+        fn view_of_handle_b364c0(&mut self, _: u32) -> Result<Option<Option<usize>>> { unreachable!() }
+        fn player_wildcard_byte_50(&mut self) -> Result<bool> { unreachable!() }
         fn brush_changed_42d4d0(&mut self) -> Result<()> { unreachable!() }
         fn vworld_list_changed_4325c0(&mut self) -> Result<()> { unreachable!() }
         fn vworld_ad(&mut self) -> Result<bool> { unreachable!() }

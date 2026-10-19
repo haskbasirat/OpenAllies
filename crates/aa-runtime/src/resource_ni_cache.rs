@@ -6,7 +6,10 @@ use crate::resource_model_payload::Payload;
 use std::sync::{Arc,Weak,Mutex};
 type Result<T>=std::result::Result<T,String>;
 #[derive(Clone)]pub struct EntryHandle{application:Weak<()>,identity:Weak<()>,ordinal:usize}
-pub(crate) struct Entry{identity:Arc<()>,pub resource:Handle,pub root:Option<Payload>,pub filename:Arc<[u16]>,pub size:u32,
+///5A5410's +40 root of the cached Ni Resource: the Model NiAVObject or the
+///Sequence NiControllerSequence (5A8190's decoded payload).
+#[derive(Clone)]pub(crate) enum Root{Model(Payload),Sequence(crate::sequence_resource_load::SequencePayload)}
+pub(crate) struct Entry{identity:Arc<()>,pub resource:Handle,pub root:Option<Root>,pub filename:Arc<[u16]>,pub size:u32,
  pub previous:Option<usize>,pub next:Option<usize>,pub hash:u32}
 pub(crate) struct State{application:Weak<()>,entries:Vec<Entry>,head:Option<usize>,tail:Option<usize>,
  load_context:LoadingContext,profile_enabled:Option<bool>}
@@ -28,9 +31,13 @@ impl State{
  pub(crate) fn loading_context_capability(&self)->LoadingContext{self.load_context.clone()}
  pub(crate) fn begin_load(&mut self){self.profile_enabled=Some(false);}
  pub(crate) fn profile_enabled(&self)->Result<bool>{self.profile_enabled.ok_or_else(||"Model timing flag read before5A9A83 reset".into())}
- pub(crate) fn append(&mut self,resource:&Handle,root:Option<Payload>,size:u32)->Result<EntryHandle>{
+ pub(crate) fn append(&mut self,resource:&Handle,root:Option<Root>,size:u32)->Result<EntryHandle>{
   self.require(resource)?;if !matches!(resource.kind(),Kind::Model|Kind::Sequence){return Err("59D240 cache resource has wrong Ni class".into())}
-  if let Some(root)=&root{if resource.kind()!=Kind::Model{return Err("Sequence cache cannot borrow a Model root".into())}root.require_resource(resource)?;}
+  match &root{
+   Some(Root::Model(root))=>{if resource.kind()!=Kind::Model{return Err("Sequence cache cannot borrow a Model root".into())}root.require_resource(resource)?;}
+   Some(Root::Sequence(_))=>if resource.kind()!=Kind::Sequence{return Err("Model cache cannot borrow a Sequence root".into())},
+   None=>{}
+  }
   let ordinal=self.entries.len();self.entries.try_reserve(1).map_err(|e|e.to_string())?;
   let identity=Arc::new(());let handle=EntryHandle{application:self.application.clone(),identity:Arc::downgrade(&identity),ordinal};
   let hash=filename_hash(resource.logical_ids());

@@ -321,6 +321,13 @@ impl OrderContext{
     }
     ///76AC70 as 436950 reads it through 5C0E30 before each vt+150.
     pub(crate) fn kingdom_76ac70(&self)->Result<Option<ActorId>>{self.kingdom_76ac70.clone()}
+    ///UIWorldState+4C as the UI frame's 43A1C0 stores it: 765E00(5C0E10()),
+    ///the local player's +28 (equal to 76AC70 outside Session state 3).
+    pub(crate) fn kingdom_4c(&self)->Result<Option<ActorId>>{
+        if !self.local_player{return Err("43A1FB 765E00 reads +28 of a NULL 5C0E10 local player (native NULL dereference)".into())}
+        if self.session_e4==3{return Err("43A1FB 765E00 player+28 in Session state 3 (where 76AC70 is NULL) is not bound".into())}
+        self.kingdom_76ac70.clone()
+    }
     ///4CF430's globals: 40EAA0, 76AC90 and the two right-click UVars.
     pub(crate) fn order_globals(&self)->crate::battle_orders_input::UiOrderGlobals{
         crate::battle_orders_input::UiOrderGlobals{can_process_40eaa0:self.can_process.clone(),

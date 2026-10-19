@@ -21,19 +21,10 @@ pub trait AttachmentEffects<T> {
     fn destroy(&mut self,message:&mut T)->Result<()>;
 }
 
-/// Native50CA40 array entry used by50D120: type1 reads its CString+48.
-/// Other message kinds require their own real constructors and payloads.
-pub struct Broadcast {text:Vec<u16>}
-impl Broadcast {pub fn text(&self)->&[u16] {&self.text}}
-
-/// The reached child of a type-1 message in 50C600 (case 1 at 50C63E):
-/// 427950 on the script processor `[B36500]` with the message CString+48 and
-/// flag 0, which evaluates the text immediately (426C20 TGC_ScriptProcessor::
-/// Eval, statement by statement through 425E80). The implementation is the
-/// actual script/UI command owner; it cannot reach this manager.
-pub trait BroadcastDelivery {
-    fn script_eval_427950(&mut self,text:&[u16],flag:u8)->Result<()>;
-}
+/// The World+130 +10 broadcast array (slots, producers, 50C750/50C600).
+#[path="world_broadcasts.rs"]
+mod broadcasts;
+pub use broadcasts::{Broadcast,BroadcastDelivery,RequestWorld};
 
 /// Native+8/+C list is authoritative. T is an actual owned compiled command,
 /// never a source-count placeholder. There is no Clone/Default capability.
@@ -42,7 +33,7 @@ pub struct State<T> {
     view:Option<u64>,
     pending:VecDeque<Option<T>>,
     enabled_1c:bool,
-    broadcasts:Vec<Broadcast>,
+    broadcasts:broadcasts::Broadcasts,
     ///The native node has already been removed at50CAD1. Keep its actual
     ///payload on a required-child failure, rather than dropping it early.
     detached:Option<Option<T>>,
@@ -51,13 +42,14 @@ impl<T> State<T> {
     ///50CE00 initializes mute0/viewNULL/listNULL/active-count0/enabled1.
     /// Its initial capacity4 is allocation policy and is not a limit.
     pub fn from_native_constructor()->Self {
-        Self {muted:false,view:None,pending:VecDeque::new(),enabled_1c:true,broadcasts:Vec::new(),detached:None}
+        Self {muted:false,view:None,pending:VecDeque::new(),enabled_1c:true,broadcasts:broadcasts::Broadcasts::from_native_constructor(),detached:None}
     }
     pub fn muted(&self)->bool {self.muted}
     pub fn attached_view(&self)->Option<u64> {self.view}
     pub fn enabled_1c(&self)->bool {self.enabled_1c}
     pub fn pending(&self)->impl Iterator<Item=&Option<T>> {self.pending.iter()}
-    pub fn broadcasts(&self)->&[Broadcast] {&self.broadcasts}
+    ///The live entries of the +10 array (below the +14 count).
+    pub fn broadcasts(&self)->&[Broadcast] {self.broadcasts.live()}
     pub fn detached_command(&self)->Option<&Option<T>> {self.detached.as_ref()}
 
     ///50CAB0 stores the actual view first, then removes each original list
@@ -96,35 +88,50 @@ impl<T> State<T> {
         }
         self.append_broadcast(text)
     }
-    ///50C750 on World+130, the first child of 43EC60 (43ECE9): every entry of
-    ///the +10 array is passed to 50C600 in index order while the index differs
-    ///from the count +14 (reread each iteration), then +14 = 0. The +1C
-    ///enabled byte and the +18 capacity are untouched, so a later 50D120 does
-    ///not insert WaitWorld again. Only type-1 entries have a Rust producer
-    ///(50D120); 50C600's other cases (432E40/43B270, 440190, 4408A0,
-    ///43CD00/43CC50) have none, so they cannot be reached here. A refused child
-    ///keeps the array and its count (native has no failure edge); the
-    ///successful prefix of deliveries stays committed. Returns the number
-    ///of delivered entries.
-    ///Proof: research/phase8-vworld-update section messages_50c750.
-    pub fn deliver_broadcasts_50c750(&mut self,delivery:&mut impl BroadcastDelivery)->Result<usize> {
-        let mut index=0;
-        while index!=self.broadcasts.len() {
-            delivery.script_eval_427950(self.broadcasts[index].text(),0)?;
-            index+=1;
-        }
-        self.broadcasts.clear();
-        Ok(index)
+    ///50C750 on World+130, the first child of 43EC60 (43ECE9): every slot
+    ///below the +14 count (reread each iteration) through 50C600 in index
+    ///order, then +14 = 0. The +1C byte, the capacity and every slot word are
+    ///untouched, so a later 50D120 does not insert WaitWorld again and a
+    ///reused slot keeps its stale words (see world_broadcasts.rs). Case 0
+    ///uses the attached view (+4). A refused child keeps the count (native
+    ///has no failure edge); the successful prefix of deliveries stays
+    ///committed. Returns the number of delivered entries.
+    ///Proof: research/phase8-vworld-update messages_50c750 and
+    ///native-world-broadcasts.json.
+    pub fn deliver_broadcasts_50c750<D:BroadcastDelivery>(&mut self,delivery:&mut D)->Result<usize> {
+        self.broadcasts.walk_50c750(self.view,delivery)
     }
     fn append_broadcast(&mut self,text:&[u16])->Result<()> {
-        self.broadcasts.try_reserve(1).map_err(|e|e.to_string())?;
-        //Native increments count and writes type1 before CString assignment.
-        self.broadcasts.push(Broadcast {text:Vec::new()});
-        let value=&mut self.broadcasts.last_mut().expect("new message").text;
-        value.try_reserve_exact(text.len()).map_err(|e|e.to_string())?;
-        value.extend_from_slice(text);
-        Ok(())
+        self.broadcasts.append_text(text)
     }
+    ///50D0B0(actor, &record): the gates and the actor+14 handle are
+    ///aa_combat's port of the same function (World+D8 != 6, ViewShowDamage,
+    ///actor+C definition +54 bit 1); a queued number becomes a kind-0 slot.
+    pub fn queue_damage_number_50d0b0(&mut self,actor:u32,record:&aa_body::damage::DamageRecord,
+        world:&impl aa_combat::presentation::World)->Result<()> {
+        let mut queued=Vec::new();
+        aa_combat::presentation::queue_damage_number(&mut queued,actor,record,world).map_err(|e|format!("50D0B0: {e}"))?;
+        match queued.pop() {
+            Some(number)=>self.broadcasts.append_thing_record(number.actor_id,number.record.words()),
+            None=>Ok(()),
+        }
+    }
+    ///50D230(definition, thing): a VFX attached to the thing whose +14
+    ///handle word is `thing_14` (None: a null thing, no request).
+    pub fn queue_attached_vfx_50d230(&mut self,world:&mut impl RequestWorld,definition:Option<u64>,
+        thing_14:Option<u32>)->Result<()> {
+        self.broadcasts.append_attached_vfx_50d230(world,definition,thing_14)
+    }
+    ///50D280(definition, &position, &direction): a detached VFX; only the
+    ///first two direction words are read, +40 = 0, +28 is not written.
+    pub fn queue_detached_vfx_50d280(&mut self,world:&mut impl RequestWorld,definition:Option<u64>,
+        position:[u32;3],direction:[u32;2])->Result<()> {
+        self.broadcasts.append_detached_vfx_50d280(world,definition,position,direction)
+    }
+    ///50D370: kind 2 (440190 mission result).
+    pub fn queue_mission_result_50d370(&mut self)->Result<()> {self.broadcasts.append_kind(2)}
+    ///50D330: kind 3 (4408A0 team victory).
+    pub fn queue_team_victory_50d330(&mut self)->Result<()> {self.broadcasts.append_kind(3)}
 
     ///50C800 reaches the mute gate first, then the attached view, then the
     /// enqueue flag. A true flag prepends; false appends through45F240.
@@ -211,8 +218,9 @@ mod tests {
         }
     }
     ///research/phase8-vworld-update messages_50c750: original 50C750/50C600
-    ///over arrays of type-1 entries (the only kind with a Rust producer). Rows
-    ///with other kinds are native reference for their future producers.
+    ///over arrays of type-1 entries. Its rows with other kinds seed raw slot
+    ///words with a pointer-keyed 432E40 seam; every kind is replayed through
+    ///the Rust producers in world_broadcasts.rs (native-world-broadcasts.json).
     #[test]
     fn native_broadcast_walk_50c750() {
         let fixture=crate::vworld_update::tests_fixture::load();
@@ -220,10 +228,19 @@ mod tests {
         assert_eq!(rows.len(),42);
         struct Sink(Vec<serde_json::Value>,Option<usize>);
         impl BroadcastDelivery for Sink {
+            type Thing=();
+            type Vfx=();
             fn script_eval_427950(&mut self,text:&[u16],flag:u8)->Result<()> {
                 if self.1==Some(self.0.len()) {return Err("explicit 427950 refusal".into());}
                 self.0.push(serde_json::json!(["427950",String::from_utf16(text).unwrap(),flag]));Ok(())
             }
+            fn thing_432e40(&mut self,_:u32)->Result<Option<()>> {unreachable!("type-1 rows only")}
+            fn thing_record_43b270(&mut self,_:u64,_:Option<()>,_:&[u32;7])->Result<()> {unreachable!()}
+            fn mission_result_440190(&mut self)->Result<()> {unreachable!()}
+            fn team_victory_4408a0(&mut self)->Result<()> {unreachable!()}
+            fn attached_vfx_43cd00(&mut self,_:u64,_:())->Result<Option<()>> {unreachable!()}
+            fn detached_vfx_43cc50(&mut self,_:u64,_:[u32;3],_:[u32;3])->Result<Option<()>> {unreachable!()}
+            fn vfx_time_50(&mut self,_:(),_:u32)->Result<()> {unreachable!()}
         }
         let mut replayed=0;
         for row in rows {

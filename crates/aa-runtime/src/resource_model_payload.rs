@@ -20,6 +20,8 @@ pub trait MetadataPolicy{
     fn preprocessed_data_wrong_version_warning_current(&mut self)->Result<u8>{Err("878F30 actual current named AVar PreprocessedDataWrongVersionWarning is required".into())}
     fn preprocessed_data_warning(&mut self,_filename:&[u16],_old_version:Option<u32>)->Result<()>{Err("878F30 positive preprocessing diagnostic sink is required".into())}
     fn graph_diagnostic(&mut self,_filename:&[u16],_node:&str,_line:u32)->Result<()>{Err("879A90 reached graph diagnostic service is required".into())}
+    ///87A1B7 405D20(B39938) of the source-created named flag WarningsCheckPartitions.
+    fn warnings_check_partitions_current(&mut self)->Result<u8>{Err("87A1B7 actual current named WarningsCheckPartitions is required".into())}
 }
 struct UnboundPolicy;impl MetadataPolicy for UnboundPolicy{}
 ///5A94F0's two outcomes as reached in the SAME graph after its Update(0,0).

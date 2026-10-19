@@ -578,6 +578,8 @@ mod trig{
  use aa_runtime::resource_model_bounds as math;
  use sha2::{Digest,Sha256};
  const MERGE_EPSILON:u32=897988541;
+ ///The NiAVObject constructor world transform, for a bone the pass has not reached yet.
+ const CONSTRUCTED_WORLD:[u32;13]=[ONE,0,0,0,ONE,0,0,0,ONE,0,0,0,ONE];
  struct Scene{local:BTreeMap<usize,[u32;13]>,material:BTreeMap<usize,[u32;14]>}
  impl Targets for Scene{
   fn local(&mut self,block:usize)->Result<&mut [u32;13]>{self.local.get_mut(&block).ok_or_else(||"controller target is not a NiAVObject".into())}
@@ -601,11 +603,16 @@ mod trig{
    let o=&nif.objects[i];if !matches!(o.class,"NiNode"|"NiTriShape"|"NiTriStrips"){return Err(format!("unported {}",o.class))}
    if nif.linked(i,"collision").is_some(){return Err("collision object".into())}
    if !nif.node_effects(i).map_err(|e|e.to_string())?.is_empty(){return Err("dynamic effects".into())}
-   if is_kind_of(o.class,"NiGeometry")&&nif.linked(i,"skin_instance").is_some(){return Err("skin".into())}
    if order.contains(&i){return Err("aliased object".into())}order.push(i);
    let properties:Vec<usize>=nif.av_properties(i).map_err(|e|e.to_string())?.into_iter().map(|p|p.ok_or_else(||"NULL property".to_string())).collect::<Result<_>>()?;
    runtime.update_object(nif,i,&properties,0,&mut scene)?;
    let local=scene.local[&i];let w=match parent.get(&i){Some(p)=>math::compose_world(world[p],local,pc)?,None=>local};world.insert(i,w);
+   //86EED0: 868020 right after this object's world data, with the bones'
+   //world transforms of this moment (8C3A90 for a skin).
+   if is_kind_of(o.class,"NiGeometry"){let d=nif.linked(i,"data").ok_or("geometry without data")?;
+    let model=if nif.linked(i,"skin_instance").is_some(){let current=|b:usize|->Result<[u32;13]>{Ok(world.get(&b).copied().unwrap_or(CONSTRUCTED_WORLD))};super::super::skin::geometry_model_bound(nif,i,&current,pc)?}
+     else{let f=&nif.objects[d].fields;let c=words(f,"center")?;[c[0],c[1],c[2],f.f32("radius").ok_or("radius")?]};
+    bound.insert(i,math::transform_sphere(&w,model,pc)?);}
    let children:Vec<usize>=nif.node_children(i).map_err(|e|e.to_string())?.into_iter().flatten().collect();
    for &c in &children{parent.insert(c,i);}work.extend(children.into_iter().rev());
   }
@@ -615,8 +622,7 @@ mod trig{
   //constructor value.
   for &i in order.iter().rev(){
    let o=&nif.objects[i];
-   if is_kind_of(o.class,"NiGeometry"){let d=nif.linked(i,"data").ok_or("geometry without data")?;let f=&nif.objects[d].fields;let c=words(f,"center")?;
-    bound.insert(i,math::transform_sphere(&world[&i],[c[0],c[1],c[2],f.f32("radius").ok_or("radius")?],pc)?);continue}
+   if is_kind_of(o.class,"NiGeometry"){continue}
    let mut b=[0u32;4];
    for c in nif.node_children(i).map_err(|e|e.to_string())?.into_iter().flatten(){let s=bound[&c];if s[3]&0x7fff_ffff==0{continue}if b[3]&0x7fff_ffff==0{b=s}else{math::merge_sphere(&mut b,s,MERGE_EPSILON,pc)?}}
    bound.insert(i,b);

@@ -22,6 +22,8 @@ parser.add_argument("--every", type=int, default=150)
 parser.add_argument("--presses", type=int, default=40)
 parser.add_argument("--census", action="store_true")
 parser.add_argument("--look-ahead", action="store_true")
+parser.add_argument("--click", type=float, nargs=2, default=[640, 360], help="logical point of the left/right clicks")
+parser.add_argument("--drag", type=float, nargs=4, default=[480, 260, 820, 480], help="logical left-drag x0 y0 x1 y1")
 args = parser.parse_args()
 EXE = Path(args.exe).resolve()
 out = ROOT / "qa-output/phase8-orders-camera" / args.tag / args.map
@@ -53,11 +55,11 @@ n = 0
 while t + 30 < args.seconds:
     steps.append({"wait": max(t - elapsed, 0), "shot": str(out / f"ord{n:02d}-a-before.png"),
                   "log": f"orders sequence {n} at +{t}s: before"})
-    steps.append({"wait": 0.5, "click": [640, 360], "log": f"orders sequence {n}: left click (640,360)"})
-    steps.append({"wait": 1.0, "drag": [480, 260, 820, 480], "log": f"orders sequence {n}: left drag (480,260)-(820,480)"})
+    steps.append({"wait": 0.5, "click": args.click, "log": f"orders sequence {n}: left click {args.click}"})
+    steps.append({"wait": 1.0, "drag": args.drag, "log": f"orders sequence {n}: left drag {args.drag}"})
     steps.append({"wait": 1.0, "shot": str(out / f"ord{n:02d}-b-after-drag.png"), "log": f"orders sequence {n}: after drag"})
-    steps.append({"wait": 0.5, "drag": [700, 300, 560, 420], "mods": "shift", "log": f"orders sequence {n}: shift drag (700,300)-(560,420)"})
-    steps.append({"wait": 1.0, "click": [640, 360], "button": "right", "log": f"orders sequence {n}: right click (640,360)"})
+    steps.append({"wait": 0.5, "drag": [args.drag[2], args.drag[3], args.drag[0], args.drag[1]], "mods": "shift", "log": f"orders sequence {n}: shift drag back"})
+    steps.append({"wait": 1.0, "click": args.click, "button": "right", "log": f"orders sequence {n}: right click {args.click}"})
     steps.append({"wait": 1.0, "shot": str(out / f"ord{n:02d}-c-after-right.png"), "log": f"orders sequence {n}: after right click"})
     elapsed = t + 6.5
     t += args.every
