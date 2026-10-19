@@ -1,0 +1,99 @@
+{
+ "schema": 1,
+ "area": "ResourceManager 5ACA50 Model (KKC_NiAVObjResource) unload at VWorld init",
+ "error_replaced": "5ACA50 actual Model Resource requires same-owner unload; new+80 retained",
+ "meaning": {
+  "new+80 retained": "5AE0A0 assigns the new Biome texture subfolder to ResourceManager+80 (405B80) before 5ACA50; a later error keeps that assignment",
+  "same-owner unload": "the manager's own 5ABFF0 KKC_ResourceManager::UnloadResource"
+ },
+ "native": {
+  "caller": "0x43f0f1 -> 0x5ae0a0 (Biome+0x98)",
+  "5aca50": "4245A0 iteration of Manager+0x60; vf4 descriptor chain must contain 0xb3d990; then flags+8 bit5 (0x20) set; then signed count+4 <= 0 -> 5ABFF0(manager,resource)",
+  "class_chains": {
+   "Texture": [
+    "0xb3d97c",
+    "0xb38e24"
+   ],
+   "Model": [
+    "0xb3d990",
+    "0xb3d968",
+    "0xb38e24"
+   ],
+   "Sequence": [
+    "0xb3d9a4",
+    "0xb3d968",
+    "0xb38e24"
+   ],
+   "Sound": [
+    "0xb3d76c",
+    "0xb38e24"
+   ],
+   "Map": [
+    "0xb3d7dc",
+    "0xb38e24"
+   ],
+   "Film": [
+    "0xb3d7f0",
+    "0xb3d7dc",
+    "0xb38e24"
+   ]
+  },
+  "5abff0": "lock +0x20, lock +0x3c; if bit0: clear bit0, vf40, vf54, log 0x523 'Unloaded %s'; if bit5: 59BFA0(manager+0x9c); unlock +0x3c, unlock +0x20",
+  "bit5_writer": "0x59b9f0 only (cache LRU append), via 5AA550 Release -> 5AEE70 ReleaseResource -> 5AC3D0 CacheOrUnloadResource -> 59BF30 -> 59BC70 EnsureEnoughAvailableMemory",
+  "bit5_clearers": [
+   "0x59ba90 decache/list removal",
+   "0x59bfa0 via 5B0270 re-request and 5ABFF0"
+  ],
+  "budget": "59C040 per-class cap = total/weight_sum*weight; totals from 59B6B0 SetSize with ResourceCachePercentOfTotalRAM=25 / PercentOfTotalVRAM=25 of machine RAM/VRAM; eviction ('Decaching') only of cached count-0 entries at 59BC70 and 59BB70",
+  "other_5abff0_callers": [
+   "0x5aa660",
+   "0x5ac510",
+   "0x5ad860",
+   "0x72f2d0"
+  ]
+ },
+ "root_cause": "the port refused every Model entry; native only unloads cached (bit5) unrequested NiAVObj entries, and the port has no cache admission, so all its Models take the native skip",
+ "removed_caps": [],
+ "no_limits_note": "growable cache budgets never evict under pressure; eviction affects only released cached resources (load timing/logs). 5ACA50 is not budget driven and is kept exactly.",
+ "oracle": {
+  "script": "native_model_unload.py",
+  "fixture": "native-model-unload.json",
+  "rows": 276,
+  "machines": 552,
+  "executed_address_byte_pins": 206,
+  "precisions": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "images": [
+   "original",
+   "v14"
+  ]
+ },
+ "rust": {
+  "files": [
+   "crates/aa-runtime/src/resource_model_unload.rs",
+   "crates/aa-runtime/src/resource_model_unload_tests.rs",
+   "crates/aa-runtime/src/resource_depot.rs"
+  ],
+  "tests": [
+   "resource_model_unload::tests::native_class_descriptor_chains_and_constructor_vtables",
+   "resource_model_unload::tests::every_native_5aca50_row_selects_the_same_entries_all_pc",
+   "resource_model_unload::tests::port_reachable_states_take_the_native_skip_and_unload_body_is_recorded",
+   "resource_depot::view_residency_tests::namespace_5aca50_skips_uncached_models_and_refuses_cached_unload"
+  ]
+ },
+ "open_gaps": [
+  "Resource release / ResourceCache admission and eviction (5AA550, 5AEE70, 5AC3D0, 59BF30, 59BC70, 59B9F0, 59BA90, 59BB70, 59C040) unported",
+  "5ABFF0 positive unload (Model vf40 5A6560, vf54 5A7CF0, 59BFA0) unported; eligible entries refuse explicitly",
+  "whether the original releases any NiAVObj before 43F0A0 on this startup path is not proven",
+  "modern view_resources registrations still refuse at 5ACA50"
+ ],
+ "firefight": {
+  "run": "qa-output/development10/lead-gui/unload01/firefight",
+  "exe_sha256": "3b91f009d437e9088aeec5c1ac1c9c171ed9c060c7df9839f90e9fd836fd04ce",
+  "result": "passed 5ACA50; World view creation end existing=0 attempted missing=2361; 0 view census failures",
+  "next_stop": "selected NIF versionA000100 raw graph loader requires implementation (aa-client/src/model_payload_backend.rs:121, first task load Special/Things/ThingStartLocation/ThingStartLocation.nif)"
+ }
+}

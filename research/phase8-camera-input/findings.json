@@ -1,0 +1,268 @@
+{
+ "area": "phase8-camera-input",
+ "date": "2026-10-19",
+ "native_path": {
+  "hotkeys": {
+   "file": "Data/Localization/Hotkeys/hotkeys_core.txt",
+   "map": "5CA4B0",
+   "key_spec": [
+    "5C46A0",
+    "4098A0",
+    "409CF0",
+    "409960"
+   ],
+   "key_table": "B27B20",
+   "auto_key_up": [
+    "5C9ED0",
+    "5C9D00",
+    "DefaultKeyUpHandler=943800 RET4"
+   ],
+   "event": "5EFC70",
+   "find": "40A610",
+   "impulse_prefix": "426950",
+   "wheel_divisor": "A42868=1200.0f"
+  },
+  "input_manager": {
+   "global": "B39B18",
+   "vtable": "A42BFC",
+   "keyboard": "59A5C0",
+   "mouse": "59A6E0",
+   "set_rect": "59AEB0 (from 40E210: 0,0,W-1,H-1)",
+   "cursor_poll": "59AD30",
+   "release_all": "59AF40 (59AE10 mouse, 59AE70 keys)",
+   "impulses": [
+    "599DF0 register",
+    "5998F0 unregister",
+    "5996E0 ordered remove",
+    "599940 tick",
+    "5995F0 dt",
+    "599930 clear"
+   ],
+   "timer": [
+    "59AA70",
+    "59AB60",
+    "59AAD0"
+   ]
+  },
+  "ui_frame": {
+   "function": "5C92F0",
+   "cursor_copy": "5BF2B0",
+   "mouse_move_dispatch": "5C1AF0",
+   "state_slot": "UI+C0 (5E0570/5E0590/5E05B0/5C1FD0)"
+  },
+  "scroller": {
+   "object": "UI+40",
+   "vtable": "A4DA84",
+   "ctor": "5CD2E0",
+   "begin": "5CD560",
+   "end": "5CCD30",
+   "direction": "5CC7D0",
+   "edge": "5CCC90",
+   "accelerate": "5CCC20",
+   "update": "5CD320",
+   "mouse_move": "5CD410",
+   "exit": "5CC7C0",
+   "commands": "5C12C0..5C1360",
+   "game_state_update": "5CD6B0 (vtable A73CD0, 6B2CC0)",
+   "edge_activation": "5CD420"
+  },
+  "rotate": {
+   "object": "UI+48",
+   "vtable": "A4D968",
+   "ctor": "5CCE90",
+   "begin_command": "5C21C0",
+   "begin": "5CCEB0",
+   "end": "5C1370->5CC870",
+   "mouse_move": "5CCF00"
+  },
+  "impulse_table": {
+   "lookup": "5C36A0",
+   "table": "B284A4",
+   "yawleft": "5C2930",
+   "yawright": "5C2950",
+   "PitchUp": "5C2970",
+   "PitchDown": "5C2990",
+   "ZoomIn": "5C29B0",
+   "ZoomOut": "5C2A10",
+   "yaw": "5C2090",
+   "pitch": "5C20F0"
+  },
+  "vworld_commands": {
+   "registration": "442C00",
+   "DeltaZoom": "43BC80",
+   "ZoomMin": "43BC20",
+   "ZoomMax": "43BC50",
+   "DefaultAngles": "43BB10 (not ported)"
+  },
+  "camera": {
+   "pan": "700500",
+   "look_at": "6FF130/6FF200/6FF1B0",
+   "move_clamp": "6FEDB0",
+   "pose": "6FF220",
+   "constrain": "6FEA20",
+   "yaw_setter": "700440",
+   "pitch_setter": "7004A0",
+   "zoom_delta": "7010F0",
+   "zoom": "7005F0",
+   "rotate_about_target": "6FEBA0",
+   "height": "550210"
+  },
+  "uvars_fast_table_B39940": {
+   "18": "CameraScrollSpeed",
+   "1C": "CameraScrollAcceleration",
+   "20": "CameraScrollSpeedMax",
+   "24": "CameraScrollEdgePadding (6FEDB0 margin)",
+   "28": "CameraScalePan",
+   "2C": "CameraScalePitch",
+   "30": "CameraScaleYaw",
+   "34": "CameraScaleZoom (also the stored zoom)",
+   "38": "CameraRotateSpeed",
+   "B4": "CameraRotate",
+   "C4": "ResolutionWindowed (App+48)",
+   "C8": "ResolutionCoopFullscreenMode (App+49)"
+  }
+ },
+ "oracle": {
+  "harness": "research/phase8-camera-input/native_camera_input.py",
+  "fixture": "research/phase8-camera-input/native-camera-input.json",
+  "fixture_sha256": "4c1facf9f60cb0a433b2be934637ef8ff5cef1a29f4dce6a7551d5c4462b5444",
+  "precisions": [
+   "Single24",
+   "Double53",
+   "Extended64"
+  ],
+  "rows": {
+   "accelerate_5ccc20": 399,
+   "impulse_dt_5995f0": 36,
+   "scroller": 30,
+   "impulses": 384,
+   "zoom": 114,
+   "wheel": 30,
+   "rotate": 9
+  },
+  "instruction_pins": 986,
+  "v14_byte_equal": true,
+  "seams": [
+   "QueryPerformanceCounter IAT 9F021C",
+   "700500",
+   "6FF220",
+   "7005F0",
+   "6FEBA0",
+   "6FF130",
+   "426330",
+   "40A610",
+   "426FB0",
+   "VWorld+13C vfunc38 hover pick"
+  ],
+  "rotate_6feba0": {
+   "harness": "research/phase8-camera-input/native_camera_rotate.py",
+   "fixture": "research/phase8-camera-input/native-camera-rotate.json",
+   "fixture_sha256": "330dc81f9c24d3fda71d4a306cb48e00559e0a8d2f24c306d200777c28c06557",
+   "rows": 84,
+   "pins": 406,
+   "hardware_transports": 780,
+   "seam": "6FE050"
+  }
+ },
+ "rust": {
+  "modules": [
+   "crates/aa-runtime/src/native_camera_input.rs",
+   "crates/aa-runtime/src/native_camera_hotkeys.rs",
+   "crates/aa-runtime/src/native_camera_pose.rs (6FEBA0)",
+   "crates/aa-runtime/src/native_camera_directory.rs (captured reads, 6FE9C0, 6FF220, 6FEBA0)",
+   "crates/aa-client/src/battle_camera.rs",
+   "crates/aa-client/src/battle_camera_input.rs",
+   "crates/aa-client/src/battle_presentation.rs"
+  ],
+  "tests": "crates/aa-runtime/src/native_camera_input_tests.rs + native_camera_hotkeys.rs tests: 8/8 pass (isolated build target/agent-camera/isolated-input); fixture mutation -> 3 failures"
+ },
+ "removed_caps": [],
+ "open_gaps": [
+  "vswprintf %f / _wtof of the wheel argument use Rust decimal conversion",
+  "AVar50 range +14/+18 unbound: pitch impulses refuse",
+  "UVar 1C/20 read from the generic UVars.tgi overlay (range-checked); 2C/30/38 unregistered in aa-ui",
+  "VWorld widget enabled/hover, hotkey contexts, App+48/49 are provisional client mappings until the TGI VWorld widget exists",
+  "UI+C0 sharing with non-camera states, UI+B4 list/BC/C4 states, VWorld+13C hover pick, editbox-context priority, numpad keys, DefaultAngles not ported",
+  "frontend.rs must call battle_presentation::State::observe_input(ctx) before poll (HUD owner)",
+  "Wheel zoom not exercised in the GUI run (the --ui-script scroll step emits egui Point units; only Line units map to WM_MOUSEWHEEL); proven by oracle rows and the directory test"
+ ],
+ "real_run": {
+  "folder": "qa-output/phase8-camera-input/camera-run04/berlin",
+  "summary": "research/phase8-camera-input/real-run-04.json",
+  "build": "private mirror target/agent-camera/mirror (real sources via junctions + aa-client copy with the frontend-routing.patch line)",
+  "result": "arrow keys pan (60 native 10 ms pans per 60 presses), PageDown zoom 0.70->2.10 clamped, fullscreen left-edge scroll accelerates and is clamped by the 6FEDB0 map rectangle at x=5 then the corner (5,5); keyboard scroll correctly refused while the OS cursor is outside the window (KKC_Input+24)"
+ },
+ "orders_integration": {
+  "hud_leaves": {
+   "camera_slot_c0": "Generic while Controls::active() holds UI+40 (A4DA84) or UI+48 (A4D968) via 5E0570/5E0590; vt+0x10 5CD410/5CCF00 return 0 and run with vt+8 5CD320 in the camera frame",
+   "drag_threshold_b39990_60": "AVar 24 CursorDragThreshold, 401BD0 402894..4028C2 (401650 int default 10 flags 0, 4B3470 index 0x18); AVars.tgi:33 = 10",
+   "vworld_ad": "VWorld+AD = native prefix initialized_for(revision)"
+  },
+  "box_rectangle": {
+   "enter": "5CD850 (5E0780, 599870, [B40048]+214=1, 887F40(4, B43CF8 seeds, NULL, colors 0,0,0.5,0.3), 5CCA80, A44EFC NiVertexColorProperty +24=1 +28=0, A4D92C NiAlphaProperty +20=0xED +22=0, 87D280 NiMaterialProperty +58=0.5 +5C+1, 5CD7E0)",
+   "update": "5CCA80 / 5CCC10",
+   "list": "5CD7E0 -> 5CD730 (first NULL else append, 5CCFE0 grow by 5, 882300); 874350 detach; NiCamera 874B7D..874BC9 capacity 5 grow 5",
+   "exit": "5CCA30 ([B40048]+214=0, 874350 on the current camera, release +4, VWorld+13C vt+44)",
+   "draw": "6FF63E..6FF672 -> 887E60 -> renderer vt+D8 (not ported)",
+   "rtti": {
+    "AB8F90": "NiVertexColorProperty",
+    "AB91D0": "NiAlphaProperty"
+   }
+  },
+  "facing": {
+   "begin": "689490 -> 689380 (ghosts, view owner) + 5CCD60 (5E0780, +214=1, +8=0, arrow +18 vt+2C(0), +C..+14=0)",
+   "drag_start": "688AE2..688B25 (arrow vt+2C(43CCA0(VWorld+1CC, +19C/+1B4)), vt+44/48) - view owner",
+   "frame": "688A43 (+1C vt+6C) and 693D10 - view owner",
+   "end": "6885F0 -> 693EB0 + 5CCDA0 (arrow vt+2C(0), +214=0)"
+  },
+  "oracle": {
+   "harness": "research/phase8-camera-input/native_camera_screen.py",
+   "fixture": "native-camera-screen.json",
+   "rows": {
+    "update_5cca80": 360,
+    "box_5cd850_5cca30": 21,
+    "facing_5ccd60_5ccda0": 6
+   },
+   "pins": 1015,
+   "seams": [
+    "6F7810 new (0xCD fill)",
+    "6F7430 free",
+    "5E0780",
+    "AB990C destructor",
+    "VWorld+13C vt+44",
+    "arrow vt+2C"
+   ],
+   "rust": [
+    "native_camera_screen_tests.rs (3 tests)",
+    "native_camera_directory_tests.rs screen_on_directory",
+    "aa-client battle_orders_hud.rs tests"
+   ]
+  },
+  "rust": [
+   "crates/aa-runtime/src/native_camera_screen.rs",
+   "crates/aa-runtime/src/native_camera_directory.rs (Camera+168, +214 store, box/attach/detach)",
+   "crates/aa-client/src/battle_orders_hud.rs (battle_camera::orders_hud)",
+   "crates/aa-client/src/battle_camera.rs (Process screen_box, orders_children)",
+   "crates/aa-client/src/battle_presentation.rs (orders queue/frames, 43EC60 call)"
+  ],
+  "removed_caps": [
+   "Camera+168 NiTArray capacity 5 / grow-by 5 (874B8E/874B94): Vec storage"
+  ],
+  "open_gaps": [
+   "GPU raster of Camera+168 screen polygons (renderer vt+D8, NiDX9Renderer / RScreenGeometryManager 743320): renderer owner",
+   "facing ghosts and arrow scene objects (689380, 688AE2, 688A43, 693D10, 693EB0): view owner",
+   "Live.terrain None until the live TerrainMap (723E00/723960/71B8F0/71B610) lands; every orders frame stops in 43C550",
+   "camera and orders run as two frames per UI frame: +214 stores reach the camera one frame later than 5C92F0",
+   "HUD UI+0x60 verdict, UI+0xBC/+0xC4 states, minimap, sounds, markers, command definitions: HUD owner (UnboundHud)",
+   "43EC60 runs once per presentation job"
+  ],
+  "real_run": {
+   "summary": "real-run-orders.json",
+   "runs": [
+    "qa-output/phase8-orders-camera/orders-run01/berlin",
+    "qa-output/phase8-orders-camera/orders-run02/berlin"
+   ],
+   "result": "48 orders UI frames with button messages; each stops in 0x43C550 -> 0x43C4B0 -> 0x71D840 (TerrainMap unbound) before any event; VWorld+AD true, 43EC60 Ok every job"
+  }
+ }
+}

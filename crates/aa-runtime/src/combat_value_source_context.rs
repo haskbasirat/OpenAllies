@@ -134,14 +134,14 @@ pub struct NumericValue {
 pub struct NumericBindings<'a, 'source> {
     catalog: &'a Catalog<'source>,
     context: SourceFpContext,
-    values: BTreeMap<String, NumericValue>,
+    values: std::sync::Arc<BTreeMap<String, NumericValue>>,
 }
 impl NumericBindings<'_, '_> {
     pub fn context(&self) -> &SourceFpContext {
         &self.context
     }
     pub fn values(&self) -> &BTreeMap<String, NumericValue> {
-        &self.values
+        self.values.as_ref()
     }
     pub fn value(&self, name: &str) -> Result<&NumericValue> {
         self.catalog.require_source_owner()?;
@@ -178,6 +178,60 @@ impl NumericBindings<'_, '_> {
 /// a missing source assignment. Registered WorldRule defaults run474C50 before
 /// completion: any rule with one of these IDS is explicitly unsupported.
 pub fn bind_numeric<'a, 'source>(
+    catalog: &'a Catalog<'source>,
+    context: &SourceFpContext,
+) -> Result<NumericBindings<'a, 'source>> {
+    catalog.require_source_owner()?;
+    //The bound values read only the immutable source owner, the Settings
+    //rows of these ten names and the context precision: replay a completed
+    //binding whose rows are unchanged (catalog_lookups::NumericMemo).
+    if let Some(values) = catalog.lookups().numeric(catalog, context.precision, |rows| {
+        numeric_rows_equal(catalog, rows)
+    }) {
+        return Ok(NumericBindings {
+            catalog,
+            context: context.clone(),
+            values,
+        });
+    }
+    let bound = bind_numeric_uncached(catalog, context)?;
+    if let Some(rows) = numeric_rows(catalog) {
+        catalog
+            .lookups()
+            .store_numeric(catalog, context.precision, rows, std::sync::Arc::clone(&bound.values));
+    }
+    Ok(bound)
+}
+/// The Settings rows `bind_numeric` reads, in NUMERIC_SETTINGS order.
+fn numeric_rows(catalog: &Catalog<'_>) -> Option<Vec<Option<Vec<Declaration>>>> {
+    let source = catalog.settings.as_ref()?;
+    Some(
+        NUMERIC_SETTINGS
+            .iter()
+            .map(|(name, _)| source.declarations.get(&name.to_ascii_lowercase()).cloned())
+            .collect(),
+    )
+}
+fn numeric_rows_equal(catalog: &Catalog<'_>, rows: &[Option<Vec<Declaration>>]) -> bool {
+    let Some(source) = catalog.settings.as_ref() else {
+        return false;
+    };
+    let same = |a: &Declaration, b: &Declaration| {
+        a.field_type == b.field_type && a.raw == b.raw && a.source == b.source
+    };
+    rows.len() == NUMERIC_SETTINGS.len()
+        && NUMERIC_SETTINGS.iter().zip(rows).all(|((name, _), snapshot)| {
+            match (source.declarations.get(&name.to_ascii_lowercase()), snapshot) {
+                (None, None) => true,
+                (Some(current), Some(snapshot)) => {
+                    current.len() == snapshot.len()
+                        && current.iter().zip(snapshot).all(|(a, b)| same(a, b))
+                }
+                _ => false,
+            }
+        })
+}
+fn bind_numeric_uncached<'a, 'source>(
     catalog: &'a Catalog<'source>,
     context: &SourceFpContext,
 ) -> Result<NumericBindings<'a, 'source>> {
@@ -293,7 +347,7 @@ pub fn bind_numeric<'a, 'source>(
     Ok(NumericBindings {
         catalog,
         context: context.clone(),
-        values,
+        values: std::sync::Arc::new(values),
     })
 }
 

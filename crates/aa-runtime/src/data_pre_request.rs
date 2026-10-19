@@ -21,6 +21,8 @@ pub mod actor_request;
 pub mod path;
 #[path="data_object_request.rs"]
 pub mod request;
+#[path="data_release_kernels.rs"]
+pub(crate) mod release_kernels;
 type Result<T> = std::result::Result<T, String>;
 
 ///ObjectData includes source-only PORTRAIT(kind1/class0). That descriptor
@@ -188,6 +190,9 @@ pub struct State {
     entries: BTreeMap<u64, Entry>,
     names: BTreeMap<String, u64>,
     sources: Option<Vec<SourceIdentity>>,
+    ///A shared source list already found equal to `sources` (both are
+    ///immutable): an identical allocation needs no second comparison.
+    verified_sources: Option<Arc<Vec<SourceIdentity>>>,
     source_precision: Option<Precision>,
     ///B3A744 is a process assertion latch, not an Aspect ctor field. This
     ///owner covers one fresh interactive application interval (PE zero); it
@@ -206,6 +211,7 @@ impl State {
             entries: BTreeMap::new(),
             names: BTreeMap::new(),
             sources: None,
+            verified_sources: None,
             source_precision: None,
             aspect_assertion_suppressed: false,
         }
@@ -230,13 +236,11 @@ impl State {
         let precision = validate_object_data(catalog, bank, definition)?;
         let state = bank.combat_source()?;
         state.completed_means()?;
-        if state.source_identities() != catalog.actors.sources.as_slice() {
+        if !crate::catalog_lookups::same_sources(catalog, state.source_identities()) {
             return Err("Data request source Bank universe differs".into());
         }
-        if self
-            .sources
-            .as_ref()
-            .is_some_and(|s| s.as_slice() != state.source_identities())
+        let shared = state.shared_source_identities();
+        if !self.bound_sources_equal(&shared)
             || self.source_precision.is_some_and(|p| p != precision)
         {
             return Err("Data request owner cannot reset or rebind its source universe/PC".into());
@@ -263,11 +267,11 @@ impl State {
         {
             return Err("Data request ActorData source-manager identity differs".into());
         }
-        self.bind_canonical(
+        self.bind_canonical_shared(
             &definition.proof.id,
             &definition.proof.source,
             definition.proof.category.native_kind,
-            state.source_identities(),
+            &shared,
             precision,
         )
     }
@@ -285,11 +289,11 @@ impl State {
             .sources()
             .first()
             .ok_or("VFX Data canonical source absent")?;
-        self.bind_canonical(
+        self.bind_canonical_shared(
             effect.id(),
             source,
             effect.kind(catalog, bank)?,
-            state.source_identities(),
+            &state.shared_source_identities(),
             state.source_precision(),
         )
     }
@@ -447,6 +451,35 @@ impl State {
             }
         }
     }
+    /// `self.sources.as_ref().is_some_and(|s| s.as_slice() != shared)`
+    /// negated, remembering a shared list once found equal.
+    fn bound_sources_equal(&mut self, shared: &Arc<Vec<SourceIdentity>>) -> bool {
+        let Some(bound) = self.sources.as_ref() else {
+            return true;
+        };
+        if self.verified_sources.as_ref().is_some_and(|v| Arc::ptr_eq(v, shared)) {
+            return true;
+        }
+        let equal = bound.as_slice() == shared.as_slice();
+        if equal {
+            self.verified_sources = Some(Arc::clone(shared));
+        }
+        equal
+    }
+    ///`bind_canonical` with the Bank's shared source list (same result).
+    fn bind_canonical_shared(
+        &mut self,
+        id: &str,
+        source: &Provenance,
+        kind: u32,
+        sources: &Arc<Vec<SourceIdentity>>,
+        precision: Precision,
+    ) -> Result<Data> {
+        if !self.bound_sources_equal(sources) {
+            return Err("Data request owner cannot reset or rebind its source universe/PC".into());
+        }
+        self.bind_canonical(id, source, kind, sources, precision)
+    }
     fn bind_canonical(
         &mut self,
         id: &str,
@@ -458,7 +491,9 @@ impl State {
         if self
             .sources
             .as_ref()
-            .is_some_and(|s| s.as_slice() != sources)
+            .is_some_and(|s| !self.verified_sources.as_ref().is_some_and(|v| {
+                std::ptr::eq(v.as_ptr(), sources.as_ptr()) && v.len() == sources.len()
+            }) && s.as_slice() != sources)
             || self.source_precision.is_some_and(|p| p != precision)
         {
             return Err("Data request owner cannot reset or rebind its source universe/PC".into());

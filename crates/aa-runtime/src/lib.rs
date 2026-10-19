@@ -411,3 +411,8 @@ pub mod view_ui_world;
 
 pub mod view_pointer;
 pub(crate) mod stored_mind_update;
+pub(crate) mod resource_model_unload;
+pub mod player_order_input;
+pub mod catalog_lookups;
+pub mod live_updates;
+pub mod hud_world_reads;

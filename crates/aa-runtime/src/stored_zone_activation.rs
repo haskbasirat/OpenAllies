@@ -309,6 +309,29 @@ pub(crate) fn operate_slot(
     inactive: Option<&crate::restore_lifecycle::InactiveLoad>,
     pc: Precision,
 ) -> Result<()> {
+    let phase = world
+        .dispatcher
+        .as_ref()
+        .ok_or_else(|| error("stored zone actual Dispatcher phase absent"))?
+        .phase;
+    operate_slot_in_phase(catalog, bank, actors, world, clock, &phase, key, index, movement, inactive, pc)
+}
+///Same operation once the dispatcher has moved into the live clocked World:
+///the caller lends that World's current +D8 phase for this call.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn operate_slot_in_phase(
+    catalog: &Catalog<'_>,
+    bank: &Bank,
+    actors: &mut ActorStore,
+    world: &mut World,
+    clock: &aa_simulation::NativeClock,
+    phase: &u32,
+    key: ObjectKey,
+    index: u32,
+    movement: Option<([u32; 2], u32)>,
+    inactive: Option<&crate::restore_lifecycle::InactiveLoad>,
+    pc: Precision,
+) -> Result<()> {
     let crate::load_world::SpatialOwner::Adopted(adoption) = &world.spatial else {
         return required("stored zone actual adopted spatial owner");
     };
@@ -319,11 +342,6 @@ pub(crate) fn operate_slot(
         return required("stored zone completed same index/live precision");
     }
     let spatial = &adoption.world;
-    let phase = &world
-        .dispatcher
-        .as_ref()
-        .ok_or_else(|| error("stored zone actual Dispatcher phase absent"))?
-        .phase;
     let session = SessionLoan(catalog.load_session);
     let mut effects = world
         .zone_globals

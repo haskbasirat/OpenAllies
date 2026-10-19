@@ -1,0 +1,20 @@
+{
+ "schema": 1,
+ "area": "Data vf18 release / vf1C ready family, ActorData +534 forwarding",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "runtime_callers": {
+  "45B530": "VObject init: data vf14(1,0), +54 |= bit28, append to WorldView+208 queue",
+  "43EC60": "WorldView update: while head VObject vf74 (45B140 = data vf1C) is true -> 45B720 data vf18(1), clear bit28, unlink",
+  "45BCA0": "VObject uninit (4450E0/458CE0): flagged view -> data vf18(1), clear, 43C490"
+ },
+ "ported": ["49BB00", "49BBB0", "45DF40", "45EF20", "428900", "428950", "4BE450", "4BE480", "494390", "494450", "4943A0", "494810", "46B260", "46B060", "469BB0", "469C50", "49B820", "49B860", "5A4ED0", "46C7D0", "46C800", "46C860", "46C890", "46C920", "46C950", "45EAC0", "45EB10"],
+ "not_ported": {"5AA550": "Resource vf14 release (+4 decrement, 5AEE70 ReleaseResource at zero) - ResourceManager owner", "46AE20": "Aspect +54/+48 loaded-Model extras (upstream request also unported)"},
+ "oracle": {"script": "native_data_release_ready.py", "fixture": "native-data-release-ready.json", "rows": 921, "pins": 1025, "precisions": ["Single24", "Double53", "Extended64"]},
+ "tests": {
+  "native_release_ready_coordinators_replay": "pass",
+  "native_release_ready_kernels_replay": "pass",
+  "actual_truck_release_reaches_its_deployment_building (AA_GAME_ROOT)": "pass: rus_truck_corps request then ready=false, release records 68 Resources incl. RUSCorps via +534; both Data+20 back to 0"
+ },
+ "removed_caps": []
+}

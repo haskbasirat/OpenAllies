@@ -34,7 +34,7 @@ impl Live<'_,'_> {
     fn object(&self,object:Object)->Result<&RuntimeObject> {
         let id=Self::id(object)?;self.catalog.require_source_owner().map_err(err)?;
         let source=self.bank.combat_source().map_err(err)?;source.completed_means().map_err(err)?;
-        if source.source_identities()!=self.catalog.actors.sources {return Err(err("SAI world source Bank/catalog differs"))}
+        if !crate::catalog_lookups::same_sources(self.catalog,source.source_identities()) {return Err(err("SAI world source Bank/catalog differs"))}
         let key=self.actors.key(id).ok_or_else(||err("SAI current GTID generation is absent"))?;
         let value=self.actors.object(key).map_err(err)?;let proof=&value.definition.proof;
         self.catalog.require_untranslated_actor_identity(&proof.id).map_err(err)?;
@@ -121,7 +121,9 @@ impl<'a> World<Fields<'a>> for Live<'a,'_> {
         if matches!(category.native_kind,1|20|21) {return Ok(false)}
         if category.native_kind!=2 {return Err(err("SAI seen-context source virtual38 dispatch is unsupported"))}
         let source=self.bank.combat_source().map_err(err)?;
-        let mobile=self.catalog.actors.native_mobile_deployment_data(source.source_precision()).map_err(err)?;
+        //Same completed source arena, computed once per precision by the
+        //Catalog (it borrows this immutable source owner; same error text).
+        let mobile=self.catalog.native_mobile_deployment_data(source.source_precision()).map_err(err)?;
         let definition=mobile.definition(id).map_err(err)?;
         self.context_words.insert(c.0,[u32::from(definition.pack_to.is_some()),u32::from(definition.unpack_to.is_some())]);Ok(true)
     }

@@ -65,7 +65,9 @@ pub(super) trait ActorWorld: ObjectWorld {
     fn ability(&mut self, secondary: bool, index: usize) -> Result<Self::Ability>;
     fn request_ability(&mut self, ability: Self::Ability, delta: u32, mode: u32) -> Result<()>;
     fn extra_ability_2a4(&mut self) -> Result<Option<Self::Ability>>;
-    fn settlement_data_534(&mut self) -> Result<Option<Self::Data>>;
+    ///ActorData+534, the MobileDeployment forward unpack target written by
+    ///the deferred4605B0 pass (not a Settlement payload). Null otherwise.
+    fn deployment_data_534(&mut self) -> Result<Option<Self::Data>>;
 }
 pub(super) fn actor(w: &mut impl ActorWorld, delta: u32, mode: u32) -> Result<()> {
     object(w, delta, mode)?;
@@ -99,8 +101,10 @@ pub(super) fn actor(w: &mut impl ActorWorld, delta: u32, mode: u32) -> Result<()
     if let Some(ability) = w.extra_ability_2a4()? {
         w.request_ability(ability, delta, mode)?;
     }
+    //45DF0B..45DF29: bit19 is reread here; (+534)->vf14(delta, 0) is the
+    //target's own Data request, so its children see mode 0.
     if w.mask_174()? & (1 << 19) != 0 {
-        if let Some(data) = w.settlement_data_534()? {
+        if let Some(data) = w.deployment_data_534()? {
             w.request_data(data, delta, 0)?;
         }
     }
@@ -110,3 +114,6 @@ pub(super) fn actor(w: &mut impl ActorWorld, delta: u32, mode: u32) -> Result<()
 #[cfg(test)]
 #[path = "data_request_fields_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "data_request_deployment_tests.rs"]
+mod deployment_tests;

@@ -4,7 +4,7 @@
 //! normalization retains both zero/nonzero *local numeric alternatives* until
 //! real publication and UI reset converge bit for bit. It does not claim the
 //! original first branch, permit mutable callback replay, or grant view-ready.
-use super::{base, ni, pose, quad, render_lists, ResetServices, Result, State};
+use super::{base, ni, pose, quad, render_lists, screen, ResetServices, Result, State};
 use crate::{
     native_render_defaults::SharedSet,
     native_render_properties::CameraInputs,
@@ -144,6 +144,8 @@ pub struct Camera<K, R> {
     renderer: Option<Arc<R>>,
     lists: Option<render_lists::State<K>>,
     quad: Option<quad::Quad>,
+    ///Camera+168 NiScreenPolygon array (NiCamera constructor 874B84).
+    screen_168: screen::List,
     phase: Phase,
 }
 impl<K, R> Camera<K, R> {
@@ -154,6 +156,7 @@ impl<K, R> Camera<K, R> {
             renderer: None,
             lists: None,
             quad: None,
+            screen_168: screen::List::default(),
             phase: Phase::Constructing,
         }
     }
@@ -170,6 +173,10 @@ impl<K, R> Camera<K, R> {
     }
     pub fn auxiliary_quad(&self) -> Option<&quad::Quad> {
         self.quad.as_ref()
+    }
+    ///Camera+168 as the 6FF63E draw loop walks it.
+    pub fn screen_polygons(&self) -> &screen::List {
+        &self.screen_168
     }
     pub fn root_164(&mut self) -> Result<&mut Node> {
         self.normalized_state()?;
@@ -518,6 +525,108 @@ impl<K, R> Directory<K, R> {
         let c = &mut self.cameras[index];
         c.normalized_state()?;
         let result = super::target::set_look_at_6ff130(&mut c.states[0], services, xy, pc);
+        if result.is_err() {
+            c.phase = Phase::Failed;
+        }
+        result
+    }
+    ///A field of the normalized captured camera as UI code reads *B40048.
+    pub fn word_captured(&self, h: &Handle, offset: u32) -> Result<u32> {
+        self.camera(h)?.normalized_state()?.word(offset)
+    }
+    pub fn byte_captured(&self, h: &Handle, offset: u32) -> Result<u8> {
+        self.camera(h)?.normalized_state()?.byte(offset)
+    }
+    ///`[B40048]+214` stores of the KKC_UI box and facing states: 5CD88E 1,
+    ///5CCA3A 0 (box), 5CCD70 1, 5CCDB3 0 (facing). Camera input reads it.
+    pub fn set_byte_214_captured(&mut self, h: &Handle, value: u8) -> Result<()> {
+        let index = self.require(h)?;
+        let c = &mut self.cameras[index];
+        c.normalized_state()?;
+        c.states[0].put_byte(0x214, value);
+        Ok(())
+    }
+    ///5CD850's polygon after its +214 store, with a new 895550 state of the
+    ///SAME shared defaults and the SAME material Factory (B323C0).
+    pub fn new_screen_box_5cd850(
+        &mut self,
+        seeds: [u32; 3],
+        tracker: screen::Tracker,
+        viewport: [i32; 2],
+        pc: Precision,
+    ) -> Result<screen::Polygon> {
+        let state = self.defaults.new_property_set_895550()?;
+        let (factory, globals) = self.defaults.factory_and_globals();
+        let polygon = screen::box_5cd850(seeds, state, factory, globals, tracker, viewport, pc)?;
+        Ok(Arc::new(std::sync::Mutex::new(polygon)))
+    }
+    ///5CD7E0 on the captured camera's +168 array.
+    pub fn attach_screen_polygon_captured_5cd7e0(&mut self, h: &Handle, polygon: &screen::Polygon) -> Result<usize> {
+        let index = self.require(h)?;
+        let c = &mut self.cameras[index];
+        c.normalized_state()?;
+        c.screen_168.attach_5cd7e0(polygon)
+    }
+    ///874350 on the captured camera's +168 array.
+    pub fn detach_screen_polygon_captured_874350(&mut self, h: &Handle, polygon: &screen::Polygon) -> Result<()> {
+        let index = self.require(h)?;
+        let c = &mut self.cameras[index];
+        c.normalized_state()?;
+        c.screen_168.detach_874350(polygon);
+        Ok(())
+    }
+    ///6FE9C0 with the SAME directory-ordinal +204 role as the reset reads.
+    pub fn developer_captured_6fe9c0(
+        &self,
+        h: &Handle,
+        input: &impl ReadOnlyInputs,
+    ) -> Result<bool> {
+        let index = self.require(h)?;
+        self.cameras[index].normalized_state()?;
+        Ok(input.free_camera_without_directory_role()? || index != 0)
+    }
+    ///700440/7004A0/700A90 tail: 6FF220 on the SAME normalized camera.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pose_captured_6ff220(
+        &mut self,
+        h: &Handle,
+        input: &impl ReadOnlyInputs,
+        center: [u32; 3],
+        yaw: u32,
+        pitch: u32,
+        zoom: u32,
+        pc: Precision,
+    ) -> Result<()> {
+        let index = self.require(h)?;
+        let matrix = &self.matrix;
+        let c = &mut self.cameras[index];
+        c.normalized_state()?;
+        let mut read = Read {
+            input,
+            role_nonzero: index != 0,
+            matrix,
+            pc,
+        };
+        let result =
+            pose::set_pose_6ff220(&mut c.states[0], matrix, &mut read, center, yaw, pitch, zoom, pc);
+        if result.is_err() {
+            c.phase = Phase::Failed;
+        }
+        result
+    }
+    ///5CCF00 -> 6FEBA0 on the SAME normalized camera.
+    pub fn rotate_about_target_captured_6feba0(
+        &mut self,
+        h: &Handle,
+        yaw: u32,
+        pitch: u32,
+        pc: Precision,
+    ) -> Result<()> {
+        let index = self.require(h)?;
+        let matrix = &self.matrix;
+        let c = &mut self.cameras[index];
+        c.normalized_state()?;
+        let result = pose::rotate_about_target_6feba0(&mut c.states[0], matrix, yaw, pitch, pc);
         if result.is_err() {
             c.phase = Phase::Failed;
         }

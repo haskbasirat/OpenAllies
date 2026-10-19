@@ -121,6 +121,10 @@ pub trait Services{
     fn timing_enabled_40eaa0(&mut self)->Result<bool>{Err("required native service: Resource block timing predicate".into())}
     fn block_diagnostic(&mut self,_resource:&Handle,_reason:BlockDiagnostic)->Result<()>{Err("required native service: Resource block diagnostic/current timer/thread".into())}
     fn block_till_ready_5b1fd0(&mut self,_task:&Task,_queue:&TaskQueue)->Result<()>{Err("required native service: Resource actual running-task waiter/events".into())}
+    ///5ABB30: the SAME manager's +4, +20 then +3C guards (5B1970 abort).
+    fn enter_manager_5abb30(&mut self,_resource:&Handle)->Result<()>{Err("required native service: ResourceManager 5ABB30 +4/+20/+3C guards".into())}
+    ///5ABB50: release +3C, +20 then +4.
+    fn leave_manager_5abb50(&mut self,_resource:&Handle)->Result<()>{Err("required native service: ResourceManager 5ABB50 guard release".into())}
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum BlockDiagnostic{RanImmediately,CompletedWhileWaitingForRemove,WaitedForLoader}
@@ -403,6 +407,30 @@ impl Task{
             queue.set_priority_5b1f50(self,mode)?;
             queue.enqueue_5aed10(self)
         }
+    }
+    ///5B1970, reached from 5AEE70 for a released task already popped from the
+    ///queue. Under 5ABB30 only status1 (dispatcher between its5B18C0 store and
+    ///its+4 guard) is changed to4. On the task's own thread status5 is stored
+    ///at once; another thread's dispatcher would have to observe4 while this
+    ///thread sleeps (6FB190 loop on+4 until5 or B396C0==3), which needs a
+    ///concurrent dispatcher owner and stays explicit. The native bool result
+    ///is unused by 5AEE70, which rereads Resource bit0.
+    pub(crate) fn abort_5b1970(&self,services:&mut impl Services)->Result<bool>{
+        services.enter_manager_5abb30(self.resource())?;
+        let running=match self.state14(){
+            Ok(1)=>self.set_state_5b18c0(4,||unreachable!("status4 preserves18")).map(|_|true),
+            Ok(_)=>Ok(false),
+            Err(e)=>Err(e),
+        };
+        let cleanup=services.leave_manager_5abb50(self.resource());
+        if !running?{cleanup?;return Ok(false)}
+        cleanup?;
+        let task=self.thread18()?.ok_or("5B1970 running task lost its Task18 thread")?;
+        let current=services.current_thread()?;
+        if current.os_id()==task.os_id(){
+            self.set_state_5b18c0(5,||unreachable!("status5 preserves18"))?;return Ok(true)
+        }
+        Err("5B1970 cross-thread abort wait (6FB190 sleep on manager+4 until status5 or B396C0==3) requires a concurrent dispatcher owner".into())
     }
     ///5B2180 for the constructor-proven TaskLoad vtableA47790: virtual10 and
     ///14 are actual6A71F0 false leaves. Remove from the real queue before Run.

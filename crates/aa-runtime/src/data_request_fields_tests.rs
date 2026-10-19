@@ -153,7 +153,8 @@ impl ActorWorld for Lab<'_> {
     fn extra_ability_2a4(&mut self) -> Result<Option<String>> {
         Ok(self.yes("extra").then(|| "extra".into()))
     }
-    fn settlement_data_534(&mut self) -> Result<Option<String>> {
+    //The fixture's historical label "settlement" names ActorData+534.
+    fn deployment_data_534(&mut self) -> Result<Option<String>> {
         Ok(self.yes("settlement").then(|| "settlement".into()))
     }
 }

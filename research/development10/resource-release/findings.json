@@ -1,0 +1,39 @@
+{
+ "schema": 1,
+ "area": "ResourceManager release (5AA550/5AEE70), ResourceCache (59BF30/59B9F0/59BA90/59BFA0), unload (5AC3D0/5ABFF0 + class vf40/vf54), cached re-request (5B0270)",
+ "native": {
+  "release_5aa550": "delta1 InterlockedDecrement(+4); else subtract under manager+20; exact zero -> 5AEE70",
+  "release_resource_5aee70": "bit0 -> 5AC3D0; else 5AED90 (log 0x636, list removal): removed -> 0x656; else 0x661, (unloaded: 0x667, 5B1970, return unless loaded), 0x672, 5AC3D0",
+  "abort_5b1970": "5ABB30; status1 -> 4 else return; 5ABB50; same thread -> status5; other thread sleeps 6FB190 until status5",
+  "cache_or_unload_5ac3d0": "under +20: bit3 clear && UVar54 ResourceCaching && 59BF30 -> cached; else Unloading, +3C, clear bit0, vf40, vf54, Unloaded",
+  "admit_59bf30": "59BC70 then 59B9F0 tail append + 59B8C0 used/peak/totals + bit5",
+  "remove_59bfa0": "59BA90 unlink, subtract current +C/+10, clear bit5; from 5B0270 (then vf2C=4B2830 RET) and 5ABFF0",
+  "unload_5abff0": "+20,+3C; bit0 -> clear,vf40,vf54,Unloaded; bit5 -> 59BFA0",
+  "vf40": {"Texture": "0x5aa700", "Sound": "0x5aa700", "Model": "0x5a6560", "Sequence": "0x5a6530"},
+  "vf54": {"Texture": "0x5a7c80", "Sound": "0x59afe0", "Model": "0x5a7cf0", "Sequence": "0x5a7cf0"},
+  "deferred_owner": "B401AC constructed by 70EF50 (renderer manager) at 419FB5; vf54 stores the field NULL via 59D430/5A75D0"
+ },
+ "removed_caps": [
+  {"address": "0x59b6b0", "what": "ResourceCache RAM/VRAM budget = ResourceCachePercentOfTotalRAM/VRAM (25) of machine memory"},
+  {"address": "0x59c040", "what": "per-class caps total/weight_sum*weight and 59BB70 ReduceCacheToSize"},
+  {"address": "0x59bc70", "what": "EnsureEnoughAvailableMemory decache loop and 59DA00 refusal"}
+ ],
+ "no_limits_note": "budgets are machine dependent; eviction only unloads released cached resources (reload timing/logs). Accounting, LRU order, bit5 and 5ACA50 biome unload are exact.",
+ "oracle": {"script": "native_release.py", "fixture": "native-release.json", "cases": 66, "rows": 198, "machines": 396, "executed_address_byte_pins": 996},
+ "rust": {
+  "files": ["crates/aa-runtime/src/resource_release.rs", "crates/aa-runtime/src/resource_release_tests.rs", "crates/aa-runtime/src/resource_cache.rs", "crates/aa-runtime/src/resource_task.rs", "crates/aa-runtime/src/resource_depot.rs", "crates/aa-runtime/src/resource_ni_cache.rs", "crates/aa-runtime/src/resource_model_unload.rs", "crates/aa-runtime/src/resource_objects_tests.rs"],
+  "tests": [
+   "resource_depot::release::tests::every_native_release_row_replays_through_the_same_manager (ignored: AA_GAME_ROOT; 159 rows exact, 3 explicit cross-thread refusals)",
+   "resource_depot::release::tests::request_release_and_cached_rerequest_round_trip (ignored: AA_GAME_ROOT)",
+   "resource_depot::release::tests::release_log_constants_are_the_native_call_arguments",
+   "resource_depot::release::tests::cache_admission_and_removal_accounting_match_native",
+   "resource_depot::release::tests::absent_deferred_owner_and_removed_cap_rows_are_documented_native_evidence"
+  ]
+ },
+ "open_gaps": [
+  "aa-client Current must implement resource_caching_54, enter/leave_unload_3c, release_log, enter/leave_manager_5abb30/50 and pass ManagerRelease to State::release_object",
+  "battle_view_startup should use Application::set_vworld_resource_context_with once cached Resources can precede a VWorld init",
+  "73D4B0 bit17 detach, Sound 59AFE0 non-streaming release, cross-thread 5B1970 wait are explicit required services",
+  "physical Texture/Sequence publication does not reach 59CB00 class creation in the port (pre-existing); cache class rows start zeroed"
+ ]
+}

@@ -14,6 +14,9 @@ use serde::Serialize;
 #[cfg(test)]
 #[path = "load_kingdom_init_world_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "load_kingdom_init_world_lookup_tests.rs"]
+mod lookup_tests;
 
 type Result<T> = std::result::Result<T, String>;
 fn error(value: impl std::fmt::Display) -> EconomyError {
@@ -455,24 +458,23 @@ fn source_node<'a>(
 ) -> Result<aa_rules::actors::ResolvedNode<'a>> {
     catalog.require_source_owner()?;
     let entry = catalog
-        .actors
-        .actors
-        .iter()
-        .find(|a| a.id.eq_ignore_ascii_case(canonical))
+        .lookups()
+        .actor_position(catalog.actors, canonical)
+        .map(|index| &catalog.actors.actors[index])
         .ok_or("canonical Kingdom recruit definition is missing")?;
     let mut found = None;
     for tag in aa_rules::actors::native_load::THING_TAGS {
+        //Same tag error, else exactly the tag's roots whose first source is
+        //entry.source, in order (the matches of filtering every root).
         for root in catalog
             .actors
-            .resolved_definitions(tag)
+            .resolved_definitions_at(tag, &entry.source)
             .map_err(|e| e.to_string())?
         {
-            if root.sources().first() == Some(&entry.source) {
-                if found.is_some() {
-                    return Err("canonical recruit source root is ambiguous".into());
-                }
-                found = Some(root)
+            if found.is_some() {
+                return Err("canonical recruit source root is ambiguous".into());
             }
+            found = Some(root)
         }
     }
     found.ok_or("canonical recruit source provenance is unavailable".into())
@@ -534,10 +536,22 @@ impl<S> World<'_, '_, '_, S> {
                 return Err("Kingdom Init source registry projection is incomplete".into());
             }
             let mut groups = [Vec::new(), Vec::new()];
+            //Roots by first source, in `roots` order: each entry lists the
+            //matches of filtering every root by `sources().first()`.
+            let mut by_source: std::collections::HashMap<&aa_rules::resources::Provenance, Vec<usize>> =
+                std::collections::HashMap::new();
+            for (at, root) in roots.iter().enumerate() {
+                if let Some(source) = root.first_source() {
+                    by_source.entry(source).or_default().push(at);
+                }
+            }
             for (index, actor) in self.catalog.actors.actors.iter().enumerate().rev() {
-                let mut matches = roots
+                let mut matches = by_source
+                    .get(&actor.source)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
                     .iter()
-                    .filter(|root| root.sources().first() == Some(&actor.source));
+                    .map(|&at| &roots[at]);
                 let root = matches
                     .next()
                     .ok_or("Kingdom Init registered source root missing")?;
@@ -582,19 +596,13 @@ impl<S> World<'_, '_, '_, S> {
         let mut seen = Vec::new();
         if primary {
             let layout = self.catalog.layout_data(self.source_pc)?;
-            let registered = self
-                .catalog
-                .actors
-                .actors
-                .iter()
-                .find(|a| a.id.eq_ignore_ascii_case(id))
+            let lookups = self.catalog.lookups();
+            let registered = lookups
+                .actor_position(self.catalog.actors, id)
+                .map(|index| &self.catalog.actors.actors[index])
                 .ok_or("canonical Element root missing")?;
-            let file = self
-                .catalog
-                .actors
-                .sources
-                .iter()
-                .position(|source| source.path.eq_ignore_ascii_case(&registered.source.path))
+            let file = lookups
+                .source_position(self.catalog.actors, &registered.source.path)
                 .ok_or("Element source file missing")?;
             let at = aa_rules::native::layout_data::RootPosition {
                 file,

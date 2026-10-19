@@ -949,17 +949,16 @@ impl ModelFixes {
         let _=entry.verified.set(Ok(verified));Ok(model)
     }
 
-    ///A raw-source graph sidecar must agree with the existing paired artifact,
-    ///including every native node ordinal. This does not invent a new input
-    ///digest for converted geometry by matching its filename.
-    pub(crate) fn verify_native_graph_pair(&self,source:&str,input_sha:&str,converted_sha:&str,audit_sha:&str,mapping:&serde_json::Value)->Result<()>{
-        let entry=self.entries.get(&resource_key(source)?).context("Native graph has no paired render artifact")?;
-        ensure!(entry.record.source_sha256==input_sha&&entry.record.converted_sha256==converted_sha&&self.metadata_sha256==audit_sha,"Native graph/source/output/material-audit digest differs");
-        let rows=mapping.as_array().context("Native graph source-node mapping is absent")?;
-        ensure!(rows.len()==entry.record.corrections.len(),"Native graph mesh mapping is incomplete");
-        for(row,expected)in rows.iter().zip(&entry.record.corrections){
-            ensure!(row["mesh_index"]==expected.mesh_index&&row["source_node_ordinal"]==expected.source_node_ordinal&&row["name"]==expected.name&&row["hierarchy"]==serde_json::json!(expected.hierarchy)&&row["vertex_count"]==expected.vertex_count&&row["triangle_count"]==expected.triangle_count,"Native graph source-node mapping differs from the paired material audit");
-        }Ok(())
+    ///The paired audit record of the selected source bytes: canonical source
+    ///path, converted-output digest, this audit's digest and the audited
+    ///meshes' source-node rows (mesh index, preorder source-node ordinal, name,
+    ///hierarchy, vertex and triangle counts).
+    pub(crate) fn native_pair(&self,source:&str,input_sha256:&str)->Result<(String,String,String,serde_json::Value)>{
+        ensure!(valid_digest(input_sha256),"Selected native Model input digest is invalid");
+        let entry=self.entries.get(&resource_key(source)?).context("Selected native Model has no paired source/output artifact")?;
+        ensure!(entry.record.source_sha256.eq_ignore_ascii_case(input_sha256),"Selected native Model bytes differ from paired artifact input");
+        let rows=entry.record.corrections.iter().map(|c|serde_json::json!({"mesh_index":c.mesh_index,"source_node_ordinal":c.source_node_ordinal,"name":c.name,"hierarchy":c.hierarchy,"vertex_count":c.vertex_count,"triangle_count":c.triangle_count})).collect();
+        Ok((entry.source.clone(),entry.record.converted_sha256.clone(),self.metadata_sha256.clone(),serde_json::Value::Array(rows)))
     }
 
     /// Apply once to a freshly prepared model. Source hashing/JSON decoding is

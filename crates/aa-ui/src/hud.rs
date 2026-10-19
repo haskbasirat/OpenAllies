@@ -224,6 +224,57 @@ pub trait HudWorld {
     fn action_buttons(&self) -> Vec<Option<HudAction>>;
 }
 
+/// The same reads from a live world, where each source can still be
+/// unbound: an error is recorded once in [`Hud::diagnostics`] and the widget
+/// it would update keeps its current state (no value is invented).
+pub trait LiveWorld {
+    fn economy(&self) -> Result<Option<HudEconomy>, String>;
+    fn economic_impact(&self) -> Result<Option<HudImpact>, String>;
+    fn faction_experience(&self) -> Result<Option<FactionExperience>, String>;
+    fn faction_abilities(&self) -> Result<Vec<HudAbility>, String>;
+    fn group_textures(&self) -> Result<Vec<Option<String>>, String>;
+    fn idle_builder(&self) -> Result<bool, String>;
+    fn idle_detached_organization(&self) -> Result<bool, String>;
+    /// TimeMessage `0x5D27B0`: VWorld+0x8C seconds.
+    fn game_time(&self) -> Result<f32, String>;
+    fn selection(&self) -> Result<HudSelection, String>;
+    fn action_buttons(&self) -> Result<Vec<Option<HudAction>>, String>;
+}
+
+struct Infallible<'a>(&'a dyn HudWorld);
+impl LiveWorld for Infallible<'_> {
+    fn economy(&self) -> Result<Option<HudEconomy>, String> {
+        Ok(self.0.economy())
+    }
+    fn economic_impact(&self) -> Result<Option<HudImpact>, String> {
+        Ok(self.0.economic_impact())
+    }
+    fn faction_experience(&self) -> Result<Option<FactionExperience>, String> {
+        Ok(self.0.faction_experience())
+    }
+    fn faction_abilities(&self) -> Result<Vec<HudAbility>, String> {
+        Ok(self.0.faction_abilities())
+    }
+    fn group_textures(&self) -> Result<Vec<Option<String>>, String> {
+        Ok(self.0.group_textures())
+    }
+    fn idle_builder(&self) -> Result<bool, String> {
+        Ok(self.0.idle_builder())
+    }
+    fn idle_detached_organization(&self) -> Result<bool, String> {
+        Ok(self.0.idle_detached_organization())
+    }
+    fn game_time(&self) -> Result<f32, String> {
+        Ok(self.0.game_time())
+    }
+    fn selection(&self) -> Result<HudSelection, String> {
+        Ok(self.0.selection())
+    }
+    fn action_buttons(&self) -> Result<Vec<Option<HudAction>>, String> {
+        Ok(self.0.action_buttons())
+    }
+}
+
 fn w(class: C, name: &str) -> Widget {
     Widget::new(class, name, false)
 }
@@ -423,6 +474,12 @@ pub struct Hud {
     stash: Vec<Widget>,
     selection: Option<&'static str>,
     groups_placed: bool,
+    /// Registry IDS the EconomyBar / EconomicImpact children were built for.
+    built_ids: Vec<String>,
+    /// The VWorld widget `DAT_00B36538` (UI+0xD0), built by the UI
+    /// (`0x5CAE30` -> `0x442C00`, `UI/Shared/VWorld.tgi:VWorld`) and held
+    /// here until the Game interface connects it.
+    vworld: Option<Widget>,
     pub diagnostics: Vec<String>,
 }
 
@@ -432,14 +489,45 @@ impl Hud {
     pub fn show(ui: &mut Ui, world: &dyn HudWorld) -> Self {
         ui.clear();
         let resources = world.resources();
+        let ids: Vec<String> = resources.iter().map(|r| r.ids.clone()).collect();
+        let (mut hud, g) = Self::construct(ui, &ids);
+        // the same registry entries, so the binding cannot fail here
+        let _ = hud.bind_resources(resources);
+        ui.connect(g);
+        hud.on_connected(ui);
+        hud
+    }
+
+    /// Resource registry entries (`0x48B800`) read by the update, in the
+    /// SAME registry order the EconomyBar children were built from.
+    pub fn bind_resources(&mut self, resources: Vec<HudResource>) -> Result<(), String> {
+        if resources.len() != self.built_ids.len() || resources.iter().zip(&self.built_ids).any(|(r, ids)| &r.ids != ids) {
+            return Err(format!(
+                "HUD resource binding {:?} differs from the registry the EconomyBar was built for {:?}",
+                resources.iter().map(|r| r.ids.as_str()).collect::<Vec<_>>(),
+                self.built_ids
+            ));
+        }
+        self.resources = resources;
+        Ok(())
+    }
+
+    /// Init `0x6182B0`, which KKC_Application::Init (`0x41AA7A`) runs once on
+    /// the Game interface right after the interfaces are allocated
+    /// (`0x61A650`, Application+0xBC = `0xB3974C`): the code-built tree in
+    /// AddChild order, loaded from the TGI data but NOT connected to the UI
+    /// root. `resource_ids` is the resource registry (`[0xB36530]+0x34`) in
+    /// registry order (EconomyBar ctor `0x603C40` -> `0x603B70`). Connect the
+    /// returned widget, then call [`Hud::on_connected`].
+    pub fn construct(ui: &mut Ui, resource_ids: &[String]) -> (Self, Widget) {
         let flag = |ui: &Ui, k: &str| ui.avars.flag(k).unwrap_or(false);
         let mut g = Widget::new(C::Interface, "UI/Game/game_interface.tgi:Game", false);
         // sort keys (vtable+0xA8): EconomyBar 1.0 (0x6E80C0), EconomicImpact
         // 0.5 (0x55D990), FactionExperience 1.0; everything else 0
         let mut bar = w(C::Panel, "UI/Game/economy_bar.tgi:EconomyBar");
         bar.key = 1.0;
-        for r in &resources {
-            bar.add_child(resource_widget(&r.ids));
+        for ids in resource_ids {
+            bar.add_child(resource_widget(ids));
         }
         g.add_child(bar);
         // 0x5FD6D0(name, 0, slot 0x47 UIMessageLogMaximumLines, fades 1,
@@ -462,8 +550,8 @@ impl Hud {
         if flag(ui, "UIUseEconomicImpact") {
             let mut imp = w(C::Panel, "UI/Game/economy_bar.tgi:EconomicImpact");
             imp.key = 0.5;
-            for r in &resources {
-                imp.add_child(resource_widget(&r.ids));
+            for ids in resource_ids {
+                imp.add_child(resource_widget(ids));
             }
             // 0x603E70: hidden at construction
             imp.set_visible(false);
@@ -537,8 +625,11 @@ impl Hud {
         }
         // the floater contents are owned by the floaters; they enter the
         // tree while open (0x607A50)
+        // only the widget names are needed to build the tree; the update
+        // reads the entries bound by `bind_resources`
+        let built = resource_ids.len();
         let mut hud = Hud {
-            resources,
+            resources: Vec::new(),
             bar_values: Vec::new(),
             impact_values: Vec::new(),
             slide: Slide::default(),
@@ -548,9 +639,17 @@ impl Hud {
             stash: Vec::new(),
             selection: None,
             groups_placed: false,
+            built_ids: resource_ids.to_vec(),
+            vworld: None,
             diagnostics: Vec::new(),
         };
-        hud.bar_values = vec![ResValues { dirty: true, ..Default::default() }; hud.resources.len()];
+        // KKC_UI 0x5CAE30: `new VWorld("UI/Shared/VWorld.tgi:VWorld", 1)`
+        // (0x442C00 -> 0x5F1D00 registered); its data is a Widget with
+        // render_threshold 15 and a DUMMY `[View]`, so the world can be picked
+        let mut vworld = Widget::new(C::Static, "UI/Shared/VWorld.tgi:VWorld", true);
+        ui.load_widget(&mut vworld, None);
+        hud.vworld = Some(vworld);
+        hud.bar_values = vec![ResValues { dirty: true, ..Default::default() }; built];
         hud.impact_values = hud.bar_values.clone();
         // ObjectDisplay sub displays (0x62CBA0): built and loaded against
         // the ObjectDisplay node, owned until a selection shows them
@@ -592,10 +691,24 @@ impl Hud {
             }
             hud.stash.insert(0, cd);
         }
-        ui.connect(g);
-        hud.place_static(ui);
+        (hud, g)
+    }
+
+    /// The Game interface was connected to the UI root (Show `0x5C0440`):
+    /// OnConnected `0x60BAE0` and its children's OnConnected placements.
+    pub fn on_connected(&mut self, ui: &mut Ui) {
+        // 0x60BAE0 -> 0x43B490(VWorld, Game): Game vt+0xD4 AddChild(VWorld),
+        // the head of its key group (behind every other child for drawing
+        // and picking)
+        if let Some(vworld) = self.vworld.take() {
+            if ui.widget(crate::press_pick::VWORLD_PATH).is_none() {
+                if ui.attach_front(GAME, vworld.clone()).is_none() {
+                    self.vworld = Some(vworld);
+                }
+            }
+        }
+        self.place_static(ui);
         ui.layout();
-        hud
     }
 
     fn stash_take(&mut self, name: &str) -> Option<Widget> {
@@ -628,8 +741,13 @@ impl Hud {
                 }
             }
         }
-        // economy bar OnConnected 0x603190: shown / hidden positions
+        // economy bar OnConnected 0x603190: shown / hidden positions, taken
+        // once (a later reconnect keeps the first positions)
         let bar = format!("{GAME}/EconomyBar");
+        if self.slide.init {
+            ui.layout();
+            return;
+        }
         if let (Some((x, y)), Ok(node)) = (ui.raw_position(&bar), ui.store.node("UI/Game/economy_bar.tgi:EconomyBar")) {
             let off = node.point2("hidden_offset").unwrap_or([0.0, 0.0]);
             let time = node.float("slide_time").unwrap_or(0.0);
@@ -643,45 +761,109 @@ impl Hud {
 
     /// Per-frame update.
     pub fn update(&mut self, ui: &mut Ui, world: &dyn HudWorld) {
+        let world = Infallible(world);
+        self.update_children_inner(ui, &world, true);
+    }
+
+    /// The children's own per-frame updates for a live world, after the
+    /// Game interface update `0x612010` (`crate::game_interface_update`)
+    /// owns TimeMessage attachment and the label/icon visibilities.
+    pub fn update_children(&mut self, ui: &mut Ui, world: &dyn LiveWorld) {
+        self.update_children_inner(ui, world, false);
+    }
+
+    fn update_children_inner(&mut self, ui: &mut Ui, world: &dyn LiveWorld, placeholder_interface: bool) {
         let now = ui.now_ms;
         self.update_economy(ui, world);
         // FactionExperience 0x604130: every 1000 ms
         if self.last_experience_ms.is_none_or(|t| now.saturating_sub(t) >= 1000) {
-            self.last_experience_ms = Some(now);
             let path = format!("{GAME}/FactionExperience");
             match world.faction_experience() {
-                Some(fe) => {
+                Ok(Some(fe)) => {
+                    self.last_experience_ms = Some(now);
                     let text = experience_text(ui, &fe);
                     ui.set_label(rel(&path), &text);
                     ui.with_widget(rel(&path), |x| x.set_visible(true));
                 }
-                None => {
+                Ok(None) => {
+                    self.last_experience_ms = Some(now);
                     ui.with_widget(rel(&path), |x| x.set_visible(false));
                 }
+                Err(e) => self.diagnostics_once(&e),
             }
         }
         // idle buttons 0x6233C0: every 1000 ms
         if self.last_idle_ms.is_none_or(|t| now.saturating_sub(t) >= 1000) {
-            self.last_idle_ms = Some(now);
-            let b = world.idle_builder();
-            let d = world.idle_detached_organization();
-            ui.with_widget("Game/IdleButtonBuilder", |x| x.set_visible(b));
-            ui.with_widget("Game/IdleButtonDetachedOrganization", |x| x.set_visible(d));
+            match (world.idle_builder(), world.idle_detached_organization()) {
+                (Ok(b), Ok(d)) => {
+                    self.last_idle_ms = Some(now);
+                    ui.with_widget("Game/IdleButtonBuilder", |x| x.set_visible(b));
+                    ui.with_widget("Game/IdleButtonDetachedOrganization", |x| x.set_visible(d));
+                }
+                (Err(e), _) | (_, Err(e)) => self.diagnostics_once(&e),
+            }
         }
-        // TimeMessage: present only with ViewShowElapsedGameTime (0x612010)
-        let show_time = ui.uvars.get_bool("ViewShowElapsedGameTime");
-        let t = world.game_time();
-        let secs = t as i64;
-        let text = format!("{}:{:02}:{:02}", secs / 3600, (secs / 60) % 60, secs % 60);
-        ui.set_label(rel(&format!("{GAME}/TimeMessage")), &text);
-        ui.with_widget("Game/TimeMessage", |x| x.set_visible(show_time));
-        // camera information (UVar CameraInformation)
-        let cam = ui.uvars.get_bool("CameraInformation");
-        ui.with_widget("Game/CameraInformationLabel", |x| x.set_visible(cam));
+        // TimeMessage 0x5D27B0: only while it is in the tree
+        let time_path = format!("{GAME}/TimeMessage");
+        if placeholder_interface || ui.widget(&time_path).is_some() {
+            match world.game_time() {
+                Ok(t) => {
+                    let secs = t as i64;
+                    let text = format!("{}:{:02}:{:02}", secs / 3600, (secs / 60) % 60, secs % 60);
+                    ui.set_label(rel(&time_path), &text);
+                }
+                Err(e) => self.diagnostics_once(&e),
+            }
+        }
+        if placeholder_interface {
+            // TimeMessage: present only with ViewShowElapsedGameTime (0x612010)
+            let show_time = ui.uvars.get_bool("ViewShowElapsedGameTime");
+            ui.with_widget("Game/TimeMessage", |x| x.set_visible(show_time));
+            // camera information (UVar CameraInformation)
+            let cam = ui.uvars.get_bool("CameraInformation");
+            ui.with_widget("Game/CameraInformationLabel", |x| x.set_visible(cam));
+        }
         self.update_floaters(ui, world);
         self.update_selection(ui, world);
         self.update_actions(ui, world);
         ui.layout();
+    }
+
+    /// Interface vtable +0xD0 AddChild of a child the Game interface owns
+    /// (Init `0x6182B0` keeps it in its field while detached).
+    pub fn attach_interface_child(&mut self, ui: &mut Ui, name: &str) -> Result<(), String> {
+        let child = self.stash_take(name).ok_or_else(|| format!("Game interface child {name} is not detached"))?;
+        ui.attach(GAME, child).ok_or("Game interface is not in the UI root")?;
+        Ok(())
+    }
+    /// `0x5EFB60(child, 0)`: RemoveChild, the Game interface keeps it.
+    pub fn detach_interface_child(&mut self, ui: &mut Ui, name: &str) -> Result<(), String> {
+        let child = take_child(ui, GAME, name).ok_or_else(|| format!("Game interface child {name} is not attached"))?;
+        self.stash.push(child);
+        Ok(())
+    }
+    /// `widget+0x24` of a Game interface child, attached or detached.
+    pub fn interface_child_flags(&self, ui: &Ui, name: &str) -> Option<u32> {
+        ui.widget(&format!("{GAME}/{name}"))
+            .map(|w| w.flags)
+            .or_else(|| self.stash.iter().find(|w| w.name == name).map(|w| w.flags))
+    }
+    /// Whether a Game interface child is attached (its +8 parent is Game).
+    pub fn interface_child_attached(&self, ui: &Ui, name: &str) -> bool {
+        ui.widget(&format!("{GAME}/{name}")).is_some()
+    }
+    /// Mutate a Game interface child, attached or detached.
+    pub fn with_interface_child(&mut self, ui: &mut Ui, name: &str, f: impl FnOnce(&mut Widget)) -> bool {
+        if ui.widget(&format!("{GAME}/{name}")).is_some() {
+            return ui.with_widget(&format!("Game/{name}"), f);
+        }
+        match self.stash.iter_mut().find(|w| w.name == name) {
+            Some(w) => {
+                f(w);
+                true
+            }
+            None => false,
+        }
     }
 
     // ------------------------------------------------------------ economy
@@ -795,9 +977,21 @@ impl Hud {
         }
     }
 
-    fn update_economy(&mut self, ui: &mut Ui, world: &dyn HudWorld) {
-        let econ = world.economy();
-        let impact = world.economic_impact();
+    fn update_economy(&mut self, ui: &mut Ui, world: &dyn LiveWorld) {
+        let econ = match world.economy() {
+            Ok(v) => v,
+            Err(e) => {
+                self.diagnostics_once(&e);
+                return;
+            }
+        };
+        let impact = match world.economic_impact() {
+            Ok(v) => Some(v),
+            Err(e) => {
+                self.diagnostics_once(&e);
+                None
+            }
+        };
         let bar = format!("{GAME}/EconomyBar");
         if ui.widget(&bar).is_some() {
             if econ.is_some() {
@@ -809,6 +1003,7 @@ impl Hud {
         if ui.widget(&imp).is_none() {
             return;
         }
+        let Some(impact) = impact else { return };
         match &impact {
             Some(i) => {
                 // 0x602640 -> vt+0xE0(1): slide_economy_bar slides the bar up
@@ -849,7 +1044,7 @@ impl Hud {
 
     // ------------------------------------------------------------ floaters
 
-    fn update_floaters(&mut self, ui: &mut Ui, world: &dyn HudWorld) {
+    fn update_floaters(&mut self, ui: &mut Ui, world: &dyn LiveWorld) {
         let g = ui.geo();
         for (name, var, kind) in [("GroupFloater", "UIGroupFloaterIsOpen", 1), ("FactionAbilitiesFloater", "UIAbilityFloaterIsOpen", 2)] {
             let path = format!("{GAME}/{name}");
@@ -883,15 +1078,25 @@ impl Hud {
             .node("UI/Game/floaters.tgi:GroupFloater/Groups")
             .ok()
             .and_then(|n| n.string("empty_group_texture").ok());
-        let tex = world.group_textures();
-        for i in 0..10 {
-            let t = tex.get(i).cloned().flatten().or_else(|| empty.clone().map(|e| format!("/{}", e.trim_start_matches('/'))));
-            set_decal_texture(ui, &format!("{groups}/{}/GroupDecal", seg("GroupButton", i)), t);
+        match world.group_textures() {
+            Ok(tex) => {
+                for i in 0..10 {
+                    let t = tex.get(i).cloned().flatten().or_else(|| empty.clone().map(|e| format!("/{}", e.trim_start_matches('/'))));
+                    set_decal_texture(ui, &format!("{groups}/{}/GroupDecal", seg("GroupButton", i)), t);
+                }
+            }
+            Err(e) => self.diagnostics_once(&e),
         }
         // Abilities 0x607FC0
         let ab = format!("{GAME}/FactionAbilitiesFloater/Abilities");
         if ui.widget(&ab).is_some() {
-            let abilities = world.faction_abilities();
+            let abilities = match world.faction_abilities() {
+                Ok(v) => v,
+                Err(e) => {
+                    self.diagnostics_once(&e);
+                    return;
+                }
+            };
             let have = ui.widget(&format!("{ab}/ItemPanel")).map(|p| p.children.len()).unwrap_or(0);
             if have != abilities.len() {
                 ui.viewport_clear(&ab);
@@ -932,9 +1137,15 @@ impl Hud {
 
     // ------------------------------------------------------------ selection
 
-    fn update_selection(&mut self, ui: &mut Ui, world: &dyn HudWorld) {
+    fn update_selection(&mut self, ui: &mut Ui, world: &dyn LiveWorld) {
         let od = format!("{GAME}/ControlPanel/ObjectDisplay");
-        let sel = world.selection();
+        let sel = match world.selection() {
+            Ok(v) => v,
+            Err(e) => {
+                self.diagnostics_once(&e);
+                return;
+            }
+        };
         let want: Option<&'static str> = match &sel {
             HudSelection::Company(_) => Some("CompanyDisplay"),
             _ => None,
@@ -1259,9 +1470,15 @@ impl Hud {
 
     // ------------------------------------------------------------ actions
 
-    fn update_actions(&mut self, ui: &mut Ui, world: &dyn HudWorld) {
+    fn update_actions(&mut self, ui: &mut Ui, world: &dyn LiveWorld) {
         let ab = format!("{GAME}/ControlPanel/ActionButtons");
-        let acts = world.action_buttons();
+        let acts = match world.action_buttons() {
+            Ok(v) => v,
+            Err(e) => {
+                self.diagnostics_once(&e);
+                return;
+            }
+        };
         for i in 0..12 {
             let bp = format!("{ab}/{}", seg("ActionButtonsButton", i));
             let a = acts.get(i).cloned().flatten();

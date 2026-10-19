@@ -52,7 +52,7 @@ impl Seeds {
     }
     pub fn validate_catalog(&self, catalog: &Catalog<'_>) -> Result<()> {
         catalog.require_source_owner()?;
-        if receipt::source_fingerprint(&catalog.actors.sources) != receipt::SOURCES_SHA256 {
+        if receipt::catalog_source_fingerprint(catalog) != receipt::SOURCES_SHA256 {
             return Err("VGrid seed owner destination source identities differ".into());
         }
         let numeric = combat_value_source_context::bind_numeric(catalog, &self.source_context)?;

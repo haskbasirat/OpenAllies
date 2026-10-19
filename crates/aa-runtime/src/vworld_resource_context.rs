@@ -23,7 +23,8 @@ pub struct Update {
 ///ownership, not a view/world readiness certificate; it stores no+98 value.
 pub struct Biome {
     entry: NativeDataEntry,
-    sources: Vec<SourceIdentity>,
+    ///Shared copy of the Bank's source identities (no per-identity copy).
+    sources: std::sync::Arc<Vec<SourceIdentity>>,
     source_precision: Precision,
 }
 ///Readonly identity of the actual GMap+24 retained registration. Copying this
@@ -34,7 +35,7 @@ pub struct BiomeIdentity {
     ids: String,
     path: Vec<usize>,
     source: aa_rules::resources::Provenance,
-    sources: Vec<SourceIdentity>,
+    sources: std::sync::Arc<Vec<SourceIdentity>>,
     source_precision: Precision,
 }
 impl BiomeIdentity {
@@ -49,8 +50,8 @@ impl BiomeIdentity {
         catalog.require_source_owner()?;
         let owner = bank.combat_source()?;
         owner.completed_means()?;
-        if owner.source_identities() != self.sources.as_slice()
-            || owner.source_identities() != catalog.actors.sources.as_slice()
+        if !same_slice(owner.source_identities(), &self.sources)
+            || !crate::catalog_lookups::same_sources(catalog, owner.source_identities())
             || owner.source_precision() != self.source_precision
         {
             return Err("GMap Biome identity source/Bank precision differs".into());
@@ -92,7 +93,7 @@ impl Biome {
             ids: self.entry.ids.clone(),
             path: self.entry.path.clone(),
             source: self.entry.source.clone(),
-            sources: self.sources.clone(),
+            sources: std::sync::Arc::clone(&self.sources),
             source_precision: self.source_precision,
         };
         identity.validate(catalog, bank)?;
@@ -107,7 +108,7 @@ impl Biome {
         let source = bank.combat_source()?;
         Ok(Self {
             entry: entry.clone(),
-            sources: source.source_identities().to_vec(),
+            sources: source.shared_source_identities(),
             source_precision: source.source_precision(),
         })
     }
@@ -118,8 +119,8 @@ impl Biome {
     ) -> Result<aa_rules::actors::ResolvedNode<'a>> {
         catalog.require_source_owner()?;
         let source = bank.combat_source()?;
-        if source.source_identities() != self.sources.as_slice()
-            || source.source_identities() != catalog.actors.sources.as_slice()
+        if !same_slice(source.source_identities(), &self.sources)
+            || !crate::catalog_lookups::same_sources(catalog, source.source_identities())
             || source.source_precision() != self.source_precision
         {
             return Err("GMap retained Biome source/Bank precision differs".into());
@@ -145,6 +146,10 @@ impl Biome {
     }
 }
 
+///`a == b.as_slice()`; the same allocation is equal without comparing.
+fn same_slice(a: &[SourceIdentity], b: &[SourceIdentity]) -> bool {
+    (std::ptr::eq(a.as_ptr(), b.as_ptr()) && a.len() == b.len()) || a == b
+}
 pub(crate) struct Input {
     pub(crate) units: Vec<u16>,
 }

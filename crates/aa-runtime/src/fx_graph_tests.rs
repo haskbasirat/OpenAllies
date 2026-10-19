@@ -268,7 +268,7 @@ fn original_v14_created_event_constructor_embedded_null_and_thread_clock_selecti
             owner: "fixture".into(),
             source,
             precision: Precision::Double53,
-            sources: Vec::new(),
+            sources: std::sync::Arc::new(Vec::new()),
             kind: GraphKind::View(ListKind::Created),
             request_only: false,
         });
@@ -305,7 +305,7 @@ fn completed_view_arena_selects_prior_created_head_without_cloning_or_constructe
     let mut draft=compile_inputs(&mut source,vec![0]).unwrap();
     let created=std::mem::take(&mut draft.roots);
     let mut prior=vec![vec![];5];prior[0]=created.clone();
-    let graph=std::sync::Arc::new(Graph{draft,prior_roots:prior,owner:"native event transport".into(),source:Provenance{path:"native event transport".into(),sha256:String::new(),span:aa_rules::tgi::Span{start:0,end:0}},precision:Precision::Double53,sources:vec![],kind:GraphKind::View(ListKind::Constructed),request_only:false});
+    let graph=std::sync::Arc::new(Graph{draft,prior_roots:prior,owner:"native event transport".into(),source:Provenance{path:"native event transport".into(),sha256:String::new(),span:aa_rules::tgi::Span{start:0,end:0}},precision:Precision::Double53,sources:std::sync::Arc::new(vec![]),kind:GraphKind::View(ListKind::Constructed),request_only:false});
     let events:Value=serde_json::from_str(include_str!("../../../research/skirmish-20261016-fx-graph/native-fx-command.json")).unwrap();
     let case=events["rows"].as_array().unwrap().iter().find(|r|r["input"]["kind"]=="Actor"&&r["input"]["nonempty"]==true&&r["input"]["muted"]==false).unwrap()["input"].clone();
     let mut input=CreatedInput{case:case.clone(),events:vec![],positions:0,things:0,clock_reads:vec![]};
@@ -512,7 +512,7 @@ fn original_v14_existing_event_and_source_predicate_order_match() {
                 span: aa_rules::tgi::Span { start: 0, end: 0 },
             },
             precision: Precision::Double53,
-            sources: Vec::new(),
+            sources: std::sync::Arc::new(Vec::new()),
             kind: GraphKind::View(ListKind::Constructed),
             request_only: false,
         });
@@ -720,7 +720,7 @@ fn request_only_and_incomplete_graphs_refuse_every_command_constructor_before_ca
                 span: aa_rules::tgi::Span { start: 0, end: 0 },
             },
             precision: Precision::Double53,
-            sources: vec![],
+            sources: std::sync::Arc::new(vec![]),
             kind: GraphKind::ActorEnter,
             request_only,
         });

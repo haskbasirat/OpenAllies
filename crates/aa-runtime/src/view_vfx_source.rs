@@ -15,7 +15,8 @@ pub struct Effect {
     source: Provenance,
     layers: Vec<Provenance>,
     category: CategoryDescriptor,
-    universe: Vec<SourceIdentity>,
+    ///Shared copy of the catalog sources (catalog_lookups::catalog_universe).
+    universe: std::sync::Arc<Vec<SourceIdentity>>,
     context: SourceFpContext,
 }
 ///Source-position receipt for the Resource+40 loader input. This contains no
@@ -67,7 +68,7 @@ fn context(catalog: &Catalog<'_>, bank: &Bank) -> Result<SourceFpContext> {
     catalog.require_source_owner()?;
     let owner = bank.combat_source()?;
     owner.completed_means()?;
-    if owner.source_identities() != catalog.actors.sources.as_slice() {
+    if !crate::catalog_lookups::same_sources(catalog, owner.source_identities()) {
         return Err("VFX source Bank/universe differs".into());
     }
     Ok(owner.context().clone())
@@ -152,7 +153,7 @@ pub fn find(catalog: &Catalog<'_>, bank: &Bank, ids: &[u16]) -> Result<Option<Ef
         source: actual.source.clone(),
         layers,
         category,
-        universe: catalog.actors.sources.clone(),
+        universe: crate::catalog_lookups::catalog_universe(catalog),
         context: ctx,
     }))
 }
@@ -181,7 +182,7 @@ impl Effect {
             source: source.clone(),
             layers,
             category,
-            universe: catalog.actors.sources.clone(),
+            universe: crate::catalog_lookups::catalog_universe(catalog),
             context: ctx,
         };
         effect.validate(catalog, bank)?;
@@ -248,7 +249,7 @@ impl Effect {
     }
     pub fn validate(&self, catalog: &Catalog<'_>, bank: &Bank) -> Result<()> {
         let ctx = context(catalog, bank)?;
-        if self.universe != catalog.actors.sources
+        if !crate::catalog_lookups::same_sources(catalog, &self.universe)
             || ctx.precision() != self.context.precision()
             || ctx.reference_startup() != self.context.reference_startup()
         {
@@ -256,10 +257,11 @@ impl Effect {
         }
         //No second native Find: canonical names can themselves be translation keys.
         let actual = catalog
-            .actors
-            .actors
-            .iter()
-            .filter(|a| a.id.eq_ignore_ascii_case(&self.id) && a.source == self.source)
+            .lookups()
+            .actor_positions(catalog.actors, &self.id)
+            .into_iter()
+            .map(|index| &catalog.actors.actors[index])
+            .filter(|a| a.source == self.source)
             .collect::<Vec<_>>();
         if actual.len() != 1 {
             return Err("VFX canonical allocation/source projection changed".into());

@@ -34,6 +34,28 @@ impl State{
             scene:crate::battle_scene_startup::State::not_attempted()})
     }
     pub fn native_view(&self)->&VWorldOwner<view_assets::State>{&self.view}
+    ///battle_orders_input::Live::views for one orders frame.
+    pub fn order_views<'s>(&'s mut self,world:&'s World<'_>)->Result<crate::live_scene::view_directory::DirectoryViews<'s>>{
+        self.view.order_views(world).map_err(|e|format!("{e:#}"))
+    }
+    ///One native UI frame's 43EC60 VWorld+208 request segment (the 43FF60
+    ///VWorld update calls it after its camera children). Release is Data
+    ///vf18(1) -> Resource vf14 5AA550 through the SAME ResourceManager and the
+    ///actual resource-task backend (guards, UVar54, diagnostics).
+    pub fn update_view_requests_43ec60(&mut self,source:&std::sync::Arc<aa_rules::actors::ActorCatalog>,
+        session:&mut ActualActivatedSession,bridge:&battle_ui_bridge::Client,execution:&mut Execution<'_>,pc:Precision)->Result<()>{
+        let mut catalog=Catalog::new(source);
+        let resources=session.world().evidence().resource_source.as_ref()
+            .ok_or("VWorld request queue actual Resource source owner absent")?;
+        catalog.bind_resource_catalog(std::sync::Arc::clone(resources))?;
+        catalog.settings=Some(session.world().presentation_parts()?.settings.clone());
+        catalog.native_load_mode=session.world().evidence().native_load_mode;
+        let(host,world,application)=session.parts();
+        let guards=application.depot_mut().resource_task_guards();
+        let mut backend=crate::battle_resource_tasks::Current::new(bridge,execution,guards,pc).with_session(host);
+        self.view.drain_ready_requests_43ec60(world,&catalog,application.depot_mut(),
+            &mut aa_runtime::resource_depot::release::ManagerRelease(&mut backend)).map_err(|e|format!("{e:#}"))
+    }
     pub fn ui_fields(&self)->&ui_world_init::State<ActorId>{&self.ui}
     pub fn diagnostics(&self)->&[Diagnostic]{&self.diagnostics}
     pub fn initialize<T:MillisecondTimer>(&mut self,session:&mut ActualActivatedSession,catalog:&Catalog<'_>,

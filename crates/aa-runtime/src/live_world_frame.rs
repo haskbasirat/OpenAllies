@@ -55,6 +55,18 @@ struct Retained {
     definitions: Bank,
     settings: Settings,
     evidence: LoadEvidence,
+    /// Set once a census update swallowed an unported leaf. Such a World is no
+    /// longer the native state and every later product/strict update refuses.
+    census_contaminated: bool,
+    /// 404F60-family debug-log calls of scheduled Updates, in call order.
+    log: Vec<crate::live_updates::NativeLog>,
+}
+/// One unported/failed leaf recorded (and skipped) by a census update.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct CensusEntry {
+    pub tick: u32,
+    pub site: String,
+    pub error: String,
 }
 enum FailedOwners {
     Inputs(WorldFrameInputs),
@@ -233,6 +245,8 @@ impl<'source> World<'source> {
             owners,
             definitions,
             settings,
+            census_contaminated: false,
+            log: Vec::new(),
             evidence: LoadEvidence {
                 resource_streams,
                 native_load_mode,
@@ -306,6 +320,15 @@ impl<'source> World<'source> {
     }
     pub fn clock(&self) -> NativeClock {
         self.state.world.clock
+    }
+    ///Read-only view of the SAME retained five native update queues
+    ///(World+1AC/1C0/1D4/1E8/208). No copy is retained by this owner.
+    pub fn queues(&self) -> &Queues {
+        &self.state.queues
+    }
+    ///Read-only scheduler identity table of the retained graph.
+    pub fn owners(&self) -> &Owners {
+        &self.retained.owners
     }
     ///775D2F's same live World4F8AE0 initial synchronization. This consumes
     ///the authoritative RNG draw even when the actual logger is disabled.
@@ -618,6 +641,45 @@ impl Frame<'_, '_> {
         &self,catalog:&Catalog<'_>,sim:&RefCell<&mut crate::live_sim::Sim>,now:FloatBits,
         host:&mut H,inputs:TickInputs<'_,S,O>,
     )->simulation::Result<simulation::Action>{self.run_inner(Some(catalog),sim,now,host,inputs)}
+    ///Headless harness entry: exactly the catalog-bound WorldSeams::world_update
+    ///body that 75CA70's world-tick branch reaches (752AE0 -> 76F790 -> GWorld
+    ///4F9970), on the same retained owners, queues, RNG and failure latch.
+    ///It does NOT evaluate the admin timeline gate 76AF90 or Sim+29 freeze and
+    ///omits the 76F790 AVI/sync-log/41C180 prefix, 76F600 end check and 752AE0
+    ///duration history. Product frames must use run_with_catalog; this entry
+    ///exists so a loaded World's tick can be exercised before the view/task
+    ///handshake unfreezes the Sim. It mints no readiness or activation.
+    pub fn world_update_4f9970<S:SessionRead+?Sized,O:AudioOutput+?Sized>(
+        &self,catalog:&Catalog<'_>,inputs:TickInputs<'_,S,O>,
+    )->simulation::Result<NativeClock>{
+        {
+            let b=self.world.try_borrow().map_err(|e|seam(format!("frame loan remains held: {e}")))?;
+            if b.state.stopped(){return Err(clocked::Error::Stopped.into())}
+            if b.retained.census_contaminated{return Err(seam("World was advanced by a census update; it is no longer native state"))}
+            if self.precision!=b.state.world.clock_precision{return Err(seam("actual application/World thread precisions differ"))}
+        }
+        WorldBorrow{frame:self,inputs,catalog:Some(catalog),census:None}.world_update()
+    }
+    ///Census variant of world_update_4f9970: every unported scheduled Update or
+    ///world-effect leaf is recorded in `sink` and skipped instead of stopping the
+    ///World, so one run inventories all reached gaps. The first use latches the
+    ///World as contaminated: product and strict updates refuse it afterwards.
+    ///Results after the first recorded entry are NOT native behaviour.
+    pub fn world_update_census<S:SessionRead+?Sized,O:AudioOutput+?Sized>(
+        &self,catalog:&Catalog<'_>,inputs:TickInputs<'_,S,O>,sink:&RefCell<Vec<CensusEntry>>,
+    )->simulation::Result<NativeClock>{
+        {
+            let mut b=self.world.try_borrow_mut().map_err(|e|seam(format!("frame loan remains held: {e}")))?;
+            if b.state.stopped(){return Err(clocked::Error::Stopped.into())}
+            if self.precision!=b.state.world.clock_precision{return Err(seam("actual application/World thread precisions differ"))}
+            b.retained.census_contaminated=true;
+        }
+        WorldBorrow{frame:self,inputs,catalog:Some(catalog),census:Some(sink)}.world_update()
+    }
+    ///Retained 404F60-family debug-log calls made by scheduled Updates.
+    pub fn native_log(&self)->Result<Vec<crate::live_updates::NativeLog>,String>{
+        Ok(self.world.try_borrow().map_err(|e|format!("frame loan remains held: {e}"))?.retained.log.clone())
+    }
     fn run_inner<'catalog_source,H:borrowed::Host+?Sized,S:SessionRead+?Sized,O:AudioOutput+?Sized>(
         &self,catalog:Option<&Catalog<'catalog_source>>,sim:&RefCell<&mut crate::live_sim::Sim>,now:FloatBits,
         host:&mut H,inputs:TickInputs<'_,S,O>,
@@ -630,6 +692,9 @@ impl Frame<'_, '_> {
                 .map_err(|e| seam(format!("frame loan remains held: {e}")))?;
             if b.state.stopped() {
                 return Err(clocked::Error::Stopped.into());
+            }
+            if b.retained.census_contaminated {
+                return Err(seam("World was advanced by a census update; it is no longer native state"));
             }
             if precision != b.state.world.clock_precision {
                 return Err(seam("actual application/World thread precisions differ"));
@@ -645,6 +710,7 @@ impl Frame<'_, '_> {
             frame: self,
             inputs,
             catalog,
+            census: None,
         };
         borrowed::Kernel {
             sim: &mut same_sim,
@@ -661,6 +727,7 @@ struct WorldBorrow<'a, 'b, 'source, 'inputs, 'catalog_source, S: SessionRead + ?
     frame: &'a Frame<'b, 'source>,
     inputs: TickInputs<'inputs, S, O>,
     catalog:Option<&'a Catalog<'catalog_source>>,
+    census:Option<&'a RefCell<Vec<CensusEntry>>>,
 }
 impl<S: SessionRead + ?Sized, O: AudioOutput + ?Sized> WorldSeams
     for WorldBorrow<'_, '_, '_, '_, '_, S, O>
@@ -699,8 +766,10 @@ impl<S: SessionRead + ?Sized, O: AudioOutput + ?Sized> WorldSeams
             (**loan)()
         };
         if let Some(catalog)=self.catalog {
+            let tick=state.world.clock.tick;
             let mut services=frame_services::Services{catalog,retained,source:first_tick_source,
-                program,music,session:&*session,output:&mut **output,sync_a:self.inputs.sync_a,gate:&mut gate};
+                program,music,session:&*session,output:&mut **output,sync_a:self.inputs.sync_a,gate:&mut gate,
+                census:self.census.map(|sink|(sink,tick))};
             return Ok(state.step(&mut services)?);
         }
         let world = &mut retained.world;
@@ -736,6 +805,7 @@ impl<S: SessionRead + ?Sized, O: AudioOutput + ?Sized> WorldSeams
                 .ok_or_else(|| seam("retained trigger manager is absent"))?,
             trigger_program: program,
             first_tick: &mut first_tick,
+            sun: None,
         };
         Ok(state.step(&mut services)?)
     }

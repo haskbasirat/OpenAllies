@@ -94,6 +94,10 @@ impl ResolvedNode<'_> {
     pub fn sources(&self) -> Vec<Provenance> {
         self.layers.iter().map(|n| n.source.clone()).collect()
     }
+    /// `sources().first()`, borrowed: the node's own declaration source.
+    pub fn first_source(&self) -> Option<&Provenance> {
+        self.layers.first().map(|n| &n.source)
+    }
     /// A `localized` field's stored native text: the string-table key (for
     /// example `#rus_corps_name`) or literal text, after the parse-time quote
     /// rule (5BEE60/5BDC00) and the single leading `@` removal of 5BA3C0.
@@ -608,9 +612,10 @@ impl ActorCatalog {
         source: &crate::resources::Provenance,
     ) -> Result<Vec<ResolvedNode<'_>>> {
         self.tag_resolves(kind)?;
-        self.resolver
-            .roots
+        // Same roots in the same (ascending) order as filtering every root.
+        self.roots_with_source(source)
             .iter()
+            .map(|&index| &self.resolver.roots[index])
             .filter(|n| !n.template && n.name.eq_ignore_ascii_case(kind) && n.source == *source)
             .map(|node| {
                 Ok(ResolvedNode {
@@ -630,33 +635,33 @@ impl ActorCatalog {
     pub fn thing_ids_declarations(&self, id: &str, precision: Precision) -> Result<usize> {
         let bits = precision.significand_bits();
         let poisoned = || Error::Unsupported("resolution cache poisoned".into());
-        let cached = self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.get(&bits).cloned();
-        let census = match cached {
-            Some(census) => census,
-            None => {
-                let census = (|| -> Result<std::collections::BTreeMap<String, usize>> {
-                    let mut counts = std::collections::BTreeMap::new();
-                    for tag in super::native_load::THING_TAGS {
-                        for node in self.resolved_definitions(tag)? {
-                            if let Some(TypedValue::String { value, .. }) = node.field("IDS", precision)? {
-                                *counts.entry(value.to_ascii_lowercase()).or_insert(0) += 1;
-                            }
-                        }
-                    }
-                    Ok(counts)
-                })()
-                .map_err(|e| match e {
-                    Error::Unsupported(message) => message,
-                    other => other.to_string(),
-                });
-                self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.insert(bits, census.clone());
-                census
-            }
-        };
-        match census {
+        let answer = |census: &std::result::Result<std::collections::BTreeMap<String, usize>, String>| match census {
             Ok(counts) => Ok(counts.get(&id.to_ascii_lowercase()).copied().unwrap_or(0)),
-            Err(message) => Err(Error::Unsupported(message)),
+            Err(message) => Err(Error::Unsupported(message.clone())),
+        };
+        // Answer a cached census in place; cloning the whole map per call
+        // dominated source preparation.
+        if let Some(census) = self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.get(&bits) {
+            return answer(census);
         }
+        let census = (|| -> Result<std::collections::BTreeMap<String, usize>> {
+            let mut counts = std::collections::BTreeMap::new();
+            for tag in super::native_load::THING_TAGS {
+                for node in self.resolved_definitions(tag)? {
+                    if let Some(TypedValue::String { value, .. }) = node.field("IDS", precision)? {
+                        *counts.entry(value.to_ascii_lowercase()).or_insert(0) += 1;
+                    }
+                }
+            }
+            Ok(counts)
+        })()
+        .map_err(|e| match e {
+            Error::Unsupported(message) => message,
+            other => other.to_string(),
+        });
+        let result = answer(&census);
+        self.resolution_cache.thing_ids.lock().map_err(|_| poisoned())?.insert(bits, census);
+        result
     }
     fn tag_resolves(&self, kind: &str) -> Result<()> {
         let key = kind.to_ascii_lowercase();
@@ -757,18 +762,43 @@ impl ActorCatalog {
         if let Some(FieldResolution::Unsupported { reason }) = actor.field("category") {
             return Err(Error::Unsupported(reason.clone()));
         }
-        let node = self
-            .resolver
-            .roots
-            .iter()
-            .find(|n| n.source == actor.source)
+        let root = self
+            .root_with_source(&actor.source)
             .ok_or_else(|| Error::Unsupported("actor source unavailable".into()))?;
+        // The layers of one root are fixed by the immutable resolver: replay
+        // their resolver paths instead of re-walking the template chain.
+        let memo = &self.resolution_cache.memo.actor_layers;
+        if let Some(paths) = crate::query_memo::lock(memo).and_then(|m| m.get(&root).cloned())
+            && let Some(layers) = paths
+                .iter()
+                .map(|path| self.resolver.node_at(path))
+                .collect::<Option<Vec<_>>>()
+        {
+            return Ok(ResolvedNode {
+                catalog: self,
+                layers,
+            });
+        }
+        let node = &self.resolver.roots[root];
+        let layers = self
+            .resolver
+            .layers(node, &mut Vec::new())
+            .map_err(Error::Unsupported)?;
+        let addresses = self
+            .resolution_cache
+            .addresses
+            .get_or_init(|| self.resolver.node_paths());
+        if let Some(paths) = layers
+            .iter()
+            .map(|layer| addresses.get(&(*layer as *const Definition as usize)).cloned())
+            .collect::<Option<Vec<_>>>()
+            && let Some(mut memo) = crate::query_memo::lock(memo)
+        {
+            memo.insert(root, paths);
+        }
         Ok(ResolvedNode {
             catalog: self,
-            layers: self
-                .resolver
-                .layers(node, &mut Vec::new())
-                .map_err(Error::Unsupported)?,
+            layers,
         })
     }
 }

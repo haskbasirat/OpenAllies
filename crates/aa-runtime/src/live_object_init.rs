@@ -225,7 +225,7 @@ impl Source {
     ) -> Result<Self> {
         catalog.require_source_owner().map_err(Error::World)?;
         let owner = bank.combat_source().map_err(Error::World)?;
-        if owner.source_identities() != catalog.actors.sources.as_slice() {
+        if !crate::catalog_lookups::same_sources(catalog, owner.source_identities()) {
             return Err(Error::World(
                 "Object Init definition source FP owner differs from Catalog".into(),
             ));

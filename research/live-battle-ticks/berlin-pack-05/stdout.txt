@@ -1,0 +1,3 @@
+
+running 1 test
+test live_skirmish_ticks_census ... E:\Games\Axis and Alies\rust-rebuild\research\live-battle-ticks\berlin-pack-05\attempt.launch.json

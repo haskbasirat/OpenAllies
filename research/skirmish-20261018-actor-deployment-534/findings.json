@@ -1,0 +1,27 @@
+{
+ "schema": 1,
+ "area": "ActorData+534 MobileDeployment forward target and Actor request 45DD80 tail",
+ "original_sha256": "5d2548a24f0c6597008bd6c83e88bfa64f7d1e00e8e1e7126c4e10d20d160d26",
+ "v14_sha256": "3bda77d7e516121f7c8904cf73cf72a23efe04b5c1d04ef273284695c8efc5c1",
+ "correction": "+534 is not a SettlementData payload. +174 bit19 is MobileDeploymentComponent; +534 is the 4605B0 forward unpack target. Packable buildings (HQs etc.) are the pack side with null +534.",
+ "native": {
+  "4624B0": "462D3B..462D7B constructor: +534..+540 = 0, +544 = 0xBF800000, +548..+554 = 0 (ebx = 4624E1 zero)",
+  "464BD0": "46852F..4686D9: bit19, unpack_to_actor_ids; empty -> pack_health_min/packing_length/unpacking_length at +54C/+550/+554; nonempty -> 473AD0 deferred ref (vtable A0347C), packed_position_offset +538/+53C, packed_orientation +540/+544, 410C40 when both |x|,|y| <= 1e-4 (A032E0) and ordered",
+  "473AD0": "prepends {vtable, IDS, next} at GameData(B36530)+824",
+  "475230": "walks head first (reverse creation), 461840 -> 4605B0",
+  "4605B0": "+534 = 4BDBA0(IDS, 0x2B); Body / MobileDeployment / Element / soft-shape +54 gates via 410C40; target+548 = this",
+  "45DD80": "ActorData vtable A05540+14; tail 45DF0B..45DF29: bit19 && +534 -> (+534)->vf14(delta, 0)"
+ },
+ "rust": {
+  "new": ["crates/aa-runtime/src/actor_deployment_534.rs", "crates/aa-runtime/src/actor_deployment_534_tests.rs", "crates/aa-runtime/src/data_request_deployment_tests.rs"],
+  "changed": ["crates/aa-runtime/src/data_actor_request.rs", "crates/aa-runtime/src/data_actor_request_tests.rs", "crates/aa-runtime/src/data_object_request.rs", "crates/aa-runtime/src/data_request_fields.rs", "crates/aa-runtime/src/data_request_fields_tests.rs"]
+ },
+ "oracle": {"script": "native_actor_deployment_534.py", "fixture": "native-actor-deployment-534.json", "cases": 70, "instructions": 434, "precisions": ["Single24", "Double53", "Extended64"], "shipped_actors": 140},
+ "shipped": {"actor_data": 1028, "mobile_deployment": 140, "forward_534": 75, "pack_side_null_534": 65, "data_errors": 0},
+ "removed_caps": [],
+ "open_gaps": [
+  "464BD0 block runs at prepare step 7 = after Portal, its native relative position (46832A < 468538); a 410C40 aborts startup through battle_source_preparation (census mode excepted)",
+  "deferred pass is evaluated at the first bit19 actor instead of after all LoadData; same outcome, error precedence can differ for malformed data",
+  "45DF40/45EF20 +534 paths: research/skirmish-20261019-data-release-ready"
+ ]
+}

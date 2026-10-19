@@ -10,7 +10,8 @@ pub(crate) struct Session {
     definition: RuntimeDefinition,
     animation: Vec<Provenance>,
     precision: Precision,
-    universe: Vec<SourceIdentity>,
+    ///Shared copy of the catalog sources (catalog_lookups::catalog_universe).
+    universe: std::sync::Arc<Vec<SourceIdentity>>,
     draft: Option<Draft>,
     lists: Vec<Vec<NodeId>>,
     failed: Option<String>,
@@ -71,7 +72,7 @@ impl Session {
             definition: definition.clone(),
             animation: animation.sources(),
             precision: source.source_precision(),
-            universe: catalog.actors.sources.clone(),
+            universe: crate::catalog_lookups::catalog_universe(catalog),
             draft: Some(Draft::new()),
             lists: vec![],
             failed: None,
@@ -85,7 +86,7 @@ impl Session {
             return Err("Animation FX compiler was already moved into Graph".into());
         }
         let owner = ObjectFxSource::bind_in_bank(catalog, bank, &self.definition)?;
-        if owner.source_precision() != self.precision || catalog.actors.sources != self.universe {
+        if owner.source_precision() != self.precision || !crate::catalog_lookups::same_sources(catalog, &self.universe) {
             return Err("Animation FX compiler source owner/PC changed".into());
         }
         Ok(())
@@ -114,8 +115,8 @@ impl Session {
             let roots = node.children(name).map_err(|e| e.to_string())?;
             //Bound contains readonly source/target metadata. Recreating that
             //view does not reset the SAME mutable Draft.first_vfx context.
-            let mut bound = Bound::new(
-                catalog.actors,
+            let mut bound = Bound::for_catalog(
+                catalog,
                 self.precision,
                 self.definition.proof.source.clone(),
             )?;
@@ -150,8 +151,8 @@ impl Session {
         self.require(catalog, bank)?;
         let result: Result<usize> = (|| {
             contains(&self.animation, node)?;
-            let mut bound = Bound::new(
-                catalog.actors,
+            let mut bound = Bound::for_catalog(
+                catalog,
                 self.precision,
                 self.definition.proof.source.clone(),
             )?;
@@ -235,8 +236,8 @@ impl Session {
                     .chain())
             }
         }
-        let input = Bound::new(
-            catalog.actors,
+        let input = Bound::for_catalog(
+            catalog,
             self.precision,
             self.definition.proof.source.clone(),
         )?;
@@ -264,7 +265,7 @@ impl Session {
             owner: self.definition.proof.id.clone(),
             source: self.definition.proof.source.clone(),
             precision: self.precision,
-            sources: self.universe.clone(),
+            sources: std::sync::Arc::clone(&self.universe),
             kind: GraphKind::ActorAnimation,
             request_only: true,
         })

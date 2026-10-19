@@ -63,6 +63,13 @@ impl Controller {
         self.request.as_ref()
     }
     pub fn ui_backend(&self)->crate::battle_ui_bridge::Client{self.ui_bridge.clone()}
+    ///Application+10C as read by the last completed notification/frame job on
+    ///the simulation thread (0 before the first one). AppState4 is the Game
+    ///state entered by Loading682EE0 -> 40CE10(Loading+C).
+    pub fn application_state(&self)->u32{
+        #[cfg(windows)]{self.engine.as_ref().map(|e|e.application_state).unwrap_or(0)}
+        #[cfg(not(windows))]{0}
+    }
     ///Only the Send result returns to the UI. The callback receives short real
     ///owner loans on the same retained simulation OS thread; no Frame/World
     ///can escape through this API. Activation is not view/task readiness.
@@ -126,10 +133,15 @@ impl Controller {
             if self.status==Status::AwaitingNativeView {
                 match engine.poll_notifications(self.request.as_ref().map(|r|r.map_id.as_str()).unwrap_or("")){
                     Ok(Some(Some(error)))|Err(error)=>{
-                        if !self.message.starts_with("Native view initialization stopped"){log::error!("native view initialization stopped: {error}");}
-                        self.message=format!("Native view initialization stopped: {error}")
+                        //The same retained notification/frame operation also
+                        //runs the AppState4 game frames after Loading.
+                        let what=if engine.application_state==4{"Native game frame stopped"}else{"Native view initialization stopped"};
+                        if !self.message.starts_with(what){log::error!("{what}: {error}");}
+                        self.message=format!("{what}: {error}")
                     },
-                    Ok(Some(None))=>self.message="Application notifications processed; native view/task protocol remains authoritative.".into(),
+                    Ok(Some(None))=>self.message=if engine.application_state==4{
+                        "In game: AppState 4, Game interface shown (40CA80/5C0440); its live-World update 612010 is not bound yet".into()
+                    }else{"Application notifications processed; native view/task protocol remains authoritative.".into()},
                     Ok(None)=>{},
                 }
                 return;
@@ -378,9 +390,11 @@ mod windows {
         resource_task:Option<aa_netcode::local_skirmish_startup::PendingResourceTask>,
         pending_main:Option<PendingMain>,
         activation: Option<aa_runtime::simulation_execution::JobTicket<Option<String>>>,
-        view_startup:Option<aa_runtime::simulation_execution::JobTicket<Option<String>>>,
+        view_startup:Option<aa_runtime::simulation_execution::JobTicket<(Option<String>,u32)>>,
         notifications_stopped:bool,
-        user_ready_ticket:Option<aa_runtime::simulation_execution::JobTicket<()>>,
+        ///Each ReadyButton press is one native 6E80F0 command, in order.
+        user_ready_tickets:std::collections::VecDeque<aa_runtime::simulation_execution::JobTicket<()>>,
+        pub(super) application_state:u32,
         ui_bridge:crate::battle_ui_bridge::Client,
     }
     impl Engine {
@@ -453,26 +467,34 @@ mod windows {
                 //World's evidence; MapResource+A8 has already restored its
                 //prior value at resource return and is not this provenance.
                 catalog.native_load_mode=loans.session.world().evidence().native_load_mode;
+                //The frame's Catalog: the same bindings, rebuilt inside the
+                //frame's Application loan with the AVar25 owner bound.
+                let frame_catalog=crate::battle_notifications::FrameCatalog{
+                    source:loans.source,resources:Arc::clone(resources),
+                    settings:catalog.settings.as_ref().ok_or("notification Catalog settings absent")?,
+                    load_mode:catalog.native_load_mode,
+                };
                 let result=loans.application_events.drain(loans.session,&catalog,loans.notifications,loans.time,
                     loans.application_views,loans.view_startup,&bridge,execution,&map_id)
-                    .and_then(|()|loans.application_events.run_frame(loans.session,&catalog,loans.notifications,loans.time,loans.focus,&bridge,execution));
-                Ok(result.err())
+                    .and_then(|()|loans.application_events.run_frame(loans.session,&catalog,&frame_catalog,loans.notifications,loans.time,loans.focus,&bridge,execution));
+                Ok((result.err(),loans.application_events.current_state()))
             })?);Ok(())
         }
         pub(super) fn queue_user_ready(&mut self)->Result<(),String>{
-            if self.user_ready_ticket.is_some(){return Err("UserReady already queued on its application owner".into())}
             if self.notifications_stopped{return Err("native application stopped after retained error".into())}
-            self.user_ready_ticket=Some(self.submit_activated(|loans,_|loans.application_events.user_ready_command(loans.session))?);Ok(())
+            let ticket=self.submit_activated(|loans,_|loans.application_events.user_ready_command(loans.session))?;
+            self.user_ready_tickets.push_back(ticket);Ok(())
         }
         pub(super) fn poll_notifications(&mut self,map_id:&str)->Result<Option<Option<String>>,String>{
             if self.notifications_stopped{return Ok(None)}
-            if let Some(ticket)=self.user_ready_ticket.as_mut(){
+            while let Some(ticket)=self.user_ready_tickets.front_mut(){
                 match ticket.try_result(){
-                    Ok(None)=>{},Ok(Some(()))=>{self.user_ready_ticket=None;},
+                    Ok(None)=>break,Ok(Some(()))=>{self.user_ready_tickets.pop_front();},
                     Err(error)=>{self.notifications_stopped=true;return Err(error)},
                 }
             }
             let result=match self.view_startup.as_mut(){Some(ticket)=>ticket.try_result(),None=>Ok(None)};
+            let result=result.map(|done|done.map(|(error,state)|{self.application_state=state;error}));
             if !matches!(result,Ok(None)){
                 self.view_startup=None;
                 if matches!(&result,Err(_)|Ok(Some(Some(_)))){self.notifications_stopped=true;}
@@ -510,7 +532,8 @@ mod windows {
                 activation: None,
                 view_startup:None,
                 notifications_stopped:false,
-                user_ready_ticket:None,
+                user_ready_tickets:Default::default(),
+                application_state:0,
                 ui_bridge:ui.clone(),
             })
         }

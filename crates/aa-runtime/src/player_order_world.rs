@@ -13,6 +13,8 @@ use aa_mind::{Arena, MindId};
 use aa_orders::commands::{self, CommandDelivery, TryCommandRouting};
 
 #[path="player_order_bank.rs"]mod bank;
+#[path = "player_order_guess.rs"]
+pub mod guess;
 pub use bank::DefinitionBankLoan;
 pub(crate) use bank::Banks;
 #[derive(Debug, thiserror::Error)]
@@ -36,6 +38,17 @@ fn check<T>(r: std::result::Result<T, impl std::fmt::Display>) -> Result<T> {
 pub trait Globals {
     fn can_process_40eaa0(&mut self) -> Result<bool>;
     fn session_phase_76ac90(&mut self) -> Result<u32>;
+    /// 4DA570 UVar "SwapRightClickWithAltRightClick": 4BE130 caches the
+    /// B39938 kind1 record (static B3CB9C bit0), 4BE150 reads its byte on
+    /// every call. The actual profile-backed UVars owner is not bound here.
+    fn swap_right_click_with_alt_right_click_4be150(&mut self) -> Result<bool> {
+        required("4BE130/4BE150 actual UVar SwapRightClickWithAltRightClick (B39938) owner")
+    }
+    /// 4DA570 UVar "HotkeyAltRightClickCommand": 4B2E60 kind4 record cached
+    /// in B3CB94 (B3CB9C bit1), UTF-16 text at record+10, read per call.
+    fn hotkey_alt_right_click_command_4b2e60(&mut self) -> Result<Vec<u16>> {
+        required("4B2E60 actual UVar HotkeyAltRightClickCommand (B39938) owner")
+    }
 }
 ///Native76A4B0/76A5A0 current low16 registry lookup. Positive B4 dispatch is
 ///admitted only for the proved ordinary Actor/Kingdom allocation domain.
@@ -268,22 +281,27 @@ pub(crate) fn eligible_with_bank(
         argument,
     )
 }
-/// Concrete selected virtual+150 ->4CE680. Explicit commands bind canonical
-/// definitions; actual default4DA570 remains a required source service.
-pub(crate) fn authorize_selected_with_bank(
+/// Concrete actor virtual+150 = 4CF430(kingdom, &cmd, selected): an
+/// explicit command passes def+0C, otherwise 4DA570(cmd, actor, false)
+/// chooses it (null -> false) and may complete the command; then 4CE680.
+#[allow(clippy::too_many_arguments)]
+fn authorize_4cf430(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
     actors: &ActorAccess<'_>,
     spatial: &impl Spatial,
     actor: ActorId,
     kingdom: Option<ActorId>,
-    command: &PlainCommand,
+    command: &mut PlainCommand,
+    selected: u8,
     globals: &mut impl Globals,
 ) -> Result<bool> {
-    if command.flags & (1 << 6) == 0 {
-        return required("4DA570 actual default command selection");
-    }
-    let d = definition_with_bank(catalog, banks, command)?;
+    let resolved = if command.flags & (1 << 6) != 0 {
+        Some(definition_with_bank(catalog, banks, command)?.mind_type)
+    } else {
+        guess::guess_plain_with_bank(catalog, banks, actors, globals, command, actor, false)?
+            .map(|g| g.definition.type_0c)
+    };
     permission_native(
         &mut PermissionBinding {
             catalog,
@@ -294,13 +312,133 @@ pub(crate) fn authorize_selected_with_bank(
         },
         actor,
         kingdom,
-        Some(d.mind_type),
-        1,
+        resolved,
+        selected,
     )
 }
+/// 4CF430 on a caller-borrowed command: a 4DA994 completion would need the
+/// caller's mutable command, so it is refused instead of being dropped.
+#[allow(clippy::too_many_arguments)]
+fn authorize_borrowed(
+    catalog: &Catalog<'_>,
+    banks: &dyn Banks,
+    actors: &ActorAccess<'_>,
+    spatial: &impl Spatial,
+    actor: ActorId,
+    kingdom: Option<ActorId>,
+    command: &PlainCommand,
+    selected: u8,
+    globals: &mut impl Globals,
+) -> Result<bool> {
+    let mut probe = command.clone();
+    let allowed = authorize_4cf430(catalog, banks, actors, spatial, actor, kingdom, &mut probe, selected, globals)?;
+    if probe != *command {
+        return required("4CF430 caller-owned mutable command for the 4DA570 completion");
+    }
+    Ok(allowed)
+}
+/// 4DA570 on the one live arena command; its 4DA994 stores persist there,
+/// also when a later leaf fails.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn guess_arena_with_bank(
+    catalog: &Catalog<'_>,
+    banks: &dyn Banks,
+    actors: &ActorAccess<'_>,
+    commands: &mut mind_world::Commands,
+    command: u32,
+    actor: ActorId,
+    non_group_excluded: bool,
+    globals: &mut impl Globals,
+) -> Result<Option<guess::Guessed>> {
+    let mut value = check(commands.value(command))?.clone();
+    let result = guess::guess_plain_with_bank(catalog, banks, actors, globals, &mut value, actor, non_group_excluded);
+    *check(commands.value_mut(command))? = value;
+    result
+}
+/// 61E220 actor vt+150(NULL, &cmd, false) on the live arena command.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn authorize_actor_arena_with_bank(
+    catalog: &Catalog<'_>,
+    banks: &dyn Banks,
+    actors: &ActorAccess<'_>,
+    spatial: &impl Spatial,
+    commands: &mut mind_world::Commands,
+    command: u32,
+    actor: ActorId,
+    globals: &mut impl Globals,
+) -> Result<bool> {
+    let mut value = check(commands.value(command))?.clone();
+    let result = authorize_4cf430(catalog, banks, actors, spatial, actor, None, &mut value, 0, globals);
+    *check(commands.value_mut(command))? = value;
+    result
+}
+/// 4D9A90(def): command+08 = def and flag bit6 set; null clears both.
+fn store_definition_4d9a90(
+    banks: &dyn Banks,
+    commands: &mut mind_world::Commands,
+    command: u32,
+    index: Option<u32>,
+) -> Result<()> {
+    let definition = index
+        .map(|i| {
+            aa_rules::native::actor_command::PREDEFINED_ACTOR_COMMANDS
+                .get(i as usize)
+                .copied()
+                .ok_or_else(|| Error::Required("canonical ActorCommand ordinal".into()))
+        })
+        .transpose()?;
+    let token = match definition {
+        Some(d) => banks.borrow_bank_mut()?.intern("ActorCommand", d.id).map_err(Error::Required)?,
+        None => 0,
+    };
+    let value = check(commands.value_mut(command))?;
+    value.definition_id = token;
+    value.definition = definition.map(|d| aa_mind::command::Definition {
+        component_slot: d.component_slot,
+        mind_type: d.mind_type,
+        behavior_flags: d.behavior_flags,
+    });
+    if definition.is_some() {
+        value.flags |= 0x40;
+    } else {
+        value.flags &= !0x40;
+    }
+    Ok(())
+}
+/// Concrete selected virtual+150 ->4CF430/4CE680 with selected=true.
+/// Explicit commands bind canonical definitions; a default command is
+/// resolved by 4DA570 (the borrowed command cannot take its completion).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn authorize_selected_with_bank(
+    catalog: &Catalog<'_>,
+    banks: &dyn Banks,
+    actors: &ActorAccess<'_>,
+    spatial: &impl Spatial,
+    actor: ActorId,
+    kingdom: Option<ActorId>,
+    command: &PlainCommand,
+    globals: &mut impl Globals,
+) -> Result<bool> {
+    authorize_borrowed(catalog, banks, actors, spatial, actor, kingdom, command, 1, globals)
+}
+/// Public 4CF430(kingdom, &cmd, true) over a caller-owned command, e.g. the
+/// UIWorldState 436950 CanSend path, in the actual moved Bank.
+#[allow(clippy::too_many_arguments)]
+pub fn authorize_selected_command_in_bank(
+    catalog: &Catalog<'_>,
+    bank: &DefinitionBankLoan<'_>,
+    actors: &ActorAccess<'_>,
+    spatial: &impl Spatial,
+    actor: ActorId,
+    kingdom: Option<ActorId>,
+    command: &mut PlainCommand,
+    globals: &mut impl Globals,
+) -> Result<bool> {
+    authorize_4cf430(catalog, bank, actors, spatial, actor, kingdom, command, 1, globals)
+}
 ///61E220's actual virtual+150 arguments: null player and selected=false.
-///4CF430 still resolves the command and calls4CE680; the false-selection
-/// branch of that proven kernel skips player ownership and eligibility reads.
+///4CF430 still resolves the command (4DA570 for a default one) and calls
+///4CE680; the false-selection branch skips player ownership/eligibility.
 pub(crate) fn authorize_actor_with_bank(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
@@ -310,23 +448,7 @@ pub(crate) fn authorize_actor_with_bank(
     command: &PlainCommand,
     globals: &mut impl Globals,
 ) -> Result<bool> {
-    if command.flags & (1 << 6) == 0 {
-        return required("4DA570 actual default actor command selection");
-    }
-    let d = definition_with_bank(catalog, banks, command)?;
-    permission_native(
-        &mut PermissionBinding {
-            catalog,
-            banks,
-            actors,
-            spatial,
-            globals,
-        },
-        actor,
-        None,
-        Some(d.mind_type),
-        0,
-    )
+    authorize_borrowed(catalog, banks, actors, spatial, actor, None, command, 0, globals)
 }
 /// Original4D9E20/4CA760 fields. Inputs are raw caller words; no target/path,
 /// direction, speed or Shift policy is invented by this constructor adapter.
@@ -696,10 +818,12 @@ pub enum SelectedDelivery {
     Empty,
     Delivered,
 }
-/// Explicit-command/null-group4ED360 branch after its diagnostic4D9A40.
+/// Null-group4ED360 branch after its diagnostic4D9A40.
 /// The real current order-node284 must match this actual scoped player's view.
-/// Default commands, positive group formation and live-group preparation remain
-/// required. Return means delivery was attempted; native ignores acceptance.
+/// A default command is guessed per actor (4DA570 with argument2 = distinct
+/// head/tail actors), stored by 4D9A90 for 4CF430/4D9B60 and cleared after.
+/// Positive group formation and live-group preparation remain required.
+/// Return means delivery was attempted; native ignores acceptance.
 pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
@@ -715,12 +839,13 @@ pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
         return required("actual current admin284 player and same scoped selection owner");
     }
     let cmd = check(world.runtime.commands.value(command))?;
-    if cmd.flags & (1 << 6) == 0 {
-        return required("4DA570 default selected-command source");
-    }
-    let selected_definition = definition_with_bank(catalog, banks, cmd)?;
-    if !matches!(selected_definition.mind_type, 0 | 5) {
-        return required("bounded selected move5/attack0 command entry");
+    // 4ED37C..4ED3A3: [esp+13] = default command (flag bit6 clear).
+    let guessing = cmd.flags & (1 << 6) == 0;
+    if !guessing {
+        let selected_definition = definition_with_bank(catalog, banks, cmd)?;
+        if !matches!(selected_definition.mind_type, 0 | 5) {
+            return required("bounded selected move5/attack0 command entry");
+        }
     }
     if !check(view.group_is_null())? {
         return required("4ED360 actual positive selection-group/formation services");
@@ -734,6 +859,23 @@ pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
         let entry = check(view.list().node(id))?;
         node = entry.next;
         object_with_bank(catalog, banks, &world.actors, entry.actor)?;
+        if guessing {
+            // 4ED551..4ED56A: argument2 = head and tail actors differ.
+            let list = view.list();
+            let multiple = match (list.head(), list.tail()) {
+                (None, _) => false,
+                (Some(h), Some(t)) => check(list.node(h))?.actor != check(list.node(t))?.actor,
+                (Some(_), None) => return required("4ED558 null selection tail with a head"),
+            };
+            let Some(g) = guess_arena_with_bank(catalog, banks, &world.actors, &mut world.runtime.commands,
+                command, entry.actor, multiple, globals)? else {
+                continue; // 4ED575: null skips this actor and the 4D9A90(0) reset.
+            };
+            if !matches!(g.definition.type_0c, 0 | 5) {
+                return required("bounded selected move5/attack0 command entry (4DA570 guessed type)");
+            }
+            store_definition_4d9a90(banks, &mut world.runtime.commands, command, Some(g.index))?;
+        }
         let cmd = check(world.runtime.commands.value(command))?;
         if authorize_selected_with_bank(catalog, banks,
             &world.actors,
@@ -748,6 +890,9 @@ pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
                 return required("4D1900/4DFF30 actual live command-group preparation");
             }
             let _ = deliver_with_bank(catalog, banks, world, arena, command, Some(entry.actor))?;
+        }
+        if guessing {
+            store_definition_4d9a90(banks, &mut world.runtime.commands, command, None)?;
         }
     }
     Ok(SelectedDelivery::Delivered)

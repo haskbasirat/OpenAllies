@@ -17,6 +17,10 @@ use aa_rules::{actors::ResolvedNode, native::TypedValue};
 use std::sync::Arc;
 #[path = "data_request_fields.rs"]
 mod fields;
+#[path = "data_release_fields.rs"]
+mod release_fields;
+#[path = "data_object_release.rs"]
+pub mod release;
 pub(super) struct Object {
     definition: RuntimeDefinition,
     unique: Option<bool>,
@@ -739,8 +743,8 @@ impl<P: ModelPolicy, B: Backend> fields::ActorWorld for Bound<'_, '_, '_, P, B> 
     fn extra_ability_2a4(&mut self) -> Result<Option<Self::Ability>> {
         self.state.actor_extra_ability_2a4(&self.data)
     }
-    fn settlement_data_534(&mut self) -> Result<Option<RuntimeDefinition>> {
-        self.state.actor_settlement_534(&self.data)
+    fn deployment_data_534(&mut self) -> Result<Option<RuntimeDefinition>> {
+        self.state.actor_deployment_534(&self.data)
     }
 }
 struct AnimationFx<'a, 'source> {

@@ -292,8 +292,11 @@ fn actual_selected_resource_metadata_same_manager_and_moved_bank() {
         .logical_path
         .encode_utf16()
         .collect::<Vec<_>>();
-    let bank = std::mem::take(&mut *catalog.definition_bank.borrow_mut());
     let mut app = crate::resource_depot::Application::from_sources(files);
+    //59CB00 Model class accounting reads the actual fresh no-profile window.
+    app.install_fresh_cache_variable_scope(&catalog, NativeOverrides::ControlledNone)
+        .unwrap();
+    let bank = std::mem::take(&mut *catalog.definition_bank.borrow_mut());
     let missing_environment = aliases
         .alias_410cb0(&catalog, &bank, "TextureEnvironmentMap")
         .unwrap();

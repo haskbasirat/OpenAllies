@@ -70,7 +70,8 @@ pub struct World {
     pub(crate) presentation:crate::fx_manager::State<crate::fx_graph::Command>,
     pub(crate) trigger_manager:Option<aa_triggers::manager::Manager>,
     trigger_load_broadcast_pending:bool,
-    source_files: Vec<aa_rules::resources::SourceIdentity>,
+    ///Shared copy of the catalog sources (catalog_lookups::catalog_universe).
+    source_files: std::sync::Arc<Vec<aa_rules::resources::SourceIdentity>>,
     precision: Precision,
 }
 
@@ -242,12 +243,12 @@ impl World {
             presentation:crate::fx_manager::State::from_native_constructor(),
             trigger_manager:Some(aa_triggers::manager::Manager::from_native_constructor()),
             trigger_load_broadcast_pending:false,
-            source_files:catalog.actors.sources.clone(), precision })
+            source_files:crate::catalog_lookups::catalog_universe(catalog), precision })
     }
 
     fn validate(&self, catalog:&Catalog<'_>, precision:Precision) -> Result<()> {
         catalog.require_source_owner()?;
-        if self.source_files != catalog.actors.sources || self.precision != precision
+        if !crate::catalog_lookups::same_sources(catalog, &self.source_files) || self.precision != precision
             || *self.map_mode != catalog.native_load_mode {
             return Err("immediate load world source/precision/mode owner differs".into());
         }

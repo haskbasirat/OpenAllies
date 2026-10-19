@@ -53,7 +53,7 @@ else:
 steps += [{"wait": .3, "shot": str(out / "before-start.png")},
           {"wait": .2, "log": "Click actual Test skirmish startup", "click": [482, 549]}]
 last = 0
-for seconds in (1, 3, 10, 30, 60, 90, 125, 155, 190, 240, 300, 360, 420, 600, 900, 1200, 1500, 1800):
+for seconds in (1, 3, 10, 30, 60, 90, 125, 155, 190, 240, 300, 360, 420, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600):
     if seconds > args.seconds:
         break
     steps.append({"wait": seconds - last, "shot": str(out / f"after-{seconds:03d}s.png"),

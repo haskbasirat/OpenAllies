@@ -62,7 +62,7 @@ pub enum RegistryError {
     InvalidCheckpoint,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct IdentityRegistry<T> {
     generations: Vec<u16>,
     entries: Vec<Option<Box<Entry<T>>>>,
@@ -70,6 +70,31 @@ pub struct IdentityRegistry<T> {
     active: usize,
     next_slot: u16,
     highest_slot: i32,
+    /// Bookkeeping only (never a game value): the clock value of the last
+    /// install/remove/swap/mutable access of each slot's entry.
+    versions: Vec<u64>,
+    clock: u64,
+    /// Distinct for every registry value, including clones (see `version`).
+    instance: u64,
+}
+fn next_instance() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+impl<T: Clone> Clone for IdentityRegistry<T> {
+    fn clone(&self) -> Self {
+        Self {
+            generations: self.generations.clone(),
+            entries: self.entries.clone(),
+            occupied: self.occupied.clone(),
+            active: self.active,
+            next_slot: self.next_slot,
+            highest_slot: self.highest_slot,
+            versions: self.versions.clone(),
+            clock: self.clock,
+            instance: next_instance(),
+        }
+    }
 }
 
 impl<T> Default for IdentityRegistry<T> {
@@ -87,7 +112,28 @@ impl<T> IdentityRegistry<T> {
             active: 0,
             next_slot: 1,
             highest_slot: 0,
+            versions: vec![0; SLOT_COUNT],
+            clock: 0,
+            instance: next_instance(),
         }
+    }
+    fn touch(&mut self, slot: usize) {
+        self.clock += 1;
+        self.versions[slot] = self.clock;
+    }
+    /// `(registry, slot version)` of a live entry: while both are unchanged
+    /// the entry has not been installed, removed, swapped or mutably borrowed
+    /// since, so its value is unchanged (values have no interior mutability
+    /// in the registries that use this). Not a game value.
+    /// `(registry, clock)`: unchanged exactly while no entry has been
+    /// installed, removed, swapped or mutably borrowed (so every entry and
+    /// value is unchanged). Not a game value.
+    pub fn stamp(&self) -> (u64, u64) {
+        (self.instance, self.clock)
+    }
+    pub fn version(&self, id: ActorId) -> Option<(u64, u64)> {
+        self.get(id)
+            .map(|_| (self.instance, self.versions[usize::from(id.slot())]))
     }
     /// Native 4F0230 intermediate state after Reset and IDMGR metadata load,
     /// before any saved object registrations. The stream stores exactly
@@ -142,6 +188,9 @@ impl<T> IdentityRegistry<T> {
             active: self.active,
             next_slot: self.next_slot,
             highest_slot: self.highest_slot,
+            versions: self.versions,
+            clock: self.clock,
+            instance: next_instance(),
         }
     }
     pub fn len(&self) -> usize {
@@ -172,6 +221,7 @@ impl<T> IdentityRegistry<T> {
             is_actor,
             value,
         }));
+        self.touch(slot);
         self.active += 1;
         self.occupied[slot >> 5] |= 1 << (slot & 31);
         self.highest_slot = self.highest_slot.max(slot as i32);
@@ -236,6 +286,9 @@ impl<T> IdentityRegistry<T> {
         if self.generations[slot] != id.generation() {
             return None;
         }
+        if self.entries[slot].is_some() {
+            self.touch(slot);
+        }
         self.entries[slot]
             .as_deref_mut()
             .map(|entry| &mut entry.value)
@@ -252,6 +305,7 @@ impl<T> IdentityRegistry<T> {
         }
         let slot = usize::from(id.slot());
         let entry = *self.entries[slot].take().unwrap();
+        self.touch(slot);
         self.active -= 1;
         self.occupied[slot >> 5] &= !(1 << (slot & 31));
         self.generations[slot] = self.generations[slot].wrapping_add(1);
@@ -274,14 +328,43 @@ impl<T> IdentityRegistry<T> {
         }
         let x = usize::from(a.slot());
         let y = usize::from(b.slot());
+        self.touch(x);
+        self.touch(y);
         self.entries.swap(x, y);
         self.entries[x].as_mut().unwrap().id = a;
         self.entries[y].as_mut().unwrap().id = b;
         Ok(())
     }
     /// Native 4EFBE0 enumerates occupied slots ascending, not insertion order.
+    /// Walks the occupancy bitmap (bit set exactly when the slot's entry is
+    /// present), so the cost follows the live count, not all 65536 slots.
     pub fn iter(&self) -> impl Iterator<Item = &Entry<T>> {
-        self.entries.iter().skip(1).filter_map(|e| e.as_deref())
+        self.iter_from(1)
+    }
+    /// `iter()` restricted to slots >= `first`, in the same ascending order.
+    pub fn iter_from(&self, first: usize) -> impl Iterator<Item = &Entry<T>> {
+        let first = first.max(1);
+        let start_word = first >> 5;
+        self.occupied
+            .iter()
+            .enumerate()
+            .skip(start_word)
+            .flat_map(move |(index, &word)| {
+                let mut bits = if index == start_word {
+                    word & (u32::MAX << (first & 31))
+                } else {
+                    word
+                };
+                std::iter::from_fn(move || {
+                    if bits == 0 {
+                        return None;
+                    }
+                    let bit = bits.trailing_zeros() as usize;
+                    bits &= bits - 1;
+                    Some(index * 32 + bit)
+                })
+            })
+            .filter_map(move |slot| self.entries[slot].as_deref())
     }
     pub fn checkpoint(&self) -> RegistryCheckpoint<T>
     where
@@ -337,6 +420,130 @@ mod tests {
         assert!(r.get(a).is_none());
         assert_eq!(r.generation_at(1), 1);
         assert_eq!(r.allocate(true, "c").unwrap().raw(), 3);
+    }
+    /// The bitmap walk visits exactly the entries the full slot scan visits.
+    #[test]
+    fn bitmap_iteration_equals_full_slot_scan() {
+        fn scan<T>(r: &IdentityRegistry<T>, first: usize) -> Vec<u32> {
+            r.entries
+                .iter()
+                .enumerate()
+                .skip(1)
+                .filter(|(slot, _)| *slot >= first)
+                .filter_map(|(slot, e)| e.as_deref().map(|e| (slot, e)))
+                .map(|(slot, e)| {
+                    // Every entry sits at its own id's slot (also after swaps),
+                    // so slot order is id.slot() order.
+                    assert_eq!(usize::from(e.id.slot()), slot);
+                    e.id.raw()
+                })
+                .collect()
+        }
+        let check = |r: &IdentityRegistry<u32>| {
+            for first in [0, 1, 2, 31, 32, 33, 63, 64, 65, 1000, 4095, 4096, 65535, 65536, 70000] {
+                let fast: Vec<u32> = r.iter_from(first).map(|e| e.id.raw()).collect();
+                assert_eq!(fast, scan(r, first), "first {first}");
+            }
+            let all: Vec<u32> = r.iter().map(|e| e.id.raw()).collect();
+            assert_eq!(all, scan(r, 1));
+        };
+        let mut r = IdentityRegistry::new();
+        check(&r);
+        let mut live = Vec::new();
+        // Deterministic pseudo-random allocate/remove/swap/saved sequence.
+        let mut state = 0x1234_5678u32;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        };
+        for step in 0..20_000u32 {
+            match next() % 7 {
+                0 | 1 | 2 => {
+                    if let Ok(id) = r.allocate(step % 2 == 0, step) {
+                        live.push(id);
+                    }
+                }
+                3 if !live.is_empty() => {
+                    let id = live.swap_remove(next() as usize % live.len());
+                    r.remove(id).unwrap();
+                }
+                4 if live.len() > 1 => {
+                    let a = live[next() as usize % live.len()];
+                    let b = live[next() as usize % live.len()];
+                    if a != b {
+                        r.swap_identities(a, b).unwrap();
+                    }
+                }
+                5 => {
+                    let slot = (next() % 65535 + 1) as u16;
+                    let id = ActorId::from_raw(u32::from(r.generation_at(slot)) << 16 | u32::from(slot));
+                    if r.register_saved(id, true, step).is_ok() {
+                        live.push(id);
+                    }
+                }
+                _ => {}
+            }
+            if step % 997 == 0 {
+                check(&r);
+            }
+        }
+        check(&r);
+        let mapped = r.clone().map_values(|_, _, v| v + 1);
+        let fast: Vec<u32> = mapped.iter().map(|e| e.id.raw()).collect();
+        assert_eq!(fast, scan(&mapped, 1));
+        let restored = IdentityRegistry::from_checkpoint(r.checkpoint()).unwrap();
+        check(&restored);
+        assert_eq!(
+            restored.iter().map(|e| e.id.raw()).collect::<Vec<_>>(),
+            r.iter().map(|e| e.id.raw()).collect::<Vec<_>>()
+        );
+    }
+    /// `version` changes on every path that can change an entry's value and
+    /// on nothing else; every registry value has its own instance.
+    #[test]
+    fn entry_versions_change_exactly_when_an_entry_can_change() {
+        let mut r = IdentityRegistry::new();
+        let a = r.allocate(true, 1u32).unwrap();
+        let b = r.allocate(false, 2u32).unwrap();
+        let va = r.version(a).unwrap();
+        let vb = r.version(b).unwrap();
+        let stamp = r.stamp();
+        // Shared reads never move a version or the registry stamp.
+        let _ = r.get(a);
+        let _ = r.iter().count();
+        let _ = r.get_actor(a);
+        assert_eq!(r.version(a), Some(va));
+        assert_eq!(r.version(b), Some(vb));
+        assert_eq!(r.stamp(), stamp);
+        // A mutable borrow moves only that entry's version.
+        *r.value_mut(a).unwrap() += 1;
+        let va2 = r.version(a).unwrap();
+        assert_ne!(va2, va);
+        assert_ne!(r.stamp(), stamp);
+        assert_eq!(r.version(b), Some(vb));
+        // A stale or absent id is neither borrowed nor versioned.
+        let stale = ActorId::from_raw(a.raw() + (1 << 16));
+        assert!(r.value_mut(stale).is_none());
+        assert_eq!(r.version(stale), None);
+        assert_eq!(r.version(a), Some(va2));
+        // Swaps move both; removal retires the id; reinstall gets a new one.
+        r.swap_identities(a, b).unwrap();
+        let (va3, vb3) = (r.version(a).unwrap(), r.version(b).unwrap());
+        assert!(va3 != va2 && vb3 != vb);
+        r.remove(b).unwrap();
+        assert_eq!(r.version(b), None);
+        let c = r.allocate(true, 3u32).unwrap();
+        assert!(r.version(c).is_some());
+        assert_ne!(r.version(c), Some(vb3));
+        // Clones and mapped registries never share an instance.
+        let clone = r.clone();
+        assert_ne!(clone.version(a).unwrap().0, r.version(a).unwrap().0);
+        assert_eq!(clone.version(a).unwrap().1, r.version(a).unwrap().1);
+        let instance = r.version(a).unwrap().0;
+        let mapped = r.map_values(|_, _, v| v);
+        assert_ne!(mapped.version(a).unwrap().0, instance);
     }
     #[test]
     fn saved_ids_and_swaps_keep_exact_handles() {

@@ -55,6 +55,23 @@ impl Queue{
         if self.shared.closed.load(Ordering::Acquire){return Ok(0)}
         let mut count=0;
         while let Ok(job)=self.receiver.try_recv(){job.run(context);count+=1;}
+        //The simulation thread blocks on each call and usually posts the next
+        //one right after its reply. Keep serving for a short bounded budget so
+        //such a chain runs within one GUI frame instead of one call per frame.
+        //Jobs still run in FIFO order on this same UI thread; only latency
+        //changes, and no job runs that would not have run on a later frame.
+        if count>0{
+            let deadline=std::time::Instant::now()+std::time::Duration::from_millis(8);
+            loop{
+                let now=std::time::Instant::now();
+                if now>=deadline||self.shared.closed.load(Ordering::Acquire){break}
+                let wait=(deadline-now).min(std::time::Duration::from_millis(2));
+                match self.receiver.recv_timeout(wait){
+                    Ok(job)=>{job.run(context);count+=1;}
+                    Err(_)=>break,
+                }
+            }
+        }
         Ok(count)
     }
     pub fn close(&mut self){

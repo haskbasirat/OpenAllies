@@ -5,7 +5,7 @@ use crate::{battle_texture_services, battle_ui_bridge};
 use aa_netcode::local_bootstrap::LocalBootstrap;
 use aa_numeric::Precision;
 use aa_runtime::{
-    resource_depot::{Backend, Resources},
+    resource_depot::{release::ReleaseLog, Backend, Resources},
     resource_objects::{Handle, Kind},
     resource_task::{self, Services, ThreadHandle},
     resource_task_guards::{Capability, Kind as GuardKind, Lease},
@@ -21,6 +21,10 @@ enum Phase {
     Dispatch,
     Load,
     Request,
+    ///5AC3D0/5ABFF0 manager+3C around an unload.
+    Unload,
+    ///5ABB30..5ABB50 (+4, +20, +3C) in 5B1970.
+    Manager,
 }
 impl Drop for Held {
     fn drop(&mut self) {
@@ -83,9 +87,43 @@ impl<'a, 'execution> Current<'a, 'execution> {
         }
     }
 }
+impl Current<'_, '_> {
+    fn push_guards(&mut self, phase: Phase, resource: &Handle, kinds: &[GuardKind]) -> Result<()> {
+        let thread = self.current_thread()?;
+        let mut held = Held {
+            resource: Some(resource.clone()),
+            leases: vec![],
+        };
+        for kind in kinds {
+            held.leases.push(self.guards.acquire(resource, *kind, &thread)?);
+        }
+        self.held.push((phase, held));
+        Ok(())
+    }
+    ///Held drops its leases in reverse acquisition order.
+    fn pop_guards(&mut self, phase: Phase, resource: &Handle) -> Result<()> {
+        if !self.held.last().is_some_and(|(p, v)| {
+            *p == phase && v.resource.as_ref().is_some_and(|r| r.same_identity(resource))
+        }) {
+            return Err("Resource guard release differs from the acquired allocation/phase".into());
+        }
+        drop(self.held.pop());
+        Ok(())
+    }
+}
 impl Services for Current<'_, '_> {
     fn current_thread(&mut self) -> Result<ThreadHandle> {
         ThreadHandle::on_simulation(self.execution)
+    }
+    fn enter_manager_5abb30(&mut self, resource: &Handle) -> Result<()> {
+        self.push_guards(
+            Phase::Manager,
+            resource,
+            &[GuardKind::Load04, GuardKind::Registry20, GuardKind::Decode3c],
+        )
+    }
+    fn leave_manager_5abb50(&mut self, resource: &Handle) -> Result<()> {
+        self.pop_guards(Phase::Manager, resource)
     }
     fn enter_load(&mut self, resource: &Handle) -> Result<()> {
         let thread = self.current_thread()?;
@@ -275,6 +313,49 @@ impl Backend for Current<'_, '_> {
     }
     fn model_after_base_3c_in(&mut self,resources:&mut Resources<'_>,resource:&Handle)->Result<()>{
         resources.ni_after_base_3c_5a5410(resource,self.precision)
+    }
+    fn resource_caching_54(&mut self, resource: &Handle) -> Result<u8> {
+        let value = self.bridge.call(self.execution, |context| context.ui.uvars.resource_caching_current())?;
+        //Modern census aid (native 5AC3D0 is silent when it caches): the
+        //first released Resources reaching CacheOrUnload, then every 1000th.
+        static REACHED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = REACHED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if n < 32 || n % 1000 == 0 {
+            log::info!(
+                "native 5AC3D0 release #{n} reached CacheOrUnload {} (UVar54 ResourceCaching={value})",
+                String::from_utf16_lossy(resource.logical_ids())
+            );
+        }
+        Ok(value)
+    }
+    fn enter_unload_3c(&mut self, resource: &Handle) -> Result<()> {
+        self.push_guards(Phase::Unload, resource, &[GuardKind::Decode3c])
+    }
+    fn leave_unload_3c(&mut self, resource: &Handle) -> Result<()> {
+        self.pop_guards(Phase::Unload, resource)
+    }
+    ///404F60/404F90 with the native format text and arguments.
+    fn release_log(&mut self, resource: &Handle, log: &ReleaseLog) -> Result<()> {
+        let native = log.native();
+        let name = String::from_utf16_lossy(resource.logical_ids());
+        let text = match log {
+            ReleaseLog::AbortRemovedFromQueue { count }
+            | ReleaseLog::AbortAlreadyPopped { count }
+            | ReleaseLog::AbortNotRun { count }
+            | ReleaseLog::AbortTooLate { count } => {
+                native.format.replacen("%s", &name, 1).replacen("%d", &count.to_string(), 1)
+            }
+            ReleaseLog::NiUnloading { count } => native
+                .format
+                .replacen("%s", std::thread::current().name().unwrap_or("unnamed"), 1)
+                .replacen("%s", &name, 1)
+                .replacen("%d", &count.to_string(), 1),
+            ReleaseLog::Unloading | ReleaseLog::Unloaded | ReleaseLog::TextureUnloading => {
+                native.format.replacen("%s", &name, 1)
+            }
+        };
+        log::info!("native {}::{} line {:#x}: {text}", native.file, native.function, native.line);
+        Ok(())
     }
 }
 impl aa_runtime::model_resource_load::Backend for Current<'_,'_>{

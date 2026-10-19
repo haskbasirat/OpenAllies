@@ -561,3 +561,243 @@ fn native_700500_unsigned_milliseconds_and_ordered_planar_float_stores() {
         assert_eq!(vars.calls, [0x28, 0x18]);
     }
 }
+
+///The ported KKC_UI controls drive the SAME lab Directory camera through
+///700500/6FF130/6FEDB0 (rectangle clamp) and 7005F0: the camera target moves
+///by the native pan, stays inside the map rectangle and zoom stays in range.
+mod controls_on_directory {
+    use super::*;
+    use crate::native_camera::input::{self, Controls, Rect, Timer, SCROLL_DOWN, SCROLL_RIGHT};
+    use crate::native_camera::{ni, target};
+    struct Services;
+    impl target::Services for Services {
+        fn map_dimensions_74_78(&mut self) -> Result<Option<[i32; 2]>> {
+            Ok(None)
+        }
+        fn fallback_dimensions_uvar_a8_ac(&mut self) -> Result<[i32; 2]> {
+            Ok([256, 128])
+        }
+        fn margin_uvar_24(&mut self) -> Result<i32> {
+            Ok(10)
+        }
+        fn world_editor_275(&mut self) -> Result<bool> {
+            Ok(false)
+        }
+        fn session_state_e4(&mut self) -> Result<u32> {
+            Ok(0)
+        }
+        fn map_height_550210(&mut self, _: [u32; 2]) -> Result<Binary> {
+            Binary::from_f32_bits(12.5f32.to_bits()).map_err(|e| e.to_string())
+        }
+        fn update_camera_6fe050(&mut self, c: &mut State, p: Precision) -> Result<()> {
+            ni::update_6fe050(c, &mut ni::RequiredChildren, p)
+        }
+    }
+    struct Pan;
+    impl PanVariables for Pan {
+        fn camera_pan_word(&mut self, o: u32) -> Result<u32> {
+            Ok(match o {
+                0x28 => 10f32.to_bits(),
+                0x18 => 2f32.to_bits(),
+                _ => return Err(format!("pan uvar {o:X}")),
+            })
+        }
+    }
+    struct Ops<'a> {
+        d: &'a mut Directory<&'static str, usize>,
+        h: Handle,
+        zoom: Zoom,
+    }
+    impl input::Camera for Ops<'_> {
+        fn word(&mut self, o: u32) -> Result<u32> {
+            self.d.word_captured(&self.h, o)
+        }
+        fn byte_214(&mut self) -> Result<u8> {
+            self.d.byte_captured(&self.h, 0x214)
+        }
+        fn developer_6fe9c0(&mut self) -> Result<bool> {
+            self.d.developer_captured_6fe9c0(&self.h, &Input)
+        }
+        fn pan_700500(&mut self, millis: u32, dir: [u32; 2]) -> Result<()> {
+            self.d.pan_captured_700500(&self.h, millis, dir, &mut Pan, &mut Services, Precision::Double53)
+        }
+        fn zoom_7005f0(&mut self, v: u32) -> Result<()> {
+            self.d.set_zoom_captured_7005f0(&self.h, v, &mut self.zoom, Precision::Double53)
+        }
+        fn pose_6ff220(&mut self, c: [u32; 3], y: u32, p: u32, z: u32) -> Result<()> {
+            self.d.pose_captured_6ff220(&self.h, &Input, c, y, p, z, Precision::Double53)
+        }
+        fn rotate_6feba0(&mut self, y: u32, p: u32) -> Result<()> {
+            self.d.rotate_about_target_captured_6feba0(&self.h, y, p, Precision::Double53)
+        }
+        fn look_at_6ff200(&mut self, xy: [u32; 2]) -> Result<()> {
+            self.d.look_at_captured_6ff130(&self.h, xy, &mut Services, Precision::Double53)
+        }
+    }
+    struct Gates;
+    impl input::Ui for Gates {
+        fn application_active(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn vworld_ad(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn vworld_flag_24_bit19(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn visual_map_bc(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn vworld_hovered_5efa80(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn app_byte_48(&mut self) -> Result<bool> {
+            Ok(false)
+        }
+        fn app_byte_49(&mut self) -> Result<bool> {
+            Ok(false)
+        }
+        fn ui_widget_60_consumes_move(&mut self) -> Result<bool> {
+            Ok(false)
+        }
+    }
+    struct Vars;
+    impl input::Variables for Vars {
+        fn uvar(&mut self, o: u32) -> Result<u32> {
+            Ok(match o {
+                0x18 => 2f32.to_bits(),
+                0x1c => 4f32.to_bits(),
+                0x20 => 10f32.to_bits(),
+                0x34 => 0.5f32.to_bits(),
+                0xb4 => 0,
+                _ => return Err(format!("uvar {o:X}")),
+            })
+        }
+        fn avar(&mut self, o: u32) -> Result<u32> {
+            Input.avar(o)
+        }
+        fn avar_range(&mut self, _: u32) -> Result<[u32; 2]> {
+            Err("range".into())
+        }
+        fn metagame_40cee0(&mut self) -> Result<bool> {
+            Ok(false)
+        }
+    }
+    ///1 MHz counter: one tick is one microsecond.
+    struct Clock(i64);
+    impl input::Qpc for Clock {
+        fn counter(&mut self) -> Result<i64> {
+            Ok(self.0)
+        }
+        fn frequency(&mut self) -> Result<i64> {
+            Ok(1_000_000)
+        }
+    }
+    fn f(w: u32) -> f32 {
+        f32::from_bits(w)
+    }
+    #[test]
+    fn controls_move_clamp_and_zoom_the_directory_camera() {
+        use input::Camera as _;
+        let pc = Precision::Double53;
+        let (mut d, mut v, mut r, mut p) = constructors();
+        let h = d.construct_camera(true, &Input, &mut v, &mut r, &mut p, pc).unwrap();
+        d.reset_current_700e30(&Input, pc).unwrap();
+        let mut c = Controls::from_native_anchors(
+            Timer::from_anchor(0),
+            Timer::from_anchor(0),
+            Rect::client_40e210(800, 600).unwrap(),
+        );
+        c.adopt_cursor([400, 300]);
+        let mut clock = Clock(0);
+        let zoom = Zoom { word: 0.5f32.to_bits(), calls: vec![], fail: false };
+        let mut ops = Ops { d: &mut d, h: h.clone(), zoom };
+        let start = [ops.word(0x24c).unwrap(), ops.word(0x250).unwrap()];
+        c.begin_scroll_5cd560(SCROLL_RIGHT, &mut Gates, &mut clock, pc).unwrap();
+        clock.0 = 50_000;
+        let trace = c.frame_5c92f0(Some([400, 300]), &mut Gates, &mut Vars, &mut ops, &mut clock, pc).unwrap();
+        assert_eq!(trace.len(), 1);
+        let after = [ops.word(0x24c).unwrap(), ops.word(0x250).unwrap()];
+        let moved = ((f(after[0]) - f(start[0])).powi(2) + (f(after[1]) - f(start[1])).powi(2)).sqrt();
+        //ScalePan10*Speed2*50ms*0.001 times acceleration (0.05*4+2)/2 = 1.1,
+        //applied along the horizontal part of the 114/118 view basis
+        //(|basis.xy| = cos(pitch 40)).
+        let basis = (f(ops.word(0x114).unwrap()), f(ops.word(0x118).unwrap()));
+        let expected = 1.1 * (basis.0 * basis.0 + basis.1 * basis.1).sqrt();
+        assert!((moved - expected).abs() < 1e-4, "{start:?} {after:?} {moved} {expected}");
+        assert!((expected - 1.1 * 40f32.to_radians().cos()).abs() < 1e-5);
+        //Twin camera: the same 700500 arguments give the identical target.
+        let (mut d2, mut v2, mut r2, mut p2) = constructors();
+        let h2 = d2.construct_camera(true, &Input, &mut v2, &mut r2, &mut p2, pc).unwrap();
+        d2.reset_current_700e30(&Input, pc).unwrap();
+        let input::Trace::Pan { millis, direction } = trace[0].clone() else { panic!() };
+        d2.pan_captured_700500(&h2, millis, direction, &mut Pan, &mut Services, pc).unwrap();
+        assert_eq!(d2.word_captured(&h2, 0x24c).unwrap(), after[0]);
+        assert_eq!(d2.word_captured(&h2, 0x250).unwrap(), after[1]);
+        //Hold right+down for 60 s of 100 ms frames: the 6FEDB0 rectangle
+        //(256x128 fallback minus margin 10, centred) bounds the target. The
+        //clamp and 550210 ground tracking run only for a Camera+33C camera
+        //(render-list constructor 701847), as for the current game camera.
+        c.begin_scroll_5cd560(SCROLL_DOWN, &mut Gates, &mut clock, pc).unwrap();
+        for _ in 0..600 {
+            clock.0 += 100_000;
+            c.frame_5c92f0(Some([400, 300]), &mut Gates, &mut Vars, &mut ops, &mut clock, pc).unwrap();
+        }
+        let (x, y) = (f(ops.word(0x24c).unwrap()), f(ops.word(0x250).unwrap()));
+        println!("clamped target after 60 s right+down: ({x}, {y}); start ({}, {})", f(start[0]), f(start[1]));
+        assert!((5.0..=251.0).contains(&x) && (5.0..=123.0).contains(&y), "{x} {y}");
+        assert!(x == 5.0 || x == 251.0 || y == 5.0 || y == 123.0, "target reached a rectangle edge: {x} {y}");
+        assert_eq!(f(ops.word(0x254).unwrap()), 12.5);
+        c.end_scroll_5ccd30(SCROLL_RIGHT, &mut Gates, pc).unwrap();
+        c.end_scroll_5ccd30(SCROLL_DOWN, &mut Gates, pc).unwrap();
+        assert_eq!(c.active(), None);
+        //Wheel notch up: deltazoom 0.1 -> zoom208 - 0.1, clamped to 3C..40.
+        let before = f(ops.word(0x208).unwrap());
+        let mut t = Vec::new();
+        input::delta_zoom_43bc80(0.1f32.to_bits(), &mut ops, &mut t, pc).unwrap();
+        let zoom = f(ops.word(0x208).unwrap());
+        assert!((zoom - (before - 0.1).clamp(0.7, 2.1)).abs() < 1e-6, "{before} {zoom}");
+        let stored = ops.word(0x208).unwrap();
+        assert_eq!(ops.zoom.word, stored);
+        for _ in 0..40 {
+            input::delta_zoom_43bc80(0.1f32.to_bits(), &mut ops, &mut t, pc).unwrap();
+        }
+        assert_eq!(f(ops.word(0x208).unwrap()), 0.7);
+    }
+}
+
+mod screen_on_directory {
+    use super::*;
+    use crate::native_camera::screen::{Slot, Tracker};
+    #[test]
+    fn box_lock_polygon_and_camera_list_on_the_directory_camera() {
+        let pc = Precision::Double53;
+        let (mut d, mut v, mut r, mut p) = constructors();
+        let h = d.construct_camera(true, &Input, &mut v, &mut r, &mut p, pc).unwrap();
+        d.reset_current_700e30(&Input, pc).unwrap();
+        let before = d.defaults.material_next_id();
+        d.set_byte_214_captured(&h, 1).unwrap();
+        assert_eq!(d.byte_captured(&h, 0x214).unwrap(), 1);
+        let t = Tracker { current: [500, 400], left_press: [100, 100] };
+        let polygon = d.new_screen_box_5cd850([1, 2, 3], t, [800, 600], pc).unwrap();
+        //The SAME Factory as the camera properties: one more material id.
+        assert_eq!(d.defaults.material_next_id(), before + 1);
+        {
+            let q = polygon.lock().unwrap();
+            //x = 100/800 and 500/800 (exact); Z keeps the seed word.
+            assert_eq!((q.vertices()[0][0], q.vertices()[0][2]), (0.125f32.to_bits(), 3));
+            assert_eq!((q.vertices()[2][0], q.vertices()[2][2]), (0.625f32.to_bits(), 3));
+            for slot in [0, 3, 9] {
+                assert!(matches!(q.property(slot).unwrap(), Slot::Installed(_)));
+            }
+            assert!(matches!(q.property(1).unwrap(), Slot::Shared(Some(_))));
+        }
+        assert_eq!(d.attach_screen_polygon_captured_5cd7e0(&h, &polygon).unwrap(), 0);
+        assert_eq!(d.camera(&h).unwrap().screen_polygons().count(), 1);
+        d.detach_screen_polygon_captured_874350(&h, &polygon).unwrap();
+        d.set_byte_214_captured(&h, 0).unwrap();
+        let list = d.camera(&h).unwrap().screen_polygons();
+        assert_eq!((list.slots().len(), list.count()), (1, 0));
+        assert_eq!(d.byte_captured(&h, 0x214).unwrap(), 0);
+    }
+}

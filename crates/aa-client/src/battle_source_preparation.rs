@@ -147,6 +147,20 @@ pub(crate) fn prepare(
         completed += 1;
         log::debug!("native Object/Actor source prepared {} ({completed})", entry.id);
     }
+    //475230 walks the deferred references only after every LoadData, so a
+    //4605B0 410C40 follows any LoadData error (ActorData+534/+548 links).
+    let deferred = (|| -> Result<()> {
+        let bank = catalog.definition_bank.try_borrow()
+            .map_err(|_| "native deferred reference pass Bank is already mutably borrowed")?;
+        application.depot_mut().with_data_pre_request(|state| state.complete_deferred_links_475230(catalog, &bank))
+    })();
+    if let Err(error) = deferred {
+        if census.is_none() {
+            return Err(format!("native deferred reference pass 475230 stopped after {completed} prepared definitions: {error}"));
+        }
+        log::warn!("startup census: deferred reference pass 475230: {error}");
+        failures.push(serde_json::json!({"id": null, "stage": "475230 deferred references", "error": error}));
+    }
     if let Some(path) = census {
         let report = serde_json::json!({"stage": "pre-World Object/Actor source preparation",
             "registered": catalog.actors.actors.len(), "prepared": completed,

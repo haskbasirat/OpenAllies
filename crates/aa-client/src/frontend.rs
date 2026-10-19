@@ -361,9 +361,12 @@ impl Shell {
         }
         if map_visible {
             //This small status overlay is presentation only. The native TGI
-            //Loading forest remains authoritative until real AppState4.
+            //Loading forest remains authoritative until real AppState4; in
+            //AppState4 it moves off the Game interface's economy bar corner.
+            let in_game=self.battle.application_state()==4;
+            let (corner,offset)=if in_game{(egui::Align2::RIGHT_TOP,egui::vec2(-8.0,8.0))}else{(egui::Align2::LEFT_TOP,egui::vec2(8.0,8.0))};
             egui::Area::new(egui::Id::new("battle_startup_status"))
-                .anchor(egui::Align2::LEFT_TOP,egui::vec2(8.0,8.0)).show(ctx,|ui|{
+                .anchor(corner,offset).show(ctx,|ui|{
                     egui::Frame::popup(ui.style()).show(ui,|ui|{
                         ui.label("Development 10 — battle map");
                         ui.label(self.battle.message());
@@ -507,6 +510,13 @@ impl eframe::App for Shell {
             load_settings:&self.battle_load_settings,battle_scene:&mut self.battle_scene}){self.error=Some(error);}
         self.battle.poll();
         if matches!(self.screen,Screen::SkirmishLoading(_)|Screen::SkirmishSession) {
+            //Ported native camera input on the presented camera
+            //(research/phase8-camera-input). Frames queue until a camera
+            //job takes them, and jobs only run on an activated session, so
+            //no frame is queued before it (no camera exists then either).
+            if matches!(self.battle.status(),crate::battle_controller::Status::AwaitingNativeView) {
+                self.battle_presentation.observe_input(ctx);
+            }
             self.battle_presentation.poll(&mut self.battle);
         }
         let now = Instant::now();

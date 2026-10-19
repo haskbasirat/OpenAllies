@@ -284,7 +284,13 @@ impl crate::actors::ActorCatalog {
     /// the actual native assignment/append, not from a sorted source list.
     pub fn native_category<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>) -> Result<CategoryDescriptor> {
         let id = id.into();
-        match self.native_field(id, "category", Precision::Double53)? {
+        // A successful result depends only on the selected root (query_memo).
+        let root = self.selected_root(id).ok().flatten();
+        let memo = &self.resolution_cache.memo.categories;
+        if let Some(hit) = root.and_then(|root| crate::query_memo::lock(memo)?.get(&root).copied()) {
+            return Ok(hit);
+        }
+        let result = match self.native_field(id, "category", Precision::Double53)? {
             Some(TypedValue::String { value, .. }) => CATEGORIES
                 .iter()
                 .find(|c| c.name.eq_ignore_ascii_case(&value))
@@ -293,7 +299,11 @@ impl crate::actors::ActorCatalog {
             _ => Err(Error::Unsupported(format!(
                 "missing typed category for {id}"
             ))),
+        };
+        if let (Some(root), Ok(value), Some(mut memo)) = (root, &result, crate::query_memo::lock(memo)) {
+            memo.insert(root, *value);
         }
+        result
     }
     pub fn native_class<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>) -> Result<u32> {
         Ok(self.native_category(id)?.runtime_class)
@@ -303,6 +313,20 @@ impl crate::actors::ActorCatalog {
     /// unsupported rather than assuming they use the same flag finalizer.
     pub fn native_final_flags<'a>(&self, id: impl Into<crate::actors::ThingRef<'a>>, precision: Precision) -> Result<u32> {
         let id = id.into();
+        // A successful result depends only on the selected root (query_memo).
+        let root = self.selected_root(id).ok().flatten();
+        let key = root.map(|root| (root, precision.significand_bits()));
+        let memo = &self.resolution_cache.memo.final_flags;
+        if let Some(hit) = key.and_then(|key| crate::query_memo::lock(memo)?.get(&key).copied()) {
+            return Ok(hit);
+        }
+        let result = self.native_final_flags_uncached(id, precision);
+        if let (Some(key), Ok(value), Some(mut memo)) = (key, &result, crate::query_memo::lock(memo)) {
+            memo.insert(key, *value);
+        }
+        result
+    }
+    fn native_final_flags_uncached(&self, id: crate::actors::ThingRef<'_>, precision: Precision) -> Result<u32> {
         let category = self.native_category(id)?;
         match category.native_kind {
             // DynamicDoodadData4922E0 calls ObjectData49DC40 and leaves its
@@ -408,6 +432,25 @@ impl crate::actors::ActorCatalog {
         precision: Precision,
     ) -> Result<(u32, Vec<TypedValue>)> {
         let id = id.into();
+        // A successful result depends only on the selected root (query_memo).
+        let root = self.selected_root(id).ok().flatten();
+        let key = root.map(|root| (root, is_actor, precision.significand_bits()));
+        let memo = &self.resolution_cache.memo.base_flags;
+        if let Some(hit) = key.and_then(|key| crate::query_memo::lock(memo)?.get(&key).cloned()) {
+            return Ok(hit);
+        }
+        let result = self.native_base_flags_uncached(id, is_actor, precision);
+        if let (Some(key), Ok(value), Some(mut memo)) = (key, &result, crate::query_memo::lock(memo)) {
+            memo.insert(key, value.clone());
+        }
+        result
+    }
+    fn native_base_flags_uncached(
+        &self,
+        id: crate::actors::ThingRef<'_>,
+        is_actor: bool,
+        precision: Precision,
+    ) -> Result<(u32, Vec<TypedValue>)> {
         let mut values = [false; 18];
         let mut provenance = Vec::new();
         for (i, (name, _)) in THING_FLAGS.iter().enumerate() {

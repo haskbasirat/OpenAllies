@@ -35,8 +35,10 @@ pub(crate) fn property_bias_for_id(catalog:&Catalog<'_>,id:&str,source_pc:Precis
     let [entry]=entries.as_slice()else{return Err(Error::Unsupported("57E430 actual registered Property identity is absent/ambiguous"))};
     if entry.reloads!=0||entry.is_technology.is_none(){return Err(Error::Unsupported("57E430 completed/reloaded Property field owner required"))}
     let origin=entry.sources.first().ok_or(Error::Unsupported("57E430 Property source origin missing"))?;
-    let roots=catalog.actors.resolved_definitions("Property").map_err(error)?;
-    let matches=roots.iter().filter(|n|n.sources().first()==Some(origin)).collect::<Vec<_>>();
+    //resolved_definitions_at: the tag's same error, else exactly the roots
+    //whose first source is `origin`, in order (filtering every root).
+    let roots=catalog.actors.resolved_definitions_at("Property",origin).map_err(error)?;
+    let matches=roots.iter().collect::<Vec<_>>();
     let [node]=matches.as_slice()else{return Err(Error::Unsupported("57E430 Property registered source identity differs"))};
     //A definition's +28 is read regardless of instance-disabled state.
     let bits=node.field("performer_cv_bias",source_pc).map_err(error)?.ok_or(Error::Unsupported("57E430 Property+28 producer unavailable"))?.fixed_bits().map_err(error)?;

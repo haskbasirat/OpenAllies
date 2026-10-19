@@ -1989,3 +1989,7 @@ pub(crate) mod client_description;
 pub(crate) mod game_data;
 #[path="local_gameplay_order.rs"]
 mod gameplay_order;
+#[path="local_hud_reads.rs"]
+pub mod hud_reads;
+#[path="local_input_reads.rs"]
+pub mod input_reads;

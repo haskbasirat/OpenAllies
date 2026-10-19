@@ -121,7 +121,8 @@ pub struct State {
     context: SourceFpContext,
     csv: CsvBinding,
     numeric: BTreeMap<String, NumericValue>,
-    sources: Vec<SourceIdentity>,
+    ///Shared copy of the catalog sources (catalog_lookups::catalog_universe).
+    sources: std::sync::Arc<Vec<SourceIdentity>>,
     phase: Phase,
     failure: Option<String>,
     manager_order: Vec<u32>,
@@ -154,7 +155,11 @@ impl State {
         &self.context
     }
     pub fn source_identities(&self) -> &[SourceIdentity] {
-        &self.sources
+        self.sources.as_slice()
+    }
+    ///The same identities as a shared allocation (cloning shares, not copies).
+    pub(crate) fn shared_source_identities(&self) -> std::sync::Arc<Vec<SourceIdentity>> {
+        std::sync::Arc::clone(&self.sources)
     }
     pub fn events(&self) -> &[Event] {
         &self.events
@@ -453,7 +458,7 @@ pub fn install(
         context: context.clone(),
         csv: csv.clone(),
         numeric: numeric.values().clone(),
-        sources: catalog.actors.sources.clone(),
+        sources: crate::catalog_lookups::catalog_universe(catalog),
         phase: Phase::Bound,
         failure: None,
         manager_order: Vec::new(),
@@ -591,7 +596,7 @@ pub fn compute(catalog: &Catalog<'_>) -> Result<()> {
         .combat_source
         .as_deref_mut()
         .ok_or("combat source State is not installed")?;
-    if state.sources != catalog.actors.sources {
+    if !crate::catalog_lookups::same_sources(catalog, &state.sources) {
         return Err("CV source identity set changed after installation".into());
     }
     if state.phase != Phase::Bound {

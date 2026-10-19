@@ -456,6 +456,14 @@ pub struct SpatialIndex {
     /// Slot -> current generation and object. A stale GTID never resolves by
     /// casting its low bits to an object key.
     references: BTreeMap<u16, (u16, ActorKey)>,
+    /// Inverse of `references`: object -> its slots, ascending. Changed only
+    /// together with `references` (insert_reference/remove_reference).
+    reference_slots: BTreeMap<ActorKey, std::collections::BTreeSet<u16>>,
+    /// Bookkeeping only: the last placement words of each key that
+    /// `tile_rectangle` accepted during load-field validation, and its result.
+    /// tile_rectangle is a pure function of (grid, placement, precision), and
+    /// grid/precision never change after `new`, so equal words give it again.
+    checked_rects: std::collections::HashMap<ActorKey, ([u32; 10], crate::geometry::TileRect)>,
     nodes: Vec<Option<Node>>,
     free_nodes: Vec<NodeKey>,
     /// Native GThing+10 intrusive query links. Shared across nested queries;
@@ -499,16 +507,37 @@ impl SpatialIndex {
                 "conflicting load spatial generation/identity".into(),
             ));
         }
-        if self.references.values().any(|&(_, old_key)| old_key == key) {
+        //Same answer as scanning every reference for this key.
+        if self.reference_slots.get(&key).is_some_and(|slots| !slots.is_empty()) {
             return Err(Error::World(
                 "load spatial key already belongs to another reference".into(),
             ));
         }
-        self.references
-            .insert(reference as u16, ((reference >> 16) as u16, key));
+        self.insert_reference(reference as u16, ((reference >> 16) as u16, key));
         Ok(())
     }
-    fn validate_load_fields(&self, member: &Member) -> Result<()> {
+    /// `references.insert`, keeping `reference_slots` its exact inverse.
+    fn insert_reference(&mut self, slot: u16, value: (u16, ActorKey)) {
+        if let Some((_, old)) = self.references.insert(slot, value) {
+            self.forget_slot(old, slot);
+        }
+        self.reference_slots.entry(value.1).or_default().insert(slot);
+    }
+    /// `references.remove`, keeping `reference_slots` its exact inverse.
+    fn remove_reference(&mut self, slot: u16) {
+        if let Some((_, old)) = self.references.remove(&slot) {
+            self.forget_slot(old, slot);
+        }
+    }
+    fn forget_slot(&mut self, key: ActorKey, slot: u16) {
+        if let Some(slots) = self.reference_slots.get_mut(&key) {
+            slots.remove(&slot);
+            if slots.is_empty() {
+                self.reference_slots.remove(&key);
+            }
+        }
+    }
+    fn validate_load_fields(&mut self, member: &Member) -> Result<()> {
         if self.resolve_reference(member.reference) != Some(member.key) {
             return Err(Error::World(
                 "load fields do not match the registered generation".into(),
@@ -517,7 +546,17 @@ impl SpatialIndex {
         //5534F0 reads facing only for boxes and never reads Z. A circle's
         //saved facing may contain native NaN bits: retain those raw words.
         //The actual geometry operation validates each numeric input it uses.
-        tile_rectangle(&self.grid, &member.placement(false), self.precision)?;
+        let placement = member.placement(false);
+        let s = &placement.shape;
+        let words = [
+            s.kind, s.radius_bits, s.bounds[0], s.bounds[1], s.bounds[2], s.bounds[3],
+            placement.facing[0], placement.facing[1], placement.position[0], placement.position[1],
+        ];
+        if self.checked_rects.get(&member.key).is_some_and(|(checked, _)| *checked == words) {
+            return Ok(());
+        }
+        let rect = tile_rectangle(&self.grid, &placement, self.precision)?;
+        self.checked_rects.insert(member.key, (words, rect));
         Ok(())
     }
     /// A synchronous operation may read these actual borrowed-field snapshots,
@@ -654,6 +693,8 @@ impl SpatialIndex {
             tiles,
             members: BTreeMap::new(),
             references: BTreeMap::new(),
+            reference_slots: BTreeMap::new(),
+            checked_rects: std::collections::HashMap::new(),
             nodes: Vec::new(),
             free_nodes: Vec::new(),
             query_links: BTreeMap::new(),
@@ -838,11 +879,15 @@ impl SpatialIndex {
     /// Current generation-bearing identity, including between load-field
     /// leases. No mutable pose/flag lookup is needed for a native list node.
     pub fn reference_for_key(&self, key: ActorKey) -> Result<u32> {
+        //The key's slots ascending: the matches of scanning every reference.
         let mut matches = self
-            .references
-            .iter()
-            .filter_map(|(&slot, &(generation, candidate))| {
-                (candidate == key).then_some((u32::from(generation) << 16) | u32::from(slot))
+            .reference_slots
+            .get(&key)
+            .into_iter()
+            .flatten()
+            .map(|slot| {
+                let (generation, _) = self.references[slot];
+                (u32::from(generation) << 16) | u32::from(*slot)
             });
         let reference = matches
             .next()
@@ -870,7 +915,7 @@ impl SpatialIndex {
         //Use the same native-read domain as the load/attach path: circular
         //geometry does not numerically inspect facing or height words.
         tile_rectangle(&self.grid, &member.placement(false), self.precision)?;
-        self.references.insert(
+        self.insert_reference(
             member.reference as u16,
             ((member.reference >> 16) as u16, member.key),
         );
@@ -881,7 +926,7 @@ impl SpatialIndex {
     /// remains available until its ordered membership removal has completed.
     pub fn retire_reference(&mut self, reference: u32) {
         if self.resolve_reference(reference).is_some() {
-            self.references.remove(&(reference as u16));
+            self.remove_reference(reference as u16);
         }
     }
     pub fn unregister(&mut self, key: ActorKey) -> Result<Member> {

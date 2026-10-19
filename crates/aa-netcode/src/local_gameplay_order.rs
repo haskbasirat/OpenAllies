@@ -37,6 +37,14 @@ impl<S:Session,F:live_frame::Frontend+?Sized> application_gate::Sources for Glob
 impl<S:Session,F:live_frame::Frontend+?Sized> orders::Globals for Globals<'_,'_,S,F>{
     fn can_process_40eaa0(&mut self)->orders::Result<bool>{application_gate::can_process_40eaa0(self).map_err(orders::Error::Required)}
     fn session_phase_76ac90(&mut self)->orders::Result<u32>{self.session.phase().map_err(orders::Error::Required)}
+    fn swap_right_click_with_alt_right_click_4be150(&mut self)->orders::Result<bool>{
+        self.frontend.try_borrow_mut().map_err(|e|orders::Error::Required(e.to_string()))?
+            .swap_right_click_with_alt_right_click_current().map_err(orders::Error::Required)
+    }
+    fn hotkey_alt_right_click_command_4b2e60(&mut self)->orders::Result<Vec<u16>>{
+        self.frontend.try_borrow_mut().map_err(|e|orders::Error::Required(e.to_string()))?
+            .hotkey_alt_right_click_command_current().map_err(orders::Error::Required)
+    }
 }
 pub(crate) fn process<F:live_frame::Frontend+?Sized>(frame:&Frame<'_,'static>,sim:&RefCell<&mut Sim>,
     catalog:&Catalog<'_>,players:&mut PlayersBorrow<'_>,slot:&mut u32,descriptor:usize,fields:&[Field],frontend:&RefCell<&mut F>)->OrderResult<()>{

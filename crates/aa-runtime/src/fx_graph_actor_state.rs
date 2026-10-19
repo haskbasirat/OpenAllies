@@ -25,7 +25,7 @@ impl Graph {
             return Err("state scan requires ActorEnter/Leave graph".into());
         }
         self.require_in_bank(catalog, bank)?;
-        let input = Bound::new(catalog.actors, self.precision, self.source.clone())?;
+        let input = Bound::for_catalog(catalog, self.precision, self.source.clone())?;
         if scan(
             &self.draft.roots,
             state,
@@ -154,7 +154,7 @@ impl Graph {
             Self::compile_actor_enter_source_textures(catalog, definition, source, request_only,textures)?;
         let enter_roots = std::mem::take(&mut enter.draft.roots);
         let mut input =
-            Bound::new(catalog.actors, enter.precision, enter.source.clone()).map_err(|error| {
+            Bound::for_catalog(catalog, enter.precision, enter.source.clone()).map_err(|error| {
                 Failure {
                     error,
                     partial: Draft::new(),
@@ -354,8 +354,8 @@ impl Graph {
         let roots = node
             .children("WhenEnter")
             .map_err(|e| failure(e.to_string()))?;
-        let mut input = Bound::new(
-            catalog.actors,
+        let mut input = Bound::for_catalog(
+            catalog,
             source.source_precision(),
             source.definition_source().clone(),
         )
@@ -384,7 +384,7 @@ impl Graph {
             owner: source.canonical_id().into(),
             source: source.definition_source().clone(),
             precision: source.source_precision(),
-            sources: catalog.actors.sources.clone(),
+            sources: crate::catalog_lookups::catalog_universe(catalog),
             kind: GraphKind::ActorEnter,
             request_only,
         },textures))
@@ -402,7 +402,7 @@ impl Graph {
             return Err("4D0A00 requires actual ActorData WhenEnter graph".into());
         }
         self.require_catalog(catalog)?;
-        let input = Bound::new(catalog.actors, self.precision, self.source.clone())?;
+        let input = Bound::for_catalog(catalog, self.precision, self.source.clone())?;
         scan(
             &self.draft.roots,
             state,
@@ -432,7 +432,7 @@ impl Graph {
             return Err("state node predicate requires actual Actor state graph".into());
         }
         self.require_in_bank(catalog, bank)?;
-        let input = Bound::new(catalog.actors, self.precision, self.source.clone())?;
+        let input = Bound::for_catalog(catalog, self.precision, self.source.clone())?;
         self.node_active(&input, id)
     }
 }

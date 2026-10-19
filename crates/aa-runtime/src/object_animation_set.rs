@@ -8,6 +8,8 @@ use aa_numeric::Precision;
 type Result<T>=std::result::Result<T,String>;
 #[path="object_animation_core.rs"]
 pub(crate) mod core;
+#[path="object_animation_release.rs"]
+mod release;
 #[cfg(test)]
 #[path="object_animation_set_tests.rs"]
 mod tests;
@@ -51,7 +53,7 @@ impl Set {
         resources:&mut Resources<'_>,texture_policy:&mut P)->Result<()> {
         self.data.require_live()?;catalog.require_source_owner()?;
         let source=bank.combat_source()?;source.completed_means()?;
-        if source.source_identities()!=catalog.actors.sources.as_slice(){return Err("ObjectAnimation source Bank/universe differs".into())}
+        if !crate::catalog_lookups::same_sources(catalog,source.source_identities()){return Err("ObjectAnimation source Bank/universe differs".into())}
         let pc=source.source_precision();let identity=(catalog.actors.sources.clone(),pc);
         if self.source.as_ref().is_some_and(|old|old!=&identity){return Err("ObjectAnimation source owner/PC changed".into())}
         for position in node.sources(){
@@ -82,7 +84,7 @@ impl<'a,P> Current<'a,'_,'_,'_,P>{
     fn lookups(&mut self)->Result<&mut OwnerLookups<'a>>{
         if self.lookups.is_none(){
             let owner=owner(self.catalog,self.node)?;
-            self.lookups=Some(OwnerLookups::new(self.catalog.actors,self.pc,owner)?);
+            self.lookups=Some(OwnerLookups::for_catalog(self.catalog,self.pc,owner)?);
         }
         Ok(self.lookups.as_mut().expect("bound owner lookups"))
     }

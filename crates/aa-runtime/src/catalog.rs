@@ -115,6 +115,8 @@ pub struct Catalog<'a> {
     mind_identities: std::cell::Cell<(u32, u32)>,
     /// Saved commands have distinct allocations even when their bytes match.
     command_identity: std::cell::Cell<u32>,
+    /// Lookup indexes over `source_owner` (see `catalog_lookups`).
+    lookups: std::cell::OnceCell<crate::catalog_lookups::Lookups>,
 }
 ///Move-only source state without any runtime Session, worker, queue or World
 ///loans. Only the same immutable ActorCatalog allocation may bind it again.
@@ -330,13 +332,13 @@ impl<'a> Catalog<'a> {
             load_owners,load_world,load_archive,runtime_environment,definition_bank,ability_arena,
             updatables,actor_bindings,component_masks,layout_data,mobile_deployment_data,
             recruit_backrefs,builder_data,resource_source,resource_economy,mind_identities,
-            command_identity}=self;
+            command_identity,lookups:_}=self;
         Ok(Catalog {actors,source_owner,source_graphs:None,renderer_orientation:None,localization,definition_text,settings,native_load_mode,
             inactive_load:None,load_session:None,load_clock:None,load_queues:RefCell::new(None),
             load_execution:RefCell::new(None),load_configuration_sync:RefCell::new(None),load_configuration_sync_s:RefCell::new(None),load_owners,load_world,load_archive,
             runtime_environment,definition_bank,ability_arena,updatables,actor_bindings,
             component_masks,layout_data,mobile_deployment_data,recruit_backrefs,builder_data,
-            resource_source,resource_economy,mind_identities,command_identity})
+            resource_source,resource_economy,mind_identities,command_identity,lookups:std::cell::OnceCell::new()})
     }
     /// End every scoped load loan before returning only the owned arenas.
     /// In particular the execution adapter must retire before its sibling
@@ -387,7 +389,13 @@ impl<'a> Catalog<'a> {
             resource_economy: RefCell::new(BTreeMap::new()),
             mind_identities: std::cell::Cell::new((1, 1)),
             command_identity: std::cell::Cell::new(0),
+            lookups: std::cell::OnceCell::new(),
         }
+    }
+    /// Lookup indexes over the immutable source owner (`catalog_lookups`).
+    pub(crate) fn lookups(&self) -> &crate::catalog_lookups::Lookups {
+        self.lookups
+            .get_or_init(|| crate::catalog_lookups::Lookups::new(self.source_owner))
     }
     ///4BC7F0/4BC5E0's proved unchanged Placeholder storage follows the
     ///same Bank through source setup, loading and live placement.
@@ -469,6 +477,12 @@ impl<'a> Catalog<'a> {
         &self,
         precision: Precision,
     ) -> Result<Arc<aa_rules::native_mobile_deployment::NativeMobileDeploymentData>, String> {
+        //The cache describes the immutable source owner only; a Catalog whose
+        //public `actors` points elsewhere computes from that catalog.
+        if !std::ptr::eq(self.actors, self.source_owner) {
+            return self.actors.native_mobile_deployment_data(precision)
+                .map(Arc::new).map_err(|e| e.to_string());
+        }
         let key = precision.significand_bits();
         if let Some(value) = self.mobile_deployment_data.borrow().get(&key) {
             return value.clone();

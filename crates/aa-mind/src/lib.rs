@@ -20,6 +20,7 @@ pub mod construct;
 pub mod decision_score;
 pub mod disable_command;
 pub mod element_command;
+pub mod element_update;
 pub mod element_move;
 pub mod element_move_continuation;
 pub mod moving_target;

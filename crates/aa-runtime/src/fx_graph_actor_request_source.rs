@@ -37,7 +37,7 @@ fn compile_textures<'a>(catalog:&'a Catalog<'_>,bank:&Bank,definition:&RuntimeDe
             }found
         };
         if !actual{return Err("Actor request FX node is outside the actual selected source allocation".into())}
-        let mut input=Bound::new(catalog.actors,source.source_precision(),definition.proof.source.clone())?;
+        let mut input=Bound::for_catalog(catalog,source.source_precision(),definition.proof.source.clone())?;
         input.request_only=true;
         input.textures=textures;
         let mut lists=Vec::new();
@@ -61,7 +61,7 @@ fn compile_textures<'a>(catalog:&'a Catalog<'_>,bank:&Bank,definition:&RuntimeDe
         draft.roots=lists.pop().unwrap();
         Ok(Graph{draft:std::mem::replace(&mut draft,Draft::new()),prior_roots:lists,
             owner:definition.proof.id.clone(),source:definition.proof.source.clone(),
-            precision:source.source_precision(),sources:catalog.actors.sources.clone(),kind:GraphKind::ActorRequest(group.base()),request_only:true})
+            precision:source.source_precision(),sources:crate::catalog_lookups::catalog_universe(catalog),kind:GraphKind::ActorRequest(group.base()),request_only:true})
     })();
     result.map_err(|error|Failure{error,partial:draft})
 }

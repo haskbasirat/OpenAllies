@@ -268,8 +268,16 @@ impl ActorStoreWitness {
         self.0.ptr_eq(&Arc::downgrade(&store.owner_identity))
     }
 }
+/// Reverse identity lookups for one unchanged registry (see `ActorStore::id`).
+#[derive(Debug, Default)]
+struct IdIndex {
+    stamp: Option<(u64, u64)>,
+    reads: u32,
+    first: Option<std::collections::HashMap<ObjectKey, ActorId>>,
+}
 pub struct ActorStore {
     owner_identity: Arc<()>,
+    id_index: std::sync::Mutex<IdIndex>,
     identities: IdentityRegistry<ObjectKey>,
     entities: BTreeMap<ObjectKey, Box<Entity>>,
     next_key: u64,
@@ -299,6 +307,7 @@ impl ActorStore {
     pub fn new() -> Self {
         Self {
             owner_identity: Arc::new(()),
+            id_index: std::sync::Mutex::new(IdIndex::default()),
             identities: IdentityRegistry::new(),
             entities: BTreeMap::new(),
             next_key: 1,
@@ -328,7 +337,27 @@ impl ActorStore {
     pub fn key(&self, id: ActorId) -> Option<ObjectKey> {
         self.identities.get(id).map(|e| e.value)
     }
+    /// The first identity (ascending slot) whose value is `key`. Repeated
+    /// reads of one unchanged registry (same `stamp`) use a first-wins index
+    /// built from that same ascending walk; any registry change discards it.
     pub fn id(&self, key: ObjectKey) -> Option<ActorId> {
+        let stamp = self.identities.stamp();
+        if let Ok(mut index) = self.id_index.lock() {
+            if index.stamp != Some(stamp) {
+                *index = IdIndex { stamp: Some(stamp), reads: 0, first: None };
+            }
+            index.reads = index.reads.saturating_add(1);
+            if index.first.is_none() && index.reads >= 3 {
+                let mut first = std::collections::HashMap::new();
+                for entry in self.identities.iter() {
+                    first.entry(entry.value).or_insert(entry.id);
+                }
+                index.first = Some(first);
+            }
+            if let Some(first) = &index.first {
+                return first.get(&key).copied();
+            }
+        }
         self.identities
             .iter()
             .find(|e| e.value == key)

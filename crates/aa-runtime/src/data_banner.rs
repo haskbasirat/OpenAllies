@@ -24,6 +24,8 @@ pub(super) struct Reference {
 pub(super) struct Directory(BTreeMap<String, Banner>);
 #[path = "data_banner_fields.rs"]
 mod fields;
+#[path = "data_banner_release.rs"]
+mod release;
 #[derive(Debug)]
 struct Banner {
     layers: Vec<Provenance>,
@@ -65,17 +67,17 @@ fn canonical<'a>(catalog: &'a Catalog<'_>, r: &Reference) -> Result<ResolvedNode
     //The native Find has already translated once; locate that registered
     //source allocation directly, never Find its canonical name again.
     let mut selected = None;
+    //resolved_definitions_at: the tag's same error, else exactly its roots
+    //whose first source is this one, in order (filtering every root).
     for node in catalog
         .actors
-        .resolved_definitions("Banner")
+        .resolved_definitions_at("Banner", &r.source)
         .map_err(|e| e.to_string())?
     {
-        if node.sources().first() == Some(&r.source) {
-            if selected.is_some() {
-                return Err("Banner canonical source is ambiguous".into());
-            }
-            selected = Some(node)
+        if selected.is_some() {
+            return Err("Banner canonical source is ambiguous".into());
         }
+        selected = Some(node)
     }
     selected.ok_or_else(|| "Banner canonical registered source is absent".into())
 }

@@ -44,17 +44,17 @@ fn validate(catalog: &Catalog<'_>, bank: &Bank, d: &RuntimeDefinition) -> Result
 fn node<'a>(catalog: &'a Catalog<'_>, d: &RuntimeDefinition) -> Result<ResolvedNode<'a>> {
     let mut selected = None;
     for tag in ["Thing", "Unit", "Projectile", "VFX"] {
+        //resolved_definitions_at: the tag's same error, else exactly its roots
+        //whose first source is this one, in order (filtering every root).
         for n in catalog
             .actors
-            .resolved_definitions(tag)
+            .resolved_definitions_at(tag, &d.proof.source)
             .map_err(|e| e.to_string())?
         {
-            if n.sources().first() == Some(&d.proof.source) {
-                if selected.is_some() {
-                    return Err("deployment source position is ambiguous".into());
-                }
-                selected = Some(n);
+            if selected.is_some() {
+                return Err("deployment source position is ambiguous".into());
             }
+            selected = Some(n);
         }
     }
     let n = selected.ok_or("deployment canonical source position absent")?;
