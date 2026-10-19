@@ -11,6 +11,8 @@ pub trait Globals {
 }
 #[path = "view_grid_occupancy.rs"]
 mod occupancy;
+#[path = "view_grid_cell_views.rs"]
+mod cell_views;
 pub use occupancy::ViewFields;
 enum Word {
     Unwritten,

@@ -31,7 +31,7 @@ pub(crate) struct Class {
 }
 #[derive(Default)]
 pub(crate) struct State {
-    classes: [Option<Class>; 4],
+    classes: [Option<Class>; 5],
     pub(crate) ram_used30: u32,
     pub(crate) vram_used3c: u32,
 }
@@ -41,6 +41,7 @@ fn slot(kind: Kind) -> usize {
         Kind::Model => 1,
         Kind::Sequence => 2,
         Kind::Sound => 3,
+        Kind::TerrainBlock => 4,
     }
 }
 impl State {

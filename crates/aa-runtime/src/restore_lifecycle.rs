@@ -422,6 +422,29 @@ impl InactiveLoad {
     }
 }
 
+/// The started application's SAI manager ([B36528]) and its player
+/// allocations, MOVED into a temporary Staged for one synchronous live
+/// creation loan and moved back afterwards (`Retained::with_staged`).
+#[derive(Debug)]
+pub struct LiveSai {
+    pub engine: aa_mind::sai::manager::Sai,
+    pub players: crate::load_sai_players::Arena,
+}
+impl LiveSai {
+    /// Constructor-shaped placeholders left in the application slot while the
+    /// real owners are lent; nothing reads them before they are swapped back.
+    pub(crate) fn placeholders() -> Self {
+        Self { engine: aa_mind::sai::manager::Sai::new(0), players: crate::load_sai_players::Arena::constructed() }
+    }
+    /// 79EA90: whether a nonnull [SAI+60] slot's player has +8 == owner.
+    /// Without a nonnull slot this is NULL without reading the arena.
+    pub(crate) fn has_player_for(&self, _owner: u32) -> std::result::Result<bool, String> {
+        if self.engine.players.iter().flatten().next().is_none() {
+            return Ok(false);
+        }
+        Err("79EA90 positive SAI player slot kingdom lookup is not bound".into())
+    }
+}
 /// The same application SAI after its inactive load capability was retired.
 /// No Clone/Default and no readiness constructor; later native services borrow
 /// its real fields, including the state retained by a failed startup.
@@ -447,12 +470,14 @@ impl StartupOwner {
     ///ONE split of the SAME application owners. The counter and timing stats
     ///move through loading with Sai; neither is reconstructed for a frame.
     pub(crate) fn frame_all_parts(&mut self)->(
-        &mut crate::live_sim::FrameControl,&crate::game_spy_manager_gate::State,&[u8;3],
+        &mut crate::live_sim::FrameControl,&crate::game_spy_manager_gate::State,
         &mut crate::presentation_timing::State,&mut crate::heartbeat_process::Counter,
         &crate::standalone_network::ApplicationNetwork,
+        &mut aa_mind::sai::manager::Sai,&mut crate::load_sai_players::Arena,
     ){
-        (&mut self.sai.frame_control,&self.sai.game_spy_gate,&self.sai.engine.bytes_5c,
-            &mut self.sai.presentation_timing,&mut self.sai.heartbeat_counter,&self.sai.network)
+        (&mut self.sai.frame_control,&self.sai.game_spy_gate,
+            &mut self.sai.presentation_timing,&mut self.sai.heartbeat_counter,&self.sai.network,
+            &mut self.sai.engine,&mut self.sai.players)
     }
     pub fn engine(&self) -> &aa_mind::sai::manager::Sai { &self.sai.engine }
     pub fn engine_mut(&mut self) -> &mut aa_mind::sai::manager::Sai { &mut self.sai.engine }

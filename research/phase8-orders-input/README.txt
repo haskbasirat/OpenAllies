@@ -74,22 +74,30 @@ the pinned v14 image; every executed instruction byte-identical in both)
       0x436DD0 271/271, 0x4371A0 208/208, 0x715850 118/118, 0x715D40 115/116
       (the one left is alignment padding)
   states/native_right_click.py       400 cases of 0x620760 (284/285, padding
-      left): base / target attack (CanSend true/false, flash) / location /
-      minimap / facing; command words at every order call
+      left): base / target attack (flash) / location / minimap / facing;
+      command words at every order call. 0x61E150 and UIWorldState vt+0x18
+      0x436950 run natively (actor vt+0x150 scripted per actor), 0x61EEF0 is
+      a seam; plus 240 direct 0x436950 rows (67/67: static group +0x40 byte
+      +0x18, explicit commands 0x25/0x26, the selected actors' vt+0x150)
   event/native_event.py              60 sequences x 8 events x 3 precisions:
       0x59A6E0 126/126, 0x5C2770 41/41 (drop, log, Input+0x44 table, ray,
       terrain call and the queued 0x30-byte event)
   terrain-ray/  (0x71D840)           v3 480 + v4 3276 rows (own README)
   guess-4da570/ (0x4DA570)           757 cases (own README)
 
-Rust replays (cargo test -p aa-runtime --lib player_order_input): 9 tests,
+Rust replays (cargo test -p aa-runtime --lib player_order_input): 10 tests,
 all rows, all precisions, no mismatch:
   pick::tests::pick_math_matches_native_rows
   pick::box_tests::box_selection_matches_native_rows
   ui_world::tests::selection_manager_matches_native_rows
   states::tests::right_click_matches_native_rows
+  states::tests::can_send_436950_matches_native_rows
   event::tests::add_mouse_event_matches_native_rows
   terrain_ray::tests::* (4)
+
+Between frames (UI side) the per-actor vt+0x150 = 0x4CF430 runs over the
+retained World read-only: player_order_input/order_world.rs
+(player_order_world::authorize_selected_command_read, ActorRead, ReadBank).
 
 Not ported (explicit errors where reached)
   +0xBC brush/targeting states (0x5CD220 family), CycleSelection

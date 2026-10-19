@@ -1,0 +1,4 @@
+
+thread 'live_skirmish_ticks_census' (49212) panicked at crates\aa-runtime\tests\live_battle_ticks.rs:574:25:
+resource task failed: 4FD47C conversion tail requires real4F9C10 fresh creation; retained queue is nonempty
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

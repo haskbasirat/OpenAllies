@@ -9,7 +9,7 @@ const CONSTRUCTOR:[u32;3]=[0,0xbf800000,0];
 ///No Default/Clone/raw-value constructor. This is the current named cell, not
 ///a copied per-object orientation or a second whole AVar manager.
 pub struct State {
-    current:[u32;3],sources:Vec<SourceIdentity>,source_context:SourceFpContext,
+    current:[u32;3],sources:std::sync::Arc<Vec<SourceIdentity>>,source_context:SourceFpContext,
     source_files:Vec<(String,String)>,assignments:Vec<Provenance>,raw_assignments:Vec<String>,source_loaded:bool,
 }
 pub struct Failure {pub state:Option<State>,pub error:String}
@@ -26,7 +26,7 @@ impl State {
             if !matches!(overrides,NativeOverrides::ControlledNone){return Err("RendererDefaultOrientation current profile/console AVar owner is unbound".into());}
             let owner=bank.combat_source()?;owner.completed_means()?;
             if owner.source_identities()!=catalog.actors.sources.as_slice(){return Err("RendererDefaultOrientation source Bank differs".into());}
-            Ok(Self{current:CONSTRUCTOR,sources:catalog.actors.sources.clone(),source_context:owner.context().clone(),source_files:Vec::new(),assignments:Vec::new(),raw_assignments:Vec::new(),source_loaded:false})
+            Ok(Self{current:CONSTRUCTOR,sources:crate::catalog_lookups::catalog_universe(catalog),source_context:owner.context().clone(),source_files:Vec::new(),assignments:Vec::new(),raw_assignments:Vec::new(),source_loaded:false})
         })();
         let mut state=allocation.map_err(|error|Failure{state:None,error})?;
         match state.load_sources(catalog,bank,files){Ok(())=>Ok(state),Err(error)=>Err(Failure{state:Some(state),error})}
@@ -71,7 +71,7 @@ impl State {
     fn validate_owner(&self,catalog:&Catalog<'_>,bank:&Bank)->Result<()> {
         catalog.require_source_owner()?;
         let source=bank.combat_source()?;source.completed_means()?;
-        if self.sources!=catalog.actors.sources||source.source_identities()!=self.sources.as_slice()
+        if !crate::catalog_lookups::same_sources(catalog,&self.sources)||!crate::catalog_lookups::same_slices(source.source_identities(),&self.sources)
             ||source.source_precision()!=self.source_context.precision(){return Err("RendererDefaultOrientation destination source Bank/precision differs".into());}
         let rows=catalog.settings.as_ref().ok_or("RendererDefaultOrientation Settings owner absent")?.app_variables.get(&NAME.to_ascii_lowercase()).map(Vec::as_slice).unwrap_or(&[]);
         if rows.len()!=self.assignments.len()||self.assignments.len()!=self.raw_assignments.len()

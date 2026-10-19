@@ -40,7 +40,18 @@ pub fn rebuild_on_owners<S:Spatial>(catalog:&Catalog<'_>,actors:&mut ActorAccess
     arena:&mut aa_mind::Arena,bank:&mut Bank,key:ObjectKey,inventory:&aa_mapworld::WorldInventory,
     spatial:&S,variables:Option<&crate::load_view_variables::State>,live_pc:Precision,
 )->Result<(),String>{
-    on_owners(catalog,actors,arena,bank,key,inventory,spatial,variables,live_pc,|world,owner|flags::rebuild(world,owner))
+    on_owners(catalog,actors,arena,bank,key,inventory,spatial,variables,live_pc,None,|world,owner|flags::rebuild(world,owner))
+}
+///The same4D1350 with the application's4CFCC0 branch2/3 services lent for
+///this callback (Session+BC VWorldStates, view+54, UIWorldState,4F5290 and
+///437EB0 owners). Without them a reached76C7F0/view+54/50C8E0 is an error.
+#[allow(clippy::too_many_arguments)]
+pub fn rebuild_on_owners_publishing<S:Spatial>(catalog:&Catalog<'_>,actors:&mut ActorAccess<'_>,
+    arena:&mut aa_mind::Arena,bank:&mut Bank,key:ObjectKey,inventory:&aa_mapworld::WorldInventory,
+    spatial:&S,variables:Option<&crate::load_view_variables::State>,live_pc:Precision,
+    publication:&mut dyn ActionMaskPublication,
+)->Result<(),String>{
+    on_owners(catalog,actors,arena,bank,key,inventory,spatial,variables,live_pc,Some(publication),|world,owner|flags::rebuild(world,owner))
 }
 ///Native57B390 is only the Organization contributor. In particular, it must
 ///not invoke the full4D1350 callback sequence during57C870/579DD0.
@@ -49,12 +60,13 @@ pub fn organization_on_owners<S:Spatial>(catalog:&Catalog<'_>,actors:&mut ActorA
     arena:&mut aa_mind::Arena,bank:&mut Bank,key:ObjectKey,inventory:&aa_mapworld::WorldInventory,
     spatial:&S,variables:Option<&crate::load_view_variables::State>,live_pc:Precision,
 )->Result<(),String>{
-    on_owners(catalog,actors,arena,bank,key,inventory,spatial,variables,live_pc,|world,owner|flags::organization(world,owner))
+    on_owners(catalog,actors,arena,bank,key,inventory,spatial,variables,live_pc,None,|world,owner|flags::organization(world,owner))
 }
 #[allow(clippy::too_many_arguments)]
 fn on_owners<S:Spatial,T>(catalog:&Catalog<'_>,actors:&mut ActorAccess<'_>,
     arena:&mut aa_mind::Arena,bank:&mut Bank,key:ObjectKey,inventory:&aa_mapworld::WorldInventory,
     spatial:&S,variables:Option<&crate::load_view_variables::State>,live_pc:Precision,
+    publication:Option<&mut dyn ActionMaskPublication>,
     call:impl FnOnce(&mut Bound<'_,'_,'_,S>,ActorId)->flags::Result<T>,
 )->Result<T,String>{
     catalog.require_source_owner()?;
@@ -63,7 +75,9 @@ fn on_owners<S:Spatial,T>(catalog:&Catalog<'_>,actors:&mut ActorAccess<'_>,
     if source.source_identities()!=catalog.actors.sources.as_slice(){return Err("stored4D1350 source Bank universe differs".into())}
     let source_pc=source.source_precision();
     let owner=actors.id(key).ok_or("stored4D1350 actual GTID absent")?;
-    let mut world=Bound{catalog,actors,arena,bank,inventory,spatial,variables,source_pc,live_pc};
+    //Option is not a coercion site: shorten the service's object lifetime here.
+    let publication:Option<&mut dyn ActionMaskPublication>=match publication{Some(p)=>Some(p),None=>None};
+    let mut world=Bound{catalog,actors,arena,bank,inventory,spatial,variables,source_pc,live_pc,publication};
     world.definition(owner).map_err(|e|e.to_string())?;
     call(&mut world,owner).map_err(|e|e.to_string())
 }
@@ -72,7 +86,9 @@ struct Bound<'a,'store,'source,S>{catalog:&'a Catalog<'source>,actors:&'a mut Ac
     arena:&'a mut aa_mind::Arena,
     bank:&'a mut Bank,inventory:&'a aa_mapworld::WorldInventory,spatial:&'a S,
     variables:Option<&'a crate::load_view_variables::State>,
-    source_pc:Precision,live_pc:Precision}
+    source_pc:Precision,live_pc:Precision,
+    ///4CFCC0 branch2/3 application services (None: unbound, explicit errors).
+    publication:Option<&'a mut dyn ActionMaskPublication>}
 impl<S:Spatial> Bound<'_,'_,'_,S>{
     fn key(&self,a:ActorId)->flags::Result<ObjectKey>{self.actors.key(a).ok_or(flags::Error::Missing("stored action current GTID"))}
     fn object(&self,a:ActorId)->flags::Result<&crate::actor_world::RuntimeObject>{self.actors.object(self.key(a)?).map_err(error)}
@@ -189,11 +205,79 @@ impl<S:Spatial> action_publication::World for Bound<'_,'_,'_,S>{
     fn rebuild_actions(&mut self,a:ActorId)->flags::Result<()>{flags::rebuild(self,a)}
     fn owner(&mut self,a:ActorId)->flags::Result<Option<ActorId>>{flags::World::owner(self,a)}
     fn object_byte_4c(&self,a:ActorId)->flags::Result<u8>{Ok(self.object(a)?.object.as_ref().ok_or(flags::Error::Missing("stored Object+4C allocation"))?.byte_4c)}
-    fn refresh_owner_views(&mut self,_:Option<ActorId>)->flags::Result<()>{required("stored76C7F0 actual owner-view publication")}
-    fn renderer_flags(&self,a:ActorId)->flags::Result<Option<u32>>{
-        if self.object(a)?.thing.word_c==0{Ok(None)}else{required("stored renderer link+54 current flags")}
+    ///76C7F0 on [B36550]: Session+BC players ->4ECD70 on their +50.
+    fn refresh_owner_views(&mut self,owner:Option<ActorId>)->flags::Result<()>{
+        let Bound{catalog,actors,bank,spatial,publication,..}=self;
+        let Some(publication)=publication.as_deref_mut()else{return required("stored76C7F0 actual owner-view publication")};
+        let bank=crate::player_order_world::DefinitionBankLoan::new(&mut **bank);
+        let mut owners=LiveOwners{publication,catalog,bank:&bank,actors:&**actors,spatial:*spatial};
+        publication_native::owner_views_76c7f0(&mut owners,owner).map_err(error)
     }
-    fn refresh_selected_view(&mut self,_:ActorId)->flags::Result<()>{required("stored50C8E0 selected-view publication")}
+    ///Thing+C view+54, read from the application's current view owner.
+    fn renderer_flags(&self,a:ActorId)->flags::Result<Option<u32>>{
+        let thing_c=self.object(a)?.thing.word_c;
+        if thing_c==0{return Ok(None)}
+        let Some(publication)=self.publication.as_deref()else{return required("stored renderer link+54 current flags")};
+        publication.view_flags_54(a,self.key(a)?,thing_c).map(Some).map_err(error)
+    }
+    ///50C8E0(actor), reached only with Thing+C bit17 set.
+    fn refresh_selected_view(&mut self,a:ActorId)->flags::Result<()>{
+        if self.publication.is_none(){return required("stored50C8E0 selected-view publication")}
+        publication_native::selected_view_50c8e0(&mut Selected{bound:self,actor:a},a).map_err(error)
+    }
+}
+
+use crate::view_flags_service::{ActionMaskPublication,HudLoans,PlayerRef,native as publication_native};
+///76C7F0 leaves over the lent Session service and the SAME in-frame loans.
+struct LiveOwners<'p,'l,'bank,'store,'source,S>{publication:&'p mut dyn ActionMaskPublication,
+    catalog:&'l Catalog<'source>,bank:&'l crate::player_order_world::DefinitionBankLoan<'bank>,
+    actors:&'l ActorAccess<'store>,spatial:&'l S}
+impl<S:Spatial> publication_native::OwnerViews for LiveOwners<'_,'_,'_,'_,'_,S>{
+    type Player=PlayerRef;
+    fn players_bc(&mut self)->crate::view_flags_service::Result<Vec<PlayerRef>>{self.publication.session_players_bc()}
+    fn kingdom_765e00(&mut self,p:PlayerRef)->crate::view_flags_service::Result<Option<ActorId>>{self.publication.player_kingdom_765e00(p)}
+    fn has_view_state_50(&mut self,p:PlayerRef)->crate::view_flags_service::Result<bool>{Ok(self.publication.player_view_state_50(p)?.is_some())}
+    fn rebuild_4ecd70(&mut self,p:PlayerRef)->crate::view_flags_service::Result<()>{
+        let(state,globals)=self.publication.player_view_state_50(p)?.ok_or("76C81F player+50 VWorldState vanished before 4ECD70")?;
+        publication_native::rebuild_view_state_4ecd70(self.catalog,self.bank,self.actors,self.spatial,globals,state)
+    }
+}
+///50C8E0 leaves: Actor/Thing reads from this rebuild's loans, the rest from
+///the lent application service.
+struct Selected<'b,'a,'store,'source,S>{bound:&'b mut Bound<'a,'store,'source,S>,actor:ActorId}
+impl<S:Spatial> Selected<'_,'_,'_,'_,S>{
+    fn service(&self)->crate::view_flags_service::Result<&dyn ActionMaskPublication>{
+        self.bound.publication.as_deref().map(|p|p as &dyn ActionMaskPublication).ok_or_else(||"50C8E0 publication service was withdrawn".into())
+    }
+}
+impl<S:Spatial> publication_native::SelectedView for Selected<'_,'_,'_,'_,S>{
+    type View=usize;
+    fn world_phase_d8(&mut self)->crate::view_flags_service::Result<u32>{self.service()?.world_phase_d8()}
+    fn thing_view_c(&mut self,a:ActorId)->crate::view_flags_service::Result<Option<usize>>{
+        let word=self.bound.object(a).map_err(|e|e.to_string())?.thing.word_c;Ok((word!=0).then_some(word))
+    }
+    fn view_flags_54(&mut self,view:usize)->crate::view_flags_service::Result<u32>{
+        let key=self.bound.key(self.actor).map_err(|e|e.to_string())?;
+        self.service()?.view_flags_54(self.actor,key,view)
+    }
+    fn owner_108(&mut self,a:ActorId)->crate::view_flags_service::Result<Option<ActorId>>{flags::World::owner(self.bound,a).map_err(|e|e.to_string())}
+    fn local_kingdom_4f5290(&mut self)->crate::view_flags_service::Result<Option<ActorId>>{
+        let actors=&*self.bound.actors;
+        let name=|k:ActorId|->crate::view_flags_service::Result<Vec<u16>>{
+            let key=actors.key(k).ok_or("4F48E0 Kingdom slot GTID is not current")?;
+            Ok(actors.object(key).map_err(|e|e.to_string())?.thing.name_utf16.clone())
+        };
+        let service=self.bound.publication.as_deref().ok_or("50C8E0 publication service was withdrawn")?;
+        publication_native::local_kingdom_4f5290(service,&name,self.bound.live_pc)
+    }
+    fn ui_selection_8(&mut self)->crate::view_flags_service::Result<Vec<usize>>{self.service()?.ui_selection_8()}
+    fn command_masks_437eb0(&mut self)->crate::view_flags_service::Result<()>{
+        let Bound{catalog,actors,bank,spatial,publication,..}=&mut *self.bound;
+        let publication=publication.as_deref_mut().ok_or("50C8E0 publication service was withdrawn")?;
+        let bank=crate::player_order_world::DefinitionBankLoan::new(&mut **bank);
+        let spatial:&dyn Spatial=*spatial;
+        publication.command_masks_437eb0(&mut HudLoans{catalog,bank:&bank,actors:&**actors,spatial})
+    }
 }
 
 impl<S:Spatial> construction::World for Bound<'_,'_,'_,S>{

@@ -32,7 +32,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
     ///No reference to Bank, variables or Owners from this construction escapes
     ///the single callback. In particular first-tick Bank is not held by step.
     fn legacy<T>(&mut self,call:impl FnOnce(&mut live_clocked::Services<'_>)->T)->Result<T,String>{
-        let world=&mut self.retained.world;
+        let world=&mut *self.retained.world;
         let spatial=match &mut world.spatial{
             SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&mut v.world,
             _=>return Err("actual live spatial owner is absent during callback".into()),
@@ -81,7 +81,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
         crate::live_scheduler_dispatch::validate_delivery(event)?;
         let target=self.retained.owners.target(event.owner).map_err(queue_fail)?;
         if matches!(target,crate::scheduler_owners::Target::Component{slot,..}if slot==ComponentSlot::Mind as u8){
-            let actual=&mut self.retained.world;
+            let actual=&mut *self.retained.world;
             let spatial=match &mut actual.spatial{
                 SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&mut v.world,
                 _=>return Err(queue_fail("actual Mind spatial owner is absent during update")),
@@ -117,7 +117,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
         }
         if let crate::scheduler_owners::Target::Component{object,slot}=target
             && slot==ComponentSlot::Construction as u8 && event.elapsed_bits.is_some(){
-            let actual=&mut self.retained.world;
+            let actual=&mut *self.retained.world;
             let spatial=match &actual.spatial{
                 SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&v.world,
                 _=>return Err(queue_fail("actual Construction spatial owner is absent during update")),
@@ -129,7 +129,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
         }
         if let crate::scheduler_owners::Target::Component{object,slot}=target
             && slot==ComponentSlot::City as u8 && event.elapsed_bits.is_some(){
-            let actual=&mut self.retained.world;
+            let actual=&mut *self.retained.world;
             let spatial=match &actual.spatial{
                 SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&v.world,
                 _=>return Err(queue_fail("actual City spatial owner is absent during update")),
@@ -148,7 +148,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
         }
         if let crate::scheduler_owners::Target::Component{object,slot}=target
             && slot==ComponentSlot::Element as u8 && event.elapsed_bits.is_some(){
-            let actual=&mut self.retained.world;
+            let actual=&mut *self.retained.world;
             let spatial=match &actual.spatial{
                 SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&v.world,
                 _=>return Err(queue_fail("actual Element spatial owner is absent during update")),
@@ -162,7 +162,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
         if let crate::scheduler_owners::Target::Component{object,slot}=target
             && slot==ComponentSlot::Economy as u8 && event.elapsed_bits.is_some(){
             //Economy vtable A3C668 periodic +14 = 56F2B0.
-            let actual=&self.retained.world;
+            let actual=&*self.retained.world;
             let spatial=match &actual.spatial{
                 SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&v.world,
                 _=>return Err(queue_fail("actual Economy spatial owner is absent during update")),
@@ -187,7 +187,7 @@ impl<S:SessionRead+?Sized,O:AudioOutput+?Sized> Services<'_,'_,'_,S,O>{
                 world.clock.begin.0,world.clock_precision).map_err(queue_fail);
         }
         if let crate::scheduler_owners::Target::Kingdom(key)=target{
-            let actual=&mut self.retained.world;
+            let actual=&mut *self.retained.world;
             let source_precision=self.retained.definitions.combat_source().map_err(queue_fail)?.source_precision();
             return crate::live_updates::kingdom::run(key,event,&mut crate::live_updates::kingdom::Context{
                 catalog:self.catalog,actors:&mut self.retained.actors,economy:&mut self.retained.evidence.kingdom_economy,

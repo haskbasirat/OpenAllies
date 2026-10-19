@@ -1791,6 +1791,8 @@ pub mod application_gate;
 pub mod glyph_roster;
 #[path = "local_implicit_ai.rs"]
 pub mod implicit_ai;
+#[path = "local_staging_requests.rs"]
+pub mod staging_requests;
 #[path = "local_finalize.rs"]
 pub mod finalize;
 #[path = "local_launch.rs"]
@@ -1993,3 +1995,5 @@ mod gameplay_order;
 pub mod hud_reads;
 #[path="local_input_reads.rs"]
 pub mod input_reads;
+#[path="local_order_describe.rs"]
+mod order_describe;

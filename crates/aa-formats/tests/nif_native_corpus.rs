@@ -25,8 +25,8 @@ fn game_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.."))
 }
 
-fn fixture() -> BTreeMap<String, BTreeMap<String, String>> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-nif/native-nif-corpus.tsv");
+fn fixture(name: &str) -> BTreeMap<String, BTreeMap<String, String>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-nif").join(name);
     let text = std::fs::read_to_string(&path).expect("native oracle fixture");
     let mut lines = text.lines();
     let cols: Vec<&str> = lines.next().unwrap().split('\t').collect();
@@ -76,19 +76,31 @@ fn pops_json(file: &nif::NifFile) -> String {
 
 #[test]
 fn every_shipped_nif_matches_the_native_stream_reader() {
+    check(".nif", "native-nif-corpus.tsv");
+}
+
+/// Every shipped KF (NiControllerSequence, NiTextKeyExtraData,
+/// NiKeyframeController/Data; 10.1.0.0 and 10.0.1.0) against the same oracle
+/// (NIF_CORPUS_EXT=.kf native_nif_corpus.py).
+#[test]
+fn every_shipped_kf_matches_the_native_stream_reader() {
+    check(".kf", "native-kf-corpus.tsv");
+}
+
+fn check(ext: &str, name: &str) {
     let root = game_root();
     let archive_path = root.join("Data.rwd");
     if !archive_path.is_file() {
         eprintln!("skipping: {} not present", archive_path.display());
         return;
     }
-    let native = fixture();
+    let native = fixture(name);
     let mut archive = RwdArchive::open(&archive_path).expect("Data.rwd");
     let members: Vec<(usize, String)> = archive
         .entries()
         .iter()
         .enumerate()
-        .filter(|(_, e)| e.path().to_ascii_lowercase().ends_with(".nif"))
+        .filter(|(_, e)| e.path().to_ascii_lowercase().ends_with(ext))
         .map(|(i, e)| (i, e.path().to_string()))
         .collect();
     assert_eq!(members.len(), native.len(), "shipped NIF member census differs from the oracle");

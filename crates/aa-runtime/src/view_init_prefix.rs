@@ -96,6 +96,23 @@ impl<G> State<G>{
         }
         Ok(self.fields.words[2])
     }
+    ///43AB30's words +84, +88, +8C, +90 of this SAME VWorld (5C92F0 calls it
+    ///per UI frame while AD is set). The prefix zeroed them; 43AB30 is their
+    ///per-frame writer (vworld_update::view_time_43ab30).
+    pub(crate) fn view_time_words_mut_for(&mut self,world:&ConstructedWorldRevision)->Result<&mut [u32;4]>{
+        if !self.world.as_ref().is_some_and(|w|w.is_for(world)){
+            return Err("43AB30 VWorld words belong to another or unbound World".into())
+        }
+        let (time,_)=self.fields.words.split_at_mut(4);
+        <&mut [u32;4]>::try_from(time).map_err(|_|"VWorld time word layout".into())
+    }
+    ///+84, +88, +8C, +90 as 43AB30 last stored them.
+    pub fn view_time_words_for(&self,world:&ConstructedWorldRevision)->Result<[u32;4]>{
+        if !self.world.as_ref().is_some_and(|w|w.is_for(world)){
+            return Err("VWorld time word read belongs to another or unbound World".into())
+        }
+        Ok([self.fields.words[0],self.fields.words[1],self.fields.words[2],self.fields.words[3]])
+    }
     ///5B355D, reached by the actual View-resource task callback. This clears
     ///only AC; it never writes AD or grants initialization/queue readiness.
     #[cfg(test)]

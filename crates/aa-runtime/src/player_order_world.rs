@@ -13,8 +13,13 @@ use aa_mind::{Arena, MindId};
 use aa_orders::commands::{self, CommandDelivery, TryCommandRouting};
 
 #[path="player_order_bank.rs"]mod bank;
+#[path = "player_order_actor_read.rs"]
+mod actor_read;
+pub use actor_read::{ActorRead, ReadBank};
 #[path = "player_order_guess.rs"]
 pub mod guess;
+#[path = "player_order_command_sync.rs"]
+pub mod command_sync;
 pub use bank::DefinitionBankLoan;
 pub(crate) use bank::Banks;
 #[derive(Debug, thiserror::Error)]
@@ -83,10 +88,10 @@ pub fn resolve_thing_reference(catalog:&Catalog<'_>,actors:&crate::actor_world::
     }
     Ok(Some(entry.id.slot()))
 }
-pub(crate) fn object_with_bank<'a>(
+pub(crate) fn object_with_bank<'a, A: ActorRead + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
-    actors: &'a ActorAccess<'_>,
+    actors: &'a A,
     actor: ActorId,
 ) -> Result<&'a RuntimeObject> {
     let key = actors
@@ -103,10 +108,10 @@ pub(crate) fn object_with_bank<'a>(
     }
     Ok(o)
 }
-pub(crate) fn actor_word_with_bank(
+pub(crate) fn actor_word_with_bank<A: ActorRead + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
-    actors: &ActorAccess<'_>,
+    actors: &A,
     actor: ActorId,
     offset: u32,
 ) -> Result<u32> {
@@ -146,10 +151,10 @@ pub fn native_command_bit(bits: u64, index: u32) -> bool {
     let mask = if shift < 64 { 1u64 << shift } else { 0 };
     bits & mask != 0
 }
-pub(crate) fn allows_with_bank(
+pub(crate) fn allows_with_bank<A: ActorRead + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
-    actors: &ActorAccess<'_>,
+    actors: &A,
     actor: ActorId,
     index: u32,
 ) -> Result<bool> {
@@ -211,14 +216,14 @@ fn permission_native(
     }
     Ok(native_command_bit(world.actions(actor)?, index))
 }
-struct PermissionBinding<'a, 'store, 'src, P, G> {
+struct PermissionBinding<'a, 'src, A: ?Sized, P, G> {
     catalog: &'a Catalog<'src>,
     banks: &'a dyn Banks,
-    actors: &'a ActorAccess<'store>,
+    actors: &'a A,
     spatial: &'a P,
     globals: &'a mut G,
 }
-impl<P: Spatial, G: Globals> PermissionWorld for PermissionBinding<'_, '_, '_, P, G> {
+impl<A: ActorRead + ?Sized, P: Spatial, G: Globals> PermissionWorld for PermissionBinding<'_, '_, A, P, G> {
     fn flags(&mut self, actor: ActorId) -> Result<u32> {
         object_with_bank(self.catalog, self.banks, self.actors, actor)?;
         let key = self
@@ -260,10 +265,10 @@ impl<P: Spatial, G: Globals> PermissionWorld for PermissionBinding<'_, '_, '_, P
 }
 /// Actual4CF120 ordinary virtual+20 over authoritative live fields. Element+10
 /// tail-calls preserve the argument and actual source identities.
-pub(crate) fn eligible_with_bank(
+pub(crate) fn eligible_with_bank<A: ActorRead + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
-    actors: &ActorAccess<'_>,
+    actors: &A,
     spatial: &impl Spatial,
     actor: ActorId,
     argument: u8,
@@ -285,10 +290,10 @@ pub(crate) fn eligible_with_bank(
 /// explicit command passes def+0C, otherwise 4DA570(cmd, actor, false)
 /// chooses it (null -> false) and may complete the command; then 4CE680.
 #[allow(clippy::too_many_arguments)]
-fn authorize_4cf430(
+fn authorize_4cf430<A: ActorRead + ?Sized>(
     catalog: &Catalog<'_>,
     banks: &dyn Banks,
-    actors: &ActorAccess<'_>,
+    actors: &A,
     spatial: &impl Spatial,
     actor: ActorId,
     kingdom: Option<ActorId>,
@@ -421,6 +426,22 @@ pub(crate) fn authorize_selected_with_bank(
 ) -> Result<bool> {
     authorize_borrowed(catalog, banks, actors, spatial, actor, kingdom, command, 1, globals)
 }
+/// 4CF430(kingdom, &cmd, true) between frames over the retained store and
+/// a read-only Bank: UIWorldState 0x436950's per-actor vt+0x150 on the UI
+/// side. The command is the UI's own (0x4DA570 may complete it).
+#[allow(clippy::too_many_arguments)]
+pub fn authorize_selected_command_read(
+    catalog: &Catalog<'_>,
+    bank: &ReadBank<'_>,
+    actors: &crate::actor_world::ActorStore,
+    spatial: &impl Spatial,
+    actor: ActorId,
+    kingdom: Option<ActorId>,
+    command: &mut PlainCommand,
+    globals: &mut impl Globals,
+) -> Result<bool> {
+    authorize_4cf430(catalog, bank, actors, spatial, actor, kingdom, command, 1, globals)
+}
 /// Public 4CF430(kingdom, &cmd, true) over a caller-owned command, e.g. the
 /// UIWorldState 436950 CanSend path, in the actual moved Bank.
 #[allow(clippy::too_many_arguments)]
@@ -551,6 +572,14 @@ impl<S: mind_world::Services> TryCommandRouting for Routing<'_, '_, '_, '_, S> {
         allows_with_bank(self.catalog, self.banks, &self.world.actors, actor, d.mind_type)
     }
     fn handle(&mut self, (actor, slot): Self::Handler) -> Result<u8> {
+        if slot == ComponentSlot::Recruit {
+            // 4D9BE5: [actor+60+10*4] KKC_RecruitComponent vt+24 = 583A70
+            // (this = component, arg = command): 77DC50, 4D9A40("_cmd",
+            // command) (command_sync::sync_command_4d9a40 with CMD_LABEL), the
+            // command+34 ParameterSet, then type 0x0F -> 5838B0(this,
+            // command+14 ActorData, ParameterSet). Owned by live_recruit.
+            return required("583A70 KKC_RecruitComponent command virtual+24: live_recruit handler (actor, Recruit component, command id with +14 object definition, SyncA binding) is not bound");
+        }
         if slot != ComponentSlot::Mind {
             return required(format!("actual component{slot:?} command virtual+24"));
         }
@@ -842,10 +871,10 @@ pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
     // 4ED37C..4ED3A3: [esp+13] = default command (flag bit6 clear).
     let guessing = cmd.flags & (1 << 6) == 0;
     if !guessing {
-        let selected_definition = definition_with_bank(catalog, banks, cmd)?;
-        if !matches!(selected_definition.mind_type, 0 | 5) {
-            return required("bounded selected move5/attack0 command entry");
-        }
+        // 4ED3AD: ebp = [cmd+8]. With a NULL group (+20) nothing reads its
+        // type: all 39 explicit types take the same per-actor path
+        // (research/phase8-orders-input/recruit/native-selected-delivery-4ed360.json).
+        definition_with_bank(catalog, banks, cmd)?;
     }
     if !check(view.group_is_null())? {
         return required("4ED360 actual positive selection-group/formation services");
@@ -871,9 +900,6 @@ pub(crate) fn deliver_selected_with_bank<S: mind_world::Services>(
                 command, entry.actor, multiple, globals)? else {
                 continue; // 4ED575: null skips this actor and the 4D9A90(0) reset.
             };
-            if !matches!(g.definition.type_0c, 0 | 5) {
-                return required("bounded selected move5/attack0 command entry (4DA570 guessed type)");
-            }
             store_definition_4d9a90(banks, &mut world.runtime.commands, command, Some(g.index))?;
         }
         let cmd = check(world.runtime.commands.value(command))?;

@@ -82,7 +82,23 @@ fn native_pixel(image: egui::Rect, pixels: [u32; 2], p: egui::Pos2) -> [i32; 2] 
 
 /// Collect this frame's world-input messages. `image` is where the native
 /// battle target is drawn and `pixels` its native size (as camera input).
+/// Every message gets VWorld when `world_under_cursor`, else one anonymous
+/// HUD widget; [`observe_with`] classifies each press point instead.
 pub fn observe(ctx: &egui::Context, window: &mut Window, image: egui::Rect, pixels: [u32; 2], world_under_cursor: bool) -> Observed {
+    let widget = if world_under_cursor { Widget::World } else { Widget::Other(0) };
+    let mut observed = observe_with(ctx, window, image, pixels, &mut |_| widget);
+    observed.world_under_cursor = world_under_cursor;
+    observed
+}
+
+/// [`observe`] with `classify` giving the 0x5C3BC0 UI+0x60 of each button
+/// message's native client pixel: [`Widget::World`] for VWorld,
+/// [`Widget::Map`] for a minimap (vt+0x90 true: 0x620760's 0x5D74B0 /
+/// B279C0 order), [`Widget::Other`] with a stable identity per HUD widget
+/// (0x5E0690 compares widgets by pointer), [`Widget::None`] for NULL.
+/// See [`widget_for_press_target`].
+pub fn observe_with(ctx: &egui::Context, window: &mut Window, image: egui::Rect, pixels: [u32; 2],
+    classify: &mut dyn FnMut([i32; 2]) -> Widget) -> Observed {
     ctx.input(|i| {
         let mut messages = Vec::new();
         let valid = image.width() > 0.0 && image.height() > 0.0;
@@ -106,7 +122,7 @@ pub fn observe(ctx: &egui::Context, window: &mut Window, image: egui::Rect, pixe
                     };
                     sync(modifiers, window, &mut messages);
                     let p = native_pixel(image, pixels, *pos);
-                    let widget = if world_under_cursor { Widget::World } else { Widget::Other };
+                    let widget = classify(p);
                     if *pressed {
                         let now = i.time * 1000.0;
                         let double = window.last_press.is_some_and(|(b, t, q)| {
@@ -127,8 +143,28 @@ pub fn observe(ctx: &egui::Context, window: &mut Window, image: egui::Rect, pixe
         }
         sync(&i.modifiers, window, &mut messages);
         let cursor = i.pointer.latest_pos().filter(|_| valid).map(|p| native_pixel(image, pixels, p));
+        let world_under_cursor = cursor.is_some_and(|c| classify(c) == Widget::World);
         Observed { messages, cursor, client: pixels, world_under_cursor }
     })
+}
+
+/// The machine's UI+0x60 for an aa-ui press target: VWorld, the minimap
+/// class (vtable A4ED20, vt+0x90 true), another widget identified by its
+/// lower-case path (FNV-1a), or NULL.
+pub fn widget_for_press_target(target: &aa_ui::press_pick::PressTarget) -> Widget {
+    use aa_ui::press_pick::PressTarget;
+    match target {
+        PressTarget::None => Widget::None,
+        PressTarget::VWorld => Widget::World,
+        PressTarget::MiniMap { .. } => Widget::Map,
+        PressTarget::Widget { path, .. } => {
+            let mut h: u32 = 0x811c_9dc5;
+            for b in path.to_ascii_lowercase().bytes() {
+                h = (h ^ u32::from(b)).wrapping_mul(0x0100_0193);
+            }
+            Widget::Other(h)
+        }
+    }
 }
 
 /// The per-view and per-actor leaves the native selection manager and pick
@@ -177,6 +213,14 @@ pub trait ViewLeaves {
     fn floater_remove_42eb10(&mut self, v: View) -> Result<()>;
     fn floater_update_453470(&mut self, v: View) -> Result<()>;
     fn flash_459600(&mut self, v: View) -> Result<()>;
+    /// UIWorldState 0x436950's per-actor call: the 0x45B7A0 actor's
+    /// vt+0x150(0x5C0E30 local kingdom, &cmd, 1) = 0x4CF430 over the live
+    /// World (`aa_runtime::player_order_input::order_world`). The actor may
+    /// complete the command, so the wire is mutable.
+    fn actor_virtual_150(&mut self, v: View, wire: &mut CommandWire) -> Result<bool> {
+        let _ = (v, wire);
+        Err("0x436950 actor vt+0x150 (0x4CF430 on the live World): not bound by the view owner".into())
+    }
 }
 
 /// The HUD/widget, presentation and audio leaves (HUD, camera and audio
@@ -192,6 +236,14 @@ pub trait HudLeaves {
     fn map_world_5d74b0(&mut self, cursor: [i32; 2]) -> Result<[u32; 2]>;
     fn map_auxiliary_b279c0(&mut self) -> Result<[u32; 2]>;
     fn cursor_feedback_620640(&mut self) -> Result<()>;
+    /// 0x620648..0x62074D with what it reads from the UI manager and the
+    /// UIWorldState, read on demand through `query` (UI+0x60, 0x436510, +8
+    /// head, 0x4363B0 target, 0x45B7A0, vt+0x34). The default keeps the
+    /// earlier [`HudLeaves::cursor_feedback_620640`].
+    fn cursor_feedback_620640_with(&mut self, query: &mut dyn CursorQuery) -> Result<()> {
+        let _ = query;
+        self.cursor_feedback_620640()
+    }
     fn selection_sound_436850(&mut self, v: View) -> Result<()>;
     fn command_masks_437eb0(&mut self, selected: &[View], group: StaticRef, masks: &mut [u32; 4]) -> Result<()>;
     fn brush_changed_42d4d0(&mut self) -> Result<()>;
@@ -208,6 +260,9 @@ pub trait HudLeaves {
     fn marker_43db10(&mut self, xy: [u32; 2]) -> Result<()>;
     fn acknowledge_61eef0(&mut self, wire: &CommandWire) -> Result<()>;
     /// UIWorldState vt+0x18 0x436950 over the selected actors' vt+0x150.
+    /// Superseded: 0x436950 is ported in `ui_world::State::can_send_436950`
+    /// (its per-actor vt+0x150 is [`ViewLeaves::actor_virtual_150`]); this
+    /// leaf is no longer called.
     fn can_send_436950(&mut self, wire: &mut CommandWire) -> Result<bool>;
     fn command_definition_298(&mut self, index: u32) -> Result<Option<CommandDefinition>>;
 }
@@ -220,6 +275,113 @@ macro_rules! unbound {
         })*
     };
 }
+/// What 0x620640's EconomicImpact branch reads from the machine, each value
+/// read when the HUD's port of 0x620648.. reaches it.
+pub trait CursorQuery {
+    /// UI+0x60 (0x62066A).
+    fn pressed_widget_60(&self) -> Widget;
+    /// 0x436510 on VWorld+0x13C.
+    fn multiple_436510(&self) -> bool;
+    /// UIWorldState+8: the head node's object.
+    fn head_8(&self) -> Option<View>;
+    /// 0x4363B0: vt+0x54 (0x6409A0) of the hovered object +0x10.
+    fn hovered_target_4363b0(&mut self) -> Result<Option<View>>;
+    /// 0x45B7A0 on a view.
+    fn actor_45b7a0(&mut self, v: View) -> Result<bool>;
+    /// The 0x45B7A0 actor's vt+0x34(index) (0x6206E5 asks 4).
+    fn actor_can_34(&mut self, v: View, index: u32) -> Result<bool>;
+}
+struct Cursor<'v> {
+    selection: states::CursorSelection<View>,
+    views: &'v mut dyn ViewLeaves,
+    precision: Precision,
+}
+impl CursorQuery for Cursor<'_> {
+    fn pressed_widget_60(&self) -> Widget {
+        self.selection.pressed_60
+    }
+    fn multiple_436510(&self) -> bool {
+        self.selection.multiple_436510
+    }
+    fn head_8(&self) -> Option<View> {
+        self.selection.head_8
+    }
+    fn hovered_target_4363b0(&mut self) -> Result<Option<View>> {
+        let hovered = self.selection.hovered_10;
+        aa_runtime::player_order_input::ui_world::State::<View>::pick_target_6409a0(&mut ViewsOnly(&mut *self.views, self.precision), hovered)
+    }
+    fn actor_45b7a0(&mut self, v: View) -> Result<bool> {
+        self.views.actor_45b7a0(v)
+    }
+    fn actor_can_34(&mut self, v: View, index: u32) -> Result<bool> {
+        self.views.actor_can_34(v, index)
+    }
+}
+/// The view leaves alone as selection-manager [`Leaves`] (0x6409A0's
+/// mapping reads only view/actor fields; anything else is an error).
+struct ViewsOnly<'v>(&'v mut dyn ViewLeaves, Precision);
+macro_rules! views_only {
+    ($($name:ident($($arg:ident: $ty:ty),*) -> $ret:ty;)*) => {
+        $(fn $name(&mut self, $($arg: $ty),*) -> $ret { self.0.$name($($arg),*) })*
+    };
+}
+macro_rules! not_views {
+    ($($name:ident($($arg:ident: $ty:ty),*) -> $ret:ty;)*) => {
+        $(fn $name(&mut self, $($arg: $ty),*) -> $ret {
+            $(let _ = $arg;)*
+            Err(concat!(stringify!($name), " is not a view leaf (0x6409A0 mapping)").into())
+        })*
+    };
+}
+impl Leaves for ViewsOnly<'_> {
+    type View = View;
+    fn precision(&self) -> Precision {
+        self.1
+    }
+    views_only! {
+        flags_54(v: View) -> Result<u32>;
+        set_flags_54(v: View, f: u32) -> Result<()>;
+        position_38(v: View) -> Result<[u32; 3]>;
+        field_10_58cb30(v: View) -> Result<u64>;
+        pickable_9c(v: View) -> Result<bool>;
+        class_78(v: View) -> Result<bool>;
+        class_84(v: View) -> Result<bool>;
+        class_7c(v: View) -> Result<bool>;
+        class_80(v: View) -> Result<bool>;
+        virtual_50(v: View) -> Result<bool>;
+        virtual_54(v: View) -> Result<bool>;
+        actor_present_14(v: View) -> Result<bool>;
+        actor_45b7a0(v: View) -> Result<bool>;
+        actor_flag8_bit0(v: View) -> Result<bool>;
+        actor_virtual_58(v: View) -> Result<bool>;
+        actor_virtual_84(v: View) -> Result<bool>;
+        actor_4d12c0(v: View) -> Result<bool>;
+        actor_virtual_20(v: View) -> Result<bool>;
+        actor_70(v: View) -> Result<bool>;
+        actor_90(v: View) -> Result<bool>;
+        link_16c_view(v: View) -> Result<Option<View>>;
+        link_94_view(v: View) -> Result<Option<View>>;
+        link_94_live(v: View) -> Result<bool>;
+        hidden_4549c0(v: View) -> Result<bool>;
+        actor_view_0c(v: View) -> Result<Option<View>>;
+        root_view_4ce6c0(v: View) -> Result<Option<View>>;
+        voiced_436600(v: View) -> Result<Option<Option<View>>>;
+        actor_virtual_150(v: View, w: &mut CommandWire) -> Result<bool>;
+        floater_remove_42eb10(v: View) -> Result<()>;
+        floater_update_453470(v: View) -> Result<()>;
+    }
+    not_views! {
+        selection_sound_436850(v: View) -> Result<()>;
+        command_masks_437eb0(s: &[View], g: StaticRef, m: &mut [u32; 4]) -> Result<()>;
+        brush_changed_42d4d0() -> Result<()>;
+        vworld_list_changed_4325c0() -> Result<()>;
+        vworld_ad() -> Result<bool>;
+    }
+    fn requests(&mut self) -> &mut dyn Requests<View> {
+        unreachable!("0x6409A0 emits no request")
+    }
+}
+
 /// No view owner bound: every leaf is an explicit error.
 pub struct UnboundViews;
 impl ViewLeaves for UnboundViews {
@@ -340,6 +502,50 @@ impl<T: aa_runtime::player_order_input::terrain_ray::Terrain> TerrainQuery for T
     }
 }
 
+/// The order Globals of the UI-side 0x4CF430 (UIWorldState 0x436950's
+/// per-actor vt+0x150), read from their owners once per orders frame before
+/// the AdminNode loan, like the view owner's OrderContext: 0x40EAA0 (the
+/// session's `can_process_40eaa0`), 0x76AC90 (Session+F8 phase) and the
+/// two 0x4DA570 UVars (Ui.uvars; their records come from Data/UVars.tgi).
+pub struct UiOrderGlobals {
+    pub can_process_40eaa0: Result<bool>,
+    pub session_phase_76ac90: Result<u32>,
+    pub swap_right_click_with_alt_right_click_4be150: Result<bool>,
+    pub hotkey_alt_right_click_command_4b2e60: Result<Vec<u16>>,
+}
+impl aa_runtime::player_order_world::Globals for UiOrderGlobals {
+    fn can_process_40eaa0(&mut self) -> aa_runtime::player_order_world::Result<bool> {
+        self.can_process_40eaa0.clone().map_err(aa_runtime::player_order_world::Error::Required)
+    }
+    fn session_phase_76ac90(&mut self) -> aa_runtime::player_order_world::Result<u32> {
+        self.session_phase_76ac90.clone().map_err(aa_runtime::player_order_world::Error::Required)
+    }
+    fn swap_right_click_with_alt_right_click_4be150(&mut self) -> aa_runtime::player_order_world::Result<bool> {
+        self.swap_right_click_with_alt_right_click_4be150.clone().map_err(aa_runtime::player_order_world::Error::Required)
+    }
+    fn hotkey_alt_right_click_command_4b2e60(&mut self) -> aa_runtime::player_order_world::Result<Vec<u16>> {
+        self.hotkey_alt_right_click_command_4b2e60.clone().map_err(aa_runtime::player_order_world::Error::Required)
+    }
+}
+
+/// What a [`ViewLeaves::actor_virtual_150`] implementation calls: the
+/// view's `actor+0x14` slot resolved in the SAME retained ActorStore, then
+/// 0x4CF430 over the World's presentation parts (read-only), with the
+/// local kingdom 0x5C0E30 -> 0x76AC70.
+pub fn actor_virtual_150_between_frames(
+    catalog: &aa_runtime::catalog::Catalog<'_>,
+    parts: &aa_runtime::live_world_frame::PresentationParts<'_>,
+    actor_slot_14: u16,
+    kingdom_76ac70: Option<aa_actors::ActorId>,
+    wire: &mut CommandWire,
+    globals: &mut UiOrderGlobals,
+) -> Result<bool> {
+    use aa_runtime::player_order_input::order_world;
+    let actor = order_world::actor_for_slot(parts.actors, actor_slot_14)
+        .ok_or("0x436950: the view's actor+0x14 slot has no live identity")?;
+    order_world::actor_virtual_150(catalog, parts.actors, parts.spatial, parts.definitions, actor, kingdom_76ac70, wire, globals)
+}
+
 /// B43CF8..B43D00, the vector 0x59A6E0 copies into the event before 0x71D840,
 /// read from the SAME retained seed owner the view constructors read
 /// (`view_startup_inputs::...::seeds()`).
@@ -455,6 +661,7 @@ impl Leaves for Host<'_, '_> {
         actor_view_0c(v: View) -> Result<Option<View>>;
         root_view_4ce6c0(v: View) -> Result<Option<View>>;
         voiced_436600(v: View) -> Result<Option<Option<View>>>;
+        actor_virtual_150(v: View, w: &mut CommandWire) -> Result<bool>;
         floater_remove_42eb10(v: View) -> Result<()>;
         floater_update_453470(v: View) -> Result<()>;
     }
@@ -503,9 +710,6 @@ impl Scene for Host<'_, '_> {
     }
 }
 impl NativeOrders for Host<'_, '_> {
-    fn can_send_436950(&mut self, wire: &mut CommandWire) -> Result<bool> {
-        self.live.hud.can_send_436950(wire)
-    }
     fn acknowledge_61eef0(&mut self, wire: &CommandWire) -> Result<()> {
         self.live.hud.acknowledge_61eef0(wire)
     }
@@ -530,6 +734,9 @@ impl states::Host for Host<'_, '_> {
     fn map_present_b36518(&mut self) -> Result<bool> {
         Ok(self.live.terrain_ready)
     }
+    fn cursor_feedback_620640(&mut self, selection: states::CursorSelection<View>) -> Result<()> {
+        self.cursor_620640(selection)
+    }
     fn project_43c4b0(&mut self, pixel: [i32; 2], secondary: &mut [u32; 3]) -> Result<[u32; 3]> {
         let (width, height) = (self.live.viewport[0], self.live.viewport[1]);
         let precision = self.live.precision;
@@ -552,7 +759,6 @@ impl states::Host for Host<'_, '_> {
         map_world_5d74b0(cursor: [i32; 2]) -> Result<[u32; 2]>;
         map_auxiliary_b279c0() -> Result<[u32; 2]>;
         command_definition_298(index: u32) -> Result<Option<CommandDefinition>>;
-        cursor_feedback_620640() -> Result<()>;
         box_rectangle_begin(press: &Event) -> Result<()>;
         box_rectangle_frame() -> Result<()>;
         box_rectangle_end() -> Result<()>;
@@ -565,6 +771,12 @@ impl states::Host for Host<'_, '_> {
         actor_can_34(v: View, index: u32) -> Result<bool>;
         actor_handle_14(v: View) -> Result<u32>;
         flash_459600(v: View) -> Result<()>;
+    }
+}
+impl Host<'_, '_> {
+    fn cursor_620640(&mut self, selection: states::CursorSelection<View>) -> Result<()> {
+        let mut cursor = Cursor { selection, views: &mut *self.live.views, precision: self.live.precision };
+        self.live.hud.cursor_feedback_620640_with(&mut cursor)
     }
 }
 impl event::Sources for Host<'_, '_> {
@@ -649,11 +861,10 @@ impl Orders {
                     report.events += 1;
                     self.machine.pump_press_5c3bc0(&mut host, &e, widget)?;
                     self.machine.track_5bf2f0(&e);
-                    // The root widget chain (HUD) declined presses over the
-                    // world; over HUD widgets the HUD owns the event.
-                    if widget == Widget::Other {
-                        continue;
-                    }
+                    // 0x5C1B80: Root's chain (0x5EFFF0 on UI+0x74, hotkeys
+                    // only) declines mouse events, so every event reaches the
+                    // states; UI+0x60's own chain (a HUD widget's handlers)
+                    // is the UI thread's, inside the machine's routing.
                     if self.machine.event(&mut host, &e)? {
                         report.handled += 1;
                     }

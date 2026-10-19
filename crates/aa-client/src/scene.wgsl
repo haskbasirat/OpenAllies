@@ -93,11 +93,23 @@ struct VertexOutput {
     // DDS alpha can be a replacement-color mask. Opaque/cutout geometry must
     // leave an opaque viewport pixel; only authored blend materials use alpha.
     let output_alpha=select(1.0,base.a,material.render_flags.x>0.5);
-    // Fog of war: render x = native x, render z = -native y.
+    // Native terrain fog of war (7208D0 -> 71C290 per TerrainBlock). Only
+    // TerrainBlock geometry (terrain_v.w) receives it, like the 720AD0
+    // NiTextureEffect attached under the block node. Render x = native x,
+    // render z = -native y. Block (c, r) owns texels [c*n, c*n+n): the
+    // effect maps uv = (p / A0 - c) * (n-1)/n + 0.5/(n-1) (88A910 scale
+    // 1/A0, 88A990 -c, 88A910 (n-1)/n, 88A990 0.5/(n-1)), clamped inside the
+    // block's own n texels.
     var fog = 1.0;
-    if camera.fog.z > 0.5 {
-        let fog_uv = vec2<f32>(v.world.x * camera.fog.x, -v.world.z * camera.fog.y);
-        fog = textureSampleLevel(fog_texture, fog_sampler, fog_uv, 0.0).r;
+    if camera.fog.w > 0.5 && material.terrain_v.w > 0.5 {
+        let a0 = camera.fog.x;
+        let n = camera.fog.y;
+        let p = vec2<f32>(v.world.x, -v.world.z) / a0;
+        let block = floor(p);
+        let uv = (p - block) * ((n - 1.0) / n) + vec2<f32>(0.5 / (n - 1.0));
+        let texel = clamp(uv * n, vec2<f32>(0.5), vec2<f32>(n - 0.5));
+        let dims = vec2<f32>(textureDimensions(fog_texture));
+        fog = textureSampleLevel(fog_texture, fog_sampler, (block * n + texel) / dims, 0.0).r;
     }
     return vec4<f32>((base.rgb * illumination + material.emissive_cutoff.xyz) * fog, output_alpha);
 }

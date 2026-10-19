@@ -296,12 +296,12 @@ impl Backend for Current<'_, '_> {
                 )
                 .map(|_| ()),
             Kind::Model => resources.load_model_4c(resource,self.precision,self).map(|_|()),
-            Kind::Sequence => {
-                Err("required native service:5A5520 actual same Sequence payload/KF decoder".into())
-            }
+            Kind::Sequence => resources.load_sequence_4c(resource,self.precision,self).map(|_|()),
             Kind::Sound => {
                 Err("required native service:59B550 actual same Sound/Miles decoder owner".into())
             }
+            //The ResourceManager runs TerrainBlock's 4F0500 leaf itself.
+            Kind::TerrainBlock => Err("TerrainBlock vf4C is the ResourceManager's 4F0500 leaf".into()),
         }
     }
     fn double_request_warning(&mut self, resource: &Handle, count: i32) -> Result<()> {
@@ -358,7 +358,27 @@ impl Backend for Current<'_, '_> {
         Ok(())
     }
 }
+///5A8190 Sequence load services; the 5A7230 decode is crate::sequence_decode.
+impl aa_runtime::sequence_resource_load::Backend for Current<'_,'_>{
+    fn resource_no_ni_objects_current(&mut self)->Result<u8>{
+        self.bridge.call(self.execution,|context|context.ui.uvars.resource_no_ni_objects_current())
+    }
+    fn sequence_loading_404f90(&mut self,resource:&Handle)->Result<()>{
+        log::info!("native404F90 Loading KF resource '{}'",String::from_utf16_lossy(resource.logical_ids()));Ok(())
+    }
+    fn decode_selected_sequence(&mut self,resource:&Handle,bytes:&[u8])->Result<Option<(aa_runtime::sequence_resource_load::SequencePayload,u32)>>{
+        crate::sequence_decode::decode_service(&String::from_utf16_lossy(resource.logical_ids()),bytes)
+    }
+    fn unable_to_load_sequence_4252a0(&mut self,resource:&Handle)->Result<()>{
+        log::error!("native4252A0 Unable to load Sequence: {}",String::from_utf16_lossy(resource.logical_ids()));Ok(())
+    }
+}
 impl aa_runtime::model_resource_load::Backend for Current<'_,'_>{
+    fn selection_diagnostic_404ed0(&mut self,resource:&Handle,diagnostic:aa_runtime::model_resource_load::SelectionDiagnostic)->Result<()>{
+        let name=String::from_utf16_lossy(resource.logical_ids());
+        log::warn!("native404ED0 level=1 {} line {:#x}: {}",aa_runtime::model_resource_load::SelectionDiagnostic::FUNCTION,diagnostic.line(),diagnostic.format().replacen("%s",&name,1));
+        Ok(())
+    }
     fn resource_no_ni_objects_current(&mut self)->Result<u8>{
         self.bridge.call(self.execution,|context|context.ui.uvars.resource_no_ni_objects_current())
     }

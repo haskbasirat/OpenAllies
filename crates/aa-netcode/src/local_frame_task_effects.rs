@@ -62,7 +62,7 @@ impl<T: MillisecondTimer, F: frame_host::Focus + ?Sized, E: frame_host::Hooks, O
     fn sync_log_gate(&mut self, _: Log) -> aa_orders::Result<bool> {
         self.simulation
             .sync_gate(&mut *self.os.try_borrow_mut().map_err(order_error)?, || {
-                let flags = self.frame.sai_sync_flags();
+                let flags = self.frame.sai_sync_flags()?;
                 Ok(Some([flags[0], flags[1]]))
             })
             .map_err(order_error)
@@ -144,7 +144,7 @@ impl<T: MillisecondTimer, F: frame_host::Focus + ?Sized, E: frame_host::Hooks, O
             simulation.sync_gate(
                 &mut *os.try_borrow_mut().map_err(|e| e.to_string())?,
                 || {
-                    let flags = frame.sai_sync_flags();
+                    let flags = frame.sai_sync_flags()?;
                     Ok(Some([flags[0], flags[1]]))
                 },
             )

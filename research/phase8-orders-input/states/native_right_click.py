@@ -11,7 +11,9 @@ and the VWorld vt+0x90 0x6A71F0. Seams (each records its call):
                         the world/map, or nothing is selected)
   0x4363B0              UIWorldState hovered target (scripted view)
   0x5C0E10              local player (constant)
-  0x61E150              KKC_TellSelectedCommandOrder::CanSend (scripted)
+  0x5C0E30              local player kingdom (constant)
+  actor vt+0x150        the selected actors' 0x4CF430 (scripted per actor;
+                        0x61E150 -> UIWorldState vt+0x18 0x436950 run natively)
   0x61EEF0              KKC_TellSelectedCommandOrder::Send
   0x459600              target flash
   0x5D74B0              minimap world XY under the Input cursor (scripted)
@@ -31,6 +33,7 @@ import native_machine as nm
 from native_machine import Machine, f32
 
 PLAYER = 0x2468ACE0
+KINGDOM = 0x13579BDF
 rng = random.Random(0x620760)
 
 def r32(lo, hi):
@@ -47,7 +50,7 @@ class Case:
         m.seam(0x5CD190, self.base)
         m.seam(0x4363B0, self.hovered)
         m.seam(0x5C0E10, lambda m: m.ret(PLAYER, 0))
-        m.seam(0x61E150, self.can_send)
+        m.seam(0x5C0E30, lambda m: m.ret(KINGDOM, 0))
         m.seam(0x61EEF0, self.send)
         m.seam(0x459600, self.flash)
         m.seam(0x5D74B0, self.map_world)
@@ -64,6 +67,14 @@ class Case:
         for i, w in enumerate(s['pointer_184']):
             m.w(vworld + 0x184 + 4 * i, w)
         uiw = m.alloc(0x60)
+        uvt = m.alloc(0x80)
+        m.w(uvt + 0x18, 0x436950)
+        m.w(uiw, uvt)
+        group = 0
+        if s['static_group'] is not None:
+            group = m.alloc(0x24)
+            m.wb(group + 0x18, 1 if s['static_group'] else 0)
+        m.w(uiw + 0x40, group)
         m.w(vworld + 0x13C, uiw)
         widget = 0
         if s['widget'] == 'world':
@@ -97,6 +108,7 @@ class Case:
             avt = m.alloc(0x200)
             m.w(avt + 0xB4, m.stub(lambda m, on=a['b4']: m.ret(1 if on else 0, 0)))
             m.w(avt + 0x34, m.stub(lambda m, can=a['can']: m.ret(1 if m.arg(1) in can else 0, 4)))
+            m.w(avt + 0x150, m.stub(lambda m, i=i, on=a['can150']: self.actor_150(m, i, on)))
             m.w(actor, avt)
             m.w(actor + 0x14, a['handle'])
             m.w(view + 0x14, actor)
@@ -156,10 +168,10 @@ class Case:
         self.trace.append(['hovered'])
         m.ret(0 if t is None else self.views[t], 0)
 
-    def can_send(self, m):
-        assert m.arg(1) == PLAYER
-        self.trace.append(['can_send', self.command(m.r(m.ecx() + 4))])
-        m.ret(1 if self.spec['can_send'] else 0, 4)
+    def actor_150(self, m, i, on):
+        assert m.arg(1) == KINGDOM and m.arg(3) == 1, (hex(m.arg(1)), m.arg(3))
+        self.trace.append(['actor_150', i, self.command(m.r(m.arg(2)))])
+        m.ret(1 if on else 0, 0xC)
 
     def send(self, m):
         assert m.arg(1) == PLAYER
@@ -197,7 +209,8 @@ def gen():
                 views.append({'actor': None})
                 continue
             can = sorted(rng.sample(range(0x27), rng.randint(0, 6)))
-            views.append({'actor': {'b4': rng.random() < 0.85, 'can': can, 'handle': rng.randrange(1, 1 << 32)}})
+            views.append({'actor': {'b4': rng.random() < 0.85, 'can': can, 'handle': rng.randrange(1, 1 << 32),
+                                    'can150': rng.random() < 0.6}})
         selected = rng.sample(range(nviews), rng.randint(0 if k % 8 == 0 else 1, nviews)) if nviews else []
         definitions = []
         for i in range(0x27):
@@ -217,11 +230,70 @@ def gen():
             target = rng.randrange(nviews)
         cases.append({
             'views': views, 'selected': selected, 'definitions': definitions, 'widget': widget, 'event': event,
-            'target': target, 'modifiers': rng.randrange(0, 8), 'can_send': rng.random() < 0.7,
+            'target': target, 'modifiers': rng.randrange(0, 8), 'static_group': rng.choice([None, None, False, True]),
             'pointer_184': [r32(-2000, 2000), r32(-2000, 2000), r32(-10, 80)],
             'cursor': [rng.randrange(0, 1024), rng.randrange(0, 768)],
             'map_xy': [r32(0, 4000), r32(0, 4000)], 'aux': [r32(-1, 1), r32(-1, 1)],
         })
+    return cases
+
+def can_send_case(spec):
+    """0x436950(&cmdptr) directly: static group +0x40, explicit commands
+    (flag bit 6, +8 definition with +0x0C type) and the selected actors."""
+    m = Machine('Double53')
+    trace = []
+    m.seam(0x5C0E30, lambda m: m.ret(KINGDOM, 0))
+    uiw = m.alloc(0x60)
+    group = 0
+    if spec['static_group'] is not None:
+        group = m.alloc(0x24)
+        m.wb(group + 0x18, 1 if spec['static_group'] else 0)
+    m.w(uiw + 0x40, group)
+    views = []
+    for i, v in enumerate(spec['views']):
+        view = m.alloc(0x40)
+        views.append(view)
+        if v is None:
+            continue
+        actor = m.alloc(0x40)
+        avt = m.alloc(0x200)
+        m.w(avt + 0xB4, m.stub(lambda m, on=v['b4']: m.ret(1 if on else 0, 0)))
+        def a150(m, i=i, on=v['can150']):
+            assert m.arg(1) == KINGDOM and m.arg(3) == 1
+            trace.append(['actor_150', i])
+            m.ret(1 if on else 0, 0xC)
+        m.w(avt + 0x150, m.stub(a150))
+        m.w(actor, avt)
+        m.w(view + 0x14, actor)
+    head = 0
+    for i in reversed(spec['selected']):
+        node = m.alloc(8)
+        m.w(node, views[i])
+        m.w(node + 4, head)
+        head = node
+    m.w(uiw + 8, head)
+    cmd = m.alloc(0x40)
+    m.w(cmd + 0xC, spec['flags'])
+    if spec['definition'] is not None:
+        d = m.alloc(0x50)
+        m.w(d + 0xC, spec['definition'])
+        m.w(cmd + 8, d)
+    holder = m.alloc(4)
+    m.w(holder, cmd)
+    al = m.call(0x436950, ecx=uiw, args=(holder,), pop=4) & 0xff
+    m.verify_v14()
+    return al, trace, m.visited
+
+def gen_can_send():
+    cases = []
+    for k in range(240):
+        n = rng.randint(0, 4)
+        views = [None if rng.random() < 0.2 else {'b4': rng.random() < 0.8, 'can150': rng.random() < 0.4} for _ in range(n)]
+        selected = rng.sample(range(n), rng.randint(0, n)) if n else []
+        flags = rng.choice([0x10, 0x14, 0x50, 0x54, 0x45, 0x40])
+        definition = rng.choice([None, 0x25, 0x26, 0x0F, 0x05, 0x24, 0x27])
+        cases.append({'views': views, 'selected': selected, 'flags': flags, 'definition': definition,
+                      'static_group': rng.choice([None, False, True])})
     return cases
 
 def main():
@@ -231,13 +303,20 @@ def main():
         c = Case(spec)
         visited.update(c.m.visited)
         rows.append({'args': spec, 'native': {'al': c.al, 'trace': c.trace}})
+    can_send_rows = []
+    for spec in gen_can_send():
+        al, trace, v = can_send_case(spec)
+        visited.update(v)
+        can_send_rows.append({'args': spec, 'native': {'al': al, 'trace': trace}})
     doc = nm.header(__file__, 'Unicorn 2.1.4, original and v14 images (PC53; 0x620760 has no x87 arithmetic)')
     doc['rows'] = rows
+    doc['can_send_rows'] = can_send_rows
     doc['executed'] = nm.instructions(visited)
     if '--dry' in sys.argv:
         from collections import Counter
         print(len(rows), 'rows', len(visited), 'instructions,', sum(1 for a in visited if 0x620760 <= a < 0x620AFD), 'in 0x620760')
         print(Counter(' '.join(t[0] for t in r['native']['trace']) for r in rows))
+        print('436950', sum(1 for a in visited if 0x436950 <= a < 0x4369E6), 'of 67;', Counter(r['native']['al'] for r in can_send_rows))
         return
     out = HERE / 'native-right-click.json'
     out.write_text(json.dumps(doc, indent=0))

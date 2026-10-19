@@ -100,6 +100,10 @@ impl<'owner, T: MillisecondTimer> Cells<'owner, T> {
     pub fn same_a(&self) -> &'owner RefCell<Synchronizer> {
         self.sync_a
     }
+    ///The SAME process SyncS loan (Sim log S), e.g. for 4F02B0 seed logs.
+    pub fn same_s(&self) -> &RefCell<&'owner mut Synchronizer> {
+        &self.sync_s
+    }
     pub fn abort_writer(&self) -> Result<order_gate::AdminWriter> {
         Ok(self
             .gate

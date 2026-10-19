@@ -9,13 +9,14 @@ struct ActorSpec {
     b4: bool,
     can: Vec<u32>,
     handle: u32,
+    /// vt+0x150's scripted answer (0x436950's loop).
+    can150: bool,
 }
 /// The oracle's views, actors, definitions and scripted answers; records
 /// every observable call the machine makes.
 struct Mock {
     views: Vec<Option<ActorSpec>>,
     definitions: Vec<Option<CommandDefinition>>,
-    can_send: bool,
     pointer: [u32; 3],
     map_xy: [u32; 2],
     aux: [u32; 2],
@@ -69,6 +70,10 @@ impl Leaves for Mock {
     fn flags_54(&mut self, _: usize) -> Result<u32> {
         Ok(0)
     }
+    fn actor_virtual_150(&mut self, v: usize, wire: &mut CommandWire) -> Result<bool> {
+        self.trace.push(json!(["actor_150", v, wire_json(wire)]));
+        Ok(self.views[v].as_ref().expect("vt+0x150 of a 0x45B7A0 actor").can150)
+    }
     unreachable_leaves! {
         set_flags_54(usize, u32) -> Result<()>;
         position_38(usize) -> Result<[u32; 3]>;
@@ -119,10 +124,6 @@ impl Scene for Mock {
     }
 }
 impl Orders for Mock {
-    fn can_send_436950(&mut self, wire: &mut CommandWire) -> Result<bool> {
-        self.trace.push(json!(["can_send", wire_json(wire)]));
-        Ok(self.can_send)
-    }
     fn acknowledge_61eef0(&mut self, wire: &CommandWire) -> Result<()> {
         self.trace.push(json!(["acknowledge", wire_json(wire)]));
         Ok(())
@@ -187,7 +188,7 @@ impl Host for Mock {
         drag_threshold_b39990() -> Result<i32>;
         camera_frame_10() -> Result<bool>;
         camera_frame_8() -> Result<()>;
-        cursor_feedback_620640() -> Result<()>;
+        cursor_feedback_620640(CursorSelection<usize>) -> Result<()>;
         box_rectangle_begin(&Event) -> Result<()>;
         box_rectangle_frame() -> Result<()>;
         box_rectangle_end() -> Result<()>;
@@ -223,6 +224,7 @@ fn right_click_matches_native_rows() {
                     b4: v["actor"]["b4"].as_bool().unwrap(),
                     can: v["actor"]["can"].as_array().unwrap().iter().map(|i| i.as_u64().unwrap() as u32).collect(),
                     handle: v["actor"]["handle"].as_u64().unwrap() as u32,
+                    can150: v["actor"]["can150"].as_bool().unwrap(),
                 })
             })
             .collect();
@@ -237,7 +239,6 @@ fn right_click_matches_native_rows() {
         let mut mock = Mock {
             views,
             definitions,
-            can_send: a["can_send"].as_bool().unwrap(),
             pointer: u32s(&a["pointer_184"]),
             map_xy: u32s(&a["map_xy"]),
             aux: u32s(&a["aux"]),
@@ -250,7 +251,7 @@ fn right_click_matches_native_rows() {
         m.pressed_60 = match a["widget"].as_str().unwrap() {
             "world" => Widget::World,
             "map" => Widget::Map,
-            "other" => Widget::Other,
+            "other" => Widget::Other(1),
             "none" => Widget::None,
             w => panic!("{w}"),
         };
@@ -284,12 +285,33 @@ fn right_click_matches_native_rows() {
         for t in n["trace"].as_array().unwrap() {
             match t[0].as_str().unwrap() {
                 "hovered" | "free" => {}
-                "base" => expected.push(json!(["base"])),
-                "can_send" => expected.push(json!(["can_send", native_command(&t[1])])),
+                // 0x5CD190 (the oracle's seam): a VWorld left press pushes the
+                // click state; otherwise 0x5E0690 swallows a left release whose
+                // +4 is NULL (the constructor value here) and routes the rest
+                // to the host's chain leaf only for VWorld / NULL (a HUD
+                // widget's or the minimap's chain is the UI thread's).
+                "base" => {
+                    let left_release = e.code == code::LEFT && e.released();
+                    let host_side = matches!(m.pressed_widget(), Widget::World | Widget::None);
+                    if host_side && !left_release {
+                        expected.push(json!(["base"]));
+                    }
+                }
+                "actor_150" => expected.push(json!(["actor_150", t[1], native_command(&t[2])])),
                 "send" => {
+                    // 0x61EEF0 is the oracle's seam; its own CanSend is the
+                    // 0x436950 the direct rows below prove.
                     let c = native_command(&t[1]);
-                    expected.push(json!(["can_send", c]));
-                    if mock.can_send {
+                    let mut can = false;
+                    for &v in m.selection().selected() {
+                        let Some(a) = mock.views[v].as_ref().filter(|a| a.b4) else { continue };
+                        expected.push(json!(["actor_150", v, c]));
+                        if a.can150 {
+                            can = true;
+                            break;
+                        }
+                    }
+                    if can {
                         expected.push(json!(["acknowledge", c]));
                         expected.push(json!(["emit", c]));
                         expected.push(json!(["diagnostic", true]));
@@ -316,6 +338,91 @@ fn right_click_matches_native_rows() {
                 assert_eq!(m.modal_names(), ["facing"], "{row}");
             }
             None => assert!(m.modal_names().is_empty() || m.modal_names() == ["click"], "{row}"),
+        }
+    }
+}
+
+/// Every direct 0x436950 row: static group +0x40 (byte +0x18), explicit
+/// commands (flag bit 6, definition +0x0C 0x25/0x26/other) and the selected
+/// actors' vt+0x150, in native order.
+#[test]
+fn can_send_436950_matches_native_rows() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../research/phase8-orders-input/states/native-right-click.json");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let rows = doc["can_send_rows"].as_array().unwrap();
+    assert!(rows.len() >= 200);
+    for row in rows {
+        let a = &row["args"];
+        let views = a["views"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| {
+                (!v.is_null()).then(|| ActorSpec {
+                    b4: v["b4"].as_bool().unwrap(),
+                    can: Vec::new(),
+                    handle: 0,
+                    can150: v["can150"].as_bool().unwrap(),
+                })
+            })
+            .collect();
+        let mut mock = Mock { views, definitions: Vec::new(), pointer: [0; 3], map_xy: [0; 2], aux: [0; 2], trace: Vec::new() };
+        let selected: Vec<usize> = a["selected"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+        let selection = Selection::for_state_tests(selected, None).with_static_for_state_tests(a["static_group"].as_bool());
+        let mut wire = CommandWire { flags: a["flags"].as_u64().unwrap() as u16, command: a["definition"].as_u64().map(|d| d as u32), ..Default::default() };
+        let got = selection.can_send_436950(&mut mock, &mut wire).unwrap();
+        let expected: Vec<Value> = row["native"]["trace"].as_array().unwrap().iter().map(|t| t[1].clone()).collect();
+        let calls: Vec<Value> = mock.trace.iter().map(|t| t[1].clone()).collect();
+        assert_eq!(calls, expected, "{row}");
+        assert_eq!(got, row["native"]["al"].as_u64().unwrap() == 1, "{row}");
+    }
+}
+
+fn widget_of(name: &Value) -> Widget {
+    match name.as_str() {
+        None => Widget::None,
+        Some("vworld") => Widget::World,
+        Some("hud_a") => Widget::Other(1),
+        Some("hud_b") => Widget::Other(2),
+        Some("minimap") => Widget::Map,
+        Some(other) => panic!("{other}"),
+    }
+}
+
+/// Every 0x5E0690 row: the +4 pressed widget afterwards, the early swallow
+/// of a left release, and the chain step reached for VWorld/NULL (the
+/// host's leaf) or a HUD widget / the minimap (the UI thread's handler).
+#[test]
+fn route_5e0690_matches_native_rows() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../research/phase8-orders-input/states/native-route-5e0690.json");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let rows = doc["rows"].as_array().unwrap();
+    assert!(rows.len() >= 300);
+    for row in rows {
+        let a = &row["args"];
+        let n = &row["native"];
+        let mut mock = Mock { views: Vec::new(), definitions: Vec::new(), pointer: [0; 3], map_xy: [0; 2], aux: [0; 2], trace: Vec::new() };
+        let mut m = Machine::<usize>::for_game_interface_60bae0();
+        m.pressed_60 = widget_of(&a["ui_60"]);
+        m.default_4 = widget_of(&a["state_4"]);
+        let e = Event {
+            x: 0,
+            y: 0,
+            flags: a["flags"].as_u64().unwrap() as u32,
+            code: a["code"].as_u64().unwrap() as u16,
+            delta: 0,
+            world: [0; 3],
+            origin: [0; 3],
+            direction: [0; 3],
+        };
+        let got = m.route_5e0690(&mut mock, &e).unwrap();
+        assert_eq!(m.default_pressed_4(), widget_of(&n["state_4"]), "{row}");
+        let chain_reached = !n["chain"].as_array().unwrap().is_empty();
+        let host_side = matches!(m.pressed_60, Widget::World | Widget::None);
+        let host_called = mock.trace == vec![json!(["base"])];
+        assert_eq!(host_called, chain_reached && host_side, "{row}");
+        if !chain_reached {
+            assert_eq!(got, n["al"].as_u64().unwrap() == 1, "{row}");
         }
     }
 }

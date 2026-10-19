@@ -45,13 +45,23 @@ fn organization_4ce6c0<T>(own:T,organization_7c:bool,element_parent_10:Option<T>
 ///Session/UI-dependent leaves are explicit errors.
 pub struct DirectoryViews<'a>{
     directory:&'a mut ViewDirectory,actors:&'a ActorStore,spatial:&'a SpatialWorld,
-    variables:&'a load_view_variables::State,context:Option<&'a OrderContext>,
+    variables:&'a load_view_variables::State,world:WorldFields<'a>,context:Option<&'a OrderContext>,
+    order_150:Option<Box<Order150<'a>>>,
+}
+///4CF430 on the SAME World and Catalog (battle_orders_input::actor_virtual_150_between_frames).
+pub type Order150<'a>=dyn FnMut(u16,Option<ActorId>,&mut aa_orders::commands::CommandWire,&mut crate::battle_orders_input::UiOrderGlobals)
+    ->Result<bool>+'a;
+///GWorld+275 and ObjectData+16D owners of the SAME World.
+#[derive(Clone,Copy)]
+pub struct WorldFields<'a>{
+    pub runtime_fields:&'a aa_runtime::load_world_runtime_fields::State,
+    pub source_fields:&'a aa_rules::native_source_requirements::NativeSourceRequirements,
 }
 impl<'a> DirectoryViews<'a>{
     pub fn new(directory:&'a mut ViewDirectory,actors:&'a ActorStore,spatial:&'a SpatialWorld,
-        variables:&'a load_view_variables::State,context:Option<&'a OrderContext>)->anyhow::Result<Self>{
+        variables:&'a load_view_variables::State,world:WorldFields<'a>,context:Option<&'a OrderContext>)->anyhow::Result<Self>{
         anyhow::ensure!(directory.actors.is_for(actors)&&directory.spatial.is_for(spatial),"orders view leaves use another World allocation");
-        Ok(Self{directory,actors,spatial,variables,context})
+        Ok(Self{directory,actors,spatial,variables,world,context,order_150:None})
     }
     ///A view of a destroyed Thing would have been uninited natively (its +14
     ///cleared); that uninit chain is not ported, so it is refused here.
@@ -83,8 +93,15 @@ impl<'a> DirectoryViews<'a>{
         if !self.directory.entries.contains_key(&view){return Err("Thing+C names no view allocation".into())}
         Ok(Some(view))
     }
+    ///Bind 4CF430 for actor_virtual_150 (order_views_with does this).
+    pub fn with_order_150(mut self,call:Box<Order150<'a>>)->Self{self.order_150=Some(call);self}
+    fn swept(&self)->Result<()>{
+        if self.directory.streaming_passes==0{return Err("VGrid On list / VThing+18: no 4312F0 -> 42F670 streaming pass has run in this World".into())}
+        Ok(())
+    }
     fn live(&self)->world::Live<'_>{
-        world::Live{directory:&*self.directory,actors:self.actors,spatial:self.spatial,variables:self.variables,context:self.context}
+        world::Live{directory:&*self.directory,actors:self.actors,spatial:self.spatial,variables:self.variables,
+            runtime_fields:self.world.runtime_fields,source_fields:self.world.source_fields,context:self.context}
     }
     fn view_class(&mut self,v:ViewHandle,which:ViewClass)->Result<bool>{
         let thing=self.entry(v)?.actor;world::view_class(&mut self.live(),Some(thing),which)
@@ -178,14 +195,40 @@ impl ViewLeaves for DirectoryViews<'_>{
     fn actor_handle_14(&mut self,v:ViewHandle)->Result<u32>{Ok(self.entry(v)?.actor.raw())}
     ///Thing vt+34(i): 4D1F90.
     fn actor_can_34(&mut self,v:ViewHandle,index:u32)->Result<bool>{let thing=self.entry(v)?.actor;world::can_34(&mut self.live(),thing,index)}
-    fn on_list_100(&mut self)->Result<Vec<ViewHandle>>{unported("on_list_100","VGrid+100 On-list writers (proximity)")}
-    fn proximity_18(&mut self,_:ViewHandle)->Result<i32>{unported("proximity_18","VThing+18 proximity writer")}
+    ///VGrid+100 from its +0 tail through VThing+8 (43D240's 42EEC0 order), as
+    ///the 42FAD0/42F670 streaming passes linked it.
+    ///436950's vt+0x150(5C0E30(), &cmd, 1): 4CF430 over the World.
+    fn actor_virtual_150(&mut self,v:ViewHandle,wire:&mut aa_orders::commands::CommandWire)->Result<bool>{
+        let slot=self.actor_slot_14(v)?;
+        let context=self.context.ok_or("0x436950 vt+0x150: orders Session/UI context was not supplied")?;
+        let kingdom=context.kingdom_76ac70()?;let mut globals=context.order_globals();
+        let call=self.order_150.as_mut().ok_or("0x436950 vt+0x150: 4CF430 World/Catalog binding was not supplied")?;
+        call(slot,kingdom,wire,&mut globals)
+    }
+    fn on_list_100(&mut self)->Result<Vec<ViewHandle>>{
+        self.swept()?;Ok(self.directory.streaming.tail_first(aa_runtime::view_streaming::List::On))
+    }
+    ///VThing+18, written by 45B330 in those passes.
+    fn proximity_18(&mut self,v:ViewHandle)->Result<i32>{self.swept()?;Ok(self.word(v,0x18)? as i32)}
     fn model_78(&mut self,_:ViewHandle)->Result<Option<Model>>{unported("model_78","VObject+78 NiAVObject instance")}
     fn selection_radius_469ac0(&mut self,_:ViewHandle)->Result<u32>{unported("selection_radius_469ac0","457DD0 + 469AC0 (Aspect+60 / Model+68)")}
     fn update_model_86e8d0(&mut self,_:ViewHandle)->Result<Model>{unported("update_model_86e8d0","86E8D0 NiAVObject::Update (model owner)")}
-    fn floater_remove_42eb10(&mut self,_:ViewHandle)->Result<()>{unported("floater_remove_42eb10","42EB10 group floater")}
-    fn floater_update_453470(&mut self,_:ViewHandle)->Result<()>{unported("floater_update_453470","453470 group floater refresh")}
-    fn flash_459600(&mut self,_:ViewHandle)->Result<()>{unported("flash_459600","459600 target flash")}
+    ///451860 / 452A90: 42EB10 runs only on a non-NULL view+9C, the attached
+    ///VFX list that 455310 allocates from VWorld 43CD00. The constructor's
+    ///NULL has no ported writer, so a non-NULL list is refused.
+    fn floater_remove_42eb10(&mut self,v:ViewHandle)->Result<()>{
+        if self.word(v,0x9c)?==0{return Ok(())}
+        unported("floater_remove_42eb10","42EB10 over the view+9C attached VFX list")
+    }
+    ///453470 returns before 42E640/43CD00 when view+9C (or VActor+150) is NULL.
+    fn floater_update_453470(&mut self,v:ViewHandle)->Result<()>{
+        if self.word(v,0x9c)?==0{return Ok(())}
+        unported("floater_update_453470","453470 42E640/43CD00 group floater VFX")
+    }
+    ///459600 first stores view+98 = (u32)59ABA0(B396E0) * 0.001f; the global
+    ///B396E0 application timer has no owner shared with the orders frame
+    ///(battle_notifications keeps its own anchor, the HUD reads Ui::now_ms).
+    fn flash_459600(&mut self,_:ViewHandle)->Result<()>{unported("flash_459600","459600 global B396E0 timer (59ABA0) owner")}
 }
 
 #[cfg(test)]

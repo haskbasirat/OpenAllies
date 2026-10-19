@@ -197,3 +197,39 @@ UI frame cost / egui staging-buffer panic
   The deploy534-01 panic (index count 3678, buffer 49152 bytes) followed
   "Acquiring a texture failed with a generic error": the wgpu device was
   lost; the staging-buffer failure is a symptom, not UI growth.
+
+Continuation 2 (2026-10-19)
+---------------------------
+Real run hud03 (final build, 30.5 min Berlin, sample_memory.py every 30 s):
+  SetState 0->2, 2->6, World view creation reached; the Loading page shows
+  "Fall of Berlin" and its description (6E8730). Stopped at the model
+  owner's "selected NIF actual Object03 controller update requires its real
+  key/controller graph". Working set 1.76-1.79 GB, private 1.95-1.97 GB,
+  GPU 213 MB, flat from 292 s to 1750 s; 0 panics. CPU time grows about
+  one core-second per second while the view init runs.
+  qa-output/development10/game-state-entry/hud03/berlin/ (after-0480s.png,
+  memory.jsonl, result.json).
+
+Native frame loop 410E70: GAMESTATE_LOCK ([B36524]+8 vt+4), 40FBE0
+  notifications + node vt+0x10 ("NETEVENTS"), 41C0E0(4), UI update 5C92D0
+  ("UIUPDATE"), unlock vt+8 ("UNLOCK"), render 5C7AC0 ("RENDER"); the
+  NetNode Update 765410 -> AdminNode 75CA70 product frame runs between the
+  locked sections. The notification job therefore runs drain (incl. Game
+  612010 in AppState 4) and then run_frame on the SAME simulation thread
+  (battle_controller start_notifications, already wired); the frame now
+  uses aa-netcode run_native_frame_bound (local_live_frame.rs, additive):
+  the caller's Catalog validates the Application loan and a FrameCatalog
+  builder (battle_notifications::FrameCatalog: same source, Resource
+  catalog, settings, load mode) builds the frame Catalog inside that loan
+  with Catalog::bind_renderer_orientation(parts.orientation) (AVar25,
+  552DD0). A missing view-inputs owner is an explicit error.
+
+UVars from 4DA570: SwapRightClickWithAltRightClick (kind 1) and
+  HotkeyAltRightClickCommand (kind 4) have no code registration; aa-ui
+  uvars.rs creates their records only from a Data/UVars.tgi declaration
+  (bool / string; values false / retreat), User overrides on top; strict
+  getters error when the record is absent or of another kind. Bound in
+  battle_notifications CurrentAudio (Frontend) through the UI bridge.
+  Test uvars::tests::right_click_order_variables_are_source_created.
+
+HudLeaves (HUD side): research/development10/hud-orders/README.txt.

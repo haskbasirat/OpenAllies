@@ -3,6 +3,7 @@
 use crate::{
     battle_camera::{input as camera_input, orders_hud},
     battle_controller::{Controller, Status},
+    battle_menus::hud_orders,
     battle_orders_input,
     gpu::{SceneRenderer, camera_device::Viewport},
     live_scene::camera_backend::Frame,
@@ -10,6 +11,8 @@ use crate::{
 use aa_runtime::native_camera::input::Trace;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
+#[path = "battle_terrain_owner.rs"]
+mod terrain_owner;
 
 struct Packet {
     frame: Arc<Frame>,
@@ -30,6 +33,33 @@ struct Packet {
     view_request_error: Option<String>,
     ///VWorld+AD for this job: 43EC60 ran exactly when it is set.
     vworld_ad: bool,
+    ///43FE0F/43FE26 construction or 4312F0/725340 refusal.
+    terrain_error: Option<String>,
+    terrain_status: Option<String>,
+}
+
+///One native UI frame of selection/order input: the window messages and the
+///HUD owner's UI+0x60 facts for the same messages (UI thread, Send).
+struct OrdersInput {
+    observed: battle_orders_input::Observed,
+    hud: hud_orders::HudFrame,
+}
+impl OrdersInput {
+    ///See `camera_input::Frame::coalesce`: messages and press picks in order;
+    ///Input+0xC keeps the last reported cursor (WM_MOUSEMOVE writes it), the
+    ///HUD facts are the latest; UI+0x60 before the first press stays.
+    fn coalesce(&mut self, next: OrdersInput) {
+        let (o, h) = (next.observed, next.hud);
+        self.observed.messages.extend(o.messages);
+        self.observed.cursor = o.cursor.or(self.observed.cursor);
+        self.observed.client = o.client;
+        self.observed.world_under_cursor = o.world_under_cursor;
+        self.hud.presses.extend(h.presses);
+        self.hud.focus_is_game = h.focus_is_game;
+        self.hud.mouse_bindings = h.mouse_bindings;
+        self.hud.economic_impact = h.economic_impact;
+        self.hud.unit_acknowledgement = h.unit_acknowledgement;
+    }
 }
 
 ///What one native orders UI frame did, for the log (Send).
@@ -43,6 +73,8 @@ struct OrdersFrame {
     ///XY words of the box polygon's four vertices while it exists.
     box_xy: Option<[u32; 8]>,
     lock_214: Option<u8>,
+    ///Voice/marker requests the HUD leaves queued (no presentation owner).
+    presentation: Vec<String>,
 }
 
 ///The first actual window target remains fixed until a native camera resize
@@ -69,11 +101,22 @@ pub struct State {
     ///Selection/order input (research/phase8-orders-input): window message
     ///tracking, UI frames queued like `input`, and the per-battle machine.
     orders_window: battle_orders_input::Window,
-    orders_input: Vec<battle_orders_input::Observed>,
+    ///UI+0x60 across frames on the UI thread (HUD owner's press pick).
+    press_tracker: hud_orders::PressTracker,
+    ///At most one pending native frame (see OrdersInput::coalesce).
+    orders_input: Vec<OrdersInput>,
     orders: Arc<Mutex<battle_orders_input::Orders>>,
+    ///The HUD owner's per-battle simulation-thread state.
+    hud_orders: Arc<Mutex<hud_orders::HudOrderState>>,
+    ///observe_input ran without the HUD tree, so no orders frame was queued.
+    orders_unrouted: bool,
     last_orders_error: Option<String>,
     last_view_request_error: Option<String>,
     last_vworld_ad: Option<bool>,
+    ///B36518 TerrainMap + VWorld+94 visibility (simulation thread).
+    terrain: Arc<Mutex<terrain_owner::Slot>>,
+    last_terrain_error: Option<String>,
+    last_terrain_status: Option<String>,
 }
 impl State {
     pub fn empty() -> Self {
@@ -91,25 +134,56 @@ impl State {
             last_status_log: None,
             last_texture: None,
             orders_window: battle_orders_input::Window::default(),
+            press_tracker: hud_orders::PressTracker::default(),
             orders_input: Vec::new(),
             orders: Arc::new(Mutex::new(battle_orders_input::Orders::new())),
+            hud_orders: Arc::new(Mutex::new(hud_orders::HudOrderState::default())),
+            orders_unrouted: false,
             last_orders_error: None,
             last_view_request_error: None,
             last_vworld_ad: None,
+            terrain: Arc::new(Mutex::new(terrain_owner::Slot::Pending)),
+            last_terrain_error: None,
+            last_terrain_status: None,
         }
     }
-    ///Collect this UI frame's real input for the native camera controls.
-    ///Call once per update before `poll`; frames queue until a job runs.
+    ///Collect this UI frame's real input for the native camera controls only.
+    ///Selection/order input needs the HUD tree's press verdict: without it no
+    ///orders frame is queued (see observe_input_hud).
     pub fn observe_input(&mut self, ctx: &egui::Context) {
+        self.observe(ctx, None);
+    }
+    ///Collect this UI frame's camera and selection/order input. `ui` is the
+    ///aa-ui HUD drawn over the battle image (0x5C3BC0 press pick). Call once
+    ///per update before `poll`; frames observed while a job is pending join
+    ///the next native frame (Frame::coalesce), so the queue stays one frame.
+    pub fn observe_input_hud(&mut self, ctx: &egui::Context, ui: &aa_ui::ui::Ui) {
+        self.observe(ctx, Some(ui));
+    }
+    fn observe(&mut self, ctx: &egui::Context, ui: Option<&aa_ui::ui::Ui>) {
         let Some(pixels) = self.pixels else { return };
-        self.input.push(camera_input::observe(ctx, ctx.content_rect(), pixels, self.presented));
-        //The HUD owner supplies the native UI+0x60 verdict later; until then
-        //the world is under the cursor unless an egui area/widget has it.
-        let world_under_cursor = !(ctx.is_pointer_over_area() || ctx.wants_pointer_input());
+        let frame = camera_input::observe(ctx, ctx.content_rect(), pixels, self.presented);
+        match self.input.last_mut() {
+            Some(last) => last.coalesce(frame),
+            None => self.input.push(frame),
+        }
+        let Some(ui) = ui else {
+            self.orders_unrouted = true;
+            return;
+        };
         //Native client pixels of the presented image (equal to the content
         //rect unless the window aspect differs from the fixed target).
         let image = self.image_rect(ctx.content_rect());
-        self.orders_input.push(battle_orders_input::observe(ctx, &mut self.orders_window, image, pixels, world_under_cursor));
+        //0x5C3BC0's UI+0x60 for each button message (VWorld, minimap or the
+        //HUD widget's identity) from the aa-ui press pick.
+        let observed = battle_orders_input::observe_with(ctx, &mut self.orders_window, image, pixels,
+            &mut |p| battle_orders_input::widget_for_press_target(&ui.press_target_5c3bc0(p[0] as i16, p[1] as i16)));
+        let hud = hud_orders::HudFrame::observe(ui, &mut self.press_tracker, &observed);
+        let next = OrdersInput { observed, hud };
+        match self.orders_input.last_mut() {
+            Some(last) => last.coalesce(next),
+            None => self.orders_input.push(next),
+        }
     }
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
@@ -151,11 +225,18 @@ impl State {
             if self.error.is_some() || controller.status() != &Status::AwaitingNativeView {
                 return;
             }
+            if std::mem::take(&mut self.orders_unrouted) && self.last_orders_error.is_none() {
+                let error = "frontend calls observe_input without the HUD tree (observe_input_hud): no selection/order frame is queued";
+                log::error!("native orders input not routed: {error}");
+                self.last_orders_error = Some(error.into());
+            }
             let Some(viewport) = self.viewport.as_ref().map(Arc::clone) else { return };
             let map_id=controller.request().map(|r|r.map_id.clone()).unwrap_or_default();
             let input = std::mem::take(&mut self.input);
             let orders_input = std::mem::take(&mut self.orders_input);
             let orders = Arc::clone(&self.orders);
+            let hud_orders = Arc::clone(&self.hud_orders);
+            let terrain = Arc::clone(&self.terrain);
             let bridge = controller.ui_backend();
             self.pending = match controller.submit_activated(move |loans, execution| {
                 //A queued upload/target change can legitimately supersede a
@@ -199,16 +280,40 @@ impl State {
                     let revision = loans.session.world().presentation_parts()?.revision;
                     startup.native_view().native().prefix().initialized_for(revision)?
                 };
+                let mut terrain = terrain.lock().map_err(|_| "battle TerrainMap owner poisoned")?;
+                //43FE0F/43FE26: the B36518 TerrainMap and VWorld+94, built once
+                //right after the visual heightfield publication.
+                let mut terrain_error = {
+                    let startup = loans.view_startup.as_ref().expect("checked above");
+                    build_terrain_43fe0f(&mut terrain, loans.source, loans.session, loans.application_views, startup, &bridge, execution)
+                };
                 //The same UI frames' selection/order input, after the camera
-                //controls (see battle_orders_hud.rs for the ordering).
+                //controls (see battle_orders_hud.rs for the ordering). 0x71D840
+                //sees the previous update's block residency, as natively.
                 let (orders, orders_error) = if orders_input.is_empty() { (Vec::new(), None) } else {
                     let startup = loans.view_startup.as_mut().expect("checked above");
-                    match native_orders_frames(&orders_input, &orders, loans.source, loans.session,
-                        loans.notifications, loans.application_views, startup, vworld_ad) {
+                    let owner = match &*terrain { terrain_owner::Slot::Built(o) => Some(&**o), _ => None };
+                    match native_orders_frames(&orders_input, &orders, &hud_orders, loans.source, loans.session,
+                        loans.notifications, loans.application_views, startup, vworld_ad, owner, &bridge, execution) {
                         Ok(frames) => (frames, None),
                         Err(error) => (Vec::new(), Some(error)),
                     }
                 };
+                //0x4312F0 (0x43ED0A) and 0x725340 (0x43ED15) once per VWorld
+                //update while VWorld+AD, right before the 43EC60 request segment.
+                //They move into the full 43EC60 driver (aa-runtime/src/
+                //vworld_update.rs) when it lands, so they never run twice.
+                let mut terrain_status = None;
+                if vworld_ad {
+                    if let terrain_owner::Slot::Built(owner) = &mut *terrain {
+                        let startup = loans.view_startup.as_ref().expect("checked above");
+                        match terrain_visibility_4312f0(owner, loans.session, loans.application_views, startup) {
+                            Ok(()) => terrain_status = Some(owner.status()),
+                            Err(error) => terrain_error = terrain_error.or(Some(error)),
+                        }
+                    }
+                }
+                drop(terrain);
                 //43FF60 -> 43EC60 (VWorld+208 requests) once per UI frame while
                 //VWorld+AD, after the camera children. A refusal is reported
                 //and the frame loop continues.
@@ -227,7 +332,8 @@ impl State {
                 )?;
                 let frame=Frame::from_current(snapshot, revision).map_err(|e|e.to_string())?;
                 Ok(Some(Packet{frame,world_revision:revision.value(),init_word_b8:native.prefix().init_word_b8(),map_id,
-                    camera_trace,camera_pose,input_error,input_status,orders,orders_error,view_request_error,vworld_ad}))
+                    camera_trace,camera_pose,input_error,input_status,orders,orders_error,view_request_error,vworld_ad,
+                    terrain_error,terrain_status}))
             }) {
                 Ok(ticket) => Some(ticket),
                 Err(error) => { log::error!("battle presentation camera job not submitted: {error}"); self.error = Some(error); None }
@@ -277,6 +383,16 @@ impl State {
             log::info!("native VWorld+AD = {}: 43EC60 view request segment {}", packet.vworld_ad,
                 if packet.vworld_ad { "runs once per presentation job" } else { "skipped" });
         }
+        if let Some(error) = &packet.terrain_error {
+            if self.last_terrain_error.as_deref() != Some(error) {
+                log::error!("native battle TerrainMap/visibility refused: {error}");
+                self.last_terrain_error = Some(error.clone());
+            }
+        }
+        if packet.terrain_status.is_some() && packet.terrain_status != self.last_terrain_status {
+            log::info!("native terrain visibility 4312F0: {}", packet.terrain_status.as_deref().unwrap_or(""));
+            self.last_terrain_status = packet.terrain_status.clone();
+        }
         if let Some(error) = &packet.view_request_error {
             once(&mut self.last_view_request_error, "native view request queue 43EC60 refused", error);
         }
@@ -294,9 +410,9 @@ impl State {
             if frame.buttons > 0 || r.events > 0 || !frame.children.is_empty() {
                 let f = |w: u32| f32::from_bits(w);
                 let box_xy = frame.box_xy.map(|w| format!("[{:.4},{:.4}]-[{:.4},{:.4}]", f(w[0]), f(w[1]), f(w[4]), f(w[5])));
-                log::info!("native orders frame: buttons={} events={} handled={} selected={} modal={:?} children={:?} box={} lock214={:?} error={}",
+                log::info!("native orders frame: buttons={} events={} handled={} selected={} modal={:?} children={:?} box={} lock214={:?} unpresented={:?} error={}",
                     frame.buttons, r.events, r.handled, r.selected, frame.modal, frame.children, box_xy.unwrap_or_else(|| "none".into()),
-                    frame.lock_214, r.error.as_deref().unwrap_or("none"));
+                    frame.lock_214, frame.presentation, r.error.as_deref().unwrap_or("none"));
             }
         }
     }
@@ -375,14 +491,18 @@ fn native_camera_frames(
 #[cfg(windows)]
 #[allow(clippy::too_many_arguments)]
 fn native_orders_frames(
-    frames: &[battle_orders_input::Observed],
+    frames: &[OrdersInput],
     orders: &Mutex<battle_orders_input::Orders>,
+    hud_orders: &Mutex<hud_orders::HudOrderState>,
     source: &Arc<aa_rules::actors::ActorCatalog>,
     session: &mut aa_netcode::local_bootstrap::world_ready::ActualActivatedSession,
     notifications: &aa_netcode::local_bootstrap::Notifications,
     views: &mut crate::live_scene::world_owner::ApplicationViews,
     startup: &mut crate::battle_view_startup::State,
     vworld_ad: bool,
+    terrain: Option<&terrain_owner::Owner>,
+    bridge: &crate::battle_ui_bridge::Client,
+    execution: &mut aa_runtime::simulation_execution::Execution<'_>,
 ) -> Result<Vec<OrdersFrame>, String> {
     use aa_runtime::native_camera::screen;
     let pc = aa_numeric::Precision::Double53;
@@ -392,6 +512,9 @@ fn native_orders_frames(
     catalog.bind_resource_catalog(Arc::clone(resources))?;
     catalog.settings = Some(session.world().presentation_parts()?.settings.clone());
     catalog.native_load_mode = session.world().evidence().native_load_mode;
+    let session_e4 = session.session_state_e4();
+    //Session/UI words of the view leaves, read before the AdminNode loan.
+    let context = startup.order_context(session, bridge, execution);
     let (host, world, application) = session.parts();
     let parts = world.presentation_parts()?;
     let revision = parts.revision;
@@ -400,10 +523,15 @@ fn native_orders_frames(
         let app = application.view_startup_parts(&catalog, parts.definitions)?;
         battle_orders_input::seed_b43cf8(app.inputs.seeds(), &catalog)?
     };
-    let terrain_ready = {
-        let height = startup.native_view().native().heightfield();
-        let (_, visual) = views.camera_and_visual_map();
-        visual.dimensions_for_world(revision, height)?.is_some()
+    //B36518 != 0 && +BC. Before the map exists (or after its refused
+    //construction) the published visual map stands for B36518.
+    let terrain_ready = match terrain {
+        Some(owner) => owner.loaded_bc()?,
+        None => {
+            let height = startup.native_view().native().heightfield();
+            let (_, visual) = views.camera_and_visual_map();
+            visual.dimensions_for_world(revision, height)?.is_some()
+        }
     };
     //Admin+2C0 and Node+8 of the SAME node whose AdminNode receives the requests.
     let (running_2c0, local_player) = {
@@ -413,28 +541,35 @@ fn native_orders_frames(
     let application_kind = notifications.application_kind_b396c0();
     let admin = host.order_node_mut().map_err(|e| e.to_string())?;
     let mut orders = orders.lock().map_err(|_| "orders input owner poisoned")?;
+    let mut hud_state = hud_orders.lock().map_err(|_| "HUD orders owner poisoned")?;
     let mut out = Vec::with_capacity(frames.len());
-    for observed in frames {
+    for OrdersInput { observed, hud: hud_frame } in frames {
         let viewport = [observed.client[0] as i32, observed.client[1] as i32];
         let (camera, _) = views.camera_and_visual_map();
         let slot = camera.controls().and_then(|n| n.controls().active());
         let before = orders.machine().tracker();
         let mut facing = orders_hud::UnboundFacing;
-        let mut hud = orders_hud::Leaves::new(slot, vworld_ad, threshold.clone(), &mut facing);
+        let mut hud_leaves = hud_orders::HudOrderLeaves::new(&mut hud_state, hud_frame, observed,
+            application_kind, Ok(session_e4), Some(&catalog));
+        let mut hud = orders_hud::Leaves::new(slot, vworld_ad, threshold.clone(), &mut facing, &mut hud_leaves);
         let report = {
             let h = camera.directory().current_handle()?;
             let state = camera.directory().camera(&h)?.normalized_state()?;
-            let mut leaves = startup.order_views(world)?;
+            let mut leaves = startup.order_views_with(world, &context)?;
+            let mut ray = terrain.map(|o| battle_orders_input::TerrainRay(&o.map));
             let mut live = battle_orders_input::Live {
                 views: &mut leaves, hud: &mut hud, admin: &mut *admin, running_2c0, local_player,
                 camera: Some(state), viewport, application_kind, terrain_ready,
-                //The live TerrainMap (723E00/723960/71B8F0/71B610) is not bound yet.
-                terrain: None, seed_b43cf8: Some(seeds), precision: pc,
+                //0x71D840 on B36518 (margin 0).
+                terrain: ray.as_mut().map(|r| r as &mut dyn battle_orders_input::TerrainQuery),
+                seed_b43cf8: Some(seeds), precision: pc,
             };
             orders.frame(observed, &mut live)
         };
         let after = orders.machine().tracker();
         let children = hud.children().to_vec();
+        drop(hud);
+        let presentation = hud_state.take_presentation().iter().map(|p| format!("{p:?}")).collect();
         let tracker = screen::Tracker { current: after.current, left_press: before.left_press };
         let apply_error = camera.orders_children(&children, tracker, viewport, Some(seeds), pc).err();
         let box_xy = camera.screen_box().and_then(|p| p.lock().ok().map(|p| {
@@ -443,9 +578,76 @@ fn native_orders_frames(
         }));
         let lock_214 = camera.directory().current_handle().and_then(|h| camera.directory().byte_captured(&h, 0x214)).ok();
         let buttons = observed.messages.iter().filter(|m| matches!(m, battle_orders_input::Message::Button { .. })).count();
-        out.push(OrdersFrame { buttons, report, modal: orders.machine().modal_names(), children, apply_error, box_xy, lock_214 });
+        out.push(OrdersFrame { buttons, report, modal: orders.machine().modal_names(), children, apply_error, box_xy, lock_214, presentation });
     }
     Ok(out)
+}
+
+///43FE0F/43FE26 once the visual heightfield is published: returns the
+///construction refusal the first time it happens.
+#[cfg(windows)]
+fn build_terrain_43fe0f(
+    slot: &mut terrain_owner::Slot,
+    source: &Arc<aa_rules::actors::ActorCatalog>,
+    session: &mut aa_netcode::local_bootstrap::world_ready::ActualActivatedSession,
+    views: &mut crate::live_scene::world_owner::ApplicationViews,
+    startup: &crate::battle_view_startup::State,
+    bridge: &crate::battle_ui_bridge::Client,
+    execution: &mut aa_runtime::simulation_execution::Execution<'_>,
+) -> Option<String> {
+    if !matches!(slot, terrain_owner::Slot::Pending) {
+        return None;
+    }
+    let built = (|| -> Result<Option<terrain_owner::Owner>, String> {
+        let native = startup.native_view().native();
+        let height = native.heightfield();
+        let revision = session.world().presentation_parts()?.revision;
+        let (_, visual) = views.camera_and_visual_map();
+        if visual.dimensions_for_world(revision, height)?.is_none() {
+            return Ok(None);
+        }
+        let height = height.ok_or("43FE0F VWorld+BC heightfield absent")?;
+        let mut catalog = aa_runtime::catalog::Catalog::new(source);
+        let resources = session.world().evidence().resource_source.as_ref()
+            .ok_or("43FE26 actual Resource source owner absent")?;
+        catalog.bind_resource_catalog(Arc::clone(resources))?;
+        catalog.settings = Some(session.world().presentation_parts()?.settings.clone());
+        catalog.native_load_mode = session.world().evidence().native_load_mode;
+        let (_, world, application) = session.parts();
+        let parts = world.presentation_parts()?;
+        let app = application.view_startup_parts(&catalog, parts.definitions)?;
+        let quad = || bridge.call(&mut *execution, |c| c.ui.uvars.terrain_quad_size_current());
+        terrain_owner::build_43fe0f(world, height, app.inputs.grid(), quad, aa_numeric::Precision::Double53).map(Some)
+    })();
+    match built {
+        Ok(Some(owner)) => {
+            log::info!("native battle TerrainMap 43FE26 built: {}", owner.status());
+            *slot = terrain_owner::Slot::Built(Box::new(owner));
+            None
+        }
+        Ok(None) => None,
+        Err(error) => {
+            *slot = terrain_owner::Slot::Failed(error.clone());
+            Some(format!("43FE0F/43FE26 TerrainMap construction: {error}"))
+        }
+    }
+}
+
+///0x4312F0 + 0x725340 on the current camera, the SAME World, VWorld+BC and
+///the VWorld+94 VGrid.
+#[cfg(windows)]
+fn terrain_visibility_4312f0(
+    owner: &mut terrain_owner::Owner,
+    session: &aa_netcode::local_bootstrap::world_ready::ActualActivatedSession,
+    views: &mut crate::live_scene::world_owner::ApplicationViews,
+    startup: &crate::battle_view_startup::State,
+) -> Result<(), String> {
+    let native = startup.native_view().native();
+    let height = native.heightfield().ok_or("4312F0 VWorld+BC heightfield absent")?;
+    let grid = native.prefix().grid().ok_or("4312F0 VWorld+94 VGrid absent")?;
+    let (camera, _) = views.camera_and_visual_map();
+    let words = aa_runtime::terrain_visibility::CameraWords::current(camera.directory())?;
+    owner.update_4312f0_725340(session.world(), height, grid, &words, aa_numeric::Precision::Double53)
 }
 
 fn aspect_fit(available: egui::Rect, pixels: [u32; 2]) -> egui::Rect {
@@ -465,5 +667,35 @@ mod tests {
         assert_eq!(fit.center(), wide.center());
         let tall = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 1000.0));
         assert_eq!(aspect_fit(tall, [1600, 900]).size(), egui::vec2(600.0, 337.5));
+    }
+    #[test]
+    fn frames_queued_behind_a_job_join_one_native_frame_in_order() {
+        use camera_input::{Event, Frame};
+        let key = |code, flags| Event::Key { code, flags };
+        let mut f = Frame { events: vec![key(0x27, 1)], cursor: Some([1, 2]), client: [800, 600], presented: false, windowed: true, counter: Some(10) };
+        f.coalesce(Frame { events: vec![key(0x27, 2), Event::Wheel { delta: 120, flags: 0x81 }], cursor: None, client: [800, 600], presented: true, windowed: false, counter: Some(25) });
+        assert_eq!(f.events, [key(0x27, 1), key(0x27, 2), Event::Wheel { delta: 120, flags: 0x81 }]);
+        assert_eq!((f.cursor, f.presented, f.windowed, f.counter), (None, true, false, Some(25)));
+        use aa_runtime::player_order_input::states::Widget;
+        use aa_ui::press_pick::PressTarget;
+        let button = |code, flags, x| battle_orders_input::Message::Button { code, flags, x, y: 5, widget: Widget::World };
+        let pick = |code, x| hud_orders::PressPick { code, flags: 1, x, y: 5, target: PressTarget::VWorld };
+        let hud = |presses| hud_orders::HudFrame { start_60: PressTarget::None, presses, focus_is_game: true,
+            mouse_bindings: Ok(()), economic_impact: false, unit_acknowledgement: Ok(true) };
+        let mut o = OrdersInput {
+            observed: battle_orders_input::Observed { messages: vec![button(0x100, 1, 3)], cursor: Some([3, 5]), client: [800, 600], world_under_cursor: true },
+            hud: hud(vec![pick(0x100, 3)]),
+        };
+        let mut next_hud = hud(vec![pick(0x101, 9)]);
+        next_hud.start_60 = PressTarget::VWorld;
+        next_hud.economic_impact = true;
+        o.coalesce(OrdersInput {
+            observed: battle_orders_input::Observed { messages: vec![button(0x100, 2, 4), button(0x101, 1, 9)], cursor: None, client: [800, 600], world_under_cursor: false },
+            hud: next_hud,
+        });
+        assert_eq!(o.observed.messages, [button(0x100, 1, 3), button(0x100, 2, 4), button(0x101, 1, 9)]);
+        assert_eq!((o.observed.cursor, o.observed.world_under_cursor), (Some([3, 5]), false));
+        assert_eq!(o.hud.presses, [pick(0x100, 3), pick(0x101, 9)]);
+        assert_eq!((o.hud.start_60.clone(), o.hud.economic_impact), (PressTarget::None, true));
     }
 }

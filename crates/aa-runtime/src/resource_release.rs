@@ -227,7 +227,7 @@ impl Resources<'_> {
     fn unload_40(&mut self, handle: &Handle, backend: &mut impl Backend) -> Result<()> {
         match handle.kind() {
             //5AA700: two stores, bit0 then bit1 cleared.
-            Kind::Texture | Kind::Sound => self.with_entry(handle, |e| {
+            Kind::Texture | Kind::Sound | Kind::TerrainBlock => self.with_entry(handle, |e| {
                 e.flags8 &= !1;
                 e.flags8 &= !2;
                 Ok(())
@@ -302,6 +302,7 @@ impl Resources<'_> {
                 }
                 Ok(())
             }
+            Kind::TerrainBlock => backend.terrain_unload_71b5f0(handle),
             Kind::Sound => {
                 if self.with_entry(handle, |e| Ok(e.sound.as_ref().ok_or("59AFE0 requires an actual Sound allocation")?.streaming41))? != 0 {
                     return Ok(());

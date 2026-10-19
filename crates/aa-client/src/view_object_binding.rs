@@ -2,7 +2,7 @@
 //!Positive construction/stance source fields, radius-change callbacks and full
 //!Data pre-request stay explicit reached boundaries until their owners exist.
 use super::{ViewHandle,TypedVObject,GridView,append_request};
-use crate::{battle_ui_bridge::Client,live_scene::{model_policy::UiPolicy,view_object_fields::{self,Fields},view_object_init,view_actor_init}};
+use crate::{battle_ui_bridge::Client,live_scene::{model_policy::UiPolicy,view_object_fields::{self,Fields},view_object_init,view_actor_init,view_actor_fields}};
 use aa_runtime::{catalog::Catalog,live_world_frame::ViewBindingParts,actor_world::{ObjectKey,RuntimeObject},
     resource_objects::Handle,data_pre_request::aspect::Aspect,simulation_execution::Execution,
     view_init_world::ObjectInitParts,world_revision::ConstructedWorldRevision};
@@ -19,16 +19,19 @@ pub struct InitContext<'owners,'run>{
     request_policy:&'owners crate::live_scene::view_request_policy::State,
     replacement_color:Option<&'owners aa_runtime::view_replacement_color::State>,
     session:Option<&'owners aa_netcode::local_bootstrap::LocalBootstrap>,
+    ///B43CF8 process vector owner read by the42D7B0 Track constructor.
+    seeds:Option<&'owners aa_runtime::view_grid_startup::Seeds>,
     precision:aa_numeric::Precision,
 }
 impl<'owners,'run> InitContext<'owners,'run>{
     pub fn new(object:ObjectInitParts<'owners,ViewHandle>,application:&'owners mut aa_runtime::resource_depot::Application,
         client:&'owners Client,execution:&'owners mut Execution<'run>,
         request_policy:&'owners crate::live_scene::view_request_policy::State,precision:aa_numeric::Precision)->Self{
-        Self{object,application,client,execution,request_policy,replacement_color:None,session:None,precision}
+        Self{object,application,client,execution,request_policy,replacement_color:None,session:None,seeds:None,precision}
     }
     pub fn with_replacement_color(mut self,color:&'owners aa_runtime::view_replacement_color::State)->Self{self.replacement_color=Some(color);self}
     pub fn with_session(mut self,session:&'owners aa_netcode::local_bootstrap::LocalBootstrap)->Self{self.session=Some(session);self}
+    pub fn with_seeds(mut self,seeds:&'owners aa_runtime::view_grid_startup::Seeds)->Self{self.seeds=Some(seeds);self}
     pub(super) fn require_world(&self,world:&ConstructedWorldRevision)->Result<()>{self.object.require_world(world).map_err(anyhow::Error::msg)}
 }
 struct Current<'a,'world,'assets,'owners,'run>{
@@ -154,7 +157,7 @@ struct ActorCurrent<'a,'world,'assets,'owners,'run>{
     source:Option<aa_runtime::data_pre_request::actor_view_source::ActorView>,
 }
 impl view_actor_init::Services for ActorCurrent<'_,'_,'_,'_,'_>{
-    type TrackArray=std::convert::Infallible;
+    type TrackArray=view_actor_fields::tracks::Array<view_actor_fields::TrackTexture>;
     fn base_init(&mut self)->Result<bool>{
         let fields=self.entry.native_fields.as_mut().context("actual VObject base fields absent")?;
         let mut current=Current{parts:self.p,catalog:self.catalog,key:self.entry.key,handle:self.handle,fields,
@@ -198,9 +201,19 @@ impl view_actor_init::Services for ActorCurrent<'_,'_,'_,'_,'_>{
     }
     fn track_count_260(&mut self)->Result<i32>{let source=self.source.as_ref().context("451F90 source38 not reached")?;
         self.context.application.with_data_pre_request(|data|data.actor_view_track_count_260(source)).map_err(anyhow::Error::msg)}
-    fn construct_track_array(&mut self,count:i32)->Result<Self::TrackArray>{self.entry.actor_fields.as_mut().context("451F90 VActor tail absent")?.construct_pending_tracks(count)}
-    fn store_track_array(&mut self,array:Self::TrackArray)->Result<()>{match array{}}
-    fn current_track_count_148(&self)->Result<i32>{bail!("451F90 positive Track array constructor has not completed")}
-    fn initialize_track(&mut self,_:usize)->Result<()>{bail!("42D830 requires the actual constructed Track owner")}
+    fn construct_track_array(&mut self,count:i32)->Result<Self::TrackArray>{
+        let seeds=self.context.seeds.context("42D7B0 requires the actual B43CF8 process vector owner")?;
+        let mut bound=seeds.bind(self.catalog).map_err(anyhow::Error::msg)?;
+        self.entry.actor_fields.as_mut().context("451F90 VActor tail absent")?.construct_tracks(count,&mut view_actor_fields::tracks::SeedGlobals(&mut bound))
+    }
+    fn store_track_array(&mut self,array:Self::TrackArray)->Result<()>{self.entry.actor_fields.as_mut().context("451F90 VActor tail absent")?.publish_tracks(array)}
+    fn current_track_count_148(&self)->Result<i32>{
+        Ok(self.entry.actor_fields.as_ref().context("451F90 VActor tail absent")?.word(0x148)?.context("451F90+148 unwritten")? as i32)
+    }
+    fn initialize_track(&mut self,index:usize)->Result<()>{
+        let source=self.source.as_ref().context("451F90 source38 not reached")?;
+        let info=self.context.application.with_data_pre_request(|data|data.actor_view_track_info_45e710(source,index)).map_err(anyhow::Error::msg)?;
+        self.entry.actor_fields.as_mut().context("451F90 VActor tail absent")?.initialize_track(index,&info)
+    }
     fn ui_random_word_d4(&mut self)->Result<u32>{self.context.client.call(self.context.execution,|c|c.ui.next_view_random_word_d4()).map_err(anyhow::Error::msg)}
 }

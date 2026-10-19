@@ -119,11 +119,30 @@ impl<A> VWorldOwner<A>{
     ///The orders input's view/actor leaves over this SAME directory and the
     ///World's ActorStore/spatial owner (battle_orders_input::Live::views).
     ///`context` carries the Session/UI words; without it those leaves err.
-    pub fn order_views<'s>(&'s mut self,world:&'s World<'_>,context:Option<&'s super::view_directory::OrderContext>)
-        ->Result<super::view_directory::DirectoryViews<'s>>{
+    ///`catalog` binds 4CF430 for actor_virtual_150.
+    pub fn order_views<'s>(&'s mut self,world:&'s World<'_>,context:Option<&'s super::view_directory::OrderContext>,
+        catalog:Option<&'s aa_runtime::catalog::Catalog<'_>>)->Result<super::view_directory::DirectoryViews<'s>>{
         self.directory.require_world(world)?;self.token().opaque_handle()?;
         let parts=world.presentation_parts().map_err(anyhow::Error::msg)?;
-        super::view_directory::DirectoryViews::new(&mut self.directory,parts.actors,parts.spatial,parts.variables,context)
+        let fields=super::view_directory::WorldFields{runtime_fields:parts.runtime_fields,source_fields:parts.source_fields};
+        let views=super::view_directory::DirectoryViews::new(&mut self.directory,parts.actors,parts.spatial,parts.variables,fields,context)?;
+        Ok(match catalog{
+            None=>views,
+            Some(catalog)=>views.with_order_150(Box::new(move|slot,kingdom,wire,globals|{
+                let parts=world.presentation_parts()?;
+                crate::battle_orders_input::actor_virtual_150_between_frames(catalog,&parts,slot,kingdom,wire,globals)
+            })),
+        })
+    }
+    ///4312F0's object side (42FAD0 per active terrain block, then 42F670) over
+    ///this SAME directory, VWorld+94 cells and VWorld+BC heightfield.
+    pub fn streaming_objects<'s>(&'s mut self,world:&'s World<'_>,model:&'s mut dyn super::view_directory::ModelLifecycle,
+        data:&'s mut dyn super::view_directory::DataLifecycle,pc:aa_numeric::Precision)->Result<super::view_directory::StreamingObjects<'s>>{
+        self.directory.require_world(world)?;self.token().opaque_handle()?;
+        let parts=world.presentation_parts().map_err(anyhow::Error::msg)?;
+        let grid=self.native.prefix().grid().context("4312F0 VWorld+94 VGrid allocation is absent")?;
+        let height=self.native.heightfield().context("43D050 VWorld+BC heightfield is absent")?;
+        Ok(super::view_directory::StreamingObjects::new(&mut self.directory,parts.actors,grid,height,parts.revision,model,data,pc))
     }
     pub fn token(&self)->ViewToken{ViewToken(Arc::downgrade(&self.allocation))}
     pub fn native(&self)->&view_init_world::State<ViewHandle,A>{&self.native}

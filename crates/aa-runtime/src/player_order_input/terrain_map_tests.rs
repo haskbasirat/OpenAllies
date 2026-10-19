@@ -39,11 +39,22 @@ impl Tiles for LabTiles {
     fn size(&self) -> [i32; 2] {
         self.size
     }
-    fn class(&self, index: i32) -> Result<Option<i32>> {
+    /// The laboratory GMaps hold one VariationData per class value.
+    fn tile(&self, index: i32) -> Result<Option<(usize, i32)>> {
         usize::try_from(index)
             .ok()
             .and_then(|i| self.classes.get(i).copied())
+            .map(|c| c.map(|c| (c as usize, c)))
             .ok_or_else(|| format!("lab tile {index} outside the allocation"))
+    }
+    fn gmap_words(&self) -> Result<[u32; 2]> {
+        Err("this oracle seams 7377F0 (no GMap water geometry)".into())
+    }
+    fn cached_cell(&self, _: [i32; 2]) -> Result<Option<Vec<[u32; 2]>>> {
+        Err("this oracle seams 7377F0 (no GMap+5C cache)".into())
+    }
+    fn base_height(&self, _: [u32; 2], _: Precision) -> Result<Binary> {
+        Err("this oracle seams 7377F0 (no 550210 heights)".into())
     }
 }
 fn lab_tiles(spec: &Value) -> LabTiles {
@@ -60,6 +71,10 @@ fn heights_of<'a>(spec: &Value, samples: &'a [u32]) -> Heights<'a> {
     let h = &spec["heightfield"];
     Heights { columns: int(&h["columns"]), rows: int(&h["rows"]), step_bits: word(&h["step"]), samples }
 }
+/// native_terrain_map.py's 4F0E50 seam (71AFD0 only): +0.0 for every query.
+fn zero_ground(_: [u32; 2], _: u32) -> Result<Binary> {
+    Ok(Binary::from_i32(0))
+}
 fn source_of<'a>(spec: &Value, samples: &'a [u32]) -> Source<'a> {
     Source {
         extents_bits: [word(&spec["extents"][0]), word(&spec["extents"][1])],
@@ -67,6 +82,7 @@ fn source_of<'a>(spec: &Value, samples: &'a [u32]) -> Source<'a> {
         terrain_block_size: int(&spec["block"]),
         terrain_quad_size: int(&spec["quad"]),
         heights: heights_of(spec, samples),
+        ground: &zero_ground,
     }
 }
 
@@ -119,7 +135,7 @@ fn native_state(state: &Value) -> Value {
     state
 }
 fn construct_error(source: &Source<'_>) -> String {
-    match TerrainMap::construct(source) {
+    match TerrainMap::construct(source, Precision::Double53) {
         Ok(_) => panic!("construction succeeded"),
         Err(e) => e,
     }
@@ -207,7 +223,7 @@ fn native_terrain_map_constructors_and_71d840_end_to_end() {
         let mut samples: Vec<u32> = spec["heightfield"]["heights"].as_array().unwrap().iter().map(word).collect();
         let mut tiles = lab_tiles(spec);
         let construct = &row["construct"];
-        let built = TerrainMap::construct(&source_of(spec, &samples));
+        let built = TerrainMap::construct(&source_of(spec, &samples), pc);
         if construct["fault"].is_string() {
             match built {
                 Err(e) if e.contains("#DE") && e.to_lowercase().contains(construct["eip"].as_str().unwrap()) => {
@@ -253,7 +269,7 @@ fn native_terrain_map_constructors_and_71d840_end_to_end() {
                 "update" => map.update_725340().map(|_| ()),
                 "water" => {
                     let cell = cell.unwrap();
-                    if map.blocks[cell].water_dirty { map.water_7208d0(cell, &tiles) } else { Ok(()) }
+                    if map.blocks[cell].water_dirty { map.water_7208d0_without_7377f0(cell, &tiles) } else { Ok(()) }
                 }
                 "invalidate" => {
                     let [column, row] = map.blocks[cell.unwrap()].index;
@@ -327,7 +343,7 @@ fn retail_lab(doc: &Value) -> (Value, Vec<u32>) {
 fn unreported_residency_is_an_error_not_a_flat_block() {
     let doc = fixture();
     let (spec, samples) = retail_lab(&doc);
-    let mut map = TerrainMap::construct(&source_of(&spec, &samples)).unwrap();
+    let mut map = TerrainMap::construct(&source_of(&spec, &samples), Precision::Double53).unwrap();
     let eye = [0x4100_0000, 0x4100_0000, 0x4120_0000];
     let down = [0x3e80_0000, 0x3e00_0000, 0xbf80_0000];
     let error = intersect_71d840(&map, eye, down, None, 0, Precision::Double53).unwrap_err();
@@ -352,18 +368,20 @@ fn water_blocks_refuse_the_unported_7377f0_triangles() {
     let doc = fixture();
     let spec = &doc["specs"]["water-tiles"];
     let samples: Vec<u32> = spec["heightfield"]["heights"].as_array().unwrap().iter().map(word).collect();
-    let mut map = TerrainMap::construct(&source_of(spec, &samples)).unwrap();
+    let mut map = TerrainMap::construct(&source_of(spec, &samples), Precision::Double53).unwrap();
     let tiles = lab_tiles(spec);
-    map.water_7208d0(0, &tiles).unwrap();
+    map.water_7208d0_without_7377f0(0, &tiles).unwrap();
     assert_eq!(map.blocks[0].water(), Ok(1));
     assert!(map.blocks[0].water_index_count().unwrap_err().contains("7377F0"));
+    // With 0x7377F0 the laboratory GMap has no geometry source: an error.
+    assert!(map.water_7208d0(0, &tiles, Precision::Double53).unwrap_err().contains("7377F0"));
     // A centre tile beyond the GMap allocation is a native out-of-bounds read.
     let small = LabTiles { size: [4, 4], classes: vec![Some(0); 16] };
-    assert!(map.water_7208d0(15, &small).unwrap_err().contains("outside"));
+    assert!(map.water_7208d0_without_7377f0(15, &small).unwrap_err().contains("outside"));
     assert!(map.blocks[15].water().is_err());
     // Out-of-range samples are refused, not clamped.
     let short = Heights { samples: &samples[..samples.len() - 1], ..heights_of(spec, &samples) };
-    let mut map = TerrainMap::construct(&source_of(spec, &samples)).unwrap();
+    let mut map = TerrainMap::construct(&source_of(spec, &samples), Precision::Double53).unwrap();
     assert!(map.load_720ad0(short, 15, Precision::Double53).unwrap_err().contains("outside"));
 }
 

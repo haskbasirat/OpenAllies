@@ -199,6 +199,9 @@ impl Leaves for Mock<'_> {
     fn voiced_436600(&mut self, _: usize) -> Result<Option<Option<usize>>> {
         Ok(None)
     }
+    fn actor_virtual_150(&mut self, _: usize, _: &mut aa_orders::commands::CommandWire) -> Result<bool> {
+        unreachable!("not in this oracle")
+    }
     /// 0x436850 runs natively with the acknowledgement option on: its
     /// 0x45B7A0, then the 0x42A590 voice with the view's actor.
     fn selection_sound_436850(&mut self, v: usize) -> Result<()> {

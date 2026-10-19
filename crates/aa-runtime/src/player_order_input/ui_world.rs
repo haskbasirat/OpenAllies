@@ -13,6 +13,7 @@
 //! | +0x0C | 0x438DF0 | [`State::deselect_438df0`] |
 //! | +0x10 | 0x640660 | [`State::selectable_640660`] |
 //! | +0x14 | 0x438370 | [`State::add_438370`] |
+//! | +0x18 | 0x436950 | [`State::can_send_436950`] |
 //! | +0x24 | 0x6A71F0 (AL = 0) | the `include` argument of FindObjectAt |
 //! | +0x34 | 0x4363C0 | [`State::clear_hover_4363c0`] |
 //! | +0x38 | 0x436650 | [`State::update_hover_436650`] |
@@ -37,6 +38,7 @@ use super::event::Event;
 use super::requests::Requests;
 use super::x87::{self, b, st};
 use aa_numeric::Precision;
+use aa_orders::commands::CommandWire;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -186,6 +188,11 @@ pub trait Leaves {
     /// 0x436600's loop body after its 0x45B7A0 holds: `actor+0x7C -> +0x40`,
     /// `+0xA4 != 0` breaks the loop with `Some(record+0x0C)`; `None` continues.
     fn voiced_436600(&mut self, view: Self::View) -> Result<Option<Option<Self::View>>>;
+    /// 0x436950's loop body after its 0x45B7A0 holds: the actor's
+    /// vt+0x150(0x5C0E30() local kingdom, &cmd, 1) (GActor/GGroup/GKingdom
+    /// 0x4CF430). The actor may complete the command (0x4DA570's type-4
+    /// branch), so the wire is mutable.
+    fn actor_virtual_150(&mut self, view: Self::View, wire: &mut CommandWire) -> Result<bool>;
 
     // ---- UI / world ----
     /// 0x436850: the selection acknowledgement (application state, sound
@@ -274,6 +281,16 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
         s.selected = selected;
         s.hovered = hovered;
         s
+    }
+    /// The same manager with +0x40 = the wildcard group +0x44 whose +0x18 is
+    /// `byte_18` (None leaves +0x40 NULL), for the 0x436950 oracle test.
+    #[cfg(test)]
+    pub(crate) fn with_static_for_state_tests(mut self, byte_18: Option<bool>) -> Self {
+        if let Some(b) = byte_18 {
+            self.wildcard_44.byte_18 = b;
+            self.static_40 = StaticRef::Wildcard;
+        }
+        self
     }
     /// The view's `+0x150` group, if any.
     pub fn group_of_150(&self, view: V) -> Option<u64> {
@@ -393,7 +410,7 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
         Ok(host.virtual_50(view)? || host.virtual_54(view)?)
     }
     /// 0x437650.
-    fn pick_owner_437650<H: Host<View = V>>(host: &mut H, view: Option<V>) -> Result<Option<V>> {
+    fn pick_owner_437650<H: Leaves<View = V>>(host: &mut H, view: Option<V>) -> Result<Option<V>> {
         let Some(view) = view else { return Ok(None) };
         if !host.actor_45b7a0(view)? {
             return Ok(Some(view));
@@ -401,7 +418,7 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
         Ok(Some(host.link_16c_view(view)?.unwrap_or(view)))
     }
     /// vt+0x54 = 0x6409A0: the target a pointer object stands for.
-    pub fn pick_target_6409a0<H: Host<View = V>>(host: &mut H, view: Option<V>) -> Result<Option<V>> {
+    pub fn pick_target_6409a0<H: Leaves<View = V>>(host: &mut H, view: Option<V>) -> Result<Option<V>> {
         let Some(owner) = Self::pick_owner_437650(host, view)? else { return Ok(None) };
         if !host.actor_45b7a0(owner)? {
             return Ok(Some(owner));
@@ -751,8 +768,39 @@ impl<V: Copy + Eq + std::fmt::Debug> State<V> {
         Ok(())
     }
     /// 0x4363B0: vt+0x54 of the hovered object.
-    pub fn hovered_target_4363b0<H: Host<View = V>>(&self, host: &mut H) -> Result<Option<V>> {
+    pub fn hovered_target_4363b0<H: Leaves<View = V>>(&self, host: &mut H) -> Result<Option<V>> {
         Self::pick_target_6409a0(host, self.hovered)
+    }
+    /// vt+0x18 = 0x436950(&cmd), CanSend of a selected-actors command:
+    /// with a static group +0x40 and an explicit command (flag bit 6) whose
+    /// definition +0x0C is 0x25 / 0x26, the answer is `group+0x18 == 0` /
+    /// `group+0x18`; otherwise the first selected 0x45B7A0 actor whose
+    /// vt+0x150 holds makes it true. Definition +0x0C is the ActorCommand
+    /// registration index (0x4B4E60), which the wire carries as `command`.
+    pub fn can_send_436950<H: Leaves<View = V>>(&self, host: &mut H, wire: &mut CommandWire) -> Result<bool> {
+        let group = match self.static_40 {
+            StaticRef::None => None,
+            StaticRef::Wildcard => Some(&self.wildcard_44),
+            StaticRef::Group(i) => Some(self.groups.get(i).ok_or("UIWorldState+0x40 names a released group")?),
+        };
+        if let Some(group) = group {
+            if wire.flags & 0x40 != 0 {
+                match wire.command {
+                    Some(0x25) => return Ok(!group.byte_18),
+                    Some(0x26) => return Ok(group.byte_18),
+                    _ => {}
+                }
+            }
+        }
+        for view in self.selected.clone() {
+            if !host.actor_45b7a0(view)? {
+                continue;
+            }
+            if host.actor_virtual_150(view, wire)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     /// vt+0x68 = 0x4365D0.
     pub fn highlight_4365d0<H: Host<View = V>>(&mut self, host: &mut H, view: V, on: bool) -> Result<()> {

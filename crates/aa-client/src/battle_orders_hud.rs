@@ -1,7 +1,8 @@
 //! The camera/presentation side of `battle_orders_input::HudLeaves` (the
 //! KKC_UI +0xC0 camera slot, `*[B39990+0x60]` and the box/facing states'
 //! camera children). HUD widget routing, the minimap, sounds, markers and
-//! command definitions stay with their owners (`UnboundHud` until bound).
+//! command definitions are the HUD owner's (`battle_menus::hud_orders::
+//! HudOrderLeaves`), to which [`Leaves`] forwards those methods.
 //!
 //! Native paths (AA.exe):
 //! - +0xC0: 5E0570/5E0590 install the UI+40 scroller (A4DA84) or UI+48 rotate
@@ -23,7 +24,7 @@
 //! and applied to the SAME camera right after it (`apply`): during the frame
 //! the machine reads the camera through a shared loan, and none of the
 //! children writes a field it reads (+214 and Camera+168 only).
-use crate::battle_orders_input::{HudLeaves, Result, UnboundHud, View};
+use crate::battle_orders_input::{CursorQuery, HudLeaves, Result, View};
 use aa_orders::commands::CommandWire;
 use aa_runtime::player_order_input::{
     event::Event,
@@ -106,7 +107,9 @@ pub struct Leaves<'f> {
     drag_threshold: Result<i32>,
     facing: &'f mut dyn FacingScene,
     children: Vec<Child>,
-    hud: UnboundHud,
+    ///The HUD owner's leaves (widget routing, brush, minimap, voices,
+    ///markers, command definitions).
+    hud: &'f mut dyn HudLeaves,
 }
 impl<'f> Leaves<'f> {
     /// `slot_c0`: the camera controls' +0xC0 (None = Empty), as left by the
@@ -116,9 +119,10 @@ impl<'f> Leaves<'f> {
         vworld_ad: bool,
         drag_threshold: Result<i32>,
         facing: &'f mut dyn FacingScene,
+        hud: &'f mut dyn HudLeaves,
     ) -> Self {
         let slot_c0 = if slot_c0.is_some() { CameraSlot::Generic } else { CameraSlot::Empty };
-        Self { slot_c0, vworld_ad, drag_threshold, facing, children: Vec::new(), hud: UnboundHud }
+        Self { slot_c0, vworld_ad, drag_threshold, facing, children: Vec::new(), hud }
     }
     pub fn children(&self) -> &[Child] {
         &self.children
@@ -146,6 +150,10 @@ impl HudLeaves for Leaves<'_> {
         acknowledge_61eef0(wire: &CommandWire) -> Result<()>;
         can_send_436950(wire: &mut CommandWire) -> Result<bool>;
         command_definition_298(index: u32) -> Result<Option<CommandDefinition>>;
+    }
+    /// 0x620648..0x62074D with the machine reads (HUD owner's port).
+    fn cursor_feedback_620640_with(&mut self, query: &mut dyn CursorQuery) -> Result<()> {
+        self.hud.cursor_feedback_620640_with(query)
     }
     fn camera_slot_c0(&mut self) -> Result<CameraSlot> {
         Ok(self.slot_c0)
@@ -224,7 +232,8 @@ mod tests {
     #[test]
     fn camera_slot_and_children_follow_the_native_states() {
         let mut facing = UnboundFacing;
-        let mut l = Leaves::new(Some(aa_runtime::native_camera::input::Slot::Rotate), true, Ok(10), &mut facing);
+        let mut unbound = crate::battle_orders_input::UnboundHud;
+        let mut l = Leaves::new(Some(aa_runtime::native_camera::input::Slot::Rotate), true, Ok(10), &mut facing, &mut unbound);
         assert_eq!(l.camera_slot_c0().unwrap(), CameraSlot::Generic);
         assert!(!l.camera_frame_10().unwrap());
         let e = Event { x: 1, y: 2, flags: 0x81, code: 0x100, delta: 0, world: [0; 3], origin: [0; 3], direction: [0; 3] };
@@ -234,9 +243,11 @@ mod tests {
         //689380 is reached before 5CCD60: no camera lock without the ghosts.
         assert!(l.facing_begin_689380(&[]).is_err());
         assert_eq!(l.children(), [Child::BoxBegin, Child::BoxFrame, Child::BoxEnd]);
+        //HUD methods reach the HUD owner's leaves.
         assert!(l.brush_installed_bc().is_err());
         let mut facing = UnboundFacing;
-        let mut empty = Leaves::new(None, false, Ok(10), &mut facing);
+        let mut unbound = crate::battle_orders_input::UnboundHud;
+        let mut empty = Leaves::new(None, false, Ok(10), &mut facing, &mut unbound);
         assert_eq!(empty.camera_slot_c0().unwrap(), CameraSlot::Empty);
     }
 }

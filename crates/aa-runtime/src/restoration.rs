@@ -186,6 +186,9 @@ pub struct Attempt {
 /// Staged common ownership after moving restored component boxes into the live
 /// arena. Partial Load remains partial; this type deliberately has no step API.
 pub struct Staged {
+    /// The started application SAI, moved in only during a live creation
+    /// loan; None throughout loading, where `inactive_load` is the SAI scope.
+    pub live_sai: Option<crate::restore_lifecycle::LiveSai>,
     pub resource_streams:Option<crate::map_resource_streams::Owner>,
     pub load_world: Option<crate::load_world::World>,
     pub native_load_mode: Option<u32>,
@@ -384,6 +387,7 @@ impl Attempt {
         let updatables = owners.bind_saved_table_with_sun(&self.updatables, &actors,
             self.load_world.as_ref().map(|world|&world.sun))?;
         Ok(Staged {
+            live_sai: None,
             resource_streams:self.resource_streams,
             load_world: self.load_world,
             native_load_mode: self.native_load_mode,

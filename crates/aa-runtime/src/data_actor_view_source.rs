@@ -47,8 +47,8 @@ fn project(catalog:&Catalog<'_>,d:&RuntimeDefinition,precision:Precision)->Resul
             if f32::from_bits(fields.circumference)==0.0{return Err("ActorData loader rejects zero Mover tire_circumference".into())}
             for tire in mover.children("Tire").map_err(|e|e.to_string())?{fields.tires.push(tire.sources());}
             //464BD0's distinct TrackInfo25C/260 list. It must never be
-            //confused with Tire240/244; this binds count/source identities,
-            //not the positive42D7B0/42D830 VActor Track payload.
+            //confused with Tire240/244; this binds count/source identities.
+            //The 0x24-byte entries come from the source prepass: track_info.
             for track in mover.children("TrackInfo").map_err(|e|e.to_string())?{fields.tracks.push(track.sources());}
         }
     }
@@ -97,6 +97,8 @@ impl State{
         i32::try_from(f.tracks.len()).map_err(|_|"ActorData260 count domain changed".into())
     }
 }
+#[path="data_actor_track_info.rs"]
+pub mod track_info;
 #[cfg(test)]
 #[path="data_actor_view_source_tests.rs"]
 mod tests;

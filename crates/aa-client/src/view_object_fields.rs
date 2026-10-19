@@ -67,6 +67,12 @@ impl Fields {
     pub(super) fn request_pending(&self)->Result<bool>{Ok(self.flags()?&0x10000000!=0)}
     ///45B720 / 45BCA0: `and [+54], 0EFFFFFFFh` after the Data vf18(1).
     pub(super) fn clear_request_pending(&mut self)->Result<()>{self.store(0x54,self.flags()?&!0x10000000)}
+    ///VGrid streaming stores (45B2B0 +1C, 45B330 +18, 45B430/45BB50 +58,
+    ///the list bits 18/19, bit3 and bit1 of +54).
+    pub(super) fn streaming_store(&mut self,offset:usize,value:u32)->Result<()>{
+        ensure!(matches!(offset,0x18|0x1c|0x54|0x58),"view streaming cannot store VThing+{offset:X}");
+        self.required(offset)?;self.store(offset,value)
+    }
     ///+54 written by the UIWorldState selection paths (set_flags_54).
     pub(super) fn set_flags_54(&mut self,flags:u32)->Result<()>{self.flags()?;self.store(0x54,flags)}
     ///45BBA0, shared actual virtual8C for VThing/Object/Actor/Organization/Camera.

@@ -51,7 +51,7 @@ pub struct Node {
     pub actor: u32,
     pub next: Option<u32>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Actor {
     pub definition: u32,
     pub flags: u32,
@@ -59,7 +59,7 @@ pub struct Actor {
     pub facing: [u32; 2],
 }
 /// Six-word native shape: POINT=0, CIRCLE=1, SQUARE=2, RECT=3.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Shape {
     pub kind: u32,
     pub radius_bits: u32,

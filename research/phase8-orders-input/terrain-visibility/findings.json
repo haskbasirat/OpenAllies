@@ -1,0 +1,73 @@
+{
+ "schema": 1,
+ "area": "phase8-orders-input / terrain visibility 0x4312F0 (TerrainBlock residency owner)",
+ "status": "ported; native-terrain-visibility.json replays with no mismatch at PC24/PC53/PC64",
+ "rust": {
+  "module": "crates/aa-runtime/src/terrain_visibility.rs",
+  "tests": "crates/aa-runtime/src/terrain_visibility_tests.rs",
+  "api": [
+   "TerrainVisibility::for_map(&mut TerrainMap)",
+   "CameraWords::current(&native_camera::directory::Directory<K,R>) / CameraWords::read(&native_camera::State)",
+   "TerrainVisibility::update_4312f0(&mut TerrainMap, &World, &view_heightfield::State, &CameraWords, &mut impl ViewCellHooks, Precision)",
+   "trait ViewCellHooks { sweep_42fad0(index, block_size_a0, state_b8); traverse_42f670() }",
+   "then TerrainMap::update_725340()"
+  ],
+  "changed": [
+   "player_order_input/terrain_map.rs (71AFD0 sphere, +14E/+14D, crate hooks, for_world pc)",
+   "player_order_input/terrain_ray.rs (Plane, plane_42ed60 pub(crate))",
+   "lib.rs (pub mod terrain_visibility;)"
+  ]
+ },
+ "native_ported": [
+  "4312F0",
+  "42EED0",
+  "869C90",
+  "430E50",
+  "430710",
+  "42F330",
+  "42F1F0",
+  "42ED10",
+  "430080",
+  "4300D0",
+  "42FE80",
+  "71A230",
+  "42FF50 (block half)",
+  "720080",
+  "42F980",
+  "42F7D0",
+  "42FED0",
+  "42FE10",
+  "721180/5AA3F0 count",
+  "7212D0",
+  "7211F0/5AA550 count",
+  "7208D0 water branch",
+  "71AFD0",
+  "430290 (pairing)"
+ ],
+ "hooks_to_view_owner": [
+  "42FAD0 per active block before 720080",
+  "42F670 tail of 4312F0"
+ ],
+ "oracle": {
+  "file": "research/phase8-orders-input/terrain-visibility/native-terrain-visibility.json",
+  "sha256": "4e11aa0595721cf01474083ce25a10366dc7601bb4875488d0597aa287aa23f9",
+  "producer_sha256": "c6ed25fe2e02e01883c5e8cf0d93fa7e897c75297e33897678fe228e6d4fe9c3",
+  "rows": 9,
+  "frames": 90,
+  "rays": 270,
+  "executed_pins": 6646,
+  "passed_per_precision": {
+   "frames": 30,
+   "rays": 30,
+   "footprints_exact": 27,
+   "footprint_native_infinity_rust_error": 3
+  }
+ },
+ "open_gaps": [
+  "50C750, 43A400, 4318E0 (visual heightfield update) in 43EC60 not ported",
+  "71CC00/73D7F0 (+14E/+14D writers) and 71CFC0 refresh not ported",
+  "7377F0 water geometry (+ 73E300/736D50/73BA00/736AB0 effects) not ported: +9C=1 block water triangles are errors",
+  "Terrain block resources are not registered in the Rust ResourceManager (no dynamic Kind); count +4 kept by this owner",
+  "no live World run (for_world/update_4312f0 compiled, replayed through the same internal functions)"
+ ]
+}

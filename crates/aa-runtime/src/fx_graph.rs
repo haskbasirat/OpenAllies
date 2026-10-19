@@ -1043,6 +1043,66 @@ impl<'a> Bound<'a> {
         lookups.store_translation(self.actors, key, &result);
         result
     }
+    ///The ordered Bone roots at this precision, read once per Catalog.
+    fn bone_table(&mut self) -> Option<std::rc::Rc<Result<crate::catalog_lookups::BoneTable>>> {
+        let lookups = self.lookups?;
+        let precision = self.pc.significand_bits();
+        let actors = self.actors;
+        lookups.bone_table(actors, precision, || {
+            let mut roots = actors.resolved_definitions("Bone").map_err(|e| e.to_string())?;
+            let position = |n: &ResolvedNode<'_>| -> Result<(usize, usize)> {
+                let source = n
+                    .sources()
+                    .first()
+                    .cloned()
+                    .ok_or("Bone root source missing")?;
+                Ok((
+                    self.source_position(&source.path)
+                        .ok_or("Bone source index missing")?,
+                    source.span.start,
+                ))
+            };
+            let mut ordered = roots
+                .drain(..)
+                .map(|n| Ok((position(&n)?, n)))
+                .collect::<Result<Vec<_>>>()?;
+            ordered.sort_by_key(|(position, _)| *position);
+            let mut rows = Vec::with_capacity(ordered.len());
+            let mut first_problem = None;
+            let mut first_row = std::collections::HashMap::new();
+            let mut seen = std::collections::BTreeSet::new();
+            for (index, (_, node)) in ordered.into_iter().enumerate() {
+                let ids = match self.value(&node, "IDS") {
+                    Ok(TypedValue::String { value, .. }) => Ok(value),
+                    Ok(_) => Err("GetString rejects FX IDS".to_string()),
+                    Err(error) => Err(error),
+                };
+                match &ids {
+                    Err(error) => {
+                        if first_problem.is_none() {
+                            first_problem = Some((index, error.clone()));
+                        }
+                    }
+                    Ok(value) => {
+                        let lower = value.to_ascii_lowercase();
+                        if !seen.insert(lower.clone()) {
+                            if first_problem.is_none() {
+                                first_problem = Some((
+                                    index,
+                                    "native Bone mode0 duplicate IDS requires source load failure"
+                                        .to_string(),
+                                ));
+                            }
+                        } else {
+                            first_row.insert(lower, index);
+                        }
+                    }
+                }
+                rows.push(crate::catalog_lookups::BoneRow { ids, sources: node.sources() });
+            }
+            Ok(crate::catalog_lookups::BoneTable { rows, first_problem, first_row })
+        })
+    }
     ///Every Translate root's inputs at this precision, read once per Catalog.
     fn translate_rows(&self) -> Option<std::rc::Rc<Result<Vec<crate::catalog_lookups::TranslateRow>>>> {
         let lookups = self.lookups?;
@@ -1310,6 +1370,31 @@ impl<'a> Inputs for Bound<'a> {
             //486650 is a distinct mode0 manager, not the generic catalog's
             //registry.486870 stores current+28 at Data+C before93D4E0.
             let ids = self.translated(manager, ids)?;
+            if let Some(table) = self.bone_table() {
+                //The loop below over the prepared ordered rows: it stops at the
+                //first problem row or the first matching row, whichever is first.
+                let table = table.as_ref().as_ref().map_err(Clone::clone)?;
+                let matched = table.first_row.get(&ids.to_ascii_lowercase()).copied();
+                return match (&table.first_problem, matched) {
+                    (Some((problem, error)), Some(row)) if *problem <= row => Err(error.clone()),
+                    (Some((_, error)), None) => Err(error.clone()),
+                    (_, Some(row)) => {
+                        let row_data = &table.rows[row];
+                        if !self.before_owner(
+                            row_data.sources.first().ok_or("Bone root source missing")?,
+                        )? {
+                            return Ok(None);
+                        }
+                        Ok(Some(Reference {
+                            id: row_data.ids.clone()?,
+                            source: row_data.sources.clone(),
+                            ordinal: Some(u32::try_from(row).map_err(|e| e.to_string())?),
+                            cutscene: false,
+                        }))
+                    }
+                    (None, None) => Ok(None),
+                };
+            }
             let mut roots = self
                 .actors
                 .resolved_definitions("Bone")

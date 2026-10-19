@@ -58,6 +58,28 @@ pub fn selection_geometry(t:&[u32;13],vertices:&[[u32;3]],p:Precision)->Result<[
     let mut out=[0x7f7fffff,0x7f7fffff,0x7f7fffff,0xff7fffff,0xff7fffff,0xff7fffff];
     for &v in vertices{let r=rotated(t,v,p)?;for i in 0..3{let value=add(b(r[i])?,b(t[9+i])?,p)?;let value=if i==0{value}else{b(s(value)?)?};if value.compare(&b(out[i])?)==Ordering::Less{out[i]=s(value.clone())?;}if value.compare(&b(out[3+i])?)==Ordering::Greater{out[3+i]=s(value)?;}}}Ok(out)
 }
+///5A95FE..5A9667: 5A94F0's fallback when the root has no NiGeometry named by
+///the Bone selection_box CString. r' = radius * [A4635C] (0.4f) stays
+///extended; the six cuboid words are min = c-r', max = r'+c (fstp m32);
+///"incorrect" is (cx-r')(r'+cx) > [9F32DC] (+0.0) or, only when that is not
+///greater, (cy-r')(r'+cy) > +0.0, both compared unrounded at the current PC.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub struct SphereSelection{pub cuboid:[u32;6],pub incorrect:bool}
+pub fn selection_from_sphere(sphere:[u32;4],p:Precision)->Result<SphereSelection>{
+    let r=mul(b(sphere[3])?,b(0x3ecccccd)?,p)?;
+    let mut cuboid=[0;6];
+    for i in 0..3{
+        cuboid[i]=s(sub(b(sphere[i])?,r.clone(),p)?)?;
+        cuboid[3+i]=s(add(r.clone(),b(sphere[i])?,p)?)?;
+    }
+    let zero=b(0)?;
+    let greater=|i:usize|->Result<bool>{
+        let product=mul(sub(b(sphere[i])?,r.clone(),p)?,add(r.clone(),b(sphere[i])?,p)?,p)?;
+        Ok(product.compare(&zero)==Ordering::Greater)
+    };
+    let incorrect=greater(0)? || greater(1)?;
+    Ok(SphereSelection{cuboid,incorrect})
+}
 ///89F5F0 recomputes the SAME GeometryData sphere after8ABEC0. Empty input
 ///reads three actual global words; the caller must supply their real owner.
 ///This is scalar math, not the separate pointer/free/refcount replacement.
@@ -168,5 +190,37 @@ impl Bounds{
             out.include_footprint(&t,&v,hidden,fixture["threshold"].as_u64().unwrap()as u32,pc).unwrap();
             assert_eq!(serde_json::json!({"radial":out.radial,"min_z":out.min_z,"max_z":out.max_z,"footprint":out.footprint}),row["output"],"{pc:?} {}",row["input"]);
         }
+    }
+    ///5A94F0 no-SelectionBox rows (real Berlin model root bounds computed by
+    ///native 45CAB0/89FBF0/89FAD0, and scalar edges) through the SAME port.
+    #[test]fn original_selection_sphere_fallback_and_diagnostics_all_precision_modes(){
+        let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../research/development10/model-selection-fallback/native-selection-fallback.json")).unwrap();
+        let rows=fixture["rows"].as_array().unwrap();assert_eq!(rows.len(),189);
+        let mut refused=0;
+        for row in rows{
+            let pc=match row["precision"].as_str().unwrap(){"Single24"=>Precision::Single24,"Double53"=>Precision::Double53,"Extended64"=>Precision::Extended64,_=>unreachable!()};
+            let out=&row["output"];
+            let sphere=serde_json::from_value::<[u32;4]>(out["root_sphere"].clone()).unwrap();
+            let events=out["events"].as_array().unwrap();
+            //Bone lookup, vf40 by the selection_box name, then vf48 Update(0,0).
+            assert_eq!(events[0][0],"42C070");assert_eq!(events[0][1],"selection_box");
+            assert_eq!(events[1][0],"vf40_GetObjectByName");assert_eq!(events[1][1],"SelectionBox");
+            assert_eq!(events[2],serde_json::json!(["vf48_Update",0,0]));
+            let lines:Vec<u64>=events.iter().filter(|e|e[0]=="404ED0").map(|e|e[3].as_u64().unwrap()).collect();
+            let flags=row["flags"].as_u64().unwrap() as u32;
+            let expected:Vec<[u32;6]>=vec![serde_json::from_value(out["cuboid"].clone()).unwrap()];
+            if expected[0].iter().any(|w|w&0x7f800000==0x7f800000){
+                //fstp overflow to infinity lies outside the finite Binary port.
+                assert!(selection_from_sphere(sphere,pc).is_err(),"{row}");refused+=1;continue;
+            }
+            let got=selection_from_sphere(sphere,pc).unwrap();
+            assert_eq!(got.cuboid,expected[0],"{row}");
+            let mut want=vec![];if (flags>>11)&1!=0{want.push(0x56f)}if got.incorrect{want.push(0x57d)}
+            assert_eq!(lines,want,"{row}");
+            for e in events.iter().filter(|e|e[0]=="404ED0"){
+                assert_eq!((e[1].as_str().unwrap(),e[2].as_str().unwrap(),e[4].as_str().unwrap()),("0xb38c28",crate::model_resource_load::SelectionDiagnostic::FILE,crate::model_resource_load::SelectionDiagnostic::FUNCTION));
+            }
+        }
+        assert_eq!(refused,9);
     }
 }

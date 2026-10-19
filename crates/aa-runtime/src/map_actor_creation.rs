@@ -254,7 +254,7 @@ impl CreateWorld<String,()> for Bound<'_,'_>{
         self.staged.actors.initialize_object(key,&mut self.staged.rng,self.pc).map_err(cr)?;
         let s=self.staged.actors.object(key).map_err(cr)?.components().map_err(cr)?.state;
         if aa_actors::state::group(u64::from(s.low)|(u64::from(s.high)<<32),13).map_err(cr)?.is_none(){set_state(&mut self.staged.actors,key,27,true).map_err(cr)?;}
-        let mut effects=Assembly{inactive:self.staged.inactive_load.as_ref()};
+        let mut effects=Assembly{inactive:self.staged.inactive_load.as_ref(),live:self.staged.live_sai.as_ref()};
         self.staged.actors.assemble_ground(key,self.catalog,aa_body::F32(self.staged.clock.begin.0),&mut self.staged.rng,&mut self.staged.owners,&mut self.staged.definitions,self.pc,&mut effects).map_err(cr)?;
         init_create_suffix(self.staged,self.catalog,key,self.params,self.source,self.pc).map_err(cr)
     }
@@ -336,10 +336,19 @@ fn init_create_suffix(staged:&mut Staged,catalog:&Catalog<'_>,key:ObjectKey,para
     }
     Ok(true)
 }
-struct Assembly<'a>{inactive:Option<&'a crate::restore_lifecycle::InactiveLoad>}
+struct Assembly<'a>{inactive:Option<&'a crate::restore_lifecycle::InactiveLoad>,live:Option<&'a crate::restore_lifecycle::LiveSai>}
 impl actor_world::AssemblyEffects for Assembly<'_>{
     fn completed(&mut self,store:&mut ActorStore,actor:ActorId,_:&[Slot])->actor_world::Result<()>{
         if store.ordinary_owner(actor)?.is_none(){return Ok(());}
+        //4D30C8..D4: a started application's [B36528]+20 clear returns here.
+        if self.inactive.is_none() && let Some(live)=self.live {
+            //4D30E7 79EA90 scans the [SAI+60] slots for player+8 == owner; a
+            //NULL result skips the parent/view notification at 4D30F0.
+            if !live.engine.ready {return Ok(());}
+            let owner=store.ordinary_owner(actor)?.map_or(0,|o|o.raw());
+            if !live.has_player_for(owner).map_err(actor_world::Error::Source)? {return Ok(());}
+            return Err(actor_world::Error::Missing("4D30F0 positive SAI player parent/view7B41E0 owner"));
+        }
         let scope=self.inactive.ok_or(actor_world::Error::Missing("4D30BA actual SAI lifetime owner"))?;
         if !scope.observer_present().map_err(actor_world::Error::Source)? || !scope.observer_active().map_err(actor_world::Error::Source)? {return Ok(());}
         Err(actor_world::Error::Missing("4D30BA positive79EA90/current parent/view7B41E0 owner"))

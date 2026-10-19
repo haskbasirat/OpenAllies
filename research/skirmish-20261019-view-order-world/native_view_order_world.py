@@ -14,7 +14,8 @@ Native: view vt+78/7C/80/84 457B70/457BB0/457BF0/457C30, 4EAD70, 4EB340,
 5C0E10, 76AC60, 76AC70, 765E00, 40CEC0, Kingdom vt+134..140 4E5240/4E5250/
 4E5280/4E52A0, view vt+50/54 45BF20/45BD40 (45BBD0, 4BB3C0), Thing vt+58
 4EE3C0, vt+84 4EB8B0, vt+20 4CF120 / 969B10, vt+34 4D1F90 (96D710),
-437650/436D40, 640B40 (4549C0, 4CE6C0), 5E05D0, 436600.
+437650/436D40, 640B40 (4549C0, 4CE6C0), 5E05D0, 436600, and the 453470 head
+(view+9C NULL returns before 42E640/43CD00).
 Globals: B36550 Session (+E4, +F8), B36558 Node (+8 player, player+28),
 B36534 GWorld (+275), B39AB0 SVar table (+1BC CheatFog), B3A5BC/B3A5C0
 UVar PerformanceDisableDoodads, B3653C UI (+1E0), B364C0 ID manager
@@ -272,6 +273,12 @@ def run(c, pc, image):
         m.w(sel + 8, head)
         r = m.call(0x436600, sel, [])
         out['result'] = owner.get(r) if r else None
+    elif leaf == '453470':
+        v = w.view(c['thing'])
+        m.w(v + 0x150, c['link_150'])
+        m.w(v + 0x9c, 0)
+        m.call(0x453470, v, [])
+        out['returned'] = True
     else:
         raise ValueError(leaf)
     out['trace'] = w.trace
@@ -391,6 +398,8 @@ def cases():
     yield {'leaf': '640b40', 'thing': 'u', 'views': ['u', 'org'],
            **world(things={'u': {'class': 3, 'element': 'org', 'components': [0x7c]}, 'org': {'class': 3}})}
     yield {'leaf': '640b40', 'thing': 'u', 'views': ['u'], **world(things={'u': {'class': 2}})}
+    for link in [0, 0x10007]:
+        yield {'leaf': '453470', 'thing': 'u', 'link_150': link, **world(things={'u': {'class': 3}})}
     for sel in [['a'], ['a', 'b'], ['b', 'a'], [], ['c', 'a'], ['d', 'b']]:
         things = {'a': {'class': 3, 'leader': 'la'}, 'b': {'class': 3, 'leader': 'lb'}, 'c': {'class': 2}, 'd': {'class': 3},
                   'la': {'class': 3}, 'lb': {'class': 3, 'components': [0xa4]}}

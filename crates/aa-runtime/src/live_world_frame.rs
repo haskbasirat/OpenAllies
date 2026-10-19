@@ -48,18 +48,174 @@ pub struct LoadEvidence {
     pub updatables_chunk: Vec<u8>,
     pub saved_queue_load: Option<usize>,
 }
+/// One retained owner. It leaves its slot only while a synchronous
+/// load-shaped callee runs on a temporary [`Staged`] assembled from the SAME
+/// owners ([`Retained::with_staged`]); every owner is moved back before the
+/// Retained is reachable again, so the empty state is never observable.
+struct Lent<T>(Option<T>);
+const LENT: &str = "retained owner is lent to a Staged creation loan";
+impl<T> Lent<T> {
+    fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+    fn take(&mut self) -> T {
+        self.0.take().expect(LENT)
+    }
+    fn put(&mut self, value: T) {
+        debug_assert!(self.0.is_none());
+        self.0 = Some(value);
+    }
+}
+impl<T> std::ops::Deref for Lent<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.0.as_ref().expect(LENT)
+    }
+}
+impl<T> std::ops::DerefMut for Lent<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.0.as_mut().expect(LENT)
+    }
+}
 struct Retained {
-    actors: ActorStore,
-    world: load_world::World,
-    owners: Owners,
-    definitions: Bank,
-    settings: Settings,
-    evidence: LoadEvidence,
+    actors: Lent<ActorStore>,
+    world: Lent<load_world::World>,
+    owners: Lent<Owners>,
+    definitions: Lent<Bank>,
+    settings: Lent<Settings>,
+    evidence: Lent<LoadEvidence>,
     /// Set once a census update swallowed an unported leaf. Such a World is no
     /// longer the native state and every later product/strict update refuses.
     census_contaminated: bool,
     /// 404F60-family debug-log calls of scheduled Updates, in call order.
     log: Vec<crate::live_updates::NativeLog>,
+}
+impl Retained {
+    /// Run a load-shaped callee (fresh 4F9C10/4FA590 creation and its
+    /// InitCreate/PostCreate/registration children) on a temporary Staged
+    /// assembled by MOVING the same live owners: actors, World (with the live
+    /// dispatcher phase/lists lent back from the clocked World), owners, Bank,
+    /// settings, load evidence, queues and RNG. The authoritative clock is
+    /// lent by value and must come back unchanged. Every owner is moved back
+    /// before return, also when the callee fails (its committed effects stay).
+    pub(crate) fn with_staged<R>(
+        &mut self,
+        state: &mut ClockedState,
+        live_sai: crate::restore_lifecycle::LiveSai,
+        call: impl FnOnce(&mut Staged) -> Result<R, String>,
+    ) -> (Result<R, String>, crate::restore_lifecycle::LiveSai) {
+        let placeholder = match Queues::new(state.queues.clock, state.queues.precision) {
+            Ok(v) => v,
+            Err(e) => return (Err(e.to_string()), live_sai),
+        };
+        if self.world.dispatcher.is_some() {
+            return (Err("live World already holds a load dispatcher owner".into()), live_sai);
+        }
+        let mut world = self.world.take();
+        world.dispatcher = Some(state.world.lend_dispatcher());
+        let LoadEvidence {
+            resource_streams,
+            native_load_mode,
+            inactive_load,
+            resource_source,
+            inventory,
+            kingdom_economy,
+            updatables,
+            report,
+            definition_text,
+            live_text,
+            updatables_chunk,
+            saved_queue_load,
+        } = self.evidence.take();
+        let clock = state.world.clock;
+        let mut staged = Staged {
+            live_sai: Some(live_sai),
+            resource_streams,
+            load_world: Some(world),
+            native_load_mode,
+            inactive_load,
+            resource_source,
+            inventory,
+            kingdom_economy,
+            triggers: None,
+            actors: self.actors.take(),
+            owners: self.owners.take(),
+            updatables,
+            definitions: self.definitions.take(),
+            clock,
+            queues: std::mem::replace(&mut state.queues, placeholder),
+            rng: state.rng,
+            report,
+            settings: self.settings.take(),
+            definition_text,
+            live_text,
+            updatables_chunk,
+            saved_queue_load,
+        };
+        let result = call(&mut staged);
+        let Staged {
+            resource_streams,
+            load_world,
+            native_load_mode,
+            inactive_load,
+            resource_source,
+            inventory,
+            kingdom_economy,
+            triggers,
+            actors,
+            owners,
+            updatables,
+            definitions,
+            clock: returned_clock,
+            queues,
+            rng,
+            report,
+            settings,
+            definition_text,
+            live_text,
+            updatables_chunk,
+            saved_queue_load,
+            live_sai,
+        } = staged;
+        let live_sai = live_sai.expect("a Staged loan callee cannot remove the lent SAI");
+        let mut world = load_world.expect("a Staged loan callee cannot remove the lent World");
+        let dispatcher = world.dispatcher.take().expect("a Staged loan callee cannot remove the lent dispatcher");
+        state.world.restore_dispatcher(dispatcher);
+        self.world.put(world);
+        self.actors.put(actors);
+        self.owners.put(owners);
+        self.definitions.put(definitions);
+        self.settings.put(settings);
+        self.evidence.put(LoadEvidence {
+            resource_streams,
+            native_load_mode,
+            inactive_load,
+            resource_source,
+            inventory,
+            kingdom_economy,
+            updatables,
+            report,
+            definition_text,
+            live_text,
+            updatables_chunk,
+            saved_queue_load,
+        });
+        state.queues = queues;
+        state.rng = rng;
+        let loan = if returned_clock != clock {
+            Err("Staged creation loan changed the authoritative World clock".to_owned())
+        } else if triggers.is_some() {
+            Err("Staged creation loan installed a decoded trigger payload".to_owned())
+        } else {
+            Ok(())
+        };
+        let result = match (result, loan) {
+            (Ok(v), Ok(())) => Ok(v),
+            (Err(e), Ok(())) | (Ok(_), Err(e)) => Err(e),
+            (Err(e), Err(l)) => Err(format!("{e}; {l}")),
+        };
+        (result, live_sai)
+    }
 }
 /// One unported/failed leaf recorded (and skipped) by a census update.
 #[derive(Clone, Debug, serde::Serialize)]
@@ -134,6 +290,10 @@ pub struct PresentationParts<'a> {
     pub creator_extents:Option<&'a crate::world_creator_extents::State>,
     pub camera_target:&'a crate::load_tail_world::CameraState,
     pub triggers:Option<&'a aa_triggers::manager::Manager>,
+    ///GWorld runtime fields; `.fog_cheat_word()` is GWorld+275.
+    pub runtime_fields:&'a crate::load_world_runtime_fields::State,
+    ///Completed source requirement bytes, e.g. `.byte(id, 0x16D)` ObjectData+16D.
+    pub source_fields:&'a aa_rules::native_source_requirements::NativeSourceRequirements,
 }
 ///Disjoint loans for the actual4F0750 view-publication stage. The same
 ///presentation queue, actor allocations and spatial owner remain retained;
@@ -229,6 +389,7 @@ impl<'source> World<'source> {
             live_text,
             updatables_chunk,
             saved_queue_load,
+            live_sai: _,
         } = staged;
         //Preflight required the real manager installation, not an empty Saved
         //proxy or a second Manager::from_saved at the activation boundary.
@@ -240,14 +401,14 @@ impl<'source> World<'source> {
             .expect("checked retained dispatcher before transfer");
         let native_world = aa_world::World::from_loaded_dispatcher(dispatcher, clock, precision);
         let retained = Retained {
-            actors,
-            world,
-            owners,
-            definitions,
-            settings,
+            actors: Lent::new(actors),
+            world: Lent::new(world),
+            owners: Lent::new(owners),
+            definitions: Lent::new(definitions),
+            settings: Lent::new(settings),
             census_contaminated: false,
             log: Vec::new(),
-            evidence: LoadEvidence {
+            evidence: Lent::new(LoadEvidence {
                 resource_streams,
                 native_load_mode,
                 inactive_load,
@@ -260,7 +421,7 @@ impl<'source> World<'source> {
                 live_text,
                 updatables_chunk,
                 saved_queue_load,
-            },
+            }),
         };
         let state = match ClockedState::from_parts(StateParts {
             world: native_world,
@@ -299,11 +460,12 @@ impl<'source> World<'source> {
             kingdoms:&self.retained.world.kingdoms,inventory:&self.retained.evidence.inventory,
             view_biome:self.retained.world.view_biome.as_ref(),revision:&self.retained.world.revision,
             creator_extents:self.retained.world.creator_extents.as_ref(),camera_target:&self.retained.world.tail.camera,
-            triggers:self.retained.world.trigger_manager.as_ref()})
+            triggers:self.retained.world.trigger_manager.as_ref(),
+            runtime_fields:&self.retained.world.runtime_fields,source_fields:&self.retained.world.source_fields})
     }
     pub fn with_view_binding<R>(&mut self,call:impl FnOnce(ViewBindingParts<'_>)->Result<R,String>)->Result<R,String> {
         if self.state.stopped(){return Err("view publication refused after a failed World update".into());}
-        let world=&mut self.retained.world;
+        let world=&mut *self.retained.world;
         let spatial=match &mut world.spatial {
             SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&mut v.world,
             _=>return Err("view publication requires the same complete adopted spatial owner".into()),
@@ -360,11 +522,11 @@ impl<'source> World<'source> {
             trigger_program,
             music,
         } = self;
-        let (control,game_spy,sai_sync_flags,presentation_timing,heartbeat_counter,network)=application.frame_all_parts();
+        let (control,game_spy,presentation_timing,heartbeat_counter,network,sai_engine,sai_players)=application.frame_all_parts();
         Frame {
             precision:*precision,
             control: RefCell::new(control),
-            game_spy,sai_sync_flags,
+            game_spy,sai:RefCell::new((sai_engine,sai_players)),
             network,
             presentation_timing:RefCell::new(presentation_timing),
             heartbeat_counter:RefCell::new(heartbeat_counter),
@@ -455,7 +617,9 @@ pub struct Frame<'battle, 'source> {
     world: RefCell<WorldLoan<'battle, 'source>>,
     game_spy:&'battle crate::game_spy_manager_gate::State,
     network:&'battle crate::standalone_network::ApplicationNetwork,
-    sai_sync_flags:&'battle [u8;3],
+    ///The application SAI manager [B36528] and its player arena, the SAME
+    ///owners; a live creation loan moves them through its Staged and back.
+    sai:RefCell<(&'battle mut aa_mind::sai::manager::Sai,&'battle mut crate::load_sai_players::Arena)>,
     presentation_timing:RefCell<&'battle mut crate::presentation_timing::State>,
     heartbeat_counter:RefCell<&'battle mut crate::heartbeat_process::Counter>,
 }
@@ -531,16 +695,17 @@ impl Frame<'_, '_> {
         let mut b=self.world.try_borrow_mut().map_err(|e|format!("actual gameplay World loan: {e}"))?;
         let WorldLoan{state,retained,..}=&mut *b;
         if state.stopped(){return Err("gameplay order refused after failed World update".into())}
-        let spatial=match &mut retained.world.spatial{
+        let world=&mut *retained.world;
+        let spatial=match &mut world.spatial{
             SpatialOwner::Adopted(v)if v.error.is_none()&&v.pending.is_empty()=>&mut v.world,
             _=>return Err("actual gameplay spatial owner is incomplete".into()),
         };
         call(GameplayOrderLoans{actors:&mut retained.actors,spatial,queues:&mut state.queues,rng:&mut state.rng,
-            definitions:&mut retained.definitions,owners:&mut retained.owners,mind_runtime:&mut retained.world.mind_runtime,
-            variables:&mut retained.world.variables,presentation:&mut retained.world.presentation,
-            inventory:&retained.evidence.inventory,zones:&retained.world.zones,clock:&state.world.clock,revision:&retained.world.revision,precision:self.precision,
-            terrain:&retained.world.terrain,mission:&retained.world.mission_fields,phase:&state.world.phase,
-            current_settings:Some((retained.world.global_settings_mode,retained.world.map_mode.as_ref()))})
+            definitions:&mut retained.definitions,owners:&mut retained.owners,mind_runtime:&mut world.mind_runtime,
+            variables:&mut world.variables,presentation:&mut world.presentation,
+            inventory:&retained.evidence.inventory,zones:&world.zones,clock:&state.world.clock,revision:&world.revision,precision:self.precision,
+            terrain:&world.terrain,mission:&world.mission_fields,phase:&state.world.phase,
+            current_settings:Some((world.global_settings_mode,world.map_mode.as_ref()))})
     }
     ///76F600 reads the distinct B40C9C owner, never the B3654C+BC gate.
     ///Only a completed SAME local selector proves its absence. Other choices
@@ -581,7 +746,31 @@ impl Frame<'_, '_> {
     ///Same current application manager/SAI fields, read afresh by each
     ///native logger gate; no per-frame bool or flags snapshot is returned.
     pub fn game_spy_manager_gate(&self)->&crate::game_spy_manager_gate::State{self.game_spy}
-    pub fn sai_sync_flags(&self)->&[u8;3]{self.sai_sync_flags}
+    ///SAI+5C..5E read afresh at each native logger gate.
+    pub fn sai_sync_flags(&self)->Result<[u8;3],String>{
+        Ok(self.sai.try_borrow().map_err(|e|format!("SAI+5C read during an SAI loan: {e}"))?.0.bytes_5c)
+    }
+    ///Move the application SAI manager and player arena out for one live
+    ///creation loan. The constructor placeholder left in the slot carries the
+    ///SAME +5C sync bytes, which creation children never write, so native
+    ///logger gates evaluated during the loan read the actual values.
+    fn lend_sai(&self)->Result<crate::restore_lifecycle::LiveSai,String>{
+        let mut sai=self.sai.try_borrow_mut().map_err(|e|format!("SAI loan: {e}"))?;
+        let mut lent=crate::restore_lifecycle::LiveSai::placeholders();
+        lent.engine.bytes_5c=sai.0.bytes_5c;
+        Ok(crate::restore_lifecycle::LiveSai{
+            engine:std::mem::replace(&mut *sai.0,lent.engine),
+            players:std::mem::replace(&mut *sai.1,lent.players),
+        })
+    }
+    fn return_sai(&self,live:crate::restore_lifecycle::LiveSai)->Result<(),String>{
+        let mut sai=self.sai.try_borrow_mut().map_err(|e|format!("SAI return: {e}"))?;
+        if sai.0.bytes_5c!=live.engine.bytes_5c {
+            *sai.0=live.engine;*sai.1=live.players;
+            return Err("SAI+5C sync bytes changed during a creation loan".into());
+        }
+        *sai.0=live.engine;*sai.1=live.players;Ok(())
+    }
     ///Disjoint loans of the same application-lifetime timing and heartbeat
     ///owners. Native service adapters use these during a frame; no fresh
     ///counter, sampled scalar mirror or second whole-World borrow is created.
@@ -675,6 +864,49 @@ impl Frame<'_, '_> {
             b.retained.census_contaminated=true;
         }
         WorldBorrow{frame:self,inputs,catalog:Some(catalog),census:Some(sink)}.world_update()
+    }
+    ///Harness/diagnostic probe, not a native order entry: one fresh 4FA590
+    ///Actor creation (4FA030/4F9C10 and its InitCreate/PostCreate/registration
+    ///children) on the SAME live owners through a [`Retained::with_staged`]
+    ///loan. Returns the created GTID; reached unported children are errors.
+    pub fn probe_create_actor(
+        &self,
+        catalog: &Catalog<'_>,
+        startup: &crate::actor_creation_startup::StartupInputs,
+        ids: &str,
+        position_bits: [u32; 3],
+        direction_bits: [u32; 2],
+        owner: u32,
+    ) -> Result<Option<u32>, String> {
+        let mut b = self.world.try_borrow_mut().map_err(|e| format!("creation probe World loan: {e}"))?;
+        let WorldLoan { state, retained, .. } = &mut *b;
+        if state.stopped() {
+            return Err("creation probe refused after failed World update".into());
+        }
+        if retained.census_contaminated {
+            return Err("World was advanced by a census update; it is no longer native state".into());
+        }
+        let precision = self.precision;
+        let live_sai = self.lend_sai()?;
+        let (result, live_sai) = retained.with_staged(state, live_sai, |staged| {
+            let canonical = catalog.actors.find(ids).ok_or_else(|| format!("{ids} is not an Actor definition"))?.id.clone();
+            let token = staged.definitions.intern("ActorDefinition", &canonical)?;
+            let mut params = crate::map_actor_creation::Params::new(crate::map_replacement_queue::DefinitionRef {
+                token,
+                canonical_ids: canonical,
+            });
+            params.position_bits = position_bits;
+            params.direction_bits = direction_bits;
+            params.owner = owner;
+            let key = crate::map_actor_creation::create(staged, catalog, &mut params, startup, precision)?;
+            Ok(key.and_then(|k| staged.actors.id(k)).map(|id| id.raw()))
+        });
+        let returned = self.return_sai(live_sai);
+        match (result, returned) {
+            (Ok(v), Ok(())) => Ok(v),
+            (Err(e), Ok(())) | (Ok(_), Err(e)) => Err(e),
+            (Err(e), Err(r)) => Err(format!("{e}; {r}")),
+        }
     }
     ///Retained 404F60-family debug-log calls made by scheduled Updates.
     pub fn native_log(&self)->Result<Vec<crate::live_updates::NativeLog>,String>{
@@ -772,7 +1004,7 @@ impl<S: SessionRead + ?Sized, O: AudioOutput + ?Sized> WorldSeams
                 census:self.census.map(|sink|(sink,tick))};
             return Ok(state.step(&mut services)?);
         }
-        let world = &mut retained.world;
+        let world =&mut *retained.world;
         let spatial = match &mut world.spatial {
             SpatialOwner::Adopted(v) if v.error.is_none() && v.pending.is_empty() => &mut v.world,
             _ => return Err(seam("actual live spatial owner is absent during update")),

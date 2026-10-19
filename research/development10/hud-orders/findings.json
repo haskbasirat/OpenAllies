@@ -1,0 +1,42 @@
+{
+ "date": "2026-10-19",
+ "oracle": {
+  "script": "native_press_pick.py",
+  "json": "native-press-pick.json",
+  "sha256": "389921b4774219b3da9cdf4a376adcc7a61997e1d19b67094288731f7dc01fa7",
+  "runs": 1560,
+  "trees": 260,
+  "picks": 3120,
+  "hits": 523,
+  "admissions": 1560,
+  "pins": 113,
+  "precision_independent": true,
+  "seams": 0,
+  "functions": [
+   "0x5E1680",
+   "0x5E2B50",
+   "0x5EDD30",
+   "0x6A71D0",
+   "0x5EFA80"
+  ]
+ },
+ "rust": {
+  "replay": "crates/aa-ui/tests/native_press_pick.rs",
+  "real_tree": "crates/aa-ui/tests/press_pick.rs",
+  "port": "crates/aa-ui/src/press_pick.rs",
+  "leaves": "crates/aa-client/src/battle_hud_orders.rs (battle_menus::hud_orders)"
+ },
+ "explicit_errors": [
+  "0x436950 CanSend (selection/static group not passed by HudLeaves)",
+  "0x620640 EconomicImpact show branch (selection head, 0x436510, 0x4363B0 not passed)",
+  "0x437EB0 with a selection (actor vt+0x154)",
+  "0x5D74B0/B279C0 (minimap presses are UI-thread routed)",
+  "decal widget vt+0x64 0x5EF4F0 (+0x70 handle)",
+  "HUD/minimap/dialog widget chains (UI thread)"
+ ],
+ "queued_presentation": [
+  "0x436850 selection voice",
+  "0x61EEF0 acknowledgement voice",
+  "0x43DB10 marker"
+ ]
+}

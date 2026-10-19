@@ -37,6 +37,7 @@ mod runtime_fp;
 mod windows_film_time;
 mod model_fixes;
 mod model_payload_backend;
+mod sequence_decode;
 mod native_map_check;
 mod native_texture_decoder;
 mod terrain_render;
@@ -50,6 +51,7 @@ mod world_check;
 mod windows_focus;
 #[cfg(windows)]
 mod windows_reset_os;
+mod view_flags_service;
 
 use aa_assets::AssetStore;
 use anyhow::{Context, Result, bail};

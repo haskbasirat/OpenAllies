@@ -110,12 +110,41 @@
   {
    "test": "crates/aa-formats/tests/nif_native_fields.rs",
    "fixture": "native-nif-fields.tsv",
-   "fixture_sha256": "f318bae37e26b3f5346ed5a4cc1ab8fc79c8d0bd403b1fe75a91ffcb3e5cf2e6",
+   "fixture_sha256": "bc2377ffb3d785d6d829c40c6ee87d377d4a6db812e43e4f670c17021422396d",
    "result": "1900/1900 native object graph records identical (4 post-processed files by class)"
   },
   {
    "test": "crates/aa-client model_payload_backend::graph_fields::tests::native_projection_matches_the_former_sidecars",
    "result": "the three former PyFFI sidecars equal the load-time native projection (property lists in native head-first order)"
+  },
+  {
+   "test": "crates/aa-client model_payload_backend::controllers::tests::every_shipped_model_update_matches_the_native_update",
+   "fixture": "native-model-update.tsv",
+   "fixture_sha256": "cad82051ec394c823d624dcf6935003c6886f83676e855a5d7a0e7444ea1240d",
+   "result": "3615 file/precision NiAVObject::Update(0,1) results identical at PC24/53/64 (831 with time controllers); other files explicit unported domains"
+  },
+  {
+   "test": "crates/aa-client model_payload_backend::tests::native_graph_matches_every_former_projection",
+   "result": "1582/1582 former PyFFI graph projections reproduced by the load-time native graph"
+  },
+  {
+   "test": "crates/aa-formats nif::link::tests::a_child_linked_twice_moves_to_the_later_parent",
+   "result": "867C40/86EA10/866DF0/866B40 re-parenting; corpus children arrays still equal native (nif_native_fields)"
+  },
+  {
+   "test": "crates/aa-formats tests every_shipped_kf_matches_the_native_stream_reader / every_shipped_kf_builds_the_native_object_graph",
+   "fixture": "native-kf-corpus.tsv, native-kf-fields.tsv",
+   "fixture_sha256": [
+    "47c6e1f65680ffe830f80e2aa26dda1fc8c6d2a3b29efab829a32713c68a2815",
+    "6e5b46308ef919d0b8d441d9ad8e981628b0ff7e41006a9f7052b10f5352ab98"
+   ],
+   "result": "581/581 KF read traces, classes, links, pops and object graphs identical"
+  },
+  {
+   "test": "crates/aa-client sequence_decode::tests::every_shipped_kf_length_matches_native",
+   "fixture": "native-kf-length.tsv",
+   "fixture_sha256": "b0bf143da9366eff7a0f13542c517e4567cc9df7260492ffbb746da332902d93",
+   "result": "581/581 5A5650 lengths and 404ED0 report lines identical"
   }
  ],
  "gaps": [
@@ -123,25 +152,32 @@
   "texture palette identity (8806D0/8806C0/880A00)",
   "AddExtraData naming/order (86AE60/86AC80)",
   "PostLinkObject side effects",
-  "model graph JSON missing for 265 aliased-AV models"
+  "controller classes other than NiKeyframeController/NiAlphaController (LookAt, Path, MaterialColor, TextureTransform, Vis, particle) are refused",
+  "multi-key TBC keys (865050/865300 squad, 865820, 864570) and quadratic rotation keys are refused"
  ],
  "producers": {
   "native_nif_load.py": "b11bacad7aac714588252cee31d08ce9ba73d730aaa2f05bd9527f502ab0e569",
   "native_nif_corpus.py": "40badb7178e5534ddaf4325c12f74c6c7026b803de73f0adc61c010ce7a1fd4b",
   "native_nif_fields.py": "c6abada0d10001efad3f205dd2b48768e57b9b784fa9b959bdea12a16a16051d",
   "corpus_tsv.py": "e7caea16b6023054677db832ca5ffe4450b0555aca6df1a8e3933a59bf536ee5",
-  "compare_trace.py": "9b5176257ce243c11671eab785ad0c92336b854d857a1b089fc763b9376a23d9"
+  "compare_trace.py": "9b5176257ce243c11671eab785ad0c92336b854d857a1b089fc763b9376a23d9",
+  "native_model_update.py": "df982920597158c695625db467927fb78235abb1d630086360a399aadee0c400"
  },
  "fixtures": {
   "native-nif-corpus.json": "7b8bf4c2cfdc47211e3578ba5e3ab9a3ecdc20a8599ed5fba4c647cb95699a0d",
   "native-nif-corpus.tsv": "396eb739d3bc64f196d1c70d26a12a186f0ec7bba5fc95758550aef0feefa11b",
   "native-nif-samples.json": "d2a65dfc330439c9d1816887e7631375911ae65175f3e966d8291a0747c4c35f",
-  "native-nif-fields.tsv": "f318bae37e26b3f5346ed5a4cc1ab8fc79c8d0bd403b1fe75a91ffcb3e5cf2e6",
-  "native-nif-fields-samples.json": "a588aea8a150e53d0c2e8f0a2ee461efdbcbdcf017160d24d1f3cd7802081db6"
+  "native-nif-fields.tsv": "bc2377ffb3d785d6d829c40c6ee87d377d4a6db812e43e4f670c17021422396d",
+  "native-nif-fields-samples.json": "a588aea8a150e53d0c2e8f0a2ee461efdbcbdcf017160d24d1f3cd7802081db6",
+  "native-model-update.tsv": "cad82051ec394c823d624dcf6935003c6886f83676e855a5d7a0e7444ea1240d",
+  "native-model-update-samples.json": "5758cef5304d88ebab21f04bb925c65343ebe41ae51bf97c8ddaad140b4659c0",
+  "native-kf-corpus.json": "9c23a2fcebc774fd4e3199354d0b14a152f48a26bde00c3502baba5388fe1a16",
+  "native-kf-corpus.tsv": "47c6e1f65680ffe830f80e2aa26dda1fc8c6d2a3b29efab829a32713c68a2815",
+  "native-kf-fields.tsv": "6e5b46308ef919d0b8d441d9ad8e981628b0ff7e41006a9f7052b10f5352ab98",
+  "native-kf-length.tsv": "b0bf143da9366eff7a0f13542c517e4567cc9df7260492ffbb746da332902d93"
  },
  "next_blocker": {
-  "firefight": "Special/Things/ThingStartLocation/ThingStartLocation.nif (10.0.1.0): Plane01 NiKeyframeController, native flags 0x2C (file 0x0C)",
-  "berlin": "Doodads/Temperate/TemperateTrees/TemperatePineTree01.nif (10.1.0.0): Object03 NiKeyframeController, flags 0x28",
-  "native_path": "87AA10 model processing calls NiAVObject::Update 86E8D0 at 87ABC0 with (0, 1): NiNode UpdateDownwardPass 866EB0 -> 866BE0 controller update before world data; the backend refuses any node controller (supported())."
+  "berlin": "Doodads/Temperate/TemperateTrees/TemperateTree04.nif: 5A94F0 selection cuboid without a SelectionBox geometry child (root world-bound sphere fallback, diagnostics 0x56F/0x57D)",
+  "firefight": "Special/Things/ThingStartLocation/ThingStartLocation.nif: 879A90 positive multi-texture descriptors require same Property24/34/44 owners"
  }
 }

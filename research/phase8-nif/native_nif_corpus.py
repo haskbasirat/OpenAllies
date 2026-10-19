@@ -14,9 +14,12 @@ link-ID list, the link-count list and the LinkObject pop trace. Plus the
 executed original instruction ranges, verified identical in the accepted v14
 image. Full traces of a few named samples go to native-nif-samples.json.
 Without --write the stored file is regenerated and compared.
+
+NIF_CORPUS_EXT=.kf runs the same oracle over every `.kf` member and writes
+native-kf-corpus.json / native-kf-samples.json instead.
 """
 from pathlib import Path
-import sys, json, hashlib, struct, subprocess, collections, time
+import sys, os, json, hashlib, struct, subprocess, collections, time
 from concurrent.futures import ProcessPoolExecutor
 
 HERE = Path(__file__).resolve().parent
@@ -25,9 +28,13 @@ GAME = ROOT.parent
 sys.path.insert(0, str(HERE))
 import native_nif_load as N
 
+EXT = os.environ.get('NIF_CORPUS_EXT', '.nif').lower()
+PREFIX = 'native-nif' if EXT == '.nif' else 'native-' + EXT.lstrip('.')
+
 SAMPLES = ['Special/Things/ThingStartLocation/ThingStartLocation.nif', 'Special/Empty.nif',
            'Effects/Gunshot/RifleShotExplosion1.NIF', 'Bridges/ArcticBridge/ArcticBridge01.nif',
-           'Buildings/Campaign/BeachMinePole/BeachMinePole.nif', 'Doodads/Temperate/TemperateLakeMist/TemperateLakeMist01.nif']
+           'Buildings/Campaign/BeachMinePole/BeachMinePole.nif', 'Doodads/Temperate/TemperateLakeMist/TemperateLakeMist01.nif',
+           'Doodads/Temperate/TemperateHighGrass/TemperateHighDryGrass.kf']
 
 
 def members():
@@ -41,7 +48,7 @@ def members():
     rows = []
     for line in out.splitlines()[1:]:
         src, size, off, path = line.split('\t')
-        if path.lower().endswith('.nif'):
+        if path.lower().endswith(EXT):
             rows.append((path, int(off), int(size)))
     return rows
 
@@ -126,8 +133,8 @@ def main():
                version_counts={'%08x/%s' % (v or 0, u): c for (v, u), c in sorted(versions.items(), key=lambda x: (x[0][0] or 0))},
                executed_blocks=len(pins), executed_bytes=len(pin_bytes), executed_sha256=sha(pin_bytes),
                rows=sorted(rows, key=lambda r: r['path'].lower()))
-    out = HERE / 'native-nif-corpus.json'
-    sample_out = HERE / 'native-nif-samples.json'
+    out = HERE / (PREFIX + '-corpus.json')
+    sample_out = HERE / (PREFIX + '-samples.json')
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     sraw = (json.dumps(dict(schema=1, samples=sorted(samples, key=lambda s: s['path'])), separators=(',', ':')) + '\n').encode()
     if write:

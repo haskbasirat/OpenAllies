@@ -515,7 +515,10 @@ impl eframe::App for Shell {
             //job takes them, and jobs only run on an activated session, so
             //no frame is queued before it (no camera exists then either).
             if matches!(self.battle.status(),crate::battle_controller::Status::AwaitingNativeView) {
-                self.battle_presentation.observe_input(ctx);
+                //Selection/orders also need the TGI tree for the native press
+                //pick (5C3BC0) and the world-under-cursor verdict.
+                let(ui,_)=self.tgi.native_parts();
+                self.battle_presentation.observe_input_hud(ctx,ui);
             }
             self.battle_presentation.poll(&mut self.battle);
         }

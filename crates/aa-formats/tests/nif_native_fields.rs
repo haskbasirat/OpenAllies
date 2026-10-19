@@ -169,6 +169,29 @@ fn record(nif: &NifFile, i: usize) -> J {
             put("format", ints(&[f.u32("pixel_layout").unwrap(), f.u32("use_mipmaps").unwrap(), f.u32("alpha_format").unwrap()]));
             put("static", int(f.u8("is_static").unwrap()));
         }
+        "NiTextKeyExtraData" => {
+            let keys = f.list("keys").unwrap().iter().map(|k| match k {
+                Value::Record(fields) => {
+                    let get = |name: &str| fields.iter().find(|x| x.name == name).map(|x| &x.value).unwrap();
+                    let time = match get("time") { Value::F32(v) => int(*v), _ => panic!("key time") };
+                    let text = match get("text") { Value::Str(s) => latin1(s.as_deref()), _ => panic!("key text") };
+                    J::List(vec![time, text])
+                }
+                _ => panic!("text key"),
+            });
+            put("keys", J::List(keys.collect()));
+        }
+        "NiControllerSequence" => {
+            put("name", latin1(f.string("name").unwrap()));
+            put("text_keys_name", latin1(f.string("text_keys_name").unwrap()));
+            put("text_keys", opt(nif.linked(i, "text_keys")));
+            let blocks = f.list("blocks").unwrap();
+            let field = |b: &Value, name: &str| -> Value {
+                match b { Value::Record(fields) => fields.iter().find(|x| x.name == name).unwrap().value.clone(), _ => panic!("block") }
+            };
+            put("targets", J::List(blocks.iter().map(|b| match field(b, "target_name") { Value::Str(s) => latin1(s.as_deref()), _ => panic!("target") }).collect()));
+            put("sequence_controllers", J::List(nif.sequence_controllers(i).unwrap().into_iter().map(opt).collect()));
+        }
         "NiTexturingProperty" => {
             put("apply", int(f.u32("apply_mode").unwrap()));
             let maps = f.list("maps").unwrap().iter().map(|m| match m {
@@ -189,6 +212,17 @@ fn record(nif: &NifFile, i: usize) -> J {
 
 #[test]
 fn every_shipped_nif_builds_the_native_object_graph() {
+    check(".nif", "native-nif-fields.tsv");
+}
+
+/// Every shipped KF: the native object graph (sequence names, text keys,
+/// target names, controllers) against NIF_CORPUS_EXT=.kf native_nif_fields.py.
+#[test]
+fn every_shipped_kf_builds_the_native_object_graph() {
+    check(".kf", "native-kf-fields.tsv");
+}
+
+fn check(ext: &str, name: &str) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let root = std::env::var_os("AA_GAME_ROOT").map(PathBuf::from).unwrap_or(root);
     let archive_path = root.join("Data.rwd");
@@ -196,7 +230,7 @@ fn every_shipped_nif_builds_the_native_object_graph() {
         eprintln!("skipping: {} not present", archive_path.display());
         return;
     }
-    let tsv = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-nif/native-nif-fields.tsv"))
+    let tsv = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-nif").join(name))
         .expect("native field fixture");
     let native: BTreeMap<&str, &str> = tsv.lines().skip(1).map(|l| l.split_once('\t').unwrap()).collect();
     let mut archive = RwdArchive::open(&archive_path).unwrap();
@@ -204,7 +238,7 @@ fn every_shipped_nif_builds_the_native_object_graph() {
         .entries()
         .iter()
         .enumerate()
-        .filter(|(_, e)| e.path().to_ascii_lowercase().ends_with(".nif"))
+        .filter(|(_, e)| e.path().to_ascii_lowercase().ends_with(ext))
         .map(|(i, e)| (i, e.path().to_string()))
         .collect();
     assert_eq!(members.len(), native.len());

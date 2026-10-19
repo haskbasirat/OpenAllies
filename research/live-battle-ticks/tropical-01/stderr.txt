@@ -1,0 +1,4 @@
+
+thread 'live_skirmish_ticks_census' (23204) panicked at crates\aa-runtime\tests\live_battle_ticks.rs:574:25:
+resource task failed: actor creation path not ported: load reveal requires actual actor virtual100 container owner
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

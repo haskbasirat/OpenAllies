@@ -20,6 +20,14 @@ use aa_orders::{
     payload::{Field, Registry, ThingCheck},
 };
 
+#[path = "player_order_describe.rs"]
+pub mod describe;
+#[path = "player_order_object_reference.rs"]
+pub mod object_reference;
+#[cfg(test)]
+#[path = "player_order_delivery_tests.rs"]
+mod delivery_tests;
+
 fn required<T>(text: impl Into<String>) -> Result<T> {
     Err(Error::Required(text.into()))
 }
@@ -55,8 +63,24 @@ impl Fields<'_> {
             _ => required("actual39-entry ActorCommand decoded reference"),
         }
     }
+    /// 61EBA0 flag bit1: 76A960 value over `[B39F58]+28 + 1` possibilities;
+    /// the count itself is the NULL sentinel (resolution happens later).
+    fn object_reference(&mut self, count: usize) -> Result<Option<u32>> {
+        match self.0.next() {
+            Some(Field::Def {
+                registry: Registry(0xb39f58),
+                index,
+            }) if (*index as usize) <= count => Ok(((*index as usize) != count).then_some(*index)),
+            _ => required("actual B39F58 Object-definition decoded reference"),
+        }
+    }
 }
 pub fn from_fields(descriptor: usize, fields: &[Field]) -> Result<Decoded> {
+    from_fields_with_objects(descriptor, fields, None)
+}
+/// [`from_fields`] with the current `[B39F58]+28` Thing-manager count, which
+/// decodes flag bit1 (61EBA0's 76A960 Object-definition reference).
+pub fn from_fields_with_objects(descriptor: usize, fields: &[Field], objects: Option<usize>) -> Result<Decoded> {
     if !matches!(descriptor, 86 | 87) {
         return required("86/87 accepted command decree boundary");
     }
@@ -77,7 +101,10 @@ pub fn from_fields(descriptor: usize, fields: &[Field]) -> Result<Decoded> {
         wire.word = fields.uint(32)?;
     }
     if has(1) {
-        return required("actual B39F58 Object-definition registry/null sentinel");
+        let Some(count) = objects else {
+            return required("actual B39F58 Object-definition registry/null sentinel");
+        };
+        wire.object = fields.object_reference(count)?;
     }
     if has(2) {
         wire.position = [fields.uint(32)?, fields.uint(32)?];
@@ -136,8 +163,7 @@ pub(crate) fn allocate_decoded_with_bank(
         return required("native eleven-bit command flags");
     }
     let has = |bit: u32| wire.flags & (1u16 << bit) != 0;
-    if (has(1) && wire.object.is_some())
-        || (has(7) && wire.parameter.is_some())
+    if (has(7) && wire.parameter.is_some())
         || (has(8) && wire.extra.is_some())
         || (has(5) && wire.parameters.is_some())
     {
@@ -161,6 +187,15 @@ pub(crate) fn allocate_decoded_with_bank(
         }
         None => 0,
     };
+    // 61EBA0 bit1: 76A960 stores [B39F58]+24[v] only for an ActorData
+    // definition (vt+38), NULL otherwise; the flag bit itself is kept.
+    let object_definition = match (has(1), wire.object) {
+        (true, Some(value)) => match check(object_reference::resolve_object_76a960(catalog, value))? {
+            Some(d) => Some(check(object_reference::object_definition_token(banks, d))?),
+            None => None,
+        },
+        _ => None,
+    };
     let command = PlainCommand {
         definition_id: token,
         definition: definition.map(|d| aa_mind::command::Definition {
@@ -170,7 +205,7 @@ pub(crate) fn allocate_decoded_with_bank(
         }),
         flags: u32::from(wire.flags),
         word10: if has(0) { wire.word } else { 0 },
-        object_definition: None,
+        object_definition,
         position_bits: if has(2) { wire.position } else { [0; 2] },
         auxiliary_bits: if has(3) { wire.auxiliary } else { [0; 2] },
         scalar_bits: if has(4) { wire.scalar } else { 0 },
@@ -327,6 +362,23 @@ pub trait Diagnostics {
         empty: bool,
     ) -> Result<()>;
     fn command_sync(&mut self, commands: &Commands, command: u32) -> Result<()>;
+    /// 61F210's description with the 4DA570 ordinal the kernel guessed on
+    /// this command (None: explicit, not guessed or NULL). The default keeps
+    /// the original `selection` sink.
+    #[allow(clippy::too_many_arguments)]
+    fn describe(
+        &mut self,
+        catalog: &Catalog<'_>,
+        actors: &ActorAccess<'_>,
+        commands: &Commands,
+        view: &impl View,
+        command: u32,
+        empty: bool,
+        guessed: Option<u32>,
+    ) -> Result<()> {
+        let _ = guessed;
+        self.selection(catalog, actors, commands, view, command, empty)
+    }
 }
 struct SelectionBinding<'a, 'world, 'store, 'source, S, P, G, D, V> {
     catalog: &'a Catalog<'source>,
@@ -355,13 +407,14 @@ impl<S: mind_world::Services, P: Spatial, G: Globals, D: Diagnostics, V: View>
         Ok(self.view.list().head().is_none())
     }
     fn inspect_empty(&mut self, _: &(), command: &mut u32) -> Result<()> {
-        self.diagnostics.selection(
+        self.diagnostics.describe(
             self.catalog,
             &self.world.actors,
             &self.world.runtime.commands,
             self.view,
             *command,
             true,
+            None,
         )
     }
     fn inspect_selected(&mut self, _: &(), command: &mut u32) -> Result<()> {
@@ -375,19 +428,22 @@ impl<S: mind_world::Services, P: Spatial, G: Globals, D: Diagnostics, V: View>
         // Native+B4 is true for the admitted classes; +108 then reads E8
         // before the optional default-definition lookup and diagnostics.
         orders::actor_word_with_bank(self.catalog, self.banks, &self.world.actors, actor, 0xe8)?;
+        let mut guessed = None;
         if check(self.world.runtime.commands.value(*command))?.flags & (1 << 6) == 0 {
             // 61F3D8: 4DA570(cmd, first actor, false). The definition only
             // names the diagnostic; its 4DA994 completion stays on the command.
-            orders::guess_arena_with_bank(self.catalog, self.banks, &self.world.actors,
-                &mut self.world.runtime.commands, *command, actor, false, self.globals)?;
+            guessed = orders::guess_arena_with_bank(self.catalog, self.banks, &self.world.actors,
+                &mut self.world.runtime.commands, *command, actor, false, self.globals)?
+                .map(|g| g.index);
         }
-        self.diagnostics.selection(
+        self.diagnostics.describe(
             self.catalog,
             &self.world.actors,
             &self.world.runtime.commands,
             self.view,
             *command,
             false,
+            guessed,
         )
     }
     fn deliver_selection(&mut self, _: &(), command: &mut u32) -> Result<()> {

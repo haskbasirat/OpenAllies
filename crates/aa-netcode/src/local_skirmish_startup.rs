@@ -33,6 +33,10 @@ pub struct Startup {
     selected: Arc<SourceResource>,
     diagnostics: Vec<u32>,
     worker_threads: Option<(u32, u32)>,
+    /// The StagingMenu's orders, in the order they were sent (explicit AIs,
+    /// kingdom Nation/Faction, AI handicap), processed by the Host after its
+    /// 7791F0 refresh and before 77A950.
+    staging: Vec<local_bootstrap::staging_requests::StagingRequest>,
 }
 impl Startup {
     ///Bind actual constructors once; selected resource and application remain
@@ -49,6 +53,7 @@ impl Startup {
             selected,
             diagnostics: Vec::new(),
             worker_threads: None,
+            staging: Vec::new(),
         };
         let result = (|| {
             this.host
@@ -62,6 +67,10 @@ impl Startup {
             Ok(()) => Ok(this),
             Err(e) => Err((this, e)),
         }
+    }
+    /// The custom-game setup orders the Host processes at launch.
+    pub fn set_staging_requests(&mut self, requests: Vec<local_bootstrap::staging_requests::StagingRequest>) {
+        self.staging = requests;
     }
     pub fn host(&self) -> &LocalBootstrap {
         &self.host
@@ -167,6 +176,22 @@ impl Startup {
         self.host
             .refresh_host_players_7791f0(catalog, &mut effects)
             .map_err(|e| e.to_string())?;
+        if !self.staging.is_empty() {
+            let manager = lifecycle.game_spy_manager_gate().map_err(|e| e.to_string())?;
+            for request in &self.staging.clone() {
+                local_bootstrap::with_launch_text(catalog, text, |text| {
+                    self.host.process_staging_request(
+                        catalog,
+                        &catalog.definition_bank.borrow(),
+                        manager,
+                        text,
+                        request,
+                        &mut effects,
+                    )
+                })
+                .map_err(|e| e.to_string())?;
+            }
+        }
         self.host
             .set_seed_7710e0(choices.seed, &mut effects)
             .map_err(|e| e.to_string())?;
@@ -265,6 +290,27 @@ impl<O: OsThreadIds> local_bootstrap::implicit_ai::Effects for Effects<'_, '_, O
     }
     fn player_diagnostic(&mut self, _: &[u16], _: &[u16], _: bool) -> crate::Result<()> {
         self.calls.push(0x77684f);
+        Ok(())
+    }
+}
+impl<O: OsThreadIds> local_bootstrap::staging_requests::Effects for Effects<'_, '_, O> {
+    fn session_message_76da60(&mut self, _: &str, _: bool) -> crate::Result<()> {
+        self.calls.push(0x76da60);
+        Ok(())
+    }
+    fn ordering_player_null(&mut self) -> crate::Result<()> {
+        Err(Error::Protocol("754F50 reached NULL Admin+284 ordering player".into()))
+    }
+    fn creating_player(&mut self, _: u32, _: bool, _: bool) -> crate::Result<()> {
+        self.calls.push(0x773710);
+        Ok(())
+    }
+    fn check_nation(&mut self, _: &[u16], _: &[u16]) -> crate::Result<()> {
+        self.calls.push(0x777cd0);
+        Ok(())
+    }
+    fn check_faction(&mut self, _: &[u16], _: &[u16]) -> crate::Result<()> {
+        self.calls.push(0x777610);
         Ok(())
     }
 }

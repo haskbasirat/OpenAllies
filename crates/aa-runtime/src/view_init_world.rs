@@ -72,6 +72,8 @@ pub struct State<V, A> {
     auxiliary_12c: Option<crate::view_init_globals::Auxiliary12c>,
     helper_10c: Option<crate::view_init_globals::Helper>,
     trigger_vfx: crate::view_trigger_vfx::List,
+    ///43FF60/43EC60 words (+98, +140, +174..+18C) and their statics.
+    update: crate::vworld_update::Fields<V>,
     world: Option<crate::world_revision::Witness>,
     phase: Phase,
 }
@@ -90,6 +92,7 @@ impl<V, A> State<V, A> {
             auxiliary_12c: None,
             helper_10c: None,
             trigger_vfx: crate::view_trigger_vfx::List::from_constructor_fields(),
+            update: crate::vworld_update::Fields::from_native_constructor(),
             world: None,
             phase: Phase::Constructed,
         }
@@ -133,6 +136,33 @@ impl<V, A> State<V, A> {
     }
     pub fn heightfield(&self) -> Option<&view_heightfield::State> {
         self.height.as_ref()
+    }
+    ///The 43FF60/43EC60 words of this SAME VWorld.
+    pub fn update_fields(&self) -> &crate::vworld_update::Fields<V> {
+        &self.update
+    }
+    pub fn update_fields_mut_for(&mut self, world: &ConstructedWorldRevision)
+        -> Result<&mut crate::vworld_update::Fields<V>> {
+        self.require_world(world)?;
+        Ok(&mut self.update)
+    }
+    ///5C92F0's 43AB30 on this VWorld (reached only while AD is set): the
+    ///76B120(0) render time, then World+E0/+E4, into +84/+88/+8C/+90.
+    pub fn update_view_time_43ab30(&mut self, world: &ConstructedWorldRevision,
+        sim: &mut impl crate::vworld_update::SimTime, pc: Precision) -> Result<()> {
+        self.require_world(world)?;
+        if !self.prefix.initialized_for(world)? {
+            return Err("5C92F0 reaches 43AB30 only while VWorld+AD is set".into());
+        }
+        let time = crate::vworld_update::sim_time_76b120(sim, 0, pc)?;
+        let e0 = sim.world_e0()?;
+        let e4 = sim.world_e4()?;
+        crate::vworld_update::view_time_43ab30(self.prefix.view_time_words_mut_for(world)?, time, e0, e4, pc)
+    }
+    ///43EC60's 4318E0 on VWorld+BC over the SAME World's ground.
+    pub fn update_heightfield_rects_4318e0(&mut self, world: &World<'_>, pc: Precision) -> Result<usize> {
+        self.require_world(world.presentation_parts()?.revision)?;
+        self.height.as_mut().ok_or("4318E0 VWorld+BC heightfield is null")?.update_rects_4318e0(world, pc)
     }
     pub fn phase(&self) -> Phase {
         self.phase

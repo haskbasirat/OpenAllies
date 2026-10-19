@@ -5,6 +5,8 @@ use super::*;
 use aa_orders::{Error as OrderError,Result as OrderResult,payload::{Resolver,SchemaContext,ThingCheck,NameKind,Registry}};
 use aa_runtime::{catalog::Catalog,live_sim::Sim,live_world_frame::Frame};
 const COMMANDS:Registry=Registry(0xb3aa58);
+#[path="local_object_registry.rs"]
+mod object_registry;
 fn required<T>(s:&'static str)->OrderResult<T>{Err(OrderError::SchemaContext(s))}
 fn live_player(players:&RefCell<PlayersBorrow<'_>>,id:u32)->OrderResult<bool>{
     let players=players.try_borrow().map_err(|e|OrderError::SchemaSource(format!("actual reference Session loan: {e}")))?;
@@ -51,6 +53,7 @@ impl Resolver for Current<'_,'_,'_,'_>{
         live_player(self.players,id)
     }
     fn try_definition(&self,registry:Registry,index:u32)->OrderResult<bool>{
+        if registry==object_registry::OBJECTS{return self.object_definition_76a960(index)}
         if registry!=COMMANDS{return required("live reference needs actual reached definition registry")}
         Ok((index as usize)<self.command_count()?)
     }
@@ -58,6 +61,7 @@ impl Resolver for Current<'_,'_,'_,'_>{
 }
 impl SchemaContext for Current<'_,'_,'_,'_>{
     fn registry_count(&self,registry:Registry)->OrderResult<usize>{
+        if registry==object_registry::OBJECTS{return self.object_count_b39f58()}
         if registry!=COMMANDS{return required("live payload needs actual reached definition registry count")}
         self.command_count()
     }
