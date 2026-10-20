@@ -2,7 +2,7 @@
 name = "aa-formats"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license.workspace = true
 description = "Read-only, checked readers for recovered Axis & Allies 2004 formats"
 
 [lib]
