@@ -5,29 +5,38 @@
 <p align="center">
   <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-b7410e?logo=rust&logoColor=white">
   <img alt="Edition 2024" src="https://img.shields.io/badge/edition-2024-6e5523">
+  <img alt="Engine: Bevy 0.19" src="https://img.shields.io/badge/engine-Bevy%200.19-232326">
   <img alt="Platform: Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-2f6f9f?logo=windows&logoColor=white">
-  <img alt="Renderer: wgpu (DX12 / Vulkan)" src="https://img.shields.io/badge/renderer-wgpu%20%C2%B7%20DX12%20%7C%20Vulkan-4b6b2f">
-  <img alt="Status: pre-alpha, not playable yet" src="https://img.shields.io/badge/status-pre--alpha%20%C2%B7%20not%20playable%20yet-a33">
+  <img alt="Status: playable test build" src="https://img.shields.io/badge/status-playable%20test%20build-c77d00">
 </p>
 
-**OpenAllies** is a remake of **Axis & Allies (2004)**, the real-time strategy game by TimeGate Studios, rewritten in Rust.
+**OpenAllies** recreates **Axis & Allies (2004)**, the real-time strategy game by TimeGate Studios, in Rust with the [Bevy](https://bevyengine.org/) engine.
 
-It is not a lookalike built from scratch. Every gameplay rule is ported from the original game's own code (`AA.exe`), and each port is checked against the original code running in a CPU emulator. The new engine is **64-bit**, uses **multiple threads** where that can't change results, and drops the original's fixed engine limits (memory pools, buffer and bandwidth caps, unit and slot masks).
-
-OpenAllies uses the **original game's assets from your own installed copy**. No art, sound, video, maps or game data from the original are included in this repository.
+The goal is a game so close to the original that a player can barely tell the difference. Every system follows the original game's own code (`AA.exe`) and every number comes from the original rules data. Menus, HUD, maps, models, animations and texts are read from the **original game files on your own installed copy**. No art, sound, video, maps or game data from the original are included in this repository.
 
 > [!IMPORTANT]
-> OpenAllies is **pre-alpha and not playable yet**. Large parts of the original game are ported and verified piece by piece. Assembling them into a running battle is the work in progress now. See [Project status](#project-status).
+> OpenAllies is a **work in progress**. You can play a custom battle against the computer: the original menus and setup screen, original and random maps, recruiting, movement, combat and the computer opponent all work. Sound, many effects, campaigns, multiplayer and the editor are still missing. See [Project status](#project-status).
+
+## Screenshots
+
+| | |
+|:---:|:---:|
+| ![The original main menu](docs/screenshots/main-menu.jpg) | ![The original Custom game setup screen](docs/screenshots/custom-setup.jpg) |
+| The original main menu, drawn from the game's own layout files | The original Custom game setup screen |
+| ![The original random map options](docs/screenshots/random-map.jpg) | ![A battle at the Russian Corps HQ](docs/screenshots/battle.jpg) |
+| The random map generator with the original options | Infantry fighting at a Russian Corps HQ: banners, flag, ground patch |
+| ![A selected regiment and the unit panel](docs/screenshots/selection.jpg) | ![Regiment banners on Fall of Berlin](docs/screenshots/banners.jpg) |
+| A selected regiment with the original HUD and unit panel | Floating regiment banners, own and enemy |
 
 ---
 
 ## Contents
 
 - [Goals](#goals)
-- [How the port works](#how-the-port-works)
+- [How it is built](#how-it-is-built)
 - [Project status](#project-status)
 - [Architecture](#architecture)
-- [Building](#building)
+- [Building and running](#building-and-running)
 - [Repository layout](#repository-layout)
 - [Contributing](#contributing)
 - [Legal](#legal)
@@ -36,56 +45,46 @@ OpenAllies uses the **original game's assets from your own installed copy**. No 
 
 | | |
 |---|---|
-| **Faithful** | Same rules, same numbers, same quirks as the original: combat, movement, AI, economy, missions and multiplayer behave as `AA.exe` does. |
-| **64-bit** | No 32-bit address-space ceiling. |
-| **Multithreaded** | Rendering, asset streaming, audio, the computer opponent's strategic AI and read-only queries (pathfinding, zone and visibility queries) run in parallel. The simulation itself keeps the original update order and random-number stream, so results and multiplayer sync stay identical. |
-| **No engine limits** | Fixed-size engine arrays, pools and caps become growable. Gameplay *rules*, like configured unit caps, keep their original defaults. Wire- and save-format values stay compatible with the original. |
+| **Faithful** | The same rules, numbers and behaviour as the original: combat, movement, AI, economy, maps and the interface work as `AA.exe` does. |
 | **Original assets** | Art, audio, video, maps and rules data are read from your installed game. |
+| **64-bit and fast** | No 32-bit address-space ceiling; a full battle simulation tick costs well under a millisecond. |
+| **No engine limits** | Fixed-size engine arrays, pools and caps become growable. Gameplay rules, like configured unit caps, keep their original defaults. |
+| **Exact later** | Systems are built to behave like the original first; each can later be replaced by a bit-exact port of the original code. |
 
-## How the port works
+## How it is built
 
-Each behaviour of the original game is traced to the machine code that implements it, translated to Rust, and then proven against the original code.
+Each system is written from the original game's code and data:
 
-```mermaid
-flowchart LR
-    A["AA.exe<br/>(your installed copy)"] --> B["REA + Ghidra<br/>decompile, xrefs,<br/>call graph"]
-    B --> C["Port to Rust<br/>same order, same x87 precision,<br/>same RNG draws"]
-    A --> D["Unicorn CPU emulator<br/>runs the ORIGINAL code<br/>on generated inputs"]
-    D --> E["Recorded results<br/>(oracle fixtures)"]
-    C --> F{"Rust tests replay<br/>every recorded case"}
-    E --> F
-    F -->|bit-exact| G["Proven port"]
-```
+- **Read the original.** The game's functions are decompiled (REA and Ghidra). Earlier work translated many of them exactly into the `aa-*` crates of this workspace, each proven against the original code running in the [Unicorn](https://www.unicorn-engine.org/) emulator. Those exact ports are the reference for how the original behaves.
+- **Recreate the behaviour.** The playable game (`aa-play`) follows the same steps, rules and order as the original, in plain fast Rust. Every number comes from the original rules files; nothing the original does not have is added. Original addresses are cited in the code.
+- **Use the original look.** The original menus and HUD are built from the original layout files by the ported UI engine (`aa-ui`) and drawn in Bevy. Models, animations, terrain transitions and textures are the original files.
+- **Compare with the original.** Behaviour is checked against the running original game: screenshots, unit speeds, damage, recruit times, AI timelines.
 
-- **Locate.** Strings, rule-file keys and the call graph lead from a feature to the native functions behind it. Addresses are cited in the Rust doc comments.
-- **Port.** Same evaluation order, same 32-bit float stores, same random-number consumption, same error paths. Nothing is invented: if a behaviour can't be proven yet, the code returns an explicit "unsupported" error instead of guessing.
-- **Prove.** The original x86 code runs under the [Unicorn](https://www.unicorn-engine.org/) emulator on thousands of generated inputs, at the x87 precisions the game uses. The Rust tests must reproduce every recorded result bit for bit. Those recordings are regenerated locally from your own copy of `AA.exe` and are not distributed.
-
-The full rules for contributors are in [`docs/NATIVE-PORT-RULES.md`](docs/NATIVE-PORT-RULES.md).
+The rules for the exact ports are in [`docs/NATIVE-PORT-RULES.md`](docs/NATIVE-PORT-RULES.md).
 
 ## Project status
 
-Legend: ✅ ported and verified against the original, 🚧 in progress, ⏳ not started.
+Legend: ✅ working, 🚧 in progress, ⏳ not started.
 
 | Area | Status | Notes |
 |---|:---:|---|
-| Game loop, timing, update scheduling | ✅ | Frame/tick driver, fixed 1/16 s step, original update order |
-| Economy, production, research, construction | ✅ | Kingdom economy tick, recruitment, research, building, supply |
-| Combat | ✅ | Damage, death, morale, experience, capture, generals' special operations |
-| Movement and pathfinding | ✅ | Unit movement, formations, collision, region and local pathfinding, aircraft |
-| Zones, detection, fog of war | ✅ | Zones of control and supply, who sees whom, shared vision |
-| Unit AI and computer opponent | 🚧 | Unit behaviours and much of the strategic AI ported; goal planning in progress |
-| Mission triggers | ✅ | Every trigger type the 26 campaign and tutorial missions use |
-| Player commands | ✅ | All 357 original command types: wire format and request/decree flow |
-| Multiplayer session layer | 🚧 | Protocol ported, tested over loopback only; no two-machine tests yet |
-| Map and saved-world loading | 🚧 | Most object types load as the original does; world start and publication in progress |
-| User interface | 🚧 | Ported UI engine builds menus, options, credits, loading screen and HUD from the original layout files |
-| World War II strategic mode | 🚧 | Turns, orders, battles, saves and its AI largely ported |
-| Rendering of the live game world | 🚧 | Original models, terrain, water and animations render; not yet driven by the ported simulation |
-| Playable skirmish battle | 🚧 | The current integration goal |
-| Campaign, editor, film/replays | ⏳ | After skirmish and multiplayer |
+| Original menus, setup screen, loading screen | ✅ | Main menu with the original video, Single Player, the Custom staging screen, Random Map and scenario dialogs |
+| Random map generator | ✅ | The original generator: 8 map types, sizes 320 to 1024 m, up to 16 sides, terrain sliders |
+| Original maps | ✅ | All 80 original maps load |
+| In-game HUD | ✅ | Economy bar, unit panel, action buttons, minimap, message log, game menu |
+| Camera, selection, orders | ✅ | The original camera; click, box and double-click selection; right-click move and attack |
+| Economy, recruiting, research, supply | ✅ | Income and upkeep, recruit queues, truck deployment, supply zones, city capture |
+| Movement and pathfinding | ✅ | The original search, formations, catch-up speed, building footprints |
+| Combat and morale | ✅ | The original damage formula, projectiles, death animations, morale, routing, entrenchment, experience |
+| Computer opponent | ✅ | The original AI generals, goal engine and reactive AI; difficulty handicaps |
+| Unit banners and selection marks | ✅ | The original banner model and decals, health bars |
+| Rendering | ✅ | Bevy: original models, animations, terrain transitions, shadows |
+| Effects | 🚧 | Building ground patches, waving flags and some weapon effects |
+| Sound and music | 🚧 | In progress |
+| Fog of war on the minimap, tooltips | ⏳ | |
+| Campaign, World War II, multiplayer, editor, film, saved games | ⏳ | After the custom battle |
 
-Detailed, dated progress notes live in [`HANDOFF.txt`](HANDOFF.txt) and [`docs/`](docs/).
+Each system lists the behaviours still to be compared with the original game; dated progress notes live in [`HANDOFF.txt`](HANDOFF.txt) and [`docs/`](docs/).
 
 ## Architecture
 
@@ -93,70 +92,66 @@ A Cargo workspace of focused crates, roughly bottom to top:
 
 | Crate | Purpose |
 |---|---|
-| `aa-numeric`, `aa-trig` | Exact x87 arithmetic at explicit precision; the original's quantized trigonometry; the C runtime's `pow` |
-| `aa-formats`, `aa-assets`, `aa-resources` | Readers for the original archives and formats; asset access and load planning |
+| `aa-formats`, `aa-assets`, `aa-resources` | Readers for the original archives and formats (including the Gamebryo NIF reader); asset access |
 | `aa-rules` | The original TGI rules language and the native data-loading order |
-| `aa-world`, `aa-simulation`, `aa-runtime` | Native update queues, deterministic scheduling, and the authoritative world that ties the systems together |
-| `aa-actors`, `aa-body` | Actors, components, creation, saved-state loading; health, damage and properties |
-| `aa-combat` | Weapons, projectiles, morale, capture, generals' special operations |
-| `aa-movement`, `aa-navigation`, `aa-spatial`, `aa-heightfield` | Movement, formations, pathfinding, collision and terrain queries |
-| `aa-zones` | Zones, detection and fog of war |
-| `aa-mind` | Unit AI and the computer opponent's strategic AI |
-| `aa-economy`, `aa-production` | Economy, recruitment, research and construction |
-| `aa-triggers` | Mission scripts |
-| `aa-orders`, `aa-transfer`, `aa-netcode` | Player commands and the multiplayer protocol |
-| `aa-mapworld` | Original map and saved-world loading |
-| `aa-metagame` | The World War II strategic mode |
+| `aa-mapworld` | Original map loading |
+| `aa-play` | **The playable battle:** game data, maps, custom setup, economy, recruiting, supply, movement, combat, morale, the computer opponent, the random map generator |
+| `aa-bevy` | **The game application** on Bevy 0.19: menus and HUD, camera, selection and orders, battle drawing, effects. It is its own Cargo workspace (see below) |
 | `aa-ui` | Port of the original UI engine, driven by the original layout files |
 | `aa-animation` | Original model animation playback |
-| `aa-client` | The application: wgpu renderer, menus, viewer and live scene |
+| `aa-numeric`, `aa-trig` | Exact x87 arithmetic and the original's trigonometry (for the exact ports) |
+| `aa-world`, `aa-simulation`, `aa-runtime` | The exact-port world: native update queues, scheduling, the authoritative world |
+| `aa-actors`, `aa-body`, `aa-combat`, `aa-movement`, `aa-navigation`, `aa-spatial`, `aa-heightfield`, `aa-zones`, `aa-mind`, `aa-economy`, `aa-production`, `aa-triggers` | Exact ports of the original systems, the reference for `aa-play` |
+| `aa-orders`, `aa-transfer`, `aa-netcode` | Player commands and the multiplayer protocol |
+| `aa-metagame` | The World War II strategic mode |
+| `aa-client` | The earlier wgpu client and asset viewer |
 
-## Building
+## Building and running
 
 **Requirements**
 
-- Windows 10 or 11, 64-bit
-- A recent stable [Rust](https://rustup.rs/) toolchain (Rust 2024 edition; the workspace declares `rust-version = "1.88"`)
+- Windows 10 or 11, 64-bit, with a Vulkan or DirectX 12 graphics driver
+- A recent stable [Rust](https://rustup.rs/) toolchain (Rust 2024 edition, `rust-version = "1.88"`)
 - Your own installed copy of **Axis & Allies (2004)**
 
 ```bash
 git clone https://github.com/haskbasirat/OpenAllies.git
 cd OpenAllies
-cargo build --release -p aa-client
+cargo build --release --manifest-path crates/aa-bevy/Cargo.toml
 ```
 
-> [!NOTE]
-> Today the build and tests expect a local data folder prepared from your installed game: the extracted original assets, plus the research recordings that the oracle scripts in [`research/`](research/) produce from your own `AA.exe`. None of that data is in this repository, and a single setup tool that prepares it from a game installation is still to come. Until then, building from a fresh clone needs that local preparation first.
+`aa-bevy` is a separate Cargo workspace on purpose: Bevy's shader tooling enables a feature of a shared dependency that breaks the older wgpu client when both are built together. The rest of the workspace builds with `cargo build --release`.
 
-Run the tests for one area, for example combat:
+> [!NOTE]
+> The game reads the original data from your installed game and from a local folder prepared from it (the extracted original assets and converted models and textures). None of that data is in this repository, and a single setup tool that prepares it from a game installation is still to come. Until then, running from a fresh clone needs that local preparation first.
+
+Run the game logic tests (the real-data tests need `AA_GAME_ROOT` pointing at your installed game):
 
 ```bash
-cargo test -p aa-combat --release
+cargo test -p aa-play --release
 ```
 
 ## Repository layout
 
 ```text
-crates/      the Rust workspace (29 crates)
-docs/        design notes, porting rules, dated progress and validation records
+crates/      the Rust workspace
+docs/        design notes, porting rules, progress records, screenshots
 research/    oracle scripts (Python + Unicorn), notes and per-area findings
 HANDOFF.txt  running continuation log for developers
 ```
 
 ## Contributing
 
-Read [`docs/NATIVE-PORT-RULES.md`](docs/NATIVE-PORT-RULES.md) first. In short:
-
-1. Find the native function behind a behaviour and cite its address.
-2. Port it with the same order, precision, random draws and failure behaviour.
-3. Prove it: record the original code's results under the emulator and add Rust tests that replay them.
-4. Never invent defaults or turn a missing piece into silent success. Return an explicit error instead.
+1. Find the original behaviour in the game's code and data, and cite the native addresses.
+2. Follow the original's steps, rules and order; take every number from the original data.
+3. Never add features or interface elements the original does not have.
+4. List what still has to be compared with the running original.
 5. Never commit files taken from the original game.
 
 ## Legal
 
 OpenAllies is an independent, non-commercial fan project. It is **not affiliated with, endorsed by or sponsored by** Hasbro, Wizards of the Coast, Avalon Hill, Atari or TimeGate Studios. *Axis & Allies* is a trademark of its respective owner. The original game was developed by TimeGate Studios and published by Atari in 2004.
 
-This repository contains **no original game files**: no art, audio, video, maps, rules data, executables or recordings of the original program's behaviour. To use OpenAllies you need your own legally obtained copy of the original game.
+This repository contains **no original game files**: no art, audio, video, maps, rules data, executables or recordings of the original program's behaviour. The screenshots show OpenAllies running with the original game's assets from a legally owned copy. To use OpenAllies you need your own legally obtained copy of the original game.
 
 No open-source license has been chosen for this code yet. Until one is added, all rights are reserved by the authors.
