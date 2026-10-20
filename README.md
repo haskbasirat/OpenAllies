@@ -7,6 +7,7 @@
   <img alt="Edition 2024" src="https://img.shields.io/badge/edition-2024-6e5523">
   <img alt="Engine: Bevy 0.19" src="https://img.shields.io/badge/engine-Bevy%200.19-232326">
   <img alt="Platforms: Windows x64 today; Windows ARM64, macOS and Linux planned" src="https://img.shields.io/badge/platforms-Windows%20x64%20%C2%B7%20ARM64%20%C2%B7%20macOS%20%C2%B7%20Linux%20(planned)-2f6f9f">
+  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-3b7f2f"></a>
   <img alt="Status: playable test build" src="https://img.shields.io/badge/status-playable%20test%20build-c77d00">
 </p>
 
@@ -39,6 +40,7 @@ The goal is a game so close to the original that a player can barely tell the di
 - [Building and running](#building-and-running)
 - [Repository layout](#repository-layout)
 - [Contributing](#contributing)
+- [License](#license)
 - [Legal](#legal)
 
 ## Goals
@@ -150,10 +152,14 @@ HANDOFF.txt  running continuation log for developers
 4. List what still has to be compared with the running original.
 5. Never commit files taken from the original game.
 
+## License
+
+OpenAllies is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License**, version 3 or (at your option) any later version. See [`LICENSE`](LICENSE) for the full text.
+
+The license covers the OpenAllies source code only. It does not cover the original game, whose files you need from your own copy.
+
 ## Legal
 
 OpenAllies is an independent, non-commercial fan project. It is **not affiliated with, endorsed by or sponsored by** Hasbro, Wizards of the Coast, Avalon Hill, Atari or TimeGate Studios. *Axis & Allies* is a trademark of its respective owner. The original game was developed by TimeGate Studios and published by Atari in 2004.
 
 This repository contains **no original game files**: no art, audio, video, maps, rules data, executables or recordings of the original program's behaviour. The screenshots show OpenAllies running with the original game's assets from a legally owned copy. To use OpenAllies you need your own legally obtained copy of the original game.
-
-No open-source license has been chosen for this code yet. Until one is added, all rights are reserved by the authors.

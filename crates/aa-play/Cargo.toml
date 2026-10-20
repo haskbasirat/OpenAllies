@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Playable Axis & Allies battle simulation that follows the original game's logic and data (behaviour-faithful, not byte-exact)"
 
 [dependencies]
