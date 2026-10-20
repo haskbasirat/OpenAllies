@@ -21,8 +21,10 @@ pub fn spawn(battle: Option<ResMut<Battle>>, ready: Option<Res<super::FxState>>,
     // AA_BEVY_FX_BENCH_KIND: the regiment kind ("infantry", "tank_medium",
     // "infantry_artillery"...), the same for both nations.
     let kind = std::env::var("AA_BEVY_FX_BENCH_KIND").unwrap_or_else(|_| "infantry".into());
-    let (Some(rus), Some(ger)) = (world.data.find(&format!("regiment_rus_{kind}")), world.data.find(&format!("regiment_ger_{kind}"))) else {
-        warn!("fx bench: no regiment_rus_{kind} / regiment_ger_{kind}");
+    // "<russian kind>/<german kind>" sets the two sides apart.
+    let (rk, gk) = kind.split_once('/').unwrap_or((kind.as_str(), kind.as_str()));
+    let (Some(rus), Some(ger)) = (world.data.find(&format!("regiment_rus_{rk}")), world.data.find(&format!("regiment_ger_{gk}"))) else {
+        warn!("fx bench: no regiment_rus_{rk} / regiment_ger_{gk}");
         return;
     };
     if world.kingdoms.len() < 2 {

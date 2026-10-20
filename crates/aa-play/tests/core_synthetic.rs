@@ -391,6 +391,21 @@ fn relay_needs_a_source_and_drains_its_stockpile() {
     assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 20.0 + 5.0);
 }
 
+/// 58AE10 searches the zones over the relay's footprint tiles: a depot
+/// (4 x 4) whose centre is 1 m outside the HQ zone (60 m) still links.
+#[test]
+fn relay_links_through_its_footprint() {
+    let (mut w, ids) = world(&[0]);
+    let _hq = spawn(&mut w, ids.hq, 0, Vec2::new(40.0, 40.0), 0.0);
+    let edge = spawn(&mut w, ids.depot, 0, Vec2::new(101.0, 40.0), 0.0);
+    let out = spawn(&mut w, ids.depot, 0, Vec2::new(40.0, 103.5), 0.0);
+    for _ in 0..4 {
+        core_step(&mut w, vec![]);
+    }
+    assert!(!w.books.out_of_supply(edge), "footprint reaches into the zone");
+    assert!(w.books.out_of_supply(out), "footprint outside the zone");
+}
+
 #[test]
 fn attached_regiment_in_supply_heals_and_rebuilds_members() {
     let (mut w, ids) = world(&[0]);

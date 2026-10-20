@@ -60,6 +60,20 @@ fn reaches_source(world: &World, start: ActorId) -> bool {
     }
 }
 
+/// Half extents of the axis-aligned rectangle around a structure's blocking
+/// shape (the actor's tile bounds +0x20..+0x30), zero without one. Same
+/// convention as the movement footprint: the shape's width lies across the
+/// facing, its height along it; a CIRCLE's size is its radius.
+fn footprint_half(def: &crate::data::Def, facing: f32) -> Vec2 {
+    let Some(size) = def.blocking_size else { return Vec2::ZERO };
+    if def.blocking_shape.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("CIRCLE")) {
+        return Vec2::splat(size[0].max(0.0));
+    }
+    let (hw, hh) = (size[0].max(0.0) * 0.5, size[1].max(0.0) * 0.5);
+    let (s, c) = facing.sin_cos();
+    Vec2::new(hw * s.abs() + hh * c.abs(), hw * c.abs() + hh * s.abs())
+}
+
 fn deploying(world: &World, a: ActorId) -> bool {
     world.books.actor(a).is_some_and(|b| b.deploy.is_some())
 }
@@ -79,8 +93,12 @@ pub fn tick(world: &mut World) {
         if relay {
             let mut link = None;
             if let Some(k) = kingdom {
+                let half = footprint_half(def, world.actors[a as usize].facing);
                 for z in &world.books.zones {
-                    if z.kingdom != k || z.provider == a || (p - z.centre).length_squared() > z.radius * z.radius {
+                    // 004CF210 + 00554CC0: the zones over the tiles of the
+                    // relay's footprint rectangle, not only its centre.
+                    let d = ((z.centre - p).abs() - half).max(Vec2::ZERO);
+                    if z.kingdom != k || z.provider == a || d.length_squared() > z.radius * z.radius {
                         continue;
                     }
                     if world.books.out_of_supply(z.provider) {

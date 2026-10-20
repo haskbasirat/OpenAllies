@@ -428,7 +428,16 @@ fn every_map_loads() {
     let mut failed = Vec::new();
     for m in &index {
         match GameMap::load_with(&root, &m.id, &data) {
-            Ok(map) => eprintln!("ok   {} starts {} slots {} notes {:?}", m.id, map.start_locations.len(), map.slots.len(), map.load_notes),
+            Ok(map) => {
+                // owned placed things that provide a unit limit (thing_unit_resource, HQs...)
+                let limits: Vec<&str> = map
+                    .placed
+                    .iter()
+                    .filter(|p| p.owner_slot.is_some() && data.find(&p.thing_id).is_some_and(|d| data.def(d).unit_limit_provided > 0.0))
+                    .map(|p| p.thing_id.as_str())
+                    .collect();
+                eprintln!("ok   {} starts {} slots {} unit-limit things {limits:?} notes {:?}", m.id, map.start_locations.len(), map.slots.len(), map.load_notes)
+            }
             Err(e) => {
                 eprintln!("FAIL {}: {e:#}", m.id);
                 failed.push(m.id.clone());
@@ -436,6 +445,169 @@ fn every_map_loads() {
         }
     }
     eprintln!("{} of {} maps failed: {failed:?}", failed.len(), index.len());
+}
+
+/// Supply of the computer's (and an idle human's) HQs over a real game:
+/// relays next to the Corps HQ must connect and fill their stockpile, their
+/// regiments stay in supply; the limits are filled from the start.
+#[test]
+#[ignore]
+fn berlin_supply_and_limits_with_the_computer() {
+    let mut w = berlin_world();
+    w.kingdoms[1].controller = aa_play::Controller::Computer(1);
+    aa_play::ai::attach(&mut w, Arc::new(aa_play::ai::AiData::load(&root()).expect("AiData")));
+    let data = w.data.clone();
+    let idx = |id: &str| data.resource_index(id).unwrap();
+    for k in 0..2u32 {
+        let b = w.books.kingdom(k).unwrap();
+        eprintln!(
+            "start k{k}: units {}/{} buildings {}/{} (Kingdom {}/{})",
+            b.consumed[idx("unit_limit_consumed")],
+            b.provided[idx("unit_limit_provided")],
+            b.consumed[idx("building_limit_consumed")],
+            b.provided[idx("building_limit_provided")],
+            w.kingdoms[k as usize].units_used,
+            w.kingdoms[k as usize].unit_limit
+        );
+    }
+    assert!(w.books.kingdom(0).unwrap().provided[idx("building_limit_provided")] > 0.0);
+    assert!(w.books.kingdom(0).unwrap().consumed[idx("building_limit_consumed")] > 0.0);
+    let mut bad = 0;
+    for minute in 0..10 {
+        for _ in 0..(16 * 60) {
+            w.step(vec![]);
+        }
+        for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom.is_some_and(|k| k < 2) && data.def(a.def).has_supply) {
+            let b = w.books.actor(a.id).unwrap();
+            let corps = w.actors.iter().find(|c| c.kingdom == a.kingdom && data.def(c.def).id.ends_with("_corps") && !c.removed).map(|c| c.pos.truncate().distance(a.pos.truncate()));
+            eprintln!(
+                "t={minute}m k{:?} {} at {:.0},{:.0} corps {:?} m: out {} relay {:?} stock {:.1} zone {}",
+                a.kingdom,
+                data.def(a.def).id,
+                a.pos.x,
+                a.pos.y,
+                corps.map(|d| d.round()),
+                b.out_of_supply,
+                b.supply_relay,
+                b.supply_stock,
+                b.zone_active
+            );
+        }
+        for o in w.orgs.iter().filter(|o| o.alive && o.kingdom < 2 && data.def(o.def).supply_used) {
+            let out = w.books.org(o.id).is_some_and(|b| b.out_of_supply);
+            let hq_near = o.hq.and_then(|h| w.actor(h)).map(|h| h.pos.truncate().distance(aa_play::supply::org_position(&w, o.id)));
+            if out && hq_near.is_some_and(|d| d < 40.0) {
+                bad += 1;
+            }
+            eprintln!("t={minute}m org {} k{} out_of_supply {out} hq {:?} dist {:?}", o.id, o.kingdom, o.hq, hq_near.map(|d| d.round()));
+        }
+        let b = w.books.kingdom(1).unwrap();
+        eprintln!("t={minute}m k1 units {}/{} buildings {}/{}", b.consumed[idx("unit_limit_consumed")], b.provided[idx("unit_limit_provided")], b.consumed[idx("building_limit_consumed")], b.provided[idx("building_limit_provided")]);
+    }
+    assert_eq!(bad, 0, "regiments next to their HQ were out of supply");
+}
+
+/// The same supply check on a generated map with two computers.
+#[test]
+#[ignore]
+fn generated_map_supply_with_two_computers() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, 3)).expect("generate");
+    let setup = aa_play::SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            aa_play::PlayerSetup { name: "A".into(), nation: "usa".into(), team: 0, color: [0, 76, 255], controller: aa_play::Controller::Computer(1), start: 0 },
+            aa_play::PlayerSetup { name: "B".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: aa_play::Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed: 3,
+    };
+    let mut w = aa_play::World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    aa_play::ai::attach(&mut w, Arc::new(aa_play::ai::AiData::load(&root()).expect("AiData")));
+    let data = w.data.clone();
+    let mut bad = 0;
+    for minute in 0..8 {
+        for _ in 0..(16 * 60) {
+            w.step(vec![]);
+        }
+        for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom.is_some_and(|k| k < 2) && data.def(a.def).supply_relay) {
+            let b = w.books.actor(a.id).unwrap();
+            let corps = w.actors.iter().find(|c| c.kingdom == a.kingdom && data.def(c.def).id.ends_with("_corps") && !c.removed).map(|c| c.pos.truncate().distance(a.pos.truncate()));
+            eprintln!("t={minute}m k{:?} {} corps {:?} m: out {} relay {:?} stock {:.1}", a.kingdom, data.def(a.def).id, corps.map(|d| d.round()), b.out_of_supply, b.supply_relay, b.supply_stock);
+        }
+        for o in w.orgs.iter().filter(|o| o.alive && o.kingdom < 2 && data.def(o.def).supply_used) {
+            let out = w.books.org(o.id).is_some_and(|b| b.out_of_supply);
+            let d = o.hq.and_then(|h| w.actor(h)).map(|h| h.pos.truncate().distance(aa_play::supply::org_position(&w, o.id)));
+            if out && d.is_some_and(|d| d < 40.0) {
+                bad += 1;
+            }
+            eprintln!("t={minute}m org {} k{} out {out} hq dist {:?}", o.id, o.kingdom, d.map(|d| d.round()));
+        }
+    }
+    assert_eq!(bad, 0);
+}
+
+/// The human side through `World::step`: recruit the infantry HQ, deploy it
+/// next to the Corps, recruit a regiment; the HQ relay connects, fills, and
+/// keeps the regiment supplied.
+#[test]
+#[ignore]
+fn berlin_human_hq_supplies_its_regiment() {
+    use aa_play::{Command, Event};
+    let mut w = berlin_world();
+    let data = w.data.clone();
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+    let cpos = w.actors[corps as usize].pos.truncate();
+    w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: data.find("regiment_rus_hq_infantry").unwrap() }]);
+    let mut truck = None;
+    for _ in 0..(16 * 40) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            truck = Some(w.orgs[*o as usize].members[0]);
+        }
+    }
+    let truck = truck.expect("HQ truck");
+    let at = cpos + glam::Vec2::new(0.0, -30.0);
+    w.step(vec![Command::Deploy { kingdom: 0, truck, at, facing: -std::f32::consts::FRAC_PI_2 }]);
+    let mut hq = None;
+    for _ in 0..(16 * 60) {
+        w.step(vec![]);
+        if let Some(Event::Deployed { building }) = w.events.iter().find(|e| matches!(e, Event::Deployed { .. })) {
+            hq = Some(*building);
+            break;
+        }
+    }
+    let hq = hq.expect("deployed");
+    w.step(vec![Command::Recruit { kingdom: 0, building: hq, def: data.find("regiment_rus_infantry").unwrap() }]);
+    let mut org = None;
+    for second in 0..120 {
+        for _ in 0..16 {
+            w.step(vec![]);
+            if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+                org = Some(*o);
+            }
+        }
+        if second % 10 == 9 {
+            let b = w.books.actor(hq).unwrap();
+            eprintln!(
+                "t={:.0}s hq {:.0} m from corps: out {} relay {:?} stock {:.1} zone {} | org {:?} out {:?}",
+                w.time,
+                w.actors[hq as usize].pos.truncate().distance(cpos),
+                b.out_of_supply,
+                b.supply_relay,
+                b.supply_stock,
+                b.zone_active,
+                org,
+                org.map(|o| w.books.org(o).map(|b| b.out_of_supply))
+            );
+        }
+    }
+    let o = org.expect("regiment");
+    assert!(!w.books.out_of_supply(hq));
+    assert!(w.books.actor(hq).unwrap().supply_stock > 80.0);
+    assert!(!w.books.org(o).unwrap().out_of_supply);
 }
 
 #[test]

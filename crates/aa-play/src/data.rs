@@ -233,7 +233,7 @@ pub struct Def {
     pub unpacking_length: f32,
     // Footprint
     pub blocking_shape: Option<String>,
-    /// SQUARE: [size, size]; RECTANGLE: [width, height]; CIRCLE: [radius, radius].
+    /// SQUARE: [square_size; 2]; RECT: [rect_width, rect_height]; CIRCLE: [blocking_radius; 2].
     pub blocking_size: Option<[f32; 2]>,
     pub placement_category: Option<String>,
     pub minimap_icon: Option<String>,
@@ -550,7 +550,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v10";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v11";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1106,8 +1106,10 @@ pub(crate) mod loader {
             let shape = st(&size, "blocking_shape");
             def.blocking_size = match shape.as_deref().map(|s| s.to_ascii_uppercase()) {
                 Some(s) if s == "SQUARE" => fx(&size, "square_size").map(|v| [v, v]),
-                Some(s) if s == "RECTANGLE" => Some([fx(&size, "rect_width").unwrap_or(0.0), fx(&size, "rect_height").unwrap_or(0.0)]),
-                Some(s) if s == "CIRCLE" => fx(&size, "radius").or_else(|| fx(&size, "circle_radius")).map(|v| [v, v]),
+                // 0049DC40: shape names of 0046F550 (POINT, CIRCLE, SQUARE, RECT)
+                // and their size keys.
+                Some(s) if s == "RECT" => Some([fx(&size, "rect_width").unwrap_or(0.0), fx(&size, "rect_height").unwrap_or(0.0)]),
+                Some(s) if s == "CIRCLE" => fx(&size, "blocking_radius").map(|v| [v, v]),
                 _ => None,
             };
             def.blocking_shape = shape;
