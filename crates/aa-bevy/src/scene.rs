@@ -335,7 +335,8 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(look::LookPlugin)
             .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
-            .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: 420.0, ..default() })
+            // Lighter, softer shadows like the original: more ambient, less direct sun.
+            .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: env_f32("AA_BEVY_AMBIENT", 640.0), ..default() })
             .insert_resource(SceneArgs(self.args.clone()))
             .init_resource::<session::LoadProgress>()
             .add_systems(OnEnter(session::AppState::Loading), start_loading)
@@ -520,7 +521,7 @@ fn setup(
     // Sun with cascaded shadows over the battlefield.
     commands.spawn((
         // Shadows on, as in Development 12 (off with the fixed-function look).
-        DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: !look::fixed_function(), ..default() },
+        DirectionalLight { illuminance: env_f32("AA_BEVY_SUN", 1750.0), shadow_maps_enabled: !look::fixed_function(), ..default() },
         Transform::default().looking_to(-look::sun_to_light(), Vec3::Y),
         CascadeShadowConfigBuilder { num_cascades: 2, first_cascade_far_bound: 60.0, maximum_distance: 220.0, ..default() }.build(),
     ));
@@ -569,4 +570,9 @@ fn hud(time: Res<Time>, mut frames: Local<(f32, u32, f32)>, mut text: Query<&mut
             t.0 = format!("{base}\nFPS {:.0}", frames.2);
         }
     }
+}
+
+/// A tuning value from the environment (display experiments), else `default`.
+fn env_f32(name: &str, default: f32) -> f32 {
+    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
