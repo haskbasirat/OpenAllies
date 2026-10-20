@@ -243,6 +243,7 @@ dependencies = [
 name = "aa-play"
 version = "0.1.0"
 dependencies = [
+ "aa-animation",
  "aa-assets",
  "aa-mapworld",
  "aa-navigation",

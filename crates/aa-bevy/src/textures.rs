@@ -107,15 +107,18 @@ pub fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {
     );
     image.data = Some(data);
     image.texture_descriptor.mip_level_count = levels;
-    let address = if kind == Kind::Mask { ImageAddressMode::ClampToEdge } else { ImageAddressMode::Repeat };
+    let address = ImageAddressMode::Repeat;
+    let filter = if kind == Kind::Mask { ImageFilterMode::Nearest } else { ImageFilterMode::Linear };
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
         address_mode_u: address,
         address_mode_v: address,
         address_mode_w: address,
-        mag_filter: ImageFilterMode::Linear,
-        min_filter: ImageFilterMode::Linear,
-        mipmap_filter: ImageFilterMode::Linear,
-        anisotropy_clamp: if kind == Kind::Mask { 1 } else { 16 },
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: filter,
+        // Masks: native compositor point sampling, no mip filtering (8A0830(0)).
+        lod_max_clamp: if kind == Kind::Mask { 0.0 } else { 32.0 },
+        anisotropy_clamp: if kind == Kind::Mask { 1 } else { 4 },
         ..default()
     });
     Ok(image)

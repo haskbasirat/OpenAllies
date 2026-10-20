@@ -126,11 +126,20 @@ pub struct ListEntry {
     pub param: String,
     pub text: String,
     pub flags: u32,
+    /// Entry +0x1C: the item label colour the bind (`0x5D3E10` ->
+    /// `0x5EDFE0` -> `0x5E13A0`) writes over the ItemLook label's TGI
+    /// colour; the entry ctor `0x5D3CC0` sets white (`0xB322C0`).
+    #[serde(default = "white")]
+    pub color: [f32; 4],
+}
+
+fn white() -> [f32; 4] {
+    [1.0; 4]
 }
 
 impl ListEntry {
     pub fn new(text: &str, param: &str) -> Self {
-        ListEntry { param: param.to_string(), text: text.to_string(), flags: 1 }
+        ListEntry { param: param.to_string(), text: text.to_string(), flags: 1, color: white() }
     }
     pub fn selected(&self) -> bool {
         self.flags & 4 != 0

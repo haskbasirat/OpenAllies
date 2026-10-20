@@ -5,6 +5,8 @@
 //! Animation frames are sampled once per (rig, clip, frame) at FRAME_RATE and
 //! cached, so any number of soldiers playing the same clip share meshes.
 use crate::scene::{NEUTRAL_TEAM, kind, model_mesh, standard};
+use crate::look::OriginalMaterial;
+use crate::model_fixes::ModelFixes;
 use crate::session::{Battle, tick_fraction};
 use crate::textures::{self, Kind};
 use aa_animation::{AnimatedAsset, PlaybackMode};
@@ -31,9 +33,10 @@ impl Plugin for BattleViewPlugin {
 #[derive(Resource)]
 pub struct Library {
     store: AssetStore,
+    fixes: Arc<ModelFixes>,
     /// Lower-case original NIF path -> rig file.
     rig_files: HashMap<String, PathBuf>,
-    models: HashMap<(String, [u8; 3]), Option<Arc<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>>>,
+    models: HashMap<(String, [u8; 3]), Option<Arc<Vec<(Handle<Mesh>, Handle<OriginalMaterial>)>>>>,
     rigs: HashMap<(String, [u8; 3]), Option<Arc<Rig>>>,
     textures: HashMap<(String, Kind), Option<Handle<Image>>>,
     pub failures: Vec<String>,
@@ -41,7 +44,7 @@ pub struct Library {
 
 pub struct Rig {
     asset: AnimatedAsset,
-    materials: Vec<Handle<StandardMaterial>>,
+    materials: Vec<Handle<OriginalMaterial>>,
     /// clip index -> frames -> one mesh per rig mesh.
     frames: std::sync::Mutex<HashMap<(usize, u32), Arc<Vec<Handle<Mesh>>>>>,
     idle: Option<usize>,
@@ -52,7 +55,7 @@ pub struct Rig {
 
 impl Library {
     /// `rig_dir` is assets-cache/animation (it holds game/*.rig.json too).
-    pub fn new(store: AssetStore, rig_dir: &Path) -> Self {
+    pub fn new(store: AssetStore, rig_dir: &Path, fixes: Arc<ModelFixes>) -> Self {
         let mut rig_files = HashMap::new();
         for dir in [rig_dir.to_path_buf(), rig_dir.join("game")] {
             let Ok(entries) = std::fs::read_dir(&dir) else { continue };
@@ -73,7 +76,7 @@ impl Library {
                 }
             }
         }
-        Self { store, rig_files, models: HashMap::new(), rigs: HashMap::new(), textures: HashMap::new(), failures: Vec::new() }
+        Self { store, fixes, rig_files, models: HashMap::new(), rigs: HashMap::new(), textures: HashMap::new(), failures: Vec::new() }
     }
 
     fn texture(&mut self, url: &str, kind: Kind, images: &mut Assets<Image>) -> Option<Handle<Image>> {
@@ -97,16 +100,19 @@ impl Library {
         path: &str,
         team: [u8; 3],
         assets: &mut Assets<Mesh>,
-        materials: &mut Assets<StandardMaterial>,
+        materials: &mut Assets<OriginalMaterial>,
         images: &mut Assets<Image>,
-    ) -> Option<Arc<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>> {
+    ) -> Option<Arc<Vec<(Handle<Mesh>, Handle<OriginalMaterial>)>>> {
         let key = (path.to_ascii_lowercase(), team);
         if let Some(m) = self.models.get(&key) {
             return m.clone();
         }
         let loaded = self.store.load_model(path).map_err(|e| e.to_string()).and_then(|m| m.prepare().map_err(|e| e.to_string()));
         let parts = match loaded {
-            Ok(model) => {
+            Ok(mut model) => {
+                if let Err(e) = self.fixes.apply(&self.store, &mut model) {
+                    self.failures.push(format!("model fixes {path}: {e:#}"));
+                }
                 let mut parts = Vec::new();
                 for mesh in model.meshes.iter().filter(|m| !m.indices.is_empty()) {
                     let texture = mesh.material.texture.clone().and_then(|t| self.texture(&t, kind(&mesh.material, team), images));
@@ -123,7 +129,7 @@ impl Library {
         parts
     }
 
-    fn rig(&mut self, path: &str, team: [u8; 3], materials: &mut Assets<StandardMaterial>, images: &mut Assets<Image>) -> Option<Arc<Rig>> {
+    fn rig(&mut self, path: &str, team: [u8; 3], materials: &mut Assets<OriginalMaterial>, images: &mut Assets<Image>) -> Option<Arc<Rig>> {
         let key = (path.to_ascii_lowercase().replace('\\', "/"), team);
         if let Some(r) = self.rigs.get(&key) {
             return r.clone();
@@ -131,7 +137,8 @@ impl Library {
         let rig = self.rig_files.get(&key.0).cloned().and_then(|file| match AnimatedAsset::load(&file) {
             Ok(mut asset) => {
                 // Same material source as the client's animation path: the static model.
-                if let Ok(model) = self.store.load_model(&asset.source).map_err(|e| e.to_string()).and_then(|m| m.prepare().map_err(|e| e.to_string())) {
+                if let Ok(mut model) = self.store.load_model(&asset.source).map_err(|e| e.to_string()).and_then(|m| m.prepare().map_err(|e| e.to_string())) {
+                    let _ = self.fixes.apply(&self.store, &mut model);
                     if model.meshes.len() == asset.meshes.len() {
                         for (rig, mesh) in asset.meshes.iter_mut().zip(&model.meshes) {
                             rig.material = mesh.material.clone();
@@ -181,13 +188,18 @@ fn rig_source(text: &str) -> Option<String> {
 
 impl Rig {
     /// The clip and playback time for an activity.
-    fn clip_for(&self, actor: ActorId, activity: Activity, since: f32, now: f32) -> Option<(usize, f32, PlaybackMode)> {
+    /// `death` is the original death clip combat chose (Def::death_clips id).
+    fn clip_for(&self, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>) -> Option<(usize, f32, PlaybackMode)> {
         let phase = (actor as f32 * 0.618_034).fract() * 4.0;
         match activity {
             Activity::Moving => self.moving.or(self.idle).map(|c| (c, now + phase, PlaybackMode::Loop)),
             Activity::Attacking => self.attack.or(self.idle).map(|c| (c, now - since, PlaybackMode::Loop)),
             Activity::Dying | Activity::Dead => {
-                let clip = *self.deaths.get(actor as usize % self.deaths.len().max(1))?;
+                let chosen = death.and_then(|name| self.asset.clips.iter().position(|c| c.name.eq_ignore_ascii_case(name)));
+                let clip = match chosen {
+                    Some(c) => c,
+                    None => *self.deaths.get(actor as usize % self.deaths.len().max(1))?,
+                };
                 let t = if activity == Activity::Dead { f32::MAX / 4.0 } else { now - since };
                 Some((clip, t, PlaybackMode::Clamp))
             }
@@ -216,7 +228,7 @@ impl Rig {
                 let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, posed.positions);
                 mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, posed.normals);
-                mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, rig.uvs.clone());
+                mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, rig.uvs.iter().map(|uv| crate::scene::model_uv(*uv)).collect::<Vec<_>>());
                 mesh.insert_indices(Indices::U32(rig.indices.clone()));
                 meshes.add(mesh)
             })
@@ -248,8 +260,15 @@ pub fn render_yaw(facing: f32) -> f32 {
     facing + std::f32::consts::FRAC_PI_2
 }
 
+/// The death clip combat chose for this actor, by its original clip id.
+fn death_clip<'w>(world: &'w World, actor: &aa_play::Actor) -> Option<&'w str> {
+    let index = world.combat.actor(actor.id)?.death_clip?;
+    world.data.def(actor.def).death_clips.get(index).map(|c| c.id.as_str())
+}
+
 fn team_of(world: &World, actor: &aa_play::Actor) -> [u8; 3] {
-    actor.kingdom.and_then(|k| world.kingdoms.get(k as usize)).map_or(NEUTRAL_TEAM, |k| k.color)
+    // A map's independent kingdom (cities, farms) is drawn neutral.
+    actor.kingdom.and_then(|k| world.kingdoms.get(k as usize)).filter(|k| !k.independent).map_or(NEUTRAL_TEAM, |k| k.color)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -260,7 +279,7 @@ pub fn sync_actors(
     mut views: Query<(Entity, &mut ActorView, &mut Transform)>,
     mut part_meshes: Query<&mut Mesh3d>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut known: Local<HashMap<ActorId, Entity>>,
 ) {
@@ -288,7 +307,7 @@ pub fn sync_actors(
         transform.translation = to_render(pos);
         transform.rotation = Quat::from_rotation_y(render_yaw(facing));
         if let Some(rig) = &view.rig {
-            if let Some((clip, t, mode)) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time) {
+            if let Some((clip, t, mode)) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor)) {
                 if let Some(frame) = rig.frame(clip, t, mode, &mut meshes) {
                     for (part, mesh) in view.parts.iter().zip(frame.iter()) {
                         if let Ok(mut m) = part_meshes.get_mut(*part) {
@@ -305,6 +324,9 @@ pub fn sync_actors(
     let new: Vec<ActorId> = world.actors.iter().filter(|a| !a.removed && !known.contains_key(&a.id)).map(|a| a.id).collect();
     for actor in new.iter().map(|&id| &world.actors[id as usize]) {
         let def = world.data.def(actor.def);
+        if def.invisible {
+            continue;
+        }
         let Some(model) = def.model.clone() else { continue };
         let team = team_of(world, actor);
         let transform = Transform::from_translation(to_render(actor.pos)).with_rotation(Quat::from_rotation_y(render_yaw(actor.facing)));
@@ -312,7 +334,7 @@ pub fn sync_actors(
         let mut parts = Vec::new();
         let parent = commands.spawn((transform, Visibility::default())).id();
         if let Some(rig) = &rig {
-            let (clip, t, mode) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time).unwrap_or((0, 0.0, PlaybackMode::Loop));
+            let (clip, t, mode) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor)).unwrap_or((0, 0.0, PlaybackMode::Loop));
             if let Some(frame) = rig.frame(clip, t, mode, &mut meshes) {
                 for (mesh, material) in frame.iter().zip(&rig.materials) {
                     parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), ChildOf(parent))).id());

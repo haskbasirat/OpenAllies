@@ -87,3 +87,11 @@ pub fn step_battle(time: Res<Time>, battle: Option<ResMut<Battle>>) {
 pub fn tick_fraction(battle: &Battle) -> f32 {
     (battle.accumulator / aa_play::DT).clamp(0.0, 1.0)
 }
+
+/// Set together with `PendingSetup` by the staging screen's launch: the
+/// computer general (SAI profile `IDS`, Data/SAI/*.tgi, e.g. what the
+/// slot's StagingSelectSAI picked or the random pick for the nation) per
+/// computer player, as (index into `SkirmishSetup::players`, profile ids),
+/// for `aa_play::ai::set_profile` on that player's kingdom.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct PendingAiProfiles(pub Vec<(usize, String)>);

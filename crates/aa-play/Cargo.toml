@@ -12,6 +12,8 @@ aa-mapworld = { path = "../aa-mapworld" }
 aa-assets = { path = "../aa-assets" }
 aa-numeric = { path = "../aa-numeric" }
 aa-navigation = { path = "../aa-navigation" }
+# core owner: Character animation set for the native derived ability recharge
+aa-animation = { path = "../aa-animation" }
 anyhow = "1"
 glam = { version = "0.32", features = ["serde"] }
 serde.workspace = true

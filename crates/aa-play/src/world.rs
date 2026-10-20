@@ -17,6 +17,8 @@ pub enum Controller {
     Human,
     /// Computer opponent with the original difficulty index.
     Computer(u8),
+    /// A map's independent kingdom (cities, farms): never thinks.
+    Independent,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,6 +35,11 @@ pub struct Kingdom {
     pub unit_limit: f32,
     pub units_used: f32,
     pub defeated: bool,
+    /// A map's independent kingdom (header "independent_N", native Kingdom
+    /// +0x190 == 1): owns cities and other neutral buildings, is not a
+    /// player, never wins or loses, is drawn neutral.
+    #[serde(default)]
+    pub independent: bool,
 }
 
 /// What an organization or a single actor has been told to do.
@@ -128,6 +135,11 @@ pub enum Command {
     CancelRecruit { kingdom: KingdomId, building: ActorId, index: usize },
     Deploy { kingdom: KingdomId, truck: ActorId, at: Vec2, facing: f32 },
     Pack { kingdom: KingdomId, building: ActorId },
+    /// Research a technology (`production::research`, native 0x584790):
+    /// `property` is the technology property IDS the building lists.
+    Research { kingdom: KingdomId, building: ActorId, property: String },
+    /// Attach a regiment to another HQ (`production::attach`, 0x574C10).
+    Attach { kingdom: KingdomId, org: OrgId, hq: ActorId },
 }
 
 /// What a player selects and orders: a whole regiment or a single actor
@@ -152,6 +164,12 @@ pub enum Event {
     Victory { team: u32 },
     /// A command was refused, with the original reason when known.
     Refused { kingdom: KingdomId, reason: String },
+    /// An organization reached a new experience level (index into its
+    /// ExperienceComponent levels; the original's promotion notification).
+    Promoted { org: OrgId, level: u32 },
+    /// A capturable actor (city) reached zero health and changed owner
+    /// (`4D5230`; health set to CaptureHealthFactor of its maximum).
+    Captured { actor: ActorId, kingdom: KingdomId },
 }
 
 pub struct World {
@@ -167,11 +185,22 @@ pub struct World {
     /// Deterministic random numbers (seeded at setup).
     pub rng: u64,
     pub winner: Option<u32>,
+    /// Core-owner side state (economy books, queues, supply, deployment).
+    pub books: crate::books::Books,
+    /// Movement-owner side state (move orders, element paths, Mover fields,
+    /// path request queue); read it through `crate::movement` functions.
+    pub movement: crate::movement::MovementState,
+    /// Combat-owner side state (engage lists, morale, routing, experience
+    /// levels, corpses); read it through `crate::combat` / `crate::morale`.
+    pub combat: crate::combat::CombatState,
+    /// Opponent-owner side state (SAI data, players, goals, schedules);
+    /// install the original SAI data with `crate::ai::attach`.
+    pub ai: crate::ai::AiState,
 }
 
 impl World {
     pub fn empty(data: Arc<GameData>, map: Arc<GameMap>, seed: u64) -> Self {
-        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None }
+        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default() }
     }
     pub fn spawn_actor(&mut self, def: DefId, kingdom: Option<KingdomId>, pos: Vec3, facing: f32) -> ActorId {
         let id = self.actors.len() as ActorId;

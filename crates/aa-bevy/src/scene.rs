@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use bevy::asset::{RenderAssetUsages, uuid_handle};
 use bevy::light::CascadeShadowConfigBuilder;
 use bevy::mesh::{Indices, PrimitiveTopology};
-use bevy::pbr::{DistanceFog, ExtendedMaterial, FogFalloff, MaterialExtension, MaterialPlugin};
+use crate::look::{self, OriginalMaterial};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, Face, ShaderType};
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
@@ -23,32 +23,10 @@ use textures::Kind;
 use std::sync::Mutex;
 
 pub const TITLE: &str = "Axis & Allies - Bevy test (Development 12)";
-const TERRAIN_SHADER: Handle<Shader> = uuid_handle!("6f1d2c4b-8a3e-4f57-9b1c-2e7d5a9c0b13");
 /// Team colours mixed into team-masked textures (display choice).
 pub const PLAYER_TEAM: [u8; 3] = [178, 34, 30];
 pub const NEUTRAL_TEAM: [u8; 3] = [120, 120, 112];
 
-type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMask>;
-
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-struct TerrainMask {
-    #[uniform(100)]
-    params: MaskParams,
-    #[texture(101)]
-    #[sampler(102)]
-    mask: Option<Handle<Image>>,
-}
-#[derive(ShaderType, Debug, Clone)]
-struct MaskParams {
-    mask_u: Vec4,
-    mask_v: Vec4,
-    flags: Vec4,
-}
-impl MaterialExtension for TerrainMask {
-    fn fragment_shader() -> ShaderRef {
-        ShaderRef::Handle(TERRAIN_SHADER)
-    }
-}
 
 #[derive(Clone)]
 struct Args {
@@ -111,6 +89,7 @@ fn parse_args() -> Result<Args> {
 #[derive(Resource)]
 struct Loaded {
     store: AssetStore,
+    fixes: Arc<crate::model_fixes::ModelFixes>,
     rigs: PathBuf,
     scene: PreparedScene,
     /// The generator's game map for a random map (an original map loads its own).
@@ -121,6 +100,8 @@ struct Loaded {
     hq_at: Vec2,
     focus: Option<Vec2>,
     seconds: f32,
+    /// The battle world (aa-play) for this map and setup.
+    world: Option<aa_play::World>,
 }
 
 fn model(store: &AssetStore, path: &str) -> Result<PreparedModel> {
@@ -185,17 +166,61 @@ fn generated_scene(args: &Args, store: &AssetStore, params: &aa_play::mapgen::Ra
     Ok((scene, generated.map))
 }
 
-fn load(args: &Args, source: &MapSource) -> Result<Loaded> {
+/// Direct start without the menus: you as Russia against a German computer
+/// player on the first two start locations, original kingdom colours.
+fn default_setup(map_id: &str, data: &aa_play::GameData) -> aa_play::SkirmishSetup {
+    let colour = |i: usize, fallback: [u8; 3]| {
+        data.kingdom_colors.get(i).map_or(fallback, |(_, c)| [(c[0] * 255.0).round() as u8, (c[1] * 255.0).round() as u8, (c[2] * 255.0).round() as u8])
+    };
+    aa_play::SkirmishSetup {
+        map_id: map_id.to_owned(),
+        players: vec![
+            aa_play::PlayerSetup { name: "Player".into(), nation: "rus".into(), team: 0, color: colour(0, PLAYER_TEAM), controller: aa_play::Controller::Human, start: 0 },
+            aa_play::PlayerSetup { name: "Computer".into(), nation: "ger".into(), team: 1, color: colour(1, NEUTRAL_TEAM), controller: aa_play::Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed: 1,
+    }
+}
+
+fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, profiles: Vec<(usize, String)>) -> Result<Loaded> {
     let start = Instant::now();
     let store = AssetStore::open(&args.assets)?;
-    let (scene, game_map) = match source {
+    let (mut scene, game_map) = match source {
         MapSource::File(id) => (store.load_scene(id, HeightMode::NativeConditional)?, None),
         MapSource::Random(params) => {
             let (scene, map) = generated_scene(args, &store, params)?;
             (scene, Some(map))
         }
     };
+    // The audited original-NIF corrections (shadow helpers, team colour
+    // flags, alpha states), exactly as the wgpu client applies them.
+    let fixes = Arc::new(crate::model_fixes::ModelFixes::discover(&store)?);
+    for (key, model) in scene.models.iter_mut() {
+        if let Err(e) = fixes.apply(&store, model) {
+            eprintln!("model fixes {key}: {e:#}");
+        }
+    }
     let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
+    // The battle world from the original rules and map.
+    let root = args.assets.parent().context("the install root above the reconstruction folder")?;
+    let data = Arc::new(aa_play::GameData::load(root)?);
+    let map_id = match source {
+        MapSource::File(id) => id.clone(),
+        MapSource::Random(_) => "random".to_owned(),
+    };
+    let world_map = match &game_map {
+        Some(m) => m.clone(),
+        None => aa_play::GameMap::load_with(root, &map_id, &data)?,
+    };
+    let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
+    let mut world = aa_play::World::new_skirmish(data, Arc::new(world_map), &setup)?;
+    // The original computer players (Data/SAI profiles); cached after the first load.
+    aa_play::ai::attach(&mut world, Arc::new(aa_play::ai::AiData::load(root)?));
+    // The generals the setup screen chose for the computer slots (kingdom id = player index).
+    for (player, profile) in &profiles {
+        aa_play::ai::set_profile(&mut world, *player as u32, profile);
+    }
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
         .map
@@ -226,6 +251,7 @@ fn load(args: &Args, source: &MapSource) -> Result<Loaded> {
     let (images, failures) = textures::decode(&store, requests);
     Ok(Loaded {
         store: store.clone(),
+        fixes,
         rigs: args.rigs.clone(),
         scene,
         game_map,
@@ -235,6 +261,7 @@ fn load(args: &Args, source: &MapSource) -> Result<Loaded> {
         hq_at,
         focus: args.focus,
         seconds: start.elapsed().as_secs_f32(),
+        world: Some(world),
     })
 }
 
@@ -261,6 +288,7 @@ fn start_loading(
     args: Res<SceneArgs>,
     setup: Option<Res<session::PendingSetup>>,
     random: Option<Res<session::PendingRandomMap>>,
+    profiles: Option<Res<session::PendingAiProfiles>>,
     mut progress: ResMut<session::LoadProgress>,
 ) {
     let map = match (&random, &setup) {
@@ -276,8 +304,10 @@ fn start_loading(
     let slot = Arc::new(Mutex::new(None));
     let out = slot.clone();
     let args = args.0.clone();
+    let setup = setup.map(|s| s.0.clone());
+    let profiles = profiles.map(|p| p.0.clone()).unwrap_or_default();
     std::thread::spawn(move || {
-        let result = load(&args, &map).map_err(|e| format!("{e:#}"));
+        let result = load(&args, &map, setup, profiles).map_err(|e| format!("{e:#}"));
         *out.lock().unwrap() = Some(result);
     });
     commands.insert_resource(LoadTask(slot));
@@ -303,7 +333,7 @@ fn poll_loading(mut commands: Commands, task: Option<Res<LoadTask>>, mut progres
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<TerrainMaterial>::default())
+        app.add_plugins(look::LookPlugin)
             .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
             .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: 420.0, ..default() })
             .insert_resource(SceneArgs(self.args.clone()))
@@ -312,11 +342,7 @@ impl Plugin for ScenePlugin {
             .add_systems(Update, poll_loading.run_if(in_state(session::AppState::Loading)))
             .add_systems(OnEnter(session::AppState::Battle), setup)
             .add_plugins(crate::battle_view::BattleViewPlugin)
-            .add_systems(Update, (crate::demo_world::drive.before(crate::battle_view::sync_actors), hud).run_if(in_state(session::AppState::Battle)));
-        let _ = app.world_mut().resource_mut::<Assets<Shader>>().insert(
-            TERRAIN_SHADER.id(),
-            Shader::from_wgsl(include_str!("terrain_mask.wgsl"), "aa_bevy/terrain_mask.wgsl"),
-        );
+            .add_systems(Update, (hud, crate::debug_battle::spawn).run_if(in_state(session::AppState::Battle)));
         if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
@@ -346,38 +372,21 @@ fn screenshot(mut commands: Commands, time: Res<Time>, mut plan: ResMut<ShotPlan
 #[derive(Component)]
 struct HudText;
 
-pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> StandardMaterial {
-    // Same alpha decisions as the client's `loading::material`.
-    let blend = m.native_render_state.map_or(m.alpha_blend || m.opacity < 1.0, |s| s.alpha_flags & 1 != 0);
-    let cutoff = if m.team_color_mask { 0.0 } else { m.alpha_test };
-    let alpha_mode = if m.team_color_mask {
-        AlphaMode::Opaque
-    } else if blend {
-        if std::env::var_os("AA_BEVY_A2C").is_some() { AlphaMode::AlphaToCoverage } else { AlphaMode::Blend }
-    } else if cutoff > 0.0 {
-        AlphaMode::Mask(cutoff)
-    } else {
-        AlphaMode::Opaque
-    };
-    StandardMaterial {
-        base_color: Color::srgba(m.color[0], m.color[1], m.color[2], m.opacity),
-        base_color_texture: texture,
-        alpha_mode,
-        double_sided: m.double_sided,
-        cull_mode: (!m.double_sided).then_some(Face::Back),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        metallic: 0.0,
-        ..default()
-    }
+pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> OriginalMaterial {
+    look::model_material(m, texture)
+}
+
+/// The recovered mesh files store (u, 1 - native v) for Three.js; restore the
+/// native Direct3D coordinates, like the wgpu client's `loading::model_uv`.
+pub fn model_uv(uv: [f32; 2]) -> [f32; 2] {
+    [uv[0], 1.0 - uv[1]]
 }
 
 pub fn model_mesh(mesh: &aa_assets::PreparedMesh) -> Mesh {
     let mut out = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
     out.insert_attribute(Mesh::ATTRIBUTE_POSITION, mesh.vertices.iter().map(|v| v.position).collect::<Vec<_>>());
     out.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mesh.vertices.iter().map(|v| v.normal).collect::<Vec<_>>());
-    out.insert_attribute(Mesh::ATTRIBUTE_UV_0, mesh.vertices.iter().map(|v| v.uv).collect::<Vec<_>>());
-    out.insert_attribute(Mesh::ATTRIBUTE_COLOR, mesh.vertices.iter().map(|v| v.color).collect::<Vec<_>>());
+    out.insert_attribute(Mesh::ATTRIBUTE_UV_0, mesh.vertices.iter().map(|v| model_uv(v.uv)).collect::<Vec<_>>());
     out.insert_indices(Indices::U32(mesh.indices.clone()));
     out
 }
@@ -388,8 +397,8 @@ fn model_parts(
     team: [u8; 3],
     tex: &HashMap<(String, Kind), Handle<Image>>,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    materials: &mut Assets<OriginalMaterial>,
+) -> Vec<(Handle<Mesh>, Handle<OriginalMaterial>)> {
     model
         .meshes
         .iter()
@@ -406,8 +415,7 @@ fn setup(
     mut commands: Commands,
     mut loaded: ResMut<Loaded>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut terrain_materials: ResMut<Assets<TerrainMaterial>>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let decoded = loaded.images.take().unwrap_or_default();
@@ -427,27 +435,8 @@ fn setup(
         mesh.insert_indices(Indices::U32(draw.indices.clone()));
         let texture = draw.texture.as_ref().and_then(|t| tex.get(&(t.clone(), Kind::Color)).cloned());
         let mask = draw.mask.as_ref().and_then(|m| tex.get(&(m.texture.clone(), Kind::Mask)).cloned());
-        let overlay = draw.mask.is_some();
-        let rows = draw.mask.as_ref().map_or([[0.0; 4]; 2], |m| m.rows);
-        let material = terrain_materials.add(TerrainMaterial {
-            base: StandardMaterial {
-                base_color: Color::srgba(draw.color[0], draw.color[1], draw.color[2], 1.0),
-                base_color_texture: texture,
-                alpha_mode: if overlay { AlphaMode::Blend } else { AlphaMode::Opaque },
-                depth_bias: -1.0e8 + (order as f32) * 1000.0,
-                perceptual_roughness: 1.0,
-                reflectance: 0.0,
-                ..default()
-            },
-            extension: TerrainMask {
-                params: MaskParams {
-                    mask_u: Vec4::from_array(rows[0]),
-                    mask_v: Vec4::from_array(rows[1]),
-                    flags: Vec4::new(if overlay && mask.is_some() { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0),
-                },
-                mask,
-            },
-        });
+        let mask = mask.zip(draw.mask.as_ref().map(|m| m.rows));
+        let material = materials.add(look::terrain_material(texture, draw.color, mask, order));
         commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster));
     }
     // Every placed map object with a resolved model.
@@ -456,11 +445,26 @@ fn setup(
         parts.insert(key.clone(), model_parts(model, NEUTRAL_TEAM, &tex, &mut meshes, &mut materials));
     }
     let mut objects = 0usize;
+    // Placements the world turned into actors (or removed with unused slots).
+    let world = loaded.world.take().expect("battle world");
+    let scenery: std::collections::HashSet<usize> = world.books.scenery.iter().copied().collect();
+    let key = |thing: &str, x: f32, y: f32| (thing.to_ascii_lowercase(), (x * 100.0).round() as i64, (y * 100.0).round() as i64);
+    let not_scenery: std::collections::HashSet<_> = world
+        .map
+        .placed
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !scenery.contains(i))
+        .map(|(_, p)| key(&p.thing_id, p.position[0], p.position[1]))
+        .collect();
     let mut modes = std::collections::BTreeMap::new();
     let no_objects = std::env::var_os("AA_BEVY_NO_OBJECTS").is_some();
     for p in loaded.scene.instances.iter().filter(|_| !no_objects) {
         let category = loaded.scene.map.placements.types.get(&p.thing_id).and_then(|t| t.category.as_deref());
         if matches!(category, Some("START_LOC" | "PLACEHOLDER")) {
+            continue;
+        }
+        if not_scenery.contains(&key(&p.thing_id, p.position[0], -p.position[2])) {
             continue;
         }
         let Some(list) = p.model_key.as_ref().and_then(|k| parts.get(k)) else { continue };
@@ -469,7 +473,7 @@ fn setup(
             .with_scale(Vec3::splat(p.scale));
         for (mesh, material) in list {
             commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform));
-            let mode = materials.get(material).map(|m| format!("{:?}", m.alpha_mode)).unwrap_or_default();
+            let mode = materials.get(material).map(|m| format!("{:?}", m.base.alpha_mode)).unwrap_or_default();
             *modes.entry(mode).or_insert(0usize) += 1;
         }
         objects += 1;
@@ -502,14 +506,21 @@ fn setup(
     let hq_at = loaded.hq_at;
     let hq_y = ground(hq_at.x, hq_at.y);
     // Display test world: aa-play actors drawn by battle_view (no gameplay yet).
-    let (battle, loops) = crate::demo_world::build(gw, gh, cell, world_heights, hq_at, PLAYER_TEAM);
-    commands.insert_resource(battle);
-    commands.insert_resource(loops);
-    commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs));
+    let _ = world_heights;
+    // The camera starts over the local player's first building (its Corps HQ).
+    let hq_at = world
+        .actors
+        .iter()
+        .find(|a| a.kingdom == Some(0) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
+        .map(|a| Vec2::new(a.pos.x, -a.pos.y))
+        .unwrap_or(hq_at);
+    let hq_y = ground(hq_at.x, hq_at.y);
+    commands.insert_resource(session::Battle::new(world, 0));
+    commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs, loaded.fixes.clone()));
     // Sun with cascaded shadows over the battlefield.
     commands.spawn((
-        DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: std::env::var_os("AA_BEVY_NO_SHADOWS").is_none(), ..default() },
-        Transform::from_xyz(-60.0, 120.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
+        DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: std::env::var_os("AA_BEVY_SHADOWS").is_some(), ..default() },
+        Transform::default().looking_to(-look::sun_to_light(), Vec3::Y),
         CascadeShadowConfigBuilder { num_cascades: 2, first_cascade_far_bound: 60.0, maximum_distance: 220.0, ..default() }.build(),
     ));
     let b = loaded.scene.terrain.bounds;
@@ -529,27 +540,18 @@ fn setup(
             min: Vec2::new(b.min[0], b.min[2]),
             max: Vec2::new(b.max[0], b.max[2]),
         },
-        DistanceFog {
-            color: Color::srgb(0.62, 0.68, 0.74),
-            falloff: FogFalloff::Linear { start: 220.0, end: 520.0 },
-            ..default()
-        },
     ));
     commands.insert_resource(camera::Ground(Box::new(ground)));
-    commands.spawn((
-        Text::new(format!(
-            "{TITLE}\n{} - {objects} map objects, {} terrain layers, loaded in {:.1} s\n\
-             Arrows/WASD or screen edges: pan   Wheel or PgUp/PgDn: zoom   Q/E: rotate   R/F: tilt   Home: HQ\n\
-             Display only: the HQ, soldiers and tank are placed to show the engine; no gameplay runs here.",
-            loaded.scene.map.terrain.name,
-            loaded.terrain.len(),
-            loaded.seconds
-        )),
-        TextFont { font_size: FontSize::Px(15.0), ..default() },
-        TextColor(Color::WHITE),
-        Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
-        HudText,
-    ));
+    // Debug overlay only on request (AA_BEVY_DEBUG): the original shows no such text.
+    if std::env::var_os("AA_BEVY_DEBUG").is_some() {
+        commands.spawn((
+            Text::new(format!("{} - {objects} map objects, {} terrain layers", loaded.scene.map.terrain.name, loaded.terrain.len())),
+            TextFont { font_size: FontSize::Px(15.0), ..default() },
+            TextColor(Color::WHITE),
+            Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
+            HudText,
+        ));
+    }
     info!("object meshes by alpha mode: {modes:?}");
     info!("Bevy test: {objects} objects, {} terrain layers, {} textures, loaded in {:.1} s", loaded.terrain.len(), tex.len(), loaded.seconds);
 }
@@ -560,10 +562,10 @@ fn hud(time: Res<Time>, mut frames: Local<(f32, u32, f32)>, mut text: Query<&mut
     if frames.0 >= 1.0 {
         frames.2 = frames.1 as f32 / frames.0;
         *frames = (0.0, 0, frames.2);
+        info!("FPS {:.1} at {:.0} s", frames.2, time.elapsed_secs());
         for mut t in &mut text {
             let base = t.0.split("\nFPS").next().unwrap_or("").to_owned();
             t.0 = format!("{base}\nFPS {:.0}", frames.2);
-            info!("FPS {:.1} at {:.0} s", frames.2, time.elapsed_secs());
         }
     }
 }

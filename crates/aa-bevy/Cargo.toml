@@ -15,12 +15,20 @@ path = "src/main.rs"
 aa-assets = { path = "../aa-assets" }
 aa-animation = { path = "../aa-animation" }
 aa-play = { path = "../aa-play" }
+# The original UI engine (TGI layouts, widgets, draw lists): menus and HUD.
+aa-ui = { path = "../aa-ui" }
+# Scenario map headers for the staging map list and preview.
+aa-mapworld = { path = "../aa-mapworld" }
+# Embedded NIF images (health / morale bar frames).
+aa-formats = { path = "../aa-formats" }
+ab_glyph = "0.2"
 anyhow = "1"
 bevy = "=0.19.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tga"] }
 rayon = "1.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both
