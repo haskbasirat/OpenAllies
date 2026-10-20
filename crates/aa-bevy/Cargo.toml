@@ -29,6 +29,12 @@ rayon = "1.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+# Effects and sound (effects/, audio/): the original FX/VFX/Audio
+# definitions through the rules catalog aa-play uses, and MP3 decoding of
+# the original music and speech through Bevy's own rodio.
+aa-rules = { path = "../aa-rules" }
+aa-numeric = { path = "../aa-numeric" }
+rodio = { version = "0.22", default-features = false, features = ["mp3"] }
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both

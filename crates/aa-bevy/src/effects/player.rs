@@ -71,6 +71,9 @@ pub struct Player {
     /// Multiplies every colour (alpha in w).
     pub tint: Vec4,
     world: Vec<Mat4>,
+    /// Per node: 1 = needed for emission, 2 = needed for sprites (the
+    /// emitter / sprite nodes and their ancestors); others are skipped.
+    needed: Vec<u8>,
     visible: Vec<bool>,
     emitters: Vec<EmitterState>,
     rng: Rng,
@@ -89,6 +92,7 @@ impl Player {
             emit_until,
             tint: Vec4::ONE,
             world: vec![Mat4::IDENTITY; fx.nodes.len()],
+            needed: needed_nodes(fx),
             visible: vec![true; fx.nodes.len()],
             emitters: fx.emitters.iter().map(|_| EmitterState::default()).collect(),
             rng: Rng::new(seed),
@@ -133,8 +137,15 @@ impl Player {
     }
 
     fn eval_nodes(&mut self) {
+        self.eval_nodes_masked(3);
+    }
+
+    fn eval_nodes_masked(&mut self, mask: u8) {
         let t = self.age.max(0.0);
         for (i, node) in self.fx.nodes.iter().enumerate() {
+            if self.needed[i] & mask == 0 {
+                continue;
+            }
             let local = node.local(t);
             let mut vis = !node.hidden && node.vis.as_ref().is_none_or(|v| v.visible(t));
             let world = if node.p >= 0 && (node.p as usize) < i {
@@ -157,7 +168,10 @@ impl Player {
             emitted += self.step(h, budget.saturating_sub(emitted));
             left -= h;
         }
-        self.eval_nodes();
+        // Sprite nodes only matter while sprites draw.
+        if self.age < self.emit_until && !self.fx.sprites.is_empty() {
+            self.eval_nodes_masked(2);
+        }
         emitted
     }
 
@@ -165,7 +179,7 @@ impl Player {
         let t0 = self.age;
         self.age += h;
         let emitting = t0 < self.emit_until;
-        if emitting {
+        if emitting && !self.fx.emitters.is_empty() {
             self.eval_at(t0);
         }
         let mut emitted = 0;
@@ -181,7 +195,7 @@ impl Player {
     fn eval_at(&mut self, t: f32) {
         let saved = self.age;
         self.age = t;
-        self.eval_nodes();
+        self.eval_nodes_masked(1);
         self.age = saved;
     }
 
@@ -481,4 +495,27 @@ impl Player {
             }
         }
     }
+}
+
+/// The nodes emission and sprites read (with their ancestors).
+fn needed_nodes(fx: &NifEffect) -> Vec<u8> {
+    let mut needed = vec![0u8; fx.nodes.len()];
+    let mut mark = |start: i32, bit: u8, needed: &mut Vec<u8>| {
+        let mut i = start;
+        while i >= 0 && (i as usize) < fx.nodes.len() {
+            if needed[i as usize] & bit != 0 {
+                break;
+            }
+            needed[i as usize] |= bit;
+            i = fx.nodes[i as usize].p;
+        }
+    };
+    for e in &fx.emitters {
+        mark(e.node as i32, 1, &mut needed);
+        mark(e.emitter.obj, 1, &mut needed);
+    }
+    for s in &fx.sprites {
+        mark(s.node as i32, 2, &mut needed);
+    }
+    needed
 }

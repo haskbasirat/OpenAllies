@@ -149,7 +149,7 @@ fn bool_of(v: Option<&str>, default: bool) -> bool {
 
 /// Data-relative files with extension `ext` in `dir` (every layer), and in
 /// its subfolders when `recursive`.
-fn files_with(data: &DataRoot, dir: &str, ext: &str, recursive: bool) -> Vec<String> {
+pub fn files_with(data: &DataRoot, dir: &str, ext: &str, recursive: bool) -> Vec<String> {
     let mut out = Vec::new();
     let mut dirs = vec![dir.trim_end_matches('/').to_string()];
     while let Some(d) = dirs.pop() {

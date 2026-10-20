@@ -448,6 +448,58 @@ impl NifEffect {
     pub fn active_span(&self) -> f32 {
         self.duration.max(0.0)
     }
+    /// Effect time after which no sprite is visible any more and no emitter
+    /// emits again (clamped alpha keys ending at 0, clamped visibility
+    /// tracks ending off, clamped emitter controllers); infinite when any
+    /// part keeps showing. Past it only live particles remain, so a
+    /// temporary effect can stop there without any visible difference.
+    pub fn quiet_after(&self) -> f32 {
+        let mut quiet: f32 = 0.0;
+        for e in &self.emitters {
+            match e.emit_end() {
+                Some(t) => quiet = quiet.max(t),
+                None => return f32::INFINITY,
+            }
+        }
+        for s in &self.sprites {
+            let mut end = f32::INFINITY;
+            if let Some(a) = &s.material.akeys {
+                if a.timing.cycle == 2 && (a.timing.freq - 1.0).abs() < 1e-4 {
+                    let keys = &a.keys.k;
+                    match keys.iter().rposition(|k| k.get(1).copied().unwrap_or(0.0) > 1e-3) {
+                        None => end = 0.0,
+                        Some(i) if i + 1 < keys.len() => end = keys[i + 1][0] - a.timing.phase,
+                        Some(_) => {}
+                    }
+                }
+            } else if s.material.alpha <= 1e-3 {
+                end = 0.0;
+            }
+            // A clamped visibility track ending off on the node or a parent.
+            let mut n = s.node as i32;
+            while n >= 0 {
+                let node = &self.nodes[n as usize];
+                if let Some(v) = &node.vis
+                    && v.timing.cycle == 2
+                    && (v.timing.freq - 1.0).abs() < 1e-4
+                    && v.k.last().is_some_and(|k| k[1] < 0.5)
+                {
+                    let last_on = v.k.iter().rposition(|k| k[1] > 0.5);
+                    let off = match last_on {
+                        Some(i) => v.k.get(i + 1).map_or(f32::INFINITY, |k| k[0]),
+                        None => 0.0,
+                    };
+                    end = end.min(off - v.timing.phase);
+                }
+                n = node.p;
+            }
+            quiet = quiet.max(end);
+            if quiet.is_infinite() {
+                return quiet;
+            }
+        }
+        quiet.max(0.0)
+    }
     pub fn loops(&self) -> bool {
         self.emitters.iter().any(|e| e.emit_end().is_none())
     }

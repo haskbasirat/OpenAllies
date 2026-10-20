@@ -2,6 +2,7 @@
 //! with the original TGI layouts) builds every screen and emits a draw
 //! list; this module feeds it input, runs the screen state machine and
 //! paints the list. Owner: UI.
+pub mod banners;
 pub mod custom;
 pub mod datafile;
 pub mod dialogs;
@@ -54,12 +55,13 @@ impl Plugin for UiPlugin {
             .insert_resource(front::Front::new(&root))
             .add_systems(Startup, render::spawn_camera)
             .init_resource::<selection::SelectionArt>()
+            .init_resource::<banners::BannerArt>()
             .init_resource::<minimap::MinimapArt>()
             .init_resource::<selection::Cursors>()
             .add_systems(Update, (script::run, front::frame, minimap_update, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
                 Update,
-                selection::update.after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)),
+                (selection::update, banners::update).after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)),
             );
         if let Some(s) = script::Script::from_env() {
             app.insert_resource(s);

@@ -46,6 +46,9 @@ pub struct Selecting {
     last_click: Option<(Vec2, f64)>,
     /// The actor under the cursor (for the focused VFX).
     pub hover: Option<ActorId>,
+    /// The hover came from an organization's banner (the organization is
+    /// focused, not the member).
+    pub hover_banner: bool,
 }
 
 /// A pickable actor this frame.
@@ -164,6 +167,7 @@ pub fn battle_input(
     views: Query<(&ActorView, &GlobalTransform, Option<&Children>)>,
     parts: Query<(&Aabb, &GlobalTransform)>,
     mut commands: Commands,
+    banners: Option<Res<crate::ui::banners::BannerArt>>,
 ) {
     let Some(mut b) = battle else { return };
     if game.is_some() {
@@ -258,8 +262,30 @@ pub fn battle_input(
         let screen = camera.world_to_viewport(cam_tf, tf.translation()).ok().map(|p| p * scale);
         picks.push(Pick { id: view.id, dist, screen });
     }
-    let hit = picks.iter().filter(|p| p.dist.is_some()).min_by(|x, y| x.dist.unwrap().total_cmp(&y.dist.unwrap())).map(|p| p.id);
+    let mut hit = picks.iter().filter(|p| p.dist.is_some()).min_by(|x, y| x.dist.unwrap().total_cmp(&y.dist.unwrap())).map(|p| (p.id, p.dist.unwrap()));
+    // an organization's banner (its view) picks the organization: the
+    // camera-facing square of the last drawn frame
+    let mut on_banner = false;
+    if let (Some(r), Some(bn)) = (ray, banners.as_deref()) {
+        let (right, up) = (cam_tf.right(), cam_tf.up());
+        for (o, centre, half) in &bn.placed {
+            let t = (*centre - r.origin).dot(*r.direction);
+            if t <= 0.0 || hit.is_some_and(|(_, d)| d <= t) {
+                continue;
+            }
+            let local = r.origin + *r.direction * t - *centre;
+            if local.dot(*right).abs() <= *half && local.dot(*up).abs() <= *half {
+                let member = b.world.orgs.get(*o as usize).and_then(|g| g.members.iter().copied().find(|m| b.world.actor(*m).is_some_and(|a| a.alive)));
+                if let Some(m) = member {
+                    hit = Some((m, t));
+                    on_banner = true;
+                }
+            }
+        }
+    }
+    let hit = hit.map(|(id, _)| id);
     sel.hover = hit.filter(|_| !front.pointer_over_ui);
+    sel.hover_banner = on_banner && sel.hover.is_some();
     // left button on the world
     if front.pointer.left_pressed && !front.press_on_ui {
         if let Some(c) = cursor {
