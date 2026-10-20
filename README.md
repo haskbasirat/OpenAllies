@@ -6,7 +6,7 @@
   <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-b7410e?logo=rust&logoColor=white">
   <img alt="Edition 2024" src="https://img.shields.io/badge/edition-2024-6e5523">
   <img alt="Engine: Bevy 0.19" src="https://img.shields.io/badge/engine-Bevy%200.19-232326">
-  <img alt="Platform: Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-2f6f9f?logo=windows&logoColor=white">
+  <img alt="Platforms: Windows x64 today; Windows ARM64, macOS and Linux planned" src="https://img.shields.io/badge/platforms-Windows%20x64%20%C2%B7%20ARM64%20%C2%B7%20macOS%20%C2%B7%20Linux%20(planned)-2f6f9f">
   <img alt="Status: playable test build" src="https://img.shields.io/badge/status-playable%20test%20build-c77d00">
 </p>
 
@@ -47,6 +47,7 @@ The goal is a game so close to the original that a player can barely tell the di
 |---|---|
 | **Faithful** | The same rules, numbers and behaviour as the original: combat, movement, AI, economy, maps and the interface work as `AA.exe` does. |
 | **Original assets** | Art, audio, video, maps and rules data are read from your installed game. |
+| **Every platform** | The finished game is planned for **Windows (x64 and ARM64), macOS (Apple Silicon and Intel) and Linux**. Bevy and the rest of the code are cross-platform; today's test builds are Windows x64 only. |
 | **64-bit and fast** | No 32-bit address-space ceiling; a full battle simulation tick costs well under a millisecond. |
 | **No engine limits** | Fixed-size engine arrays, pools and caps become growable. Gameplay rules, like configured unit caps, keep their original defaults. |
 | **Exact later** | Systems are built to behave like the original first; each can later be replaced by a bit-exact port of the original code. |
@@ -83,6 +84,7 @@ Legend: ✅ working, 🚧 in progress, ⏳ not started.
 | Sound and music | 🚧 | In progress |
 | Fog of war on the minimap, tooltips | ⏳ | |
 | Campaign, World War II, multiplayer, editor, film, saved games | ⏳ | After the custom battle |
+| Windows ARM64, macOS, Linux | ⏳ | Planned for the finished game; today Windows x64 only |
 
 Each system lists the behaviours still to be compared with the original game; dated progress notes live in [`HANDOFF.txt`](HANDOFF.txt) and [`docs/`](docs/).
 
@@ -110,7 +112,7 @@ A Cargo workspace of focused crates, roughly bottom to top:
 
 **Requirements**
 
-- Windows 10 or 11, 64-bit, with a Vulkan or DirectX 12 graphics driver
+- Today: Windows 10 or 11, x64, with a Vulkan or DirectX 12 graphics driver. Windows on ARM, macOS and Linux are planned for the finished game
 - A recent stable [Rust](https://rustup.rs/) toolchain (Rust 2024 edition, `rust-version = "1.88"`)
 - Your own installed copy of **Axis & Allies (2004)**
 
