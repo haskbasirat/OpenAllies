@@ -329,7 +329,8 @@ fn three_computers_cost_on_a_generated_map() {
     let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(15);
     let rmg = RandomMapData::load(&root()).expect("random map data");
     let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
-    let mut params = RandomMapParams::defaults(&info, 4, 11);
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(11);
+    let mut params = RandomMapParams::defaults(&info, 4, seed);
     params.width = 640.0;
     params.height = 640.0;
     params.teams = vec![0, 1, 2, 3];
@@ -345,7 +346,8 @@ fn three_computers_cost_on_a_generated_map() {
             start: i,
         })
         .collect();
-    let setup = SkirmishSetup { map_id: "generated".into(), players, starting_resources: None, seed: 11 };
+    let setup = SkirmishSetup { map_id: "generated".into(), players, starting_resources: None, seed };
+    let mut refused = std::collections::BTreeMap::<(u32, String), usize>::new();
     let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
     ai::attach(&mut w, sai());
     let t = std::time::Instant::now();
@@ -361,8 +363,17 @@ fn three_computers_cost_on_a_generated_map() {
             if let aa_play::Event::Captured { actor, kingdom } = e {
                 eprintln!("t={:>6.1}s captured {} by k{kingdom}", w.time, w.data.def(w.actors[*actor as usize].def).id);
             }
+            if let aa_play::Event::Refused { kingdom, reason } = e
+                && *kingdom > 0
+            {
+                *refused.entry((*kingdom, reason.chars().take(80).collect())).or_default() += 1;
+            }
         }
     }
+    for ((k, r), n) in &refused {
+        eprintln!("refused k{k} x{n}: {r}");
+    }
+    assert!(!refused.keys().any(|(_, r)| r.contains("own unit")), "the computer attacked its own units");
     for k in 1..4u32 {
         let s = snapshot(&w, k);
         eprintln!("t={:>4.0}s k{k} (level {}) regiments {} cv {:.0} buildings {}", w.time, k - 1, s.regiments, s.cv, s.buildings);
