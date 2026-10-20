@@ -7,13 +7,15 @@
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
     forward_io::{VertexOutput, FragmentOutput},
+    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
 }
 
 struct Look {
     mask_u: vec4<f32>,
     mask_v: vec4<f32>,
     // x: terrain mask present, y: alpha test function (0 off, else NIF code + 1),
-    // z: alpha test threshold (0..1)
+    // z: alpha test threshold (0..1), w: 1 = fixed-function lighting, 0 = Bevy
+    // lit shading with shadows (the Development 12 look)
     flags: vec4<f32>,
     // fixed-function material colours, already multiplied by the sun colours
     ambient: vec4<f32>,
@@ -53,7 +55,7 @@ fn alpha_passes(a: f32, func: u32, threshold: f32) -> bool {
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
-    let pbr_input = pbr_input_from_standard_material(in, is_front);
+    var pbr_input = pbr_input_from_standard_material(in, is_front);
     // Texture (sRGB-decoded) times the material colour.
     var base = pbr_input.material.base_color;
 #ifdef VERTEX_UVS_B
@@ -67,13 +69,20 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     if !alpha_passes(base.a, u32(look.flags.y), look.flags.z) {
         discard;
     }
+    var out: FragmentOutput;
+    if look.flags.w < 0.5 {
+        // Bevy's lit shading and shadows, as Development 12 drew it.
+        pbr_input.material.base_color = base;
+        out.color = apply_pbr_lighting(pbr_input);
+        out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+        return out;
+    }
     let n = normalize(select(-pbr_input.world_normal, pbr_input.world_normal, is_front));
     let lambert = max(dot(n, normalize(look.sun.xyz)), 0.0);
     // D3D fixed function: clamp(emissive + ambient + diffuse * N.L), then
     // MODULATE with the texture, all on gamma values.
     let light = clamp(look.emissive.rgb + look.ambient.rgb + look.diffuse.rgb * lambert, vec3<f32>(0.0), vec3<f32>(1.0));
     let colour = to_gamma(base.rgb) * light;
-    var out: FragmentOutput;
     out.color = vec4<f32>(to_linear(colour), base.a);
     return out;
 }
