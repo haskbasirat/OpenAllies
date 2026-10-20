@@ -555,13 +555,18 @@ impl HudWorld for View<'_> {
                 stock[j] = k.stockpile[i];
             }
         }
-        if let Some(j) = self.res_index("unit_limit_provided") {
-            production[j] = k.unit_limit;
+        let _ = k;
+        // All four limit resources as (provided, consumed) from the kingdom's
+        // books; the bar shows upkeep[consumed] / production[provider].
+        if let (Some(b), Some(w)) = (self.battle, self.world()) {
+            for ids in ["unit_limit_provided", "unit_limit_consumed", "building_limit_provided", "building_limit_consumed"] {
+                if let (Some(j), Some((p, c))) = (self.res_index(ids), aa_play::economy::rates(w, b.local, ids)) {
+                    production[j] = p;
+                    upkeep[j] = c;
+                }
+            }
         }
-        if let Some(j) = self.res_index("unit_limit_consumed") {
-            upkeep[j] = k.units_used;
-        }
-        let limited_max = self.world().and_then(|w| w.data.rule("LimitedResourceMaximum")).unwrap_or(f32::MAX);
+        let limited_max = self.world().and_then(|w| w.data.rule_ci("EconomyLimitedResourceMax")).unwrap_or(f32::MAX);
         Some(HudEconomy { preview_production: production.clone(), production, upkeep, stock, limited_max })
     }
 

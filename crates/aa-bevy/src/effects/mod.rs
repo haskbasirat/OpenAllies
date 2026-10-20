@@ -351,6 +351,26 @@ struct ModelFx {
 }
 
 type Parts = Arc<Vec<(Handle<Mesh>, Handle<OriginalMaterial>)>>;
+/// A model decoded on a loader thread: meshes, materials, decoded textures.
+type Decoded = Vec<(Mesh, aa_assets::Material, Option<Image>)>;
+
+enum Slot {
+    Loading(Arc<Mutex<Option<Option<Decoded>>>>),
+    Ready(Option<Parts>),
+}
+
+/// What a model waits to become once loaded.
+#[derive(Clone, Copy)]
+enum PendingUse {
+    Model { owner: Option<ActorId>, life: Option<f32>, list: ListKind },
+    Wreck(ActorId),
+}
+
+struct PendingSpawn {
+    key: (String, [u8; 3]),
+    transform: Transform,
+    use_: PendingUse,
+}
 
 #[derive(Resource)]
 pub struct FxState {
@@ -374,8 +394,10 @@ pub struct FxState {
     health: Vec<f32>,
     moving: Vec<bool>,
     seen: Vec<bool>,
+    seen_orgs: Vec<bool>,
     frequency: HashMap<(u32, usize), u32>,
-    parts: HashMap<(String, [u8; 3]), Option<Parts>>,
+    parts: HashMap<(String, [u8; 3]), Slot>,
+    pending_spawns: Vec<PendingSpawn>,
     quads_mesh: Handle<Mesh>,
     decal_mesh: Handle<Mesh>,
     quads_entity: Entity,
@@ -467,8 +489,10 @@ fn poll_loading(
         health: Vec::new(),
         moving: Vec::new(),
         seen: Vec::new(),
+        seen_orgs: Vec::new(),
         frequency: HashMap::new(),
         parts: HashMap::new(),
+        pending_spawns: Vec::new(),
         quads_mesh,
         decal_mesh,
         quads_entity,
@@ -952,43 +976,154 @@ impl FxState {
         // compare: the original plays their node keyframes (debris flying).
         if key.starts_with("deathdebris/") || key.starts_with("flags/") {
             let team = owner.and_then(|o| frame.world.actors.get(o as usize)).map_or(crate::scene::NEUTRAL_TEAM, |a| team_of(frame.world, a));
-            if let Some(entity) = self.spawn_model(&def.model, team, Transform::from_matrix(place), spawn) {
-                self.models.push(ModelFx { entity, owner, life: if def.permanent { None } else { Some(duration.max(5.0)) }, list });
+            let life = if def.permanent { None } else { Some(duration.max(5.0)) };
+            if let Some(entity) = self.spawn_model(&def.model, team, Transform::from_matrix(place), spawn, Some(PendingUse::Model { owner, life, list })) {
+                self.models.push(ModelFx { entity, owner, life, list });
             }
         } else if self.warned.insert(key.clone()) {
             warn!("effects: VFX {} model {} is not in the effect NIF table", fxc.ids, def.model);
         }
     }
 
-    /// An original static model as entities (cached meshes/materials).
-    fn spawn_model(&mut self, path: &str, team: [u8; 3], transform: Transform, spawn: &mut Spawn) -> Option<Entity> {
+    /// Start decoding an original model (and its textures) on a loader
+    /// thread, so a death or a first shot never stalls a frame.
+    fn request_model(&mut self, path: &str, team: [u8; 3]) {
         let key = (path.to_ascii_lowercase(), team);
-        let parts = match self.parts.get(&key) {
-            Some(p) => p.clone(),
-            None => {
-                let loaded = self.store.as_ref().and_then(|store| {
-                    let model = store.load_model(path).ok()?.prepare().ok()?;
-                    let mut parts = Vec::new();
-                    for mesh in model.meshes.iter().filter(|m| !m.indices.is_empty()) {
-                        let texture = mesh.material.texture.as_ref().and_then(|t| {
-                            crate::textures::load(store, t, crate::scene::kind(&mesh.material, team)).ok().map(|img| spawn.images.add(img))
-                        });
-                        parts.push((spawn.meshes.add(crate::scene::model_mesh(mesh)), spawn.materials.add(crate::look::model_material(&mesh.material, texture))));
-                    }
-                    Some(Arc::new(parts))
-                });
-                if loaded.is_none() && self.warned.insert(path.to_owned()) {
-                    warn!("effects: model {path} did not load");
+        if self.parts.contains_key(&key) {
+            return;
+        }
+        let Some(store) = self.store.clone() else {
+            self.parts.insert(key, Slot::Ready(None));
+            return;
+        };
+        let slot = Arc::new(Mutex::new(None));
+        let out = slot.clone();
+        let path = path.to_owned();
+        std::thread::spawn(move || {
+            let decoded = (|| -> Option<Decoded> {
+                let model = store.load_model(&path).ok()?.prepare().ok()?;
+                let mut parts = Vec::new();
+                for mesh in model.meshes.iter().filter(|m| !m.indices.is_empty()) {
+                    let texture = mesh.material.texture.as_ref().and_then(|t| crate::textures::load(&store, t, crate::scene::kind(&mesh.material, team)).ok());
+                    parts.push((crate::scene::model_mesh(mesh), mesh.material.clone(), texture));
                 }
-                self.parts.insert(key, loaded.clone());
-                loaded
-            }
-        }?;
+                Some(parts)
+            })();
+            *out.lock().unwrap() = Some(decoded);
+        });
+        self.parts.insert(key, Slot::Loading(slot));
+    }
+
+    /// The model's Bevy assets: None while loading, Some(None) if it failed.
+    fn model_parts(&mut self, key: &(String, [u8; 3]), spawn: &mut Spawn) -> Option<Option<Parts>> {
+        let decoded = match self.parts.get(key)? {
+            Slot::Ready(p) => return Some(p.clone()),
+            Slot::Loading(slot) => slot.lock().unwrap().take()?,
+        };
+        let parts = decoded.map(|list| {
+            Arc::new(
+                list.into_iter()
+                    .map(|(mesh, material, image)| {
+                        let texture = image.map(|i| spawn.images.add(i));
+                        (spawn.meshes.add(mesh), spawn.materials.add(crate::look::model_material(&material, texture)))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        });
+        if parts.is_none() && self.warned.insert(key.0.clone()) {
+            warn!("effects: model {} did not load", key.0);
+        }
+        self.parts.insert(key.clone(), Slot::Ready(parts.clone()));
+        Some(parts)
+    }
+
+    fn instantiate(parts: &Parts, transform: Transform, spawn: &mut Spawn) -> Entity {
         let parent = spawn.commands.spawn((transform, Visibility::default())).id();
         for (mesh, material) in parts.iter() {
             spawn.commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), ChildOf(parent)));
         }
-        Some(parent)
+        parent
+    }
+
+    /// An original static model as entities now when it is decoded, else
+    /// once its loader finishes (`use_` says what it becomes).
+    fn spawn_model(&mut self, path: &str, team: [u8; 3], transform: Transform, spawn: &mut Spawn, use_: Option<PendingUse>) -> Option<Entity> {
+        let key = (path.to_ascii_lowercase(), team);
+        self.request_model(path, team);
+        match self.model_parts(&key, spawn) {
+            Some(Some(parts)) => Some(Self::instantiate(&parts, transform, spawn)),
+            Some(None) => None,
+            None => {
+                if let Some(use_) = use_ {
+                    self.pending_spawns.push(PendingSpawn { key, transform, use_ });
+                }
+                None
+            }
+        }
+    }
+
+    /// Models whose loaders finished: wrecks replace their actor, model VFX
+    /// appear.
+    fn flush_pending(&mut self, frame: &Frame, spawn: &mut Spawn, views: &mut Query<(&ActorView, &mut Visibility)>) {
+        if self.pending_spawns.is_empty() {
+            return;
+        }
+        let pending = std::mem::take(&mut self.pending_spawns);
+        for p in pending {
+            match self.model_parts(&p.key, spawn) {
+                None => self.pending_spawns.push(p),
+                Some(None) => {}
+                Some(Some(parts)) => match p.use_ {
+                    PendingUse::Model { owner, life, list } => {
+                        if owner.is_some_and(|o| frame.world.actor(o).is_none()) {
+                            continue;
+                        }
+                        let entity = Self::instantiate(&parts, p.transform, spawn);
+                        self.models.push(ModelFx { entity, owner, life, list });
+                    }
+                    PendingUse::Wreck(actor) => {
+                        if frame.world.actor(actor).is_none() || self.wrecks.contains_key(&actor) {
+                            continue;
+                        }
+                        let entity = Self::instantiate(&parts, p.transform, spawn);
+                        self.wrecks.insert(actor, entity);
+                        for (view, mut vis) in views.iter_mut() {
+                            if view.id == actor {
+                                *vis = Visibility::Hidden;
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    }
+
+    /// Decode early what an actor may show later: its wreck, its
+    /// projectiles, its debris and flag models.
+    fn prefetch(&mut self, fx: &data::ActorFx, team: [u8; 3]) {
+        if let Some(m) = fx.death_model.clone() {
+            self.request_model(&m, team);
+        }
+        let tables = self.tables.clone();
+        for w in &fx.weapons {
+            if let Some(prefix) = w.projectile.as_ref().and_then(|p| tables.actors.get(p)).and_then(|p| p.resource_prefix.clone()) {
+                self.request_model(&format!("{prefix}.nif"), crate::scene::NEUTRAL_TEAM);
+            }
+        }
+        for f in fx.health.iter().chain(&fx.destroyed).chain(&fx.constructed).chain(&fx.created) {
+            if f.kind != "CREATE_VFX" {
+                continue;
+            }
+            if let Some(def) = tables.vfx.get(&f.ids)
+                && def.category == "VFXMODEL"
+                && !def.nightonly
+            {
+                let key = def.model.strip_prefix("effects/").unwrap_or(&def.model);
+                if !self.nif.effects.contains_key(key) && (key.starts_with("deathdebris/") || key.starts_with("flags/")) {
+                    self.request_model(&def.model, team);
+                }
+            }
+        }
     }
 
     fn run_list(&mut self, list: &[Fxc], ctx: Ctx, frame: &Frame, spawn: &mut Spawn, kind: ListKind) {
@@ -1034,7 +1169,7 @@ impl FxState {
             let arc = if lob { 9.8 * flight * flight / 8.0 } else { 0.0 };
             let pfx = tables.actors.get(p);
             let model = pfx.and_then(|f| f.resource_prefix.clone()).map(|r| format!("{r}.nif"));
-            let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn));
+            let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None));
             if let Some(pfx) = pfx {
                 let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos) };
                 let created = pfx.created.clone();
@@ -1092,7 +1227,7 @@ impl FxState {
         {
             let Some(m) = actor_matrix(frame, actor) else { return };
             let team = team_of(frame.world, a);
-            if let Some(entity) = self.spawn_model(model, team, Transform::from_matrix(m), spawn) {
+            if let Some(entity) = self.spawn_model(model, team, Transform::from_matrix(m), spawn, Some(PendingUse::Wreck(actor))) {
                 self.wrecks.insert(actor, entity);
                 for (view, mut vis) in views.iter_mut() {
                     if view.id == actor {
@@ -1105,7 +1240,45 @@ impl FxState {
 
     /// Per-actor state changes: new actors (WhenCreated), health thresholds
     /// (WhenHealth), movement starts/stops, removal.
+    /// Organizations (regiments): their View WhenCreated / WhenDestroyed
+    /// sounds (the "deployed" callouts), played on the organization.
+    fn scan_orgs(&mut self, frame: &Frame, spawn: &mut Spawn) {
+        let n = frame.world.orgs.len();
+        if self.seen_orgs.len() < n {
+            self.seen_orgs.resize(n, false);
+        }
+        for o in &frame.world.orgs {
+            let i = o.id as usize;
+            if self.seen_orgs[i] {
+                continue;
+            }
+            self.seen_orgs[i] = true;
+            // compare: the map's own regiments at the first frame stay
+            // silent (they were not recruited).
+            if self.first_frame || !o.alive {
+                continue;
+            }
+            let Some(fx) = self.fx_of(frame.world, o.def) else { continue };
+            let place = Place::Object(crate::audio::org_object(o.id));
+            for f in fx.created.iter().filter(|f| f.kind == "PLAY_SFX" && f.frequency > 0) {
+                spawn.sfx.play.push(Sfx { ids: f.ids.clone(), place, owner: Some(o.kingdom), voice: Some(crate::audio::org_object(o.id)), looping: f.looping });
+            }
+        }
+    }
+
+    fn org_destroyed(&mut self, org: aa_play::OrgId, frame: &Frame, spawn: &mut Spawn) {
+        let Some(o) = frame.world.orgs.get(org as usize) else { return };
+        let Some(fx) = self.fx_of(frame.world, o.def) else { return };
+        // Its last member's place (the members are gone by now).
+        let Some(pos) = o.members.iter().filter_map(|m| frame.world.actors.get(*m as usize)).map(|a| a.pos).next() else { return };
+        let place = Place::Location(pos);
+        for f in fx.destroyed.iter().filter(|f| f.kind == "PLAY_SFX" && f.frequency > 0) {
+            spawn.sfx.play.push(Sfx { ids: f.ids.clone(), place, owner: Some(o.kingdom), voice: None, looping: false });
+        }
+    }
+
     fn scan(&mut self, frame: &Frame, spawn: &mut Spawn) {
+        self.scan_orgs(frame, spawn);
         let tables = self.tables.clone();
         let n = frame.world.actors.len();
         if self.seen.len() < n {
@@ -1131,6 +1304,7 @@ impl FxState {
                 self.health[i] = if def.health > 0.0 { a.health / def.health } else { 1.0 };
                 self.moving[i] = a.activity == Activity::Moving;
                 if let Some(fx) = fx {
+                    self.prefetch(fx, team_of(frame.world, a));
                     self.run_list(&fx.created, ctx, frame, spawn, ListKind::Created);
                     // compare: WhenConstructed runs when the actor first
                     // exists built (map buildings, finished deployments).
@@ -1513,12 +1687,14 @@ fn run(
         match *ev {
             Event::Fired { shooter, target, weapon } => state.fired(shooter, target, weapon as usize, &frame, &mut spawn),
             Event::Died { actor } => state.died(actor, &frame, &mut spawn, &mut views),
+            Event::OrgDestroyed { org } => state.org_destroyed(org, &frame, &mut spawn),
             _ => {}
         }
     }
     let t2 = Instant::now();
     let dt = if battle.paused { 0.0 } else { time.delta_secs() * battle.speed };
     state.step(dt, &frame, &mut spawn, &mut transforms);
+    state.flush_pending(&frame, &mut spawn, &mut views);
     let t3 = Instant::now();
     let quads = state.draw(&mut spawn, &mut transforms);
     let t4 = Instant::now();
