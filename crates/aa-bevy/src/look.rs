@@ -66,12 +66,18 @@ fn material_colours(m: &aa_assets::Material) -> ([f32; 3], [f32; 3]) {
     }
 }
 
+/// Lighting style: Bevy's lit shading with shadows (the Development 12 look,
+/// default) or the original fixed-function formula (AA_BEVY_FIXED_FUNCTION=1).
+pub fn fixed_function() -> bool {
+    std::env::var_os("AA_BEVY_FIXED_FUNCTION").is_some()
+}
+
 fn params(ambient: [f32; 3], diffuse: [f32; 3], emissive: [f32; 3], alpha: (f32, f32)) -> LookParams {
     let mul = |c: [f32; 3], s: [f32; 3]| Vec4::new(c[0] * s[0], c[1] * s[1], c[2] * s[2], 1.0);
     LookParams {
         mask_u: Vec4::ZERO,
         mask_v: Vec4::ZERO,
-        flags: Vec4::new(0.0, alpha.0, alpha.1, 0.0),
+        flags: Vec4::new(0.0, alpha.0, alpha.1, if fixed_function() { 1.0 } else { 0.0 }),
         ambient: mul(ambient, SUN_AMBIENT),
         diffuse: mul(diffuse, SUN_DIFFUSE),
         emissive: Vec4::new(emissive[0], emissive[1], emissive[2], 0.0),
@@ -114,7 +120,9 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
             alpha_mode,
             double_sided: m.double_sided,
             cull_mode: (!m.double_sided).then_some(Face::Back),
-            unlit: false,
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
+            metallic: 0.0,
             ..default()
         },
         extension: OriginalLook { params: params(ambient, diffuse, m.emissive, alpha), mask: None },
@@ -138,6 +146,8 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
             alpha_mode: if overlay { AlphaMode::Blend } else { AlphaMode::Opaque },
             // Overlays draw before every other transparent thing, in layer order.
             depth_bias: -1.0e8 + order as f32 * 1000.0,
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
             ..default()
         },
         extension: OriginalLook { params: p, mask: mask.map(|m| m.0) },

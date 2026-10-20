@@ -519,7 +519,8 @@ fn setup(
     commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs, loaded.fixes.clone()));
     // Sun with cascaded shadows over the battlefield.
     commands.spawn((
-        DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: std::env::var_os("AA_BEVY_SHADOWS").is_some(), ..default() },
+        // Shadows on, as in Development 12 (off with the fixed-function look).
+        DirectionalLight { illuminance: 2400.0, shadow_maps_enabled: !look::fixed_function(), ..default() },
         Transform::default().looking_to(-look::sun_to_light(), Vec3::Y),
         CascadeShadowConfigBuilder { num_cascades: 2, first_cascade_far_bound: 60.0, maximum_distance: 220.0, ..default() }.build(),
     ));
