@@ -32,6 +32,8 @@ impl World {
             Command::Move { .. } | Command::Attack { .. } | Command::Stop { .. } => crate::movement::command(self, &command),
             Command::Recruit { .. } | Command::CancelRecruit { .. } => crate::production::command(self, &command),
             Command::Deploy { .. } | Command::Pack { .. } => crate::deploy::command(self, &command),
+            Command::Research { kingdom, building, property } => crate::production::research(self, *kingdom, *building, property),
+            Command::Attach { kingdom, org, hq } => crate::production::attach(self, *kingdom, *org, *hq),
         };
         if let Err(reason) = result {
             let kingdom = match command {
@@ -41,7 +43,9 @@ impl World {
                 | Command::Recruit { kingdom, .. }
                 | Command::CancelRecruit { kingdom, .. }
                 | Command::Deploy { kingdom, .. }
-                | Command::Pack { kingdom, .. } => kingdom,
+                | Command::Pack { kingdom, .. }
+                | Command::Research { kingdom, .. }
+                | Command::Attach { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

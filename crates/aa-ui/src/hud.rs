@@ -1603,6 +1603,8 @@ pub fn resource_text(icon: u32, amount: f32, invalid: [f32; 3], with_stock: bool
 /// `0x5C8F10`.
 pub fn limit_text(icon: u32, amount: f32, limit: f32, invalid: [f32; 3]) -> String {
     let ic = char::from_u32(icon).unwrap_or('\0');
+    // no consumption gives -0 (the amount is -net): print 0
+    let amount = amount + 0.0;
     let mut a = format!("{:.0}", amount as f64);
     if limit < amount {
         a = wrap(&a, invalid);

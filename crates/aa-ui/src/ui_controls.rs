@@ -457,6 +457,13 @@ impl Ui {
             } else {
                 w.flags &= !wf::SELECTED;
             }
+            // 0x5EDFE0: the entry colour replaces the label's (when the item
+            // has its label view element, widget+0x6C)
+            if let Some((_, e)) = &entry {
+                if let Some(crate::ve::ViewElement { kind: VeKind::Label(l), .. }) = &mut w.sub_ve {
+                    l.color = e.color;
+                }
+            }
             if let Some(it) = w.list_item_mut() {
                 match &entry {
                     Some((i, e)) => {

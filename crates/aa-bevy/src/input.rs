@@ -1,0 +1,458 @@
+//! Battle input: selection and orders as the original's game interface
+//! state machine (aa-runtime player_order_input: click 0x640CF0, add
+//! 0x640E10, box 0x436460 / 0x4377B0, double click, groups 0x439E90 /
+//! 0x4376C0, right-click command 0x620760), behaviour-faithful over Bevy
+//! picking of the battle view's actor entities.
+//!
+//! * A left press on the world (the HUD's VWorld widget, aa-ui
+//!   `press_target_5c3bc0`) is a click; moving 10 px (Manhattan,
+//!   AVar CursorDragThreshold) turns it into a drag box.
+//! * Click: select the hit (a soldier selects his regiment, `Unit::Org`;
+//!   buildings and trucks are `Unit::Actor`); empty ground clears.
+//!   Shift/Ctrl toggles the hit. Double click: every visible object of the
+//!   same definition as the hit (own objects only).
+//! * Box: own regiments first, else own buildings (class rule 0x6406C0);
+//!   at most 6 objects, the nearest to the centroid (0x640FA0).
+//! * Right click with own movable units selected: an enemy under the
+//!   cursor is attacked, otherwise move to the ground point.
+//! * Groups: Ctrl+digit saves, digit selects, a second tap within
+//!   UICenterGroupTimeMS (1000 ms) centres the camera on the group.
+//! * Keys: Pause = gamepause, +/- = SpeedUp/SpeedDown (hotkeys_core.txt).
+use crate::battle_view::ActorView;
+use crate::camera::{CameraRequests, NativeCamera};
+use crate::session::{AppState, Battle};
+use crate::ui::hud::{GameAction, GameInput, TargetOrder};
+use aa_play::{ActorId, Command, DefClass, Unit};
+use bevy::camera::primitives::Aabb;
+use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+
+/// The original selection limit (select 0x6409E0).
+pub const MAX_SELECTION: usize = 6;
+/// AVar CursorDragThreshold.
+pub const DRAG_THRESHOLD: f32 = 10.0;
+const DOUBLE_CLICK_S: f64 = 0.5;
+
+#[derive(Resource, Default)]
+pub struct Selecting {
+    /// Left press on the world: physical pixel, time.
+    press: Option<(Vec2, f64)>,
+    /// Drag box corners (physical pixels) while dragging.
+    pub drag: Option<(Vec2, Vec2)>,
+    /// An action button armed a targeted order.
+    pub armed: Option<TargetOrder>,
+    groups: Vec<Vec<Unit>>,
+    last_group: Option<(usize, f64)>,
+    last_click: Option<(Vec2, f64)>,
+    /// The actor under the cursor (for the focused VFX).
+    pub hover: Option<ActorId>,
+}
+
+/// A pickable actor this frame.
+struct Pick {
+    id: ActorId,
+    /// Distance along the cursor ray (hit) or None.
+    dist: Option<f32>,
+    /// Screen position (physical pixels) of the actor's origin.
+    screen: Option<Vec2>,
+}
+
+fn native(p: Vec3) -> Vec3 {
+    Vec3::new(p.x, -p.z, p.y)
+}
+
+/// Relation class (0x6406C0): own regiments 3, own buildings 2, own
+/// others 1, foreign 0.
+fn class(b: &Battle, u: Unit) -> u8 {
+    let w = &b.world;
+    match u {
+        Unit::Org(o) => {
+            if w.orgs.get(o as usize).is_some_and(|o| o.kingdom == b.local) {
+                3
+            } else {
+                0
+            }
+        }
+        Unit::Actor(a) => match w.actor(a) {
+            Some(a) if a.kingdom == Some(b.local) => match w.data.def(a.def).class {
+                Some(DefClass::Building) => 2,
+                _ => 1,
+            },
+            _ => 0,
+        },
+    }
+}
+
+fn unit_of(b: &Battle, id: ActorId) -> Option<Unit> {
+    let a = b.world.actor(id)?;
+    if !a.alive {
+        return None;
+    }
+    Some(match a.org {
+        Some(o) if b.world.orgs.get(o as usize).is_some_and(|o| o.alive) => Unit::Org(o),
+        _ => Unit::Actor(id),
+    })
+}
+
+/// Where a unit is (native ground point).
+fn unit_pos(b: &Battle, u: Unit) -> Option<Vec2> {
+    match u {
+        Unit::Org(o) => b.world.orgs.get(o as usize).map(|o| o.anchor),
+        Unit::Actor(a) => b.world.actor(a).map(|a| a.pos.truncate()),
+    }
+}
+
+fn unit_def(b: &Battle, u: Unit) -> Option<aa_play::DefId> {
+    match u {
+        Unit::Org(o) => b.world.orgs.get(o as usize).map(|o| o.def),
+        Unit::Actor(a) => b.world.actor(a).map(|a| a.def),
+    }
+}
+
+/// Keep at most 6, the nearest to the centroid (0x640FA0).
+fn cap(b: &Battle, mut units: Vec<Unit>) -> Vec<Unit> {
+    units.dedup();
+    if units.len() <= MAX_SELECTION {
+        return units;
+    }
+    let pts: Vec<Vec2> = units.iter().filter_map(|u| unit_pos(b, *u)).collect();
+    let c = pts.iter().copied().sum::<Vec2>() / pts.len().max(1) as f32;
+    units.sort_by(|x, y| {
+        let dx = unit_pos(b, *x).map_or(f32::MAX, |p| p.distance_squared(c));
+        let dy = unit_pos(b, *y).map_or(f32::MAX, |p| p.distance_squared(c));
+        dx.total_cmp(&dy)
+    });
+    units.truncate(MAX_SELECTION);
+    units
+}
+
+/// Ray / ground intersection over the battle heightfield (native point).
+fn ground_hit(b: &Battle, ray: Ray3d) -> Option<Vec3> {
+    let o = native(ray.origin);
+    let d = native(*ray.direction);
+    let above = |p: Vec3| p.z - b.world.map.height_at(p.truncate());
+    let mut t0 = 0.0;
+    let step = 2.0;
+    let mut t = step;
+    while t < 2000.0 {
+        if above(o + d * t) < 0.0 {
+            let (mut lo, mut hi) = (t0, t);
+            for _ in 0..24 {
+                let m = (lo + hi) * 0.5;
+                if above(o + d * m) < 0.0 { hi = m } else { lo = m }
+            }
+            return Some(o + d * hi);
+        }
+        t0 = t;
+        t += step;
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn battle_input(
+    mut sel: ResMut<Selecting>,
+    battle: Option<ResMut<Battle>>,
+    front: Res<crate::ui::front::Front>,
+    game: Option<Res<GameInput>>,
+    mut requests: ResMut<CameraRequests>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<NativeCamera>>,
+    views: Query<(&ActorView, &GlobalTransform, Option<&Children>)>,
+    parts: Query<(&Aabb, &GlobalTransform)>,
+    mut commands: Commands,
+) {
+    let Some(mut b) = battle else { return };
+    if game.is_some() {
+        commands.remove_resource::<GameInput>();
+    }
+    let now = time.elapsed_secs_f64();
+    let local = b.local;
+    // HUD actions first
+    if let Some(g) = &game {
+        for a in &g.actions {
+            match a {
+                GameAction::Stop => {
+                    let units = own_movable(&b);
+                    if !units.is_empty() {
+                        b.pending.push(Command::Stop { kingdom: local, units });
+                    }
+                }
+                GameAction::Recruit { building, def } => b.pending.push(Command::Recruit { kingdom: local, building: *building, def: *def }),
+                GameAction::Pack { building } => b.pending.push(Command::Pack { kingdom: local, building: *building }),
+                GameAction::Target(t) => sel.armed = Some(t.clone()),
+                GameAction::MinimapJump(u, v) => {
+                    let m = &b.world.map;
+                    requests.look_at = Some(Vec2::new(u * m.width as f32 * m.cell_size, v * m.height as f32 * m.cell_size));
+                }
+                GameAction::TogglePause => b.paused = !b.paused,
+                GameAction::SetPaused(p) => b.paused = *p,
+                GameAction::SetSpeed(s) => b.speed = s.clamp(0.25, 4.0),
+                GameAction::CameraZoom(z) => requests.zoom = Some(*z),
+                GameAction::SpeedUp => b.speed = (b.speed * 2.0).min(4.0),
+                GameAction::SpeedDown => b.speed = (b.speed * 0.5).max(0.25),
+            }
+        }
+    }
+    let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+    let add = ctrl || keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+    // keys the UI did not take (hotkeys_core / hotkeys_groups)
+    if let Some(g) = &game {
+        for k in &g.keys {
+            match k {
+                KeyCode::Pause => b.paused = !b.paused,
+                KeyCode::Minus | KeyCode::NumpadSubtract => b.speed = (b.speed * 0.5).max(0.25),
+                KeyCode::Equal | KeyCode::NumpadAdd => b.speed = (b.speed * 2.0).min(4.0),
+                _ => {}
+            }
+            if let Some(i) = digit(*k) {
+                if sel.groups.len() < 10 {
+                    sel.groups.resize(10, Vec::new());
+                }
+                if ctrl {
+                    sel.groups[i] = b.selection.clone();
+                } else {
+                    let group: Vec<Unit> = sel.groups[i].iter().copied().filter(|u| unit_pos(&b, *u).is_some()).collect();
+                    let again = sel.last_group.is_some_and(|(g, t)| g == i && now - t < 1.0);
+                    if again && !group.is_empty() {
+                        let pts: Vec<Vec2> = group.iter().filter_map(|u| unit_pos(&b, *u)).collect();
+                        requests.look_at = Some(pts.iter().copied().sum::<Vec2>() / pts.len() as f32);
+                    }
+                    b.selection = group;
+                    sel.last_group = Some((i, now));
+                }
+            }
+        }
+    }
+    let Ok(window) = windows.single() else { return };
+    let Ok((camera, cam_tf)) = cameras.single() else { return };
+    let scale = window.scale_factor();
+    // the UI's pointer (the same events the HUD saw, incl. scripted ones)
+    let cursor = front.pointer.pos;
+    let _ = &buttons;
+    let ray = cursor.and_then(|c| camera.viewport_to_world(cam_tf, c / scale).ok());
+    // pick: the nearest actor whose model bounds the ray crosses
+    let mut picks = Vec::new();
+    for (view, tf, children) in &views {
+        let Some(a) = b.world.actor(view.id) else { continue };
+        if !a.alive {
+            continue;
+        }
+        let mut dist: Option<f32> = None;
+        if let Some(r) = ray {
+            for child in children.into_iter().flatten() {
+                let Ok((aabb, ptf)) = parts.get(*child) else { continue };
+                let inv = ptf.affine().inverse();
+                let o = inv.transform_point3(r.origin);
+                let d = inv.transform_vector3(*r.direction);
+                let (min, max) = (Vec3::from(aabb.center - aabb.half_extents), Vec3::from(aabb.center + aabb.half_extents));
+                if let Some(t) = slab(o, d, min, max) {
+                    let world_t = (ptf.transform_point(o + d * t) - r.origin).length();
+                    dist = Some(dist.map_or(world_t, |x: f32| x.min(world_t)));
+                }
+            }
+        }
+        let screen = camera.world_to_viewport(cam_tf, tf.translation()).ok().map(|p| p * scale);
+        picks.push(Pick { id: view.id, dist, screen });
+    }
+    let hit = picks.iter().filter(|p| p.dist.is_some()).min_by(|x, y| x.dist.unwrap().total_cmp(&y.dist.unwrap())).map(|p| p.id);
+    sel.hover = hit.filter(|_| !front.pointer_over_ui);
+    // left button on the world
+    if front.pointer.left_pressed && !front.press_on_ui {
+        if let Some(c) = cursor {
+            sel.press = Some((c, now));
+        }
+    }
+    if let (Some((p, _)), Some(c)) = (sel.press, cursor) {
+        if front.left_held && sel.armed.is_none() && ((c - p).abs().element_sum() >= DRAG_THRESHOLD || sel.drag.is_some()) {
+            sel.drag = Some((p, c));
+        }
+    }
+    requests.blocked = sel.drag.is_some();
+    if front.pointer.left_released {
+        if let Some((p, _)) = sel.press.take() {
+            if let Some((a, c)) = sel.drag.take() {
+                // box select (0x436460 / 0x4377B0)
+                let (lo, hi) = (a.min(c), a.max(c));
+                let mut units: Vec<Unit> = picks
+                    .iter()
+                    .filter(|pk| pk.screen.is_some_and(|s| s.x >= lo.x && s.y >= lo.y && s.x <= hi.x && s.y <= hi.y))
+                    .filter_map(|pk| unit_of(&b, pk.id))
+                    .collect();
+                units.sort_by_key(|u| std::cmp::Reverse(class(&b, *u)));
+                let best = units.first().map(|u| class(&b, *u)).unwrap_or(0);
+                // only own objects are box-selected; regiments beat buildings
+                units.retain(|u| class(&b, *u) == best && best >= 2);
+                let mut next = if add { b.selection.clone() } else { Vec::new() };
+                if add && next.first().is_some_and(|u| class(&b, *u) != best) {
+                    next.clear();
+                }
+                next.extend(units);
+                if !next.is_empty() || !add {
+                    b.selection = cap(&b, next);
+                }
+            } else if let Some(order) = sel.armed.take() {
+                // targeted order from an action button
+                let target = hit.filter(|id| b.world.actor(*id).is_some_and(|a| a.kingdom.is_some() && a.kingdom != Some(local)));
+                let ground = ray.and_then(|r| ground_hit(&b, r));
+                match order {
+                    TargetOrder::Attack => {
+                        let units = own_movable(&b);
+                        if !units.is_empty() {
+                            if let Some(t) = target {
+                                b.pending.push(Command::Attack { kingdom: local, units, target: t });
+                            } else if let Some(g) = ground {
+                                b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: true });
+                            }
+                        }
+                    }
+                    TargetOrder::Deploy(truck) => {
+                        if let Some(g) = ground {
+                            let facing = b.world.actor(truck).map(|a| a.facing).unwrap_or(0.0);
+                            b.pending.push(Command::Deploy { kingdom: local, truck, at: g.truncate(), facing });
+                        }
+                    }
+                }
+            } else {
+                // click (0x640CF0) / add (0x640E10) / double click
+                let double = sel.last_click.is_some_and(|(q, t)| now - t <= DOUBLE_CLICK_S && (q - p).abs().max_element() <= 2.0);
+                sel.last_click = Some((p, now));
+                let unit = hit.and_then(|id| unit_of(&b, id));
+                match unit {
+                    None => {
+                        if !add {
+                            b.selection.clear();
+                        }
+                    }
+                    Some(u) if double && class(&b, u) >= 1 => {
+                        let def = unit_def(&b, u);
+                        let mut same: Vec<Unit> = picks
+                            .iter()
+                            .filter(|pk| pk.screen.is_some_and(|s| s.x >= 0.0 && s.y >= 0.0 && s.x < window.physical_width() as f32 && s.y < window.physical_height() as f32))
+                            .filter_map(|pk| unit_of(&b, pk.id))
+                            .filter(|x| unit_def(&b, *x) == def && class(&b, *x) == class(&b, u))
+                            .collect();
+                        same.insert(0, u);
+                        let mut next = if add { b.selection.clone() } else { Vec::new() };
+                        next.extend(same);
+                        b.selection = cap(&b, next);
+                    }
+                    Some(u) => {
+                        if add {
+                            if let Some(i) = b.selection.iter().position(|x| *x == u) {
+                                b.selection.remove(i);
+                            } else if b.selection.first().is_none_or(|f| class(&b, *f) == class(&b, u) && class(&b, u) >= 1) {
+                                if b.selection.len() < MAX_SELECTION {
+                                    b.selection.push(u);
+                                }
+                            }
+                        } else {
+                            b.selection = vec![u];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // right click: cancel an armed order / box, else the hot command
+    if front.pointer.right_pressed && !front.pointer_over_ui {
+        if sel.armed.take().is_some() || sel.drag.take().is_some() {
+            sel.press = None;
+        } else {
+            let units = own_movable(&b);
+            if !units.is_empty() {
+                let enemy = hit.filter(|id| {
+                    b.world.actor(*id).is_some_and(|a| {
+                        a.kingdom.is_some_and(|k| b.world.kingdoms.iter().find(|x| x.id == k).map(|x| x.team) != b.world.kingdoms.iter().find(|x| x.id == local).map(|x| x.team))
+                    })
+                });
+                if let Some(t) = enemy {
+                    debug!("order: attack {t} with {units:?}");
+                    b.pending.push(Command::Attack { kingdom: local, units, target: t });
+                } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
+                    debug!("order: move {units:?} to {g:?}");
+                    b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: false });
+                }
+            }
+        }
+    }
+    // the selection keeps only living objects
+    let alive: Vec<Unit> = b.selection.iter().copied().filter(|u| unit_pos(&b, *u).is_some() && match u {
+        Unit::Org(o) => b.world.orgs.get(*o as usize).is_some_and(|o| o.alive),
+        Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.alive),
+    }).collect();
+    if alive.len() != b.selection.len() {
+        b.selection = alive;
+    }
+}
+
+/// The selected own units that take move / attack / stop orders:
+/// regiments and single actors that are not buildings.
+fn own_movable(b: &Battle) -> Vec<Unit> {
+    b.selection
+        .iter()
+        .copied()
+        .filter(|u| match u {
+            Unit::Org(o) => b.world.orgs.get(*o as usize).is_some_and(|o| o.kingdom == b.local),
+            Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.kingdom == Some(b.local) && b.world.data.def(a.def).class != Some(DefClass::Building)),
+        })
+        .collect()
+}
+
+fn digit(k: KeyCode) -> Option<usize> {
+    Some(match k {
+        KeyCode::Digit1 => 0,
+        KeyCode::Digit2 => 1,
+        KeyCode::Digit3 => 2,
+        KeyCode::Digit4 => 3,
+        KeyCode::Digit5 => 4,
+        KeyCode::Digit6 => 5,
+        KeyCode::Digit7 => 6,
+        KeyCode::Digit8 => 7,
+        KeyCode::Digit9 => 8,
+        KeyCode::Digit0 => 9,
+        _ => return None,
+    })
+}
+
+/// Ray / box slab test: entry distance (or 0 inside).
+fn slab(o: Vec3, d: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
+    let mut t0 = 0.0f32;
+    let mut t1 = f32::MAX;
+    for i in 0..3 {
+        if d[i].abs() < 1e-8 {
+            if o[i] < min[i] || o[i] > max[i] {
+                return None;
+            }
+        } else {
+            let inv = 1.0 / d[i];
+            let (mut a, mut c) = ((min[i] - o[i]) * inv, (max[i] - o[i]) * inv);
+            if a > c {
+                std::mem::swap(&mut a, &mut c);
+            }
+            t0 = t0.max(a);
+            t1 = t1.min(c);
+            if t0 > t1 {
+                return None;
+            }
+        }
+    }
+    Some(t0)
+}
+
+pub struct InputPlugin;
+
+impl Plugin for InputPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Selecting>().init_resource::<CameraRequests>().add_systems(
+            Update,
+            (crate::camera::attach, battle_input, crate::camera::update)
+                .chain()
+                .after(crate::ui::front::frame)
+                .run_if(in_state(AppState::Battle)),
+        );
+    }
+}

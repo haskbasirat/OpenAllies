@@ -17,6 +17,7 @@
 //! - world, sim, lib: shared types; change only by agreement
 
 pub mod ai;
+pub mod books;
 pub mod combat;
 pub mod data;
 pub mod deploy;
@@ -41,3 +42,4 @@ pub use world::*;
 /// The original simulation rate: 16 ticks per second (aa_simulation::NativeClock).
 pub const TICKS_PER_SECOND: u32 = 16;
 pub const DT: f32 = 1.0 / TICKS_PER_SECOND as f32;
+pub mod mapgen;
