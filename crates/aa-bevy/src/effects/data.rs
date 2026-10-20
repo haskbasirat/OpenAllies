@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-3";
+const CACHE_VERSION: &str = "aa-bevy-fx-4";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -76,6 +76,8 @@ pub struct ActorFx {
     pub selected: Vec<Fxc>,
     pub commanded: Vec<Fxc>,
     pub commanded_aggressive: Vec<Fxc>,
+    /// View WhenConstructed (buildings: ground planes, flags, lights).
+    pub constructed: Vec<Fxc>,
     /// BodyComponent WhenHealth.
     pub health: Vec<Fxc>,
     pub start_moving: Vec<Fxc>,
@@ -113,6 +115,8 @@ pub struct VfxDef {
     pub additive: bool,
     pub decal_type: String,
     pub rotate_dps: f32,
+    /// VFXProjectedTextureLit: lit by the world like the ground.
+    pub respect_lighting: bool,
 }
 
 /// An Audio definition as 46C3A0 LoadData stores it (template_audio.tgi).
@@ -319,6 +323,7 @@ fn actor_fx(catalog: &ActorCatalog, id: &str) -> Option<ActorFx> {
         fx.selected = list(&view, "WhenSelected");
         fx.commanded = list(&view, "WhenCommanded");
         fx.commanded_aggressive = list(&view, "WhenCommandedAggressive");
+        fx.constructed = list(&view, "WhenConstructed");
         let prefix = text_with_folder(&view, "resource_prefix").map(|(v, folder)| relative(&folder, &v));
         for aspect in view.children("Aspect").unwrap_or_default() {
             let ids = text(&aspect, "IDS").unwrap_or_default();
@@ -364,6 +369,7 @@ fn vfx_def(node: &ResolvedNode<'_>) -> VfxDef {
         additive: flag_any("additive").unwrap_or(false),
         decal_type: text(node, "decal_type").unwrap_or_default().to_ascii_lowercase(),
         rotate_dps: num(node, "rotate_degrees_per_sec").unwrap_or(0.0),
+        respect_lighting: flag_any("respect_lighting").unwrap_or(false),
     }
 }
 

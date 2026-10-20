@@ -1,8 +1,10 @@
 //! Axis & Allies on Bevy: app wiring. Owner: UI (menus, HUD, camera, input).
 //! The battle scene (lead) is added as `scene::ScenePlugin`.
+mod audio;
 mod battle_view;
 mod camera;
 mod debug_battle;
+mod effects;
 mod model_fixes;
 mod look;
 mod input;
@@ -49,7 +51,9 @@ fn main() -> anyhow::Result<()> {
     })
     .add_systems(Update, session::step_battle)
     // the original camera, selection and orders (after the UI took its input)
-    .add_plugins(input::InputPlugin);
+    .add_plugins(input::InputPlugin)
+    // original effects and sound (effects.rs adds the sound plugin)
+    .add_plugins(effects::EffectsPlugin);
     app.run();
     Ok(())
 }

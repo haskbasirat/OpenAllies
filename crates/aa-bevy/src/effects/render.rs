@@ -10,9 +10,10 @@
 use bevy::asset::{RenderAssetUsages, uuid_handle};
 use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::{Indices, PrimitiveTopology};
-use bevy::pbr::{Material, MaterialPlugin};
+use bevy::mesh::MeshVertexBufferLayoutRef;
+use bevy::pbr::{Material, MaterialPipeline, MaterialPipelineKey, MaterialPlugin};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, Extent3d, TextureDataOrder, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension};
+use bevy::render::render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError, Extent3d, TextureDataOrder, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension};
 use bevy::shader::{Shader, ShaderRef};
 
 pub const SHADER: Handle<Shader> = uuid_handle!("6c2d9a41-58e3-4f0b-a7c6-1e93b04d2f85");
@@ -111,6 +112,11 @@ impl Material for FxMaterial {
     fn enable_shadows() -> bool {
         false
     }
+    /// Effect quads are two-sided (NIF sprites, streaks, billboards).
+    fn specialize(_: &MaterialPipeline, descriptor: &mut RenderPipelineDescriptor, _: &MeshVertexBufferLayoutRef, _: MaterialPipelineKey<Self>) -> Result<(), SpecializedMeshPipelineError> {
+        descriptor.primitive.cull_mode = None;
+        Ok(())
+    }
 }
 
 pub fn add_render(app: &mut App) {
@@ -200,6 +206,8 @@ pub fn write(mesh: &mut Mesh, quads: &[Quad], eye: Vec3, sort: bool) {
         }
         indices.extend_from_slice(&[0, 1, 2]);
     }
+    // A fresh mesh: the extracted one no longer holds its main-world data.
+    *mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, params);

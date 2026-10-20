@@ -410,9 +410,9 @@ impl View<'_> {
         let k = b.world.kingdoms.iter().find(|k| Some(k.id) == kingdom && !k.independent)?;
         let local = self.local()?;
         let c = k.color;
-        // diplomatic colour 0x457CD0: own and allied green, enemy red
-        // (INFERRED from 05/06: the local player's name is green)
-        let relation = if k.team == local.team { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+        // diplomatic colour 0x457CD0 -> 0x454D30 by the local kingdom's
+        // relation (0 self green, 1 friend blue, 2 neutral grey 0.8, 3 enemy red)
+        let relation = super::banners::relation_colors()[(aa_play::setup::relation(&b.world, Some(local.id), Some(k.id)) as usize).min(3)];
         Some(OwnerInfo {
             name: k.name.clone(),
             rank_glyph: None,

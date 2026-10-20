@@ -9,8 +9,9 @@
 //!   a selected regiment shows it under every member; a supply relay adds
 //!   VFXSupplyStockpileBar (SupplyStockpileBar.nif, SUPPLY_STOCKPILE);
 //! * the object under the cursor shows its `focused_vfx`: FocusedSquare
-//!   (buildings) or FocusedCircle, a projected decal on the ground, green
-//!   for the local player's objects;
+//!   (buildings) or FocusedCircle, a projected decal on the ground in the
+//!   diplomatic colour (0x454DC0: self green, friend blue, neutral grey,
+//!   enemy red);
 //! * the drag box (0x5CD850 / 0x5CCA80): a flat screen rectangle of vertex
 //!   colour (0, 0, 0.5) at 30 % alpha under the HUD;
 //! * the mouse cursor: the original animated cursor frames
@@ -56,12 +57,13 @@ pub struct SelectionArt {
     health: Bar,
     health_medium: Bar,
     supply: Bar,
-    focused_square: Option<Handle<StandardMaterial>>,
-    focused_circle: Option<Handle<StandardMaterial>>,
+    /// Focused decals per relation (0 self, 1 friend, 2 neutral, 3 enemy).
+    focused_square: Vec<Handle<StandardMaterial>>,
+    focused_circle: Vec<Handle<StandardMaterial>>,
     pool: Vec<Entity>,
 }
 
-fn material(images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>, rgba: nifart::Rgba, tint: Color) -> Handle<StandardMaterial> {
+pub(super) fn material(images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>, rgba: nifart::Rgba, tint: Color) -> Handle<StandardMaterial> {
     let (w, h, data) = rgba;
     let mut img = super::tex::make_image(w, h, data, Variant::default(), false);
     img.sampler = bevy::image::ImageSampler::linear();
@@ -118,9 +120,16 @@ fn load_art(art: &mut SelectionArt, front: &super::front::Front, images: &mut As
     }
     // the converted DDS decals (reconstruction/assets/converted/textures)
     let conv = front.root.join("assets/converted/textures/Effects/Selection");
-    let green = Color::srgb(0.0, 1.0, 0.0);
-    art.focused_square = load_png(&conv.join("FocusedSquare.png")).map(|r| material(images, materials, r, green));
-    art.focused_circle = load_png(&conv.join("FocusedCircle.png")).map(|r| material(images, materials, r, green));
+    // tinted with the diplomatic colour (0x4590DF -> 0x454DC0)
+    for c in super::banners::relation_colors() {
+        let tint = Color::srgb(c[0], c[1], c[2]);
+        if let Some(r) = load_png(&conv.join("FocusedSquare.png")) {
+            art.focused_square.push(material(images, materials, r, tint));
+        }
+        if let Some(r) = load_png(&conv.join("FocusedCircle.png")) {
+            art.focused_circle.push(material(images, materials, r, tint));
+        }
+    }
 }
 
 /// World-space bounds (render coordinates) of an actor's model parts.
@@ -218,10 +227,11 @@ pub fn update(
         }
     }
     // the hovered object's focused decal
-    if let Some(id) = sel.hover {
+    if let Some(id) = sel.hover.filter(|_| !sel.hover_banner) {
         if let (Some(a), Some((pos, children))) = (w.actor(id), by_id.get(&id)) {
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
-            let m = if building { art.focused_square.clone() } else { art.focused_circle.clone() };
+            let relation = aa_play::setup::relation(w, Some(b.local), a.kingdom) as usize;
+            let m = if building { art.focused_square.get(relation.min(3)).cloned() } else { art.focused_circle.get(relation.min(3)).cloned() };
             if let Some(m) = m {
                 let (size, y) = match bounds(*children, &parts) {
                     Some((lo, hi)) => ((hi.x - lo.x).max(hi.z - lo.z).max(1.0) * 1.25, lo.y),
@@ -238,7 +248,7 @@ pub fn update(
         let e = commands
             .spawn((
                 Mesh3d(art.quad.clone()),
-                MeshMaterial3d(art.health.frames.first().cloned().or(art.focused_circle.clone()).unwrap_or_default()),
+                MeshMaterial3d(art.health.frames.first().cloned().or(art.focused_circle.first().cloned()).unwrap_or_default()),
                 Transform::default(),
                 Visibility::Hidden,
                 bevy::light::NotShadowCaster,

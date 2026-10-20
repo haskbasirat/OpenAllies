@@ -10,9 +10,11 @@
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
-//! (kind "enemy", "enemy_building", "own_unit", "own_building": the on-screen actor of that
+//! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_banner",
+//! "enemy_banner": the on-screen actor / organization banner of that
 //! kind nearest the window centre, clicked where it is drawn),
-//! `{"dclick_at": [fx, fy]}` (double click), `{"exit": true}`.
+//! `{"dclick_at": [fx, fy]}` (double click), `{"zoom": z}` (camera zoom,
+//! battle only), `{"exit": true}`.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -212,6 +214,7 @@ pub fn run(
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
     views: Query<(&crate::battle_view::ActorView, &GlobalTransform)>,
     mut requests: ResMut<crate::camera::CameraRequests>,
+    banners: Option<Res<super::banners::BannerArt>>,
 ) {
     let Some(mut s) = script else { return };
     let mut logical = Vec2::ONE;
@@ -238,6 +241,11 @@ pub fn run(
                 _ => false,
             }
         };
+        if let Some(z) = step.get("zoom").and_then(|v| v.as_f64()) {
+            requests.zoom = Some(z as f32);
+            s.next();
+            return;
+        }
         if let Some(what) = kind("look_at") {
             let hq = w.actors.iter().find(|a| a.alive && a.kingdom == Some(b.local) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate()).unwrap_or_default();
             let best = w.actors.iter().filter(|a| matches(a.id, &what)).min_by(|x, y| x.pos.truncate().distance(hq).total_cmp(&y.pos.truncate().distance(hq)));
@@ -255,6 +263,30 @@ pub fn run(
             let Some(what) = kind(key) else { continue };
             let Ok((cam, cam_tf)) = cameras.single() else { return };
             let centre = logical * 0.5;
+            // "own_banner" / "enemy_banner": an organization's banner
+            if let Some(side) = what.strip_suffix("_banner") {
+                let own = side == "own";
+                let best = banners
+                    .iter()
+                    .flat_map(|bn| bn.placed.iter())
+                    .filter(|(o, _, _)| w.orgs.get(*o as usize).is_some_and(|g| (g.kingdom == b.local) == own))
+                    .filter_map(|(o, c, _)| cam.world_to_viewport(cam_tf, *c).ok().map(|p| (*o, p)))
+                    .filter(|(_, p)| p.x > 0.0 && p.y > 0.0 && p.x < logical.x && p.y < logical.y * 0.75)
+                    .min_by(|x, y| x.1.distance(centre).total_cmp(&y.1.distance(centre)));
+                match best {
+                    Some((o, p)) => {
+                        let f = p / logical;
+                        info!("script: {key} {what} org {o} at {:.3},{:.3}", f.x, f.y);
+                        let at = s.at;
+                        s.steps[at] = serde_json::json!({ out: [f.x, f.y] });
+                    }
+                    None => {
+                        warn!("script: no on-screen {what}");
+                        s.next();
+                    }
+                }
+                return;
+            }
             let best = views
                 .iter()
                 .filter(|(v, _)| matches(v.id, &what))

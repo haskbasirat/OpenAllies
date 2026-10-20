@@ -20,6 +20,8 @@ const TO_RENDER: Mat4 = super::player::NIF_TO_RENDER;
 pub struct RigBones {
     asset: AnimatedAsset,
     nodes: HashMap<String, usize>,
+    /// Per clip: node -> its track index.
+    tracks: Vec<Vec<Option<usize>>>,
     /// First skinned mesh: (mesh node, skin offset, skeleton root).
     skin: Option<(usize, Mat4, usize)>,
     idle: Option<usize>,
@@ -82,6 +84,18 @@ impl Bones {
         Self { rig_files, data_root, cache: HashMap::new() }
     }
 
+    /// Load every indexed rig now, in parallel (the loader thread), so the
+    /// first shots do not stall a frame on JSON parsing.
+    pub fn preload_rigs(&mut self) {
+        use rayon::prelude::*;
+        let files: Vec<(String, PathBuf)> = self.rig_files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let loaded: Vec<(String, Arc<Source>)> = files
+            .par_iter()
+            .filter_map(|(key, file)| AnimatedAsset::load(file).ok().map(|a| (key.clone(), Arc::new(Source::Rig(Box::new(RigBones::new(a)))))))
+            .collect();
+        self.cache.extend(loaded);
+    }
+
     /// The bone source of a model (loaded once).
     pub fn source(&mut self, model: &str) -> Arc<Source> {
         let key = model.to_ascii_lowercase().replace('\\', "/");
@@ -117,6 +131,19 @@ fn read_head(path: &Path) -> std::io::Result<String> {
 impl RigBones {
     fn new(asset: AnimatedAsset) -> Self {
         let nodes = asset.nodes.iter().enumerate().map(|(i, n)| (n.name.to_ascii_lowercase(), i)).collect();
+        let tracks = asset
+            .clips
+            .iter()
+            .map(|c| {
+                let mut t = vec![None; asset.nodes.len()];
+                for (k, track) in c.tracks.iter().enumerate() {
+                    if track.node < t.len() {
+                        t[track.node] = Some(k);
+                    }
+                }
+                t
+            })
+            .collect();
         let skin = asset.meshes.iter().find_map(|m| m.skin.as_ref().map(|s| (m.node, Mat4::from_cols_array_2d(&s.skin_offset), s.skeleton_root)));
         let find = |names: &[&str]| asset.clips.iter().position(|c| names.iter().any(|n| c.name.eq_ignore_ascii_case(n)));
         let idle = find(&["idle", "InfantryIdle"]);
@@ -129,17 +156,21 @@ impl RigBones {
             .filter(|(_, c)| c.name.to_ascii_lowercase().starts_with("die") || c.name.contains("Die"))
             .map(|(i, _)| i)
             .collect();
-        Self { asset, nodes, skin, idle, moving, attack, deaths }
+        Self { asset, nodes, tracks, skin, idle, moving, attack, deaths }
     }
 
     /// battle_view's `Rig::clip_for` and frame quantisation.
-    fn clip_time(&self, actor: ActorId, activity: Activity, since: f32, now: f32) -> Option<(usize, f32)> {
+    fn clip_time(&self, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>) -> Option<(usize, f32)> {
         let phase = (actor as f32 * 0.618_034).fract() * 4.0;
         let (clip, t, looped) = match activity {
             Activity::Moving => (self.moving.or(self.idle)?, now + phase, true),
             Activity::Attacking => (self.attack.or(self.idle)?, now - since, true),
             Activity::Dying | Activity::Dead => {
-                let clip = *self.deaths.get(actor as usize % self.deaths.len().max(1))?;
+                let chosen = death.and_then(|name| self.asset.clips.iter().position(|c| c.name.eq_ignore_ascii_case(name)));
+                let clip = match chosen {
+                    Some(c) => c,
+                    None => *self.deaths.get(actor as usize % self.deaths.len().max(1))?,
+                };
                 let t = if activity == Activity::Dead { f32::MAX / 4.0 } else { now - since };
                 (clip, t, false)
             }
@@ -151,38 +182,43 @@ impl RigBones {
         Some((clip, (index / FRAME_RATE).clamp(0.0, duration)))
     }
 
-    /// Native-space global matrices of every node at a clip time.
-    fn globals(&self, clip: Option<usize>, time: f32) -> Vec<Mat4> {
-        let mut tracks: Vec<Option<&NodeTrack>> = vec![None; self.asset.nodes.len()];
-        if let Some(c) = clip.and_then(|c| self.asset.clips.get(c)) {
-            for t in &c.tracks {
-                if t.node < tracks.len() {
-                    tracks[t.node] = Some(t);
-                }
+    /// Native-space global matrix of one node at a clip time (its parent
+    /// chain only).
+    fn global(&self, index: usize, clip: Option<usize>, time: f32) -> Mat4 {
+        let tracks = clip.and_then(|c| Some((self.tracks.get(c)?, self.asset.clips.get(c)?)));
+        let mut m = Mat4::IDENTITY;
+        let mut chain = [0usize; 32];
+        let mut n = 0;
+        let mut i = Some(index);
+        while let Some(k) = i {
+            if n == chain.len() || k >= self.asset.nodes.len() {
+                break;
             }
+            chain[n] = k;
+            n += 1;
+            i = self.asset.nodes[k].parent.filter(|&p| p < k);
         }
-        let mut globals: Vec<Mat4> = Vec::with_capacity(self.asset.nodes.len());
-        for (i, node) in self.asset.nodes.iter().enumerate() {
-            let local = local_matrix(node, tracks[i], time);
-            let g = node.parent.filter(|&p| p < i).map_or(local, |p| globals[p] * local);
-            globals.push(g);
+        for &k in chain[..n].iter().rev() {
+            let track: Option<&NodeTrack> = tracks.and_then(|(t, c)| t[k].map(|j| &c.tracks[j]));
+            m *= local_matrix(&self.asset.nodes[k], track, time);
         }
-        globals
+        m
     }
 
     /// Render-space model matrix of a node for what battle_view draws.
-    pub fn node(&self, name: &str, actor: ActorId, activity: Activity, since: f32, now: f32) -> Option<Mat4> {
+    pub fn node(&self, name: &str, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>) -> Option<Mat4> {
         let index = *self.nodes.get(&name.to_ascii_lowercase())?;
-        let (clip, t) = self.clip_time(actor, activity, since, now).map_or((None, 0.0), |(c, t)| (Some(c), t));
-        let g = self.globals(clip, t);
-        let mut m = g[index];
+        let (clip, t) = self.clip_time(actor, activity, since, now, death).map_or((None, 0.0), |(c, t)| (Some(c), t));
+        let mut m = self.global(index, clip, t);
         // Skinned geometry is drawn as G(mesh) * offset * G(root)^-1 * G(bone).
         if let Some((mesh, offset, root)) = self.skin
-            && mesh < g.len()
-            && root < g.len()
-            && g[root].determinant().abs() > 1e-12
+            && mesh < self.asset.nodes.len()
+            && root < self.asset.nodes.len()
         {
-            m = g[mesh] * offset * g[root].inverse() * m;
+            let g_root = self.global(root, clip, t);
+            if g_root.determinant().abs() > 1e-12 {
+                m = self.global(mesh, clip, t) * offset * g_root.inverse() * m;
+            }
         }
         Some(TO_RENDER * m * TO_RENDER.inverse())
     }
@@ -318,9 +354,9 @@ fn nif_bones(data_root: &Path, rel: &str) -> Option<NifBones> {
 
 impl Source {
     /// Render-space model matrix of the bone `name` (NIF node name).
-    pub fn node(&self, name: &str, actor: ActorId, activity: Activity, since: f32, now: f32) -> Option<Mat4> {
+    pub fn node(&self, name: &str, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>) -> Option<Mat4> {
         match self {
-            Source::Rig(r) => r.node(name, actor, activity, since, now),
+            Source::Rig(r) => r.node(name, actor, activity, since, now, death),
             Source::Nif(n) => n.nodes.get(&name.to_ascii_lowercase()).copied(),
             Source::None => None,
         }
