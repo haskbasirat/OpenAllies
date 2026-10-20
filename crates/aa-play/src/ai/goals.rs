@@ -59,6 +59,8 @@ pub struct UnpackMemo {
     pub region: u32,
     pub site: Vec2,
     pub ordered_at: f32,
+    /// Battle time the Deploy command left the send queue (0 = not yet).
+    pub sent_at: f32,
     pub bad: Vec<u32>,
 }
 
@@ -596,7 +598,7 @@ fn spread_offset(i: usize) -> Vec2 {
 }
 
 /// A free, land-passable spot in `region` for a building of `def`.
-fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, reserved: &[(Vec2, f32)]) -> Option<Vec2> {
+fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, reserved: &[(Vec2, f32)]) -> Option<Vec2> {
     let d = c.def(def);
     let radius = d.blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
     let pad = c.view.world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0);
@@ -624,7 +626,13 @@ fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, reserved: &[(Vec2, f32)])
             });
             let clear_r = reserved.iter().all(|(q, r)| q.distance(p) >= r + radius + pad);
             if clear_b && clear_t && clear_r {
-                return Some(p);
+                // The deploy owner's own placement and footprint rules.
+                let (at, _) = crate::deploy::placement(c.view.world, def, p, 0.0);
+                if crate::deploy::spot_clear(c.view.world, def, at, Some(truck)).is_ok()
+                    && crate::movement::deploy_spot_problem(c.view.world, truck, at).is_none()
+                {
+                    return Some(at);
+                }
             }
         }
     }
@@ -650,6 +658,7 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, goals: &
         if memo.ordered_at > 0.0 {
             memo.bad.push(memo.region);
             memo.ordered_at = 0.0;
+            memo.sent_at = 0.0;
         }
         let home = c.region_of(t.pos);
         let mut candidates = c.regions.within(home, u.adjacent_region_depth.max(0) as u32);
@@ -671,7 +680,7 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, goals: &
             if memo.bad.contains(&r) || !c.regions.same_island(r, home) {
                 continue;
             }
-            let Some(site) = find_site(c, r, t.unpacks_to, &reserved) else { continue };
+            let Some(site) = find_site(c, r, t.unpacks_to, t.id, &reserved) else { continue };
             let center = c.regions.centers[r as usize];
             let mut bonus = 0.0;
             for b in &mine {
@@ -821,11 +830,7 @@ fn attack_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
         }
     };
     for b in &c.view.buildings {
-        if b.owner == Some(c.view.me) || !c.view.is_hostile(b.owner) || !player.known.contains(&b.id) {
-            continue;
-        }
-        // Independent things are targets only when they can be captured.
-        if b.owner.is_none() && !c.def(b.def).captureable {
+        if b.owner == Some(c.view.me) || !player.known.contains(&b.id) || !attack_target(c, b) {
             continue;
         }
         let r = c.region_of(b.pos);
@@ -858,6 +863,45 @@ fn attack_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
         g.allied_cv = (c.allied(r, true) - c.inf.at(&c.inf.mobile, r, c.view.me)).max(0.0) * c.ego.attack_allied_influence_cv_multiplier;
         goals.push(g);
     }
+}
+
+/// The static actors `7BB5E0` admits as region targets: owned by a kingdom
+/// the player regards as an enemy, and either a city (object +D4, the
+/// CityComponent, admits it regardless of the other tests) or an actor
+/// passing the targetable tests (+8 bit 11 clear, bit 14 set, definition
+/// +291). Closest reading of those tests here: the buildings of enemy
+/// players; an independent's other buildings (city blocks, farms) change
+/// hands with their city and are not targets. A city nobody owns is taken
+/// by presence and is admitted too.
+pub(crate) fn attack_target(c: &Ctx<'_, '_>, b: &super::view::BuildingView) -> bool {
+    let def = c.def(b.def);
+    let city = def.city && def.city_zone_radius > 0.0;
+    match b.owner {
+        None => city,
+        Some(o) if c.view.hostile[o] => city || !c.view.world.kingdoms[o].independent,
+        Some(_) => false,
+    }
+}
+
+/// Where a regiment of a combat goal goes: its own slot around the target;
+/// inside the zone of a city target (presence captures, 5647A0).
+pub(crate) fn goal_point(c: &Ctx<'_, '_>, target: Vec2, target_actor: Option<ActorId>, slot: usize) -> Vec2 {
+    let offset = spread_offset(slot);
+    match target_actor.map(|t| c.def(c.view.world.actors[t as usize].def)) {
+        Some(d) if d.city && d.city_zone_radius > 0.0 => {
+            let max = d.city_zone_radius * 0.6;
+            let len = offset.length();
+            target + if len > max { offset * (max / len) } else { offset }
+        }
+        _ => target + offset,
+    }
+}
+
+pub(crate) fn city_target(c: &Ctx<'_, '_>, target_actor: Option<ActorId>) -> bool {
+    target_actor.is_some_and(|t| {
+        let d = c.def(c.view.world.actors[t as usize].def);
+        d.city && d.city_zone_radius > 0.0
+    })
 }
 
 /// EXPLORE goals (`7C29F0`): close (0) and deep (1); air recon needs
@@ -1494,6 +1538,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
                 memo.region = region;
                 memo.site = at;
                 memo.ordered_at = c.now;
+                memo.sent_at = 0.0;
                 player.memory.deployed.push((c.now, w.actors[truck as usize].def));
                 log.push(format!("deploy {} at ({:.0},{:.0}) (priority {:.0})", c.def(w.actors[truck as usize].def).id, at.x, at.y, g.base));
             }
@@ -1525,7 +1570,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
                 for &o in &g.actors {
                     let ov = &c.view.orgs[o];
                     // A stable slot per organization keeps re-sent orders identical.
-                    let target = g.target + spread_offset(ov.id as usize % 8);
+                    let target = goal_point(c, g.target, g.target_actor, ov.id as usize % 8);
                     let previous = player.memory.assigned.get(&ov.id);
                     let since = previous.filter(|p| p.key == g.key).map_or(c.now, |p| p.since);
                     assigned.insert(ov.id, Assignment { key: g.key, target, target_actor: g.target_actor, region: g.region, since, combat: true });
@@ -1539,8 +1584,9 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
                         }
                     }
                     // A static target is attacked directly once close; until then
-                    // (and for mobile targets) an attack-move to the region.
-                    let near = g.target_actor.is_some() && ov.pos.distance(g.target) <= c.regions.size;
+                    // (and for mobile targets) an attack-move to the region. A
+                    // city is taken by standing in its zone, never attacked.
+                    let near = g.target_actor.is_some() && !city_target(c, g.target_actor) && ov.pos.distance(g.target) <= c.regions.size;
                     if near && let Some(t) = g.target_actor {
                         if !matches!(ov.order, Order::Attack { target } if target == t) {
                             commands.push(Command::Attack { kingdom: me, units: vec![Unit::Org(ov.id)], target: t });
@@ -1596,7 +1642,7 @@ fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::
             continue;
         }
         let counted = if b.city { e.intuition_count_settlements } else { e.intuition_count_other_buildings };
-        if counted && c.view.is_hostile(b.owner) {
+        if counted && attack_target(c, b) {
             *intuition.entry(c.region_of(b.pos)).or_default() += 1;
         }
     }

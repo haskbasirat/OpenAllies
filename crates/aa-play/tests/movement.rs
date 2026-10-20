@@ -422,6 +422,34 @@ fn deploy_order_drives_there_and_faces_the_requested_way() {
 }
 
 #[test]
+fn deploy_to_a_blocked_spot_is_refused() {
+    let (data, ids) = data();
+    let mut map = open_map(64, 64, 4.0);
+    for y in 1..63 {
+        for x in 40..50 {
+            set(&mut map, x, y, NOT_LAND_PASSABLE);
+        }
+    }
+    let mut w = world(map, data);
+    let truck = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(40.0, 40.0)), 0.0);
+    let water = Vec2::new(180.0, 40.0);
+    assert!(movement::deploy_spot_problem(&w, truck, water).is_some());
+    assert!(movement::deploy_spot_problem(&w, truck, Vec2::new(60.0, 40.0)).is_none());
+    w.actors[truck as usize].order = Order::Deploy { at: water, facing: 0.0 };
+    advance(&mut w, 1);
+    assert_eq!(w.actors[truck as usize].order, Order::Idle);
+    assert!(w.events.iter().any(|e| matches!(e, aa_play::Event::Refused { kingdom: 0, reason } if reason.contains("blocked"))), "{:?}", w.events);
+    // A land spot across a river that spans the map: driven toward, then
+    // refused once the move fails (3 tries, CAIMoveMinSecondsBeforeFail).
+    let behind = Vec2::new(220.0, 40.0);
+    assert!(movement::deploy_spot_problem(&w, truck, behind).is_none());
+    w.events.clear();
+    w.actors[truck as usize].order = Order::Deploy { at: behind, facing: 0.0 };
+    assert!(run_until(&mut w, 60.0, |w| w.actors[truck as usize].order == Order::Idle));
+    assert!(w.events.iter().any(|e| matches!(e, aa_play::Event::Refused { reason, .. } if reason.contains("cannot be reached"))), "{:?}", w.events);
+}
+
+#[test]
 fn group_move_spreads_regiments_in_the_group_formation() {
     let (data, ids) = data();
     let mut w = world(open_map(128, 128, 4.0), data);

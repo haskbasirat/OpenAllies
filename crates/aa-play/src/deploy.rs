@@ -37,6 +37,10 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
             let building = world.data.def(world.actors[truck as usize].def).unpacks_to.expect("checked");
             let (at, facing) = placement(world, building, at, facing);
             spot_clear(world, building, at, Some(truck))?;
+            // The truck must be able to stand there and reach it (movement's check).
+            if let Some(problem) = crate::movement::deploy_spot_problem(world, truck, at) {
+                return Err(problem);
+            }
             let order = Order::Deploy { at, facing };
             world.actors[truck as usize].order = order.clone();
             if let Some(o) = world.actors[truck as usize].org {
