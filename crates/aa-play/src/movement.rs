@@ -929,7 +929,19 @@ fn apply_order(ms: &mut MovementState, world: &mut World, owner: Owner, order: O
                 start(ms, world, owner, to, Vec2::ZERO, Some(*target), false, None, None);
             }
         }
-        Order::Deploy { at, facing } => start(ms, world, owner, *at, Vec2::ZERO, None, false, None, Some(*facing)),
+        Order::Deploy { at, facing } => {
+            let truck = match owner {
+                Owner::Actor(a) => Some(a),
+                Owner::Org(o) => pick_leader(world, o),
+            };
+            if let Some(reason) = truck.and_then(|t| spot_problem(&ms.occupancy, world, t, *at)) {
+                refuse(world, owner, reason);
+                stop(ms, world, owner);
+                set_order(world, ms, owner, Order::Idle);
+                return;
+            }
+            start(ms, world, owner, *at, Vec2::ZERO, None, false, None, Some(*facing))
+        }
     }
     match owner {
         Owner::Org(o) => ms.orgs[o as usize].seen = Some(order),
@@ -1005,8 +1017,31 @@ fn finish(ms: &mut MovementState, world: &mut World, owner: Owner) {
 }
 /// Mind +0x124: the move failed; the units stay where they are.
 fn fail(ms: &mut MovementState, world: &mut World, owner: Owner) {
+    if ms.order(owner).deploy_facing.is_some() {
+        refuse(world, owner, "the deploy spot cannot be reached".into());
+    }
     stop(ms, world, owner);
     set_order(world, ms, owner, Order::Idle);
+}
+/// A refused order, reported like a refused command.
+fn refuse(world: &mut World, owner: Owner, reason: String) {
+    let kingdom = match owner {
+        Owner::Org(o) => Some(world.orgs[o as usize].kingdom),
+        Owner::Actor(a) => world.actors[a as usize].kingdom,
+    };
+    if let Some(kingdom) = kingdom {
+        world.events.push(crate::world::Event::Refused { kingdom, reason });
+    }
+}
+/// Why a mover cannot drive to `at`: outside the map or on a tile blocked
+/// for it (terrain, water for ground units, or a standing structure).
+fn spot_problem(occupancy: &Occupancy, world: &World, mover: ActorId, at: Vec2) -> Option<String> {
+    let extent = Vec2::new(world.map.width as f32, world.map.height as f32) * world.map.cell_size;
+    if !(at.x >= 0.0 && at.y >= 0.0 && at.x < extent.x && at.y < extent.y) {
+        return Some("the deploy spot is outside the map".into());
+    }
+    let grid = occupancy.grid(&world.map, mover_class(def_of(world, mover)));
+    grid.blocked_at(at).then(|| "the deploy spot is blocked".into())
 }
 fn is_moving(ms: &MovementState, id: ActorId) -> bool {
     ms.actors.get(id as usize).is_some_and(|a| a.mover.active)
@@ -2114,6 +2149,14 @@ pub fn deploy_ready(world: &World, id: ActorId) -> bool {
         return false;
     };
     !am.order.active && !actor_moving(world, id) && (actor.pos.truncate() - at).length_squared() < ARRIVAL_RADIUS_SQUARED && signed_angle(facing_vector(actor.facing), facing_vector(facing)).abs() < 1e-3
+}
+/// Why `truck` cannot drive to the deploy spot `at` (outside the map, or a
+/// tile blocked for it by terrain, water or a standing structure); None when
+/// the spot is drivable. `Order::Deploy` to such a spot is refused with this
+/// reason (`Event::Refused`) and reset to `Order::Idle`.
+pub fn deploy_spot_problem(world: &World, truck: ActorId, at: Vec2) -> Option<String> {
+    world.actor(truck)?;
+    spot_problem(&world.movement.occupancy, world, truck, at)
 }
 /// Number of path requests waiting for a later tick.
 pub fn queued_requests(world: &World) -> usize {

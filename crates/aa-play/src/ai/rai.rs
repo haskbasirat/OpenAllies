@@ -18,7 +18,7 @@
 //! - halt: a retreating organization whose local friendly / hostile ratio
 //!   reaches `halt_retreat_cv_ratio` stops and fights again.
 use super::data::{AiData, DEFEND_REGION};
-use super::goals::{Ctx, Key, supply_point};
+use super::goals::{Ctx, Key, city_target, supply_point};
 use super::regions::{Influence, Regions};
 use super::view::View;
 use super::{Bound, Player, SaiRng, enqueue};
@@ -202,9 +202,13 @@ pub fn think(
             }
             continue;
         }
-        // Attack goals: attack the target building once in reach.
+        // Attack goals: attack the target building once in reach (a city is
+        // taken by presence: stay in its zone).
+        // The target must still be an enemy's: a stale assignment may name a
+        // building that changed hands since the goal-engine think.
         if let Some(t) = a.target_actor
-            && let Some(ta) = w.actor(t).filter(|ta| ta.alive)
+            && !city_target(&c, Some(t))
+            && let Some(ta) = w.actor(t).filter(|ta| ta.alive && super::enemy_of(w, view.kingdom, ta.kingdom))
         {
             let tp = ta.pos.truncate();
             let reach = w.orgs[o as usize]

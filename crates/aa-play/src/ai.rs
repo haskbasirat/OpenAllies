@@ -220,6 +220,7 @@ impl AiState {
             self.next_analysis = world.time + svar(world, "dynamic_map_analysis_think_frequency", 10.0).max(0.5);
         }
         self.detect_structures(world, &data);
+        self.detect_refused_deploys(world);
         let now = world.time;
         let ge_gap = svar(world, "GoalEngineThinkFrequencyMinOffset", 2.0);
         let rai_gap = svar(world, "RAIThinkFrequencyMinOffset", 0.2);
@@ -276,6 +277,11 @@ impl AiState {
             while p.queue.front().is_some_and(|(due, _)| *due <= now) {
                 let (_, command) = p.queue.pop_front().expect("front exists");
                 if let Some(c) = still_valid(world, command) {
+                    if let Command::Deploy { truck, .. } = c
+                        && let Some(memo) = p.memory.unpack.get_mut(&truck)
+                    {
+                        memo.sent_at = now;
+                    }
                     if self.logging && self.log.len() < 20_000 {
                         self.log.push(LogEntry { time: now, kingdom: p.kingdom, text: format!("send {c:?}") });
                     }
@@ -330,6 +336,38 @@ impl AiState {
                 scouted: vec![f32::NEG_INFINITY; regions],
                 ..Default::default()
             });
+        }
+    }
+
+    /// A Deploy refused by the deploy owner (spot blocked or not reachable:
+    /// `Event::Refused`, the truck's order reset to Idle) leaves the truck
+    /// without a deployment once the command was sent. The AI drops that
+    /// region and plans the truck's unpacking again at once.
+    fn detect_refused_deploys(&mut self, world: &World) {
+        let now = world.time;
+        let logging = self.logging;
+        let mut lines = Vec::new();
+        for p in &mut self.players {
+            for (&truck, memo) in p.memory.unpack.iter_mut() {
+                if memo.sent_at <= 0.0 || memo.ordered_at <= 0.0 || now <= memo.sent_at {
+                    continue;
+                }
+                let Some(a) = world.actor(truck).filter(|a| a.alive) else { continue };
+                let deploying = matches!(a.order, crate::world::Order::Deploy { .. }) || world.books.actor(truck).is_some_and(|b| b.deploy.is_some());
+                if deploying {
+                    continue;
+                }
+                memo.bad.push(memo.region);
+                memo.ordered_at = 0.0;
+                memo.sent_at = 0.0;
+                p.ge_due = p.ge_due.min(now);
+                if logging {
+                    lines.push((p.kingdom, format!("deploy of {} refused at ({:.0},{:.0}); another site", world.data.def(a.def).id, memo.site.x, memo.site.y)));
+                }
+            }
+        }
+        for (k, text) in lines {
+            self.push_log(now, k, vec![text]);
         }
     }
 
@@ -429,6 +467,11 @@ fn choose_profile(data: &AiData, requested: Option<&str>, nation: &str, rng: &mu
     Some(candidates[rng.below(candidates.len())])
 }
 
+/// Kingdom `k` regards the owner of an actor as an enemy (relation 3).
+pub(crate) fn enemy_of(world: &World, k: KingdomId, owner: Option<KingdomId>) -> bool {
+    owner.is_some() && world.books.relation(&world.kingdoms, Some(k), owner) == crate::books::ENEMY
+}
+
 /// `7AF220` skips actors that died or are being deleted since the think.
 fn still_valid(world: &World, command: Command) -> Option<Command> {
     let live = |u: &Unit| match *u {
@@ -441,8 +484,11 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
             (!units.is_empty()).then_some(Command::Move { kingdom, units, to, attack_move })
         }
         Command::Attack { kingdom, units, target } => {
+            // A target that changed hands (capture) since the think is no
+            // longer attacked: only an enemy's actor is.
             let units: Vec<Unit> = units.into_iter().filter(live).collect();
-            (!units.is_empty() && world.actor(target).is_some_and(|a| a.alive)).then_some(Command::Attack { kingdom, units, target })
+            let enemy = world.actor(target).is_some_and(|a| a.alive && enemy_of(world, kingdom, a.kingdom));
+            (!units.is_empty() && enemy).then_some(Command::Attack { kingdom, units, target })
         }
         Command::Stop { kingdom, units } => {
             let units: Vec<Unit> = units.into_iter().filter(live).collect();

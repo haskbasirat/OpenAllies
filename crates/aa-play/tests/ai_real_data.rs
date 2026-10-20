@@ -133,6 +133,9 @@ fn play(profile: Option<&str>, level: u8, minutes: u32) -> World {
             if let aa_play::Event::Refused { kingdom: 1, reason } = e {
                 *refused.entry(reason.chars().take(90).collect()).or_default() += 1;
             }
+            if let aa_play::Event::Captured { actor, kingdom } = e {
+                eprintln!("t={:>6.1}s captured {} by k{kingdom}", w.time, w.data.def(w.actors[*actor as usize].def).id);
+            }
         }
         if tick % (60 * aa_play::TICKS_PER_SECOND as u64) == 0 {
             let s = snapshot(&w, 1);
@@ -192,6 +195,8 @@ fn computer_builds_recruits_and_attacks_on_berlin() {
     let deployed = p.memory.deployed.len();
     let attacks = p.memory.attacks.len();
     eprintln!("recruited {recruited} deployed {deployed} attacks {attacks} first attack {:?}", p.memory.attacks.first());
+    let human: Vec<u32> = w.actors.iter().filter(|a| a.kingdom == Some(0) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| w.ai.regions.as_ref().unwrap().region_at(a.pos.truncate())).collect();
+    eprintln!("first attack on the human: {:?}", p.memory.attacks.iter().find(|a| human.contains(&a.1)));
     assert!(deployed > 0, "the computer deployed no truck");
     assert!(recruited > 2, "the computer recruited {recruited}");
     let s = snapshot(&w, 1);
@@ -294,9 +299,17 @@ fn computer_plays_a_generated_map() {
     w.ai.logging = true;
     for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
         w.step(Vec::new());
+        for e in &w.events {
+            if let aa_play::Event::Refused { kingdom: 1, reason } = e {
+                eprintln!("t={:>6.1}s refused: {reason}", w.time);
+            }
+        }
         if tick % (60 * aa_play::TICKS_PER_SECOND as u64) == 0 {
             let s = snapshot(&w, 1);
             eprintln!("t={:>4.0}s computer: regiments {} (cv {:.0}) buildings {} trucks {} money {:.0}", w.time, s.regiments, s.cv, s.buildings, s.trucks, s.money);
+            for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Truck)) {
+                eprintln!("   truck {} {} order {:?} pos {:?} deploy {:?}", a.id, w.data.def(a.def).id, a.order, a.pos, w.books.actor(a.id).and_then(|b| b.deploy.as_ref().map(|d| d.done_at)));
+            }
         }
     }
     let p = &w.ai.players[0];
@@ -341,7 +354,12 @@ fn three_computers_cost_on_a_generated_map() {
         if tick % (5 * 60 * aa_play::TICKS_PER_SECOND as u64) == 0 && tick > 0 {
             for k in 1..4u32 {
                 let s = snapshot(&w, k);
-                eprintln!("t={:>4.0}s k{k} (level {}) regiments {} cv {:.0} buildings {}", w.time, k - 1, s.regiments, s.cv, s.buildings);
+                eprintln!("t={:>4.0}s k{k} (level {}) regiments {} cv {:.0} buildings {} income {:?}", w.time, k - 1, s.regiments, s.cv, s.buildings, w.kingdoms[k as usize].income);
+            }
+        }
+        for e in &w.events {
+            if let aa_play::Event::Captured { actor, kingdom } = e {
+                eprintln!("t={:>6.1}s captured {} by k{kingdom}", w.time, w.data.def(w.actors[*actor as usize].def).id);
             }
         }
     }
@@ -353,7 +371,15 @@ fn three_computers_cost_on_a_generated_map() {
     let avg = st.total_ns as f64 / st.ticks.max(1) as f64 / 1e6;
     eprintln!("{minutes} min in {:?}: AI avg {avg:.4} ms/tick, max {:.2} ms, GE {} RAI {} analyses {} commands {}", t.elapsed(), st.max_ns as f64 / 1e6, st.ge_thinks, st.rai_thinks, st.analyses, st.commands);
     for p in &w.ai.players {
-        eprintln!("k{} profile {} ego {}", p.kingdom, w.ai.data.as_ref().unwrap().profiles[p.profile].ids, w.ai.data.as_ref().unwrap().egos[p.ego].ids);
+        eprintln!(
+            "k{} profile {} ego {} first attack {:?} recruited {} deployed {}",
+            p.kingdom,
+            w.ai.data.as_ref().unwrap().profiles[p.profile].ids,
+            w.ai.data.as_ref().unwrap().egos[p.ego].ids,
+            p.memory.attacks.first(),
+            p.memory.recruited.len(),
+            p.memory.deployed.len()
+        );
     }
     assert!(avg < 1.0);
 }

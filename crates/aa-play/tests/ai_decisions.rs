@@ -670,6 +670,59 @@ fn detached_regiment_attaches_to_a_free_hq() {
 }
 
 #[test]
+fn city_of_an_enemy_independent_is_taken_by_presence_and_neutral_blocks_are_ignored() {
+    let (mut w, defs) = world();
+    let (city_def, block_def) = {
+        let data = Arc::get_mut(&mut w.data).expect("unique data");
+        let mut push = |def: Def| -> u32 {
+            let id = data.defs.len() as u32;
+            data.by_id.insert(def.id.to_ascii_lowercase(), id);
+            data.defs.push(def);
+            id
+        };
+        let city = push(Def {
+            id: "western_europe_city_center01_small".into(),
+            class: Some(DefClass::Building),
+            health: 500.0,
+            production: [25.0, 10.0, 10.0],
+            properties: vec!["property_city".into(), "economic_building".into()],
+            city: true,
+            city_zone_radius: 30.0,
+            captureable: true,
+            blocking_size: Some([10.0, 10.0]),
+            ..Default::default()
+        });
+        let block = push(Def { id: "weurope_cityblock10x10_01".into(), class: Some(DefClass::Building), health: 500.0, properties: vec!["property_city".into()], blocking_size: Some([10.0, 10.0]), ..Default::default() });
+        (city, block)
+    };
+    building(&mut w, defs.corps, Some(0), Vec2::new(60.0, 60.0));
+    let base = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), base);
+    // independent_5 (enemy of both teams) owns the city; independent_2
+    // (neutral) owns a city block next to the computer.
+    let mut enemy = kingdom(2, 0x8000_0005, Controller::Independent, 0.0);
+    enemy.independent = true;
+    let mut neutral = kingdom(3, 0x8000_0002, Controller::Independent, 0.0);
+    neutral.independent = true;
+    w.kingdoms.push(enemy);
+    w.kingdoms.push(neutral);
+    // Relation rows (0 self, 1 friend, 2 neutral, 3 enemy).
+    w.books.relations = vec![vec![0, 3, 3, 2], vec![3, 0, 3, 2], vec![3, 3, 0, 2], vec![2, 2, 2, 0]];
+    let city_pos = Vec2::new(500.0, 650.0);
+    let city = building(&mut w, city_def, Some(2), city_pos);
+    let block_pos = Vec2::new(650.0, 520.0);
+    building(&mut w, block_def, Some(3), block_pos);
+    for i in 0..2 {
+        org(&mut w, defs.infantry, defs.rifle, 6, 1, base + Vec2::new(-20.0 + i as f32 * 10.0, 30.0));
+    }
+    let cmds = run(&mut w, 1.0);
+    let moves: Vec<Vec2> = cmds.iter().filter_map(|c| if let Command::Move { to, attack_move: true, .. } = c { Some(*to) } else { None }).collect();
+    assert!(moves.iter().any(|to| to.distance(city_pos) <= 30.0), "into the city zone: {moves:?} {:#?}", w.ai.log);
+    assert!(moves.iter().all(|to| to.distance(block_pos) > 40.0), "neutral block targeted: {moves:?}");
+    assert!(!cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == city)), "a city is taken by presence, not attacked");
+}
+
+#[test]
 fn unused_defs_compile() {
     let (_, defs) = game_data();
     let _ = (defs.oil_truck, defs.hq, defs.scout);

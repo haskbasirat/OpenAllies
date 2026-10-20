@@ -67,7 +67,9 @@ pub struct View<'w> {
     pub me: usize,
     pub kingdom: KingdomId,
     pub team: u32,
-    /// Per kingdom index: hostile to me / allied (own included).
+    /// Per kingdom index: hostile to me (relation ENEMY, the player
+    /// virtual +140 of 4E52A0) / allied (SELF or FRIEND, virtual +138).
+    /// Neutral independents (farms, city blocks) are neither.
     pub hostile: Vec<bool>,
     pub allied: Vec<bool>,
     pub orgs: Vec<OrgView>,
@@ -90,8 +92,9 @@ impl<'w> View<'w> {
     pub fn build(world: &'w World, bound: &Bound, me: usize) -> Self {
         let kingdom = world.kingdoms[me].id;
         let team = world.kingdoms[me].team;
-        let hostile = world.kingdoms.iter().map(|k| k.team != team && !k.defeated).collect();
-        let allied = world.kingdoms.iter().map(|k| k.team == team).collect();
+        let rel = |k: &crate::world::Kingdom| world.books.relation(&world.kingdoms, Some(kingdom), Some(k.id));
+        let hostile = world.kingdoms.iter().map(|k| rel(k) == crate::books::ENEMY && !k.defeated).collect();
+        let allied = world.kingdoms.iter().map(|k| matches!(rel(k), crate::books::SELF | crate::books::FRIEND)).collect();
         let data = &world.data;
         let max_health = |id: ActorId| -> f32 {
             let a = &world.actors[id as usize];
@@ -220,8 +223,8 @@ impl<'w> View<'w> {
     pub fn is_hostile(&self, owner: Option<usize>) -> bool {
         match owner {
             Some(i) => self.hostile.get(i).copied().unwrap_or(false),
-            // Independent (unowned) cities are capture targets.
-            None => true,
+            // An unowned side is neutral (the native default relation).
+            None => false,
         }
     }
     pub fn computer(&self) -> bool {
