@@ -255,10 +255,6 @@ impl Manager {
         }
     }
 
-    pub fn has(&self, ids: &str) -> bool {
-        self.defs.contains_key(&ids.to_ascii_lowercase())
-    }
-
     pub fn playing_count(&self) -> usize {
         self.instances.iter().filter(|i| i.playing).count()
     }
@@ -750,12 +746,6 @@ impl Manager {
         }
     }
     /// Stop every sound of a category (0 SOUND, 1 MUSIC, 2 SPEECH).
-    pub fn stop_category(&mut self, category: i32) {
-        let found: Vec<u32> = self.instances.iter().filter(|i| i.def.category == category && !i.released).map(|i| i.id).collect();
-        for id in found {
-            self.stop(id, true);
-        }
-    }
     pub fn stop_all(&mut self) {
         let found: Vec<u32> = self.instances.iter().map(|i| i.id).collect();
         for id in found {

@@ -4,6 +4,10 @@
 //! `nif_effects.json`, plus key evaluation (copied from aa-client vfx/nif.rs).
 //! All positions are in the NIF's Z-up space.
 
+// The table's full schema is kept even where the player does not read a
+// field yet (alpha test, vertex-colour mode, gravity field kinds).
+#![allow(dead_code)]
+
 use bevy::math::{Mat4, Quat, Vec3, Vec4};
 use serde::Deserialize;
 use std::collections::HashMap;

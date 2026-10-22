@@ -119,10 +119,6 @@ impl Player {
         self.transform = placement * Mat4::from_scale(Vec3::splat(self.scale)) * NIF_TO_RENDER;
     }
 
-    pub fn particle_count(&self) -> usize {
-        self.emitters.iter().map(|e| e.particles.len()).sum()
-    }
-
     pub fn finished(&self) -> bool {
         self.age >= self.emit_until && self.emitters.iter().all(|e| e.particles.is_empty())
     }
@@ -130,10 +126,6 @@ impl Player {
     /// Stop emitting now; live particles finish their lives.
     pub fn stop(&mut self) {
         self.emit_until = self.emit_until.min(self.age);
-    }
-
-    pub fn origin(&self) -> Vec3 {
-        self.transform.w_axis.truncate()
     }
 
     fn eval_nodes(&mut self) {
@@ -500,7 +492,7 @@ impl Player {
 /// The nodes emission and sprites read (with their ancestors).
 fn needed_nodes(fx: &NifEffect) -> Vec<u8> {
     let mut needed = vec![0u8; fx.nodes.len()];
-    let mut mark = |start: i32, bit: u8, needed: &mut Vec<u8>| {
+    let mark = |start: i32, bit: u8, needed: &mut Vec<u8>| {
         let mut i = start;
         while i >= 0 && (i as usize) < fx.nodes.len() {
             if needed[i as usize] & bit != 0 {
