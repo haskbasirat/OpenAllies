@@ -32,9 +32,6 @@ impl Pcm {
     pub fn frames(&self) -> usize {
         self.samples.len() / self.channels.max(1) as usize
     }
-    pub fn seconds(&self) -> f32 {
-        self.frames() as f32 / self.rate.max(1) as f32
-    }
 }
 
 fn le16(b: &[u8], at: usize) -> Option<u16> {
@@ -152,9 +149,6 @@ impl Mixer {
     /// callbacks the manager handles at the start of its update).
     pub fn take_ended(&self) -> Vec<u32> {
         self.0.lock().map(|mut t| std::mem::take(&mut t.ended)).unwrap_or_default()
-    }
-    pub fn playing(&self) -> usize {
-        self.0.lock().map(|t| t.voices.len()).unwrap_or(0)
     }
     /// Record the next `seconds` of mixed output (verification runs).
     pub fn start_capture(&self, seconds: f32) {

@@ -1197,7 +1197,6 @@ impl FxState {
     }
 
     fn died(&mut self, actor: ActorId, frame: &Frame, spawn: &mut Spawn, views: &mut Query<(&ActorView, &mut Visibility)>) {
-        let tables = self.tables.clone();
         let Some(a) = frame.world.actors.get(actor as usize) else { return };
         let def = frame.world.data.def(a.def);
         let _ = def;
@@ -1279,7 +1278,6 @@ impl FxState {
 
     fn scan(&mut self, frame: &Frame, spawn: &mut Spawn) {
         self.scan_orgs(frame, spawn);
-        let tables = self.tables.clone();
         let n = frame.world.actors.len();
         if self.seen.len() < n {
             self.seen.resize(n, false);
@@ -1662,6 +1660,10 @@ fn run(
     ground: Option<Res<crate::camera::Ground>>,
 ) {
     let (Some(battle), Some(mut state)) = (battle, state) else { return };
+    // AA_BEVY_NO_FX=1: no effects at all (frame-cost comparison runs).
+    if std::env::var_os("AA_BEVY_NO_FX").is_some() {
+        return;
+    }
     let started = Instant::now();
     let state = &mut *state;
     if let Some((cam, native)) = cameras.iter().next() {
