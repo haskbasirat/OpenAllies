@@ -124,24 +124,41 @@ enum MapSource {
 /// A generated map as a scene: its terrain plus every scenery model.
 fn generated_scene(args: &Args, store: &AssetStore, params: &aa_play::mapgen::RandomMapParams) -> Result<(PreparedScene, aa_play::GameMap)> {
     let root = args.assets.parent().context("the install root above the reconstruction folder")?;
-    let generated = aa_play::mapgen::generate(params, root)?;
+    let generated = crate::preload::random_maps(root)?.generate(params)?;
     let terrain = generated.terrain.prepare(HeightMode::NativeConditional)?;
+    // Every distinct scenery model, read and prepared in parallel.
+    let mut unique: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for g in &generated.scenery {
+        if let Some(model) = &g.model {
+            unique.entry(model.replace('\\', "/").to_lowercase()).or_insert_with(|| model.clone());
+        }
+    }
+    let loaded: Vec<(String, String, Result<aa_assets::PreparedModel>)> = {
+        use rayon::prelude::*;
+        unique
+            .into_par_iter()
+            .map(|(key, model)| {
+                let prepared = store.load_model(&model).map_err(anyhow::Error::from).and_then(|m| m.prepare().map_err(anyhow::Error::from));
+                (key, model, prepared)
+            })
+            .collect()
+    };
     let mut models = std::collections::BTreeMap::new();
-    let mut instances = Vec::new();
     let mut warnings = Vec::new();
+    for (key, model, prepared) in loaded {
+        match prepared {
+            Ok(m) => {
+                models.insert(key, m);
+            }
+            Err(e) => warnings.push(aa_assets::AssetWarning { source: model, message: format!("{e:#}") }),
+        }
+    }
+    let mut instances = Vec::new();
     for (i, g) in generated.scenery.iter().enumerate() {
         let Some(model) = &g.model else { continue };
         let key = model.replace('\\', "/").to_lowercase();
         if !models.contains_key(&key) {
-            match store.load_model(model).map_err(anyhow::Error::from).and_then(|m| m.prepare().map_err(anyhow::Error::from)) {
-                Ok(prepared) => {
-                    models.insert(key.clone(), prepared);
-                }
-                Err(e) => {
-                    warnings.push(aa_assets::AssetWarning { source: model.clone(), message: format!("{e:#}") });
-                    continue;
-                }
-            }
+            continue;
         }
         instances.push(aa_assets::PreparedInstance {
             source_index: i,
@@ -183,9 +200,20 @@ fn default_setup(map_id: &str, data: &aa_play::GameData) -> aa_play::SkirmishSet
     }
 }
 
+/// Loading step timings in the log (`load step <name>: <ms>`).
+struct Steps(Instant);
+impl Steps {
+    fn mark(&mut self, name: &str) {
+        info!("load step {name}: {:.0} ms", self.0.elapsed().as_secs_f64() * 1000.0);
+        self.0 = Instant::now();
+    }
+}
+
 fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, profiles: Vec<(usize, String)>) -> Result<Loaded> {
     let start = Instant::now();
-    let store = AssetStore::open(&args.assets)?;
+    let mut steps = Steps(Instant::now());
+    let store = (*crate::preload::store(&args.assets)?).clone();
+    steps.mark("asset store");
     let (mut scene, game_map) = match source {
         MapSource::File(id) => (store.load_scene(id, HeightMode::NativeConditional)?, None),
         MapSource::Random(params) => {
@@ -195,18 +223,25 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
             (scene, Some(map))
         }
     };
+    steps.mark("map scene");
     // The audited original-NIF corrections (shadow helpers, team colour
     // flags, alpha states), exactly as the wgpu client applies them.
-    let fixes = Arc::new(crate::model_fixes::ModelFixes::discover(&store)?);
-    for (key, model) in scene.models.iter_mut() {
-        if let Err(e) = fixes.apply(&store, model) {
-            eprintln!("model fixes {key}: {e:#}");
-        }
+    let fixes = crate::preload::fixes(&args.assets)?;
+    {
+        use rayon::prelude::*;
+        scene.models.par_iter_mut().for_each(|(key, model)| {
+            if let Err(e) = fixes.apply(&store, model) {
+                eprintln!("model fixes {key}: {e:#}");
+            }
+        });
     }
+    steps.mark("model fixes");
     let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
+    steps.mark("terrain layers");
     // The battle world from the original rules and map.
     let root = args.assets.parent().context("the install root above the reconstruction folder")?;
-    let data = Arc::new(aa_play::GameData::load(root)?);
+    let data = crate::preload::game_data(root)?;
+    steps.mark("game data");
     let map_id = match source {
         MapSource::File(id) => id.clone(),
         MapSource::Random(_) => "random".to_owned(),
@@ -215,11 +250,14 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         Some(m) => m.clone(),
         None => aa_play::GameMap::load_with(root, &map_id, &data)?,
     };
+    steps.mark("game map");
     let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
     session::set_load_status("app_status_loading_objects");
     let mut world = aa_play::World::new_skirmish(data, Arc::new(world_map), &setup)?;
+    steps.mark("new skirmish");
     // The original computer players (Data/SAI profiles); cached after the first load.
-    aa_play::ai::attach(&mut world, Arc::new(aa_play::ai::AiData::load(root)?));
+    aa_play::ai::attach(&mut world, crate::preload::ai_data(root)?);
+    steps.mark("ai data");
     // The generals the setup screen chose for the computer slots (kingdom id = player index).
     for (player, profile) in &profiles {
         aa_play::ai::set_profile(&mut world, *player as u32, profile);
@@ -253,6 +291,7 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         }
     }
     let (images, failures) = textures::decode(&store, requests);
+    steps.mark("textures");
     Ok(Loaded {
         store: store.clone(),
         fixes,
@@ -338,6 +377,7 @@ fn poll_loading(mut commands: Commands, task: Option<Res<LoadTask>>, mut progres
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
+        crate::preload::start(self.args.assets.clone());
         app.add_plugins(look::LookPlugin)
             .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
             // Lighter, softer shadows like the original: more ambient, less direct sun.
@@ -426,6 +466,7 @@ fn setup(
     mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
+    let setup_started = Instant::now();
     let decoded = loaded.images.take().unwrap_or_default();
     let tex = textures::upload(decoded, std::mem::take(&mut loaded.failures), &mut images);
     for f in tex.failures.iter().take(20) {
@@ -564,6 +605,7 @@ fn setup(
         ));
     }
     info!("object meshes by alpha mode: {modes:?}");
+    info!("load step battle scene setup: {:.0} ms", setup_started.elapsed().as_secs_f64() * 1000.0);
     info!("Bevy test: {objects} objects, {} terrain layers, {} textures, loaded in {:.1} s", loaded.terrain.len(), tex.len(), loaded.seconds);
 }
 
