@@ -92,6 +92,29 @@ fn eligible(world: &World, a: ActorId) -> bool {
     !d.supply_required || supplied(world, a)
 }
 
+/// Modifier flag NO_UPKEEP (004C1110 index 9): the upkeep vector of an actor
+/// whose modifier carries it is cleared (aa-actors `definition_values`). It
+/// comes from the actor's own properties (its definition's and the ones the
+/// map gave it, e.g. tech_noupkeep on the random map start bunkers) or from
+/// a kingdom technology that applies to it.
+fn no_upkeep(world: &World, a: ActorId) -> bool {
+    let actor = &world.actors[a as usize];
+    let d = world.data.def(actor.def);
+    if d.upkeep_all.iter().all(|v| *v == 0.0) {
+        return false;
+    }
+    let extra = world.books.actor(a).map_or(&[][..], |b| b.properties.as_slice());
+    let has = |r: &String| d.properties.iter().chain(extra).any(|q| q.eq_ignore_ascii_case(r));
+    let flag = |m: &crate::data::Modifier| m.kind == "FLAG" && m.flag.as_deref().is_some_and(|f| f.eq_ignore_ascii_case("NO_UPKEEP"));
+    d.properties
+        .iter()
+        .chain(extra)
+        .filter_map(|p| world.data.property(p))
+        .filter(|p| p.required_properties.iter().all(|r| has(r)))
+        .any(|p| p.modifiers.iter().any(flag))
+        || actor.kingdom.is_some_and(|k| crate::production::technology_modifiers(world, k, &d.properties).any(flag))
+}
+
 /// Recompute every kingdom's provider and consumer arrays.
 pub fn refresh(world: &mut World) {
     let n = world.data.resources.len();
@@ -105,7 +128,7 @@ pub fn refresh(world: &mut World) {
             continue;
         }
         let d = world.data.def(actor.def);
-        if d.has_economy {
+        if d.has_economy && !no_upkeep(world, a as ActorId) {
             for (o, v) in upkeep[k].iter_mut().zip(&d.upkeep_all) {
                 *o += *v;
             }

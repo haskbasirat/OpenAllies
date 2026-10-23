@@ -133,10 +133,9 @@ pub(super) fn build(data: &RmgData, params: &RandomMapParams, world: &World, pla
     let mut player_slots = Vec::new();
     for (i, k) in placement.kingdoms.iter().enumerate() {
         if k.major {
-            // The game's starting location: the owned actor with the highest
-            // starting_location_priority (the Corps HQ placeholder, 1000),
-            // else the start location object.
-            let p = k.hq.unwrap_or(k.start);
+            // The start location object, which PrepareMapFixStartLocations
+            // moved onto the Corps HQ placeholder.
+            let p = k.start;
             start_locations.push(serde_json::to_value(glam::Vec2::new(p[0], p[1]))?);
             player_slots.push(slot_of(i));
         }
@@ -157,6 +156,7 @@ pub(super) fn build(data: &RmgData, params: &RandomMapParams, world: &World, pla
             "scale": o.scale,
             "variant": o.variant,
             "serialized_id": serial,
+            "properties": placement.group_properties(o.group),
         }));
         serial += 1;
         let model = if def.invisible {

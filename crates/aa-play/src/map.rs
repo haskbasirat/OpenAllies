@@ -48,6 +48,10 @@ pub struct PlacedThing {
     /// Serialized GTID of the record (map-local identity).
     #[serde(default)]
     pub serialized_id: u32,
+    /// Extra properties the map gives the actor (the random map generator's
+    /// RMCActorGroup `properties`, e.g. tech_noupkeep on the start bunkers).
+    #[serde(default)]
+    pub properties: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -391,6 +395,7 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
             scale,
             variant: p.object.as_ref().and_then(|o| o.variant_index).unwrap_or(-1),
             serialized_id: p.serialized_id,
+            properties: Vec::new(),
         });
     }
     // Start locations of the player (non-independent) slots, in slot order.

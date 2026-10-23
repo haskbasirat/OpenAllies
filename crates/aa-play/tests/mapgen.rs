@@ -320,3 +320,89 @@ fn a_custom_battle_starts_on_a_generated_map() {
     eprintln!("actors {} (player {}, computer {}), kingdoms {}", world.actors.len(), owned(0), owned(1), world.kingdoms.len());
     assert!(owned(0) > 0 && owned(1) > 0, "both sides got their starting buildings");
 }
+
+/// Distances of every side's starting objects from its Corps HQ placeholder
+/// and from its start location object (printed; ignored probe).
+#[test]
+#[ignore]
+fn probe_start_groups() {
+    if data().is_none() {
+        return;
+    }
+    for seed in [1u64, 2, 3, 42, 2026] {
+        let m = generate(&params("rmc_southerneurope", 384.0, 2, seed));
+        for slot in m.map.player_slots.iter().map(|&s| s as u32) {
+            let of = |id: &str| m.placed.iter().filter(|p| p.owner_slot == Some(slot) && p.thing_id == id).map(|p| glam::Vec2::new(p.position[0], p.position[1])).collect::<Vec<_>>();
+            let hq = of("placeholder_corpsunpacked")[0];
+            let start = of("start_loc")[0];
+            let mut line = format!("seed {seed} slot {slot}: hq-start {:.1}", hq.distance(start));
+            for id in ["placeholder_depot_supply", "placeholder_bunker", "placeholder_bunker_antiaircraft", "placeholder_bunker_artillery"] {
+                for p in of(id) {
+                    line += &format!(" | {} hq {:.1} start {:.1}", id.trim_start_matches("placeholder_"), p.distance(hq), p.distance(start));
+                }
+            }
+            eprintln!("{line}");
+        }
+    }
+}
+
+/// Every RMC at every map size, with the fewest and the most recommended
+/// sides, places all of every side's required starting objects, and the
+/// defences ring the Corps HQ: the start location moves onto the HQ
+/// placeholder (PrepareMapFixStartLocations 0x4FB640) and the bunker groups
+/// search 12 m around it, at least 12 m from the HQ and the depot.
+#[test]
+fn every_rmc_size_and_side_count_places_the_starting_defences_around_the_hq() {
+    let Some(d) = data() else { return };
+    let cat = d.catalog();
+    let expected = [
+        ("placeholder_corpsunpacked", 1),
+        ("placeholder_depot_supply", 1),
+        ("placeholder_bunker", 1),
+        ("placeholder_bunker_antiaircraft", 2),
+        ("placeholder_bunker_artillery", 1),
+    ];
+    let retries = std::sync::atomic::AtomicUsize::new(0);
+    let maps = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for (ri, rmc) in cat.rmcs.iter().enumerate() {
+            let (retries, maps, expected) = (&retries, &maps, &expected);
+            scope.spawn(move || {
+                for size in &rmc.map_sizes {
+                    let mut sides: Vec<u32> = vec![2, size.recommended_kingdoms_max.clamp(2, rmc.max_sides)];
+                    sides.dedup();
+                    for n in sides {
+                        let p = params(&rmc.ids, size.width, n, 1000 + ri as u64 * 37 + size.width as u64 + n as u64);
+                        let m = generate(&p);
+                        maps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        retries.fetch_add(m.map.load_notes.iter().filter(|n| n.contains("placement try")).count(), std::sync::atomic::Ordering::Relaxed);
+                        assert_eq!(m.map.start_locations.len(), n as usize);
+                        for (i, &slot) in m.map.player_slots.iter().enumerate() {
+                            let own = |id: &str| -> Vec<glam::Vec2> {
+                                m.placed
+                                    .iter()
+                                    .filter(|t| t.owner_slot == Some(slot as u32) && t.thing_id == id)
+                                    .map(|t| glam::Vec2::new(t.position[0], t.position[1]))
+                                    .collect()
+                            };
+                            for &(id, count) in expected {
+                                assert_eq!(own(id).len(), count, "{} {} m {n} sides: side {i} has {} {id}", rmc.ids, size.width, own(id).len());
+                            }
+                            let hq = own("placeholder_corpsunpacked")[0];
+                            let start = m.map.start_locations[i];
+                            assert!(start.distance(hq) < 1e-3, "{}: start location {start:?} not on the HQ {hq:?}", rmc.ids);
+                            assert!(own("start_loc")[0].distance(hq) < 1e-3);
+                            for &(id, _) in &expected[1..] {
+                                for p in own(id) {
+                                    let dist = p.distance(hq);
+                                    assert!((11.9..=25.0).contains(&dist), "{} {} m {n} sides: {id} {dist:.1} m from the HQ", rmc.ids, size.width);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+    eprintln!("{} maps, {} placement retries", maps.into_inner(), retries.into_inner());
+}

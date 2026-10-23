@@ -507,6 +507,57 @@ fn berlin_supply_and_limits_with_the_computer() {
     assert_eq!(bad, 0, "regiments next to their HQ were out of supply");
 }
 
+/// Every nation's starting income is its Corps HQ's production
+/// (Data/Buildings/<NAT>/<nat>_corps.tgi), on Berlin and on a generated map.
+#[test]
+#[ignore]
+fn every_nation_corps_income_at_start() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let data = data();
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let nations = ["usa", "gbr", "rus", "ger", "jpn"];
+    let mut bad = Vec::new();
+    for map_kind in ["(2v2)Berlin", "generated"] {
+        for (n, nation) in nations.iter().enumerate() {
+            let other = nations[(n + 1) % nations.len()];
+            let (map, starts) = if map_kind == "generated" {
+                (Arc::new(rmg.generate(&RandomMapParams::defaults(&info, 2, 3)).expect("generate").map), [0, 1])
+            } else {
+                (Arc::new(GameMap::load_with(&root(), map_kind, &data).expect("Berlin")), [0, 2])
+            };
+            let setup = aa_play::SkirmishSetup {
+                map_id: map_kind.into(),
+                players: vec![
+                    aa_play::PlayerSetup { name: "A".into(), nation: (*nation).into(), team: 0, color: [0, 76, 255], controller: aa_play::Controller::Human, start: starts[0] },
+                    aa_play::PlayerSetup { name: "B".into(), nation: other.into(), team: 1, color: [217, 0, 25], controller: aa_play::Controller::Human, start: starts[1] },
+                ],
+                starting_resources: None,
+                seed: 3,
+            };
+            let mut w = aa_play::World::new_skirmish(data.clone(), map, &setup).expect("new_skirmish");
+            for _ in 0..16 {
+                w.step(vec![]);
+            }
+            for k in 0..2usize {
+                let nat = &w.kingdoms[k].nation;
+                let corps = data.find(&format!("{nat}_corps")).map(|d| data.def(d)).expect("corps");
+                let owned: Vec<String> = w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(k as u32)).map(|a| data.def(a.def).id.clone()).collect();
+                let b = w.books.kingdom(k as u32).unwrap();
+                let want = [corps.production_all[0], corps.production_all[1], corps.production_all[2]];
+                eprintln!(
+                    "{map_kind} {nat}: income {:?} want {want:?} provided {:?} consumed {:?} raw {:?} owned {owned:?}",
+                    w.kingdoms[k].income, b.provided, b.consumed, b.raw_provided
+                );
+                if w.kingdoms[k].income != want {
+                    bad.push(format!("{map_kind} {nat}: {:?} != {want:?}", w.kingdoms[k].income));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
 /// The same supply check on a generated map with two computers.
 #[test]
 #[ignore]
