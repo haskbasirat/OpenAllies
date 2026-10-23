@@ -1502,9 +1502,11 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
                     if near && let Some(t) = g.target_actor {
                         if !matches!(ov.order, Order::Attack { target } if target == t) {
                             commands.push(Command::Attack { kingdom: me, units: vec![Unit::Org(ov.id)], target: t });
+                            player.rai.record(ov.id, c.view.world.actors[t as usize].pos.truncate(), Some(t), ov.pos, c.now);
                         }
                     } else {
                         commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(ov.id)], to: target, attack_move: true });
+                        player.rai.record(ov.id, target, None, ov.pos, c.now);
                     }
                     sent += 1;
                 }

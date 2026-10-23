@@ -402,6 +402,8 @@ pub struct FxState {
     decal_mesh: Handle<Mesh>,
     quads_entity: Entity,
     decal_entity: Entity,
+    /// Actors fog hides from the local player this frame (their effects hidden).
+    fog_hidden: std::collections::HashSet<ActorId>,
     view: View,
     focus: Vec3,
     warned: std::collections::HashSet<String>,
@@ -497,6 +499,7 @@ fn poll_loading(
         decal_mesh,
         quads_entity,
         decal_entity,
+        fog_hidden: Default::default(),
         view: View::default(),
         focus: Vec3::ZERO,
         warned: Default::default(),
@@ -1529,7 +1532,8 @@ impl FxState {
         // Unlit decals: drawn first among the transparent objects (their
         // entity sits far ahead along the view), in decal_type order.
         let far = view.eye - view.back * 2000.0;
-        let mut order: Vec<usize> = (0..self.decals.len()).filter(|&i| !self.decals[i].lit).collect();
+        let hidden = |o: Option<ActorId>| o.is_some_and(|a| self.fog_hidden.contains(&a));
+        let mut order: Vec<usize> = (0..self.decals.len()).filter(|&i| !self.decals[i].lit && !hidden(self.decals[i].owner)).collect();
         order.sort_by_key(|&i| self.decals[i].order);
         let mut dq = Vec::new();
         for i in order {
@@ -1556,7 +1560,7 @@ impl FxState {
         // after the terrain layers (entity even farther ahead).
         let far_lit = view.eye - view.back * 3000.0;
         let mut by_texture: HashMap<String, (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[f32; 2]>, Vec<[f32; 4]>)> = HashMap::new();
-        for d in self.decals.iter().filter(|d| d.lit) {
+        for d in self.decals.iter().filter(|d| d.lit && !d.owner.is_some_and(|a| self.fog_hidden.contains(&a))) {
             let e = by_texture.entry(d.texture.to_ascii_lowercase()).or_default();
             let a = decal_alpha(d);
             for v in &d.verts {
@@ -1694,6 +1698,22 @@ fn run(
         }
     }
     let t2 = Instant::now();
+    // Fog of war: effects of actors the local player cannot see are hidden too.
+    let hidden: std::collections::HashSet<ActorId> = state
+        .decals
+        .iter()
+        .filter_map(|d| d.owner)
+        .chain(state.models.iter().filter_map(|m| m.owner))
+        .filter(|&a| !crate::ui::fog::drawn(&battle, a))
+        .collect();
+    if hidden != state.fog_hidden {
+        state.fog_hidden = hidden;
+        state.decals_dirty = true;
+    }
+    for m in &state.models {
+        let show = !m.owner.is_some_and(|a| state.fog_hidden.contains(&a));
+        spawn.commands.entity(m.entity).insert(if show { Visibility::Inherited } else { Visibility::Hidden });
+    }
     let dt = if battle.paused { 0.0 } else { time.delta_secs() * battle.speed };
     state.step(dt, &frame, &mut spawn, &mut transforms);
     state.flush_pending(&frame, &mut spawn, &mut views);

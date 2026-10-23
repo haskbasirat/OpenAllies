@@ -12,7 +12,8 @@
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
 //! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck", "own_banner",
 //! "enemy_banner": the on-screen actor / organization banner of that
-//! kind nearest the window centre, clicked where it is drawn),
+//! kind nearest the window centre, clicked where it is drawn, or at
+//! `"offset": [dx, dy]` window fractions from there),
 //! `{"dclick_at": [fx, fy]}` (double click), `{"zoom": z}` (camera zoom,
 //! battle only), `{"exit": true}`.
 use super::front::PointerInput;
@@ -308,7 +309,9 @@ pub fn run(
                 .min_by(|x, y| x.1.distance(centre).total_cmp(&y.1.distance(centre)));
             match best {
                 Some((id, p)) => {
-                    let f = p / logical;
+                    // "offset": [dx, dy] (window fractions) from the actor
+                    let off = step.get("offset").and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32)).unwrap_or(Vec2::ZERO);
+                    let f = p / logical + off;
                     info!("script: {key} {what} actor {id} at {:.3},{:.3}", f.x, f.y);
                     let at = s.at;
                     s.steps[at] = serde_json::json!({ out: [f.x, f.y] });

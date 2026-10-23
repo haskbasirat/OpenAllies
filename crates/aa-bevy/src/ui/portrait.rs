@@ -5,8 +5,8 @@
 //!   Thing, e.g. Units/GER/GERInfantryCo/GERInfantryCOPortrait.nif, else the
 //!   selected object's own model) rendered into an image the UI draws in
 //!   the widget's rectangle. A portrait NIF's own NiCamera (its transform
-//!   and frustum) frames it; a model without one is framed from the front
-//!   left and above, its bounds filling the view (the 17-truck shot);
+//!   and frustum) frames it; any other model is framed from the front left
+//!   and above, its bounds filling the view (the 17-truck shot);
 //! * the banner: the selected organization's composed banner (the same
 //!   layers the world banner shows) drawn as an image.
 //!
@@ -128,7 +128,11 @@ impl Portraits {
             if parts.is_empty() {
                 return None;
             }
-            let camera = data.find(path).and_then(|p| std::fs::read(p).ok()).and_then(|b| nif_camera(&b));
+            // a portrait model's own NiCamera frames it; other models (a
+            // truck: USATruck.nif carries an unrelated camera) are framed
+            // from their bounds
+            let portrait = path.to_ascii_lowercase().contains("portrait");
+            let camera = data.find(path).filter(|_| portrait).and_then(|p| std::fs::read(p).ok()).and_then(|b| nif_camera(&b));
             debug!("portrait {path}: {} parts, bounds {min} .. {max}, camera {camera:?}", parts.len());
             Some(Arc::new(PortraitModel { parts, camera, min, max }))
         })();
@@ -197,12 +201,14 @@ pub fn update(
         let (eye, look, up, fov, near, far) = match m.camera {
             Some(c) => (c.eye, c.eye + c.dir, if c.up.length_squared() > 0.5 { c.up } else { Vec3::Y }, c.fov, c.near, c.far),
             None => {
-                // front left and above, the bounds filling the view
+                // front left and above, the bounds filling the view (the
+                // bounding sphere at 0.7 of its fitting distance: the
+                // silhouette fills the frame as in the original truck shot)
                 let centre = (m.min + m.max) * 0.5;
                 let radius = ((m.max - m.min).length() * 0.5).max(0.1);
                 let fov = 30f32.to_radians();
                 let dir = Vec3::new(1.0, -0.55, -1.0).normalize();
-                let dist = radius / (fov * 0.5).sin() * if aspect < 1.0 { 1.0 / aspect } else { 1.0 };
+                let dist = 0.7 * radius / (fov * 0.5).sin() * if aspect < 1.0 { 1.0 / aspect } else { 1.0 };
                 (centre - dir * dist, centre, Vec3::Y, fov, (dist - radius * 2.0).max(0.05), dist + radius * 2.0)
             }
         };

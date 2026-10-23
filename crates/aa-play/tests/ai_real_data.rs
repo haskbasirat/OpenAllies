@@ -442,7 +442,8 @@ fn measure(mut w: World, minutes: u32) {
             moves.entry(org).or_default().push(l.time);
         }
         let early_goal = l.text.starts_with("  goal") && (window.is_some_and(|(a, b)| l.time >= a && l.time <= b) || (l.time < 130.0 && (l.text.contains("Recruit") || l.text.contains("Unpack") || l.text.contains("Research"))));
-        if early_goal || ["recruit", "deploy", "research", "attack", "ego", "retreat", "explore"].iter().any(|k| l.text.starts_with(k)) {
+        let sends = std::env::var_os("AA_AI_SENDS").is_some() && l.text.starts_with("send Move");
+        if sends || early_goal || ["recruit", "deploy", "research", "attack", "ego", "retreat", "explore", "halt"].iter().any(|k| l.text.starts_with(k)) {
             eprintln!("{:>6.1}s {}", l.time, l.text);
         }
     }
