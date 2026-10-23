@@ -391,6 +391,32 @@ fn relay_needs_a_source_and_drains_its_stockpile() {
     assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 20.0 + 5.0);
 }
 
+/// 4D0C90: a cut-off relay still counts as supplied (and produces) while its
+/// stockpile lasts; empty, a supply_required depot produces as its truck
+/// (56F960 via the +548 pack link), here nothing.
+#[test]
+fn cut_off_relay_produces_while_its_stockpile_lasts() {
+    let (mut w, ids) = world(&[0]);
+    let hq = spawn(&mut w, ids.hq, 0, Vec2::new(40.0, 40.0), 0.0);
+    let depot = spawn(&mut w, ids.depot, 0, Vec2::new(80.0, 40.0), 0.0);
+    for _ in 0..(16 * 3) {
+        core_step(&mut w, vec![]);
+    }
+    assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 20.0 + 5.0);
+    let stock = w.books.actor(depot).unwrap().supply_stock;
+    assert!(stock > 2.0, "{stock}");
+    w.actors[hq as usize].alive = false;
+    core_step(&mut w, vec![]);
+    core_step(&mut w, vec![]);
+    assert!(w.books.out_of_supply(depot));
+    assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 5.0, "stock left: the depot still produces");
+    for _ in 0..(16 * 4) {
+        core_step(&mut w, vec![]);
+    }
+    assert_eq!(w.books.actor(depot).unwrap().supply_stock, 0.0);
+    assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 0.0, "empty: as its truck");
+}
+
 /// 58AE10 searches the zones over the relay's footprint tiles: a depot
 /// (4 x 4) whose centre is 1 m outside the HQ zone (60 m) still links.
 #[test]

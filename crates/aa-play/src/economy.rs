@@ -41,16 +41,23 @@ pub fn tick(world: &mut World) {
 fn deploying(world: &World, a: ActorId) -> bool {
     world.books.actor(a).is_some_and(|b| b.deploy.is_some())
 }
+/// 4D0C90: in supply unless in state 19 (out_of_supply), and a supplier in
+/// state 19 still counts while its relay stockpile (Supply+18) is positive.
 fn supplied(world: &World, a: ActorId) -> bool {
-    !world.books.out_of_supply(a)
+    match world.books.actor(a) {
+        Some(b) if b.out_of_supply => world.data.def(world.actors[a as usize].def).has_supply && b.supply_stock > 0.0,
+        _ => true,
+    }
 }
 
 /// 56F960/56FC20 production_start for one actor (member or top level).
 fn actor_production(world: &World, a: ActorId, out: &mut [f32]) {
     let actor = &world.actors[a as usize];
     let d = world.data.def(actor.def);
+    // 56F960: ActorData+548 is the inverse pack link (a building's truck,
+    // written by 4605B0); a truck has only the forward +534 unpack link.
     let source: DefId = if !supplied(world, a)
-        && let Some(p) = d.packs_to.or(d.unpacks_to)
+        && let Some(p) = d.packs_to
         && world.data.def(p).has_economy
     {
         p
@@ -84,7 +91,7 @@ fn eligible(world: &World, a: ActorId) -> bool {
     }
     let d = world.data.def(actor.def);
     if !supplied(world, a)
-        && let Some(p) = d.packs_to.or(d.unpacks_to)
+        && let Some(p) = d.packs_to
         && world.data.def(p).has_economy
     {
         return true;
