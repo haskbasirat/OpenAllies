@@ -70,6 +70,9 @@ const NEAR_POINT_SQUARED: f32 = 0.25;
 /// 0x532B50 / 0x5379C0 lead: 1.5 * movement radius (0x3FC00000).
 const LEAD_SCALE: f32 = 1.5;
 
+/// 0x52DE40 passes 4.0 (0x40800000) to FindOpenPositionLineThenRadius.
+const DEPLOY_SEARCH_RADIUS: f32 = 4.0;
+
 /// Tiles the path queue may expand per tick before later requests wait for
 /// the next tick. A request always runs to completion once started, so the
 /// budget only adds latency, never changes a route. Engineering limit, not
@@ -287,7 +290,7 @@ impl SpatialHash {
                 continue;
             }
             let r = radius.get(a.def as usize).copied().unwrap_or(0.0);
-            if r <= 0.0 {
+            if r <= 0.0 || !blocks_movers(world.data.def(a.def)) {
                 continue;
             }
             let p = a.pos.truncate();
@@ -366,7 +369,7 @@ impl Occupancy {
                 continue;
             }
             let def = world.data.def(a.def);
-            if def.speed_max > 0.0 {
+            if !is_building(def) {
                 continue;
             }
             if let Some(r) = footprint(def, a.pos.truncate(), a.facing, &world.map) {
@@ -387,6 +390,22 @@ impl Occupancy {
     fn grid<'a>(&'a self, map: &'a crate::map::GameMap, class: MoverClass) -> Grid<'a> {
         Grid::with_occupancy(map, class, &self.cells)
     }
+    /// The point stands on a building's footprint.
+    fn inside(&self, world: &World, p: Vec2) -> bool {
+        let cell = [(p.x.max(0.0) / world.map.cell_size) as i32, (p.y.max(0.0) / world.map.cell_size) as i32];
+        self.registered.iter().any(|(_, r)| cell[0] >= r[0] && cell[0] <= r[2] && cell[1] >= r[1] && cell[1] <= r[3])
+    }
+}
+/// Buildings (StructureComponent, CityComponent or packed-truck targets:
+/// `DefClass::Building`) stand on tiles; doodads such as trees do not.
+fn is_building(def: &Def) -> bool {
+    def.class == Some(crate::data::DefClass::Building) && def.speed_max <= 0.0
+}
+/// Actors that block movers: other movers and buildings.
+/// Actors that block movers by their shape: other movers. Buildings block
+/// through the tiles of their footprint (`Occupancy`).
+fn blocks_movers(def: &Def) -> bool {
+    def.speed_max > 0.0
 }
 /// Tile rectangle (min x, min y, max x, max y) of a structure's blocking
 /// shape, or None when it does not mark blockers.
@@ -787,6 +806,21 @@ fn group_offsets(world: &World, occupied: &[u16], owners: &[Owner], to: Vec2) ->
 fn start(ms: &mut MovementState, world: &mut World, owner: Owner, to: Vec2, offset: Vec2, target: Option<ActorId>, attack_move: bool, group_speed: Option<f32>, deploy_facing: Option<f32>) {
     let cap = speed_cap(&mut ms.speeds, world, owner);
     let now = world.time;
+    let mut to = to;
+    // A unit leaving the building it stands in (a recruit going to its
+    // deployment point): KKC_UAIStateDeploy::Activate 0x52DE40 moves the
+    // point to a free spot, FindOpenPositionLineThenRadius 0x554BF0 (4 m).
+    let mover = match owner {
+        Owner::Actor(a) => Some(a),
+        Owner::Org(o) => pick_leader(world, o),
+    };
+    if target.is_none()
+        && deploy_facing.is_none()
+        && let Some(m) = mover
+        && ms.occupancy.inside(world, pos2(world, m))
+    {
+        to = open_position(ms, world, m, to, DEPLOY_SEARCH_RADIUS);
+    }
     let destination = clamp_extent(world, to);
     let path_dest = clamp_extent(world, to + offset);
     let o = ms.order(owner);
@@ -1955,8 +1989,12 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
                 let lateral = left * side * reach;
                 let aside = pos + lateral;
                 let past = q + dir * reach + lateral;
-                let (d1, d2) = (normalize(aside - pos), normalize(past - aside));
+                let (d1, d2, d3) = (normalize(aside - pos), normalize(past - aside), normalize(head.pos - past));
                 if d1 != Vec2::ZERO && d2 != Vec2::ZERO {
+                    // Rejoin at the head itself, so it is reached, not skipped.
+                    if d3 != Vec2::ZERO {
+                        am.nodes.insert(0, Node { pos: head.pos, dir: d3, kind: 0 });
+                    }
                     am.nodes.insert(0, Node { pos: past, dir: d2, kind: 0 });
                     am.nodes.insert(0, Node { pos: aside, dir: d1, kind: 0 });
                 }
@@ -1987,8 +2025,11 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
             } else {
                 // The route ends at the head (or as near as it gets); a
                 // duplicate head is dropped on arrival by ActionGo.
+                // Avoidance nodes are kind 0 (instant turn), like the original
+                // low-level pather's, so a vehicle turns away from the
+                // obstacle instead of arcing into it.
                 for w in route.waypoints.iter().rev() {
-                    am.nodes.insert(0, Node::from(*w));
+                    am.nodes.insert(0, Node { pos: w.pos, dir: w.dir, kind: 0 });
                 }
                 // Routes are smoothed from tile centres: when the first leg
                 // from an off-centre position clips a blocked tile, step to
@@ -1999,7 +2040,7 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
                     let center = grid.center(grid.cell_of(pos));
                     let dir = normalize(center - pos);
                     if dir != Vec2::ZERO {
-                        ms.actors[id as usize].nodes.insert(0, Node { pos: center, dir, kind: 1 });
+                        ms.actors[id as usize].nodes.insert(0, Node { pos: center, dir, kind: 0 });
                     }
                 }
             }
@@ -2015,6 +2056,81 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
     }
     let speed = ms.actors[id as usize].requested;
     action_go(ms, world, id, speed, rules);
+}
+
+/// The mover's blocking circle fits at `p`: no blocked tile under its
+/// bounding square (tiles under the shape, like 0x553BA0) and no other
+/// mover or building circle overlapping.
+fn spot_free(ms: &MovementState, world: &World, mover: ActorId, p: Vec2) -> bool {
+    let def = def_of(world, mover);
+    let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
+    let grid = ms.occupancy.grid(&world.map, mover_class(def));
+    let lo = grid.cell_of(p - Vec2::splat(r));
+    let hi = grid.cell_of(p + Vec2::splat((r - EPSILON).max(0.0)));
+    for y in lo[1]..=hi[1] {
+        for x in lo[0]..=hi[0] {
+            if grid.blocked([x, y]) {
+                return false;
+            }
+        }
+    }
+    ms.hash.for_each_near(p, r + ms.hash.max_radius, |o, q, rq| o != mover && (q - p).length_squared() < (r + rq) * (r + rq)).is_none()
+}
+
+/// FindOpenPositionLineThenRadius 0x554BF0: walk from `point` back toward
+/// the mover in steps of its radius (at least a quarter cell, 0x553FA0)
+/// until the spot is free, then search rings of eight directions within
+/// `radius` around it (0x554B30 / 0x554850, starting along the facing).
+/// Keeps the line result when the ring search fails.
+fn open_position(ms: &MovementState, world: &World, mover: ActorId, point: Vec2, radius: f32) -> Vec2 {
+    let start = pos2(world, mover);
+    let cell = world.map.cell_size;
+    let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
+    let step = r.max(cell * 0.25);
+    let mut p = point;
+    let delta = p - start;
+    let mut remaining = delta.length();
+    let back = if remaining > 0.0 { delta * (step / remaining) } else { Vec2::ZERO };
+    let mut found = false;
+    loop {
+        let candidate = clamp_extent(world, p);
+        if spot_free(ms, world, mover, candidate) {
+            p = candidate;
+            found = true;
+            break;
+        }
+        if remaining <= 0.0 {
+            break;
+        }
+        p -= back;
+        remaining -= step;
+        if remaining <= 0.0 {
+            p = start;
+            remaining = 0.0;
+        }
+    }
+    if found && (p - start).abs().element_sum() >= f32::from_bits(0x3951_b717) {
+        return p;
+    }
+    // 0x554B30: rings within `radius`, eight rotations by -pi/4.
+    let rings = ((radius / step) as i32).clamp(1, 20);
+    let ring_step = radius / rings as f32;
+    let facing = ms.actors[mover as usize].mover.facing;
+    let base = if found { p } else { point };
+    if spot_free(ms, world, mover, base) {
+        return base;
+    }
+    for k in 1..=rings {
+        let mut offset = facing * (k as f32 * ring_step);
+        for _ in 0..8 {
+            let candidate = clamp_extent(world, base + offset);
+            if spot_free(ms, world, mover, candidate) {
+                return candidate;
+            }
+            offset = rotate(offset, -std::f32::consts::FRAC_PI_4) * offset.length();
+        }
+    }
+    p
 }
 
 /// An element gave up its path: a regiment member waits for the regiment to

@@ -422,6 +422,24 @@ fn deploy_order_drives_there_and_faces_the_requested_way() {
 }
 
 #[test]
+fn truck_facing_a_building_wall_turns_away_and_drives_on() {
+    let (mut data, ids) = data();
+    let hq = Def { id: "rus_corps".into(), class: Some(DefClass::Building), health: 1000.0, blocking_shape: Some("SQUARE".into()), blocking_size: Some([20.0, 20.0]), ..Default::default() };
+    data.by_id.insert(hq.id.clone(), data.defs.len() as u32);
+    data.defs.push(hq);
+    let hq_def = data.defs.len() as u32 - 1;
+    let mut w = world(open_map(64, 64, 2.0), data);
+    w.spawn_actor(hq_def, Some(0), w.ground(Vec2::new(60.0, 60.0)), 0.0);
+    // Just north of the footprint's top edge (y = 70), nose to the south.
+    let truck = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(61.0, 70.6)), -FRAC_PI_2);
+    for to in [Vec2::new(73.0, 70.6), Vec2::new(45.0, 70.6), Vec2::new(45.0, 45.0)] {
+        order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(truck)], to, attack_move: false });
+        assert!(run_until(&mut w, 60.0, |w| w.actors[truck as usize].order == Order::Idle), "stuck at {:?}", pos(&w, truck));
+        assert!((pos(&w, truck) - to).length() < 0.6, "stopped at {:?} for {to:?}", pos(&w, truck));
+    }
+}
+
+#[test]
 fn deploy_to_a_blocked_spot_is_refused() {
     let (data, ids) = data();
     let mut map = open_map(64, 64, 4.0);

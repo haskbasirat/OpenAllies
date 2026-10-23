@@ -468,7 +468,9 @@ impl GameHud {
             Some(Unit::Actor(a)) => b.world.actor(*a).is_some_and(|x| b.world.data.def(x.def).class == Some(DefClass::Truck)),
             _ => false,
         };
-        ui.with_widget("Game/ControlPanel/ObjectDisplay/CompanyDisplay/BannerButton", |w| w.set_visible(!truck));
+        for part in ["BannerButton", "Morale", "AttackEfficiency"] {
+            ui.with_widget(&format!("Game/ControlPanel/ObjectDisplay/CompanyDisplay/{part}"), |w| w.set_visible(!truck));
+        }
     }
 
     /// The game message log from this frame's battle events (message
@@ -523,7 +525,9 @@ impl GameHud {
                 aa_play::Event::KingdomDefeated { kingdom } => {
                     out.push(("KINGDOM_DEFEATED", fmt(ui, "kingdom_defeated", &[&kingdom_name(Some(*kingdom))]), None));
                 }
-                // refusals play a sound in the original, no log line
+                // refusals play a sound in the original, no log line (the
+                // reason goes to the program log)
+                aa_play::Event::Refused { kingdom, reason } if *kingdom == b.local => info!("command refused: {reason}"),
                 _ => {}
             }
         }

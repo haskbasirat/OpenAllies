@@ -40,38 +40,45 @@ pub struct Memory {
     pub sent: BTreeMap<OrgId, Resend>,
 }
 
-/// A goal-execution order the reactive AI sent: where to (or whom), when,
-/// and where the organization stood.
+/// The last goal order sent to an organization (by the goal engine or the
+/// reactive AI): where to (or whom), when, and how far it was from there.
 #[derive(Clone, Copy, Debug)]
 pub struct Resend {
     pub to: Vec2,
     pub target: Option<crate::world::ActorId>,
     pub at: f32,
-    pub pos: Vec2,
+    pub distance: f32,
 }
 
 impl Memory {
     /// The reactive AI re-sends a goal's order to an idle organization
     /// (`7B7D30` orders the goal's actors that are not busy). An order the
     /// organization could not follow (an unreachable or blocked target: it
-    /// stands where it stood when the same order was sent) is not repeated
-    /// every think: it waits for the next goal-engine period.
+    /// came no closer since the same order was sent, by the goal engine or
+    /// the reactive AI) is not repeated every think: it waits for the next
+    /// goal-engine period.
+    #[allow(clippy::too_many_arguments)]
     fn gate(&mut self, o: OrgId, to: Vec2, target: Option<crate::world::ActorId>, pos: Vec2, now: f32, tol: f32, period: f32) -> bool {
         if let Some(last) = self.sent.get(&o)
             && last.target == target
             && last.to.distance(to) < tol
-            && last.pos.distance(pos) < STUCK_METRES
+            && pos.distance(to) > last.distance - STUCK_METRES
             && now - last.at < period
         {
             return false;
         }
-        self.sent.insert(o, Resend { to, target, at: now, pos });
+        self.record(o, to, target, pos, now);
         true
+    }
+
+    /// Note an order sent to `o` (the goal engine's orders too).
+    pub(crate) fn record(&mut self, o: OrgId, to: Vec2, target: Option<crate::world::ActorId>, pos: Vec2, now: f32) {
+        self.sent.insert(o, Resend { to, target, at: now, distance: pos.distance(to) });
     }
 }
 
-/// An organization that moved less than this since the same order was sent
-/// did not get any closer.
+/// An organization that came less than this closer to its target since the
+/// same order was sent did not get any closer.
 const STUCK_METRES: f32 = 2.0;
 
 #[allow(clippy::too_many_arguments)]
