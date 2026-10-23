@@ -21,6 +21,7 @@
 //!   and the travel weight `4A7130`.
 use super::data::{self, AiData, Ego};
 use super::regions::{Influence, Regions};
+use super::value::{Census, Val};
 use super::view::{View, has};
 use super::{Bound, Player, SaiRng, enqueue};
 use crate::data::{DefClass, DefId};
@@ -62,6 +63,9 @@ pub struct UnpackMemo {
     /// Battle time the Deploy command left the send queue (0 = not yet).
     pub sent_at: f32,
     pub bad: Vec<u32>,
+    /// Battle time of the last immediate replan after a refused deploy
+    /// (0 = none).
+    pub replanned_at: f32,
 }
 
 /// What the goal engine keeps between thinks.
@@ -90,7 +94,7 @@ pub(crate) struct Ctx<'a, 'w> {
     pub now: f32,
 }
 
-const RESOURCES: [&str; 3] = ["money", "ammo", "oil"];
+pub(crate) const RESOURCES: [&str; 3] = ["money", "ammo", "oil"];
 
 impl Ctx<'_, '_> {
     pub fn def(&self, d: DefId) -> &crate::data::Def {
@@ -101,22 +105,6 @@ impl Ctx<'_, '_> {
     }
     pub fn cv(&self, d: DefId) -> f32 {
         self.bound.cv.get(d as usize).copied().unwrap_or(0.0)
-    }
-    /// ResourceManagement need per point of a stockpilable resource.
-    pub fn need(&self, r: usize) -> f32 {
-        let e = self.ego;
-        let income = self.view.income[r];
-        let (short, enough, plenty_value, plenty) = match e.resource_needs.iter().find(|n| n.resource == RESOURCES[r]) {
-            Some(n) => (n.short_need, n.enough_need, n.plenty_value, n.plenty_need),
-            None => (e.stockpilable_short_need, e.stockpilable_enough_need, e.stockpilable_plenty_value, e.stockpilable_plenty_need),
-        };
-        if income < 0.0 {
-            short
-        } else if plenty_value != 0.0 && income > plenty_value {
-            plenty
-        } else {
-            enough
-        }
     }
     /// Money/ammo/oil of a definition's cost, upkeep or production vector
     /// with its organization slots (`56F850`/`56F580`/`56F660`, the
@@ -160,23 +148,6 @@ impl Ctx<'_, '_> {
         let def = self.def(d);
         let members: f32 = def.slots.iter().filter_map(|(m, _)| w.data.defs.get(*m as usize)).map(|m| m.unit_limit_consumed).sum();
         def.unit_limit_consumed.max(members)
-    }
-    /// Per-minute production minus upkeep of a definition and its slots.
-    pub fn net(&self, d: DefId) -> [f32; 3] {
-        let p = self.quote(d, crate::production::Vector::Production);
-        let u = self.quote(d, crate::production::Vector::Upkeep);
-        [p[0] - u[0], p[1] - u[1], p[2] - u[2]]
-    }
-    /// Ego ActorValue of a definition (`7AD2D0` closest reading):
-    /// `scaling_mult * (economic + military_cv_mult * cv * military_value_scaling_mult)`.
-    pub fn actor_value_cv(&self, d: DefId, cv: f32) -> f32 {
-        let e = self.ego;
-        let net = self.net(d);
-        let economic: f32 = (0..3).map(|r| net[r] * self.need(r)).sum();
-        e.scaling_mult * (economic + e.military_cv_mult * cv * e.military_value_scaling_mult)
-    }
-    pub fn actor_value(&self, d: DefId) -> f32 {
-        self.actor_value_cv(d, self.cv(d))
     }
     fn sum(&self, values: &[f32], region: u32, pick: impl Fn(usize) -> bool) -> f32 {
         (0..self.inf.kingdoms).filter(|&k| pick(k)).map(|k| self.inf.at(values, region, k)).filter(|v| *v > 0.0).sum()
@@ -324,79 +295,6 @@ impl Goal {
     }
 }
 
-/// Counts of the player's own things (live, queued) by definition and property.
-#[derive(Default)]
-struct Census {
-    by_def: HashMap<DefId, i32>,
-    by_prop: HashMap<String, i32>,
-}
-
-impl Census {
-    fn add(&mut self, d: DefId, props: &[String]) {
-        *self.by_def.entry(d).or_default() += 1;
-        for p in props {
-            *self.by_prop.entry(p.clone()).or_default() += 1;
-        }
-    }
-    fn build(c: &Ctx<'_, '_>) -> Self {
-        let mut s = Census::default();
-        let w = c.view.world;
-        for o in c.view.orgs.iter().filter(|o| o.owner == c.view.me) {
-            s.add(o.def, c.props(o.def));
-        }
-        for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)) {
-            if w.actors[b.id as usize].org.is_none() {
-                s.add(b.def, c.props(b.def));
-            }
-            let queued = w.books.actor(b.id).map(|bk| bk.queue.items.iter().map(|i| i.def).collect::<Vec<_>>()).unwrap_or_default();
-            let queued = if queued.is_empty() { w.actors[b.id as usize].queue.iter().map(|(d, _)| *d).collect() } else { queued };
-            for d in queued {
-                s.add(d, c.props(d));
-            }
-        }
-        for t in c.view.trucks.iter().filter(|t| t.owner == c.view.me && t.org.is_none()) {
-            s.add(t.def, c.props(t.def));
-        }
-        s
-    }
-    fn def(&self, d: DefId) -> i32 {
-        self.by_def.get(&d).copied().unwrap_or(0)
-    }
-    fn prop(&self, p: &str) -> i32 {
-        self.by_prop.get(p).copied().unwrap_or(0)
-    }
-}
-
-/// `ActorPriority` bonus of recruiting `d` and the per-think maximum.
-fn actor_priority(c: &Ctx<'_, '_>, census: &Census, d: DefId) -> (f32, i32) {
-    let props = c.props(d);
-    let id = c.def(d).id.to_ascii_lowercase();
-    let mut value = 0.0;
-    let mut max = c.ego.default_max_recruited_per_think;
-    for ap in &c.ego.actor_priorities {
-        let matched = match (&ap.property, &ap.actor) {
-            (Some(p), _) => has(props, p),
-            (None, Some(a)) => *a == id,
-            _ => false,
-        };
-        if !matched {
-            continue;
-        }
-        let count = match &ap.property {
-            Some(p) if ap.count_all_property_actors => census.prop(p),
-            _ => census.def(d),
-        };
-        value += ap.value - ap.repeat_penalty * count as f32;
-        if count == 0 {
-            value += ap.one_time_bonus;
-        }
-        if ap.max_recruited_per_think != 0 {
-            max = ap.max_recruited_per_think;
-        }
-    }
-    (value, max)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn think(
     view: &View<'_>,
@@ -404,6 +302,7 @@ pub fn think(
     data: &AiData,
     regions: &Regions,
     inf: &Influence,
+    reach: &super::reach::Reach,
     player: &mut Player,
     rng: &mut SaiRng,
     log: &mut Vec<String>,
@@ -415,16 +314,17 @@ pub fn think(
     update_knowledge(&c, player);
     update_flares(&c, player);
     let census = Census::build(&c);
+    let val = Val::new(&c, &census);
     let mut goals = Vec::new();
-    unpack_goals(&c, player, rng, &mut goals);
+    unpack_goals(&c, player, rng, reach, &mut goals);
     recover_goals(&c, &mut goals);
-    defend_goals(&c, &mut goals);
-    attack_goals(&c, player, &mut goals);
+    defend_goals(&c, &val, &mut goals);
+    attack_goals(&c, &val, player, &mut goals);
     apply_flares(&c, player, &mut goals);
     explore_goals(&c, player, &mut goals);
-    recruit_goals(&c, &census, rng, &mut goals);
+    recruit_goals(&c, &val, data, rng, &mut goals);
     research_goals(&c, &mut goals);
-    attach_goals(&c, &mut goals);
+    attach_goals(&c, &val, &mut goals);
     for g in &mut goals {
         finalize(g, ego, &player.memory, rng);
     }
@@ -440,11 +340,13 @@ pub fn think(
             }
             shown += other as usize;
             log.push(format!(
-                "  goal {} base {:.0} current {:.0} actors {} cv {:.0}/{:.0}{}",
+                "  goal {} raw {:.1} base {:.0} current {:.0} actors {} cv {:.0}/{:.0}{}",
                 match g.key {
                     Key::Recruit(_, d) => format!("Recruit {} cost {:?}", c.def(d).id, g.cost),
+                    Key::Research(_, _) => format!("Research {}", g.research.as_ref().map_or("", |r| r.1.as_str())),
                     k => format!("{k:?}"),
                 },
+                g.raw,
                 g.base,
                 g.current,
                 g.actors.len(),
@@ -597,8 +499,9 @@ fn spread_offset(i: usize) -> Vec2 {
     Vec2::new(a.cos(), a.sin()) * (12.0 + 8.0 * (i as f32).sqrt())
 }
 
-/// A free, land-passable spot in `region` for a building of `def`.
-fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, reserved: &[(Vec2, f32)]) -> Option<Vec2> {
+/// A free, land-passable spot in `region` for a building of `def` that the
+/// truck can drive to (`reach`).
+fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, from: Vec2, reach: &super::reach::Reach, reserved: &[(Vec2, f32)]) -> Option<Vec2> {
     let d = c.def(def);
     let radius = d.blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
     let pad = c.view.world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0);
@@ -630,6 +533,7 @@ fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, reserved:
                 let (at, _) = crate::deploy::placement(c.view.world, def, p, 0.0);
                 if crate::deploy::spot_clear(c.view.world, def, at, Some(truck)).is_ok()
                     && crate::movement::deploy_spot_problem(c.view.world, truck, at).is_none()
+                    && reach.reachable(from, at)
                 {
                     return Some(at);
                 }
@@ -639,8 +543,9 @@ fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, reserved:
     None
 }
 
-/// UNPACK goals (`7CBC40` with the `4A9AE0` value).
-fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, goals: &mut Vec<Goal>) {
+/// UNPACK goals (`7CBC40` with the `4A9AE0` value): the candidate regions
+/// are valued first and searched for a reachable spot best first.
+fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, reach: &super::reach::Reach, goals: &mut Vec<Goal>) {
     let u = &c.ego.unpacking;
     let mine: Vec<_> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).collect();
     let mut reserved: Vec<(Vec2, f32)> = Vec::new();
@@ -675,12 +580,11 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, goals: &
         if memo.region != 0 && !candidates.contains(&memo.region) {
             candidates.insert(0, memo.region);
         }
-        let mut best: Option<(f32, u32, Vec2)> = None;
+        let mut valued: Vec<(f32, u32)> = Vec::new();
         for r in candidates {
             if memo.bad.contains(&r) || !c.regions.same_island(r, home) {
                 continue;
             }
-            let Some(site) = find_site(c, r, t.unpacks_to, t.id, &reserved) else { continue };
             let center = c.regions.centers[r as usize];
             let mut bonus = 0.0;
             for b in &mine {
@@ -696,10 +600,12 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, goals: &
             if r == memo.region {
                 v += u.inertia;
             }
-            if best.is_none_or(|(bv, _, _)| v > bv) {
-                best = Some((v, r, site));
+            if !valued.iter().any(|&(_, q)| q == r) {
+                valued.push((v, r));
             }
         }
+        valued.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let best = valued.into_iter().find_map(|(v, r)| find_site(c, r, t.unpacks_to, t.id, t.pos, reach, &reserved).map(|site| (v, r, site)));
         let Some((value, region, site)) = best else { continue };
         let radius = c.def(t.unpacks_to).blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
         reserved.push((site, radius));
@@ -764,7 +670,7 @@ pub(crate) fn supply_point(c: &Ctx<'_, '_>, from: Vec2) -> Option<Vec2> {
 }
 
 /// DEFEND_REGION goals (`7C5F80` -> `7BD360`).
-fn defend_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
+fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
     let dp = &c.ego.defend;
     let mut regions: BTreeMap<u32, (f32, Vec2, f32)> = BTreeMap::new();
     for b in &c.view.buildings {
@@ -772,7 +678,10 @@ fn defend_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
         if !c.view.allied[owner] {
             continue;
         }
-        let value = c.actor_value(b.def).max(0.0);
+        // 7AD340: (actor value without the distance multiplier + its
+        // ActorPriority) ^ economic_value_exponent * multiplier.
+        let kingdom = c.view.world.kingdoms[owner].id;
+        let value = (val.actor_value(b.def, Some(kingdom), b.cv, false, b.pos, false) + val.actor_priority(b.def, false)).max(0.0);
         let mut threat = dp.economic_value_multiplier * value.powf(dp.economic_value_exponent);
         if owner != c.view.me {
             threat *= c.ego.defend_friendly_kingdom_actor_multiplier;
@@ -817,7 +726,7 @@ fn defend_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
 
 /// ATTACK_REGION goals (`7C5AE0`, value `7BCCB0`: the juiciest visible
 /// hostile static or mobile actor of the region, `7AD9E0`).
-fn attack_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
+fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: &mut Vec<Goal>) {
     let mut best: BTreeMap<u32, (f32, Vec2, Option<ActorId>)> = BTreeMap::new();
     let mut home_islands: Vec<u32> = c.view.orgs.iter().filter(|o| o.owner == c.view.me).map(|o| c.regions.island[c.region_of(o.pos) as usize]).collect();
     home_islands.extend(c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| c.regions.island[c.region_of(b.pos) as usize]));
@@ -837,7 +746,10 @@ fn attack_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
         if !reachable(r) {
             continue;
         }
-        consider(r, c.actor_value_cv(b.def, b.cv), b.pos, Some(b.id));
+        // 7AD2D0: the actor value (with the distance multiplier) plus its
+        // ActorPriority (one fewer counted, no one-time bonus).
+        let owner = b.owner.map(|o| c.view.world.kingdoms[o].id);
+        consider(r, val.actor_value(b.def, owner, b.cv, false, b.pos, true) + val.actor_priority(b.def, false), b.pos, Some(b.id));
     }
     let mut eyes: Vec<(Vec2, f32)> = c.view.orgs.iter().filter(|o| o.owner == c.view.me).map(|o| (o.pos, o.sight)).collect();
     for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)) {
@@ -850,7 +762,8 @@ fn attack_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
         }
         let r = c.region_of(o.pos);
         if reachable(r) {
-            consider(r, c.actor_value_cv(o.def, o.cv), o.pos, None);
+            let owner = Some(c.view.world.kingdoms[o.owner].id);
+            consider(r, val.actor_value(o.def, owner, o.cv, true, o.pos, true) + val.actor_priority(o.def, false), o.pos, None);
         }
     }
     let oc = &c.ego.offensive;
@@ -909,6 +822,8 @@ pub(crate) fn city_target(c: &Ctx<'_, '_>, target_actor: Option<ActorId>) -> boo
 /// regions already explored.
 fn explore_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
     let home = c.view.buildings.iter().find(|b| b.owner == Some(c.view.me)).map(|b| c.region_of(b.pos));
+    let mine: Vec<Vec2> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| b.pos).collect();
+    let center = (!mine.is_empty()).then(|| mine.iter().copied().sum::<Vec2>() / mine.len() as f32);
     let island: Vec<u32> = (0..c.regions.len() as u32).filter(|&r| home.is_some_and(|h| c.regions.same_island(r, h))).collect();
     let explored = island.iter().filter(|&&r| player.scouted.get(r as usize).is_some_and(|t| t.is_finite())).count() as f32;
     for kind in 0..2usize {
@@ -918,27 +833,42 @@ fn explore_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
             if base > e.min_priority && !island.is_empty() {
                 base -= explored / island.len() as f32 * (base - e.min_priority);
             }
-            let mut g = Goal::new(Key::Explore(kind as u8, slot as u8), data::EXPLORE, base, 0, Vec2::ZERO);
+            // The travel weight of an explore goal measures the way to the
+            // region it explored last, else to the kingdom centre (its
+            // region is chosen per explorer when executed).
+            let key = Key::Explore(kind as u8, slot as u8);
+            let region = player.memory.explore_region.get(&key).copied().or(home).unwrap_or(0);
+            let target = player.memory.explore_region.get(&key).map(|&r| c.regions.centers[r as usize]).or(center).unwrap_or(Vec2::ZERO);
+            let mut g = Goal::new(key, data::EXPLORE, base, region, target);
             g.explore = Some(kind);
             goals.push(g);
         }
     }
 }
 
-/// RECRUIT goals (`7CFEA0`).
-fn recruit_goals(c: &Ctx<'_, '_>, census: &Census, rng: &mut SaiRng, goals: &mut Vec<Goal>) {
+/// RECRUIT goals (`7CFEA0`): the candidates are the things the player's
+/// recruiters list whose element requirements hold (`7B4380`: `4E65E0`,
+/// `5827B0`); every SpecificRecruitRequest makes a request per matching
+/// candidate (`7CD330`, priority `7CC640`, dropped when not positive), the
+/// military requests the best company (`7CFB60`/`7CF340`); a goal's base
+/// is its request priority plus the recruit value (`7CEE50` -> `7CE5E0`).
+/// The best `max_goals_per_think` goals are kept, at most
+/// `max_recruited_per_think` of a definition.
+fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mut SaiRng, goals: &mut Vec<Goal>) {
     let w = c.view.world;
     let rr = &c.ego.recruiting;
     let king = &w.kingdoms[c.view.me];
     let queue_max = if c.ego.build_queue_max_items > 0 { c.ego.build_queue_max_items as usize } else { usize::MAX };
     // Recruiting buildings with room in their queue, by recruitable def.
-    let mut sites: HashMap<DefId, Vec<ActorId>> = HashMap::new();
+    let mut sites: BTreeMap<DefId, Vec<ActorId>> = BTreeMap::new();
     for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me) && b.recruits && b.queue < queue_max) {
         if w.books.actor(b.id).is_some_and(|bk| bk.deploy.is_some()) {
             continue;
         }
         for &d in &c.def(b.def).recruits {
-            sites.entry(d).or_default().push(b.id);
+            if c.def(d).recruitable != 0 || val.econ.synthetic {
+                sites.entry(d).or_default().push(b.id);
+            }
         }
     }
     if sites.is_empty() {
@@ -948,6 +878,31 @@ fn recruit_goals(c: &Ctx<'_, '_>, census: &Census, rng: &mut SaiRng, goals: &mut
     let fits = |d: DefId| -> bool {
         let need = c.unit_need(d);
         need <= 0.0 || need <= unit_room + 1e-3
+    };
+    let owned_props: Vec<String> = c
+        .view
+        .buildings
+        .iter()
+        .filter(|b| b.owner == Some(c.view.me))
+        .flat_map(|b| c.props(b.def).iter().cloned())
+        .chain(w.books.kingdom(c.view.kingdom).map(|k| k.technologies.iter().map(|t| t.to_ascii_lowercase()).collect::<Vec<_>>()).unwrap_or_default())
+        .collect();
+    let owned_defs: Vec<String> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| c.def(b.def).id.to_ascii_lowercase()).collect();
+    // ElementComponent required_structures / required_properties of the
+    // thing and of every slot of a company.
+    let requirements_met = |d: DefId| -> bool {
+        let def = c.def(d);
+        let mut ids = vec![def.id.to_ascii_lowercase()];
+        for (m, _) in &def.slots {
+            if let Some(md) = w.data.defs.get(*m as usize) {
+                ids.push(md.id.to_ascii_lowercase());
+            }
+        }
+        ids.iter().all(|id| {
+            data.requirements.get(id).is_none_or(|r| {
+                r.structures.iter().all(|s| owned_defs.contains(s)) && r.properties.iter().all(|p| owned_props.contains(p))
+            })
+        })
     };
     // An organization recruited by an HQ takes one of its attachments.
     let enroll = |b: ActorId, d: DefId| -> bool {
@@ -974,112 +929,84 @@ fn recruit_goals(c: &Ctx<'_, '_>, census: &Census, rng: &mut SaiRng, goals: &mut
         }
         best
     };
-    let mut candidates: Vec<Goal> = Vec::new();
-    let mut per_def: HashMap<DefId, i32> = HashMap::new();
-    // hq_type_not_available_bonus: no HQ of the type, or every one full.
-    let hq_unavailable = |prop: &str, d: DefId| -> bool {
-        let capacity = c.def(d).max_attachments.or_else(|| c.def(d).slots.iter().find_map(|(m, _)| w.data.defs.get(*m as usize).and_then(|m| m.max_attachments)));
-        let mut seen = 0;
-        for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me) && has(c.props(b.def), prop)) {
-            seen += 1;
-            let attached = crate::production::attachments(w, b.id) + crate::production::hq_org(w, b.id).and_then(|o| w.books.org(o)).map_or(0, |bk| bk.reserved_attachments);
-            let cap = crate::production::hq_org(w, b.id).and_then(|o| c.def(w.orgs[o as usize].def).max_attachments).or(capacity);
-            if cap.is_none_or(|cap| attached < cap) {
-                return false;
+    // 7CC640 HQ scan: an HQ of the candidate's type that still takes an
+    // attachment (packed or deployed) means no hq_type_not_available_bonus.
+    let hq_props = |d: DefId| -> Vec<String> { c.props(d).iter().filter(|p| p.ends_with("hq") && p.as_str() != "hq").cloned().collect() };
+    let hq_available = |d: DefId| -> bool {
+        let types = hq_props(d);
+        for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me) && types.iter().any(|t| has(c.props(b.def), t))) {
+            let Some(o) = crate::production::hq_org(w, b.id) else { continue };
+            let max = c.def(w.orgs[o as usize].def).max_attachments.unwrap_or(u32::MAX);
+            let reserved = w.books.org(o).map_or(0, |bk| bk.reserved_attachments);
+            if crate::production::attachments(w, b.id) + reserved < max {
+                return true;
             }
         }
-        // A packed or queued HQ of the type will offer its attachments.
-        census.prop(prop) <= seen
+        c.view.trucks.iter().any(|t| t.owner == c.view.me && types.iter().any(|ty| has(c.props(t.def), ty)))
+            || types.iter().any(|t| val.census.prop(t) > c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me) && has(c.props(b.def), t)).count() as i32)
     };
+    let eligible: Vec<DefId> = sites.keys().copied().filter(|&d| fits(d) && requirements_met(d)).collect();
+    let mut candidates: Vec<Goal> = Vec::new();
     for (index, req) in rr.requests.iter().enumerate() {
-        let mut best: Option<(f32, DefId)> = None;
-        for &d in sites.keys() {
+        for &d in &eligible {
             let id = c.def(d).id.to_ascii_lowercase();
-            let matched = match (&req.recruit, &req.property) {
-                (Some(r), _) => *r == id,
-                (None, Some(p)) => has(c.props(d), p),
-                _ => false,
+            let (matched, count) = match (&req.recruit, &req.property) {
+                (Some(r), _) => (*r == id, val.census.def(d)),
+                (None, Some(p)) => (has(c.props(d), p), val.census.prop(p)),
+                _ => (false, 0),
             };
-            if !matched || !fits(d) {
+            if !matched {
                 continue;
             }
-            // Repeats count the requested type: every owned or queued thing
-            // with the property (trucks unpack into other definitions).
-            let count = match (&req.recruit, &req.property) {
-                (None, Some(p)) => census.prop(p),
-                _ => census.def(d),
-            };
-            let (ap, _) = actor_priority(c, census, d);
-            let mut p = req.base_priority + c.actor_value(d) * req.economic_value_multiplier - req.repeat_penalty * count as f32 + ap;
-            if count == 0 {
+            let mut p = req.base_priority + val.def_value(d, true) * req.economic_value_multiplier - req.repeat_penalty * count as f32;
+            if count < 1 {
                 p += req.one_time_bonus;
             }
-            let is_hq = c.def(d).max_attachments.is_some() || c.def(d).slots.iter().any(|(m, _)| w.data.defs.get(*m as usize).is_some_and(|m| m.max_attachments.is_some()));
-            if is_hq && let Some(prop) = &req.property && hq_unavailable(prop, d) {
+            let is_hq = c.def(d).max_attachments.is_some();
+            if is_hq && !hq_available(d) {
                 p += req.hq_type_not_available_bonus;
             }
-            if best.is_none_or(|(bp, _)| p > bp) {
-                best = Some((p, d));
+            if p <= 0.0 {
+                continue;
             }
-        }
-        if let Some((p, d)) = best {
             for n in 0..req.number_to_request.max(1) {
-                let mut g = Goal::new(Key::Recruit(index as u32 * 16 + n as u32, d), data::RECRUIT, p, 0, Vec2::ZERO);
+                let base = p + val.recruit_value(d, false, true, rng);
+                let mut g = Goal::new(Key::Recruit(index as u32 * 16 + n as u32, d), data::RECRUIT, base, 0, Vec2::ZERO);
                 g.cost = c.quote(d, crate::production::Vector::Cost);
                 g.recruit = Some((d, 0));
                 candidates.push(g);
             }
         }
     }
-    // Military requests: the best company to recruit (core CV, ActorPriority,
-    // economic value and income penalties, candidate fuzziness).
-    let mut extra: HashMap<DefId, i32> = HashMap::new();
     for n in 0..rr.num_military_goals.max(0) {
         let mut best: Option<(f32, DefId)> = None;
-        for &d in sites.keys() {
+        for &d in &eligible {
             let def = c.def(d);
-            if def.class != Some(DefClass::Organization) || has(&def.properties, "hq") || c.cv(d) <= 0.0 || has(c.props(d), "economic_truck") || !fits(d) {
+            if def.class != Some(DefClass::Organization) || def.max_attachments.is_some() || has(&def.properties, "hq") || c.cv(d) <= 0.0 {
                 continue;
             }
-            let cv = c.cv(d);
-            let money = c.quote(d, crate::production::Vector::Cost)[0];
-            let mut p = cv * rr.core_cv_multiplier;
-            if money > 0.0 {
-                p += cv / money * rr.core_cv_ratio_multiplier;
-            }
-            let (ap, _) = actor_priority(c, census, d);
-            p += ap - extra.get(&d).copied().unwrap_or(0) as f32 * repeat_of(c, d);
-            p += c.actor_value(d) * rr.economic_value_multiplier;
-            let net = c.net(d);
-            if net.iter().any(|v| *v < 0.0) {
-                p -= rr.decreased_income_penalty;
-            }
-            if (0..3).any(|r| net[r] < 0.0 && c.view.income[r] + net[r] < rr.insufficient_income_level) {
-                p -= rr.insufficient_income_penalty;
-            }
-            p += rng.unit() * rr.candidate_fuzziness;
-            if best.is_none_or(|(bp, _)| p > bp) {
-                best = Some((p, d));
+            let v = val.recruit_value(d, true, true, rng);
+            if best.is_none_or(|(bv, _)| v > bv) {
+                best = Some((v, d));
             }
         }
         if let Some((p, d)) = best {
-            *extra.entry(d).or_default() += 1;
             let mut g = Goal::new(Key::Recruit(u32::MAX - n as u32, d), data::RECRUIT, p, 0, Vec2::ZERO);
             g.cost = c.quote(d, crate::production::Vector::Cost);
             g.recruit = Some((d, 0));
             candidates.push(g);
         }
     }
-    // max_goals_per_think best goals; at most max_recruited_per_think of a type.
     candidates.sort_by(|a, b| b.raw.partial_cmp(&a.raw).unwrap_or(std::cmp::Ordering::Equal));
     let limit = if rr.max_goals_per_think < 0 { usize::MAX } else { rr.max_goals_per_think as usize };
+    let mut per_def: HashMap<DefId, i32> = HashMap::new();
     let mut taken = 0;
     for mut g in candidates {
         if taken >= limit {
             break;
         }
         let (d, _) = g.recruit.expect("recruit goal");
-        let (_, max) = actor_priority(c, census, d);
+        let max = val.max_per_think(d);
         let count = per_def.entry(d).or_default();
         if max > 0 && *count >= max {
             continue;
@@ -1133,7 +1060,7 @@ fn research_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
 /// attached to the first of the player's HQs that accepts it (`574A10`);
 /// unless `attach_when_engaged`, not while engaged. Priority: its maximum CV
 /// (`4D01E0`) times the Attach `cv_multiplier`, plus its definition value.
-fn attach_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
+fn attach_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
     let w = c.view.world;
     let mut hqs: Vec<ActorId> = c
         .view
@@ -1165,7 +1092,7 @@ fn attach_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
             continue;
         };
         *taken.entry(hq).or_default() += 1;
-        let value = c.cv(org.def) * c.ego.attach_cv_multiplier + c.actor_value(org.def);
+        let value = c.cv(org.def) * c.ego.attach_cv_multiplier + val.actor_priority(org.def, false);
         let mut g = Goal::new(Key::Attach(o.id), data::ATTACH, value, c.region_of(o.pos), o.pos);
         let factor = w.data.rule_ci("HQAttachCostPercentage").unwrap_or(0.0);
         let cost = c.quote(org.def, crate::production::Vector::Cost);
@@ -1173,21 +1100,6 @@ fn attach_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
         g.attach = Some((o.id, hq));
         goals.push(g);
     }
-}
-
-fn repeat_of(c: &Ctx<'_, '_>, d: DefId) -> f32 {
-    let props = c.props(d);
-    let id = c.def(d).id.to_ascii_lowercase();
-    c.ego
-        .actor_priorities
-        .iter()
-        .filter(|ap| match (&ap.property, &ap.actor) {
-            (Some(p), _) => has(props, p),
-            (None, Some(a)) => *a == id,
-            _ => false,
-        })
-        .map(|ap| ap.repeat_penalty)
-        .sum()
 }
 
 // ---------------------------------------------------------------------------

@@ -325,6 +325,11 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
             match &s.armed {
                 Some(crate::ui::hud::TargetOrder::Attack) => return "attack".into(),
                 Some(crate::ui::hud::TargetOrder::Deploy(_)) => return "unpack".into(),
+                // the commands' cursor_ids (Data/Game/actor_commands*.tgi)
+                Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) => return "move".into(),
+                Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
+                Some(crate::ui::hud::TargetOrder::Guard) | Some(crate::ui::hud::TargetOrder::AttachHq) => return "guard".into(),
+                Some(crate::ui::hud::TargetOrder::Explore) => return "explore".into(),
                 None => {}
             }
         }

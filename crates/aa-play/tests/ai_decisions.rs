@@ -216,6 +216,7 @@ fn ai_data() -> AiData {
             factions: vec![],
         }],
         handicaps: vec![],
+        requirements: Default::default(),
     }
 }
 
@@ -726,4 +727,69 @@ fn city_of_an_enemy_independent_is_taken_by_presence_and_neutral_blocks_are_igno
 fn unused_defs_compile() {
     let (_, defs) = game_data();
     let _ = (defs.oil_truck, defs.hq, defs.scout);
+}
+
+#[test]
+fn truck_unpacks_only_where_it_can_drive() {
+    // A water channel (one tile wide, the whole map high) east of the
+    // corps: the truck stands beyond it, so the corps side (the best
+    // region by the friendly-building bonus) cannot be reached by land.
+    let (data, defs) = game_data();
+    let mut map = flat_map();
+    let channel_x = 168u32; // 672 m
+    for y in 0..map.height {
+        map.flags[(y * map.width + channel_x) as usize] |= aa_play::map::NOT_LAND_PASSABLE;
+    }
+    let mut w = World::empty(Arc::new(data), Arc::new(map), 7);
+    w.kingdoms.push(kingdom(0, 0, Controller::Human, 500.0));
+    w.kingdoms.push(kingdom(1, 1, Controller::Computer(1), 500.0));
+    ai::attach(&mut w, Arc::new(ai_data()));
+    w.ai.logging = true;
+    building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
+    let corps_pos = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), corps_pos);
+    let o = org(&mut w, defs.hq_regiment, defs.hq_truck, 1, 1, Vec2::new(690.0, 650.0));
+    let truck = w.orgs[o as usize].members[0];
+    let cmds = run(&mut w, 1.0);
+    let (t, at) = cmds.iter().find_map(|c| if let Command::Deploy { truck: t, at, .. } = c { Some((*t, *at)) } else { None }).unwrap_or_else(|| panic!("no deploy: {:#?}", w.ai.log));
+    assert_eq!(t, truck);
+    assert!(at.x > channel_x as f32 * 4.0 + 4.0, "site across the channel: {at}");
+}
+
+#[test]
+fn stuck_regiment_is_not_reordered_every_reactive_think() {
+    // The opponent runs alone: nothing moves, so every Move it gives leaves
+    // the regiment where it stood (an unreachable target). The reactive AI
+    // repeats a goal's order at most once per goal-engine period.
+    let (mut w, defs) = world();
+    let enemy_hq = building(&mut w, defs.corps, Some(0), Vec2::new(200.0, 200.0));
+    let corps_pos = Vec2::new(500.0, 500.0);
+    building(&mut w, defs.corps, Some(1), corps_pos);
+    let mut orgs = Vec::new();
+    for i in 0..10 {
+        orgs.push(org(&mut w, defs.infantry, defs.rifle, 6, 1, corps_pos + Vec2::new(-40.0 + i as f32 * 8.0, 30.0)));
+    }
+    let cmds = run(&mut w, 61.0);
+    assert!(!attackers_of(&cmds, Vec2::new(200.0, 200.0), enemy_hq).is_empty(), "no attack: {:#?}", w.ai.log);
+    for o in orgs {
+        let moves = cmds.iter().filter(|c| matches!(c, Command::Move { units, .. } if units == &vec![Unit::Org(o)])).count();
+        // Goal-engine thinks at 0, 30 and 60 s, one reactive repeat per period.
+        assert!(moves <= 6, "regiment {o} got {moves} Move commands in 61 s");
+    }
+}
+
+#[test]
+fn unpacked_building_is_not_a_construction() {
+    // 7B2350 (immediate rethink, new-structure defend flare) runs when a
+    // construction finishes; a truck's unpacked HQ is not one.
+    let (mut w, defs) = world();
+    building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
+    let corps_pos = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), corps_pos);
+    run(&mut w, 3.0);
+    let due = w.ai.players[0].ge_due;
+    building(&mut w, defs.hq, Some(1), corps_pos + Vec2::new(40.0, 0.0));
+    run(&mut w, 6.0);
+    assert_eq!(w.ai.players[0].ge_due, due, "an unpacked building moved the goal-engine think");
+    assert!(w.ai.players[0].flares.is_empty(), "{:?}", w.ai.players[0].flares);
 }

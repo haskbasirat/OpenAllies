@@ -36,7 +36,43 @@ pub struct Memory {
     pub region_reconsider: BTreeMap<u32, u32>,
     /// Retreat orders given: (time, organization).
     pub retreats: Vec<(f32, OrgId)>,
+    /// The last goal-execution order sent to each organization.
+    pub sent: BTreeMap<OrgId, Resend>,
 }
+
+/// A goal-execution order the reactive AI sent: where to (or whom), when,
+/// and where the organization stood.
+#[derive(Clone, Copy, Debug)]
+pub struct Resend {
+    pub to: Vec2,
+    pub target: Option<crate::world::ActorId>,
+    pub at: f32,
+    pub pos: Vec2,
+}
+
+impl Memory {
+    /// The reactive AI re-sends a goal's order to an idle organization
+    /// (`7B7D30` orders the goal's actors that are not busy). An order the
+    /// organization could not follow (an unreachable or blocked target: it
+    /// stands where it stood when the same order was sent) is not repeated
+    /// every think: it waits for the next goal-engine period.
+    fn gate(&mut self, o: OrgId, to: Vec2, target: Option<crate::world::ActorId>, pos: Vec2, now: f32, tol: f32, period: f32) -> bool {
+        if let Some(last) = self.sent.get(&o)
+            && last.target == target
+            && last.to.distance(to) < tol
+            && last.pos.distance(pos) < STUCK_METRES
+            && now - last.at < period
+        {
+            return false;
+        }
+        self.sent.insert(o, Resend { to, target, at: now, pos });
+        true
+    }
+}
+
+/// An organization that moved less than this since the same order was sent
+/// did not get any closer.
+const STUCK_METRES: f32 = 2.0;
 
 #[allow(clippy::too_many_arguments)]
 pub fn think(
@@ -78,6 +114,8 @@ pub fn think(
     };
     let cv_of = |o: OrgId| index.get(&o).map_or(0.0, |&i| view.orgs[i].cv);
     player.rai.retreating.retain(|o, _| index.contains_key(o));
+    player.rai.sent.retain(|o, _| index.contains_key(o));
+    let period = ego.think_frequency.max(0.5);
 
     // Halt retreat or finish it at the destination.
     let retreating: Vec<OrgId> = player.rai.retreating.keys().copied().collect();
@@ -177,6 +215,7 @@ pub fn think(
     let hostiles: Vec<usize> = (0..view.orgs.len()).filter(|&j| view.hostile[view.orgs[j].owner] && view.orgs[j].cv > 0.0).collect();
     let eyes: Vec<(Vec2, f32)> = view.orgs.iter().filter(|o| o.owner == view.me).map(|o| (o.pos, o.sight)).collect();
     let visible = |p: Vec2| eyes.iter().any(|&(e, s)| e.distance(p) <= s);
+    let mut gate = Memory { sent: std::mem::take(&mut player.rai.sent), ..Default::default() };
     for (&o, a) in &player.memory.assigned {
         let Some(&i) = index.get(&o) else { continue };
         let ov = &view.orgs[i];
@@ -192,12 +231,12 @@ pub fn think(
                 .filter(|h| regions.hops(c.region_of(h.pos), a.region) <= attack_reach && visible(h.pos))
                 .min_by(|x, y| x.pos.distance(ov.pos).partial_cmp(&y.pos.distance(ov.pos)).unwrap_or(std::cmp::Ordering::Equal));
             if let Some(h) = threat {
-                if !matches!(&ov.order, Order::Move { to, attack_move: true } if to.distance(h.pos) < tol) {
+                if !matches!(&ov.order, Order::Move { to, attack_move: true } if to.distance(h.pos) < tol) && gate.gate(o, h.pos, None, ov.pos, c.now, tol, period) {
                     commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(o)], to: h.pos, attack_move: true });
                 }
                 continue;
             }
-            if idle && regions.hops(c.region_of(ov.pos), a.region) > 1 {
+            if idle && regions.hops(c.region_of(ov.pos), a.region) > 1 && gate.gate(o, a.target, None, ov.pos, c.now, tol, period) {
                 commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(o)], to: a.target, attack_move: true });
             }
             continue;
@@ -218,14 +257,17 @@ pub fn think(
                 .flat_map(|m| c.def(m.def).weapons.iter().map(|wp| wp.range))
                 .fold(0.0f32, f32::max);
             if ov.pos.distance(tp) <= reach + tol && !matches!(ov.order, Order::Attack { target } if target == t) {
-                commands.push(Command::Attack { kingdom: me, units: vec![Unit::Org(o)], target: t });
+                if gate.gate(o, tp, Some(t), ov.pos, c.now, tol, period) {
+                    commands.push(Command::Attack { kingdom: me, units: vec![Unit::Org(o)], target: t });
+                }
                 continue;
             }
         }
-        if idle && ov.pos.distance(a.target) > tol {
+        if idle && ov.pos.distance(a.target) > tol && gate.gate(o, a.target, None, ov.pos, c.now, tol, period) {
             commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(o)], to: a.target, attack_move: true });
         }
     }
+    player.rai.sent = gate.sent;
     let _ = DEFEND_REGION;
     let profile = &data.profiles[player.profile];
     enqueue(player, data, c.now, r.reaction_time, profile.max_rai_commands, commands);

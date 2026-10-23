@@ -8,6 +8,14 @@ use bevy::render::render_resource::{AsBindGroup, Face, ShaderType};
 use bevy::shader::{Shader, ShaderRef};
 
 const LOOK_SHADER: Handle<Shader> = uuid_handle!("3b8e1f64-0a2c-4d7e-9b51-6c0f2e9d4a77");
+/// The terrain and unit fog texture every original material samples
+/// (written by `ui::fog`): one R8 texel per `FOG_TEXEL` metres of the native
+/// ground from the map origin, 0 = visible, 255 = black.
+pub const FOG_IMAGE: Handle<Image> = uuid_handle!("8d2c5a3e-6f1b-4e07-a9c4-2b7d0e5f9a61");
+/// Fog texels per side (covers 4096 m: larger than any original map).
+pub const FOG_SIZE: u32 = 1024;
+/// Native metres per fog texel (the GMap tile).
+pub const FOG_TEXEL: f32 = 4.0;
 
 pub type OriginalMaterial = ExtendedMaterial<StandardMaterial, OriginalLook>;
 
@@ -18,6 +26,9 @@ pub struct OriginalLook {
     #[texture(101)]
     #[sampler(102)]
     pub mask: Option<Handle<Image>>,
+    /// The fog texture (always `FOG_IMAGE`).
+    #[texture(103)]
+    pub fog: Option<Handle<Image>>,
 }
 
 #[derive(ShaderType, Debug, Clone)]
@@ -42,6 +53,16 @@ impl Plugin for LookPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<OriginalMaterial>::default());
         let _ = app.world_mut().resource_mut::<Assets<Shader>>().insert(LOOK_SHADER.id(), Shader::from_wgsl(include_str!("original.wgsl"), "aa_bevy/original.wgsl"));
+        // no fog until a battle writes it; created at its final size so the
+        // GPU texture (and every material's binding of it) is reused
+        let image = Image::new(
+            bevy::render::render_resource::Extent3d { width: FOG_SIZE, height: FOG_SIZE, depth_or_array_layers: 1 },
+            bevy::render::render_resource::TextureDimension::D2,
+            vec![0; (FOG_SIZE * FOG_SIZE) as usize],
+            bevy::render::render_resource::TextureFormat::R8Unorm,
+            bevy::asset::RenderAssetUsages::default(),
+        );
+        let _ = app.world_mut().resource_mut::<Assets<Image>>().insert(FOG_IMAGE.id(), image);
     }
 }
 
@@ -125,7 +146,7 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
             metallic: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: params(ambient, diffuse, m.emissive, alpha), mask: None },
+        extension: OriginalLook { params: params(ambient, diffuse, m.emissive, alpha), mask: None, fog: Some(FOG_IMAGE) },
     }
 }
 
@@ -150,6 +171,6 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
             reflectance: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: p, mask: mask.map(|m| m.0) },
+        extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE) },
     }
 }

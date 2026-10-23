@@ -590,8 +590,10 @@ fn slot_groups(def: &Def) -> Vec<usize> {
 }
 /// Slot offsets of the current formation: the layout's default formation
 /// (Organizations/Layouts, e.g. regiment_defensive), else `Def::slots`.
-fn formation_offsets(def: &Def) -> Vec<[f32; 2]> {
-    match def.default_formation.and_then(|i| def.formations.get(i)) {
+/// UI owner hook: `current` is the formation the formation buttons chose
+/// (`crate::player_orders::formation`, layout default otherwise).
+fn formation_offsets(def: &Def, current: Option<usize>) -> Vec<[f32; 2]> {
+    match current.or(def.default_formation).and_then(|i| def.formations.get(i)) {
         Some(f) if !f.positions.is_empty() => f.positions.clone(),
         _ => def.slots.iter().map(|s| s.1).collect(),
     }
@@ -1294,7 +1296,7 @@ fn set_org_facing(ms: &mut MovementState, world: &mut World, org: OrgId, facing:
     let def = world.data.def(world.orgs[org as usize].def);
     let leader = ms.orgs[org as usize].leader;
     let leader_slot = leader.map(|l| member_slot(world, org, l));
-    let mut slots = formation::compute_slot_positions(&formation_offsets(def), facing, leader_slot, primary_slot(def));
+    let mut slots = formation::compute_slot_positions(&formation_offsets(def, crate::player_orders::formation(world, org)), facing, leader_slot, primary_slot(def));
     let mut members = vec![None; slots.len()];
     for m in alive_members(world, org) {
         let s = member_slot(world, org, m);

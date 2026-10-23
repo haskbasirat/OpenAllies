@@ -94,7 +94,7 @@ impl<'w> View<'w> {
         let team = world.kingdoms[me].team;
         let rel = |k: &crate::world::Kingdom| world.books.relation(&world.kingdoms, Some(kingdom), Some(k.id));
         let hostile = world.kingdoms.iter().map(|k| rel(k) == crate::books::ENEMY && !k.defeated).collect();
-        let allied = world.kingdoms.iter().map(|k| matches!(rel(k), crate::books::SELF | crate::books::FRIEND)).collect();
+        let allied: Vec<bool> = world.kingdoms.iter().map(|k| matches!(rel(k), crate::books::SELF | crate::books::FRIEND)).collect();
         let data = &world.data;
         let max_health = |id: ActorId| -> f32 {
             let a = &world.actors[id as usize];
@@ -197,11 +197,35 @@ impl<'w> View<'w> {
                 }
                 Some(DefClass::Truck) => {
                     let (Some(owner), Some(unpacks_to)) = (owner, def.unpacks_to) else { continue };
-                    let deploying = matches!(a.order, Order::Deploy { .. }) || world.books.actor(a.id).is_some_and(|b| b.deploy.is_some());
+                    let deploying = truck_deploying(world, a.id);
                     trucks.push(TruckView { id: a.id, owner, org: a.org, def: a.def, pos: a.pos.truncate(), unpacks_to, deploying, speed: def.speed_max });
                 }
                 _ => {}
             }
+        }
+        // Fog of war (UI/fog owner hook): a computer player knows the other
+        // sides' actors as its kingdom sees them. The original SAI asks the
+        // actor's visible_to (virtual +0x70, `0x4D3B80`) before it engages
+        // (`0x7BD360`) and, for a target it does not see, orders the attack
+        // at the position of its kingdom's memory record (`0x7C7C30` with
+        // `0x4EA430`); a structure it saw stays known where it saw it.
+        if crate::fog::enabled(world) {
+            let others = |owner: Option<usize>| owner.is_some_and(|o| o != me && !allied.get(o).copied().unwrap_or(false));
+            orgs.retain(|o| !others(Some(o.owner)) || crate::fog::org_visible(world, o.id, Some(kingdom)));
+            buildings.retain_mut(|b| {
+                if !others(b.owner) {
+                    return true;
+                }
+                match crate::fog::sighting(world, b.id, Some(kingdom)) {
+                    crate::fog::Sighting::Visible => true,
+                    crate::fog::Sighting::Remembered(m) => {
+                        b.pos = m.pos.truncate();
+                        true
+                    }
+                    crate::fog::Sighting::Hidden => false,
+                }
+            });
+            trucks.retain(|t| !others(Some(t.owner)) || crate::fog::actor_visible(world, t.id, Some(kingdom)));
         }
         let k = &world.kingdoms[me];
         let mut income = k.income;
@@ -229,6 +253,21 @@ impl<'w> View<'w> {
     }
     pub fn computer(&self) -> bool {
         matches!(self.world.kingdoms[self.me].controller, Controller::Computer(_))
+    }
+}
+
+/// A truck is on its way to unpack or unpacking. An HQ regiment's truck
+/// drives under its organization's order (the movement owner resets the
+/// organization to Idle when the deploy fails, the truck's own order may
+/// still read Deploy).
+pub(crate) fn truck_deploying(world: &World, truck: crate::world::ActorId) -> bool {
+    let Some(a) = world.actor(truck) else { return false };
+    if world.books.actor(truck).is_some_and(|b| b.deploy.is_some()) {
+        return true;
+    }
+    match a.org {
+        Some(o) => matches!(world.orgs[o as usize].order, Order::Deploy { .. }),
+        None => matches!(a.order, Order::Deploy { .. }),
     }
 }
 

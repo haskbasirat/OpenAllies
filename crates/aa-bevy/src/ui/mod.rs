@@ -6,6 +6,7 @@ pub mod banners;
 pub mod custom;
 pub mod datafile;
 pub mod dialogs;
+pub mod fog;
 pub mod front;
 pub mod gamedata;
 pub mod glyphs;
@@ -15,7 +16,10 @@ pub mod script;
 pub mod selection;
 pub mod minimap;
 pub mod nifart;
+pub mod panels;
+pub mod portrait;
 pub mod tex;
+pub mod tooltip;
 pub mod video;
 
 use bevy::prelude::*;
@@ -57,16 +61,63 @@ impl Plugin for UiPlugin {
             .init_resource::<selection::SelectionArt>()
             .init_resource::<banners::BannerArt>()
             .init_resource::<minimap::MinimapArt>()
+            .init_resource::<fog::FogDraw>()
+            .init_resource::<portrait::Portraits>()
             .init_resource::<selection::Cursors>()
-            .add_systems(Update, (script::run, front::frame, minimap_update, render::update_camera, render::paint, selection::cursor).chain())
+            .init_resource::<Quit>()
+            .add_systems(Last, quit)
+            .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
                 Update,
                 (selection::update, banners::update).after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)),
+            )
+            // fog: the staging rule and the first fog state before the first
+            // tick and frame; the texture and hidden actors after the tick
+            .add_systems(Update, fog::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
+            .add_systems(Update, fog::update.after(crate::session::step_battle))
+            .add_systems(
+                Update,
+                fog::hide_unseen.after(crate::session::step_battle).after(crate::battle_view::sync_actors).run_if(in_state(crate::session::AppState::Battle)),
             );
         if let Some(s) = script::Script::from_env() {
             app.insert_resource(s);
         }
     }
+}
+
+/// A quit asked for by the UI (Quit, the game menu, scripts), or the
+/// window closed with its close button.
+///
+/// The exit crash of the 2560x1440 runs (the window covers the whole
+/// 2560x1440 screen; Vulkan without vsync): leaving the winit loop drops the
+/// App, and destroying the render world's GPU objects after winit destroyed
+/// the window faulted inside the NVIDIA Vulkan driver (nvoglv64.dll, read
+/// access violation, exit code 0xC0000005; the stack ran through bevy_winit's
+/// runner, the thread-local WinitWindows destructor and the render resources'
+/// drop into vulkan-1.dll). The process now ends right away once the UI asks
+/// to quit (or the window is gone), before the App is torn down: the driver
+/// releases its objects with the process, as after any process exit.
+/// Nothing the game keeps needs a destructor then (settings are saved when
+/// the options close). AA_BEVY_QUIT_DROP=1 keeps the old path.
+#[derive(Resource, Default)]
+pub struct Quit {
+    pub requested: bool,
+    had_window: bool,
+}
+
+fn quit(mut q: ResMut<Quit>, windows: Query<(), With<bevy::window::PrimaryWindow>>, mut exit: MessageWriter<AppExit>) {
+    let window = !windows.is_empty();
+    let closed = q.had_window && !window;
+    q.had_window |= window;
+    if !q.requested && !closed {
+        return;
+    }
+    if std::env::var_os("AA_BEVY_QUIT_DROP").is_some() {
+        exit.write(AppExit::Success);
+        return;
+    }
+    info!("quit");
+    std::process::exit(0);
 }
 
 /// The minimap's terrain image and points for this frame's draw list.
@@ -76,6 +127,8 @@ fn minimap_update(
     mut art: ResMut<minimap::MinimapArt>,
     mut draw: ResMut<render::UiDraw>,
     mut images: ResMut<Assets<Image>>,
+    windows: Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
 ) {
     let (Some(b), true) = (battle, front.page == front::Page::Game) else {
         draw.minimap = None;
@@ -90,6 +143,32 @@ fn minimap_update(
         return;
     };
     art.terrain(&front.ui.store.root, &b, &mut images);
-    draw.minimap = minimap::draw(&front.ui, &art, &b, rect);
+    // the camera's view on the ground: the window corners' rays on the
+    // ground plane at the terrain height under the view centre
+    let view = (|| {
+        let window = windows.single().ok()?;
+        let (camera, tf) = cameras.single().ok()?;
+        let (w, h) = (window.width(), window.height());
+        let ray = |x: f32, y: f32| camera.viewport_to_world(tf, Vec2::new(x, y)).ok();
+        let centre = ray(w * 0.5, h * 0.5)?;
+        let t0 = if centre.direction.y.abs() > 1e-4 { -centre.origin.y / centre.direction.y } else { 0.0 };
+        let c = centre.origin + *centre.direction * t0;
+        let ground = b.world.map.height_at(Vec2::new(c.x, -c.z));
+        let mut out = [Vec2::ZERO; 4];
+        for (i, (x, y)) in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].into_iter().enumerate() {
+            let r = ray(x, y)?;
+            if r.direction.y.abs() < 1e-4 {
+                return None;
+            }
+            let t = (ground - r.origin.y) / r.direction.y;
+            if t <= 0.0 {
+                return None;
+            }
+            let p = r.origin + *r.direction * t;
+            out[i] = Vec2::new(p.x, -p.z);
+        }
+        Some(out)
+    })();
+    draw.minimap = minimap::draw(&front.ui, &mut art, &b, rect, view);
     draw.minimap_image = art.image.clone();
 }

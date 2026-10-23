@@ -37,6 +37,26 @@ pub struct LoadProgress {
     pub error: Option<String>,
 }
 
+/// The loader's current stage as the original's status key (Localization
+/// `app_status_*`, set by the world load `0x4FC600` / `0x682EE0` in this
+/// order: loading_data, generating_map / verifying_map for a random map,
+/// loading_objects, loading_resources; `0x6E8C00` finished). Written by the
+/// background loader thread, read by the loading screen. (Appended by the UI
+/// owner.)
+pub static LOAD_STATUS: std::sync::Mutex<&'static str> = std::sync::Mutex::new("app_status_loading_data");
+
+/// Set the loader's status key (see `LOAD_STATUS`).
+pub fn set_load_status(key: &'static str) {
+    if let Ok(mut s) = LOAD_STATUS.lock() {
+        *s = key;
+    }
+}
+
+/// The loader's status key now.
+pub fn load_status() -> &'static str {
+    LOAD_STATUS.lock().map(|s| *s).unwrap_or("app_status_loading_data")
+}
+
 /// The running battle.
 #[derive(Resource)]
 pub struct Battle {

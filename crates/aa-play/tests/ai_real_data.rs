@@ -394,3 +394,318 @@ fn three_computers_cost_on_a_generated_map() {
     }
     assert!(avg < 1.0);
 }
+
+/// Run `w` for `minutes` with an idle human (kingdom 0) and print the
+/// computer's (kingdom 1) timeline: recruits, deploys, captures, the first
+/// hit on the human, refusals, the decisions and the Move rate per
+/// regiment (the most Move commands one regiment got within 60 s).
+fn measure(mut w: World, minutes: u32) {
+    let mut refused = std::collections::BTreeMap::<String, usize>::new();
+    let mut first_hit = None;
+    for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
+        w.step(Vec::new());
+        for e in &w.events {
+            match e {
+                aa_play::Event::Refused { kingdom: 1, reason } => *refused.entry(reason.chars().take(80).collect()).or_default() += 1,
+                aa_play::Event::Captured { actor, kingdom: 1 } => eprintln!("t={:>6.1}s captured {}", w.time, w.data.def(w.actors[*actor as usize].def).id),
+                aa_play::Event::Recruited { kingdom: 1, org, actor } => {
+                    let def = org.map(|o| w.orgs[o as usize].def).or(actor.map(|a| w.actors[a as usize].def));
+                    eprintln!("t={:>6.1}s RECRUITED {}", w.time, def.map_or("?", |d| w.data.def(d).id.as_str()));
+                }
+                aa_play::Event::Deployed { building } if w.actors[*building as usize].kingdom == Some(1) => {
+                    eprintln!("t={:>6.1}s DEPLOYED {}", w.time, w.data.def(w.actors[*building as usize].def).id);
+                }
+                aa_play::Event::Hit { target, .. } if first_hit.is_none() && w.actors[*target as usize].kingdom == Some(0) => {
+                    first_hit = Some(w.time);
+                    eprintln!("t={:>6.1}s FIRST HIT ON HUMAN {}", w.time, w.data.def(w.actors[*target as usize].def).id);
+                }
+                _ => {}
+            }
+        }
+        if tick % (60 * aa_play::TICKS_PER_SECOND as u64) == 0 {
+            let s = snapshot(&w, 1);
+            let k = &w.kingdoms[1];
+            eprintln!("t={:>4.0}s computer: regiments {} (cv {:.0}) buildings {} trucks {} money {:.0} income {:?} units {}/{}", w.time, s.regiments, s.cv, s.buildings, s.trucks, s.money, k.income, k.units_used, k.unit_limit);
+        }
+    }
+    let window: Option<(f32, f32)> = std::env::var("AA_AI_GOALS").ok().and_then(|v| {
+        let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok());
+        Some((it.next()??, it.next()??))
+    });
+    let mut moves: std::collections::BTreeMap<String, Vec<f32>> = Default::default();
+    for l in &w.ai.log {
+        if l.kingdom == 1
+            && l.text.starts_with("send Move")
+            && let Some(i) = l.text.find("Org(")
+        {
+            let org: String = l.text[i + 4..].chars().take_while(|c| c.is_ascii_digit()).collect();
+            moves.entry(org).or_default().push(l.time);
+        }
+        let early_goal = l.text.starts_with("  goal") && (window.is_some_and(|(a, b)| l.time >= a && l.time <= b) || (l.time < 130.0 && (l.text.contains("Recruit") || l.text.contains("Unpack") || l.text.contains("Research"))));
+        if early_goal || ["recruit", "deploy", "research", "attack", "ego", "retreat", "explore"].iter().any(|k| l.text.starts_with(k)) {
+            eprintln!("{:>6.1}s {}", l.time, l.text);
+        }
+    }
+    let mut worst = (0usize, String::new(), 0.0f32);
+    for (org, times) in &moves {
+        for (i, &t) in times.iter().enumerate() {
+            let n = times[i..].iter().take_while(|&&u| u < t + 60.0).count();
+            if n > worst.0 {
+                worst = (n, org.clone(), t);
+            }
+        }
+    }
+    eprintln!("Move commands: {} to {} regiments; most to one regiment within 60 s: {} (org {} from {:.0} s)", moves.values().map(Vec::len).sum::<usize>(), moves.len(), worst.0, worst.1, worst.2);
+    for (r, n) in &refused {
+        eprintln!("refused x{n}: {r}");
+    }
+    let st = w.ai.stats;
+    eprintln!("first hit on the human {first_hit:?}; AI avg {:.4} ms/tick, commands {}", st.total_ns as f64 / st.ticks.max(1) as f64 / 1e6, st.commands);
+    assert!(!refused.keys().any(|r| r.contains("own unit")), "the computer attacked its own units");
+}
+
+/// The comparison scenario of the original's log (Chuikov, Normal, a
+/// Southern Europe 384 random map, an idle human): prints the early goal
+/// lists in the original SAI goal CSV's terms and the timeline
+/// (AA_AI_SEED, AA_AI_MINUTES, AA_AI_GOALS=from,to for more goal lists).
+#[test]
+#[ignore]
+fn chuikov_southern_europe_timeline() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    w.ai.logging = true;
+    measure(w, minutes);
+}
+
+/// Rommel (Normal) on (2v2)Berlin against an idle human: the deploy
+/// refusals and the Move rate the comparison measured.
+#[test]
+#[ignore]
+fn rommel_berlin_timeline() {
+    let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(15);
+    measure(berlin(Some("rommel_sai"), 1), minutes);
+}
+
+/// Probe (ignored): every refused deploy of the computer on the Chuikov
+/// comparison map, with the truck position, the spot and the reachability
+/// and path answers at that moment.
+#[test]
+#[ignore]
+fn probe_refused_deploys() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    use aa_play::path::{MoverClass, PathRules, Pathfinder, Request};
+    let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(7);
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    eprintln!("map {}x{} cell {}", w.map.width, w.map.height, w.map.cell_size);
+    let mut deploys: std::collections::BTreeMap<u32, (f32, glam::Vec2, glam::Vec2)> = Default::default();
+    for _ in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
+        let before: Vec<(u32, aa_play::Order, glam::Vec2)> = w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Truck)).map(|a| (a.id, a.order.clone(), a.pos.truncate())).collect();
+        w.step(Vec::new());
+        for (id, _, pos) in &before {
+            if let aa_play::Order::Deploy { at, .. } = w.actors[*id as usize].order {
+                deploys.entry(*id).or_insert((w.time, *pos, at));
+            }
+        }
+        for e in &w.events {
+            if let aa_play::Event::Refused { kingdom: 1, reason } = e {
+                eprintln!("t={:.1} refused: {reason}", w.time);
+                for (id, (t0, from, at)) in &deploys {
+                    let a = &w.actors[*id as usize];
+                    if matches!(a.order, aa_play::Order::Deploy { .. }) {
+                        continue;
+                    }
+                    let reach = aa_play::ai::reach::Reach::build(&w);
+                    let route = Pathfinder::default().solve(&w.map, &PathRules::from_data(&w.data), &Request { from: *from, to: *at, class: MoverClass::Land, max_speed: 0.0 });
+                    eprintln!(
+                        "   truck {id} {} ordered {t0:.1} from {from:?} to {at:?} now at {:?}; reach(from) {} reach(now) {}; static path {:?} end {:?} goal {:?}",
+                        w.data.def(a.def).id,
+                        a.pos.truncate(),
+                        reach.reachable(*from, *at),
+                        reach.reachable(a.pos.truncate(), *at),
+                        route.status,
+                        route.waypoints.last().map(|p| p.pos),
+                        route.goal
+                    );
+                    if w.time < 40.0 || (w.time > 360.0 && w.time < 366.0) {
+                        for b in w.actors.iter().filter(|b| b.alive && !b.removed && w.data.def(b.def).speed_max <= 0.0 && b.pos.truncate().distance(w.actors[*id as usize].pos.truncate()) < 20.0) {
+                            let d = w.data.def(b.def);
+                            eprintln!("      static {} {} at {:?} facing {:.2} shape {:?} size {:?}", b.id, d.id, b.pos.truncate(), b.facing, d.blocking_shape, d.blocking_size);
+                        }
+                        for b in w.actors.iter().filter(|b| b.alive && !b.removed && w.data.def(b.def).speed_max > 0.0 && b.pos.truncate().distance(w.actors[*id as usize].pos.truncate()) < 6.0) {
+                            eprintln!("      mobile {} {} at {:?} order {:?}", b.id, w.data.def(b.def).id, b.pos.truncate(), b.order);
+                        }
+                    }
+                }
+                deploys.retain(|id, _| matches!(w.actors[*id as usize].order, aa_play::Order::Deploy { .. }));
+            }
+        }
+        deploys.retain(|id, _| w.actors[*id as usize].alive && !w.actors[*id as usize].removed);
+    }
+}
+
+/// Probe (ignored): can the seed-3 starting supply truck move at all? A
+/// fresh world per direction, the AI detached, one Move 12 m away.
+#[test]
+#[ignore]
+fn probe_start_truck_moves() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let map = Arc::new(generated.map);
+    for (name, dir) in [("east", glam::Vec2::new(1.0, 0.0)), ("west", glam::Vec2::new(-1.0, 0.0)), ("north", glam::Vec2::new(0.0, 1.0)), ("south", glam::Vec2::new(0.0, -1.0)), ("site", glam::Vec2::ZERO)] {
+        let setup = SkirmishSetup {
+            map_id: "generated".into(),
+            players: vec![
+                PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+                PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Human, start: 1 },
+            ],
+            starting_resources: None,
+            seed,
+        };
+        let mut w = World::new_skirmish(data(), map.clone(), &setup).expect("new_skirmish");
+        let truck = w.actors.iter().find(|a| a.alive && a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Truck)).map(|a| a.id).expect("truck");
+        let from = w.actors[truck as usize].pos.truncate();
+        let site = std::env::var("AA_PROBE_SITE").ok().and_then(|v| { let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok()); Some(glam::Vec2::new(it.next()??, it.next()??)) }).unwrap_or(glam::Vec2::new(299.0, 249.0));
+        let to = if dir == glam::Vec2::ZERO { site } else { from + dir * 12.0 };
+        let cmd = Command::Move { kingdom: 1, units: vec![aa_play::Unit::Actor(truck)], to, attack_move: false };
+        w.step(vec![cmd]);
+        let mut refused = Vec::new();
+        for _ in 0..(15 * aa_play::TICKS_PER_SECOND) {
+            w.step(Vec::new());
+            for e in &w.events {
+                if let aa_play::Event::Refused { kingdom: 1, reason } = e {
+                    refused.push(format!("{:.1} {reason}", w.time));
+                }
+            }
+        }
+        let a = &w.actors[truck as usize];
+        eprintln!("{name}: {} from {from:?} to {to:?} -> {:?} order {:?} refused {refused:?}", w.data.def(a.def).id, a.pos.truncate(), a.order);
+    }
+}
+
+/// Probe (ignored): the computer's trucks and HQ regiments over time on the
+/// Chuikov comparison map (position, order, deploy state).
+#[test]
+#[ignore]
+fn probe_truck_states() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
+        w.step(Vec::new());
+        for e in &w.events {
+            if let aa_play::Event::Refused { kingdom: 1, reason } = e {
+                eprintln!("t={:.1} refused: {reason}", w.time);
+            }
+        }
+        if tick % (5 * aa_play::TICKS_PER_SECOND as u64) == 0 {
+            for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Truck)) {
+                let org = a.org.map(|o| (o, w.orgs[o as usize].order.clone()));
+                eprintln!(
+                    "t={:>5.1} truck {} {} pos {:?} order {:?} org {:?} deploy {:?} ready {}",
+                    w.time,
+                    a.id,
+                    w.data.def(a.def).id,
+                    a.pos.truncate(),
+                    a.order,
+                    org,
+                    w.books.actor(a.id).and_then(|b| b.deploy.as_ref().map(|d| d.done_at)),
+                    aa_play::movement::deploy_ready(&w, a.id)
+                );
+            }
+        }
+    }
+}
+
+/// Probe (ignored): a truck recruited at the corps (spawned where the
+/// production owner puts it) driving to a spot behind the corps, without
+/// the AI. AA_PROBE_SPAWN / AA_PROBE_SITE as "x,y".
+#[test]
+#[ignore]
+fn probe_recruited_truck_moves() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+    let pair = |name: &str, default: glam::Vec2| -> glam::Vec2 {
+        std::env::var(name).ok().and_then(|v| { let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok()); Some(glam::Vec2::new(it.next()??, it.next()??)) }).unwrap_or(default)
+    };
+    let spawn = pair("AA_PROBE_SPAWN", glam::Vec2::new(125.96, 229.65));
+    let site = pair("AA_PROBE_SITE", glam::Vec2::new(109.0, 239.0));
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Human, start: 1 },
+        ],
+        starting_resources: None,
+        seed,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    let def = w.data.find("rus_truck_engineer").expect("def");
+    let truck = w.spawn_actor(def, Some(1), glam::Vec3::new(spawn.x, spawn.y, 0.0), -std::f32::consts::FRAC_PI_2);
+    w.step(vec![Command::Move { kingdom: 1, units: vec![aa_play::Unit::Actor(truck)], to: site, attack_move: false }]);
+    let mut trail = Vec::new();
+    for t in 0..(20 * aa_play::TICKS_PER_SECOND) {
+        w.step(Vec::new());
+        if t % aa_play::TICKS_PER_SECOND == 0 {
+            trail.push(w.actors[truck as usize].pos.truncate());
+        }
+    }
+    eprintln!("spawned at {spawn:?} -> {site:?}: now {:?} order {:?}", w.actors[truck as usize].pos.truncate(), w.actors[truck as usize].order);
+    eprintln!("trail {trail:?}");
+}

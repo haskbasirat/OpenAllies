@@ -16,7 +16,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 const PC: Precision = Precision::Double53;
-const CACHE_VERSION: &str = "aa-play-sai-v2";
+const CACHE_VERSION: &str = "aa-play-sai-v3";
 
 /// `tables::GOAL_TYPES` order of the native `7BDB70` enum.
 pub const GOAL_TYPES: [&str; 23] = [
@@ -230,6 +230,8 @@ pub struct Recruiting {
     pub insufficient_income_penalty: f32,
     pub empty_slot_value: f32,
     pub candidate_fuzziness: f32,
+    pub matching_builder_bonus: f32,
+    pub mismatching_builder_penalty: f32,
     pub base_value: f32,
     pub building_bonus: f32,
     pub location_fuzziness: f32,
@@ -413,6 +415,15 @@ pub struct Handicap {
     pub modifiers: Vec<(String, f32)>,
 }
 
+/// ElementComponent `required_structures` / `required_properties` of a
+/// Thing (every listed structure owned, every property present): the
+/// candidate test `4E65E0` of the recruit planner.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Requirement {
+    pub structures: Vec<String>,
+    pub properties: Vec<String>,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AiData {
     pub source_key: String,
@@ -420,6 +431,10 @@ pub struct AiData {
     pub egos: Vec<Ego>,
     /// In `Game/handicaps.tgi` order (easy, medium, hard).
     pub handicaps: Vec<Handicap>,
+    /// Lower-case Thing IDS -> its element requirements (only Things that
+    /// have any).
+    #[serde(default)]
+    pub requirements: std::collections::BTreeMap<String, Requirement>,
 }
 
 impl AiData {
@@ -474,6 +489,18 @@ impl AiData {
             let n = N { node: node.clone(), path: "SAI".into() };
             let profile = load_profile(&n, &data.egos).with_context(|| format!("SAI {:?}", n.s("IDS").ok().flatten()))?;
             data.profiles.push(profile);
+        }
+        for actor in &catalog.actors {
+            let Ok(node) = catalog.resolved_actor(aa_rules::actors::ThingRef::registered(&actor.id)) else { continue };
+            let n = N { node, path: actor.id.clone() };
+            let Ok(element) = n.child("ElementComponent") else { continue };
+            let list = |name: &str| -> Vec<String> {
+                element.s(name).ok().flatten().map(|v| v.split(',').map(|x| x.trim().to_ascii_lowercase()).filter(|x| !x.is_empty() && x != "null").collect()).unwrap_or_default()
+            };
+            let r = Requirement { structures: list("required_structures"), properties: list("required_properties") };
+            if !r.structures.is_empty() || !r.properties.is_empty() {
+                data.requirements.insert(actor.id.to_ascii_lowercase(), r);
+            }
         }
         if let Ok(nodes) = catalog.resolved_definitions("Handicap") {
             for node in nodes {
@@ -802,6 +829,8 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
         insufficient_income_penalty: rr.f("insufficient_income_penalty")?,
         empty_slot_value: rr.f("empty_slot_value")?,
         candidate_fuzziness: rr.f("candidate_fuzziness")?,
+        matching_builder_bonus: rr.f("matching_builder_bonus")?,
+        mismatching_builder_penalty: rr.f("mismatching_builder_penalty")?,
         base_value: rr.f("base_value")?,
         building_bonus: rr.f("building_bonus")?,
         location_fuzziness: rr.f("location_fuzziness")?,

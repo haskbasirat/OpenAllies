@@ -10,7 +10,7 @@
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
-//! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_banner",
+//! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck", "own_banner",
 //! "enemy_banner": the on-screen actor / organization banner of that
 //! kind nearest the window centre, clicked where it is drawn),
 //! `{"dclick_at": [fx, fy]}` (double click), `{"zoom": z}` (camera zoom,
@@ -186,17 +186,28 @@ fn key_code(name: &str) -> Option<KeyCode> {
         "Delete" => KeyCode::Delete,
         "Backspace" => KeyCode::Backspace,
         "F1" => KeyCode::F1,
+        "F2" => KeyCode::F2,
+        "F3" => KeyCode::F3,
+        "F4" => KeyCode::F4,
+        "F5" => KeyCode::F5,
+        "F6" => KeyCode::F6,
         "F10" => KeyCode::F10,
+        "Equal" => KeyCode::Equal,
+        "Minus" => KeyCode::Minus,
+        "Backslash" => KeyCode::Backslash,
+        "NumpadAdd" => KeyCode::NumpadAdd,
+        "NumpadSubtract" => KeyCode::NumpadSubtract,
         "Pause" => KeyCode::Pause,
-        s if s.len() == 1 && s.chars().all(|c| c.is_ascii_alphabetic()) => match s.to_ascii_uppercase().as_str() {
-            "A" => KeyCode::KeyA,
-            "D" => KeyCode::KeyD,
-            "H" => KeyCode::KeyH,
-            "P" => KeyCode::KeyP,
-            "S" => KeyCode::KeyS,
-            "W" => KeyCode::KeyW,
-            _ => return None,
-        },
+        // a letter, also as its KeyCode name ("KeyQ")
+        s if (s.len() == 1 || (s.len() == 4 && s.starts_with("Key"))) && s.chars().last().is_some_and(|c| c.is_ascii_alphabetic()) => {
+            const LETTERS: [KeyCode; 26] = [
+                KeyCode::KeyA, KeyCode::KeyB, KeyCode::KeyC, KeyCode::KeyD, KeyCode::KeyE, KeyCode::KeyF, KeyCode::KeyG, KeyCode::KeyH, KeyCode::KeyI,
+                KeyCode::KeyJ, KeyCode::KeyK, KeyCode::KeyL, KeyCode::KeyM, KeyCode::KeyN, KeyCode::KeyO, KeyCode::KeyP, KeyCode::KeyQ, KeyCode::KeyR,
+                KeyCode::KeyS, KeyCode::KeyT, KeyCode::KeyU, KeyCode::KeyV, KeyCode::KeyW, KeyCode::KeyX, KeyCode::KeyY, KeyCode::KeyZ,
+            ];
+            let c = s.chars().last()?.to_ascii_uppercase();
+            LETTERS[(c as u8 - b'A') as usize]
+        }
         _ => return None,
     })
 }
@@ -209,7 +220,7 @@ pub fn run(
     state: Res<State<AppState>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     draw: Option<Res<super::render::UiDraw>>,
-    mut exit: MessageWriter<AppExit>,
+    mut quit: ResMut<super::Quit>,
     battle: Option<Res<crate::session::Battle>>,
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
     views: Query<(&crate::battle_view::ActorView, &GlobalTransform)>,
@@ -238,6 +249,8 @@ pub fn run(
                 "enemy_building" => a.kingdom.is_some() && team(a.kingdom) != local_team && building,
                 "own_unit" => a.kingdom == Some(b.local) && a.org.is_some(),
                 "own_building" => a.kingdom == Some(b.local) && building,
+                // a mobile actor outside any organization (a truck)
+                "own_truck" => a.kingdom == Some(b.local) && !building && a.org.is_none() && w.data.def(a.def).health > 0.0,
                 _ => false,
             }
         };
@@ -344,7 +357,7 @@ pub fn run(
     } else if step.get("exit").is_some() {
         s.frames += 1;
         if s.frames > 2 {
-            exit.write(AppExit::Success);
+            quit.requested = true;
         }
     }
 }

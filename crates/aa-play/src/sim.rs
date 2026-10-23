@@ -22,6 +22,10 @@ impl World {
         crate::morale::tick(self);
         crate::supply::tick(self);
         crate::victory::tick(self);
+        // appended by the UI owner: rally points of this tick's recruits,
+        // then the detection zones and fog after the actors moved
+        crate::player_orders::tick(self);
+        crate::fog::tick(self);
         self.tick += 1;
         self.time = self.tick as f32 * crate::DT;
     }
@@ -34,6 +38,9 @@ impl World {
             Command::Deploy { .. } | Command::Pack { .. } => crate::deploy::command(self, &command),
             Command::Research { kingdom, building, property } => crate::production::research(self, *kingdom, *building, property),
             Command::Attach { kingdom, org, hq } => crate::production::attach(self, *kingdom, *org, *hq),
+            Command::SetFormation { .. } | Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => {
+                crate::player_orders::command(self, &command)
+            }
         };
         if let Err(reason) = result {
             let kingdom = match command {
@@ -45,7 +52,12 @@ impl World {
                 | Command::Deploy { kingdom, .. }
                 | Command::Pack { kingdom, .. }
                 | Command::Research { kingdom, .. }
-                | Command::Attach { kingdom, .. } => kingdom,
+                | Command::Attach { kingdom, .. }
+                | Command::SetFormation { kingdom, .. }
+                | Command::SetRallyPoint { kingdom, .. }
+                | Command::Sell { kingdom, .. }
+                | Command::Detach { kingdom, .. }
+                | Command::Disband { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

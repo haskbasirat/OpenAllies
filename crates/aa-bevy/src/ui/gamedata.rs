@@ -120,6 +120,10 @@ pub struct MapInfo {
     pub kingdoms: Vec<MapKingdom>,
     /// (ids, name).
     pub teams: Vec<(String, String)>,
+    /// The map's own world rules (MAP_HEADER WorldRules v4): IDS, native
+    /// kind (0 bool byte, 1 int, 2 fixed as f32 bits, 3 enum value index)
+    /// and raw value.
+    pub rules: Vec<(String, u32, u32)>,
 }
 
 pub struct GameData {
@@ -217,6 +221,17 @@ impl GameData {
                     true_name: n.get("true_name").unwrap_or_default().to_string(),
                     false_name: n.get("false_name").unwrap_or_default().to_string(),
                 };
+                let mut rule = rule;
+                // "type = enum_specified": only DifficultyLevel is known
+                // (0x4909DE): its values are the [DifficultyLevel] nodes of
+                // Game/difficulty_level.tgi (easy / medium / hard)
+                if rule.kind == "enum_specified" && rule.enum_values.is_empty() && ids.eq_ignore_ascii_case("DifficultyLevel") {
+                    rule.enum_values = datafile::load(data, "Game/difficulty_level.tgi")
+                        .iter()
+                        .filter(|e| e.name.eq_ignore_ascii_case("DifficultyLevel"))
+                        .map(|e| (e.get("IDS").unwrap_or_default().to_string(), e.get("name").unwrap_or_default().to_string()))
+                        .collect();
+                }
                 match g.rules.iter_mut().find(|r| r.ids.eq_ignore_ascii_case(&ids)) {
                     Some(r) => *r = rule,
                     None => g.rules.push(rule),
@@ -453,11 +468,12 @@ pub fn read_map(data: &DataRoot, path: &str) -> Option<MapInfo> {
         })
         .collect();
     let teams = p.teams.iter().map(|t| (utf16(&t.id), text(&utf16(&t.display_key)))).collect();
-    Some(MapInfo { path: path.to_string(), title, name, description, size: extents, kingdoms, teams })
+    let rules = header.rules.rules.iter().map(|r| (utf16(&r.key), r.kind, r.value)).collect();
+    Some(MapInfo { path: path.to_string(), title, name, description, size: extents, kingdoms, teams, rules })
 }
 
-/// Every scenario map under Data/Maps (recursive, as StagingFileDialog
-/// type 2 scans `PathMaps` with *.RMP).
+/// The Scenario Map scan (`0x68E340`): the `Maps/*.RMP` files; the find
+/// loop skips directories (Campaign, DeveloperMaps, TrailerMaps).
 pub fn list_maps(data: &DataRoot) -> Vec<String> {
-    files_with(data, "Maps", ".rmp", true)
+    files_with(data, "Maps", ".rmp", false)
 }

@@ -45,6 +45,9 @@ pub struct UiDraw {
     /// The minimap content (drawn at the GameMiniMap view element).
     pub minimap: Option<super::minimap::MinimapDraw>,
     pub minimap_image: Option<Handle<Image>>,
+    /// The object display's portrait render and banner image.
+    pub portrait: Option<Handle<Image>>,
+    pub banner: Option<Handle<Image>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -69,7 +72,7 @@ pub struct UiRenderer {
     videos: HashMap<String, VideoPlayer>,
     video_root: PathBuf,
     seed: usize,
-    last: Option<(DrawList, Vec<Option<AssetId<Image>>>, [u32; 2], Option<super::minimap::MinimapDraw>)>,
+    last: Option<(DrawList, Vec<Option<AssetId<Image>>>, [u32; 2], Option<super::minimap::MinimapDraw>, [Option<AssetId<Image>>; 2])>,
     pool: Vec<(Entity, Handle<Mesh>)>,
     materials: HashMap<MatKey, Handle<ColorMaterial>>,
 }
@@ -274,7 +277,8 @@ pub fn paint(
         }
     }
     let video_ids: Vec<Option<AssetId<Image>>> = video_frames.iter().map(|h| h.as_ref().map(|h| h.id())).collect();
-    if r.last.as_ref().is_some_and(|(l, v, s, m)| l == list && *v == video_ids && *s == size && *m == draw.minimap) {
+    let extra = [draw.portrait.as_ref().map(|h| h.id()), draw.banner.as_ref().map(|h| h.id())];
+    if r.last.as_ref().is_some_and(|(l, v, s, m, e)| l == list && *v == video_ids && *s == size && *m == draw.minimap && *e == extra) {
         return;
     }
     // textures first (decoded in parallel)
@@ -295,6 +299,12 @@ pub fn paint(
                 }
             }
             _ => {}
+        }
+    }
+    // minimap icons (Data/MiniMap/Icons, drawn as shipped)
+    if let Some(m) = &draw.minimap {
+        for icon in &m.icons {
+            keys.push(Key { path: icon.texture.clone(), skin: None, variant: Variant::default() });
         }
     }
     r.tex.prepare(keys, &mut images);
@@ -369,6 +379,19 @@ pub fn paint(
                     if let (Some(img), true) = (&draw.minimap_image, m.has_terrain) {
                         b.poly(Some(img.clone()), [pt(0.0, 0.0), pt(1.0, 0.0), pt(1.0, 1.0), pt(0.0, 1.0)], [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]], [1.0; 4]);
                     }
+                    for icon in &m.icons {
+                        let key = Key { path: icon.texture.clone(), skin: None, variant: Variant::default() };
+                        if let Some(e) = r.tex.get(&key) {
+                            b.poly(Some(e.image.clone()), icon.corners, [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]], icon.color);
+                        }
+                    }
+                    for (a, e, c) in &m.lines {
+                        // a one pixel line as a thin quad
+                        let (dx, dy) = (e.0 - a.0, e.1 - a.1);
+                        let len = (dx * dx + dy * dy).sqrt().max(1e-3);
+                        let (nx, ny) = (-dy / len * 0.5, dx / len * 0.5);
+                        b.poly(None, [(a.0 + nx, a.1 + ny), (e.0 + nx, e.1 + ny), (e.0 - nx, e.1 - ny), (a.0 - nx, a.1 - ny)], [[0.0, 0.0]; 4], *c);
+                    }
                     for (u, v, s, c) in &m.points {
                         let (x, y) = pt(*u, *v);
                         let h = s * 0.5;
@@ -376,7 +399,21 @@ pub fn paint(
                     }
                 }
             }
-            // 3D portrait / banner models are drawn by the battle renderer
+            // the object display's portrait render and banner image
+            DrawKind::External { rect, .. } if cmd.widget.ends_with("PortraitButton/Portrait") => {
+                if let Some(img) = &draw.portrait {
+                    b.quad(Some(img.clone()), *rect, [0.0, 0.0, 1.0, 1.0], [1.0; 4], None);
+                }
+            }
+            DrawKind::External { rect, .. } if cmd.widget.ends_with("BannerButton/Banner") => {
+                if let Some(img) = &draw.banner {
+                    // the banner's square, centred in the view
+                    let (w, h) = (rect.r - rect.l, rect.b - rect.t);
+                    let s = w.min(h);
+                    let (l, t) = (rect.l + (w - s) * 0.5, rect.t + (h - s) * 0.5);
+                    b.quad(Some(img.clone()), Rect { l, t, r: l + s, b: t + s }, [0.0, 0.0, 1.0, 1.0], [1.0; 4], None);
+                }
+            }
             DrawKind::External { .. } => {}
         }
     }
@@ -416,7 +453,7 @@ pub fn paint(
             r.pool.push((entity, handle));
         }
     }
-    r.last = Some((list.clone(), video_ids, size, draw.minimap.clone()));
+    r.last = Some((list.clone(), video_ids, size, draw.minimap.clone(), extra));
     // hide the pool entries this frame did not use
     for (entity, _) in r.pool.iter().skip(used) {
         if let Ok(mut v) = visibility.get_mut(*entity) {
