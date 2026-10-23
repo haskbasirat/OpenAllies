@@ -203,12 +203,15 @@ fn spawn_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>
     if data.def(def).class == Some(crate::data::DefClass::Organization) {
         if let Some(k) = kingdom {
             let o = crate::production::spawn_organization(world, def, k, pos, facing, None);
+            let properties = world.map.placed[index].properties.clone();
             for m in world.orgs[o as usize].members.clone() {
                 world.books.actor_mut(m).placed = Some(index);
+                world.books.actor_mut(m).properties = properties.clone();
             }
         }
         return;
     }
     let a = crate::production::spawn_single(world, def, kingdom, pos, facing);
     world.books.actor_mut(a).placed = Some(index);
+    world.books.actor_mut(a).properties = world.map.placed[index].properties.clone();
 }

@@ -79,6 +79,10 @@ pub struct ActorBooks {
     pub deploy: Option<Deployment>,
     /// Battle time this actor was created (construction/unpack start).
     pub created_at: f32,
+    /// Properties added to this actor beyond its definition's (from the map:
+    /// `PlacedThing::properties`); their modifiers apply to it.
+    #[serde(default)]
+    pub properties: Vec<String>,
 }
 
 /// Native production queue (aa-production `Queue`), seconds of battle time.

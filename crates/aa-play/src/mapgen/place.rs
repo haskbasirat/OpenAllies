@@ -33,7 +33,8 @@ pub(super) struct Kingdom {
     pub def: usize,
     pub major: bool,
     pub team: Option<u32>,
-    /// The starting location (the start location object at the marker).
+    /// The start location object: the balanced marker until the Corps HQ
+    /// placeholder (starting_location_priority 1000) moves it onto the HQ.
     pub start: [f32; 2],
     pub start_priority: i32,
     /// The balanced marker (where start_loc stands).
@@ -187,6 +188,42 @@ impl<'a> Placement<'a> {
         true
     }
 
+    /// 0x556070 (called by CheckPositionValid with a 12 m search radius): an
+    /// invalid position is moved to the first valid point on rings of
+    /// `step` = the object radius (a quarter tile at least, half the radius
+    /// above one tile) out to 12 m, 8 directions per ring starting at the
+    /// facing and turning by 45 degrees.
+    fn snap_valid(&self, world: &World, thing: usize, pos: [f32; 2], facing: [f32; 2]) -> Option<[f32; 2]> {
+        if self.position_valid(world, thing, pos) {
+            return Some(pos);
+        }
+        const SEARCH: f32 = 12.0;
+        let r = self.radius(thing);
+        let step = if r < world.tile * 0.25 {
+            world.tile * 0.25
+        } else if r > world.tile {
+            r * 0.5
+        } else {
+            r
+        };
+        let rings = ((SEARCH / step) as i32).clamp(1, 20);
+        let (sin, cos) = (-std::f32::consts::FRAC_PI_4).sin_cos();
+        for ring in 1..=rings {
+            let d = ring as f32 * (SEARCH / rings as f32);
+            let (mut dx, mut dy) = (d * facing[0], d * facing[1]);
+            for _ in 0..8 {
+                let p = [pos[0] + dx, pos[1] + dy];
+                if self.position_valid(world, thing, p) {
+                    return Some(p);
+                }
+                let (nx, ny) = (dx * cos - dy * sin, dx * sin + dy * cos);
+                dx = nx;
+                dy = ny;
+            }
+        }
+        None
+    }
+
     fn matches(pattern: &str, g: &GroupInst) -> bool {
         if let Some(prefix) = pattern.strip_suffix('*') {
             g.ids.to_ascii_lowercase().starts_with(&prefix.to_ascii_lowercase())
@@ -237,7 +274,9 @@ impl<'a> Placement<'a> {
     fn context_score(&self, gi: usize, pos: [f32; 2]) -> f32 {
         let g = &self.groups[gi];
         let mut score = 0.0;
-        if let Some(k) = g.kingdom {
+        // 0x595340: only a kingdom with a start location object (a playing
+        // side, never the independents owning the villages) pulls its group.
+        if let Some(k) = g.kingdom.filter(|&k| self.kingdoms[k].major) {
             if g.def.start_weight != 0.0 {
                 score = dist(self.kingdoms[k].start, pos) * g.def.start_weight;
             }
@@ -288,11 +327,15 @@ impl<'a> Placement<'a> {
     }
 
     /// FindRandomPosition (0x591A30): 90 tries, the valid one with the lowest score.
-    fn find_position(&self, world: &World, rng: &mut Rng, gi: Option<usize>, thing: usize, tries: u32) -> Option<[f32; 2]> {
+    /// `rounds`: required objects ("conform", 0x591E60 passes 1) get up to 4
+    /// rounds of `tries`, stopping after the first round that found a valid
+    /// position; other groups get one.
+    fn find_position(&self, world: &World, rng: &mut Rng, gi: Option<usize>, thing: usize, tries: u32, rounds: u32) -> Option<[f32; 2]> {
         let d = self.radius(thing) + world.tile;
         let circle = gi.and_then(|g| self.search_circle(g));
         let mut best: Option<(f32, [f32; 2])> = None;
-        for _ in 0..tries {
+        let mut tried = 0u32;
+        for _ in 0..tries * rounds.max(1) {
             let pos = match circle {
                 Some((c, r)) => {
                     let x = rng.signed() * r + c[0];
@@ -301,17 +344,24 @@ impl<'a> Placement<'a> {
                 }
                 None => [(world.width - d - d) * rng.unit() + d, (world.height - d - d) * rng.unit() + d],
             };
-            if !self.position_valid(world, thing, pos) {
-                continue;
-            }
-            if let Some(g) = gi {
-                if !self.context_valid(g, pos) {
-                    continue;
+            // CheckPositionValid: snapped to valid terrain, then the group rules.
+            let snapped = self.snap_valid(world, thing, pos, DEFAULT_FACING);
+            let valid = snapped.is_some_and(|p| gi.is_none_or(|g| self.context_valid(g, p)));
+            let pos = snapped.unwrap_or(pos);
+            if !valid {
+                tried += 1;
+                if tried % tries == 0 && best.is_some() {
+                    break;
                 }
+                continue;
             }
             let score = gi.map_or(0.0, |g| self.context_score(g, pos));
             if best.is_none_or(|b| score < b.0) {
                 best = Some((score, pos));
+            }
+            tried += 1;
+            if tried % tries == 0 && best.is_some() {
+                break;
             }
         }
         best.map(|b| b.1)
@@ -326,22 +376,44 @@ impl<'a> Placement<'a> {
         }
     }
 
+    /// The `properties` of a generated group (RMCActorGroup), given to
+    /// every actor it places (e.g. tech_noupkeep on the start bunkers).
+    pub(super) fn group_properties(&self, group: Option<usize>) -> Vec<String> {
+        group
+            .and_then(|g| self.groups.get(g))
+            .and_then(|g| g.def.properties.as_deref())
+            .map(|s| s.split([',', ' ', '\t']).map(str::trim).filter(|p| !p.is_empty() && !p.eq_ignore_ascii_case("null")).map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
     fn add(&mut self, thing: usize, pos: [f32; 2], facing: [f32; 2], owner: Option<usize>, group: Option<usize>, rng: &mut Rng) -> usize {
         let def = &self.data.things[thing];
         let variant = if def.models.len() > 1 { rng.below(def.models.len() as u32) as i32 } else { -1 };
         let scale = if def.scale[1] > def.scale[0] { rng.range(def.scale) } else { def.scale[0].max(1e-3) };
         let index = self.objects.len();
-        if let Some(k) = owner {
-            if def.start_priority > self.kingdoms[k].start_priority {
-                // Recorded for the game's starting location; the RMG keeps
-                // searching relative to the start location object.
-                self.kingdoms[k].start_priority = def.start_priority;
-                self.kingdoms[k].hq = Some(pos);
-            }
-        }
+        let moves_start = owner.is_some_and(|k| self.kingdoms[k].major && def.start_priority > 0 && def.start_priority > self.kingdoms[k].start_priority);
         self.objects.push(Object { thing, pos, facing, scale, variant, owner, group });
         if let Some(g) = group {
             self.groups[g].objects.push(index);
+        }
+        if moves_start {
+            // 0x5910D0 -> KKC_GWorld::PrepareMapFixStartLocations (0x4FB640):
+            // creating an actor with starting_location_priority > 0 moves the
+            // kingdom's start location object (kingdom+1F8) to its owned actor
+            // with the highest priority (0x4F1C20) - the Corps HQ placeholder.
+            // Every later "relative to this kingdom" search (the bunker,
+            // anti-air and artillery groups) is centred on it.
+            let k = owner.unwrap();
+            self.kingdoms[k].start_priority = def.start_priority;
+            self.kingdoms[k].start = pos;
+            self.kingdoms[k].hq = Some(pos);
+            if let Some(start_thing) = self.data.thing_by_id.get("start_loc").copied() {
+                for o in self.objects.iter_mut() {
+                    if o.owner == Some(k) && o.thing == start_thing {
+                        o.pos = pos;
+                    }
+                }
+            }
         }
         index
     }
@@ -593,11 +665,34 @@ impl<'a> Placement<'a> {
                     self.notes.push(format!("required object {} is not a known thing", r.object));
                     continue;
                 };
-                let pos = match self.find_position(world, rng, Some(gi), thing, 90) {
+                let pos = match self.find_position(world, rng, Some(gi), thing, 90, 4) {
                     Some(p) => p,
                     None => {
                         let circle = self.search_circle(gi);
-                        anyhow::bail!("required object {} of {} could not be placed (search {circle:?})", r.object, self.groups[gi].ids)
+                        // Diagnostic: scan the search square for valid points.
+                        let (mut terrain_ok, mut both_ok, mut total) = (0, 0, 0);
+                        if let Some((c, rad)) = circle {
+                            let mut y = c[1] - rad;
+                            while y <= c[1] + rad {
+                                let mut x = c[0] - rad;
+                                while x <= c[0] + rad {
+                                    total += 1;
+                                    if self.position_valid(world, thing, [x, y]) {
+                                        terrain_ok += 1;
+                                        if self.context_valid(gi, [x, y]) {
+                                            both_ok += 1;
+                                        }
+                                    }
+                                    x += 0.5;
+                                }
+                                y += 0.5;
+                            }
+                        }
+                        anyhow::bail!(
+                            "required object {} of {} could not be placed (search {circle:?}: {terrain_ok}/{total} terrain-valid, {both_ok} also group-valid)",
+                            r.object,
+                            self.groups[gi].ids
+                        )
                     }
                 };
                 let facing = self.random_facing(thing, rng);
@@ -667,7 +762,7 @@ impl<'a> Placement<'a> {
         let mut created = 0;
         for _ in 0..count.max(0) {
             let Some(thing) = self.pick_object(gi, rng) else { break };
-            let Some(pos) = self.find_position(world, rng, Some(gi), thing, 90) else { continue };
+            let Some(pos) = self.find_position(world, rng, Some(gi), thing, 90, 1) else { continue };
             let facing = self.random_facing(thing, rng);
             let owner = self.groups[gi].kingdom;
             self.add(thing, pos, facing, owner, Some(gi), rng);
@@ -733,7 +828,7 @@ impl<'a> Placement<'a> {
             let p = if self.position_valid(world, thing, pos[i]) && self.context_valid(gi, pos[i]) {
                 Some(pos[i])
             } else {
-                self.find_position(world, rng, Some(gi), thing, 90)
+                self.find_position(world, rng, Some(gi), thing, 90, 1)
             };
             let Some(p) = p else { continue };
             let facing = self.random_facing(thing, rng);
