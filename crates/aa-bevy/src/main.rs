@@ -8,6 +8,7 @@ mod effects;
 mod model_fixes;
 mod look;
 mod input;
+mod preload;
 mod scene;
 mod session;
 mod terrain;
