@@ -558,6 +558,95 @@ fn every_nation_corps_income_at_start() {
     assert!(bad.is_empty(), "{bad:#?}");
 }
 
+/// What a division HQ truck adds to the income while packed, unpacking and
+/// deployed (56F9A0 / 56F960 / 4D0C90): the packed truck produces its own
+/// EconomyComponent (rus_truck_infantry 12/5/2), nothing while unpacking, the
+/// deployed HQ in supply its own (rus_hq_infantry 25/10/5), and a deployed HQ
+/// cut off with an empty stockpile its packed truck's values. The Corps is
+/// 25/20/10. Supply trucks and depots give no money.
+#[test]
+#[ignore]
+fn hq_truck_income_packed_unpacking_and_deployed() {
+    use aa_play::{Command, Event};
+    let data = data();
+    let corps_income = [25.0, 20.0, 10.0];
+    let truck_income = [12.0, 5.0, 2.0];
+    let hq_income = [25.0, 10.0, 5.0];
+    let sum = |a: [f32; 3], b: [f32; 3]| [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    for (label, offset, deployed_want) in [("near", glam::Vec2::new(0.0, -30.0), sum(corps_income, hq_income)), ("far", glam::Vec2::new(0.0, -150.0), sum(corps_income, truck_income))] {
+        let mut w = berlin_world();
+        let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+        let cpos = w.actors[corps as usize].pos.truncate();
+        w.step(vec![]);
+        assert_eq!(w.kingdoms[0].income, corps_income, "{label}: the Corps alone");
+        w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: data.find("regiment_rus_hq_infantry").unwrap() }]);
+        let mut truck = None;
+        for _ in 0..(16 * 60) {
+            w.step(vec![]);
+            if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+                truck = Some(w.orgs[*o as usize].members[0]);
+                break;
+            }
+        }
+        let truck = truck.expect("HQ truck");
+        w.step(vec![]);
+        eprintln!("{label} t={:.1}s packed truck: income {:?} out {}", w.time, w.kingdoms[0].income, w.books.out_of_supply(truck));
+        assert_eq!(w.kingdoms[0].income, sum(corps_income, truck_income), "{label}: packed truck");
+        w.step(vec![Command::Deploy { kingdom: 0, truck, at: cpos + offset, facing: -std::f32::consts::FRAC_PI_2 }]);
+        let mut hq = None;
+        // The economy runs before the deployment in a tick: check the second
+        // tick of the unpacking.
+        let mut unpacking_ticks = 0;
+        let mut cut_off_ticks = 0;
+        for _ in 0..(16 * 120) {
+            w.step(vec![]);
+            if let Some(Event::Deployed { building }) = w.events.iter().find(|e| matches!(e, Event::Deployed { .. })) {
+                hq = Some(*building);
+                break;
+            }
+            // A packed truck outside every zone still produces as itself
+            // (it has no +548 packed form).
+            if w.actors[truck as usize].alive && !w.actors[truck as usize].removed && w.books.out_of_supply(truck) {
+                cut_off_ticks += 1;
+                if cut_off_ticks == 2 {
+                    eprintln!("{label} t={:.1}s truck out of supply: income {:?}", w.time, w.kingdoms[0].income);
+                    assert_eq!(w.kingdoms[0].income, sum(corps_income, truck_income), "{label}: packed truck out of supply");
+                }
+            }
+            if w.books.actors.iter().any(|b| b.deploy.is_some()) {
+                unpacking_ticks += 1;
+                if unpacking_ticks == 2 {
+                    eprintln!("{label} t={:.1}s unpacking: income {:?}", w.time, w.kingdoms[0].income);
+                    assert_eq!(w.kingdoms[0].income, corps_income, "{label}: nothing while unpacking");
+                }
+            }
+        }
+        assert!(unpacking_ticks >= 2, "{label}: unpacking state");
+        if label == "far" {
+            assert!(cut_off_ticks >= 2, "far: the truck drives out of the Corps zone");
+        }
+        let hq = hq.expect("deployed");
+        w.step(vec![]);
+        let b = w.books.actor(hq).unwrap();
+        eprintln!(
+            "{label} t={:.1}s deployed {:.0} m from the Corps: income {:?} out {} stock {:.1}",
+            w.time,
+            w.actors[hq as usize].pos.truncate().distance(cpos),
+            w.kingdoms[0].income,
+            b.out_of_supply,
+            b.supply_stock
+        );
+        assert_eq!(w.kingdoms[0].income, deployed_want, "{label}: deployed");
+    }
+    // Supply trucks and depots: no money.
+    for nat in ["usa", "gbr", "rus", "ger", "jpn"] {
+        for id in [format!("{nat}_truck_supply"), format!("{nat}_depot_supply")] {
+            let d = data.def(data.find(&id).unwrap());
+            assert_eq!(d.production_all[0], 0.0, "{id} money");
+        }
+    }
+}
+
 /// The same supply check on a generated map with two computers.
 #[test]
 #[ignore]
