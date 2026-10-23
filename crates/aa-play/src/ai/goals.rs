@@ -482,7 +482,12 @@ fn finalize(g: &mut Goal, ego: &Ego, memory: &Memory, rng: &mut SaiRng) {
         g.base = p;
         return;
     }
-    if let Some(&fuzzy) = memory.selected.get(&g.key) {
+    // A recruit goal is made anew every think: no inertia and a fresh fuzz
+    // (the goal CSV shows inertia 0 on all 91 RECRUIT rows, also for the
+    // Mechanized HQ selected think after think).
+    if g.kind != data::RECRUIT
+        && let Some(&fuzzy) = memory.selected.get(&g.key)
+    {
         g.fuzzy = fuzzy;
         g.base = p + fuzzy + inertia;
     } else {
@@ -1393,7 +1398,7 @@ fn ordered_to(order: &Order, to: Vec2, tolerance: f32) -> bool {
     }
 }
 
-fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRng, goals: &[Goal], log: &mut Vec<String>) {
+fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng, goals: &[Goal], log: &mut Vec<String>) {
     let w = c.view.world;
     let me = c.view.kingdom;
     let mut commands = Vec::new();
@@ -1401,19 +1406,41 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
     let mut used_buildings: Vec<ActorId> = Vec::new();
     let mut assigned = BTreeMap::new();
     let tol = c.regions.size * 0.5;
-    for g in goals.iter().filter(|g| g.selected) {
+    // 7A59C0: the selected goals run in order of their current priority
+    // (comparator 7A3070, goal +0x34). 7A39C0 pays each from the running
+    // stockpile (7A3860 without income: the purchase resources, money);
+    // a goal it cannot pay now but could within saving_time_limit
+    // (7A3860 with income) starts saving, and no later goal with a purchase
+    // cost runs this think (7A3980). Goals without a cost always run.
+    let mut order: Vec<&Goal> = goals.iter().filter(|g| g.selected).collect();
+    order.sort_by(|a, b| b.current.partial_cmp(&a.current).unwrap_or(std::cmp::Ordering::Equal));
+    let saving_rate = c.ego.saving_time_limit / 60.0;
+    let mut saving = false;
+    let mut pay = |cost: [f32; 3], stock: &mut [f32; 3]| -> bool {
+        let money = cost[0];
+        if money <= 0.0 {
+            return true;
+        }
+        if saving {
+            return false;
+        }
+        if money <= stock[0] + 1e-3 {
+            stock[0] -= money;
+            return true;
+        }
+        if money <= stock[0] + c.view.income[0].max(0.0) * saving_rate + 1e-3 {
+            saving = true;
+        }
+        false
+    };
+    for g in order {
         match g.kind {
             data::RECRUIT => {
                 let Some((d, b)) = g.recruit else { continue };
-                // 7CDA10 sends the recruit order of every selected goal (one
-                // per recruiter up to build_queue_max_items); production
-                // refuses what the stockpile cannot pay now, so an unpaid
-                // goal neither queues nor holds back the goals below it.
-                if used_buildings.contains(&b) || (0..3).any(|r| g.cost[r] > stock[r] + 1e-3) {
+                // 7A39C0 pays first; then 7CDA10 sends the recruit order,
+                // one per recruiter up to build_queue_max_items.
+                if !pay(g.cost, &mut stock) || used_buildings.contains(&b) {
                     continue;
-                }
-                for (s, cost) in stock.iter_mut().zip(g.cost) {
-                    *s -= cost;
                 }
                 used_buildings.push(b);
                 commands.push(Command::Recruit { kingdom: me, building: b, def: d });
@@ -1422,11 +1449,9 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
             }
             data::RESEARCH => {
                 let Some((b, tech)) = g.research.clone() else { continue };
-                if used_buildings.contains(&b) || (0..3).any(|r| g.cost[r] > stock[r] + 1e-3) {
+                // 7D0820: one order per building up to build_queue_max_items.
+                if !pay(g.cost, &mut stock) || used_buildings.contains(&b) {
                     continue;
-                }
-                for (s, cost) in stock.iter_mut().zip(g.cost) {
-                    *s -= cost;
                 }
                 used_buildings.push(b);
                 log.push(format!("research {tech} at {} (priority {:.0})", c.def(w.actors[b as usize].def).id, g.base));
@@ -1434,11 +1459,8 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
             }
             data::ATTACH => {
                 let Some((org, hq)) = g.attach else { continue };
-                if (0..3).any(|r| g.cost[r] > stock[r] + 1e-3) {
+                if !pay(g.cost, &mut stock) {
                     continue;
-                }
-                for (s, cost) in stock.iter_mut().zip(g.cost) {
-                    *s -= cost;
                 }
                 log.push(format!("attach {} to {} (priority {:.0})", c.def(w.orgs[org as usize].def).id, c.def(w.actors[hq as usize].def).id, g.base));
                 commands.push(Command::Attach { kingdom: me, org, hq });
@@ -1467,7 +1489,8 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
             data::EXPLORE => {
                 let Some(&o) = g.actors.first() else { continue };
                 let ov = &c.view.orgs[o];
-                let region = explore_region(c, player, g, ov);
+                // 7C3440: no candidate region -> the actor's own region.
+                let region = explore_region(c, player, g, ov, rng).unwrap_or_else(|| c.region_of(ov.pos));
                 let target = c.regions.centers[region as usize];
                 player.memory.explore_region.insert(g.key, region);
                 player.memory.explore_actor.insert(g.key, ov.id);
@@ -1532,97 +1555,197 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, _rng: &mut SaiRn
     enqueue(player, data, c.now, c.ego.reaction_time, profile.max_ge_commands, commands);
 }
 
-/// Explore region choice: the current region, regions with unknown hostile
-/// buildings (intuition), random island regions; fog, kingdom-centre and
-/// actor distances, time since scouted, fuzziness (ExplorationTypeData).
-fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::OrgView) -> u32 {
-    let e = &c.ego.exploration[g.explore.unwrap_or(1)];
+/// Explore region choice of an explore goal with an actor (`7C2C20`, run by
+/// the goal's execution `7C3440`). Every region of the actor's island gets
+/// the largest of these candidate bonuses:
+/// - the actor's region: `actor_region_bonus`;
+/// - the region this goal explored last think: `current_region_bonus`;
+/// - close goals only: the regions of the player's buildings,
+///   `building_region_bonus`;
+/// - intuition: each region, with `intuition_probability`, counts the cities
+///   (`intuition_count_settlements`) and the hostile buildings outside a city
+///   (`intuition_count_other_buildings`) standing there, seen or not; with
+///   any, and within `intuition_distance` regions of one of the player's
+///   buildings when that is not negative, `intuition_region_bonus` (times
+///   count ^ `intuition_region_exponent` when that is positive);
+/// - `num_random_candidates` random island regions: `random_candidate_bonus`.
+///
+/// Regions with a positive bonus are valued by `4A9450` and the best is
+/// explored; None when no region qualifies (`7C3440` then uses the actor's
+/// own region).
+fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::OrgView, rng: &mut SaiRng) -> Option<u32> {
+    let kind = g.explore.unwrap_or(1);
+    let e = &c.ego.exploration[kind];
+    let w = c.view.world;
+    let n = c.regions.len();
     let home = c.region_of(ov.pos);
-    let mut seed = (c.now.to_bits() as u64) ^ (ov.id as u64 * 0x9e37_79b9);
-    let mut next = || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f32 / (1u64 << 53) as f32
+    let island: Vec<u32> = (0..n as u32).filter(|&r| c.regions.same_island(r, home)).collect();
+    let mut bonus = vec![0.0f32; n];
+    let raise = |bonus: &mut Vec<f32>, r: u32, v: f32| {
+        if let Some(b) = bonus.get_mut(r as usize)
+            && *b < v
+        {
+            *b = v;
+        }
     };
-    let mut candidates: Vec<(u32, f32)> = Vec::new();
-    if let Some(&r) = player.memory.explore_region.get(&g.key) {
-        candidates.push((r, e.current_region_bonus));
+    raise(&mut bonus, home, e.actor_region_bonus);
+    let last = player.memory.explore_region.get(&g.key).copied();
+    if let Some(r) = last {
+        raise(&mut bonus, r, e.current_region_bonus);
     }
-    candidates.push((home, e.actor_region_bonus));
-    let mut intuition: BTreeMap<u32, u32> = BTreeMap::new();
-    for b in &c.view.buildings {
-        if b.owner == Some(c.view.me) || player.known.contains(&b.id) {
+    let mine: Vec<u32> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| c.region_of(b.pos)).collect();
+    if kind == 0 {
+        for &r in &mine {
+            raise(&mut bonus, r, e.building_region_bonus);
+        }
+    }
+    // Intuition reads the region's actors themselves, not what the player
+    // has seen (the original walks each region's actor list).
+    let mut items = vec![0u32; n];
+    for a in w.actors.iter().filter(|a| a.alive && !a.removed) {
+        let def = c.def(a.def);
+        if def.class != Some(crate::data::DefClass::Building) && !def.city {
             continue;
         }
-        let counted = if b.city { e.intuition_count_settlements } else { e.intuition_count_other_buildings };
-        if counted && attack_target(c, b) {
-            *intuition.entry(c.region_of(b.pos)).or_default() += 1;
+        let owner = a.kingdom.and_then(|k| super::view::kingdom_index(w, k));
+        if owner == Some(c.view.me) || owner.is_some_and(|o| c.view.allied[o]) {
+            continue;
+        }
+        let city = def.city && def.city_zone_radius > 0.0;
+        let counted = if city {
+            e.intuition_count_settlements
+        } else {
+            // Other buildings: a hostile kingdom's, not a city's blocks.
+            e.intuition_count_other_buildings && owner.is_some_and(|o| c.view.hostile[o] && !w.kingdoms[o].independent)
+        };
+        if counted {
+            items[c.region_of(a.pos.truncate()) as usize] += 1;
         }
     }
-    for (r, n) in intuition {
-        if next() <= e.intuition_probability && (e.intuition_distance < 0 || c.regions.hops(home, r) as i32 <= e.intuition_distance) {
-            let bonus = if e.intuition_region_exponent <= 0.0 { e.intuition_region_bonus } else { e.intuition_region_bonus * (n as f32).powf(e.intuition_region_exponent) };
-            candidates.push((r, bonus));
+    for &r in island.iter().rev() {
+        if rng.unit() > e.intuition_probability {
+            continue;
         }
+        let count = items[r as usize];
+        if count == 0 {
+            continue;
+        }
+        if e.intuition_distance >= 0 && !mine.iter().any(|&m| c.regions.hops(m, r) as i32 <= e.intuition_distance) {
+            continue;
+        }
+        let v = if e.intuition_region_exponent > 0.0 { e.intuition_region_bonus * (count as f32).powf(e.intuition_region_exponent) } else { e.intuition_region_bonus };
+        raise(&mut bonus, r, v);
     }
-    let land: Vec<u32> = (0..c.regions.len() as u32).filter(|&r| c.regions.same_island(r, home)).collect();
     for _ in 0..e.num_random_candidates.max(0) {
-        if land.is_empty() {
+        if island.is_empty() {
             break;
         }
-        let r = land[((next() * land.len() as f32) as usize).min(land.len() - 1)];
-        candidates.push((r, e.random_candidate_bonus));
+        let r = island[rng.below(island.len())];
+        raise(&mut bonus, r, e.random_candidate_bonus);
     }
-    let mine: Vec<Vec2> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| b.pos).collect();
-    let center = if mine.is_empty() { ov.pos } else { mine.iter().copied().sum::<Vec2>() / mine.len() as f32 };
-    let factor = |d: f32, cap: f32, max: f32, exp: f32, ceil: f32, floor: f32, close: bool| -> Option<f32> {
-        if cap >= 0.0 && d > cap {
-            return None;
+    let center = {
+        let pts: Vec<Vec2> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| b.pos).collect();
+        if pts.is_empty() { ov.pos } else { pts.iter().copied().sum::<Vec2>() / pts.len() as f32 }
+    };
+    let mut best: Option<(u32, f32)> = None;
+    for r in 0..n as u32 {
+        let b = bonus[r as usize];
+        if b <= 0.0 || !c.regions.same_island(r, home) {
+            continue;
         }
-        let d = d.min(max.max(1e-3));
-        let mut m = d / max.max(1e-3);
+        let v = explore_value(c, player, e, b, r, last, ov, center, rng);
+        if v > best.map_or(0.0, |x| x.1) {
+            best = Some((r, v));
+        }
+    }
+    best.map(|b| b.0)
+}
+
+/// `4A9450`: the value of exploring region `r` with candidate bonus `bonus`.
+/// Fog: within `fog_search_depth` regions the nearest region whose explored
+/// share is at most `percent_to_count_region_explored` scales the priority
+/// from `black_fog_priority` (the region itself) to `grey_fog_priority`
+/// (none in reach; a negative depth searches nothing). Then the
+/// kingdom-centre, last-region and actor distance multipliers (a candidate
+/// beyond a positive cap is worth 0), the time since the region was last
+/// scouted (`min(t, max) ^ exp`, for a region not itself unexplored) and
+/// `fuzzy_factor` times a draw of the SAI RNG.
+#[allow(clippy::too_many_arguments)]
+fn explore_value(c: &Ctx<'_, '_>, player: &Player, e: &super::data::Exploration, bonus: f32, r: u32, last: Option<u32>, ov: &super::view::OrgView, center: Vec2, rng: &mut SaiRng) -> f32 {
+    let depth = e.fog_search_depth;
+    let mut steps = (depth + 1).max(0);
+    let span = if steps < 2 {
+        steps = 1;
+        1
+    } else {
+        steps
+    };
+    if depth >= 0 {
+        for q in c.regions.within(r, depth as u32) {
+            let hops = c.regions.hops(r, q) as i32;
+            if hops < steps && c.regions.same_island(q, r) && explored_share(c, q) <= e.percent_to_count_region_explored {
+                steps = hops;
+            }
+        }
+    }
+    let mut v = e.black_fog_priority - (e.black_fog_priority - e.grey_fog_priority) * (steps as f32 / span as f32) + bonus;
+    let p = c.regions.centers[r as usize];
+    let factor = |d: f32, max: f32, close: bool, exp: f32, floor: f32, ceil: f32| -> f32 {
+        let mut m = d.min(max) / if max > 0.0 { max } else { 1.0 };
         if close {
             m = 1.0 - m;
         }
-        Some(m.max(0.0).powf(exp) * (ceil - floor) + floor)
+        (ceil - floor) * m.max(0.0).powf(exp) + floor
     };
-    let mut best = (home, f32::MIN);
-    for (r, bonus) in candidates {
-        if !c.regions.same_island(r, home) {
-            continue;
+    if e.consider_distance_to_kingdom_center {
+        let d = p.distance(center);
+        if e.kingdom_center_distance_cap > 0.0 && d > e.kingdom_center_distance_cap {
+            return 0.0;
         }
-        let p = c.regions.centers[r as usize];
+        v *= factor(d, e.kingdom_center_distance_max, e.kingdom_center_distance_prefer_close, e.kingdom_center_distance_exp, e.kingdom_center_distance_floor, e.kingdom_center_distance_ceil);
+    }
+    if e.consider_distance_to_last_region
+        && let Some(l) = last
+    {
+        let d = c.regions.centers[l as usize].distance(p);
+        if e.last_region_distance_cap > 0.0 && d > e.last_region_distance_cap {
+            return 0.0;
+        }
+        v *= factor(d, e.last_region_distance_max, e.last_region_distance_prefer_close, e.last_region_distance_exp, e.last_region_distance_floor, e.last_region_distance_ceil);
+    }
+    if e.consider_distance_to_actor {
+        let d = ov.pos.distance(p);
+        if e.actor_distance_cap > 0.0 && d > e.actor_distance_cap {
+            return 0.0;
+        }
+        v *= factor(d, e.actor_distance_max, e.actor_distance_prefer_close, e.actor_distance_exp, e.actor_distance_floor, e.actor_distance_ceil);
+    }
+    if e.use_time_since_last_scouted && steps > 0 {
         let seen = player.scouted.get(r as usize).copied().unwrap_or(f32::NEG_INFINITY);
-        let fog = if seen.is_finite() { e.grey_fog_priority } else { e.black_fog_priority };
-        let mut v = fog + bonus;
-        if e.consider_distance_to_kingdom_center {
-            match factor(p.distance(center), e.kingdom_center_distance_cap, e.kingdom_center_distance_max, e.kingdom_center_distance_exp, e.kingdom_center_distance_ceil, e.kingdom_center_distance_floor, e.kingdom_center_distance_prefer_close) {
-                Some(m) => v *= m,
-                None => continue,
-            }
-        }
-        if e.consider_distance_to_actor {
-            match factor(p.distance(ov.pos), e.actor_distance_cap, e.actor_distance_max, e.actor_distance_exp, e.actor_distance_ceil, e.actor_distance_floor, e.actor_distance_prefer_close) {
-                Some(m) => v *= m,
-                None => continue,
-            }
-        }
-        if e.consider_distance_to_last_region && let Some(&last) = player.memory.explore_region.get(&g.key) {
-            let lp = c.regions.centers[last as usize];
-            match factor(p.distance(lp), e.last_region_distance_cap, e.last_region_distance_max, e.last_region_distance_exp, e.last_region_distance_ceil, e.last_region_distance_floor, e.last_region_distance_prefer_close) {
-                Some(m) => v *= m,
-                None => continue,
-            }
-        }
-        if e.use_time_since_last_scouted && e.time_since_last_scouted_max > 0.0 {
-            let t = if seen.is_finite() { (c.now - seen).max(0.0) } else { e.time_since_last_scouted_max };
-            v *= (t / e.time_since_last_scouted_max).min(1.0).powf(e.time_since_last_scouted_exp);
-        }
-        v += next() * e.fuzzy_factor;
-        if v > best.1 {
-            best = (r, v);
+        let t = if seen.is_finite() { c.now - seen } else { c.now };
+        if t > 0.0 {
+            v *= t.min(e.time_since_last_scouted_max).powf(e.time_since_last_scouted_exp);
         }
     }
-    best.0
+    rng.unit() * e.fuzzy_factor + v
+}
+
+/// The share of a region's tiles the player's side has explored (grey or
+/// white fog).
+fn explored_share(c: &Ctx<'_, '_>, r: u32) -> f32 {
+    let w = c.view.world;
+    let cell = w.map.cell_size.max(1e-3);
+    let (rx, ry) = c.regions.coords(r);
+    let per = (c.regions.size / cell).round().max(1.0) as i32;
+    let (x0, y0) = (rx * per, ry * per);
+    let (mut seen, mut all) = (0u32, 0u32);
+    for y in y0..(y0 + per).min(w.map.height as i32) {
+        for x in x0..(x0 + per).min(w.map.width as i32) {
+            all += 1;
+            if crate::fog::tile_view(w, Some(c.view.kingdom), x, y) != crate::fog::TileView::Unexplored {
+                seen += 1;
+            }
+        }
+    }
+    if all == 0 { 1.0 } else { seen as f32 / all as f32 }
 }

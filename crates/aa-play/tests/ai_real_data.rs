@@ -402,8 +402,29 @@ fn three_computers_cost_on_a_generated_map() {
 fn measure(mut w: World, minutes: u32) {
     let mut refused = std::collections::BTreeMap::<String, usize>::new();
     let mut first_hit = None;
+    let mut first_seen = None;
+    let mut first_attack = None;
+    let human: Vec<u32> = w.actors.iter().filter(|a| a.alive && a.kingdom == Some(0) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.id).collect();
     for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
         w.step(Vec::new());
+        if first_seen.is_none()
+            && w.time > 1.0
+            && let Some(&h) = human.iter().find(|&&h| aa_play::fog::actor_seen(&w, h, Some(1)))
+        {
+            first_seen = Some(w.time);
+            eprintln!("t={:>6.1}s FIRST SIGHT OF THE HUMAN BASE {}", w.time, w.data.def(w.actors[h as usize].def).id);
+        }
+        if first_attack.is_none()
+            && let (Some(p), Some(regions)) = (w.ai.players.first(), w.ai.regions.as_ref())
+            && let Some(a) = p.memory.attacks.iter().find(|a| human.iter().any(|&h| regions.region_at(w.actors[h as usize].pos.truncate()) == a.1))
+        {
+            first_attack = Some(a.0);
+            eprintln!("t={:>6.1}s FIRST ATTACK GOAL ON THE HUMAN BASE (region {}, {} orgs)", a.0, a.1, a.2);
+        }
+        if tick > 0 && tick % (300 * aa_play::TICKS_PER_SECOND as u64) == 0 {
+            let s = snapshot(&w, 1);
+            eprintln!("t={:>4.0}s ARMY regiments {} cv {:.0} buildings {} income {:?}", w.time, s.regiments, s.cv, s.buildings, w.kingdoms[1].income);
+        }
         for e in &w.events {
             match e {
                 aa_play::Event::Refused { kingdom: 1, reason } => *refused.entry(reason.chars().take(80).collect()).or_default() += 1,
@@ -461,7 +482,7 @@ fn measure(mut w: World, minutes: u32) {
         eprintln!("refused x{n}: {r}");
     }
     let st = w.ai.stats;
-    eprintln!("first hit on the human {first_hit:?}; AI avg {:.4} ms/tick, commands {}", st.total_ns as f64 / st.ticks.max(1) as f64 / 1e6, st.commands);
+    eprintln!("first sight of the human base {first_seen:?}; first attack goal on it {first_attack:?}; first hit on the human {first_hit:?}; AI avg {:.4} ms/tick, commands {}", st.total_ns as f64 / st.ticks.max(1) as f64 / 1e6, st.commands);
     assert!(!refused.keys().any(|r| r.contains("own unit")), "the computer attacked its own units");
 }
 
@@ -709,4 +730,67 @@ fn probe_recruited_truck_moves() {
     }
     eprintln!("spawned at {spawn:?} -> {site:?}: now {:?} order {:?}", w.actors[truck as usize].pos.truncate(), w.actors[truck as usize].order);
     eprintln!("trail {trail:?}");
+}
+
+/// Probe (ignored): the Chuikov comparison map's layout (bases, cities and
+/// their owners) and how close the computer's regiments come to the human
+/// buildings, with the time the computer first sees one.
+#[test]
+#[ignore]
+fn probe_contact() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let minutes: u32 = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+    let seed: u64 = std::env::var("AA_AI_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let params = RandomMapParams::defaults(&info, 2, seed);
+    let generated = rmg.generate(&params).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    let human: Vec<u32> = w.actors.iter().filter(|a| a.alive && a.kingdom == Some(0) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.id).collect();
+    for k in &w.kingdoms {
+        eprintln!("kingdom {} {} independent {} team {}", k.id, k.name, k.independent, k.team);
+    }
+    for a in w.actors.iter().filter(|a| a.alive && (w.data.def(a.def).city || human.contains(&a.id) || (a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)))) {
+        eprintln!("{} {} owner {:?} at {:?} zone {}", a.id, w.data.def(a.def).id, a.kingdom, a.pos.truncate(), w.data.def(a.def).city_zone_radius);
+    }
+    let mut seen = None;
+    let mut closest = f32::MAX;
+    for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
+        w.step(Vec::new());
+        if seen.is_none() && let Some(&h) = human.iter().find(|&&h| aa_play::fog::actor_seen(&w, h, Some(1))) {
+            seen = Some(w.time);
+            eprintln!("t={:.1} the computer first sees {} at {:?}", w.time, w.data.def(w.actors[h as usize].def).id, w.actors[h as usize].pos.truncate());
+        }
+        if tick % (16 * 30) == 0 {
+            let mut best = (f32::MAX, 0u32);
+            for o in w.orgs.iter().filter(|o| o.alive && o.kingdom == 1) {
+                for &m in &o.members {
+                    let a = &w.actors[m as usize];
+                    if !a.alive {
+                        continue;
+                    }
+                    for &h in &human {
+                        let d = a.pos.truncate().distance(w.actors[h as usize].pos.truncate());
+                        if d < best.0 {
+                            best = (d, o.id);
+                        }
+                    }
+                }
+            }
+            closest = closest.min(best.0);
+            eprintln!("t={:>5.0} closest regiment {} at {:.0} m from a human building; ai buildings {}", w.time, best.1, best.0, w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(1) && w.data.def(a.def).class == Some(aa_play::DefClass::Building)).count());
+        }
+    }
+    eprintln!("first seen {seen:?}, closest {closest:.0} m");
 }
