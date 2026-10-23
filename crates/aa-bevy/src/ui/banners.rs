@@ -16,7 +16,8 @@
 //!   insignia of the organization's HQ, Nations/<nation>.tgi [Badge]);
 //! * a selected organization's view shows the VFXMoraleBar
 //!   (Effects/MoraleBar/MoraleBar.NIF) above its banner;
-//! * a focused organization (cursor over the banner or a member) shows
+//! * a focused organization (cursor over the banner or a member, or
+//!   selected itself or through its structure) shows
 //!   `banner_focus_vfx` (Effects/Selection/BannerFocus.NIF, BannerFocusBase)
 //!   tinted with the diplomatic colour (0x454DC0: self green, friend blue,
 //!   neutral grey 0.8, enemy red).
@@ -72,6 +73,8 @@ struct Key {
 
 #[derive(Resource, Default)]
 pub struct BannerArt {
+    /// The banner material of the object display's organization.
+    pub selected: Option<Handle<StandardMaterial>>,
     loaded: bool,
     quad: Handle<Mesh>,
     size: f32,
@@ -333,15 +336,35 @@ pub fn update(
     let view_pos: HashMap<u32, Vec3> = views.iter().map(|(v, tf)| (v.id, tf.translation())).collect();
     let badges = hq_badges(w, &art);
     let flash_on = (time.elapsed_secs() / FLASH_SECONDS) as u64 % 2 == 0;
-    // the focused organization: the hovered member's
-    let focused = sel.hover.and_then(|id| w.actor(id)).and_then(|a| a.org);
+    // the focused organizations (0x458ED0: the focus VFX runs for an
+    // object flagged hovered or selected, 0x8000 / 0x10000, or whose
+    // organization's is; the selection VFX of organizations is
+    // /special/empty.NIF): the hovered member's, the selected ones and the
+    // organization of a selected structure (the original's selected HQ
+    // shows its banner's green corners, original-ui/06-corps.png)
     let selected: Vec<u32> = b.selection.iter().filter_map(|u| match u {
         Unit::Org(o) => Some(*o),
         _ => None,
     }).collect();
+    let mut focused: Vec<u32> = sel.hover.and_then(|id| w.actor(id)).and_then(|a| a.org).into_iter().collect();
+    for u in &b.selection {
+        match u {
+            Unit::Org(o) => focused.push(*o),
+            Unit::Actor(a) => focused.extend(w.actor(*a).and_then(|x| x.org)),
+        }
+    }
     let mut want: Vec<(Handle<StandardMaterial>, Transform)> = Vec::new();
     let mut placed = Vec::new();
-    for o in w.orgs.iter().filter(|o| o.alive) {
+    // the object display's banner: the first selected organization's, or
+    // the HQ organization of a selected HQ structure
+    let shown_org = match b.selection.first() {
+        Some(Unit::Org(o)) => Some(*o),
+        Some(Unit::Actor(a)) => w.actor(*a).and_then(|x| x.org),
+        None => None,
+    };
+    art.selected = None;
+    // an organization the local kingdom does not see has no banner
+    for o in w.orgs.iter().filter(|o| o.alive && aa_play::fog::org_visible(w, o.id, Some(b.local))) {
         let def = w.data.def(o.def);
         let Some(info) = art.things.get(&lower(&def.id)).cloned() else { continue };
         let Some(k) = w.kingdoms.iter().find(|k| k.id == o.kingdom) else { continue };
@@ -415,6 +438,9 @@ pub fn update(
         }
         let key = Key { color: k.color, layers };
         let m = art.material(data, &key, &mut images, &mut materials);
+        if shown_org == Some(o.id) {
+            art.selected = Some(m.clone());
+        }
         // constant screen size (banner_focus_vfx constant_screen_size; the
         // original banners keep their screen size over the zoom range, see
         // the module notes): the model size at the default zoom's distance
@@ -423,7 +449,7 @@ pub fn update(
         want.push((m, Transform::from_translation(pos).with_rotation(cam_rot).with_scale(Vec3::new(size, size, 1.0))));
         placed.push((o.id, pos, size * 0.5));
         let relation = aa_play::setup::relation(w, Some(b.local), Some(o.kingdom)) as usize;
-        if focused == Some(o.id) {
+        if focused.contains(&o.id) {
             if let Some(f) = art.focus.get(relation.min(3)).cloned() {
                 let s = art.focus_size * k;
                 want.push((f, Transform::from_translation(pos + toward * 0.05 * k).with_rotation(cam_rot).with_scale(Vec3::new(s, s, 1.0))));

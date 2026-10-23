@@ -74,6 +74,12 @@ pub struct Front {
     pub pointer_over_ui: bool,
     settings_path: Option<PathBuf>,
     pub quit: bool,
+    /// The tooltip on screen and the hover timer.
+    tooltips: super::tooltip::Tooltips,
+    /// The loading screen's status key shown.
+    loading_status: String,
+    /// The launched session's StartingExperience world rule.
+    starting_experience: f32,
 }
 
 /// Commands the front end does not run yet (their screens are not built).
@@ -117,6 +123,9 @@ impl Front {
             pointer_over_ui: false,
             settings_path,
             quit: false,
+            tooltips: Default::default(),
+            loading_status: String::new(),
+            starting_experience: 0.0,
         }
     }
 
@@ -189,6 +198,8 @@ impl Front {
     }
 
     fn build(&mut self, size: (i32, i32), battle: Option<&Battle>, progress: Option<&LoadProgress>) {
+        // a rebuilt screen has no tooltip connected
+        self.tooltips = Default::default();
         self.ui.set_screen(Screen { width: size.0, height: size.1 });
         if self.page == Page::Credits && self.credits.is_some() {
             self.ui.layout();
@@ -237,7 +248,13 @@ impl Front {
 
     /// Loading screen refresh (0x6E83A0) from the pending setup / loader.
     fn refresh_loading(&mut self, progress: Option<&LoadProgress>) {
-        let status_text = progress.map(|p| p.status.clone()).unwrap_or_default();
+        // the loader's stage (session::LOAD_STATUS app_status_* key), the
+        // load error text otherwise
+        let status_text = match progress.and_then(|p| p.error.clone()) {
+            Some(e) => e,
+            None => crate::session::load_status().to_string(),
+        };
+        self.loading_status = status_text.clone();
         let status = if self.loading_finished {
             self.ui.strings.resolve("#app_status_finished")
         } else if status_text.starts_with('#') || status_text.starts_with("app_status") {
@@ -248,6 +265,7 @@ impl Front {
             status_text
         };
         let (map_name, map_description, nation) = self.custom.loading_info();
+        let map_description = if map_description.starts_with('#') { self.ui.strings.resolve(&map_description) } else { map_description };
         let info = screens::LoadingInfo {
             hide_map_labels: false,
             map_name,
@@ -419,7 +437,7 @@ pub fn frame(
     progress: Option<Res<LoadProgress>>,
     selecting: Option<Res<crate::input::Selecting>>,
     mut commands: Commands,
-    mut exit: MessageWriter<AppExit>,
+    mut quit: ResMut<super::Quit>,
 ) {
     let Ok(window) = windows.single() else { return };
     let size = (window.physical_width().max(1) as i32, window.physical_height().max(1) as i32);
@@ -463,7 +481,10 @@ pub fn frame(
     let battle_ref = battle.as_deref();
     if f.built_for != Some((size.0, size.1, f.page)) {
         f.build(size, battle_ref, progress.as_deref());
-    } else if f.page == Page::Loading && !f.loading_finished && progress.as_ref().is_some_and(|p| p.is_changed()) {
+    } else if f.page == Page::Loading
+        && !f.loading_finished
+        && (progress.as_ref().is_some_and(|p| p.is_changed()) || f.loading_status != crate::session::load_status())
+    {
         f.refresh_loading(progress.as_deref());
     }
     // pointer input (window physical pixels), script injection first
@@ -603,7 +624,11 @@ pub fn frame(
     }
     // the HUD reads the battle every frame
     if f.page == Page::Game {
+        let hovered = input.pos.and_then(|p| f.ui.pick(p.x, p.y));
+        let starting_experience = f.starting_experience;
         if let (Some(hud), Some(b)) = (f.hud.as_mut(), battle.as_deref()) {
+            hud.starting_experience = starting_experience;
+            hud.set_hover(hovered.as_deref());
             hud.update(&mut f.ui, b);
         }
     }
@@ -612,6 +637,12 @@ pub fn frame(
             f.custom.localize_setup(&f.ui, &mut setup);
             info!("launch: {setup:?}, generals {:?}", f.custom.launched_profiles);
             commands.insert_resource(crate::session::PendingAiProfiles(f.custom.launched_profiles.clone()));
+            f.starting_experience = f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
+            // the FogOfWar world rule of the session (EnumValue IDS)
+            match f.custom.rule_value("FogOfWar").and_then(|v| aa_play::fog::FogMode::from_ids(&v)) {
+                Some(mode) => commands.insert_resource(super::fog::PendingFog(mode)),
+                None => commands.remove_resource::<super::fog::PendingFog>(),
+            }
             commands.insert_resource(crate::session::PendingSetup(setup));
             if let Some(params) = random {
                 commands.insert_resource(crate::session::PendingRandomMap(params));
@@ -647,6 +678,16 @@ pub fn frame(
     }
     if f.built_for != Some((size.0, size.1, f.page)) {
         f.build(size, battle.as_deref(), progress.as_deref());
+    }
+    // tooltips (after the HUD set this frame's buttons)
+    {
+        let pointer = input.pos.map(|p| (p.x, p.y));
+        let pressed = input.left_pressed || input.right_pressed;
+        let game = f.page == Page::Game;
+        let now = f.now_ms();
+        let hud = f.hud.as_ref();
+        let dynamic = |p: &str| hud.and_then(|h| h.tooltip(p));
+        f.tooltips.frame(&mut f.ui, pointer, pressed, now, game, &dynamic);
     }
     f.ui.layout();
     let mut list = f.ui.draw_list();
@@ -694,6 +735,6 @@ pub fn frame(
     }
     draw.list = list;
     if f.quit {
-        exit.write(AppExit::Success);
+        quit.requested = true;
     }
 }

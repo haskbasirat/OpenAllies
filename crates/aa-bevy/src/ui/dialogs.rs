@@ -111,6 +111,24 @@ fn rule_value_text(ui: &Ui, rule: &WorldRule, value: &str) -> String {
     }
 }
 
+/// A map's stored world rules as rule values (bool byte, int, fixed f32,
+/// enum index into the rule's values).
+fn map_rules(data: &GameData, m: &MapInfo) -> Vec<RuleValue> {
+    m.rules
+        .iter()
+        .filter_map(|(ids, kind, raw)| {
+            let rule = data.rules.iter().find(|r| r.ids.eq_ignore_ascii_case(ids))?;
+            let value = match kind {
+                0 => (*raw != 0).to_string(),
+                1 => (*raw as i32).to_string(),
+                2 => format!("{}", f32::from_bits(*raw)),
+                _ => rule.enum_values.get(*raw as usize)?.0.clone(),
+            };
+            Some(RuleValue { ids: rule.ids.clone(), value })
+        })
+        .collect()
+}
+
 /// Rule lines whose value differs from the default (0x511460).
 pub fn rule_lines(ui: &Ui, data: &GameData, values: &[RuleValue]) -> Vec<String> {
     let mut out = Vec::new();
@@ -135,6 +153,10 @@ struct RulesPanel {
     /// Data node of the panel (`file:Dialog/WorldRulesPanel`).
     node: String,
     shown: Vec<(String, String)>,
+    /// Two rules per row (ctor argument, +0xB9: the Scenario Map dialog's
+    /// panel, `0x68D280` passes 1): each WorldRuleSlot row holds a rule in
+    /// its Left then its Right half (`0x6A1360` / `0x69FE30`).
+    columns: bool,
 }
 
 impl RulesPanel {
@@ -193,7 +215,24 @@ impl RulesPanel {
             };
             load_item(ui, &mut item, &self.node);
             item.tag = 7000 + self.shown.len() as u64;
-            ui.viewport_add(&vp, item);
+            if self.columns {
+                // a new WorldRuleSlot when there is none or the last is full
+                let n = self.shown.len();
+                if n % 2 == 0 {
+                    let mut slot = w(C::Panel, "WorldRuleSlot");
+                    slot.add_child(w(C::Panel, "Left"));
+                    slot.add_child(w(C::Panel, "Right"));
+                    load_item(ui, &mut slot, &self.node);
+                    slot.tag = 7500 + (n / 2) as u64;
+                    ui.viewport_add(&vp, slot);
+                }
+                if let Some(slot) = ui.find_tag(7500 + (n / 2) as u64) {
+                    let half = if n % 2 == 0 { "Left" } else { "Right" };
+                    let _ = ui.attach(&format!("{slot}/{half}"), item);
+                }
+            } else {
+                ui.viewport_add(&vp, item);
+            }
             self.shown.push((rule.ids.clone(), class_name.to_string()));
         }
         ui.layout();
@@ -343,7 +382,8 @@ impl FileDialog {
         let mut label = w(C::Label, "MapPreviewLabel");
         load_item(ui, &mut label, &format!("{FILE_DIALOG}/MapPreviewPanel/MapPreviewViewport/ItemPanel"));
         ui.viewport_add(&format!("{FD}/MapPreviewPanel/MapPreviewViewport"), label);
-        // the scan: Maps/ recursive *.RMP, entry text = the map name
+        // the scan (0x68E340): Maps/*.RMP, directories skipped; entry text
+        // = the map name
         let mut maps: Vec<MapInfo> = super::gamedata::list_maps(&ui.store.root).iter().filter_map(|p| super::gamedata::read_map(&ui.store.root, p)).collect();
         maps.sort_by_key(|m| m.name.to_lowercase());
         // duplicates get "%s [%s]" (text, file title)
@@ -358,7 +398,7 @@ impl FileDialog {
         let mut dlg = FileDialog {
             maps,
             selected: None,
-            rules_panel: RulesPanel { path: format!("{FD}/WorldRulesPanel"), node: format!("{FILE_DIALOG}/WorldRulesPanel"), shown: Vec::new() },
+            rules_panel: RulesPanel { path: format!("{FD}/WorldRulesPanel"), node: format!("{FILE_DIALOG}/WorldRulesPanel"), shown: Vec::new(), columns: true },
             rules,
         };
         // pre-selection: the session's map, else the first entry
@@ -404,12 +444,17 @@ impl FileDialog {
         }
         let sides = if req == avail { avail.to_string() } else { ui.strings.format("staging_map_preview_num_req_kingdoms_format_string|dd", &[&req.to_string(), &avail.to_string()]) };
         lines.push(line(ui, "#staging_map_preview_num_kingdoms_format_string", &sides));
-        lines.extend(rule_lines(ui, data, &self.rules));
+        // case 2: the map's own world rules that differ from the rule
+        // defaults (0x65EF50), then a blank line
+        lines.extend(rule_lines(ui, data, &map_rules(data, m)));
         lines.push(String::new());
         for k in &playable {
             lines.push(kingdom_row(ui, data.color(&k.color), &k.name));
         }
+        // the side rows' line end and 0x65EBB0's: a blank line, then the
+        // description (0x65E360)
         if !m.description.is_empty() {
+            lines.push(String::new());
             lines.push(m.description.clone());
         }
         lines.join("\n")
@@ -524,7 +569,7 @@ impl RandomDialog {
         let mut dlg = RandomDialog {
             rmcs,
             selected: None,
-            rules_panel: RulesPanel { path: format!("{RD}/WorldRulesPanel"), node: format!("{RMC_DIALOG}/WorldRulesPanel"), shown: Vec::new() },
+            rules_panel: RulesPanel { path: format!("{RD}/WorldRulesPanel"), node: format!("{RMC_DIALOG}/WorldRulesPanel"), shown: Vec::new(), columns: false },
             rules,
             sliders: Vec::new(),
             prefs,
@@ -634,7 +679,7 @@ impl RandomDialog {
         let mut rules = self.rules.clone();
         self.rules_panel.read(ui, &mut rules);
         lines.extend(rule_lines(ui, data, &rules));
-        lines.push(String::new());
+        // case 1 runs the side rows straight on (0x65FB20 after 0x65D050)
         for k in rmc.kingdoms.iter().filter(|k| k.playable && !k.independent) {
             lines.push(kingdom_row(ui, data.color(&k.color), &ui.strings.resolve(&k.name)));
         }

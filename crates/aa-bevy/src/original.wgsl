@@ -21,12 +21,48 @@ struct Look {
     ambient: vec4<f32>,
     diffuse: vec4<f32>,
     emissive: vec4<f32>,
-    // xyz: render-space direction to the sun
+    // xyz: render-space direction to the sun; w: 1 = no fog (the HUD's
+    // portrait models)
     sun: vec4<f32>,
 }
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> look: Look;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var mask_texture: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(102) var mask_sampler: sampler;
+// The terrain / unit fog (KKC_Terrain fog blocks 0x7203F0 / 0x71BD00 /
+// 0x71C290): one texel per 4 m GMap tile of the native ground, 0 visible,
+// TerrainFogGrayPercentage * 255 explored, 255 never explored.
+@group(#{MATERIAL_BIND_GROUP}) @binding(103) var fog_texture: texture_2d<f32>;
+
+// Native metres per fog texel and the original texture density
+// (AVar TerrainFogPixelsPerMeter = 2): the original fog texture holds two
+// texels per metre, each the value of the tile under it, bilinearly
+// filtered, so a tile edge blends over half a metre.
+const FOG_TEXEL: f32 = 4.0;
+const FOG_PIXELS_PER_METER: f32 = 2.0;
+
+fn fog_texel(i: vec2<i32>) -> f32 {
+    let size = vec2<i32>(textureDimensions(fog_texture));
+    let c = clamp(i, vec2<i32>(0), size - vec2<i32>(1));
+    return textureLoad(fog_texture, c, 0).r;
+}
+
+/// Fog darkening at a render-space position: the terrain colour is
+/// multiplied by (1 - fog), the way a black fog layer of that opacity
+/// covers it.
+fn fog_at(world: vec3<f32>) -> f32 {
+    if look.sun.w > 0.5 {
+        return 0.0;
+    }
+    // render (x, z, -y) -> native ground (x, y), in texels
+    let p = vec2<f32>(world.x, -world.z) / FOG_TEXEL - vec2<f32>(0.5);
+    let i = vec2<i32>(floor(p));
+    var f = fract(p);
+    let sharp = FOG_TEXEL * FOG_PIXELS_PER_METER;
+    f = clamp((f - vec2<f32>(0.5)) * sharp + vec2<f32>(0.5), vec2<f32>(0.0), vec2<f32>(1.0));
+    let a = mix(fog_texel(i), fog_texel(i + vec2<i32>(1, 0)), f.x);
+    let b = mix(fog_texel(i + vec2<i32>(0, 1)), fog_texel(i + vec2<i32>(1, 1)), f.x);
+    return mix(a, b, f.y);
+}
 
 fn to_gamma(c: vec3<f32>) -> vec3<f32> {
     let lo = c * 12.92;
@@ -74,6 +110,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         // Bevy's lit shading and shadows, as Development 12 drew it.
         pbr_input.material.base_color = base;
         out.color = apply_pbr_lighting(pbr_input);
+        // the fog darkens on gamma values like the original's pipeline
+        let keep = to_linear(vec3<f32>(1.0 - fog_at(in.world_position.xyz)));
+        out.color = vec4<f32>(out.color.rgb * keep, out.color.a);
         out.color = main_pass_post_lighting_processing(pbr_input, out.color);
         return out;
     }
@@ -82,7 +121,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // D3D fixed function: clamp(emissive + ambient + diffuse * N.L), then
     // MODULATE with the texture, all on gamma values.
     let light = clamp(look.emissive.rgb + look.ambient.rgb + look.diffuse.rgb * lambert, vec3<f32>(0.0), vec3<f32>(1.0));
-    let colour = to_gamma(base.rgb) * light;
+    let colour = to_gamma(base.rgb) * light * (1.0 - fog_at(in.world_position.xyz));
     out.color = vec4<f32>(to_linear(colour), base.a);
     return out;
 }

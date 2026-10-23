@@ -140,6 +140,18 @@ pub enum Command {
     Research { kingdom: KingdomId, building: ActorId, property: String },
     /// Attach a regiment to another HQ (`production::attach`, 0x574C10).
     Attach { kingdom: KingdomId, org: OrgId, hq: ActorId },
+    // ---- appended by the UI owner (HUD commands, `crate::player_orders`) ----
+    /// The formation buttons (actor command set_formation 0x21): index into
+    /// the organization layout's `Def::formations`.
+    SetFormation { kingdom: KingdomId, orgs: Vec<OrgId>, formation: usize },
+    /// set_rally_point (0x10): the building's recruits move to `at`.
+    SetRallyPoint { kingdom: KingdomId, building: ActorId, at: Vec2 },
+    /// sell (0x14): remove the structure for SellFactor of its cost.
+    Sell { kingdom: KingdomId, building: ActorId },
+    /// hq_detach (0x20): the organization leaves its HQ.
+    Detach { kingdom: KingdomId, org: OrgId },
+    /// disband (10): the selection leaves the battle for good.
+    Disband { kingdom: KingdomId, units: Vec<Unit> },
 }
 
 /// What a player selects and orders: a whole regiment or a single actor
@@ -196,11 +208,18 @@ pub struct World {
     /// Opponent-owner side state (SAI data, players, goals, schedules);
     /// install the original SAI data with `crate::ai::attach`.
     pub ai: crate::ai::AiState,
+    // ---- appended by the UI/fog owner ----
+    /// Fog of war: per-kingdom tile visibility, detection words and
+    /// memory; read it through `crate::fog` functions.
+    pub fog: crate::fog::FogState,
+    /// HUD player orders (formations, rally points); read it through
+    /// `crate::player_orders` functions.
+    pub player_orders: crate::player_orders::PlayerOrders,
 }
 
 impl World {
     pub fn empty(data: Arc<GameData>, map: Arc<GameMap>, seed: u64) -> Self {
-        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default() }
+        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default(), fog: Default::default(), player_orders: Default::default() }
     }
     pub fn spawn_actor(&mut self, def: DefId, kingdom: Option<KingdomId>, pos: Vec3, facing: f32) -> ActorId {
         let id = self.actors.len() as ActorId;

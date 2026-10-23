@@ -967,7 +967,9 @@ impl Custom {
             // (PickRandomProfile 0x79FAF0); its name is the player name
             let name = match &r.occ {
                 Occ::Human => {
-                    local_nation = Some(nation_short.clone());
+                    // the loading screen reads the staging record's nation
+                    // (0x6E83A0 -> 0x50DC00 +0x18): none for "Random"
+                    local_nation = r.nation.as_ref().and_then(|n| data.nation(n)).map(|n| n.short.clone());
                     player.clone()
                 }
                 _ => {
@@ -1028,6 +1030,11 @@ impl Custom {
         Some((SkirmishSetup { map_id, players, starting_resources, seed: game_seed }, random))
     }
 
+    /// The value of a world rule (IDS) of the session being launched.
+    pub fn rule_value(&self, ids: &str) -> Option<String> {
+        self.session.as_ref()?.rules.iter().find(|r| r.ids.eq_ignore_ascii_case(ids)).map(|r| r.value.clone())
+    }
+
     /// Localize the computer generals' names chosen for a launch.
     pub fn localize_setup(&self, ui: &Ui, setup: &mut SkirmishSetup) {
         for p in &mut setup.players {
@@ -1044,7 +1051,11 @@ impl Custom {
         let nation = self.launched_nation.clone();
         match &s.source {
             Source::Map(m) => (m.name.clone(), m.description.clone(), nation),
-            Source::Random { .. } => (self.state.map_name.clone(), String::new(), nation),
+            // the generated world's description: the RMC's (a '#' key)
+            Source::Random { rmc, .. } => {
+                let desc = self.data.as_ref().and_then(|d| d.rmcs.iter().find(|r| r.ids.eq_ignore_ascii_case(rmc))).map(|r| r.description.clone()).unwrap_or_default();
+                (self.state.map_name.clone(), desc, nation)
+            }
         }
     }
 

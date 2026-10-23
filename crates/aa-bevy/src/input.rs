@@ -43,6 +43,8 @@ pub struct Selecting {
     pub armed: Option<TargetOrder>,
     groups: Vec<Vec<Unit>>,
     last_group: Option<(usize, f64)>,
+    /// The idle buttons' cycle position per kind.
+    idle_cycle: [usize; 3],
     last_click: Option<(Vec2, f64)>,
     /// The actor under the cursor (for the focused VFX).
     pub hover: Option<ActorId>,
@@ -187,6 +189,55 @@ pub fn battle_input(
                 }
                 GameAction::Recruit { building, def } => b.pending.push(Command::Recruit { kingdom: local, building: *building, def: *def }),
                 GameAction::Pack { building } => b.pending.push(Command::Pack { kingdom: local, building: *building }),
+                GameAction::Sell { building } => b.pending.push(Command::Sell { kingdom: local, building: *building }),
+                GameAction::Detach { org } => b.pending.push(Command::Detach { kingdom: local, org: *org }),
+                GameAction::SetFormation(i) => {
+                    let orgs: Vec<aa_play::OrgId> = b
+                        .selection
+                        .iter()
+                        .filter_map(|u| match u {
+                            Unit::Org(o) if b.world.orgs.get(*o as usize).is_some_and(|x| x.kingdom == local) => Some(*o),
+                            _ => None,
+                        })
+                        .collect();
+                    if !orgs.is_empty() {
+                        b.pending.push(Command::SetFormation { kingdom: local, orgs, formation: *i });
+                    }
+                }
+                GameAction::Disband => {
+                    let units = own_movable(&b);
+                    if !units.is_empty() {
+                        b.pending.push(Command::Disband { kingdom: local, units });
+                    }
+                }
+                GameAction::CycleIdle(kind) => {
+                    // the next idle unit of the kind, selected and centred
+                    let list = crate::ui::hud::idle_units(&b, *kind);
+                    if !list.is_empty() {
+                        let k = (*kind as usize).min(2);
+                        let i = sel.idle_cycle[k] % list.len();
+                        sel.idle_cycle[k] = i + 1;
+                        let u = list[i];
+                        b.selection = vec![u];
+                        if let Some(p) = unit_pos(&b, u) {
+                            requests.look_at = Some(p);
+                        }
+                    }
+                }
+                GameAction::CommandAll { building } => {
+                    // 0x60CCD0: every regiment attached to the HQ
+                    let w = &b.world;
+                    let hq_members: Vec<ActorId> = aa_play::production::hq_org(w, *building).map(|o| w.orgs[o as usize].members.clone()).unwrap_or_default();
+                    let attached: Vec<Unit> = w
+                        .orgs
+                        .iter()
+                        .filter(|o| o.alive && o.kingdom == local && o.hq.is_some_and(|h| h == *building || hq_members.contains(&h)))
+                        .map(|o| Unit::Org(o.id))
+                        .collect();
+                    if !attached.is_empty() {
+                        b.selection = cap(&b, attached);
+                    }
+                }
                 GameAction::Target(t) => sel.armed = Some(t.clone()),
                 GameAction::MinimapJump(u, v) => {
                     let m = &b.world.map;
@@ -196,8 +247,8 @@ pub fn battle_input(
                 GameAction::SetPaused(p) => b.paused = *p,
                 GameAction::SetSpeed(s) => b.speed = s.clamp(0.25, 4.0),
                 GameAction::CameraZoom(z) => requests.zoom = Some(*z),
-                GameAction::SpeedUp => b.speed = (b.speed * 2.0).min(4.0),
-                GameAction::SpeedDown => b.speed = (b.speed * 0.5).max(0.25),
+                GameAction::SpeedUp => b.speed = speed_step(b.speed, 1.0),
+                GameAction::SpeedDown => b.speed = speed_step(b.speed, -1.0),
             }
         }
     }
@@ -208,8 +259,11 @@ pub fn battle_input(
         for k in &g.keys {
             match k {
                 KeyCode::Pause => b.paused = !b.paused,
-                KeyCode::Minus | KeyCode::NumpadSubtract => b.speed = (b.speed * 0.5).max(0.25),
-                KeyCode::Equal | KeyCode::NumpadAdd => b.speed = (b.speed * 2.0).min(4.0),
+                KeyCode::Minus | KeyCode::NumpadSubtract => b.speed = speed_step(b.speed, -1.0),
+                KeyCode::Equal | KeyCode::NumpadAdd => b.speed = speed_step(b.speed, 1.0),
+                // backslash: "GameSpeed" without an argument (0x60D690):
+                // exponent 0, 100%
+                KeyCode::Backslash | KeyCode::IntlBackslash => b.speed = 1.0,
                 _ => {}
             }
             if let Some(i) = digit(*k) {
@@ -242,7 +296,8 @@ pub fn battle_input(
     let mut picks = Vec::new();
     for (view, tf, children) in &views {
         let Some(a) = b.world.actor(view.id) else { continue };
-        if !a.alive {
+        // what the fog hides cannot be picked
+        if !a.alive || !crate::ui::fog::drawn(&b, view.id) {
             continue;
         }
         let mut dist: Option<f32> = None;
@@ -341,6 +396,34 @@ pub fn battle_input(
                             b.pending.push(Command::Deploy { kingdom: local, truck, at: g.truncate(), facing });
                         }
                     }
+                    // move (5) and Run (7): a plain (passive) move; guard (2)
+                    // and explore (9) move there engaging on the way
+                    TargetOrder::Move | TargetOrder::Run | TargetOrder::Guard | TargetOrder::Explore => {
+                        let units = own_movable(&b);
+                        let engage = matches!(order, TargetOrder::Guard | TargetOrder::Explore);
+                        // guard an object: its position
+                        let object = hit.filter(|_| matches!(order, TargetOrder::Guard)).and_then(|id| b.world.actor(id)).map(|a| a.pos.truncate());
+                        if let Some(to) = object.or(ground.map(|g| g.truncate())) {
+                            if !units.is_empty() {
+                                b.pending.push(Command::Move { kingdom: local, units, to, attack_move: engage });
+                            }
+                        }
+                    }
+                    TargetOrder::AttachHq => {
+                        let hq = hit.filter(|id| b.world.actor(*id).is_some_and(|a| a.kingdom == Some(local)) && aa_play::production::hq_org(&b.world, *id).is_some());
+                        if let Some(hq) = hq {
+                            for u in b.selection.clone() {
+                                if let Unit::Org(org) = u {
+                                    b.pending.push(Command::Attach { kingdom: local, org, hq });
+                                }
+                            }
+                        }
+                    }
+                    TargetOrder::Rally(building) => {
+                        if let Some(g) = ground {
+                            b.pending.push(Command::SetRallyPoint { kingdom: local, building, at: g.truncate() });
+                        }
+                    }
                 }
             } else {
                 // click (0x640CF0) / add (0x640E10) / double click
@@ -405,10 +488,10 @@ pub fn battle_input(
             }
         }
     }
-    // the selection keeps only living objects
+    // the selection keeps only living objects the local kingdom sees
     let alive: Vec<Unit> = b.selection.iter().copied().filter(|u| unit_pos(&b, *u).is_some() && match u {
-        Unit::Org(o) => b.world.orgs.get(*o as usize).is_some_and(|o| o.alive),
-        Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.alive),
+        Unit::Org(o) => b.world.orgs.get(*o as usize).is_some_and(|o| o.alive && aa_play::fog::org_visible(&b.world, o.id, Some(b.local))),
+        Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.alive) && crate::ui::fog::drawn(&b, *a),
     }).collect();
     if alive.len() != b.selection.len() {
         b.selection = alive;
@@ -426,6 +509,14 @@ fn own_movable(b: &Battle) -> Vec<Unit> {
             Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.kingdom == Some(b.local) && b.world.data.def(a.def).class != Some(DefClass::Building)),
         })
         .collect()
+}
+
+/// SpeedUp / SpeedDown: the GVar GameSpeed exponent v (speed 2^v) moved
+/// by half a step, clamped to SVars GameSpeedMin / GameSpeedMax (-2 / +2:
+/// 25% .. 400%), so 100% -> 141% -> 200%.
+fn speed_step(speed: f32, dir: f32) -> f32 {
+    let v = (speed.max(1e-3).log2() * 2.0).round() / 2.0 + 0.5 * dir;
+    2f32.powf(v.clamp(-2.0, 2.0))
 }
 
 fn digit(k: KeyCode) -> Option<usize> {

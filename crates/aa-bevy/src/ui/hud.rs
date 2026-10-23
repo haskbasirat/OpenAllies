@@ -12,7 +12,17 @@
 //! * a building that recruits shows `recruit` (slot 0); pressing it opens
 //!   the recruit page: one button per recruitable organization (its
 //!   RegimentButtons icon) and `structure_cancel_queued`'s IconCancel in the
-//!   last slot to go back (07-recruit.png).
+//!   last slot to go back (07-recruit.png);
+//! * own regiments: move, kill, retreat (Run), stop, guard, explore and, for
+//!   one regiment that attaches to HQs, hq_attach / hq_detach (the
+//!   05-regiment layout), plus the formation buttons of the unit panel
+//!   (`FormationChange <id>`, `0x629AB0`, Organizations/Formations icons);
+//! * own structures: recruit, CommandAll (ActionButtonInfo index 4, an HQ:
+//!   select its attached regiments, `0x60CCD0`), set_rally_point, pack /
+//!   unpack, sell (SellFactor of the cost in the tooltip, `0x5F6860`;
+//!   disabled under siege) (the 06-corps layout);
+//! * every button carries its command's name and tooltip for the tooltip
+//!   (`0x5F6860`: name in TextFontIDSToolTipName, then the tooltip).
 use crate::session::Battle;
 use aa_play::{DefClass, Unit, World};
 use aa_ui::hud::{
@@ -32,6 +42,20 @@ pub enum GameAction {
     Recruit { building: aa_play::ActorId, def: aa_play::DefId },
     /// `pack`: a building back into its truck.
     Pack { building: aa_play::ActorId },
+    /// `sell` (0x14).
+    Sell { building: aa_play::ActorId },
+    /// `hq_detach` (0x20) of the selected regiment.
+    Detach { org: aa_play::OrgId },
+    /// A formation button (`FormationChange <id>`): index into the layout
+    /// formations, for the selected own regiments.
+    SetFormation(usize),
+    /// `CommandAll` (`0x60CCD0`): select every regiment attached to the HQ.
+    CommandAll { building: aa_play::ActorId },
+    /// `disband` (10) of the selection.
+    Disband,
+    /// An idle button / F5-F6 (`CycleSelection 1` idle builder, `2` idle
+    /// detached organization): select the next one and centre on it.
+    CycleIdle(u32),
     /// Arm a targeted order: the next left click picks its target.
     Target(TargetOrder),
     /// Minimap press/drag: jump the camera to (u, v) of the map.
@@ -53,6 +77,18 @@ pub enum TargetOrder {
     Attack,
     /// Truck `unpack`: deploy at the clicked ground point.
     Deploy(aa_play::ActorId),
+    /// `move` (5): move to the clicked point.
+    Move,
+    /// `retreat` (7, "Run"): move ignoring enemies.
+    Run,
+    /// `guard` (2): guard the clicked object or area.
+    Guard,
+    /// `explore` (9): explore the clicked area.
+    Explore,
+    /// `hq_attach` (0x1F): attach to the clicked own HQ.
+    AttachHq,
+    /// `set_rally_point` (0x10) of a building.
+    Rally(aa_play::ActorId),
 }
 
 /// HUD output for the battle input this frame.
@@ -69,24 +105,76 @@ struct ActorCommand {
     ids: String,
     icon: String,
     position: i32,
+    /// `name` and `tooltip` string keys.
+    name: String,
+    tooltip: String,
+}
+
+/// One Organizations/Formations formation: name key and icon (Data path).
+#[derive(Clone, Debug)]
+struct FormationInfo {
+    name: String,
+    icon: String,
+    /// The formation's property icon (shown in the unit panel).
+    property_icon: Option<String>,
+}
+
+/// Team commands (Data/Game/team_commands.tgi) for the team page.
+#[derive(Clone, Debug)]
+struct TeamCommand {
+    icon: String,
+    position: i32,
+    name: String,
+    tooltip: String,
+}
+
+/// An ActionButtonInfo of UI/Game/action_buttons.tgi (CommandAll...).
+#[derive(Clone, Debug, Default)]
+struct ButtonInfo {
+    name: String,
+    tooltip: String,
+    index: i32,
+    texture: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum ActionPage {
     Main,
     Recruit(aa_play::ActorId),
+    /// GoToTeamCommands (ActionButtonInfo index 8): the team commands.
+    Team,
 }
 
 pub struct GameHud {
     hud: Hud,
     resources: Vec<HudResource>,
     commands: Vec<ActorCommand>,
+    formations: std::collections::HashMap<String, FormationInfo>,
+    command_all: ButtonInfo,
+    team_go: ButtonInfo,
+    team_cancel: ButtonInfo,
+    team_commands: Vec<TeamCommand>,
+    property_icons: std::collections::HashMap<String, String>,
+    /// The command of the action button under the pointer (the economic
+    /// impact preview of 0x602640).
+    hovered: Option<String>,
+    /// Tooltip (name, text) of each action slot and formation button.
+    slot_tips: Vec<Option<(String, String)>>,
+    formation_tips: Vec<String>,
     page: ActionPage,
     /// Action slot commands of the current page (slot -> command string).
     slot_commands: Vec<Option<String>>,
     menu_open: bool,
     game_over: bool,
     last_events: usize,
+    /// The game speed of the last frame (the change message).
+    last_speed: Option<f32>,
+    /// The owned displays (F1 objectives, F2 technology, F3 message log,
+    /// F4 politics).
+    panels: super::panels::Panels,
+    /// The session's StartingExperience world rule (the faction's
+    /// experience at time 0).
+    pub starting_experience: f32,
 }
 
 const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResource", 1), ("LimitedConsumedResource", 2)];
@@ -140,13 +228,135 @@ fn load_commands(ui: &mut Ui) -> Vec<ActorCommand> {
             if ids.is_empty() || out.iter().any(|c: &ActorCommand| c.ids == ids) {
                 continue;
             }
-            out.push(ActorCommand { ids, icon: n.get("icon").unwrap_or_default().to_string(), position: n.int("preferred_position").unwrap_or(-1) });
+            out.push(ActorCommand {
+                ids,
+                icon: n.get("icon").unwrap_or_default().to_string(),
+                position: n.int("preferred_position").unwrap_or(-1),
+                name: n.get("name").unwrap_or_default().trim_matches('"').to_string(),
+                tooltip: n.get("tooltip").unwrap_or_default().trim_matches('"').to_string(),
+            });
         }
     }
     if out.is_empty() {
         warn!("HUD: no actor commands read from Data/Game/actor_commands*.tgi");
     }
     out
+}
+
+/// Organizations/Formations/*.tgi: IDS (lower case) -> name and icon (the
+/// icon path is relative to the formation file's folder).
+fn load_formations(ui: &mut Ui) -> std::collections::HashMap<String, FormationInfo> {
+    let mut out = std::collections::HashMap::new();
+    for f in ui.store.root.list_dir("Organizations/Formations").into_iter().filter(|f| f.to_ascii_lowercase().ends_with(".tgi")) {
+        for n in super::datafile::load(&ui.store.root, &format!("Organizations/Formations/{f}")).iter().filter(|n| n.name.eq_ignore_ascii_case("Formation")) {
+            let Some(ids) = n.get("IDS") else { continue };
+            let icon = n.get("icon").unwrap_or_default().trim_matches('"').to_string();
+            let icon = if icon.starts_with('/') || icon.eq_ignore_ascii_case("null") { icon } else { format!("/Organizations/Formations/{icon}") };
+            let property_icon = n
+                .children_named("Property")
+                .into_iter()
+                .find_map(|p| p.get("icon").map(|s| s.trim_matches('"').to_string()))
+                .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("null"));
+            out.insert(ids.to_ascii_lowercase(), FormationInfo { name: n.get("name").unwrap_or_default().trim_matches('"').to_string(), icon, property_icon });
+        }
+    }
+    out
+}
+
+/// Properties/*.tgi: property IDS (lower case) -> icon (Data path).
+fn load_property_icons(ui: &mut Ui) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    for f in ui.store.root.list_dir("Properties").into_iter().filter(|f| f.to_ascii_lowercase().ends_with(".tgi")) {
+        for n in super::datafile::load(&ui.store.root, &format!("Properties/{f}")).iter() {
+            let (Some(ids), Some(icon)) = (n.get("IDS"), n.get("icon")) else { continue };
+            let icon = icon.trim_matches('"').trim().to_string();
+            if !icon.is_empty() && !icon.eq_ignore_ascii_case("null") {
+                // a relative icon is below Properties/ (TechIcons/...,
+                // PropertyIcons/...)
+                let icon = if icon.starts_with('/') { icon } else { format!("/Properties/{icon}") };
+                out.insert(ids.to_ascii_lowercase(), icon);
+            }
+        }
+    }
+    out
+}
+
+fn load_team_commands(ui: &mut Ui) -> Vec<TeamCommand> {
+    super::datafile::load(&ui.store.root, "Game/team_commands.tgi")
+        .iter()
+        .filter(|n| n.name.eq_ignore_ascii_case("TeamCommand"))
+        .map(|n| TeamCommand {
+            icon: n.get("icon").unwrap_or_default().split(';').next().unwrap_or_default().trim().to_string(),
+            position: n.int("preferred_position").unwrap_or(-1),
+            name: n.get("name").unwrap_or_default().trim_matches('"').to_string(),
+            tooltip: n.get("tooltip").unwrap_or_default().trim_matches('"').to_string(),
+        })
+        .collect()
+}
+
+/// The numbered name of an actor (`0x4D8AB0`, the number per kingdom and
+/// definition from `0x4E4980`): "%dst %s", "%dnd %s", "%drd %s", "%dth %s".
+fn numbered(strings: Option<&aa_ui::resources::StringTable>, n: usize, name: &str) -> String {
+    let (m10, m100) = (n % 10, n % 100);
+    let key = if (11..=20).contains(&m100) || m10 == 0 || m10 > 3 {
+        "#actor_name_numbered|ds"
+    } else if m10 == 1 {
+        "#actor_name_numbered_st|ds"
+    } else if m10 == 2 {
+        "#actor_name_numbered_nd|ds"
+    } else {
+        "#actor_name_numbered_rd|ds"
+    };
+    let Some(s) = strings else { return name.to_string() };
+    s.resolve(key).replacen("%d", &n.to_string(), 1).replacen("%s", name, 1)
+}
+
+/// UI/Game/action_buttons.tgi `[<name> Template = ActionButtonInfo]`.
+fn load_button_info(ui: &mut Ui, name: &str) -> ButtonInfo {
+    let Ok(n) = ui.store.node(&format!("UI/Game/action_buttons.tgi:ActionButtons/{name}")) else { return ButtonInfo::default() };
+    ButtonInfo {
+        name: n.string_or_empty("name"),
+        tooltip: n.string_or_empty("tooltip"),
+        index: n.int("index").unwrap_or(-1),
+        texture: n.string_or_empty("texture"),
+    }
+}
+
+/// A resource cost for a tooltip: every non-zero stockpiled value with its
+/// resource glyph (`0x5C4D10`).
+fn cost_text(ui: &Ui, res: &[HudResource], values: &[f32]) -> String {
+    let mut out = Vec::new();
+    for (i, r) in res.iter().enumerate() {
+        let v = values.get(i).copied().unwrap_or(0.0);
+        if v == 0.0 || r.kind != 0 {
+            continue;
+        }
+        let icon = ui.strings.glyphs.get(r.icon.to_ascii_lowercase().as_str()).copied().map(String::from).unwrap_or_default();
+        out.push(format!("{icon}{v:.0}"));
+    }
+    out.join("  ")
+}
+
+/// An upkeep line for a tooltip (the economy label's format, `0x5C4CB0`):
+/// every non-zero value with its glyph, signed, limited resources as their
+/// amount.
+fn upkeep_text(ui: &Ui, res: &[HudResource], values: &[f32]) -> String {
+    let mut out = Vec::new();
+    for (i, r) in res.iter().enumerate() {
+        let v = values.get(i).copied().unwrap_or(0.0);
+        if v == 0.0 || r.limit_provider {
+            continue;
+        }
+        let icon = ui.strings.glyphs.get(r.icon.to_ascii_lowercase().as_str()).copied().map(String::from).unwrap_or_default();
+        if r.kind == 2 {
+            out.push(format!("{icon}{:.0}", v.abs()));
+        } else if v > 0.0 {
+            out.push(format!("{icon}+{v}"));
+        } else {
+            out.push(format!("{icon}{v}"));
+        }
+    }
+    out.join(" ")
 }
 
 /// A definition's display name: a localization key (with or without '#'),
@@ -166,17 +376,49 @@ impl GameHud {
     pub fn show(ui: &mut Ui, battle: Option<&Battle>) -> Self {
         let resources = load_resources(ui);
         let commands = load_commands(ui);
-        let view = View { battle, resources: &resources, commands: &commands, page: &ActionPage::Main, ui_strings: None };
+        let formations = load_formations(ui);
+        let command_all = load_button_info(ui, "CommandAll");
+        let team_go = load_button_info(ui, "GoToTeamCommands");
+        let team_cancel = load_button_info(ui, "CancelTeamCommands");
+        let team_commands = load_team_commands(ui);
+        let property_icons = load_property_icons(ui);
+        let view = View {
+            battle,
+            resources: &resources,
+            commands: &commands,
+            page: &ActionPage::Main,
+            ui_strings: None,
+            formations: &formations,
+            command_all: &command_all,
+            team_go: &team_go,
+            team_cancel: &team_cancel,
+            team_commands: &team_commands,
+            property_icons: &property_icons,
+            hovered: None,
+            starting_experience: 0.0,
+        };
         let hud = Hud::show(ui, &view);
         let mut g = GameHud {
             hud,
             resources,
             commands,
+            formations,
+            command_all,
+            team_go,
+            team_cancel,
+            team_commands,
+            property_icons,
+            hovered: None,
+            slot_tips: vec![None; 12],
+            formation_tips: Vec::new(),
             page: ActionPage::Main,
             slot_commands: vec![None; 12],
             menu_open: false,
             game_over: false,
             last_events: 0,
+            last_speed: None,
+            panels: Default::default(),
+            starting_experience: 0.0,
         };
         if let Some(b) = battle {
             g.update(ui, b);
@@ -193,11 +435,40 @@ impl GameHud {
             }
         }
         self.messages(ui, b);
+        self.panels.update(ui, b, &self.property_icons);
         self.game_over = b.world.winner.is_some();
         let strings = ui.strings.clone();
-        let view = View { battle: Some(b), resources: &self.resources, commands: &self.commands, page: &self.page, ui_strings: Some(&strings) };
-        self.slot_commands = view.action_buttons().into_iter().map(|a| a.map(|a| a.command)).collect();
+        let view = View {
+            battle: Some(b),
+            resources: &self.resources,
+            commands: &self.commands,
+            page: &self.page,
+            ui_strings: Some(&strings),
+            formations: &self.formations,
+            command_all: &self.command_all,
+            team_go: &self.team_go,
+            team_cancel: &self.team_cancel,
+            team_commands: &self.team_commands,
+            property_icons: &self.property_icons,
+            hovered: self.hovered.as_deref(),
+            starting_experience: self.starting_experience,
+        };
+        let buttons = view.action_buttons();
+        self.slot_commands = buttons.iter().map(|a| a.as_ref().map(|a| a.command.clone())).collect();
+        self.slot_tips = buttons.iter().map(|a| a.as_ref().and_then(|a| view.tip(ui, &a.command))).collect();
+        self.formation_tips = match view.selection() {
+            HudSelection::Company(c) => c.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(),
+            _ => Vec::new(),
+        };
         self.hud.update(ui, &view);
+        // a truck is a simple actor in the original (SimpleActorDisplay: no
+        // banner view); shown here in the company display without its
+        // banner button
+        let truck = match b.selection.first() {
+            Some(Unit::Actor(a)) => b.world.actor(*a).is_some_and(|x| b.world.data.def(x.def).class == Some(DefClass::Truck)),
+            _ => false,
+        };
+        ui.with_widget("Game/ControlPanel/ObjectDisplay/CompanyDisplay/BannerButton", |w| w.set_visible(!truck));
     }
 
     /// The game message log from this frame's battle events (message
@@ -256,6 +527,14 @@ impl GameHud {
                 _ => {}
             }
         }
+        // a game speed change (0x76F3F0: |old - new| >= 0.0001 posts
+        // networking_change_game_speed|f, 100 * 2^v, as GENERIC_EVENT)
+        if self.last_speed.is_some_and(|s| (s.log2() - b.speed.log2()).abs() >= 0.0001) {
+            let t = ui.strings.resolve("#networking_change_game_speed|f");
+            let text = t.replacen("%.0f", &format!("{:.0}", b.speed * 100.0), 1).replace("%%", "%");
+            out.push(("GENERIC_EVENT", text, None));
+        }
+        self.last_speed = Some(b.speed);
         for (kind, text, at) in out {
             let uv = ui.uvars.clone();
             ui.messages.send(&uv, kind, &text, at);
@@ -268,6 +547,18 @@ impl GameHud {
     pub fn command(&mut self, ui: &mut Ui, cmd: &str) -> Option<Vec<GameAction>> {
         if let Some(rest) = cmd.strip_prefix("AAPlay ") {
             return Some(self.action(rest).into_iter().collect());
+        }
+        // the idle buttons (0x623520): "CycleSelection <kind>"
+        if let Some(rest) = cmd.strip_prefix("CycleSelection") {
+            return Some(rest.trim().parse::<u32>().ok().map(GameAction::CycleIdle).into_iter().collect());
+        }
+        // the owned displays' toggles and close buttons
+        if self.panels.command(ui, cmd) {
+            return Some(Vec::new());
+        }
+        // the formation buttons (0x628490): "FormationChange <id> "
+        if let Some(rest) = cmd.strip_prefix("FormationChange") {
+            return Some(rest.trim().parse::<usize>().ok().map(GameAction::SetFormation).into_iter().collect());
         }
         Some(match cmd {
             // ControlPanel ButtonMenu -> the in-game menu (0x5C0C40)
@@ -303,8 +594,26 @@ impl GameHud {
             "recruit" => Some(GameAction::Recruit { building: arg?, def: arg2? }),
             "stop" => Some(GameAction::Stop),
             "kill" => Some(GameAction::Target(TargetOrder::Attack)),
+            "move" => Some(GameAction::Target(TargetOrder::Move)),
+            "retreat" => Some(GameAction::Target(TargetOrder::Run)),
+            "guard" => Some(GameAction::Target(TargetOrder::Guard)),
+            "explore" => Some(GameAction::Target(TargetOrder::Explore)),
+            "hq_attach" => Some(GameAction::Target(TargetOrder::AttachHq)),
+            "hq_detach" => Some(GameAction::Detach { org: arg? }),
             "unpack" => Some(GameAction::Target(TargetOrder::Deploy(arg?))),
             "pack" => Some(GameAction::Pack { building: arg? }),
+            "set_rally_point" => Some(GameAction::Target(TargetOrder::Rally(arg?))),
+            "sell" => Some(GameAction::Sell { building: arg? }),
+            "command_all" => Some(GameAction::CommandAll { building: arg? }),
+            "disband" => Some(GameAction::Disband),
+            "team_page" => {
+                self.page = ActionPage::Team;
+                None
+            }
+            "team_back" => {
+                self.page = ActionPage::Main;
+                None
+            }
             _ => None,
         }
     }
@@ -354,12 +663,38 @@ impl GameHud {
     /// hotkeys_standard_aa.txt, `game|action|verify "ActorCommand <ids>"`):
     /// a key fires the action button showing that command.
     pub fn hotkey(&mut self, ui: &mut Ui, key: KeyCode) -> Option<Vec<GameAction>> {
+        // the formation buttons: q / w / e (CompanyFormationButtons_0..2)
+        let formation = match key {
+            KeyCode::KeyQ => Some(0),
+            KeyCode::KeyW => Some(1),
+            KeyCode::KeyE => Some(2),
+            _ => None,
+        };
+        if let Some(i) = formation {
+            return (i < self.formation_tips.len()).then(|| vec![GameAction::SetFormation(i)]);
+        }
+        // F1..F4: the control panel's display buttons
+        if self.panels.hotkey(ui, key) {
+            return Some(Vec::new());
+        }
+        // the idle buttons: F5 idle builder, F6 idle detached organization
+        match key {
+            KeyCode::F5 => return Some(vec![GameAction::CycleIdle(1)]),
+            KeyCode::F6 => return Some(vec![GameAction::CycleIdle(2)]),
+            _ => {}
+        }
         let verbs: &[&str] = match key {
             KeyCode::KeyS => &["stop"],
-            KeyCode::KeyA => &["kill"],
+            KeyCode::KeyA => &["kill", "command_all"],
+            KeyCode::KeyM => &["move"],
+            KeyCode::KeyR => &["retreat"],
+            KeyCode::KeyG => &["guard"],
+            KeyCode::KeyX => &["explore"],
+            KeyCode::KeyF => &["set_rally_point"],
             KeyCode::KeyP => &["pack", "unpack"],
             KeyCode::KeyD => &["recruit_page"],
-            KeyCode::KeyC => &["recruit_back"],
+            KeyCode::KeyC => &["recruit_back", "hq_attach"],
+            KeyCode::Delete => &["sell", "hq_detach", "disband"],
             _ => return None,
         };
         let cmd = self.slot_commands.iter().flatten().find(|c| {
@@ -368,6 +703,42 @@ impl GameHud {
         })?;
         let cmd = cmd.clone();
         self.command(ui, &cmd)
+    }
+
+    /// The widget under the pointer: an action button's command is
+    /// previewed in the economic impact bar.
+    pub fn set_hover(&mut self, path: Option<&str>) {
+        self.hovered = path.and_then(|p| {
+            let at = p.find("ActionButtons/ActionButtonsButton")? + "ActionButtons/ActionButtonsButton".len();
+            let i = match p[at..].strip_prefix('#') {
+                Some(n) => n.split('/').next()?.parse::<usize>().ok()?,
+                None => 0,
+            };
+            self.slot_commands.get(i).cloned().flatten()
+        });
+    }
+
+    /// The tooltip (name, text) of an action button slot / formation button
+    /// widget path, for the tooltip module.
+    pub fn tooltip(&self, path: &str) -> Option<(String, String)> {
+        let index = |seg: &str| -> Option<usize> {
+            let at = path.find(seg)? + seg.len();
+            let rest = &path[at..];
+            if let Some(n) = rest.strip_prefix('#') {
+                n.split('/').next()?.parse().ok()
+            } else {
+                Some(0)
+            }
+        };
+        if path.contains("ActionButtons/ActionButtonsButton") {
+            let i = index("ActionButtonsButton")?;
+            return self.slot_tips.get(i).cloned().flatten();
+        }
+        if path.contains("FormationButtons/FormationButton") {
+            let i = index("FormationButton")?;
+            return self.formation_tips.get(i).map(|n| (String::new(), n.clone()));
+        }
+        None
     }
 }
 
@@ -378,6 +749,14 @@ struct View<'a> {
     commands: &'a [ActorCommand],
     page: &'a ActionPage,
     ui_strings: Option<&'a aa_ui::resources::StringTable>,
+    formations: &'a std::collections::HashMap<String, FormationInfo>,
+    command_all: &'a ButtonInfo,
+    team_go: &'a ButtonInfo,
+    team_cancel: &'a ButtonInfo,
+    team_commands: &'a [TeamCommand],
+    property_icons: &'a std::collections::HashMap<String, String>,
+    hovered: Option<&'a str>,
+    starting_experience: f32,
 }
 
 impl View<'_> {
@@ -420,9 +799,22 @@ impl View<'_> {
             relation_color: Some(relation),
         })
     }
-    /// Upkeep per resource of a definition (shown negative, unit limit
-    /// consumed positive) in registry order.
+    /// The economy line of a definition (`0x56FE00`): production minus
+    /// upkeep per resource in registry order (06-corps: "+30 +10 +5 +5 1",
+    /// 05-regiment: "-10 1"; limited resources shown as their amount).
     fn upkeep(&self, def: &aa_play::Def) -> Vec<f32> {
+        if let Some(w) = self.world() {
+            if !def.production_all.is_empty() || !def.upkeep_all.is_empty() {
+                return self
+                    .resources
+                    .iter()
+                    .map(|r| match w.data.resource_index(&r.ids) {
+                        Some(j) => def.production_all.get(j).copied().unwrap_or(0.0) - def.upkeep_all.get(j).copied().unwrap_or(0.0),
+                        None => 0.0,
+                    })
+                    .collect();
+            }
+        }
         let mut v = vec![0.0; self.resources.len()];
         for (ids, i) in [("money", aa_play::data::MONEY), ("ammo", aa_play::data::AMMO), ("oil", aa_play::data::OIL)] {
             if let Some(j) = self.res_index(ids) {
@@ -433,6 +825,92 @@ impl View<'_> {
             v[j] = def.unit_limit_consumed;
         }
         v
+    }
+    /// The highest-priority actor state the original would show
+    /// (`0x4D1510`; Data/Game/actor_states*.tgi priorities: resting 4,
+    /// entrenched 6, out of supply 6, moving / attacking 8, engaged /
+    /// routing 12, packing / unpacking 14).
+    fn state_text(&self, states: &[&str]) -> Option<String> {
+        let w = self.world()?;
+        let mut best: Option<(i32, &str)> = None;
+        for s in states {
+            let p = w.data.actor_states.get(*s).map(|d| d.priority).unwrap_or(0);
+            if best.is_none_or(|(bp, _)| p > bp) {
+                best = Some((p, s));
+            }
+        }
+        best.map(|(_, s)| self.name(&format!("#actor_states_{s}_name")))
+    }
+    fn org_states(&self, org: &aa_play::Organization) -> Vec<&'static str> {
+        let Some(w) = self.world() else { return Vec::new() };
+        let mut v = vec!["mind_resting"];
+        match &org.order {
+            aa_play::Order::Move { .. } | aa_play::Order::Deploy { .. } => v.push("mind_moving"),
+            aa_play::Order::Attack { .. } => v.push("mind_attacking"),
+            aa_play::Order::Idle => {}
+        }
+        if let Some(c) = aa_play::combat::org_state(w, org.id).filter(|c| c.initialized) {
+            if c.entrenched {
+                v.push("organization_entrenched");
+            }
+            if c.engaging() {
+                v.push("mind_engaged");
+            }
+            if c.routing.is_some() {
+                v.push("mind_routing");
+            }
+        }
+        if w.books.org(org.id).is_some_and(|s| s.out_of_supply) {
+            v.push("out_of_supply");
+        }
+        v
+    }
+    /// The numbered name (`0x4D8AB0`): an organization or an HQ structure
+    /// counts the kingdom's earlier ones of its definition (`0x4E4980`).
+    fn display_name(&self, def: aa_play::DefId, kingdom: Option<aa_play::KingdomId>, rank: Option<usize>) -> String {
+        let Some(w) = self.world() else { return String::new() };
+        let name = self.name(&w.data.def(def).name);
+        let _ = kingdom;
+        match rank {
+            Some(n) => numbered(self.ui_strings, n, &name),
+            None => name,
+        }
+    }
+    /// The portrait model (`0x624270`): the leader's `<thing>_portrait`
+    /// Thing (View portrait_ids), else the leader's or the object's own
+    /// model.
+    fn portrait(&self, def: aa_play::DefId) -> Option<String> {
+        let w = self.world()?;
+        let d = w.data.def(def);
+        let leader = d.leader_slot.and_then(|l| d.slots.get(l as usize)).map(|s| s.0).filter(|&x| x != aa_play::data::NO_DEF);
+        let who = leader.or_else(|| d.slots.iter().map(|s| s.0).find(|&x| x != aa_play::data::NO_DEF)).unwrap_or(def);
+        let wd = w.data.def(who);
+        w.data.find(&format!("{}_portrait", wd.id)).and_then(|p| w.data.def(p).model.clone()).or_else(|| wd.model.clone()).or_else(|| d.model.clone())
+    }
+    fn org_rank(&self, org: &aa_play::Organization) -> usize {
+        let Some(w) = self.world() else { return 1 };
+        1 + w.orgs.iter().filter(|o| o.id < org.id && o.kingdom == org.kingdom && o.def == org.def).count()
+    }
+    /// The economy line of a definition through the production quote
+    /// (`0x56F850` / `0x56F580` / `0x56F660`: the definition and, for an
+    /// organization, every layout slot): production minus upkeep per
+    /// resource in registry order.
+    fn econ_of(&self, def: aa_play::DefId) -> Vec<f32> {
+        let Some(w) = self.world() else { return vec![0.0; self.resources.len()] };
+        let up = aa_play::production::quote(w, def, aa_play::production::Vector::Upkeep);
+        let pr = aa_play::production::quote(w, def, aa_play::production::Vector::Production);
+        self.resources
+            .iter()
+            .map(|r| match w.data.resource_index(&r.ids) {
+                Some(j) => pr.get(j).copied().unwrap_or(0.0) - up.get(j).copied().unwrap_or(0.0),
+                None => 0.0,
+            })
+            .collect()
+    }
+    fn cost_of(&self, def: aa_play::DefId) -> Vec<f32> {
+        let Some(w) = self.world() else { return vec![0.0; self.resources.len()] };
+        let c = aa_play::production::quote(w, def, aa_play::production::Vector::Cost);
+        self.resources.iter().map(|r| w.data.resource_index(&r.ids).and_then(|j| c.get(j).copied()).unwrap_or(0.0)).collect()
     }
     fn company_for_org(&self, org: &aa_play::Organization) -> Option<CompanyInfo> {
         let w = self.world()?;
@@ -460,18 +938,80 @@ impl View<'_> {
             slots.push(LayoutSlot { position: i, definition: d as i32, unit });
         }
         let breakpoint = def.morale_breakpoint;
+        // the formation buttons: up to 3, only for an own layout with more
+        // than one formation (0x629AB0)
+        let own = self.battle.is_some_and(|b| b.local == org.kingdom);
+        let current = aa_play::player_orders::formation(w, org.id);
+        let formations: Vec<aa_ui::hud::Formation> = if own && def.formations.len() > 1 {
+            def.formations
+                .iter()
+                .enumerate()
+                .take(3)
+                .map(|(i, f)| aa_ui::hud::Formation {
+                    id: i as i32,
+                    texture: self.formations.get(&f.id.to_ascii_lowercase()).map(|x| x.icon.clone()).unwrap_or_default(),
+                    selected: current == Some(i),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        // properties (0x627240): the formation's property and the
+        // entrenchment of an entrenched regiment
+        let mut properties = Vec::new();
+        if let Some(icon) = current.and_then(|i| def.formations.get(i)).and_then(|f| self.formations.get(&f.id.to_ascii_lowercase())).and_then(|f| f.property_icon.clone()) {
+            properties.push(icon);
+        }
+        if aa_play::combat::org_state(w, org.id).is_some_and(|c| c.initialized && c.entrenched) {
+            // infantry_entrench requires the infantry property
+            let infantry = members.iter().any(|a| w.data.def(a.def).properties.iter().any(|p| p.eq_ignore_ascii_case("infantry")));
+            let key = if infantry { "infantry_entrench" } else { "vehicle_entrench" };
+            if let Some(icon) = self.property_icons.get(key) {
+                properties.push(icon.clone());
+            }
+        }
+        // an HQ truck organization (its members trucks) is a truck
+        let truck = members.iter().all(|a| w.data.def(a.def).class == Some(DefClass::Truck)) && !members.is_empty();
         Some(CompanyInfo {
-            name: self.name(&def.name),
+            name: if truck { self.display_name(org.def, Some(org.kingdom), None) } else { self.display_name(org.def, Some(org.kingdom), Some(self.org_rank(org))) },
             owner: self.owner(Some(org.kingdom)),
-            portrait_model: def.model.clone(),
+            portrait_model: if truck { members.first().and_then(|a| w.data.def(a.def).model.clone()) } else { self.portrait(org.def) },
             banner_model: None,
             health: if max > 0.0 { hp / max } else { 1.0 },
             morale: (org.morale.clamp(0.0, 1.0), breakpoint.clamp(0.0, 1.0)),
             attack_efficiency: (1.0, 1.0),
             supply: None,
-            economy: Some(self.upkeep(def)),
-            state: None,
-            slots,
+            economy: Some(self.econ_of(org.def)),
+            state: self.state_text(&self.org_states(org)),
+            slots: if truck { Vec::new() } else { slots },
+            leader_slot: -1,
+            hq: None,
+            formations,
+            properties,
+        })
+    }
+    /// A truck or another single actor (the SimpleActor display is not
+    /// ported in aa-ui; the company display shows its name, owner, health,
+    /// economy and state, without members).
+    fn company_for_actor(&self, a: &aa_play::Actor) -> Option<CompanyInfo> {
+        let w = self.world()?;
+        let def = w.data.def(a.def);
+        let mut states = vec!["mind_resting"];
+        if matches!(a.order, aa_play::Order::Move { .. } | aa_play::Order::Deploy { .. }) {
+            states.push("mind_moving");
+        }
+        Some(CompanyInfo {
+            name: self.display_name(a.def, a.kingdom, None),
+            owner: self.owner(a.kingdom),
+            portrait_model: def.model.clone(),
+            banner_model: None,
+            health: (a.health / def.health.max(1e-6)).clamp(0.0, 1.0),
+            morale: (1.0, 0.0),
+            attack_efficiency: (1.0, 1.0),
+            supply: None,
+            economy: Some(self.econ_of(a.def)),
+            state: self.state_text(&states),
+            slots: Vec::new(),
             leader_slot: -1,
             hq: None,
             formations: Vec::new(),
@@ -482,18 +1022,38 @@ impl View<'_> {
         let w = self.world()?;
         let def = w.data.def(a.def);
         // HQ attachments: the regiments attached to this HQ
+        // the attachments of the building or of its HQ organization
+        let hq_org = aa_play::production::hq_org(w, a.id);
+        let hq_members: Vec<aa_play::ActorId> = hq_org.map(|o| w.orgs[o as usize].members.clone()).unwrap_or_default();
         let attached: Vec<Option<HqSlot>> = w
             .orgs
             .iter()
-            .filter(|o| o.alive && o.hq == Some(a.id))
+            .filter(|o| o.alive && o.hq.is_some_and(|h| h == a.id || hq_members.contains(&h)))
             .map(|o| {
-                Some(HqSlot { texture: w.data.def(o.def).icon.clone(), health: 1.0, morale: o.morale.clamp(0.0, 1.0) })
+                let (mut hp, mut max) = (0.0, 0.0);
+                for m in o.members.iter().filter_map(|m| w.actor(*m)) {
+                    hp += m.health.max(0.0);
+                    max += w.data.def(m.def).health;
+                }
+                Some(HqSlot { texture: w.data.def(o.def).icon.clone(), health: if max > 0.0 { hp / max } else { 1.0 }, morale: o.morale.clamp(0.0, 1.0) })
             })
             .collect();
+        let mut states = vec!["mind_resting"];
+        if let Some(d) = w.books.actor(a.id).and_then(|s| s.deploy.as_ref()) {
+            states.push(if d.kind == aa_play::books::DeployKind::Packing { "structure_packing" } else { "structure_unpacking" });
+        }
+        if !a.queue.is_empty() {
+            states.push("structure_recruiting");
+        }
+        if aa_play::player_orders::under_siege(w, a.id) {
+            states.push("under_siege");
+        }
+        // an HQ structure is numbered like its organization
+        let rank = hq_org.map(|o| self.org_rank(&w.orgs[o as usize]));
         let mut hq = attached;
         hq.resize(5.max(hq.len()), None);
         Some(CompanyInfo {
-            name: self.name(&def.name),
+            name: self.display_name(a.def, a.kingdom, rank),
             owner: self.owner(a.kingdom),
             portrait_model: def.model.clone(),
             banner_model: None,
@@ -503,8 +1063,8 @@ impl View<'_> {
             // a supply relay's stockpile (SupplyComponent +18 / stockpile_max)
             supply: (def.supply_relay && def.supply_stockpile_max > 0.0)
                 .then(|| (w.books.actor(a.id).map_or(0.0, |s| s.supply_stock) / def.supply_stockpile_max).clamp(0.0, 1.0)),
-            economy: Some(self.upkeep(def)),
-            state: None,
+            economy: Some(self.econ_of(a.def)),
+            state: self.state_text(&states),
             slots: Vec::new(),
             leader_slot: -1,
             hq: Some(hq),
@@ -516,6 +1076,112 @@ impl View<'_> {
         let c = self.command(ids)?;
         Some((c.position, HudAction { texture: c.icon.clone(), command: cmd, enabled: true, selected: false, targeted: false }))
     }
+    fn act_enabled(&self, ids: &str, cmd: String, enabled: bool) -> Option<(i32, HudAction)> {
+        self.act(ids, cmd).map(|(p, mut a)| {
+            a.enabled = enabled;
+            (p, a)
+        })
+    }
+    /// The formation's display name (layout formation index).
+    fn formation_name(&self, index: usize) -> String {
+        let Some((b, w)) = self.battle.zip(self.world()) else { return String::new() };
+        let org = b.selection.iter().find_map(|u| match u {
+            Unit::Org(o) => w.orgs.get(*o as usize),
+            _ => None,
+        });
+        let Some(f) = org.and_then(|o| w.data.def(o.def).formations.get(index)) else { return String::new() };
+        let name = self.formations.get(&f.id.to_ascii_lowercase()).map(|i| i.name.clone()).unwrap_or_else(|| f.id.clone());
+        let text = self.name(&name);
+        // template_game_FormationButton_ToolTip|s = "%s"
+        match self.ui_strings {
+            Some(s) => s.resolve("#template_game_FormationButton_ToolTip|s").replacen("%s", &text, 1),
+            None => text,
+        }
+    }
+    /// The (name, tooltip) of an action button's command (`0x5F6860`).
+    fn tip(&self, ui: &Ui, cmd: &str) -> Option<(String, String)> {
+        let rest = cmd.strip_prefix("AAPlay ")?;
+        let mut it = rest.split_whitespace();
+        let verb = it.next()?;
+        let arg = it.next().and_then(|s| s.parse::<u32>().ok());
+        let arg2 = it.next().and_then(|s| s.parse::<u32>().ok());
+        let resolve = |k: &str| if k.is_empty() { String::new() } else { self.name(k) };
+        let w = self.world()?;
+        match verb {
+            "recruit" => {
+                // a recruit page item: the organization's name and cost
+                let d = w.data.def(arg2?);
+                let cost = self.cost_of(arg2?);
+                // name, then "Cost" and "Upkeep" rows with the values in a
+                // second column (the original recruit item tooltip)
+                let upkeep = self.econ_of(arg2?);
+                let up = upkeep_text(ui, self.resources, &upkeep);
+                let mut text = format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost));
+                if !up.is_empty() {
+                    text.push_str(&format!("
+{}<setx=100>{}", resolve("#ui_tooltip_item_title_upkeep"), up));
+                }
+                Some((resolve(&d.name), text))
+            }
+            "recruit_back" => self.command("structure_cancel_queued").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+            "command_all" => Some((resolve(&self.command_all.name), resolve(&self.command_all.tooltip))),
+            "team_page" => Some((resolve(&self.team_go.name), resolve(&self.team_go.tooltip))),
+            "team_back" => Some((resolve(&self.team_cancel.name), resolve(&self.team_cancel.tooltip))),
+            "team_command" => self.team_commands.get(arg? as usize).map(|t| (resolve(&t.name), resolve(&t.tooltip))),
+            "recruit_page" => self.command("recruit").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+            "sell" => {
+                let c = self.command("sell")?;
+                let a = w.actor(arg?)?;
+                let value = aa_play::player_orders::sell_value(w, a.def);
+                // registry order of the HUD resources
+                let values: Vec<f32> = self.resources.iter().map(|r| w.data.resource_index(&r.ids).and_then(|i| value.get(i).copied()).unwrap_or(0.0)).collect();
+                let text = resolve(&c.tooltip).replacen("%s", &cost_text(ui, self.resources, &values), 1);
+                Some((resolve(&c.name), text))
+            }
+            ids => self.command(ids).map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+        }
+    }
+}
+
+/// The local kingdom's idle units (`CycleSelection` kinds): 1 idle
+/// builders (trucks that are not moving or unpacking), 2 idle detached
+/// organizations (fighting regiments without an HQ, standing).
+pub fn idle_units(b: &Battle, kind: u32) -> Vec<Unit> {
+    let w = &b.world;
+    let mut out = Vec::new();
+    match kind {
+        1 => {
+            for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(b.local)) {
+                let d = w.data.def(a.def);
+                if d.class != Some(DefClass::Truck) || d.unpacks_to.is_none() {
+                    continue;
+                }
+                let busy = w.books.actor(a.id).is_some_and(|s| s.deploy.is_some());
+                let unit = match a.org {
+                    Some(o) if w.orgs.get(o as usize).is_some_and(|x| x.alive) => {
+                        if w.orgs[o as usize].order != aa_play::Order::Idle {
+                            continue;
+                        }
+                        Unit::Org(o)
+                    }
+                    _ => Unit::Actor(a.id),
+                };
+                if a.order == aa_play::Order::Idle && !busy && !out.contains(&unit) {
+                    out.push(unit);
+                }
+            }
+        }
+        _ => {
+            for o in w.orgs.iter().filter(|o| o.alive && o.kingdom == b.local && o.hq.is_none() && o.order == aa_play::Order::Idle) {
+                let d = w.data.def(o.def);
+                let fights = o.members.iter().filter_map(|m| w.actor(*m)).any(|a| a.alive && !w.data.def(a.def).weapons.is_empty());
+                if d.supply_used && d.max_attachments.is_none() && fights {
+                    out.push(Unit::Org(o.id));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Place actions at their preferred position, else the first free slot.
@@ -570,12 +1236,38 @@ impl HudWorld for View<'_> {
         Some(HudEconomy { preview_production: production.clone(), production, upkeep, stock, limited_max })
     }
 
+    /// The hovered recruit item's impact (`0x602640`): its upkeep change
+    /// (production minus upkeep, negative) and its cost.
     fn economic_impact(&self) -> Option<HudImpact> {
-        None
+        let w = self.world()?;
+        let rest = self.hovered?.strip_prefix("AAPlay recruit ")?;
+        let def = rest.split_whitespace().nth(1)?.parse::<u32>().ok()?;
+        let d = w.data.def(def);
+        let mut upkeep = self.econ_of(def);
+        // limited resources: the consumed amount as a negative change
+        for (i, r) in self.resources.iter().enumerate() {
+            if r.kind == 2 {
+                upkeep[i] = -upkeep[i].abs();
+            }
+        }
+        let _ = d;
+        let cost = self.cost_of(def);
+        Some(HudImpact { upkeep, cost })
     }
 
+    /// The kingdom's experience (player +0x230): SVar
+    /// ExperienceFactionGainPeriodic per second plus
+    /// ExperienceFactionGainMultiplier of what its organizations gained,
+    /// up to the faction's experience_max (Templates/template_faction_aa:
+    /// 5000). Abilities spending it are not implemented.
     fn faction_experience(&self) -> Option<aa_ui::hud::FactionExperience> {
-        None
+        let (b, w) = (self.battle?, self.world()?);
+        let periodic = w.data.rule_ci("ExperienceFactionGainPeriodic").unwrap_or(1.0);
+        let mult = w.data.rule_ci("ExperienceFactionGainMultiplier").unwrap_or(1.0);
+        let gained: f32 = w.orgs.iter().filter(|o| o.kingdom == b.local).map(|o| o.experience.max(0.0)).sum();
+        let max = 5000.0;
+        // the faction starts with the StartingExperience world rule
+        Some(aa_ui::hud::FactionExperience { value: (self.starting_experience + periodic * w.time + mult * gained).floor().min(max), max })
     }
 
     fn faction_abilities(&self) -> Vec<aa_ui::hud::HudAbility> {
@@ -587,11 +1279,11 @@ impl HudWorld for View<'_> {
     }
 
     fn idle_builder(&self) -> bool {
-        false
+        self.battle.is_some_and(|b| !idle_units(b, 1).is_empty())
     }
 
     fn idle_detached_organization(&self) -> bool {
-        false
+        self.battle.is_some_and(|b| !idle_units(b, 2).is_empty())
     }
 
     fn game_time(&self) -> f32 {
@@ -613,8 +1305,11 @@ impl HudWorld for View<'_> {
                         Some(c) => HudSelection::Company(Box::new(c)),
                         None => HudSelection::None,
                     },
-                    // the SimpleActor display (trucks...) is not ported in aa-ui
-                    _ => HudSelection::Unsupported("SimpleActor"),
+                    // trucks and other single actors (SimpleActor display)
+                    _ => match self.company_for_actor(a) {
+                        Some(c) => HudSelection::Company(Box::new(c)),
+                        None => HudSelection::None,
+                    },
                 }
             }
         }
@@ -645,18 +1340,86 @@ impl HudWorld for View<'_> {
                 }
                 v
             }
+            ActionPage::Team => {
+                // the team commands (Data/Game/team_commands.tgi); flares to
+                // allies are not implemented, so they stay disabled
+                let mut acts: Vec<(i32, HudAction)> = Vec::new();
+                for (i, t) in self.team_commands.iter().enumerate().filter(|(_, t)| !t.icon.is_empty()) {
+                    if acts.iter().any(|(p, _)| *p == t.position) {
+                        continue;
+                    }
+                    acts.push((t.position, HudAction { texture: t.icon.clone(), command: format!("AAPlay team_command {i}"), enabled: false, selected: false, targeted: false }));
+                }
+                if !self.team_cancel.texture.is_empty() {
+                    acts.push((self.team_cancel.index, HudAction { texture: self.team_cancel.texture.clone(), command: "AAPlay team_back".into(), enabled: true, selected: false, targeted: false }));
+                }
+                place(acts)
+            }
             ActionPage::Main => {
                 let mut acts = Vec::new();
-                let orgs = b.selection.iter().any(|u| matches!(u, Unit::Org(o) if w.orgs.get(*o as usize).is_some_and(|o| o.alive && own(Some(o.kingdom)))));
-                if orgs {
-                    acts.extend(self.act("kill", "AAPlay kill".into()));
+                let own_orgs: Vec<&aa_play::Organization> = b
+                    .selection
+                    .iter()
+                    .filter_map(|u| match u {
+                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom))),
+                        _ => None,
+                    })
+                    .collect();
+                let member_defs = |o: &aa_play::Organization| -> Vec<&aa_play::Def> { o.members.iter().filter_map(|m| w.actor(*m)).filter(|a| a.alive).map(|a| w.data.def(a.def)).collect() };
+                // a regiment that fights; an HQ truck organization only moves
+                let fighting = own_orgs.iter().any(|o| member_defs(o).iter().any(|d| !d.weapons.is_empty()));
+                let own_trucks: Vec<aa_play::ActorId> = b
+                    .selection
+                    .iter()
+                    .filter_map(|u| match u {
+                        Unit::Actor(a) => w.actor(*a).filter(|x| x.alive && own(x.kingdom) && w.data.def(x.def).class == Some(DefClass::Truck)).map(|x| x.id),
+                        _ => None,
+                    })
+                    .collect();
+                if !own_orgs.is_empty() || !own_trucks.is_empty() {
+                    acts.extend(self.act("move", "AAPlay move".into()));
+                    if fighting {
+                        acts.extend(self.act("kill", "AAPlay kill".into()));
+                        acts.extend(self.act("retreat", "AAPlay retreat".into()));
+                    }
                     acts.extend(self.act("stop", "AAPlay stop".into()));
+                    if fighting {
+                        acts.extend(self.act("guard", "AAPlay guard".into()));
+                        acts.extend(self.act("explore", "AAPlay explore".into()));
+                    }
+                }
+                // the team commands page (ActionButtonInfo GoToTeamCommands)
+                if (!own_orgs.is_empty() && fighting) || matches!(b.selection.as_slice(), [Unit::Actor(_)]) && !self.team_go.texture.is_empty() {
+                    let building = matches!(b.selection.as_slice(), [Unit::Actor(id)] if w.actor(*id).is_some_and(|a| own(a.kingdom) && w.data.def(a.def).class == Some(DefClass::Building)));
+                    if (!own_orgs.is_empty() && fighting) || building {
+                        acts.push((self.team_go.index, HudAction { texture: self.team_go.texture.clone(), command: "AAPlay team_page".into(), enabled: true, selected: false, targeted: false }));
+                    }
+                }
+                // one regiment that attaches to HQs: hq_attach / hq_detach
+                if let [Unit::Org(o)] = b.selection.as_slice() {
+                    if let Some(org) = w.orgs.get(*o as usize).filter(|x| x.alive && own(Some(x.kingdom))) {
+                        let od = w.data.def(org.def);
+                        if od.max_attachments.is_none() && od.supply_used && fighting {
+                            acts.extend(self.act_enabled("hq_attach", "AAPlay hq_attach".into(), org.hq.is_none()));
+                            acts.extend(self.act_enabled("hq_detach", format!("AAPlay hq_detach {o}"), org.hq.is_some()));
+                        }
+                        // an HQ truck organization unpacks through its truck
+                        if let Some(t) = org.members.iter().copied().find(|m| w.actor(*m).is_some_and(|a| a.alive && w.data.def(a.def).unpacks_to.is_some())) {
+                            acts.extend(self.act("unpack", format!("AAPlay unpack {t}")));
+                        }
+                    }
                 }
                 if let [Unit::Actor(id)] = b.selection.as_slice() {
                     if let Some(a) = w.actor(*id).filter(|a| own(a.kingdom)) {
                         let def = w.data.def(a.def);
                         if !def.recruits.is_empty() {
                             acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
+                            acts.extend(self.act("set_rally_point", format!("AAPlay set_rally_point {id}")));
+                        }
+                        // an HQ: CommandAll (ActionButtonInfo index 4)
+                        let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));
+                        if hq && !self.command_all.texture.is_empty() {
+                            acts.push((self.command_all.index, HudAction { texture: self.command_all.texture.clone(), command: format!("AAPlay command_all {id}"), enabled: true, selected: false, targeted: false }));
                         }
                         if def.unpacks_to.is_some() {
                             acts.extend(self.act("unpack", format!("AAPlay unpack {id}")));
@@ -664,7 +1427,14 @@ impl HudWorld for View<'_> {
                         if def.packs_to.is_some() {
                             acts.extend(self.act("pack", format!("AAPlay pack {id}")));
                         }
+                        if aa_play::player_orders::sellable(w, *id) {
+                            acts.extend(self.act_enabled("sell", format!("AAPlay sell {id}"), aa_play::player_orders::sell_refused(w, *id).is_none()));
+                        }
                     }
+                }
+                // trucks and HQ truck organizations can be disbanded
+                if !own_trucks.is_empty() || (!own_orgs.is_empty() && !fighting) {
+                    acts.extend(self.act("disband", "AAPlay disband".into()));
                 }
                 place(acts)
             }

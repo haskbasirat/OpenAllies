@@ -43,3 +43,7 @@ pub use world::*;
 pub const TICKS_PER_SECOND: u32 = 16;
 pub const DT: f32 = 1.0 / TICKS_PER_SECOND as f32;
 pub mod mapgen;
+/// Fog of war (appended by the UI/fog owner).
+pub mod fog;
+/// HUD player orders (appended by the UI owner).
+pub mod player_orders;

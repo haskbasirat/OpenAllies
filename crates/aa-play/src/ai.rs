@@ -10,11 +10,14 @@
 //!   players by `index / (players + 1) * frequency`, and two thinks of any
 //!   players are at least `GoalEngineThinkFrequencyMinOffset` /
 //!   `RAIThinkFrequencyMinOffset` seconds apart. The goal engine also
-//!   rethinks at once when one of the player's structures appears while its
-//!   settlements are at most `immediate_think_on_build_max_settlements` and
-//!   the battle is younger than `immediate_think_on_build_max_time`
-//!   (`7B2350`/`7AD9A0`; A&A buildings have no settlement component, so the
-//!   count is 0).
+//!   rethinks at once when one of the player's constructions finishes while
+//!   its settlements are at most `immediate_think_on_build_max_settlements`
+//!   and the battle is younger than `immediate_think_on_build_max_time`
+//!   (`7B2350`/`7AD9A0`, called from
+//!   `KKC_ConstructionComponent::OnConstructionFinished`; a truck's unpacked
+//!   building is not a construction, so in a skirmish without engineer
+//!   constructions the thinks stay on the 30 s schedule, as in the
+//!   original's goal CSV).
 //! - The dynamic map analysis (`7AC0D0`) every
 //!   `dynamic_map_analysis_think_frequency` seconds, shared by the players.
 //! - Decisions leave the AI only as `Command`s (`KKC_SAICommandData::Send`
@@ -33,7 +36,9 @@
 pub mod data;
 pub mod goals;
 pub mod rai;
+pub mod reach;
 pub mod regions;
+pub mod value;
 pub mod view;
 
 pub use data::AiData;
@@ -152,6 +157,9 @@ pub struct AiState {
     pub log: Vec<LogEntry>,
     /// Keep the decision timeline (off by default; tests turn it on).
     pub logging: bool,
+    /// Land reachability of the unpack site search (rebuilt when the
+    /// structures change).
+    reach: reach::Reach,
 }
 
 impl std::fmt::Debug for AiState {
@@ -220,7 +228,7 @@ impl AiState {
             self.next_analysis = world.time + svar(world, "dynamic_map_analysis_think_frequency", 10.0).max(0.5);
         }
         self.detect_structures(world, &data);
-        self.detect_refused_deploys(world);
+        self.detect_refused_deploys(world, &data);
         let now = world.time;
         let ge_gap = svar(world, "GoalEngineThinkFrequencyMinOffset", 2.0);
         let rai_gap = svar(world, "RAIThinkFrequencyMinOffset", 0.2);
@@ -245,7 +253,8 @@ impl AiState {
                 self.stats.ge_thinks += 1;
                 let mut log = Vec::new();
                 let first = self.players[i].ge_count == 0;
-                goals::think(&view, &self.bound, &data, &regions, &self.influence, &mut self.players[i], &mut rng, &mut log, self.logging);
+                self.reach.update(world);
+                goals::think(&view, &self.bound, &data, &regions, &self.influence, &self.reach, &mut self.players[i], &mut rng, &mut log, self.logging);
                 let p = &mut self.players[i];
                 let ego = &data.egos[p.ego];
                 let freq = ego.think_frequency.max(0.5);
@@ -342,8 +351,10 @@ impl AiState {
     /// A Deploy refused by the deploy owner (spot blocked or not reachable:
     /// `Event::Refused`, the truck's order reset to Idle) leaves the truck
     /// without a deployment once the command was sent. The AI drops that
-    /// region and plans the truck's unpacking again at once.
-    fn detect_refused_deploys(&mut self, world: &World) {
+    /// region; a truck is planned again at once at most once per goal-engine
+    /// period, later refusals wait for the next regular think (no retry
+    /// loop when the truck itself cannot move).
+    fn detect_refused_deploys(&mut self, world: &World, data: &AiData) {
         let now = world.time;
         let logging = self.logging;
         let mut lines = Vec::new();
@@ -353,14 +364,17 @@ impl AiState {
                     continue;
                 }
                 let Some(a) = world.actor(truck).filter(|a| a.alive) else { continue };
-                let deploying = matches!(a.order, crate::world::Order::Deploy { .. }) || world.books.actor(truck).is_some_and(|b| b.deploy.is_some());
-                if deploying {
+                if view::truck_deploying(world, a.id) {
                     continue;
                 }
                 memo.bad.push(memo.region);
                 memo.ordered_at = 0.0;
                 memo.sent_at = 0.0;
-                p.ge_due = p.ge_due.min(now);
+                let period = data.egos[p.ego].think_frequency.max(0.5);
+                if memo.replanned_at <= 0.0 || now - memo.replanned_at >= period {
+                    memo.replanned_at = now;
+                    p.ge_due = p.ge_due.min(now);
+                }
                 if logging {
                     lines.push((p.kingdom, format!("deploy of {} refused at ({:.0},{:.0}); another site", world.data.def(a.def).id, memo.site.x, memo.site.y)));
                 }
@@ -372,7 +386,11 @@ impl AiState {
     }
 
     /// Structures created since the last tick trigger the immediate rethink
-    /// of `7B2350`.
+    /// and the new-structure defend flare of `7B2350`. The original calls it
+    /// from `KKC_ConstructionComponent::OnConstructionFinished` only: a
+    /// truck's unpacked building is not a construction (the goal CSV shows
+    /// no extra think and no +500 defend flare when the supply depot, the
+    /// Infantry Division HQ or the Artillery Brigade unpack).
     fn detect_structures(&mut self, world: &World, data: &AiData) {
         if world.actors.len() == self.actors_seen {
             return;
@@ -381,6 +399,9 @@ impl AiState {
         self.actors_seen = world.actors.len();
         for a in &world.actors[from.min(world.actors.len())..] {
             if !a.alive || a.removed || !matches!(world.data.def(a.def).class, Some(crate::data::DefClass::Building)) {
+                continue;
+            }
+            if world.data.defs.iter().any(|d| d.unpacks_to == Some(a.def)) {
                 continue;
             }
             let Some(k) = a.kingdom else { continue };
@@ -502,6 +523,8 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
         Command::Attach { org, hq, .. } => {
             (world.orgs.get(org as usize).is_some_and(|o| o.alive) && world.actor(hq).is_some_and(|a| a.alive)).then_some(command)
         }
+        // HUD player orders (appended by the UI owner; the AI sends none)
+        Command::SetFormation { .. } | Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => Some(command),
     }
 }
 

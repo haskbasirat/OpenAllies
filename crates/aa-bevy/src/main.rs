@@ -21,6 +21,9 @@ fn main() -> anyhow::Result<()> {
     let scene = scene::prepare()?;
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        // the UI ends the process when the window closes (ui::Quit: the
+        // 2560x1440 exit crash)
+        exit_condition: bevy::window::ExitCondition::DontExit,
         primary_window: Some(Window {
             title: scene::TITLE.into(),
             // AA_BEVY_WINDOW=2560x1440 opens a window of that many pixels
