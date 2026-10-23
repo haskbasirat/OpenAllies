@@ -189,7 +189,9 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
     let (mut scene, game_map) = match source {
         MapSource::File(id) => (store.load_scene(id, HeightMode::NativeConditional)?, None),
         MapSource::Random(params) => {
+            session::set_load_status("app_status_generating_map");
             let (scene, map) = generated_scene(args, &store, params)?;
+            session::set_load_status("app_status_verifying_map");
             (scene, Some(map))
         }
     };
@@ -214,6 +216,7 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         None => aa_play::GameMap::load_with(root, &map_id, &data)?,
     };
     let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
+    session::set_load_status("app_status_loading_objects");
     let mut world = aa_play::World::new_skirmish(data, Arc::new(world_map), &setup)?;
     // The original computer players (Data/SAI profiles); cached after the first load.
     aa_play::ai::attach(&mut world, Arc::new(aa_play::ai::AiData::load(root)?));
@@ -231,6 +234,7 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         .map(|p| Vec2::new(p.render_position()[0], p.render_position()[2]))
         .or_else(|| game_map.as_ref().and_then(|m| m.start_locations.first()).map(|p| Vec2::new(p.x, -p.y)))
         .unwrap_or(Vec2::new(scene.terrain.bounds.max[0] * 0.5, scene.terrain.bounds.min[2] * 0.5));
+    session::set_load_status("app_status_loading_resources");
     let mut requests = textures::Requests::default();
     for draw in &terrain {
         if let Some(t) = &draw.texture {
@@ -301,6 +305,7 @@ fn start_loading(
         MapSource::Random(r) => format!("random map {}", r.rmc),
     };
     *progress = session::LoadProgress { fraction: 0.0, status: format!("Loading {label}"), error: None };
+    session::set_load_status("app_status_loading_data");
     let slot = Arc::new(Mutex::new(None));
     let out = slot.clone();
     let args = args.0.clone();
@@ -336,7 +341,9 @@ impl Plugin for ScenePlugin {
         app.add_plugins(look::LookPlugin)
             .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
             // Lighter, softer shadows like the original: more ambient, less direct sun.
-            .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: env_f32("AA_BEVY_AMBIENT", 640.0), ..default() })
+            // Matched to the original screenshots (brightness and saturation, darker shadows).
+            .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: env_f32("AA_BEVY_AMBIENT", 340.0), ..default() })
+            .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
             .insert_resource(SceneArgs(self.args.clone()))
             .init_resource::<session::LoadProgress>()
             .add_systems(OnEnter(session::AppState::Loading), start_loading)
@@ -521,9 +528,11 @@ fn setup(
     // Sun with cascaded shadows over the battlefield.
     commands.spawn((
         // Shadows on, as in Development 12 (off with the fixed-function look).
-        DirectionalLight { illuminance: env_f32("AA_BEVY_SUN", 1750.0), shadow_maps_enabled: !look::fixed_function(), ..default() },
-        Transform::default().looking_to(-look::sun_to_light(), Vec3::Y),
-        CascadeShadowConfigBuilder { num_cascades: 2, first_cascade_far_bound: 60.0, maximum_distance: 220.0, ..default() }.build(),
+        DirectionalLight { illuminance: env_f32("AA_BEVY_SUN", 1300.0), shadow_maps_enabled: !look::fixed_function(), ..default() },
+        Transform::default().looking_to(-sun_dir(), Vec3::Y),
+        // The original camera looks from about 155 m (CameraHeight 100 / sin 40 deg,
+        // zoom 0.7..2.1 = 110..325 m): the sharp cascade must cover that range.
+        CascadeShadowConfigBuilder { num_cascades: 2, minimum_distance: 40.0, first_cascade_far_bound: 230.0, maximum_distance: 420.0, ..default() }.build(),
     ));
     let b = loaded.scene.terrain.bounds;
     let focus2 = loaded.focus.map(|f| Vec2::new(f.x, -f.y)).unwrap_or(hq_at);
@@ -575,4 +584,16 @@ fn hud(time: Res<Time>, mut frames: Local<(f32, u32, f32)>, mut text: Query<&mut
 /// A tuning value from the environment (display experiments), else `default`.
 fn env_f32(name: &str, default: f32) -> f32 {
     std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
+/// Render-space direction to the sun: the original SunDirection, or
+/// AA_BEVY_SUN_DIR="x,y,z" (native, the way the light travels) for tests.
+fn sun_dir() -> Vec3 {
+    std::env::var("AA_BEVY_SUN_DIR")
+        .ok()
+        .and_then(|v| {
+            let p: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+            (p.len() == 3).then(|| -Vec3::new(p[0], p[2], -p[1]).normalize())
+        })
+        .unwrap_or_else(look::sun_to_light)
 }
