@@ -527,8 +527,27 @@ pub fn extract(catalog: &ActorCatalog, actor_ids: &[String]) -> FxTables {
     t
 }
 
+/// `assets-cache/aa-bevy` of this checkout (found from the executable or
+/// the working directory), else below the install's rust-rebuild folder.
+pub fn cache_dir(game_root: &Path) -> PathBuf {
+    let mut starts = vec![];
+    if let Ok(exe) = std::env::current_exe() {
+        starts.push(exe);
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        starts.push(cwd);
+    }
+    starts
+        .iter()
+        .flat_map(|s| s.ancestors())
+        .map(|a| a.join("assets-cache"))
+        .find(|p| p.is_dir())
+        .unwrap_or_else(|| game_root.join("rust-rebuild").join("assets-cache"))
+        .join("aa-bevy")
+}
+
 fn cache_path(game_root: &Path) -> PathBuf {
-    game_root.join("rust-rebuild").join("assets-cache").join("aa-bevy").join("fx.json")
+    cache_dir(game_root).join("fx.json")
 }
 
 /// The tables for `actor_ids`, from the cache when it matches, else from the

@@ -115,3 +115,12 @@ pub fn tick_fraction(battle: &Battle) -> f32 {
 /// for `aa_play::ai::set_profile` on that player's kingdom.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct PendingAiProfiles(pub Vec<(usize, String)>);
+
+/// Object animations the FX system started on actors (FXC
+/// PLAY_OBJECT_ANIMATION, e.g. a tank's `recoil1` when it fires): actor ->
+/// (the animation IDS, lower case, and the battle time it started). Written
+/// by the effects (effects/mod.rs); battle_view can play the rig clip of
+/// that name (case-insensitive, e.g. "Recoil1") once from that time.
+/// (Appended by the effects and sound owner.)
+#[derive(Resource, Default)]
+pub struct ObjectAnimations(pub std::collections::HashMap<aa_play::ActorId, (String, f32)>);

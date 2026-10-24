@@ -1,18 +1,19 @@
 //! Original Gamebryo effect NIF data (node keyframes, billboards, sprite
-//! quads with alpha/colour/flip controllers, NiPSys particle emitters) as the
-//! wgpu client's `vfx/extract_nif_effects.py` extracts them into
-//! `nif_effects.json`, plus key evaluation (copied from aa-client vfx/nif.rs).
-//! All positions are in the NIF's Z-up space.
+//! quads with alpha/colour/flip controllers, NiPSys particle emitters) in
+//! the layout of the wgpu client's `vfx/extract_nif_effects.py` table, plus
+//! key evaluation (copied from aa-client vfx/nif.rs). `extract.rs` builds
+//! the table from the original NIFs at run time. All positions are in the
+//! NIF's Z-up space.
 
 // The table's full schema is kept even where the player does not read a
 // field yet (alpha test, vertex-colour mode, gravity field kinds).
 #![allow(dead_code)]
 
 use bevy::math::{Mat4, Quat, Vec3, Vec4};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NifTable {
     pub format: String,
     pub textures: Vec<String>,
@@ -21,7 +22,7 @@ pub struct NifTable {
     pub failures: HashMap<String, String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NifEffect {
     pub duration: f32,
     pub nodes: Vec<Node>,
@@ -29,7 +30,7 @@ pub struct NifEffect {
     pub emitters: Vec<Emitter>,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 pub struct Timing {
     #[serde(default)]
     pub start: f32,
@@ -67,7 +68,7 @@ impl Timing {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct KeyGroup {
     /// 1 linear, 2 quadratic (Hermite tangents follow the value), 3 TBC, 5 constant.
     #[serde(default = "linear")]
@@ -164,7 +165,7 @@ impl KeyGroup {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Keyframes {
     #[serde(flatten)]
     pub timing: Timing,
@@ -175,7 +176,7 @@ pub struct Keyframes {
     pub e: Option<Vec<KeyGroup>>,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct VisTrack {
     #[serde(flatten)]
     pub timing: Timing,
@@ -203,7 +204,7 @@ pub fn step(keys: &[[f32; 2]], t: f32) -> bool {
     v > 0.5
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Node {
     #[serde(default)]
     pub name: String,
@@ -249,7 +250,7 @@ impl Node {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct FloatTrack {
     #[serde(flatten)]
     pub timing: Timing,
@@ -266,7 +267,7 @@ impl FloatTrack {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ColorTrack {
     #[serde(flatten)]
     pub track: FloatTrack,
@@ -275,7 +276,7 @@ pub struct ColorTrack {
     pub target: u8,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Flip {
     #[serde(flatten)]
     pub timing: Timing,
@@ -286,7 +287,7 @@ pub struct Flip {
 }
 
 /// Material fields shared by sprites and particle systems.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Material {
     #[serde(default = "white3")]
     pub color: [f32; 3],
@@ -316,7 +317,7 @@ fn minus_one() -> i32 {
     -1
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Sprite {
     pub node: usize,
     /// Quads: 4 corners x (x, y, z, u, v); corner order 00, 10, 01, 11.
@@ -328,7 +329,7 @@ pub struct Sprite {
     pub post: Option<[f32; 16]>,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EmitCtl {
     #[serde(flatten)]
     pub timing: Timing,
@@ -337,14 +338,14 @@ pub struct EmitCtl {
     pub vis: Vec<[f32; 2]>,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Controllers {
     pub emit: Option<EmitCtl>,
     pub radius: Option<FloatTrack>,
     pub speed: Option<FloatTrack>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmitterShape {
     pub speed: f32,
     pub speed_var: f32,
@@ -367,7 +368,7 @@ pub struct EmitterShape {
     pub active: Option<VisTrack>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Gravity {
     pub axis: [f32; 3],
     pub strength: f32,
@@ -382,14 +383,14 @@ pub struct Gravity {
     pub active: Option<VisTrack>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Drag {
     pub axis: [f32; 3],
     pub pct: f32,
     pub active: Option<VisTrack>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Collider {
     pub bounce: f32,
     #[serde(default)]
@@ -397,7 +398,7 @@ pub struct Collider {
     pub z: f32,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Emitter {
     pub node: usize,
     #[serde(default)]
