@@ -794,3 +794,63 @@ fn probe_contact() {
     }
     eprintln!("first seen {seen:?}, closest {closest:.0} m");
 }
+
+/// Probe (ignored): on seeds AA_PROBE_SEEDS (default 1..40) of the Chuikov
+/// comparison map, the villages whose centre lies within 60 m of a side's
+/// corps, and who owns them after 10 s.
+#[test]
+#[ignore]
+fn probe_start_villages() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let last: u64 = std::env::var("AA_PROBE_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    for seed in 1..=last {
+        let params = RandomMapParams::defaults(&info, 2, seed);
+        let generated = rmg.generate(&params).expect("generate");
+        let setup = SkirmishSetup {
+            map_id: "generated".into(),
+            players: vec![
+                PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+                PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Human, start: 1 },
+            ],
+            starting_resources: None,
+            seed,
+        };
+        let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+        let corps: Vec<(u32, glam::Vec2)> = w.actors.iter().filter(|a| a.alive && a.kingdom.is_some_and(|k| k < 2) && w.data.def(a.def).id.ends_with("_corps")).map(|a| (a.kingdom.unwrap(), a.pos.truncate())).collect();
+        let near: Vec<(u32, u32, f32)> = w
+            .actors
+            .iter()
+            .filter(|a| a.alive && w.data.def(a.def).city && w.data.def(a.def).city_zone_radius > 0.0)
+            .filter_map(|a| corps.iter().map(|&(k, p)| (k, p.distance(a.pos.truncate()))).filter(|&(_, d)| d < 60.0).map(|(k, d)| (a.id, k, d)).next())
+            .collect();
+        if near.is_empty() {
+            continue;
+        }
+        let mut captured = Vec::new();
+        for _ in 0..(10 * aa_play::TICKS_PER_SECOND) {
+            w.step(Vec::new());
+            for e in &w.events {
+                if let aa_play::Event::Captured { actor, kingdom } = e {
+                    captured.push((*actor, *kingdom, w.time));
+                }
+            }
+        }
+        for (city, k, d) in near {
+            let zone = w.data.def(w.actors[city as usize].def).city_zone_radius;
+            let inside: Vec<String> = w
+                .actors
+                .iter()
+                .filter(|a| a.alive && !a.removed && a.kingdom == Some(k) && a.pos.truncate().distance(w.actors[city as usize].pos.truncate()) <= zone)
+                .map(|a| w.data.def(a.def).id.clone())
+                .collect();
+            eprintln!(
+                "seed {seed}: village {city} {:.0} m from k{k}'s corps (zone {zone}); k{k} actors inside {inside:?}; owner after 10 s {:?}; captures {:?}",
+                d,
+                w.actors[city as usize].kingdom,
+                captured.iter().filter(|c| c.0 == city).collect::<Vec<_>>()
+            );
+        }
+    }
+}
