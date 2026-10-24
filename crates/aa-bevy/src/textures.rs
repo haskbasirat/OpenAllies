@@ -8,6 +8,32 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::RwLock;
+
+/// The current biome texture subfolder: the original's ResourceManager+80,
+/// copied from the map's Biome texture_subfolder_name at world init
+/// (43F0EE/5AE0A0). Every texture lookup tries `<folder>/<subfolder>/<file>`
+/// before the named file (5A77E0), so Arctic, Desert and Tropical maps show
+/// their texture variants.
+static SUBFOLDER: RwLock<String> = RwLock::new(String::new());
+
+/// Set at battle load, before any of the battle's textures are decoded.
+pub fn set_biome_subfolder(subfolder: Option<&str>) {
+    if let Ok(mut current) = SUBFOLDER.write() {
+        *current = subfolder.unwrap_or_default().to_owned();
+    }
+}
+
+/// The biome variant of `url`, when the current subfolder has one.
+fn biome_variant(store: &AssetStore, url: &str) -> Option<PathBuf> {
+    let subfolder = SUBFOLDER.read().ok()?;
+    if subfolder.is_empty() {
+        return None;
+    }
+    let (folder, file) = url.rsplit_once('/')?;
+    store.resolve_url(&format!("{folder}/{subfolder}/{file}")).ok()
+}
 
 /// How a texture is sampled and what its alpha means.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
@@ -60,7 +86,10 @@ pub fn upload(images: Vec<((String, Kind), Image)>, failures: Vec<String>, asset
 }
 
 pub fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {
-    let path = store.resolve_url(url)?;
+    let path = match biome_variant(store, url) {
+        Some(path) => path,
+        None => store.resolve_url(url)?,
+    };
     let mut rgba = image::open(&path)?.to_rgba8();
     if let Kind::Team(team) = kind {
         for p in rgba.pixels_mut() {

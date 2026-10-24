@@ -342,6 +342,9 @@ pub struct Extract<'a> {
     /// node and whether it is blended (the sprite path's geometry),
     /// instead of sprite extraction.
     geometry: Option<Vec<(usize, usize, bool)>>,
+    /// A fixed stored quaternion sign (KF sequences), else the check
+    /// against the bind rotation.
+    qsign: Option<f32>,
 }
 
 impl<'a> Extract<'a> {
@@ -390,7 +393,7 @@ impl<'a> Extract<'a> {
             if let Some(&(_, w, x, y, z)) = rows.first() {
                 // The stored convention against the bind rotation at the first key.
                 let err = |m: Mat3| (m.x_axis - bind.x_axis).abs().element_sum() + (m.y_axis - bind.y_axis).abs().element_sum() + (m.z_axis - bind.z_axis).abs().element_sum();
-                let sign = if err(quat_cols(w, -x, -y, -z)) + 1e-4 < err(quat_cols(w, x, y, z)) { -1.0 } else { 1.0 };
+                let sign = self.qsign.unwrap_or_else(|| if err(quat_cols(w, -x, -y, -z)) + 1e-4 < err(quat_cols(w, x, y, z)) { -1.0 } else { 1.0 });
                 k.q = Some(KeyGroup { i: 1, k: rows.iter().map(|&(t, w, x, y, z)| vec![t, sign * x, sign * y, sign * z, w]).collect() });
             }
         } else if rcount > 0 {
@@ -1100,6 +1103,7 @@ pub fn extract(file: &NifFile, nif_rel: &str, textures: &mut Textures) -> Option
         tag: 0,
         psys: Vec::new(),
         geometry: None,
+        qsign: None,
     };
     let roots: Vec<usize> = file.top_level.iter().flatten().copied().filter(|&i| i < file.objects.len()).collect();
     for r in roots {
@@ -1203,6 +1207,7 @@ pub fn scene(file: &NifFile) -> Scene {
         tag: 0,
         psys: Vec::new(),
         geometry: Some(Vec::new()),
+        qsign: None,
     };
     let roots: Vec<usize> = file.top_level.iter().flatten().copied().filter(|&i| i < file.objects.len()).collect();
     for r in roots {
@@ -1211,6 +1216,53 @@ pub fn scene(file: &NifFile) -> Scene {
         }
     }
     Scene { geometry: ex.geometry.take().unwrap_or_default(), nodes: ex.nodes, node_of: ex.node_index, duration: ex.duration }
+}
+
+/// A KF file's NiControllerSequence blocks (NiControllerSequence::LoadBinary
+/// `883650`): the target node name of each block with its keyframe track
+/// and controller timing, and the sequence length (the latest stop).
+/// `bind` gives a target node's bind rotation (the quaternion sign check).
+pub fn kf_tracks(file: &NifFile, bind: &dyn Fn(&str) -> Mat3, qsign: Option<f32>) -> (Vec<(String, Keyframes)>, f32) {
+    let mut textures = Textures::default();
+    let ex = Extract {
+        file,
+        nif_rel: String::new(),
+        textures: &mut textures,
+        nodes: Vec::new(),
+        node_index: HashMap::new(),
+        sprites: Vec::new(),
+        emitters: Vec::new(),
+        duration: 0.0,
+        tag: 0,
+        psys: Vec::new(),
+        geometry: None,
+        qsign,
+    };
+    let mut out = Vec::new();
+    let mut length = 0.0f32;
+    for (i, o) in file.objects.iter().enumerate() {
+        if o.class != "NiControllerSequence" {
+            continue;
+        }
+        let Some(blocks) = o.fields.list("blocks") else { continue };
+        let controllers = file.sequence_controllers(i).unwrap_or_default();
+        for (b, c) in blocks.iter().zip(controllers) {
+            let (Value::Record(r), Some(c)) = (b, c) else { continue };
+            let name = str_field(&rec(r), "target_name");
+            let co = ex.obj(c);
+            if !is_kind_of(co.class, "NiKeyframeController") {
+                continue;
+            }
+            let cf = &co.fields;
+            let Some(d) = ex.target(cf, "data") else { continue };
+            if let Some(mut k) = ex.keyframe_track(&ex.obj(d).fields, bind(&name)) {
+                k.timing = timing(cf);
+                length = length.max(k.timing.stop);
+                out.push((name, k));
+            }
+        }
+    }
+    (out, length)
 }
 
 /// NiTransform words as a matrix (skin data and bone offsets).

@@ -41,7 +41,7 @@ pub enum Source {
     None,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Bones {
     /// Lower-case original NIF path -> rig file (game/ rigs preferred), the
     /// same index battle_view builds.
@@ -93,6 +93,18 @@ impl Bones {
             .par_iter()
             .filter_map(|(key, file)| AnimatedAsset::load(file).ok().map(|a| (key.clone(), Arc::new(Source::Rig(Box::new(RigBones::new(a)))))))
             .collect();
+        self.cache.extend(loaded);
+    }
+
+    /// Read the node tables of these (non-rig) models now, in parallel (the
+    /// preload job), so a battle's first effects at bones do not read NIFs.
+    pub fn preload_models(&mut self, models: &[String]) {
+        use rayon::prelude::*;
+        let mut keys: Vec<String> = models.iter().map(|m| m.to_ascii_lowercase().replace('\\', "/")).filter(|k| !self.cache.contains_key(k) && !self.rig_files.contains_key(k)).collect();
+        keys.sort();
+        keys.dedup();
+        let root = self.data_root.clone();
+        let loaded: Vec<(String, Arc<Source>)> = keys.par_iter().map(|k| (k.clone(), Arc::new(nif_bones(&root, k).map_or(Source::None, Source::Nif)))).collect();
         self.cache.extend(loaded);
     }
 

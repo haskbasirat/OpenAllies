@@ -21,6 +21,7 @@ pub mod extract;
 pub mod nif;
 pub mod player;
 pub mod render;
+pub mod view;
 
 use crate::audio::{Place, Sfx, SfxQueue};
 use crate::battle_view::{ActorView, render_yaw, to_render};
@@ -64,6 +65,8 @@ impl Plugin for EffectsPlugin {
             .add_systems(OnEnter(AppState::Battle), start_loading)
             .add_systems(OnExit(AppState::Battle), clear)
             .add_systems(Update, bench::spawn.run_if(in_state(AppState::Battle)))
+            .add_systems(Update, bench::frame_times)
+            .add_systems(Update, upload_atlas.run_if(not(resource_exists::<FxAtlas>)))
             .add_systems(Update, (bench::recoil_shots, bench::death_shots).after(EffectsSet).run_if(in_state(AppState::Battle)))
             .add_systems(
                 Update,
@@ -125,8 +128,67 @@ struct Loaded {
     seconds: f32,
 }
 
+/// The battle-independent effect data, loaded once per run on a preload
+/// thread (crate::preload::effects): the FX tables of every Thing, the NIF
+/// effect table, the effect texture array and the rig bones.
+pub struct Preloaded {
+    tables: Arc<FxTables>,
+    nif: &'static NifTable,
+    layer_index: HashMap<String, u16>,
+    layers: usize,
+    white: u16,
+    reconstruction: PathBuf,
+    bones: bones::Bones,
+    notes: Vec<String>,
+    seconds: f32,
+    /// The texture array, taken by the first battle (later battles keep
+    /// its handle in FxAtlas).
+    atlas: Mutex<Option<Image>>,
+}
+
+/// The preload job: `things` are every Thing of the rules (GameData defs)
+/// with its model.
+pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded> {
+    let ids: Vec<String> = things.iter().map(|(id, _)| id.clone()).collect();
+    let mut l = load(&ids)?;
+    // The node tables of the models whose effects sit at bones.
+    let at_bones = |fx: &data::ActorFx| {
+        let lists = [&fx.created, &fx.destroyed, &fx.health, &fx.selected, &fx.constructed, &fx.start_moving, &fx.stop_moving];
+        lists.iter().any(|l| l.iter().any(|f| !f.location.is_empty())) || fx.weapons.iter().any(|w| w.start.iter().chain(&w.do_).chain(&w.end).any(|f| !f.location.is_empty()))
+    };
+    let models: Vec<String> = things.iter().filter(|(id, _)| l.tables.actors.get(&id.to_ascii_lowercase()).is_some_and(at_bones)).filter_map(|(_, m)| m.clone()).collect();
+    l.bones.preload_models(&models);
+    let atlas = render::atlas_image(&l.layers);
+    Ok(Preloaded {
+        tables: l.tables,
+        nif: l.nif,
+        layer_index: l.layer_index,
+        layers: l.layers.len(),
+        white: l.white,
+        reconstruction: l.reconstruction,
+        bones: l.bones,
+        notes: l.notes,
+        seconds: l.seconds,
+        atlas: Mutex::new(Some(atlas)),
+    })
+}
+
+/// The effect texture array of the run (kept across battles).
 #[derive(Resource)]
-struct LoadTask(Arc<Mutex<Option<Result<Loaded, String>>>>);
+struct FxAtlas(Handle<Image>);
+
+/// As soon as the preload job has built the effect texture array (in the
+/// menus), hand it to the renderer, so its upload is not part of a battle's
+/// first frame.
+fn upload_atlas(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let Some(loaded) = crate::preload::effects_ready() else { return };
+    if let Some(image) = loaded.atlas.lock().unwrap().take() {
+        commands.insert_resource(FxAtlas(images.add(image)));
+    }
+}
+
+#[derive(Resource)]
+struct LoadTask(Arc<Mutex<Option<Result<Arc<Preloaded>, String>>>>);
 
 fn start_loading(mut commands: Commands, battle: Option<Res<Battle>>, existing: Option<Res<FxState>>) {
     if existing.is_some() {
@@ -144,11 +206,17 @@ fn start_loading(mut commands: Commands, battle: Option<Res<Battle>>, existing: 
 struct Retry;
 
 fn spawn_loader(commands: &mut Commands, battle: &Battle) {
-    let ids: Vec<String> = battle.world.data.defs.iter().map(|d| d.id.clone()).collect();
+    let _ = battle;
     let slot = Arc::new(Mutex::new(None));
     let out = slot.clone();
+    // The preload job (started with the game) did the work; this waits for
+    // it off the main thread if it is still running.
     std::thread::spawn(move || {
-        let result = load(&ids).map_err(|e| format!("{e:#}"));
+        let root = reconstruction_root().and_then(|r| r.parent().map(Path::to_path_buf));
+        let result = match root {
+            Some(root) => crate::preload::effects(&root).map_err(|e| format!("{e:#}")),
+            None => Err("the reconstruction folder was not found".to_owned()),
+        };
         *out.lock().unwrap() = Some(result);
     });
     commands.insert_resource(LoadTask(slot));
@@ -464,7 +532,7 @@ pub struct FxState {
     layer_index: HashMap<String, u16>,
     white: u16,
     bones: bones::Bones,
-    store: Option<aa_assets::AssetStore>,
+    store: Option<Arc<aa_assets::AssetStore>>,
     filters: HashMap<String, (u32, u32)>,
     time: f32,
     rng: Rng,
@@ -524,6 +592,7 @@ fn poll_loading(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<FxMaterial>>,
+    kept_atlas: Option<Res<FxAtlas>>,
 ) {
     if retry.is_some() {
         if let Some(b) = battle.as_ref() {
@@ -533,7 +602,13 @@ fn poll_loading(
         return;
     }
     let Some(task) = task else { return };
+    // upload_atlas took the texture array this frame: its handle arrives
+    // with the next one.
+    if kept_atlas.is_none() && crate::preload::effects_ready().is_some_and(|l| l.atlas.lock().unwrap().is_none()) {
+        return;
+    }
     let Some(result) = task.0.lock().unwrap().take() else { return };
+    let started = std::time::Instant::now();
     commands.remove_resource::<LoadTask>();
     let loaded = match result {
         Ok(l) => l,
@@ -542,8 +617,11 @@ fn poll_loading(
             return;
         }
     };
-    for n in &loaded.notes {
-        warn!("effects: {n}");
+    let first = loaded.atlas.lock().unwrap().is_some();
+    if first {
+        for n in &loaded.notes {
+            warn!("effects: {n}");
+        }
     }
     info!(
         "effects: {} actors, {} VFX, {} audio, {} special operations, {} NIF effects, {} texture layers, loaded in {:.2} s",
@@ -552,10 +630,18 @@ fn poll_loading(
         loaded.tables.audio.len(),
         loaded.tables.special_ops.len(),
         loaded.nif.effects.len(),
-        loaded.layers.len(),
+        loaded.layers,
         loaded.seconds
     );
-    let atlas = images.add(render::atlas_image(&loaded.layers));
+    let atlas = match (loaded.atlas.lock().unwrap().take(), kept_atlas) {
+        (Some(image), _) => {
+            let h = images.add(image);
+            commands.insert_resource(FxAtlas(h.clone()));
+            h
+        }
+        (None, Some(kept)) => kept.0.clone(),
+        (None, None) => images.add(Image::default()),
+    };
     let quads_mesh = meshes.add(render::empty_mesh());
     let decal_mesh = meshes.add(render::empty_mesh());
     let quads_entity = commands
@@ -564,14 +650,14 @@ fn poll_loading(
     let decal_entity = commands
         .spawn((Mesh3d(decal_mesh.clone()), MeshMaterial3d(materials.add(FxMaterial { atlas, depth_bias: 0.0 })), Transform::default(), NoFrustumCulling, NotShadowCaster))
         .id();
-    let store = aa_assets::AssetStore::open(&loaded.reconstruction).ok();
+    let store = crate::preload::store(&loaded.reconstruction).ok();
     commands.insert_resource(FxData(loaded.tables.clone()));
     commands.insert_resource(FxState {
-        tables: loaded.tables,
+        tables: loaded.tables.clone(),
         nif: loaded.nif,
-        layer_index: loaded.layer_index,
+        layer_index: loaded.layer_index.clone(),
         white: loaded.white,
-        bones: loaded.bones,
+        bones: loaded.bones.clone(),
         store,
         filters: HashMap::new(),
         time: 0.0,
@@ -615,6 +701,9 @@ fn poll_loading(
         cursor_shown: None,
         ops_prefetched: false,
     });
+    if std::env::var_os("AA_BEVY_FX_FRAMES").is_some() {
+        info!("effects: battle set up in {:.1} ms", started.elapsed().as_secs_f32() * 1000.0);
+    }
 }
 
 fn clear(mut commands: Commands, state: Option<Res<FxState>>) {
@@ -1122,7 +1211,9 @@ impl FxState {
         let data_root = self.data_root.clone();
         // The effect player already draws its blended geometry as sprites.
         let sprites = animated && self.in_nif_table(&path);
-        std::thread::spawn(move || {
+        // On the worker pool: a battle's first frame requests a hundred
+        // models, and starting a thread each costs the frame.
+        rayon::spawn(move || {
             let decoded = (|| -> Option<Decoded> {
                 let model = store.load_model(&path).ok()?.prepare().ok()?;
                 let meshes: Vec<&aa_assets::PreparedMesh> = model.meshes.iter().filter(|m| !m.indices.is_empty()).collect();
@@ -1609,9 +1700,11 @@ impl FxState {
             }
         });
         self.run_list(&fx.destroyed, ctx, frame, spawn, ListKind::Other);
-        // aspect_death: the wreck / rubble model replaces the actor's.
+        // aspect_death: the wreck model replaces the actor's (a building's
+        // death model plays its own collapse in battle_view instead).
         if let Some(model) = fx.death_model.as_ref()
             && !self.wrecks.contains_key(&actor)
+            && def.class != Some(aa_play::DefClass::Building)
         {
             let Some(m) = actor_matrix(frame, actor) else { return };
             let team = team_of(frame.world, a);
@@ -1678,6 +1771,15 @@ impl FxState {
             self.health.resize(n, 1.0);
             self.moving.resize(n, false);
         }
+        let timing = self.first_frame && std::env::var_os("AA_BEVY_FX_FRAMES").is_some();
+        let mut spent = [0f32; 4];
+        let mut clock = Instant::now();
+        let mut lap = |slot: usize, clock: &mut Instant| {
+            if timing {
+                spent[slot] += clock.elapsed().as_secs_f32() * 1000.0;
+                *clock = Instant::now();
+            }
+        };
         for a in &frame.world.actors {
             let i = a.id as usize;
             if a.removed {
@@ -1690,6 +1792,7 @@ impl FxState {
             let def = frame.world.data.def(a.def);
             let fx = self.fx_of(frame.world, a.def);
             let fx = fx.as_deref();
+            lap(0, &mut clock);
             let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None };
             if !self.seen[i] {
                 self.seen[i] = true;
@@ -1697,12 +1800,15 @@ impl FxState {
                 self.moving[i] = a.activity == Activity::Moving;
                 if let Some(fx) = fx {
                     self.prefetch(fx, team_of(frame.world, a));
+                    lap(1, &mut clock);
                     self.run_list(&fx.created, ctx, frame, spawn, ListKind::Created);
+                    lap(2, &mut clock);
                     // compare: WhenConstructed runs when the actor first
                     // exists built (map buildings, finished deployments).
                     if a.alive {
                         self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
                     }
+                    lap(3, &mut clock);
                 }
                 continue;
             }
@@ -1737,6 +1843,9 @@ impl FxState {
                     self.run_list(&fx.stop_moving, ctx, frame, spawn, ListKind::Moving);
                 }
             }
+        }
+        if timing {
+            info!("effects: first scan: FX lists {:.1} ms, prefetch {:.1} ms, WhenCreated {:.1} ms, WhenConstructed {:.1} ms", spent[0], spent[1], spent[2], spent[3]);
         }
     }
 

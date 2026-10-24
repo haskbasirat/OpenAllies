@@ -18,6 +18,89 @@ pub fn spawn(battle: Option<ResMut<Battle>>, ready: Option<Res<super::FxState>>,
     if let Some(speed) = std::env::var("AA_BEVY_FX_BENCH_SPEED").ok().and_then(|v| v.parse::<f32>().ok()) {
         battle.speed = speed;
     }
+    // AA_BEVY_VIEW_TEST_HQ=<fraction>: the local kingdom's buildings start at
+    // that fraction of their health (aspect skins: aspect_disabled at 0.40).
+    if let Some(f) = std::env::var("AA_BEVY_VIEW_TEST_HQ").ok().and_then(|v| v.parse::<f32>().ok()) {
+        let local = battle.local;
+        let world = &mut battle.world;
+        let ids: Vec<aa_play::ActorId> = world.actors.iter().filter(|a| a.kingdom == Some(local) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.id).collect();
+        for id in ids {
+            let max = world.combat.actor(id).map_or(0.0, |c| c.max_health);
+            let max = if max > 0.0 { max } else { world.data.def(world.actors[id as usize].def).health };
+            world.actors[id as usize].health = max * f;
+        }
+        info!("view test: local buildings at {:.0}% health", f * 100.0);
+    }
+    // AA_BEVY_VIEW_TEST=<thing ids>: single actors of the local kingdom in a
+    // row west of its HQ; trucks that unpack are sent to unpack 24 m away,
+    // the others drive there (view animation checks: tires, treads,
+    // trailers, tilt, unpacking).
+    if let Ok(list) = std::env::var("AA_BEVY_VIEW_TEST") {
+        let local = battle.local;
+        let world = &mut battle.world;
+        let hq = world
+            .actors
+            .iter()
+            .find(|a| a.kingdom == Some(local) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
+            .map(|a| a.pos.truncate())
+            .unwrap_or(Vec2::new(100.0, 100.0));
+        let mut orders = Vec::new();
+        // AA_BEVY_VIEW_TEST_SLOPE=1: on the steepest ground within 60 m
+        // (the tilt check), driving across the slope.
+        let slope = std::env::var_os("AA_BEVY_VIEW_TEST_SLOPE").is_some().then(|| {
+            let h = |p: Vec2| world.map.height_at(p);
+            let mut best = (0.0f32, hq, Vec2::X);
+            for gx in -15..=15 {
+                for gy in -15..=15 {
+                    let p = hq + Vec2::new(gx as f32 * 4.0, gy as f32 * 4.0);
+                    let size = Vec2::new(world.map.width as f32, world.map.height as f32) * world.map.cell_size;
+                    if p.x < 30.0 || p.y < 30.0 || p.x > size.x - 30.0 || p.y > size.y - 30.0 {
+                        continue;
+                    }
+                    let g = Vec2::new(h(p + Vec2::X * 2.0) - h(p - Vec2::X * 2.0), h(p + Vec2::Y * 2.0) - h(p - Vec2::Y * 2.0)) / 4.0;
+                    // drivable: steep, but no cliff or wall
+                    if g.length() > best.0 && g.length() < 0.35 {
+                        best = (g.length(), p, g.normalize_or(Vec2::X));
+                    }
+                }
+            }
+            info!("view test: steepest ground {:.2} at {:?}", best.0, best.1);
+            best
+        });
+        for (i, id) in list.split(',').map(str::trim).filter(|s| !s.is_empty()).enumerate() {
+            let Some(def) = world.data.find(id) else {
+                warn!("view test: no thing {id}");
+                continue;
+            };
+            // AA_BEVY_VIEW_TEST_EAST=1: east of the HQ, driving east (in view).
+            let east = std::env::var_os("AA_BEVY_VIEW_TEST_EAST").is_some();
+            // AA_BEVY_VIEW_TEST_NEAR=1: close west of the HQ, a short walk.
+            let near = std::env::var_os("AA_BEVY_VIEW_TEST_NEAR").is_some();
+            let (at, to) = if let Some((_, p, g)) = slope {
+                // across the slope: perpendicular to the gradient
+                let across = Vec2::new(-g.y, g.x);
+                let at = p - across * 10.0 + g * (i as f32 * 5.0 - 5.0);
+                (at, at + across * 20.0)
+            } else if near {
+                let at = hq + Vec2::new(-12.0, -8.0 + i as f32 * 4.0);
+                (at, at + Vec2::new(-8.0, 0.0))
+            } else if east {
+                let at = hq + Vec2::new(14.0, -12.0 + i as f32 * 8.0);
+                (at, at + Vec2::new(14.0, 3.0))
+            } else {
+                let at = hq + Vec2::new(-16.0, -14.0 + i as f32 * 7.0);
+                (at, at + Vec2::new(-24.0, 4.0))
+            };
+            let a = aa_play::production::spawn_single(world, def, Some(local), at, 0.0);
+            if world.data.def(def).unpacks_to.is_some() {
+                orders.push(Command::Deploy { kingdom: local, truck: a, at: to, facing: std::f32::consts::PI });
+            } else {
+                orders.push(Command::Move { kingdom: local, units: vec![Unit::Actor(a)], to, attack_move: false });
+            }
+            info!("view test: {id} actor {a} at {at:?} -> {to:?}");
+        }
+        battle.pending.extend(orders);
+    }
     let Some(soldiers) = std::env::var("AA_BEVY_FX_BENCH").ok().and_then(|v| v.parse::<usize>().ok()) else {
         *done = true;
         return;
@@ -57,6 +140,17 @@ pub fn spawn(battle: Option<ResMut<Battle>>, ready: Option<Res<super::FxState>>,
     }
     battle.pending.extend(orders);
     info!("fx bench: {} regiments a side ordered to attack-move", per_side);
+}
+
+/// Measurement only (AA_BEVY_FX_FRAMES=<ms>): every frame longer than that
+/// (real time, not the 250 ms clamped game delta) in the log, with the app
+/// state, so stalls between Launch and the battle can be found.
+pub fn frame_times(time: Res<Time<Real>>, state: Res<State<crate::session::AppState>>, mut limit: Local<Option<f32>>) {
+    let limit = *limit.get_or_insert_with(|| std::env::var("AA_BEVY_FX_FRAMES").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(f32::MAX));
+    let ms = time.delta_secs() * 1000.0;
+    if ms > limit {
+        info!("frame time: {ms:.0} ms ({:?})", state.get());
+    }
 }
 
 /// Measurement only (AA_BEVY_FX_RECOIL_SHOTS=<file prefix>): the first time
