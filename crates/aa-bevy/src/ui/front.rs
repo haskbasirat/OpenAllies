@@ -638,6 +638,11 @@ pub fn frame(
             info!("launch: {setup:?}, generals {:?}", f.custom.launched_profiles);
             commands.insert_resource(crate::session::PendingAiProfiles(f.custom.launched_profiles.clone()));
             f.starting_experience = f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
+            // the generals and the StartingExperience rule (ui/abilities.rs)
+            commands.insert_resource(super::abilities::PendingGenerals {
+                factions: f.custom.launched_factions.clone(),
+                starting_experience: f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()),
+            });
             // the FogOfWar world rule of the session (EnumValue IDS)
             match f.custom.rule_value("FogOfWar").and_then(|v| aa_play::fog::FogMode::from_ids(&v)) {
                 Some(mode) => commands.insert_resource(super::fog::PendingFog(mode)),

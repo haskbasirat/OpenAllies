@@ -152,6 +152,18 @@ pub enum Command {
     Detach { kingdom: KingdomId, org: OrgId },
     /// disband (10): the selection leaves the battle for good.
     Disband { kingdom: KingdomId, units: Vec<Unit> },
+    // ---- appended by the combat owner (special operations) ----
+    /// A general's faction ability (KKC_FactionUseAbilityOrder `61E190` ->
+    /// `4CDE00`, `crate::special_ops`): `ability` indexes the kingdom's
+    /// general's abilities (the HUD's "UseFactionAbility %i").
+    UseAbility { kingdom: KingdomId, ability: u32, target: Option<AbilityTarget> },
+}
+
+/// Where a faction ability is aimed: a map point, or a clicked actor.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum AbilityTarget {
+    Point(Vec2),
+    Actor(ActorId),
 }
 
 /// What a player selects and orders: a whole regiment or a single actor
@@ -182,6 +194,12 @@ pub enum Event {
     /// A capturable actor (city) reached zero health and changed owner
     /// (`4D5230`; health set to CaptureHealthFactor of its maximum).
     Captured { actor: ActorId, kingdom: KingdomId },
+    // ---- appended by the combat owner (special operations) ----
+    /// A general's ability was used (`4C9550` phase 0): its IDS, the
+    /// (map-clamped) point and the clicked actor.
+    SpecialOperation { kingdom: KingdomId, ability: String, at: Vec2, target: Option<ActorId> },
+    /// DESCRIBE_ECONOMY (effect 9): `kingdom` was shown the economy of `of`.
+    EconomyDescribed { kingdom: KingdomId, of: KingdomId },
 }
 
 pub struct World {
@@ -215,11 +233,15 @@ pub struct World {
     /// HUD player orders (formations, rally points); read it through
     /// `crate::player_orders` functions.
     pub player_orders: crate::player_orders::PlayerOrders,
+    // ---- appended by the combat owner ----
+    /// Generals' special operations (commanders, experience, enchantments);
+    /// install the generals data with `crate::special_ops::attach`.
+    pub special_ops: crate::special_ops::SpecialOpsState,
 }
 
 impl World {
     pub fn empty(data: Arc<GameData>, map: Arc<GameMap>, seed: u64) -> Self {
-        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default(), fog: Default::default(), player_orders: Default::default() }
+        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default(), fog: Default::default(), player_orders: Default::default(), special_ops: Default::default() }
     }
     pub fn spawn_actor(&mut self, def: DefId, kingdom: Option<KingdomId>, pos: Vec3, facing: f32) -> ActorId {
         let id = self.actors.len() as ActorId;

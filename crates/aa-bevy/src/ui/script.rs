@@ -15,7 +15,9 @@
 //! kind nearest the window centre, clicked where it is drawn, or at
 //! `"offset": [dx, dy]` window fractions from there),
 //! `{"dclick_at": [fx, fy]}` (double click), `{"zoom": z}` (camera zoom,
-//! battle only), `{"exit": true}`.
+//! battle only), `{"exit": true}`; `{"move_at": [fx, fy]}` /
+//! `{"move_actor": kind}` move the pointer there without a click
+//! (appended by the combat owner).
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -94,7 +96,7 @@ impl Script {
                     return;
                 }
             }
-        } else if let Some(v) = step.get("click_at").or(step.get("rclick_at")).or(step.get("dclick_at")) {
+        } else if let Some(v) = step.get("click_at").or(step.get("rclick_at")).or(step.get("dclick_at")).or(step.get("move_at")) {
             Some(Vec2::new(self.frac(v, 0) * self.size.x, self.frac(v, 1) * self.size.y))
         } else {
             None
@@ -107,7 +109,7 @@ impl Script {
                     input.pos = Some(t);
                     self.phase = 1;
                 }
-                1 if step.get("move").is_some() => self.next(),
+                1 if step.get("move").is_some() || step.get("move_at").is_some() => self.next(),
                 1 => {
                     input.pos = Some(t);
                     if right { input.right_pressed = true } else { input.left_pressed = true }
@@ -273,7 +275,7 @@ pub fn run(
             s.next();
             return;
         }
-        for (key, out) in [("click_actor", "click_at"), ("rclick_actor", "rclick_at"), ("dclick_actor", "dclick_at")] {
+        for (key, out) in [("click_actor", "click_at"), ("rclick_actor", "rclick_at"), ("dclick_actor", "dclick_at"), ("move_actor", "move_at")] {
             let Some(what) = kind(key) else { continue };
             let Ok((cam, cam_tf)) = cameras.single() else { return };
             let centre = logical * 0.5;

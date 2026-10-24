@@ -466,6 +466,13 @@ fn max_speed(cache: &mut SpeedCache, world: &World, id: ActorId) -> f32 {
         Some(k) => crate::production::multiply_factor(world, k, &def.properties, "SPEED_MAX"),
         None => 1.0,
     });
+    // (combat owner) the actor's enchantments' SPEED_MAX amounts join the
+    // same 502A70 sum (special operations: Blitzkrieg, Forced March...)
+    let enchanted = crate::special_ops::mods(world, id).map_or(0.0, |m| m.speed);
+    if enchanted != 0.0 {
+        let clamp = world.data.rule_ci("ModifierAttributeClampMultiply").unwrap_or(0.05);
+        return def.speed_max * (factor + enchanted).max(clamp);
+    }
     def.speed_max * factor
 }
 

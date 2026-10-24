@@ -2,6 +2,7 @@
 //! with the original TGI layouts) builds every screen and emits a draw
 //! list; this module feeds it input, runs the screen state machine and
 //! paints the list. Owner: UI.
+pub mod abilities;
 pub mod banners;
 pub mod custom;
 pub mod datafile;
@@ -74,6 +75,8 @@ impl Plugin for UiPlugin {
             // fog: the staging rule and the first fog state before the first
             // tick and frame; the texture and hidden actors after the tick
             .add_systems(Update, fog::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
+            // the generals of the battle before its first tick (combat owner)
+            .add_systems(Update, abilities::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             .add_systems(Update, fog::update.after(crate::session::step_battle))
             .add_systems(
                 Update,

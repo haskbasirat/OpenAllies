@@ -967,7 +967,15 @@ fn targetable(world: &World, id: ActorId) -> bool {
         return false;
     }
     let def = world.data.def(a.def);
-    !matches!(def.class, Some(DefClass::Other | DefClass::Organization)) && def.health > 0.0
+    if def.health <= 0.0 || def.invulnerable {
+        return false;
+    }
+    match def.class {
+        Some(DefClass::Organization) => false,
+        // scenery stays out; a targetable Thing (a supply drop) does not
+        Some(DefClass::Other) => def.targetable,
+        _ => true,
+    }
 }
 
 /// A shooter's current target is still valid: targetable, hostile, not dying.
@@ -1051,6 +1059,9 @@ pub(crate) fn type_factor(world: &World, st: &CombatState, damage_type: u32, tar
     {
         factor -= st.extras().def(target.def).entrench_resist.get(damage_type as usize).copied().unwrap_or(0.0);
     }
+    if let Some(m) = crate::special_ops::mods(world, target.id) {
+        factor -= m.resist.get(damage_type as usize).copied().unwrap_or(0.0);
+    }
     factor.max(st.rules().clamp_multiply)
 }
 
@@ -1062,13 +1073,20 @@ fn target_defense(world: &World, st: &CombatState, target: &crate::world::Actor)
     {
         dv += st.extras().def(target.def).entrench_dv;
     }
+    if let Some(m) = crate::special_ops::mods(world, target.id) {
+        dv += m.dv;
+    }
     modified_defense(def.defense, dv, st.rules().clamp_add)
 }
 
 fn shooter_power(world: &World, st: &CombatState, shooter: &crate::world::Actor, w: &Weapon) -> f32 {
-    let (av, kind) = level_of(world, st, shooter).map_or((0.0, 0.0), |l| {
+    let (mut av, mut kind) = level_of(world, st, shooter).map_or((0.0, 0.0), |l| {
         (l.av, if w.projectile.is_some() { l.av_ranged } else { l.av_melee })
     });
+    if let Some(m) = crate::special_ops::mods(world, shooter.id) {
+        av += m.av;
+        kind += if w.projectile.is_some() { m.av_ranged } else { m.av_melee };
+    }
     modified_power(w.damage, kind, av, st.rules().clamp_add)
 }
 
@@ -1685,7 +1703,9 @@ fn fire(world: &mut World, st: &mut CombatState) {
             continue;
         }
         let w = &data.def(world.actors[id].def).weapons[d.weapon];
-        world.actors[id].combat.recharge[d.weapon] = w.recharge;
+        // 501560: the recharge divided by the RECHARGE_TIME multiplier.
+        let multiplier = crate::special_ops::mods(world, id as ActorId).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
+        world.actors[id].combat.recharge[d.weapon] = w.recharge / multiplier;
         world.events.push(Event::Fired { shooter: id as ActorId, target, weapon: d.weapon as u32 });
         world.set_activity(id as ActorId, Activity::Attacking);
         // 57F290: face the target when not moving (turrets turn on their own).
@@ -1799,9 +1819,27 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
         h.retain(|(t, _)| now - *t < window);
         h.push((now, amount));
     }
-    if dead && !st.actors[target as usize].queued_death && !zero_health(world, st, shooter, target) {
+    let kingdom = world.actors[shooter as usize].kingdom;
+    if dead && !st.actors[target as usize].queued_death && !zero_health(world, st, kingdom, target) {
         st.actors[target as usize].queued_death = true;
         st.deaths.push(target);
+    }
+    // ABILITY_EFFECT modifiers of the shooter (special operations): their
+    // ADD_DAMAGE (type factor x amount) joins every attack of the type.
+    if !dead {
+        for (_, extra, dt) in crate::special_ops::extra_hits(world, shooter, w.ability_type.as_deref()) {
+            let add = add_damage_amount(world, st, target, extra, dt);
+            if add > 0.0 && world.actors[target as usize].alive {
+                let t = &mut world.actors[target as usize];
+                t.health = (t.health - add).max(0.0);
+                let now_dead = t.health <= 0.0;
+                world.events.push(Event::Hit { target, damage: add });
+                if now_dead && !st.actors[target as usize].queued_death && !zero_health(world, st, kingdom, target) {
+                    st.actors[target as usize].queued_death = true;
+                    st.deaths.push(target);
+                }
+            }
+        }
     }
     if let Some(o) = victim_org {
         st.orgs[o as usize].last_hit = Some((shooter, now));
@@ -1821,12 +1859,11 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
 /// (`4D1120`: captureable, hostile source) changes owner with
 /// CaptureHealthFactor of its maximum health (`4D5230`); a non-destructible
 /// body is restored to 1. Returns true when the actor does not die.
-fn zero_health(world: &mut World, st: &mut CombatState, shooter: ActorId, target: ActorId) -> bool {
+fn zero_health(world: &mut World, st: &mut CombatState, kingdom: Option<KingdomId>, target: ActorId) -> bool {
     let def = world.data.def(world.actors[target as usize].def);
     // (core) 4D1120: an actor with a CityComponent is never captured by
     // damage; cities change hands by presence (City tick 5647A0, supply.rs).
     let (captureable, destructible) = (def.captureable && !def.city, def.destructible);
-    let kingdom = world.actors[shooter as usize].kingdom;
     if captureable && st.hostile(kingdom, world.actors[target as usize].kingdom)
         && let Some(k) = kingdom
     {
@@ -1843,6 +1880,86 @@ fn zero_health(world: &mut World, st: &mut CombatState, shooter: ActorId, target
         return true;
     }
     false
+}
+
+/// MAIN_DAMAGE of a faction ability (`4CA400` with a kingdom source: no
+/// offensive component, so offense 1; the ability's main power).
+pub(crate) fn kingdom_hit_amount(world: &World, st: &CombatState, target: ActorId, power: f32, scale: f32, damage_type: u32, flags: u32) -> f32 {
+    let t = &world.actors[target as usize];
+    damage_amount(power, 1.0, scale, target_defense(world, st, t), type_factor(world, st, damage_type, t), flags, st.rules().damage_minimum)
+}
+
+/// ADD_DAMAGE and periodic damage (`4CA400` other kinds): type factor x
+/// amount, no defense, no minimum.
+pub(crate) fn add_damage_amount(world: &World, st: &CombatState, target: ActorId, amount: f32, damage_type: u32) -> f32 {
+    amount.max(0.0) * type_factor(world, st, damage_type, &world.actors[target as usize])
+}
+
+/// Damage from a kingdom (a special operation): Body `5625C0` without an
+/// actor source, so no kill credit and no reactive engagement.
+pub(crate) fn damage_from_kingdom(world: &mut World, st: &mut CombatState, kingdom: KingdomId, target: ActorId, amount: f32, damage_type: Option<u32>) {
+    let i = target as usize;
+    if amount <= 0.0 || !world.actors[i].alive {
+        return;
+    }
+    let t = &mut world.actors[i];
+    t.health = (t.health - amount).max(0.0);
+    let dead = t.health <= 0.0;
+    world.events.push(Event::Hit { target, damage: amount });
+    if st.actors.len() <= i {
+        st.actors.resize_with(i + 1, ActorCombat::default);
+    }
+    st.actors[i].last_hit = None;
+    st.actors[i].last_damage = Some((amount, damage_type));
+    if dead && !st.actors[i].queued_death && !zero_health(world, st, Some(kingdom), target) {
+        st.actors[i].queued_death = true;
+        st.deaths.push(target);
+    }
+}
+
+/// Periodic damage of the Properties tick (`5818D0`: event kind 2, reason
+/// 10, the Body type modifier): no event per tick, no credit.
+pub(crate) fn periodic_damage(world: &mut World, st: &mut CombatState, target: ActorId, amount: f32, damage_type: u32) {
+    let i = target as usize;
+    if amount <= 0.0 || !world.actors[i].alive {
+        return;
+    }
+    let t = &mut world.actors[i];
+    t.health = (t.health - amount).max(0.0);
+    let dead = t.health <= 0.0;
+    if st.actors.len() <= i {
+        st.actors.resize_with(i + 1, ActorCombat::default);
+    }
+    st.actors[i].last_hit = None;
+    st.actors[i].last_damage = Some((amount, Some(damage_type)));
+    if dead && !st.actors[i].queued_death && !zero_health(world, st, None, target) {
+        st.actors[i].queued_death = true;
+        st.deaths.push(target);
+    }
+}
+
+/// Maximum health from the definition, the regiment's level and the
+/// enchantments (HEALTH multipliers add; floored at
+/// ModifierAttributeClampMultiply). Current health is kept, at most the new
+/// maximum.
+pub(crate) fn refresh_max_health(world: &mut World, st: &mut CombatState, actor: ActorId) {
+    let i = actor as usize;
+    let Some(a) = world.actors.get(i) else { return };
+    // (core) 502A70: level, handicap/technology and enchantment HEALTH
+    // amounts in one multiplier.
+    let mut sum = level_of(world, st, a).map_or(0.0, |l| l.health) + crate::production::health_amount(world, a.kingdom, a.def);
+    if let Some(m) = crate::special_ops::mods(world, actor) {
+        sum += m.health;
+    }
+    let max = world.data.def(a.def).health * (1.0 + sum).max(st.rules().clamp_multiply);
+    if st.actors.len() <= i {
+        st.actors.resize_with(i + 1, ActorCombat::default);
+    }
+    st.actors[i].max_health = max;
+    let a = &mut world.actors[i];
+    if a.health > max {
+        a.health = max;
+    }
 }
 
 /// Death (`5625C0` zero health -> death queue -> BeginDeath), kill credit,

@@ -647,6 +647,62 @@ fn hq_truck_income_packed_unpacking_and_deployed() {
     }
 }
 
+/// Probe: the balanced villages next to each start on a generated map
+/// (RMCVillageActorGroups, side_enemy), who owns them over the first 40 s.
+#[test]
+#[ignore]
+fn generated_map_start_villages() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let data = data();
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    for seed in [3u64, 7, 11] {
+        let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, seed)).expect("generate");
+        let setup = aa_play::SkirmishSetup {
+            map_id: "generated".into(),
+            players: vec![
+                aa_play::PlayerSetup { name: "A".into(), nation: "rus".into(), team: 0, color: [0, 76, 255], controller: aa_play::Controller::Human, start: 0 },
+                aa_play::PlayerSetup { name: "B".into(), nation: "ger".into(), team: 1, color: [217, 0, 25], controller: aa_play::Controller::Human, start: 1 },
+            ],
+            starting_resources: None,
+            seed,
+        };
+        let mut w = aa_play::World::new_skirmish(data.clone(), Arc::new(generated.map), &setup).expect("new_skirmish");
+        for second in [0, 1, 10, 40] {
+            while w.time < second as f32 {
+                w.step(vec![]);
+            }
+            for k in 0..2u32 {
+                let corps = w.actors.iter().find(|a| a.kingdom == Some(k) && data.def(a.def).id.ends_with("_corps")).map(|a| a.pos.truncate()).unwrap();
+                let mut near: Vec<(f32, String, Option<u32>, f32)> = w
+                    .actors
+                    .iter()
+                    .filter(|a| a.alive && !a.removed && data.def(a.def).city && data.def(a.def).city_zone_radius > 0.0)
+                    .map(|a| (a.pos.truncate().distance(corps), data.def(a.def).id.clone(), a.kingdom, data.def(a.def).city_zone_radius))
+                    .collect();
+                near.sort_by(|a, b| a.0.total_cmp(&b.0));
+                eprintln!("seed {seed} t={:.1}s k{k} income {:?} nearest cities {:?}", w.time, w.kingdoms[k as usize].income, &near[..near.len().min(2)]);
+            }
+        }
+    }
+}
+
+/// Probe: combat values (Performer+60, 57E430) of the start actors, the
+/// value 4D01E0 counts for city admission.
+#[test]
+#[ignore]
+fn start_actor_combat_values() {
+    let mut w = berlin_world();
+    w.step(vec![]);
+    let data = w.data.clone();
+    let extras = w.combat.extras.clone().expect("combat extras");
+    for id in ["rus_truck_supply", "rus_depot_supply", "rus_truck_infantry", "rus_hq_infantry", "rus_corps", "rus_bunker", "rus_bunker_aa", "rus_bunker_artillery", "regiment_rus_hq_infantry", "regiment_rus_infantry", "rus_rifleman", "start_loc"] {
+        if let Some(d) = data.find(id) {
+            eprintln!("{id}: combat_value {} weapons {}", extras.def(d).combat_value, data.def(d).weapons.len());
+        }
+    }
+}
+
 /// The same supply check on a generated map with two computers.
 #[test]
 #[ignore]

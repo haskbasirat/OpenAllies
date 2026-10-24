@@ -365,6 +365,10 @@ pub struct Custom {
     launched_nation: Option<String>,
     /// The computer generals of the last launch: (player index, SAI ids).
     pub launched_profiles: Vec<(usize, String)>,
+    /// The faction (general) of each launched player: the staging Faction
+    /// choice, a computer's SAI profile faction; None = random for the
+    /// nation (appended by the combat owner, for ui/abilities.rs).
+    pub launched_factions: Vec<(usize, Option<String>)>,
 }
 
 impl Custom {
@@ -382,6 +386,7 @@ impl Custom {
             rmc_prefs: Default::default(),
             launched_nation: None,
             launched_profiles: Vec::new(),
+            launched_factions: Vec::new(),
         }
     }
 
@@ -941,6 +946,7 @@ impl Custom {
         let mut start = 0usize;
         let mut local_nation = None;
         let mut profiles = Vec::new();
+        let mut factions = Vec::new();
         for r in s.records.iter() {
             if !(r.playable && !r.independent) {
                 continue;
@@ -970,6 +976,7 @@ impl Custom {
                     // the loading screen reads the staging record's nation
                     // (0x6E83A0 -> 0x50DC00 +0x18): none for "Random"
                     local_nation = r.nation.as_ref().and_then(|n| data.nation(n)).map(|n| n.short.clone());
+                    factions.push((players.len(), r.faction.clone()));
                     player.clone()
                 }
                 _ => {
@@ -984,6 +991,8 @@ impl Custom {
                     if let Some(id) = &chosen {
                         profiles.push((players.len(), id.clone()));
                     }
+                    let sai_faction = chosen.as_ref().and_then(|id| data.sais.iter().find(|x| &x.ids == id)).and_then(|x| x.faction.clone());
+                    factions.push((players.len(), r.faction.clone().or(sai_faction)));
                     chosen.and_then(|id| data.sais.iter().find(|x| x.ids == id)).map(|x| x.name.clone()).unwrap_or_else(|| r.side_name.clone())
                 }
             };
@@ -1027,6 +1036,7 @@ impl Custom {
         };
         self.launched_nation = local_nation;
         self.launched_profiles = profiles;
+        self.launched_factions = factions;
         Some((SkirmishSetup { map_id, players, starting_resources, seed: game_seed }, random))
     }
 

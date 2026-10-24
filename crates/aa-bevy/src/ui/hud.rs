@@ -69,6 +69,8 @@ pub enum GameAction {
     CameraZoom(f32),
     SpeedUp,
     SpeedDown,
+    /// A +SELF general ability used at once (ui/abilities.rs, combat owner).
+    UseAbility(usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -89,6 +91,9 @@ pub enum TargetOrder {
     AttachHq,
     /// `set_rally_point` (0x10) of a building.
     Rally(aa_play::ActorId),
+    /// A general ability's targeting state (`UseFactionAbility %i`,
+    /// ui/abilities.rs, combat owner).
+    Ability(usize),
 }
 
 /// HUD output for the battle input this frame.
@@ -175,6 +180,10 @@ pub struct GameHud {
     /// The session's StartingExperience world rule (the faction's
     /// experience at time 0).
     pub starting_experience: f32,
+    /// The local general's abilities and their tooltips this frame
+    /// (ui/abilities.rs, combat owner).
+    abilities: Vec<aa_play::special_ops::AbilityView>,
+    ability_tips: Vec<(String, String)>,
 }
 
 const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResource", 1), ("LimitedConsumedResource", 2)];
@@ -419,6 +428,8 @@ impl GameHud {
             last_speed: None,
             panels: Default::default(),
             starting_experience: 0.0,
+            abilities: Vec::new(),
+            ability_tips: Vec::new(),
         };
         if let Some(b) = battle {
             g.update(ui, b);
@@ -461,6 +472,10 @@ impl GameHud {
             _ => Vec::new(),
         };
         self.hud.update(ui, &view);
+        // the generals' ability buttons: enabled state and tooltips
+        self.abilities = aa_play::special_ops::abilities(&b.world, b.local);
+        self.ability_tips = self.abilities.iter().map(|v| super::abilities::tip(ui, v)).collect();
+        super::abilities::apply_enabled(ui, &self.abilities);
         // a truck is a simple actor in the original (SimpleActorDisplay: no
         // banner view); shown here in the company display without its
         // banner button
@@ -563,6 +578,10 @@ impl GameHud {
         // the formation buttons (0x628490): "FormationChange <id> "
         if let Some(rest) = cmd.strip_prefix("FormationChange") {
             return Some(rest.trim().parse::<usize>().ok().map(GameAction::SetFormation).into_iter().collect());
+        }
+        // the general ability buttons (CommandUseFactionAbility 0x612750)
+        if let Some(rest) = cmd.strip_prefix("UseFactionAbility") {
+            return Some(rest.trim().parse::<usize>().ok().and_then(|i| super::abilities::command(ui, &self.abilities, i)).into_iter().collect());
         }
         Some(match cmd {
             // ControlPanel ButtonMenu -> the in-game menu (0x5C0C40)
@@ -687,6 +706,17 @@ impl GameHud {
             KeyCode::F6 => return Some(vec![GameAction::CycleIdle(2)]),
             _ => {}
         }
+        // hotkeys_custom.txt: y / h / n / j "UseFactionAbility 0..3"
+        let ability = match key {
+            KeyCode::KeyY => Some(0),
+            KeyCode::KeyH => Some(1),
+            KeyCode::KeyN => Some(2),
+            KeyCode::KeyJ => Some(3),
+            _ => None,
+        };
+        if let Some(i) = ability {
+            return self.command(ui, &format!("UseFactionAbility {i}"));
+        }
         let verbs: &[&str] = match key {
             KeyCode::KeyS => &["stop"],
             KeyCode::KeyA => &["kill", "command_all"],
@@ -741,6 +771,10 @@ impl GameHud {
         if path.contains("FormationButtons/FormationButton") {
             let i = index("FormationButton")?;
             return self.formation_tips.get(i).map(|n| (String::new(), n.clone()));
+        }
+        // the general ability items (0x6081B0)
+        if let Some(i) = super::abilities::item_index(path) {
+            return self.ability_tips.get(i).cloned();
         }
         None
     }
@@ -1266,6 +1300,10 @@ impl HudWorld for View<'_> {
     /// 5000). Abilities spending it are not implemented.
     fn faction_experience(&self) -> Option<aa_ui::hud::FactionExperience> {
         let (b, w) = (self.battle?, self.world()?);
+        // the commander's balance and maximum (special operations spend it)
+        if let Some((value, max)) = aa_play::special_ops::experience(w, b.local) {
+            return Some(aa_ui::hud::FactionExperience { value: value.floor(), max });
+        }
         let periodic = w.data.rule_ci("ExperienceFactionGainPeriodic").unwrap_or(1.0);
         let mult = w.data.rule_ci("ExperienceFactionGainMultiplier").unwrap_or(1.0);
         let gained: f32 = w.orgs.iter().filter(|o| o.kingdom == b.local).map(|o| o.experience.max(0.0)).sum();
@@ -1275,7 +1313,8 @@ impl HudWorld for View<'_> {
     }
 
     fn faction_abilities(&self) -> Vec<aa_ui::hud::HudAbility> {
-        Vec::new()
+        // the local general's special operations (ui/abilities.rs)
+        self.battle.map(|b| super::abilities::hud_items(&b.world, b.local)).unwrap_or_default()
     }
 
     fn group_textures(&self) -> Vec<Option<String>> {

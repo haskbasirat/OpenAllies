@@ -16,6 +16,8 @@ static FIXES: Shared<crate::model_fixes::ModelFixes> = OnceLock::new();
 static GAME: Shared<aa_play::GameData> = OnceLock::new();
 static AI: Shared<aa_play::ai::AiData> = OnceLock::new();
 static RANDOM: Shared<aa_play::mapgen::RandomMapData> = OnceLock::new();
+// appended by the combat owner: the generals and their special operations
+static GENERALS: Shared<aa_play::special_ops::GeneralData> = OnceLock::new();
 
 fn get<T>(cell: &'static Shared<T>, init: impl FnOnce() -> Result<T>) -> Result<Arc<T>> {
     cell.get_or_init(|| init().map(Arc::new).map_err(|e| format!("{e:#}"))).clone().map_err(anyhow::Error::msg)
@@ -38,6 +40,12 @@ pub fn ai_data(root: &Path) -> Result<Arc<aa_play::ai::AiData>> {
 pub fn random_maps(root: &Path) -> Result<Arc<aa_play::mapgen::RandomMapData>> {
     get(&RANDOM, || aa_play::mapgen::RandomMapData::load(root))
 }
+/// The generals (Data/Generals) with their special operations and the SAI
+/// GeneralPowers (needs the GameData; cached after the first load).
+pub fn generals(root: &Path) -> Result<Arc<aa_play::special_ops::GeneralData>> {
+    let data = game_data(root)?;
+    get(&GENERALS, || aa_play::special_ops::GeneralData::load(root, &data))
+}
 
 /// Warm everything in parallel in the background (called once at startup).
 pub fn start(reconstruction: PathBuf) {
@@ -54,6 +62,7 @@ pub fn start(reconstruction: PathBuf) {
             let root = root.clone();
             Box::new(move || {
                 let _ = game_data(&root);
+                let _ = generals(&root);
             })
         },
         {
