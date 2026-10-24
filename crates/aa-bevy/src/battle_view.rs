@@ -189,9 +189,22 @@ fn rig_source(text: &str) -> Option<String> {
 impl Rig {
     /// The clip and playback time for an activity.
     /// `death` is the original death clip combat chose (Def::death_clips id).
-    fn clip_for(&self, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>) -> Option<(usize, f32, PlaybackMode)> {
+    /// `object` is an object animation an FX command started (e.g. a tank's
+    /// `recoil1` on firing): (clip IDS, start time); it plays once, then the
+    /// normal clip returns.
+    fn clip_for(&self, actor: ActorId, activity: Activity, since: f32, now: f32, death: Option<&str>, object: Option<(&str, f32)>) -> Option<(usize, f32, PlaybackMode)> {
         let phase = (actor as f32 * 0.618_034).fract() * 4.0;
-        match activity {
+        if let Some((name, start)) = object {
+            if let Some(c) = self.asset.clips.iter().position(|c| c.name.eq_ignore_ascii_case(name)) {
+                let t = now - start;
+                if (0.0..self.asset.clips[c].duration).contains(&t) && !matches!(activity, Activity::Dying | Activity::Dead) {
+                    return Some((c, t, PlaybackMode::Clamp));
+                }
+            }
+        }
+        // Rigs with only object clips (tank recoil): rest on their first frame.
+        let rest = || (self.idle.is_none() && self.moving.is_none()).then(|| self.asset.clips.iter().position(|c| c.name.to_ascii_lowercase().starts_with("recoil"))).flatten().map(|c| (c, 0.0, PlaybackMode::Clamp));
+        let normal = match activity {
             Activity::Moving => self.moving.or(self.idle).map(|c| (c, now + phase, PlaybackMode::Loop)),
             Activity::Attacking => self.attack.or(self.idle).map(|c| (c, now - since, PlaybackMode::Loop)),
             Activity::Dying | Activity::Dead => {
@@ -204,7 +217,8 @@ impl Rig {
                 Some((clip, t, PlaybackMode::Clamp))
             }
             _ => self.idle.map(|c| (c, now + phase, PlaybackMode::Loop)),
-        }
+        };
+        normal.or_else(rest)
     }
 
     fn frame(&self, clip: usize, time: f32, mode: PlaybackMode, meshes: &mut Assets<Mesh>) -> Option<Arc<Vec<Handle<Mesh>>>> {
@@ -282,9 +296,11 @@ pub fn sync_actors(
     mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut known: Local<HashMap<ActorId, Entity>>,
+    object_animations: Option<Res<crate::session::ObjectAnimations>>,
 ) {
     let (Some(battle), Some(mut library)) = (battle, library) else { return };
     let world = &battle.world;
+    let object = |id: ActorId| object_animations.as_ref().and_then(|o| o.0.get(&id)).map(|(n, t)| (n.as_str(), *t));
     let alpha = tick_fraction(&battle);
     // Update and remove existing views.
     for (entity, mut view, mut transform) in &mut views {
@@ -307,7 +323,7 @@ pub fn sync_actors(
         transform.translation = to_render(pos);
         transform.rotation = Quat::from_rotation_y(render_yaw(facing));
         if let Some(rig) = &view.rig {
-            if let Some((clip, t, mode)) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor)) {
+            if let Some((clip, t, mode)) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor), object(actor.id)) {
                 if let Some(frame) = rig.frame(clip, t, mode, &mut meshes) {
                     for (part, mesh) in view.parts.iter().zip(frame.iter()) {
                         if let Ok(mut m) = part_meshes.get_mut(*part) {
@@ -334,7 +350,7 @@ pub fn sync_actors(
         let mut parts = Vec::new();
         let parent = commands.spawn((transform, Visibility::default())).id();
         if let Some(rig) = &rig {
-            let (clip, t, mode) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor)).unwrap_or((0, 0.0, PlaybackMode::Loop));
+            let (clip, t, mode) = rig.clip_for(actor.id, actor.activity, actor.activity_since, world.time, death_clip(world, actor), object(actor.id)).unwrap_or((0, 0.0, PlaybackMode::Clamp));
             if let Some(frame) = rig.frame(clip, t, mode, &mut meshes) {
                 for (mesh, material) in frame.iter().zip(&rig.materials) {
                     parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), ChildOf(parent))).id());

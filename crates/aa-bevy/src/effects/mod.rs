@@ -12,10 +12,12 @@
 //! Owner: effects and sound. Behaviour-faithful, not byte-exact: the FXC
 //! semantics follow template_fx.tgi and the native FX graph ports in
 //! aa-runtime (fx_graph*, view_fx_*); unclear points are marked "compare".
+pub mod anim;
 pub mod bench;
 pub mod bones;
 pub mod data;
 pub mod decal;
+pub mod extract;
 pub mod nif;
 pub mod player;
 pub mod render;
@@ -58,9 +60,11 @@ impl Plugin for EffectsPlugin {
         render::add_render(app);
         app.add_plugins(crate::audio::SoundPlugin)
             .init_resource::<FxStats>()
+            .init_resource::<crate::session::ObjectAnimations>()
             .add_systems(OnEnter(AppState::Battle), start_loading)
             .add_systems(OnExit(AppState::Battle), clear)
             .add_systems(Update, bench::spawn.run_if(in_state(AppState::Battle)))
+            .add_systems(Update, (bench::recoil_shots, bench::death_shots).after(EffectsSet).run_if(in_state(AppState::Battle)))
             .add_systems(
                 Update,
                 (poll_loading, run)
@@ -150,12 +154,12 @@ fn spawn_loader(commands: &mut Commands, battle: &Battle) {
     commands.insert_resource(LoadTask(slot));
 }
 
-/// Texture keys of the effect table: converted PNG paths below
-/// assets/converted/textures, `original:` Data paths, `embedded:` images the
-/// extractor wrote next to the table.
-fn load_layer(reconstruction: &Path, table_dir: &Path, key: &str) -> Option<image::RgbaImage> {
+/// Texture keys of the effect table: Data-relative original texture paths
+/// (drawn from their converted PNG when there is one), `original:` Data
+/// paths, `embedded:` images the extractor decoded into `texture_dir`.
+fn load_layer(reconstruction: &Path, texture_dir: &Path, key: &str) -> Option<image::RgbaImage> {
     let path = if let Some(name) = key.strip_prefix("embedded:") {
-        Some(table_dir.join("textures").join(name))
+        Some(texture_dir.join(name))
     } else if let Some(rel) = key.strip_prefix("original:") {
         bones::find_file(&reconstruction.join("assets/original/Data"), rel)
     } else {
@@ -174,17 +178,11 @@ fn load(ids: &[String]) -> anyhow::Result<Loaded> {
     let install = reconstruction.parent().ok_or_else(|| anyhow::anyhow!("install root"))?.to_path_buf();
     let mut notes = Vec::new();
     let tables = Arc::new(data::load(&install, ids)?);
-    // The wgpu client's extracted effect NIF table (see nif.rs).
-    let table_path = find_up("assets-cache/aa-bevy/nif_effects.json").or_else(|| find_up("crates/aa-client/src/vfx/nif_effects.json"));
-    let nif: NifTable = match table_path.as_ref().and_then(|p| std::fs::read(p).ok()) {
-        Some(bytes) => serde_json::from_slice(&bytes)?,
-        None => {
-            notes.push("effect NIF table (nif_effects.json) not found: NIF effects are not drawn".into());
-            NifTable { format: String::new(), textures: Vec::new(), effects: HashMap::new(), failures: HashMap::new() }
-        }
-    };
+    // The effect table built from the original NIFs (extract.rs), cached.
+    let cache = data::cache_dir(&install);
+    let table_dir = cache.join("nif_textures");
+    let nif = nif_table(&reconstruction, &cache, &table_dir, &tables, &mut notes);
     let nif: &'static NifTable = Box::leak(Box::new(nif));
-    let table_dir = table_path.as_ref().and_then(|p| p.parent()).map(Path::to_path_buf).unwrap_or_default();
     let mut layers = Vec::new();
     let mut layer_index = HashMap::new();
     for key in &nif.textures {
@@ -214,6 +212,40 @@ fn load(ids: &[String]) -> anyhow::Result<Loaded> {
     let mut bones = bones::Bones::new(rig_dir.as_deref(), reconstruction.join("assets/original/Data"));
     bones.preload_rigs();
     Ok(Loaded { tables, nif, layers, layer_index, white, reconstruction, bones, notes, seconds: start.elapsed().as_secs_f32() })
+}
+
+/// The particle effect table of every VFX model, from the cache when it is
+/// current, else extracted from the original NIFs (about a second).
+fn nif_table(reconstruction: &Path, cache: &Path, texture_dir: &Path, tables: &FxTables, notes: &mut Vec<String>) -> NifTable {
+    let mut models: Vec<String> = tables.vfx.values().filter(|d| d.category == "VFXMODEL" && !d.model.is_empty()).map(|d| d.model.clone()).collect();
+    models.sort();
+    models.dedup();
+    let key = format!("aa-bevy-nif-effects-1:{}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256, models.len());
+    let path = cache.join("nif_effects.json");
+    if let Ok(bytes) = std::fs::read(&path)
+        && let Ok(t) = serde_json::from_slice::<NifTable>(&bytes)
+        && t.format == key
+        && t.textures.iter().filter_map(|k| k.strip_prefix("embedded:")).all(|n| texture_dir.join(n).exists())
+    {
+        return t;
+    }
+    let started = Instant::now();
+    let mut t = extract::build(&reconstruction.join("assets/original/Data"), &models, texture_dir.to_path_buf());
+    t.format = key;
+    for (k, why) in &t.failures {
+        if why != "empty" {
+            notes.push(format!("effect NIF {k}: {why}"));
+        }
+    }
+    info!("effects: {} NIF effects extracted from the original files in {:.2} s", t.effects.len(), started.elapsed().as_secs_f32());
+    let _ = std::fs::create_dir_all(cache);
+    if let Ok(bytes) = serde_json::to_vec(&t) {
+        let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+    t
 }
 
 /// A target filter (`+infantry -building`) as required / forbidden bits.
@@ -348,11 +380,29 @@ struct ModelFx {
     /// Seconds left; None = until the owner is removed.
     life: Option<f32>,
     list: ListKind,
+    /// Animated models (flags, debris): the frames, part entities, start
+    /// time and the frame shown.
+    anim: Option<AnimInstance>,
 }
 
-type Parts = Arc<Vec<(Handle<Mesh>, Handle<OriginalMaterial>)>>;
-/// A model decoded on a loader thread: meshes, materials, decoded textures.
-type Decoded = Vec<(Mesh, aa_assets::Material, Option<Image>)>;
+struct AnimInstance {
+    assets: Parts,
+    parts: Vec<Entity>,
+    start: f32,
+    shown: usize,
+}
+
+/// A model's Bevy assets: per part its frame meshes (one for a still
+/// model) and material.
+struct ModelAssets {
+    parts: Vec<(Vec<Handle<Mesh>>, Handle<OriginalMaterial>)>,
+    frames: usize,
+    looping: bool,
+}
+type Parts = Arc<ModelAssets>;
+/// A model decoded on a loader thread: per part the frame meshes, the
+/// material and its decoded texture; the frame count and looping.
+type Decoded = (Vec<(Vec<Mesh>, aa_assets::Material, Option<Image>)>, usize, bool);
 
 enum Slot {
     Loading(Arc<Mutex<Option<Option<Decoded>>>>),
@@ -409,6 +459,8 @@ pub struct FxState {
     warned: std::collections::HashSet<String>,
     quads: Vec<Quad>,
     lit: HashMap<String, LitBatch>,
+    /// The original Data folder (animated model NIFs).
+    data_root: PathBuf,
     /// The first battle frame: the map's own actors exist already built.
     first_frame: bool,
     /// Bone world matrices of this frame, by (actor, bone name hash).
@@ -505,6 +557,7 @@ fn poll_loading(
         warned: Default::default(),
         quads: Vec::new(),
         lit: HashMap::new(),
+        data_root: loaded.reconstruction.join("assets/original/Data"),
         first_frame: true,
         bone_cache: HashMap::new(),
         def_bones: Vec::new(),
@@ -556,6 +609,7 @@ struct Spawn<'a, 'w, 's> {
     materials: &'a mut Assets<OriginalMaterial>,
     images: &'a mut Assets<Image>,
     sfx: &'a mut SfxQueue,
+    object_animations: &'a mut crate::session::ObjectAnimations,
 }
 
 fn actor_matrix(frame: &Frame, id: ActorId) -> Option<Mat4> {
@@ -797,8 +851,18 @@ impl FxState {
             "STOP_SFX" => {
                 spawn.sfx.stop.push((fxc.ids.clone(), ctx.actor.map(|a| Place::Object(a as u64))));
             }
-            // PLAY_OBJECT_ANIMATION (recoil), EQUIPMENT, CREATE_RFX (radar
-            // blips), CHANGE_ASPECT: drawing/UI-owned, not effects.
+            // The actor's object animation (recoil): battle_view plays it.
+            "PLAY_OBJECT_ANIMATION" => {
+                if let Some(a) = ctx.actor {
+                    spawn.object_animations.0.insert(a, (fxc.ids.clone(), frame.world.time));
+                    if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                        let pos = frame.world.actor(a).map(|x| x.pos);
+                        info!("fx: object animation {} on actor {a} at {pos:?}, battle time {:.2}", fxc.ids, frame.world.time);
+                    }
+                }
+            }
+            // EQUIPMENT, CREATE_RFX (radar blips), CHANGE_ASPECT: drawing /
+            // UI-owned, not effects.
             _ => {}
         }
         for c in &fxc.chain_immediate {
@@ -972,26 +1036,29 @@ impl FxState {
                 chain: fxc.chain.clone(),
                 ctx,
             });
-            return;
+            if !animated_model(&key) {
+                return;
+            }
         }
-        // Mesh effects the particle table does not carry (death debris,
-        // flags): the original model, still.
-        // compare: the original plays their node keyframes (debris flying).
-        if key.starts_with("deathdebris/") || key.starts_with("flags/") {
+        // Model effects (waving flags, flying death debris): the original
+        // model played from its own keyframe and skin animation (anim.rs);
+        // debris also emits its smoke above.
+        if animated_model(&key) {
             let team = owner.and_then(|o| frame.world.actors.get(o as usize)).map_or(crate::scene::NEUTRAL_TEAM, |a| team_of(frame.world, a));
             let life = if def.permanent { None } else { Some(duration.max(5.0)) };
-            if let Some(entity) = self.spawn_model(&def.model, team, Transform::from_matrix(place), spawn, Some(PendingUse::Model { owner, life, list })) {
-                self.models.push(ModelFx { entity, owner, life, list });
+            if let Some((entity, anim)) = self.spawn_model(&def.model, team, Transform::from_matrix(place), spawn, Some(PendingUse::Model { owner, life, list }), true) {
+                self.models.push(ModelFx { entity, owner, life, list, anim });
             }
-        } else if self.warned.insert(key.clone()) {
+        } else if !self.nif.effects.contains_key(&key) && self.warned.insert(key.clone()) {
             warn!("effects: VFX {} model {} is not in the effect NIF table", fxc.ids, def.model);
         }
     }
 
     /// Start decoding an original model (and its textures) on a loader
-    /// thread, so a death or a first shot never stalls a frame.
-    fn request_model(&mut self, path: &str, team: [u8; 3]) {
-        let key = (path.to_ascii_lowercase(), team);
+    /// thread, so a death or a first shot never stalls a frame. `animated`
+    /// also bakes the NIF's keyframe/skin animation (anim.rs).
+    fn request_model(&mut self, path: &str, team: [u8; 3], animated: bool) {
+        let key = (model_key(path, animated), team);
         if self.parts.contains_key(&key) {
             return;
         }
@@ -1002,15 +1069,37 @@ impl FxState {
         let slot = Arc::new(Mutex::new(None));
         let out = slot.clone();
         let path = path.to_owned();
+        let data_root = self.data_root.clone();
         std::thread::spawn(move || {
             let decoded = (|| -> Option<Decoded> {
                 let model = store.load_model(&path).ok()?.prepare().ok()?;
+                let meshes: Vec<&aa_assets::PreparedMesh> = model.meshes.iter().filter(|m| !m.indices.is_empty()).collect();
+                let baked = animated
+                    .then(|| {
+                        let bytes = std::fs::read(bones::find_file(&data_root, &path)?).ok()?;
+                        let file = aa_formats::nif::load(&bytes).ok()?;
+                        let converted: Vec<(String, usize)> = meshes.iter().map(|m| (m.name.clone(), m.vertices.len())).collect();
+                        anim::bake(&file, &converted)
+                    })
+                    .flatten();
                 let mut parts = Vec::new();
-                for mesh in model.meshes.iter().filter(|m| !m.indices.is_empty()) {
+                for (i, mesh) in meshes.iter().enumerate() {
                     let texture = mesh.material.texture.as_ref().and_then(|t| crate::textures::load(&store, t, crate::scene::kind(&mesh.material, team)).ok());
-                    parts.push((crate::scene::model_mesh(mesh), mesh.material.clone(), texture));
+                    let frames = match baked.as_ref().and_then(|b| b.parts.get(i)).and_then(|p| p.frames.as_ref()) {
+                        Some(frames) => frames
+                            .iter()
+                            .map(|(pos, nrm)| {
+                                let mut m = crate::scene::model_mesh(mesh);
+                                m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos.clone());
+                                m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, nrm.clone());
+                                m
+                            })
+                            .collect(),
+                        None => vec![crate::scene::model_mesh(mesh)],
+                    };
+                    parts.push((frames, mesh.material.clone(), texture));
                 }
-                Some(parts)
+                Some((parts, baked.as_ref().map_or(1, |b| b.frames), baked.as_ref().is_some_and(|b| b.looping)))
             })();
             *out.lock().unwrap() = Some(decoded);
         });
@@ -1023,15 +1112,18 @@ impl FxState {
             Slot::Ready(p) => return Some(p.clone()),
             Slot::Loading(slot) => slot.lock().unwrap().take()?,
         };
-        let parts = decoded.map(|list| {
-            Arc::new(
-                list.into_iter()
-                    .map(|(mesh, material, image)| {
+        let parts = decoded.map(|(list, frames, looping)| {
+            Arc::new(ModelAssets {
+                parts: list
+                    .into_iter()
+                    .map(|(meshes, material, image)| {
                         let texture = image.map(|i| spawn.images.add(i));
-                        (spawn.meshes.add(mesh), spawn.materials.add(crate::look::model_material(&material, texture)))
+                        (meshes.into_iter().map(|m| spawn.meshes.add(m)).collect::<Vec<_>>(), spawn.materials.add(crate::look::model_material(&material, texture)))
                     })
-                    .collect::<Vec<_>>(),
-            )
+                    .collect(),
+                frames,
+                looping,
+            })
         });
         if parts.is_none() && self.warned.insert(key.0.clone()) {
             warn!("effects: model {} did not load", key.0);
@@ -1040,21 +1132,31 @@ impl FxState {
         Some(parts)
     }
 
-    fn instantiate(parts: &Parts, transform: Transform, spawn: &mut Spawn) -> Entity {
+    fn instantiate(parts: &Parts, transform: Transform, spawn: &mut Spawn) -> (Entity, Vec<Entity>) {
         let parent = spawn.commands.spawn((transform, Visibility::default())).id();
-        for (mesh, material) in parts.iter() {
-            spawn.commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), ChildOf(parent)));
+        let mut children = Vec::new();
+        for (meshes, material) in parts.parts.iter() {
+            let Some(mesh) = meshes.first() else { continue };
+            children.push(spawn.commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), ChildOf(parent))).id());
         }
-        parent
+        (parent, children)
     }
 
-    /// An original static model as entities now when it is decoded, else
-    /// once its loader finishes (`use_` says what it becomes).
-    fn spawn_model(&mut self, path: &str, team: [u8; 3], transform: Transform, spawn: &mut Spawn, use_: Option<PendingUse>) -> Option<Entity> {
-        let key = (path.to_ascii_lowercase(), team);
-        self.request_model(path, team);
+    /// The animation of an instantiated model (None for a still one).
+    fn anim_of(&self, parts: &Parts, children: Vec<Entity>) -> Option<AnimInstance> {
+        (parts.frames > 1).then(|| AnimInstance { assets: parts.clone(), parts: children, start: self.time, shown: 0 })
+    }
+
+    /// An original model as entities now when it is decoded, else once its
+    /// loader finishes (`use_` says what it becomes).
+    fn spawn_model(&mut self, path: &str, team: [u8; 3], transform: Transform, spawn: &mut Spawn, use_: Option<PendingUse>, animated: bool) -> Option<(Entity, Option<AnimInstance>)> {
+        let key = (model_key(path, animated), team);
+        self.request_model(path, team, animated);
         match self.model_parts(&key, spawn) {
-            Some(Some(parts)) => Some(Self::instantiate(&parts, transform, spawn)),
+            Some(Some(parts)) => {
+                let (e, children) = Self::instantiate(&parts, transform, spawn);
+                Some((e, self.anim_of(&parts, children)))
+            }
             Some(None) => None,
             None => {
                 if let Some(use_) = use_ {
@@ -1081,14 +1183,15 @@ impl FxState {
                         if owner.is_some_and(|o| frame.world.actor(o).is_none()) {
                             continue;
                         }
-                        let entity = Self::instantiate(&parts, p.transform, spawn);
-                        self.models.push(ModelFx { entity, owner, life, list });
+                        let (entity, children) = Self::instantiate(&parts, p.transform, spawn);
+                        let anim = self.anim_of(&parts, children);
+                        self.models.push(ModelFx { entity, owner, life, list, anim });
                     }
                     PendingUse::Wreck(actor) => {
                         if frame.world.actor(actor).is_none() || self.wrecks.contains_key(&actor) {
                             continue;
                         }
-                        let entity = Self::instantiate(&parts, p.transform, spawn);
+                        let (entity, _) = Self::instantiate(&parts, p.transform, spawn);
                         self.wrecks.insert(actor, entity);
                         for (view, mut vis) in views.iter_mut() {
                             if view.id == actor {
@@ -1105,12 +1208,12 @@ impl FxState {
     /// projectiles, its debris and flag models.
     fn prefetch(&mut self, fx: &data::ActorFx, team: [u8; 3]) {
         if let Some(m) = fx.death_model.clone() {
-            self.request_model(&m, team);
+            self.request_model(&m, team, false);
         }
         let tables = self.tables.clone();
         for w in &fx.weapons {
             if let Some(prefix) = w.projectile.as_ref().and_then(|p| tables.actors.get(p)).and_then(|p| p.resource_prefix.clone()) {
-                self.request_model(&format!("{prefix}.nif"), crate::scene::NEUTRAL_TEAM);
+                self.request_model(&format!("{prefix}.nif"), crate::scene::NEUTRAL_TEAM, false);
             }
         }
         for f in fx.health.iter().chain(&fx.destroyed).chain(&fx.constructed).chain(&fx.created) {
@@ -1122,8 +1225,8 @@ impl FxState {
                 && !def.nightonly
             {
                 let key = def.model.strip_prefix("effects/").unwrap_or(&def.model);
-                if !self.nif.effects.contains_key(key) && (key.starts_with("deathdebris/") || key.starts_with("flags/")) {
-                    self.request_model(&def.model, team);
+                if animated_model(key) {
+                    self.request_model(&def.model, team, true);
                 }
             }
         }
@@ -1172,7 +1275,7 @@ impl FxState {
             let arc = if lob { 9.8 * flight * flight / 8.0 } else { 0.0 };
             let pfx = tables.actors.get(p);
             let model = pfx.and_then(|f| f.resource_prefix.clone()).map(|r| format!("{r}.nif"));
-            let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None));
+            let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None, false)).map(|(e, _)| e);
             if let Some(pfx) = pfx {
                 let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos) };
                 let created = pfx.created.clone();
@@ -1229,7 +1332,7 @@ impl FxState {
         {
             let Some(m) = actor_matrix(frame, actor) else { return };
             let team = team_of(frame.world, a);
-            if let Some(entity) = self.spawn_model(model, team, Transform::from_matrix(m), spawn, Some(PendingUse::Wreck(actor))) {
+            if let Some((entity, _)) = self.spawn_model(model, team, Transform::from_matrix(m), spawn, Some(PendingUse::Wreck(actor)), false) {
                 self.wrecks.insert(actor, entity);
                 for (view, mut vis) in views.iter_mut() {
                     if view.id == actor {
@@ -1372,7 +1475,7 @@ impl FxState {
         });
     }
 
-    fn step(&mut self, dt: f32, frame: &Frame, spawn: &mut Spawn, transforms: &mut Query<&mut Transform, Without<ActorView>>) {
+    fn step(&mut self, dt: f32, frame: &Frame, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
         self.time += dt;
         // Delayed FXCs.
         let now = self.time;
@@ -1398,7 +1501,7 @@ impl FxState {
             let s2 = (s + 0.02).min(1.0);
             let p2 = f.from.lerp(f.to, s2) + Vec3::Y * (f.arc * 4.0 * s2 * (1.0 - s2));
             if let Some(e) = f.entity
-                && let Ok(mut t) = transforms.get_mut(e)
+                && let Ok((mut t, _)) = transforms.get_mut(e)
             {
                 t.translation = p;
                 let d = p2 - p;
@@ -1458,6 +1561,23 @@ impl FxState {
         if self.decals.len() != before {
             self.decals_dirty = true;
         }
+        // Animated models: the frame for their age.
+        let now = self.time;
+        for m in &mut self.models {
+            let Some(a) = m.anim.as_mut() else { continue };
+            let f = anim::frame_at(a.assets.frames, a.assets.looping, now - a.start);
+            if f == a.shown {
+                continue;
+            }
+            a.shown = f;
+            for (part, (frames, _)) in a.parts.iter().zip(&a.assets.parts) {
+                if let Some(h) = frames.get(f).or(frames.first())
+                    && let Ok((_, Some(mut mesh))) = transforms.get_mut(*part)
+                {
+                    mesh.0 = h.clone();
+                }
+            }
+        }
         // Timed models.
         let commands = &mut *spawn.commands;
         self.models.retain_mut(|m| match m.life.as_mut() {
@@ -1474,7 +1594,7 @@ impl FxState {
         });
     }
 
-    fn draw(&mut self, spawn: &mut Spawn, transforms: &mut Query<&mut Transform, Without<ActorView>>) -> usize {
+    fn draw(&mut self, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) -> usize {
         let view = self.view;
         let mut quads = std::mem::take(&mut self.quads);
         quads.clear();
@@ -1508,7 +1628,7 @@ impl FxState {
             }
             render::write(&mut mesh, &quads, view.eye - origin, true);
         }
-        if let Ok(mut t) = transforms.get_mut(self.quads_entity) {
+        if let Ok((mut t, _)) = transforms.get_mut(self.quads_entity) {
             t.translation = origin;
         }
         self.quads = quads;
@@ -1516,7 +1636,7 @@ impl FxState {
         n
     }
 
-    fn draw_decals(&mut self, view: View, spawn: &mut Spawn, transforms: &mut Query<&mut Transform, Without<ActorView>>) {
+    fn draw_decals(&mut self, view: View, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
         // Rebuilt only when needed: decals added or removed, fading, or the
         // camera far from where the meshes were last placed.
         let moved = view.eye.distance(self.decal_eye) > 50.0;
@@ -1552,7 +1672,7 @@ impl FxState {
         if let Some(mut mesh) = spawn.meshes.get_mut(&self.decal_mesh) {
             render::write(&mut mesh, &dq, Vec3::ZERO, false);
         }
-        if let Ok(mut t) = transforms.get_mut(self.decal_entity) {
+        if let Ok((mut t, _)) = transforms.get_mut(self.decal_entity) {
             t.translation = far;
         }
         // Lit decals (building ground planes): the scene's terrain look,
@@ -1582,7 +1702,7 @@ impl FxState {
             if let Some(mut mesh) = spawn.meshes.get_mut(&batch.mesh) {
                 lit_mesh(&mut mesh, pos, normals, uvs, colors);
             }
-            if let Ok(mut t) = transforms.get_mut(batch.entity) {
+            if let Ok((mut t, _)) = transforms.get_mut(batch.entity) {
                 t.translation = far_lit;
             }
         }
@@ -1657,11 +1777,12 @@ fn run(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     drawn: Query<(&ActorView, &Transform)>,
     mut views: Query<(&ActorView, &mut Visibility)>,
-    mut transforms: Query<&mut Transform, Without<ActorView>>,
+    mut transforms: Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
     ground: Option<Res<crate::camera::Ground>>,
+    mut object_animations: ResMut<crate::session::ObjectAnimations>,
 ) {
     let (Some(battle), Some(mut state)) = (battle, state) else { return };
     // AA_BEVY_NO_FX=1: no effects at all (frame-cost comparison runs).
@@ -1685,7 +1806,9 @@ fn run(
     state.bone_cache.clear();
     let frame = Frame { world: &battle.world, ground: ground.as_deref(), drawn: &drawn_map, local: battle.local };
     let _ = frame.local;
-    let mut spawn = Spawn { commands: &mut commands, meshes: &mut meshes, materials: &mut materials, images: &mut images, sfx: &mut sfx };
+    // Object animations of removed actors are forgotten.
+    object_animations.0.retain(|a, _| battle.world.actor(*a).is_some());
+    let mut spawn = Spawn { commands: &mut commands, meshes: &mut meshes, materials: &mut materials, images: &mut images, sfx: &mut sfx, object_animations: &mut object_animations };
     let t0 = Instant::now();
     state.scan(&frame, &mut spawn);
     let t1 = Instant::now();
@@ -1743,8 +1866,13 @@ fn run(
     if w.3 >= 2.0 {
         if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
             let shooting = battle.world.actors.iter().filter(|a| a.alive && !a.removed && a.activity == Activity::Attacking).count();
+            // Object animations (recoil) started in the last 2 s, by name.
+            let mut recent: Vec<&str> = object_animations.0.values().filter(|(_, t)| battle.world.time - *t < 2.0).map(|(n, _)| n.as_str()).collect();
+            recent.sort_unstable();
+            recent.dedup();
+            let recent_count = object_animations.0.values().filter(|(_, t)| battle.world.time - *t < 2.0).count();
             info!(
-                "fx stats: {:.0} us/frame average (scan {:.0}, events {:.0}, step {:.0}, draw {:.0}), {:.0} us peak over {} frames; {} effects, {} quads, {} tracers, {} decals, {} attacking actors, {} alive actors",
+                "fx stats: {:.0} us/frame average (scan {:.0}, events {:.0}, step {:.0}, draw {:.0}), {:.0} us peak over {} frames; {} effects, {} quads, {} tracers, {} decals, {} attacking actors, {} alive actors, {} object animations started {:?}",
                 w.0 / w.1.max(1) as f32,
                 phases[0] / w.1.max(1) as f32,
                 phases[1] / w.1.max(1) as f32,
@@ -1757,10 +1885,24 @@ fn run(
                 state.tracers.len(),
                 state.decals.len(),
                 shooting,
-                battle.world.actors.iter().filter(|a| a.alive && !a.removed).count()
+                battle.world.actors.iter().filter(|a| a.alive && !a.removed).count(),
+                recent_count,
+                recent
             );
         }
         *w = (0.0, 0, 0.0, 0.0);
         stats.phases = [0.0; 4];
     }
+}
+
+/// The loader cache key of a model (animated bakes apart from still loads).
+fn model_key(path: &str, animated: bool) -> String {
+    let p = path.to_ascii_lowercase();
+    if animated { format!("anim:{p}") } else { p }
+}
+
+/// The model effects played as animated models (the client's particle
+/// extractor leaves them to the model pipeline).
+fn animated_model(key: &str) -> bool {
+    key.starts_with("deathdebris/") || key.starts_with("flags/")
 }

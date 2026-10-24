@@ -333,7 +333,8 @@ fn nif_bones(data_root: &Path, rel: &str) -> Option<NifBones> {
         let s = floats(o.fields.get("scale")).and_then(|v| v.first().copied()).unwrap_or(1.0);
         let local = match (t, r) {
             (Some(t), Some(r)) => {
-                let rot = Mat3::from_cols_array(&[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]]);
+                // Stored triples are rows of the column-vector matrix (extract.rs).
+                let rot = Mat3::from_cols_array(&[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]]).transpose();
                 Mat4::from_cols((rot.x_axis * s).extend(0.0), (rot.y_axis * s).extend(0.0), (rot.z_axis * s).extend(0.0), Vec3::new(t[0], t[1], t[2]).extend(1.0))
             }
             _ => Mat4::IDENTITY,
