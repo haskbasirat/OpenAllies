@@ -28,6 +28,14 @@ pub struct Books {
     /// native values: 0 self, 1 friend, 2 neutral, 3 enemy. Built by setup;
     /// empty means the team rule (same team friend, else enemy).
     pub relations: Vec<Vec<u8>>,
+    /// The tiles each zone of `zones` covers (same order; sorted tile
+    /// indices of the ZoneSolver flood, `supply::flood_tiles`).
+    #[serde(skip)]
+    pub zone_tiles: Vec<std::sync::Arc<Vec<u32>>>,
+    /// Flood results by (start tile, radius bits): the map does not change
+    /// during a battle, so a zone is flooded again only when it moves.
+    #[serde(skip)]
+    pub zone_floods: std::collections::HashMap<(u32, u32), std::sync::Arc<Vec<u32>>>,
 }
 
 /// Native relation values (4E52D0).

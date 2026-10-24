@@ -154,7 +154,7 @@ fn minimap_update(
         draw.minimap = None;
         return;
     };
-    art.terrain(&front.ui.store.root, &b, &mut images);
+    art.terrain(&front.ui.store.root, &b, &mut images, minimap::target_pixels(&front.ui));
     // the camera's view on the ground: the window corners' rays on the
     // ground plane at the terrain height under the view centre
     let view = (|| {
