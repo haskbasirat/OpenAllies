@@ -231,27 +231,23 @@ impl<'a> Placement<'a> {
             g.ids.eq_ignore_ascii_case(pattern) || g.def.ids.eq_ignore_ascii_case(pattern)
         }
     }
-    /// Restrictions that apply between group `gi` and the others: its own and
-    /// (both ways) those other groups declare against it.
+    /// The restrictions group `gi` itself declares, against the groups they
+    /// match. Only the placing group's own list counts (validity 0x595430,
+    /// score 0x595340, balanced self-score 0x5944A0 all read group+68): a
+    /// restriction a group declares against one placed after it (StartCorps
+    /// against the villages) constrains nothing, so villages may land next to
+    /// a start. A wildcard never matches the group itself (StartCorps
+    /// restricts "start_corps*" to 96 m yet places its depot within 16 m).
     fn restrictions(&self, gi: usize) -> Vec<(usize, f32, f32)> {
         let g = &self.groups[gi];
         let mut out = Vec::new();
         for (oi, o) in self.groups.iter().enumerate() {
-            // A wildcard never matches the group itself (StartCorps restricts
-            // "start_corps*" to 96 m yet places its depot within 16 m).
             if oi == gi {
                 continue;
             }
             for r in &g.def.restrictions {
                 if Self::matches(&r.group_ids, o) {
                     out.push((oi, r.min, r.desired));
-                }
-            }
-            {
-                for r in &o.def.restrictions {
-                    if Self::matches(&r.group_ids, g) {
-                        out.push((oi, r.min, r.desired));
-                    }
                 }
             }
         }
