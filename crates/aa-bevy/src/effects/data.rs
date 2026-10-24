@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-7";
+const CACHE_VERSION: &str = "aa-bevy-fx-8";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -97,6 +97,14 @@ pub struct ActorFx {
     /// character animations).
     #[serde(default)]
     pub view: ViewFx,
+    /// PerformerComponent Turret list: each turret's turret_ids (lower case),
+    /// in the order Weapon::turret indexes.
+    #[serde(default)]
+    pub turrets: Vec<String>,
+    /// ProjectileComponent (projectiles): projectile_spread, the radius
+    /// around the sim hit point where the view's projectile lands.
+    #[serde(default)]
+    pub projectile_spread: f32,
 }
 
 /// The original's view data of one Thing that battle_view plays.
@@ -445,6 +453,12 @@ fn actor_fx(catalog: &ActorCatalog, id: &str) -> Option<ActorFx> {
     }
     if let Ok(Some(air)) = actor.child("AircraftComponent") {
         fx.operational_height = num(&air, "operational_height");
+    }
+    if let Ok(Some(performer)) = actor.child("PerformerComponent") {
+        fx.turrets = performer.children("Turret").unwrap_or_default().iter().map(|t| text(t, "turret_ids").unwrap_or_default().to_ascii_lowercase()).collect();
+    }
+    if let Ok(Some(p)) = actor.child("ProjectileComponent") {
+        fx.projectile_spread = num(&p, "projectile_spread").unwrap_or(0.0);
     }
     view_fx(&actor, &mut fx);
     Some(fx)

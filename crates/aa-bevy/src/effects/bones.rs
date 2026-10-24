@@ -33,6 +33,8 @@ pub struct RigBones {
 /// Bind-pose node transforms of a static model (render-space model matrices).
 pub struct NifBones {
     nodes: HashMap<String, Mat4>,
+    /// Node -> its parent node (lower case).
+    parents: HashMap<String, String>,
 }
 
 pub enum Source {
@@ -332,9 +334,10 @@ fn nif_bones(data_root: &Path, rel: &str) -> Option<NifBones> {
         }
     };
     let mut nodes = HashMap::new();
-    let mut stack: Vec<(usize, Mat4)> = file.top_level.iter().flatten().map(|&i| (i, Mat4::IDENTITY)).collect();
+    let mut parents = HashMap::new();
+    let mut stack: Vec<(usize, Mat4, Option<String>)> = file.top_level.iter().flatten().map(|&i| (i, Mat4::IDENTITY, None)).collect();
     let mut seen = vec![false; file.objects.len()];
-    while let Some((i, parent)) = stack.pop() {
+    while let Some((i, parent, parent_name)) = stack.pop() {
         if i >= file.objects.len() || seen[i] {
             continue;
         }
@@ -352,17 +355,22 @@ fn nif_bones(data_root: &Path, rel: &str) -> Option<NifBones> {
             _ => Mat4::IDENTITY,
         };
         let world = parent * local;
+        let mut own = parent_name.clone();
         if let Some(Value::Str(Some(name))) = o.fields.get("name") {
             let name = String::from_utf8_lossy(name).to_ascii_lowercase();
-            nodes.entry(name).or_insert(TO_RENDER * world * TO_RENDER.inverse());
+            nodes.entry(name.clone()).or_insert(TO_RENDER * world * TO_RENDER.inverse());
+            if let Some(p) = parent_name {
+                parents.entry(name.clone()).or_insert(p);
+            }
+            own = Some(name);
         }
         if let Some(children) = file.children.get(i) {
             for c in children.iter().flatten() {
-                stack.push((*c, world));
+                stack.push((*c, world, own.clone()));
             }
         }
     }
-    (!nodes.is_empty()).then_some(NifBones { nodes })
+    (!nodes.is_empty()).then_some(NifBones { nodes, parents })
 }
 
 impl Source {
@@ -372,6 +380,38 @@ impl Source {
             Source::Rig(r) => r.node(name, actor, activity, since, now, death),
             Source::Nif(n) => n.nodes.get(&name.to_ascii_lowercase()).copied(),
             Source::None => None,
+        }
+    }
+
+    /// Whether node `name` lies below node `ancestor` (NIF node names).
+    pub fn under(&self, name: &str, ancestor: &str) -> bool {
+        let (name, ancestor) = (name.to_ascii_lowercase(), ancestor.to_ascii_lowercase());
+        match self {
+            Source::Rig(r) => {
+                let Some(&mut_index) = r.nodes.get(&name) else { return false };
+                let mut i = Some(mut_index);
+                while let Some(k) = i {
+                    if r.asset.nodes[k].name.eq_ignore_ascii_case(&ancestor) {
+                        return true;
+                    }
+                    i = r.asset.nodes[k].parent.filter(|&p| p < k);
+                }
+                false
+            }
+            Source::Nif(n) => {
+                let mut cur = name;
+                for _ in 0..64 {
+                    if cur == ancestor {
+                        return true;
+                    }
+                    match n.parents.get(&cur) {
+                        Some(p) => cur = p.clone(),
+                        None => return false,
+                    }
+                }
+                false
+            }
+            Source::None => false,
         }
     }
 }

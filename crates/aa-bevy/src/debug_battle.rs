@@ -23,19 +23,31 @@ pub fn spawn(battle: Option<ResMut<Battle>>, mut done: Local<bool>) {
         return;
     }
     // Near the local player's first building.
-    let hq = world
+    let first = world
         .actors
         .iter()
         .find(|a| a.kingdom == Some(0) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
-        .map(|a| a.pos.truncate())
-        .unwrap_or(Vec2::new(100.0, 100.0));
+        .map(|a| a.id);
+    let hq = first.and_then(|id| world.actor(id)).map(|a| a.pos.truncate()).unwrap_or(Vec2::new(100.0, 100.0));
     // In view of the original camera (yaw -45 deg): either side of the HQ,
     // 28 m apart, in front of it.
     let a = hq + Vec2::new(-1.4, -18.4);
     let b = hq + Vec2::new(18.4, 1.4);
-    let ours = aa_play::production::spawn_organization(world, rus, 0, a, 0.0, None);
-    let theirs = aa_play::production::spawn_organization(world, ger, 1, b, std::f32::consts::PI, None);
+    // AA_BEVY_SKIRMISH_TEST=attached (core heal check): our regiment is
+    // attached to that building, so it is in supply in its zone and heals and
+    // refills after the fight.
+    let attached = std::env::var("AA_BEVY_SKIRMISH_TEST").is_ok_and(|v| v == "attached");
+    // (attached: the enemy is the first kingdom on another team, so the fight
+    // happens whatever the staging teams are)
+    let enemy = if attached {
+        let team = world.kingdoms[0].team;
+        world.kingdoms.iter().find(|k| k.team != team && !k.independent).map_or(1, |k| k.id)
+    } else {
+        1
+    };
+    let ours = aa_play::production::spawn_organization(world, rus, 0, a, 0.0, if attached { first } else { None });
+    let theirs = aa_play::production::spawn_organization(world, ger, enemy, b, std::f32::consts::PI, None);
     battle.pending.push(Command::Move { kingdom: 0, units: vec![Unit::Org(ours)], to: b, attack_move: true });
-    battle.pending.push(Command::Move { kingdom: 1, units: vec![Unit::Org(theirs)], to: a, attack_move: true });
+    battle.pending.push(Command::Move { kingdom: enemy, units: vec![Unit::Org(theirs)], to: a, attack_move: true });
     info!("skirmish test: regiment {ours} and {theirs} ordered to attack-move");
 }
