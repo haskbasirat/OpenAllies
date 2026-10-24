@@ -1,23 +1,47 @@
 //! The game minimap (KKC_RMinimap) drawn into the GameMiniMap widget's
-//! quad (aa-ui `minimap::quad`, the world square as a diamond):
+//! quad (aa-ui `minimap::quad`, the world square as a diamond). It is one
+//! image the size of the widget's `minimap_size` (172 x 172), drawn over
+//! the whole quad, in which every layer is drawn in its pixels. KKC_RMinimap
+//! (`0x712D60`) keeps the widget size (+0xC / +0x10), the texture size (the
+//! next powers of two, `0x43A920`: 256) and their ratio as the texture
+//! coordinate scale (172 / 256); every layer (`0x4345D0`, `0x433620`,
+//! `0x433470`, `0x435BC0`) draws `*(RMinimap + 0xC)` x `*(RMinimap + 0x10)`
+//! pixels, so the 256 texture only holds the 172 pixel image in its
+//! corner:
 //! * the terrain: every target pixel in the `terrain_color` of the cell
 //!   under it (Data/Terrain/**/*.tgi: "What color should this terrain be in
 //!   the minimap"), from the battle map's cell variations, multiplied by the
 //!   local kingdom's fog layer: per target pixel the bilinear blend of the
 //!   four tiles around it, visible 1.0, explored 0.7, never explored 0
 //!   (`0x433620`), refreshed every AVar MinimapPeriodUpdateFog seconds;
-//! * the objects, refreshed every MinimapPeriodUpdateObjects seconds: the
-//!   ones the local kingdom sees (and the static ones it remembers, where it
-//!   remembers them) in their kingdom colour, neutral (independent) objects
-//!   in `color_neutral_*`, the selection in `color_owned_selected`; a
-//!   definition with a `minimap_icon` (Data/MiniMap/Icons) draws the icon
-//!   tinted with that colour, map-aligned (it turns with the map), the rest
-//!   a point of `object_point_size` with a `color_object_border` edge.
-//!   Sizes are minimap target pixels: the target is the next power of two of
-//!   `minimap_size` (172 -> 256, `0x712D60`), drawn over the whole quad;
 //! * the local kingdom's supply border (the outline of its supply zones'
 //!   tiles in `color_requires_supply`, every MinimapPeriodUpdateSupply
 //!   seconds);
+//! * the objects layer (`0x435BC0`), redrawn every
+//!   MinimapPeriodUpdateObjects seconds into a cleared layer with a
+//!   priority byte per pixel (an object pixel replaces only a lower
+//!   priority), over the layers above:
+//!   - every object the local kingdom sees, and every static one it
+//!     remembers where it remembers it, owned as remembered;
+//!   - its colour follows its relation to the local kingdom (`0x433B50`):
+//!     own selected `color_owned_selected`, own `color_owned_static` /
+//!     `_mobile`, allied `color_allied_*`, enemy `color_enemy_*`, an
+//!     independent or unowned one `color_neutral_*`, which is drawn only by
+//!     its icon;
+//!   - its priority (`0x433E40`) starts at the definition's radar_factor, or
+//!     `priority_multiplier_icon` when it has a minimap icon, times
+//!     `_enemy`, `_owned` (and `_selected`) or `_friendly`, and `_static`;
+//!   - how it is drawn (`0x434D70`): a definition with a `minimap_icon`
+//!     (Data/MiniMap/Icons) blits the icon's pixels map-aligned (icon
+//!     column along world x, icon row along world y), each opaque pixel the
+//!     icon colour times the object colour (/256), solid white for a white
+//!     colour; a mobile object whose shape radius is below `min_icon_radius`
+//!     is a square of `object_point_size` pixels with a
+//!     `color_object_border` ring; anything else is its blocking shape
+//!     turned by its facing, filled, with a one pixel border;
+//!   - last, over everything, the last own selected object's rally point
+//!     (static: `rallypoint_icon`) or its current order's target (mobile:
+//!     `waypoint_icon`);
 //! * the camera's view on the ground in `color_white`;
 //! * while the local kingdom's enchantments carry MINIMAP_NO_FOG (modifier
 //!   flag 8, Radar Scan) the fog layer (`0x433620`) is clear and the objects
@@ -26,32 +50,27 @@
 //!   picks the change up).
 use super::datafile;
 use crate::session::Battle;
-use aa_play::DefClass;
 use aa_play::fog::{self, Sighting};
+use aa_play::{DefClass, Order, Unit};
 use bevy::prelude::*;
 use std::collections::HashMap;
-
-/// One map-aligned icon: the texture (Data path), its four screen corners
-/// (image corners (0,1), (1,1), (1,0), (0,0)) and its tint.
-#[derive(Clone, Debug, PartialEq)]
-pub struct MinimapIcon {
-    pub texture: String,
-    pub corners: [(f32, f32); 4],
-    pub color: [f32; 4],
-}
 
 /// What the front end hands the painter for the minimap.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MinimapDraw {
     /// The widget quad P0, P1, P2 (window pixels).
     pub quad: [(f32, f32); 3],
-    /// Points: (u, v) map fractions, size px, colour (borders first).
-    pub points: Vec<(f32, f32, f32, [f32; 4])>,
-    pub icons: Vec<MinimapIcon>,
     /// Lines (window pixels): from, to, colour (the camera view).
     pub lines: Vec<((f32, f32), (f32, f32), [f32; 4])>,
-    /// The terrain image is ready.
+    /// The minimap image is ready.
     pub has_terrain: bool,
+}
+
+/// A minimap icon's pixels (RGBA, rows top first).
+struct IconPixels {
+    w: i32,
+    h: i32,
+    rgba: Vec<u8>,
 }
 
 #[derive(Resource, Default)]
@@ -63,34 +82,54 @@ pub struct MinimapArt {
     built_for: Option<(String, u32, u32, u32)>,
     /// The fog-free terrain colours (RGBA, image rows top first).
     base: Vec<u8>,
+    /// The terrain under the fog with the supply border (the image without
+    /// the objects layer).
+    fogged: Vec<u8>,
     /// Fog refresh: battle time of the last one and the fog revision seen.
     fog_at: f32,
     fog_revision: u64,
     fog_local: Option<u32>,
     /// MINIMAP_NO_FOG at the last fog refresh.
     fog_no_fog: bool,
-    /// The objects of the last refresh and when it was made.
-    objects: Option<(f32, Vec<Object>)>,
-    /// Minimap TGI values.
-    pub point_size: f32,
-    pub selected: [f32; 3],
+    /// The objects layer (RGBA like the image, alpha 0 where empty) and the
+    /// battle time it was drawn at.
+    objects: Vec<u8>,
+    objects_at: Option<f32>,
+    /// Minimap TGI values (`0x49B110`).
+    pub point_size: i32,
+    pub min_icon_radius: f32,
+    pub white: [f32; 3],
     pub border: [f32; 3],
+    pub owned_selected: [f32; 3],
+    pub owned_static: [f32; 3],
+    pub owned_mobile: [f32; 3],
+    pub enemy_static: [f32; 3],
+    pub enemy_mobile: [f32; 3],
+    pub allied_static: [f32; 3],
+    pub allied_mobile: [f32; 3],
     pub neutral_static: [f32; 3],
     pub neutral_mobile: [f32; 3],
-    pub min_icon_radius: f32,
+    pub requires_supply: [f32; 3],
+    /// priority_multiplier_icon / _selected / _enemy / _owned / _friendly /
+    /// _static (bytes).
+    pub mul_icon: u8,
+    pub mul_selected: u8,
+    pub mul_enemy: u8,
+    pub mul_owned: u8,
+    pub mul_friendly: u8,
+    pub mul_static: u8,
+    /// minimap.tgi rallypoint_icon / waypoint_icon (Data paths).
+    pub rally_icon: String,
+    pub waypoint_icon: String,
     /// AVars MinimapPeriodUpdateFog / MinimapPeriodUpdateObjects (s).
     pub period_fog: f32,
     pub period_objects: f32,
-    /// Icon pixel sizes by Data path.
-    icon_sizes: HashMap<String, Option<(u32, u32)>>,
-    /// minimap.tgi rallypoint_icon (Data path).
-    pub rally_icon: String,
-    pub white: [f32; 3],
-    pub requires_supply: [f32; 3],
     pub period_supply: f32,
     supply_at: f32,
     /// Supply border pixels (image index) of the last supply refresh.
     supply_border: Vec<usize>,
+    /// Icon pixels by Data path.
+    icons: HashMap<String, Option<IconPixels>>,
 }
 
 /// The fog layer tones of `0x433620` (AA.exe data): a visible tile
@@ -100,18 +139,22 @@ const FOG_VISIBLE: f32 = 1.0;
 const FOG_EXPLORED: f32 = 0.7;
 const FOG_UNEXPLORED: f32 = 0.0;
 
-/// An object as the last object refresh placed it.
-#[derive(Clone, Debug)]
-struct Object {
-    pos: Vec2,
-    color: [f32; 3],
-    icon: Option<String>,
-    selected: bool,
-}
+/// The definition radar_factor (template_object.tgi `int radar_factor = 1`,
+/// def +0x144): only the objective markers set another value and they are
+/// invisible things here.
+const RADAR_FACTOR: u8 = 1;
 
 fn point3(v: &str) -> Option<[f32; 3]> {
     let p: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
     (p.len() >= 3).then(|| [p[0], p[1], p[2]])
+}
+
+fn byte(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+fn rgba(c: [f32; 3]) -> [u8; 4] {
+    [byte(c[0]), byte(c[1]), byte(c[2]), 255]
 }
 
 impl MinimapArt {
@@ -177,16 +220,31 @@ impl MinimapArt {
         let mm = datafile::load(data, "MiniMap/minimap.tgi");
         let node = mm.iter().find(|n| n.name.eq_ignore_ascii_case("Minimap"));
         let c = |name: &str, d: [f32; 3]| node.and_then(|n| n.get(name)).and_then(point3).unwrap_or(d);
-        self.point_size = node.and_then(|n| n.float("object_point_size")).unwrap_or(2.0);
-        // textures/rallypoint.png, relative to Data/MiniMap
+        let int = |name: &str, d: f32| node.and_then(|n| n.float(name)).unwrap_or(d);
+        self.point_size = int("object_point_size", 2.0) as i32;
+        // textures/rallypoint.png, textures/waypoint.png (relative to
+        // Data/MiniMap)
         self.rally_icon = node.and_then(|n| n.get("rallypoint_icon")).map(|s| format!("MiniMap/{}", s.trim())).unwrap_or_else(|| "MiniMap/Textures/Rallypoint.PNG".into());
-        self.min_icon_radius = node.and_then(|n| n.float("min_icon_radius")).unwrap_or(2.0);
-        self.selected = c("color_owned_selected", [1.0; 3]);
+        self.waypoint_icon = node.and_then(|n| n.get("waypoint_icon")).map(|s| format!("MiniMap/{}", s.trim())).unwrap_or_else(|| "MiniMap/Textures/Waypoint.PNG".into());
+        self.min_icon_radius = int("min_icon_radius", 2.0);
+        self.white = c("color_white", [1.0; 3]);
         self.border = c("color_object_border", [0.0; 3]);
+        self.owned_selected = c("color_owned_selected", [1.0; 3]);
+        self.owned_static = c("color_owned_static", [0.169, 0.600, 0.145]);
+        self.owned_mobile = c("color_owned_mobile", [0.533, 0.863, 0.604]);
+        self.enemy_static = c("color_enemy_static", [0.612, 0.145, 0.145]);
+        self.enemy_mobile = c("color_enemy_mobile", [0.776, 0.294, 0.294]);
+        self.allied_static = c("color_allied_static", [0.106, 0.192, 0.510]);
+        self.allied_mobile = c("color_allied_mobile", [0.290, 0.404, 0.827]);
         self.neutral_static = c("color_neutral_static", [0.729; 3]);
         self.neutral_mobile = c("color_neutral_mobile", [0.729; 3]);
-        self.white = c("color_white", [1.0; 3]);
         self.requires_supply = c("color_requires_supply", [0.0, 1.0, 0.0]);
+        self.mul_selected = int("priority_multiplier_selected", 10.0) as u8;
+        self.mul_icon = int("priority_multiplier_icon", 2.0) as u8;
+        self.mul_enemy = int("priority_multiplier_enemy", 4.0) as u8;
+        self.mul_owned = int("priority_multiplier_owned", 3.0) as u8;
+        self.mul_friendly = int("priority_multiplier_friendly", 2.0) as u8;
+        self.mul_static = int("priority_multiplier_static", 2.0) as u8;
         // AVars.tgi (the hard-coded defaults of 0x401BD0 are 5 / 2 s)
         let avars = datafile::load(data, "AVars.tgi");
         let avar = |name: &str, d: f32| avars.iter().find_map(|n| n.float(name)).unwrap_or(d);
@@ -196,9 +254,10 @@ impl MinimapArt {
     }
 
     /// Build (once per map) the terrain layer at the minimap target size
-    /// (`target` pixels square), then lay the local kingdom's fog over it
-    /// every MinimapPeriodUpdateFog seconds and its supply border every
-    /// MinimapPeriodUpdateSupply seconds.
+    /// (`target` pixels square), lay the local kingdom's fog over it every
+    /// MinimapPeriodUpdateFog seconds and its supply border every
+    /// MinimapPeriodUpdateSupply seconds, and draw the objects layer every
+    /// MinimapPeriodUpdateObjects seconds over them.
     pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>, target: u32) {
         if self.colors.is_none() {
             let t0 = std::time::Instant::now();
@@ -219,7 +278,6 @@ impl MinimapArt {
             let colors = self.colors.as_ref().unwrap();
             // 0x4345D0: every target pixel in the colour of the cell under it
             let mut px = vec![0u8; t * t * 4];
-            let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
             for ty in 0..t {
                 for tx in 0..t {
                     let c = m
@@ -235,13 +293,15 @@ impl MinimapArt {
                 }
             }
             self.base = px.clone();
+            self.fogged = px.clone();
+            self.objects = vec![0u8; t * t * 4];
             let mut img = super::tex::make_image(t as u32, t as u32, px, super::tex::Variant::default(), true);
             img.sampler = bevy::image::ImageSampler::linear();
             self.image = Some(images.add(img));
             self.fog_at = f32::NEG_INFINITY;
             self.supply_at = f32::NEG_INFINITY;
             self.fog_local = None;
-            self.objects = None;
+            self.objects_at = None;
         }
         // the supply border (0x433470): the outline of the tiles of the
         // local kingdom's supply zones (their ZoneSolver floods, which bend
@@ -282,11 +342,37 @@ impl MinimapArt {
                 supply_changed = true;
             }
         }
+        let mut dirty = self.fog_layer(b, t, supply_changed);
+        // the objects layer every MinimapPeriodUpdateObjects
+        if self.objects_at.is_none_or(|at| now - at >= self.period_objects || now < at) {
+            self.objects_at = Some(now);
+            self.objects_layer(data, b, t);
+            dirty = true;
+        }
+        if !dirty {
+            return;
+        }
+        let Some(mut img) = self.image.as_ref().and_then(|h| images.get_mut(h)) else { return };
+        let Some(px) = img.data.as_mut() else { return };
+        if px.len() != self.fogged.len() || self.objects.len() != px.len() {
+            return;
+        }
+        // the objects over the layers below them
+        for i in (0..px.len()).step_by(4) {
+            let src = if self.objects[i + 3] != 0 { &self.objects[i..i + 4] } else { &self.fogged[i..i + 4] };
+            px[i..i + 4].copy_from_slice(src);
+        }
+    }
+
+    /// The fog layer over the terrain, with the supply border, into
+    /// `fogged`; whether it changed.
+    fn fog_layer(&mut self, b: &Battle, t: usize, supply_changed: bool) -> bool {
+        let now = b.world.time;
         let due = now - self.fog_at >= self.period_fog || now < self.fog_at;
         let no_fog = minimap_no_fog(b);
         let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(b.local) || self.fog_no_fog != no_fog;
         if !(due && changed) && self.fog_local.is_some() && !supply_changed {
-            return;
+            return false;
         }
         self.fog_at = now;
         self.fog_revision = b.world.fog.revision;
@@ -296,10 +382,9 @@ impl MinimapArt {
         let mut shade = Vec::new();
         fog::shade(&b.world, Some(b.local), 1, &mut shade);
         let (fw, fh) = (b.world.fog.width.max(0) as usize, b.world.fog.height.max(0) as usize);
-        let Some(mut img) = self.image.as_ref().and_then(|h| images.get_mut(h)) else { return };
-        let Some(px) = img.data.as_mut() else { return };
+        let px = &mut self.fogged;
         if px.len() != self.base.len() || fw == 0 || fh == 0 || shade.len() != fw * fh {
-            return;
+            return false;
         }
         // 0x433620: each target pixel blends the tones of the four tiles
         // around its point (bilinear, the tile index at the point's lower
@@ -334,64 +419,61 @@ impl MinimapArt {
                 }
             }
         }
-        let green = self.requires_supply.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        let green = self.requires_supply.map(byte);
         for &i in &self.supply_border {
             px[i * 4..i * 4 + 3].copy_from_slice(&green);
         }
+        true
     }
 
-    fn icon_size(&mut self, data: &aa_ui::fs::DataRoot, path: &str) -> Option<(u32, u32)> {
-        if let Some(s) = self.icon_sizes.get(path) {
-            return *s;
+    /// The icon's pixels (loaded once per path).
+    fn icon(&mut self, data: &aa_ui::fs::DataRoot, path: &str) -> Option<&IconPixels> {
+        if !self.icons.contains_key(path) {
+            let found = data.find(path.trim_start_matches('/')).and_then(|p| image::open(&p).ok()).map(|img| {
+                let img = img.to_rgba8();
+                IconPixels { w: img.width() as i32, h: img.height() as i32, rgba: img.into_raw() }
+            });
+            if found.is_none() {
+                warn!("minimap: icon {path} not found");
+            }
+            self.icons.insert(path.to_string(), found);
         }
-        let found = data.find(path.trim_start_matches('/')).and_then(|p| image::image_dimensions(&p).ok());
-        self.icon_sizes.insert(path.to_string(), found);
-        found
+        self.icons.get(path).and_then(|i| i.as_ref())
     }
 
-    /// The objects the local kingdom sees or remembers.
-    fn refresh_objects(&mut self, b: &Battle) -> Vec<Object> {
+    /// `0x435BC0`: the objects layer, drawn from scratch.
+    fn objects_layer(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, t: usize) {
         let w = &b.world;
+        let map = &w.map;
+        let (mw, mh) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
+        let mut r = Raster { t: t as i32, px: vec![[0u8; 4]; t * t], prio: vec![0u8; t * t], border: rgba(self.border) };
+        let (sx, sy) = (t as f32 / mw.max(1e-3), t as f32 / mh.max(1e-3));
         let selected: std::collections::HashSet<u32> = b
             .selection
             .iter()
             .flat_map(|u| match *u {
-                aa_play::Unit::Org(o) => w.orgs.get(o as usize).map(|o| o.members.clone()).unwrap_or_default(),
-                aa_play::Unit::Actor(a) => vec![a],
+                Unit::Org(o) => w.orgs.get(o as usize).map(|o| o.members.clone()).unwrap_or_default(),
+                Unit::Actor(a) => vec![a],
             })
             .collect();
-        let mut out = Vec::new();
+        let local_team = w.kingdoms.iter().find(|k| k.id == b.local).map(|k| k.team);
         // 0x435BC0: MINIMAP_NO_FOG draws every object as if it were seen
         let no_fog = minimap_no_fog(b);
+        // the last own selected object (0x433E40 records it)
+        let mut marked: Option<aa_play::ActorId> = None;
+        let mut objects: Vec<(aa_play::DefId, Vec3, f32, Option<u32>, bool, Option<aa_play::ActorId>)> = Vec::new();
         for a in w.actors.iter().filter(|a| a.alive && !a.removed) {
-            let Some(k) = a.kingdom.and_then(|k| w.kingdoms.iter().find(|x| x.id == k)) else { continue };
-            let def = w.data.def(a.def);
-            if def.invisible {
+            if a.kingdom.is_none() || w.data.def(a.def).invisible {
                 continue;
             }
             let sighting = if no_fog { Sighting::Visible } else { fog::sighting(w, a.id, Some(b.local)) };
-            let (pos, owner) = match sighting {
-                Sighting::Visible => (a.pos.truncate(), Some(k)),
-                Sighting::Remembered(m) => (m.pos.truncate(), m.kingdom.and_then(|mk| w.kingdoms.iter().find(|x| x.id == mk))),
+            // the owner as the local kingdom saw it last
+            let (pos, facing, owner) = match sighting {
+                Sighting::Visible => (a.pos, a.facing, a.kingdom),
+                Sighting::Remembered(m) => (m.pos, m.facing, m.kingdom),
                 Sighting::Hidden => continue,
             };
-            let mobile = def.speed_max > 0.0 || matches!(def.class, Some(DefClass::Member) | Some(DefClass::Truck));
-            // neutral objects show only by their icon (the original minimap
-            // shows the cities' flags, not their blocks)
-            if owner.is_none_or(|o| o.independent) && def.minimap_icon.is_none() {
-                continue;
-            }
-            let color = match owner {
-                Some(o) if !o.independent => [o.color[0] as f32 / 255.0, o.color[1] as f32 / 255.0, o.color[2] as f32 / 255.0],
-                _ => {
-                    if mobile {
-                        self.neutral_mobile
-                    } else {
-                        self.neutral_static
-                    }
-                }
-            };
-            out.push(Object { pos, color, icon: def.minimap_icon.clone(), selected: selected.contains(&a.id) });
+            objects.push((a.def, pos, facing, owner, selected.contains(&a.id), Some(a.id)));
         }
         // ghosts of remembered actors already gone (none while everything
         // live is shown)
@@ -399,15 +481,366 @@ impl MinimapArt {
             if w.actor(id).is_some_and(|a| a.alive) {
                 continue;
             }
-            let def = w.data.def(m.def);
-            let owner = m.kingdom.and_then(|mk| w.kingdoms.iter().find(|x| x.id == mk));
-            let color = match owner {
-                Some(o) if !o.independent => [o.color[0] as f32 / 255.0, o.color[1] as f32 / 255.0, o.color[2] as f32 / 255.0],
-                _ => self.neutral_static,
-            };
-            out.push(Object { pos: m.pos.truncate(), color, icon: def.minimap_icon.clone(), selected: false });
+            objects.push((m.def, m.pos, m.facing, m.kingdom, false, None));
         }
-        out
+        for (def_id, pos, facing, owner, is_selected, id) in objects {
+            let def = w.data.def(def_id);
+            // actor flags bit 29: a structure that does not move
+            let mobile = def.speed_max > 0.0 || matches!(def.class, Some(DefClass::Member) | Some(DefClass::Truck));
+            let kingdom = owner.and_then(|k| w.kingdoms.iter().find(|x| x.id == k));
+            let relation = match kingdom {
+                Some(k) if k.id == b.local => Relation::Own,
+                Some(k) if k.independent => Relation::Other,
+                Some(k) if Some(k.team) == local_team => Relation::Allied,
+                Some(_) => Relation::Enemy,
+                None => Relation::Other,
+            };
+            let selected = relation == Relation::Own && is_selected;
+            let icon = def.minimap_icon.clone();
+            // 0x433B50: the relation colour; an object of no relation is
+            // drawn only by its icon
+            let color = match relation {
+                Relation::Own if selected => self.owned_selected,
+                Relation::Own if mobile => self.owned_mobile,
+                Relation::Own => self.owned_static,
+                Relation::Allied if mobile => self.allied_mobile,
+                Relation::Allied => self.allied_static,
+                Relation::Enemy if mobile => self.enemy_mobile,
+                Relation::Enemy => self.enemy_static,
+                Relation::Other if mobile => self.neutral_mobile,
+                Relation::Other => self.neutral_static,
+            };
+            if relation == Relation::Other && icon.is_none() {
+                continue;
+            }
+            // 0x433E40: the priority (byte arithmetic)
+            let mut p = if icon.is_some() { self.mul_icon } else { RADAR_FACTOR };
+            match relation {
+                Relation::Enemy => p = p.wrapping_mul(self.mul_enemy),
+                Relation::Own => {
+                    p = p.wrapping_mul(self.mul_owned);
+                    if selected {
+                        p = p.wrapping_mul(self.mul_selected);
+                        marked = id.or(marked);
+                    }
+                }
+                Relation::Allied => p = p.wrapping_mul(self.mul_friendly),
+                Relation::Other => {}
+            }
+            if !mobile {
+                p = p.wrapping_mul(self.mul_static);
+            }
+            let c = rgba(color);
+            let at = pos.truncate();
+            // 0x434D70
+            if let Some(px) = icon.as_deref().and_then(|i| self.icon(data, i)) {
+                blit(&mut r, px, at, sx, c, p);
+                continue;
+            }
+            let shape = Shape::of(def);
+            if mobile && shape.radius() < self.min_icon_radius {
+                // the point at the truncated position
+                let x0 = ((at.x.trunc()) * sx) as i32;
+                let y0 = ((at.y.trunc()) * sy) as i32;
+                point(&mut r, x0, y0, self.point_size, c, p);
+            } else {
+                footprint(&mut r, &shape, at, Vec2::new(facing.cos(), facing.sin()), sx, sy, c, p);
+            }
+        }
+        // the marked object's rally point (static) or its current order's
+        // target (mobile), over everything (priority 0xFF, colour
+        // 0xFFFEFFFF: the icon's own colours)
+        if let Some(id) = marked {
+            let a = &w.actors[id as usize];
+            let def = w.data.def(a.def);
+            let mobile = def.speed_max > 0.0 || matches!(def.class, Some(DefClass::Member) | Some(DefClass::Truck));
+            let (icon, at) = if !mobile {
+                (self.rally_icon.clone(), aa_play::player_orders::rally_point(w, id))
+            } else {
+                let order = match a.org.and_then(|o| w.orgs.get(o as usize)) {
+                    Some(g) => g.order.clone(),
+                    None => a.order.clone(),
+                };
+                let at = match order {
+                    Order::Move { to, .. } => Some(to),
+                    Order::Deploy { at, .. } => Some(at),
+                    Order::Attack { target } => w.actor(target).filter(|t| t.alive).map(|t| t.pos.truncate()),
+                    Order::Idle => None,
+                };
+                (self.waypoint_icon.clone(), at)
+            };
+            if let Some(at) = at {
+                if let Some(px) = self.icon(data, &icon) {
+                    blit(&mut r, px, at, sx, [0xFE, 0xFF, 0xFF, 0xFF], 0xFF);
+                }
+            }
+        }
+        // into the image's row order (row 0 = world y = H)
+        let out = &mut self.objects;
+        out.clear();
+        out.resize(t * t * 4, 0);
+        for y in 0..t {
+            for x in 0..t {
+                let i = ((t - 1 - y) * t + x) * 4;
+                out[i..i + 4].copy_from_slice(&r.px[y * t + x]);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Relation {
+    Own,
+    Allied,
+    Enemy,
+    Other,
+}
+
+/// The blocking shape (`0x46D8E0` circle, `0x46E0E0` square / rect: half
+/// extents and the bounding radius).
+enum Shape {
+    Point,
+    Circle(f32),
+    Box(f32, f32),
+}
+
+impl Shape {
+    fn of(def: &aa_play::Def) -> Shape {
+        match (def.blocking_shape.as_deref().map(str::to_ascii_uppercase).as_deref(), def.blocking_size) {
+            (Some("CIRCLE"), Some(s)) => Shape::Circle(s[0]),
+            (Some("SQUARE") | Some("RECT"), Some(s)) => Shape::Box(s[0] * 0.5, s[1] * 0.5),
+            _ => Shape::Point,
+        }
+    }
+
+    /// Shape +4.
+    fn radius(&self) -> f32 {
+        match *self {
+            Shape::Point => 0.0,
+            Shape::Circle(r) => r,
+            Shape::Box(hx, hy) => (hx * hx + hy * hy).sqrt(),
+        }
+    }
+
+    /// The half extents the outline uses (a circle: its radius both ways).
+    fn half(&self) -> (f32, f32) {
+        match *self {
+            Shape::Point => (0.0, 0.0),
+            Shape::Circle(r) => (r, r),
+            Shape::Box(hx, hy) => (hx, hy),
+        }
+    }
+}
+
+/// The objects layer of one refresh: colour and priority per target pixel
+/// (row 0 = world y = 0).
+struct Raster {
+    t: i32,
+    px: Vec<[u8; 4]>,
+    prio: Vec<u8>,
+    border: [u8; 4],
+}
+
+impl Raster {
+    fn idx(&self, x: i32, y: i32) -> Option<usize> {
+        (x >= 0 && y >= 0 && x < self.t && y < self.t).then(|| (y * self.t + x) as usize)
+    }
+
+    /// An object pixel: it replaces only a lower priority.
+    fn put(&mut self, x: i32, y: i32, c: [u8; 4], p: u8) {
+        if let Some(i) = self.idx(x, y) {
+            if self.prio[i] < p {
+                self.px[i] = c;
+                self.prio[i] = p;
+            }
+        }
+    }
+
+    /// `0x432C30`: the border colour next to (x, y) where that pixel is not
+    /// the fill colour and holds a lower priority than `p` (the border does
+    /// not take the priority).
+    fn edge(&mut self, x: i32, y: i32, dx: i32, dy: i32, fill: [u8; 4], p: u8) {
+        if let Some(i) = self.idx(x + dx, y + dy) {
+            if self.px[i] != fill && self.prio[i] < p {
+                self.px[i] = self.border;
+            }
+        }
+    }
+}
+
+/// `0x434D70` icon: the icon's opaque pixels centred on the object
+/// (column x - w/2 .. along world x, row y - h/2 .. along world y; both
+/// from the x scale), each the icon colour times `c` / 256, solid white
+/// for a white `c`.
+fn blit(r: &mut Raster, icon: &IconPixels, at: Vec2, s: f32, c: [u8; 4], p: u8) {
+    let (cx, cy) = ((at.x * s) as i32, (at.y * s) as i32);
+    let white = c[0] == 0xFF && c[1] == 0xFF && c[2] == 0xFF;
+    for row in 0..icon.h {
+        let y = row - (icon.h >> 1) + cy;
+        for col in 0..icon.w {
+            let x = cx - (icon.w >> 1) + col;
+            let Some(i) = r.idx(x, y) else { continue };
+            let k = ((row * icon.w + col) * 4) as usize;
+            let src = &icon.rgba[k..k + 4];
+            if r.prio[i] >= p || src[3] == 0 {
+                continue;
+            }
+            r.px[i] = if white {
+                [0xFF, 0xFF, 0xFF, 0xFF]
+            } else {
+                let m = |a: u8, b: u8| ((u16::from(a) * u16::from(b)) >> 8) as u8;
+                [m(src[0], c[0]), m(src[1], c[1]), m(src[2], c[2]), 0xFF]
+            };
+            r.prio[i] = p;
+        }
+    }
+}
+
+/// `0x434D70` point: an `n` pixel square (from x - n/2) with a border ring.
+fn point(r: &mut Raster, x0: i32, y0: i32, n: i32, c: [u8; 4], p: u8) {
+    let half = n >> 1;
+    let t = r.t;
+    for row in 0..n {
+        let y = row - half + y0;
+        if y < 0 || y >= t {
+            continue;
+        }
+        for col in 0..n {
+            let x = col - half + x0;
+            if x < 0 || x >= t {
+                continue;
+            }
+            r.put(x, y, c, p);
+            let (first_col, last_col) = (col == 0 && x > 0, col == n - 1 && x < t - 1);
+            if row == 0 && y > 0 {
+                if first_col {
+                    r.edge(x, y, -1, -1, c, p);
+                }
+                r.edge(x, y, 0, -1, c, p);
+                if last_col {
+                    r.edge(x, y, 1, -1, c, p);
+                }
+            }
+            if first_col {
+                r.edge(x, y, -1, 0, c, p);
+            }
+            if last_col {
+                r.edge(x, y, 1, 0, c, p);
+            }
+            if row == n - 1 && y < t - 1 {
+                if first_col {
+                    r.edge(x, y, -1, 1, c, p);
+                }
+                r.edge(x, y, 0, 1, c, p);
+                if last_col {
+                    r.edge(x, y, 1, 1, c, p);
+                }
+            }
+        }
+    }
+}
+
+/// `0x42F330`: where segment p0-p1 crosses segment q0-q1 (both ends
+/// included).
+fn cross(p0: Vec2, p1: Vec2, q0: Vec2, q1: Vec2) -> Option<Vec2> {
+    let d = p1 - p0;
+    let e = q1 - q0;
+    let den = d.x * e.y - e.x * d.y;
+    if den == 0.0 {
+        return None;
+    }
+    let s = ((p0.y - q0.y) * e.x - (p0.x - q0.x) * e.y) * (1.0 / den);
+    let u = ((p0.y - q0.y) * d.x - (p0.x - q0.x) * d.y) * (1.0 / den);
+    ((0.0..=1.0).contains(&s) && (0.0..=1.0).contains(&u)).then(|| p0 + d * s)
+}
+
+/// `0x434D70` outline: the shape's box turned by the facing, filled row by
+/// row inside the shape's bounds (`0x46E540`), with a one pixel border.
+#[allow(clippy::too_many_arguments)]
+fn footprint(r: &mut Raster, shape: &Shape, at: Vec2, dir: Vec2, sx: f32, sy: f32, c: [u8; 4], p: u8) {
+    let (hx, hy) = shape.half();
+    // bounds (world units)
+    let (lo, hi) = match shape {
+        Shape::Point => (at, at),
+        Shape::Circle(rad) => (at - Vec2::splat(*rad), at + Vec2::splat(*rad)),
+        Shape::Box(..) => {
+            let a = Vec2::new(dir.y * hx, -dir.x * hx);
+            let b = Vec2::new(dir.x * hy, dir.y * hy);
+            let cs = [at - a - b, at - a + b, at + a + b, at + a - b];
+            (cs.iter().copied().reduce(Vec2::min).unwrap(), cs.iter().copied().reduce(Vec2::max).unwrap())
+        }
+    };
+    let (x_lo, x_hi) = (lo.x * sx - 1.0, hi.x * sx + 1.0);
+    let (mut y, y_hi) = (lo.y * sy, hi.y * sy);
+    let height = y_hi - y;
+    if height < 1.0 {
+        y += height * 0.5;
+    }
+    // the corners in target pixels
+    let (cx, cy) = (at.x * sx, at.y * sy);
+    let (px, py) = (hx * sx, hy * sy);
+    let a = Vec2::new(dir.y * px, -dir.x * px);
+    let b = Vec2::new(dir.x * py, dir.y * py);
+    let c0 = Vec2::new(cx, cy);
+    let corners = [c0 - a - b, c0 - a + b, c0 + a + b, c0 + a - b];
+    let t = r.t;
+    while y <= y_hi {
+        // rows and columns truncate toward zero (ftol)
+        let row = y as i32;
+        if row < 0 {
+            y += 1.0;
+            continue;
+        }
+        if row >= t {
+            return;
+        }
+        let mut xs = Vec::with_capacity(4);
+        for i in 0..4 {
+            if let Some(q) = cross(Vec2::new(x_lo, y), Vec2::new(x_hi, y), corners[i], corners[(i + 1) % 4]) {
+                xs.push(q.x);
+            }
+        }
+        if xs.len() >= 2 {
+            let from = xs.iter().copied().fold(f32::MAX, f32::min);
+            let to = xs.iter().copied().fold(f32::MIN, f32::max);
+            let mut x = from;
+            while x <= to {
+                let col = x as i32;
+                if col >= 0 {
+                    if col >= t {
+                        break;
+                    }
+                    let q = p.wrapping_sub(1);
+                    if x == from && col > 0 {
+                        if row > 0 {
+                            r.edge(col, row, -1, -1, c, q);
+                        }
+                        r.edge(col, row, -1, 0, c, q);
+                        if row < t - 1 {
+                            r.edge(col, row, -1, 1, c, q);
+                        }
+                    }
+                    if row > 0 {
+                        r.edge(col, row, 0, -1, c, q);
+                    }
+                    r.put(col, row, c, p);
+                    if row < t - 1 {
+                        r.edge(col, row, 0, 1, c, q);
+                    }
+                    if to <= x + 1.0 && col < t - 1 {
+                        if row > 0 {
+                            r.edge(col, row, 1, -1, c, q);
+                        }
+                        r.edge(col, row, 1, 0, c, q);
+                        if row < t - 1 {
+                            r.edge(col, row, 1, 1, c, q);
+                        }
+                    }
+                }
+                x += 1.0;
+            }
+        }
+        y += 1.0;
     }
 }
 
@@ -417,18 +850,14 @@ fn minimap_no_fog(b: &Battle) -> bool {
     aa_play::special_ops::kingdom_has_flag(&b.world, b.local, "MINIMAP_NO_FOG")
 }
 
-/// Next power of two of the minimap target size (`0x43A920`).
-fn target_size(n: i32) -> f32 {
-    (n.max(1) as u32).next_power_of_two() as f32
-}
-
-/// The GameMiniMap widget's target size in pixels (172 -> 256).
+/// The GameMiniMap widget's layer size in pixels (`minimap_size`, 172; the
+/// layers are drawn at the widget size, not at the 256 texture size).
 pub fn target_pixels(ui: &aa_ui::ui::Ui) -> u32 {
     let size = match ui.widget("Root/Game/ControlPanel/GameMiniMap").and_then(|w| w.control.as_deref()) {
         Some(aa_ui::controls::Control::MiniMap(m)) => m.size,
         _ => aa_ui::minimap::MiniMap::default().size,
     };
-    target_size(size.0.max(size.1)) as u32
+    size.0.max(size.1).max(1) as u32
 }
 
 /// The minimap content for this frame. `view` is the camera's view on the
@@ -445,55 +874,8 @@ pub fn draw(ui: &aa_ui::ui::Ui, art: &mut MinimapArt, b: &Battle, rect: aa_ui::l
     if mw <= 0.0 || mh <= 0.0 {
         return None;
     }
-    // the objects move on the minimap every MinimapPeriodUpdateObjects
-    let now = b.world.time;
-    let stale = art.objects.as_ref().is_none_or(|(t, _)| now - *t >= art.period_objects || now < *t);
-    if stale {
-        let objects = art.refresh_objects(b);
-        art.objects = Some((now, objects));
-    }
-    let objects = art.objects.as_ref().map(|(_, o)| o.clone()).unwrap_or_default();
-    // minimap target pixels -> window pixels along the quad edge
     let [p0, p1, p2] = quad;
-    let side = ((p1.0 - p0.0).hypot(p1.1 - p0.1)).max(1.0);
-    let target = target_size(m.size.0.max(m.size.1));
-    let px = side / target;
     let pt = |u: f32, v: f32| (p0.0 + u * (p2.0 - p1.0) + v * (p1.0 - p0.0), p0.1 + u * (p2.1 - p1.1) + v * (p1.1 - p0.1));
-    let mut points = Vec::new();
-    let mut icons = Vec::new();
-    for o in &objects {
-        let (u, v) = (o.pos.x / mw, o.pos.y / mh);
-        let color = if o.selected { art.selected } else { o.color };
-        let c = [color[0], color[1], color[2], 1.0];
-        if let Some(icon) = &o.icon {
-            if let Some((iw, ih)) = art.icon_size(&ui.store.root, icon) {
-                // map-aligned: the icon's pixels are minimap target pixels
-                let (hu, hv) = (iw as f32 * 0.5 / target, ih as f32 * 0.5 / target);
-                let corners = [pt(u - hu, v - hv), pt(u + hu, v - hv), pt(u + hu, v + hv), pt(u - hu, v + hv)];
-                icons.push(MinimapIcon { texture: icon.clone(), corners, color: c });
-                continue;
-            }
-        }
-        let size = (art.point_size.max(1.0) * 2.0 * px).max(1.0);
-        let edge = px.max(1.0);
-        points.push((u, v, size + 2.0 * edge, [art.border[0], art.border[1], art.border[2], 1.0]));
-        points.push((u, v, size, c));
-    }
-    // the selected building's rally point (minimap.tgi rallypoint_icon)
-    if let [aa_play::Unit::Actor(id)] = b.selection.as_slice() {
-        if let Some(p) = aa_play::player_orders::rally_point(&b.world, *id).filter(|_| b.world.actor(*id).is_some_and(|a| a.kingdom == Some(b.local))) {
-            let icon = art.rally_icon.clone();
-            if let Some((iw, ih)) = art.icon_size(&ui.store.root, &icon) {
-                let (u, v) = (p.x / mw, p.y / mh);
-                let (hu, hv) = (iw as f32 * 0.5 / target, ih as f32 * 0.5 / target);
-                icons.push(MinimapIcon { texture: icon, corners: [pt(u - hu, v - hv), pt(u + hu, v - hv), pt(u + hu, v + hv), pt(u - hu, v + hv)], color: [1.0; 4] });
-            }
-        }
-    }
-    // borders under every fill
-    let (borders, fills): (Vec<_>, Vec<_>) = points.chunks(2).map(|p| (p[0], p[1])).unzip();
-    let mut points = borders;
-    points.extend(fills);
     let mut lines = Vec::new();
     if let Some(v) = view {
         let c = [art.white[0], art.white[1], art.white[2], 1.0];
@@ -502,5 +884,5 @@ pub fn draw(ui: &aa_ui::ui::Ui, art: &mut MinimapArt, b: &Battle, rect: aa_ui::l
             lines.push((pt(a.x / mw, a.y / mh), pt(e.x / mw, e.y / mh), c));
         }
     }
-    Some(MinimapDraw { quad, points, icons, lines, has_terrain: art.image.is_some() })
+    Some(MinimapDraw { quad, lines, has_terrain: art.image.is_some() })
 }
