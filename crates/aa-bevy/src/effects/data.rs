@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-4";
+const CACHE_VERSION: &str = "aa-bevy-fx-5";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -87,6 +87,9 @@ pub struct ActorFx {
     pub death_model: Option<String>,
     /// View resource_prefix, Data-relative.
     pub resource_prefix: Option<String>,
+    /// AircraftComponent operational_height (air transports fly at it).
+    #[serde(default)]
+    pub operational_height: Option<f32>,
 }
 
 /// A VFX definition (template_vfx.tgi), the fields the view reads.
@@ -172,6 +175,10 @@ pub struct FxTables {
     pub terrain_groups: BTreeMap<String, String>,
     /// Nation id ("rus") -> game_music audio IDS.
     pub nation_music: BTreeMap<String, String>,
+    /// The generals' faction abilities (Faction Ability -> AbilityDefinition):
+    /// definition IDS (lower case) -> its FX lists (WhenDo...).
+    #[serde(default)]
+    pub special_ops: BTreeMap<String, WeaponFx>,
     pub ambient: BTreeMap<String, AmbientDef>,
     pub notes: Vec<String>,
 }
@@ -342,6 +349,9 @@ fn actor_fx(catalog: &ActorCatalog, id: &str) -> Option<ActorFx> {
     if let Ok(Some(mover)) = actor.child("MoverComponent") {
         fx.start_moving = list(&mover, "WhenStartMoving");
         fx.stop_moving = list(&mover, "WhenStopMoving");
+    }
+    if let Ok(Some(air)) = actor.child("AircraftComponent") {
+        fx.operational_height = num(&air, "operational_height");
     }
     Some(fx)
 }
@@ -516,6 +526,19 @@ pub fn extract(catalog: &ActorCatalog, actor_ids: &[String]) -> FxTables {
     for node in catalog.resolved_definitions("Terrain").unwrap_or_default() {
         if let (Some(ids), Some(group)) = (ids_of(&node), text(&node, "terrain_group")) {
             t.terrain_groups.insert(ids, group.to_ascii_lowercase());
+        }
+    }
+    // The generals' abilities (Data/Generals Faction roots, their Ability
+    // children naming a shared AbilityDefinition or holding their own).
+    for faction in catalog.resolved_definitions("Faction").unwrap_or_default() {
+        for ability in faction.children("Ability").unwrap_or_default() {
+            let definition = match ability.child("AbilityDefinition") {
+                Ok(Some(local)) => Some(local),
+                _ => text(&ability, "ability_IDS").and_then(|id| catalog.resolved_definition("AbilityDefinition", &id, PC).ok()),
+            };
+            let Some(ids) = definition.as_ref().and_then(|d| text(d, "IDS")) else { continue };
+            let fx = weapon_fx(catalog, &ability);
+            t.special_ops.entry(ids.to_ascii_lowercase()).or_insert(fx);
         }
     }
     for node in catalog.resolved_definitions("Nation").unwrap_or_default() {

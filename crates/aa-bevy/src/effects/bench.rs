@@ -11,11 +11,17 @@ pub fn spawn(battle: Option<ResMut<Battle>>, ready: Option<Res<super::FxState>>,
     if *done || ready.is_none() {
         return;
     }
+    let Some(mut battle) = battle else { return };
+    // AA_BEVY_FX_BENCH_SPEED: the game speed for the measurement (slow
+    // motion lets short animations such as a tank's recoil or a bomber's
+    // pass be captured frame by frame on a slow renderer).
+    if let Some(speed) = std::env::var("AA_BEVY_FX_BENCH_SPEED").ok().and_then(|v| v.parse::<f32>().ok()) {
+        battle.speed = speed;
+    }
     let Some(soldiers) = std::env::var("AA_BEVY_FX_BENCH").ok().and_then(|v| v.parse::<usize>().ok()) else {
         *done = true;
         return;
     };
-    let Some(mut battle) = battle else { return };
     *done = true;
     let world = &mut battle.world;
     // AA_BEVY_FX_BENCH_KIND: the regiment kind ("infantry", "tank_medium",
@@ -50,12 +56,6 @@ pub fn spawn(battle: Option<ResMut<Battle>>, ready: Option<Res<super::FxState>>,
         orders.push(Command::Move { kingdom: 1, units: vec![Unit::Org(theirs)], to: a + off, attack_move: true });
     }
     battle.pending.extend(orders);
-    // AA_BEVY_FX_BENCH_SPEED: the game speed for the bench (slow motion lets
-    // short animations such as a tank's recoil be captured frame by frame
-    // on a slow renderer).
-    if let Some(speed) = std::env::var("AA_BEVY_FX_BENCH_SPEED").ok().and_then(|v| v.parse::<f32>().ok()) {
-        battle.speed = speed;
-    }
     info!("fx bench: {} regiments a side ordered to attack-move", per_side);
 }
 

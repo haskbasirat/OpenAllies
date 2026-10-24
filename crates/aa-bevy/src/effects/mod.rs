@@ -67,7 +67,7 @@ impl Plugin for EffectsPlugin {
             .add_systems(Update, (bench::recoil_shots, bench::death_shots).after(EffectsSet).run_if(in_state(AppState::Battle)))
             .add_systems(
                 Update,
-                (poll_loading, run)
+                (poll_loading, target_cursor, run)
                     .chain()
                     .in_set(EffectsSet)
                     .after(crate::session::step_battle)
@@ -220,7 +220,7 @@ fn nif_table(reconstruction: &Path, cache: &Path, texture_dir: &Path, tables: &F
     let mut models: Vec<String> = tables.vfx.values().filter(|d| d.category == "VFXMODEL" && !d.model.is_empty()).map(|d| d.model.clone()).collect();
     models.sort();
     models.dedup();
-    let key = format!("aa-bevy-nif-effects-1:{}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256, models.len());
+    let key = format!("aa-bevy-nif-effects-2:{}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256, models.len());
     let path = cache.join("nif_effects.json");
     if let Ok(bytes) = std::fs::read(&path)
         && let Ok(t) = serde_json::from_slice::<NifTable>(&bytes)
@@ -278,6 +278,9 @@ struct Ctx {
     /// Native position of the target at the event (when it is gone later).
     target_ground: Option<Vec3>,
     shooter_ground: Option<Vec3>,
+    /// The kingdom an effect belongs to when there is no source actor (a
+    /// general's faction ability).
+    kingdom: Option<u32>,
 }
 
 /// Which list started a permanent effect (for stopping it).
@@ -290,6 +293,8 @@ enum ListKind {
     /// WhenConstructed: stopped when the actor is destructed
     /// (FXC stop_on_destructed).
     Constructed,
+    /// The targeting state's target_location_vfx (follows the cursor).
+    Cursor,
 }
 
 struct LiveFx {
@@ -398,11 +403,39 @@ struct ModelAssets {
     parts: Vec<(Vec<Handle<Mesh>>, Handle<OriginalMaterial>)>,
     frames: usize,
     looping: bool,
+    /// The NIF's animation length (0: none): a temporary model VFX lasts it.
+    duration: f32,
 }
 type Parts = Arc<ModelAssets>;
 /// A model decoded on a loader thread: per part the frame meshes, the
-/// material and its decoded texture; the frame count and looping.
-type Decoded = (Vec<(Vec<Mesh>, aa_assets::Material, Option<Image>)>, usize, bool);
+/// material and its decoded texture; the frame count, looping and length.
+type Decoded = (Vec<(Vec<Mesh>, aa_assets::Material, Option<Image>)>, usize, bool, f32);
+
+/// A temporary model's life: the FXC/VFX duration, else the model's own
+/// animation length (template_vfx.tgi VFXModelTemporary), else 5 s.
+fn model_life(life: Option<f32>, model_duration: f32) -> Option<f32> {
+    life.map(|l| if l > 0.0 { l } else if model_duration > 0.0 { model_duration } else { 5.0 })
+}
+
+/// An air transport flying a transported summon in (KKC_AbilityEffectSummon::
+/// SummonTransportedActor 4CB110): from the farther map edge along that
+/// axis, at its operational height, over the drop point when the sim drops.
+struct Plane {
+    key: (String, [u8; 3]),
+    /// Render-space start and unit direction, speed (m/s).
+    from: Vec3,
+    dir: Vec3,
+    speed: f32,
+    start: f32,
+    /// Time it is over the drop point, and leaves the map on the other side.
+    arrive: f32,
+    end: f32,
+    entity: Option<Entity>,
+    /// Measurement screenshots taken (AA_BEVY_FX_PLANE_SHOTS).
+    shots: usize,
+    /// Its sound object (crate::audio::effect_object).
+    object: u64,
+}
 
 enum Slot {
     Loading(Arc<Mutex<Option<Option<Decoded>>>>),
@@ -420,6 +453,8 @@ struct PendingSpawn {
     key: (String, [u8; 3]),
     transform: Transform,
     use_: PendingUse,
+    /// When it was asked for (an animation starts then, even if it loaded later).
+    since: f32,
 }
 
 #[derive(Resource)]
@@ -471,6 +506,14 @@ pub struct FxState {
     decals_dirty: bool,
     decal_eye: Vec3,
     decal_time: f32,
+    planes: Vec<Plane>,
+    next_object: u32,
+    /// The targeting decal wanted this frame (target_cursor): VFX IDS,
+    /// size and the native ground point.
+    cursor_request: Option<(String, f32, Vec3)>,
+    cursor_shown: Option<(String, f32, Vec3)>,
+    /// The generals' special operations were prefetched.
+    ops_prefetched: bool,
 }
 
 fn poll_loading(
@@ -503,10 +546,11 @@ fn poll_loading(
         warn!("effects: {n}");
     }
     info!(
-        "effects: {} actors, {} VFX, {} audio, {} NIF effects, {} texture layers, loaded in {:.2} s",
+        "effects: {} actors, {} VFX, {} audio, {} special operations, {} NIF effects, {} texture layers, loaded in {:.2} s",
         loaded.tables.actors.len(),
         loaded.tables.vfx.len(),
         loaded.tables.audio.len(),
+        loaded.tables.special_ops.len(),
         loaded.nif.effects.len(),
         loaded.layers.len(),
         loaded.seconds
@@ -565,6 +609,11 @@ fn poll_loading(
         decals_dirty: true,
         decal_eye: Vec3::ZERO,
         decal_time: 0.0,
+        planes: Vec::new(),
+        next_object: 0,
+        cursor_request: None,
+        cursor_shown: None,
+        ops_prefetched: false,
     });
 }
 
@@ -823,7 +872,7 @@ impl FxState {
                         return;
                     }
                 }
-                let owner = ctx.actor.and_then(|a| frame.world.actors.get(a as usize)).and_then(|a| a.kingdom);
+                let owner = ctx.actor.and_then(|a| frame.world.actors.get(a as usize)).and_then(|a| a.kingdom).or(ctx.kingdom);
                 let place = match fxc.at.as_str() {
                     "SELF" | "TARGET_THING" if ctx.at.is_none() => {
                         let who = if fxc.at == "TARGET_THING" { ctx.target } else { ctx.actor };
@@ -1045,9 +1094,10 @@ impl FxState {
         // debris also emits its smoke above.
         if animated_model(&key) {
             let team = owner.and_then(|o| frame.world.actors.get(o as usize)).map_or(crate::scene::NEUTRAL_TEAM, |a| team_of(frame.world, a));
-            let life = if def.permanent { None } else { Some(duration.max(5.0)) };
+            let life = if def.permanent { None } else { Some(duration) };
             if let Some((entity, anim)) = self.spawn_model(&def.model, team, Transform::from_matrix(place), spawn, Some(PendingUse::Model { owner, life, list }), true) {
-                self.models.push(ModelFx { entity, owner, life, list, anim });
+                let length = anim.as_ref().map_or(0.0, |a| a.assets.duration);
+                self.models.push(ModelFx { entity, owner, life: model_life(life, length), list, anim });
             }
         } else if !self.nif.effects.contains_key(&key) && self.warned.insert(key.clone()) {
             warn!("effects: VFX {} model {} is not in the effect NIF table", fxc.ids, def.model);
@@ -1070,6 +1120,8 @@ impl FxState {
         let out = slot.clone();
         let path = path.to_owned();
         let data_root = self.data_root.clone();
+        // The effect player already draws its blended geometry as sprites.
+        let sprites = animated && self.in_nif_table(&path);
         std::thread::spawn(move || {
             let decoded = (|| -> Option<Decoded> {
                 let model = store.load_model(&path).ok()?.prepare().ok()?;
@@ -1079,11 +1131,14 @@ impl FxState {
                         let bytes = std::fs::read(bones::find_file(&data_root, &path)?).ok()?;
                         let file = aa_formats::nif::load(&bytes).ok()?;
                         let converted: Vec<(String, usize)> = meshes.iter().map(|m| (m.name.clone(), m.vertices.len())).collect();
-                        anim::bake(&file, &converted)
+                        anim::bake(&file, &converted, sprites)
                     })
                     .flatten();
                 let mut parts = Vec::new();
                 for (i, mesh) in meshes.iter().enumerate() {
+                    if baked.as_ref().and_then(|b| b.parts.get(i)).is_some_and(|p| p.skip) {
+                        continue;
+                    }
                     let texture = mesh.material.texture.as_ref().and_then(|t| crate::textures::load(&store, t, crate::scene::kind(&mesh.material, team)).ok());
                     let frames = match baked.as_ref().and_then(|b| b.parts.get(i)).and_then(|p| p.frames.as_ref()) {
                         Some(frames) => frames
@@ -1099,7 +1154,7 @@ impl FxState {
                     };
                     parts.push((frames, mesh.material.clone(), texture));
                 }
-                Some((parts, baked.as_ref().map_or(1, |b| b.frames), baked.as_ref().is_some_and(|b| b.looping)))
+                Some((parts, baked.as_ref().map_or(1, |b| b.frames), baked.as_ref().is_some_and(|b| b.looping), baked.as_ref().map_or(0.0, |b| b.duration)))
             })();
             *out.lock().unwrap() = Some(decoded);
         });
@@ -1112,7 +1167,7 @@ impl FxState {
             Slot::Ready(p) => return Some(p.clone()),
             Slot::Loading(slot) => slot.lock().unwrap().take()?,
         };
-        let parts = decoded.map(|(list, frames, looping)| {
+        let parts = decoded.map(|(list, frames, looping, duration)| {
             Arc::new(ModelAssets {
                 parts: list
                     .into_iter()
@@ -1123,9 +1178,12 @@ impl FxState {
                     .collect(),
                 frames,
                 looping,
+                duration,
             })
         });
-        if parts.is_none() && self.warned.insert(key.0.clone()) {
+        // (A special-operation set piece without solid meshes has no model.)
+        let plain = key.0.strip_prefix("anim:").unwrap_or(&key.0).to_owned();
+        if parts.is_none() && !self.in_nif_table(&plain) && self.warned.insert(key.0.clone()) {
             warn!("effects: model {} did not load", key.0);
         }
         self.parts.insert(key.clone(), Slot::Ready(parts.clone()));
@@ -1144,7 +1202,17 @@ impl FxState {
 
     /// The animation of an instantiated model (None for a still one).
     fn anim_of(&self, parts: &Parts, children: Vec<Entity>) -> Option<AnimInstance> {
-        (parts.frames > 1).then(|| AnimInstance { assets: parts.clone(), parts: children, start: self.time, shown: 0 })
+        self.anim_from(parts, children, self.time)
+    }
+
+    fn anim_from(&self, parts: &Parts, children: Vec<Entity>, start: f32) -> Option<AnimInstance> {
+        (parts.frames > 1).then(|| AnimInstance { assets: parts.clone(), parts: children, start, shown: usize::MAX })
+    }
+
+    /// The model is in the effect NIF table (its sprites and particles).
+    fn in_nif_table(&self, path: &str) -> bool {
+        let p = path.to_ascii_lowercase();
+        self.nif.effects.contains_key(p.strip_prefix("effects/").unwrap_or(&p))
     }
 
     /// An original model as entities now when it is decoded, else once its
@@ -1160,7 +1228,7 @@ impl FxState {
             Some(None) => None,
             None => {
                 if let Some(use_) = use_ {
-                    self.pending_spawns.push(PendingSpawn { key, transform, use_ });
+                    self.pending_spawns.push(PendingSpawn { key, transform, use_, since: self.time });
                 }
                 None
             }
@@ -1183,9 +1251,15 @@ impl FxState {
                         if owner.is_some_and(|o| frame.world.actor(o).is_none()) {
                             continue;
                         }
+                        // A temporary model keeps its own clock: one that
+                        // loaded late starts part way through (or not at all).
+                        let left = model_life(life, parts.duration).map(|l| l - (self.time - p.since));
+                        if left.is_some_and(|l| l <= 0.0) {
+                            continue;
+                        }
                         let (entity, children) = Self::instantiate(&parts, p.transform, spawn);
-                        let anim = self.anim_of(&parts, children);
-                        self.models.push(ModelFx { entity, owner, life, list, anim });
+                        let anim = self.anim_from(&parts, children, p.since);
+                        self.models.push(ModelFx { entity, owner, life: left, list, anim });
                     }
                     PendingUse::Wreck(actor) => {
                         if frame.world.actor(actor).is_none() || self.wrecks.contains_key(&actor) {
@@ -1232,6 +1306,213 @@ impl FxState {
         }
     }
 
+    /// Decode early the set pieces of every kingdom's general (bombers,
+    /// rockets...) and their air transports.
+    fn prefetch_ops(&mut self, frame: &Frame) {
+        let tables = self.tables.clone();
+        for k in &frame.world.kingdoms {
+            let Some(general) = aa_play::special_ops::general(frame.world, k.id) else { continue };
+            for op in &general.abilities {
+                if let Some(fx) = tables.special_ops.get(&op.id.to_ascii_lowercase()) {
+                    for f in fx.start.iter().chain(&fx.do_) {
+                        if f.kind == "CREATE_VFX"
+                            && let Some(def) = tables.vfx.get(&f.ids)
+                            && def.category == "VFXMODEL"
+                            && animated_model(def.model.strip_prefix("effects/").unwrap_or(&def.model))
+                        {
+                            self.request_model(&def.model, crate::scene::NEUTRAL_TEAM, true);
+                        }
+                    }
+                }
+                for t in op.effects.iter().filter_map(|e| e.summon.as_ref()).filter_map(|s| s.transport.as_ref()) {
+                    if let Some(prefix) = tables.actors.get(&t.to_ascii_lowercase()).and_then(|a| a.resource_prefix.clone()) {
+                        let team = if k.independent { crate::scene::NEUTRAL_TEAM } else { k.color };
+                        self.request_model(&format!("{prefix}.nif"), team, true);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A general's faction ability was used (Event::SpecialOperation,
+    /// `4C9550` phase 0): its AbilityDefinition's FX lists run with the
+    /// kingdom as the source, so source and target ground are both the
+    /// (map-clamped) target point; transported summons get their plane.
+    fn special_op(&mut self, kingdom: u32, ability: &str, at: Vec2, target: Option<ActorId>, frame: &Frame, spawn: &mut Spawn) {
+        let tables = self.tables.clone();
+        let ground = Vec3::new(at.x, at.y, frame.world.map.height_at(at));
+        let ctx = Ctx {
+            actor: None,
+            target: target.filter(|t| frame.world.actor(*t).is_some()),
+            at: None,
+            target_ground: Some(ground),
+            shooter_ground: Some(ground),
+            kingdom: Some(kingdom),
+        };
+        if let Some(fx) = tables.special_ops.get(&ability.to_ascii_lowercase()) {
+            self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
+            self.run_list(&fx.do_, ctx, frame, spawn, ListKind::Other);
+        } else if self.warned.insert(format!("op:{ability}")) {
+            warn!("effects: special operation {ability} has no FX lists");
+        }
+        let Some(general) = aa_play::special_ops::general(frame.world, kingdom) else { return };
+        let Some(op) = general.abilities.iter().find(|o| o.id.eq_ignore_ascii_case(ability)) else { return };
+        let transports: Vec<String> = op.effects.iter().filter_map(|e| e.summon.as_ref()).filter_map(|s| s.transport.clone()).collect();
+        for t in transports {
+            self.transport(kingdom, &t, at, frame, spawn);
+        }
+    }
+
+    /// `4CB110`: the transport starts at the farther map edge (x or y, the
+    /// longer way), heads straight along that axis and is over the point
+    /// when the sim drops the summon (special_ops::summon: distance / its
+    /// speed_max); it flies on and leaves over the other edge (compare).
+    fn transport(&mut self, kingdom: u32, id: &str, point: Vec2, frame: &Frame, spawn: &mut Spawn) {
+        let world = frame.world;
+        let Some(def) = world.data.find(id) else { return };
+        let speed = world.data.def(def).speed_max;
+        let m = &world.map;
+        if speed <= 0.0 || m.width == 0 || m.height == 0 {
+            return;
+        }
+        let size = Vec2::new(m.width as f32 * m.cell_size, m.height as f32 * m.cell_size);
+        let along_x = point.x.max(size.x - point.x);
+        let along_y = point.y.max(size.y - point.y);
+        let (from, dir, span) = if along_x <= along_y {
+            if size.y - point.y >= point.y { (Vec2::new(point.x, size.y), Vec2::NEG_Y, size.y) } else { (Vec2::new(point.x, 0.0), Vec2::Y, size.y) }
+        } else if size.x - point.x >= point.x {
+            (Vec2::new(size.x, point.y), Vec2::NEG_X, size.x)
+        } else {
+            (Vec2::new(0.0, point.y), Vec2::X, size.x)
+        };
+        let tables = self.tables.clone();
+        let fx = tables.actors.get(&id.to_ascii_lowercase());
+        // compare: AircraftComponent operational_height above the drop point.
+        let height = m.height_at(point) + fx.and_then(|f| f.operational_height).unwrap_or(17.0);
+        let team = world.kingdoms.get(kingdom as usize).filter(|k| !k.independent).map_or(crate::scene::NEUTRAL_TEAM, |k| k.color);
+        let Some(prefix) = fx.and_then(|f| f.resource_prefix.clone()) else { return };
+        let path = format!("{prefix}.nif");
+        self.request_model(&path, team, true);
+        self.next_object += 1;
+        let object = crate::audio::effect_object(self.next_object);
+        let plane = Plane {
+            key: (model_key(&path, true), team),
+            from: to_render(Vec3::new(from.x, from.y, height)),
+            dir: Vec3::new(dir.x, 0.0, -dir.y),
+            speed,
+            start: self.time,
+            arrive: self.time + from.distance(point) / speed,
+            end: self.time + span / speed,
+            entity: None,
+            object,
+            shots: 0,
+        };
+        info!("effects: {id} flies from {from:?} over {point:?} in {:.1} s", from.distance(point) / speed);
+        spawn.sfx.objects.insert(object, Vec3::new(from.x, from.y, height));
+        // Its View WhenCreated sounds (the "bomber deployed" call).
+        if let Some(fx) = fx {
+            for f in fx.created.iter().filter(|f| f.kind == "PLAY_SFX" && f.frequency > 0) {
+                spawn.sfx.play.push(Sfx { ids: f.ids.clone(), place: Place::Object(object), owner: Some(kingdom), voice: Some(object), looping: f.looping });
+            }
+        }
+        self.planes.push(plane);
+    }
+
+    /// Fly the transports: their model once decoded, their place by time.
+    fn step_planes(&mut self, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
+        let now = self.time;
+        let mut i = 0;
+        while i < self.planes.len() {
+            if now >= self.planes[i].end {
+                let p = self.planes.swap_remove(i);
+                spawn.sfx.objects.remove(&p.object);
+                if let Some(e) = p.entity {
+                    self.models.retain(|m| m.entity != e);
+                    spawn.commands.entity(e).despawn();
+                }
+                continue;
+            }
+            let (pos, rotation) = {
+                let p = &self.planes[i];
+                let pos = p.from + p.dir * p.speed * (now - p.start);
+                // Models face native -Y (render +Z), like the units.
+                (pos, Quat::from_rotation_arc(Vec3::Z, p.dir))
+            };
+            if self.planes[i].entity.is_none() {
+                let key = self.planes[i].key.clone();
+                if let Some(Some(parts)) = self.model_parts(&key, spawn) {
+                    let (entity, children) = Self::instantiate(&parts, Transform::from_translation(pos).with_rotation(rotation), spawn);
+                    let anim = self.anim_from(&parts, children, self.planes[i].start);
+                    self.models.push(ModelFx { entity, owner: None, life: None, list: ListKind::Other, anim });
+                    self.planes[i].entity = Some(entity);
+                }
+            } else if let Some(e) = self.planes[i].entity
+                && let Ok((mut t, _)) = transforms.get_mut(e)
+            {
+                t.translation = pos;
+                t.rotation = rotation;
+            }
+            spawn.sfx.objects.insert(self.planes[i].object, Vec3::new(pos.x, -pos.z, pos.y));
+            // Measurement only (AA_BEVY_FX_PLANE_SHOTS=<file prefix>):
+            // screenshots 3 s and 1 s before the plane is over the drop
+            // point, at it and 2 s after.
+            if let Some(prefix) = std::env::var_os("AA_BEVY_FX_PLANE_SHOTS") {
+                const AT: [f32; 4] = [-3.0, -1.0, 0.0, 2.0];
+                let p = &mut self.planes[i];
+                if p.shots < AT.len() && now >= p.arrive + AT[p.shots] {
+                    let path = format!("{}_{}_{:+.1}.png", prefix.to_string_lossy(), p.shots, now - p.arrive);
+                    info!("plane shots: {path}");
+                    spawn.commands.spawn(bevy::render::view::screenshot::Screenshot::primary_window()).observe(bevy::render::view::screenshot::save_to_disk(path));
+                    p.shots += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    /// The targeting state's target_location_vfx (GameUIStates `621B20`):
+    /// while a general's area ability is armed, its decal lies under the
+    /// cursor, 2 x area wide.
+    fn update_cursor(&mut self, frame: &Frame) {
+        if self.cursor_request == self.cursor_shown {
+            return;
+        }
+        self.cursor_shown = self.cursor_request.clone();
+        let before = self.decals.len();
+        self.decals.retain(|d| d.list != ListKind::Cursor);
+        if before != self.decals.len() {
+            self.decals_dirty = true;
+        }
+        let Some((ids, size, point)) = self.cursor_shown.clone() else { return };
+        let Some(def) = self.tables.vfx.get(&ids).cloned() else { return };
+        if def.category != "VFXPROJECTEDTEXTURE" || def.texture.is_empty() {
+            return;
+        }
+        let Some(layer) = self.layer_index.get(&def.texture.to_ascii_lowercase()).copied() else { return };
+        let world = frame.world;
+        let height = |x: f32, z: f32| match frame.ground {
+            Some(g) => (g.0)(x, z),
+            None => world.map.height_at(Vec2::new(x, -z)),
+        };
+        let verts = decal::build(to_render(point), size, 0.0, world.map.cell_size, &height);
+        self.decals.push(Decal {
+            verts,
+            layer,
+            texture: def.texture.clone(),
+            lit: false,
+            order: decal_order(&def.decal_type),
+            color: def.color,
+            additive: def.additive,
+            age: def.decal_fade[0],
+            duration: f32::INFINITY,
+            fade: def.decal_fade,
+            owner: None,
+            permanent: true,
+            list: ListKind::Cursor,
+        });
+        self.decals_dirty = true;
+    }
+
     fn run_list(&mut self, list: &[Fxc], ctx: Ctx, frame: &Frame, spawn: &mut Spawn, kind: ListKind) {
         for f in list {
             self.run_fxc(f, ctx, frame, spawn, kind, false);
@@ -1250,6 +1531,7 @@ impl FxState {
             at: None,
             target_ground: frame.world.actors.get(target as usize).map(|t| t.pos),
             shooter_ground: Some(a.pos),
+            kingdom: None,
         };
         self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
         self.run_list(&fx.do_, ctx, frame, spawn, ListKind::Other);
@@ -1277,7 +1559,7 @@ impl FxState {
             let model = pfx.and_then(|f| f.resource_prefix.clone()).map(|r| format!("{r}.nif"));
             let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None, false)).map(|(e, _)| e);
             if let Some(pfx) = pfx {
-                let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos) };
+                let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos), kingdom: None };
                 let created = pfx.created.clone();
                 self.run_list(&created, pctx, frame, spawn, ListKind::Other);
             }
@@ -1298,6 +1580,7 @@ impl FxState {
             at: Some(ground),
             target_ground: Some(Vec3::new(ground.x, -ground.z, ground.y)),
             shooter_ground: frame.world.actors.get(f.shooter as usize).map(|a| a.pos),
+            kingdom: None,
         };
         self.run_list(&pfx.destroyed, ctx, frame, spawn, ListKind::Other);
     }
@@ -1307,7 +1590,7 @@ impl FxState {
         let def = frame.world.data.def(a.def);
         let _ = def;
         let Some(fx) = self.fx_of(frame.world, a.def) else { return };
-        let ctx = Ctx { actor: Some(actor), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos) };
+        let ctx = Ctx { actor: Some(actor), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None };
         // WhenConstructed effects stop on destruction (stop_on_destructed).
         for e in self.effects.iter_mut().filter(|e| e.owner == Some(actor) && e.list == ListKind::Constructed) {
             e.player.stop();
@@ -1383,6 +1666,11 @@ impl FxState {
     }
 
     fn scan(&mut self, frame: &Frame, spawn: &mut Spawn) {
+        if !self.ops_prefetched {
+            self.ops_prefetched = true;
+            self.prefetch_ops(frame);
+        }
+        self.update_cursor(frame);
         self.scan_orgs(frame, spawn);
         let n = frame.world.actors.len();
         if self.seen.len() < n {
@@ -1402,7 +1690,7 @@ impl FxState {
             let def = frame.world.data.def(a.def);
             let fx = self.fx_of(frame.world, a.def);
             let fx = fx.as_deref();
-            let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos) };
+            let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None };
             if !self.seen[i] {
                 self.seen[i] = true;
                 self.health[i] = if def.health > 0.0 { a.health / def.health } else { 1.0 };
@@ -1561,6 +1849,7 @@ impl FxState {
         if self.decals.len() != before {
             self.decals_dirty = true;
         }
+        self.step_planes(spawn, transforms);
         // Animated models: the frame for their age.
         let now = self.time;
         for m in &mut self.models {
@@ -1765,6 +2054,64 @@ fn lit_mesh(mesh: &mut Mesh, mut pos: Vec<[f32; 3]>, mut normals: Vec<[f32; 3]>,
     mesh.insert_indices(bevy::mesh::Indices::U32((0..n).collect()));
 }
 
+/// The armed general ability's target_location_vfx under the cursor
+/// (GameUIStates `621B20`: only an ability with an area, 2 x area wide);
+/// FxState::update_cursor draws it.
+fn target_cursor(
+    state: Option<ResMut<FxState>>,
+    battle: Option<Res<Battle>>,
+    selecting: Option<Res<crate::input::Selecting>>,
+    front: Option<Res<crate::ui::front::Front>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
+) {
+    let (Some(mut state), Some(battle)) = (state, battle) else { return };
+    let want = (|| {
+        let index = match &selecting.as_ref()?.armed {
+            Some(crate::ui::hud::TargetOrder::Ability(i)) => *i,
+            _ => return None,
+        };
+        let op = aa_play::special_ops::general(&battle.world, battle.local)?.abilities.get(index)?;
+        if op.area <= 0.0 {
+            return None;
+        }
+        let ids = op.target_location_vfx.as_ref()?.to_ascii_lowercase();
+        let front = front.as_ref()?;
+        let cursor = front.pointer.pos?;
+        let window = windows.single().ok()?;
+        let (camera, tf) = cameras.single().ok()?;
+        let ray = camera.viewport_to_world(tf, cursor / window.scale_factor()).ok()?;
+        let point = ground_hit(&battle.world, ray)?;
+        Some((ids, op.area * 2.0, point))
+    })();
+    if state.cursor_request != want {
+        state.cursor_request = want;
+    }
+}
+
+/// Where a render-space ray meets the ground (native point), like
+/// input.rs's picking.
+fn ground_hit(world: &World, ray: Ray3d) -> Option<Vec3> {
+    let native = |v: Vec3| Vec3::new(v.x, -v.z, v.y);
+    let o = native(ray.origin);
+    let d = native(*ray.direction);
+    let above = |p: Vec3| p.z - world.map.height_at(p.truncate());
+    let (mut t0, mut t) = (0.0, 2.0);
+    while t < 2000.0 {
+        if above(o + d * t) < 0.0 {
+            let (mut lo, mut hi) = (t0, t);
+            for _ in 0..24 {
+                let m = (lo + hi) * 0.5;
+                if above(o + d * m) < 0.0 { hi = m } else { lo = m }
+            }
+            return Some(o + d * hi);
+        }
+        t0 = t;
+        t += 2.0;
+    }
+    None
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run(
     mut commands: Commands,
@@ -1817,6 +2164,13 @@ fn run(
             Event::Fired { shooter, target, weapon } => state.fired(shooter, target, weapon as usize, &frame, &mut spawn),
             Event::Died { actor } => state.died(actor, &frame, &mut spawn, &mut views),
             Event::OrgDestroyed { org } => state.org_destroyed(org, &frame, &mut spawn),
+            Event::SpecialOperation { kingdom, ref ability, at, target } => {
+                let t = Instant::now();
+                state.special_op(kingdom, ability, at, target, &frame, &mut spawn);
+                if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                    info!("fx: special operation {ability} of kingdom {kingdom} at {at:?}: {} us", t.elapsed().as_micros());
+                }
+            }
             _ => {}
         }
     }
@@ -1904,5 +2258,5 @@ fn model_key(path: &str, animated: bool) -> String {
 /// The model effects played as animated models (the client's particle
 /// extractor leaves them to the model pipeline).
 fn animated_model(key: &str) -> bool {
-    key.starts_with("deathdebris/") || key.starts_with("flags/")
+    key.starts_with("deathdebris/") || key.starts_with("flags/") || key.starts_with("specialops/")
 }
