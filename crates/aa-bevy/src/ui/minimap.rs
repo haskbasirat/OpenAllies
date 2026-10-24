@@ -1,10 +1,11 @@
 //! The game minimap (KKC_RMinimap) drawn into the GameMiniMap widget's
 //! quad (aa-ui `minimap::quad`, the world square as a diamond):
-//! * the terrain: every cell in its terrain variation's `terrain_color`
-//!   (Data/Terrain/**/*.tgi: "What color should this terrain be in the
-//!   minimap"), from the battle map's cell variations, darkened by the
-//!   local kingdom's fog like the terrain (visible, grey explored, black
-//!   unexplored), refreshed every AVar MinimapPeriodUpdateFog seconds;
+//! * the terrain: every target pixel in the `terrain_color` of the cell
+//!   under it (Data/Terrain/**/*.tgi: "What color should this terrain be in
+//!   the minimap"), from the battle map's cell variations, multiplied by the
+//!   local kingdom's fog layer: per target pixel the bilinear blend of the
+//!   four tiles around it, visible 1.0, explored 0.7, never explored 0
+//!   (`0x433620`), refreshed every AVar MinimapPeriodUpdateFog seconds;
 //! * the objects, refreshed every MinimapPeriodUpdateObjects seconds: the
 //!   ones the local kingdom sees (and the static ones it remembers, where it
 //!   remembers them) in their kingdom colour, neutral (independent) objects
@@ -14,8 +15,9 @@
 //!   a point of `object_point_size` with a `color_object_border` edge.
 //!   Sizes are minimap target pixels: the target is the next power of two of
 //!   `minimap_size` (172 -> 256, `0x712D60`), drawn over the whole quad;
-//! * the local kingdom's supply border (its supply zones' outline in
-//!   `color_requires_supply`, every MinimapPeriodUpdateSupply seconds);
+//! * the local kingdom's supply border (the outline of its supply zones'
+//!   tiles in `color_requires_supply`, every MinimapPeriodUpdateSupply
+//!   seconds);
 //! * the camera's view on the ground in `color_white`;
 //! * while the local kingdom's enchantments carry MINIMAP_NO_FOG (modifier
 //!   flag 8, Radar Scan) the fog layer (`0x433620`) is clear and the objects
@@ -57,7 +59,8 @@ pub struct MinimapArt {
     /// Variation ids (lower case) -> terrain colour.
     colors: Option<HashMap<String, [f32; 3]>>,
     pub image: Option<Handle<Image>>,
-    built_for: Option<(String, u32, u32)>,
+    /// Map id, cells and the target size the layers were built for.
+    built_for: Option<(String, u32, u32, u32)>,
     /// The fog-free terrain colours (RGBA, image rows top first).
     base: Vec<u8>,
     /// Fog refresh: battle time of the last one and the fog revision seen.
@@ -86,9 +89,16 @@ pub struct MinimapArt {
     pub requires_supply: [f32; 3],
     pub period_supply: f32,
     supply_at: f32,
-    /// Supply border tiles (index) of the last supply refresh.
+    /// Supply border pixels (image index) of the last supply refresh.
     supply_border: Vec<usize>,
 }
+
+/// The fog layer tones of `0x433620` (AA.exe data): a visible tile
+/// (`0xB28130`, 1.0), an explored one (`0xB2813C`, 0.7) and a never explored
+/// one (`0xB39E6C`, zero-initialised: black).
+const FOG_VISIBLE: f32 = 1.0;
+const FOG_EXPLORED: f32 = 0.7;
+const FOG_UNEXPLORED: f32 = 0.0;
 
 /// An object as the last object refresh placed it.
 #[derive(Clone, Debug)]
@@ -185,42 +195,47 @@ impl MinimapArt {
         self.period_supply = avar("MinimapPeriodUpdateSupply", 5.0);
     }
 
-    /// Build (once per map) the terrain colours, then darken them by the
-    /// local kingdom's fog every MinimapPeriodUpdateFog seconds.
-    pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>) {
+    /// Build (once per map) the terrain layer at the minimap target size
+    /// (`target` pixels square), then lay the local kingdom's fog over it
+    /// every MinimapPeriodUpdateFog seconds and its supply border every
+    /// MinimapPeriodUpdateSupply seconds.
+    pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>, target: u32) {
         if self.colors.is_none() {
             let t0 = std::time::Instant::now();
             self.load(data);
             info!("minimap: data loaded in {:.0} ms", t0.elapsed().as_secs_f32() * 1000.0);
         }
         let m = &b.world.map;
-        let key = (m.id.clone(), m.width, m.height);
+        let key = (m.id.clone(), m.width, m.height, target);
         if m.width == 0 || m.height == 0 {
             return;
         }
         let (w, h) = (m.width as usize, m.height as usize);
+        let t = target.max(1) as usize;
+        // the map cell under a target pixel (row 0 = world y = 0)
+        let cell = |tx: usize, ty: usize| (ty * h / t).min(h - 1) * w + (tx * w / t).min(w - 1);
         if self.built_for.as_ref() != Some(&key) {
             self.built_for = Some(key);
             let colors = self.colors.as_ref().unwrap();
-            let mut px = vec![0u8; w * h * 4];
+            // 0x4345D0: every target pixel in the colour of the cell under it
+            let mut px = vec![0u8; t * t * 4];
             let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            for y in 0..h {
-                for x in 0..w {
-                    let cell = y * w + x;
+            for ty in 0..t {
+                for tx in 0..t {
                     let c = m
                         .cell_variation
-                        .get(cell)
+                        .get(cell(tx, ty))
                         .and_then(|&v| m.variations.get(v as usize))
                         .and_then(|id| colors.get(&id.to_ascii_lowercase()))
                         .copied()
                         .unwrap_or([0.5, 0.5, 0.5]);
                     // image row 0 = the map's top (world y = H)
-                    let i = ((h - 1 - y) * w + x) * 4;
+                    let i = ((t - 1 - ty) * t + tx) * 4;
                     px[i..i + 4].copy_from_slice(&[byte(c[0]), byte(c[1]), byte(c[2]), 255]);
                 }
             }
             self.base = px.clone();
-            let mut img = super::tex::make_image(w as u32, h as u32, px, super::tex::Variant::default(), true);
+            let mut img = super::tex::make_image(t as u32, t as u32, px, super::tex::Variant::default(), true);
             img.sampler = bevy::image::ImageSampler::linear();
             self.image = Some(images.add(img));
             self.fog_at = f32::NEG_INFINITY;
@@ -228,38 +243,37 @@ impl MinimapArt {
             self.fog_local = None;
             self.objects = None;
         }
-        // the supply border: tiles of the local kingdom's supply zones next
-        // to a tile outside them
+        // the supply border (0x433470): the outline of the tiles of the
+        // local kingdom's supply zones (their ZoneSolver floods, which bend
+        // around impassable ground and water), one target pixel wide along
+        // the tile edges
         let now = b.world.time;
         let mut supply_changed = false;
         if now - self.supply_at >= self.period_supply || now < self.supply_at {
             self.supply_at = now;
-            let tile = m.cell_size.max(1.0);
             let mut inside = vec![false; w * h];
-            for z in b.world.books.zones.iter().filter(|z| z.kingdom == b.local && z.radius > 0.0) {
-                let (x0, x1) = (((z.centre.x - z.radius) / tile).floor().max(0.0) as usize, (((z.centre.x + z.radius) / tile).ceil() as usize).min(w));
-                let (y0, y1) = (((z.centre.y - z.radius) / tile).floor().max(0.0) as usize, (((z.centre.y + z.radius) / tile).ceil() as usize).min(h));
-                for y in y0..y1 {
-                    for x in x0..x1 {
-                        let c = Vec2::new((x as f32 + 0.5) * tile, (y as f32 + 0.5) * tile);
-                        if c.distance_squared(z.centre) <= z.radius * z.radius {
-                            inside[y * w + x] = true;
-                        }
+            for (i, z) in b.world.books.zones.iter().enumerate() {
+                if z.kingdom != b.local {
+                    continue;
+                }
+                for &tile in b.world.books.zone_tiles.get(i).map_or(&[][..], |s| s.as_slice()) {
+                    if let Some(v) = inside.get_mut(tile as usize) {
+                        *v = true;
                     }
                 }
             }
             let mut border = Vec::new();
-            for y in 0..h {
-                for x in 0..w {
-                    if !inside[y * w + x] {
+            for ty in 0..t {
+                for tx in 0..t {
+                    if !inside[cell(tx, ty)] {
                         continue;
                     }
-                    let out = |dx: i32, dy: i32| {
-                        let (nx, ny) = (x as i32 + dx, y as i32 + dy);
-                        nx < 0 || ny < 0 || nx >= w as i32 || ny >= h as i32 || !inside[ny as usize * w + nx as usize]
+                    let out = |dx: isize, dy: isize| {
+                        let (nx, ny) = (tx as isize + dx, ty as isize + dy);
+                        nx < 0 || ny < 0 || nx >= t as isize || ny >= t as isize || !inside[cell(nx as usize, ny as usize)]
                     };
                     if out(1, 0) || out(-1, 0) || out(0, 1) || out(0, -1) {
-                        border.push(y * w + x);
+                        border.push((t - 1 - ty) * t + tx);
                     }
                 }
             }
@@ -278,32 +292,51 @@ impl MinimapArt {
         self.fog_revision = b.world.fog.revision;
         self.fog_local = Some(b.local);
         self.fog_no_fog = no_fog;
+        // tile states: 0 visible, 1 explored, 255 never explored
         let mut shade = Vec::new();
-        fog::shade(&b.world, Some(b.local), super::fog::gray_value(), &mut shade);
-        // 0x433620: the kingdom's MINIMAP_NO_FOG flag shows every cell as
-        // visible
-        if no_fog {
-            shade.iter_mut().for_each(|s| *s = 0);
-        }
+        fog::shade(&b.world, Some(b.local), 1, &mut shade);
+        let (fw, fh) = (b.world.fog.width.max(0) as usize, b.world.fog.height.max(0) as usize);
         let Some(mut img) = self.image.as_ref().and_then(|h| images.get_mut(h)) else { return };
         let Some(px) = img.data.as_mut() else { return };
-        if px.len() != self.base.len() || shade.len() != w * h {
+        if px.len() != self.base.len() || fw == 0 || fh == 0 || shade.len() != fw * fh {
             return;
         }
-        for y in 0..h {
-            for x in 0..w {
-                let keep = 255 - u16::from(shade[y * w + x]);
-                let i = ((h - 1 - y) * w + x) * 4;
+        // 0x433620: each target pixel blends the tones of the four tiles
+        // around its point (bilinear, the tile index at the point's lower
+        // corner); the kingdom's MINIMAP_NO_FOG flag shows every tile as
+        // visible. The fog layer multiplies the terrain layer.
+        let tone = |s: u8| {
+            if no_fog || s == 0 {
+                FOG_VISIBLE
+            } else if s == 255 {
+                FOG_UNEXPLORED
+            } else {
+                FOG_EXPLORED
+            }
+        };
+        let axis = |p: usize, tiles: usize| {
+            let f = p as f32 * tiles as f32 / t as f32;
+            let i = (f as usize).min(tiles - 1);
+            let j = if (i as f32) < tiles as f32 - 1.0 { i + 1 } else { i };
+            (i, j, f - i as f32)
+        };
+        for ty in 0..t {
+            let (y0, y1, wy) = axis(ty, fh);
+            for tx in 0..t {
+                let (x0, x1, wx) = axis(tx, fw);
+                let s = |x: usize, y: usize| tone(shade[y * fw + x]);
+                let v = s(x0, y0) * (1.0 - wx) * (1.0 - wy) + s(x1, y0) * wx * (1.0 - wy) + s(x0, y1) * (1.0 - wx) * wy + s(x1, y1) * wx * wy;
+                // 0x4324A0: the tone as a byte (truncated)
+                let fog = u16::from((v * 255.0).clamp(0.0, 255.0) as u8);
+                let i = ((t - 1 - ty) * t + tx) * 4;
                 for c in 0..3 {
-                    px[i + c] = ((u16::from(self.base[i + c]) * keep) / 255) as u8;
+                    px[i + c] = ((u16::from(self.base[i + c]) * fog) / 255) as u8;
                 }
             }
         }
         let green = self.requires_supply.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
-        for &t in &self.supply_border {
-            let (x, y) = (t % w, t / w);
-            let i = ((h - 1 - y) * w + x) * 4;
-            px[i..i + 3].copy_from_slice(&green);
+        for &i in &self.supply_border {
+            px[i * 4..i * 4 + 3].copy_from_slice(&green);
         }
     }
 
@@ -387,6 +420,15 @@ fn minimap_no_fog(b: &Battle) -> bool {
 /// Next power of two of the minimap target size (`0x43A920`).
 fn target_size(n: i32) -> f32 {
     (n.max(1) as u32).next_power_of_two() as f32
+}
+
+/// The GameMiniMap widget's target size in pixels (172 -> 256).
+pub fn target_pixels(ui: &aa_ui::ui::Ui) -> u32 {
+    let size = match ui.widget("Root/Game/ControlPanel/GameMiniMap").and_then(|w| w.control.as_deref()) {
+        Some(aa_ui::controls::Control::MiniMap(m)) => m.size,
+        _ => aa_ui::minimap::MiniMap::default().size,
+    };
+    target_size(size.0.max(size.1)) as u32
 }
 
 /// The minimap content for this frame. `view` is the camera's view on the

@@ -418,13 +418,15 @@ fn cut_off_relay_produces_while_its_stockpile_lasts() {
 }
 
 /// 58AE10 searches the zones over the relay's footprint tiles: a depot
-/// (4 x 4) whose centre is 1 m outside the HQ zone (60 m) still links.
+/// (4 x 4) whose centre is 1 m outside the HQ zone (60 m) still links. The
+/// zone is its ZoneSolver flood: 30 tiles of 2 m from the HQ's tile, so the
+/// footprint of a depot at y 107.5 (tile rows 52..54) lies outside it.
 #[test]
 fn relay_links_through_its_footprint() {
     let (mut w, ids) = world(&[0]);
     let _hq = spawn(&mut w, ids.hq, 0, Vec2::new(40.0, 40.0), 0.0);
     let edge = spawn(&mut w, ids.depot, 0, Vec2::new(101.0, 40.0), 0.0);
-    let out = spawn(&mut w, ids.depot, 0, Vec2::new(40.0, 103.5), 0.0);
+    let out = spawn(&mut w, ids.depot, 0, Vec2::new(40.0, 107.5), 0.0);
     for _ in 0..4 {
         core_step(&mut w, vec![]);
     }

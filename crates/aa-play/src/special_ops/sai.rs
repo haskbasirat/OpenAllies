@@ -156,7 +156,7 @@ fn priority(world: &mut World, me: KingdomId, op: &SpecialOp, pc: &PowerConfig, 
             return None;
         }
     }
-    if pc.requires_supply && !world.books.zones.iter().any(|z| allied(world, Some(z.kingdom), Some(me)) && z.centre.distance(point) <= z.radius) {
+    if pc.requires_supply && !world.books.zones.iter().enumerate().any(|(i, z)| allied(world, Some(z.kingdom), Some(me)) && crate::supply::zone_covers(world, i, point)) {
         return None;
     }
     let mut total = pc.base;
