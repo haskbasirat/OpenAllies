@@ -35,6 +35,7 @@ pub struct BattleViewPlugin;
 impl Plugin for BattleViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, sync_actors.run_if(in_state(crate::session::AppState::Battle)));
+        app.add_systems(Update, draw_ghost.after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)));
     }
 }
 
@@ -772,6 +773,8 @@ struct Look {
     character: Option<Character>,
     /// The aspect skin the parts wear (None: the model's own textures).
     skin: Option<String>,
+    /// Per Performer turret: its node's parts, turned by the sim's yaw.
+    turrets: Vec<Option<view::TurretView>>,
 }
 
 /// One drawn actor: a parent with its transform and one child per model mesh.
@@ -898,6 +901,17 @@ fn set_up(
         look.running = Running::new(&extras.info, &tires, fx.view.tire_circumference, extras.treads.clone());
         look.own_mesh = (0..extras.info.parts.len()).map(|i| extras.treads.iter().any(|(p, _, _)| *p == i)).collect();
         look.equipment = extras.info.parts.iter().map(|p| p.equipment.clone()).collect();
+        // The Performer turrets (turret_ids -> Bone node, 453BF0).
+        look.turrets = fx
+            .turrets
+            .iter()
+            .enumerate()
+            .map(|(i, ids)| {
+                let mut t = view::TurretView::new(&extras.info, &node(ids))?;
+                t.pitch = def.turrets.get(i).map_or(0.0, |d| d.pitch_start);
+                Some(t)
+            })
+            .collect();
         // View WhenCreated FXC_Equipment (e.g. a mortar team carries its tube).
         for f in fx.created.iter().filter(|f| f.kind == "EQUIPMENT") {
             match f.action.as_str() {
@@ -1247,6 +1261,41 @@ pub fn sync_actors(
                 }
             }
         }
+        // Turrets turned to the sim's yaw, raised by the view's own pitch
+        // (453130 / 4521D0).
+        let frame_dt = if battle.paused { 0.0 } else { time.delta_secs() * battle.speed };
+        let tdefs = &world.data.def(actor.def).turrets;
+        for (i, t) in view.look.turrets.iter_mut().enumerate() {
+            let Some(t) = t else { continue };
+            let rel = view::turret_turn(world, actor.id, i, alpha).unwrap_or(0.0);
+            if let Some(td) = tdefs.get(i) {
+                // The pitch toward the combat target from the turret's pivot.
+                let want = actor.combat.target.and_then(|tg| world.actors.get(tg as usize)).map(|tg| {
+                    let pivot = model.transform_point3(t.pivot());
+                    let d = tg.pos - pivot;
+                    d.z.atan2(d.truncate().length().max(1e-4))
+                });
+                t.step_pitch(td, want, frame_dt);
+            }
+            let pitch_moved = (t.pitch - t.shown_pitch).abs() > 1e-4;
+            if log_now && actor.combat.target.is_some() {
+                let target = actor.combat.target.and_then(|t| world.actors.get(t as usize)).map(|t| t.pos.truncate() - actor.pos.truncate());
+                let want = target.map(|d| (d.y.atan2(d.x) - actor.facing).to_degrees().rem_euclid(360.0));
+                info!("turret: actor {} {} turret {i} at {:.1} deg from the hull, target at {:?} deg, {:?}", actor.id, world.data.def(actor.def).id, rel.to_degrees().rem_euclid(360.0), want, actor.activity);
+            }
+            if (rel - t.shown).abs() > 1e-4 || t.shown.is_nan() || pitch_moved {
+                t.shown = rel;
+                t.shown_pitch = t.pitch;
+                let tf = t.transform(rel, t.pitch);
+                for &p in &t.parts {
+                    if let Some(&part) = view.parts.get(p)
+                        && let Ok((_, mut pt, _)) = parts_q.get_mut(part)
+                    {
+                        *pt = tf;
+                    }
+                }
+            }
+        }
         // Equipment shown / hidden (FXC_Equipment).
         if view.look.applied.as_ref() != Some(&view.look.hidden) && !view.look.equipment.is_empty() {
             for (i, eq) in view.look.equipment.iter().enumerate() {
@@ -1343,5 +1392,115 @@ pub fn sync_actors(
     }
     for f in library.animated.failures.drain(..) {
         warn!("{f}");
+    }
+}
+
+/// The Unpack placement ghost (SharedUIStates placement 0x6895B0; ghost
+/// list 0x693AE0 / 0x693D10): the building's model in its kingdom's colour,
+/// drawn through AVar VFXGhosting `ghost_vfx` (VFXAlphaModifier alpha 0.5),
+/// and while the spot is illegal also AVar VFXIllegalPlacement
+/// `illegal_placement_vfx` (VFXTintModifier colour 1,0,0, instantaneous,
+/// 0x693A10 / 0x693A80). A preview: no shadow, no fog, no ActorView (not
+/// picked).
+#[derive(Default)]
+pub struct GhostView {
+    key: Option<(aa_play::DefId, [u8; 3])>,
+    entity: Option<Entity>,
+    parts: Vec<Entity>,
+    /// Per part: the ghost material and the tinted one.
+    plain: Vec<Handle<OriginalMaterial>>,
+    tinted: Vec<Handle<OriginalMaterial>>,
+    shown_tint: bool,
+    shown: Option<(Vec3, f32)>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn draw_ghost(
+    mut commands: Commands,
+    ghost: Option<Res<crate::ui::placement::Ghost>>,
+    battle: Option<Res<Battle>>,
+    library: Option<ResMut<Library>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+    mut state: Local<GhostView>,
+    mut roots: Query<(&mut Transform, &mut Visibility), Without<ActorView>>,
+    mut mats: Query<&mut MeshMaterial3d<OriginalMaterial>, Without<ActorView>>,
+) {
+    let (Some(battle), Some(mut library)) = (battle, library) else { return };
+    if battle.is_added() {
+        // A new battle: the last one's ghost went with its world.
+        *state = GhostView::default();
+    }
+    let want = ghost.as_ref().and_then(|g| g.model.clone());
+    let Some(g) = want else {
+        if let Some(e) = state.entity
+            && let Ok((_, mut v)) = roots.get_mut(e)
+            && *v != Visibility::Hidden
+        {
+            *v = Visibility::Hidden;
+        }
+        return;
+    };
+    let world = &battle.world;
+    let team = world.kingdoms.get(g.kingdom as usize).filter(|k| !k.independent).map_or(NEUTRAL_TEAM, |k| k.color);
+    let key = (g.def, team);
+    if state.key != Some(key) {
+        if let Some(e) = state.entity.take() {
+            commands.entity(e).despawn();
+        }
+        state.parts.clear();
+        state.plain.clear();
+        state.tinted.clear();
+        state.shown = None;
+        state.key = None;
+        let Some(model) = world.data.def(g.def).model.clone() else { return };
+        let Some(parts) = library.static_model(&model, team, &mut meshes, &mut materials, &mut images) else { return };
+        let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+        for (mesh, material) in parts.iter() {
+            let Some(base) = materials.get(material).cloned() else { continue };
+            // ghost_vfx: the whole model at alpha 0.5; no fog over a preview.
+            let mut plain = base;
+            plain.base.alpha_mode = AlphaMode::Blend;
+            let a = plain.base.base_color.alpha();
+            plain.base.base_color.set_alpha(a * g.alpha);
+            plain.extension.params.sun.w = 1.0;
+            // illegal_placement_vfx: the red tint (TINT colour 1,0,0).
+            let mut tinted = plain.clone();
+            tinted.base.emissive = LinearRgba::rgb(1.0, 0.0, 0.0);
+            tinted.extension.params.emissive = Vec4::new(1.0, 0.0, 0.0, 0.0);
+            let plain = materials.add(plain);
+            let tinted = materials.add(tinted);
+            let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(plain.clone()), bevy::light::NotShadowCaster, ChildOf(parent))).id();
+            state.parts.push(child);
+            state.plain.push(plain);
+            state.tinted.push(tinted);
+        }
+        state.entity = Some(parent);
+        state.key = Some(key);
+        state.shown_tint = false;
+    }
+    let Some(e) = state.entity else { return };
+    if state.shown != Some((g.at, g.facing)) {
+        let flat = Vec3::new(g.facing.cos(), g.facing.sin(), 0.0);
+        let tf = view::render_transform(view::model_matrix(g.at, flat, Vec3::Z));
+        if let Ok((mut t, mut v)) = roots.get_mut(e) {
+            *t = tf;
+            *v = Visibility::Inherited;
+            state.shown = Some((g.at, g.facing));
+        }
+    } else if let Ok((_, mut v)) = roots.get_mut(e)
+        && *v == Visibility::Hidden
+    {
+        *v = Visibility::Inherited;
+    }
+    if state.shown_tint != g.illegal {
+        let list = if g.illegal { &state.tinted } else { &state.plain };
+        for (part, m) in state.parts.iter().zip(list.iter()) {
+            if let Ok(mut mm) = mats.get_mut(*part) {
+                mm.0 = m.clone();
+            }
+        }
+        state.shown_tint = g.illegal;
     }
 }

@@ -66,6 +66,9 @@ impl Plugin for EffectsPlugin {
             .add_systems(OnExit(AppState::Battle), clear)
             .add_systems(Update, bench::spawn.run_if(in_state(AppState::Battle)))
             .add_systems(Update, bench::frame_times)
+            .add_systems(Update, take_point_vfx.after(crate::input::battle_input).before(run).run_if(in_state(AppState::Battle)))
+            .add_systems(Update, take_waypoints.after(crate::ui::order_marks::fill_waypoints).before(run).run_if(in_state(AppState::Battle)))
+            .add_systems(Update, take_ghost_arrow.after(crate::input::battle_input).before(run).run_if(in_state(AppState::Battle)))
             .add_systems(Update, upload_atlas.run_if(not(resource_exists::<FxAtlas>)))
             .add_systems(Update, (bench::recoil_shots, bench::death_shots).after(EffectsSet).run_if(in_state(AppState::Battle)))
             .add_systems(
@@ -176,6 +179,32 @@ pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded>
 /// The effect texture array of the run (kept across battles).
 #[derive(Resource)]
 struct FxAtlas(Handle<Image>);
+
+/// The placement's facing arrow (ui::placement::Ghost.arrow).
+fn take_ghost_arrow(ghost: Option<Res<crate::ui::placement::Ghost>>, state: Option<ResMut<FxState>>) {
+    let Some(mut state) = state else { return };
+    let want = ghost.and_then(|g| g.arrow);
+    if state.arrow_request != want {
+        state.arrow_request = want;
+    }
+}
+
+/// The UI's waypoint markers of this frame (ui::order_marks::Waypoints, which
+/// it refills every frame; not drained).
+fn take_waypoints(marks: Option<Res<crate::ui::order_marks::Waypoints>>, state: Option<ResMut<FxState>>) {
+    let Some(mut state) = state else { return };
+    state.waypoint_marks = marks.map(|m| m.marks.iter().map(|w| (w.vfx_ids.to_ascii_lowercase(), to_render(w.at))).collect()).unwrap_or_default();
+}
+
+/// The UI's point VFX requests (ui::order_marks: the move order marker of
+/// 43DB10, unattached at the ground height + z_offset) for this frame's run.
+fn take_point_vfx(marks: Option<ResMut<crate::ui::order_marks::PointVfx>>, state: Option<ResMut<FxState>>, battle: Option<Res<Battle>>) {
+    let (Some(mut marks), Some(mut state), Some(battle)) = (marks, state, battle) else { return };
+    for r in marks.requests.drain(..) {
+        let z = battle.world.map.height_at(r.at) + r.z_offset;
+        state.point_requests.push((r.vfx_ids.to_ascii_lowercase(), to_render(Vec3::new(r.at.x, r.at.y, z))));
+    }
+}
 
 /// As soon as the preload job has built the effect texture array (in the
 /// menus), hand it to the renderer, so its upload is not part of a battle's
@@ -349,6 +378,9 @@ struct Ctx {
     /// The kingdom an effect belongs to when there is no source actor (a
     /// general's faction ability).
     kingdom: Option<u32>,
+    /// TARGET_HIT_POSITION when the view's projectile landed elsewhere than
+    /// on the target (projectile_spread), render space.
+    hit: Option<Vec3>,
 }
 
 /// Which list started a permanent effect (for stopping it).
@@ -363,6 +395,8 @@ enum ListKind {
     Constructed,
     /// The targeting state's target_location_vfx (follows the cursor).
     Cursor,
+    /// The placement's facing_arrow_vfx (while the facing is dragged).
+    Arrow,
 }
 
 struct LiveFx {
@@ -443,10 +477,20 @@ struct Flight {
     target: Option<ActorId>,
     shooter: ActorId,
     entity: Option<Entity>,
+    /// Landed away from the target by projectile_spread.
+    scattered: bool,
 }
 
 /// A static original model shown by the effects (wrecks, rubble, debris,
 /// projectiles).
+/// One waypoint marker slot (0x626F50): the permanent model VFX it shows.
+#[derive(Default)]
+struct WaypointSlot {
+    ids: String,
+    entity: Option<Entity>,
+    key: Option<(String, [u8; 3])>,
+}
+
 struct ModelFx {
     entity: Entity,
     owner: Option<ActorId>,
@@ -582,6 +626,15 @@ pub struct FxState {
     cursor_shown: Option<(String, f32, Vec3)>,
     /// The generals' special operations were prefetched.
     ops_prefetched: bool,
+    /// Point VFX requested by the UI this frame: (VFX IDS, render point).
+    pub point_requests: Vec<(String, Vec3)>,
+    /// The UI's waypoint markers this frame (VFX IDS, render point) and the
+    /// VFX shown per slot.
+    waypoint_marks: Vec<(String, Vec3)>,
+    waypoint_slots: Vec<WaypointSlot>,
+    /// The placement facing arrow (native point, facing) wanted and shown.
+    arrow_request: Option<(Vec3, f32)>,
+    arrow_shown: Option<(Vec3, f32)>,
 }
 
 fn poll_loading(
@@ -700,6 +753,11 @@ fn poll_loading(
         cursor_request: None,
         cursor_shown: None,
         ops_prefetched: false,
+        point_requests: Vec::new(),
+        waypoint_marks: Vec::new(),
+        waypoint_slots: Vec::new(),
+        arrow_request: None,
+        arrow_shown: None,
     });
     if std::env::var_os("AA_BEVY_FX_FRAMES").is_some() {
         info!("effects: battle set up in {:.1} ms", started.elapsed().as_secs_f32() * 1000.0);
@@ -807,8 +865,23 @@ impl FxState {
         };
         let tables = self.tables.clone();
         let name = tables.bones.get(location).map_or(location, String::as_str);
-        let m = match source.node(name, actor, a.activity, a.activity_since, frame.world.time, death_clip(frame.world, actor)) {
-            Some(m) => base * m,
+        let death = death_clip(frame.world, actor);
+        let m = match source.node(name, actor, a.activity, a.activity_since, frame.world.time, death) {
+            Some(mut m) => {
+                // Below a turret node the bone turns with the turret (the
+                // muzzle dummies of a tank's barrel).
+                let turrets = self.fx_of(frame.world, a.def).map(|f| f.turrets.clone()).unwrap_or_default();
+                for (i, ids) in turrets.iter().enumerate() {
+                    let tnode = tables.bones.get(ids).map_or(ids.as_str(), String::as_str);
+                    if !source.under(name, tnode) {
+                        continue;
+                    }
+                    let (Some(g), Some(rel)) = (source.node(tnode, actor, a.activity, a.activity_since, frame.world.time, death), view::turret_turn(frame.world, actor, i, 1.0)) else { continue };
+                    let c = view::to_render_basis();
+                    m = g * (c * Mat4::from_rotation_z(rel) * c.inverse()) * g.inverse() * m;
+                }
+                base * m
+            }
             None => base,
         };
         self.bone_cache.insert(key, m);
@@ -884,6 +957,7 @@ impl FxState {
                 };
                 Some((Mat4::from_translation(ground(p)), None, true))
             }
+            "TARGET_HIT_POSITION" if ctx.hit.is_some() => Some((Mat4::from_translation(ctx.hit?), None, true)),
             "TARGET_HIT_POSITION" => {
                 // compare: where the original puts the hit on the target's
                 // bounds; here the target's centre height, toward the shooter.
@@ -1292,6 +1366,57 @@ impl FxState {
     }
 
     /// The animation of an instantiated model (None for a still one).
+    /// The selected units' waypoint markers (0x627D90 / 0x626F50 / 0x6252A0):
+    /// one permanent model VFX per slot, recreated when its VFX changes,
+    /// moved to the slot's point every frame (vtable +0x68), removed past
+    /// the last slot.
+    fn update_waypoints(&mut self, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
+        let marks = std::mem::take(&mut self.waypoint_marks);
+        while self.waypoint_slots.len() > marks.len() {
+            let slot = self.waypoint_slots.pop().unwrap_or_default();
+            self.drop_waypoint(slot.entity, spawn);
+        }
+        for (i, (ids, at)) in marks.iter().enumerate() {
+            if self.waypoint_slots.len() <= i {
+                self.waypoint_slots.push(WaypointSlot::default());
+            }
+            if self.waypoint_slots[i].ids != *ids {
+                let old = self.waypoint_slots[i].entity.take();
+                self.drop_waypoint(old, spawn);
+                let model = self.tables.vfx.get(ids).filter(|d| d.category == "VFXMODEL").map(|d| d.model.clone());
+                let key = model.as_ref().map(|m| (model_key(m, true), crate::scene::NEUTRAL_TEAM));
+                if let Some(m) = &model {
+                    self.request_model(m, crate::scene::NEUTRAL_TEAM, true);
+                }
+                self.waypoint_slots[i] = WaypointSlot { ids: ids.clone(), entity: None, key };
+            }
+            match self.waypoint_slots[i].entity {
+                Some(e) => {
+                    if let Ok((mut t, _)) = transforms.get_mut(e)
+                        && t.translation != *at
+                    {
+                        t.translation = *at;
+                    }
+                }
+                None => {
+                    let Some(key) = self.waypoint_slots[i].key.clone() else { continue };
+                    if let Some(Some(parts)) = self.model_parts(&key, spawn) {
+                        let (entity, children) = Self::instantiate(&parts, Transform::from_translation(*at), spawn);
+                        let anim = self.anim_of(&parts, children);
+                        self.models.push(ModelFx { entity, owner: None, life: None, list: ListKind::Other, anim });
+                        self.waypoint_slots[i].entity = Some(entity);
+                    }
+                }
+            }
+        }
+    }
+
+    fn drop_waypoint(&mut self, entity: Option<Entity>, spawn: &mut Spawn) {
+        let Some(e) = entity else { return };
+        self.models.retain(|m| m.entity != e);
+        spawn.commands.entity(e).despawn();
+    }
+
     fn anim_of(&self, parts: &Parts, children: Vec<Entity>) -> Option<AnimInstance> {
         self.anim_from(parts, children, self.time)
     }
@@ -1439,6 +1564,7 @@ impl FxState {
             target_ground: Some(ground),
             shooter_ground: Some(ground),
             kingdom: Some(kingdom),
+            hit: None,
         };
         if let Some(fx) = tables.special_ops.get(&ability.to_ascii_lowercase()) {
             self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
@@ -1604,6 +1730,49 @@ impl FxState {
         self.decals_dirty = true;
     }
 
+    /// AVar VFXSelectFacing `facing_arrow_vfx` (a projected UI decal,
+    /// FacingArrow.tga, texture_size 2) at the placement's press point, its
+    /// arrow turned to the facing (0x688990).
+    fn update_arrow(&mut self, frame: &Frame) {
+        if self.arrow_request == self.arrow_shown {
+            return;
+        }
+        self.arrow_shown = self.arrow_request;
+        let before = self.decals.len();
+        self.decals.retain(|d| d.list != ListKind::Arrow);
+        if before != self.decals.len() {
+            self.decals_dirty = true;
+        }
+        let Some((point, facing)) = self.arrow_shown else { return };
+        let Some(def) = self.tables.vfx.get("facing_arrow_vfx").cloned() else { return };
+        let Some(layer) = self.layer_index.get(&def.texture.to_ascii_lowercase()).copied() else { return };
+        let world = frame.world;
+        let height = |x: f32, z: f32| match frame.ground {
+            Some(g) => (g.0)(x, z),
+            None => world.map.height_at(Vec2::new(x, -z)),
+        };
+        // The arrow points to the texture's top (v 0): local -Y of the
+        // decal, turned so that it is the facing in render X/Z.
+        let size = if def.texture_size > 0.0 { def.texture_size } else { 2.0 };
+        let verts = decal::build(to_render(point), size, std::f32::consts::FRAC_PI_2 - facing, world.map.cell_size, &height);
+        self.decals.push(Decal {
+            verts,
+            layer,
+            texture: def.texture.clone(),
+            lit: false,
+            order: decal_order(&def.decal_type),
+            color: def.color,
+            additive: def.additive,
+            age: def.decal_fade[0],
+            duration: f32::INFINITY,
+            fade: def.decal_fade,
+            owner: None,
+            permanent: true,
+            list: ListKind::Arrow,
+        });
+        self.decals_dirty = true;
+    }
+
     fn run_list(&mut self, list: &[Fxc], ctx: Ctx, frame: &Frame, spawn: &mut Spawn, kind: ListKind) {
         for f in list {
             self.run_fxc(f, ctx, frame, spawn, kind, false);
@@ -1623,6 +1792,7 @@ impl FxState {
             target_ground: frame.world.actors.get(target as usize).map(|t| t.pos),
             shooter_ground: Some(a.pos),
             kingdom: None,
+            hit: None,
         };
         self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
         self.run_list(&fx.do_, ctx, frame, spawn, ListKind::Other);
@@ -1642,19 +1812,30 @@ impl FxState {
                     (m.w_axis != base.w_axis).then(|| m.w_axis.truncate())
                 })
                 .unwrap_or_else(|| to_render(a.pos) + Vec3::Y * 1.2);
-            let to = actor_matrix(frame, target).map_or(to_render(t.pos), |m| m.w_axis.truncate()) + Vec3::Y * 0.5;
+            let mut to = actor_matrix(frame, target).map_or(to_render(t.pos), |m| m.w_axis.truncate()) + Vec3::Y * 0.5;
             // compare: LOB arc height from gravity over the flight time.
             let lob = w.projectile_type.as_deref().is_some_and(|k| k.eq_ignore_ascii_case("LOB"));
             let arc = if lob { 9.8 * flight * flight / 8.0 } else { 0.0 };
             let pfx = tables.actors.get(p);
+            // ProjectileComponent projectile_spread: the view's projectile
+            // lands within that radius of the sim's hit point (the damage is
+            // the sim's).
+            let mut scattered = false;
+            if let Some(spread) = pfx.map(|f| f.projectile_spread).filter(|s| *s > 0.0) {
+                scattered = true;
+                let r = spread * self.rng.next().sqrt();
+                let a = std::f32::consts::TAU * self.rng.next();
+                to += Vec3::new(r * a.cos(), 0.0, r * a.sin());
+                to.y = frame.world.map.height_at(Vec2::new(to.x, -to.z)) + 0.5;
+            }
             let model = pfx.and_then(|f| f.resource_prefix.clone()).map(|r| format!("{r}.nif"));
             let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None, false)).map(|(e, _)| e);
             if let Some(pfx) = pfx {
-                let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos), kingdom: None };
+                let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos), kingdom: None, hit: None };
                 let created = pfx.created.clone();
                 self.run_list(&created, pctx, frame, spawn, ListKind::Other);
             }
-            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), arc, target: Some(target), shooter, entity });
+            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), arc, target: Some(target), shooter, entity, scattered });
         }
     }
 
@@ -1672,6 +1853,7 @@ impl FxState {
             target_ground: Some(Vec3::new(ground.x, -ground.z, ground.y)),
             shooter_ground: frame.world.actors.get(f.shooter as usize).map(|a| a.pos),
             kingdom: None,
+            hit: f.scattered.then_some(f.to),
         };
         self.run_list(&pfx.destroyed, ctx, frame, spawn, ListKind::Other);
     }
@@ -1681,7 +1863,7 @@ impl FxState {
         let def = frame.world.data.def(a.def);
         let _ = def;
         let Some(fx) = self.fx_of(frame.world, a.def) else { return };
-        let ctx = Ctx { actor: Some(actor), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None };
+        let ctx = Ctx { actor: Some(actor), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
         // WhenConstructed effects stop on destruction (stop_on_destructed).
         for e in self.effects.iter_mut().filter(|e| e.owner == Some(actor) && e.list == ListKind::Constructed) {
             e.player.stop();
@@ -1793,7 +1975,7 @@ impl FxState {
             let fx = self.fx_of(frame.world, a.def);
             let fx = fx.as_deref();
             lap(0, &mut clock);
-            let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None };
+            let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
             if !self.seen[i] {
                 self.seen[i] = true;
                 self.health[i] = if def.health > 0.0 { a.health / def.health } else { 1.0 };
@@ -2267,6 +2449,15 @@ fn run(
     let mut spawn = Spawn { commands: &mut commands, meshes: &mut meshes, materials: &mut materials, images: &mut images, sfx: &mut sfx, object_animations: &mut object_animations };
     let t0 = Instant::now();
     state.scan(&frame, &mut spawn);
+    // Point VFX the UI asked for (the move order marker, 43DB10): unattached
+    // at a render-space point.
+    for (ids, at) in std::mem::take(&mut state.point_requests) {
+        let fxc = Fxc { kind: "CREATE_VFX".into(), ids, at: "SELF".into(), attached: false, frequency: 1, ..Default::default() };
+        let ctx = Ctx { actor: None, target: None, at: Some(at), target_ground: None, shooter_ground: None, kingdom: None, hit: None };
+        state.run_fxc(&fxc, ctx, &frame, &mut spawn, ListKind::Other, false);
+    }
+    state.update_waypoints(&mut spawn, &mut transforms);
+    state.update_arrow(&frame);
     let t1 = Instant::now();
     for ev in &battle.frame_events {
         match *ev {
@@ -2367,5 +2558,5 @@ fn model_key(path: &str, animated: bool) -> String {
 /// The model effects played as animated models (the client's particle
 /// extractor leaves them to the model pipeline).
 fn animated_model(key: &str) -> bool {
-    key.starts_with("deathdebris/") || key.starts_with("flags/") || key.starts_with("specialops/")
+    key.starts_with("deathdebris/") || key.starts_with("flags/") || key.starts_with("specialops/") || key.starts_with("waypoints/")
 }

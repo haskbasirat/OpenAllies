@@ -293,6 +293,62 @@ pub struct Changes {
     pub meshes: Vec<(usize, Handle<Mesh>)>,
 }
 
+/// A turret drawn turned (VObjectDynamic 453130 / 4521D0): the Turret node's
+/// local rotation becomes the yaw from the sim's turret state, so every part
+/// below it (the barrel, the muzzle dummies) turns about the node.
+pub struct TurretView {
+    pub parts: Vec<usize>,
+    a: Mat4,
+    a_inv: Mat4,
+    r0t: Mat4,
+    /// The turn last applied (radians from the hull's forward).
+    pub shown: f32,
+    /// The view's own pitch (453130: toward the target inside the pitch
+    /// range at pitch_rotation_per_sec, else back to pitch_start).
+    pub pitch: f32,
+    pub shown_pitch: f32,
+}
+
+impl TurretView {
+    pub fn new(info: &ModelInfo, node: &str) -> Option<Self> {
+        let b = info.nodes.get(node)?;
+        let parts: Vec<usize> = info.parts.iter().enumerate().filter(|(_, p)| p.path.iter().any(|n| n == node)).map(|(i, _)| i).collect();
+        (!parts.is_empty()).then(|| TurretView { parts, a: b.pivot, a_inv: b.pivot.inverse(), r0t: Mat4::from_mat3(b.r0.transpose()), shown: f32::NAN, pitch: 0.0, shown_pitch: 0.0 })
+    }
+
+    /// The turret node's pivot in model space (native frame).
+    pub fn pivot(&self) -> Vec3 {
+        self.a.w_axis.truncate()
+    }
+
+    /// The parts' transform (actor-local render space) for a turn of `rel`
+    /// radians counter-clockwise from the hull's forward and an elevation of
+    /// `pitch` (4521D0: the forward direction raised, then turned).
+    pub fn transform(&self, rel: f32, pitch: f32) -> Transform {
+        let c = to_render_basis();
+        Transform::from_matrix(c * self.a * Mat4::from_rotation_z(rel) * Mat4::from_rotation_x(-pitch) * self.r0t * self.a_inv * c.inverse())
+    }
+
+    /// 453130's pitch for one frame of `dt` seconds: toward `want` (None:
+    /// pitch_start) at the pitch rate, inside the pitch range.
+    pub fn step_pitch(&mut self, t: &aa_play::data::TurretDef, want: Option<f32>, dt: f32) {
+        let ranged = (t.pitch_max - t.pitch_min).abs() > 1e-6;
+        let goal = if ranged { want.unwrap_or(t.pitch_start) } else { t.pitch_start };
+        let step = t.pitch_rate * dt;
+        let d = goal - self.pitch;
+        let p = if d.abs() > step { self.pitch + step.copysign(d) } else { goal };
+        self.pitch = if ranged { p.clamp(t.pitch_min, t.pitch_max) } else { p };
+    }
+}
+
+/// The turn of turret `i` from the hull's forward (radians, counter-
+/// clockwise) the view draws: the sim's turret yaw interpolated between the
+/// last two ticks (453130), plus pi/2.
+pub fn turret_turn(world: &aa_play::World, actor: aa_play::ActorId, i: usize, alpha: f32) -> Option<f32> {
+    let s = world.combat.actor(actor)?.turrets.get(i)?;
+    Some(s.yaw * alpha + (1.0 - alpha) * s.prev + std::f32::consts::FRAC_PI_2)
+}
+
 impl Running {
     /// `tires`: (node name lower case, front) from the Tire bones.
     pub fn new(info: &ModelInfo, tires: &[(String, bool)], circumference: f32, treads: Vec<(usize, Arc<Vec<Handle<Mesh>>>, Tread)>) -> Option<Self> {
