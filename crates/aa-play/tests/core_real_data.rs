@@ -974,3 +974,49 @@ fn berlin_full_step_runs() {
     }
     eprintln!("World::step x160 {:?} per tick", t.elapsed() / 160);
 }
+
+#[test]
+#[ignore]
+fn vehicles_conform_to_terrain_infantry_do_not() {
+    let data = data();
+    let conforming = data.defs.iter().filter(|d| d.conform_to_terrain).count();
+    let truck = data.defs.iter().find(|d| d.conform_to_terrain && d.name.to_ascii_lowercase().contains("truck")).map(|d| d.name.clone());
+    let infantry = data.defs.iter().filter(|d| d.has_component("CharacterComponent")).filter(|d| d.conform_to_terrain).map(|d| d.name.clone()).collect::<Vec<_>>();
+    eprintln!("conform_to_terrain: {conforming} things, e.g. {truck:?}");
+    assert!(truck.is_some(), "no truck conforms to the terrain");
+    assert!(infantry.is_empty(), "characters conforming: {infantry:?}");
+}
+
+#[test]
+#[ignore]
+fn infantry_kneel_and_go_prone_slower_when_engaged() {
+    let data = data();
+    let speed = |property: &str| -> f32 {
+        let p = data.property(property).unwrap_or_else(|| panic!("{property}"));
+        p.modifiers.iter().filter(|m| m.kind == "MULTIPLY" && m.attribute.as_deref() == Some("SPEED_MAX")).map(|m| m.amount).sum()
+    };
+    assert!((speed("infantry_kneel") + 0.2).abs() < 1e-6);
+    assert!((speed("infantry_prone") + 0.6).abs() < 1e-6);
+    let with_kneel = data.defs.iter().filter(|d| d.stances.iter().any(|s| s.ids == "kneel" && s.property.as_deref() == Some("infantry_kneel"))).count();
+    let mg = data.defs.iter().find(|d| d.name.to_ascii_lowercase().contains("machine") || d.id.to_ascii_lowercase().contains("infantry_mg")).map(|d| (d.id.clone(), d.stances.clone()));
+    eprintln!("{with_kneel} things kneel; e.g. {mg:?}");
+    assert!(with_kneel > 0);
+    let prone = data.defs.iter().flat_map(|d| &d.stances).find(|s| s.ids == "prone").expect("a prone stance");
+    assert_eq!(prone.health, 0.5);
+    assert_eq!(prone.states, ["mind_engaged", "under_siege"]);
+}
+
+#[test]
+#[ignore]
+fn biomes_name_their_texture_subfolders() {
+    let data = data();
+    let subfolders = &data.terrain.biome_texture_subfolder;
+    eprintln!("biome texture subfolders: {subfolders:?}");
+    assert!(subfolders.values().any(|s| s == "Arctic"), "{subfolders:?}");
+    assert!(subfolders.values().any(|s| s == "Desert"), "{subfolders:?}");
+    for id in ["(2v2)Berlin", "(2v2)Moscow", "(3v3)Stalingrad", "(2v2)Kursk"] {
+        if let Ok(map) = GameMap::load_with(&root(), id, &data) {
+            eprintln!("{id}: biome {:?} -> {:?}", map.biome, data.terrain.texture_subfolder(&map.biome));
+        }
+    }
+}

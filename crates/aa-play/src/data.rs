@@ -291,6 +291,26 @@ pub struct Def {
     /// CityComponent zone_radius: units inside it take part in the city's
     /// ownership (City tick 5647A0).
     pub city_zone_radius: f32,
+    /// Thing `[Flags]` conform_to_terrain (native Thing flag 0x1000000, set
+    /// by the vehicle and trailer templates): the view tilts the model to the
+    /// ground under its footprint (0x715E90).
+    pub conform_to_terrain: bool,
+    /// The Thing's `[Stance]` list in source order (kneel, prone, falling,
+    /// packing...); the active one adds its property (45E620).
+    #[serde(default)]
+    pub stances: Vec<StanceDef>,
+}
+
+/// One `[Stance]` entry: active while the actor's health fraction is at most
+/// `health` and one of `states` holds (no states: always, unless dead).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StanceDef {
+    pub ids: String,
+    /// property_ids added while the stance is active (e.g. infantry_kneel).
+    pub property: Option<String>,
+    pub health: f32,
+    /// actor_state ids, lower case (mind_engaged, under_siege, dead...).
+    pub states: Vec<String>,
 }
 
 /// Movement domain of a definition. The original MoverComponent has no
@@ -550,7 +570,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v11";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v13";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1091,6 +1111,18 @@ pub(crate) mod loader {
             def.tile_locked = bl(&flags, "tile_locked").unwrap_or(false);
             def.water_based = bl(&flags, "water_based").unwrap_or(false);
             def.axis_locked = bl(&flags, "axis_locked").unwrap_or(false);
+            def.conform_to_terrain = bl(&flags, "conform_to_terrain").unwrap_or(false);
+        }
+        let null = |v: &String| v.is_empty() || v.eq_ignore_ascii_case("null");
+        for s in node.children("Stance").unwrap_or_default() {
+            def.stances.push(StanceDef {
+                ids: st(&s, "ids").or_else(|| st(&s, "IDS")).unwrap_or_default().to_ascii_lowercase(),
+                property: st(&s, "property_ids").filter(|v| !null(v)),
+                health: fx(&s, "health").unwrap_or(1.0),
+                states: st(&s, "actor_state")
+                    .map(|v| v.split([',', ' ', '\t']).filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("null")).map(str::to_ascii_lowercase).collect())
+                    .unwrap_or_default(),
+            });
         }
         def.fake_cv_value = -1.0;
         if let Ok(Some(proj)) = node.child("ProjectileComponent") {

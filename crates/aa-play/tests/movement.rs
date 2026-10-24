@@ -66,7 +66,9 @@ fn data() -> (GameData, Ids) {
     let infantry = add(member("rus_infantry", 2.5, 0.0, 0, 0.0, 0.35, 30.0));
     let slow = add(member("slow_infantry", 1.5, 0.0, 0, 0.0, 0.35, 30.0));
     let tank = add(member("rus_tank_medium", 3.5, 1.0, 1, 0.9, 0.8, 40.0));
-    let mut truck_def = member("rus_truck", 3.5, 1.0, 2, 1.25, 0.6, 0.0);
+    // rus_truck_*: speed_max 3, no acceleration, AAUnitVehicleHQTruck
+    // turn_radius 3 WHILE_MOVING, blocking_radius 0.65.
+    let mut truck_def = member("rus_truck", 3.0, 0.0, 2, 3.0, 0.65, 0.0);
     truck_def.class = Some(DefClass::Truck);
     truck_def.weapons.clear();
     let truck = add(truck_def);
@@ -410,7 +412,7 @@ fn stop_halts_a_regiment() {
 }
 
 #[test]
-fn deploy_order_drives_there_and_faces_the_requested_way() {
+fn deploy_order_drives_there_without_pivoting() {
     let (data, ids) = data();
     let mut w = world(open_map(64, 64, 4.0), data);
     let truck = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(40.0, 40.0)), 0.0);
@@ -418,7 +420,97 @@ fn deploy_order_drives_there_and_faces_the_requested_way() {
     w.actors[truck as usize].order = Order::Deploy { at, facing: -FRAC_PI_2 };
     assert!(run_until(&mut w, 120.0, |w| movement::deploy_ready(w, truck)), "truck at {:?} facing {}", pos(&w, truck), w.actors[truck as usize].facing);
     assert!((pos(&w, truck) - at).length() < 0.5);
-    assert!((w.actors[truck as usize].facing + FRAC_PI_2).abs() < 1e-3);
+    // The truck keeps the facing of its last leg; the building takes the
+    // commanded facing.
+    let leg = (at - Vec2::new(40.0, 40.0)).normalize();
+    assert!((w.actors[truck as usize].facing - leg.y.atan2(leg.x)).abs() < 0.05, "facing {}", w.actors[truck as usize].facing);
+    let f = w.actors[truck as usize].facing;
+    advance(&mut w, 32);
+    assert_eq!(w.actors[truck as usize].facing, f);
+}
+
+#[test]
+fn truck_turns_on_an_arc_of_its_turn_radius() {
+    let (data, ids) = data();
+    let mut w = world(open_map(64, 64, 4.0), data);
+    // Facing east, ordered due north: it drives on while turning at
+    // speed / turn radius = 1 rad/s, so it curves on a 3 m radius.
+    let start = Vec2::new(100.0, 100.0);
+    let truck = w.spawn_actor(ids.truck, Some(0), w.ground(start), 0.0);
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(truck)], to: Vec2::new(100.0, 160.0), attack_move: false });
+    let mut previous = w.actors[truck as usize].facing;
+    let mut max_rate = 0.0f32;
+    let mut speeds = Vec::new();
+    for _ in 0..16 * 2 {
+        advance(&mut w, 1);
+        let f = w.actors[truck as usize].facing;
+        max_rate = max_rate.max((f - previous).abs() * aa_play::TICKS_PER_SECOND as f32);
+        previous = f;
+        speeds.push(w.actors[truck as usize].motion.speed);
+    }
+    assert!(max_rate <= 1.0 + 1e-3 && max_rate > 0.9, "turn rate {max_rate} rad/s");
+    assert!(speeds.iter().skip(1).all(|&v| (v - 3.0).abs() < 1e-3), "constant 3 m/s while turning (no acceleration): {speeds:?}");
+    // A quarter turn on a 3 m radius moves it about 3 m east before heading north.
+    let p = pos(&w, truck);
+    assert!(p.x > 102.0 && p.x < 104.0, "{p:?}");
+    assert!(run_until(&mut w, 60.0, |w| w.actors[truck as usize].order == Order::Idle));
+}
+
+#[test]
+fn vehicles_pitch_and_roll_with_the_ground_infantry_stay_upright() {
+    let (mut data, ids) = data();
+    // Flags as the original templates give them: the vehicle template sets
+    // conform_to_terrain, infantry do not.
+    data.defs[ids.truck as usize].conform_to_terrain = true;
+    let mut map = open_map(32, 32, 4.0);
+    // Ground rising 0.25 m per metre toward +X.
+    map.heights = (0..33 * 33).map(|i| (i % 33) as f32 * 4.0 * 0.25).collect();
+    let mut w = world(map, data);
+    let east = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(60.0, 60.0)), 0.0);
+    let north = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(60.0, 60.0)), FRAC_PI_2);
+    let man = w.spawn_actor(ids.infantry, Some(0), w.ground(Vec2::new(60.0, 60.0)), 0.0);
+    let slope = glam::Vec3::new(-0.25, 0.0, 1.0).normalize();
+    // Driving uphill: pitched nose up.
+    let o = movement::orientation(&w, east).unwrap();
+    assert!((o.up - slope).length() < 1e-3, "{:?}", o.up);
+    assert!((o.forward - glam::Vec3::new(1.0, 0.0, 0.25).normalize()).length() < 1e-3, "{:?}", o.forward);
+    assert!((o.position.z - w.actors[east as usize].pos.z).abs() < 1e-3);
+    // Across the slope: rolled, nose level.
+    let o = movement::orientation(&w, north).unwrap();
+    assert!((o.up - slope).length() < 1e-3, "{:?}", o.up);
+    assert!(o.forward.z.abs() < 1e-3 && (o.forward.y - 1.0).abs() < 1e-3, "{:?}", o.forward);
+    // Infantry stand upright.
+    let o = movement::orientation(&w, man).unwrap();
+    assert_eq!(o.up, glam::Vec3::Z);
+    assert_eq!(o.position, w.actors[man as usize].pos);
+}
+
+#[test]
+fn trucks_queue_behind_a_truck_going_the_same_way() {
+    let (mut data, ids) = data();
+    // A slightly slower leader (2.9 m/s): the follower (3 m/s) is not faster
+    // by more than 0.25 m/s, so it waits behind instead of overtaking.
+    let mut slow = data.defs[ids.truck as usize].clone();
+    slow.id = "slow_truck".into();
+    slow.speed_max = 2.9;
+    data.by_id.insert(slow.id.clone(), data.defs.len() as u32);
+    data.defs.push(slow);
+    let slow_def = data.defs.len() as u32 - 1;
+    let mut w = world(open_map(160, 32, 2.0), data);
+    let lead = w.spawn_actor(slow_def, Some(0), w.ground(Vec2::new(30.0, 32.0)), 0.0);
+    let follower = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(27.0, 32.0)), 0.0);
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(lead)], to: Vec2::new(300.0, 32.0), attack_move: false });
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(follower)], to: Vec2::new(296.0, 32.0), attack_move: false });
+    let mut closest = f32::MAX;
+    let mut passed = false;
+    run_until(&mut w, 120.0, |w| {
+        closest = closest.min((pos(w, lead) - pos(w, follower)).length());
+        passed |= pos(w, follower).x > pos(w, lead).x;
+        w.actors[follower as usize].order == Order::Idle && w.actors[lead as usize].order == Order::Idle
+    });
+    assert!(!passed, "the follower overtook");
+    assert!(closest >= 1.2, "kept its distance: {closest}");
+    assert!((pos(&w, follower) - Vec2::new(296.0, 32.0)).length() < 0.6);
 }
 
 #[test]
