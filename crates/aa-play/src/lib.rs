@@ -47,3 +47,5 @@ pub mod mapgen;
 pub mod fog;
 /// HUD player orders (appended by the UI owner).
 pub mod player_orders;
+/// Generals' special operations (appended by the combat owner).
+pub mod special_ops;

@@ -26,6 +26,10 @@ impl World {
         // then the detection zones and fog after the actors moved
         crate::player_orders::tick(self);
         crate::fog::tick(self);
+        // appended by the combat owner: commander experience, landing
+        // special operations, enchantments (expiry, periodic effects) and
+        // the SAI general powers
+        crate::special_ops::tick(self);
         self.tick += 1;
         self.time = self.tick as f32 * crate::DT;
     }
@@ -41,6 +45,8 @@ impl World {
             Command::SetFormation { .. } | Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => {
                 crate::player_orders::command(self, &command)
             }
+            // appended by the combat owner
+            Command::UseAbility { .. } => crate::special_ops::command(self, &command),
         };
         if let Err(reason) = result {
             let kingdom = match command {
@@ -57,7 +63,8 @@ impl World {
                 | Command::SetRallyPoint { kingdom, .. }
                 | Command::Sell { kingdom, .. }
                 | Command::Detach { kingdom, .. }
-                | Command::Disband { kingdom, .. } => kingdom,
+                | Command::Disband { kingdom, .. }
+                | Command::UseAbility { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

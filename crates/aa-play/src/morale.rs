@@ -104,13 +104,11 @@ fn refresh_level_values(world: &mut World, st: &mut CombatState, id: OrgId) {
     }
     st.orgs[i].morale_max = max;
     st.orgs[i].breakpoint = def.morale_breakpoint - breakpoint_add;
-    let kingdom = Some(world.orgs[i].kingdom);
-    for &m in &world.orgs[i].members {
+    let _ = health;
+    for m in world.orgs[i].members.clone() {
         // (core) 502A70: the level amount adds to the handicap/technology
-        // HEALTH amounts in one multiplier.
-        let d = world.actors[m as usize].def;
-        let multiplier = (1.0 + health + crate::production::health_amount(world, kingdom, d)).max(st.rules().clamp_multiply);
-        st.actors[m as usize].max_health = data.def(d).health * multiplier;
+        // HEALTH amounts (and the enchantments') in one multiplier.
+        crate::combat::refresh_max_health(world, st, m);
     }
 }
 

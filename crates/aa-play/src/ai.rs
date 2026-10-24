@@ -525,6 +525,9 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
         }
         // HUD player orders (appended by the UI owner; the AI sends none)
         Command::SetFormation { .. } | Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => Some(command),
+        // special operations (appended by the combat owner; the SAI general
+        // powers apply them directly from `special_ops::sai`)
+        Command::UseAbility { .. } => Some(command),
     }
 }
 

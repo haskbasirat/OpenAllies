@@ -48,6 +48,9 @@ pub struct Selecting {
     last_click: Option<(Vec2, f64)>,
     /// The actor under the cursor (for the focused VFX).
     pub hover: Option<ActorId>,
+    /// An armed general ability would be admitted where the cursor is
+    /// (the faction_ability_target_valid cursor; combat owner).
+    pub ability_valid: bool,
     /// The hover came from an organization's banner (the organization is
     /// focused, not the member).
     pub hover_banner: bool,
@@ -239,6 +242,8 @@ pub fn battle_input(
                     }
                 }
                 GameAction::Target(t) => sel.armed = Some(t.clone()),
+                // a +SELF general ability: the order without a target
+                GameAction::UseAbility(i) => b.pending.push(Command::UseAbility { kingdom: local, ability: *i as u32, target: None }),
                 GameAction::MinimapJump(u, v) => {
                     let m = &b.world.map;
                     requests.look_at = Some(Vec2::new(u * m.width as f32 * m.cell_size, v * m.height as f32 * m.cell_size));
@@ -340,6 +345,11 @@ pub fn battle_input(
     }
     let hit = hit.map(|(id, _)| id);
     sel.hover = hit.filter(|_| !front.pointer_over_ui);
+    // the armed general ability's cursor (faction_ability_target_valid)
+    sel.ability_valid = match sel.armed {
+        Some(TargetOrder::Ability(i)) => crate::ui::abilities::valid_target(&b.world, local, i, sel.hover),
+        _ => false,
+    };
     sel.hover_banner = on_banner && sel.hover.is_some();
     // left button on the world
     if front.pointer.left_pressed && !front.press_on_ui {
@@ -422,6 +432,16 @@ pub fn battle_input(
                     TargetOrder::Rally(building) => {
                         if let Some(g) = ground {
                             b.pending.push(Command::SetRallyPoint { kingdom: local, building, at: g.truncate() });
+                        }
+                    }
+                    // a general ability: the clicked actor, else the ground
+                    // point, when admitted; otherwise the targeting stays
+                    TargetOrder::Ability(i) => {
+                        let at = hit.map(aa_play::AbilityTarget::Actor).or(ground.map(|g| aa_play::AbilityTarget::Point(g.truncate())));
+                        if at.is_some() && crate::ui::abilities::valid_target(&b.world, local, i, hit) {
+                            b.pending.push(Command::UseAbility { kingdom: local, ability: i as u32, target: at });
+                        } else {
+                            sel.armed = Some(TargetOrder::Ability(i));
                         }
                     }
                 }

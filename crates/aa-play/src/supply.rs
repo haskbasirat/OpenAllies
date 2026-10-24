@@ -153,7 +153,9 @@ pub fn tick(world: &mut World) {
         }
         let attached = def.in_supply_detached || org.hq.is_some_and(|h| live(world, h));
         let at = org_position(world, o);
-        let in_supply = attached && supplied_at(world, org.kingdom, at);
+        // (combat owner) a Resupply special operation's SUPPLIED flag
+        // keeps the organization in supply while it lasts
+        let in_supply = (attached && supplied_at(world, org.kingdom, at)) || crate::special_ops::org_has_flag(world, o, "SUPPLIED");
         world.books.org_mut(o).out_of_supply = !in_supply;
         for m in world.orgs[o as usize].members.clone() {
             world.books.actor_mut(m).out_of_supply = !in_supply;
@@ -432,6 +434,9 @@ fn regenerate(world: &mut World, dt: f32) {
         // 0x5014E0: the organization modifier context multiplies +2CC
         // (technologies such as tech_plentiful_ammunition: RESUPPLY_RATE).
         let rate = sd.resupply_rate * crate::production::multiply_factor(world, org.kingdom, &def.properties, "RESUPPLY_RATE");
+        // (combat owner) the enchantments' RESUPPLY_RATE (Resupply special
+        // operations) in the same 502A70 sum
+        let rate = rate + sd.resupply_rate * (crate::special_ops::org_resupply_multiplier(world, o) - 1.0);
         let amount = sd.health * rate * factor * dt;
         let (anchor, heading, kingdom) = (org_position(world, o), org.heading, org.kingdom);
         let offset = def.slots[slot].1;

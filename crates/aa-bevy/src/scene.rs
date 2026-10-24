@@ -262,6 +262,13 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
     for (player, profile) in &profiles {
         aa_play::ai::set_profile(&mut world, *player as u32, profile);
     }
+    // The generals' special operations (Data/Generals; each kingdom's general
+    // is set at battle start, ui/abilities.rs). Appended by the combat owner.
+    match crate::preload::generals(root) {
+        Ok(g) => aa_play::special_ops::attach(&mut world, g),
+        Err(e) => warn!("generals: {e:#}"),
+    }
+    steps.mark("generals");
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
         .map

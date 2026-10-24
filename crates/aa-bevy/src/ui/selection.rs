@@ -330,6 +330,10 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
                 Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
                 Some(crate::ui::hud::TargetOrder::Guard) | Some(crate::ui::hud::TargetOrder::AttachHq) => return "guard".into(),
                 Some(crate::ui::hud::TargetOrder::Explore) => return "explore".into(),
+                // a general ability (cursor ids 0x13 / 0x14)
+                Some(crate::ui::hud::TargetOrder::Ability(_)) => {
+                    return if s.ability_valid { "faction_ability_target_valid".into() } else { "faction_ability_target".into() };
+                }
                 None => {}
             }
         }
