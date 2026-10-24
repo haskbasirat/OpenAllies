@@ -25,6 +25,7 @@ pub mod portrait;
 pub mod tex;
 pub mod tooltip;
 pub mod video;
+pub mod zone_border;
 
 use bevy::prelude::*;
 use std::path::PathBuf;
@@ -72,6 +73,7 @@ impl Plugin for UiPlugin {
             .init_resource::<order_marks::PointVfx>()
             .init_resource::<order_marks::Waypoints>()
             .init_resource::<order_marks::Issued>()
+            .init_resource::<zone_border::ZoneBorder>()
             .add_systems(Last, (quit, long_frames, order_marks::drop_stale))
             .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, names::place, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
@@ -84,6 +86,8 @@ impl Plugin for UiPlugin {
             // the generals of the battle before its first tick (combat owner)
             .add_systems(Update, abilities::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             .add_systems(Update, fog::update.after(crate::session::step_battle))
+            // the friendly supply border in 3D (zone renderer type 0)
+            .add_systems(Update, zone_border::update.after(crate::session::step_battle))
             // the placement's impact preview for the next HUD update
             .add_systems(Update, placement_impact.after(crate::input::battle_input))
             // the selected units' order waypoints (0x627D90), after the tick
@@ -172,7 +176,8 @@ fn minimap_update(
         draw.minimap = None;
         return;
     };
-    art.terrain(&front.ui.store.root, &b, &mut images, minimap::target_pixels(&front.ui));
+    let show_supply = front.ui.uvars.get_bool("ViewShowZoneFriendlySupply");
+    art.terrain(&front.ui.store.root, &b, &mut images, minimap::target_pixels(&front.ui), show_supply);
     // the camera's view on the ground: the window corners' rays on the
     // ground plane at the terrain height under the view centre
     let view = (|| {

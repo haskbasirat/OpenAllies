@@ -13,8 +13,9 @@
 //!   same definition as the hit (own objects only).
 //! * Box: own regiments first, else own buildings (class rule 0x6406C0);
 //!   at most 6 objects, the nearest to the centroid (0x640FA0).
-//! * Right click with own movable units selected: an enemy under the
-//!   cursor is attacked, otherwise move to the ground point. Over the
+//! * Right click with own movable units selected: an actor under the
+//!   cursor (any owner) is followed (move with a target,
+//!   `Command::Follow`), otherwise move to the ground point. Over the
 //!   minimap (its widget takes only the left button, `0x5D77A0`) the
 //!   right press reaches the world with the minimap's point (`0x6203F0` ->
 //!   `0x5D74B0`): a move there.
@@ -608,14 +609,16 @@ pub fn battle_input(
         } else {
             let units = own_movable(&b);
             if !units.is_empty() {
-                let enemy = hit.filter(|id| {
-                    b.world.actor(*id).is_some_and(|a| {
-                        a.kingdom.is_some_and(|k| b.world.kingdoms.iter().find(|x| x.id == k).map(|x| x.team) != b.world.kingdoms.iter().find(|x| x.id == local).map(|x| x.team))
-                    })
-                });
-                if let Some(t) = enemy {
-                    debug!("order: attack {t} with {units:?}");
-                    b.pending.push(Command::Attack { kingdom: local, units, target: t });
+                // 0x620760 -> GuessCommandData 0x4DA570: over a pickable
+                // actor (own, allied, enemy, neutral, a building) only the
+                // target is sent, and the first command whose
+                // can_hot_command_actor allows it is move (kill's is
+                // switched off in the data): the selection follows it. An
+                // actor order plays no move VFX; Alt+right (HotkeyAltRight-
+                // ClickCommand retreat) has no command of its own here.
+                if let Some(t) = hit {
+                    debug!("order: follow {t} with {units:?}");
+                    b.pending.push(Command::Follow { kingdom: local, units, target: t });
                 } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
                     debug!("order: move {units:?} to {g:?}");
                     order_marks::move_command(&mut marks, g.truncate());
