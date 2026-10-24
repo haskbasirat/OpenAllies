@@ -52,6 +52,9 @@ enum Occ {
 /// A creator kingdom record (stride 0x6C) and its staging state.
 #[derive(Clone, Debug)]
 struct Record {
+    /// The kingdom IDS of the map / RMC (aa-play's kingdom name for the
+    /// independent ones).
+    ids: String,
     /// The record's localized name ("Side 1"), shown in the map preview.
     side_name: String,
     color: [f32; 3],
@@ -371,6 +374,20 @@ pub struct Custom {
     pub launched_factions: Vec<(usize, Option<String>)>,
 }
 
+/// The staging screen's game data (nations, SAIs, rules, RMCs), parsed on a
+/// background thread as soon as the front end starts so the Custom button
+/// does not stall a frame on it (about 0.2 s of TGI parsing).
+static WARM: std::sync::Mutex<Option<std::thread::JoinHandle<GameData>>> = std::sync::Mutex::new(None);
+
+/// Start parsing the staging data in the background (once, at startup).
+pub fn warm(root: aa_ui::fs::DataRoot) {
+    if let Ok(mut g) = WARM.lock() {
+        if g.is_none() {
+            *g = Some(std::thread::spawn(move || GameData::load(&root)));
+        }
+    }
+}
+
 impl Custom {
     pub fn new(root: &Path) -> Self {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
@@ -393,7 +410,9 @@ impl Custom {
     fn data(&mut self, ui: &Ui) -> &GameData {
         if self.data.is_none() {
             let t = std::time::Instant::now();
-            self.data = Some(GameData::load(&ui.store.root));
+            // the staging data warmed at startup ([`warm`]), else loaded now
+            let warmed = WARM.lock().ok().and_then(|mut g| g.take()).and_then(|h| h.join().ok());
+            self.data = Some(warmed.unwrap_or_else(|| GameData::load(&ui.store.root)));
             let d = self.data.as_ref().unwrap();
             info!(
                 "staging data: {} nations, {} SAIs, {} handicaps, {} rules, {} RMCs in {:.2} s",
@@ -443,6 +462,7 @@ impl Custom {
             .kingdoms
             .iter()
             .map(|k| Record {
+                ids: k.ids.clone(),
                 side_name: ui.strings.resolve(&k.name),
                 color: data.color(&k.color),
                 independent: k.independent,
@@ -474,6 +494,7 @@ impl Custom {
             .map(|k| {
                 let nation = k.nation.as_ref().and_then(|n| data.nation(n)).map(|n| n.ids.clone());
                 Record {
+                    ids: k.ids.clone(),
                     side_name: k.name.clone(),
                     color: data.color(&k.color),
                     independent: k.independent,
@@ -1038,6 +1059,16 @@ impl Custom {
         self.launched_profiles = profiles;
         self.launched_factions = factions;
         Some((SkirmishSetup { map_id, players, starting_resources, seed: game_seed }, random))
+    }
+
+    /// The display names of the session's independent kingdoms (kingdom
+    /// IDS lower case -> the record's name: RMC "Enemies", a map's
+    /// "Civilian (Aggressive)").
+    pub fn kingdom_names(&self) -> std::collections::HashMap<String, String> {
+        self.session
+            .as_ref()
+            .map(|s| s.records.iter().filter(|r| r.independent && !r.side_name.is_empty()).map(|r| (r.ids.to_ascii_lowercase(), r.side_name.clone())).collect())
+            .unwrap_or_default()
     }
 
     /// The value of a world rule (IDS) of the session being launched.

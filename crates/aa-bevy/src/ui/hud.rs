@@ -71,6 +71,9 @@ pub enum GameAction {
     SpeedDown,
     /// A +SELF general ability used at once (ui/abilities.rs, combat owner).
     UseAbility(usize),
+    /// A recruit queue button (the structure's queue panel or an HQ slot
+    /// holding a queued organization): cancel that queue entry.
+    CancelRecruit { building: aa_play::ActorId, index: usize },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -180,6 +183,12 @@ pub struct GameHud {
     /// The session's StartingExperience world rule (the faction's
     /// experience at time 0).
     pub starting_experience: f32,
+    /// General id -> its 3D portrait model (Data path), parsed once.
+    general_portraits: std::collections::HashMap<String, Option<String>>,
+    /// Actor names (cities) and kingdom display names.
+    pub names: super::names::Names,
+    /// The owners of the capturable actors last frame (who lost a capture).
+    owned_before: std::collections::HashMap<aa_play::ActorId, aa_play::KingdomId>,
     /// The local general's abilities and their tooltips this frame
     /// (ui/abilities.rs, combat owner).
     abilities: Vec<aa_play::special_ops::AbilityView>,
@@ -391,6 +400,7 @@ impl GameHud {
         let team_cancel = load_button_info(ui, "CancelTeamCommands");
         let team_commands = load_team_commands(ui);
         let property_icons = load_property_icons(ui);
+        let names = super::names::Names::default();
         let view = View {
             battle,
             resources: &resources,
@@ -405,8 +415,11 @@ impl GameHud {
             property_icons: &property_icons,
             hovered: None,
             starting_experience: 0.0,
+            general_portrait: None,
+            names: &names,
         };
         let hud = Hud::show(ui, &view);
+        drop(view);
         let mut g = GameHud {
             hud,
             resources,
@@ -428,6 +441,9 @@ impl GameHud {
             last_speed: None,
             panels: Default::default(),
             starting_experience: 0.0,
+            general_portraits: Default::default(),
+            names: Default::default(),
+            owned_before: Default::default(),
             abilities: Vec::new(),
             ability_tips: Vec::new(),
         };
@@ -441,14 +457,20 @@ impl GameHud {
     pub fn update(&mut self, ui: &mut Ui, b: &Battle) {
         // a recruit page whose building left the selection closes
         if let ActionPage::Recruit(id) = self.page {
-            if b.selection != [Unit::Actor(id)] || b.world.actor(id).is_none() {
+            if selected_structure(b) != Some(id) || b.world.actor(id).is_none() {
                 self.page = ActionPage::Main;
             }
         }
+        self.names.update(&ui.store.root, &ui.strings, b);
         self.messages(ui, b);
         self.panels.update(ui, b, &self.property_icons);
         self.game_over = b.world.winner.is_some();
         let strings = ui.strings.clone();
+        // a selected division HQ shows its kingdom's general
+        let general_portrait = match b.selection.as_slice() {
+            [Unit::Org(o)] => b.world.orgs.get(*o as usize).filter(|o| hq_structure(&b.world, o).is_some()).and_then(|o| self.general_portrait(ui, b, o.kingdom)),
+            _ => None,
+        };
         let view = View {
             battle: Some(b),
             resources: &self.resources,
@@ -463,6 +485,8 @@ impl GameHud {
             property_icons: &self.property_icons,
             hovered: self.hovered.as_deref(),
             starting_experience: self.starting_experience,
+            general_portrait: general_portrait.as_deref(),
+            names: &self.names,
         };
         let buttons = view.action_buttons();
         self.slot_commands = buttons.iter().map(|a| a.as_ref().map(|a| a.command.clone())).collect();
@@ -483,16 +507,47 @@ impl GameHud {
             Some(Unit::Actor(a)) => b.world.actor(*a).is_some_and(|x| b.world.data.def(x.def).class == Some(DefClass::Truck)),
             _ => false,
         };
+        // a structure outside any HQ organization (the Corps HQ) is a
+        // simple actor too: its queue panel takes the banner's place
+        let simple = match b.selection.as_slice() {
+            [Unit::Actor(a)] => b.world.actor(*a).is_some_and(|x| b.world.data.def(x.def).class == Some(DefClass::Building) && aa_play::production::hq_org(&b.world, x.id).is_none()),
+            _ => false,
+        };
+        let truck = truck || simple;
         for part in ["BannerButton", "Morale", "AttackEfficiency"] {
             ui.with_widget(&format!("Game/ControlPanel/ObjectDisplay/CompanyDisplay/{part}"), |w| w.set_visible(!truck));
         }
+        recruit_queue(ui, b);
+    }
+
+    /// The 3D portrait model of a kingdom's general (its Faction
+    /// `portrait_ids` Thing: View resource_prefix beside the general's file,
+    /// Generals/<NATION>/<general>.tgi).
+    fn general_portrait(&mut self, ui: &Ui, b: &Battle, kingdom: aa_play::KingdomId) -> Option<String> {
+        let g = aa_play::special_ops::general(&b.world, kingdom)?;
+        let id = g.id.clone();
+        let portrait = g.portrait.clone()?;
+        if let Some(p) = self.general_portraits.get(&id) {
+            return p.clone();
+        }
+        let nation = b.world.kingdoms.iter().find(|k| k.id == kingdom).map(|k| k.nation.to_ascii_uppercase()).unwrap_or_default();
+        let file = format!("Generals/{nation}/{id}.tgi");
+        let found = super::datafile::load(&ui.store.root, &file)
+            .iter()
+            .find(|n| n.name.eq_ignore_ascii_case("Thing") && n.get("ids").or(n.get("IDS")).is_some_and(|i| i.eq_ignore_ascii_case(&portrait)))
+            .and_then(|n| n.children_named("View").find_map(|v| v.get("resource_prefix")).map(|p| format!("Generals/{nation}/{}.nif", p.trim())));
+        self.general_portraits.insert(id, found.clone());
+        found
     }
 
     /// The game message log from this frame's battle events (message
     /// system send 0x40B5C0 with the original message types).
     fn messages(&mut self, ui: &mut Ui, b: &Battle) {
         let w = &b.world;
-        let kingdom_name = |k: Option<aa_play::KingdomId>| w.kingdoms.iter().find(|x| Some(x.id) == k).map(|x| x.name.clone()).unwrap_or_default();
+        let names = &self.names;
+        let kingdom_name = |k: Option<aa_play::KingdomId>| w.kingdoms.iter().find(|x| Some(x.id) == k).map(|x| names.kingdom(&x.name).to_string()).unwrap_or_default();
+        // an actor's name: its own (a city) or its definition's
+        let actor_name = |ui: &Ui, a: &aa_play::Actor| names.actor(a.id).map(str::to_string).unwrap_or_else(|| name(ui, &w.data.def(a.def).name));
         let org_name = |ui: &Ui, o: aa_play::OrgId| w.orgs.get(o as usize).map(|o| name(ui, &w.data.def(o.def).name)).unwrap_or_default();
         // Data/Game/game_events.tgi: event -> message type, text
         // game_events_<event>_game_message (Localization strings)
@@ -540,6 +595,18 @@ impl GameHud {
                 aa_play::Event::KingdomDefeated { kingdom } => {
                     out.push(("KINGDOM_DEFEATED", fmt(ui, "kingdom_defeated", &[&kingdom_name(Some(*kingdom))]), None));
                 }
+                // game_events actor_captured (BUILDING_CAPTURED, "You have
+                // captured %s") / actor_captured_by_enemy
+                // (BUILDING_NEGATIVE, "%s captured by %s")
+                aa_play::Event::Captured { actor, kingdom } => {
+                    let Some(a) = w.actors.get(*actor as usize) else { continue };
+                    let at = Some((a.pos.x, a.pos.y));
+                    if *kingdom == b.local {
+                        out.push(("BUILDING_CAPTURED", fmt(ui, "actor_captured", &[&actor_name(ui, a)]), at));
+                    } else if self.owned_before.get(actor).is_some_and(|k| *k == b.local) {
+                        out.push(("BUILDING_NEGATIVE", fmt(ui, "actor_captured_by_enemy", &[&actor_name(ui, a), &kingdom_name(Some(*kingdom))]), at));
+                    }
+                }
                 // refusals play a sound in the original, no log line (the
                 // reason goes to the program log)
                 aa_play::Event::Refused { kingdom, reason } if *kingdom == b.local => info!("command refused: {reason}"),
@@ -568,6 +635,12 @@ impl GameHud {
             let uv = ui.uvars.clone();
             ui.messages.send(&uv, kind, &text, at);
         }
+        self.owned_before = w
+            .actors
+            .iter()
+            .filter(|a| a.alive && w.data.def(a.def).captureable)
+            .filter_map(|a| a.kingdom.map(|k| (a.id, k)))
+            .collect();
         self.last_events = b.frame_events.len();
     }
 
@@ -625,6 +698,7 @@ impl GameHud {
                 None
             }
             "recruit" => Some(GameAction::Recruit { building: arg?, def: arg2? }),
+            "cancel_recruit" => Some(GameAction::CancelRecruit { building: arg?, index: arg2? as usize }),
             "stop" => Some(GameAction::Stop),
             "kill" => Some(GameAction::Target(TargetOrder::Attack)),
             "move" => Some(GameAction::Target(TargetOrder::Move)),
@@ -843,6 +917,232 @@ fn describe_economy(ui: &Ui, resources: &[HudResource], w: &World, of: aa_play::
     s
 }
 
+/// The structure of a deployed division HQ organization: its living member
+/// building with the recruit component (the HQ organization itself has
+/// none).
+fn hq_structure(w: &World, org: &aa_play::Organization) -> Option<aa_play::ActorId> {
+    w.data.def(org.def).max_attachments?;
+    org.members
+        .iter()
+        .copied()
+        .find(|m| w.actor(*m).is_some_and(|a| a.alive && !a.removed && w.data.def(a.def).class == Some(DefClass::Building) && !w.data.def(a.def).recruits.is_empty()))
+}
+
+/// The one selected own structure (building or deployed HQ organization).
+fn selected_structure(b: &Battle) -> Option<aa_play::ActorId> {
+    let w = &b.world;
+    match b.selection.as_slice() {
+        [Unit::Actor(id)] => w.actor(*id).filter(|a| a.kingdom == Some(b.local)).map(|a| a.id),
+        [Unit::Org(o)] => w.orgs.get(*o as usize).filter(|o| o.alive && o.kingdom == b.local).and_then(|o| hq_structure(w, o)),
+        _ => None,
+    }
+}
+
+/// The stockpiled resources cover a price (production `can_afford`).
+fn affordable(w: &World, kingdom: aa_play::KingdomId, cost: &[f32]) -> bool {
+    let Some(k) = w.books.kingdom(kingdom) else { return false };
+    w.data
+        .resources
+        .iter()
+        .enumerate()
+        .all(|(i, r)| r.kind != aa_play::data::ResourceKind::Stockpiled || k.stockpiled.get(i).copied().unwrap_or(0.0) >= cost.get(i).copied().unwrap_or(0.0))
+}
+
+/// A queue entry as the HUD shows it.
+struct QueueEntry {
+    def: aa_play::DefId,
+    /// The item reserves an HQ attachment (shown in the HQ slots).
+    attaches: bool,
+    /// Index in the building's queue (CancelRecruit).
+    index: usize,
+    /// `0x5889B0` for the head (1 - (deadline - now or pause) / duration),
+    /// 0 for the waiting ones.
+    progress: f32,
+}
+
+fn queue_items(w: &World, building: aa_play::ActorId) -> Vec<QueueEntry> {
+    let Some(q) = w.books.actor(building).map(|b| &b.queue) else { return Vec::new() };
+    let now = q.paused_at.unwrap_or(w.time);
+    q.items
+        .iter()
+        .enumerate()
+        .filter(|(_, it)| it.research.is_none())
+        .map(|(i, it)| QueueEntry {
+            def: it.def,
+            attaches: it.attaches,
+            index: i,
+            progress: if i == 0 && q.duration > 0.0 { (1.0 - (q.deadline - now) / q.duration).clamp(0.0, 1.0) } else { 0.0 },
+        })
+        .collect()
+}
+
+const DISPLAY: &str = "Root/Game/ControlPanel/ObjectDisplay/CompanyDisplay";
+const SIMPLE_NODE: &str = "UI/Game/object_display.tgi:ObjectDisplay/SimpleActorDisplay";
+const SLOT_NODE: &str = "UI/Game/object_display.tgi:ObjectDisplay/CompanyDisplay/HQAttached";
+/// QueuePanel max_queue_widgets (KKD_MAX_WIDGETS_QUEUE_DISPLAY_BUTTONS 6:
+/// the current button and 5 queue buttons), 3 per row when stacked.
+const QUEUE_WIDGETS: usize = 6;
+const QUEUE_ROW: usize = 3;
+
+fn seg(name: &str, i: usize) -> String {
+    if i == 0 { name.to_string() } else { format!("{name}#{i}") }
+}
+
+/// Load a code-built widget against the data node `parent`.
+fn load_under(ui: &mut Ui, item: &mut Widget, parent: &str) {
+    if let Ok(n) = ui.store.node(parent) {
+        let strings = ui.strings.clone();
+        let resolve = |v: &str| strings.resolve(v);
+        let root = std::sync::Arc::new(n.clone());
+        item.load(&mut ui.store, Some((&n, &root)), Some(10), &resolve);
+    }
+}
+
+fn set_decal(ui: &mut Ui, path: &str, texture: Option<String>) {
+    ui.with_widget(path, |w| {
+        if let Some(aa_ui::ve::ViewElement { kind: aa_ui::ve::VeKind::Decal(d), .. }) = &mut w.sub_ve {
+            d.texture = texture;
+        }
+    });
+}
+
+/// SimpleActorDisplay QueuePanel (`0x629F20`): CurrentButton, Progress,
+/// Queue with 5 QueueButtons and the QueueMoreIndicator.
+fn queue_panel(ui: &mut Ui) -> Widget {
+    let w = |c: C, n: &str| Widget::new(c, n, false);
+    let button = |n: &str| {
+        let mut b = w(C::PushButton, n);
+        b.client_name = "UnitButtonDecal".into();
+        b.add_child(w(C::Decal, "UnitButtonDecal"));
+        b
+    };
+    let mut p = w(C::Panel, "QueuePanel");
+    p.add_child(button("CurrentButton"));
+    p.add_child(w(C::StatusBar, "Progress"));
+    let mut q = w(C::Panel, "Queue");
+    for _ in 1..QUEUE_WIDGETS {
+        q.add_child(button("QueueButton"));
+    }
+    q.add_child(w(C::Decal, "QueueMoreIndicator"));
+    p.add_child(q);
+    load_under(ui, &mut p, SIMPLE_NODE);
+    p
+}
+
+/// The selected structure's recruit queue, as the original shows it:
+/// * a structure without an HQ organization (the Corps HQ, a factory) has
+///   the SimpleActorDisplay QueuePanel (`0x6286F0`): the head item in the
+///   CurrentButton with the recruit progress below it (RecruitProgressBar:
+///   red, yellow, green), the next ones in the QueueButtons, the
+///   QueueMoreIndicator when more are queued than fit; no HQ slots;
+/// * a division HQ shows its queued organizations in the HQ slots
+///   (`0x62E0F0` / `0x62D9D0` type 2): the icon and the RecruitProgress bar
+///   (the head's progress, 0 for the waiting ones) instead of health and
+///   morale.
+/// A queue button cancels its entry (CancelRecruit, the paid cost comes
+/// back).
+fn recruit_queue(ui: &mut Ui, b: &Battle) {
+    let w = &b.world;
+    let structure = selected_structure(b).filter(|id| w.actor(*id).is_some_and(|a| !w.data.def(a.def).recruits.is_empty()));
+    let hq = structure.and_then(|id| aa_play::production::hq_org(w, id));
+    let simple = structure.filter(|_| hq.is_none());
+    if ui.widget(DISPLAY).is_none() {
+        return;
+    }
+    // the structure queue panel
+    let qp = format!("{DISPLAY}/QueuePanel");
+    if simple.is_some() && ui.widget(&qp).is_none() {
+        let p = queue_panel(ui);
+        let _ = ui.attach(DISPLAY, p);
+        ui.layout();
+        // the queue buttons stacked 3 per row (should_queue_stack)
+        let g = ui.geo();
+        let bw = ui.widget(&format!("{qp}/Queue/QueueButton")).map(|x| (x.root.outer.rect.r - x.root.outer.rect.l) / g.sx).unwrap_or(32.0);
+        let bh = ui.widget(&format!("{qp}/Queue/QueueButton")).map(|x| (x.root.outer.rect.b - x.root.outer.rect.t) / g.sy).unwrap_or(32.0);
+        for i in 0..QUEUE_WIDGETS - 1 {
+            ui.set_position(&format!("{qp}/Queue/{}", seg("QueueButton", i)), (i % QUEUE_ROW) as f32 * bw, (i / QUEUE_ROW) as f32 * bh);
+        }
+    }
+    let rel = |p: &str| p.strip_prefix("Root/").unwrap_or(p).to_string();
+    // any structure outside an HQ organization is a simple actor: no HQ
+    // slots (a city block, a depot, a bunker, the Corps HQ)
+    let lone = match b.selection.as_slice() {
+        [Unit::Actor(a)] => w.actor(*a).is_some_and(|x| w.data.def(x.def).class == Some(DefClass::Building) && aa_play::production::hq_org(w, x.id).is_none()),
+        _ => false,
+    };
+    ui.with_widget(&rel(&qp), |x| x.set_visible(simple.is_some()));
+    ui.with_widget(&rel(&format!("{DISPLAY}/HQAttached")), |x| x.set_visible(!lone));
+    if let Some(id) = simple {
+        let items = queue_items(w, id);
+        let progress = items.first().map_or(0.0, |it| it.progress);
+        aa_ui::hud::set_status(ui, &format!("{qp}/Progress"), progress);
+        let tip = ui.strings.resolve("#object_display_SimpleActorDisplay_QueuePanel_Progress_ToolTip|f").replacen("%.0f", &format!("{:.0}", progress * 100.0), 1);
+        ui.with_widget(&rel(&format!("{qp}/Progress")), |x| x.tooltip = tip.clone());
+        for i in 0..QUEUE_WIDGETS {
+            let bp = if i == 0 { format!("{qp}/CurrentButton") } else { format!("{qp}/Queue/{}", seg("QueueButton", i - 1)) };
+            let item = items.get(i);
+            let name = item.map(|it| name(ui, &w.data.def(it.def).name)).unwrap_or_default();
+            let cmd = item.map(|it| format!("AAPlay cancel_recruit {id} {}", it.index));
+            set_decal(ui, &rel(&format!("{bp}/UnitButtonDecal")), item.and_then(|it| w.data.def(it.def).icon.clone()));
+            ui.with_widget(&rel(&bp), |x| {
+                x.set_visible(item.is_some());
+                x.command = cmd.clone();
+                x.tooltip = name.clone();
+            });
+        }
+        let more = items.len() > QUEUE_WIDGETS;
+        ui.with_widget(&rel(&format!("{qp}/Queue/QueueMoreIndicator")), |x| x.set_visible(more));
+    }
+    // the HQ slots' queued organizations
+    let queued: Vec<QueueEntry> = match (structure, hq) {
+        (Some(id), Some(_)) => queue_items(w, id).into_iter().filter(|it| it.attaches).collect(),
+        _ => Vec::new(),
+    };
+    let attached = match (structure, hq) {
+        (Some(id), Some(o)) => {
+            let members = &w.orgs[o as usize].members;
+            w.orgs.iter().filter(|r| r.alive && r.hq.is_some_and(|h| h == id || members.contains(&h))).count()
+        }
+        _ => 0,
+    };
+    let slots = format!("{DISPLAY}/HQAttached");
+    if ui.widget(&slots).is_none() {
+        return;
+    }
+    for i in 0..6 {
+        let sp = format!("{slots}/{}", seg("HQAttachedOrganization", i));
+        if ui.widget(&sp).is_none() {
+            continue;
+        }
+        let rp = format!("{sp}/RecruitProgress");
+        if ui.widget(&rp).is_none() {
+            let mut bar = Widget::new(C::StatusBar, "RecruitProgress", false);
+            load_under(ui, &mut bar, &format!("{SLOT_NODE}/HQAttachedOrganization"));
+            let _ = ui.attach(&sp, bar);
+            ui.layout();
+        }
+        let entry = i.checked_sub(attached).and_then(|q| queued.get(q));
+        ui.with_widget(&rel(&rp), |x| x.set_visible(entry.is_some()));
+        if let (Some(e), Some(id)) = (entry, structure) {
+            ui.with_widget(&rel(&format!("{sp}/Health")), |x| x.set_visible(false));
+            ui.with_widget(&rel(&format!("{sp}/Morale")), |x| x.set_visible(false));
+            aa_ui::hud::set_status(ui, &rp, e.progress);
+            let tip = name(ui, &w.data.def(e.def).name);
+            let cmd = format!("AAPlay cancel_recruit {id} {}", e.index);
+            ui.with_widget(&rel(&format!("{sp}/Button")), |x| {
+                x.command = Some(cmd.clone());
+                x.tooltip = tip.clone();
+            });
+        } else {
+            ui.with_widget(&rel(&format!("{sp}/Button")), |x| {
+                if x.command.as_deref().is_some_and(|c| c.starts_with("AAPlay cancel_recruit")) {
+                    x.command = None;
+                }
+            });
+        }
+    }
+}
+
 /// The battle as the HUD reads it.
 struct View<'a> {
     battle: Option<&'a Battle>,
@@ -858,6 +1158,9 @@ struct View<'a> {
     property_icons: &'a std::collections::HashMap<String, String>,
     hovered: Option<&'a str>,
     starting_experience: f32,
+    /// The selected division HQ's general portrait model.
+    general_portrait: Option<&'a str>,
+    names: &'a super::names::Names,
 }
 
 impl View<'_> {
@@ -1152,9 +1455,20 @@ impl View<'_> {
         // an HQ structure is numbered like its organization
         let rank = hq_org.map(|o| self.org_rank(&w.orgs[o as usize]));
         let mut hq = attached;
-        hq.resize(5.max(hq.len()), None);
+        // 0x62E0F0: the HQ's attachment list also holds the organizations
+        // queued there (0x62D9D0 type 2: their icon and the recruit
+        // progress, see `recruit_queue`), then the free attachments, up to
+        // 6 slots
+        if hq_org.is_some() {
+            for item in queue_items(w, a.id).into_iter().filter(|it| it.attaches) {
+                hq.push(Some(HqSlot { texture: w.data.def(item.def).icon.clone(), health: 1.0, morale: 1.0 }));
+            }
+        }
+        let slots = hq_org.and_then(|o| w.data.def(w.orgs[o as usize].def).max_attachments).map_or(5, |m| m as usize).min(6);
+        hq.resize(slots.max(hq.len()).min(6), None);
         Some(CompanyInfo {
-            name: self.display_name(a.def, a.kingdom, rank),
+            // a named actor (a city) shows its name (GetName vtable +0x24)
+            name: self.names.building(w, a.id).map(str::to_string).unwrap_or_else(|| self.display_name(a.def, a.kingdom, rank)),
             owner: self.owner(a.kingdom),
             portrait_model: def.model.clone(),
             banner_model: None,
@@ -1400,10 +1714,24 @@ impl HudWorld for View<'_> {
         let (Some(b), Some(w)) = (self.battle, self.world()) else { return HudSelection::None };
         let Some(first) = b.selection.first() else { return HudSelection::None };
         match *first {
-            Unit::Org(id) => match w.orgs.get(id as usize).filter(|o| o.alive).and_then(|o| self.company_for_org(o)) {
-                Some(c) => HudSelection::Company(Box::new(c)),
-                None => HudSelection::None,
-            },
+            Unit::Org(id) => {
+                let Some(o) = w.orgs.get(id as usize).filter(|o| o.alive) else { return HudSelection::None };
+                // a deployed division HQ: its structure's display (HQ slots,
+                // recruit queue) with the organization's leader portrait
+                let shown = match hq_structure(w, o).and_then(|s| w.actor(s)) {
+                    Some(a) => self.company_for_building(a).map(|mut c| {
+                        // the HQ's portrait is its kingdom's general (the
+                        // Faction portrait_ids Thing, original-ui/06-corps)
+                        c.portrait_model = self.general_portrait.map(str::to_string).or(c.portrait_model);
+                        c
+                    }),
+                    None => self.company_for_org(o),
+                };
+                match shown {
+                    Some(c) => HudSelection::Company(Box::new(c)),
+                    None => HudSelection::None,
+                }
+            }
             Unit::Actor(id) => {
                 let Some(a) = w.actor(id) else { return HudSelection::None };
                 match w.data.def(a.def).class {
@@ -1432,7 +1760,9 @@ impl HudWorld for View<'_> {
                 let mut v: Vec<Option<HudAction>> = vec![None; 12];
                 for (i, r) in def.recruits.iter().take(11).enumerate() {
                     let rd = w.data.def(*r);
-                    let affordable = (0..3).all(|k| self.local().is_some_and(|l| l.stockpile[k] >= rd.cost[k]));
+                    // the recruit price at this building (501730) against
+                    // the stockpiled resources
+                    let affordable = affordable(w, b.local, &aa_play::production::recruit_cost(w, id, *r));
                     v[i] = Some(HudAction {
                         texture: rd.icon.clone().unwrap_or_default(),
                         command: format!("AAPlay recruit {id} {r}"),
@@ -1467,7 +1797,7 @@ impl HudWorld for View<'_> {
                     .selection
                     .iter()
                     .filter_map(|u| match u {
-                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom))),
+                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom)) && hq_structure(w, o).is_none()),
                         _ => None,
                     })
                     .collect();
@@ -1495,8 +1825,8 @@ impl HudWorld for View<'_> {
                     }
                 }
                 // the team commands page (ActionButtonInfo GoToTeamCommands)
-                if (!own_orgs.is_empty() && fighting) || matches!(b.selection.as_slice(), [Unit::Actor(_)]) && !self.team_go.texture.is_empty() {
-                    let building = matches!(b.selection.as_slice(), [Unit::Actor(id)] if w.actor(*id).is_some_and(|a| own(a.kingdom) && w.data.def(a.def).class == Some(DefClass::Building)));
+                if (!own_orgs.is_empty() && fighting) || selected_structure(b).is_some() && !self.team_go.texture.is_empty() {
+                    let building = selected_structure(b).is_some_and(|id| w.actor(id).is_some_and(|a| own(a.kingdom) && w.data.def(a.def).class == Some(DefClass::Building)));
                     if (!own_orgs.is_empty() && fighting) || building {
                         acts.push((self.team_go.index, HudAction { texture: self.team_go.texture.clone(), command: "AAPlay team_page".into(), enabled: true, selected: false, targeted: false }));
                     }
@@ -1515,7 +1845,10 @@ impl HudWorld for View<'_> {
                         }
                     }
                 }
-                if let [Unit::Actor(id)] = b.selection.as_slice() {
+                // a structure: the selected building, or a deployed division
+                // HQ organization's structure (the recruit component is on
+                // the building, not on its organization)
+                if let Some(id) = &selected_structure(b) {
                     if let Some(a) = w.actor(*id).filter(|a| own(a.kingdom)) {
                         let def = w.data.def(a.def);
                         if !def.recruits.is_empty() {

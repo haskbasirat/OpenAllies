@@ -133,9 +133,49 @@ fn data_path(p: &str) -> String {
 
 impl BannerArt {
     fn load(&mut self, front: &super::front::Front, images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>, meshes: &mut Assets<Mesh>) {
+        let t0 = std::time::Instant::now();
+        self.load_inner(front, images, materials, meshes);
+        info!("banners: data loaded in {:.0} ms", t0.elapsed().as_secs_f32() * 1000.0);
+    }
+
+    fn load_inner(&mut self, front: &super::front::Front, images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>, meshes: &mut Assets<Mesh>) {
         self.loaded = true;
         self.quad = meshes.add(Rectangle::new(1.0, 1.0));
         let data = &front.ui.store.root;
+        // the TGI part, parsed in the background since startup ([`warm`])
+        let warmed = WARM.lock().ok().and_then(|mut g| g.take()).and_then(|h| h.join().ok());
+        let parsed = warmed.unwrap_or_else(|| parse(data));
+        self.things = parsed.things;
+        self.banners = parsed.banners;
+        self.badges = parsed.badges;
+        self.load_assets(data, images, materials);
+    }
+}
+
+/// The banner data of the TGI files: thing banner fields, banner resource
+/// prefixes, nation badges.
+struct Parsed {
+    things: HashMap<String, ThingBanner>,
+    banners: HashMap<String, String>,
+    badges: HashMap<String, Vec<String>>,
+}
+
+/// Parsed on a background thread from the start, so the first battle frame
+/// does not spend ~0.1 s reading every regiment file.
+static WARM: std::sync::Mutex<Option<std::thread::JoinHandle<Parsed>>> = std::sync::Mutex::new(None);
+
+/// Start parsing the banner data in the background (once, at startup).
+pub fn warm(root: aa_ui::fs::DataRoot) {
+    if let Ok(mut g) = WARM.lock() {
+        if g.is_none() {
+            *g = Some(std::thread::spawn(move || parse(&root)));
+        }
+    }
+}
+
+fn parse(data: &aa_ui::fs::DataRoot) -> Parsed {
+    let mut out = Parsed { things: HashMap::new(), banners: HashMap::new(), badges: HashMap::new() };
+    {
         // templates (Templates/ and the regiment files' own) and things
         let mut files = super::gamedata::files_with(data, "Templates", ".tgi", false);
         files.extend(super::gamedata::files_with(data, "Regiments", ".tgi", true));
@@ -156,7 +196,7 @@ impl BannerArt {
             let r = resolve(&templates, t, 0);
             let Some(ids) = r.get("IDS") else { continue };
             let icon = view_field(&r, "banner_icon").filter(|s| !s.eq_ignore_ascii_case("null") && !s.contains('%')).map(|s| data_path(&s));
-            self.things.insert(
+            out.things.insert(
                 lower(ids),
                 ThingBanner {
                     banner_ids: view_field(&r, "banner_ids").map(|s| lower(&s)),
@@ -168,7 +208,7 @@ impl BannerArt {
         for f in super::gamedata::files_with(data, "Organizations/Banners", ".tgi", false) {
             for n in datafile::load(data, &f).iter().filter(|n| n.name.eq_ignore_ascii_case("Banner")) {
                 if let (Some(ids), Some(prefix)) = (n.get("ids").or(n.get("IDS")), n.get("resource_prefix")) {
-                    self.banners.insert(lower(ids), prefix.to_string());
+                    out.banners.insert(lower(ids), prefix.to_string());
                 }
             }
         }
@@ -177,9 +217,15 @@ impl BannerArt {
                 let ids = lower(n.get("IDS").unwrap_or_default());
                 let short = ids.strip_prefix("nation_").unwrap_or(&ids).to_string();
                 let list: Vec<String> = n.children_named("Badge").filter_map(|b| b.get("badge_texture")).map(|p| format!("Nations/{}", data_path(p))).collect();
-                self.badges.insert(short, list);
+                out.badges.insert(short, list);
             }
         }
+    }
+    out
+}
+
+impl BannerArt {
+    fn load_assets(&mut self, data: &aa_ui::fs::DataRoot, images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>) {
         // model sizes
         self.size = data.read("Organizations/Banners/Shared/Banner.nif").ok().and_then(|b| nifart::extent(&b)).map(|(w, _)| w).unwrap_or(2.41);
         if let Ok(bytes) = data.read("Effects/Selection/BannerFocus.NIF") {

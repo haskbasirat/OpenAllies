@@ -80,6 +80,10 @@ pub struct Front {
     loading_status: String,
     /// The launched session's StartingExperience world rule.
     starting_experience: f32,
+    /// The running battle's speed (2^v), for the options dialog's slider.
+    battle_speed: Option<f32>,
+    /// The launched session's independent kingdoms' display names.
+    kingdom_names: std::collections::HashMap<String, String>,
 }
 
 /// Commands the front end does not run yet (their screens are not built).
@@ -102,6 +106,11 @@ impl Front {
             ui.uvars.apply_overrides(&vars);
         }
         let custom = Custom::new(root);
+        // the staging data parses in the background from the start
+        super::custom::warm(ui.store.root.clone());
+        super::banners::warm(ui.store.root.clone());
+        super::minimap::warm(ui.store.root.clone());
+        super::names::warm(ui.store.root.clone());
         Self {
             ui,
             page: Page::MainMenu,
@@ -126,6 +135,8 @@ impl Front {
             tooltips: Default::default(),
             loading_status: String::new(),
             starting_experience: 0.0,
+            battle_speed: None,
+            kingdom_names: Default::default(),
         }
     }
 
@@ -168,6 +179,10 @@ impl Front {
             if o.connection.is_empty() {
                 o.connection = default_connection;
             }
+            // 0x76B2F0: a game in progress (single player: this player hosts)
+            // lets the slider change the speed, GameSpeedMin / GameSpeedMax
+            // (SVars -2 / +2) around the current exponent
+            o.game_speed = self.battle_speed.filter(|_| self.page == Page::Game).map(|s| (-2.0, 2.0, s.max(1e-3).log2()));
             o.show(&mut self.ui, "");
         }
     }
@@ -198,6 +213,15 @@ impl Front {
     }
 
     fn build(&mut self, size: (i32, i32), battle: Option<&Battle>, progress: Option<&LoadProgress>) {
+        let t0 = std::time::Instant::now();
+        self.build_page(size, battle, progress);
+        let ms = t0.elapsed().as_secs_f32() * 1000.0;
+        if ms > 20.0 {
+            info!("UI page {:?} built in {ms:.0} ms", self.page);
+        }
+    }
+
+    fn build_page(&mut self, size: (i32, i32), battle: Option<&Battle>, progress: Option<&LoadProgress>) {
         // a rebuilt screen has no tooltip connected
         self.tooltips = Default::default();
         self.ui.set_screen(Screen { width: size.0, height: size.1 });
@@ -422,6 +446,18 @@ fn ui_key(code: KeyCode) -> Option<(UiKey, &'static str)> {
 
 /// The per-frame front end: input, commands, page builds, the draw list.
 #[allow(clippy::too_many_arguments)]
+/// Logs a UI frame that took long (a main-thread stall the player feels).
+struct SlowFrame(std::time::Instant, Page);
+
+impl Drop for SlowFrame {
+    fn drop(&mut self) {
+        let ms = self.0.elapsed().as_secs_f32() * 1000.0;
+        if ms > 30.0 {
+            info!("slow UI frame: {ms:.0} ms on {:?}", self.1);
+        }
+    }
+}
+
 pub fn frame(
     mut front: ResMut<Front>,
     mut draw: ResMut<super::render::UiDraw>,
@@ -441,7 +477,9 @@ pub fn frame(
 ) {
     let Ok(window) = windows.single() else { return };
     let size = (window.physical_width().max(1) as i32, window.physical_height().max(1) as i32);
+    let _slow = SlowFrame(std::time::Instant::now(), front.page);
     let f = front.as_mut();
+    f.battle_speed = battle.as_ref().map(|b| b.speed);
     // the app state decides the page
     let want = match state.get() {
         AppState::Menu => match f.page {
@@ -628,6 +666,9 @@ pub fn frame(
         let starting_experience = f.starting_experience;
         if let (Some(hud), Some(b)) = (f.hud.as_mut(), battle.as_deref()) {
             hud.starting_experience = starting_experience;
+            if hud.names.kingdoms.is_empty() && !f.kingdom_names.is_empty() {
+                hud.names.kingdoms = f.kingdom_names.clone();
+            }
             hud.set_hover(hovered.as_deref());
             hud.update(&mut f.ui, b);
         }
@@ -637,6 +678,7 @@ pub fn frame(
             f.custom.localize_setup(&f.ui, &mut setup);
             info!("launch: {setup:?}, generals {:?}", f.custom.launched_profiles);
             commands.insert_resource(crate::session::PendingAiProfiles(f.custom.launched_profiles.clone()));
+            f.kingdom_names = f.custom.kingdom_names();
             f.starting_experience = f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
             // the generals and the StartingExperience rule (ui/abilities.rs)
             commands.insert_resource(super::abilities::PendingGenerals {
