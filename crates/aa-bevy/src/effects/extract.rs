@@ -338,9 +338,10 @@ pub struct Extract<'a> {
     duration: f32,
     tag: u32,
     psys: Vec<(usize, HashMap<&'static str, usize>, usize)>,
-    /// Scene walk only (animated models): every drawn geometry object and
-    /// its node, instead of sprite extraction.
-    geometry: Option<Vec<(usize, usize)>>,
+    /// Scene walk only (animated models): every drawn geometry object, its
+    /// node and whether it is blended (the sprite path's geometry),
+    /// instead of sprite extraction.
+    geometry: Option<Vec<(usize, usize, bool)>>,
 }
 
 impl<'a> Extract<'a> {
@@ -482,9 +483,13 @@ impl<'a> Extract<'a> {
             return;
         }
         if is_kind_of(o.class, "NiTriBasedGeom") {
-            if let Some(g) = self.geometry.as_mut() {
-                if !hidden {
-                    g.push((i, idx));
+            if self.geometry.is_some() {
+                // Blended geometry is the sprite path's (and helper shapes
+                // are never drawn).
+                let helper = name.starts_with("selectionbox") || name.starts_with("selection box") || name.starts_with("collision");
+                let blended = helper || props.get("NiAlphaProperty").is_some_and(|&p| self.obj(p).fields.u16("flags").unwrap_or(0) & 1 != 0);
+                if !hidden && let Some(g) = self.geometry.as_mut() {
+                    g.push((i, idx, blended));
                 }
                 return;
             }
@@ -1112,9 +1117,11 @@ pub fn extract(file: &NifFile, nif_rel: &str, textures: &mut Textures) -> Option
 }
 
 /// The particle-player folders (as the client extractor): UI markers,
-/// flags, transports, waypoints and the special-operation set pieces are
-/// animated models, not particle effects. Death debris adds its smoke.
-pub const INCLUDE: [&str; 21] = [
+/// flags, transports and waypoints are models, not particle effects. Death
+/// debris and the special-operation set pieces (bombers, rockets, emblems)
+/// are both: their opaque meshes play as animated models (anim.rs) and
+/// their blended sprites and particles here.
+pub const INCLUDE: [&str; 13] = [
     "gunshot/",
     "tankshot/",
     "artilleryshot/",
@@ -1126,15 +1133,7 @@ pub const INCLUDE: [&str; 21] = [
     "moveeffect/",
     "crusheddoodad/",
     "construction/pack",
-    "specialops/smokebarrage/",
-    "specialops/atomicbomb/atomicsparks",
-    "specialops/vweapons/v1explosion",
-    "specialops/vweapons/v1groundfire",
-    "specialops/vweapons/v1shock",
-    "specialops/courage/couragecloud",
-    "specialops/fear/fearcloud",
-    "specialops/economicaid/grounddust",
-    "specialops/resupply/",
+    "specialops/",
     "deathdebris/",
 ];
 
@@ -1182,11 +1181,11 @@ pub fn build(data_root: &Path, models: &[String], texture_dir: PathBuf) -> NifTa
 
 /// The scene graph of a model NIF: the node table (bind transforms with
 /// their keyframe and visibility tracks), object -> node, and the drawn
-/// geometry objects with their nodes, in walk order.
+/// geometry objects with their nodes and blending, in walk order.
 pub struct Scene {
     pub nodes: Vec<Node>,
     pub node_of: HashMap<usize, usize>,
-    pub geometry: Vec<(usize, usize)>,
+    pub geometry: Vec<(usize, usize, bool)>,
     pub duration: f32,
 }
 

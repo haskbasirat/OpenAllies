@@ -50,11 +50,18 @@ pub struct SfxQueue {
     pub play: Vec<Sfx>,
     /// Stop requests: (IDS, place).
     pub stop: Vec<(String, Option<Place>)>,
+    /// Native positions of the effects' own sound objects (air transports).
+    pub objects: HashMap<u64, Vec3>,
 }
 
 /// Organization handles for sound objects (actors use their id).
 pub fn org_object(org: u32) -> u64 {
     (1u64 << 32) | org as u64
+}
+
+/// Handles of the effects' own moving sound objects (not sim actors).
+pub fn effect_object(n: u32) -> u64 {
+    (2u64 << 32) | n as u64
 }
 
 pub struct SoundPlugin;
@@ -190,10 +197,14 @@ impl Sound {
 struct BattleWorld<'a> {
     world: &'a World,
     local: u32,
+    objects: HashMap<u64, Vec3>,
 }
 
 impl manager::World for BattleWorld<'_> {
     fn object_position(&self, object: u64) -> Option<Vec3> {
+        if object >> 32 == 2 {
+            return self.objects.get(&object).copied();
+        }
         if object >> 32 == 1 {
             let org = self.world.orgs.get((object & 0xffff_ffff) as usize)?;
             let member = org.members.iter().find_map(|m| self.world.actor(*m))?;
@@ -225,10 +236,11 @@ fn read_vars(reconstruction: &std::path::Path) -> Vars {
     Vars::read(&texts)
 }
 
-fn leave_battle(mut commands: Commands, sound: Option<ResMut<Sound>>) {
+fn leave_battle(mut commands: Commands, sound: Option<ResMut<Sound>>, mut queue: ResMut<SfxQueue>) {
     if let Some(mut s) = sound {
         s.manager.stop_all();
     }
+    queue.objects.clear();
     commands.remove_resource::<Sound>();
 }
 
@@ -351,7 +363,7 @@ fn update(
     };
     let sound = &mut *sound;
     let world = &battle.world;
-    let bw = BattleWorld { world, local: battle.local };
+    let bw = BattleWorld { world, local: battle.local, objects: queue.objects.clone() };
     sound.files.poll();
     // 4F96D0 first-tick music: the local player's nation game_music, looping.
     if !sound.music_started {
