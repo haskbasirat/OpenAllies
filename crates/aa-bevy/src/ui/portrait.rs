@@ -5,8 +5,9 @@
 //!   Thing, e.g. Units/GER/GERInfantryCo/GERInfantryCOPortrait.nif, else the
 //!   selected object's own model) rendered into an image the UI draws in
 //!   the widget's rectangle. A portrait NIF's own NiCamera (its transform
-//!   and frustum) frames it; any other model is framed from the front left
-//!   and above, its bounds filling the view (the 17-truck shot);
+//!   and frustum) frames it; any other model is framed as the ModelVE
+//!   fit_model does it (`0x5EA730`): from the VE position 1,-1,1 (front
+//!   right, above), its bounds filling the view;
 //! * the banner: the selected organization's composed banner (the same
 //!   layers the world banner shows) drawn as an image.
 //!
@@ -201,15 +202,26 @@ pub fn update(
         let (eye, look, up, fov, near, far) = match m.camera {
             Some(c) => (c.eye, c.eye + c.dir, if c.up.length_squared() > 0.5 { c.up } else { Vec3::Y }, c.fov, c.near, c.far),
             None => {
-                // front left and above, the bounds filling the view (the
-                // bounding sphere at 0.7 of its fitting distance: the
-                // silhouette fills the frame as in the original truck shot)
-                let centre = (m.min + m.max) * 0.5;
-                let radius = ((m.max - m.min).length() * 0.5).max(0.1);
+                // ModelVE fit_model (0x5EA730): the camera on the VE
+                // `position` direction (template_ve.tgi 1,-1,1: native +x,
+                // -y in front of the model, above; render (1,1,1)), looking
+                // at the model origin raised by half the model height. The
+                // distance puts the bounds' top corner (horizontal radius R,
+                // half height h) on the frame edge: sqrt(R^2 + h^2)
+                // sin(pi - atan(h/R) - a - e) / sin(a), with a the half view
+                // angle and e the elevation of the position.
+                let h = ((m.max.y - m.min.y) * 0.5).max(0.05);
+                let r = m.min.x.abs().max(m.max.x.abs()).max(m.min.z.abs()).max(m.max.z.abs()).max(0.05);
                 let fov = 30f32.to_radians();
-                let dir = Vec3::new(1.0, -0.55, -1.0).normalize();
-                let dist = 0.7 * radius / (fov * 0.5).sin() * if aspect < 1.0 { 1.0 / aspect } else { 1.0 };
-                (centre - dir * dist, centre, Vec3::Y, fov, (dist - radius * 2.0).max(0.05), dist + radius * 2.0)
+                let half = fov * 0.5;
+                let pos = Vec3::new(1.0, -1.0, 1.0);
+                let elevation = std::f32::consts::FRAC_PI_2 - (pos.x.hypot(pos.y) / pos.z).atan();
+                let a = std::f32::consts::PI - (h / r).atan() - half - elevation;
+                let dist = (r * r + h * h).sqrt() * a.sin() / half.sin();
+                let target = Vec3::new(0.0, h, 0.0);
+                let dir = to_render(pos).normalize();
+                let radius = (r * r + h * h).sqrt();
+                (target + dir * dist, target, Vec3::Y, fov, (dist - radius * 2.0).max(0.05), dist + radius * 2.0)
             }
         };
         // models face the camera's light: from the front, above

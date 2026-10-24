@@ -14,7 +14,16 @@
 //! * Box: own regiments first, else own buildings (class rule 0x6406C0);
 //!   at most 6 objects, the nearest to the centroid (0x640FA0).
 //! * Right click with own movable units selected: an enemy under the
-//!   cursor is attacked, otherwise move to the ground point.
+//!   cursor is attacked, otherwise move to the ground point. Over the
+//!   minimap (its widget takes only the left button, `0x5D77A0`) the
+//!   right press reaches the world with the minimap's point (`0x6203F0` ->
+//!   `0x5D74B0`): a move there.
+//! * Order feedback (`0x6229F0`): an accepted location order plays
+//!   `move_vfx` at its point (`crate::ui::order_marks`); the unit's
+//!   waypoint flag shows the command given (`order_marks::Issued`).
+//! * Unpack: the placement mode (`crate::ui::placement`): the ghost follows
+//!   the cursor, a press at a legal spot fixes it, dragging turns it, the
+//!   release places the building with that facing (default native -Y).
 //! * Groups: Ctrl+digit saves, digit selects, a second tap within
 //!   UICenterGroupTimeMS (1000 ms) centres the camera on the group.
 //! * Keys: Pause = gamepause, +/- = SpeedUp/SpeedDown (hotkeys_core.txt).
@@ -22,6 +31,8 @@ use crate::battle_view::ActorView;
 use crate::camera::{CameraRequests, NativeCamera};
 use crate::session::{AppState, Battle};
 use crate::ui::hud::{GameAction, GameInput, TargetOrder};
+use crate::ui::order_marks::{self, Issued, PointVfx};
+use crate::ui::placement::{self, Ghost, Placement};
 use aa_play::{ActorId, Command, DefClass, Unit};
 use bevy::camera::primitives::Aabb;
 use bevy::prelude::*;
@@ -173,8 +184,15 @@ pub fn battle_input(
     parts: Query<(&Aabb, &GlobalTransform)>,
     mut commands: Commands,
     banners: Option<Res<crate::ui::banners::BannerArt>>,
+    (mut place, mut ghost, mut marks, mut issued): (ResMut<Placement>, ResMut<Ghost>, ResMut<PointVfx>, ResMut<Issued>),
 ) {
-    let Some(mut b) = battle else { return };
+    let Some(mut b) = battle else {
+        place.active = None;
+        if *ghost != Ghost::default() {
+            *ghost = Ghost::default();
+        }
+        return;
+    };
     if game.is_some() {
         commands.remove_resource::<GameInput>();
     }
@@ -352,10 +370,68 @@ pub fn battle_input(
         _ => false,
     };
     sel.hover_banner = on_banner && sel.hover.is_some();
+    // the Unpack placement mode: the ghost at the cursor (or at the press
+    // point, turned toward the cursor while dragged), tested every frame
+    // (0x688860)
+    let placing = match sel.armed {
+        Some(TargetOrder::Deploy(truck)) => b.world.actor(truck).and_then(|a| b.world.data.def(a.def).unpacks_to).map(|d| (truck, d)),
+        _ => None,
+    };
+    match placing {
+        Some((truck, building)) => {
+            if place.active.as_ref().is_none_or(|a| a.truck != truck || a.building != building) {
+                place.active = Some(placement::Active { truck, building, at: Vec2::ZERO, facing: placement::DEFAULT_FACING, legal: false, problem: None, press: None, turning: false });
+            }
+            let g = ray.and_then(|r| ground_hit(&b, r)).map(|g| g.truncate()).filter(|_| !front.pointer_over_ui);
+            let a = place.active.as_mut().expect("set");
+            match a.press {
+                None => {
+                    if let Some(g) = g {
+                        a.at = g;
+                    }
+                    a.facing = placement::DEFAULT_FACING;
+                }
+                Some((sp, gp)) => {
+                    a.at = gp;
+                    if let (Some(c), Some(g)) = (cursor, g) {
+                        // 0x688AA0: past the drag threshold the facing follows
+                        if !a.turning && (c - sp).abs().element_sum() >= DRAG_THRESHOLD {
+                            a.turning = true;
+                        }
+                        let d = g - gp;
+                        if a.turning && d != Vec2::ZERO {
+                            a.facing = d.y.atan2(d.x);
+                        }
+                    }
+                }
+            }
+            let (at, facing) = aa_play::deploy::placement(&b.world, building, a.at, a.facing);
+            a.at = at;
+            a.facing = facing;
+            a.problem = placement::problem(&b.world, truck, building, at);
+            a.legal = a.problem.is_none();
+            // the placement state has no hover focus (that is the default
+            // state's)
+            sel.hover = None;
+            sel.hover_banner = false;
+        }
+        None => place.active = None,
+    }
     // left button on the world
     if front.pointer.left_pressed && !front.press_on_ui {
         if let Some(c) = cursor {
-            sel.press = Some((c, now));
+            match place.active.as_mut() {
+                // 0x6887C0: an illegal spot does not place (the reason is
+                // reported); a legal one fixes the ghost at the press point
+                Some(a) if !a.legal => {
+                    info!("placement: {}", a.problem.as_deref().unwrap_or("illegal spot"));
+                }
+                Some(a) => {
+                    a.press = Some((c, a.at));
+                    sel.press = Some((c, now));
+                }
+                None => sel.press = Some((c, now)),
+            }
         }
     }
     if let (Some((p, _)), Some(c)) = (sel.press, cursor) {
@@ -397,14 +473,18 @@ pub fn battle_input(
                             if let Some(t) = target {
                                 b.pending.push(Command::Attack { kingdom: local, units, target: t });
                             } else if let Some(g) = ground {
+                                // kill at a location (actor_commands.tgi kill)
+                                order_marks::move_command(&mut marks, g.truncate());
+                                issued.give(&units, g.truncate(), "waypoint_attack_actor");
                                 b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: true });
                             }
                         }
                     }
+                    // the placement: where the press fixed the ghost, with the
+                    // facing the drag gave it (native -Y without a drag)
                     TargetOrder::Deploy(truck) => {
-                        if let Some(g) = ground {
-                            let facing = b.world.actor(truck).map(|a| a.facing).unwrap_or(0.0);
-                            b.pending.push(Command::Deploy { kingdom: local, truck, at: g.truncate(), facing });
+                        if let Some(a) = place.active.take().filter(|a| a.truck == truck && a.press.is_some()) {
+                            b.pending.push(Command::Deploy { kingdom: local, truck, at: a.at, facing: a.facing });
                         }
                     }
                     // move (5) and Run (7): a plain (passive) move; guard (2)
@@ -416,6 +496,19 @@ pub fn battle_input(
                         let object = hit.filter(|_| matches!(order, TargetOrder::Guard)).and_then(|id| b.world.actor(id)).map(|a| a.pos.truncate());
                         if let Some(to) = object.or(ground.map(|g| g.truncate())) {
                             if !units.is_empty() {
+                                // a location order plays the move VFX; the
+                                // waypoint shows the command
+                                // (actor_commands*.tgi command_vfx_ids_actor)
+                                if object.is_none() {
+                                    order_marks::move_command(&mut marks, to);
+                                }
+                                let vfx = match order {
+                                    TargetOrder::Run => "waypoint_run_actor",
+                                    TargetOrder::Guard => "waypoint_defend_actor",
+                                    TargetOrder::Explore => "waypoint_explore_actor",
+                                    _ => "waypoint_move_actor",
+                                };
+                                issued.give(&units, to, vfx);
                                 b.pending.push(Command::Move { kingdom: local, units, to, attack_move: engage });
                             }
                         }
@@ -432,6 +525,7 @@ pub fn battle_input(
                     }
                     TargetOrder::Rally(building) => {
                         if let Some(g) = ground {
+                            order_marks::move_command(&mut marks, g.truncate());
                             b.pending.push(Command::SetRallyPoint { kingdom: local, building, at: g.truncate() });
                         }
                     }
@@ -487,7 +581,27 @@ pub fn battle_input(
             }
         }
     }
-    // right click: cancel an armed order / box, else the hot command
+    // right click: cancel an armed order / box, else the hot command; over
+    // the minimap the hot command's point is the minimap's (no actor there)
+    let on_minimap = cursor.filter(|_| front.pointer.right_pressed && front.pointer_over_ui).and_then(|c| match front.ui.press_target_5c3bc0(c.x as i16, c.y as i16) {
+        aa_ui::press_pick::PressTarget::MiniMap { path, .. } => front.ui.minimap_uv(&path, c.x, c.y),
+        _ => None,
+    });
+    if front.pointer.right_pressed && on_minimap.is_some() {
+        if sel.armed.take().is_some() || sel.drag.take().is_some() {
+            sel.press = None;
+        } else if let Some((u, v)) = on_minimap.filter(|(u, v)| (0.0..=1.0).contains(u) && (0.0..=1.0).contains(v)) {
+            let units = own_movable(&b);
+            if !units.is_empty() {
+                let m = &b.world.map;
+                let to = Vec2::new(u * m.width as f32 * m.cell_size, v * m.height as f32 * m.cell_size);
+                debug!("order: move {units:?} to {to:?} (minimap)");
+                order_marks::move_command(&mut marks, to);
+                issued.give(&units, to, "waypoint_move_actor");
+                b.pending.push(Command::Move { kingdom: local, units, to, attack_move: false });
+            }
+        }
+    }
     if front.pointer.right_pressed && !front.pointer_over_ui {
         if sel.armed.take().is_some() || sel.drag.take().is_some() {
             sel.press = None;
@@ -504,6 +618,8 @@ pub fn battle_input(
                     b.pending.push(Command::Attack { kingdom: local, units, target: t });
                 } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
                     debug!("order: move {units:?} to {g:?}");
+                    order_marks::move_command(&mut marks, g.truncate());
+                    issued.give(&units, g.truncate(), "waypoint_move_actor");
                     b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: false });
                 }
             }
@@ -516,6 +632,14 @@ pub fn battle_input(
     }).collect();
     if alive.len() != b.selection.len() {
         b.selection = alive;
+    }
+    // the placement ends with its armed order (placed or cancelled)
+    if !matches!(sel.armed, Some(TargetOrder::Deploy(_))) {
+        place.active = None;
+    }
+    let g = placement::ghost_of(&b.world, local, &place);
+    if *ghost != g {
+        *ghost = g;
     }
 }
 
@@ -585,7 +709,7 @@ pub struct InputPlugin;
 
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Selecting>().init_resource::<CameraRequests>().add_systems(
+        app.init_resource::<Selecting>().init_resource::<CameraRequests>().init_resource::<Placement>().init_resource::<Ghost>().init_resource::<PointVfx>().init_resource::<Issued>().add_systems(
             Update,
             (crate::camera::attach, battle_input, crate::camera::update)
                 .chain()

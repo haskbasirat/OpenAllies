@@ -301,12 +301,6 @@ pub fn paint(
             _ => {}
         }
     }
-    // minimap icons (Data/MiniMap/Icons, drawn as shipped)
-    if let Some(m) = &draw.minimap {
-        for icon in &m.icons {
-            keys.push(Key { path: icon.texture.clone(), skin: None, variant: Variant::default() });
-        }
-    }
     r.tex.prepare(keys, &mut images);
     let mut b = Builder { batches: Vec::new(), half: [size[0] as f32 * 0.5, size[1] as f32 * 0.5] };
     let mut video_i = 0;
@@ -374,16 +368,11 @@ pub fn paint(
                 if let Some(m) = &draw.minimap {
                     let [p0, p1, p2] = m.quad;
                     // point(u, v) = p0 + u (p2 - p1) + v (p1 - p0); image row 0
-                    // is the map's top (v = 1)
+                    // is the map's top (v = 1). The image holds every layer,
+                    // the objects included.
                     let pt = |u: f32, v: f32| (p0.0 + u * (p2.0 - p1.0) + v * (p1.0 - p0.0), p0.1 + u * (p2.1 - p1.1) + v * (p1.1 - p0.1));
                     if let (Some(img), true) = (&draw.minimap_image, m.has_terrain) {
                         b.poly(Some(img.clone()), [pt(0.0, 0.0), pt(1.0, 0.0), pt(1.0, 1.0), pt(0.0, 1.0)], [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]], [1.0; 4]);
-                    }
-                    for icon in &m.icons {
-                        let key = Key { path: icon.texture.clone(), skin: None, variant: Variant::default() };
-                        if let Some(e) = r.tex.get(&key) {
-                            b.poly(Some(e.image.clone()), icon.corners, [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]], icon.color);
-                        }
                     }
                     for (a, e, c) in &m.lines {
                         // a one pixel line as a thin quad
@@ -391,11 +380,6 @@ pub fn paint(
                         let len = (dx * dx + dy * dy).sqrt().max(1e-3);
                         let (nx, ny) = (-dy / len * 0.5, dx / len * 0.5);
                         b.poly(None, [(a.0 + nx, a.1 + ny), (e.0 + nx, e.1 + ny), (e.0 - nx, e.1 - ny), (a.0 - nx, a.1 - ny)], [[0.0, 0.0]; 4], *c);
-                    }
-                    for (u, v, s, c) in &m.points {
-                        let (x, y) = pt(*u, *v);
-                        let h = s * 0.5;
-                        b.quad(None, Rect { l: (x - h).floor(), t: (y - h).floor(), r: (x - h).floor() + s.round().max(1.0), b: (y - h).floor() + s.round().max(1.0) }, [0.0, 0.0, 1.0, 1.0], *c, None);
                     }
                 }
             }

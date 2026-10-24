@@ -166,6 +166,9 @@ pub struct GameHud {
     /// The command of the action button under the pointer (the economic
     /// impact preview of 0x602640).
     hovered: Option<String>,
+    /// The structure the Unpack placement mode is placing (its impact is
+    /// previewed, `0x603A00` -> `0x603620` -> `0x602640`).
+    placing: Option<aa_play::DefId>,
     /// Tooltip (name, text) of each action slot and formation button.
     slot_tips: Vec<Option<(String, String)>>,
     formation_tips: Vec<String>,
@@ -414,6 +417,7 @@ impl GameHud {
             team_commands: &team_commands,
             property_icons: &property_icons,
             hovered: None,
+            placing: None,
             starting_experience: 0.0,
             general_portrait: None,
             names: &names,
@@ -431,6 +435,7 @@ impl GameHud {
             team_commands,
             property_icons,
             hovered: None,
+            placing: None,
             slot_tips: vec![None; 12],
             formation_tips: Vec::new(),
             page: ActionPage::Main,
@@ -484,6 +489,7 @@ impl GameHud {
             team_commands: &self.team_commands,
             property_icons: &self.property_icons,
             hovered: self.hovered.as_deref(),
+            placing: self.placing,
             starting_experience: self.starting_experience,
             general_portrait: general_portrait.as_deref(),
             names: &self.names,
@@ -836,6 +842,12 @@ impl GameHud {
         });
     }
 
+    /// The structure being placed (the Unpack placement mode), previewed in
+    /// the economic impact bar.
+    pub fn set_placing(&mut self, def: Option<aa_play::DefId>) {
+        self.placing = def;
+    }
+
     /// The tooltip (name, text) of an action button slot / formation button
     /// widget path, for the tooltip module.
     pub fn tooltip(&self, path: &str) -> Option<(String, String)> {
@@ -1070,10 +1082,18 @@ fn recruit_queue(ui: &mut Ui, b: &Battle) {
         [Unit::Actor(a)] => w.actor(*a).is_some_and(|x| w.data.def(x.def).class == Some(DefClass::Building) && aa_play::production::hq_org(w, x.id).is_none()),
         _ => false,
     };
-    ui.with_widget(&rel(&qp), |x| x.set_visible(simple.is_some()));
+    // 0x628E60 -> 0x6247B0: the QueuePanel is there only while the
+    // structure (own or allied) has something queued; with an empty queue
+    // the panel is removed, no button, bar or indicator stays
+    let items = simple.map(|id| queue_items(w, id)).unwrap_or_default();
+    let friendly = simple.and_then(|id| w.actor(id)).and_then(|a| a.kingdom).is_some_and(|k| {
+        let team = |k: u32| w.kingdoms.iter().find(|x| x.id == k).map(|x| x.team);
+        k == b.local || team(k) == team(b.local)
+    });
+    let shown = simple.filter(|_| friendly && !items.is_empty());
+    ui.with_widget(&rel(&qp), |x| x.set_visible(shown.is_some()));
     ui.with_widget(&rel(&format!("{DISPLAY}/HQAttached")), |x| x.set_visible(!lone));
-    if let Some(id) = simple {
-        let items = queue_items(w, id);
+    if let Some(id) = shown {
         let progress = items.first().map_or(0.0, |it| it.progress);
         aa_ui::hud::set_status(ui, &format!("{qp}/Progress"), progress);
         let tip = ui.strings.resolve("#object_display_SimpleActorDisplay_QueuePanel_Progress_ToolTip|f").replacen("%.0f", &format!("{:.0}", progress * 100.0), 1);
@@ -1157,6 +1177,7 @@ struct View<'a> {
     team_commands: &'a [TeamCommand],
     property_icons: &'a std::collections::HashMap<String, String>,
     hovered: Option<&'a str>,
+    placing: Option<aa_play::DefId>,
     starting_experience: f32,
     /// The selected division HQ's general portrait model.
     general_portrait: Option<&'a str>,
@@ -1655,6 +1676,19 @@ impl HudWorld for View<'_> {
     /// (production minus upkeep, negative) and its cost.
     fn economic_impact(&self) -> Option<HudImpact> {
         let w = self.world()?;
+        // the Unpack placement mode (0x603A00 -> 0x603620): the structure's
+        // own production and upkeep, no cost (the original shows the second
+        // bar while the ghost is out: "+30 +25" over "+25 +20" for a supply
+        // depot)
+        if let Some(def) = self.placing.filter(|_| self.hovered.is_none_or(|h| !h.starts_with("AAPlay recruit "))) {
+            let mut upkeep = self.econ_of(def);
+            for (i, r) in self.resources.iter().enumerate() {
+                if r.kind == 2 {
+                    upkeep[i] = -upkeep[i].abs();
+                }
+            }
+            return Some(HudImpact { upkeep, cost: vec![0.0; self.resources.len()] });
+        }
         let rest = self.hovered?.strip_prefix("AAPlay recruit ")?;
         let def = rest.split_whitespace().nth(1)?.parse::<u32>().ok()?;
         let d = w.data.def(def);

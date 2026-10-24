@@ -18,7 +18,9 @@ pub mod selection;
 pub mod minimap;
 pub mod nifart;
 pub mod names;
+pub mod order_marks;
 pub mod panels;
+pub mod placement;
 pub mod portrait;
 pub mod tex;
 pub mod tooltip;
@@ -67,7 +69,10 @@ impl Plugin for UiPlugin {
             .init_resource::<portrait::Portraits>()
             .init_resource::<selection::Cursors>()
             .init_resource::<Quit>()
-            .add_systems(Last, (quit, long_frames))
+            .init_resource::<order_marks::PointVfx>()
+            .init_resource::<order_marks::Waypoints>()
+            .init_resource::<order_marks::Issued>()
+            .add_systems(Last, (quit, long_frames, order_marks::drop_stale))
             .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, names::place, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
                 Update,
@@ -79,6 +84,10 @@ impl Plugin for UiPlugin {
             // the generals of the battle before its first tick (combat owner)
             .add_systems(Update, abilities::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             .add_systems(Update, fog::update.after(crate::session::step_battle))
+            // the placement's impact preview for the next HUD update
+            .add_systems(Update, placement_impact.after(crate::input::battle_input))
+            // the selected units' order waypoints (0x627D90), after the tick
+            .add_systems(Update, order_marks::fill_waypoints.after(crate::input::battle_input).after(crate::session::step_battle))
             .add_systems(
                 Update,
                 fog::hide_unseen.after(crate::session::step_battle).after(crate::battle_view::sync_actors).run_if(in_state(crate::session::AppState::Battle)),
@@ -130,6 +139,15 @@ fn quit(mut q: ResMut<Quit>, windows: Query<(), With<bevy::window::PrimaryWindow
     }
     info!("quit");
     std::process::exit(0);
+}
+
+/// The structure the placement mode is placing, for the HUD's economic
+/// impact bar.
+fn placement_impact(mut front: ResMut<front::Front>, place: Option<Res<placement::Placement>>) {
+    let def = place.and_then(|p| p.active.as_ref().map(|a| a.building));
+    if let Some(h) = front.hud.as_mut() {
+        h.set_placing(def);
+    }
 }
 
 /// The minimap's terrain image and points for this frame's draw list.
