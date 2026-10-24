@@ -49,7 +49,8 @@ impl Tooltips {
                 return Some((p, t));
             }
             if let Some(w) = ui.widget(&p) {
-                if !w.tooltip_name.is_empty() || !w.tooltip.is_empty() {
+                // "@Set By Code": the code sets that tooltip (none here)
+                if (!w.tooltip_name.is_empty() || !w.tooltip.is_empty()) && !w.tooltip.starts_with('@') {
                     return Some((p.clone(), (text(ui, &w.tooltip_name), text(ui, &w.tooltip))));
                 }
             }

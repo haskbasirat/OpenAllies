@@ -191,6 +191,7 @@ pub fn battle_input(
                     }
                 }
                 GameAction::Recruit { building, def } => b.pending.push(Command::Recruit { kingdom: local, building: *building, def: *def }),
+                GameAction::CancelRecruit { building, index } => b.pending.push(Command::CancelRecruit { kingdom: local, building: *building, index: *index }),
                 GameAction::Pack { building } => b.pending.push(Command::Pack { kingdom: local, building: *building }),
                 GameAction::Sell { building } => b.pending.push(Command::Sell { kingdom: local, building: *building }),
                 GameAction::Detach { org } => b.pending.push(Command::Detach { kingdom: local, org: *org }),

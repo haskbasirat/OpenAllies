@@ -10,7 +10,8 @@
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
-//! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck", "own_banner",
+//! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck",
+//! "own_hq", "own_corps", "city_center", "own_banner",
 //! "enemy_banner": the on-screen actor / organization banner of that
 //! kind nearest the window centre, clicked where it is drawn, or at
 //! `"offset": [dx, dy]` window fractions from there),
@@ -254,6 +255,12 @@ pub fn run(
                 "own_building" => a.kingdom == Some(b.local) && building,
                 // a mobile actor outside any organization (a truck)
                 "own_truck" => a.kingdom == Some(b.local) && !building && a.org.is_none() && w.data.def(a.def).health > 0.0,
+                // a recruiting structure: a deployed division HQ (in its HQ
+                // organization) or a lone one (the Corps HQ)
+                "own_hq" => a.kingdom == Some(b.local) && building && a.org.is_some() && !w.data.def(a.def).recruits.is_empty(),
+                "own_corps" => a.kingdom == Some(b.local) && building && a.org.is_none() && !w.data.def(a.def).recruits.is_empty(),
+                // a city center (CityComponent)
+                "city_center" => w.data.def(a.def).city,
                 _ => false,
             }
         };

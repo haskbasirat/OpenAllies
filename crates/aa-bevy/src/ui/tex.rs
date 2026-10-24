@@ -123,6 +123,8 @@ impl UiTextures {
             return;
         }
         let root = self.root.clone();
+        let t0 = std::time::Instant::now();
+        let count = missing.len();
         let decoded: Vec<(Key, Option<(u32, u32, Vec<u8>)>)> =
             missing.into_par_iter().map(|k| {
                 let d = Self::decode(&root, &k);
@@ -137,6 +139,10 @@ impl UiTextures {
                 warn!("UI image not found: {}", key.path);
             }
             self.entries.insert(key, entry);
+        }
+        let ms = t0.elapsed().as_secs_f32() * 1000.0;
+        if ms > 20.0 {
+            info!("UI textures: {count} decoded in {ms:.0} ms");
         }
     }
 

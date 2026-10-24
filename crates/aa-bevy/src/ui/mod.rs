@@ -17,6 +17,7 @@ pub mod script;
 pub mod selection;
 pub mod minimap;
 pub mod nifart;
+pub mod names;
 pub mod panels;
 pub mod portrait;
 pub mod tex;
@@ -66,8 +67,8 @@ impl Plugin for UiPlugin {
             .init_resource::<portrait::Portraits>()
             .init_resource::<selection::Cursors>()
             .init_resource::<Quit>()
-            .add_systems(Last, quit)
-            .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, render::update_camera, render::paint, selection::cursor).chain())
+            .add_systems(Last, (quit, long_frames))
+            .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, names::place, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
                 Update,
                 (selection::update, banners::update).after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)),
@@ -106,6 +107,14 @@ impl Plugin for UiPlugin {
 pub struct Quit {
     pub requested: bool,
     had_window: bool,
+}
+
+/// A frame longer than 150 ms in the program log (the stalls players see).
+fn long_frames(time: Res<Time>, front: Res<front::Front>) {
+    let dt = time.delta_secs();
+    if dt > 0.15 {
+        info!("long frame: {:.0} ms (page {:?})", dt * 1000.0, front.page);
+    }
 }
 
 fn quit(mut q: ResMut<Quit>, windows: Query<(), With<bevy::window::PrimaryWindow>>, mut exit: MessageWriter<AppExit>) {

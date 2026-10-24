@@ -106,7 +106,30 @@ fn point3(v: &str) -> Option<[f32; 3]> {
 
 impl MinimapArt {
     fn load(&mut self, data: &aa_ui::fs::DataRoot) {
-        let mut colors = HashMap::new();
+        // the terrain colours, parsed in the background since startup
+        let warmed = WARM.lock().ok().and_then(|mut g| g.take()).and_then(|h| h.join().ok());
+        self.colors = Some(warmed.unwrap_or_else(|| terrain_colors(data)));
+        self.load_minimap(data);
+    }
+}
+
+/// The terrain colours (every Data/Terrain TGI file) parsed on a background
+/// thread from the start, so the first battle frame does not stall on them.
+static WARM: std::sync::Mutex<Option<std::thread::JoinHandle<HashMap<String, [f32; 3]>>>> = std::sync::Mutex::new(None);
+
+/// Start parsing the terrain colours in the background (once, at startup).
+pub fn warm(root: aa_ui::fs::DataRoot) {
+    if let Ok(mut g) = WARM.lock() {
+        if g.is_none() {
+            *g = Some(std::thread::spawn(move || terrain_colors(&root)));
+        }
+    }
+}
+
+/// Every terrain and variation IDS -> `terrain_color`.
+fn terrain_colors(data: &aa_ui::fs::DataRoot) -> HashMap<String, [f32; 3]> {
+    let mut colors = HashMap::new();
+    {
         let mut dirs = vec!["Terrain".to_string()];
         while let Some(d) = dirs.pop() {
             for f in data.list_dir(&d) {
@@ -135,7 +158,12 @@ impl MinimapArt {
                 }
             }
         }
-        self.colors = Some(colors);
+    }
+    colors
+}
+
+impl MinimapArt {
+    fn load_minimap(&mut self, data: &aa_ui::fs::DataRoot) {
         let mm = datafile::load(data, "MiniMap/minimap.tgi");
         let node = mm.iter().find(|n| n.name.eq_ignore_ascii_case("Minimap"));
         let c = |name: &str, d: [f32; 3]| node.and_then(|n| n.get(name)).and_then(point3).unwrap_or(d);
@@ -161,7 +189,9 @@ impl MinimapArt {
     /// local kingdom's fog every MinimapPeriodUpdateFog seconds.
     pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>) {
         if self.colors.is_none() {
+            let t0 = std::time::Instant::now();
             self.load(data);
+            info!("minimap: data loaded in {:.0} ms", t0.elapsed().as_secs_f32() * 1000.0);
         }
         let m = &b.world.map;
         let key = (m.id.clone(), m.width, m.height);
