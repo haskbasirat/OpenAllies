@@ -35,7 +35,7 @@ use data::{Fxc, FxTables, VfxDef};
 use nif::NifTable;
 use player::{Player, Rng};
 use render::{FxMaterial, Quad, View};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -591,6 +591,8 @@ pub struct FxState {
     health: Vec<f32>,
     moving: Vec<bool>,
     seen: Vec<bool>,
+    /// Seen while unpacking: WhenConstructed waits for the end of it.
+    unbuilt: HashSet<ActorId>,
     seen_orgs: Vec<bool>,
     frequency: HashMap<(u32, usize), u32>,
     parts: HashMap<(String, [u8; 3]), Slot>,
@@ -726,6 +728,7 @@ fn poll_loading(
         health: Vec::new(),
         moving: Vec::new(),
         seen: Vec::new(),
+        unbuilt: HashSet::new(),
         seen_orgs: Vec::new(),
         frequency: HashMap::new(),
         parts: HashMap::new(),
@@ -1986,8 +1989,11 @@ impl FxState {
                     self.run_list(&fx.created, ctx, frame, spawn, ListKind::Created);
                     lap(2, &mut clock);
                     // compare: WhenConstructed runs when the actor first
-                    // exists built (map buildings, finished deployments).
-                    if a.alive {
+                    // exists built (map buildings, finished deployments): a
+                    // building that is still unpacking gets it when done.
+                    if a.alive && a.activity == Activity::Unpacking {
+                        self.unbuilt.insert(a.id);
+                    } else if a.alive {
                         self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
                     }
                     lap(3, &mut clock);
@@ -1995,6 +2001,9 @@ impl FxState {
                 continue;
             }
             let Some(fx) = fx else { continue };
+            if a.activity != Activity::Unpacking && self.unbuilt.remove(&a.id) && a.alive {
+                self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
+            }
             if def.health > 0.0 && !fx.health.is_empty() {
                 let cur = if a.alive { (a.health / def.health).max(0.0) } else { 0.0 };
                 let prev = self.health[i];

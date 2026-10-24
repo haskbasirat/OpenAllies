@@ -984,6 +984,14 @@ fn set_up(
         }
         look.character = Some(ch);
     }
+    // A truck that unpacks: its building's unpacking aspect is decoded now,
+    // so the camp starts from its first frame when the truck deploys.
+    if let Some(target) = def.unpacks_to
+        && let Some(tfx) = tables.actors.get(&world.data.def(target).id.to_ascii_lowercase())
+        && let Some(m) = aspect_model(tfx, "aspect_unpacking")
+    {
+        library.animated.request(&m, look.team);
+    }
     // Buildings: start decoding the aspects they may show.
     if look.building {
         for ids in ["aspect_normal", "aspect_packing", "aspect_unpacking", "aspect_death"] {
@@ -1206,6 +1214,19 @@ pub fn sync_actors(
                 }
             }
             let path = aspect_model(fx, want).or_else(|| (want != "aspect_normal").then(|| aspect_model(fx, "aspect_normal")).flatten());
+            // An aspect with its own timeline (unpacking, packing, death) that
+            // is still decoding: nothing is drawn meanwhile, not the normal
+            // model (the finished camp would stand there before the unpack).
+            let own_model = want != "aspect_normal" && aspect_model(fx, want).is_some_and(|m| Some(m) != aspect_model(fx, "aspect_normal"));
+            if own_model && view.look.aspect.as_ref().is_none_or(|a| a.ids != want) {
+                for p in &view.parts {
+                    if let Ok((_, _, mut v)) = parts_q.get_mut(*p)
+                        && *v != Visibility::Hidden
+                    {
+                        *v = Visibility::Hidden;
+                    }
+                }
+            }
             if view.look.aspect.as_ref().is_none_or(|a| a.ids != want)
                 && let Some(path) = path
                 && let Some(Some(m)) = library.animated.get(&path, view.look.team, &mut meshes, &mut materials, &mut images)
@@ -1220,6 +1241,9 @@ pub fn sync_actors(
                     }
                 }
                 let normal = want == "aspect_normal";
+                if log_characters {
+                    info!("aspect: actor {} {} {:?} -> {want} ({path}) {} frames, start {:.2} now {:.2}, at {:?}", actor.id, world.data.def(actor.def).id, actor.activity, m.frames, actor.activity_since, world.time, actor.pos);
+                }
                 view.look.aspect = Some(AspectPlay { ids: want.to_owned(), start: if normal { 0.0 } else { actor.activity_since }, looping: normal && m.looping, model: m, shown: 0 });
                 view.look.running = None;
                 view.look.equipment.clear();

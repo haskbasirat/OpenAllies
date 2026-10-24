@@ -46,6 +46,28 @@ impl MaterialExtension for OriginalLook {
     fn fragment_shader() -> ShaderRef {
         ShaderRef::Handle(LOOK_SHADER)
     }
+
+    /// StandardMaterial turns `depth_bias` into the rasterizer's constant
+    /// depth bias as well as the draw order. The terrain layers' -1e8 +
+    /// 1000 * order is meant for the order only: as a depth bias it pushed
+    /// the whole terrain to the far plane, so anything under the ground (the
+    /// parts of an unpacking HQ that rise out of it) drew over it. Keep the
+    /// order and only the layer step (one unit per layer) in the depth: the
+    /// base layer at its own depth, each overlay just in front of the one
+    /// below (appended by the effects owner, for the unpack aspects).
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialExtensionPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::mesh::MeshVertexBufferLayoutRef,
+        _key: bevy::pbr::MaterialExtensionKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        if let Some(ds) = descriptor.depth_stencil.as_mut()
+            && ds.bias.constant <= -10_000_000
+        {
+            ds.bias.constant = (ds.bias.constant + 100_000_000) / 1000;
+        }
+        Ok(())
+    }
 }
 
 pub struct LookPlugin;
