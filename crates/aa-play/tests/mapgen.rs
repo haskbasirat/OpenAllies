@@ -406,3 +406,36 @@ fn every_rmc_size_and_side_count_places_the_starting_defences_around_the_hq() {
     });
     eprintln!("{} maps, {} placement retries", maps.into_inner(), retries.into_inner());
 }
+
+/// Nearest village centre to every side's HQ, and the villages' owner slot
+/// (printed; ignored probe).
+#[test]
+#[ignore]
+fn probe_villages_near_starts() {
+    if data().is_none() {
+        return;
+    }
+    let mut near = 0;
+    let mut total = 0;
+    for seed in 0..40u64 {
+        let m = generate(&params("rmc_southerneurope", 384.0, 2, seed));
+        let villages: Vec<(glam::Vec2, Option<u32>)> = m
+            .placed
+            .iter()
+            .filter(|p| p.thing_id.ends_with("_village01") || p.thing_id.ends_with("_village02") || p.thing_id.contains("_city0"))
+            .map(|p| (glam::Vec2::new(p.position[0], p.position[1]), p.owner_slot))
+            .collect();
+        for (i, start) in m.map.start_locations.iter().enumerate() {
+            let d = villages.iter().map(|v| v.0.distance(*start)).fold(f32::MAX, f32::min);
+            total += 1;
+            if d < 60.0 {
+                near += 1;
+            }
+            if seed < 6 {
+                let owners: Vec<String> = villages.iter().map(|v| v.1.map_or("-".into(), |s| m.map.slots[s as usize].id.clone())).collect();
+                eprintln!("seed {seed} side {i}: nearest village {d:.0} m ({} villages, owners {owners:?})", villages.len());
+            }
+        }
+    }
+    eprintln!("{near} of {total} sides have a village centre within 60 m of the HQ");
+}
