@@ -19,13 +19,17 @@
 //!   `scroll_*` at the screen edges, `multiple_select` while dragging,
 //!   the armed order's cursor (`attack`, `unpack`).
 //!
-//! Behaviour-faithful: the decal is a flat quad at the ground under the
-//! object, not a terrain projection; the bar's placement (at the object's
-//! front edge toward the camera) is read from the original screenshots.
+//! The focused decal follows the ground like the original's projected
+//! decals (terrain decals drawn with AVar DecalDepthBias -0.00001, slope
+//! scale 0): a grid over the decal square, every vertex on the drawn
+//! terrain (`camera::Ground`, plus a hair, `DECAL_LIFT`, for the terrain
+//! triangles between the grid points), drawn with a depth bias.
+//! The bar's placement (at the object's front edge toward the camera) is
+//! read from the original screenshots.
 use super::nifart;
 use super::render::UI_LAYER;
 use super::tex::{Key, Variant};
-use crate::battle_view::{ActorView, to_render};
+use crate::battle_view::ActorView;
 use crate::camera::NativeCamera;
 use crate::input::Selecting;
 use crate::session::Battle;
@@ -41,6 +45,10 @@ pub struct Indicator;
 
 #[derive(Component)]
 pub struct CursorSprite;
+
+/// The focused decal (its mesh follows the ground).
+#[derive(Component)]
+pub struct FocusDecal;
 
 /// One status-bar VFX model: its fill frames (full to empty) and size.
 #[derive(Default)]
@@ -61,6 +69,47 @@ pub struct SelectionArt {
     focused_square: Vec<Handle<StandardMaterial>>,
     focused_circle: Vec<Handle<StandardMaterial>>,
     pool: Vec<Entity>,
+    /// The focused decal: its entity and terrain-following mesh.
+    focus: Option<(Entity, Handle<Mesh>)>,
+}
+
+/// Vertices per side of the focused decal's ground grid.
+const DECAL_GRID: usize = 9;
+/// Lift over the sampled ground (m).
+const DECAL_LIFT: f32 = 0.03;
+
+/// The decal quad (unit square in its XY plane, `t` its placement) laid on
+/// the ground: every grid vertex at the terrain height under it.
+/// `ground(x, z)`: the drawn terrain's height at a render point.
+fn ground_decal(ground: &dyn Fn(f32, f32) -> f32, t: &Transform) -> Mesh {
+    let n = DECAL_GRID;
+    let mut pos = Vec::with_capacity(n * n);
+    let mut uv = Vec::with_capacity(n * n);
+    let m = t.to_matrix();
+    for j in 0..n {
+        for i in 0..n {
+            let (u, v) = (i as f32 / (n - 1) as f32, j as f32 / (n - 1) as f32);
+            let p = m.transform_point3(Vec3::new(u - 0.5, 0.5 - v, 0.0));
+            // render (x, y up, z) -> native ground (x, -z)
+            let y = ground(p.x, p.z) + DECAL_LIFT;
+            pos.push([p.x, y, p.z]);
+            uv.push([u, v]);
+        }
+    }
+    let mut idx = Vec::with_capacity((n - 1) * (n - 1) * 6);
+    for j in 0..n - 1 {
+        for i in 0..n - 1 {
+            let a = (j * n + i) as u32;
+            let (b, c, d) = (a + 1, a + n as u32, a + n as u32 + 1);
+            idx.extend_from_slice(&[a, c, b, b, c, d]);
+        }
+    }
+    let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::RENDER_WORLD | bevy::asset::RenderAssetUsages::MAIN_WORLD);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; pos.len()]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uv);
+    mesh.insert_indices(bevy::mesh::Indices::U32(idx));
+    mesh
 }
 
 pub(super) fn material(images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>, rgba: nifart::Rgba, tint: Color) -> Handle<StandardMaterial> {
@@ -167,7 +216,9 @@ pub fn update(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut indicators: Query<(&mut Transform, &mut MeshMaterial3d<StandardMaterial>, &mut Visibility), With<Indicator>>,
+    mut indicators: Query<(&mut Transform, &mut MeshMaterial3d<StandardMaterial>, &mut Visibility), (With<Indicator>, Without<FocusDecal>)>,
+    mut focus_q: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Visibility), (With<FocusDecal>, Without<Indicator>)>,
+    drawn_ground: Option<Res<crate::camera::Ground>>,
 ) {
     let Some(b) = battle else { return };
     if !art.loaded {
@@ -226,7 +277,8 @@ pub fn update(
             Unit::Actor(a) => add_bars(a, &mut want),
         }
     }
-    // the hovered object's focused decal
+    // the hovered object's focused decal (on the ground, below)
+    let mut focus: Option<(Handle<StandardMaterial>, Transform)> = None;
     if let Some(id) = sel.hover.filter(|_| !sel.hover_banner) {
         if let (Some(a), Some((pos, children))) = (w.actor(id), by_id.get(&id)) {
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
@@ -237,9 +289,9 @@ pub fn update(
                     Some((lo, hi)) => ((hi.x - lo.x).max(hi.z - lo.z).max(1.0) * 1.25, lo.y),
                     None => (1.5, pos.y),
                 };
-                let ground = to_render(w.ground(a.pos.truncate())).y.max(y.min(pos.y));
+                let _ = y;
                 let rot = Quat::from_rotation_y(crate::battle_view::render_yaw(a.facing)) * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                want.push((m, Transform::from_translation(Vec3::new(pos.x, ground + 0.08, pos.z)).with_rotation(rot).with_scale(Vec3::splat(size))));
+                focus = Some((m, Transform::from_translation(Vec3::new(pos.x, 0.0, pos.z)).with_rotation(rot).with_scale(Vec3::splat(size))));
             }
         }
     }
@@ -257,6 +309,40 @@ pub fn update(
             ))
             .id();
         art.pool.push(e);
+    }
+    // the focused decal's own entity and mesh
+    if art.focus.is_none() {
+        let mesh = meshes.add(ground_decal(&|_, _| 0.0, &Transform::default()));
+        let e = commands
+            .spawn((
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(art.focused_circle.first().cloned().unwrap_or_default()),
+                Transform::IDENTITY,
+                Visibility::Hidden,
+                bevy::light::NotShadowCaster,
+                bevy::light::NotShadowReceiver,
+                FocusDecal,
+            ))
+            .id();
+        art.focus = Some((e, mesh));
+    }
+    if let Some((e, mesh)) = art.focus.clone() {
+        if let Ok((mut mat, mut vis)) = focus_q.get_mut(e) {
+            match &focus {
+                Some((m, t)) => {
+                    let height = |x: f32, z: f32| match &drawn_ground {
+                        Some(g) => (g.0)(x, z),
+                        None => w.map.height_at(Vec2::new(x, -z)),
+                    };
+                    let _ = meshes.insert(mesh.id(), ground_decal(&height, t));
+                    if mat.0 != *m {
+                        mat.0 = m.clone();
+                    }
+                    *vis = Visibility::Visible;
+                }
+                None => *vis = Visibility::Hidden,
+            }
+        }
     }
     for (i, e) in art.pool.iter().enumerate() {
         let Ok((mut tf, mut mat, mut vis)) = indicators.get_mut(*e) else { continue };

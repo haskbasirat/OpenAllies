@@ -683,6 +683,14 @@ impl GameHud {
                 vec![GameAction::SetPaused(false)]
             }
             "GamePause" => vec![GameAction::TogglePause],
+            // ControlPanel ButtonSupplyBorder / ctrl-s: UVar
+            // ViewShowZoneFriendlySupply (the button shows it selected,
+            // game_interface_update)
+            "ToggleShowZoneSupply" => {
+                let on = ui.uvars.get_bool("ViewShowZoneFriendlySupply");
+                ui.uvars.set_bool("ViewShowZoneFriendlySupply", !on);
+                vec![]
+            }
             "SpeedUp" => vec![GameAction::SpeedUp],
             "SpeedDown" => vec![GameAction::SpeedDown],
             _ => return None,

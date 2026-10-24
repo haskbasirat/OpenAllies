@@ -14,15 +14,19 @@
 //!   local kingdom's fog layer: per target pixel the bilinear blend of the
 //!   four tiles around it, visible 1.0, explored 0.7, never explored 0
 //!   (`0x433620`), refreshed every AVar MinimapPeriodUpdateFog seconds;
-//! * the local kingdom's supply border (the outline of its supply zones'
-//!   tiles in `color_requires_supply`, every MinimapPeriodUpdateSupply
-//!   seconds);
+//! * the local kingdom's supply border (`0x433470`): the zone renderer's
+//!   border segments of its supply zones (`zone_border::segments`), one
+//!   pixel wide in ViewZoneFriendlySupplyColor, the segment starts at half
+//!   alpha, blended over the fogged terrain, every MinimapPeriodUpdateSupply
+//!   seconds while UVar ViewShowZoneFriendlySupply is set;
 //! * the objects layer (`0x435BC0`), redrawn every
 //!   MinimapPeriodUpdateObjects seconds into a cleared layer with a
 //!   priority byte per pixel (an object pixel replaces only a lower
 //!   priority), over the layers above:
-//!   - every object the local kingdom sees, and every static one it
-//!     remembers where it remembers it, owned as remembered;
+//!   - every radar thing (Thing [Flags] `radar`: actors yes, organizations,
+//!     city blocks, banks, factories, doodads no, a city centre yes) the
+//!     local kingdom sees, and every static one it remembers where it
+//!     remembers it, owned as remembered;
 //!   - its colour follows its relation to the local kingdom (`0x433B50`):
 //!     own selected `color_owned_selected`, own `color_owned_static` /
 //!     `_mobile`, allied `color_allied_*`, enemy `color_enemy_*`, an
@@ -126,8 +130,12 @@ pub struct MinimapArt {
     pub period_objects: f32,
     pub period_supply: f32,
     supply_at: f32,
-    /// Supply border pixels (image index) of the last supply refresh.
-    supply_border: Vec<usize>,
+    /// The supply layer's alpha per pixel (image order) of the last supply
+    /// refresh, and whether it was shown.
+    supply_alpha: Vec<u8>,
+    supply_shown: bool,
+    /// AVar ViewZoneFriendlySupplyColor (AVars_AA 0,1,0).
+    pub supply_color: [f32; 3],
     /// Icon pixels by Data path.
     icons: HashMap<String, Option<IconPixels>>,
 }
@@ -245,9 +253,11 @@ impl MinimapArt {
         self.mul_owned = int("priority_multiplier_owned", 3.0) as u8;
         self.mul_friendly = int("priority_multiplier_friendly", 2.0) as u8;
         self.mul_static = int("priority_multiplier_static", 2.0) as u8;
-        // AVars.tgi (the hard-coded defaults of 0x401BD0 are 5 / 2 s)
-        let avars = datafile::load(data, "AVars.tgi");
+        // AVars_AA.tgi over AVars.tgi (the hard-coded defaults of 0x401BD0
+        // are 5 / 2 s)
+        let avars: Vec<_> = datafile::load(data, "AVars_AA.tgi").into_iter().chain(datafile::load(data, "AVars.tgi")).collect();
         let avar = |name: &str, d: f32| avars.iter().find_map(|n| n.float(name)).unwrap_or(d);
+        self.supply_color = avars.iter().find_map(|n| n.get("ViewZoneFriendlySupplyColor")).and_then(point3).unwrap_or([0.0, 1.0, 0.0]);
         self.period_fog = avar("MinimapPeriodUpdateFog", 5.0);
         self.period_objects = avar("MinimapPeriodUpdateObjects", 2.0);
         self.period_supply = avar("MinimapPeriodUpdateSupply", 5.0);
@@ -258,7 +268,7 @@ impl MinimapArt {
     /// MinimapPeriodUpdateFog seconds and its supply border every
     /// MinimapPeriodUpdateSupply seconds, and draw the objects layer every
     /// MinimapPeriodUpdateObjects seconds over them.
-    pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>, target: u32) {
+    pub fn terrain(&mut self, data: &aa_ui::fs::DataRoot, b: &Battle, images: &mut Assets<Image>, target: u32, show_supply: bool) {
         if self.colors.is_none() {
             let t0 = std::time::Instant::now();
             self.load(data);
@@ -303,42 +313,55 @@ impl MinimapArt {
             self.fog_local = None;
             self.objects_at = None;
         }
-        // the supply border (0x433470): the outline of the tiles of the
-        // local kingdom's supply zones (their ZoneSolver floods, which bend
-        // around impassable ground and water), one target pixel wide along
-        // the tile edges
+        // the supply border (0x433470), every MinimapPeriodUpdateSupply
+        // seconds while UVar ViewShowZoneFriendlySupply is set: every border
+        // segment of the local kingdom's supply zones (the zone renderer's
+        // axis-aligned tile-edge segments, `zone_border::segments`) drawn by
+        // 0x4329A0 in ViewZoneFriendlySupplyColor, one pixel wide: from the
+        // lower end to the upper one in whole pixel steps, the first (and
+        // an exactly reached last) pixel at half alpha; the layer is then
+        // blended over the fogged terrain by its alpha (0x712900 mode 1)
         let now = b.world.time;
         let mut supply_changed = false;
-        if now - self.supply_at >= self.period_supply || now < self.supply_at {
+        if now - self.supply_at >= self.period_supply || now < self.supply_at || show_supply != self.supply_shown {
             self.supply_at = now;
-            let mut inside = vec![false; w * h];
-            for (i, z) in b.world.books.zones.iter().enumerate() {
-                if z.kingdom != b.local {
-                    continue;
-                }
-                for &tile in b.world.books.zone_tiles.get(i).map_or(&[][..], |s| s.as_slice()) {
-                    if let Some(v) = inside.get_mut(tile as usize) {
-                        *v = true;
+            self.supply_shown = show_supply;
+            let mut alpha = vec![0u8; t * t];
+            if show_supply {
+                let inside = super::zone_border::supply_tiles(b);
+                let (mw, mh) = (m.width as f32 * m.cell_size, m.height as f32 * m.cell_size);
+                let (sx, sy) = (t as f32 / mw.max(1e-3), t as f32 / mh.max(1e-3));
+                let mut put = |col: i32, row: i32, a: u8| {
+                    if col >= 0 && row >= 0 && (col as usize) < t && (row as usize) < t {
+                        // image row 0 = the map's top
+                        alpha[(t - 1 - row as usize) * t + col as usize] = a;
+                    }
+                };
+                for (p, q) in super::zone_border::segments(m.width, m.height, &inside) {
+                    let (x0, y0) = (p.x as f32 * m.cell_size * sx, p.y as f32 * m.cell_size * sy);
+                    let (x1, y1) = (q.x as f32 * m.cell_size * sx, q.y as f32 * m.cell_size * sy);
+                    if x0 != x1 {
+                        if y0 != y1 {
+                            continue;
+                        }
+                        let (lo, hi) = (x0.min(x1), x0.max(x1));
+                        let mut x = lo;
+                        while x <= hi {
+                            put(x as i32, y0 as i32, if x == lo || x == hi { 127 } else { 255 });
+                            x += 1.0;
+                        }
+                    } else {
+                        let (lo, hi) = (y0.min(y1), y0.max(y1));
+                        let mut y = lo;
+                        while y <= hi {
+                            put(x0 as i32, y as i32, if y == lo || y == hi { 127 } else { 255 });
+                            y += 1.0;
+                        }
                     }
                 }
             }
-            let mut border = Vec::new();
-            for ty in 0..t {
-                for tx in 0..t {
-                    if !inside[cell(tx, ty)] {
-                        continue;
-                    }
-                    let out = |dx: isize, dy: isize| {
-                        let (nx, ny) = (tx as isize + dx, ty as isize + dy);
-                        nx < 0 || ny < 0 || nx >= t as isize || ny >= t as isize || !inside[cell(nx as usize, ny as usize)]
-                    };
-                    if out(1, 0) || out(-1, 0) || out(0, 1) || out(0, -1) {
-                        border.push((t - 1 - ty) * t + tx);
-                    }
-                }
-            }
-            if border != self.supply_border {
-                self.supply_border = border;
+            if alpha != self.supply_alpha {
+                self.supply_alpha = alpha;
                 supply_changed = true;
             }
         }
@@ -419,9 +442,16 @@ impl MinimapArt {
                 }
             }
         }
-        let green = self.requires_supply.map(byte);
-        for &i in &self.supply_border {
-            px[i * 4..i * 4 + 3].copy_from_slice(&green);
+        // 0x712900 mode 1: the supply layer blended by its alpha
+        let green = self.supply_color.map(byte);
+        if self.supply_alpha.len() * 4 == px.len() {
+            for (i, &a) in self.supply_alpha.iter().enumerate().filter(|(_, a)| **a != 0) {
+                let a = u16::from(a);
+                for c in 0..3 {
+                    let d = u16::from(px[i * 4 + c]);
+                    px[i * 4 + c] = (((255 - a) * d + u16::from(green[c]) * a) >> 8) as u8;
+                }
+            }
         }
         true
     }
@@ -463,7 +493,11 @@ impl MinimapArt {
         let mut marked: Option<aa_play::ActorId> = None;
         let mut objects: Vec<(aa_play::DefId, Vec3, f32, Option<u32>, bool, Option<aa_play::ActorId>)> = Vec::new();
         for a in w.actors.iter().filter(|a| a.alive && !a.removed) {
-            if a.kingdom.is_none() || w.data.def(a.def).invisible {
+            // only radar things are on the minimap (Thing [Flags] radar:
+            // actors yes; organizations, city blocks, banks, factories,
+            // doodads, mines and crates no; a city centre yes)
+            let d = w.data.def(a.def);
+            if a.kingdom.is_none() || d.invisible || !d.radar {
                 continue;
             }
             let sighting = if no_fog { Sighting::Visible } else { fog::sighting(w, a.id, Some(b.local)) };
@@ -478,7 +512,7 @@ impl MinimapArt {
         // ghosts of remembered actors already gone (none while everything
         // live is shown)
         for (id, m) in fog::memories(w, Some(b.local)).into_iter().filter(|_| !no_fog) {
-            if w.actor(id).is_some_and(|a| a.alive) {
+            if w.actor(id).is_some_and(|a| a.alive) || !w.data.def(m.def).radar {
                 continue;
             }
             objects.push((m.def, m.pos, m.facing, m.kingdom, false, None));
