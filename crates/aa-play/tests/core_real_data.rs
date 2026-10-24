@@ -703,6 +703,164 @@ fn start_actor_combat_values() {
     }
 }
 
+/// The human recruit chain for every nation and every building that
+/// recruits: the Corps recruits the division HQ (or truck), the truck
+/// deploys next to the Corps, the building is in supply and provides its
+/// unit limit, and every organization it lists is recruited from it
+/// (Command::Recruit targets the deployed building actor) and spawns
+/// attached to it.
+#[test]
+#[ignore]
+fn every_nation_recruits_from_every_division_hq() {
+    use aa_play::{Command, Event};
+    let data = data();
+    let mut failures = Vec::new();
+    for nation in ["usa", "gbr", "rus", "ger", "jpn"] {
+        let corps_id = format!("{nation}_corps");
+        let corps_def = data.find(&corps_id).expect("corps");
+        let unit_limit = data.resource_index("unit_limit_provided").unwrap();
+        for &item in &data.def(corps_def).recruits.clone() {
+            let item_id = data.def(item).id.clone();
+            // The Corps item: an HQ regiment (its truck member) or a lone truck.
+            let truck_def = if data.def(item).class == Some(aa_play::data::DefClass::Organization) {
+                data.def(item).slots.iter().map(|(d, _)| *d).find(|&d| d != aa_play::data::NO_DEF && data.def(d).unpacks_to.is_some())
+            } else {
+                data.def(item).unpacks_to.map(|_| item)
+            };
+            let Some(truck_def) = truck_def else { continue };
+            let Some(building_def) = data.def(truck_def).unpacks_to else { continue };
+            if data.def(building_def).recruits.is_empty() {
+                continue;
+            }
+            let map = Arc::new(GameMap::load_with(&root(), "(2v2)Berlin", &data).expect("Berlin"));
+            let setup = aa_play::SkirmishSetup {
+                map_id: "(2v2)Berlin".into(),
+                players: vec![
+                    aa_play::PlayerSetup { name: "P".into(), nation: nation.into(), team: 0, color: [0, 76, 255], controller: aa_play::Controller::Human, start: 0 },
+                    aa_play::PlayerSetup { name: "Q".into(), nation: "ger".into(), team: 1, color: [217, 0, 25], controller: aa_play::Controller::Human, start: 2 },
+                ],
+                starting_resources: Some(50000.0),
+                seed: 1,
+            };
+            let mut w = aa_play::World::new_skirmish(data.clone(), map, &setup).expect("new_skirmish");
+            let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && a.def == corps_def).unwrap().id;
+            let cpos = w.actors[corps as usize].pos.truncate();
+            let refused = |w: &aa_play::World| w.events.iter().filter_map(|e| if let Event::Refused { kingdom: 0, reason } = e { Some(reason.clone()) } else { None }).collect::<Vec<_>>();
+            w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: item }]);
+            let r = refused(&w);
+            if !r.is_empty() {
+                failures.push(format!("{nation}: Corps refuses {item_id}: {r:?}"));
+                continue;
+            }
+            let mut truck = None;
+            for _ in 0..(16 * 120) {
+                w.step(vec![]);
+                if let Some(a) = w.actors.iter().find(|a| a.alive && !a.removed && a.kingdom == Some(0) && a.def == truck_def) {
+                    truck = Some(a.id);
+                    break;
+                }
+            }
+            let Some(truck) = truck else {
+                failures.push(format!("{nation}: {item_id} never appeared"));
+                continue;
+            };
+            let at = cpos + glam::Vec2::new(0.0, -35.0);
+            w.step(vec![Command::Deploy { kingdom: 0, truck, at, facing: -std::f32::consts::FRAC_PI_2 }]);
+            let r = refused(&w);
+            if !r.is_empty() {
+                failures.push(format!("{nation}: deploy {item_id} refused: {r:?}"));
+                continue;
+            }
+            let mut building = None;
+            for _ in 0..(16 * 120) {
+                w.step(vec![]);
+                if let Some(Event::Deployed { building: b }) = w.events.iter().find(|e| matches!(e, Event::Deployed { .. })) {
+                    building = Some(*b);
+                    break;
+                }
+            }
+            let Some(building) = building else {
+                failures.push(format!("{nation}: {item_id} never deployed"));
+                continue;
+            };
+            for _ in 0..16 {
+                w.step(vec![]);
+            }
+            let bdef = data.def(building_def);
+            let provided = w.books.kingdom(0).unwrap().provided[unit_limit];
+            eprintln!(
+                "{nation} {} (from {item_id}): out of supply {} unit limit {} (def {}) org {:?} recruits {:?}",
+                bdef.id,
+                w.books.out_of_supply(building),
+                provided,
+                bdef.unit_limit_provided,
+                w.actors[building as usize].org.map(|o| data.def(w.orgs[o as usize].def).id.clone()),
+                bdef.recruits.iter().map(|&d| data.def(d).id.clone()).collect::<Vec<_>>()
+            );
+            if w.books.out_of_supply(building) && bdef.supply_required {
+                failures.push(format!("{nation}: {} out of supply next to the Corps", bdef.id));
+            }
+            if w.actors[building as usize].org.is_none() {
+                failures.push(format!("{nation}: {} is not in its HQ organization", bdef.id));
+            }
+            if bdef.unit_limit_provided > 0.0 && provided < bdef.unit_limit_provided {
+                failures.push(format!("{nation}: {} unit limit {provided} < {}", bdef.id, bdef.unit_limit_provided));
+            }
+            // HQComponent max_attachments of the HQ organization the building
+            // belongs to: a full HQ refuses further regiments (0x574A10).
+            let max_attachments = aa_play::production::hq_org(&w, building).and_then(|o| data.def(w.orgs[o as usize].def).max_attachments);
+            let mut recruited = 0u32;
+            for &unit in &bdef.recruits {
+                let unit_id = data.def(unit).id.clone();
+                let orgs_before = w.orgs.len();
+                let actors_before = w.actors.len();
+                w.step(vec![Command::Recruit { kingdom: 0, building, def: unit }]);
+                let r = refused(&w);
+                let full = max_attachments.is_some_and(|m| recruited >= m) && data.def(unit).class == Some(aa_play::data::DefClass::Organization);
+                if full {
+                    if r != ["the HQ has no free attachment".to_string()] {
+                        failures.push(format!("{nation}: full {} gives {r:?} for {unit_id}", bdef.id));
+                    }
+                    continue;
+                }
+                if !r.is_empty() {
+                    failures.push(format!("{nation}: {} refuses {unit_id} with {recruited} attached: {r:?}", bdef.id));
+                    continue;
+                }
+                let mut done = false;
+                for _ in 0..(16 * 180) {
+                    w.step(vec![]);
+                    if w.events.iter().any(|e| matches!(e, Event::Recruited { .. })) {
+                        done = true;
+                        break;
+                    }
+                }
+                if !done {
+                    let q = &w.books.actor(building).unwrap().queue;
+                    failures.push(format!("{nation}: {} -> {unit_id} never spawned (queue {:?})", bdef.id, q.items.iter().map(|i| data.def(i.def).id.clone()).collect::<Vec<_>>()));
+                    // Clear the stuck item so the next one is tried.
+                    let n = q.items.len();
+                    for i in (0..n).rev() {
+                        aa_play::production::cancel(&mut w, building, i);
+                    }
+                    continue;
+                }
+                let spawned_org = w.orgs.len() > orgs_before;
+                let attached = w.orgs.iter().skip(orgs_before).any(|o| o.hq == Some(building));
+                recruited += 1;
+                if spawned_org && !attached {
+                    failures.push(format!("{nation}: {unit_id} is not attached to {}", bdef.id));
+                }
+                eprintln!("  {unit_id}: spawned org {spawned_org} attached {attached} actors +{}", w.actors.len() - actors_before);
+                if data.def(unit).class == Some(aa_play::data::DefClass::Organization) && !spawned_org {
+                    failures.push(format!("{nation}: {} -> {unit_id} spawned no organization", bdef.id));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
 /// The same supply check on a generated map with two computers.
 #[test]
 #[ignore]
