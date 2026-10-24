@@ -157,6 +157,13 @@ pub enum Command {
     /// `4CDE00`, `crate::special_ops`): `ability` indexes the kingdom's
     /// general's abilities (the HUD's "UseFactionAbility %i").
     UseAbility { kingdom: KingdomId, ability: u32, target: Option<AbilityTarget> },
+    // ---- appended by the movement owner ----
+    /// The move command aimed at an actor (ActorCommand move 5 with a
+    /// target: a right-click on an actor, GuessCommandData `0x4DA570`;
+    /// CAIStateMove activation `0x520320`): the units follow the target as
+    /// it moves until it is in range, then stop. Their order reads
+    /// `Order::Move` toward the target's latest position.
+    Follow { kingdom: KingdomId, units: Vec<Unit>, target: ActorId },
 }
 
 /// Where a faction ability is aimed: a map point, or a clicked actor.

@@ -241,6 +241,10 @@ pub struct Def {
     pub city: bool,
     /// Thing `[Flags]`: not drawn (start locations, placeholders, markers).
     pub invisible: bool,
+    /// Thing `[Flags]` radar (native Thing flag 0x100): shown on the minimap
+    /// (template_thing false, template_actor true, AAVillageCenter true...).
+    #[serde(default)]
+    pub radar: bool,
     /// Thing `[Flags]` blocking / invulnerable / targetable / flying.
     pub blocking: bool,
     pub invulnerable: bool,
@@ -604,7 +608,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v14";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v15";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1165,6 +1169,7 @@ pub(crate) mod loader {
         }
         if let Ok(Some(flags)) = node.child("Flags") {
             def.invisible = bl(&flags, "invisible").unwrap_or(false);
+            def.radar = bl(&flags, "radar").unwrap_or(false);
             def.blocking = bl(&flags, "blocking").unwrap_or(false);
             def.invulnerable = bl(&flags, "invulnerable").unwrap_or(false);
             def.targetable = bl(&flags, "targetable").unwrap_or(false);
