@@ -20,7 +20,7 @@
 //! * disband (10): own organizations and single actors leave the battle at
 //!   once ("Permanently disbands selection"), without a refund.
 use crate::data::{DefClass, DefId};
-use crate::world::{ActorId, Command, Event, KingdomId, Order, OrgId, Unit, World};
+use crate::world::{ActorId, Command, KingdomId, Order, OrgId, Unit, World};
 use glam::Vec2;
 use std::collections::BTreeMap;
 
@@ -31,9 +31,6 @@ pub struct PlayerOrders {
     formations: BTreeMap<OrgId, usize>,
     /// Rally point per recruiting building.
     rally: BTreeMap<ActorId, Vec2>,
-    /// Organizations created so far (recruits newer than this are checked
-    /// against the rally points).
-    orgs_seen: usize,
 }
 
 /// The organization's current formation (index into `Def::formations`):
@@ -204,37 +201,8 @@ fn sell(world: &mut World, kingdom: KingdomId, building: ActorId) -> Result<(), 
     Ok(())
 }
 
-/// After the battle tick: organizations recruited from a building with a
-/// rally point move to it.
-pub fn tick(world: &mut World) {
-    let from = world.player_orders.orgs_seen.min(world.orgs.len());
-    world.player_orders.orgs_seen = world.orgs.len();
-    if world.player_orders.rally.is_empty() {
-        return;
-    }
-    let recruited: Vec<OrgId> = world
-        .events
-        .iter()
-        .filter_map(|e| match e {
-            Event::Recruited { org: Some(o), .. } => Some(*o),
-            _ => None,
-        })
-        .filter(|o| (*o as usize) >= from)
-        .collect();
-    for o in recruited {
-        let (kingdom, at) = {
-            let org = &world.orgs[o as usize];
-            (org.kingdom, org.anchor)
-        };
-        // the building whose creation point the organization stands on
-        let source = world.player_orders.rally.iter().find_map(|(&b, &p)| {
-            let a = world.actor(b).filter(|a| a.alive && a.kingdom == Some(kingdom))?;
-            let d = world.data.def(a.def);
-            let start = a.pos.truncate() + crate::production::rotate(d.creation_offset.unwrap_or([0.0, 0.0]), a.facing);
-            (start.distance(at) < 0.01).then_some(p)
-        });
-        if let Some(to) = source {
-            let _ = crate::movement::command(world, &Command::Move { kingdom, units: vec![Unit::Org(o)], to, attack_move: false });
-        }
-    }
-}
+/// After the battle tick. The rally points are applied where the recruit
+/// completes (production, `0x4D3D20`: the new organization gets its move
+/// to the building's rally point there), so nothing is left to do here;
+/// matching this tick's recruits again would give them a second order.
+pub fn tick(_world: &mut World) {}

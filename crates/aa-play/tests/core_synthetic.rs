@@ -155,6 +155,12 @@ fn data() -> (GameData, Ids) {
     });
     data.defs[depot as usize].packs_to = Some(truck);
     data.defs[hq as usize].recruits.push(truck);
+    // ActorData +17C (460310 / 460000) and the regiment's control_range: its
+    // members come out of the HQ door (4FBF40).
+    data.defs[regiment as usize].control_range = 18.0;
+    for d in [regiment, soldier, captain, truck] {
+        data.defs[d as usize].recruited_at = vec![hq];
+    }
     // Research: a production technology for depots and a recruit-cost one.
     data.defs[hq as usize].properties = vec!["hqprop".into()];
     data.defs[depot as usize].properties = vec!["depotprop".into()];
@@ -306,26 +312,33 @@ fn recruit_pays_waits_and_spawns_members_in_their_slots() {
     let (o, t) = done.expect("recruited");
     assert!((t - 15.0).abs() <= 2.0 * aa_play::DT, "recruited after {t}");
     let org = &w.orgs[o as usize];
-    assert_eq!(org.members.len(), 3);
+    // 582E80: a supply_used regiment without recruit_full gets its leader
+    // only; the organization stands at the deployment point (facing 0, +X:
+    // offset (-10, 0) turns to (0, +10)).
+    assert_eq!(org.members.len(), 1);
     assert_eq!(org.hq, None, "hq building is not in an HQ organization here");
-    // Leader slot first; members at their default-formation offsets around
-    // the creation point (offset 0,0) facing the deployment point.
+    assert!((org.anchor - Vec2::new(100.0, 110.0)).length() < 1e-3, "{}", org.anchor);
     let leader = org.members[0];
     assert_eq!(w.actors[leader as usize].slot, Some(2));
     assert_eq!(w.actors[leader as usize].def, ids.captain);
-    let heading = org.heading;
-    for &m in &org.members {
-        let a = &w.actors[m as usize];
-        let offset = w.data.def(ids.regiment).slots[a.slot.unwrap() as usize].1;
-        let want = Vec2::new(100.0, 100.0) + aa_play::production::rotate(offset, heading);
-        assert!((a.pos.truncate() - want).length() < 1e-3);
+    // 4FBF40: out of the HQ door (creation offset 0, 0).
+    assert!((w.actors[leader as usize].pos.truncate() - Vec2::new(100.0, 100.0)).length() < 1e-3);
+    // Attached to the HQ (as an HQ organization's recruit is) it is in supply;
+    // regeneration 57B5A0 brings the rest one at a time:
+    // resupply_rate 0.1 -> 10 s per soldier, each at the door again.
+    w.orgs[o as usize].hq = Some(hq);
+    let mut joined = Vec::new();
+    for _ in 0..(16 * 25) {
+        core_step(&mut w, vec![]);
+        let n = w.orgs[o as usize].members.len();
+        if n > joined.len() + 1 {
+            joined.push(w.time);
+            let m = *w.orgs[o as usize].members.last().unwrap();
+            assert!((w.actors[m as usize].pos.truncate() - Vec2::new(100.0, 100.0)).length() < 1e-3, "at the door");
+        }
     }
-    // Facing 0 (+X): deployment offset (-10, 0) turns to (0, +10).
-    let to = match org.order {
-        Order::Move { to, .. } => to,
-        ref o => panic!("{o:?}"),
-    };
-    assert!((to - Vec2::new(100.0, 110.0)).length() < 1e-3, "{to}");
+    assert_eq!(w.orgs[o as usize].members.len(), 3, "{joined:?}");
+    assert!((joined[0] - t - 10.0).abs() < 0.5 && (joined[1] - joined[0] - 10.0).abs() < 0.5, "one every 10 s: {joined:?}");
 }
 
 #[test]

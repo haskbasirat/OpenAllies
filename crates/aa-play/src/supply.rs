@@ -595,10 +595,9 @@ fn regenerate(world: &mut World, dt: f32) {
         let member_at = |slot: usize| {
             org.members.iter().copied().find(|&m| live(world, m) && world.actors[m as usize].slot == Some(slot as u16))
         };
-        let damaged = |m: ActorId| {
-            let a = &world.actors[m as usize];
-            a.health < world.data.def(a.def).health
-        };
+        // 5617C0 against Body +14, the actual maximum (handicap, technology
+        // and experience HEALTH modifiers).
+        let damaged = |m: ActorId| world.actors[m as usize].health < member_max_health(world, m);
         let leader = def.leader_slot.map(usize::from).filter(|&l| l < slots);
         let choice = leader
             .filter(|&l| member_at(l).is_some_and(damaged))
@@ -607,11 +606,16 @@ fn regenerate(world: &mut World, dt: f32) {
             .or_else(|| (0..slots).find(|&s| member_at(s).is_none() && def.slots[s].0 != u32::MAX && world.data.def(def.slots[s].0).has_component("BodyComponent")));
         let Some(slot) = choice else { continue };
         if let Some(m) = member_at(slot) {
-            let a = &world.actors[m as usize];
-            let md = world.data.def(a.def);
-            let amount = md.resupply_rate * md.health * factor * dt;
+            // Element +20 (5704D0: resupply_rate through the member's
+            // RESUPPLY_RATE modifier) * Body +14 * (1 - shortage) * delta,
+            // one member at a time until it is full (57B5A0 / 562BA0).
+            let md = world.data.def(world.actors[m as usize].def);
+            let rate = md.resupply_rate * crate::production::multiply_factor(world, org.kingdom, &md.properties, "RESUPPLY_RATE");
+            let rate = rate + md.resupply_rate * (crate::special_ops::org_resupply_multiplier(world, o) - 1.0);
+            let max = member_max_health(world, m);
+            let amount = rate * max * factor * dt;
             let a = &mut world.actors[m as usize];
-            a.health = (a.health + amount).min(md.health);
+            a.health = (a.health + amount).min(max);
             continue;
         }
         let slot_def = def.slots[slot].0;
@@ -623,9 +627,6 @@ fn regenerate(world: &mut World, dt: f32) {
         // operations) in the same 502A70 sum
         let rate = rate + sd.resupply_rate * (crate::special_ops::org_resupply_multiplier(world, o) - 1.0);
         let amount = sd.health * rate * factor * dt;
-        let (anchor, heading, kingdom) = (org_position(world, o), org.heading, org.kingdom);
-        let offset = def.slots[slot].1;
-        let leader_offset = leader.map_or([0.0, 0.0], |l| def.slots[l].1);
         let b = world.books.org_mut(o);
         if b.progress.len() < slots {
             b.progress.resize(slots, 0.0);
@@ -633,12 +634,21 @@ fn regenerate(world: &mut World, dt: f32) {
         b.progress[slot] += amount;
         if b.progress[slot] >= sd.health {
             b.progress[slot] = 0.0;
-            let local = [offset[0] - leader_offset[0], offset[1] - leader_offset[1]];
-            let pos = anchor + crate::production::rotate(local, heading);
-            let a = crate::production::spawn_single(world, slot_def, Some(kingdom), pos, heading);
-            world.actors[a as usize].org = Some(o);
-            world.actors[a as usize].slot = Some(slot as u16);
-            world.orgs[o as usize].members.push(a);
+            // 57AD30 -> 4FBF40: out of the nearest recruiting structure's
+            // door when one is within control range, else at the slot.
+            crate::production::spawn_member(world, o, slot);
         }
     }
+}
+
+/// Body +14 of a member: the combat maximum (with the experience level),
+/// else the definition health with the kingdom HEALTH modifiers.
+fn member_max_health(world: &World, m: ActorId) -> f32 {
+    let a = &world.actors[m as usize];
+    world
+        .combat
+        .actors
+        .get(m as usize)
+        .filter(|c| c.initialized && c.max_health > 0.0)
+        .map_or_else(|| crate::production::max_health(world, a.kingdom, a.def), |c| c.max_health)
 }

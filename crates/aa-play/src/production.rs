@@ -42,20 +42,7 @@ pub fn spawn_single(world: &mut World, def: DefId, kingdom: Option<KingdomId>, p
 pub fn spawn_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: Vec2, heading: f32, hq: Option<ActorId>) -> OrgId {
     let data = world.data.clone();
     let d = data.def(def);
-    let id = world.orgs.len() as OrgId;
-    world.orgs.push(Organization {
-        id,
-        def,
-        kingdom,
-        members: Vec::new(),
-        hq,
-        order: Order::Idle,
-        anchor,
-        heading,
-        morale: 0.0,
-        experience: 0.0,
-        alive: true,
-    });
+    let id = new_organization(world, def, kingdom, anchor, heading, hq);
     let mut order: Vec<usize> = Vec::with_capacity(d.slots.len());
     if let Some(l) = d.leader_slot.map(usize::from).filter(|&l| l < d.slots.len()) {
         order.push(l);
@@ -78,6 +65,211 @@ pub fn spawn_organization(world: &mut World, def: DefId, kingdom: KingdomId, anc
     let slots = d.slots.len();
     world.books.org_mut(id).progress = vec![0.0; slots];
     id
+}
+
+/// The organization actor alone (no members yet), standing at `anchor`.
+fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: Vec2, heading: f32, hq: Option<ActorId>) -> OrgId {
+    let id = world.orgs.len() as OrgId;
+    world.orgs.push(Organization {
+        id,
+        def,
+        kingdom,
+        members: Vec::new(),
+        hq,
+        order: Order::Idle,
+        anchor,
+        heading,
+        morale: 0.0,
+        experience: 0.0,
+        alive: true,
+    });
+    let slots = world.data.def(def).slots.len();
+    world.books.org_mut(id).progress = vec![0.0; slots];
+    id
+}
+
+/// 57AD30's occupied test: a living member holds `slot`.
+fn slot_member(world: &World, o: OrgId, slot: usize) -> Option<ActorId> {
+    world.orgs[o as usize]
+        .members
+        .iter()
+        .copied()
+        .find(|&m| world.actors.get(m as usize).is_some_and(|a| a.alive && !a.removed && a.slot == Some(slot as u16)))
+}
+
+/// 4FBF40 structure search: the nearest friendly structure with a
+/// DeploymentInfo (ActorData +3EC) whose definition is in the member
+/// definition's +17C list, within the organization's control_range
+/// (Organization +AC = ActorData +2FC) of the organization.
+fn member_structure(world: &World, o: OrgId, member_def: DefId) -> Option<ActorId> {
+    let org = &world.orgs[o as usize];
+    let range = world.data.def(org.def).control_range;
+    let at = crate::supply::org_position(world, o);
+    let md = world.data.def(member_def);
+    let mut best: Option<(f32, ActorId)> = None;
+    for a in &world.actors {
+        if !a.alive || a.removed || world.data.def(a.def).creation_offset.is_none() || !md.recruited_at.contains(&a.def) {
+            continue;
+        }
+        let rel = world.books.relation(&world.kingdoms, a.kingdom, Some(org.kingdom));
+        if rel != crate::books::SELF && rel != crate::books::FRIEND {
+            continue;
+        }
+        let d = a.pos.truncate().distance_squared(at);
+        if d > range * range {
+            continue;
+        }
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, a.id));
+        }
+    }
+    best.map(|(_, a)| a)
+}
+
+/// The radius a definition's shape blocks with: a CIRCLE's radius, half the
+/// smaller side of a SQUARE / RECT (the movement occupancy reading).
+fn shape_radius(d: &crate::data::Def) -> f32 {
+    let Some(s) = d.blocking_size else { return 0.0 };
+    match d.blocking_shape.as_deref().map(str::to_ascii_uppercase).as_deref() {
+        Some("CIRCLE") => s[0].max(0.0),
+        Some(_) => 0.5 * s[0].min(s[1]).max(0.0),
+        None => 0.0,
+    }
+}
+
+/// 553BA0 for the shape of `def` standing at `p`: inside the map, on ground
+/// it can stand on, outside every building footprint and, with `movers`,
+/// clear of every other blocking actor's shape (553FA0 queries with flag
+/// 0x20000000 set, which leaves the movers out).
+fn spot_open(world: &World, def: DefId, p: Vec2, movers: bool) -> bool {
+    let d = world.data.def(def);
+    let r = shape_radius(d);
+    let map = &world.map;
+    if map.width > 0 {
+        let extent = Vec2::new(map.width as f32, map.height as f32) * map.cell_size;
+        if p.x - r < 0.0 || p.y - r < 0.0 || p.x + r > extent.x || p.y + r > extent.y {
+            return false;
+        }
+        let c = map.cell_size;
+        let cell = |x: f32, y: f32| ((y / c) as u32).min(map.height - 1) * map.width + ((x / c) as u32).min(map.width - 1);
+        let mask = if d.water_based { crate::map::BLOCKED } else { crate::map::BLOCKED | crate::map::NOT_LAND_PASSABLE };
+        for (x, y) in [(p.x - r, p.y - r), (p.x + r, p.y - r), (p.x - r, p.y + r), (p.x + r, p.y + r), (p.x, p.y)] {
+            if map.flags.get(cell(x, y) as usize).is_some_and(|f| f & mask != 0) {
+                return false;
+            }
+        }
+    }
+    for a in &world.actors {
+        if a.removed || !a.alive {
+            continue;
+        }
+        let od = world.data.def(a.def);
+        let q = a.pos.truncate();
+        if od.class == Some(DefClass::Building) {
+            let Some(s) = od.blocking_size else { continue };
+            let half = if od.blocking_shape.as_deref().is_some_and(|x| x.eq_ignore_ascii_case("CIRCLE")) { Vec2::splat(s[0]) } else { Vec2::new(s[0], s[1]) * 0.5 };
+            let d = ((p - q).abs() - half).max(Vec2::ZERO);
+            if d.length_squared() < r * r || (p - q).abs().cmplt(half).all() {
+                return false;
+            }
+        } else if movers && od.blocking && od.speed_max > 0.0 {
+            let rr = r + shape_radius(od);
+            if (p - q).length_squared() < rr * rr {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// FindOpenPositionLineThenRadius 0x554BF0 for the shape of `def`: walk
+/// from `point` back toward `from` in steps of the shape radius (at least a
+/// quarter cell, 0x553FA0) to the first spot free of static obstacles, then
+/// FindOpenPositionNear, movers included
+/// (0x554B30): that spot, else rings of eight directions within `radius`,
+/// starting along `facing` and turning by -pi/4 (0x554850). Keeps the line
+/// result when the rings find nothing.
+fn open_position(world: &World, def: DefId, point: Vec2, from: Vec2, facing: Vec2, radius: f32) -> Vec2 {
+    let step = shape_radius(world.data.def(def)).max(world.map.cell_size * 0.25).max(0.05);
+    let delta = from - point;
+    let length = delta.length();
+    let dir = if length > 0.0 { delta / length } else { Vec2::ZERO };
+    let mut base = point;
+    let mut t = 0.0f32;
+    loop {
+        let p = point + dir * t.min(length);
+        if spot_open(world, def, p, false) {
+            base = p;
+            break;
+        }
+        if t >= length {
+            break;
+        }
+        t += step;
+    }
+    if spot_open(world, def, base, true) {
+        return base;
+    }
+    let rings = ((radius / step) as i32).clamp(1, 20);
+    let ring_step = radius / rings as f32;
+    let facing = if facing.length_squared() > 0.0 { facing.normalize() } else { Vec2::X };
+    for k in 1..=rings {
+        let mut offset = facing * (k as f32 * ring_step);
+        for _ in 0..8 {
+            if spot_open(world, def, base + offset, true) {
+                return base + offset;
+            }
+            let (s, c) = (-std::f32::consts::FRAC_PI_4).sin_cos();
+            offset = Vec2::new(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
+        }
+    }
+    base
+}
+
+/// 4FACA0's mind order (vf198 = 52F320, KKC_UAIStateDeploy): the new member
+/// walks from the door to the structure's deployment point on its own, then
+/// rejoins its organization (movement::walk_member).
+fn walk_out(world: &mut World, member: ActorId, to: Vec2) {
+    crate::movement::walk_member(world, member, to);
+}
+
+/// Organization member creation 57AD30 -> 4FBF40 for an empty `slot`: at
+/// the door of the nearest structure that recruits it (DeploymentInfo
+/// creation_offset turned by the structure facing, facing its deployment
+/// point, which it then walks to; 4FACA0 + 57D860), else at the slot's
+/// formation position around the organization (578290 + 57D950). None when
+/// the slot is occupied or has no definition.
+pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId> {
+    let org = world.orgs.get(o as usize).filter(|x| x.alive)?;
+    let def = world.data.def(org.def);
+    let (member_def, offset) = *def.slots.get(slot)?;
+    if member_def == crate::data::NO_DEF || slot_member(world, o, slot).is_some() {
+        return None;
+    }
+    let (kingdom, heading) = (org.kingdom, org.heading);
+    let (pos, facing, walk_to) = match member_structure(world, o, member_def) {
+        Some(b) => {
+            let s = &world.actors[b as usize];
+            let sd = world.data.def(s.def);
+            let door = s.pos.truncate() + rotate(sd.creation_offset.unwrap_or([0.0, 0.0]), s.facing);
+            let to = s.pos.truncate() + rotate(sd.deployment_offset.unwrap_or([0.0, 0.0]), s.facing);
+            (door, angle_of(to - door).unwrap_or(s.facing), (to != door).then_some(to))
+        }
+        None => {
+            let leader = def.leader_slot.map(usize::from).filter(|&l| l < def.slots.len());
+            let leader_offset = leader.map_or([0.0, 0.0], |l| def.slots[l].1);
+            let local = [offset[0] - leader_offset[0], offset[1] - leader_offset[1]];
+            (crate::supply::org_position(world, o) + rotate(local, heading), heading, None)
+        }
+    };
+    let a = spawn_single(world, member_def, Some(kingdom), pos, facing);
+    world.actors[a as usize].org = Some(o);
+    world.actors[a as usize].slot = Some(slot as u16);
+    world.orgs[o as usize].members.push(a);
+    if let Some(to) = walk_to {
+        walk_out(world, a, to);
+    }
+    Some(a)
 }
 
 /// Which kind of resource vector a quote reads.
@@ -578,22 +770,59 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
     let end = origin + rotate(deployment, facing);
     let heading = angle_of(end - start).unwrap_or(facing);
     let def = item.def;
+    let rally = crate::player_orders::rally_point(world, building);
     let (org, actor) = if world.data.def(def).class == Some(DefClass::Organization) {
+        // 582E80 organization branch: the organization actor stands at the
+        // structure's deployment point (ActorData +3E4/+3E8 turned by its
+        // facing) facing the structure's way; its members come through
+        // 4FBF40, i.e. out of this structure's door. A supply_used
+        // organization without recruit_full gets only its leader slot now
+        // (ActorData +2F4 / +31C); regeneration 57B5A0 rebuilds the rest one
+        // at a time.
         let hq = item.attaches.then_some(building);
-        let o = spawn_organization(world, def, kingdom, start, heading, hq);
+        let d = world.data.def(def);
+        let all = !d.supply_used || d.recruit_full;
+        let leader = d.leader_slot.map(usize::from).filter(|&l| l < d.slots.len());
+        // 554BF0 for the leader slot's shape: from the deployment point back
+        // toward the structure to the first open spot, then rings around it
+        // (radius: the structure's shape plus the organization's), so a new
+        // organization does not stand on the ones already there.
+        let leader_def = leader.map(|l| d.slots[l].0).filter(|&x| x != crate::data::NO_DEF).or_else(|| d.slots.iter().map(|s| s.0).find(|&x| x != crate::data::NO_DEF));
+        let anchor = match leader_def {
+            Some(ld) => {
+                let radius = shape_radius(world.data.def(world.actors[building as usize].def)) + shape_radius(d);
+                open_position(world, ld, end, origin, Vec2::new(facing.cos(), facing.sin()), radius)
+            }
+            None => end,
+        };
+        let o = new_organization(world, def, kingdom, anchor, facing, hq);
+        let d = world.data.def(def);
+        let slots: Vec<usize> = (0..d.slots.len()).filter(|&s| d.slots[s].0 != crate::data::NO_DEF && (all || Some(s) == leader)).collect();
+        // The layout's morale (as a full organization) from the start.
+        let morale: f32 = d.slots.iter().filter(|s| s.0 != crate::data::NO_DEF).map(|s| world.data.def(s.0).morale_value).sum();
+        world.orgs[o as usize].morale = morale;
+        for s in slots {
+            spawn_member(world, o, s);
+        }
         if world.orgs[o as usize].members.is_empty() {
-            // 0x4FA2C4 "failed to create any elements - destroying".
+            // 57A730 == 0: "failed to create any elements - destroying".
             world.orgs[o as usize].alive = false;
             return false;
         }
-        if end != start {
-            world.orgs[o as usize].order = Order::Move { to: end, attack_move: false };
+        // The members walk out of the door to the deployment point, where the
+        // organization stands (4FACA0 mind order, walk_member), then take
+        // their slots. A rally point (4D3D20 after a 554500 spot) gives the
+        // organization a move that replaces those walks.
+        if let Some(to) = rally {
+            let _ = crate::movement::command(world, &Command::Move { kingdom, units: vec![crate::world::Unit::Org(o)], to, attack_move: false });
         }
         (Some(o), None)
     } else {
+        // 4FACA0: created at the creation point facing the deployment point,
+        // the mind walks it there; then the rally point, if any.
         let a = spawn_single(world, def, Some(kingdom), start, heading);
-        if end != start {
-            world.actors[a as usize].order = Order::Move { to: end, attack_move: false };
+        if let Some(to) = rally.or((end != start).then_some(end)) {
+            let _ = crate::movement::command(world, &Command::Move { kingdom, units: vec![crate::world::Unit::Actor(a)], to, attack_move: false });
         }
         (None, Some(a))
     };

@@ -329,14 +329,35 @@ fn berlin_two_players_start_recruit_and_economy() {
         r.order,
         r.members.iter().map(|&m| (data.def(w.actors[m as usize].def).id.clone(), w.actors[m as usize].slot, w.actors[m as usize].pos)).collect::<Vec<_>>()
     );
-    assert_eq!(r.members.len(), data.def(regiment).slots.len());
+    // 582E80: regiment_rus_infantry is supply_used without recruit_full, so
+    // only its leader (the officer) comes out of the HQ door (4FBF40 ->
+    // 4FACA0: DeploymentInfo creation_offset turned by the HQ facing); the
+    // organization stands at the HQ deployment point.
+    assert_eq!(r.members.len(), 1);
     assert_eq!(r.hq, Some(hq));
-    for &m in &r.members {
-        let a = &w.actors[m as usize];
-        let offset = data.def(regiment).slots[a.slot.unwrap() as usize].1;
-        let want = r.anchor + aa_play::production::rotate(offset, r.heading);
-        assert!((a.pos.truncate() - want).length() < 1e-3, "member in its slot");
+    let h = &w.actors[hq as usize];
+    let hd = data.def(h.def);
+    let door = h.pos.truncate() + aa_play::production::rotate(hd.creation_offset.unwrap(), h.facing);
+    let deploy = h.pos.truncate() + aa_play::production::rotate(hd.deployment_offset.unwrap(), h.facing);
+    assert!((r.anchor - deploy).length() < 1e-3, "organization at the deployment point");
+    let leader = r.members[0];
+    assert_eq!(w.actors[leader as usize].slot, data.def(regiment).leader_slot);
+    assert!((w.actors[leader as usize].pos.truncate() - door).length() < 1e-3, "leader out of the door");
+    // In supply next to its HQ the rest follow one at a time (57B5A0:
+    // 1 / resupply_rate = 3.3 s each for rus_infantry), out of the same door.
+    let (o_id, start) = (o, w.time);
+    let mut joined: Vec<f32> = Vec::new();
+    for _ in 0..(16 * 40) {
+        core_step(&mut w, vec![]);
+        let n = w.orgs[o_id as usize].members.len();
+        if n > joined.len() + 1 {
+            joined.push(w.time - start);
+        }
     }
+    eprintln!("members joined after {joined:?} s");
+    let slots = data.def(regiment).slots.iter().filter(|s| s.0 != aa_play::data::NO_DEF).count();
+    assert_eq!(w.orgs[o_id as usize].members.len(), slots);
+    assert!(joined.windows(2).all(|p| p[1] - p[0] > 2.0), "one at a time: {joined:?}");
     let k = w.books.kingdom(0).unwrap();
     eprintln!("after recruits: money {} income {:?} unit limit {}/{}", k.stockpiled[0], w.kingdoms[0].income, w.kingdoms[0].units_used, w.kingdoms[0].unit_limit);
 
@@ -816,7 +837,9 @@ fn every_nation_recruits_from_every_division_hq() {
                 let actors_before = w.actors.len();
                 w.step(vec![Command::Recruit { kingdom: 0, building, def: unit }]);
                 let r = refused(&w);
-                let full = max_attachments.is_some_and(|m| recruited >= m) && data.def(unit).class == Some(aa_play::data::DefClass::Organization);
+                // (attached regiments, not recruits: a member that cannot find a
+                // free spot after walking out dies, 52F7A0 "redeploy failed")
+                let full = max_attachments.is_some_and(|m| aa_play::production::attachments(&w, building) >= m) && data.def(unit).class == Some(aa_play::data::DefClass::Organization);
                 if full {
                     if r != ["the HQ has no free attachment".to_string()] {
                         failures.push(format!("{nation}: full {} gives {r:?} for {unit_id}", bdef.id));
@@ -962,6 +985,221 @@ fn berlin_human_hq_supplies_its_regiment() {
     assert!(!w.books.out_of_supply(hq));
     assert!(w.books.actor(hq).unwrap().supply_stock > 80.0);
     assert!(!w.books.org(o).unwrap().out_of_supply);
+}
+
+/// Berlin, rus: recruit and deploy the infantry HQ 30 m south of the Corps;
+/// returns the world, the HQ building and the Corps.
+fn berlin_with_infantry_hq() -> (aa_play::World, u32, u32) {
+    use aa_play::{Command, Event};
+    let mut w = berlin_world();
+    let data = w.data.clone();
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+    let cpos = w.actors[corps as usize].pos.truncate();
+    w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: data.find("regiment_rus_hq_infantry").unwrap() }]);
+    let mut truck = None;
+    for _ in 0..(16 * 40) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            truck = Some(w.orgs[*o as usize].members[0]);
+        }
+    }
+    let truck = truck.expect("HQ truck");
+    w.step(vec![Command::Deploy { kingdom: 0, truck, at: cpos + glam::Vec2::new(0.0, -30.0), facing: -std::f32::consts::FRAC_PI_2 }]);
+    for _ in 0..(16 * 60) {
+        w.step(vec![]);
+        if let Some(Event::Deployed { building }) = w.events.iter().find(|e| matches!(e, Event::Deployed { .. })) {
+            let hq = *building;
+            for _ in 0..16 {
+                w.step(vec![]);
+            }
+            return (w, hq, corps);
+        }
+    }
+    panic!("HQ never deployed");
+}
+
+/// 582E80 / 4FBF40 through `World::step`: a rifle regiment recruited at the
+/// infantry HQ starts with its leader at the HQ door, the organization at
+/// the HQ deployment point; the leader walks out and the rest come out of
+/// the same door one at a time.
+#[test]
+#[ignore]
+fn recruits_come_out_of_the_hq_door_one_by_one() {
+    use aa_play::{Command, Event};
+    let (mut w, hq, _) = berlin_with_infantry_hq();
+    let data = w.data.clone();
+    let h = w.actors[hq as usize].clone();
+    let hd = data.def(h.def);
+    let door = h.pos.truncate() + aa_play::production::rotate(hd.creation_offset.unwrap(), h.facing);
+    let deploy = h.pos.truncate() + aa_play::production::rotate(hd.deployment_offset.unwrap(), h.facing);
+    w.step(vec![Command::Recruit { kingdom: 0, building: hq, def: data.find("regiment_rus_infantry").unwrap() }]);
+    let mut org = None;
+    for _ in 0..(16 * 60) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            org = Some(*o);
+            break;
+        }
+    }
+    let o = org.expect("regiment");
+    let leader = w.orgs[o as usize].members[0];
+    eprintln!("door {door} deploy {deploy} leader at {} members {}", w.actors[leader as usize].pos.truncate(), w.orgs[o as usize].members.len());
+    assert_eq!(w.orgs[o as usize].members.len(), 1);
+    assert!(w.actors[leader as usize].pos.truncate().distance(door) < 0.5, "leader out of the door (walking since this tick)");
+    let start = w.time;
+    let mut seen = 1;
+    for _ in 0..(16 * 40) {
+        w.step(vec![]);
+        let n = w.orgs[o as usize].members.len();
+        if n > seen {
+            let m = *w.orgs[o as usize].members.last().unwrap();
+            eprintln!("t+{:.1}s member {n} appears at {} ({:.1} m from the door); leader {:.1} m from the deployment point", w.time - start, w.actors[m as usize].pos.truncate(), w.actors[m as usize].pos.truncate().distance(door), w.actors[leader as usize].pos.truncate().distance(deploy));
+            assert!(w.actors[m as usize].pos.truncate().distance(door) < 0.5, "out of the door");
+            seen = n;
+        }
+    }
+    assert_eq!(seen, 9);
+    for _ in 0..(16 * 10) {
+        w.step(vec![]);
+    }
+    assert!(w.actors[leader as usize].pos.truncate().distance(deploy) < 2.0, "the leader walked out to the deployment point");
+    // walk_member: everyone walked out to the deployment point and then to
+    // its slot; nobody waits at the door.
+    let at_door = w.orgs[o as usize].members.iter().filter(|&&m| w.actors[m as usize].pos.truncate().distance(door) < 1.0).count();
+    let spread: Vec<f32> = w.orgs[o as usize].members.iter().map(|&m| (w.actors[m as usize].pos.truncate().distance(deploy) * 10.0).round() / 10.0).collect();
+    eprintln!("members from the deployment point: {spread:?}");
+    assert_eq!(at_door, 0, "members left the door");
+}
+
+/// Six rifle regiments recruited in a row at one division HQ, never moved,
+/// no rally point: each organization gets a free creation point (582E80 ->
+/// 554BF0) and every member walks out and finds room (4FBF40 / walk_member),
+/// so nobody dies and every regiment is complete.
+#[test]
+#[ignore]
+fn six_regiments_in_a_row_at_one_hq_all_complete() {
+    use aa_play::{Command, Event};
+    let (mut w, hq, _) = berlin_with_infantry_hq();
+    let data = w.data.clone();
+    let regiment = data.find("regiment_rus_infantry").unwrap();
+    // Unit limit and money for six regiments.
+    let n = data.resources.len();
+    w.books.kingdom_mut(0, n).stockpiled[0] = 50000.0;
+    let max = aa_play::production::hq_org(&w, hq).and_then(|o| data.def(w.orgs[o as usize].def).max_attachments).unwrap_or(6);
+    let count = 6.min(max as usize);
+    let mut orgs = Vec::new();
+    let mut deaths = 0;
+    let slots = data.def(regiment).slots.iter().filter(|s| s.0 != aa_play::data::NO_DEF).count();
+    for i in 0..count {
+        w.step(vec![Command::Recruit { kingdom: 0, building: hq, def: regiment }]);
+        assert!(!w.events.iter().any(|e| matches!(e, Event::Refused { .. })), "recruit {i}: {:?}", w.events);
+        let mut got = None;
+        for _ in 0..(16 * 120) {
+            w.step(vec![]);
+            for e in &w.events {
+                if let Event::Died { actor } = e {
+                    let a = &w.actors[*actor as usize];
+                    let near = w.actors.iter().filter(|x| x.alive && x.id != a.id && x.pos.truncate().distance(a.pos.truncate()) < 0.8).count();
+                    eprintln!("t={:.1}s died: actor {} org {:?} slot {:?} at {} ({near} others within 0.8 m)", w.time, a.id, a.org, a.slot, a.pos.truncate());
+                }
+            }
+            deaths += w.events.iter().filter(|e| matches!(e, Event::Died { .. })).count();
+            if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+                got = Some(*o);
+                break;
+            }
+        }
+        let o = got.unwrap_or_else(|| panic!("regiment {i} recruited"));
+        eprintln!("regiment {i}: org {o} anchor {} ({:.1} m from the HQ)", w.orgs[o as usize].anchor, w.orgs[o as usize].anchor.distance(w.actors[hq as usize].pos.truncate()));
+        orgs.push(o);
+    }
+    // Everyone has time to come out and find a place.
+    for _ in 0..(16 * 60) {
+        w.step(vec![]);
+        deaths += w.events.iter().filter(|e| matches!(e, Event::Died { .. })).count();
+    }
+    for &o in &orgs {
+        let alive = w.orgs[o as usize].members.iter().filter(|&&m| w.actors[m as usize].alive).count();
+        eprintln!("org {o}: {alive}/{slots} members, anchor {}", w.orgs[o as usize].anchor);
+        assert_eq!(alive, slots, "organization {o} complete");
+    }
+    assert_eq!(deaths, 0, "nobody died walking out");
+}
+
+/// Probe: the HQ truck leaving the Corps after its recruit.
+#[test]
+#[ignore]
+fn hq_truck_drives_out_of_the_corps() {
+    use aa_play::{Command, Event};
+    let mut w = berlin_world();
+    let data = w.data.clone();
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+    let c = w.actors[corps as usize].clone();
+    let cd = data.def(c.def);
+    let deploy = c.pos.truncate() + aa_play::production::rotate(cd.deployment_offset.unwrap(), c.facing);
+    w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: data.find("regiment_rus_hq_infantry").unwrap() }]);
+    let mut org = None;
+    for _ in 0..(16 * 40) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            org = Some(*o);
+            break;
+        }
+    }
+    let o = org.expect("HQ organization");
+    let truck = w.orgs[o as usize].members[0];
+    eprintln!("corps {} deploy point {deploy} org anchor {} order {:?} refused {:?}", c.pos.truncate(), w.orgs[o as usize].anchor, w.orgs[o as usize].order, w.events.iter().filter(|e| matches!(e, Event::Refused { .. })).collect::<Vec<_>>());
+    w.step(vec![Command::Move { kingdom: 0, units: vec![aa_play::Unit::Org(o)], to: deploy, attack_move: false }]);
+    eprintln!("manual move: order {:?} refused {:?}", w.orgs[o as usize].order, w.events.iter().filter(|e| matches!(e, Event::Refused { .. })).collect::<Vec<_>>());
+    for s in 0..8 {
+        for _ in 0..16 {
+            w.step(vec![]);
+        }
+        eprintln!("t+{s}s truck at {} ({:.1} m from the deployment point)", w.actors[truck as usize].pos.truncate(), w.actors[truck as usize].pos.truncate().distance(deploy));
+    }
+    assert!(w.actors[truck as usize].pos.truncate().distance(deploy) < 3.0, "drove out to the deployment point");
+}
+
+/// Probe: how a wounded regiment heals in supply next to its HQ.
+#[test]
+#[ignore]
+fn regiment_heals_one_member_at_a_time() {
+    use aa_play::{Command, Event};
+    let (mut w, hq, _) = berlin_with_infantry_hq();
+    let data = w.data.clone();
+    w.step(vec![Command::Recruit { kingdom: 0, building: hq, def: data.find("regiment_rus_infantry").unwrap() }]);
+    let mut org = None;
+    for _ in 0..(16 * 120) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            org = Some(*o);
+            break;
+        }
+    }
+    let o = org.expect("regiment");
+    // Let every member come out first.
+    for _ in 0..(16 * 120) {
+        w.step(vec![]);
+    }
+    let members: Vec<u32> = w.orgs[o as usize].members.iter().copied().filter(|&m| w.actors[m as usize].alive).collect();
+    for &m in &members {
+        w.actors[m as usize].health *= 0.5;
+    }
+    let mut healing_at_once = 0usize;
+    for second in 0..120 {
+        let before: Vec<f32> = members.iter().map(|&m| w.actors[m as usize].health).collect();
+        for _ in 0..16 {
+            w.step(vec![]);
+        }
+        let after: Vec<f32> = members.iter().map(|&m| w.actors[m as usize].health).collect();
+        let rising = before.iter().zip(&after).filter(|(b, a)| *a > *b).count();
+        healing_at_once = healing_at_once.max(rising);
+        if second % 5 == 0 {
+            eprintln!("t={:.0}s rising {rising} health {:?}", w.time, after.iter().map(|h| h.round()).collect::<Vec<_>>());
+        }
+    }
+    eprintln!("members {} most healing in one second {healing_at_once}", members.len());
+    assert!(healing_at_once <= 2, "native 57B5A0 heals one member at a time");
 }
 
 #[test]

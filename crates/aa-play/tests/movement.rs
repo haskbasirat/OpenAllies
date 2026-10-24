@@ -763,6 +763,126 @@ fn performance_150_regiments() {
 }
 
 // ---------------------------------------------------------------------------
+// New members walking out of their structure (movement::walk_member).
+
+/// A member of `org` (slot 0) standing at `door`, facing `to`, as member
+/// creation puts it at a structure's door.
+fn member_at_door(w: &mut World, org: OrgId, door: Vec2, to: Vec2) -> ActorId {
+    let a = w.orgs[org as usize].members[0];
+    let d = to - door;
+    w.actors[a as usize].pos = w.ground(door);
+    w.actors[a as usize].facing = d.y.atan2(d.x);
+    a
+}
+
+#[test]
+fn new_member_walks_to_the_deployment_point_then_to_its_slot() {
+    let (data, ids) = data();
+    let mut w = world(open_map(64, 64, 2.0), data);
+    let center = Vec2::new(60.0, 60.0);
+    let o = spawn_regiment(&mut w, ids.regiment, 0, center, 0.0);
+    let (door, point) = (center + Vec2::new(0.0, 25.0), center + Vec2::new(0.0, 20.0));
+    let a = member_at_door(&mut w, o, door, point);
+    let others: Vec<(ActorId, Vec2)> = w.orgs[o as usize].members.iter().filter(|&&m| m != a).map(|&m| (m, pos(&w, m))).collect();
+    movement::walk_member(&mut w, a, point);
+    let mut top = 0.0f32;
+    let reached = run_until(&mut w, 4.0, |w| {
+        top = top.max(w.actors[a as usize].motion.speed);
+        (pos(w, a) - point).length() < 0.5
+    });
+    let t = w.time;
+    let facing = w.actors[a as usize].facing;
+    eprintln!("deployment point reached {reached} at t={t:.2} (5 m), top speed {top:.3}, facing {facing:.3}");
+    assert!(reached && t < 3.0, "walk took {t}");
+    // Its own top speed (rus_infantry 2.5), no turn at the point.
+    assert!((top - 2.5).abs() < 0.05, "speed {top}");
+    assert!((facing + FRAC_PI_2).abs() < 0.05, "facing {facing}");
+    assert_eq!(w.orgs[o as usize].order, Order::Idle);
+    let slot = slot_position(center, 0.0, INFANTRY_POSITIONS[0]);
+    let back = run_until(&mut w, 15.0, |w| (pos(w, a) - slot).length() < 0.5 && !movement::actor_moving(w, a));
+    eprintln!("back in its slot {back} at t={:.2}, error {:.3}", w.time, (pos(&w, a) - slot).length());
+    assert!(back);
+    // The regiment stood still all along.
+    for (m, p) in others {
+        assert!((pos(&w, m) - p).length() < 1e-3, "member {m} moved");
+    }
+    assert_eq!(w.orgs[o as usize].order, Order::Idle);
+    assert!(formation_error(&w, o) < 0.5);
+}
+
+#[test]
+fn walking_member_passes_through_others_and_redeploys_off_an_occupied_point() {
+    let (data, ids) = data();
+    let mut w = world(open_map(64, 64, 2.0), data);
+    let (door, point) = (Vec2::new(60.0, 70.0), Vec2::new(60.0, 64.0));
+    let walker = w.spawn_actor(ids.infantry, Some(0), w.ground(door), -FRAC_PI_2);
+    let on_the_way = Vec2::new(60.0, 67.0);
+    let bystander = w.spawn_actor(ids.infantry, Some(0), w.ground(on_the_way), 0.0);
+    movement::walk_member(&mut w, walker, point);
+    // Someone steps onto the point after the walk began.
+    let squatter = w.spawn_actor(ids.infantry, Some(0), w.ground(point), 0.0);
+    let mut closest = f32::MAX;
+    run_until(&mut w, 10.0, |w| {
+        closest = closest.min((pos(w, walker) - on_the_way).length());
+        false
+    });
+    let end = pos(&w, walker);
+    let settled = !movement::actor_moving(&w, walker);
+    eprintln!("walker settled {settled} at {end:?}; closest to the bystander {closest:.3}; from the point {:.3}", (end - point).length());
+    assert!(settled);
+    // Ethereal on the way: straight through the bystander, who stays put.
+    assert!(closest < 0.3, "went around: {closest}");
+    assert!((pos(&w, bystander) - on_the_way).length() < 1e-3);
+    // Redeployed to a free spot within 8 m of the occupied point.
+    let gap = (end - pos(&w, squatter)).length();
+    assert!(gap >= 0.7 - 1e-3 && (end - point).length() <= 8.5, "gap {gap}");
+    assert!(w.actors[walker as usize].health > 0.0);
+}
+
+#[test]
+fn a_short_redeploy_reaches_its_spot() {
+    // The walk ends only at the point itself (mode 1, 0.1 m), so a free
+    // spot half a metre away is reached instead of creeping toward it.
+    let (data, ids) = data();
+    let mut w = world(open_map(64, 64, 2.0), data);
+    let (door, point) = (Vec2::new(60.0, 70.0), Vec2::new(60.0, 64.0));
+    let walker = w.spawn_actor(ids.infantry, Some(0), w.ground(door), -FRAC_PI_2);
+    movement::walk_member(&mut w, walker, point);
+    let squatter = w.spawn_actor(ids.infantry, Some(0), w.ground(point + Vec2::new(0.0, 0.6)), 0.0);
+    advance(&mut w, 8 * aa_play::TICKS_PER_SECOND);
+    let end = pos(&w, walker);
+    let gap = (end - pos(&w, squatter)).length();
+    eprintln!("walker at {end:?}, gap to the squatter {gap:.3}");
+    assert!(w.actors[walker as usize].health > 0.0, "died redeploying");
+    assert!(gap >= 0.7 - 1e-3, "still overlapping: {gap}");
+    assert!((end - (point - Vec2::new(0.0, 0.5))).length() < 0.1, "at {end:?}");
+}
+
+#[test]
+fn a_regiment_order_replaces_the_walk_out() {
+    let (data, ids) = data();
+    let mut w = world(open_map(64, 64, 2.0), data);
+    let center = Vec2::new(40.0, 50.0);
+    let o = spawn_regiment(&mut w, ids.regiment, 0, center, 0.0);
+    let (door, point) = (center + Vec2::new(0.0, 20.0), center + Vec2::new(0.0, 16.0));
+    let a = member_at_door(&mut w, o, door, point);
+    movement::walk_member(&mut w, a, point);
+    advance(&mut w, (0.3 * aa_play::TICKS_PER_SECOND as f32) as u32);
+    let to = center + Vec2::new(40.0, 0.0);
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to, attack_move: false });
+    let mut closest = f32::MAX;
+    let settled = run_until(&mut w, 60.0, |w| {
+        closest = closest.min((pos(w, a) - point).length());
+        org_settled(w, o)
+    });
+    let error = formation_error(&w, o);
+    eprintln!("settled {settled} at t={:.1}, formation error {error:.2}, walker's closest to the point {closest:.2}", w.time);
+    assert!(settled && error < 1.5, "error {error}");
+    assert!(closest > 1.0, "kept walking to the point");
+    assert!((w.orgs[o as usize].anchor - to).length() < 1.0);
+}
+
+// ---------------------------------------------------------------------------
 // Real data (needs AA_GAME_ROOT).
 
 #[test]
