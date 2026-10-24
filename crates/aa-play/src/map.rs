@@ -191,8 +191,18 @@ pub struct TerrainTables {
     /// applied first like the native 48D500 Find.
     #[serde(default)]
     pub translations: std::collections::BTreeMap<String, String>,
+    /// Lower-case Biome id -> its texture_subfolder_name (Biome+98, e.g.
+    /// "Arctic", "Desert", "Tropical"); biomes without one are absent.
+    #[serde(default)]
+    pub biome_texture_subfolder: std::collections::BTreeMap<String, String>,
 }
 impl TerrainTables {
+    /// The texture subfolder the original selects for a map of `biome`
+    /// (43F0EE copies it to the resource manager at world init; every
+    /// texture lookup 5A77E0 then tries `<folder>/<subfolder>/<file>` first).
+    pub fn texture_subfolder(&self, biome: &str) -> Option<&str> {
+        self.biome_texture_subfolder.get(&biome.to_ascii_lowercase()).map(String::as_str)
+    }
     /// 48D500: the translation first (its target only), else the id itself.
     pub fn find(&self, id: &str) -> Option<&TerrainVariationDef> {
         let key = id.to_ascii_lowercase();
@@ -264,6 +274,9 @@ pub(crate) fn terrain_tables(catalog: &aa_rules::actors::ActorCatalog, notes: &m
     if let Ok(biomes) = catalog.resolved_definitions("Biome") {
         for biome in biomes {
             let Some(id) = st(&biome, "IDS") else { continue };
+            if let Some(sub) = st(&biome, "texture_subfolder_name").filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("null")) {
+                out.biome_texture_subfolder.insert(id.to_ascii_lowercase(), sub);
+            }
             let first = biome.children("Terrain").ok().and_then(|v| v.into_iter().next());
             if let Some(t) = first.and_then(|t| st(&t, "terrain_IDS"))
                 && let Some(v) = first_variation.get(&t.to_ascii_lowercase())
