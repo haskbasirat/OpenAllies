@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-5";
+const CACHE_VERSION: &str = "aa-bevy-fx-7";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -56,6 +56,9 @@ pub struct Fxc {
     pub time: f32,
     pub chain: Vec<Fxc>,
     pub chain_immediate: Vec<Fxc>,
+    /// FXC_Equipment action (HIDE / UNHIDE), upper case.
+    #[serde(default)]
+    pub action: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -90,6 +93,95 @@ pub struct ActorFx {
     /// AircraftComponent operational_height (air transports fly at it).
     #[serde(default)]
     pub operational_height: Option<f32>,
+    /// What battle_view animates on the model (tires, aspects, trailer,
+    /// character animations).
+    #[serde(default)]
+    pub view: ViewFx,
+}
+
+/// The original's view data of one Thing that battle_view plays.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ViewFx {
+    /// MoverComponent Tire list: the bone IDS (lower case) and FRONT.
+    pub tires: Vec<(String, bool)>,
+    /// MoverComponent tire_circumference (metres per turn).
+    pub tire_circumference: f32,
+    /// MoverComponent trailer_actor (lower case) and TrailerHitch
+    /// (node IDS lower case, node_offset).
+    pub trailer: Option<String>,
+    pub hitch: Option<(String, [f32; 3])>,
+    /// View AspectNormal and Aspect list: IDS (lower case; "aspect_normal"
+    /// for AspectNormal) -> model and skin, Data-relative, "%s" expanded.
+    pub aspects: Vec<AspectFx>,
+    /// CharacterComponent Animation list, in authored order.
+    pub animations: Vec<AnimFx>,
+    /// The rear corners of the soft shape in data space (x right, y
+    /// forward): RECT/SQUARE (minX, minY), (maxX, minY), else the blocking
+    /// radius (-r, -r), (r, -r) (trailers, `45CC40`).
+    #[serde(default)]
+    pub rear: [[f32; 2]; 2],
+    /// CharacterComponent AspectAnimationSet lists: aspect IDS (lower case)
+    /// -> the set's own animations, then every base animation whose IDS it
+    /// does not name (464BD0 / 463F10 merge).
+    #[serde(default)]
+    pub anim_sets: Vec<(String, Vec<AnimFx>)>,
+    /// The Stance list in authored order (45E620 takes the last that applies).
+    #[serde(default)]
+    pub stances: Vec<StanceFx>,
+    /// View idle_loops_min / idle_loops_max (49B4D0).
+    #[serde(default)]
+    pub idle_loops: [i32; 2],
+    /// Per ability in the weapon order (Performer, then Defender): its
+    /// animation1..5 IDS and idle_animation IDS (lower case).
+    #[serde(default)]
+    pub abilities: Vec<AbilityAnims>,
+}
+
+/// One Stance (template_stance.tgi).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StanceFx {
+    pub ids: String,
+    /// aspect_ids (lower case), None for NULL.
+    pub aspect: Option<String>,
+    pub health: f32,
+    /// actor_state list (lower case), empty for NULL.
+    pub states: Vec<String>,
+}
+
+/// The animations an Ability plays (template_actorability.tgi).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AbilityAnims {
+    pub animations: Vec<String>,
+    pub idle: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AspectFx {
+    pub ids: String,
+    pub model: Option<String>,
+    pub skin: Option<String>,
+}
+
+/// One CharacterComponent Animation (template_animation.tgi).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AnimFx {
+    /// MOVE, ABILITY, IDLE, FIDGET, DIE, HIT, SUMMON (upper case).
+    pub kind: String,
+    pub ids: String,
+    /// The KF file, Data-relative.
+    pub kf: String,
+    /// Desired gameplay length (s), walk_distance (m per cycle), key_ratio.
+    pub length: f32,
+    pub walk_distance: f32,
+    pub key_ratio: f32,
+    pub weight: f32,
+    pub damage_threshold: f32,
+    pub damage_filter: i32,
+    pub start: Vec<Fxc>,
+    pub do_: Vec<Fxc>,
+    pub end: Vec<Fxc>,
+    /// WhenDoAtTime (each with its `time`).
+    pub at_time: Vec<Fxc>,
 }
 
 /// A VFX definition (template_vfx.tgi), the fields the view reads.
@@ -293,6 +385,7 @@ fn fxc(n: &ResolvedNode<'_>) -> Fxc {
         time: num(n, "time").unwrap_or(0.0),
         chain: list(n, "Chain"),
         chain_immediate: list(n, "ChainImmediate"),
+        action: text(n, "action").unwrap_or_default().to_ascii_uppercase(),
     }
 }
 fn list(node: &ResolvedNode<'_>, name: &str) -> Vec<Fxc> {
@@ -353,7 +446,133 @@ fn actor_fx(catalog: &ActorCatalog, id: &str) -> Option<ActorFx> {
     if let Ok(Some(air)) = actor.child("AircraftComponent") {
         fx.operational_height = num(&air, "operational_height");
     }
+    view_fx(&actor, &mut fx);
     Some(fx)
+}
+
+/// Expand an aspect / animation resource: "%s" takes the resource prefix
+/// (Data-relative already), "/" starts at the Data root, otherwise the
+/// value is relative to the file that assigned it.
+fn resource(value: &str, folder: &str, prefix: Option<&str>, second: &str) -> Option<String> {
+    let v = value.replace('\\', "/");
+    if v.contains("%s") {
+        let prefix = prefix?;
+        let once = v.replacen("%s", prefix, 1);
+        return Some(once.replacen("%s", second, 1).trim_start_matches('/').to_owned());
+    }
+    Some(relative(folder, &v))
+}
+
+fn view_fx(actor: &ResolvedNode<'_>, fx: &mut ActorFx) {
+    let prefix = fx.resource_prefix.clone();
+    if let Ok(Some(mover)) = actor.child("MoverComponent") {
+        fx.view.tire_circumference = num(&mover, "tire_circumference").unwrap_or(1.0);
+        for t in mover.children("Tire").unwrap_or_default() {
+            if let Some(bone) = text(&t, "tire_ids") {
+                let front = text(&t, "type").is_some_and(|k| k.eq_ignore_ascii_case("front"));
+                fx.view.tires.push((bone.to_ascii_lowercase(), front));
+            }
+        }
+        fx.view.trailer = text(&mover, "trailer_actor").map(|t| t.to_ascii_lowercase());
+        if let Ok(Some(h)) = mover.child("TrailerHitch")
+            && let Some(bone) = text(&h, "node_ids")
+        {
+            fx.view.hitch = Some((bone.to_ascii_lowercase(), p3(&h, "node_offset", [0.0; 3])));
+        }
+    }
+    if let Ok(Some(size)) = actor.child("Size") {
+        let shape = text(&size, "soft_shape").unwrap_or_default().to_ascii_uppercase();
+        let radius = num(&size, "blocking_radius").unwrap_or(0.5);
+        fx.view.rear = if shape == "RECT" || shape == "SQUARE" {
+            let w = num(&size, "rect_width").unwrap_or(radius * 2.0) * 0.5;
+            let h = num(&size, "rect_height").unwrap_or(radius * 2.0) * 0.5;
+            [[-w, -h], [w, -h]]
+        } else {
+            [[-radius, -radius], [radius, -radius]]
+        };
+    }
+    if let Ok(Some(view)) = actor.child("View") {
+        let mut aspects: Vec<(String, ResolvedNode<'_>)> = Vec::new();
+        if let Ok(Some(normal)) = view.child("AspectNormal") {
+            aspects.push(("aspect_normal".into(), normal));
+        }
+        for a in view.children("Aspect").unwrap_or_default() {
+            let ids = text(&a, "IDS").unwrap_or_default().to_ascii_lowercase();
+            aspects.push((ids, a));
+        }
+        for (ids, a) in aspects {
+            let aspect_prefix = text(&a, "aspect_prefix").unwrap_or_default();
+            let full = prefix.as_ref().map(|p| format!("{p}{aspect_prefix}"));
+            let field = |name: &str| text_with_folder(&a, name).and_then(|(v, folder)| resource(&v, &folder, full.as_deref(), ""));
+            fx.view.aspects.push(AspectFx { ids, model: field("model"), skin: field("skin") });
+        }
+    }
+    if let Ok(Some(view)) = actor.child("View") {
+        fx.view.idle_loops = [num(&view, "idle_loops_min").map_or(1, |v| v as i32), num(&view, "idle_loops_max").map_or(3, |v| v as i32)];
+    }
+    if let Ok(Some(character)) = actor.child("CharacterComponent") {
+        for a in character.children("Animation").unwrap_or_default() {
+            fx.view.animations.push(anim_fx(&a, prefix.as_deref()));
+        }
+        // 464BD0: one more set per AspectAnimationSet, loaded with the
+        // aspect's own prefix; 463F10 then adds the base animations whose IDS
+        // the set does not have.
+        for set in character.children("AspectAnimationSet").unwrap_or_default() {
+            let Some(aspect) = text(&set, "aspect_ids").map(|s| s.to_ascii_lowercase()) else { continue };
+            let aspect_prefix = actor.child("View").ok().flatten().and_then(|view| {
+                let node = view.children("Aspect").unwrap_or_default().into_iter().find(|n| text(n, "IDS").is_some_and(|i| i.eq_ignore_ascii_case(&aspect)))?;
+                text(&node, "aspect_prefix")
+            });
+            let set_prefix = prefix.as_ref().map(|p| format!("{p}{}", aspect_prefix.unwrap_or_default()));
+            let mut rows: Vec<AnimFx> = set.children("Animation").unwrap_or_default().iter().map(|a| anim_fx(a, set_prefix.as_deref())).collect();
+            for base in &fx.view.animations {
+                if !rows.iter().any(|r| r.ids == base.ids) {
+                    rows.push(base.clone());
+                }
+            }
+            if !fx.view.anim_sets.iter().any(|(a, _)| *a == aspect) {
+                fx.view.anim_sets.push((aspect, rows));
+            }
+        }
+    }
+    for s in actor.children("Stance").unwrap_or_default() {
+        fx.view.stances.push(StanceFx {
+            ids: text(&s, "ids").or_else(|| text(&s, "IDS")).unwrap_or_default().to_ascii_lowercase(),
+            aspect: text(&s, "aspect_ids").map(|a| a.to_ascii_lowercase()),
+            health: num(&s, "health").unwrap_or(1.0),
+            states: text(&s, "actor_state").map_or_else(Vec::new, |v| v.split([',', ' ', '\t']).filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("null")).map(|t| t.to_ascii_lowercase()).collect()),
+        });
+    }
+    for component in ["PerformerComponent", "DefenderComponent"] {
+        if let Ok(Some(c)) = actor.child(component) {
+            for ability in c.children("Ability").unwrap_or_default() {
+                let animations = (1..=5).filter_map(|i| text(&ability, &format!("animation{i}"))).map(|s| s.to_ascii_lowercase()).collect();
+                fx.view.abilities.push(AbilityAnims { animations, idle: text(&ability, "idle_animation").map(|s| s.to_ascii_lowercase()) });
+            }
+        }
+    }
+}
+
+/// One Animation node (template_animation.tgi; the kf expanded with the
+/// prefix of the set that loads it).
+fn anim_fx(a: &ResolvedNode<'_>, prefix: Option<&str>) -> AnimFx {
+    let ids = text(a, "IDS").unwrap_or_default();
+    let kf = text_with_folder(a, "kf").and_then(|(v, folder)| resource(&v, &folder, prefix, &ids)).unwrap_or_default();
+    AnimFx {
+        kind: text(a, "type").unwrap_or_default().to_ascii_uppercase(),
+        ids: ids.to_ascii_lowercase(),
+        kf,
+        length: num(a, "length").unwrap_or(1.0),
+        walk_distance: num(a, "walk_distance").unwrap_or(1.0),
+        key_ratio: num(a, "key_ratio").unwrap_or(0.5),
+        weight: num(a, "weight").unwrap_or(1.0),
+        damage_threshold: num(a, "damage_threshold").unwrap_or(0.0),
+        damage_filter: num(a, "damage_filter").map_or(-1, |f| f as i32),
+        start: list(a, "WhenStart"),
+        do_: list(a, "WhenDo"),
+        end: list(a, "WhenEnd"),
+        at_time: list(a, "WhenDoAtTime"),
+    }
 }
 
 fn vfx_def(node: &ResolvedNode<'_>) -> VfxDef {
@@ -476,8 +695,8 @@ pub fn extract(catalog: &ActorCatalog, actor_ids: &[String]) -> FxTables {
             None => t.notes.push(format!("actor {id}: not resolved")),
         }
     }
-    // Projectiles named by any weapon.
-    let projectiles: Vec<String> = t.actors.values().flat_map(|a| a.weapons.iter().filter_map(|w| w.projectile.clone())).collect();
+    // Projectiles named by any weapon, and the trucks' trailers.
+    let projectiles: Vec<String> = t.actors.values().flat_map(|a| a.weapons.iter().filter_map(|w| w.projectile.clone()).chain(a.view.trailer.clone())).collect();
     for p in projectiles {
         if !t.actors.contains_key(&p) {
             if let Some(fx) = actor_fx(catalog, &p) {

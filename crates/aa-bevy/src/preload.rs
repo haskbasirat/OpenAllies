@@ -47,6 +47,40 @@ pub fn generals(root: &Path) -> Result<Arc<aa_play::special_ops::GeneralData>> {
     get(&GENERALS, || aa_play::special_ops::GeneralData::load(root, &data))
 }
 
+// appended by the effects and sound owner: the effect tables (FX catalog,
+// NIF effect table, texture array, rig bones) and the sound data (audio
+// variables, sound file index, every WAV decoded)
+static EFFECTS: Shared<crate::effects::Preloaded> = OnceLock::new();
+static SOUNDS: Shared<crate::audio::SoundBank> = OnceLock::new();
+static SOUNDS_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// `root` is the install (the reconstruction folder's parent).
+pub fn effects(root: &Path) -> Result<Arc<crate::effects::Preloaded>> {
+    let data = game_data(root)?;
+    get(&EFFECTS, || {
+        let things: Vec<(String, Option<String>)> = data.defs.iter().map(|d| (d.id.clone(), d.model.clone())).collect();
+        crate::effects::preload(&things)
+    })
+}
+pub fn sounds(reconstruction: &Path) -> Result<Arc<crate::audio::SoundBank>> {
+    get(&SOUNDS, || crate::audio::SoundBank::load(reconstruction))
+}
+/// The effect data if its job has finished (never blocks).
+pub fn effects_ready() -> Option<Arc<crate::effects::Preloaded>> {
+    EFFECTS.get().and_then(|r| r.clone().ok())
+}
+/// The sound data if its job has finished (never blocks).
+pub fn sounds_ready() -> Option<Arc<crate::audio::SoundBank>> {
+    SOUNDS.get().and_then(|r| r.clone().ok())
+}
+/// Start the sound job if nothing has (a run that skipped `start`).
+pub fn sounds_request(reconstruction: PathBuf) {
+    if SOUNDS.get().is_none() && !SOUNDS_REQUESTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        std::thread::spawn(move || {
+            let _ = sounds(&reconstruction);
+        });
+    }
+}
+
 /// Warm everything in parallel in the background (called once at startup).
 pub fn start(reconstruction: PathBuf) {
     let Some(root) = reconstruction.parent().map(Path::to_path_buf) else { return };
@@ -75,6 +109,20 @@ pub fn start(reconstruction: PathBuf) {
             let root = root.clone();
             Box::new(move || {
                 let _ = random_maps(&root);
+            })
+        },
+        // appended by the effects and sound owner
+        {
+            let root = root.clone();
+            Box::new(move || {
+                let _ = effects(&root);
+            })
+        },
+        {
+            let r = reconstruction.clone();
+            Box::new(move || {
+                SOUNDS_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+                let _ = sounds(&r);
             })
         },
     ];

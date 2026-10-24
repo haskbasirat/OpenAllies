@@ -72,6 +72,28 @@ pub fn bake(file: &NifFile, converted: &[(String, usize)], skip_blended: bool) -
     if !animated && !skip_blended {
         return None;
     }
+    let looping = scene.nodes.iter().filter_map(|n| n.kf.as_ref()).any(|k| k.timing.cycle == 0);
+    let duration = scene.duration;
+    bake_scene(file, &scene, converted, skip_blended, animated, looping, duration)
+}
+
+/// Bake a KF clip (extract::kf_tracks) on the model's skeleton: each track
+/// replaces the animation of the node of its name; `duration` is the
+/// sequence length, `looping` the animation type's (idle and move loop).
+pub fn bake_clip(file: &NifFile, tracks: &[(String, super::nif::Keyframes)], duration: f32, looping: bool, converted: &[(String, usize)]) -> Option<Baked> {
+    if duration <= 0.0 {
+        return None;
+    }
+    let mut scene = extract::scene(file);
+    for (name, k) in tracks {
+        if let Some(n) = scene.nodes.iter_mut().find(|n| n.name.eq_ignore_ascii_case(name)) {
+            n.kf = Some(k.clone());
+        }
+    }
+    bake_scene(file, &scene, converted, false, true, looping, duration)
+}
+
+fn bake_scene(file: &NifFile, scene: &extract::Scene, converted: &[(String, usize)], skip_blended: bool, animated: bool, looping: bool, duration: f32) -> Option<Baked> {
     let target = |f: &aa_formats::nif::Fields, name: &str| f.link(name).and_then(|l| file.target(l)).filter(|&i| i < file.objects.len());
     // The NIF's drawn geometry, by name.
     let mut geos: Vec<(String, Geo)> = Vec::new();
@@ -109,8 +131,6 @@ pub fn bake(file: &NifFile, converted: &[(String, usize)], skip_blended: bool) -
         let name = o.fields.string("name").flatten().map(|b| String::from_utf8_lossy(b).into_owned()).unwrap_or_default();
         geos.push((name, Geo { node, blended, verts, normals, skin }));
     }
-    let looping = scene.nodes.iter().filter_map(|n| n.kf.as_ref()).any(|k| k.timing.cycle == 0);
-    let duration = scene.duration;
     let frames = if !animated {
         1
     } else if looping {

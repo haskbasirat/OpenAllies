@@ -280,6 +280,11 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         .or_else(|| game_map.as_ref().and_then(|m| m.start_locations.first()).map(|p| Vec2::new(p.x, -p.y)))
         .unwrap_or(Vec2::new(scene.terrain.bounds.max[0] * 0.5, scene.terrain.bounds.min[2] * 0.5));
     session::set_load_status("app_status_loading_resources");
+    // The map's Biome texture subfolder (Arctic, Desert, Tropical) for every
+    // texture of this battle, as the original sets it at world init.
+    let subfolder = world.data.terrain.texture_subfolder(&world.map.biome);
+    info!("biome {:?}: texture subfolder {subfolder:?}", world.map.biome);
+    textures::set_biome_subfolder(subfolder);
     let mut requests = textures::Requests::default();
     for draw in &terrain {
         if let Some(t) = &draw.texture {
@@ -391,13 +396,17 @@ impl Plugin for ScenePlugin {
             // Matched to the original screenshots (brightness and saturation, darker shadows).
             .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: env_f32("AA_BEVY_AMBIENT", 340.0), ..default() })
             .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
+            // Spread a new battle's texture and mesh uploads over the frames
+            // the loading screen still covers (a whole map in one frame took
+            // about 0.3 s).
+            .insert_resource(bevy::render::render_asset::RenderAssetBytesPerFrame::new(32 << 20))
             .insert_resource(SceneArgs(self.args.clone()))
             .init_resource::<session::LoadProgress>()
             .add_systems(OnEnter(session::AppState::Loading), start_loading)
             .add_systems(Update, poll_loading.run_if(in_state(session::AppState::Loading)))
             .add_systems(OnEnter(session::AppState::Battle), setup)
             .add_plugins(crate::battle_view::BattleViewPlugin)
-            .add_systems(Update, (hud, crate::debug_battle::spawn).run_if(in_state(session::AppState::Battle)));
+            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain).run_if(in_state(session::AppState::Battle)));
         if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
@@ -480,20 +489,9 @@ fn setup(
         warn!("{f}");
     }
     let tex = tex.handles;
-    // Terrain layers, later batches on top (drawn before other transparents).
-    let no_terrain = std::env::var_os("AA_BEVY_NO_TERRAIN").is_some();
-    for (order, draw) in loaded.terrain.iter().enumerate().filter(|_| !no_terrain) {
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, draw.positions.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, draw.normals.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, draw.uvs.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, draw.cell_uvs.clone());
-        mesh.insert_indices(Indices::U32(draw.indices.clone()));
-        let texture = draw.texture.as_ref().and_then(|t| tex.get(&(t.clone(), Kind::Color)).cloned());
-        let mask = draw.mask.as_ref().and_then(|m| tex.get(&(m.texture.clone(), Kind::Mask)).cloned());
-        let mask = mask.zip(draw.mask.as_ref().map(|m| m.rows));
-        let material = materials.add(look::terrain_material(texture, draw.color, mask, order));
-        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster));
+    // Terrain layers stream in over the next frames (`stream_terrain`).
+    if std::env::var_os("AA_BEVY_NO_TERRAIN").is_none() {
+        commands.insert_resource(TerrainStream { textures: tex.clone(), next: 0, frames: 0 });
     }
     // Every placed map object with a resolved model.
     let mut parts = HashMap::new();
@@ -614,6 +612,51 @@ fn setup(
     info!("object meshes by alpha mode: {modes:?}");
     info!("load step battle scene setup: {:.0} ms", setup_started.elapsed().as_secs_f64() * 1000.0);
     info!("Bevy test: {objects} objects, {} terrain layers, {} textures, loaded in {:.1} s", loaded.terrain.len(), tex.len(), loaded.seconds);
+}
+
+/// Terrain layers still to be created. Every new mesh and material is
+/// prepared by the renderer in the frame it appears; a big map has about
+/// 2000 layers (Berlin 1976, ~0.1 ms each), so they are spread over the
+/// frames the loading screen still covers instead of one 0.2 s frame.
+#[derive(Resource)]
+struct TerrainStream {
+    textures: HashMap<(String, Kind), Handle<Image>>,
+    next: usize,
+    frames: u32,
+}
+
+/// Terrain layers created per frame (about 20 ms of renderer preparation).
+const TERRAIN_LAYERS_PER_FRAME: usize = 200;
+
+/// Terrain layers, later batches on top (drawn before other transparents).
+fn stream_terrain(
+    mut commands: Commands,
+    loaded: Option<Res<Loaded>>,
+    stream: Option<ResMut<TerrainStream>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
+) {
+    let (Some(loaded), Some(mut stream)) = (loaded, stream) else { return };
+    let end = (stream.next + TERRAIN_LAYERS_PER_FRAME).min(loaded.terrain.len());
+    for (order, draw) in loaded.terrain.iter().enumerate().take(end).skip(stream.next) {
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, draw.positions.clone());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, draw.normals.clone());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, draw.uvs.clone());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, draw.cell_uvs.clone());
+        mesh.insert_indices(Indices::U32(draw.indices.clone()));
+        let texture = draw.texture.as_ref().and_then(|t| stream.textures.get(&(t.clone(), Kind::Color)).cloned());
+        let mask = draw.mask.as_ref().and_then(|m| stream.textures.get(&(m.texture.clone(), Kind::Mask)).cloned());
+        let mask = mask.zip(draw.mask.as_ref().map(|m| m.rows));
+        let material = materials.add(look::terrain_material(texture, draw.color, mask, order));
+        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster));
+    }
+    stream.next = end;
+    stream.frames += 1;
+    if end >= loaded.terrain.len() {
+        info!("terrain: {} layers created over {} frames", loaded.terrain.len(), stream.frames);
+        commands.remove_resource::<TerrainStream>();
+    }
 }
 
 fn hud(time: Res<Time>, mut frames: Local<(f32, u32, f32)>, mut text: Query<&mut Text, With<HudText>>) {

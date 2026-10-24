@@ -94,10 +94,49 @@ fn start_output(mut commands: Commands, mut assets: ResMut<Assets<MixerAsset>>) 
     commands.insert_resource(Output(mixer));
 }
 
+/// The battle-independent sound data, loaded once per run on a preload
+/// thread (crate::preload::sounds): the audio variables, the files of the
+/// sound folders by lower-case relative path, and every WAV decoded.
+pub struct SoundBank {
+    vars: Vars,
+    files: HashMap<String, PathBuf>,
+    pcm: HashMap<String, Arc<Pcm>>,
+}
+
+impl SoundBank {
+    pub fn load(reconstruction: &std::path::Path) -> anyhow::Result<Self> {
+        use rayon::prelude::*;
+        let vars = read_vars(reconstruction);
+        let base = reconstruction.join("assets/original");
+        let mut files = HashMap::new();
+        for root in [base.join("Data"), base.join("Music"), base.join("Speech")] {
+            let mut stack = vec![root.clone()];
+            while let Some(dir) = stack.pop() {
+                let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+                for e in entries.flatten() {
+                    let path = e.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if let Ok(rel) = path.strip_prefix(&root) {
+                        let key = rel.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+                        if key.ends_with(".wav") || key.ends_with(".mp3") {
+                            files.entry(key).or_insert(path);
+                        }
+                    }
+                }
+            }
+        }
+        let wavs: Vec<(&String, &PathBuf)> = files.iter().filter(|(k, _)| k.ends_with(".wav")).collect();
+        let pcm: HashMap<String, Arc<Pcm>> = wavs.par_iter().filter_map(|(k, p)| std::fs::read(p).ok().and_then(|b| mixer::decode_wav(&b).ok()).map(|x| ((*k).clone(), Arc::new(x)))).collect();
+        Ok(Self { vars, files, pcm })
+    }
+}
+
 /// Sound files below the original Audio mount (Data.rwd, Music.rwd and
 /// Speech.rwd all mount over `Audio/`; here their extracted folders).
 struct Files {
     roots: Vec<PathBuf>,
+    bank: Option<Arc<SoundBank>>,
     pcm: HashMap<String, Option<Arc<Pcm>>>,
     streams: HashMap<String, Option<Arc<Pcm>>>,
     pending: HashMap<String, ()>,
@@ -106,11 +145,12 @@ struct Files {
 }
 
 impl Files {
-    fn new(reconstruction: &std::path::Path) -> Self {
+    fn new(reconstruction: &std::path::Path, bank: Option<Arc<SoundBank>>) -> Self {
         let base = reconstruction.join("assets/original");
         let (tx, rx) = mpsc::channel();
         Self {
             roots: vec![base.join("Data"), base.join("Music"), base.join("Speech")],
+            bank,
             pcm: HashMap::new(),
             streams: HashMap::new(),
             pending: HashMap::new(),
@@ -119,6 +159,9 @@ impl Files {
         }
     }
     fn locate(&self, path: &str) -> Option<PathBuf> {
+        if let Some(bank) = &self.bank {
+            return bank.files.get(&path.replace('\\', "/").to_ascii_lowercase()).cloned();
+        }
         self.roots.iter().find_map(|r| crate::effects::bones::find_file(r, path))
     }
     fn poll(&mut self) {
@@ -135,6 +178,10 @@ impl manager::Files for Files {
         let key = path.to_ascii_lowercase();
         if let Some(p) = self.pcm.get(&key) {
             return p.clone();
+        }
+        if let Some(p) = self.bank.as_ref().and_then(|b| b.pcm.get(&key.replace('\\', "/"))) {
+            self.pcm.insert(key, Some(p.clone()));
+            return Some(p.clone());
         }
         let pcm = self.locate(path).and_then(|f| std::fs::read(f).ok()).and_then(|b| mixer::decode_wav(&b).ok()).map(Arc::new);
         self.pcm.insert(key, pcm.clone());
@@ -339,10 +386,19 @@ fn update(
     };
     let Some(mut sound) = sound else {
         let Some(reconstruction) = crate::effects::reconstruction_root() else { return };
-        let vars = read_vars(&reconstruction);
+        // The preloaded sound data (variables, file index, decoded WAVs);
+        // if its job is still running, wait for it without blocking.
+        let Some(bank) = crate::preload::sounds_ready() else {
+            crate::preload::sounds_request(reconstruction);
+            queue.play.clear();
+            queue.stop.clear();
+            return;
+        };
+        let started = std::time::Instant::now();
+        let vars = bank.vars.clone();
         let defs = Arc::new(data.0.audio.clone());
         let manager = Manager::new(vars, defs, output.0.clone());
-        let mut s = Sound { manager, files: Files::new(&reconstruction), emitters: Vec::new(), disturbable: HashMap::new(), music_started: false, capturing: false, time: 0.0, rng: 0x2545_F491 };
+        let mut s = Sound { manager, files: Files::new(&reconstruction, Some(bank)), emitters: Vec::new(), disturbable: HashMap::new(), music_started: false, capturing: false, time: 0.0, rng: 0x2545_F491 };
         // Map-placed audio doodads.
         for p in &battle.world.map.placed {
             if let Some(def) = data.0.ambient.get(&p.thing_id.to_ascii_lowercase()) {
@@ -357,7 +413,7 @@ fn update(
                 s.emitters.push(Emitter { pos: Vec3::from(p.position), def: def.clone(), next_random: first, next_check: 0.0, ready_at: 0.0 });
             }
         }
-        info!("sound: {} definitions, {} ambient emitters", data.0.audio.len(), s.emitters.len());
+        info!("sound: {} definitions, {} ambient emitters, set up in {:.1} ms", data.0.audio.len(), s.emitters.len(), started.elapsed().as_secs_f32() * 1000.0);
         commands.insert_resource(s);
         return;
     };
