@@ -574,6 +574,23 @@ impl AnimatedModels {
                 let meshes: Vec<&aa_assets::PreparedMesh> = model.meshes.iter().filter(|m| !m.indices.is_empty()).collect();
                 let converted: Vec<(String, usize)> = meshes.iter().map(|m| (m.name.clone(), m.vertices.len())).collect();
                 let baked = super::bones::find_file(&root, &path).and_then(|p| std::fs::read(p).ok()).and_then(|b| aa_formats::nif::load(&b).ok()).and_then(|f| super::anim::bake(&f, &converted, false));
+                if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                    let animated: Vec<String> = baked
+                        .as_ref()
+                        .map(|b| {
+                            b.parts
+                                .iter()
+                                .filter_map(|p| {
+                                    let fr = p.frames.as_ref()?;
+                                    let y = |vs: &[[f32; 3]]| vs.iter().fold((f32::MAX, f32::MIN), |(l, h), v| (l.min(v[1]), h.max(v[1])));
+                                    let (a, z) = (y(&fr[0].0), y(&fr[fr.len() - 1].0));
+                                    Some(format!("{} y {:.2}..{:.2} -> {:.2}..{:.2}", converted[p.mesh].0, a.0, a.1, z.0, z.1))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    bevy::log::info!("aspect model {path}: {} meshes, animated {:?}", converted.len(), animated);
+                }
                 let mut parts = Vec::new();
                 for (i, mesh) in meshes.iter().enumerate() {
                     let texture = mesh.material.texture.as_ref().and_then(|t| crate::textures::load(&store, t, crate::scene::kind(&mesh.material, team)).ok());
