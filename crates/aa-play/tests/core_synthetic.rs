@@ -581,14 +581,34 @@ fn cities_change_hands_by_presence_and_independents_never_lose() {
     assert_eq!(w.actors[c as usize].kingdom, Some(2), "nobody near the city");
     assert!(!w.kingdoms[2].defeated, "an independent never loses");
     assert_eq!(w.winner, None);
-    // A soldier with a weapon of kingdom 0 in the zone takes the city.
+    // A lone soldier with a weapon (PerformerComponent, combat value > 0) of
+    // kingdom 0 in the zone takes the city; an unarmed one does not (5640A0
+    // needs actor value 4D01E0 > 0).
     let mut soldier = w.data.def(ids.soldier).clone();
     soldier.weapons = vec![aa_play::data::Weapon { range: 10.0, damage: 1.0, ..Default::default() }];
     soldier.destructible = true;
+    soldier.components |= aa_rules::native::COMPONENTS.iter().find(|(c, _)| *c == "PerformerComponent").map_or(0, |(_, bit)| 1u32 << bit);
+    let mut unarmed_def = soldier.clone();
+    unarmed_def.weapons.clear();
     let mut data = (*w.data).clone();
     let armed = data.defs.len() as u32;
     data.defs.push(soldier);
+    let unarmed = data.defs.len() as u32;
+    data.defs.push(unarmed_def);
+    // A regiment of armed soldiers: it counts as one candidate (its members
+    // are skipped, 4549C0) with its own value (578C00).
+    let mut squad = w.data.def(ids.regiment).clone();
+    squad.slots = vec![(armed, [-3.0, 2.5]), (armed, [3.0, 2.5]), (armed, [0.0, 0.0])];
+    let squad_def = data.defs.len() as u32;
+    data.defs.push(squad);
     w.data = Arc::new(data);
+    // Combat prepares the combat values (Performer +60) of the new definitions.
+    aa_play::combat::tick(&mut w);
+    assert!(w.combat.extras.as_ref().unwrap().def(armed).combat_value > 0.0);
+    let u = spawn(&mut w, unarmed, 0, Vec2::new(205.0, 200.0), 0.0);
+    core_step(&mut w, vec![]);
+    assert_eq!(w.actors[c as usize].kingdom, Some(2), "unarmed: no value");
+    w.actors[u as usize].alive = false;
     let a = spawn(&mut w, armed, 0, Vec2::new(210.0, 200.0), 0.0);
     core_step(&mut w, vec![]);
     assert_eq!(w.actors[c as usize].kingdom, Some(0));
@@ -601,7 +621,12 @@ fn cities_change_hands_by_presence_and_independents_never_lose() {
     w.actors[a as usize].alive = false;
     core_step(&mut w, vec![]);
     assert_eq!(w.actors[c as usize].kingdom, Some(1));
-    let _ = (b, hq0);
+    // Kingdom 1 leaves and a regiment of kingdom 0 arrives: it takes the city.
+    w.actors[b as usize].alive = false;
+    let o = aa_play::production::spawn_organization(&mut w, squad_def, 0, Vec2::new(205.0, 205.0), 0.0, Some(hq0));
+    assert!(w.orgs[o as usize].members.iter().all(|&m| w.actors[m as usize].org == Some(o)));
+    core_step(&mut w, vec![]);
+    assert_eq!(w.actors[c as usize].kingdom, Some(0), "the regiment counts through its organization");
 }
 
 #[test]
