@@ -176,24 +176,116 @@ pub fn tick(world: &mut World) {
     cities(world);
 }
 
-/// City candidate admission 0x5640A0: an armed, non-flying actor of a major
-/// (non-independent) kingdom with a positive value inside the zone.
-fn city_value(world: &World, a: ActorId) -> f32 {
+/// One city zone candidate: a lone actor or an organization (as the native
+/// organization actor at its own position).
+struct CityCandidate {
+    kingdom: KingdomId,
+    pos: Vec2,
+    /// 4D0180: the current value the city tick weighs.
+    current: f32,
+}
+
+/// Performer +60 (57E430): the combat value of a definition with a
+/// PerformerComponent, None without one.
+fn performer_value(world: &World, def: crate::data::DefId) -> Option<f32> {
+    let d = world.data.def(def);
+    if !d.has_component("PerformerComponent") {
+        return None;
+    }
+    Some(world.combat.extras.as_ref().map_or(0.0, |e| e.def(def).combat_value))
+}
+
+/// 57DC40: the Body health ratio (Body +10 / +14), 1 without a Body.
+fn health_ratio(world: &World, a: ActorId) -> f32 {
     let actor = &world.actors[a as usize];
-    let def = world.data.def(actor.def);
-    if !actor.alive || actor.removed || def.flying || def.weapons.is_empty() {
-        return 0.0;
+    let d = world.data.def(actor.def);
+    if !d.has_component("BodyComponent") {
+        return 1.0;
     }
-    if actor.kingdom.is_none_or(|k| world.kingdoms.get(k as usize).is_none_or(|x| x.independent || x.defeated)) {
-        return 0.0;
+    let max = world
+        .combat
+        .actors
+        .get(a as usize)
+        .filter(|c| c.initialized && c.max_health > 0.0)
+        .map_or_else(|| crate::production::max_health(world, actor.kingdom, actor.def), |c| c.max_health);
+    if max > 0.0 { actor.health / max } else { 1.0 }
+}
+
+/// 5640A0 kingdom gate: owned by a major (non-independent) kingdom
+/// (kingdom +400 == 0).
+fn major(world: &World, k: Option<KingdomId>) -> Option<KingdomId> {
+    k.filter(|&k| world.kingdoms.get(k as usize).is_some_and(|x| !x.independent))
+}
+
+/// City candidate admission 0x5640A0 for every actor and organization:
+/// not dead, owned by a major kingdom, not an organization member (4549C0:
+/// the organization stands for it), thing flag bit 12 (flying, 0x1000)
+/// clear, actor value 4D01E0(0) > 0, and without a Body or captureable or
+/// destructible. 4D01E0 is Organization +6C (5788B0 maximum: the members'
+/// Performer +60 plus the empty layout slots' ActorData +1E4) + Settlement
+/// +34 + Performer +60 + Denizen +14; 4D0180, the weight, uses Organization
+/// +68 (the members' Performer +60 times their health ratio), Settlement
+/// +30, 57DC40 (Performer +60 times the health ratio) and Denizen +10.
+/// aa-play has no Settlement or Denizen occupants: those terms are 0.
+fn city_candidates(world: &World) -> Vec<CityCandidate> {
+    let mut out = Vec::new();
+    for a in 0..world.actors.len() as ActorId {
+        let actor = &world.actors[a as usize];
+        if !actor.alive || actor.removed || actor.org.is_some() {
+            continue;
+        }
+        let Some(kingdom) = major(world, actor.kingdom) else { continue };
+        let d = world.data.def(actor.def);
+        if d.flying {
+            continue;
+        }
+        if d.has_component("BodyComponent") && !d.captureable && !d.destructible {
+            continue;
+        }
+        let Some(value) = performer_value(world, actor.def) else { continue };
+        if value <= 0.0 {
+            continue;
+        }
+        out.push(CityCandidate { kingdom, pos: actor.pos.truncate(), current: value * health_ratio(world, a) });
     }
-    if def.has_component("BodyComponent") && !def.captureable && !def.destructible {
-        return 0.0;
+    for o in 0..world.orgs.len() as OrgId {
+        let org = &world.orgs[o as usize];
+        if !org.alive || !org.members.iter().any(|&m| live(world, m)) {
+            continue;
+        }
+        let Some(kingdom) = major(world, Some(org.kingdom)) else { continue };
+        let d = world.data.def(org.def);
+        if d.flying {
+            continue;
+        }
+        if d.has_component("BodyComponent") && !d.captureable && !d.destructible {
+            continue;
+        }
+        let (mut maximum, mut current) = (0.0f32, 0.0f32);
+        for (slot, (slot_def, _)) in d.slots.iter().enumerate() {
+            let member = org.members.iter().copied().find(|&m| live(world, m) && world.actors[m as usize].slot == Some(slot as u16));
+            match member {
+                Some(m) => {
+                    if let Some(v) = performer_value(world, world.actors[m as usize].def) {
+                        current += health_ratio(world, m) * v;
+                        maximum += v;
+                    }
+                }
+                None => {
+                    if *slot_def != crate::data::NO_DEF
+                        && let Some(v) = performer_value(world, *slot_def)
+                    {
+                        maximum += v;
+                    }
+                }
+            }
+        }
+        if maximum <= 0.0 {
+            continue;
+        }
+        out.push(CityCandidate { kingdom, pos: org_position(world, o), current });
     }
-    // 4D0180 actor value: the combat value (4618B0) scaled by health.
-    let value = world.combat.extras.as_ref().map_or(1.0, |e| e.def(actor.def).combat_value.max(0.0));
-    let ratio = if def.health > 0.0 { (actor.health / def.health).clamp(0.0, 1.0) } else { 1.0 };
-    if value > 0.0 { value * ratio } else { ratio }
+    out
 }
 
 /// City tick 0x5647A0. Against the current owner: the value of its friends
@@ -206,6 +298,7 @@ fn city_value(world: &World, a: ActorId) -> f32 {
 fn cities(world: &mut World) {
     use crate::books::{ENEMY, FRIEND, SELF};
     let n = world.kingdoms.len();
+    let candidates = city_candidates(world);
     for c in 0..world.actors.len() as ActorId {
         let city = &world.actors[c as usize];
         if !city.alive || city.removed {
@@ -216,23 +309,17 @@ fn cities(world: &mut World) {
             continue;
         }
         let (centre, radius, owner) = (city.pos.truncate(), def.city_zone_radius, city.kingdom);
+        // The candidates in the zone (the city itself never is one: it has no
+        // Performer and belongs to its owner).
         let mut present = vec![0.0f32; n];
-        for a in 0..world.actors.len() as ActorId {
-            if a == c {
-                continue;
-            }
-            let actor = &world.actors[a as usize];
-            if actor.pos.truncate().distance_squared(centre) > radius * radius {
-                continue;
-            }
-            let v = city_value(world, a);
-            if v > 0.0
-                && let Some(k) = actor.kingdom
-            {
-                present[k as usize] += v;
+        let mut any = false;
+        for cand in &candidates {
+            if cand.pos.distance_squared(centre) <= radius * radius && (cand.kingdom as usize) < n {
+                present[cand.kingdom as usize] += cand.current;
+                any = true;
             }
         }
-        if present.iter().all(|v| *v <= 0.0) {
+        if !any {
             continue;
         }
         let rel = |a: usize, b: usize| world.books.relation(&world.kingdoms, Some(a as u32), Some(b as u32));
