@@ -70,11 +70,18 @@ const RECOVERY_SQUARED: f32 = 1.0;
 const RECOVERY_ANGLE: f32 = f32::from_bits(0x3f49_0fdb);
 /// 0x537B90 near destination: squared distance below 0.25 (0x3E800000).
 const NEAR_POINT_SQUARED: f32 = 0.25;
+/// 0x537B90 arrival of a mode 1 move: squared distance below 0.01
+/// (0x3C23D70A).
+const ARRIVED_SQUARED: f32 = f32::from_bits(0x3c23_d70a);
 /// 0x532B50 / 0x5379C0 lead: 1.5 * movement radius (0x3FC00000).
 const LEAD_SCALE: f32 = 1.5;
 
 /// 0x52DE40 passes 4.0 (0x40800000) to FindOpenPositionLineThenRadius.
 const DEPLOY_SEARCH_RADIUS: f32 = 4.0;
+/// 0x52F7A0 KKC_UAIStateDeploy::EventReachedDestination: FindOpenPositionNear
+/// within 8.0 (0x41000000); more than 5 redeploys and the actor dies.
+const REDEPLOY_SEARCH_RADIUS: f32 = 8.0;
+const REDEPLOY_TRIES: u8 = 5;
 
 /// Tiles the path queue may expand per tick before later requests wait for
 /// the next tick. A request always runs to completion once started, so the
@@ -214,7 +221,8 @@ struct OrgMove {
 struct ActorMove {
     /// Element move state current.
     active: bool,
-    /// 0 ordinary, 3 formation following.
+    /// Move state +0x30: 0 ordinary, 1 to the exact point, 3 formation
+    /// following.
     mode: u8,
     nodes: Vec<Node>,
     /// State requested speed (+0x24).
@@ -236,6 +244,17 @@ struct ActorMove {
     pursue: Option<(ActorId, f32, Vec2)>,
     /// Effective speed of the last step (for `Motion`).
     step_speed: f32,
+    /// Walking out of a recruiting structure (`walk_member`).
+    walk: Option<MemberWalk>,
+}
+/// `KKC_UAIStateDeploy` (Mind +0x48): Activate `0x52DE40`, Enter `0x52F560`,
+/// Exit `0x52F660`, EventReachedDestination `0x52F7A0`. While it is current
+/// the actor is ethereal (Thing flag 0x40000) and does not block (vf50(0)):
+/// it passes through others and others through it.
+#[derive(Clone, Copy, Debug)]
+struct MemberWalk {
+    /// Redeploys so far (+0x18).
+    tries: u8,
 }
 impl ActorMove {
     fn kind1_count(&self) -> i32 {
@@ -277,7 +296,7 @@ impl SpatialHash {
     fn bucket(&self, p: Vec2) -> [i32; 2] {
         [((p.x / HASH_CELL) as i32).clamp(0, self.width - 1), ((p.y / HASH_CELL) as i32).clamp(0, self.height - 1)]
     }
-    fn rebuild(&mut self, world: &World, radius: &[f32]) {
+    fn rebuild(&mut self, world: &World, radius: &[f32], movers: &[ActorMove]) {
         self.items.clear();
         self.max_radius = 0.0;
         let extent = Vec2::new(world.map.width as f32, world.map.height as f32) * world.map.cell_size;
@@ -293,6 +312,10 @@ impl SpatialHash {
             }
             let r = radius.get(a.def as usize).copied().unwrap_or(0.0);
             if r <= 0.0 || !blocks_movers(world.data.def(a.def)) {
+                continue;
+            }
+            // A member walking out of its structure does not block (0x52F560).
+            if movers.get(a.id as usize).is_some_and(|m| m.walk.is_some()) {
                 continue;
             }
             let p = a.pos.truncate();
@@ -978,6 +1001,12 @@ fn sync_orders(ms: &mut MovementState, world: &mut World) {
         }
         let order = &world.orgs[o].order;
         if ms.orgs[o].seen.as_ref() != Some(order) {
+            // A new regiment's Idle has nothing to stop (a member may
+            // already be walking out of its structure).
+            if ms.orgs[o].seen.is_none() && *order == Order::Idle {
+                ms.orgs[o].seen = Some(Order::Idle);
+                continue;
+            }
             let order = order.clone();
             apply_order(ms, world, Owner::Org(o as OrgId), order);
         }
@@ -989,6 +1018,10 @@ fn sync_orders(ms: &mut MovementState, world: &mut World) {
         }
         if ms.actors[a].seen.as_ref() != Some(&actor.order) {
             let order = actor.order.clone();
+            if ms.actors[a].seen.is_none() && order == Order::Idle {
+                ms.actors[a].seen = Some(order);
+                continue;
+            }
             if world.data.def(actor.def).speed_max > 0.0 {
                 apply_order(ms, world, Owner::Actor(a as ActorId), order);
             } else {
@@ -1405,6 +1438,10 @@ fn start_element(ms: &mut MovementState, world: &World, id: ActorId, nodes: Vec<
     am.requested = speed;
     am.next_think = world.time;
     am.pursue = None;
+    // Any other path (the regiment's EventMoveFormationPath `0x532310`
+    // activates the move with mode 2, clearing the state stack) ends a walk
+    // out of the structure (Exit `0x52F660`).
+    am.walk = None;
 }
 /// Element move complete: stop the Mover where it is (`0x52D660`; the Mover
 /// keeps its speed value, `0x5767C0(0, 0)`).
@@ -1416,6 +1453,7 @@ fn complete_element(ms: &mut MovementState, id: ActorId) {
     am.mover.turning = false;
     am.mover.last_step = 0.0;
     am.pursue = None;
+    am.walk = None;
 }
 
 // ---------------------------------------------------------------------------
@@ -1431,9 +1469,15 @@ fn element_think(ms: &mut MovementState, world: &mut World, id: ActorId, rules: 
         return;
     }
     am.depth += 1;
-    let done = am.nodes.last().is_none_or(|last| (last.pos - pos).length_squared() < NEAR_POINT_SQUARED);
+    let near = if am.mode == 1 { ARRIVED_SQUARED } else { NEAR_POINT_SQUARED };
+    let done = am.nodes.last().is_none_or(|last| (last.pos - pos).length_squared() < near);
     if done {
+        let walk = am.walk;
         complete_element(ms, id);
+        if let Some(walk) = walk {
+            walk_arrived(ms, world, id, walk, rules);
+            return;
+        }
         // A single actor's order checks its arrival on the next tick.
         if world.actors[id as usize].org.is_none() && ms.actors[id as usize].order.active {
             ms.actors[id as usize].order.next_think = now;
@@ -1806,7 +1850,7 @@ enum Step {
 fn step_movers(ms: &mut MovementState, world: &mut World, rules: &MoveRules) {
     let now = world.time;
     if ms.blocking_radius.iter().any(|&r| r > 0.0) {
-        ms.hash.rebuild(world, &ms.blocking_radius);
+        ms.hash.rebuild(world, &ms.blocking_radius, &ms.actors);
     } else {
         ms.hash.items.clear();
     }
@@ -1964,6 +2008,10 @@ fn collision(ms: &MovementState, world: &World, id: ActorId, pos: Vec2, candidat
         return None;
     }
     let am = &ms.actors[id as usize];
+    // Ethereal while walking out of its structure (0x52F560, flag 0x40000).
+    if am.walk.is_some() {
+        return None;
+    }
     let now = world.time;
     let my_team = kingdom_team(world, actor.kingdom);
     let my_org_moving = actor.org.is_some_and(|o| ms.orgs.get(o as usize).is_some_and(|x| x.order.active));
@@ -2132,7 +2180,7 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
     let radius = turn_radius(def_of(world, id));
     update_waypoint_offset(&mut ms.actors[id as usize], radius);
     if ms.actors[id as usize].nodes.is_empty() {
-        element_failed(ms, world, id);
+        element_failed(ms, world, id, rules);
         return;
     }
     let speed = ms.actors[id as usize].requested;
@@ -2193,25 +2241,32 @@ fn open_position(ms: &MovementState, world: &World, mover: ActorId, point: Vec2,
     if found && (p - start).abs().element_sum() >= f32::from_bits(0x3951_b717) {
         return p;
     }
-    // 0x554B30: rings within `radius`, eight rotations by -pi/4.
+    let base = if found { p } else { point };
+    open_position_near(ms, world, mover, base, radius).unwrap_or(p)
+}
+/// FindOpenPositionNear 0x554B30: `base` itself, else rings within `radius`
+/// (steps of the mover's radius, at least a quarter cell), eight rotations
+/// by -pi/4 starting along the mover's facing (0x554850).
+fn open_position_near(ms: &MovementState, world: &World, mover: ActorId, base: Vec2, radius: f32) -> Option<Vec2> {
+    let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
+    let step = r.max(world.map.cell_size * 0.25);
     let rings = ((radius / step) as i32).clamp(1, 20);
     let ring_step = radius / rings as f32;
     let facing = ms.actors[mover as usize].mover.facing;
-    let base = if found { p } else { point };
     if spot_free(ms, world, mover, base) {
-        return base;
+        return Some(base);
     }
     for k in 1..=rings {
         let mut offset = facing * (k as f32 * ring_step);
         for _ in 0..8 {
             let candidate = clamp_extent(world, base + offset);
             if spot_free(ms, world, mover, candidate) {
-                return candidate;
+                return Some(candidate);
             }
             offset = rotate(offset, -std::f32::consts::FRAC_PI_4) * offset.length();
         }
     }
-    p
+    None
 }
 
 /// Rings searched around a blocked node for an open tile (engineering bound).
@@ -2245,8 +2300,15 @@ fn nearest_open(grid: &Grid, p: Vec2, rings: i32) -> Option<Vec2> {
 
 /// An element gave up its path: a regiment member waits for the regiment to
 /// send it a path again (+0x2BC), or to call it back to its slot.
-fn element_failed(ms: &mut MovementState, world: &World, id: ActorId) {
+fn element_failed(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) {
+    let walk = ms.actors[id as usize].walk;
     complete_element(ms, id);
+    // A walk out of the structure that cannot go on ends where it stands:
+    // the arrival check takes over (0x52F7A0).
+    if let Some(walk) = walk {
+        walk_arrived(ms, world, id, walk, rules);
+        return;
+    }
     if let Some(org) = world.actors[id as usize].org {
         let om = &mut ms.orgs[org as usize];
         if om.order.active && !om.pending.contains(&id) {
@@ -2255,22 +2317,113 @@ fn element_failed(ms: &mut MovementState, world: &World, id: ActorId) {
     }
 }
 
+/// A new regiment member walks out of its recruiting structure: member
+/// creation `4FACA0` -> Mind vf198 `0x52F320` -> `KKC_UAIStateDeploy`.
+/// `to` (the structure's deployment point) first moves to a free spot,
+/// FindOpenPositionLineThenRadius `0x554BF0` within 4 m (Activate
+/// `0x52DE40`). The member walks there on its own while its regiment stands
+/// (Enter `0x52F560` -> `KKC_UAIStateMove::Activate` `0x52DF60`): an
+/// ordinary move (mode 0) at its own top speed (speed 0 -> Mover +0x28,
+/// with its technology and stance factors, `0x52FC50`), no final facing,
+/// passing through others (ethereal, not blocking). On arrival (`0x52F7A0`)
+/// a member overlapping something walks on to a free spot within 8 m
+/// (FindOpenPositionNear `0x554B30`); after 5 such redeploys, or with no
+/// free spot, it dies. Then it rejoins its regiment (`0x5324A0`, reattach
+/// `0x534000`): a moving regiment sends it its formation path at its next
+/// think, an idle one calls it back to its slot. A new regiment order in
+/// the meantime replaces the walk.
+pub fn walk_member(world: &mut World, member: ActorId, to: Vec2) {
+    let mut ms = std::mem::take(&mut world.movement);
+    ms.ensure(world);
+    if alive(world, member) && def_of(world, member).speed_max > 0.0 {
+        let rules = MoveRules::from_data(&world.data);
+        ms.hash.rebuild(world, &ms.blocking_radius, &ms.actors);
+        let at = open_position(&ms, world, member, clamp_extent(world, to), DEPLOY_SEARCH_RADIUS);
+        begin_walk(&mut ms, world, member, at, 0, &rules);
+    }
+    world.movement = ms;
+}
+/// Enter `0x52F560`: the move to `at` (mode 0, own top speed, no facing).
+fn begin_walk(ms: &mut MovementState, world: &mut World, member: ActorId, at: Vec2, tries: u8, rules: &MoveRules) {
+    let speed = max_speed(&mut ms.speeds, world, member);
+    let request = Request { from: pos2(world, member), to: at, class: mover_class(def_of(world, member)), max_speed: speed };
+    let route = ms.solve(&world.map, &rules.path, &request);
+    let walk = MemberWalk { tries };
+    if route.status == Status::Failed || route.waypoints.is_empty() {
+        // Already there, or nowhere to go: the arrival check decides.
+        complete_element(ms, member);
+        walk_arrived(ms, world, member, walk, rules);
+        return;
+    }
+    // Mode 1 (+0x30 = 1 from 0x52F560): done only at the point itself.
+    start_element(ms, world, member, route.waypoints.into_iter().map(Node::from).collect(), 1, speed);
+    ms.actors[member as usize].walk = Some(walk);
+}
+/// `0x52F7A0` EventReachedDestination: the actor's shape must be clear where
+/// it stands (`0x553BA0`), else it redeploys.
+fn walk_arrived(ms: &mut MovementState, world: &mut World, id: ActorId, walk: MemberWalk, rules: &MoveRules) {
+    let p = pos2(world, id);
+    if spot_free(ms, world, id, p) {
+        rejoin(ms, world, id);
+        return;
+    }
+    let tries = walk.tries + 1;
+    let next = if tries > REDEPLOY_TRIES { None } else { open_position_near(ms, world, id, p, REDEPLOY_SEARCH_RADIUS) };
+        match next {
+        Some(q) => begin_walk(ms, world, id, q, tries, rules),
+        // "redeploy failed %d times - dying" / "FindOpenPositionNear failed
+        // for redeploy - dying" (0x4D7960): zero health, combat's death path.
+        None => world.actors[id as usize].health = 0.0,
+    }
+}
+/// `0x5324A0` after a clear arrival: the reattach state ends for a member
+/// inside its regiment's zone and the regiment lists it (+0x2BC via
+/// `0x5709D0` -> `0x522840`). A moving regiment sends it its formation path
+/// at its next think; an idle one calls it back to its slot (`reform`).
+fn rejoin(ms: &mut MovementState, world: &World, id: ActorId) {
+    let Some(org) = world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive)) else {
+        return;
+    };
+    let om = &mut ms.orgs[org as usize];
+    if om.order.active && !om.pending.contains(&id) {
+        om.pending.push(id);
+    }
+}
+
 /// `0x52E9D0` / `0x52E900` return to slot: members of an idle regiment that
 /// stand still away from their slot (and have no combat target) walk back
-/// to it with an ordinary move (mode 0), checked once per regiment think.
+/// to it with an ordinary move (mode 0) at their own top speed (speed 0 ->
+/// Mover +0x28, `0x52FC50`), checked once per regiment think.
 fn reform(ms: &mut MovementState, world: &mut World, org: OrgId, rules: &MoveRules) {
     let now = world.time;
     let om = &ms.orgs[org as usize];
-    if om.order.active || om.slots.is_empty() || now < om.next_reform {
+    if om.order.active || now < om.next_reform {
         return;
     }
+    if om.slots.is_empty() {
+        // A regiment that has not moved yet: its slot table (+0x78) for its
+        // heading, as its members were placed (no reassignment).
+        let Some(leader) = pick_leader(world, org) else {
+            return;
+        };
+        let def = world.data.def(world.orgs[org as usize].def);
+        let facing = facing_vector(world.orgs[org as usize].heading);
+        let slots = formation::compute_slot_positions(&formation_offsets(def, crate::player_orders::formation(world, org)), facing, Some(member_slot(world, org, leader)), primary_slot(def));
+        let om = &mut ms.orgs[org as usize];
+        om.leader = Some(leader);
+        om.facing = facing;
+        om.slots = slots;
+    }
     let center = world.orgs[org as usize].anchor;
-    let leader = om.leader;
-    let speed = om.order.speed;
+    let leader = ms.orgs[org as usize].leader;
     ms.orgs[org as usize].next_reform = now + THINK_SECONDS;
     let members: Vec<ActorId> = alive_members(world, org).collect();
     for m in members {
         if Some(m) == leader || ms.actors[m as usize].active || world.actors[m as usize].combat.target.is_some() {
+            continue;
+        }
+        let speed = max_speed(&mut ms.speeds, world, m);
+        if speed <= 0.0 {
             continue;
         }
         let slot = member_slot(world, org, m);

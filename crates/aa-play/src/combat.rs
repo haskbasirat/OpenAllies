@@ -37,6 +37,7 @@ use crate::data::{DefClass, DefId, GameData, Weapon};
 use crate::world::{Activity, ActorId, Event, KingdomId, Order, OrgId, World};
 use crate::DT;
 use glam::Vec2;
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::Arc;
 
 /// `526A70` schedules the next regiment engage Think in 1.0 s.
@@ -700,6 +701,22 @@ pub struct ActorCombat {
     pub history: Vec<(f32, f32)>,
     /// ROE back-off: no attack before this time (`5340C0` retry time).
     pub roe_retry_at: f32,
+    /// Performer turret states (`+4C`, one per `Def::turrets`).
+    pub turrets: Vec<TurretState>,
+}
+
+/// One turret of a Performer (`57F4D0` allocates 0x1C bytes per turret).
+#[derive(Clone, Debug, Default)]
+pub struct TurretState {
+    /// `+0` yaw in the actor's frame (radians; at rest `yaw_start - pi/2`,
+    /// so `yaw + pi/2` is the turn from the hull's forward, counter-clockwise).
+    pub yaw: f32,
+    /// `+4` the yaw before this tick's step (the view interpolates between).
+    pub prev: f32,
+    /// `+8` when the turret last aimed (the reset timer).
+    pub last_used: f32,
+    /// The Performer's per-tick turret update is on (`+5C`, `57EF00`).
+    pub active: bool,
 }
 
 /// A projectile in flight (`Weapon::projectile_speed`).
@@ -865,6 +882,11 @@ impl CombatState {
                 s.initialized = true;
                 s.max_health = crate::production::max_health(world, a.kingdom, a.def);
                 s.next_think = now + (a.id % 16) as f32 * DT;
+                // 57F4D0: every turret starts at yaw_start - pi/2 (wrapped once).
+                s.turrets = world.data.def(a.def).turrets.iter().map(|t| {
+                    let yaw = wrap_once(t.yaw_start - FRAC_PI_2);
+                    TurretState { yaw, prev: yaw, last_used: 0.0, active: false }
+                }).collect();
             }
             s.targeted = false;
         }
@@ -1671,6 +1693,9 @@ fn fire(world: &mut World, st: &mut CombatState) {
         if !a.alive || a.removed || st.actors[id].queued_death {
             continue;
         }
+        // 57EF00: idle turrets turn back to rest after reset_time.
+        turret_reset_tick(world, st, id);
+        let a = &world.actors[id];
         let Some(target) = a.combat.target else {
             if a.activity == Activity::Attacking {
                 world.set_activity(id as ActorId, Activity::Idle);
@@ -1703,6 +1728,21 @@ fn fire(world: &mut World, st: &mut CombatState) {
             continue;
         }
         let w = &data.def(world.actors[id].def).weapons[d.weapon];
+        // 57F290 -> 57EE40: an ability with a turret that can turn waits in
+        // the aiming state until 57E730 has the turret on the target (one
+        // yaw_rotation_per_sec step a tick); the use (57ED20) follows.
+        if let Some(t) = usize::try_from(w.turret).ok().and_then(|i| data.def(world.actors[id].def).turrets.get(i).map(|t| (i, t)))
+            && turret_can_turn(t.1)
+        {
+            let (i, td) = t;
+            let point = world.actors[target as usize].pos.truncate();
+            if !turret_in_arc(td, world.actors[id].pos.truncate(), world.actors[id].facing, point) {
+                continue;
+            }
+            if !turret_aim(world, st, id, i, td, point) {
+                continue;
+            }
+        }
         // 501560: the recharge divided by the RECHARGE_TIME multiplier.
         let multiplier = crate::special_ops::mods(world, id as ActorId).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
         world.actors[id].combat.recharge[d.weapon] = w.recharge / multiplier;
@@ -1722,6 +1762,107 @@ fn fire(world: &mut World, st: &mut CombatState) {
         }
     }
     impacts(world, st);
+}
+
+// ---------------------------------------------------------------------------
+// Turrets (Performer turret list; TurretDefinition from 4C7820)
+
+/// `+2*pi` once when negative (the original's single correction).
+fn wrap_once(a: f32) -> f32 {
+    if a < 0.0 { a + TAU } else { a }
+}
+
+/// `4C7620`: the turret turns (a yaw rate and a yaw range).
+fn turret_can_turn(t: &crate::data::TurretDef) -> bool {
+    t.yaw_rate - EPSILON > 0.0 && t.yaw_half_range - EPSILON > 0.0
+}
+
+/// `4C76A0`: the turret offset turned by the actor's facing.
+fn turret_offset(t: &crate::data::TurretDef, facing: Vec2) -> Vec2 {
+    let o = Vec2::from(t.offset);
+    Vec2::new(facing.x * o.x - facing.y * o.y, facing.x * o.y + facing.y * o.x)
+}
+
+/// `4C76E0`: a turret limited to less than the full turn reaches `point`
+/// only inside its yaw range around its start direction.
+fn turret_in_arc(t: &crate::data::TurretDef, pos: Vec2, facing: f32, point: Vec2) -> bool {
+    if !turret_can_turn(t) || t.yaw_half_range + EPSILON >= PI {
+        return true;
+    }
+    let f = Vec2::new(facing.cos(), facing.sin());
+    let start = facing + t.yaw_start;
+    let dir = Vec2::new(start.cos(), start.sin());
+    let d = (point - (pos + turret_offset(t, f))).normalize_or_zero();
+    d.dot(dir) >= t.yaw_half_range_cos
+}
+
+/// `57DEE0`: one tick of turning toward `target` (yaw_rotation_per_sec x
+/// the tick), the short way round; true when the turret reached it.
+fn turret_step(s: &mut TurretState, rate: f32, target: f32) -> bool {
+    let mut cur = s.yaw;
+    let mut target = target;
+    let step = rate * DT;
+    let d = (target - cur).abs();
+    if TAU - d < d {
+        if cur >= target {
+            target += TAU;
+        } else {
+            cur += TAU;
+        }
+    }
+    s.prev = cur;
+    let (yaw, reached) = if cur >= target {
+        let v = cur - step;
+        if v > target { (v, false) } else { (target, true) }
+    } else {
+        let v = cur + step;
+        if v < target { (v, false) } else { (target, true) }
+    };
+    s.yaw = yaw;
+    reached
+}
+
+/// `57E730`: turret `i` of `id` turns toward `point` (its yaw in the
+/// actor's frame, `atan(dir) - atan(facing) - pi/2`); the reset timer
+/// restarts. True when it is on the point.
+fn turret_aim(world: &World, st: &mut CombatState, id: usize, i: usize, t: &crate::data::TurretDef, point: Vec2) -> bool {
+    let a = &world.actors[id];
+    let f = Vec2::new(a.facing.cos(), a.facing.sin());
+    let d = point - (a.pos.truncate() + turret_offset(t, f));
+    let len = d.length();
+    let dir = if len <= EPSILON { Vec2::ZERO } else { d / len };
+    // 85D8D0: the table atan of (x, y), counter-clockwise in [0, 2 pi).
+    let angle = |v: Vec2| wrap_once(v.y.atan2(v.x));
+    let yaw = wrap_once(angle(dir) - angle(f) - FRAC_PI_2);
+    let now = world.time;
+    let Some(s) = st.actors.get_mut(id).and_then(|c| c.turrets.get_mut(i)) else { return true };
+    s.last_used = now;
+    if t.can_reset {
+        s.active = true;
+    }
+    turret_step(s, t.yaw_rate, yaw)
+}
+
+/// `57EF00`: a turret that may reset turns back to `yaw_start - pi/2` once
+/// it has not aimed for `reset_time`; the update stops when all are home.
+fn turret_reset_tick(world: &World, st: &mut CombatState, id: usize) {
+    let now = world.time;
+    let def = world.data.def(world.actors[id].def);
+    let Some(c) = st.actors.get_mut(id) else { return };
+    for (s, t) in c.turrets.iter_mut().zip(&def.turrets) {
+        if !s.active || !t.can_reset {
+            s.prev = s.yaw;
+            continue;
+        }
+        if t.reset_time <= now - s.last_used {
+            let rest = wrap_once(t.yaw_start - FRAC_PI_2);
+            if turret_step(s, t.yaw_rate, rest) {
+                s.active = false;
+            }
+        } else {
+            s.prev = s.yaw;
+        }
+    }
 }
 
 /// Projectiles reaching their target: the target if it is still there,
@@ -2101,4 +2242,32 @@ fn corpses(world: &mut World, st: &mut CombatState) {
 /// Combat state of an organization, for the UI and the opponent.
 pub fn org_state(world: &World, org: OrgId) -> Option<&OrgCombat> {
     world.combat.org(org)
+}
+
+#[cfg(test)]
+mod turret_tests {
+    use super::*;
+
+    /// 57DEE0: one rate x tick step, the short way round, and "aimed" only
+    /// once the step reaches the target.
+    #[test]
+    fn turret_turns_the_short_way_at_its_rate() {
+        let rate = 37f32.to_radians();
+        let rest = wrap_once(-FRAC_PI_2);
+        let mut s = TurretState { yaw: rest, prev: rest, last_used: 0.0, active: false };
+        // A target 30 degrees to the left of forward: rest + 30 deg.
+        let target = rest + 30f32.to_radians();
+        let mut ticks = 0;
+        while !turret_step(&mut s, rate, target) {
+            ticks += 1;
+            assert!(ticks < 1000);
+        }
+        let expected = (30.0 / 37.0 / DT).ceil() as i32;
+        assert!((ticks + 1 - expected).abs() <= 1, "{ticks} ticks for 30 deg at 37 deg/s (expected about {expected})");
+        assert!((s.yaw - target).abs() < 1e-5);
+        // Across 0 / 2 pi: from 350 deg toward 10 deg turns +20 deg, not -340.
+        let mut s = TurretState { yaw: 350f32.to_radians(), ..Default::default() };
+        turret_step(&mut s, rate, 10f32.to_radians());
+        assert!(s.yaw > 350f32.to_radians(), "turned the long way: {}", s.yaw.to_degrees());
+    }
 }

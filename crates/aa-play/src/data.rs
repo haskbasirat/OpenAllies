@@ -299,6 +299,40 @@ pub struct Def {
     /// packing...); the active one adds its property (45E620).
     #[serde(default)]
     pub stances: Vec<StanceDef>,
+    /// PerformerComponent `[Turret]` list (464BD0 / 4C7820), the list
+    /// `Weapon::turret` indexes.
+    #[serde(default)]
+    pub turrets: Vec<TurretDef>,
+    /// ActorData +17C recruitment backreferences (460310 / 460000): the
+    /// structures that recruit this definition, and for an organization
+    /// element also the structures recruiting its organization. 4FBF40
+    /// creates a member at the nearest such structure with a DeploymentInfo.
+    #[serde(default)]
+    pub recruited_at: Vec<DefId>,
+}
+
+/// One PerformerComponent `[Turret]` (TurretDefinition, aa-rules turrets.rs),
+/// angles in radians.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TurretDef {
+    /// +4 yaw_start.
+    pub yaw_start: f32,
+    /// +8 yaw rotation per second.
+    pub yaw_rate: f32,
+    /// +C half the yaw rotation range and +10 its cosine.
+    pub yaw_half_range: f32,
+    pub yaw_half_range_cos: f32,
+    /// +14 pitch_start, +18 pitch rotation per second, +1C/+20 pitch range.
+    pub pitch_start: f32,
+    pub pitch_rate: f32,
+    pub pitch_min: f32,
+    pub pitch_max: f32,
+    /// +24/+28 offset (raw point2).
+    pub offset: [f32; 2],
+    /// +2C reset_time, +30 can_reset, +31 can_preaim.
+    pub reset_time: f32,
+    pub can_reset: bool,
+    pub can_preaim: bool,
 }
 
 /// One `[Stance]` entry: active while the actor's health fraction is at most
@@ -570,7 +604,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v13";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v14";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -926,6 +960,33 @@ pub(crate) mod loader {
                 .map(|(i, &d)| (d, positions.get(i).copied().unwrap_or([0.0, 0.0])))
                 .collect();
         }
+        // ActorData +17C (460310): every structure listing a definition in
+        // its RecruitComponent; then 460000 gives each organization element
+        // the organization's entries it lacks.
+        for b in 0..data.defs.len() {
+            for t in data.defs[b].recruits.clone() {
+                if let Some(d) = data.defs.get_mut(t as usize)
+                    && !d.recruited_at.contains(&(b as DefId))
+                {
+                    d.recruited_at.push(b as DefId);
+                }
+            }
+        }
+        for o in 0..data.defs.len() {
+            if data.defs[o].recruited_at.is_empty() {
+                continue;
+            }
+            let owners = data.defs[o].recruited_at.clone();
+            for (m, _) in data.defs[o].slots.clone() {
+                if let Some(d) = data.defs.get_mut(m as usize) {
+                    for &b in &owners {
+                        if !d.recruited_at.contains(&b) {
+                            d.recruited_at.push(b);
+                        }
+                    }
+                }
+            }
+        }
         data.armor_types = profiles.iter().map(|(n, _)| n.clone()).collect();
         data.damage_factors = (0..data.damage_types.len())
             .map(|dt| profiles.iter().map(|(_, v)| v[dt]).collect())
@@ -1219,6 +1280,28 @@ pub(crate) mod loader {
             Ok(Some(d)) => def.weapons.extend(d.abilities().iter().map(|a| weapon(a, true, damage_types))),
             Ok(None) => {}
             Err(e) => note("defender abilities", &e),
+        }
+        match catalog.native_turrets(id, PC) {
+            Ok(list) => {
+                def.turrets = list
+                    .iter()
+                    .map(|t| TurretDef {
+                        yaw_start: f32::from_bits(t.yaw_start_bits),
+                        yaw_rate: f32::from_bits(t.yaw_rate_bits),
+                        yaw_half_range: f32::from_bits(t.yaw_half_range_bits),
+                        yaw_half_range_cos: f32::from_bits(t.yaw_half_range_cos_bits),
+                        pitch_start: f32::from_bits(t.pitch_start_bits),
+                        pitch_rate: f32::from_bits(t.pitch_rate_bits),
+                        pitch_min: f32::from_bits(t.pitch_range_start_bits),
+                        pitch_max: f32::from_bits(t.pitch_range_end_bits),
+                        offset: [f32::from_bits(t.offset_bits[0]), f32::from_bits(t.offset_bits[1])],
+                        reset_time: f32::from_bits(t.reset_time_bits),
+                        can_reset: t.can_reset,
+                        can_preaim: t.can_preaim,
+                    })
+                    .collect()
+            }
+            Err(e) => note("turrets", &e),
         }
         // Economy (464BD0 EconomyComponent + 4605B0 forward unpack target).
         match catalog.native_economy_inputs(id, PC) {
