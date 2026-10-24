@@ -543,6 +543,16 @@ impl GameHud {
                 // refusals play a sound in the original, no log line (the
                 // reason goes to the program log)
                 aa_play::Event::Refused { kingdom, reason } if *kingdom == b.local => info!("command refused: {reason}"),
+                // KKC_AbilityEffectDescribeEconomy::Use (0x4CC050): the user
+                // gets "ability_effect_describe_economy|ss" (the target
+                // kingdom's name, its economy line 0x4E7200) as GENERIC_EVENT
+                aa_play::Event::EconomyDescribed { kingdom, of } if *kingdom == b.local => {
+                    let name = kingdom_name(Some(*of));
+                    let economy = describe_economy(ui, &self.resources, w, *of);
+                    let text = ui.strings.resolve("#ability_effect_describe_economy|ss").replacen("%s", &name, 1).replacen("%s", &economy, 1);
+                    info!("economy described: {text}");
+                    out.push(("GENERIC_EVENT", text, None));
+                }
                 _ => {}
             }
         }
@@ -778,6 +788,59 @@ impl GameHud {
         }
         None
     }
+}
+
+/// A kingdom's economy line (`0x4E7200`): every resource that is not a
+/// limit provider, two spaces apart, a limited one as `0x5C8F10` (used /
+/// the provider's amount), the others as `0x5C9830` (net income, with the
+/// stock for a stockpiled one), then the commander's experience
+/// (`0x4CE5F0` -> `0x4CE3A0`: the experience glyph, balance / maximum).
+fn describe_economy(ui: &Ui, resources: &[HudResource], w: &World, of: aa_play::KingdomId) -> String {
+    let Some(k) = w.kingdoms.iter().find(|k| k.id == of) else { return String::new() };
+    let n = resources.len();
+    let index = |ids: &str| resources.iter().position(|r| r.ids.eq_ignore_ascii_case(ids));
+    let (mut production, mut upkeep, mut stock) = (vec![0.0f32; n], vec![0.0f32; n], vec![0.0f32; n]);
+    for (ids, i) in [("money", aa_play::data::MONEY), ("ammo", aa_play::data::AMMO), ("oil", aa_play::data::OIL)] {
+        if let Some(j) = index(ids) {
+            production[j] = k.income[i];
+            stock[j] = k.stockpile[i];
+        }
+    }
+    for ids in ["unit_limit_provided", "unit_limit_consumed", "building_limit_provided", "building_limit_consumed"] {
+        if let (Some(j), Some((p, c))) = (index(ids), aa_play::economy::rates(w, of, ids)) {
+            production[j] = p;
+            upkeep[j] = c;
+        }
+    }
+    let invalid = ui.uvars.get_point3("UIColorOptionInvalid");
+    let mut s = String::new();
+    for (i, r) in resources.iter().enumerate() {
+        if r.limit_provider {
+            continue;
+        }
+        if !s.is_empty() {
+            s.push_str("  ");
+        }
+        let icon = ui.strings.glyphs.get(r.icon.to_ascii_lowercase().as_str()).copied().map(|c| c as u32).unwrap_or(0);
+        if r.kind == 2 {
+            let j = r.limited_by.unwrap_or(i);
+            s.push_str(&aa_ui::hud::limit_text(icon, upkeep[i], production[j], invalid));
+        } else {
+            s.push_str(&aa_ui::hud::resource_text(icon, production[i] - upkeep[i], invalid, r.kind == 0, stock[i]));
+        }
+    }
+    if let Some((value, max)) = aa_play::special_ops::experience(w, of) {
+        let glyph = ui.avars.float("FontFactionExperienceGlyphIndex").map(|v| v as u32).unwrap_or(0);
+        let mut t = match char::from_u32(glyph).filter(|_| glyph != 0) {
+            Some(c) => format!("{c} {value:.0}"),
+            None => format!("{value:.0}"),
+        };
+        if max >= 0.0 {
+            t.push_str(&format!("/{max:.0}"));
+        }
+        s.push_str(&t);
+    }
+    s
 }
 
 /// The battle as the HUD reads it.

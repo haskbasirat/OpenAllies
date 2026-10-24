@@ -16,7 +16,12 @@
 //!   `minimap_size` (172 -> 256, `0x712D60`), drawn over the whole quad;
 //! * the local kingdom's supply border (its supply zones' outline in
 //!   `color_requires_supply`, every MinimapPeriodUpdateSupply seconds);
-//! * the camera's view on the ground in `color_white`.
+//! * the camera's view on the ground in `color_white`;
+//! * while the local kingdom's enchantments carry MINIMAP_NO_FOG (modifier
+//!   flag 8, Radar Scan) the fog layer (`0x433620`) is clear and the objects
+//!   layer (`0x435BC0`) draws every object at its live position, not only
+//!   the ones the kingdom sees (the next periodic refresh of each layer
+//!   picks the change up).
 use super::datafile;
 use crate::session::Battle;
 use aa_play::DefClass;
@@ -59,6 +64,8 @@ pub struct MinimapArt {
     fog_at: f32,
     fog_revision: u64,
     fog_local: Option<u32>,
+    /// MINIMAP_NO_FOG at the last fog refresh.
+    fog_no_fog: bool,
     /// The objects of the last refresh and when it was made.
     objects: Option<(f32, Vec<Object>)>,
     /// Minimap TGI values.
@@ -232,15 +239,22 @@ impl MinimapArt {
             }
         }
         let due = now - self.fog_at >= self.period_fog || now < self.fog_at;
-        let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(b.local);
+        let no_fog = minimap_no_fog(b);
+        let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(b.local) || self.fog_no_fog != no_fog;
         if !(due && changed) && self.fog_local.is_some() && !supply_changed {
             return;
         }
         self.fog_at = now;
         self.fog_revision = b.world.fog.revision;
         self.fog_local = Some(b.local);
+        self.fog_no_fog = no_fog;
         let mut shade = Vec::new();
         fog::shade(&b.world, Some(b.local), super::fog::gray_value(), &mut shade);
+        // 0x433620: the kingdom's MINIMAP_NO_FOG flag shows every cell as
+        // visible
+        if no_fog {
+            shade.iter_mut().for_each(|s| *s = 0);
+        }
         let Some(mut img) = self.image.as_ref().and_then(|h| images.get_mut(h)) else { return };
         let Some(px) = img.data.as_mut() else { return };
         if px.len() != self.base.len() || shade.len() != w * h {
@@ -284,13 +298,16 @@ impl MinimapArt {
             })
             .collect();
         let mut out = Vec::new();
+        // 0x435BC0: MINIMAP_NO_FOG draws every object as if it were seen
+        let no_fog = minimap_no_fog(b);
         for a in w.actors.iter().filter(|a| a.alive && !a.removed) {
             let Some(k) = a.kingdom.and_then(|k| w.kingdoms.iter().find(|x| x.id == k)) else { continue };
             let def = w.data.def(a.def);
             if def.invisible {
                 continue;
             }
-            let (pos, owner) = match fog::sighting(w, a.id, Some(b.local)) {
+            let sighting = if no_fog { Sighting::Visible } else { fog::sighting(w, a.id, Some(b.local)) };
+            let (pos, owner) = match sighting {
                 Sighting::Visible => (a.pos.truncate(), Some(k)),
                 Sighting::Remembered(m) => (m.pos.truncate(), m.kingdom.and_then(|mk| w.kingdoms.iter().find(|x| x.id == mk))),
                 Sighting::Hidden => continue,
@@ -313,8 +330,9 @@ impl MinimapArt {
             };
             out.push(Object { pos, color, icon: def.minimap_icon.clone(), selected: selected.contains(&a.id) });
         }
-        // ghosts of remembered actors already gone
-        for (id, m) in fog::memories(w, Some(b.local)) {
+        // ghosts of remembered actors already gone (none while everything
+        // live is shown)
+        for (id, m) in fog::memories(w, Some(b.local)).into_iter().filter(|_| !no_fog) {
             if w.actor(id).is_some_and(|a| a.alive) {
                 continue;
             }
@@ -328,6 +346,12 @@ impl MinimapArt {
         }
         out
     }
+}
+
+/// The local kingdom's enchantments carry MINIMAP_NO_FOG (Radar Scan;
+/// `0x4CF110` flags bit 8).
+fn minimap_no_fog(b: &Battle) -> bool {
+    aa_play::special_ops::kingdom_has_flag(&b.world, b.local, "MINIMAP_NO_FOG")
 }
 
 /// Next power of two of the minimap target size (`0x43A920`).
