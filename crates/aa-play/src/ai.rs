@@ -528,6 +528,12 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
         // special operations (appended by the combat owner; the SAI general
         // powers apply them directly from `special_ops::sai`)
         Command::UseAbility { .. } => Some(command),
+        // a right-click on an actor (appended by the movement owner; the AI
+        // sends none)
+        Command::Follow { kingdom, units, target } => {
+            let units: Vec<Unit> = units.into_iter().filter(live).collect();
+            (!units.is_empty() && world.actor(target).is_some_and(|a| !a.removed)).then_some(Command::Follow { kingdom, units, target })
+        }
     }
 }
 

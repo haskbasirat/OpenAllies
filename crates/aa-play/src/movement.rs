@@ -112,6 +112,9 @@ pub struct MoveRules {
     /// obstacle re-routes of one element.
     pub low_path_wait: f32,
     pub path: PathRules,
+    /// `CAITargetInRangeZOCMultiplier` (SVars_AA.tgi line 88, 0.6; SVars.tgi
+    /// 1): a followed actor is in range within this times the zone radius.
+    pub target_in_range_zoc: f32,
 }
 impl MoveRules {
     pub fn from_data(data: &GameData) -> Self {
@@ -125,6 +128,7 @@ impl MoveRules {
             banner_min_catchup: r("BannerMinCatchupSpeed", 0.5),
             low_path_wait: r("LowPathingWaitMinimum", 2.0),
             path: PathRules::from_data(data),
+            target_in_range_zoc: r("CAITargetInRangeZOCMultiplier", 0.6),
         }
     }
 }
@@ -200,6 +204,8 @@ struct OrderMove {
     job: Option<u64>,
     held: bool,
     deploy_facing: Option<f32>,
+    /// A move to `target` (`0x520320`, `Command::Follow`), not an attack.
+    follow: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -849,6 +855,30 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
             }
             Ok(())
         }
+        // The move command with a target actor (CAIStateMove activation
+        // `0x520320`; a lone actor: KKC_UAIStateMove to an actor `0x532930`):
+        // the group offsets around the target, the group speed.
+        Command::Follow { kingdom, units, target } => {
+            let Some(tp) = world.actor(*target).filter(|a| !a.removed).map(|a| a.pos.truncate()) else {
+                return Err("the target is gone".into());
+            };
+            let owners = resolve(world, *kingdom, units);
+            if owners.is_empty() {
+                return Err("no unit of this kingdom can move".into());
+            }
+            let offsets = group_offsets(world, &ms.occupancy.cells, &owners, tp);
+            let mut slowest = f32::INFINITY;
+            for &o in &owners {
+                slowest = slowest.min(speed_cap(&mut ms.speeds, world, o));
+            }
+            let group_speed = (owners.len() > 1).then(|| slowest.max(rules.group_speed_minimum));
+            for (&owner, &offset) in owners.iter().zip(&offsets) {
+                start(ms, world, owner, tp, offset, Some(*target), false, group_speed, None);
+                ms.order(owner).follow = true;
+                set_order(world, ms, owner, Order::Move { to: clamp_extent(world, tp + offset), attack_move: false });
+            }
+            Ok(())
+        }
         other => Err(format!("{other:?} is not a movement command")),
     }
 }
@@ -913,6 +943,7 @@ fn start(ms: &mut MovementState, world: &mut World, owner: Owner, to: Vec2, offs
         job: None,
         held: false,
         deploy_facing,
+        follow: false,
     };
 }
 
@@ -1100,7 +1131,18 @@ fn increment_tries(o: &mut OrderMove, now: f32, rules: &MoveRules) -> bool {
 }
 /// Mind +0x144: the move is complete.
 fn finish(ms: &mut MovementState, world: &mut World, owner: Owner) {
+    let now = world.time;
     let o = ms.order(owner);
+    // A move to a living actor stays current and thinks again in 1 s
+    // (`0x5222E0` / `0x5324A0` with `0x52FD00`): the units keep following.
+    if o.follow
+        && let Some(t) = o.target
+        && owner != Owner::Actor(t)
+        && world.actor(t).is_some_and(|a| a.alive && !a.removed)
+    {
+        o.next_think = now + THINK_SECONDS;
+        return;
+    }
     o.active = false;
     o.held = false;
     let deploy = o.deploy_facing;
@@ -1227,6 +1269,81 @@ fn pursue_members(ms: &mut MovementState, world: &mut World, org: OrgId) {
     }
 }
 
+/// 0x537B90 mode 2: a lone actor following another stops once their shapes
+/// are less than 5.0 (0x40A00000) apart.
+const FOLLOW_REACH: f32 = 5.0;
+/// 0x533C30: a lone actor re-targets when the target moved by more than
+/// 0.3827 (0xA3547C) times the gap between them.
+const ELEMENT_RETARGET: f32 = f32::from_bits(0x3ec3_f141);
+
+/// The move to an actor in `0x5276B0` (regiment) / `0x537B90` mode 2 with
+/// `0x533C30` (lone actor). True when this think is over.
+/// - The target is gone (EventTargetGone `0x521F90` pops the move), or is
+///   the mover itself: the order ends where the units stand.
+/// - In range: a regiment within `CAITargetInRangeZOCMultiplier` times its
+///   zone radius (control_range, x0.75 exhausted) of the target
+///   (`0x51FBC0`), a lone actor less than 5 m from it shape to shape. While
+///   the target lives the move stays and holds (vf144 `0x5222E0` /
+///   `0x5324A0` with `0x52FD00`: think again in 1 s; a lone actor's Mover
+///   stops), so the units go after it again once it leaves the range; a
+///   dead target ends the order. A friendly target with a Portal would be
+///   joined instead (EventJoin `0x51E5D0`; nothing here has one).
+/// - Otherwise the route is renewed when the target moved away from the
+///   last goal: regiment `|goal - last|^2 >= 0.146 |goal - own|^2`, lone
+///   actor `|goal - last| >= 0.3827 x gap`.
+fn follow_think(ms: &mut MovementState, world: &mut World, owner: Owner, target: ActorId, own: Vec2, rules: &MoveRules) -> bool {
+    let now = world.time;
+    let Some((tp, living)) = world.actor(target).filter(|a| !a.removed).map(|a| (a.pos.truncate(), a.alive)) else {
+        finish(ms, world, owner);
+        return true;
+    };
+    if owner == Owner::Actor(target) {
+        finish(ms, world, owner);
+        return true;
+    }
+    let radius = |id: ActorId| ms.blocking_radius.get(world.actors[id as usize].def as usize).copied().unwrap_or(0.0);
+    let (in_range, gap) = match owner {
+        Owner::Org(o) => {
+            let mut zone = world.data.def(world.orgs[o as usize].def).control_range;
+            if crate::combat::org_state(world, o).is_some_and(|c| c.exhausted) {
+                zone *= 0.75;
+            }
+            ((own - tp).length() <= rules.target_in_range_zoc * zone, 0.0)
+        }
+        Owner::Actor(a) => {
+            let gap = (own - tp).length() - radius(a) - radius(target);
+            (gap < FOLLOW_REACH, gap)
+        }
+    };
+    if in_range {
+        if !living {
+            finish(ms, world, owner);
+            return true;
+        }
+        if let Owner::Actor(a) = owner {
+            complete_element(ms, a);
+        }
+        ms.order(owner).next_think = now + THINK_SECONDS;
+        return true;
+    }
+    let o = ms.order(owner);
+    let goal = tp + o.group_offset;
+    let moved = (o.path_dest - goal).length_squared();
+    let renew = match owner {
+        Owner::Org(_) => (own - goal).length_squared() * REPATH_RATIO <= moved,
+        Owner::Actor(_) => (gap * ELEMENT_RETARGET).powi(2) <= moved,
+    };
+    if renew {
+        o.path.clear();
+        o.tries = 0;
+        o.destination = clamp_extent(world, tp);
+        o.path_dest = clamp_extent(world, goal);
+        let to = o.path_dest;
+        set_order(world, ms, owner, Order::Move { to, attack_move: false });
+    }
+    false
+}
+
 /// Regiment move Think `0x5276B0` (also used for single actors).
 fn order_think(ms: &mut MovementState, world: &mut World, owner: Owner, rules: &MoveRules) {
     let now = world.time;
@@ -1245,7 +1362,13 @@ fn order_think(ms: &mut MovementState, world: &mut World, owner: Owner, rules: &
         Owner::Actor(a) => a,
     };
     let own = owner_position(world, owner);
-    if let Some(target) = ms.order(owner).target {
+    if ms.order(owner).follow
+        && let Some(target) = ms.order(owner).target
+    {
+        if follow_think(ms, world, owner, target, own, rules) {
+            return;
+        }
+    } else if let Some(target) = ms.order(owner).target {
         if !alive(world, target) {
             fail(ms, world, owner);
             return;
@@ -2015,9 +2138,11 @@ fn collision(ms: &MovementState, world: &World, id: ActorId, pos: Vec2, candidat
     let now = world.time;
     let my_team = kingdom_team(world, actor.kingdom);
     let my_org_moving = actor.org.is_some_and(|o| ms.orgs.get(o as usize).is_some_and(|x| x.order.active));
+    // An attack target does not block the approach; an actor being
+    // followed does.
     let target = match actor.org {
-        Some(o) => ms.orgs.get(o as usize).and_then(|x| x.order.target),
-        None => am.order.target,
+        Some(o) => ms.orgs.get(o as usize).filter(|x| !x.order.follow).and_then(|x| x.order.target),
+        None => Some(&am.order).filter(|x| !x.follow).and_then(|x| x.target),
     };
     let mut found = None;
     ms.hash.for_each_near(candidate, radius + ms.hash.max_radius, |other, q, r| {

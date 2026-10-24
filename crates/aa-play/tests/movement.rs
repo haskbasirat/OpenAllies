@@ -53,6 +53,8 @@ fn regiment(id: &str, members: [u32; 9]) -> Def {
         leader_slot: Some(8),
         formations: vec![Formation { id: "regiment_defensive".into(), positions: INFANTRY_POSITIONS.to_vec() }],
         default_formation: Some(0),
+        // Templates/template_organization_aa.tgi
+        control_range: 18.0,
         ..Default::default()
     }
 }
@@ -880,6 +882,79 @@ fn a_regiment_order_replaces_the_walk_out() {
     assert!(settled && error < 1.5, "error {error}");
     assert!(closest > 1.0, "kept walking to the point");
     assert!((w.orgs[o as usize].anchor - to).length() < 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// Following an actor (Command::Follow: a right-click on an actor).
+
+const TPS: u32 = aa_play::TICKS_PER_SECOND;
+
+#[test]
+fn regiment_follows_a_moving_regiment_and_keeps_following() {
+    let (data, ids) = data();
+    let mut w = world(open_map(96, 64, 2.0), data);
+    let a = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(30.0, 40.0), 0.0);
+    let b = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(30.0, 80.0), 0.0);
+    let target = w.orgs[b as usize].members[8];
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(b)], to: Vec2::new(110.0, 80.0), attack_move: false });
+    order(&mut w, Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target });
+    advance(&mut w, 45 * TPS);
+    let gap = (w.orgs[a as usize].anchor - pos(&w, target)).length();
+    eprintln!("after 45 s: follower at {:?}, {gap:.2} m from the target, order {:?}", w.orgs[a as usize].anchor, w.orgs[a as usize].order);
+    // Within CAITargetInRangeZOCMultiplier 0.6 x control_range 18 (and the
+    // leader's last leg), still on its move.
+    assert!(w.orgs[a as usize].anchor.x > 90.0 && gap < 12.0, "gap {gap}");
+    assert!(matches!(w.orgs[a as usize].order, Order::Move { attack_move: false, .. }));
+    // The target moves on: the follower goes after it again.
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(b)], to: Vec2::new(110.0, 25.0), attack_move: false });
+    advance(&mut w, 45 * TPS);
+    let gap = (w.orgs[a as usize].anchor - pos(&w, target)).length();
+    eprintln!("after 90 s: follower at {:?}, {gap:.2} m from the target", w.orgs[a as usize].anchor);
+    assert!(w.orgs[a as usize].anchor.y < 50.0 && gap < 12.0, "gap {gap}");
+    assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }));
+}
+
+#[test]
+fn lone_actor_follows_and_holds_five_metres_short() {
+    let (data, ids) = data();
+    let mut w = world(open_map(96, 64, 2.0), data);
+    let truck = w.spawn_actor(ids.truck, Some(0), w.ground(Vec2::new(30.0, 40.0)), 0.0);
+    let runner = w.spawn_actor(ids.infantry, Some(0), w.ground(Vec2::new(50.0, 40.0)), 0.0);
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(runner)], to: Vec2::new(150.0, 40.0), attack_move: false });
+    order(&mut w, Command::Follow { kingdom: 0, units: vec![Unit::Actor(truck)], target: runner });
+    let gap = |w: &World| (pos(w, truck) - pos(w, runner)).length() - 0.65 - 0.35;
+    advance(&mut w, 50 * TPS);
+    eprintln!("truck {:?} runner {:?} gap {:.2}, moving {}", pos(&w, truck), pos(&w, runner), gap(&w), movement::actor_moving(&w, truck));
+    assert!(gap(&w) < 5.0 && gap(&w) > 1.0 && !movement::actor_moving(&w, truck));
+    assert!(matches!(w.actors[truck as usize].order, Order::Move { .. }), "still following");
+    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Actor(runner)], to: Vec2::new(150.0, 100.0), attack_move: false });
+    advance(&mut w, 40 * TPS);
+    eprintln!("then truck {:?} runner {:?} gap {:.2}", pos(&w, truck), pos(&w, runner), gap(&w));
+    assert!(gap(&w) < 5.0 && pos(&w, truck).y > 80.0);
+}
+
+#[test]
+fn following_ends_when_the_target_is_gone_or_dead() {
+    let (data, ids) = data();
+    let mut w = world(open_map(96, 64, 2.0), data);
+    let a = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(30.0, 40.0), 0.0);
+    let enemy = w.spawn_actor(ids.infantry, Some(1), w.ground(Vec2::new(120.0, 40.0)), 0.0);
+    order(&mut w, Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target: enemy });
+    advance(&mut w, 5 * TPS);
+    assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }));
+    // Gone (EventTargetGone): the regiment stops where it is.
+    w.actors[enemy as usize].removed = true;
+    advance(&mut w, 2 * TPS);
+    assert_eq!(w.orgs[a as usize].order, Order::Idle);
+    assert!(movement::command(&mut w, &Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target: enemy }).is_err());
+    // A dead target: walked up to, then the order ends.
+    let corpse = w.spawn_actor(ids.infantry, Some(1), w.ground(Vec2::new(120.0, 60.0)), 0.0);
+    w.actors[corpse as usize].alive = false;
+    order(&mut w, Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target: corpse });
+    let ended = run_until(&mut w, 60.0, |w| w.orgs[a as usize].order == Order::Idle);
+    let gap = (w.orgs[a as usize].anchor - pos(&w, corpse)).length();
+    eprintln!("dead target: order ended {ended} at t={:.1}, {gap:.2} m away", w.time);
+    assert!(ended && gap <= 0.6 * 18.0 + 1.0);
 }
 
 // ---------------------------------------------------------------------------

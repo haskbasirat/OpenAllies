@@ -47,6 +47,8 @@ impl World {
             }
             // appended by the combat owner
             Command::UseAbility { .. } => crate::special_ops::command(self, &command),
+            // appended by the movement owner
+            Command::Follow { .. } => crate::movement::command(self, &command),
         };
         if let Err(reason) = result {
             let kingdom = match command {
@@ -64,7 +66,8 @@ impl World {
                 | Command::Sell { kingdom, .. }
                 | Command::Detach { kingdom, .. }
                 | Command::Disband { kingdom, .. }
-                | Command::UseAbility { kingdom, .. } => kingdom,
+                | Command::UseAbility { kingdom, .. }
+                | Command::Follow { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }
