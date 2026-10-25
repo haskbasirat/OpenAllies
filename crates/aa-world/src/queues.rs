@@ -83,6 +83,9 @@ pub struct Dispatch {
     delivered: bool,
 }
 
+/// One event, doubly linked in its bucket like the native entries (50ABC0 /
+/// 50B250 unlink in constant time): `next` is the delivery order, `prev`
+/// only serves the unlink.
 #[derive(Clone, Debug)]
 struct Node {
     queue: u8,
@@ -90,6 +93,7 @@ struct Node {
     owner: Owner,
     data: u32,
     next: Option<EventId>,
+    prev: Option<EventId>,
 }
 
 #[derive(Clone, Debug)]
@@ -297,6 +301,7 @@ impl Queues {
         owners.try_reserve(1).map_err(|_| Error::Allocation)?;
         let q = self.queues.get_mut(&id).ok_or(Error::QueueKind)?;
         let event = EventId(self.next_id);
+        let head = q.buckets[bucket];
         self.nodes.insert(
             event.0,
             Node {
@@ -304,11 +309,15 @@ impl Queues {
                 bucket,
                 owner,
                 data,
-                next: q.buckets[bucket],
+                next: head,
+                prev: None,
             },
         );
         owners.insert(0, event);
         q.buckets[bucket] = Some(event);
+        if let Some(head) = head {
+            self.nodes.get_mut(&head.0).ok_or(Error::InvalidCursor)?.prev = Some(event);
+        }
         self.next_id = next_id;
         Ok(event)
     }
@@ -400,21 +409,17 @@ impl Queues {
             self.cursor = node.next;
         }
         let q = self.queues.get_mut(&node.queue).ok_or(Error::QueueKind)?;
-        if q.buckets[node.bucket] == Some(id) {
-            q.buckets[node.bucket] = node.next;
-        } else {
-            let mut cursor = q.buckets[node.bucket];
-            while let Some(previous) = cursor {
-                let previous = self
-                    .nodes
+        match node.prev {
+            None => q.buckets[node.bucket] = node.next,
+            Some(previous) => {
+                self.nodes
                     .get_mut(&previous.0)
-                    .ok_or(Error::InvalidCursor)?;
-                if previous.next == Some(id) {
-                    previous.next = node.next;
-                    break;
-                }
-                cursor = previous.next;
+                    .ok_or(Error::InvalidCursor)?
+                    .next = node.next;
             }
+        }
+        if let Some(next) = node.next {
+            self.nodes.get_mut(&next.0).ok_or(Error::InvalidCursor)?.prev = node.prev;
         }
         if let Some(owned) = self.owners.get_mut(&node.owner) {
             owned.retain(|value| *value != id);
