@@ -319,6 +319,13 @@ pub struct Def {
     /// must have; both lists all-of.
     #[serde(default)]
     pub requirements: Requirements,
+    /// MoverComponent trailer_actor: the actor GActor InitCreate (4D70F2)
+    /// creates hitched to it (aa-play keeps no trailer actor).
+    #[serde(default)]
+    pub trailer: Option<DefId>,
+    /// DynamicDoodadData components (Disturbable, Breakable) present.
+    #[serde(default)]
+    pub doodad_components: u8,
 }
 
 /// A Requirements object (ElementComponent or ResearchItem
@@ -514,6 +521,10 @@ pub struct NationDef {
     /// placeholder Thing IDS (lower case) -> nation Thing.
     pub placeholders: BTreeMap<String, DefId>,
     pub factions: Vec<String>,
+    /// The factions 474B40 can pick at random (FactionData +0x18, the
+    /// `public` flag), in nation order.
+    #[serde(default)]
+    pub eligible_factions: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -633,7 +644,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v16";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v17";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -921,6 +932,7 @@ pub(crate) mod loader {
         unpacks_to: Option<String>,
         packs_to: Option<String>,
         resists: Vec<(usize, f32)>,
+        trailer: Option<String>,
     }
 
     pub(crate) fn build(sources: &mut Sources, catalog: &ActorCatalog) -> anyhow::Result<GameData> {
@@ -974,6 +986,7 @@ pub(crate) mod loader {
             let recruits = p.recruits.iter().filter_map(|r| resolve(&data, r)).collect();
             let unpacks_to = p.unpacks_to.as_deref().and_then(|r| resolve(&data, r));
             let packs_to = p.packs_to.as_deref().and_then(|r| resolve(&data, r));
+            let trailer = p.trailer.as_deref().and_then(|r| resolve(&data, r));
             let mut factor = vec![1.0f32; data.damage_types.len()];
             for (i, sum) in data.damage_types.iter().enumerate().map(|(i, _)| (i, p.resists.iter().filter(|r| r.0 == i).map(|r| r.1).sum::<f32>())) {
                 factor[i] = (1.0 - sum).max(clamp);
@@ -991,6 +1004,7 @@ pub(crate) mod loader {
             def.recruits = recruits;
             def.unpacks_to = unpacks_to;
             def.packs_to = packs_to;
+            def.trailer = trailer;
             def.damage_factor = factor;
             def.armor_type = armor as u32;
             let positions = def
@@ -1046,6 +1060,12 @@ pub(crate) mod loader {
                     factions: st(&node, "factions").map(|s| s.split(',').map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()).collect()).unwrap_or_default(),
                     ..Default::default()
                 };
+                nation.eligible_factions = nation
+                    .factions
+                    .iter()
+                    .filter(|f| catalog.resolved_definition("Faction", f, PC).ok().is_some_and(|n| bl(&n, "public").unwrap_or(true)))
+                    .cloned()
+                    .collect();
                 for ph in node.children("Placeholder").unwrap_or_default() {
                     let (Some(from), Some(to)) = (st(&ph, "placeholder_IDS"), st(&ph, "thing_IDS")) else { continue };
                     match resolve(&data, &to) {
@@ -1163,7 +1183,7 @@ pub(crate) mod loader {
         property: &mut dyn FnMut(&str) -> (Vec<(usize, f32)>, u32),
     ) -> (Def, Pending) {
         let mut def = Def { id: id.to_owned(), health: 0.0, ..Default::default() };
-        let mut p = Pending { recruits: vec![], slots: vec![], unpacks_to: None, packs_to: None, resists: vec![] };
+        let mut p = Pending { recruits: vec![], slots: vec![], unpacks_to: None, packs_to: None, resists: vec![], trailer: None };
         let mut note = |what: &str, e: &dyn std::fmt::Display| notes.push(format!("{id}: {what}: {e}"));
         let category = match catalog.native_category(ThingRef::registered(id)) {
             Ok(c) => c,
@@ -1175,6 +1195,12 @@ pub(crate) mod loader {
         };
         def.category = category.name.to_owned();
         def.actor_data = category.native_kind == 2;
+        // DynamicDoodadData (kind 21): its Disturbable / Breakable components.
+        if category.native_kind == 21
+            && let Ok(dd) = catalog.native_dynamic_doodad(id, PC)
+        {
+            def.doodad_components = dd.components.iter().filter(|c| c.is_some()).count() as u8;
+        }
         let node = match catalog.resolved_actor(ThingRef::registered(id)) {
             Ok(n) => n,
             Err(e) => {
@@ -1378,6 +1404,9 @@ pub(crate) mod loader {
             if p.unpacks_to.is_none() {
                 p.unpacks_to = d.unpack_to.clone();
             }
+        }
+        if let Ok(Some(mover)) = node.child("MoverComponent") {
+            p.trailer = st(&mover, "trailer_actor").filter(|s| !s.eq_ignore_ascii_case("null"));
         }
         if let Ok(Some(md)) = node.child("MobileDeploymentComponent") {
             def.packed_position_offset = pt(&md, "packed_position_offset").unwrap_or([0.0, 0.0]);

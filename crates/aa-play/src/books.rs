@@ -72,6 +72,10 @@ pub struct KingdomBooks {
     /// Kingdom +0x324: kingdom-level research in progress (0x4E2310).
     #[serde(default)]
     pub research: aa_production::research::KingdomResearch,
+    /// The general WorldParameters 0x50E8B0 picked at random for this kingdom
+    /// (Faction IDS), used by `special_ops::set_general(.., None)`.
+    #[serde(default)]
+    pub general: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

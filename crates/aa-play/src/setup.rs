@@ -57,12 +57,37 @@ fn neutral_actor(data: &GameData, def: crate::data::DefId) -> bool {
 impl World {
     /// Implemented by the core owner.
     pub fn new_skirmish(data: Arc<GameData>, map: Arc<GameMap>, setup: &SkirmishSetup) -> anyhow::Result<World> {
+        Self::new_skirmish_with(data, map, setup, &[])
+    }
+
+    /// `new_skirmish` with the staging screen's random picks, one per player
+    /// (missing: none). WorldParameters 0x50E8B0 resolves them during map
+    /// restore, in the creator's kingdom (map slot) order, with the world
+    /// RNG: a random nation replaces the player's, a random general is kept
+    /// for `special_ops::set_general(world, kingdom, None)`.
+    pub fn new_skirmish_with(data: Arc<GameData>, map: Arc<GameMap>, setup: &SkirmishSetup, picks: &[crate::creation::StartPick]) -> anyhow::Result<World> {
         let mut world = World::empty(data.clone(), map.clone(), setup.seed);
         if setup.players.is_empty() {
             anyhow::bail!("a custom battle needs at least one player");
         }
         let money = data.resource_index("money");
         let start = setup.starting_resources.or_else(|| data.rule_ci("ResourceStockpileDefault")).unwrap_or(0.0);
+        // 0x50E8B0 per player kingdom in creator (map slot) order.
+        let mut order: Vec<usize> = (0..setup.players.len()).collect();
+        order.sort_by_key(|&i| map.player_slots.get(setup.players[i].start).copied().unwrap_or(usize::MAX));
+        let mut nations: Vec<String> = setup.players.iter().map(|p| p.nation.clone()).collect();
+        let mut generals: Vec<Option<String>> = vec![None; setup.players.len()];
+        for &i in &order {
+            let pick = picks.get(i).copied().unwrap_or_default();
+            if pick.random_nation
+                && let Some(n) = crate::creation::random_nation(&mut world)
+            {
+                nations[i] = n;
+            }
+            if pick.random_general {
+                generals[i] = crate::creation::random_general(&mut world, &nations[i]);
+            }
+        }
         let mut slot_kingdom: Vec<Option<u32>> = vec![None; map.slots.len()];
         for (i, p) in setup.players.iter().enumerate() {
             let Some(&slot) = map.player_slots.get(p.start) else {
@@ -71,7 +96,7 @@ impl World {
             if slot_kingdom[slot].is_some() {
                 anyhow::bail!("two players share start location {}", p.start);
             }
-            let nation = data.nation(&p.nation).ok_or_else(|| anyhow::anyhow!("unknown nation {}", p.nation))?;
+            let nation = data.nation(&nations[i]).ok_or_else(|| anyhow::anyhow!("unknown nation {}", nations[i]))?;
             slot_kingdom[slot] = Some(i as u32);
             world.kingdoms.push(Kingdom {
                 id: i as u32,
@@ -97,6 +122,7 @@ impl World {
                 kb.stockpiled[m] = start;
             }
             kb.handicap = handicap;
+            kb.general = generals[i].clone();
         }
         // The map's independent kingdoms (header "independent_N", native
         // Kingdom +0x190 = 1) own the cities and the other neutral buildings.
@@ -165,6 +191,19 @@ impl World {
                 None => world.books.scenery.push(index),
             }
         }
+        // The restored things' InitExisting draws (4FC600), in ascending GTID
+        // slot order: a DynamicDoodad component each (5904A0 / 58F960), a
+        // Supply component registering on queue 1 (58B0E0). All saved things
+        // are restored, also those of the kingdoms the battle leaves out.
+        let mut restored: Vec<(u16, usize)> =
+            map.placed.iter().enumerate().filter(|(_, p)| p.serialized_id != 0).map(|(i, p)| (crate::ids::Gtid::from_raw(p.serialized_id).slot(), i)).collect();
+        restored.sort_unstable();
+        for (_, i) in restored {
+            if let Some(def) = data.find(&map.placed[i].thing_id) {
+                crate::creation::restored(&mut world, def);
+            }
+        }
+        // StartMission 0x4E6DB0 draws nothing.
         // 4FDA70 queues the placeholders in ascending slot order (4EFBE0),
         // objects and actors apart; 4FC4A0 runs the objects, then the actors;
         // 4FBA50 destroys each placeholder, then creates the replacement with
@@ -244,7 +283,10 @@ pub fn relation(world: &World, a: Option<u32>, b: Option<u32>) -> u8 {
 /// saved id.
 fn keep_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>, pos: glam::Vec2, facing: f32, index: usize) {
     world.ids.request_placed(index);
+    // Restored, not created: no creation draws (crate::creation).
+    world.ids.restore_scope = true;
     spawn_placed(world, def, kingdom, pos, facing, index);
+    world.ids.restore_scope = false;
     world.ids.clear_request(index);
 }
 

@@ -17,6 +17,10 @@
 //!   needs ([`aa_orders::payload::SchemaContext`]).
 //! * [`replay`]: the H4 replay driver: a film's decrees into aa-play on the
 //!   film's own stock map, checkpoint by checkpoint.
+//! * [`native_trace`]: reader of the native state sampler's per-tick
+//!   snapshots of the original (kingdoms, actors, components, zones), and
+//!   [`state_compare`]: their field-by-field comparison with aa-play, lane by
+//!   lane (economy, production, movement, combat, supply, fog).
 //!
 //! Nothing here reproduces a simulation; it measures one.
 pub mod chain;
@@ -25,10 +29,13 @@ pub mod decree;
 pub mod film;
 #[cfg(feature = "play")]
 pub mod mapping;
+pub mod native_trace;
 pub mod registries;
 #[cfg(feature = "play")]
 pub mod replay;
 pub mod slog;
+#[cfg(feature = "play")]
+pub mod state_compare;
 
 pub use decree::Decree;
 pub use film::{Checkpoint, Film, FilmDecree, FilmHeader, SessionPlayer, TickRecord};

@@ -123,6 +123,11 @@ fn berlin_film_replays_into_aa_play() {
     assert_eq!(plan.players.iter().filter(|p| p.computer).count(), 3);
 
     let mut world = replay::build(&plan, &root, data.clone(), map.clone()).unwrap();
+    let mismatches = replay::pick_mismatches(&plan, &world);
+    assert!(
+        mismatches.is_empty(),
+        "the random picks reproduce the film header: {mismatches:?}"
+    );
     eprintln!(
         "aa-play at battle start: {} kingdoms, {} actors, {} live ids, next slot {}, rng state {:#010x}; id notes {:?}",
         world.kingdoms.len(),
@@ -153,6 +158,9 @@ fn berlin_film_replays_into_aa_play() {
     print_difference("replay", &report);
     assert_eq!(report.steps as usize, film.world_ticks());
     assert_eq!(report.checked, film.checkpoints.len());
+    // Reached 2026-10-25 with the battle-start draws and the random picks
+    // (`World::new_skirmish_with`): checkpoints 17..391 match.
+    assert!(report.matched >= 23, "checkpoints 17..391 match ({} matched)", report.matched);
     let first = report.first_difference.as_ref().map(|d| d.check);
     if let Some(d) = &report.first_difference {
         // The getters of the first interval are where the film needs them
