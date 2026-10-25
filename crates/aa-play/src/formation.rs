@@ -80,9 +80,100 @@ pub fn offset_path(path: &[Waypoint], formation_offset: Vec2) -> Vec<Waypoint> {
     out
 }
 
+/// The simulation thread's x87 precision control (PC53).
+const PC: aa_numeric::Precision = aa_numeric::Precision::Double53;
+
+/// A member standing in a slot, for [`organization_slots`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SlotMember {
+    pub actor: u32,
+    pub pos: Vec2,
+}
+
+/// The organization slot table (+0x78) of an oriented formation, exactly
+/// (`aa_movement::formation` at the simulation's PC53): ComputeSlotPosition
+/// `0x5797E0` for every slot (zero for the leader's and the primary slot,
+/// else the offset turned by `0x578250`), then with `reassign` the
+/// reassignment `0x57BA80` (together `0x57BEF0`). `members[i]` stands in
+/// slot i; `leader` is the leader's actor and slot. Inputs the native code
+/// refuses (a non-finite value, slots outside the arrays) get the plain
+/// `f32` table.
+#[allow(clippy::too_many_arguments)]
+pub fn organization_slots(offsets: &[[f32; 2]], facing: Vec2, center: Vec2, members: &[Option<SlotMember>], leader: Option<(u32, usize)>, primary_slot: Option<usize>, groups: &[usize], reassign: bool) -> Vec<Vec2> {
+    use aa_movement::formation as native;
+    struct NoDraws;
+    impl native::FormationWorld for NoDraws {
+        // Only an empty slot of a formation that is not oriented draws.
+        fn next_random_u32(&mut self) -> aa_movement::Result<u32> {
+            Err(aa_movement::Error::World("an oriented formation does not draw".into()))
+        }
+        fn mind_leader_changed(&mut self) -> aa_movement::Result<()> {
+            Ok(())
+        }
+        fn detached_member(&mut self, _: u32, _: u32, _: [f32; 2]) -> aa_movement::Result<()> {
+            Ok(())
+        }
+    }
+    let n = offsets.len();
+    let member = |slot: usize, m: &SlotMember| native::Member { id: m.actor, position: [m.pos.x, m.pos.y], slot: slot as i32, attached: true };
+    let mut organization = native::Organization {
+        owner_id: 0,
+        facing: [facing.x, facing.y],
+        owner_has_mind: false,
+        center: [center.x, center.y],
+        primary_slot: primary_slot.map_or(-1, |p| p as i32),
+        group_sizes: groups.iter().map(|&g| g as i32).collect(),
+        slot_count: n as i32,
+        members: (0..n).map(|i| members.get(i).copied().flatten().map(|m| member(i, &m))).collect(),
+        leader: leader.map(|(actor, slot)| {
+            let pos = members.get(slot).copied().flatten().map_or(center, |m| m.pos);
+            member(slot, &SlotMember { actor, pos })
+        }),
+        formation: Some(native::FormationShape { oriented: true, offsets: offsets.to_vec() }),
+        slot_positions: vec![[0.0; 2]; n],
+    };
+    let result = if reassign {
+        native::compute_all_slot_positions(&mut organization, PC, &mut NoDraws).map(|_| ())
+    } else {
+        (0..n as i32).try_for_each(|slot| native::compute_slot_position(&mut organization, slot, PC, &mut NoDraws).map(|_| ()))
+    };
+    match result {
+        Ok(()) => organization.slot_positions.iter().map(|&p| Vec2::from(p)).collect(),
+        Err(_) => {
+            let leader_slot = leader.map(|l| l.1);
+            let mut slots = compute_slot_positions(offsets, facing, leader_slot, primary_slot);
+            if reassign {
+                let positions: Vec<Option<Vec2>> = (0..n).map(|i| members.get(i).copied().flatten().map(|m| m.pos)).collect();
+                reassign_slots(center, &mut slots, &positions, leader_slot, groups);
+            }
+            slots
+        }
+    }
+}
+
+/// `0x52CBD0` exactly (`aa_navigation::company_move::offset_path_for_slot`
+/// at PC53): the regiment path offset for the slot whose world-frame
+/// offset (+0x78) is `slot_offset` under the organization `facing`. Inputs
+/// the native code refuses get the plain [`offset_path`].
+pub fn slot_path(path: &[Waypoint], slot_offset: Vec2, facing: Vec2) -> Vec<Waypoint> {
+    use aa_navigation::{OwnedPath, PathNode, company_move};
+    let bits = |v: Vec2| [v.x.to_bits(), v.y.to_bits()];
+    let node = |w: &Waypoint| {
+        let [x, y] = bits(w.pos);
+        let [dx, dy] = bits(w.dir);
+        PathNode { words: [x, y, dx, dy, 1, 0, x, y] }
+    };
+    let source = OwnedPath { nodes: path.iter().map(node).collect(), kind1_count: path.len() as i32, kind2_count: 0, dirty: false, word18: u32::MAX };
+    let mut target = source.clone();
+    match company_move::offset_path_for_slot(&mut target, bits(slot_offset), bits(facing), &source, PC) {
+        Ok(()) => target.nodes.iter().zip(path).map(|(n, w)| Waypoint { pos: Vec2::new(f32::from_bits(n.words[0]), f32::from_bits(n.words[1])), dir: w.dir }).collect(),
+        Err(_) => offset_path(path, unrotate_offset(slot_offset, facing)),
+    }
+}
+
 /// Slot offsets (organization +0x78) for a facing: zero for the leader's slot
 /// and the primary slot, otherwise the oriented formation offset turned by
-/// the facing (`0x5797E0` for an oriented formation).
+/// the facing (`0x5797E0` for an oriented formation), in plain `f32`.
 pub fn compute_slot_positions(offsets: &[[f32; 2]], facing: Vec2, leader_slot: Option<usize>, primary_slot: Option<usize>) -> Vec<Vec2> {
     offsets
         .iter()
@@ -219,6 +310,41 @@ mod tests {
         assert_eq!(out[1].pos, Vec2::new(12.0, 10.0));
         // Corner: intersection of y = -2 (right of east) and x = 12.
         assert!((out[0].pos - Vec2::new(12.0, -2.0)).length() < 1e-5, "{:?}", out[0].pos);
+    }
+
+    #[test]
+    fn exact_slot_table_and_slot_path_agree_with_the_plain_versions() {
+        let offsets = [[-3.0, 2.5], [0.0, 3.25], [2.75, 2.75], [0.25, -3.0], [-3.25, -2.75], [3.25, -2.75], [0.0, 0.0]];
+        let facing = Vec2::new(0.6, 0.8);
+        let center = Vec2::new(100.0, 50.0);
+        // Members of slots 1 and 2 stand at each other's slot.
+        let mut members: Vec<Option<SlotMember>> = (0..offsets.len()).map(|i| Some(SlotMember { actor: i as u32 + 10, pos: center + rotate_offset(Vec2::from(offsets[i]), facing) })).collect();
+        members.swap(1, 2);
+        members[1].as_mut().unwrap().actor = 11;
+        members[2].as_mut().unwrap().actor = 12;
+        let groups = [3, 3, 1];
+        let exact = organization_slots(&offsets, facing, center, &members, Some((16, 6)), Some(6), &groups, true);
+        let mut plain = compute_slot_positions(&offsets, facing, Some(6), Some(6));
+        let positions: Vec<Option<Vec2>> = members.iter().map(|m| m.map(|m| m.pos)).collect();
+        reassign_slots(center, &mut plain, &positions, Some(6), &groups);
+        for (e, p) in exact.iter().zip(&plain) {
+            assert!((*e - *p).length() < 1e-5, "{e:?} vs {p:?}");
+        }
+        // The swap happened: slot 1 now holds slot 2's offset.
+        assert!((exact[1] - rotate_offset(Vec2::from(offsets[2]), facing)).length() < 1e-5);
+        assert_eq!(exact[6], Vec2::ZERO);
+        let path = [
+            Waypoint { pos: Vec2::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0) },
+            Waypoint { pos: Vec2::new(10.0, 10.0), dir: Vec2::new(0.0, 1.0) },
+            Waypoint { pos: Vec2::new(30.0, 30.0), dir: Vec2::new(0.70710677, 0.70710677) },
+        ];
+        let offset = rotate_offset(Vec2::new(2.0, -1.0), facing);
+        let exact = slot_path(&path, offset, facing);
+        let plain = offset_path(&path, unrotate_offset(offset, facing));
+        for (e, p) in exact.iter().zip(&plain) {
+            assert!((e.pos - p.pos).length() < 1e-4, "{:?} vs {:?}", e.pos, p.pos);
+            assert_eq!(e.dir, p.dir);
+        }
     }
 
     #[test]

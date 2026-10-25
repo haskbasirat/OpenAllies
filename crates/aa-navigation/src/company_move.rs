@@ -14,7 +14,7 @@
 //! group objects (actor +0x164), member Minds and timers are explicit world
 //! callbacks, called in native order with the live state.
 use crate::{ActorState, Activation, Error, MoveState, NavigationWorld, OwnedPath, PathNode, Result};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 #[path="company_activation.rs"]
@@ -26,10 +26,10 @@ pub use lifecycle::{CompanySpeedFields,CompanyExitFields,CompanyLifecycleFields,
 pub use activation::{CompanyActivationFields,LocationActivation,set_destination_on_fields,
     activate_to_actor_on_fields,activate_to_location_on_fields};
 
-fn b(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn b(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
-fn store(value: &Binary) -> Result<u32> {
+fn store(value: &Fast) -> Result<u32> {
     Ok(value.store_f32()?)
 }
 /// Native binary32 constants: 1e-4 (0xa3aa10 / 0xa329e4), 1.0.
@@ -153,7 +153,7 @@ pub fn offset_path_for_slot(
     let [fx, fy] = facing.map(b);
     let (sx, sy, fx, fy) = (sx?, sy?, fx?, fy?);
     // A = sx*fy - sy*fx and B = sy*fy + sx*fx (extended, recomputed per node).
-    let across = |p: Precision| -> Result<(Binary, Binary)> {
+    let across = |p: Precision| -> Result<(Fast, Fast)> {
         Ok((
             sx.mul(&fy, p)?.sub(&sy.mul(&fx, p)?, p)?,
             sy.mul(&fy, p)?.add(&sx.mul(&fx, p)?, p)?,
@@ -539,12 +539,12 @@ pub trait CompanyThinkWorld: CompanyWorld {
     fn next_random(&mut self) -> Result<u32>;
 }
 
-fn unit_draw(draw: u32, p: Precision) -> Result<Binary> {
-    let mut value = Binary::from_i32(draw as i32);
+fn unit_draw(draw: u32, p: Precision) -> Result<Fast> {
+    let mut value = Fast::from_i32(draw as i32);
     if draw & 0x8000_0000 != 0 {
-        value = value.add(&Binary::from_f64_bits(0x41f0_0000_0000_0000)?, p)?;
+        value = value.add(&Fast::from_f64_bits(0x41f0_0000_0000_0000)?, p)?;
     }
-    Ok(value.mul(&Binary::from_f64_bits(0x3df0_0000_0010_0000)?, p)?)
+    Ok(value.mul(&Fast::from_f64_bits(0x3df0_0000_0010_0000)?, p)?)
 }
 
 /// Original `0x409230` vector2 normalize (stores components; zero below 1e-4).

@@ -321,8 +321,8 @@ pub struct Pathfinder {
     /// an exact-path error), solved by the f32 reference instead.
     pub fallbacks: u64,
     /// Solve with the exact native solver (see [`Pathfinder::exact`]). Off
-    /// by default until it meets the planning budget: the game uses the f32
-    /// reference.
+    /// by default, the f32 reference kept for comparison; the game's
+    /// movement solves with the exact solver.
     pub exact: bool,
 }
 

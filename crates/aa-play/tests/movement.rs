@@ -722,10 +722,14 @@ fn performance_150_regiments() {
     // Planning (queued and budgeted per tick).
     let mut planning_ticks = 0;
     let mut planning_worst = 0.0f64;
+    let mut worst_at = 0;
     loop {
         let s = std::time::Instant::now();
         advance(&mut w, 1);
-        planning_worst = planning_worst.max(s.elapsed().as_secs_f64() * 1000.0);
+        let ms = s.elapsed().as_secs_f64() * 1000.0;
+        if ms > planning_worst {
+            (planning_worst, worst_at) = (ms, planning_ticks);
+        }
         planning_ticks += 1;
         if movement::queued_requests(&w) == 0 {
             break;
@@ -740,7 +744,7 @@ fn performance_150_regiments() {
     let per_tick = t.elapsed().as_secs_f64() * 1000.0 / ticks as f64;
     let moving = w.actors.iter().filter(|a| movement::actor_moving(&w, a.id)).count();
     eprintln!(
-        "150 regiments x 9 marching: {per_tick:.3} ms per tick ({moving} movers); planning {} searches, {} tiles, {:.1} ms over {} ticks (worst tick {planning_worst:.2} ms)",
+        "150 regiments x 9 marching: {per_tick:.3} ms per tick ({moving} movers); planning {} searches, {} tiles, {:.1} ms over {} ticks (worst tick {planning_worst:.2} ms, planning tick {worst_at})",
         stats.searches,
         stats.expanded,
         planning.as_secs_f64() * 1000.0,

@@ -39,6 +39,8 @@ pub struct TileWalk {
     grid: TileGrid,
     precision: Precision,
     state: WalkState,
+    /// Use the binary64 step at PC53 (see [`TileWalk::pc53_step`]).
+    shortcut: bool,
 }
 fn b(bits: u32) -> Result<Fast> {
     Ok(Fast::from_f32_bits(bits)?)
@@ -101,7 +103,49 @@ impl TileWalk {
                 started: false,
                 remaining,
             },
+            shortcut: true,
         })
+    }
+    /// Always take the `Fast` step (for the differential tests).
+    #[doc(hidden)]
+    pub fn without_shortcut(mut self) -> Self {
+        self.shortcut = false;
+        self
+    }
+    /// The 4DD150 step at PC53 in host binary64 (`aa_numeric::pc53`).
+    /// Returns the axis and the new point, or None when a value leaves the
+    /// range where that equals PC53 (or an index or store would fail), for
+    /// the general step.
+    fn pc53_step(&self) -> Option<(usize, [u32; 2])> {
+        use aa_numeric::pc53::{add, div, load, mul, store, sub};
+        let point = self.state.point_bits;
+        let dx = load(self.state.delta_bits[0])?;
+        let dy = load(self.state.delta_bits[1])?;
+        let epsilon = f64::from(f32::from_bits(0x38d1_b717));
+        if dx.abs() < epsilon {
+            return Some((1, point));
+        }
+        if dy.abs() < epsilon {
+            return Some((0, point));
+        }
+        let cell = load(self.grid.cell_size_bits)?;
+        // -0.0 counts as non-negative, as `!is_negative_nonzero`.
+        let index = |axis: usize, d: f64| self.state.current[axis].checked_add(i32::from(d >= 0.0));
+        let by = store(mul(f64::from(index(1, dy)?), cell)?)?;
+        let bx = mul(cell, f64::from(index(0, dx)?))?;
+        let px = load(point[0])?;
+        let py = load(point[1])?;
+        let tx = div(sub(bx, px)?, dx)?;
+        let tx_stored = f64::from(store(tx)?);
+        let ty = f64::from(store(div(sub(f64::from(by), py)?, dy)?)?);
+        if tx < ty {
+            let x = store(bx)?;
+            let y = store(add(mul(tx_stored, dy)?, py)?)?;
+            Some((0, [x.to_bits(), y.to_bits()]))
+        } else {
+            let x = store(add(mul(ty, dx)?, px)?)?;
+            Some((1, [x.to_bits(), by.to_bits()]))
+        }
     }
     pub fn state(&self) -> &WalkState {
         &self.state
@@ -120,6 +164,19 @@ impl TileWalk {
             return Ok(None);
         }
         self.state.remaining -= 1;
+        if self.shortcut
+            && self.precision == Precision::Double53
+            && let Some((axis, point)) = self.pc53_step()
+        {
+            let delta = f32::from_bits(self.state.delta_bits[axis]);
+            if let Some(next) =
+                self.state.current[axis].checked_add(if delta < 0.0 { -1 } else { 1 })
+            {
+                self.state.point_bits = point;
+                self.state.current[axis] = next;
+                return Ok(Some(self.state.current));
+            }
+        }
         let pc = self.precision;
         let dx = b(self.state.delta_bits[0])?;
         let dy = b(self.state.delta_bits[1])?;
