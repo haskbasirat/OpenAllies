@@ -3,6 +3,9 @@
 //! preserves the original binary32 spills and callback load order.
 
 use crate::search::{DIRECTIONS, QueueEntry};
+// At PC53 each arithmetic block first runs in host binary64 (`aa_numeric::pc53`),
+// falling back to `Fast` from the same operands at the same point.
+use aa_numeric::pc53::{add, div, load, mul, store, sub};
 use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -82,12 +85,25 @@ pub fn accumulated_cost(
     } else {
         0x3f80_0000
     };
-    let previous = number(state.current.cost_bits)?;
+    let pc53 = precision == Precision::Double53;
     //53C5C0 adds the existing cost before53CB70 subtracts it and stores f32.
-    let base = number(multiplier)?
-        .mul(&number(cell_size_bits)?, precision)?
-        .add(&previous, precision)?;
-    let mut step = stored(base.sub(&previous, precision)?)?;
+    let fast_base = pc53.then(|| {
+        let previous = load(state.current.cost_bits)?;
+        store(sub(
+            add(mul(load(multiplier)?, load(cell_size_bits)?)?, previous)?,
+            previous,
+        )?)
+    });
+    let mut step = match fast_base.flatten() {
+        Some(step) => Fast::from_f32(step)?,
+        None => {
+            let previous = number(state.current.cost_bits)?;
+            let base = number(multiplier)?
+                .mul(&number(cell_size_bits)?, precision)?
+                .add(&previous, precision)?;
+            stored(base.sub(&previous, precision)?)?
+        }
+    };
     if let Some(actor) = world.tile_actor(destination)?
         && world.has_wall_component(actor)?
         && state.collision_owner.is_some()
@@ -125,13 +141,28 @@ pub fn accumulated_cost(
         if destination_speed.compare(&Fast::from_i32(0)) == Ordering::Greater
             && destination_speed.compare(&reference) == Ordering::Less
         {
-            step = number(world.terrain_change_penalty_bits()?)?
-                .div(&destination_speed, precision)?
-                .mul(&reference, precision)?
-                .add(&step, precision)?;
+            let penalty = number(world.terrain_change_penalty_bits()?)?;
+            let fast = pc53.then(|| {
+                let quotient = div(penalty.to_f64_exact()?, destination_speed.to_f64_exact()?)?;
+                add(
+                    mul(quotient, reference.to_f64_exact()?)?,
+                    step.to_f64_exact()?,
+                )
+            });
+            step = match fast.flatten() {
+                Some(value) => Fast::from_f64(value)?,
+                None => penalty
+                    .div(&destination_speed, precision)?
+                    .mul(&reference, precision)?
+                    .add(&step, precision)?,
+            };
         }
     }
-    Ok(step
-        .add(&number(state.current.cost_bits)?, precision)?
-        .store_f32()?)
+    let fast = pc53.then(|| store(add(step.to_f64_exact()?, load(state.current.cost_bits)?)?));
+    match fast.flatten() {
+        Some(total) => Ok(total.to_bits()),
+        None => Ok(step
+            .add(&number(state.current.cost_bits)?, precision)?
+            .store_f32()?),
+    }
 }

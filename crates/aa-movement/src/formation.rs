@@ -12,9 +12,21 @@
 //! pending set is an exact growable per-slot set. For slot indices below 32 the
 //! behavior is identical; the native aliasing for larger indices is not
 //! reproduced. The swap budget keeps the native wrapping signed factorial.
-use crate::mover::{bin, epsilon, store};
 use crate::{Error, Result};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Binary, Fast, Precision};
+
+// The slot arithmetic runs on `aa_numeric::Fast`, the exact x87 values of
+// `Binary` without big-integer cost (formations are recomputed for every
+// regiment order); `unit_draw` keeps its `Binary` result for other callers.
+fn bin(value: f32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(value.to_bits())?)
+}
+fn store(value: &Fast) -> Result<f32> {
+    Ok(f32::from_bits(value.store_f32()?))
+}
+fn epsilon() -> Result<Fast> {
+    Ok(Fast::from_f32_bits(crate::NATIVE_EPSILON_BITS)?)
+}
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -53,6 +65,14 @@ pub fn unit_draw(draw: u32, precision: Precision) -> Result<Binary> {
         value = value.add(&Binary::from_f64_bits(0x41f0_0000_0000_0000)?, precision)?;
     }
     Ok(value.mul(&Binary::from_f64_bits(0x3df0_0000_0010_0000)?, precision)?)
+}
+/// [`unit_draw`] as a `Fast` value.
+fn unit_draw_fast(draw: u32, precision: Precision) -> Result<Fast> {
+    let mut value = Fast::from_i32(draw as i32);
+    if draw & 0x8000_0000 != 0 {
+        value = value.add(&Fast::from_f64_bits(0x41f0_0000_0000_0000)?, precision)?;
+    }
+    Ok(value.mul(&Fast::from_f64_bits(0x3df0_0000_0010_0000)?, precision)?)
 }
 
 /// Organization member (actor pointer in native slot array +0x28).
@@ -200,7 +220,7 @@ pub fn compute_slot_position<W: FormationWorld>(
         }
         let heading = random_direction(world.next_random_u32()?);
         organization.slot_positions[index] = heading;
-        let scale = unit_draw(world.next_random_u32()?, precision)?
+        let scale = unit_draw_fast(world.next_random_u32()?, precision)?
             .mul(&bin(4.0)?, precision)?
             .add(&bin(0.5)?, precision)?;
         organization.slot_positions[index] = [

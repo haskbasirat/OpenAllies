@@ -32,7 +32,7 @@
 //! step (the original low-level pather `0x53C170` / `0x534A40`) is a sidestep
 //! node around the blocking actor, or a tile re-route with the tile solver.
 use crate::data::{Def, GameData};
-use crate::formation::{self, facing_angle, facing_vector, unrotate_offset};
+use crate::formation::{self, facing_angle, facing_vector};
 use crate::path::{Grid, MoverClass, PathRules, Pathfinder, Request, Status, Waypoint};
 use crate::world::{Activity, ActorId, Command, KingdomId, Order, OrgId, Unit, World};
 use glam::Vec2;
@@ -163,6 +163,11 @@ struct Mover {
     last_step: f32,
     turning: bool,
     instant: bool,
+    /// Registered on update queue 0 this update by an ActionGo that found
+    /// it stopped (`0x5773C0` -> `0x50AC00`): the queue has run, so its
+    /// first step is next update (the Berlin film: a truck's ActionGo in
+    /// 403, speed 0 at the end of 403, moving from 404).
+    fresh: bool,
 }
 impl Default for Mover {
     fn default() -> Self {
@@ -179,6 +184,7 @@ impl Default for Mover {
             last_step: 0.0,
             turning: false,
             instant: false,
+            fresh: false,
         }
     }
 }
@@ -252,6 +258,9 @@ struct ActorMove {
     step_speed: f32,
     /// Walking out of a recruiting structure (`walk_member`).
     walk: Option<MemberWalk>,
+    /// A move activated with a destination (the walk out, `0x52DF60`) whose
+    /// first think is ResultPlan `0x5336B0`, not the continuation.
+    plan: bool,
 }
 /// `KKC_UAIStateDeploy` (Mind +0x48): Activate `0x52DE40`, Enter `0x52F560`,
 /// Exit `0x52F660`, EventReachedDestination `0x52F7A0`. While it is current
@@ -361,7 +370,7 @@ impl SpatialHash {
 /// mark tile blockers (`marks_blocker` 0x4EE700: bounding radius * 4 >= the
 /// whole cell size). Movers never mark cells. Tiles with objects carry
 /// flags20 bit10, which ground and water descriptors treat as blocked.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 struct Occupancy {
     scanned: usize,
     cells: Vec<u16>,
@@ -545,6 +554,194 @@ fn stance_speed_amount(world: &World, id: ActorId) -> f32 {
     property.modifiers.iter().filter(|m| m.kind == "MULTIPLY" && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("SPEED_MAX"))).map(|m| m.amount).sum()
 }
 
+/// The game's path solvers: the exact native solver (`Pathfinder::exact`,
+/// 53E1F0 at PC53) for the requests solved on the spot, and the planner
+/// that solves the queued ones ahead on worker threads ([`run_jobs`]).
+#[derive(Debug)]
+struct Solvers {
+    main: Pathfinder,
+    planner: Planner,
+}
+impl Default for Solvers {
+    fn default() -> Self {
+        Self { main: Pathfinder::exact(), planner: Planner::default() }
+    }
+}
+
+/// Most threads the path planner uses, the simulation thread included
+/// (engineering limit).
+const PATH_THREADS: usize = 8;
+
+/// What a queued route depends on besides its request: the map, the
+/// structures on it (one occupancy version) and the path rules.
+struct Snapshot {
+    map: std::sync::Arc<crate::map::GameMap>,
+    occupancy: Occupancy,
+    rules: PathRules,
+}
+
+#[derive(Default)]
+struct PlannerQueue {
+    /// Requests no worker has taken yet, in queue order.
+    pending: VecDeque<(u64, Request)>,
+    /// Finished routes by job id; None when the solve panicked (the
+    /// simulation thread solves it again).
+    done: std::collections::HashMap<u64, Option<crate::path::Route>>,
+    /// Cancelled requests a worker may still be solving: drop their route.
+    dropped: std::collections::HashSet<u64>,
+    snapshot: Option<std::sync::Arc<Snapshot>>,
+    /// Bumped by every restart; a route solved before one is dropped.
+    generation: u64,
+    stop: bool,
+}
+struct PlannerShared {
+    queue: std::sync::Mutex<PlannerQueue>,
+    work: std::sync::Condvar,
+    finished: std::sync::Condvar,
+}
+impl PlannerShared {
+    fn lock(&self) -> std::sync::MutexGuard<'_, PlannerQueue> {
+        self.queue.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// Background path planning (engineering, not native): worker threads
+/// solve the queued requests in queue order, ahead of [`run_jobs`], which
+/// takes each route when its walk reaches the request (solving it itself
+/// when no worker has started it). A route is a pure function of the map,
+/// the occupancy version and its request ([`solve_job`]), so the walk gets
+/// exactly the routes it would solve one by one; only the waiting changes.
+#[derive(Default)]
+struct Planner {
+    shared: Option<std::sync::Arc<PlannerShared>>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+    /// Map and occupancy version of the current snapshot.
+    key: (usize, u64),
+    /// Requests handed to the workers (pending, being solved or done).
+    submitted: std::collections::HashSet<u64>,
+}
+impl std::fmt::Debug for Planner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Planner").field("workers", &self.workers.len()).field("submitted", &self.submitted.len()).finish()
+    }
+}
+impl Drop for Planner {
+    fn drop(&mut self) {
+        if let Some(shared) = &self.shared {
+            shared.lock().stop = true;
+            shared.work.notify_all();
+        }
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
+impl Planner {
+    fn worker(shared: std::sync::Arc<PlannerShared>) {
+        let mut pathfinder = Pathfinder::exact();
+        let mut queue = shared.lock();
+        loop {
+            if queue.stop {
+                return;
+            }
+            let Some((id, request)) = queue.pending.pop_front() else {
+                queue = shared.work.wait(queue).unwrap_or_else(|e| e.into_inner());
+                continue;
+            };
+            let Some(snapshot) = queue.snapshot.clone() else {
+                continue;
+            };
+            let generation = queue.generation;
+            drop(queue);
+            let route = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solve_job(&mut pathfinder, &snapshot.occupancy, &snapshot.map, &snapshot.rules, &request))).ok();
+            if route.is_none() {
+                pathfinder = Pathfinder::exact();
+            }
+            queue = shared.lock();
+            if queue.generation == generation && !queue.dropped.remove(&id) {
+                queue.done.insert(id, route);
+                shared.finished.notify_all();
+            }
+        }
+    }
+    /// Use `threads` threads (none beside the simulation thread for 1) on
+    /// the snapshot of map and occupancy `key`, restarting when it changed.
+    fn prepare(&mut self, key: (usize, u64), threads: usize, snapshot: impl FnOnce() -> Snapshot) {
+        if threads < 2 {
+            return;
+        }
+        let shared = self.shared.get_or_insert_with(|| std::sync::Arc::new(PlannerShared { queue: Default::default(), work: Default::default(), finished: Default::default() })).clone();
+        while self.workers.len() < threads - 1 {
+            let shared = shared.clone();
+            self.workers.push(std::thread::spawn(move || Planner::worker(shared)));
+        }
+        let mut queue = shared.lock();
+        if self.key != key || queue.snapshot.is_none() {
+            queue.pending.clear();
+            queue.done.clear();
+            queue.dropped.clear();
+            queue.generation += 1;
+            queue.snapshot = Some(std::sync::Arc::new(snapshot()));
+            self.submitted.clear();
+            self.key = key;
+        }
+    }
+    fn submit(&mut self, id: u64, request: Request) {
+        if let Some(shared) = &self.shared
+            && self.submitted.insert(id)
+        {
+            shared.lock().pending.push_back((id, request));
+            shared.work.notify_one();
+        }
+    }
+    /// The request was cancelled before the walk reached it.
+    fn forget(&mut self, id: u64) {
+        if let Some(shared) = &self.shared
+            && self.submitted.remove(&id)
+        {
+            let mut queue = shared.lock();
+            let before = queue.pending.len();
+            queue.pending.retain(|p| p.0 != id);
+            if queue.pending.len() == before && queue.done.remove(&id).is_none() {
+                queue.dropped.insert(id);
+            }
+        }
+    }
+    /// The route of a submitted request, waiting for its worker, or solved
+    /// here with `main` when no worker has taken it. None when it was not
+    /// submitted or its worker panicked: the caller solves it.
+    fn take(&mut self, id: u64, main: &mut Pathfinder) -> Option<crate::path::Route> {
+        let shared = self.shared.as_ref()?;
+        if !self.submitted.remove(&id) {
+            return None;
+        }
+        let mut queue = shared.lock();
+        loop {
+            if let Some(route) = queue.done.remove(&id) {
+                return route;
+            }
+            if let Some(at) = queue.pending.iter().position(|p| p.0 == id) {
+                let (_, request) = queue.pending.remove(at)?;
+                let snapshot = queue.snapshot.clone()?;
+                drop(queue);
+                return Some(solve_job(main, &snapshot.occupancy, &snapshot.map, &snapshot.rules, &request));
+            }
+            queue = shared.finished.wait(queue).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+}
+
+/// One complete route on the map plus the structures standing on it. A
+/// pure function of its inputs: the pathfinder's caches and the native
+/// grid's leftover visit epochs never change a route.
+fn solve_job(pathfinder: &mut Pathfinder, occupancy: &Occupancy, map: &crate::map::GameMap, rules: &PathRules, request: &Request) -> crate::path::Route {
+    // A mover standing inside a structure's footprint ignores it (a
+    // recruit and the building that created it).
+    let cell = [(request.from.x.max(0.0) / map.cell_size) as i32, (request.from.y.max(0.0) / map.cell_size) as i32];
+    let ignore: Vec<[i32; 4]> = occupancy.registered.iter().map(|r| r.1).filter(|r| cell[0] >= r[0] && cell[0] <= r[2] && cell[1] >= r[1] && cell[1] <= r[3]).collect();
+    pathfinder.solve_ignoring(map, Some((&occupancy.cells, occupancy.version)), &ignore, rules, request)
+}
+
 /// Movement state kept beside the battle state (`World::movement`).
 #[derive(Default, Debug)]
 pub struct MovementState {
@@ -554,7 +751,7 @@ pub struct MovementState {
     /// blocking shape (e.g. infantry CIRCLE 0.35, medium tank 0.8 in
     /// Templates/template_unit_aa.tgi). Actors without one never block.
     blocking_radius: Vec<f32>,
-    pathfinder: Pathfinder,
+    pathfinder: Solvers,
     jobs: VecDeque<Job>,
     next_job: u64,
     hash: SpatialHash,
@@ -581,14 +778,13 @@ impl MovementState {
     }
     /// One complete route on the map plus the structures standing on it.
     fn solve(&mut self, map: &crate::map::GameMap, rules: &PathRules, request: &Request) -> crate::path::Route {
-        // A mover standing inside a structure's footprint ignores it (a
-        // recruit and the building that created it).
-        let cell = [(request.from.x.max(0.0) / map.cell_size) as i32, (request.from.y.max(0.0) / map.cell_size) as i32];
-        let ignore: Vec<[i32; 4]> = self.occupancy.registered.iter().map(|r| r.1).filter(|r| cell[0] >= r[0] && cell[0] <= r[2] && cell[1] >= r[1] && cell[1] <= r[3]).collect();
-        let route = self.pathfinder.solve_ignoring(map, Some((&self.occupancy.cells, self.occupancy.version)), &ignore, rules, request);
+        let route = solve_job(&mut self.pathfinder.main, &self.occupancy, map, rules, request);
+        self.count(&route);
+        route
+    }
+    fn count(&mut self, route: &crate::path::Route) {
         self.stats.searches += 1;
         self.stats.expanded += u64::from(route.expanded);
-        route
     }
     fn order(&mut self, owner: Owner) -> &mut OrderMove {
         match owner {
@@ -686,6 +882,17 @@ fn formation_offsets(def: &Def, current: Option<usize>) -> Vec<[f32; 2]> {
         Some(f) if !f.positions.is_empty() => f.positions.clone(),
         _ => def.slots.iter().map(|s| s.1).collect(),
     }
+}
+/// The living member standing in each of `slots` slots (organization +0x28).
+fn slot_members(world: &World, org: OrgId, slots: usize) -> Vec<Option<formation::SlotMember>> {
+    let mut members = vec![None; slots];
+    for m in alive_members(world, org) {
+        let s = member_slot(world, org, m);
+        if s < members.len() {
+            members[s] = Some(formation::SlotMember { actor: m, pos: pos2(world, m) });
+        }
+    }
+    members
 }
 fn alive_members(world: &World, org: OrgId) -> impl Iterator<Item = ActorId> + '_ {
     world.orgs[org as usize].members.iter().copied().filter(move |&m| alive(world, m))
@@ -1083,7 +1290,30 @@ fn apply_order(ms: &mut MovementState, world: &mut World, owner: Owner, order: O
         Owner::Actor(a) => ms.actors[a as usize].seen = Some(order),
     }
 }
+/// Solve the queued requests in queue order within the tick's budget. Every
+/// queued request that is still current goes to the [`Planner`], whose
+/// workers solve them ahead in queue order, across ticks; the walk takes
+/// each route when it reaches its request, exactly the route it would solve
+/// itself. The planner restarts when the occupancy version changes.
 fn run_jobs(ms: &mut MovementState, world: &mut World, rules: &MoveRules) {
+    static THREADS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    let threads = *THREADS.get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, PATH_THREADS));
+    if ms.jobs.is_empty() {
+        return;
+    }
+    let key = (&*world.map as *const crate::map::GameMap as usize, ms.occupancy.version);
+    let map = world.map.clone();
+    let occupancy = &ms.occupancy;
+    ms.pathfinder.planner.prepare(key, threads, || Snapshot { map, occupancy: occupancy.clone(), rules: rules.path });
+    for &job in &ms.jobs {
+        let o = match job.owner {
+            Owner::Org(o) => &ms.orgs[o as usize].order,
+            Owner::Actor(a) => &ms.actors[a as usize].order,
+        };
+        if o.active && o.job == Some(job.id) {
+            ms.pathfinder.planner.submit(job.id, job.request);
+        }
+    }
     let mut budget = SEARCH_BUDGET;
     let mut first = true;
     while let Some(job) = ms.jobs.front().copied() {
@@ -1093,10 +1323,16 @@ fn run_jobs(ms: &mut MovementState, world: &mut World, rules: &MoveRules) {
         ms.jobs.pop_front();
         let o = ms.order(job.owner);
         if !o.active || o.job != Some(job.id) {
+            ms.pathfinder.planner.forget(job.id);
             continue;
         }
         first = false;
-        let route = ms.solve(&world.map, &rules.path, &job.request);
+        let Solvers { main, planner } = &mut ms.pathfinder;
+        let route = match planner.take(job.id, main) {
+            Some(route) => route,
+            None => solve_job(main, &ms.occupancy, &world.map, &rules.path, &job.request),
+        };
+        ms.count(&route);
         budget = budget.saturating_sub(route.expanded.max(1));
         let o = ms.order(job.owner);
         o.job = None;
@@ -1515,7 +1751,7 @@ fn send_member_path(ms: &mut MovementState, world: &World, org: OrgId, member: A
     }
     let slot = member_slot(world, org, member);
     let offset = om.slots.get(slot).copied().unwrap_or(Vec2::ZERO);
-    let nodes = formation::offset_path(&om.order.path, unrotate_offset(offset, om.facing)).into_iter().map(Node::from).collect();
+    let nodes = formation::slot_path(&om.order.path, offset, om.facing).into_iter().map(Node::from).collect();
     let speed = om.order.speed;
     start_element(ms, world, member, nodes, 3, speed);
 }
@@ -1525,17 +1761,11 @@ fn send_member_path(ms: &mut MovementState, world: &World, org: OrgId, member: A
 fn set_org_facing(ms: &mut MovementState, world: &mut World, org: OrgId, facing: Vec2) {
     let def = world.data.def(world.orgs[org as usize].def);
     let leader = ms.orgs[org as usize].leader;
-    let leader_slot = leader.map(|l| member_slot(world, org, l));
-    let mut slots = formation::compute_slot_positions(&formation_offsets(def, crate::player_orders::formation(world, org)), facing, leader_slot, primary_slot(def));
-    let mut members = vec![None; slots.len()];
-    for m in alive_members(world, org) {
-        let s = member_slot(world, org, m);
-        if s < members.len() {
-            members[s] = Some(pos2(world, m));
-        }
-    }
+    let offsets = formation_offsets(def, crate::player_orders::formation(world, org));
+    let members = slot_members(world, org, offsets.len());
     let center = world.orgs[org as usize].anchor;
-    formation::reassign_slots(center, &mut slots, &members, leader_slot, &slot_groups(def));
+    let leader = leader.map(|l| (l, member_slot(world, org, l)));
+    let slots = formation::organization_slots(&offsets, facing, center, &members, leader, primary_slot(def), &slot_groups(def), true);
     let om = &mut ms.orgs[org as usize];
     om.facing = facing;
     om.slots = slots;
@@ -1558,6 +1788,8 @@ fn start_element(ms: &mut MovementState, world: &World, id: ActorId, nodes: Vec<
     // activates the move with mode 2, clearing the state stack) ends a walk
     // out of the structure (Exit `0x52F660`).
     am.walk = None;
+    // A path event (`0x532170` / `0x532310`) thinks with the continuation.
+    am.plan = false;
 }
 /// Element move complete: stop the Mover where it is (`0x52D660`; the Mover
 /// keeps its speed value, `0x5767C0(0, 0)`).
@@ -1570,6 +1802,7 @@ fn complete_element(ms: &mut MovementState, id: ActorId) {
     am.mover.last_step = 0.0;
     am.pursue = None;
     am.walk = None;
+    am.plan = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1598,6 +1831,16 @@ fn element_think(ms: &mut MovementState, world: &mut World, id: ActorId, rules: 
         if world.actors[id as usize].org.is_none() && ms.actors[id as usize].order.active {
             ms.actors[id as usize].order.next_think = now;
         }
+        return;
+    }
+    // ResultPlan 0x5336B0 for a move activated with a destination: the
+    // route, the 52FD90 offset and ActionGo(0), whose delay is the next think
+    // (the film: a walking truck's ActionGo in 403, the next one in 421).
+    if am.plan {
+        am.plan = false;
+        let radius = turn_radius(def_of(world, id));
+        update_waypoint_offset(am, radius);
+        action_go(ms, world, id, 0.0, rules);
         return;
     }
     // 0x5379C0 continuation.
@@ -1679,7 +1922,9 @@ fn action_go(ms: &mut MovementState, world: &mut World, id: ActorId, speed_arg: 
     }
     let am = &mut ms.actors[id as usize];
     let dest = head.pos - head.dir * am.waypoint_offset;
+    let fresh = !am.mover.active;
     begin_mover(&mut am.mover, pos, head.dir, dest, speed, factor, rules.reached_threshold);
+    am.mover.fresh |= fresh;
     // 0x5773C0 ends by registering the Mover on update queue 0 (0x50AC00 ->
     // 0x50B2C0): one getter and one draw for its bucket (`% 1`). The early
     // out of other mover modes ([mover+0x56]) is not modelled.
@@ -1993,6 +2238,9 @@ fn step_movers(ms: &mut MovementState, world: &mut World, rules: &MoveRules) {
             continue;
         }
         if !ms.actors[a].mover.active {
+            continue;
+        }
+        if std::mem::take(&mut ms.actors[a].mover.fresh) {
             continue;
         }
         ms.actors[a].ignore.retain(|&(_, until)| until > now);
@@ -2476,6 +2724,14 @@ pub fn walk_member(world: &mut World, member: ActorId, to: Vec2) {
         ms.hash.rebuild(world, &ms.blocking_radius, &ms.actors);
         let at = open_position(&ms, world, member, clamp_extent(world, to), DEPLOY_SEARCH_RADIUS);
         begin_walk(&mut ms, world, member, at, 0, &rules);
+        // The new Mind first updates in the next world update (this
+        // update's Mind queue has run): the walk's first ActionGo, and its
+        // Mover registration and delay draws, come then (the Berlin film:
+        // trucks created in 402 start in 403).
+        let am = &mut ms.actors[member as usize];
+        if am.active && am.walk.is_some() {
+            am.next_think = world.time + EPSILON;
+        }
     }
     world.movement = ms;
 }
@@ -2493,7 +2749,11 @@ fn begin_walk(ms: &mut MovementState, world: &mut World, member: ActorId, at: Ve
     }
     // Mode 1 (+0x30 = 1 from 0x52F560): done only at the point itself.
     start_element(ms, world, member, route.waypoints.into_iter().map(Node::from).collect(), 1, speed);
-    ms.actors[member as usize].walk = Some(walk);
+    let am = &mut ms.actors[member as usize];
+    am.walk = Some(walk);
+    // Activated with a destination, not given a path: its first think is
+    // ResultPlan (the route here is solved at activation).
+    am.plan = true;
 }
 /// `0x52F7A0` EventReachedDestination: the actor's shape must be clear where
 /// it stands (`0x553BA0`), else it redeploys.
@@ -2546,7 +2806,10 @@ fn reform(ms: &mut MovementState, world: &mut World, org: OrgId, rules: &MoveRul
         };
         let def = world.data.def(world.orgs[org as usize].def);
         let facing = facing_vector(world.orgs[org as usize].heading);
-        let slots = formation::compute_slot_positions(&formation_offsets(def, crate::player_orders::formation(world, org)), facing, Some(member_slot(world, org, leader)), primary_slot(def));
+        let offsets = formation_offsets(def, crate::player_orders::formation(world, org));
+        let members = slot_members(world, org, offsets.len());
+        let center = world.orgs[org as usize].anchor;
+        let slots = formation::organization_slots(&offsets, facing, center, &members, Some((leader, member_slot(world, org, leader))), primary_slot(def), &slot_groups(def), false);
         let om = &mut ms.orgs[org as usize];
         om.leader = Some(leader);
         om.facing = facing;
@@ -2591,7 +2854,10 @@ fn update_anchors(ms: &mut MovementState, world: &mut World, rules: &MoveRules) 
             continue;
         }
         let om = &ms.orgs[o];
-        let members_moving = world.orgs[o].members.iter().any(|&m| is_moving(ms, m));
+        // A member walking out of its structure (`walk_member`) does not
+        // move the banner: the Berlin film's HQ organization actors stay at
+        // their deployment points while their trucks drive to them.
+        let members_moving = world.orgs[o].members.iter().any(|&m| is_moving(ms, m) && ms.actors[m as usize].walk.is_none());
         if !om.order.active && !members_moving {
             continue;
         }

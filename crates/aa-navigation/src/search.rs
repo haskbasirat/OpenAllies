@@ -258,6 +258,11 @@ pub fn heuristic(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Resu
         return Ok(Fast::from_i32(0));
     }
     let p = input.precision;
+    if p == Precision::Double53
+        && let Some(value) = heuristic_pc53(grid, input, cell)
+    {
+        return Ok(Fast::from_f64(value)?);
+    }
     let half = scalar(grid.cell_size_bits)?.mul(&scalar(0x3f00_0000)?, p)?;
     let mut delta = [Fast::from_i32(0), Fast::from_i32(0)];
     for i in 0..2 {
@@ -279,6 +284,36 @@ pub fn heuristic(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Resu
     Ok(small
         .mul(&scalar(DIAGONAL)?, p)?
         .add(&large.sub(&small, p)?, p)?)
+}
+/// [`heuristic`] at PC53 as a host value, the goal cell included.
+#[inline]
+fn heuristic_host(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Option<f64> {
+    if cell == input.goal_cell {
+        return Some(0.0);
+    }
+    heuristic_pc53(grid, input, cell)
+}
+/// [`heuristic`] in host binary64 at PC53 (`aa_numeric::pc53`), the same
+/// operations in the same order; None where a value leaves the range in
+/// which that is the PC53 result, for the general path.
+#[inline]
+fn heuristic_pc53(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Option<f64> {
+    use aa_numeric::pc53::{add, load, mul, store, sub};
+    let half = mul(load(grid.cell_size_bits)?, 0.5)?;
+    let mut delta = [0.0; 2];
+    for i in 0..2 {
+        let shifted = f64::from(cell[i].wrapping_shl(grid.coordinate_shift & 31));
+        let center = f64::from(store(add(shifted, half)?)?);
+        let value = sub(center, load(input.goal_world_bits[i])?)?;
+        // As `is_negative_nonzero`: -0.0 keeps its sign.
+        delta[i] = if value < 0.0 { -value } else { value };
+    }
+    let [x, y] = delta;
+    let (small, large) = if x < y { (x, y) } else { (y, x) };
+    add(
+        mul(small, f64::from(f32::from_bits(DIAGONAL)))?,
+        sub(large, small)?,
+    )
 }
 
 /// 0x53c5c0 followed by the unmodified step branch of 0x53cb70. This is valid
@@ -371,7 +406,8 @@ fn neighbor_allowed<W: SearchWorld>(
     if grid.cell(candidate)?.flags20 & 1 != 0 {
         return Ok(false);
     }
-    if blocked(world, grid, candidate)? {
+    // The native blocked test; its flags20 bit was just read clear.
+    if world.collision_blocked(grid, candidate)? {
         return Ok(false);
     }
     if direction & 1 != 0 {
@@ -430,11 +466,27 @@ pub fn search<W: SearchWorld>(
     })? {
         return Ok(outcome(0, None, expanded, queue.len()));
     }
+    let pc53 = input.precision == Precision::Double53;
     while let Some(current) = queue.pop() {
-        let distance = heuristic(grid, &input, current.cell)?;
-        if distance.compare(&scalar(closest_distance)?) == Ordering::Less {
-            closest = current.cell;
-            closest_distance = distance.store_f32()?;
+        // At PC53 the host heuristic and store when both stay in range
+        // (`heuristic_host`), else the general path from the start.
+        let host = pc53
+            .then(|| {
+                let distance = heuristic_host(grid, &input, current.cell)?;
+                Some((distance, aa_numeric::pc53::store(distance)?))
+            })
+            .flatten();
+        if let Some((distance, stored)) = host {
+            if distance < f64::from(f32::from_bits(closest_distance)) {
+                closest = current.cell;
+                closest_distance = stored.to_bits();
+            }
+        } else {
+            let distance = heuristic(grid, &input, current.cell)?;
+            if distance.compare(&scalar(closest_distance)?) == Ordering::Less {
+                closest = current.cell;
+                closest_distance = distance.store_f32()?;
+            }
         }
         expanded.try_reserve(1)?;
         expanded.push(current);
@@ -449,18 +501,38 @@ pub fn search<W: SearchWorld>(
         while direction != 0 {
             if neighbor_allowed(world, grid, current.cell, direction, reverse)? {
                 let candidate = offset(current.cell, direction);
-                if grid.cell(candidate)?.visit_epoch != grid.epoch {
-                    grid.mark(current.cell, candidate)?;
+                // `validate` made every in-grid index a cell.
+                let index = grid.index(candidate)?;
+                if grid.cells[index].visit_epoch != grid.epoch {
+                    // `mark`, with the fan direction that gave the candidate.
+                    grid.cells[index].visit_epoch = grid.epoch;
+                    grid.cells[index].predecessor_direction = direction;
                     if candidate == input.goal_cell {
                         return Ok(outcome(1, Some(candidate), expanded, queue.len()));
                     }
-                    if !blocked(world, grid, candidate)? {
-                        let remaining = heuristic(grid, &input, candidate)?.store_f32()?;
+                    // The native blocked test again; flags20 was read clear above.
+                    if !world.collision_blocked(grid, candidate)? {
+                        let host = pc53
+                            .then(|| {
+                                aa_numeric::pc53::store(heuristic_host(grid, &input, candidate)?)
+                            })
+                            .flatten();
+                        let remaining = match host {
+                            Some(remaining) => remaining.to_bits(),
+                            None => heuristic(grid, &input, candidate)?.store_f32()?,
+                        };
                         let cost_bits =
                             world.accumulated_cost(grid, current, candidate, input.precision)?;
-                        let priority_bits = scalar(cost_bits)?
-                            .add(&scalar(remaining)?, input.precision)?
-                            .store_f32()?;
+                        let fast = (input.precision == Precision::Double53).then(|| {
+                            use aa_numeric::pc53::{add, load, store};
+                            store(add(load(cost_bits)?, load(remaining)?)?)
+                        });
+                        let priority_bits = match fast.flatten() {
+                            Some(priority) => priority.to_bits(),
+                            None => scalar(cost_bits)?
+                                .add(&scalar(remaining)?, input.precision)?
+                                .store_f32()?,
+                        };
                         if !queue.push(QueueEntry {
                             cell: candidate,
                             depth: current.depth.wrapping_add(1),
