@@ -326,6 +326,18 @@ pub struct Def {
     /// DynamicDoodadData components (Disturbable, Breakable) present.
     #[serde(default)]
     pub doodad_components: u8,
+    /// BuilderComponent `[BuildActor] actor_ids` in authored order
+    /// (ActorData +0x504, 464BD0 / 4604C0; 0x4D4CF0 copies it to actor
+    /// +0x108): the structures this actor can construct.
+    #[serde(default)]
+    pub builds: Vec<DefId>,
+    /// DenizenComponent `[AirAttackCost]` / `[AirReconCost]` in
+    /// `GameData::resources` order (ActorData loader 0x46770C / 0x4677A8);
+    /// None when the definition has none.
+    #[serde(default)]
+    pub air_attack_cost: Option<Vec<f32>>,
+    #[serde(default)]
+    pub air_recon_cost: Option<Vec<f32>>,
 }
 
 /// A Requirements object (ElementComponent or ResearchItem
@@ -644,7 +656,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v17";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v18";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -933,6 +945,7 @@ pub(crate) mod loader {
         packs_to: Option<String>,
         resists: Vec<(usize, f32)>,
         trailer: Option<String>,
+        builds: Vec<String>,
     }
 
     pub(crate) fn build(sources: &mut Sources, catalog: &ActorCatalog) -> anyhow::Result<GameData> {
@@ -958,6 +971,7 @@ pub(crate) mod loader {
         }
         let layouts = catalog.native_layout_data(PC).map_err(|e| notes.push(format!("layout data: {e}"))).ok();
         let mobile = catalog.native_mobile_deployment_data(PC).map_err(|e| notes.push(format!("mobile deployment: {e}"))).ok();
+        let builders = catalog.native_builder_data().map_err(|e| notes.push(format!("builder data: {e}"))).ok();
         let clamp = data.rule_ci("ModifierAttributeClampMultiply").unwrap_or(0.05);
         let mut property_cache: BTreeMap<String, (Vec<(usize, f32)>, u32)> = BTreeMap::new();
         let mut pending = Vec::new();
@@ -967,12 +981,17 @@ pub(crate) mod loader {
             if data.by_id.contains_key(&key) {
                 continue;
             }
-            let (def, p) = read_def(catalog, &data.damage_types, &resource_ids, &actor.id, &actor.source.path, layouts.as_ref(), mobile.as_ref(), &mut notes, &mut |id: &str| {
+            let (def, mut p) = read_def(catalog, &data.damage_types, &resource_ids, &actor.id, &actor.source.path, layouts.as_ref(), mobile.as_ref(), &mut notes, &mut |id: &str| {
                 property_cache
                     .entry(id.to_ascii_lowercase())
                     .or_insert_with(|| (property_resists(catalog, id, &data.damage_types), property_targets(catalog, id, target_domain.as_ref())))
                     .clone()
             });
+            // ActorData +0x504 (aa-rules native_builder_data: head-first
+            // native list, authored order).
+            if let Some(b) = builders.as_ref().and_then(|b| b.definition(&actor.id).ok()) {
+                p.builds = b.ids.clone();
+            }
             data.by_id.insert(key, data.defs.len() as DefId);
             data.defs.push(def);
             pending.push(p);
@@ -987,6 +1006,7 @@ pub(crate) mod loader {
             let unpacks_to = p.unpacks_to.as_deref().and_then(|r| resolve(&data, r));
             let packs_to = p.packs_to.as_deref().and_then(|r| resolve(&data, r));
             let trailer = p.trailer.as_deref().and_then(|r| resolve(&data, r));
+            let builds = p.builds.iter().filter_map(|r| resolve(&data, r)).collect();
             let mut factor = vec![1.0f32; data.damage_types.len()];
             for (i, sum) in data.damage_types.iter().enumerate().map(|(i, _)| (i, p.resists.iter().filter(|r| r.0 == i).map(|r| r.1).sum::<f32>())) {
                 factor[i] = (1.0 - sum).max(clamp);
@@ -1005,6 +1025,7 @@ pub(crate) mod loader {
             def.unpacks_to = unpacks_to;
             def.packs_to = packs_to;
             def.trailer = trailer;
+            def.builds = builds;
             def.damage_factor = factor;
             def.armor_type = armor as u32;
             let positions = def
@@ -1183,7 +1204,7 @@ pub(crate) mod loader {
         property: &mut dyn FnMut(&str) -> (Vec<(usize, f32)>, u32),
     ) -> (Def, Pending) {
         let mut def = Def { id: id.to_owned(), health: 0.0, ..Default::default() };
-        let mut p = Pending { recruits: vec![], slots: vec![], unpacks_to: None, packs_to: None, resists: vec![], trailer: None };
+        let mut p = Pending { recruits: vec![], slots: vec![], unpacks_to: None, packs_to: None, resists: vec![], trailer: None, builds: vec![] };
         let mut note = |what: &str, e: &dyn std::fmt::Display| notes.push(format!("{id}: {what}: {e}"));
         let category = match catalog.native_category(ThingRef::registered(id)) {
             Ok(c) => c,
@@ -1467,11 +1488,15 @@ pub(crate) mod loader {
                 });
             }
         }
-        if let Ok(Some(denizen)) = node.child("DenizenComponent")
-            && let Ok(Some(info)) = denizen.child("DeploymentInfo")
-        {
-            def.creation_offset = pt(&info, "creation_offset");
-            def.deployment_offset = pt(&info, "deployment_offset");
+        if let Ok(Some(denizen)) = node.child("DenizenComponent") {
+            if let Ok(Some(info)) = denizen.child("DeploymentInfo") {
+                def.creation_offset = pt(&info, "creation_offset");
+                def.deployment_offset = pt(&info, "deployment_offset");
+            }
+            // 0x46770C / 0x4677A8: the resource vectors, absent = none.
+            let costs = |name: &str| denizen.child(name).ok().flatten().map(|c| resource_ids.iter().map(|r| fx(&c, r).unwrap_or(0.0)).collect::<Vec<f32>>());
+            def.air_attack_cost = costs("AirAttackCost");
+            def.air_recon_cost = costs("AirReconCost");
         }
         def.structure = node.child("StructureComponent").ok().flatten().is_some();
         if let Ok(Some(city)) = node.child("CityComponent") {
