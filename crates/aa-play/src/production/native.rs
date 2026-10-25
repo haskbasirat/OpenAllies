@@ -254,8 +254,14 @@ impl aa_production::World for Host<'_> {
         // no structure states.
         Ok(())
     }
+    /// 0x50B250: the queue leaves the periodic queue 0.
     fn cancel_schedule(&mut self, queue: &mut Queue) -> R<()> {
         queue.scheduled = false;
+        let list = &mut self.world.books.production_queue0;
+        if let Some(i) = list.iter().position(|&b| b == self.building) {
+            list.remove(i);
+            self.world.books.queue0_left = true;
+        }
         Ok(())
     }
     /// 0x50AC00(0): the periodic queue-0 registration draws its bucket from
@@ -263,6 +269,11 @@ impl aa_production::World for Host<'_> {
     fn schedule_zero(&mut self, queue: &mut Queue) -> R<()> {
         self.world.random_u32();
         queue.scheduled = true;
+        // Head insertion: the newest registration is delivered first.
+        let list = &mut self.world.books.production_queue0;
+        if !list.contains(&self.building) {
+            list.insert(0, self.building);
+        }
         Ok(())
     }
     fn organization_definition(&mut self, actor_definition: u32) -> R<bool> {
