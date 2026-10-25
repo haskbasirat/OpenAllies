@@ -231,7 +231,8 @@ Initial world, film against aa-play (`aa_parity::replay::plan`/`build`):
 | rules | DifficultyLevel 1, ResourceStockpileDefault 500.0, StartingExperience 200.0 (kind 2 = binary32) | Computer(1) handicap, 500, 200; SAI not attached (the AI's decisions are the film's decrees) |
 | start positions | each slot's start_loc / placeholder_corpsunpacked | same |
 | HQ ids (creation order) | the replacement keeps the placeholder's saved GTID: kingdom_1 0x344D, kingdom_3 0x344F, kingdom_0 0x3450, kingdom_4 0x3451; next-fit stays at IDMGR 13399 (the first recruit) | placeholder destroyed, corps on next-fit 0x3457–0x345A (13399–13402) |
-| RNG state at the first battle getter | low half 0x05E7 (solved): 6231 draws after the map's saved GWORLD state 0xB846CE0C, or 19585 after the creator-seeded state 0x719C7E26 (mod 65536) | 0x9355: one draw (begin_battle) after the saved state |
+| RNG state at the first battle getter | 0x4F1E05E7: exactly 6231 draws after the map's saved GWORLD state 0xB846CE0C (measured, §10; the creator-seeded hypothesis is ruled out) | 0x9355: one draw (begin_battle) after the saved state |
+| HQ ids, after 21a4d6d | — | the replacement keeps the placeholder's saved GTID (core fix) |
 
 Replay (`tests/berlin_replay.rs`): record `r` runs before update `r + 1`, through `Mapper` +
 `PlayIds`.
@@ -242,12 +243,55 @@ Replay (`tests/berlin_replay.rs`): record `r` runs before update `r + 1`, throug
    above), so no Recruit command runs, no production start, and no queue-0 getter. The same
    id shift later sends selections of 13399/13402 to aa-play's corps, giving 4 refused
    recruits.
-2. With the placeholders' slots aliased to aa-play's corps (`replay::placeholder_aliases`):
-   tick 17 has count 38 and the getters sit exactly where the film needs them (after each
-   recruit's 86). Only the hash differs, by the RNG state row above.
-3. With aliases and the film's low half set at battle start: checkpoints 17–391 match (23).
-   **The next difference is tick 408**: (523, 60855) against (487, 15865). The film logs 48
-   getters in 391..408, aa-play 12 (6 in update 402, 6 in 403). These are the recruits
-   completing, and the creation getters (GThing, components, minds) are not modelled. One
-   draw per getter with all 48 in one update, or split equally over consecutive updates,
-   does not reproduce the film's hash.
+2. Since the core HQ-id fix (21a4d6d), no alias is needed: the record-2 selections 13389,
+   13391 and 13393 resolve to each player's own Corps HQ. Tick 17 then has count 38, with the
+   getters exactly where the film needs them (after each recruit's 86); only the hash
+   differs, by the RNG state row above. (Before the fix this needed hand aliases.)
+3. Starting from the measured state 0x4F1E05E7 (the gate's diagnostic; §10), checkpoints
+   17–391 match (23). **The next difference is tick 408**: (523, 60855) against
+   (487, 15865). The film logs 48 getters in 391..408, aa-play 12 (6 in update 402, 6 in 403).
+   These are the recruits completing; §10 lists the 48 draws.
+
+## 10. Every world-RNG draw, measured live: Berlin battle start and first recruits (2026-10-25)
+
+Tool: `reconstruction/qa-runs/compare-20261022/tools/RngTrace.cs`, built x86 with csc (QA copy only,
+not in the repo). It is a debugger attached to the QA AA.exe while it plays the Berlin film
+(hidden desktop, keys only: F11, F12, `SelectLaunchType LOAD_FILM`, Enter, F10, Enter). It sets
+INT3s on 85D840 (draw, logged only when the state pointer is GWorld+0xD4), 4F02B0 (getter),
+85D880 (seed) and the creation markers (4DC730, 58B0E0, 4F9C10, 4FA030, 4FBF40, 4FBA50, ...),
+logging each with a return-address stack scan. Two runs gave identical sequences with no state
+discontinuity, so 85D840 is the only writer of GWorld+0xD4 after map restore. The film's
+checkpoints confirm both runs: the first battle getter's state is **0x4F1E05E7**, and its low
+half 0x05E7 is the value solved from the film.
+
+**Battle start: 6231 draws, from the map's saved GWORLD state 0xB846CE0C to the first battle getter.**
+
+| # | phase / native | draws (Berlin) | what draws |
+|---|---|---|---|
+| 0 | CreateGWorld 76AA90 (getter, seed 85D880), GWorld::Init 4F27E0 | 0 | MapRestore 4FC600 then overwrites the state with the saved 0xB846CE0C |
+| 1 | MapRestore → 4FCE31 → WorldParameters 50E8B0, per player kingdom in creator order | 8 | nation for an empty ("Random") creator nation: `do {getter 50EC92; draw 50ECA1; n = table[draw % count]} while (!n+0x68)`; then the faction: getter 50ECE5, 474B40 = eligible factions (+0x18) and, when more than one, draw 474C0F `% eligible`. Interleaved per kingdom: kingdom_0, _1, _3, _4 → rus chuikov, rus zhukov, ger rundstedt, rus konev |
+| 2 | restore of saved things in ascending GTID slot order: DynamicDoodad InitExisting 4DC730 → component +4 | 6190 | one draw per DynamicDoodad: Disturbable 5904A0 (398) or Breakable 58F960 → 5904A0 (5792); delay = unit × component def+0x10 into deferred 50ACC0. Every Berlin doodad has exactly one component |
+| 2 | (same walk) Supply InitExisting 58B0E0 with comp+0xC == 0 → 50AC60(0) → 50B2C0 | 4 | queue-1 registration of the city supply components: GTIDs 0xF68, 0xF72, 0xF78 (city_center01_small) and 0x2FA1 (berlin_city_center) |
+| 3 | StartMission 4E6DB0 × 6 | 0 | |
+| 4 | ResolvePlaceholders 4FDA70 → 4FC4A0 → Replace 4FBA50 × 4 (ascending placeholder slot 0x344D, 0x344F, 0x3450, 0x3451) → CreateGActor 4FA030 → CreateGThing 4F9C10 | 28 | per corps: random scale 49B440 (InitCreate 4E9FC0), Element Mind ctor jitter 530E50, then the component InitCreate loop 4D6F10: 5 × 563FD0 (queue-1 add; aa-actors `component_virtuals` slots Properties/Organization/Element/Supply/Construction/Detection/Lair/City). Supply InitExisting 58B0E0 then skips (already registered) |
+| 5 | SessionLaunch 775BF0 → SyncDump 4F8AE0 → 4F6280 | 1 | the dump draw (aa-play `begin_battle`), then S reset 77D900(0,0) |
+
+Not reached on Berlin: AssignName 4F4A20, CreateOrganization 4FA150, the GThing facing draw
+(4EF2A0 flag bit 15), the variant draw (49B900) and the random-thing tables.
+
+**First recruits (film interval 391..408: 48 getters, one draw each).** Production completion
+58A414 runs for both rus HQ regiments in update 402 and for the ger one in update 403. Each
+recruit makes 14 draws:
+
+1. 5830AC → CreateGThing `regiment_*_hq_infantry` (the organization), 6 draws: scale 49B440;
+   then component InitCreates in slot order: 563FD0 × 2, Economy 56F250 (queue 1, when
+   element+0x348 is set), 563FD0, Hq 574610 → 4E2640.
+2. SpawnMember 4FBF40 → CreateGThing `*_truck_infantry`, 8 draws: scale 49B440; Element Mind
+   ctor 530E50. Then, inside the truck's GActor InitCreate (4D70F2), CreateGActor →
+   `*_trailer_infantry`: scale 49B440 and 50AB10 (4D7520 ← 4F9F88). Then the truck's
+   563FD0 × 3, then the truck's 50AB10.
+
+Then each truck starts to move one update after creation (403, 403, 404): the Mover order
+5773C0 queue-0 registration, then ActionGo 53037F, two draws each.
+
+Total: 3 × 14 + 3 × 2 = 48.

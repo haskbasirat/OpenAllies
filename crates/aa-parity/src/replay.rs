@@ -437,31 +437,6 @@ fn outcome_key(m: &Mapped) -> String {
 /// asked (a diagnostic override for a known id difference).
 pub type Aliases = BTreeMap<u16, aa_play::Unit>;
 
-/// The placeholder replacements aa-play made at setup, keyed by the
-/// placeholder's saved slot. The original's replacement takes the
-/// placeholder's slot (the Berlin film's computer players select their Corps
-/// HQ at 13389/13391/13393, the saved ids of their placeholder_corpsunpacked);
-/// aa-play gives it a next-fit id. As aliases these let a replay look past
-/// that difference.
-pub fn placeholder_aliases(world: &World) -> Aliases {
-    let mut out = Aliases::new();
-    for a in world.actors.iter().filter(|a| !a.removed) {
-        let Some(index) = world.books.actor(a.id).and_then(|b| b.placed) else {
-            continue;
-        };
-        let p = &world.map.placed[index];
-        if p.thing_id.to_ascii_lowercase().starts_with("placeholder_") {
-            let slot = aa_play::ids::Gtid::from_raw(p.serialized_id).slot();
-            let unit = match a.org {
-                Some(o) => aa_play::Unit::Org(o),
-                None => aa_play::Unit::Actor(a.id),
-            };
-            out.entry(slot).or_insert(unit);
-        }
-    }
-    out
-}
-
 struct Aliased<'a> {
     ids: PlayIds<'a>,
     aliases: &'a Aliases,
