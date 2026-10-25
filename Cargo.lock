@@ -244,9 +244,12 @@ name = "aa-parity"
 version = "0.1.0"
 dependencies = [
  "aa-mapworld",
+ "aa-numeric",
  "aa-orders",
  "aa-play",
  "aa-rules",
+ "aa-simulation",
+ "aa-world",
  "anyhow",
  "glam 0.32.1",
  "serde",

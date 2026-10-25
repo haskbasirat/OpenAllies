@@ -70,6 +70,19 @@ pub trait Callbacks {
     fn deliver(&mut self, queues: &mut Queues, event: Delivery) -> Result<()>;
 }
 
+/// One queue update in progress ([`Queues::begin_update`]).
+#[derive(Debug)]
+pub struct Dispatch {
+    id: u8,
+    kind: Kind,
+    elapsed_bits: Option<u32>,
+    /// Deferred deliveries of this update (the thousandth is skipped).
+    count: u32,
+    /// A delivery was handed out: the next step first applies the native
+    /// post-callback advance.
+    delivered: bool,
+}
+
 #[derive(Clone, Debug)]
 struct Node {
     queue: u8,
@@ -425,6 +438,14 @@ impl Queues {
     }
 
     fn update_inner<C: Callbacks + ?Sized>(&mut self, id: u8, callbacks: &mut C) -> Result<()> {
+        let mut dispatch = self.start_dispatch(id)?;
+        while let Some(event) = self.step_dispatch(&mut dispatch)? {
+            callbacks.deliver(self, event)?;
+        }
+        self.finish_dispatch(dispatch)
+    }
+
+    fn start_dispatch(&mut self, id: u8) -> Result<Dispatch> {
         let q = self.queues.get(&id).ok_or(Error::QueueKind)?;
         let kind = q.kind;
         self.cursor = q.buckets[q.current];
@@ -437,45 +458,107 @@ impl Queues {
         } else {
             None
         };
-        let mut count = 0_u32;
-        while let Some(event_id) = self.cursor {
-            let node = self
-                .nodes
-                .get(&event_id.0)
-                .cloned()
-                .ok_or(Error::InvalidCursor)?;
-            let event = Delivery {
-                queue: id,
-                owner: node.owner,
-                data: node.data,
-                elapsed_bits,
-            };
-            if kind == Kind::Deferred {
+        Ok(Dispatch {
+            id,
+            kind,
+            elapsed_bits,
+            count: 0,
+            delivered: false,
+        })
+    }
+
+    /// The next delivery of `dispatch`, applying the native advance that
+    /// follows the previous delivery's callback first.
+    fn step_dispatch(&mut self, d: &mut Dispatch) -> Result<Option<Delivery>> {
+        if d.kind == Kind::Deferred {
+            loop {
+                if d.delivered {
+                    let q = self.queues.get(&d.id).ok_or(Error::QueueKind)?;
+                    self.cursor = q.buckets[q.current]; //Includes new heads inserted by callbacks.
+                }
+                d.delivered = true;
+                let Some(event_id) = self.cursor else {
+                    return Ok(None);
+                };
+                let node = self
+                    .nodes
+                    .get(&event_id.0)
+                    .cloned()
+                    .ok_or(Error::InvalidCursor)?;
                 self.cancel(event_id)?; //Both intrusive lists are unlinked before delivery.
-                count += 1;
-                if count == 1000 {
-                    count = 0;
-                } else {
-                    callbacks.deliver(self, event)?;
+                d.count += 1;
+                if d.count == 1000 {
+                    d.count = 0; //The native skips every thousandth deferred callback.
+                    continue;
                 }
-                let q = self.queues.get(&id).ok_or(Error::QueueKind)?;
-                self.cursor = q.buckets[q.current]; //Includes new heads inserted by callbacks.
-            } else {
-                callbacks.deliver(self, event)?;
-                //Cancellation itself advances the native cursor. The dispatcher
-                //then advances again: the successor of a removed current entry
-                //is skipped for this visit, as in50B371..380.
-                if let Some(current) = self.cursor {
-                    self.cursor = self.nodes.get(&current.0).ok_or(Error::InvalidCursor)?.next;
-                }
+                return Ok(Some(Delivery {
+                    queue: d.id,
+                    owner: node.owner,
+                    data: node.data,
+                    elapsed_bits: None,
+                }));
             }
         }
-        let q = self.queues.get_mut(&id).ok_or(Error::QueueKind)?;
+        if d.delivered {
+            //Cancellation itself advances the native cursor. The dispatcher
+            //then advances again: the successor of a removed current entry
+            //is skipped for this visit, as in50B371..380.
+            if let Some(current) = self.cursor {
+                self.cursor = self.nodes.get(&current.0).ok_or(Error::InvalidCursor)?.next;
+            }
+        }
+        d.delivered = true;
+        let Some(event_id) = self.cursor else {
+            return Ok(None);
+        };
+        let node = self.nodes.get(&event_id.0).ok_or(Error::InvalidCursor)?;
+        Ok(Some(Delivery {
+            queue: d.id,
+            owner: node.owner,
+            data: node.data,
+            elapsed_bits: d.elapsed_bits,
+        }))
+    }
+
+    fn finish_dispatch(&mut self, d: Dispatch) -> Result<()> {
+        let q = self.queues.get_mut(&d.id).ok_or(Error::QueueKind)?;
         q.current = (q.current + 1) % q.buckets.len();
-        if kind == Kind::Deferred {
+        if d.kind == Kind::Deferred {
             q.last_end_bits = self.clock.end_bits;
         }
         Ok(())
+    }
+
+    /// Step-by-step form of [`Self::update`] for a host that keeps the queues
+    /// inside its own world and needs `&mut` access to that world between
+    /// deliveries (the same native order, cursor moves and thousandth-callback
+    /// skip): call [`Self::next_delivery`] until it returns `None`, run each
+    /// delivery's leaf in between (it may add or cancel events on these
+    /// queues), then [`Self::end_update`]. After a failed leaf, call
+    /// [`Self::abort_update`]: the committed effects stay and the bucket does
+    /// not advance, as with [`Self::update`].
+    pub fn begin_update(&mut self, id: u8) -> Result<Dispatch> {
+        if self.dispatching {
+            return Err(Error::NestedDispatch);
+        }
+        let d = self.start_dispatch(id)?;
+        self.dispatching = true;
+        Ok(d)
+    }
+    pub fn next_delivery(&mut self, dispatch: &mut Dispatch) -> Result<Option<Delivery>> {
+        let result = self.step_dispatch(dispatch);
+        if result.is_err() {
+            self.dispatching = false;
+        }
+        result
+    }
+    pub fn end_update(&mut self, dispatch: Dispatch) -> Result<()> {
+        self.dispatching = false;
+        self.finish_dispatch(dispatch)
+    }
+    pub fn abort_update(&mut self, dispatch: Dispatch) {
+        let _ = dispatch;
+        self.dispatching = false;
     }
 
     pub fn snapshot(&self) -> Vec<QueueSnapshot> {

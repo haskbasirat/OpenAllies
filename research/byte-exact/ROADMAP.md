@@ -290,7 +290,7 @@ Run it with `cargo test -p aa-parity --test first_comparison -- --ignored --noca
 | 7 | S4 production queue exact (5836E0…589F90, research 584790, attach 574C10) | M | core: `production.rs` | 3, 5 | visible recruit timing |
 | 8 | F3 fast PC53 arithmetic and the x87 helper consolidation | M | numeric: new `crates/aa-numeric/src/fast.rs` | — (parallel) | blocks per-unit systems for performance |
 | 9 | S5 formation exact (5797E0/578250/57BEF0/57BA80) | S–M | movement: `formation.rs` | 2 | small, proven |
-| 10 | F4 queue scheduler: `sim.rs` → `aa_world::World::step` 0x4F9970 plus `aa_world::queues` registrations | L | shared: `sim.rs`, `world.rs`, all `tick()` entry points | 5 | prerequisite for every Think-driven system |
+| 10 | F4 queue scheduler: `sim.rs` → `aa_world::World::step` 0x4F9970 plus `aa_world::queues` registrations (design, registration census and migration plan: `SCHEDULER.md`) | L | shared: `sim.rs`, `world.rs`, all `tick()` entry points | 5 | prerequisite for every Think-driven system |
 | 11 | S6 supply and regeneration (58AE10…, 57B5A0) | M | core: `supply.rs` | S3, 10 | |
 | 12 | S7 mover and element movement (577E50/5774A0, 537B90, 53C170, 534A40) | L | movement: `movement.rs` | 8, 10 | |
 | 13 | S8 combat and morale, S9 CAI/UAI states | L | combat: `combat.rs`, `morale.rs`; opponent: aa-mind Think hosts | 10, 12 | |
