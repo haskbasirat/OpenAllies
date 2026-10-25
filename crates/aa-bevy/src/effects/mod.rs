@@ -477,7 +477,8 @@ struct Flight {
     target: Option<ActorId>,
     shooter: ActorId,
     entity: Option<Entity>,
-    /// Landed away from the target by projectile_spread.
+    /// TARGET_HIT_POSITION is `to`: landed away from the target by
+    /// projectile_spread, or fired at a ground point.
     scattered: bool,
 }
 
@@ -1782,31 +1783,46 @@ impl FxState {
         }
     }
 
-    fn fired(&mut self, shooter: ActorId, target: ActorId, weapon: usize, frame: &Frame, spawn: &mut Spawn) {
+    /// An ability used at an actor (Event::Fired, `target` Some) or at a
+    /// ground point (Event::FiredAt, a bombard: 0x5340C0 with the point).
+    /// With a point there is no target thing: TARGET_GROUND and
+    /// TARGET_HIT_POSITION are the point, TARGET_THING commands do nothing
+    /// and the per-target list does not run here (it belongs to the actors
+    /// the landing hits, which the sim does not report).
+    fn fired(&mut self, shooter: ActorId, target: Option<ActorId>, point: Option<Vec2>, weapon: usize, frame: &Frame, spawn: &mut Spawn) {
         let tables = self.tables.clone();
         let Some(a) = frame.world.actors.get(shooter as usize) else { return };
         let def = frame.world.data.def(a.def);
         let Some(all) = self.fx_of(frame.world, a.def) else { return };
         let Some(fx) = all.weapons.get(weapon) else { return };
+        let t = target.and_then(|t| frame.world.actors.get(t as usize));
+        // The native ground point the ability is used at.
+        let ground = match (t, point) {
+            (Some(t), _) => t.pos,
+            (None, Some(p)) => Vec3::new(p.x, p.y, frame.world.map.height_at(p)),
+            (None, None) => return,
+        };
+        let at_point = target.is_none();
         let ctx = Ctx {
             actor: Some(shooter),
-            target: Some(target),
+            target,
             at: None,
-            target_ground: frame.world.actors.get(target as usize).map(|t| t.pos),
+            target_ground: Some(ground),
             shooter_ground: Some(a.pos),
             kingdom: None,
-            hit: None,
+            hit: at_point.then(|| to_render(ground)),
         };
         self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
         self.run_list(&fx.do_, ctx, frame, spawn, ListKind::Other);
-        self.run_list(&fx.per_target, ctx, frame, spawn, ListKind::Other);
+        if !at_point {
+            self.run_list(&fx.per_target, ctx, frame, spawn, ListKind::Other);
+        }
         // The projectile in flight (the sim lands it after distance / speed).
         let w = def.weapons.get(weapon);
         if let (Some(p), Some(w)) = (fx.projectile.as_ref(), w)
             && w.projectile_speed > 0.0
-            && let Some(t) = frame.world.actors.get(target as usize)
         {
-            let flight = (t.pos.truncate() - a.pos.truncate()).length() / w.projectile_speed;
+            let flight = (ground.truncate() - a.pos.truncate()).length() / w.projectile_speed;
             let muzzle = ["cannon_ae_01", "gun_ae_01"]
                 .iter()
                 .find_map(|b| {
@@ -1815,7 +1831,13 @@ impl FxState {
                     (m.w_axis != base.w_axis).then(|| m.w_axis.truncate())
                 })
                 .unwrap_or_else(|| to_render(a.pos) + Vec3::Y * 1.2);
-            let mut to = actor_matrix(frame, target).map_or(to_render(t.pos), |m| m.w_axis.truncate()) + Vec3::Y * 0.5;
+            // An actor: its drawn centre, half a metre up; a ground point:
+            // the ground there.
+            let lift = if at_point { 0.0 } else { 0.5 };
+            let mut to = match target.and_then(|t| actor_matrix(frame, t)) {
+                Some(m) => m.w_axis.truncate(),
+                None => to_render(ground),
+            } + Vec3::Y * lift;
             // compare: LOB arc height from gravity over the flight time.
             let lob = w.projectile_type.as_deref().is_some_and(|k| k.eq_ignore_ascii_case("LOB"));
             let arc = if lob { 9.8 * flight * flight / 8.0 } else { 0.0 };
@@ -1823,22 +1845,22 @@ impl FxState {
             // ProjectileComponent projectile_spread: the view's projectile
             // lands within that radius of the sim's hit point (the damage is
             // the sim's).
-            let mut scattered = false;
+            let mut scattered = at_point;
             if let Some(spread) = pfx.map(|f| f.projectile_spread).filter(|s| *s > 0.0) {
                 scattered = true;
                 let r = spread * self.rng.next().sqrt();
                 let a = std::f32::consts::TAU * self.rng.next();
                 to += Vec3::new(r * a.cos(), 0.0, r * a.sin());
-                to.y = frame.world.map.height_at(Vec2::new(to.x, -to.z)) + 0.5;
+                to.y = frame.world.map.height_at(Vec2::new(to.x, -to.z)) + lift;
             }
             let model = pfx.and_then(|f| f.resource_prefix.clone()).map(|r| format!("{r}.nif"));
             let entity = model.and_then(|m| self.spawn_model(&m, crate::scene::NEUTRAL_TEAM, Transform::from_translation(muzzle), spawn, None, false)).map(|(e, _)| e);
             if let Some(pfx) = pfx {
-                let pctx = Ctx { actor: None, target: Some(target), at: Some(muzzle), target_ground: Some(t.pos), shooter_ground: Some(a.pos), kingdom: None, hit: None };
+                let pctx = Ctx { actor: None, target, at: Some(muzzle), target_ground: Some(ground), shooter_ground: Some(a.pos), kingdom: None, hit: None };
                 let created = pfx.created.clone();
                 self.run_list(&created, pctx, frame, spawn, ListKind::Other);
             }
-            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), arc, target: Some(target), shooter, entity, scattered });
+            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), arc, target, shooter, entity, scattered });
         }
     }
 
@@ -2470,7 +2492,8 @@ fn run(
     let t1 = Instant::now();
     for ev in &battle.frame_events {
         match *ev {
-            Event::Fired { shooter, target, weapon } => state.fired(shooter, target, weapon as usize, &frame, &mut spawn),
+            Event::Fired { shooter, target, weapon } => state.fired(shooter, Some(target), None, weapon as usize, &frame, &mut spawn),
+            Event::FiredAt { shooter, at, weapon } => state.fired(shooter, None, Some(at), weapon as usize, &frame, &mut spawn),
             Event::Died { actor } => state.died(actor, &frame, &mut spawn, &mut views),
             Event::OrgDestroyed { org } => state.org_destroyed(org, &frame, &mut spawn),
             Event::SpecialOperation { kingdom, ref ability, at, target } => {

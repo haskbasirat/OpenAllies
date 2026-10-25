@@ -567,6 +567,16 @@ pub fn run_aliased(
     )
 }
 
+/// SharedPropertyData slot -> property IDS for every replay of this process,
+/// set once by the caller from the measured native table (the v14 one is the
+/// git-ignored fixture `tests/fixtures/native_shared_property_slots_v14.json`,
+/// NativeSampler `REGIDS` of `[0xB3AA2C]`). Unset: research orders stay
+/// unresolved.
+pub fn set_property_ids(ids: Vec<String>) {
+    let _ = PROPERTY_IDS.set(ids);
+}
+static PROPERTY_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
 /// [`run_aliased`] calling `observe(step, world)` after every step (the
 /// world after GWorld update `step`, as the native sampler's 0x76F850
 /// snapshot of the same tick).
@@ -598,6 +608,7 @@ pub fn run_observed(
                     world: &*world,
                     players: &film.players,
                     object_ids,
+                    property_ids: PROPERTY_IDS.get().map_or(&[], |v| v.as_slice()),
                 },
                 aliases,
             };

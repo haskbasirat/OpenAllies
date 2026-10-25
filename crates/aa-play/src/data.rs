@@ -656,7 +656,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v18";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v19";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1001,6 +1001,7 @@ pub(crate) mod loader {
             data.find(id).or_else(|| catalog.find(id).and_then(|d| data.find(&d.id)))
         };
         let mut profiles: Vec<(String, Vec<f32>)> = Vec::new();
+        let constructable = data.target_types.iter().position(|t| t.eq_ignore_ascii_case("constructable"));
         for (index, p) in pending.into_iter().enumerate() {
             let recruits = p.recruits.iter().filter_map(|r| resolve(&data, r)).collect();
             let unpacks_to = p.unpacks_to.as_deref().and_then(|r| resolve(&data, r));
@@ -1026,6 +1027,14 @@ pub(crate) mod loader {
             def.packs_to = packs_to;
             def.trailer = trailer;
             def.builds = builds;
+            // ActorData +0x1B8 (464BD0 at 4664xx): a definition with a
+            // ConstructionComponent is `constructable` (4CF410 ORs it into
+            // every target flag word, beside the properties' flags).
+            if def.has_component("ConstructionComponent")
+                && let Some(bit) = constructable
+            {
+                def.target_flags |= 1 << bit;
+            }
             def.damage_factor = factor;
             def.armor_type = armor as u32;
             let positions = def

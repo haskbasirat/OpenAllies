@@ -114,6 +114,12 @@ fn berlin_film_replays_into_aa_play() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
     let film = Film::read(&film_path(), &registries).unwrap();
+    // SharedProperty slots (research orders), measured from the original.
+    let slots = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/native_shared_property_slots_v14.json");
+    if let Ok(text) = std::fs::read_to_string(&slots) {
+        let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
+        replay::set_property_ids(v["ids"].as_array().unwrap().iter().map(|s| s.as_str().unwrap().to_owned()).collect());
+    }
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let map = Arc::new(aa_play::GameMap::load_with(&root, MAP, &data).unwrap());
 

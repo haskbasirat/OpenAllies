@@ -194,6 +194,8 @@ const SUPPLY_COMPONENT: u32 = 11;
 const TRANSPORT_COMPONENT: u32 = 24;
 /// Native actor state bits (aa-actors `state::DESCRIPTORS`).
 const STATE_OUT_OF_SUPPLY: u64 = 1 << 19;
+/// Actor state 21: under construction (BuildActor 0x563160).
+const STATE_CONSTRUCTING: u64 = 1 << 21;
 const STATE_DEAD: u64 = 1 << 23;
 const STATE_DISABLED: u64 = 1 << 39;
 
@@ -232,6 +234,9 @@ impl GateWorld for Values<'_> {
                 // Packing / unpacking disables the actor (queue pause reason 2).
                 if b.is_some_and(|b| b.deploy.is_some()) {
                     state |= STATE_DISABLED;
+                }
+                if b.is_some_and(|b| b.constructing) {
+                    state |= STATE_CONSTRUCTING;
                 }
                 if !x.alive {
                     state |= STATE_DEAD;
@@ -443,7 +448,7 @@ fn key(world: &World, t: Thing) -> u64 {
             mix(u64::from(x.alive) | u64::from(x.removed) << 1);
             mix(x.org.map_or(u64::MAX, u64::from));
             mix(x.slot.map_or(u64::MAX, u64::from));
-            mix(b.map_or(0, |b| u64::from(b.out_of_supply) | u64::from(b.supply_stock > 0.0) << 1 | u64::from(b.deploy.is_some()) << 2));
+            mix(b.map_or(0, |b| u64::from(b.out_of_supply) | u64::from(b.supply_stock > 0.0) << 1 | u64::from(b.deploy.is_some()) << 2 | u64::from(b.constructing) << 3));
             mix(b.map_or(0, |b| b.properties.len() as u64));
             mix(tech(x.kingdom));
         }

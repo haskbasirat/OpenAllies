@@ -17,6 +17,7 @@ pub mod render;
 pub mod script;
 pub mod selection;
 pub mod minimap;
+pub mod modifiers;
 pub mod nifart;
 pub mod names;
 pub mod order_marks;
@@ -60,6 +61,8 @@ impl Plugin for UiPlugin {
         };
         let video = find_up("assets-cache/video").unwrap_or_else(|| root.join("assets-cache/video"));
         let data = aa_ui::fs::DataRoot::with_overlay(root.join("assets/original/Data"), root.join("native-game/runtime-expanded-v14/Data"));
+        // disabled icons (texture effect mode 1, ui_grey.wgsl)
+        render::add_grey(app);
         app.insert_resource(render::UiRenderer::new(&root, video, data))
             .insert_resource(render::UiDraw::default())
             .insert_resource(front::Front::new(&root))

@@ -70,6 +70,10 @@ pub struct NativeIds {
     /// Things spawned now are restored from the map (no creation draws), not
     /// created (setup sets it around a kept map thing and its members).
     pub restore_scope: bool,
+    /// Things created now are a MobileDeployment's in-place unpack (0x575C80):
+    /// their Supply component registers when the unpacking ends, not at
+    /// creation (`crate::deploy`).
+    pub unpack_scope: bool,
     /// Registrations and allocations that failed (stale generation, no ids
     /// left), for the load notes and the parity harness.
     pub notes: Vec<String>,
@@ -88,6 +92,7 @@ impl Default for NativeIds {
             kingdom_slots: Vec::new(),
             requested: None,
             restore_scope: false,
+            unpack_scope: false,
             notes: Vec::new(),
         }
     }

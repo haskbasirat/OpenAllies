@@ -536,6 +536,42 @@ pub fn battle_input(
                             b.pending.push(Command::SetRallyPoint { kingdom: local, building, at: g.truncate() });
                         }
                     }
+                    // bombard (1) at the clicked enemy, else the ground point
+                    TargetOrder::Bombard => {
+                        let units = own_movable(&b);
+                        let at = target.map(aa_play::AbilityTarget::Actor).or(ground.map(|g| aa_play::AbilityTarget::Point(g.truncate())));
+                        if let (false, Some(target)) = (units.is_empty(), at) {
+                            b.pending.push(Command::Bombard { kingdom: local, units, target });
+                        }
+                    }
+                    // repair (3) of the clicked actor (the command takes an
+                    // actor only: can_hot_command_location false)
+                    TargetOrder::Repair => {
+                        let units = own_movable(&b);
+                        if let (false, Some(target)) = (units.is_empty(), hit) {
+                            b.pending.push(Command::Repair { kingdom: local, units, target });
+                        }
+                    }
+                    // a construct page structure at the clicked ground point,
+                    // facing the placement default (0x6894B0)
+                    TargetOrder::Construct(def) => {
+                        let units = own_movable(&b);
+                        if let (false, Some(g)) = (units.is_empty(), ground) {
+                            b.pending.push(Command::Construct { kingdom: local, units, def, at: g.truncate(), facing: crate::ui::placement::DEFAULT_FACING });
+                        }
+                    }
+                    // an airfield's air attack (0x19, the clicked enemy or
+                    // the ground point) / air recon (0x1A, the ground point)
+                    TargetOrder::AirAttack(building) | TargetOrder::AirRecon(building) => {
+                        let enemy = target.filter(|_| matches!(order, TargetOrder::AirAttack(_)));
+                        let at = enemy.map(aa_play::AbilityTarget::Actor).or(ground.map(|g| aa_play::AbilityTarget::Point(g.truncate())));
+                        if let Some(target) = at {
+                            b.pending.push(match order {
+                                TargetOrder::AirAttack(_) => Command::AirAttack { kingdom: local, building, target },
+                                _ => Command::AirRecon { kingdom: local, building, target },
+                            });
+                        }
+                    }
                     // a general ability: the clicked actor, else the ground
                     // point, when admitted; otherwise the targeting stays
                     TargetOrder::Ability(i) => {

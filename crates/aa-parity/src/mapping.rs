@@ -438,13 +438,17 @@ pub fn map_tick(
 /// `aa_play::ids`). Players resolve through the film's SessionPlayers rows
 /// (Kingdom+0x188 index → `aa_play::ids::kingdom_by_index`), object
 /// definitions through the ThingData IDS (`Registries::object_ids`) and
-/// `GameData::find`. Formation, SharedProperty, general-ability and selector
+/// `GameData::find`, SharedProperty references through the native slot
+/// table (`property_ids`: the wire value indexes the registry's +0x24 entry
+/// vector, as for ThingData). Formation, general-ability and selector
 /// references are not mapped yet and stay `None` (the mapper then reports
 /// `Mapped::Unresolved`).
 pub struct PlayIds<'a> {
     pub world: &'a aa_play::World,
     pub players: &'a [crate::film::SessionPlayer],
     pub object_ids: &'a [String],
+    /// SharedPropertyData slot -> property IDS (empty: unmapped).
+    pub property_ids: &'a [String],
 }
 impl NativeIds for PlayIds<'_> {
     fn kingdom(&self, player: u32) -> Option<KingdomId> {
@@ -470,8 +474,8 @@ impl NativeIds for PlayIds<'_> {
     fn formation(&self, _org: OrgId, _formation: u32) -> Option<usize> {
         None
     }
-    fn property(&self, _property: u32) -> Option<String> {
-        None
+    fn property(&self, property: u32) -> Option<String> {
+        self.property_ids.get(property as usize).cloned()
     }
     fn general_ability(&self, _kingdom: KingdomId, _ability: u32) -> Option<u32> {
         None

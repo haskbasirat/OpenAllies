@@ -15,6 +15,11 @@
 //! Consecutive commands that sample the same image form one mesh; each
 //! mesh is drawn at its own depth (painter's order). Clip rectangles are
 //! applied on the CPU (quads are axis-aligned: the UVs are cut with them).
+//!
+//! A quad in texture effect mode 1 (a disabled button icon, `0x5E66E0`) is
+//! drawn with `GreyUiMaterial` (`ui_grey.wgsl`, the Direct3D stages of
+//! `0x742CC0`). Effect modes 2 and 3 (the texture's +0x101 flag: the
+//! specular colour blended in by texture alpha) are not ported.
 use super::glyphs::{GlyphAtlas, PAGE};
 use super::tex::{Key, UiTextures, Variant};
 use super::video::VideoPlayer;
@@ -54,6 +59,45 @@ pub struct UiDraw {
 enum MatKey {
     Plain,
     Image(AssetId<Image>),
+    /// Effect mode 1 (a disabled icon, `ui_grey.wgsl`); alpha-blended.
+    Grey(AssetId<Image>, bool),
+}
+
+/// The material of a batch: the plain colour material, or the grey effect.
+#[derive(Clone)]
+enum UiMat {
+    Color(Handle<ColorMaterial>),
+    Grey(Handle<GreyUiMaterial>),
+}
+
+pub const GREY_SHADER: Handle<bevy::shader::Shader> = bevy::asset::uuid_handle!("5f0c3b8a-2d71-4e96-8a4b-c71e09d36f52");
+
+/// A UI texture in effect mode 1 (`0x73EAF0`): the fixed-function stages of
+/// `0x742CC0` / `0x742630` as a shader (`ui_grey.wgsl`).
+#[derive(Asset, TypePath, bevy::render::render_resource::AsBindGroup, Debug, Clone)]
+pub struct GreyUiMaterial {
+    #[texture(0)]
+    #[sampler(1)]
+    pub texture: Handle<Image>,
+    /// x: 1 when the texture is alpha-blended (UI texture +0x80 == 2).
+    #[uniform(2)]
+    pub params: UVec4,
+}
+
+impl bevy::sprite_render::Material2d for GreyUiMaterial {
+    fn fragment_shader() -> bevy::shader::ShaderRef {
+        bevy::shader::ShaderRef::Handle(GREY_SHADER)
+    }
+    fn alpha_mode(&self) -> bevy::sprite_render::AlphaMode2d {
+        bevy::sprite_render::AlphaMode2d::Blend
+    }
+}
+
+/// Register the grey effect material and its shader.
+pub fn add_grey(app: &mut App) {
+    app.add_plugins(bevy::sprite_render::Material2dPlugin::<GreyUiMaterial>::default());
+    let shader = bevy::shader::Shader::from_wgsl(include_str!("ui_grey.wgsl"), "aa_bevy/ui/ui_grey.wgsl");
+    let _ = app.world_mut().resource_mut::<Assets<bevy::shader::Shader>>().insert(GREY_SHADER.id(), shader);
 }
 
 struct Batch {
@@ -74,7 +118,7 @@ pub struct UiRenderer {
     seed: usize,
     last: Option<(DrawList, Vec<Option<AssetId<Image>>>, [u32; 2], Option<super::minimap::MinimapDraw>, [Option<AssetId<Image>>; 2])>,
     pool: Vec<(Entity, Handle<Mesh>)>,
-    materials: HashMap<MatKey, Handle<ColorMaterial>>,
+    materials: HashMap<MatKey, UiMat>,
 }
 
 impl UiRenderer {
@@ -226,10 +270,15 @@ impl Builder {
         b.idx.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
     fn quad(&mut self, image: Option<Handle<Image>>, rect: Rect, uv: [f32; 4], color: [f32; 4], clip: Option<Rect>) {
+        self.quad_fx(image, rect, uv, color, clip, None);
+    }
+    /// A quad; `grey` = Some(blended) draws it in effect mode 1.
+    fn quad_fx(&mut self, image: Option<Handle<Image>>, rect: Rect, uv: [f32; 4], color: [f32; 4], clip: Option<Rect>, grey: Option<bool>) {
         let Some((r, uv)) = clip_quad(rect, uv, clip) else { return };
-        let key = match &image {
-            Some(h) => MatKey::Image(h.id()),
-            None => MatKey::Plain,
+        let key = match (&image, grey) {
+            (Some(h), Some(blended)) => MatKey::Grey(h.id(), blended),
+            (Some(h), None) => MatKey::Image(h.id()),
+            (None, _) => MatKey::Plain,
         };
         if self.batches.last().is_none_or(|b| b.key != key) {
             self.batches.push(Batch { key, image, pos: Vec::new(), uv: Vec::new(), col: Vec::new(), idx: Vec::new() });
@@ -262,6 +311,7 @@ pub fn paint(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut grey_materials: ResMut<Assets<GreyUiMaterial>>,
     mut visibility: Query<&mut Visibility, With<UiBatch>>,
 ) {
     let Ok(window) = windows.single() else { return };
@@ -321,7 +371,8 @@ pub fn paint(
                         let key = Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address) };
                         let Some(e) = r.tex.get(&key) else { continue };
                         let image = e.image.clone();
-                        b.quad(Some(image), q.rect, q.uv, color, q.clip);
+                        let grey = (q.effect == 1).then_some(q.blend == Blend::Alpha);
+                        b.quad_fx(Some(image), q.rect, q.uv, color, q.clip, grey);
                     }
                     None => b.quad(None, q.rect, [0.0, 0.0, 1.0, 1.0], color, q.clip),
                 }
@@ -413,20 +464,21 @@ pub fn paint(
         let material = r
             .materials
             .entry(batch.key.clone())
-            .or_insert_with(|| {
-                materials.add(ColorMaterial { color: Color::WHITE, texture: batch.image.clone(), alpha_mode: bevy::sprite_render::AlphaMode2d::Blend, ..default() })
+            .or_insert_with(|| match (&batch.key, &batch.image) {
+                (MatKey::Grey(_, blended), Some(image)) => UiMat::Grey(grey_materials.add(GreyUiMaterial { texture: image.clone(), params: UVec4::new(u32::from(*blended), 0, 0, 0) })),
+                _ => UiMat::Color(materials.add(ColorMaterial { color: Color::WHITE, texture: batch.image.clone(), alpha_mode: bevy::sprite_render::AlphaMode2d::Blend, ..default() })),
             })
             .clone();
         let z = i as f32 * 0.001;
-        if let Some((entity, handle)) = r.pool.get(i).cloned() {
+        let entity = if let Some((entity, handle)) = r.pool.get(i).cloned() {
             let _ = meshes.insert(handle.id(), mesh);
-            commands.entity(entity).insert((MeshMaterial2d(material), Transform::from_xyz(0.0, 0.0, z), Visibility::Visible));
+            commands.entity(entity).insert((Transform::from_xyz(0.0, 0.0, z), Visibility::Visible));
+            entity
         } else {
             let handle = meshes.add(mesh);
             let entity = commands
                 .spawn((
                     Mesh2d(handle.clone()),
-                    MeshMaterial2d(material),
                     Transform::from_xyz(0.0, 0.0, z),
                     Visibility::Visible,
                     RenderLayers::layer(UI_LAYER),
@@ -435,6 +487,16 @@ pub fn paint(
                 ))
                 .id();
             r.pool.push((entity, handle));
+            entity
+        };
+        // a pooled entity keeps one material component of the right kind
+        match material {
+            UiMat::Color(m) => {
+                commands.entity(entity).remove::<MeshMaterial2d<GreyUiMaterial>>().insert(MeshMaterial2d(m));
+            }
+            UiMat::Grey(m) => {
+                commands.entity(entity).remove::<MeshMaterial2d<ColorMaterial>>().insert(MeshMaterial2d(m));
+            }
         }
     }
     r.last = Some((list.clone(), video_ids, size, draw.minimap.clone(), extra));

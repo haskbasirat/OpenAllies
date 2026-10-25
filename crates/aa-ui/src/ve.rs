@@ -104,6 +104,10 @@ pub struct DecalData {
     pub alpha_testing: bool,
     pub alpha_blending: bool,
     pub stretch: bool,
+    /// Texture effect mode set by code (`0x5E66E0`: 1 while the owning
+    /// button is disabled), see `draw::Quad::effect`.
+    #[serde(default)]
+    pub effect: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -380,6 +384,7 @@ impl ViewElement {
                     alpha_testing: flag(node, "alpha_testing", &mut diags),
                     alpha_blending: flag(node, "alpha_blending", &mut diags),
                     stretch: flag(node, "stretch", &mut diags),
+                    effect: 0,
                 })
             }
             VeType::DecalTiled => {

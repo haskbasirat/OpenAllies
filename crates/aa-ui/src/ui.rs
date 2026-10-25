@@ -722,6 +722,9 @@ impl Ui {
                     reference,
                     self.precision,
                 );
+                for q in &mut quads {
+                    q.effect = d.effect;
+                }
                 push_quads(quads, out);
             }
             VeKind::DecalTiled(t) => {

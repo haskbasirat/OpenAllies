@@ -18,7 +18,9 @@
 //! `{"dclick_at": [fx, fy]}` (double click), `{"zoom": z}` (camera zoom,
 //! battle only), `{"exit": true}`; `{"move_at": [fx, fy]}` /
 //! `{"move_actor": kind}` move the pointer there without a click
-//! (appended by the combat owner).
+//! (appended by the combat owner); `{"spawn_org": "<Thing IDS>"}` creates
+//! an own organization beside the own HQ (`"offset": [dx, dy]` metres), a
+//! verification aid for the HUD's order buttons.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -225,13 +227,31 @@ pub fn run(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     draw: Option<Res<super::render::UiDraw>>,
     mut quit: ResMut<super::Quit>,
-    battle: Option<Res<crate::session::Battle>>,
+    mut battle: Option<ResMut<crate::session::Battle>>,
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
     views: Query<(&crate::battle_view::ActorView, &GlobalTransform)>,
     mut requests: ResMut<crate::camera::CameraRequests>,
     banners: Option<Res<super::banners::BannerArt>>,
 ) {
     let Some(mut s) = script else { return };
+    // {"spawn_org": "<organization Thing IDS>", "offset": [dx, dy]}: a
+    // verification aid that creates an own organization next to the own
+    // HQ (metres), so the HUD's buttons for it can be checked
+    if let (Some(id), Some(b)) = (s.step().and_then(|v| v.get("spawn_org")).and_then(|v| v.as_str()).map(str::to_string), battle.as_mut()) {
+        let off = s.step().and_then(|v| v.get("offset")).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32)).unwrap_or(Vec2::new(-10.0, -15.0));
+        let local = b.local;
+        let world = &mut b.world;
+        let hq = world.actors.iter().find(|a| a.alive && a.kingdom == Some(local) && world.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate()).unwrap_or_default();
+        match world.data.find(&id) {
+            Some(def) => {
+                let org = aa_play::production::spawn_organization(world, def, local, hq + off, 0.0, None);
+                info!("script: spawned {id} as organization {org}");
+            }
+            None => warn!("script: no {id} in the data"),
+        }
+        s.next();
+        return;
+    }
     let mut logical = Vec2::ONE;
     if let Ok(w) = windows.single() {
         s.size = Vec2::new(w.physical_width() as f32, w.physical_height() as f32);

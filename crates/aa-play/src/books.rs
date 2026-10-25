@@ -94,6 +94,15 @@ pub struct ActorBooks {
     /// Its InitExisting 0x58B0E0 ran (the first 0x58AE10).
     #[serde(default)]
     pub supply_started: bool,
+    /// Actor state 21 (actor +0x100 bit 21): placed by BuildActor 0x563160
+    /// and under construction until a repair brings its body whole
+    /// (0x561E50 -> 0x566AC0 -> OnConstructionFinished 0x565B00).
+    #[serde(default)]
+    pub constructing: bool,
+    /// CityComponent +0x18: the candidates admitted by 0x564300 on entering
+    /// the city zone (head first), pruned by the City Tick 0x564C10.
+    #[serde(default)]
+    pub city_candidates: Vec<CityCandidateRef>,
     pub queue: Queue,
     pub deploy: Option<Deployment>,
     /// Battle time this actor was created (construction/unpack start).
@@ -216,6 +225,22 @@ pub struct SupplyZone {
     pub radius: f32,
 }
 
+/// A city candidate (a lone actor or an organization, 0x5640A0).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CityCandidateRef {
+    Actor(ActorId),
+    Org(OrgId),
+}
+
+/// Why BuildActor 0x563160 refused a structure (`Notice::ConstructRefused`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ConstructRefusal {
+    /// construct_error_affording|ss (0x562FD0) with the quoted price.
+    Unaffordable { cost: Vec<f32> },
+    /// construct_error_creating|s (0x4F9C10 failed).
+    CreationFailed,
+}
+
 /// The refused purchase of `Notice::Unaffordable`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Purchase {
@@ -248,6 +273,8 @@ pub enum Notice {
     Researched { kingdom: KingdomId, property: String },
     /// An organization was attached to another HQ (0x574C10).
     Attached { org: OrgId, hq: ActorId },
+    /// A construct order's BuildActor (0x563160) refused the structure.
+    ConstructRefused { kingdom: KingdomId, def: DefId, reason: ConstructRefusal },
 }
 
 impl Books {

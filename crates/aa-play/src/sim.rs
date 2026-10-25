@@ -67,6 +67,7 @@ impl World {
         // (victory inside) on queue 0, newest registration first
         // (crate::scheduler).
         crate::scheduler::periodic(self);
+        crate::scheduler::deferred(self);
         crate::deploy::tick(self);
         crate::movement::tick(self);
         crate::combat::tick(self);
@@ -82,6 +83,9 @@ impl World {
         // special operations, enchantments (expiry, periodic effects) and
         // the SAI general powers
         crate::special_ops::tick(self);
+        // (core) step 8 of 0x4F9970: the deferred +208 (the minds' "schedule
+        // in" re-thinks), after the passes that stand for phases 4 and 5.
+        crate::scheduler::think(self);
         // (core) ids of the things removed this tick go back.
         crate::ids::sweep(self);
         if self.trace.recording() {
@@ -105,6 +109,11 @@ impl World {
             Command::UseAbility { .. } => crate::special_ops::command(self, &command),
             // appended by the movement owner
             Command::Follow { .. } => crate::movement::command(self, &command),
+            // appended by the core owner: the HUD orders on the ability and
+            // builder ports (crate::combat::tasks)
+            Command::Bombard { .. } | Command::Repair { .. } | Command::Construct { .. } | Command::AirAttack { .. } | Command::AirRecon { .. } => {
+                crate::combat::tasks::command(self, &command)
+            }
         };
         if let Err(reason) = result {
             let kingdom = match command {
@@ -123,7 +132,12 @@ impl World {
                 | Command::Detach { kingdom, .. }
                 | Command::Disband { kingdom, .. }
                 | Command::UseAbility { kingdom, .. }
-                | Command::Follow { kingdom, .. } => kingdom,
+                | Command::Follow { kingdom, .. }
+                | Command::Bombard { kingdom, .. }
+                | Command::Repair { kingdom, .. }
+                | Command::Construct { kingdom, .. }
+                | Command::AirAttack { kingdom, .. }
+                | Command::AirRecon { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

@@ -756,6 +756,7 @@ pub fn frame(
                         blend: aa_ui::draw::Blend::Alpha,
                         address: Default::default(),
                         clip: None,
+                        effect: 0,
                     }),
                 },
             );
@@ -776,6 +777,7 @@ pub fn frame(
                     blend: aa_ui::draw::Blend::Opaque,
                     address: Default::default(),
                     clip: None,
+                    effect: 0,
                 }),
             },
         );

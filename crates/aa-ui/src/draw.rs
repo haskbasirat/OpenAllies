@@ -45,6 +45,11 @@ pub struct Quad {
     pub address: [Address; 2],
     /// Scissor rectangle (window pixels) or none.
     pub clip: Option<Rect>,
+    /// The texture's effect mode (UI texture +0x74, set by `0x73EAF0`):
+    /// 0 normal, 1 grey (a disabled icon, `0x5E66E0`: the GrayscaleShader
+    /// stages of `0x742CC0`).
+    #[serde(default)]
+    pub effect: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

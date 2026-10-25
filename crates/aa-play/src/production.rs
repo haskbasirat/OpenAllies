@@ -414,7 +414,7 @@ fn can_enroll(world: &World, building: ActorId, def: DefId) -> bool {
     attachments(world, building) + reserved < max
 }
 
-fn can_afford(world: &World, kingdom: KingdomId, cost: &[f32]) -> bool {
+pub(crate) fn can_afford(world: &World, kingdom: KingdomId, cost: &[f32]) -> bool {
     let Some(k) = world.books.kingdom(kingdom) else { return false };
     world
         .data
@@ -424,7 +424,7 @@ fn can_afford(world: &World, kingdom: KingdomId, cost: &[f32]) -> bool {
         .all(|(i, r)| r.kind != ResourceKind::Stockpiled || k.stockpiled.get(i).copied().unwrap_or(0.0) >= cost.get(i).copied().unwrap_or(0.0))
 }
 
-fn credit(world: &mut World, kingdom: KingdomId, values: &[f32], sign: f32) {
+pub(crate) fn credit(world: &mut World, kingdom: KingdomId, values: &[f32], sign: f32) {
     let n = world.data.resources.len();
     let max = world.data.rule_ci("EconomyStockpileResourceMax").unwrap_or(f32::MAX);
     let k = world.books.kingdom_mut(kingdom, n);

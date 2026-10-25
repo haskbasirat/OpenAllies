@@ -164,6 +164,25 @@ pub enum Command {
     /// it moves until it is in range, then stop. Their order reads
     /// `Order::Move` toward the target's latest position.
     Follow { kingdom: KingdomId, units: Vec<Unit>, target: ActorId },
+    // ---- appended by the core owner (HUD orders, `crate::combat::tasks`) ----
+    /// bombard (actor command 1; regiment `KKC_CAIStateBombard` 0x5207F0,
+    /// element `KKC_UAIStateBombard` 0x5353E0): the units fire their bombard
+    /// abilities (ability flag bit 3) at a ground point or an actor, moving
+    /// closer until a member has it in range (0x4D5180 / 0x57EAF0).
+    Bombard { kingdom: KingdomId, units: Vec<Unit>, target: AbilityTarget },
+    /// repair (actor command 3; `KKC_UAIStateRepair` 0x5359D0): the units'
+    /// repair abilities (HEAL effects) on a friendly structure until its body
+    /// is whole; on a structure under construction this builds it.
+    Repair { kingdom: KingdomId, units: Vec<Unit>, target: ActorId },
+    /// construct (actor command 4; `KKC_CAIStateConstruct` 0x51DB80 ->
+    /// 0x57ACC0 -> BuilderComponent::BuildActor 0x563160): an organization
+    /// whose builder lists `def` places it at `at` (facing `facing`) and
+    /// builds it up.
+    Construct { kingdom: KingdomId, units: Vec<Unit>, def: DefId, at: Vec2, facing: f32 },
+    /// air_attack (0x19) and air_recon (0x1A), the DenizenComponent commands
+    /// of an airfield or carrier, paid with its AirAttackCost / AirReconCost.
+    AirAttack { kingdom: KingdomId, building: ActorId, target: AbilityTarget },
+    AirRecon { kingdom: KingdomId, building: ActorId, target: AbilityTarget },
 }
 
 /// Where a faction ability is aimed: a map point, or a clicked actor.
@@ -207,6 +226,15 @@ pub enum Event {
     SpecialOperation { kingdom: KingdomId, ability: String, at: Vec2, target: Option<ActorId> },
     /// DESCRIBE_ECONOMY (effect 9): `kingdom` was shown the economy of `of`.
     EconomyDescribed { kingdom: KingdomId, of: KingdomId },
+    // ---- appended by the core owner (HUD orders) ----
+    /// An ability used at a ground point (a bombard), not at an actor.
+    FiredAt { shooter: ActorId, at: Vec2, weapon: u32 },
+    /// A repair ability healed `target` by `amount` (HEAL effect, 562BA0).
+    Healed { shooter: ActorId, target: ActorId, amount: f32 },
+    /// A structure under construction was placed (BuildActor 0x563160) and
+    /// one was finished (OnConstructionFinished 0x565B00).
+    ConstructionStarted { actor: ActorId, kingdom: KingdomId },
+    ConstructionFinished { actor: ActorId, kingdom: KingdomId },
 }
 
 pub struct World {

@@ -82,6 +82,9 @@ pub enum Owner {
     Placed(u32, u8),
     /// A saved Updatable aa-play does not resolve (UPDATABLES table id).
     Saved(u32),
+    /// An organization's mind (the Regiment / Organization Mind, its
+    /// Updatable +8 on the deferred +208).
+    OrgMind(OrgId),
 }
 
 impl Owner {
@@ -98,6 +101,7 @@ impl Owner {
             Owner::KingdomComponent(k, s) => (8, u64::from(s), k),
             Owner::Placed(i, s) => (9, u64::from(s), i),
             Owner::Saved(id) => (10, 0, id),
+            Owner::OrgMind(o) => (11, 0, o),
         };
         kind << 56 | slot << 48 | u64::from(id)
     }
@@ -115,6 +119,7 @@ impl Owner {
             8 => Owner::KingdomComponent(id, slot),
             9 => Owner::Placed(id, slot),
             10 => Owner::Saved(id),
+            11 => Owner::OrgMind(id),
             _ => return None,
         })
     }
@@ -282,6 +287,7 @@ pub fn release_actor(world: &mut World, a: ActorId) {
 }
 pub fn release_org(world: &mut World, o: OrgId) {
     world.unschedule(Owner::Org(o));
+    world.unschedule(Owner::OrgMind(o));
     for slot in 0..SLOTS {
         world.unschedule(Owner::OrgComponent(o, slot));
     }
@@ -340,9 +346,9 @@ pub fn run_queue(world: &mut World, id: u8) {
 }
 
 /// COMPONENTS slots of the queue-1 leaves.
-const ORGANIZATION_SLOT: u8 = 7;
-const SUPPLY_SLOT: u8 = 11;
-const CITY_SLOT: u8 = 29;
+pub const ORGANIZATION_SLOT: u8 = 7;
+pub const SUPPLY_SLOT: u8 = 11;
+pub const CITY_SLOT: u8 = 29;
 
 fn deliver(world: &mut World, event: Delivery) {
     let elapsed = event.elapsed_bits.unwrap_or(world.clock.step.0);
@@ -354,16 +360,32 @@ fn deliver(world: &mut World, event: Delivery) {
         // City Tick 0x5647A0.
         Some(Owner::Component(a, CITY_SLOT)) => crate::supply::city_tick(world, a),
         // KKC_OrganizationComponent::TickMaintenance 0x57C8E0.
+        // (movement owner) the same Updatable's queue-0 goal step (data 1,
+        // 0x57D820 -> 0x57C080).
+        Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) if event.data == 1 => crate::movement::org_tick(world, o),
         Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) => crate::supply::org_maintenance(world, o, f32::from_bits(elapsed)),
+        // (movement owner) Mover Tick 0x577E50.
+        Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
         // Not yet leaves: their systems still run as passes.
         _ => {}
     }
 }
 
+/// Step 6 of 0x4F9970, its last queue: the deferred +1E8 (Updatable +18
+/// callbacks; every 1000th callback of an update is skipped).
+pub fn deferred(world: &mut World) {
+    run_queue(world, DEFERRED);
+}
+
+/// Step 8 of 0x4F9970: the deferred +208 after phase 5 (Updatable +1C, the
+/// minds' re-think "schedule in").
+pub fn think(world: &mut World) {
+    run_queue(world, THINK);
+}
+
 /// Step 6 of 0x4F9970 for the periodic queues 0, 1, 2 (every update, 1 s,
 /// 5 s), with the core passes around them: the economy contributions and
-/// the dead structures' queues before, the shortfall attrition and the HUD
-/// copy after.
+/// the dead structures' queues before, the HUD copy after.
 pub fn periodic(world: &mut World) {
     sync_clock(world);
     crate::economy::refresh(world);
@@ -373,4 +395,35 @@ pub fn periodic(world: &mut World) {
     run_queue(world, EVERY_SECOND);
     run_queue(world, EVERY_FIVE_SECONDS);
     crate::economy::after_queue(world);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Owner;
+
+    #[test]
+    fn owner_keys_round_trip() {
+        let owners = [
+            Owner::Kingdom(5),
+            Owner::Structure(70_000),
+            Owner::Mover(3),
+            Owner::Mind(u32::MAX),
+            Owner::Component(12, 29),
+            Owner::Org(4),
+            Owner::OrgComponent(4, 7),
+            Owner::KingdomComponent(2, 6),
+            Owner::Placed(6000, 22),
+            Owner::Saved(523),
+            Owner::OrgMind(9),
+        ];
+        let keys: Vec<u64> = owners.iter().map(|o| o.key()).collect();
+        for (o, k) in owners.iter().zip(&keys) {
+            assert_eq!(Owner::from_key(*k), Some(*o));
+        }
+        let mut unique = keys.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), keys.len());
+        assert_eq!(Owner::from_key(0), None);
+    }
 }

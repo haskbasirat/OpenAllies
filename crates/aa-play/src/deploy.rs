@@ -168,6 +168,10 @@ fn replace(world: &mut World, old: ActorId, def: DefId, pos: Vec2, facing: f32) 
             }
         }
         world.orgs[o as usize].order = Order::Idle;
+        // 0x4D6174 -> 0x57D8A0 (movement owner): the new actor is the
+        // organization's member (and leader) in the old one's place, and the
+        // goal follows it (0x57C800 -> 0x57C680).
+        crate::movement::member_replaced(world, o, old, new);
     }
     for r in world.orgs.iter_mut() {
         if r.hq == Some(old) {
@@ -200,6 +204,14 @@ pub fn tick(world: &mut World) {
                     world.books.actor_mut(a).deploy = None;
                     world.set_activity(a, Activity::Idle);
                     world.events.push(Event::Deployed { building: a });
+                    // The deferred end of the unpacking registers the Supply
+                    // component (0x576319 -> 0x4D3068 -> 0x563FD0: queue 1,
+                    // one draw) and runs its first 0x58AE10.
+                    if world.data.def(world.actors[a as usize].def).has_supply {
+                        let owner = crate::scheduler::Owner::Component(a, crate::scheduler::SUPPLY_SLOT);
+                        world.schedule_periodic(crate::scheduler::EVERY_SECOND, owner, 0);
+                        crate::supply::supplier_tick(world, a, 0.0);
+                    }
                 }
                 DeployKind::Packing => {
                     let b = &world.actors[a as usize];
@@ -225,7 +237,11 @@ pub fn tick(world: &mut World) {
             continue;
         }
         let length = world.data.def(building).unpacking_length;
+        // 0x575C80: the building is created in place of the truck; its
+        // Supply waits for the end of the unpacking (crate::creation).
+        world.ids.unpack_scope = true;
         let b = replace(world, a, building, at, facing);
+        world.ids.unpack_scope = false;
         world.books.actor_mut(b).deploy = Some(Deployment { kind: DeployKind::Unpacking, into: building, started: now, done_at: now + length });
         world.set_activity(b, Activity::Unpacking);
     }

@@ -360,7 +360,9 @@ pub fn supplier_tick(world: &mut World, a: ActorId, elapsed: f32) {
     let provides = kingdom.is_some_and(|k| {
         let stock_ok = !relay || world.books.actor(a).is_some_and(|b| !b.out_of_supply || b.supply_stock > 0.0);
         let independent = world.kingdoms.iter().any(|x| x.id == k && x.independent);
-        !(independent || deploying(world, a) || !stock_ok || def.supply_range < 0.0)
+        // actor +0x100 bit 21: under construction.
+        let constructing = world.books.actor(a).is_some_and(|b| b.constructing);
+        !(independent || deploying(world, a) || constructing || !stock_ok || def.supply_range < 0.0)
     });
     world.books.actor_mut(a).zone_active = provides;
 }
@@ -432,13 +434,54 @@ pub fn tick(world: &mut World) {
         let in_supply = actor.kingdom.is_some_and(|k| supplied_at(world, k, actor.pos.truncate()));
         world.books.actor_mut(a).out_of_supply = !in_supply;
     }
+    city_admissions(world);
+}
+
+/// 0x564300 for every city: an admitted candidate (0x5640A0) that entered
+/// the city zone joins the head of City+18, and a City not on queue 1
+/// registers there (0x50AC60: one draw). Compare against the original: the
+/// zone-8 entries are found once per update after the moves, not inside
+/// each tile change.
+fn city_admissions(world: &mut World) {
+    let mut candidates: Option<Vec<CityCandidate>> = None;
+    for c in 0..world.actors.len() as ActorId {
+        let city = &world.actors[c as usize];
+        if !city.alive || city.removed {
+            continue;
+        }
+        let def = world.data.def(city.def);
+        if !def.city || def.city_zone_radius <= 0.0 || def.components & (1 << crate::scheduler::CITY_SLOT) == 0 {
+            continue;
+        }
+        let (centre, radius) = (city.pos.truncate(), def.city_zone_radius);
+        let all = candidates.get_or_insert_with(|| city_candidates(world));
+        let entering: Vec<crate::books::CityCandidateRef> = all
+            .iter()
+            .filter(|x| x.pos.distance_squared(centre) <= radius * radius)
+            .map(|x| x.who)
+            .filter(|who| !world.books.actor(c).is_some_and(|b| b.city_candidates.contains(who)))
+            .collect();
+        for who in entering {
+            world.books.actor_mut(c).city_candidates.insert(0, who);
+            let owner = crate::scheduler::Owner::Component(c, crate::scheduler::CITY_SLOT);
+            if !world.is_scheduled(owner) {
+                world.schedule_periodic(crate::scheduler::EVERY_SECOND, owner, 0);
+            }
+        }
+    }
 }
 
 /// KKC_OrganizationComponent::TickMaintenance 0x57C8E0 for organization
-/// `o` (queue 1, `elapsed` = 1 s): the shortfall attrition 0x578660 of an
-/// out-of-supply supply_used organization of a kingdom short of upkeep,
-/// then behind the 0x579110 gate the regeneration 0x57B5A0 of one slot.
+/// `o` (queue 1, `elapsed` = 1 s): after the zone update 0x515F40 the
+/// organization follows its moving leader (0x57C800, movement owner), then
+/// the shortfall attrition 0x578660 of an out-of-supply supply_used
+/// organization of a kingdom short of upkeep, then behind the 0x579110 gate
+/// the regeneration 0x57B5A0 of one slot.
 pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
+    if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
+        return;
+    }
+    crate::movement::org_follow_leader(world, o);
     if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
         return;
     }
@@ -449,6 +492,7 @@ pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
 /// One city zone candidate: a lone actor or an organization (as the native
 /// organization actor at its own position).
 struct CityCandidate {
+    who: crate::books::CityCandidateRef,
     kingdom: KingdomId,
     pos: Vec2,
     /// 4D0180: the current value the city tick weighs.
@@ -516,7 +560,7 @@ fn city_candidates(world: &World) -> Vec<CityCandidate> {
         if value <= 0.0 {
             continue;
         }
-        out.push(CityCandidate { kingdom, pos: actor.pos.truncate(), current: value * health_ratio(world, a) });
+        out.push(CityCandidate { who: crate::books::CityCandidateRef::Actor(a), kingdom, pos: actor.pos.truncate(), current: value * health_ratio(world, a) });
     }
     for o in 0..world.orgs.len() as OrgId {
         let org = &world.orgs[o as usize];
@@ -553,7 +597,7 @@ fn city_candidates(world: &World) -> Vec<CityCandidate> {
         if maximum <= 0.0 {
             continue;
         }
-        out.push(CityCandidate { kingdom, pos: org_position(world, o), current });
+        out.push(CityCandidate { who: crate::books::CityCandidateRef::Org(o), kingdom, pos: org_position(world, o), current });
     }
     out
 }
@@ -579,16 +623,34 @@ pub fn city_tick(world: &mut World, c: ActorId) {
             return;
         }
     }
+    // 0x564C10: the City+18 candidates still admitted (0x5640A0) and in the
+    // zone stay; an empty list leaves the queue (0x50B250) until the next
+    // admission (0x564300) registers the City again.
     let candidates = city_candidates(world);
     {
         let city = &world.actors[c as usize];
         let def = world.data.def(city.def);
+        let (centre, radius) = (city.pos.truncate(), def.city_zone_radius);
+        let inside = |who: crate::books::CityCandidateRef| candidates.iter().any(|x| x.who == who && x.pos.distance_squared(centre) <= radius * radius);
+        let mut list = std::mem::take(&mut world.books.actor_mut(c).city_candidates);
+        list.retain(|&who| inside(who));
+        let empty = list.is_empty();
+        world.books.actor_mut(c).city_candidates = list;
+        if empty {
+            world.unschedule(crate::scheduler::Owner::Component(c, crate::scheduler::CITY_SLOT));
+            return;
+        }
+    }
+    {
+        let city = &world.actors[c as usize];
+        let def = world.data.def(city.def);
         let (centre, radius, owner) = (city.pos.truncate(), def.city_zone_radius, city.kingdom);
-        // The candidates in the zone (the city itself never is one: it has no
-        // Performer and belongs to its owner).
+        // 0x5647A0 over the City+18 candidates (the city itself never is one:
+        // it has no Performer and belongs to its owner).
+        let listed = world.books.actor(c).map(|b| b.city_candidates.clone()).unwrap_or_default();
         let mut present = vec![0.0f32; n];
         let mut any = false;
-        for cand in &candidates {
+        for cand in candidates.iter().filter(|x| listed.contains(&x.who)) {
             if cand.pos.distance_squared(centre) <= radius * radius && (cand.kingdom as usize) < n {
                 present[cand.kingdom as usize] += cand.current;
                 any = true;
