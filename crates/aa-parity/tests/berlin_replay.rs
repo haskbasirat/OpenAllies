@@ -22,7 +22,14 @@ fn film_path() -> PathBuf {
     std::env::var_os("AA_PARITY_BERLIN_FILM").map_or_else(|| PathBuf::from(FILM), PathBuf::from)
 }
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("fixtures/qa_film_berlin_20261025.json")).unwrap()
+    // The fixtures are local (crates/**/tests/fixtures/ is git-ignored), so
+    // they are read at run time, not compiled in.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/qa_film_berlin_20261025.json");
+    serde_json::from_str(
+        &std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
+    )
+    .unwrap()
 }
 fn checkpoint_json(c: &aa_parity::Checkpoint) -> Value {
     serde_json::json!({"tick": c.tick, "count": c.count, "hash": c.hash})
@@ -75,6 +82,32 @@ fn berlin_film_decodes_to_its_recorded_aggregates() {
     );
 }
 
+/// The original's world-RNG state at this film's first battle getter (the
+/// record-2 recruit), measured with RngTrace on two playbacks of the film
+/// (research/byte-exact/SYNC_LOG.md section 10): 6231 draws after the map's
+/// saved GWORLD state. The diagnostic replay below starts from it until
+/// aa-play models those draws.
+const MEASURED_FIRST_GETTER_STATE: u32 = 0x4F1E_05E7;
+
+fn print_difference(label: &str, report: &replay::ReplayReport) {
+    eprintln!(
+        "{label}: {} steps, {} checkpoints checked, {} matched; first difference {}",
+        report.steps,
+        report.checked,
+        report.matched,
+        serde_json::to_string_pretty(&report.first_difference).unwrap()
+    );
+    eprintln!("{label} outcomes: {:?}", report.outcomes);
+    eprintln!(
+        "{label} unresolved (first): {:?}",
+        report.unresolved.iter().take(12).collect::<Vec<_>>()
+    );
+    eprintln!("{label} refused: {:?}", report.refused);
+}
+
+/// The gate: replays the whole film, reports the first checkpoint that
+/// differs and why (entry kinds, getter slots, the film's state at aa-play's
+/// placement). Structural facts already reached are asserted.
 #[test]
 #[ignore = "reads the QA Berlin film and the original data; set AA_GAME_ROOT"]
 fn berlin_film_replays_into_aa_play() {
@@ -84,64 +117,6 @@ fn berlin_film_replays_into_aa_play() {
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let map = Arc::new(aa_play::GameMap::load_with(&root, MAP, &data).unwrap());
 
-    eprintln!("map slots:");
-    for (i, s) in map.slots.iter().enumerate() {
-        eprintln!(
-            "  {i} {:>14} independent {:5} team {:?} colour {:?} nation {:?} faction {:?} index {:?} id {:#x?}",
-            s.id,
-            s.independent,
-            s.team_id,
-            s.color_id,
-            s.nation,
-            s.faction,
-            s.kingdom_index,
-            s.serialized_id
-        );
-    }
-    eprintln!("film creator kingdoms:");
-    for k in &film.header.creator_kingdoms {
-        eprintln!(
-            "  {:>14} independent {:5} team {:?} colour {:?} nation {:?} faction {:?} handicap {:?}",
-            k.id, k.independent, k.team, k.color, k.nation, k.faction, k.handicap
-        );
-    }
-    eprintln!("film header kingdoms:");
-    for k in &film.header.header_kingdoms {
-        eprintln!(
-            "  {:>14} independent {:5} team {:?} colour {:?} nation {:?} faction {:?} handicap {:?}",
-            k.id, k.independent, k.team, k.color, k.nation, k.faction, k.handicap
-        );
-    }
-    eprintln!("film rules:");
-    for r in &film.header.map_header.creator.rules.rules {
-        eprintln!(
-            "  {} kind {} value {:#x}",
-            String::from_utf16_lossy(&r.key),
-            r.kind,
-            r.value
-        );
-    }
-
-    if let Some(m) = &map.id_manager {
-        eprintln!(
-            "map IDMGR: next slot {} highest slot {} ({} generations)",
-            m.next_slot,
-            m.highest_slot,
-            m.generations.len()
-        );
-    }
-    eprintln!("map things owned by player slots:");
-    for (i, p) in map.placed.iter().enumerate() {
-        if let Some(s) = p.owner_slot
-            && !map.slots[s as usize].independent
-        {
-            eprintln!(
-                "  placed {i} {} owner {} id {:#x} at {:?}",
-                p.thing_id, map.slots[s as usize].id, p.serialized_id, p.position
-            );
-        }
-    }
-
     let plan = replay::plan(&film, &data, &map).unwrap();
     eprintln!("plan: {}", serde_json::to_string_pretty(&plan).unwrap());
     assert_eq!(plan.players.len(), 4);
@@ -149,192 +124,55 @@ fn berlin_film_replays_into_aa_play() {
 
     let mut world = replay::build(&plan, &root, data.clone(), map.clone()).unwrap();
     eprintln!(
-        "aa-play at battle start: {} kingdoms, {} actors, {} organizations, {} live ids, next slot {}, rng state {:#010x}",
+        "aa-play at battle start: {} kingdoms, {} actors, {} live ids, next slot {}, rng state {:#010x}; id notes {:?}",
         world.kingdoms.len(),
         world.actors.len(),
-        world.orgs.len(),
         world.ids.live(),
         world.ids.next_slot(),
-        world.native_rng.state
+        world.native_rng.state,
+        world.ids.notes
     );
-    for (k, kingdom) in world.kingdoms.iter().enumerate() {
-        let actors: Vec<String> = world
-            .actors
-            .iter()
-            .filter(|a| a.kingdom == Some(k as u32) && !a.removed)
-            .map(|a| {
-                format!(
-                    "{}@{:#x}",
-                    data.def(a.def).id,
-                    world.ids.actor(a.id).map_or(0, |g| g.raw())
-                )
-            })
-            .collect();
-        eprintln!(
-            "  kingdom {k} {:?} {} {:?}: {}",
-            kingdom.name,
-            kingdom.nation,
-            kingdom.controller,
-            actors.join(", ")
-        );
-    }
-    let checks = replay::slot_checks(&film, &plan, &world, film.ticks.len() as u32);
-    eprintln!("film selections against aa-play's ids at battle start:");
+    // Creation order: the computer players' record-2 recruits select their
+    // own Corps HQ by the placeholders' saved slots (13389, 13391, 13393).
+    let checks = replay::slot_checks(&film, &plan, &world, 3);
     for c in &checks {
         eprintln!(
-            "  slot {:>5} by player {:?} (kingdom {:?}): aa-play {} (kingdom {:?})",
+            "record 2 selection: slot {} by player {:?} (plan kingdom {:?}) -> aa-play {} (kingdom {:?})",
             c.slot, c.player, c.expected_kingdom, c.ours, c.our_kingdom
         );
     }
-    eprintln!("id notes: {:?}", world.ids.notes);
+    assert_eq!(checks.len(), 3);
+    assert!(
+        checks.iter().all(|c| c.our_kingdom.is_some()
+            && c.our_kingdom == c.expected_kingdom
+            && c.ours.contains("corps")),
+        "every record-2 selection resolves to its player's Corps HQ"
+    );
 
     let report = replay::run(&film, &mut world, &registries.object_ids, None, false);
-    eprintln!("report: {}", serde_json::to_string_pretty(&report).unwrap());
+    print_difference("replay", &report);
     assert_eq!(report.steps as usize, film.world_ticks());
     assert_eq!(report.checked, film.checkpoints.len());
+    let first = report.first_difference.as_ref().map(|d| d.check);
+    if let Some(d) = &report.first_difference {
+        // The getters of the first interval are where the film needs them
+        // (one after each recruit) once the HQ selections resolve.
+        if d.check.tick == 17 {
+            assert_eq!(d.check.ours.0, d.check.film.0, "tick 17 entry count");
+        }
+    }
 
-    // Diagnostic: the same replay with the placeholder replacements answering
-    // their placeholders' saved slots, as the original's ids do.
-    let mut world = replay::build(&plan, &root, data.clone(), map.clone()).unwrap();
-    let aliases = replay::placeholder_aliases(&world);
-    eprintln!("placeholder aliases: {aliases:?}");
-    let aliased = replay::run_aliased(
-        &film,
-        &mut world,
-        &registries.object_ids,
-        None,
-        true,
-        &aliases,
-    );
-    eprintln!(
-        "aliased: checked {} matched {} first difference {}",
-        aliased.checked,
-        aliased.matched,
-        serde_json::to_string_pretty(&aliased.first_difference).unwrap()
-    );
-    eprintln!("aliased outcomes: {:?}", aliased.outcomes);
-    eprintln!("aliased refused: {:?}", aliased.refused);
-
-    // How many world-RNG draws lie between the map's saved GWORLD state and
-    // the first battle getter, natively (low 16 bits, unique mod 2^16) and in
-    // aa-play (full state).
-    let saved = map
-        .rng_state
-        .expect("a loaded map carries its GWORLD state");
-    let lcg = |s: u32| s.wrapping_mul(0x41C6_4E6D).wrapping_add(0x3039);
-    let mut s = saved;
-    let mut ours = None;
-    let first_getter = aliased
-        .first_difference
-        .as_ref()
-        .and_then(|d| d.ours.getter_states.first())
-        .map(|g| g.1);
-    for n in 0..2_000_000u32 {
-        if Some(s & 0xFFFF) == first_getter {
-            ours = Some(n);
-            break;
-        }
-        s = lcg(s);
-    }
-    let film_x = aliased
-        .first_difference
-        .as_ref()
-        .and_then(|d| d.film_states_at_our_placement.clone())
-        .unwrap_or_default();
-    let mut native = Vec::new();
-    for &x in &film_x {
-        let mut s = saved & 0xFFFF;
-        for n in 0..65536u32 {
-            if s == x {
-                native.push(n);
-                break;
-            }
-            s = lcg(s) & 0xFFFF;
-        }
-    }
-    eprintln!(
-        "map saved GWORLD rng {saved:#010x}; draws to the first battle getter: aa-play {ours:?}, original {native:?} (mod 65536)"
-    );
-    // Diagnostic: aliases plus the film's low half at the first getter (the
-    // first draw after battle start), to see the next difference.
-    if let Some(&x) = film_x.first() {
-        let mut world = replay::build(&plan, &root, data.clone(), map.clone()).unwrap();
-        world.native_rng.state = (world.native_rng.state & 0xFFFF_0000) | x;
-        let next = replay::run_aliased(
-            &film,
-            &mut world,
-            &registries.object_ids,
-            None,
-            true,
-            &aliases,
+    // Diagnostic until the battle-start draws are modelled: start from the
+    // measured state (aa-play draws nothing between battle start and the
+    // first getter) and report the next difference.
+    if first.is_some_and(|c| c.tick == 17 && c.ours.0 == c.film.0) {
+        let mut world = replay::build(&plan, &root, data, map).unwrap();
+        world.native_rng.state = MEASURED_FIRST_GETTER_STATE;
+        let next = replay::run(&film, &mut world, &registries.object_ids, None, true);
+        print_difference("measured battle-start state", &next);
+        assert!(
+            next.matched >= 23,
+            "checkpoints 17..391 match from the measured state"
         );
-        eprintln!(
-            "aliased + low half {x:#06x}: checked {} matched {} first difference {}",
-            next.checked,
-            next.matched,
-            serde_json::to_string_pretty(&next.first_difference).unwrap()
-        );
-        // Where could the film's getters of that interval sit, given the
-        // state aa-play reached there (same draws so far)? Try every update
-        // holding all of them, and every split into equal groups over
-        // consecutive updates.
-        if let Some(d) = &next.first_difference
-            && let Some(&(_, x)) = d.ours.getter_states.first()
-        {
-            let iv = aa_parity::chain::prepare(&film)
-                .into_iter()
-                .find(|iv| iv.to_tick == d.check.tick)
-                .unwrap();
-            let update_slot = |k: u32| {
-                iv.slots
-                    .iter()
-                    .position(|s| *s == aa_parity::chain::Slot::Update { update: k })
-            };
-            let r = iv.residual as usize;
-            let mut found = Vec::new();
-            for groups in [1usize, 2, 3, 4, 6, 8, 12, 16] {
-                if r % groups != 0 {
-                    continue;
-                }
-                for first in iv.from_tick + 1..=iv.to_tick {
-                    let Some(slots): Option<Vec<usize>> =
-                        (0..groups as u32).map(|g| update_slot(first + g)).collect()
-                    else {
-                        continue;
-                    };
-                    let pick: Vec<usize> = slots
-                        .iter()
-                        .flat_map(|&s| std::iter::repeat_n(s, r / groups))
-                        .collect();
-                    if aa_parity::chain::solve(&iv, &pick, 1).contains(&x) {
-                        found.push((groups, first));
-                    }
-                }
-            }
-            eprintln!(
-                "  film interval {}..{}: {} getters from low half {x:#06x}; equal groups on consecutive updates that explain it (groups, first update): {found:?}",
-                iv.from_tick, iv.to_tick, r
-            );
-        }
-        eprintln!("  outcomes: {:?}", next.outcomes);
-        eprintln!("  unresolved: {:?}", next.unresolved);
-        eprintln!("  refused: {:?}", next.refused);
     }
-    let mut census: std::collections::BTreeMap<String, usize> = Default::default();
-    for p in &map.placed {
-        let key = match data.find(&p.thing_id) {
-            None => "not an aa-play definition".to_string(),
-            Some(d) => {
-                let def = data.def(d);
-                format!(
-                    "{} {:?}{}",
-                    if def.actor_data { "actor" } else { "object" },
-                    def.class,
-                    if p.owner_slot.is_some() { " owned" } else { "" }
-                )
-            }
-        };
-        *census.entry(key).or_default() += 1;
-    }
-    eprintln!("map things: {} {census:?}", map.placed.len());
 }

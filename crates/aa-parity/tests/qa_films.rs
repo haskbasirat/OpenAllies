@@ -23,7 +23,14 @@ fn game_root() -> PathBuf {
     )
 }
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("fixtures/qa_films_20261022.json")).unwrap()
+    // The fixtures are local (crates/**/tests/fixtures/ is git-ignored), so
+    // they are read at run time, not compiled in.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/qa_films_20261022.json");
+    serde_json::from_str(
+        &std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
+    )
+    .unwrap()
 }
 fn histogram_json(film: &Film) -> Value {
     serde_json::to_value(film.histogram()).unwrap()
