@@ -168,7 +168,7 @@ fn tick(w: &mut World) {
     w.time = f32::from_bits(w.clock.end.0);
     // (core) the Commander's experience income 4CDFD0 runs in the kingdom
     // economy tick 4E9C40.
-    aa_play::scheduler::queue_zero(w);
+    aa_play::scheduler::periodic(w);
     special_ops::tick(w);
 }
 
