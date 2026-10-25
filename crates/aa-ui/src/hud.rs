@@ -200,6 +200,10 @@ pub struct HudAction {
     pub enabled: bool,
     pub selected: bool,
     pub targeted: bool,
+    /// The icon's tint colour (`0x5E6740`, the widget's +0x101 flag: a
+    /// kingdom button in the kingdom's colour), texture effect mode 2 (3
+    /// while disabled).
+    pub tint: Option<[f32; 3]>,
 }
 
 /// The game data the HUD reads. The native world implements this.
@@ -1504,8 +1508,10 @@ impl Hud {
                             if let crate::ve::VeKind::Decal(dd) = &mut d.kind {
                                 dd.texture = Some(a.texture.clone());
                                 // 0x5F6D30 / 0x5F6EA0 -> 0x5E66E0: a disabled
-                                // button's icon in effect mode 1 (grey)
-                                dd.effect = u8::from(!a.enabled);
+                                // button's icon in effect mode 1 (grey), 3
+                                // when it is also tinted (0x5E6740: mode 2)
+                                dd.effect = u8::from(!a.enabled) + 2 * u8::from(a.tint.is_some());
+                                dd.tint = a.tint.unwrap_or_default();
                             }
                             crate::layout::parse_bounds(&mut d.layout.outer, &format!("{l}"), &format!("{t}"), &format!("{r}r"), &format!("{b}b"));
                         }
@@ -1718,7 +1724,7 @@ impl PlaceholderWorld {
     }
 
     fn act(tex: &str, cmd: &str) -> Option<HudAction> {
-        Some(HudAction { texture: tex.to_string(), command: cmd.to_string(), enabled: true, selected: false, targeted: false })
+        Some(HudAction { texture: tex.to_string(), command: cmd.to_string(), enabled: true, selected: false, targeted: false, tint: None })
     }
 
     fn owner() -> OwnerInfo {

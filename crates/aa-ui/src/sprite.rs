@@ -125,6 +125,7 @@ pub fn piece_quads(
                 address: [Address::Clamp, Address::Clamp],
                 clip: None,
                 effect: 0,
+        tint: [0.0; 3],
             });
         }
     }

@@ -415,8 +415,10 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
                 Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) => return "move".into(),
                 Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
                 Some(crate::ui::hud::TargetOrder::Guard) | Some(crate::ui::hud::TargetOrder::AttachHq) => return "guard".into(),
-                // bombard.tgi cursor_ids (cursor_invalid_ids bombard_invalid
-                // is not ported), actor_commands.tgi repair
+                // bombard.tgi cursor_ids, and cursor_invalid_ids while the
+                // point is out of the first selected object's reach
+                // (0x620C30: command type 1 only); actor_commands.tgi repair
+                Some(crate::ui::hud::TargetOrder::Bombard) if s.bombard_invalid => return "bombard_invalid".into(),
                 Some(crate::ui::hud::TargetOrder::Bombard) | Some(crate::ui::hud::TargetOrder::AirAttack(_)) => return "bombard".into(),
                 Some(crate::ui::hud::TargetOrder::Repair) => return "repair".into(),
                 // construct.tgi cursor_ids; air_recon.tgi cursor_ids explore

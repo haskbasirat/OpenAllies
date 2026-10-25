@@ -104,10 +104,15 @@ pub struct DecalData {
     pub alpha_testing: bool,
     pub alpha_blending: bool,
     pub stretch: bool,
-    /// Texture effect mode set by code (`0x5E66E0`: 1 while the owning
-    /// button is disabled), see `draw::Quad::effect`.
+    /// Texture effect mode set by code (`0x5E66E0` / `0x5E6740`: 1 while
+    /// the owning button is disabled, +2 while it is tinted), see
+    /// `draw::Quad::effect`.
     #[serde(default)]
     pub effect: u8,
+    /// The tint colour of effect modes 2 and 3 (`0x5E6740`), see
+    /// `draw::Quad::tint`.
+    #[serde(default)]
+    pub tint: [f32; 3],
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -385,6 +390,7 @@ impl ViewElement {
                     alpha_blending: flag(node, "alpha_blending", &mut diags),
                     stretch: flag(node, "stretch", &mut diags),
                     effect: 0,
+            tint: [0.0; 3],
                 })
             }
             VeType::DecalTiled => {
