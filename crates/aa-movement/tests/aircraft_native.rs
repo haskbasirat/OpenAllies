@@ -121,6 +121,7 @@ fn aircraft(v: &Value) -> AircraftState {
     AircraftState {
         on_ground: u(&v["on_ground"]) as u8,
         cruise_speed: f(&v["cruise_speed"]),
+        cruise_altitude: 0.0,
         path: path(&v["path"]),
         circling: u(&v["circling"]) as u8,
         attack_target: u(&v["attack_target"]),

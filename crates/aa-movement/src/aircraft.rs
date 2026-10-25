@@ -17,16 +17,24 @@
 //! - `0x55EBE0` [`reset_member_paths`], `0x55E1B0` [`clear_path`], `0x5685B0`
 //!   [`group_leader`], `0x567FF0` [`group_leader_is`], `0x516B10`
 //!   [`following_path`] and the Mover requested-speed clamp `0x576D20`
-//!   [`set_mover_speed`].
+//!   [`set_mover_speed`];
+//! - the constructor `0x55E8E0` [`AircraftState::new`] with the native word
+//!   accessors, the formation join `0x55EB30` [`join_formation`], teardown
+//!   `0x55EDC0` [`leave_formation`] and follower test `0x55E660`
+//!   [`following_leader`] ([`GroupWorld`]);
+//! - in `aircraft_legs.rs`: the leg builder `0x55F230` [`build_leg`], the
+//!   planner `0x5601E0` [`append_legs`], the follow planner `0x560A70`
+//!   [`follow_path`] and the flight entry points `0x560DB0` [`fly_to`],
+//!   `0x560ED0` [`replace_path`] and `0x560F10` [`fly_formation`] with their
+//!   helpers ([`TerrainWorld`], [`FlightWorld`]).
 //!
-//! Explicit boundaries ([`AircraftWorld`], [`FormationWorld`]): Mind virtuals,
-//! actor speed virtuals, the attack descriptor/ability/combat services
-//! `0x4C8300`/`0x4C8F20`/`0x57E030`, diagnostics `0x404F60`, the formation
-//! teardown `0x55EDC0` (refcounted group release with virtual deleting
-//! destructors and recursion over followers), the follow planner `0x560A70`,
-//! the leg builder `0x55F230`, the Mover pose commit `0x576BB0`, the terrain
-//! height `0x4F0E50` and group virtual +0x14. The segment free `0x6F7430` is the
-//! allocator: popping a segment here drops it.
+//! Explicit MoveTick boundaries ([`AircraftWorld`], [`FormationWorld`]): Mind
+//! virtuals, actor speed virtuals, the attack descriptor/ability/combat
+//! services `0x4C8300`/`0x4C8F20`/`0x57E030`, diagnostics `0x404F60`, the
+//! formation teardown `0x55EDC0`, the follow planner `0x560A70`, the leg
+//! builder `0x55F230` (a world binds the ports above), the Mover pose commit
+//! `0x576BB0`, the terrain height `0x4F0E50` and group virtual +0x14. The
+//! segment free `0x6F7430` is the allocator: popping a segment here drops it.
 //!
 //! All arithmetic is `aa_numeric::Binary` at an explicit x87 precision with the
 //! native binary32 store points. Nonfinite operands are outside that domain
@@ -42,6 +50,13 @@ use aa_numeric::{Binary, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+
+#[path = "aircraft_legs.rs"]
+mod legs;
+pub use legs::{
+    FlightWorld, TerrainWorld, altitude_band, append_legs, build_leg, circle_side, flat_length, fly_formation, fly_to,
+    follow_path, leg_target, length_parameter, new_segment, replace_path, set_path_speed, slot_point,
+};
 
 /// actor+0xBC = component array actor+0x60 + 23 * 4.
 pub const AIRCRAFT_COMPONENT_SLOT: usize = 23;
@@ -85,6 +100,8 @@ pub enum AircraftError {
     NonFinite(&'static str),
     #[error("arc-length subdivision repeats its own interval (native recursion never ends)")]
     UnboundedRecursion,
+    #[error("native loop without an exit: {0}")]
+    UnboundedLoop(&'static str),
     #[error("formation slot {0} is beyond the layout offsets (native out-of-bounds read)")]
     SlotOutOfBounds(usize),
     #[error("aircraft world boundary failed: {0}")]
@@ -167,6 +184,9 @@ pub struct AircraftState {
     pub on_ground: u8,
     /// +0x14: cruise speed; `0x55EDC0` stores definition speed (+0x228).
     pub cruise_speed: f32,
+    /// +0x18: cruise altitude (the AAI's `0x516720` writes it with +0x80).
+    #[serde(default)]
+    pub cruise_altitude: f32,
     /// +0x28 path sub-object.
     pub path: AircraftPath,
     /// +0x90 byte: the current path is a MoveTick holding circle.
@@ -183,6 +203,309 @@ pub struct AircraftState {
     pub group_b: Option<GroupKey>,
     /// +0xB0: follower group.
     pub group_c: Option<GroupKey>,
+}
+
+impl AircraftState {
+    /// The AircraftComponent constructor `0x55E8E0` for an actor whose
+    /// definition has speed +0x228 (`0x45D6F0(0)`: `fld`, stored with `fstp`
+    /// as the path's planning speed) and turn radius +0x234 (copied as a
+    /// word): on the ground, every word zero, an empty path with the Bezier
+    /// basis (`0x55D9A0` from `0xB281D8`; `0x55E1B0` clears it), no attack, no
+    /// groups. The constructor also zeroes +0x1C..+0x24, which nothing here
+    /// reads.
+    pub fn new(definition_speed: f32, turn_radius: f32) -> Self {
+        let mut state = Self {
+            on_ground: 1,
+            cruise_speed: 0.0,
+            cruise_altitude: 0.0,
+            path: AircraftPath {
+                planning_speed: x87_load_store(definition_speed),
+                turn_radius,
+                segments: VecDeque::new(),
+                t: 0.0,
+                basis: BEZIER_BASIS_BITS.map(f32::from_bits),
+                altitude: 0.0,
+                leg_speed: 0.0,
+                total_length: 0.0,
+                speed: 0.0,
+            },
+            circling: 0,
+            attack_target: 0,
+            attack_point: [0.0; 3],
+            pending_ability: None,
+            group_a: None,
+            group_b: None,
+            group_c: None,
+        };
+        clear_path(&mut state.path);
+        state
+    }
+    /// The binary32 word at component offset `offset` (+0x14 cruise speed,
+    /// +0x18 cruise altitude, +0x2C planning speed, +0x30 turn radius, +0x34
+    /// the segment list head as nonzero or 0, +0x3C path parameter, +0x80
+    /// altitude, +0x84 leg speed, +0x88 total length, +0x8C path speed,
+    /// +0x94 attack target); None for any other offset.
+    pub fn word(&self, offset: u32) -> Option<u32> {
+        let p = &self.path;
+        Some(match offset {
+            0x14 => self.cruise_speed.to_bits(),
+            0x18 => self.cruise_altitude.to_bits(),
+            0x2c => p.planning_speed.to_bits(),
+            0x30 => p.turn_radius.to_bits(),
+            0x34 => u32::from(!p.segments.is_empty()),
+            0x3c => p.t.to_bits(),
+            0x80 => p.altitude.to_bits(),
+            0x84 => p.leg_speed.to_bits(),
+            0x88 => p.total_length.to_bits(),
+            0x8c => p.speed.to_bits(),
+            0x94 => self.attack_target,
+            _ => return None,
+        })
+    }
+    /// Store `bits` at component offset `offset` (the writable words of
+    /// [`Self::word`]; +0x34 is the segment list, changed only by the path
+    /// operations). False for any other offset.
+    pub fn set_word(&mut self, offset: u32, bits: u32) -> bool {
+        let p = &mut self.path;
+        let value = f32::from_bits(bits);
+        match offset {
+            0x14 => self.cruise_speed = value,
+            0x18 => self.cruise_altitude = value,
+            0x2c => p.planning_speed = value,
+            0x30 => p.turn_radius = value,
+            0x3c => p.t = value,
+            0x80 => p.altitude = value,
+            0x84 => p.leg_speed = value,
+            0x88 => p.total_length = value,
+            0x8c => p.speed = value,
+            0x94 => self.attack_target = bits,
+            _ => return false,
+        }
+        true
+    }
+    /// The byte at +0x10 (on the ground) or +0x90 (circling).
+    pub fn byte(&self, offset: u32) -> Option<u8> {
+        match offset {
+            0x10 => Some(self.on_ground),
+            0x90 => Some(self.circling),
+            _ => None,
+        }
+    }
+    pub fn set_byte(&mut self, offset: u32, value: u8) -> bool {
+        match offset {
+            0x10 => self.on_ground = value,
+            0x90 => self.circling = value,
+            _ => return false,
+        }
+        true
+    }
+}
+
+/// `fld dword` + `fstp dword` of a binary32: exact, except that a signaling
+/// NaN loads quieted (invalid operation, masked).
+fn x87_load_store(value: f32) -> f32 {
+    if value.is_nan() { f32::from_bits(value.to_bits() | 0x0040_0000) } else { value }
+}
+
+/// The group services the formation join `0x55EB30`, the teardown
+/// `0x55EDC0` and the follower test `0x55E660` use.
+pub trait GroupWorld: FormationWorld {
+    /// Group virtual +0x14 (it may change the group, e.g. prune members).
+    fn group_unusable(&mut self, group: GroupKey) -> AircraftResult<bool>;
+    /// Group +4 reference count: `inc`.
+    fn retain_group(&mut self, group: GroupKey) -> AircraftResult<()>;
+    /// Group +4 reference count: `dec`, and at zero the deleting destructor
+    /// (virtual +0 with 1). True when the destructor ran.
+    fn release_group(&mut self, group: GroupKey) -> AircraftResult<bool>;
+    /// `0x45D6F0(0)` on an actor's definition (actor+4): its +0x228 speed.
+    fn definition_speed(&mut self, actor: ActorKey) -> AircraftResult<f32>;
+}
+
+/// `0x55E660` (thiscall aircraft): a formation follower. In a group (+0xA8),
+/// airborne (+0x10 clear), the +0xAC group usable (virtual +0x14 false) and
+/// its leader (`0x5685B0`) another object than this aircraft's actor (a null
+/// leader counts as another). A null +0xAC there is the native null
+/// dereference.
+pub fn following_leader<W: GroupWorld + ?Sized>(unit: &mut AircraftUnit, world: &mut W) -> AircraftResult<bool> {
+    if unit.aircraft.group_a.is_none() || unit.aircraft.on_ground != 0 {
+        return Ok(false);
+    }
+    let group = unit.aircraft.group_b.ok_or(AircraftError::NullDereference("0x55E660 reads the null +0xAC group"))?;
+    if world.group_unusable(group)? {
+        return Ok(false);
+    }
+    Ok(group_leader(world, group)? != Some(unit.actor.key))
+}
+
+/// The AIRCRAFT component of `actor`: this unit's own, or another actor's
+/// (absent is the native null dereference, see
+/// [`FormationWorld::member_aircraft`]).
+fn aircraft_of<'a, W: FormationWorld + ?Sized>(
+    unit: &'a mut AircraftUnit,
+    world: &'a mut W,
+    actor: ActorKey,
+) -> AircraftResult<&'a mut AircraftState> {
+    if actor == unit.actor.key { Ok(&mut unit.aircraft) } else { world.member_aircraft(actor) }
+}
+
+/// Groups whose deleting destructor ran during one join/teardown call: the
+/// original then reads freed memory (its member nodes, its count), which
+/// is outside what this port reproduces.
+struct Released(Vec<GroupKey>);
+impl Released {
+    fn live(&self, group: GroupKey) -> AircraftResult<()> {
+        if self.0.contains(&group) {
+            return Err(AircraftError::World(format!("group {} is used after its deleting destructor", group.0)));
+        }
+        Ok(())
+    }
+    fn release<W: GroupWorld + ?Sized>(&mut self, world: &mut W, group: GroupKey) -> AircraftResult<()> {
+        self.live(group)?;
+        if world.release_group(group)? {
+            self.0.push(group);
+        }
+        Ok(())
+    }
+    fn retain<W: GroupWorld + ?Sized>(&self, world: &mut W, group: GroupKey) -> AircraftResult<()> {
+        self.live(group)?;
+        world.retain_group(group)
+    }
+}
+
+/// `0x55EB30` (thiscall aircraft, arg group): join a formation group. A null
+/// group is the teardown `0x55EDC0`. Otherwise an airborne aircraft's path is
+/// cleared (`0x55E1B0`, twice: the second finds it empty), +0xA8 takes the
+/// group (retained before the old one is released) and +0xAC follows +0xA8
+/// the same way.
+pub fn join_formation<W: GroupWorld + ?Sized>(
+    unit: &mut AircraftUnit,
+    world: &mut W,
+    group: Option<GroupKey>,
+) -> AircraftResult<()> {
+    let Some(group) = group else {
+        return leave_formation(unit, world);
+    };
+    if unit.aircraft.on_ground == 0 {
+        clear_path(&mut unit.aircraft.path);
+        clear_path(&mut unit.aircraft.path);
+    }
+    let mut released = Released(Vec::new());
+    if unit.aircraft.group_a != Some(group) {
+        released.retain(world, group)?;
+        if let Some(old) = unit.aircraft.group_a {
+            released.release(world, old)?;
+        }
+        unit.aircraft.group_a = Some(group);
+    }
+    if unit.aircraft.group_b != unit.aircraft.group_a {
+        if let Some(a) = unit.aircraft.group_a {
+            released.retain(world, a)?;
+        }
+        if let Some(old) = unit.aircraft.group_b {
+            released.release(world, old)?;
+        }
+        unit.aircraft.group_b = unit.aircraft.group_a;
+    }
+    Ok(())
+}
+
+/// `0x55EDC0` (thiscall aircraft): leave the formation.
+///
+/// 1. When the follower group +0xB0 is usable (virtual +0x14 false), every
+///    live (resolving handle, actor flag bit0 clear) member's aircraft
+///    leaves too, recursively;
+/// 2. when +0xAC differs from +0xA8 and is usable, its leader's (`0x5685B0`)
+///    +0xB0 group is released and cleared;
+/// 3. every live member of +0xA8 releases and clears all three of its groups
+///    (+0xA8, +0xAC, +0xB0, in that order);
+/// 4. an airborne aircraft's path is cleared inline (segments freed, +0x3C
+///    and +0x88 zero) and +0x14 takes the definition speed (`0x45D6F0(0)`).
+///
+/// Each step rereads this aircraft's words. A follower chain that reaches an
+/// aircraft already leaving recurses without end natively
+/// ([`AircraftError::UnboundedRecursion`]).
+pub fn leave_formation<W: GroupWorld + ?Sized>(unit: &mut AircraftUnit, world: &mut W) -> AircraftResult<()> {
+    let mut active = Vec::new();
+    let mut released = Released(Vec::new());
+    let own = unit.actor.key;
+    leave_of(unit, world, own, &mut active, &mut released)
+}
+
+fn live_member<W: FormationWorld + ?Sized>(
+    unit: &AircraftUnit,
+    world: &mut W,
+    handle: u32,
+) -> AircraftResult<Option<ActorKey>> {
+    let Some(member) = resolve_handle(world, handle)? else {
+        return Ok(None);
+    };
+    Ok((actor_flags(unit, world, member)? & 1 == 0).then_some(member))
+}
+
+fn leave_of<W: GroupWorld + ?Sized>(
+    unit: &mut AircraftUnit,
+    world: &mut W,
+    actor: ActorKey,
+    active: &mut Vec<ActorKey>,
+    released: &mut Released,
+) -> AircraftResult<()> {
+    if active.contains(&actor) {
+        return Err(AircraftError::UnboundedRecursion);
+    }
+    active.push(actor);
+    if let Some(followers) = aircraft_of(unit, world, actor)?.group_c {
+        released.live(followers)?;
+        if !world.group_unusable(followers)? {
+            for handle in world.group_members(followers)? {
+                if let Some(member) = live_member(unit, world, handle)? {
+                    leave_of(unit, world, member, active, released)?;
+                }
+                // The node's next link is read after the member left.
+                released.live(followers)?;
+            }
+        }
+    }
+    let state = aircraft_of(unit, world, actor)?;
+    if let Some(leading) = state.group_b
+        && state.group_a != Some(leading)
+    {
+        released.live(leading)?;
+        if !world.group_unusable(leading)?
+            && let Some(leader) = group_leader(world, leading)?
+        {
+            let leader_state = aircraft_of(unit, world, leader)?;
+            if let Some(group) = leader_state.group_c.take() {
+                released.release(world, group)?;
+            }
+        }
+    }
+    if let Some(group) = aircraft_of(unit, world, actor)?.group_a {
+        released.live(group)?;
+        for handle in world.group_members(group)? {
+            if let Some(member) = live_member(unit, world, handle)? {
+                for field in 0..3 {
+                    let state = aircraft_of(unit, world, member)?;
+                    let slot = match field {
+                        0 => &mut state.group_a,
+                        1 => &mut state.group_b,
+                        _ => &mut state.group_c,
+                    };
+                    if let Some(old) = slot.take() {
+                        released.release(world, old)?;
+                    }
+                }
+            }
+            released.live(group)?;
+        }
+    }
+    if aircraft_of(unit, world, actor)?.on_ground == 0 {
+        let speed = x87_load_store(world.definition_speed(actor)?);
+        let state = aircraft_of(unit, world, actor)?;
+        clear_path(&mut state.path);
+        state.cruise_speed = speed;
+    }
+    active.pop();
+    Ok(())
 }
 
 /// ActorDefinition (actor+4) AircraftComponent values (loader `0x464BD0`).

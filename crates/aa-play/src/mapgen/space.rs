@@ -227,6 +227,9 @@ impl Space {
                 let flags = self.flags[t];
                 if flags & tile_mask != 0 && aa_spatial::shape_overlap::overlaps(&self.tile_placement([x, y]), query, P).unwrap_or(false) {
                     if flags & STATIC_BLOCKER == 0 {
+                        if std::env::var_os("AA_RMG_HIT_DEBUG").is_some() {
+                            eprintln!("    tile hit at ({x}, {y}) flags {flags:x}");
+                        }
                         return 1;
                     }
                     if self.find_blocker([x, y]) {

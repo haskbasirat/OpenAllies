@@ -34,6 +34,8 @@
 //! Morale, routing, entrenchment, attack efficiency and experience levels are
 //! in `morale.rs`; both modules share [`CombatState`] (`World::combat`).
 pub mod tasks;
+/// The aircraft Mind (AAI.cpp) hosted on aa-mind (core owner).
+pub mod air;
 
 use crate::data::{DefClass, DefId, GameData, Weapon};
 use crate::world::{Activity, ActorId, Event, KingdomId, Order, OrgId, World};

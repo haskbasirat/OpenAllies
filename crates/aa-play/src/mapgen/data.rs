@@ -378,6 +378,9 @@ pub(super) struct Svars {
     pub static_fast: bool,
     pub static_fast_mult: i32,
     pub static_fast_div: i32,
+    /// RMGBalanceNumObjectsInSmallGroup and RMGBalanceSerachMapPercent.
+    pub balance_small: f32,
+    pub balance_search: f32,
 }
 
 pub(super) struct RmgData {
@@ -401,6 +404,49 @@ pub(super) struct RmgData {
 
 fn lower(s: &str) -> String {
     s.to_ascii_lowercase()
+}
+
+/// A RandomActorData definition (category RANDOM_ACTOR, kind 19) as the
+/// ActorData loader leaves it: the base flag word through the ActorData
+/// finalizer (aa_rules::native::finalize_actor_flags with the Body,
+/// Projectile, Mover, Organization and Settlement bits), the Size blocking
+/// and soft shapes (aa_rules::objects::shape) and the scale range.
+fn random_actor_definition(catalog: &ActorCatalog, id: &str, registry_index: u32, def: &mut ThingDef) {
+    use aa_rules::native::TypedValue;
+    let field = |path: &str| catalog.native_field(ThingRef::registered(id), path, PC).ok().flatten();
+    let bits = |path: &str| field(path).and_then(|v| v.fixed_bits().ok());
+    let selector = |path: &str| match field(path) {
+        Some(TypedValue::String { value, .. }) => ["POINT", "CIRCLE", "SQUARE", "RECT"].iter().position(|s| value.eq_ignore_ascii_case(s)).map(|n| n as u32),
+        _ => None,
+    };
+    let dims = |kind: u32, radius: &str| -> Option<Vec<u32>> {
+        match kind {
+            0 => Some(Vec::new()),
+            1 => Some(vec![bits(radius)?]),
+            2 => Some(vec![bits("Size.square_size")?]),
+            _ => Some(vec![bits("Size.rect_width")?, bits("Size.rect_height")?]),
+        }
+    };
+    if let Some(kind) = selector("Size.blocking_shape") {
+        if let Some(s) = dims(kind, "Size.blocking_radius").and_then(|d| aa_rules::objects::shape(kind, &d, PC).ok()) {
+            def.shape = s.words;
+            def.shape_radius = f32::from_bits(s.words[1]);
+        }
+        let soft = selector("Size.soft_shape").unwrap_or(kind);
+        if let Some(s) = dims(soft, "Size.soft_radius").and_then(|d| aa_rules::objects::shape(soft, &d, PC).ok()) {
+            def.soft = s.words;
+        }
+    }
+    if let (Some(lo), Some(hi)) = (bits("Size.scale_min"), bits("Size.scale_max")) {
+        def.scale_bits = [lo, hi];
+    }
+    if let Ok((base, _)) = catalog.native_base_flags(ThingRef::registered(id), true, PC) {
+        let mask = def.components & ((1 << 0) | (1 << 1) | (1 << 3) | (1 << 7) | (1 << 14));
+        let speed = if mask & (1 << 3) != 0 { bits("MoverComponent.speed_max").unwrap_or(0) } else { 0 };
+        if let Ok(flags) = aa_rules::native::finalize_actor_flags(base, mask, speed, registry_index) {
+            def.flags = flags;
+        }
+    }
 }
 
 impl RmgData {
@@ -431,10 +477,11 @@ impl RmgData {
                 placement_retries: 3,
                 max_percent_mountain: 0.15,
                 max_percent_water: 0.15,
-                balance_iterations: 120,
-                balance_worse: 8,
-                nudge_step: 2.0,
-                nudge_delta: 2.0,
+                // The SVar constructors (0x5065D0) before the file values.
+                balance_iterations: 20,
+                balance_worse: 2,
+                nudge_step: 4.0,
+                nudge_delta: 4.0,
                 elevation: [-10.0, 14.0, 2.0],
                 doodad_auto: true,
                 tile_bits: 1,
@@ -450,6 +497,8 @@ impl RmgData {
                 static_fast: true,
                 static_fast_mult: 3,
                 static_fast_div: 4,
+                balance_small: 10.0,
+                balance_search: 0.2,
             },
             default_rmc: "rmc_southerneurope".into(),
             default_size: [384.0, 384.0],
@@ -486,7 +535,9 @@ impl RmgData {
                 if let Some(v) = int(&node, "RMGBalanceMaxNumIterations") { s.balance_iterations = v }
                 if let Some(v) = int(&node, "RMGBalanceMaxNumWorseScores") { s.balance_worse = v }
                 if let Some(v) = fx(&node, "RMGBalanceMarkerNudgeStep") { s.nudge_step = v }
-                if let Some(v) = fx(&node, "RMGBalanceMarkerNudgeStepDelta") { s.nudge_delta = v }
+                // The SVar is registered as RMGBalanceMarkerNudgeDelta; the file's
+                // RMGBalanceMarkerNudgeStepDelta names nothing, so the default 4 stays.
+                if let Some(v) = fx(&node, "RMGBalanceMarkerNudgeDelta") { s.nudge_delta = v }
                 if let Some(v) = fx(&node, "ElevationMin") { s.elevation[0] = v }
                 if let Some(v) = fx(&node, "ElevationMax") { s.elevation[1] = v }
                 if let Some(v) = fx(&node, "ElevationDefault") { s.elevation[2] = v }
@@ -504,6 +555,8 @@ impl RmgData {
                 if let Some(v) = bl(&node, "StaticMapUseFastSquareReduction") { s.static_fast = v }
                 if let Some(v) = int(&node, "StaticMapFastSquareReductionMult") { s.static_fast_mult = v }
                 if let Some(v) = int(&node, "StaticMapFastSquareReductionDiv") { s.static_fast_div = v }
+                if let Some(v) = fx(&node, "RMGBalanceNumObjectsInSmallGroup") { s.balance_small = v }
+                if let Some(v) = fx(&node, "RMGBalanceSerachMapPercent") { s.balance_search = v }
             }
         }
         for kind in ["AVars", "Vars"] {
@@ -649,6 +702,23 @@ impl RmgData {
             }
             if let Ok(category) = catalog.native_category(ThingRef::registered(&id)) {
                 def.native_kind = category.native_kind;
+                if category.native_kind == 19 {
+                    // RandomActorData (a random village) loads as ActorData:
+                    // the ActorData flag finalizer and the Size shapes.
+                    random_actor_definition(catalog, &id, category.registry_index, &mut def);
+                }
+            }
+            if std::env::var("AA_RMG_DUMP_DEF").is_ok_and(|v| v.eq_ignore_ascii_case(&id)) {
+                // Debugging aid: the typed native fields of one definition.
+                eprintln!("{id}: source {source}");
+                for path in [
+                    "category", "Size.blocking_shape", "Size.square_size", "Size.rect_width", "Size.rect_height", "Size.blocking_radius",
+                    "Size.soft_shape", "Size.soft_radius", "Size.scale_min", "Size.scale_max", "Flags.blocking", "Flags.tile_locked",
+                    "Flags.ethereal", "Flags.random_orientation", "needs_space_for_settlement_zone",
+                ] {
+                    eprintln!("  {path}: {:?}", catalog.native_field(ThingRef::registered(&id), path, PC).map(|v| v.map(|v| format!("{v:?}"))));
+                }
+                eprintln!("  flags {:?} category {:?}", catalog.native_final_flags(ThingRef::registered(&id), PC), catalog.native_category(ThingRef::registered(&id)));
             }
             def.needs_space = matches!(
                 catalog.native_field(ThingRef::registered(&id), "needs_space_for_settlement_zone", PC),

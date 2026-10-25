@@ -127,6 +127,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-mind"
+version = "0.1.0"
+dependencies = [
+ "aa-combat",
+ "aa-navigation",
+ "aa-numeric",
+ "aa-rules",
+ "aa-spatial",
+ "aa-trig",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aa-movement"
 version = "0.1.0"
 dependencies = [
@@ -173,6 +187,7 @@ dependencies = [
  "aa-body",
  "aa-economy",
  "aa-mapworld",
+ "aa-mind",
  "aa-movement",
  "aa-navigation",
  "aa-numeric",

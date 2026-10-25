@@ -391,7 +391,7 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams, start: Option<&Str
                     eprint!("{}", placement.describe_groups());
                 }
                 placement.place_required_exact(&mut world, &mut place_rng)?;
-                placement.place_groups(&mut world, &rmc.biome, &value, &mut place_rng)?;
+                placement.place_groups_exact(&mut world, &value, &mut place_rng)?;
                 Ok(())
             };
             match run() {
@@ -402,6 +402,10 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams, start: Option<&Str
                     if d.svars.doodad_auto {
                         placement.doodify(&world, &rmc.biome, &mut stage_rng.fork(20));
                     }
+                    // The session start (after the generator, world RNG): the random
+                    // things resolve (0x4FDA70), then the settlements' city layouts.
+                    placement.resolve_random_things(&mut stage_rng.fork(30));
+                    placement.expand_cities(&mut world, &rmc.biome, &mut stage_rng.fork(31));
                     if timing {
                         eprintln!("mapgen doodads {:?}", clock.elapsed());
                     }
@@ -413,7 +417,8 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams, start: Option<&Str
                     map.rng_log = rng.log();
                     let draws = rng.take_trace();
                     let mut log = terrain_log.clone();
-                    log.extend(placement.balance_log.iter().map(|&(i, s)| LogLine { what: "balance iteration".into(), values: vec![f64::from(i), s] }));
+                    log.extend(placement.balance_log.iter().chain(&placement.group_balance_log).map(|&(i, s)| LogLine { what: "balance iteration".into(), values: vec![f64::from(i), s] }));
+                    log.extend(placement.marker_log.iter().map(|&(what, i, p)| LogLine { what: what.into(), values: vec![f64::from(i), f64::from(p[0]), f64::from(p[1])] }));
                     return Ok((GeneratedMap { params: params.clone(), terrain: out.terrain, placed: out.placed, scenery: out.scenery, map, log }, draws));
                 }
                 Err(e) => {

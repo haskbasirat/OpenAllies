@@ -35,8 +35,16 @@ aa-spatial = { path = "../aa-spatial" }
 aa-world = { path = "../aa-world" }
 # movement owner: the exact formation slot table (0x5797E0 / 0x57BEF0 / 0x57BA80)
 aa-movement = { path = "../aa-movement" }
+# core owner: the native Mind arena, constructors and the AAI state Thinks
+# (crate::minds, crate::combat::air)
+aa-mind = { path = "../aa-mind" }
 anyhow = "1"
 glam = { version = "0.32", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[features]
+# core owner, temporary: the aircraft attack states while they are written
+# (crate::combat::air::attack); removed when they are switched on.
+air-b2 = []

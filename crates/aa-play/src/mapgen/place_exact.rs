@@ -18,7 +18,7 @@
 //! stores where the original stores).
 use super::super::rng::Rng;
 use super::super::space::{self, FACING, P};
-use super::{Object, Placement, World};
+use super::{Balance, GroupDef, Marker, Object, Placement, World, balance_markers, pair_penalty_exact};
 use aa_spatial::collision::Shape;
 use aa_spatial::geometry::Placement as Where;
 
@@ -49,6 +49,49 @@ fn grow(shape: &Shape, amount: f32) -> Shape {
             aa_rules::objects::shape(3, &[w.to_bits(), h.to_bits()], P).map_or(shape.clone(), |s| space::shape(s.words))
         }
         _ => shape.clone(),
+    }
+}
+
+/// The object balancer's callbacks (KKC_RMGObjectBalancer, vtable 0xA417CC).
+struct ObjectBalance<'p, 'a> {
+    place: &'p Placement<'a>,
+    gi: usize,
+    /// +0x2C: width / (trunc(sqrt(count)) + 1).
+    desired: f32,
+}
+
+impl Balance for ObjectBalance<'_, '_> {
+    /// 0x593170: 0x590E10 at the balancer's desired distance.
+    fn pair(&self, rng: &mut Rng, a: &mut Marker, b: &Marker) -> f32 {
+        pair_penalty_exact(rng, a, b.pos, self.desired)
+    }
+    /// 0x593190: CheckPositionValid without group context, snapping allowed.
+    fn valid(&self, m: &Marker, cand: &mut [f32; 2]) -> bool {
+        let before = *cand;
+        let ok = self.place.check_position(None, m.thing, cand, false, m.orient, false);
+        if std::env::var_os("AA_RMG_BALANCE_DEBUG").is_some() {
+            let c = self.place.creation_check(m.thing, before, m.orient, false);
+            eprintln!("  move marker {} from {:?} to {before:?}: valid {ok} -> {cand:?} (check {c})", m.id, m.pos);
+        }
+        ok
+    }
+    /// 0x593530: the tile size (0x5906B0), stored.
+    fn margin(&self, _m: &Marker) -> f64 {
+        f64::from(f32::from_bits(self.place.space.grid.cell_size_bits))
+    }
+    /// 0x5944A0: 0x590E10 against every object of every restricted group at
+    /// max(max(proximity_min, proximity_desired), the balancer's distance).
+    fn self_score(&self, rng: &mut Rng, m: &mut Marker) -> f64 {
+        let mut sum = 0.0f32;
+        for &(t, min, desired) in &self.place.groups[self.gi].restr {
+            let v = if min > desired { min } else { desired };
+            let d = if v > self.desired { v } else { self.desired };
+            for &o in &self.place.groups[t].objects {
+                let q = self.place.objects[o].pos;
+                sum = (f64::from(pair_penalty_exact(rng, m, q, d)) + f64::from(sum)) as f32;
+            }
+        }
+        f64::from(sum)
     }
 }
 
@@ -473,6 +516,188 @@ impl Placement<'_> {
                 let index = self.create_thing(thing, pos, facing, -1, owner, Some(gi), rng);
                 self.fix_start(owner, index);
                 self.group_add(gi, index);
+            }
+        }
+        Ok(())
+    }
+
+    /// 0x593290: up to `tries` positions, uniform over the map (the original
+    /// leaves out the margin offset) or, with a radius, around `pos` clamped
+    /// to [m, size - m] with m = trunc(tile) (+ the settlement zone radius),
+    /// the first that CheckPositionValid (no group context) accepts.
+    #[allow(clippy::too_many_arguments)]
+    fn random_valid(&self, rng: &mut Rng, thing: usize, pos: &mut [f32; 2], radius: f32, orient: &mut [f32; 2], tries: i32) -> bool {
+        let tile = f32::from_bits(self.space.grid.cell_size_bits);
+        let [w, h] = self.space.extent_bits.map(f32::from_bits);
+        for _ in 0..tries.max(0) {
+            let m = (tile as i32) as f32;
+            let mut cand = if radius == 0.0 {
+                let m2 = (f64::from(m) + f64::from(m)) as f32;
+                let u = unit(rng, 0x593352);
+                let x = (u * (f64::from(w) - f64::from(m2))) as f32;
+                let u = unit(rng, 0x593396);
+                let y = (u * (f64::from(h) - f64::from(m2))) as f32;
+                [x, y]
+            } else {
+                let u = unit(rng, 0x5933CF);
+                let mut x = ((u * f64::from(radius)) * 2.0 + (f64::from(pos[0]) - f64::from(radius))) as f32;
+                let u = unit(rng, 0x59340D);
+                let mut y = ((u * f64::from(radius)) * 2.0 + (f64::from(pos[1]) - f64::from(radius))) as f32;
+                let (lx, ly) = (f64::from(w) - f64::from(m), f64::from(h) - f64::from(m));
+                if x < m {
+                    x = m;
+                } else if f64::from(x) > lx {
+                    x = lx as f32;
+                }
+                if y < m {
+                    y = m;
+                } else if f64::from(y) > ly {
+                    y = ly as f32;
+                }
+                [x, y]
+            };
+            let o = *orient;
+            if self.check_position(None, thing, &mut cand, false, o, false) {
+                *pos = cand;
+                *orient = o;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The group's area scale 0x590500: 1 for area_factor 0, else
+    /// s = binary32(width / reference_size), s, s*s or pow(s, factor).
+    fn area_scale_exact(&self, factor: f32) -> f64 {
+        if factor == 0.0 {
+            return 1.0;
+        }
+        let w = f32::from_bits(self.space.extent_bits[0]);
+        let s = (f64::from(w) / f64::from(self.rmc.reference_size)) as f32;
+        if factor == 1.0 {
+            f64::from(s)
+        } else if factor == 2.0 {
+            f64::from(s) * f64::from(s)
+        } else {
+            f64::from(s).powf(f64::from(factor))
+        }
+    }
+
+    /// KKC_RMGObjectBalancer::BalancePlaceGroup 0x594E60: PlaceMarkers
+    /// 0x593AA0, BalanceMarkers 0x590B10 with the object callbacks (vtable
+    /// 0xA417CC: pair 0x593170, validity 0x593190, margin 0x593530, self
+    /// score 0x5944A0), CreateMarkers 0x594100, CreateExtraMarkers 0x594260.
+    /// Returns (created, minimum).
+    fn balanced_group_exact(&mut self, world: &World, gi: usize, value: f32, rng: &mut Rng, log: &mut Vec<(i32, f64)>) -> (i32, i32) {
+        let def = self.groups[gi].def.clone();
+        let owner = self.groups[gi].kingdom;
+        let scale = self.area_scale_exact(def.slider.area_factor);
+        let count = (scale * f64::from(value)) as i32;
+        let minimum = (scale * f64::from(def.objects_min)) as i32;
+        let [w, h] = self.space.extent_bits.map(f32::from_bits);
+        let desired = (f64::from(w) / f64::from((f64::from(count)).sqrt() as i32 + 1)) as f32;
+        self.notes.push(format!("RMG: Group '{}': trying to place {count} minimum {minimum} using balancing", self.groups[gi].ids));
+        // PlaceMarkers 0x593AA0.
+        let small = self.data.svars.balance_small >= count as f32;
+        let centre = [(f64::from(w) * 0.5) as f32, (f64::from(h) * 0.5) as f32];
+        let mut markers: Vec<Marker> = Vec::new();
+        for i in 0..count.max(0) {
+            rng.getter();
+            let Some(thing) = self.pick_weighted_after_getter(gi, rng) else { continue };
+            let mut orient = self.required_facing(thing, rng);
+            let mut pos = if small { centre } else { [0.0, 0.0] };
+            let radius = if small { (f64::from(self.data.svars.balance_search) * f64::from(w)) as f32 } else { 0.0 };
+            if self.random_valid(rng, thing, &mut pos, radius, &mut orient, 10) {
+                let mut m = Marker::new(markers.len(), pos, orient, owner);
+                m.thing = thing;
+                self.marker_log.push(("marker placed", i, pos));
+                markers.push(m);
+            } else {
+                self.notes.push(format!("marker {i} tries 10 failed to find position"));
+            }
+        }
+        if (markers.len() as i32) < minimum {
+            return (0, minimum);
+        }
+        // BalanceMarkers 0x590B10.
+        {
+            let sv = &self.data.svars;
+            let cb = ObjectBalance { place: self, gi, desired };
+            balance_markers(world, rng, &mut markers, sv.nudge_step, sv.nudge_delta, &cb, sv.balance_iterations, sv.balance_worse, log);
+        }
+        // CreateMarkers 0x594100.
+        let mut created = 0;
+        for (i, m) in markers.iter().enumerate() {
+            let mut pos = m.best;
+            let orient = m.best_orient;
+            if !self.check_position(Some(gi), m.thing, &mut pos, false, orient, false) {
+                self.notes.push(format!("marker {i} failed to create at {},{}", pos[0], pos[1]));
+                continue;
+            }
+            let index = self.create_thing(m.thing, pos, orient, -1, owner, Some(gi), rng);
+            self.fix_start(owner, index);
+            self.marker_log.push(("marker created", i as i32, pos));
+            self.group_add(gi, index);
+            created += 1;
+        }
+        // CreateExtraMarkers 0x594260 (the grid scan) is not ported yet.
+        if created < count {
+            self.notes.push(format!("RMG: Group '{}': {} extra markers needed (not ported)", self.groups[gi].ids, count - created));
+        }
+        (created, minimum)
+    }
+
+    /// 0x4B6FF0 on the group's weighted object table, after the caller's
+    /// getter: 0x4B6BA0 pushes every object of positive weight at the head
+    /// (the table runs last object first, the total a binary32 running sum).
+    fn pick_weighted_after_getter(&self, gi: usize, rng: &mut Rng) -> Option<usize> {
+        let mut table: Vec<(usize, f32)> = Vec::new();
+        let mut total = 0.0f32;
+        for (ids, w) in &self.groups[gi].def.objects {
+            if !(*w > 0.0) {
+                continue;
+            }
+            if let Some(&t) = self.data.thing_by_id.get(&ids.to_ascii_lowercase()) {
+                table.insert(0, (t, *w));
+                total = (f64::from(*w) + f64::from(total)) as f32;
+            }
+        }
+        if table.is_empty() {
+            return None;
+        }
+        let u = f64::from(rng.at(0x4B7008).draw_after_getter()) * super::super::rng::UNIT;
+        let mut r = u * f64::from(total) - f64::from(table[0].1);
+        let mut i = 0;
+        while !(r < 0.0) && i + 1 < table.len() {
+            i += 1;
+            r -= f64::from(table[i].1);
+        }
+        Some(table[i].0)
+    }
+
+    /// KKC_RMGObjectPlacementStage::Run 0x595180: every actor group with
+    /// objects (balanced or not), then every doodad group.
+    pub(in crate::mapgen) fn place_groups_exact(&mut self, world: &mut World, values: &dyn Fn(&GroupDef) -> f32, rng: &mut Rng) -> anyhow::Result<()> {
+        for gi in 0..self.groups.len() {
+            if self.groups[gi].def.objects.is_empty() {
+                continue;
+            }
+            let value = values(&self.groups[gi].def);
+            if self.groups[gi].def.balanced {
+                let mut log = Vec::new();
+                let (created, minimum) = self.balanced_group_exact(world, gi, value, rng, &mut log);
+                self.group_balance_log.extend(log);
+                if created < minimum {
+                    anyhow::bail!("RMG: Balanced Group '{}': failed minimum (created {created}, needed {minimum})", self.groups[gi].ids);
+                }
+            } else {
+                let scale = self.area_scale(world, self.groups[gi].def.slider.area_factor);
+                let count = (value * scale) as i32;
+                let minimum = (self.groups[gi].def.objects_min as f32 * scale) as i32;
+                let created = self.plain_group(world, gi, count, rng);
+                if created < minimum {
+                    anyhow::bail!("group {} placed {created} of at least {minimum}", self.groups[gi].ids);
+                }
             }
         }
         Ok(())

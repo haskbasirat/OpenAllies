@@ -84,6 +84,10 @@ pub(super) struct Placement<'a> {
     pub balance_log: Vec<(i32, f64)>,
     /// The GMap occupancy the original's placement queries read.
     space: super::space::Space,
+    /// Balanced groups: the marker log ("marker %d placed / created at")
+    /// and the balancer's (iteration, score) log.
+    pub marker_log: Vec<(&'static str, i32, [f32; 2])>,
+    pub group_balance_log: Vec<(i32, f64)>,
 }
 
 const DEFAULT_FACING: [f32; 2] = [0.0, -1.0];
@@ -110,6 +114,8 @@ impl<'a> Placement<'a> {
             notes: Vec::new(),
             balance_log: Vec::new(),
             space: super::space::Space::new(world, data),
+            marker_log: Vec::new(),
+            group_balance_log: Vec::new(),
         };
         p.radii = (0..data.things.len()).map(|t| p.compute_radius(t)).collect();
         p.update_regions(world);
@@ -816,10 +822,25 @@ impl<'a> Placement<'a> {
                 }
             }
         }
-        for id in ["start_loc", "southerneurope_village01"] {
-            if let Some(&t) = self.data.thing_by_id.get(id) {
+        let settlements: Vec<&str> = self.data.things.iter().filter(|t| t.components & (1 << 14) != 0).map(|t| t.ids.as_str()).collect();
+        s += &format!("  things with a SettlementComponent: {settlements:?}\n");
+        let sv = &self.data.svars;
+        s += &format!("  svars nudge step {} delta {} iterations {} worse {} small {} search {}\n", sv.nudge_step, sv.nudge_delta, sv.balance_iterations, sv.balance_worse, sv.balance_small, sv.balance_search);
+        let mut ids: Vec<String> = vec!["start_loc".into()];
+        for g in &self.groups {
+            ids.extend(g.def.objects.iter().map(|o| o.0.to_ascii_lowercase()));
+            s += &format!("  objects of {}: {:?}\n", g.ids, g.def.objects);
+        }
+        for id in ids {
+            if let Some(&t) = self.data.thing_by_id.get(&id) {
                 let t = &self.data.things[t];
-                s += &format!("  thing {} category {} kind {} flags {:08x} shape {:08x?} radius {}\n", t.ids, t.category, t.native_kind, t.flags, t.shape, t.shape_radius);
+                s += &format!(
+                    "  thing {} category {} kind {} flags {:08x} shape {:08x?} soft {:08x?} radius {} components {:08x} needs_space {} models {}\n",
+                    t.ids, t.category, t.native_kind, t.flags, t.shape, t.soft, t.shape_radius, t.components, t.needs_space, t.models.len()
+                );
+            }
+            if let Some(members) = self.data.random_actors.get(&id) {
+                s += &format!("  random {id}: {members:?}\n");
             }
         }
         s
@@ -984,10 +1005,45 @@ impl<'a> Placement<'a> {
         created
     }
 
+    /// The random things of GWorld::ResolvePlaceholdersAndRandomThings
+    /// (0x4FDA70, after the generator, at the session start): every
+    /// RANDOM_ACTOR thing, in creation order, becomes a member of its table
+    /// (0x4B6FF0 with the world RNG: members of positive weight pushed at the
+    /// head by 0x4B6BA0, so the table runs last member first).
+    pub(super) fn resolve_random_things(&mut self, rng: &mut Rng) {
+        for i in 0..self.objects.len() {
+            let ids = self.data.things[self.objects[i].thing].ids.to_ascii_lowercase();
+            let Some(members) = self.data.random_actors.get(&ids) else { continue };
+            let mut table: Vec<(usize, f32)> = Vec::new();
+            let mut total = 0.0f32;
+            for (id, w) in members {
+                if !(*w > 0.0) {
+                    continue;
+                }
+                if let Some(&t) = self.data.thing_by_id.get(&id.to_ascii_lowercase()) {
+                    table.insert(0, (t, *w));
+                    total = (f64::from(*w) + f64::from(total)) as f32;
+                }
+            }
+            rng.getter();
+            if table.is_empty() {
+                continue;
+            }
+            let u = f64::from(rng.at(0x4B7008).draw_after_getter()) * super::rng::UNIT;
+            let mut r = u * f64::from(total) - f64::from(table[0].1);
+            let mut k = 0;
+            while !(r < 0.0) && k + 1 < table.len() {
+                k += 1;
+                r -= f64::from(table[k].1);
+            }
+            self.objects[i].thing = table[k].0;
+        }
+    }
+
     /// Settlement centres create one of their CityComponent layouts; every
     /// building paints its [BaseTerrain] (biome variation, padding) and
     /// flattens the ground when flatten_terrain is set.
-    fn expand_cities(&mut self, world: &mut World, biome: &str, rng: &mut Rng) {
+    pub(super) fn expand_cities(&mut self, world: &mut World, biome: &str, rng: &mut Rng) {
         let data = self.data;
         let mut index = 0;
         while index < self.objects.len() {
@@ -1182,11 +1238,13 @@ pub(super) struct Marker {
     /// The marker's kingdom (kingdom markers); kept for the group balancer.
     #[allow(dead_code)]
     pub kingdom: Option<usize>,
+    /// +0x30 the marker's definition (object markers).
+    pub thing: usize,
 }
 
 impl Marker {
     pub(super) fn new(id: usize, pos: [f32; 2], orient: [f32; 2], kingdom: Option<usize>) -> Self {
-        Self { id, pos, best: [0.0, 0.0], orient, best_orient: [0.0, 0.0], step: 0.0, force: [0.0, 0.0], kingdom }
+        Self { id, pos, best: [0.0, 0.0], orient, best_orient: [0.0, 0.0], step: 0.0, force: [0.0, 0.0], kingdom, thing: usize::MAX }
     }
 }
 
@@ -1194,9 +1252,11 @@ impl Marker {
 /// margin, +0xC self score).
 pub(super) trait Balance {
     fn pair(&self, rng: &mut Rng, a: &mut Marker, b: &Marker) -> f32;
-    fn valid(&self, m: &Marker, cand: [f32; 2]) -> bool;
+    /// May move the candidate (CheckPositionValid's snap); the marker moves
+    /// to the candidate as left.
+    fn valid(&self, m: &Marker, cand: &mut [f32; 2]) -> bool;
     fn margin(&self, m: &Marker) -> f64;
-    fn self_score(&self, m: &mut Marker) -> f64;
+    fn self_score(&self, rng: &mut Rng, m: &mut Marker) -> f64;
 }
 
 /// The kingdom balancer (vtable 0xA4228C: 0x5954B0 / 0x595520 / 0x595530 /
@@ -1225,13 +1285,13 @@ impl Balance for KingdomBalance {
         };
         pair_penalty_exact(rng, a, b.pos, desired)
     }
-    fn valid(&self, _m: &Marker, _cand: [f32; 2]) -> bool {
+    fn valid(&self, _m: &Marker, _cand: &mut [f32; 2]) -> bool {
         true
     }
     fn margin(&self, _m: &Marker) -> f64 {
         self.margin
     }
-    fn self_score(&self, _m: &mut Marker) -> f64 {
+    fn self_score(&self, _rng: &mut Rng, _m: &mut Marker) -> f64 {
         0.0
     }
 }
@@ -1278,7 +1338,7 @@ fn marker_score(rng: &mut Rng, markers: &mut [Marker], i: usize, cb: &dyn Balanc
         let p = cb.pair(rng, &mut markers[i], &other);
         sum = (f64::from(p) + f64::from(sum)) as f32;
     }
-    cb.self_score(&mut markers[i]) + f64::from(sum)
+    cb.self_score(rng, &mut markers[i]) + f64::from(sum)
 }
 
 /// KKC_RMGBalancer::BalanceMarkers (0x590B10): every iteration scores all
@@ -1358,7 +1418,7 @@ pub(super) fn balance_markers(world: &World, rng: &mut Rng, markers: &mut [Marke
                 cand[1] = lim_y;
             }
             let m = &markers[i];
-            if cb.valid(m, cand) {
+            if cb.valid(m, &mut cand) {
                 markers[i].pos = cand;
             } else {
                 markers[i].step = (f64::from(delta) + f64::from(markers[i].step)) as f32;
