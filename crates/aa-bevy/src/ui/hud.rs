@@ -68,6 +68,8 @@ pub enum GameAction {
     CycleIdle(u32),
     /// Arm a targeted order: the next left click picks its target.
     Target(TargetOrder),
+    /// ActorCommandCancel: drop the armed order (and its placement).
+    CancelTarget,
     /// Minimap press/drag: jump the camera to (u, v) of the map.
     MinimapJump(f32, f32),
     TogglePause,
@@ -197,15 +199,22 @@ pub struct GameHud {
     command_all: ButtonInfo,
     team_go: ButtonInfo,
     team_cancel: ButtonInfo,
+    /// ActionButtonInfo ActorCommandCancel (action panel +0xCC): the only
+    /// button while a construct item is being placed (`0x5F85A0`).
+    command_cancel: ButtonInfo,
     team_commands: Vec<TeamCommand>,
     property_icons: std::collections::HashMap<String, String>,
     research_art: std::collections::HashMap<String, ResearchArt>,
     /// The command of the action button under the pointer (the economic
     /// impact preview of 0x602640).
     hovered: Option<String>,
-    /// The structure the Unpack placement mode is placing (its impact is
-    /// previewed, `0x603A00` -> `0x603620` -> `0x602640`).
-    placing: Option<aa_play::DefId>,
+    /// The structure the placement mode is placing and whether it is a
+    /// construct item (its impact is previewed: Unpack `0x603A00` ->
+    /// `0x603620` -> `0x602640`, a construct item `0x603B50` -> `0x603A00`).
+    placing: Option<(aa_play::DefId, bool)>,
+    /// Verification aid (script step tint_actions): every action button
+    /// drawn tinted.
+    pub debug_tint: Option<[f32; 3]>,
     /// Tooltip (name, text) of each action slot and formation button.
     slot_tips: Vec<Option<(String, String)>>,
     formation_tips: Vec<String>,
@@ -460,6 +469,7 @@ impl GameHud {
         let command_all = load_button_info(ui, "CommandAll");
         let team_go = load_button_info(ui, "GoToTeamCommands");
         let team_cancel = load_button_info(ui, "CancelTeamCommands");
+        let command_cancel = load_button_info(ui, "ActorCommandCancel");
         let team_commands = load_team_commands(ui);
         let property_icons = load_property_icons(ui);
         let research_art = load_research_art(ui);
@@ -474,11 +484,13 @@ impl GameHud {
             command_all: &command_all,
             team_go: &team_go,
             team_cancel: &team_cancel,
+            command_cancel: &command_cancel,
             team_commands: &team_commands,
             property_icons: &property_icons,
             research_art: &research_art,
             hovered: None,
             placing: None,
+            debug_tint: None,
             starting_experience: 0.0,
             general_portrait: None,
             names: &names,
@@ -493,11 +505,13 @@ impl GameHud {
             command_all,
             team_go,
             team_cancel,
+            command_cancel,
             team_commands,
             property_icons,
             research_art,
             hovered: None,
             placing: None,
+            debug_tint: None,
             slot_tips: vec![None; 12],
             formation_tips: Vec::new(),
             page: ActionPage::Main,
@@ -565,11 +579,13 @@ impl GameHud {
             command_all: &self.command_all,
             team_go: &self.team_go,
             team_cancel: &self.team_cancel,
+            command_cancel: &self.command_cancel,
             team_commands: &self.team_commands,
             property_icons: &self.property_icons,
             research_art: &self.research_art,
             hovered: self.hovered.as_deref(),
             placing: self.placing,
+            debug_tint: self.debug_tint,
             starting_experience: self.starting_experience,
             general_portrait: general_portrait.as_deref(),
             names: &self.names,
@@ -768,6 +784,17 @@ impl GameHud {
                     let text = ui.strings.resolve(key).replacen("%s", &subject, 1).replacen("%s", &price, 1);
                     plain.push(("GENERIC_ERROR", text));
                 }
+                // an unaffordable air attack / air recon (0x56D5A0 /
+                // 0x56D7C0 / 0x56DA00): denizen_error_affording|ss with the
+                // subject string (denizen_air_attack / denizen_air_recon)
+                // and the price (0x5C4D10), GENERIC_ERROR (type 0x11)
+                aa_play::books::Notice::DenizenUnaffordable { kingdom, what, cost, .. } if *kingdom == b.local => {
+                    let price: Vec<f32> = self.resources.iter().map(|r| w.data.resource_index(&r.ids).and_then(|j| cost.get(j).copied()).unwrap_or(0.0)).collect();
+                    let price = cost_text(ui, &self.resources, &price);
+                    let subject = ui.strings.resolve(&format!("#{what}"));
+                    let text = ui.strings.resolve("#denizen_error_affording|ss").replacen("%s", &subject, 1).replacen("%s", &price, 1);
+                    plain.push(("GENERIC_ERROR", text));
+                }
                 _ => {}
             }
         }
@@ -895,6 +922,7 @@ impl GameHud {
                 self.page = ActionPage::Main;
                 None
             }
+            "command_cancel" => Some(GameAction::CancelTarget),
             _ => None,
         }
     }
@@ -1010,10 +1038,15 @@ impl GameHud {
         });
     }
 
-    /// The structure being placed (the Unpack placement mode), previewed in
-    /// the economic impact bar.
-    pub fn set_placing(&mut self, def: Option<aa_play::DefId>) {
-        self.placing = def;
+    /// The structure being placed (the placement mode) and whether it is a
+    /// construct item, previewed in the economic impact bar. Entering the
+    /// construct placement closes the construct page (`0x5F85A0` ->
+    /// `0x5F5300` releases the page command).
+    pub fn set_placing(&mut self, placing: Option<(aa_play::DefId, bool)>) {
+        if placing.is_some_and(|(_, construct)| construct) && self.page == ActionPage::Construct {
+            self.page = ActionPage::Main;
+        }
+        self.placing = placing;
     }
 
     /// The tooltip (name, text) of an action button slot / formation button
@@ -1106,6 +1139,24 @@ fn hq_structure(w: &World, org: &aa_play::Organization) -> Option<aa_play::Actor
         .iter()
         .copied()
         .find(|m| w.actor(*m).is_some_and(|a| a.alive && !a.removed && w.data.def(a.def).class == Some(DefClass::Building) && !w.data.def(a.def).recruits.is_empty()))
+}
+
+/// DenizenGroup behaviour bits (denizen +0x38 capability, +0x3C readiness):
+/// AIR_OFFENSIVE (air_attack) and AIR_RECON (air_recon).
+const AIR_OFFENSIVE: u32 = aa_play::denizen::AIR_OFFENSIVE;
+const AIR_RECON: u32 = aa_play::denizen::AIR_RECON;
+
+/// The denizen's capability (+0x38, `0x567F80(0)` / `0x567FA0(0)`).
+fn air_capable(w: &World, actor: aa_play::ActorId, bit: u32) -> bool {
+    w.books.actor(actor).and_then(|b| b.denizen.as_ref()).is_some_and(|d| d.behaviors & bit != 0)
+}
+
+/// The command mask bit of air_attack (0x19) / air_recon (0x1A)
+/// (`0x569C70`: the capability and the readiness +0x3C, which `0x5696B0`
+/// rebuilds from the aircraft at home; aa-play `denizen::enabled`).
+fn air_ready(w: &World, actor: aa_play::ActorId, bit: u32) -> bool {
+    let command = if bit == AIR_OFFENSIVE { aa_play::denizen::COMMAND_AIR_ATTACK } else { aa_play::denizen::COMMAND_AIR_RECON };
+    aa_play::denizen::enabled(w, actor, command)
 }
 
 /// The one selected own structure (building or deployed HQ organization).
@@ -1370,11 +1421,14 @@ struct View<'a> {
     command_all: &'a ButtonInfo,
     team_go: &'a ButtonInfo,
     team_cancel: &'a ButtonInfo,
+    command_cancel: &'a ButtonInfo,
     team_commands: &'a [TeamCommand],
     property_icons: &'a std::collections::HashMap<String, String>,
     research_art: &'a std::collections::HashMap<String, ResearchArt>,
     hovered: Option<&'a str>,
-    placing: Option<aa_play::DefId>,
+    placing: Option<(aa_play::DefId, bool)>,
+    /// Verification aid: every action button tinted (script tint_actions).
+    debug_tint: Option<[f32; 3]>,
     starting_experience: f32,
     /// The selected division HQ's general portrait model.
     general_portrait: Option<&'a str>,
@@ -1784,7 +1838,7 @@ impl View<'_> {
     }
     fn act(&self, ids: &str, cmd: String) -> Option<(i32, HudAction)> {
         let c = self.command(ids)?;
-        Some((c.position, HudAction { texture: c.icon.clone(), command: cmd, enabled: true, selected: false, targeted: false }))
+        Some((c.position, HudAction { texture: c.icon.clone(), command: cmd, enabled: true, selected: false, targeted: false, tint: None }))
     }
     fn act_enabled(&self, ids: &str, cmd: String, enabled: bool) -> Option<(i32, HudAction)> {
         self.act(ids, cmd).map(|(p, mut a)| {
@@ -1894,11 +1948,28 @@ impl View<'_> {
             "research_page" => self.command("research").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "construct_page" => self.command("construct").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "construct" => {
-                // 0x5F6590: the structure's name, "Cost" (0x640140) and
-                // "Upkeep" (0x640590) rows; its other sections (other
-                // requirements 0x63B270, upgrades 0x63B5C0, properties
-                // 0x63AEF0, researches 0x63B740, general 0x63A440) are not
-                // ported yet
+                // 0x5F6590 (not an upgrade): the structure's name, the
+                // "Cost" (0x640140) and "Upkeep" (0x640590) rows, then the
+                // sections 0x639AB0 adds after one blank line before the
+                // first of them (DAT_009F20AC "\n"):
+                // - 0x63B270 "Recruits" (a StructureComponent's recruit
+                //   list, ActorData +0x454): each organization whose
+                //   property requirements the kingdom meets (0x4C5250 with
+                //   the structure test off), followed by
+                //   ui_tooltip_other_requirements|s with the other
+                //   structures it requires (+0x2C8), joined by ", "
+                //   (0x638A00);
+                // - 0x63B5C0 "Upgrades" (ConstructionComponent [Upgrade],
+                //   +0x4C0), 0x63AEF0 "Properties Provided" / "Technology"
+                //   (Element / StructureComponent SupportProperty, Structure
+                //   TechnologyProperty, +0x2D8 / +0x434 / +0x43C): no AA
+                //   definition authors these lists;
+                // - 0x63B740 "Researches": the research items 0x5842F0 lets
+                //   the kingdom research; it needs a kingdom-level 0x5842F0
+                //   (aa-play's takes the researching building), and no AA
+                //   construct item has research items;
+                // - 0x63A440: the description (ActorData +0x30), which no
+                //   AA construct item has (aa-play does not load it).
                 let def = arg?;
                 let d = w.data.def(def);
                 let cost = self.cost_of(def);
@@ -1907,12 +1978,39 @@ impl View<'_> {
                 if !up.is_empty() {
                     rows.push(format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_upkeep"), up));
                 }
+                let mut sections = Vec::new();
+                if d.has_component("StructureComponent") {
+                    let known = self.local().and_then(|k| w.books.kingdom(k.id)).map(|k| k.technologies.clone()).unwrap_or_default();
+                    let has = |p: &String| known.iter().any(|t| t.eq_ignore_ascii_case(p));
+                    let mut recruits = Vec::new();
+                    for r in &d.recruits {
+                        let rq = &w.data.def(*r).requirements;
+                        let props_met = rq.properties.is_empty() || if rq.any_property { rq.properties.iter().any(has) } else { rq.properties.iter().all(has) };
+                        if !props_met {
+                            continue;
+                        }
+                        let others: Vec<String> = rq.structures.iter().filter_map(|s| w.data.find(s)).filter(|s| *s != def).map(|s| resolve(&w.data.def(s).name)).collect();
+                        let mut item = resolve(&w.data.def(*r).name);
+                        if !others.is_empty() {
+                            item.push_str(&resolve("#ui_tooltip_other_requirements|s").replacen("%s", &others.join(", "), 1));
+                        }
+                        recruits.push(item);
+                    }
+                    if !recruits.is_empty() {
+                        sections.push(format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_recruits"), recruits.join(", ")));
+                    }
+                }
+                if !sections.is_empty() {
+                    rows.push(String::new());
+                    rows.extend(sections);
+                }
                 Some((resolve(&d.name), rows.join("\n")))
             }
             "recruit_back" => self.command("structure_cancel_queued").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "command_all" => Some((resolve(&self.command_all.name), resolve(&self.command_all.tooltip))),
             "team_page" => Some((resolve(&self.team_go.name), resolve(&self.team_go.tooltip))),
             "team_back" => Some((resolve(&self.team_cancel.name), resolve(&self.team_cancel.tooltip))),
+            "command_cancel" => Some((resolve(&self.command_cancel.name), resolve(&self.command_cancel.tooltip))),
             "team_command" => self.team_commands.get(arg? as usize).map(|t| (resolve(&t.name), resolve(&t.tooltip))),
             "recruit_page" => self.command("recruit").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "sell" => {
@@ -2030,7 +2128,13 @@ impl HudWorld for View<'_> {
         // own production and upkeep, no cost (the original shows the second
         // bar while the ghost is out: "+30 +25" over "+25 +20" for a supply
         // depot)
-        if let Some(def) = self.placing.filter(|_| self.hovered.is_none_or(|h| !h.starts_with("AAPlay recruit "))) {
+        // a construct item (0x603B50 -> 0x603A00, a structure without an
+        // organization layout): no upkeep change, the cost the first
+        // selected builder is quoted (0x6025E0)
+        if let Some((def, true)) = self.placing.filter(|_| self.hovered.is_none_or(|h| !h.starts_with("AAPlay recruit "))) {
+            return Some(HudImpact { upkeep: vec![0.0; self.resources.len()], cost: self.cost_of(def) });
+        }
+        if let Some((def, false)) = self.placing.filter(|_| self.hovered.is_none_or(|h| !h.starts_with("AAPlay recruit "))) {
             let mut upkeep = self.econ_of(def);
             for (i, r) in self.resources.iter().enumerate() {
                 if r.kind == 2 {
@@ -2134,236 +2238,271 @@ impl HudWorld for View<'_> {
     }
 
     fn action_buttons(&self) -> Vec<Option<HudAction>> {
-        let (Some(b), Some(w)) = (self.battle, self.world()) else { return vec![None; 12] };
-        let own = |k: Option<aa_play::KingdomId>| k == Some(b.local);
-        match self.page {
-            ActionPage::Recruit(id) => {
-                let id = *id;
-                let Some(a) = w.actor(id) else { return vec![None; 12] };
-                let def = w.data.def(a.def);
+        // the page's buttons; a verification run can tint them all
+        // (script step tint_actions: texture effect mode 2, or 3 when
+        // disabled)
+        let mut v = (|| -> Vec<Option<HudAction>> {
+            let (Some(b), Some(w)) = (self.battle, self.world()) else { return vec![None; 12] };
+            let own = |k: Option<aa_play::KingdomId>| k == Some(b.local);
+            // placing a construct item (0x612A70 -> 0x5F85A0): the panel holds
+            // only ActorCommandCancel, in the last slot, until the placement
+            // ends
+            if self.placing.is_some_and(|(_, construct)| construct) {
                 let mut v: Vec<Option<HudAction>> = vec![None; 12];
-                // 0x5F7350: a button per recruit, enabled while 0x581F70
-                // finds its requirements met (code 0); code 2 leaves its
-                // slot empty. The price is not part of it: an unaffordable
-                // recruit is refused when pressed (0x6157B0 -> 0x582950).
-                for (i, r) in def.recruits.iter().take(11).enumerate() {
-                    let code = aa_play::production::recruit_requirements(w, id, *r).code;
-                    if code == 2 {
-                        continue;
-                    }
-                    let rd = w.data.def(*r);
-                    v[i] = Some(HudAction {
-                        texture: rd.icon.clone().unwrap_or_default(),
-                        command: format!("AAPlay recruit {id} {r}"),
-                        enabled: code == 0,
-                        selected: false,
-                        targeted: false,
-                    });
+                if !self.command_cancel.texture.is_empty() {
+                    v[11] = Some(HudAction { texture: self.command_cancel.texture.clone(), command: "AAPlay command_cancel".into(), enabled: true, selected: false, targeted: false, tint: None });
                 }
-                if let Some(c) = self.command("structure_cancel_queued") {
-                    v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
-                }
-                v
+                return v;
             }
-            ActionPage::Construct => {
-                // 0x5F7350 (behavior flag 0x40000): a button per structure of
-                // the builders' list, up to 11 (0x5F6D30 with the
-                // definition's icon), the back button in the last slot
-                let own_orgs: Vec<&aa_play::Organization> = b
-                    .selection
-                    .iter()
-                    .filter_map(|u| match u {
-                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom))),
-                        _ => None,
-                    })
-                    .collect();
-                let mut v: Vec<Option<HudAction>> = vec![None; 12];
-                for (i, d) in construct_list(w, &own_orgs).into_iter().take(11).enumerate() {
-                    v[i] = Some(HudAction { texture: w.data.def(d).icon.clone().unwrap_or_default(), command: format!("AAPlay construct {d}"), enabled: true, selected: false, targeted: false });
+            match self.page {
+                ActionPage::Recruit(id) => {
+                    let id = *id;
+                    let Some(a) = w.actor(id) else { return vec![None; 12] };
+                    let def = w.data.def(a.def);
+                    let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                    // 0x5F7350: a button per recruit, enabled while 0x581F70
+                    // finds its requirements met (code 0); code 2 leaves its
+                    // slot empty. The price is not part of it: an unaffordable
+                    // recruit is refused when pressed (0x6157B0 -> 0x582950).
+                    for (i, r) in def.recruits.iter().take(11).enumerate() {
+                        let code = aa_play::production::recruit_requirements(w, id, *r).code;
+                        if code == 2 {
+                            continue;
+                        }
+                        let rd = w.data.def(*r);
+                        v[i] = Some(HudAction {
+                            texture: rd.icon.clone().unwrap_or_default(),
+                            command: format!("AAPlay recruit {id} {r}"),
+                            enabled: code == 0,
+                            selected: false,
+                            targeted: false,
+                            tint: None,
+                        });
+                    }
+                    if let Some(c) = self.command("structure_cancel_queued") {
+                        v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false, tint: None });
+                    }
+                    v
                 }
-                if let Some(c) = self.command("structure_cancel_queued") {
-                    v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
+                ActionPage::Construct => {
+                    // 0x5F7350 (behavior flag 0x40000): a button per structure of
+                    // the builders' list, up to 11 (0x5F6D30 with the
+                    // definition's icon), the back button in the last slot
+                    let own_orgs: Vec<&aa_play::Organization> = b
+                        .selection
+                        .iter()
+                        .filter_map(|u| match u {
+                            Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom))),
+                            _ => None,
+                        })
+                        .collect();
+                    let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                    for (i, d) in construct_list(w, &own_orgs).into_iter().take(11).enumerate() {
+                        v[i] = Some(HudAction { texture: w.data.def(d).icon.clone().unwrap_or_default(), command: format!("AAPlay construct {d}"), enabled: true, selected: false, targeted: false, tint: None });
+                    }
+                    if let Some(c) = self.command("structure_cancel_queued") {
+                        v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false, tint: None });
+                    }
+                    v
                 }
-                v
+                ActionPage::Research(id) => {
+                    // 0x5F77B0: the structure's research items in order, up to
+                    // 11 slots; 0x5844A0 code 2 shows nothing and takes no
+                    // slot, code 4 (known, queued here or in progress in the
+                    // kingdom) leaves its slot empty, code 1 (a structure
+                    // missing) a disabled button, code 0 an enabled one
+                    // (0x5F6EA0: PropertyDataSelectCommand, the property's
+                    // action_button_icon); the back button as on the recruit
+                    // page (0x5F6FE0 on the last slot)
+                    let id = *id;
+                    let Some(a) = w.actor(id) else { return vec![None; 12] };
+                    let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                    let mut slot = 0;
+                    for (index, r) in w.data.def(a.def).research.iter().enumerate() {
+                        if slot > 10 {
+                            break;
+                        }
+                        let code = aa_play::production::research_requirements(w, id, index).code;
+                        match code {
+                            2 => continue,
+                            4 => {}
+                            _ => {
+                                let texture = self.research_art.get(&r.property.to_ascii_lowercase()).map(|x| x.icon.clone()).unwrap_or_default();
+                                v[slot] = Some(HudAction { texture, command: format!("AAPlay research {id} {index}"), enabled: code == 0, selected: false, targeted: false, tint: None });
+                            }
+                        }
+                        slot += 1;
+                    }
+                    if let Some(c) = self.command("structure_cancel_queued") {
+                        v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false, tint: None });
+                    }
+                    v
+                }
+                ActionPage::Team => {
+                    // the team commands (Data/Game/team_commands.tgi); flares to
+                    // allies are not implemented, so they stay disabled
+                    let mut acts: Vec<(i32, HudAction)> = Vec::new();
+                    for (i, t) in self.team_commands.iter().enumerate().filter(|(_, t)| !t.icon.is_empty()) {
+                        if acts.iter().any(|(p, _)| *p == t.position) {
+                            continue;
+                        }
+                        acts.push((t.position, HudAction { texture: t.icon.clone(), command: format!("AAPlay team_command {i}"), enabled: false, selected: false, targeted: false, tint: None }));
+                    }
+                    if !self.team_cancel.texture.is_empty() {
+                        acts.push((self.team_cancel.index, HudAction { texture: self.team_cancel.texture.clone(), command: "AAPlay team_back".into(), enabled: true, selected: false, targeted: false, tint: None }));
+                    }
+                    place(acts)
+                }
+                ActionPage::Main => {
+                    let mut acts = Vec::new();
+                    let own_orgs: Vec<&aa_play::Organization> = b
+                        .selection
+                        .iter()
+                        .filter_map(|u| match u {
+                            Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom)) && hq_structure(w, o).is_none()),
+                            _ => None,
+                        })
+                        .collect();
+                    let member_defs = |o: &aa_play::Organization| -> Vec<&aa_play::Def> { o.members.iter().filter_map(|m| w.actor(*m)).filter(|a| a.alive).map(|a| w.data.def(a.def)).collect() };
+                    // a regiment that fights; an HQ truck organization only moves
+                    let fighting = own_orgs.iter().any(|o| member_defs(o).iter().any(|d| !d.weapons.is_empty()));
+                    let own_trucks: Vec<aa_play::ActorId> = b
+                        .selection
+                        .iter()
+                        .filter_map(|u| match u {
+                            Unit::Actor(a) => w.actor(*a).filter(|x| x.alive && own(x.kingdom) && w.data.def(x.def).class == Some(DefClass::Truck)).map(|x| x.id),
+                            _ => None,
+                        })
+                        .collect();
+                    // 0x530510 over the members' performer abilities (an
+                    // organization's command mask is the OR of its members',
+                    // 0x589A60): kill (0) for one with an ability (0x57E230),
+                    // unless all its abilities bombard (0x57E2F0); bombard (1)
+                    // for one with an ability flagged bombard (AbilityDefinition
+                    // +0x54 bit 3, 0x57E280); repair (3) for one with a healing
+                    // ability (0x57E1C0 -> 0x4BE970: a HEAL effect)
+                    const BOMBARD: u32 = 1 << 3;
+                    const HEAL: u32 = 3;
+                    let performer = |d: &aa_play::Def| d.weapons.iter().filter(|x| !x.defender).cloned().collect::<Vec<_>>();
+                    let caps: Vec<Vec<aa_play::data::Weapon>> = own_orgs.iter().flat_map(|o| member_defs(o)).map(performer).collect();
+                    let can_kill = caps.iter().any(|ws| !ws.is_empty() && (!ws.iter().any(|x| x.flags & BOMBARD != 0) || ws.iter().any(|x| x.flags & BOMBARD == 0)));
+                    let can_bombard = caps.iter().any(|ws| ws.iter().any(|x| x.flags & BOMBARD != 0));
+                    let can_repair = caps.iter().any(|ws| ws.iter().any(|x| x.effects.iter().any(|e| e.kind == HEAL)));
+                    if !own_orgs.is_empty() || !own_trucks.is_empty() {
+                        acts.extend(self.act("move", "AAPlay move".into()));
+                        if can_kill {
+                            acts.extend(self.act("kill", "AAPlay kill".into()));
+                        }
+                        if fighting {
+                            acts.extend(self.act("retreat", "AAPlay retreat".into()));
+                        }
+                        if can_bombard {
+                            acts.extend(self.act("bombard", "AAPlay bombard".into()));
+                        }
+                        if can_repair {
+                            acts.extend(self.act("repair", "AAPlay repair".into()));
+                        }
+                        // construct (4): a member with a mover and a build list
+                        // (0x530510: mover and actor +0x108); the button opens
+                        // the construct page (behavior flags 0x50030)
+                        if !construct_list(w, &own_orgs).is_empty() {
+                            acts.extend(self.act("construct", "AAPlay construct_page".into()));
+                        }
+                        // air_attack (0x19) / air_recon (0x1A) of a denizen
+                        // member (a carrier in its organization): 0x5F88C0 adds
+                        // them only through the selection's command mask (the
+                        // organization's is its members' OR, 0x589A60), so only
+                        // while one is ready, and enabled; the order goes to the
+                        // first ready member
+                        for (bit, ids) in [(AIR_OFFENSIVE, "air_attack"), (AIR_RECON, "air_recon")] {
+                            let ready = own_orgs.iter().flat_map(|o| o.members.iter().copied()).find(|m| w.actor(*m).is_some_and(|a| a.alive) && air_ready(w, *m, bit));
+                            if let Some(m) = ready {
+                                acts.extend(self.act(ids, format!("AAPlay {ids} {m}")));
+                            }
+                        }
+                        acts.extend(self.act("stop", "AAPlay stop".into()));
+                        if fighting {
+                            acts.extend(self.act("guard", "AAPlay guard".into()));
+                            acts.extend(self.act("explore", "AAPlay explore".into()));
+                        }
+                    }
+                    // the team commands page (ActionButtonInfo GoToTeamCommands)
+                    if (!own_orgs.is_empty() && fighting) || selected_structure(b).is_some() && !self.team_go.texture.is_empty() {
+                        let building = selected_structure(b).is_some_and(|id| w.actor(id).is_some_and(|a| own(a.kingdom) && w.data.def(a.def).class == Some(DefClass::Building)));
+                        if (!own_orgs.is_empty() && fighting) || building {
+                            acts.push((self.team_go.index, HudAction { texture: self.team_go.texture.clone(), command: "AAPlay team_page".into(), enabled: true, selected: false, targeted: false, tint: None }));
+                        }
+                    }
+                    // one regiment that attaches to HQs: hq_attach / hq_detach
+                    if let [Unit::Org(o)] = b.selection.as_slice() {
+                        if let Some(org) = w.orgs.get(*o as usize).filter(|x| x.alive && own(Some(x.kingdom))) {
+                            let od = w.data.def(org.def);
+                            if od.max_attachments.is_none() && od.supply_used && fighting {
+                                acts.extend(self.act_enabled("hq_attach", "AAPlay hq_attach".into(), org.hq.is_none()));
+                                acts.extend(self.act_enabled("hq_detach", format!("AAPlay hq_detach {o}"), org.hq.is_some()));
+                            }
+                            // an HQ truck organization unpacks through its truck
+                            if let Some(t) = org.members.iter().copied().find(|m| w.actor(*m).is_some_and(|a| a.alive && w.data.def(a.def).unpacks_to.is_some())) {
+                                acts.extend(self.act("unpack", format!("AAPlay unpack {t}")));
+                            }
+                        }
+                    }
+                    // a structure: the selected building, or a deployed division
+                    // HQ organization's structure (the recruit component is on
+                    // the building, not on its organization)
+                    if let Some(id) = &selected_structure(b) {
+                        if let Some(a) = w.actor(*id).filter(|a| own(a.kingdom)) {
+                            let def = w.data.def(a.def);
+                            if !def.recruits.is_empty() {
+                                acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
+                                acts.extend(self.act("set_rally_point", format!("AAPlay set_rally_point {id}")));
+                            }
+                            // a ResearchComponent (actor +0xB4): research
+                            // (actor_commands_aa.tgi, preferred_position 6)
+                            if !def.research.is_empty() {
+                                acts.extend(self.act("research", format!("AAPlay research_page {id}")));
+                            }
+                            // a denizen (0x5F88C0 for one own actor: an airfield,
+                            // a carrier outside an organization): shown while it
+                            // has the capability, +0x38 bits 0x10 / 0x40
+                            // (0x567F80(0) / 0x567FA0(0)), enabled by the command
+                            // mask (0x437810; 0x569C70: capability and readiness
+                            // +0x3C)
+                            if air_capable(w, *id, AIR_OFFENSIVE) {
+                                acts.extend(self.act_enabled("air_attack", format!("AAPlay air_attack {id}"), air_ready(w, *id, AIR_OFFENSIVE)));
+                            }
+                            if air_capable(w, *id, AIR_RECON) {
+                                acts.extend(self.act_enabled("air_recon", format!("AAPlay air_recon {id}"), air_ready(w, *id, AIR_RECON)));
+                            }
+                            // an HQ: CommandAll (ActionButtonInfo index 4)
+                            let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));
+                            if hq && !self.command_all.texture.is_empty() {
+                                acts.push((self.command_all.index, HudAction { texture: self.command_all.texture.clone(), command: format!("AAPlay command_all {id}"), enabled: true, selected: false, targeted: false, tint: None }));
+                            }
+                            if def.unpacks_to.is_some() {
+                                acts.extend(self.act("unpack", format!("AAPlay unpack {id}")));
+                            }
+                            if def.packs_to.is_some() {
+                                acts.extend(self.act("pack", format!("AAPlay pack {id}")));
+                            }
+                            if aa_play::player_orders::sellable(w, *id) {
+                                acts.extend(self.act_enabled("sell", format!("AAPlay sell {id}"), aa_play::player_orders::sell_refused(w, *id).is_none()));
+                            }
+                        }
+                    }
+                    // trucks and HQ truck organizations can be disbanded
+                    if !own_trucks.is_empty() || (!own_orgs.is_empty() && !fighting) {
+                        acts.extend(self.act("disband", "AAPlay disband".into()));
+                    }
+                    place(acts)
+                }
             }
-            ActionPage::Research(id) => {
-                // 0x5F77B0: the structure's research items in order, up to
-                // 11 slots; 0x5844A0 code 2 shows nothing and takes no
-                // slot, code 4 (known, queued here or in progress in the
-                // kingdom) leaves its slot empty, code 1 (a structure
-                // missing) a disabled button, code 0 an enabled one
-                // (0x5F6EA0: PropertyDataSelectCommand, the property's
-                // action_button_icon); the back button as on the recruit
-                // page (0x5F6FE0 on the last slot)
-                let id = *id;
-                let Some(a) = w.actor(id) else { return vec![None; 12] };
-                let mut v: Vec<Option<HudAction>> = vec![None; 12];
-                let mut slot = 0;
-                for (index, r) in w.data.def(a.def).research.iter().enumerate() {
-                    if slot > 10 {
-                        break;
-                    }
-                    let code = aa_play::production::research_requirements(w, id, index).code;
-                    match code {
-                        2 => continue,
-                        4 => {}
-                        _ => {
-                            let texture = self.research_art.get(&r.property.to_ascii_lowercase()).map(|x| x.icon.clone()).unwrap_or_default();
-                            v[slot] = Some(HudAction { texture, command: format!("AAPlay research {id} {index}"), enabled: code == 0, selected: false, targeted: false });
-                        }
-                    }
-                    slot += 1;
-                }
-                if let Some(c) = self.command("structure_cancel_queued") {
-                    v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
-                }
-                v
-            }
-            ActionPage::Team => {
-                // the team commands (Data/Game/team_commands.tgi); flares to
-                // allies are not implemented, so they stay disabled
-                let mut acts: Vec<(i32, HudAction)> = Vec::new();
-                for (i, t) in self.team_commands.iter().enumerate().filter(|(_, t)| !t.icon.is_empty()) {
-                    if acts.iter().any(|(p, _)| *p == t.position) {
-                        continue;
-                    }
-                    acts.push((t.position, HudAction { texture: t.icon.clone(), command: format!("AAPlay team_command {i}"), enabled: false, selected: false, targeted: false }));
-                }
-                if !self.team_cancel.texture.is_empty() {
-                    acts.push((self.team_cancel.index, HudAction { texture: self.team_cancel.texture.clone(), command: "AAPlay team_back".into(), enabled: true, selected: false, targeted: false }));
-                }
-                place(acts)
-            }
-            ActionPage::Main => {
-                let mut acts = Vec::new();
-                let own_orgs: Vec<&aa_play::Organization> = b
-                    .selection
-                    .iter()
-                    .filter_map(|u| match u {
-                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom)) && hq_structure(w, o).is_none()),
-                        _ => None,
-                    })
-                    .collect();
-                let member_defs = |o: &aa_play::Organization| -> Vec<&aa_play::Def> { o.members.iter().filter_map(|m| w.actor(*m)).filter(|a| a.alive).map(|a| w.data.def(a.def)).collect() };
-                // a regiment that fights; an HQ truck organization only moves
-                let fighting = own_orgs.iter().any(|o| member_defs(o).iter().any(|d| !d.weapons.is_empty()));
-                let own_trucks: Vec<aa_play::ActorId> = b
-                    .selection
-                    .iter()
-                    .filter_map(|u| match u {
-                        Unit::Actor(a) => w.actor(*a).filter(|x| x.alive && own(x.kingdom) && w.data.def(x.def).class == Some(DefClass::Truck)).map(|x| x.id),
-                        _ => None,
-                    })
-                    .collect();
-                // 0x530510 over the members' performer abilities (an
-                // organization's command mask is the OR of its members',
-                // 0x589A60): kill (0) for one with an ability (0x57E230),
-                // unless all its abilities bombard (0x57E2F0); bombard (1)
-                // for one with an ability flagged bombard (AbilityDefinition
-                // +0x54 bit 3, 0x57E280); repair (3) for one with a healing
-                // ability (0x57E1C0 -> 0x4BE970: a HEAL effect)
-                const BOMBARD: u32 = 1 << 3;
-                const HEAL: u32 = 3;
-                let performer = |d: &aa_play::Def| d.weapons.iter().filter(|x| !x.defender).cloned().collect::<Vec<_>>();
-                let caps: Vec<Vec<aa_play::data::Weapon>> = own_orgs.iter().flat_map(|o| member_defs(o)).map(performer).collect();
-                let can_kill = caps.iter().any(|ws| !ws.is_empty() && (!ws.iter().any(|x| x.flags & BOMBARD != 0) || ws.iter().any(|x| x.flags & BOMBARD == 0)));
-                let can_bombard = caps.iter().any(|ws| ws.iter().any(|x| x.flags & BOMBARD != 0));
-                let can_repair = caps.iter().any(|ws| ws.iter().any(|x| x.effects.iter().any(|e| e.kind == HEAL)));
-                if !own_orgs.is_empty() || !own_trucks.is_empty() {
-                    acts.extend(self.act("move", "AAPlay move".into()));
-                    if can_kill {
-                        acts.extend(self.act("kill", "AAPlay kill".into()));
-                    }
-                    if fighting {
-                        acts.extend(self.act("retreat", "AAPlay retreat".into()));
-                    }
-                    if can_bombard {
-                        acts.extend(self.act("bombard", "AAPlay bombard".into()));
-                    }
-                    if can_repair {
-                        acts.extend(self.act("repair", "AAPlay repair".into()));
-                    }
-                    // construct (4): a member with a mover and a build list
-                    // (0x530510: mover and actor +0x108); the button opens
-                    // the construct page (behavior flags 0x50030)
-                    if !construct_list(w, &own_orgs).is_empty() {
-                        acts.extend(self.act("construct", "AAPlay construct_page".into()));
-                    }
-                    acts.extend(self.act("stop", "AAPlay stop".into()));
-                    if fighting {
-                        acts.extend(self.act("guard", "AAPlay guard".into()));
-                        acts.extend(self.act("explore", "AAPlay explore".into()));
-                    }
-                }
-                // the team commands page (ActionButtonInfo GoToTeamCommands)
-                if (!own_orgs.is_empty() && fighting) || selected_structure(b).is_some() && !self.team_go.texture.is_empty() {
-                    let building = selected_structure(b).is_some_and(|id| w.actor(id).is_some_and(|a| own(a.kingdom) && w.data.def(a.def).class == Some(DefClass::Building)));
-                    if (!own_orgs.is_empty() && fighting) || building {
-                        acts.push((self.team_go.index, HudAction { texture: self.team_go.texture.clone(), command: "AAPlay team_page".into(), enabled: true, selected: false, targeted: false }));
-                    }
-                }
-                // one regiment that attaches to HQs: hq_attach / hq_detach
-                if let [Unit::Org(o)] = b.selection.as_slice() {
-                    if let Some(org) = w.orgs.get(*o as usize).filter(|x| x.alive && own(Some(x.kingdom))) {
-                        let od = w.data.def(org.def);
-                        if od.max_attachments.is_none() && od.supply_used && fighting {
-                            acts.extend(self.act_enabled("hq_attach", "AAPlay hq_attach".into(), org.hq.is_none()));
-                            acts.extend(self.act_enabled("hq_detach", format!("AAPlay hq_detach {o}"), org.hq.is_some()));
-                        }
-                        // an HQ truck organization unpacks through its truck
-                        if let Some(t) = org.members.iter().copied().find(|m| w.actor(*m).is_some_and(|a| a.alive && w.data.def(a.def).unpacks_to.is_some())) {
-                            acts.extend(self.act("unpack", format!("AAPlay unpack {t}")));
-                        }
-                    }
-                }
-                // a structure: the selected building, or a deployed division
-                // HQ organization's structure (the recruit component is on
-                // the building, not on its organization)
-                if let Some(id) = &selected_structure(b) {
-                    if let Some(a) = w.actor(*id).filter(|a| own(a.kingdom)) {
-                        let def = w.data.def(a.def);
-                        if !def.recruits.is_empty() {
-                            acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
-                            acts.extend(self.act("set_rally_point", format!("AAPlay set_rally_point {id}")));
-                        }
-                        // a ResearchComponent (actor +0xB4): research
-                        // (actor_commands_aa.tgi, preferred_position 6)
-                        if !def.research.is_empty() {
-                            acts.extend(self.act("research", format!("AAPlay research_page {id}")));
-                        }
-                        // an airfield's denizen (0x5F88C0 for one own actor:
-                        // shown while the denizen has the capability, +0x38
-                        // bits 0x10 / 0x40, 0x567F80 / 0x567FA0, which its
-                        // AirAttackCost / AirReconCost give); its readiness
-                        // (+0x3C) is not simulated, so the buttons stay enabled
-                        if def.air_attack_cost.is_some() {
-                            acts.extend(self.act("air_attack", format!("AAPlay air_attack {id}")));
-                        }
-                        if def.air_recon_cost.is_some() {
-                            acts.extend(self.act("air_recon", format!("AAPlay air_recon {id}")));
-                        }
-                        // an HQ: CommandAll (ActionButtonInfo index 4)
-                        let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));
-                        if hq && !self.command_all.texture.is_empty() {
-                            acts.push((self.command_all.index, HudAction { texture: self.command_all.texture.clone(), command: format!("AAPlay command_all {id}"), enabled: true, selected: false, targeted: false }));
-                        }
-                        if def.unpacks_to.is_some() {
-                            acts.extend(self.act("unpack", format!("AAPlay unpack {id}")));
-                        }
-                        if def.packs_to.is_some() {
-                            acts.extend(self.act("pack", format!("AAPlay pack {id}")));
-                        }
-                        if aa_play::player_orders::sellable(w, *id) {
-                            acts.extend(self.act_enabled("sell", format!("AAPlay sell {id}"), aa_play::player_orders::sell_refused(w, *id).is_none()));
-                        }
-                    }
-                }
-                // trucks and HQ truck organizations can be disbanded
-                if !own_trucks.is_empty() || (!own_orgs.is_empty() && !fighting) {
-                    acts.extend(self.act("disband", "AAPlay disband".into()));
-                }
-                place(acts)
+        })();
+        if let Some(t) = self.debug_tint {
+            for a in v.iter_mut().flatten() {
+                a.tint = Some(t);
             }
         }
+        v
     }
 }

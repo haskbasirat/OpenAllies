@@ -216,7 +216,7 @@ pub fn hide_unseen(battle: Option<Res<Battle>>, mut views: Query<(&ActorView, &m
             Sighting::Visible => true,
             Sighting::Remembered(_) => w.actor(view.id).is_some_and(|a| a.alive),
             Sighting::Hidden => false,
-        };
+        } && !in_hangar(&b, view.id);
         let want = if show { Visibility::Inherited } else { Visibility::Hidden };
         if *vis != want {
             *vis = want;
@@ -226,11 +226,21 @@ pub fn hide_unseen(battle: Option<Res<Battle>>, mut views: Query<(&ActorView, &m
 
 /// The local kingdom sees the actor (drawn live, not as a memory).
 pub fn sees(b: &Battle, actor: aa_play::ActorId) -> bool {
-    matches!(fog::sighting(&b.world, actor, Some(b.local)), Sighting::Visible)
+    !in_hangar(b, actor) && matches!(fog::sighting(&b.world, actor, Some(b.local)), Sighting::Visible)
+}
+
+/// A denizen aircraft waiting in its hangar for the runway (actor flag
+/// 0x40000000, CreateDenizen 0x56CC10 until the runway release 0x5695B0):
+/// not drawn, picked or selected.
+pub fn in_hangar(b: &Battle, actor: aa_play::ActorId) -> bool {
+    b.world.books.actor(actor).and_then(|x| x.aircraft.as_ref()).is_some_and(|x| x.hidden)
 }
 
 /// The local kingdom sees the actor or remembers it (it is drawn).
 pub fn drawn(b: &Battle, actor: aa_play::ActorId) -> bool {
+    if in_hangar(b, actor) {
+        return false;
+    }
     match fog::sighting(&b.world, actor, Some(b.local)) {
         Sighting::Visible => true,
         Sighting::Remembered(_) => b.world.actor(actor).is_some_and(|a| a.alive),

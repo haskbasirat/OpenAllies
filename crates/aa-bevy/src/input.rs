@@ -7,12 +7,32 @@
 //! * A left press on the world (the HUD's VWorld widget, aa-ui
 //!   `press_target_5c3bc0`) is a click; moving 10 px (Manhattan,
 //!   AVar CursorDragThreshold) turns it into a drag box.
-//! * Click: select the hit (a soldier selects his regiment, `Unit::Org`;
-//!   buildings and trucks are `Unit::Actor`); empty ground clears.
-//!   Shift/Ctrl toggles the hit. Double click: every visible object of the
-//!   same definition as the hit (own objects only).
-//! * Box: own regiments first, else own buildings (class rule 0x6406C0);
-//!   at most 6 objects, the nearest to the centroid (0x640FA0).
+//! * The selection follows the game UIWorldState (vtable 0xA61E40; port in
+//!   aa-runtime `player_order_input::ui_world`): every object it takes
+//!   passes the class rule `0x6406C0` against the selection's class
+//!   (+0x54), at most 6 objects (`0x6409E0`), the newest at the head.
+//!   - The class is the relation to the local kingdom (own 0x800, enemy
+//!     0x400, allied 0x200, neutral 0x100) and the kind: an organization,
+//!     a truck or another thing with a Mind that may move (actor vt+0x20,
+//!     `0x4CF120`: no mover, or MobileDeployment / Recruit / Denizen) and is
+//!     not static (`0x4D12C0`) 0x40 (then 0x80); a mover without those
+//!     components 0x08 (then 0x10); a wall 0x04 (then 0x01); anything else
+//!     (a building) 0x20, of which only one is taken. A lower relation or
+//!     kind is refused; a higher one replaces the selection.
+//! * Click (`0x640CF0` -> `0x437B20`): clear, then select the hit (a
+//!   soldier stands for his regiment, `0x6409A0` / `0x640B40`); empty ground
+//!   clears. Shift/Ctrl (`0x640E10`): a selected hit is dropped, another one
+//!   added when its class fits. Double click with an own object at the
+//!   selection's head: every visible object of the head's definition joins
+//!   through the six-object cap (`0x640BF0` -> `0x640FA0`); Shift/Ctrl
+//!   double click adds the hit's like (hit selected) or drops them.
+//! * Box (`0x5CCB70` -> `0x436460`: clear, then `0x4377B0`; Shift/Ctrl
+//!   keeps the selection): every visible object whose model bounds reach
+//!   into the box (`0x4367A0` / `0x715D40`; here the projected bounds
+//!   overlapping the rectangle) becomes a candidate through its regiment
+//!   (`0x6409A0`) under the class rule (`0x640A40`); then `0x640FA0`: with
+//!   more than six, the six nearest to the centroid of the selection (or
+//!   of the candidates).
 //! * Right click with own movable units selected: an actor under the
 //!   cursor (any owner) is followed (move with a target,
 //!   `Command::Follow`), otherwise move to the ground point. Over the
@@ -66,6 +86,9 @@ pub struct Selecting {
     /// The hover came from an organization's banner (the organization is
     /// focused, not the member).
     pub hover_banner: bool,
+    /// The armed bombard cannot reach the ground point under the cursor
+    /// (the cursor_invalid_ids cursor, `0x620C30`).
+    pub bombard_invalid: bool,
 }
 
 /// A pickable actor this frame.
@@ -75,32 +98,195 @@ struct Pick {
     dist: Option<f32>,
     /// Screen position (physical pixels) of the actor's origin.
     screen: Option<Vec2>,
+    /// Screen rectangle (physical pixels) of its model bounds, when a box
+    /// is released this frame.
+    rect: Option<(Vec2, Vec2)>,
 }
 
 fn native(p: Vec3) -> Vec3 {
     Vec3::new(p.x, -p.z, p.y)
 }
 
-/// Relation class (0x6406C0): own regiments 3, own buildings 2, own
-/// others 1, foreign 0.
-fn class(b: &Battle, u: Unit) -> u8 {
+/// The relation bits of `0x6406C0` (view vt+0x78 / +0x84 / +0x7C / +0x80):
+/// own 0x800, enemy 0x400, allied 0x200, neutral 0x100.
+fn relation_bits(b: &Battle, u: Unit) -> u32 {
+    let k = match u {
+        Unit::Org(o) => b.world.orgs.get(o as usize).map(|o| o.kingdom),
+        Unit::Actor(a) => b.world.actor(a).and_then(|a| a.kingdom),
+    };
+    match aa_play::setup::relation(&b.world, Some(b.local), k) {
+        aa_play::books::SELF => 0x800,
+        aa_play::books::ENEMY => 0x400,
+        aa_play::books::FRIEND => 0x200,
+        _ => 0x100,
+    }
+}
+
+/// The kinds `0x6406C0` tells apart.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// Actor vt+0x20 (`0x4CF120`) false: a mover without MobileDeployment,
+    /// Recruit or Denizen.
+    Mover,
+    /// A Mind (+0x70: an organization, aircraft or element, `0x4CF480`)
+    /// that is not disabled (`0x4D12C0`: Thing flag 29, static).
+    Mind,
+    /// A WallComponent (+0x90).
+    Wall,
+    Plain,
+}
+
+fn kind_of(b: &Battle, u: Unit) -> Kind {
     let w = &b.world;
-    match u {
-        Unit::Org(o) => {
-            if w.orgs.get(o as usize).is_some_and(|o| o.kingdom == b.local) {
-                3
-            } else {
-                0
+    let Some(def) = (match u {
+        Unit::Org(o) => w.orgs.get(o as usize).map(|o| o.def),
+        Unit::Actor(a) => w.actor(a).map(|a| a.def),
+    }) else {
+        return Kind::Plain;
+    };
+    let d = w.data.def(def);
+    let has = |bit: u32| d.components & (1 << bit) != 0;
+    // aa-rules COMPONENTS: Projectile 1, Mover 3, Organization 7, Element
+    // 8, Denizen 10, Wall 12, Recruit 16, MobileDeployment 19, Aircraft 23
+    let mover = has(3);
+    if mover && !(has(19) || has(16) || has(10)) {
+        return Kind::Mover;
+    }
+    let mind = has(7) || has(23) || has(8);
+    // ActorData 0x468995: bit 29 (static) stays unless a mover with speed,
+    // an organization or a projectile
+    let fixed = !((mover && d.speed_max > 0.0) || has(7) || has(1));
+    if mind && !fixed {
+        Kind::Mind
+    } else if has(12) {
+        Kind::Wall
+    } else {
+        Kind::Plain
+    }
+}
+
+/// `0x6406C0(object, current)`: the object's class bits against the
+/// current class, 0 when refused.
+fn class_bits(b: &Battle, u: Unit, current: u32) -> u32 {
+    let relation = relation_bits(b, u);
+    let mut current = current;
+    if current != 0 {
+        if relation < current & 0xf00 {
+            return 0;
+        }
+        if relation > current {
+            current = 0;
+        }
+    }
+    let pick = |kind: u32| if current > kind { 0 } else { kind };
+    let next = |first: u32, again: u32, mask: u32| if current != 0 && current & mask != 0 { again } else { first };
+    match kind_of(b, u) {
+        Kind::Mover => pick(relation | next(0x08, 0x10, 0x18)),
+        Kind::Mind => pick(relation | next(0x40, 0x80, 0xc0)),
+        Kind::Wall => pick(relation | next(0x04, 0x01, 0x05)),
+        // 0x20 first; again only while the current class has no other kind
+        Kind::Plain => pick(relation | if current != 0 && current & 0xdd == 0 { 0x02 } else { 0x20 }),
+    }
+}
+
+/// The selection's class (+0x54) as `0x6409E0` built it, newest last.
+fn selection_class(b: &Battle) -> u32 {
+    let mut class = 0;
+    for u in b.selection.iter().rev() {
+        let c = class_bits(b, *u, class);
+        if c != 0 {
+            class = c;
+        }
+    }
+    class
+}
+
+/// `0x6409E0`: take `u` when there is room and its class fits; a higher
+/// class (not one of the repeat kinds 0x93) replaces the selection.
+fn select_one(b: &mut Battle, class: &mut u32, u: Unit) {
+    if b.selection.len() >= MAX_SELECTION {
+        return;
+    }
+    let c = class_bits(b, u, *class);
+    if c == 0 {
+        return;
+    }
+    if c > *class && c & 0x93 == 0 {
+        b.selection.clear();
+    }
+    *class = c;
+    if !b.selection.contains(&u) {
+        b.selection.insert(0, u);
+    }
+}
+
+/// `0x640B20`: the object's class fits the selection's.
+fn compatible(b: &Battle, class: u32, u: Unit) -> bool {
+    class == 0 || class_bits(b, u, class) != 0
+}
+
+/// `0x640FA0`: select a list under the six-object cap; with more than the
+/// room left, the `6 - selected` compatible ones nearest (XY) to the
+/// centroid of the selection (or of the list when nothing is selected).
+fn select_list(b: &mut Battle, list: &[Unit]) {
+    let mut class = selection_class(b);
+    let count = b.selection.len();
+    if count >= MAX_SELECTION {
+        return;
+    }
+    let chosen: Vec<Unit> = if list.len() + count <= MAX_SELECTION {
+        list.to_vec()
+    } else {
+        let source: Vec<Unit> = if count > 0 { b.selection.clone() } else { list.to_vec() };
+        let pts: Vec<Vec2> = source.iter().filter_map(|u| unit_pos(b, *u)).collect();
+        let c = pts.iter().copied().sum::<Vec2>() / pts.len().max(1) as f32;
+        let slots = MAX_SELECTION - count;
+        let mut best: Vec<(Unit, f32)> = Vec::with_capacity(slots);
+        for u in list.iter().copied() {
+            if b.selection.contains(&u) || !compatible(b, class, u) {
+                continue;
+            }
+            let Some(p) = unit_pos(b, u) else { continue };
+            let d2 = p.distance_squared(c);
+            if best.len() < slots {
+                best.push((u, d2));
+                continue;
+            }
+            // the first strictly largest entry is replaced by a nearer one
+            let mut worst = 0;
+            for i in 1..slots {
+                if best[i].1 > best[worst].1 {
+                    worst = i;
+                }
+            }
+            if d2 < best[worst].1 {
+                best[worst] = (u, d2);
             }
         }
-        Unit::Actor(a) => match w.actor(a) {
-            Some(a) if a.kingdom == Some(b.local) => match w.data.def(a.def).class {
-                Some(DefClass::Building) => 2,
-                _ => 1,
-            },
-            _ => 0,
-        },
+        best.iter().rev().map(|(u, _)| *u).collect()
+    };
+    // 0x4368C0
+    for u in chosen {
+        if !b.selection.contains(&u) && compatible(b, class, u) {
+            select_one(b, &mut class, u);
+        }
     }
+}
+
+/// `0x640BF0`: the visible objects of `u`'s definition (head-inserted, so
+/// in reverse list order).
+fn same_definition(b: &Battle, picks: &[Pick], u: Unit, on_screen: impl Fn(&Pick) -> bool) -> Vec<Unit> {
+    let def = unit_def(b, u);
+    let mut out: Vec<Unit> = Vec::new();
+    for pk in picks.iter().filter(|pk| on_screen(pk)) {
+        // the object's own view (a soldier's +0x10 is the soldier's)
+        let x = Unit::Actor(pk.id);
+        let x = if unit_def(b, x) == def { x } else { match unit_of(b, pk.id) { Some(o) if unit_def(b, o) == def => o, _ => continue } };
+        if !out.contains(&x) {
+            out.insert(0, x);
+        }
+    }
+    out
 }
 
 fn unit_of(b: &Battle, id: ActorId) -> Option<Unit> {
@@ -130,8 +316,9 @@ fn unit_def(b: &Battle, u: Unit) -> Option<aa_play::DefId> {
 }
 
 /// Keep at most 6, the nearest to the centroid (0x640FA0).
-fn cap(b: &Battle, mut units: Vec<Unit>) -> Vec<Unit> {
-    units.dedup();
+fn cap(b: &Battle, units: Vec<Unit>) -> Vec<Unit> {
+    let mut seen = Vec::new();
+    let mut units: Vec<Unit> = units.into_iter().filter(|u| if seen.contains(u) { false } else { seen.push(*u); true }).collect();
     if units.len() <= MAX_SELECTION {
         return units;
     }
@@ -268,6 +455,7 @@ pub fn battle_input(
                     }
                 }
                 GameAction::Target(t) => sel.armed = Some(t.clone()),
+                GameAction::CancelTarget => sel.armed = None,
                 // a +SELF general ability: the order without a target
                 GameAction::UseAbility(i) => b.pending.push(Command::UseAbility { kingdom: local, ability: *i as u32, target: None }),
                 GameAction::MinimapJump(u, v) => {
@@ -325,6 +513,7 @@ pub fn battle_input(
     let ray = cursor.and_then(|c| camera.viewport_to_world(cam_tf, c / scale).ok());
     // pick: the nearest actor whose model bounds the ray crosses
     let mut picks = Vec::new();
+    let want_rects = front.pointer.left_released && sel.drag.is_some();
     for (view, tf, children) in &views {
         let Some(a) = b.world.actor(view.id) else { continue };
         // what the fog hides cannot be picked
@@ -346,7 +535,21 @@ pub fn battle_input(
             }
         }
         let screen = camera.world_to_viewport(cam_tf, tf.translation()).ok().map(|p| p * scale);
-        picks.push(Pick { id: view.id, dist, screen });
+        let mut rect: Option<(Vec2, Vec2)> = None;
+        if want_rects {
+            for child in children.into_iter().flatten() {
+                let Ok((aabb, ptf)) = parts.get(*child) else { continue };
+                let (c, h) = (Vec3::from(aabb.center), Vec3::from(aabb.half_extents));
+                for i in 0..8 {
+                    let corner = c + h * Vec3::new(if i & 1 == 0 { -1.0 } else { 1.0 }, if i & 2 == 0 { -1.0 } else { 1.0 }, if i & 4 == 0 { -1.0 } else { 1.0 });
+                    if let Ok(s) = camera.world_to_viewport(cam_tf, ptf.transform_point(corner)) {
+                        let s = s * scale;
+                        rect = Some(rect.map_or((s, s), |(lo, hi)| (lo.min(s), hi.max(s))));
+                    }
+                }
+            }
+        }
+        picks.push(Pick { id: view.id, dist, screen, rect });
     }
     let mut hit = picks.iter().filter(|p| p.dist.is_some()).min_by(|x, y| x.dist.unwrap().total_cmp(&y.dist.unwrap())).map(|p| (p.id, p.dist.unwrap()));
     // an organization's banner (its view) picks the organization: the
@@ -377,11 +580,24 @@ pub fn battle_input(
         _ => false,
     };
     sel.hover_banner = on_banner && sel.hover.is_some();
+    // the targeting state's cursor (0x620C30): bombard (command 1, which
+    // has cursor_invalid_ids) shows its invalid cursor while the first
+    // selected object relates to the ground point under the cursor
+    // (0x6203F0) other than "in range" (0x4D5180(point, 1): the least of
+    // an organization's members, 0x57EAF0 for an actor)
+    sel.bombard_invalid = matches!(sel.armed, Some(TargetOrder::Bombard))
+        && match (b.selection.first().copied(), ray.and_then(|r| ground_hit(&b, r))) {
+            (Some(u), Some(g)) => bombard_relation(&b, u, g.truncate()) != 0,
+            _ => false,
+        };
     // the Unpack placement mode: the ghost at the cursor (or at the press
     // point, turned toward the cursor while dragged), tested every frame
     // (0x688860)
+    // (0x612A70: Unpack with the truck's structure, a construct item
+    // without a truck)
     let placing = match sel.armed {
-        Some(TargetOrder::Deploy(truck)) => b.world.actor(truck).and_then(|a| b.world.data.def(a.def).unpacks_to).map(|d| (truck, d)),
+        Some(TargetOrder::Deploy(truck)) => b.world.actor(truck).and_then(|a| b.world.data.def(a.def).unpacks_to).map(|d| (Some(truck), d)),
+        Some(TargetOrder::Construct(def)) => Some((None, def)),
         _ => None,
     };
     match placing {
@@ -450,25 +666,50 @@ pub fn battle_input(
     if front.pointer.left_released {
         if let Some((p, _)) = sel.press.take() {
             if let Some((a, c)) = sel.drag.take() {
-                // box select (0x436460 / 0x4377B0)
+                // box select (0x5CCB70: 0x436460 clears, then 0x4377B0;
+                // Shift/Ctrl keeps the selection)
                 let (lo, hi) = (a.min(c), a.max(c));
-                let mut units: Vec<Unit> = picks
+                let mut inside: Vec<&Pick> = picks
                     .iter()
-                    .filter(|pk| pk.screen.is_some_and(|s| s.x >= lo.x && s.y >= lo.y && s.x <= hi.x && s.y <= hi.y))
-                    .filter_map(|pk| unit_of(&b, pk.id))
+                    .filter(|pk| pk.rect.or(pk.screen.map(|s| (s, s))).is_some_and(|(rlo, rhi)| rlo.x <= hi.x && rlo.y <= hi.y && rhi.x >= lo.x && rhi.y >= lo.y))
                     .collect();
-                units.sort_by_key(|u| std::cmp::Reverse(class(&b, *u)));
-                let best = units.first().map(|u| class(&b, *u)).unwrap_or(0);
-                // only own objects are box-selected; regiments beat buildings
-                units.retain(|u| class(&b, *u) == best && best >= 2);
-                let mut next = if add { b.selection.clone() } else { Vec::new() };
-                if add && next.first().is_some_and(|u| class(&b, *u) != best) {
-                    next.clear();
+                // the view list in creation order
+                inside.sort_by_key(|pk| pk.id);
+                // 0x4367A0 / 0x640A40: the candidates through their regiment
+                // (0x6409A0), targetable ones only (0x5C19E0 -> 0x45B470),
+                // under the class rule, head-inserted
+                let mut candidates: Vec<Unit> = Vec::new();
+                let mut cand_class = 0;
+                let mut candidate = |b: &Battle, u: Unit, candidates: &mut Vec<Unit>| {
+                    let targetable = match u {
+                        Unit::Org(o) => b.world.orgs.get(o as usize).is_some_and(|o| b.world.data.def(o.def).targetable),
+                        Unit::Actor(x) => b.world.actor(x).is_some_and(|x| b.world.data.def(x.def).targetable),
+                    };
+                    if candidates.contains(&u) || !targetable {
+                        return;
+                    }
+                    let c = class_bits(b, u, cand_class);
+                    if c == 0 {
+                        return;
+                    }
+                    if c > cand_class && c & 0x93 == 0 {
+                        candidates.clear();
+                    }
+                    cand_class = c;
+                    candidates.insert(0, u);
+                };
+                // (0x4377B0 also takes the hovered object, which the box
+                // state never has: its vt+0x20 turns the hover off,
+                // 0x5C1E70)
+                for pk in inside {
+                    if let Some(u) = unit_of(&b, pk.id) {
+                        candidate(&*b, u, &mut candidates);
+                    }
                 }
-                next.extend(units);
-                if !next.is_empty() || !add {
-                    b.selection = cap(&b, next);
+                if !add {
+                    b.selection.clear();
                 }
+                select_list(&mut b, &candidates);
             } else if let Some(order) = sel.armed.take() {
                 // targeted order from an action button
                 let target = hit.filter(|id| b.world.actor(*id).is_some_and(|a| a.kingdom.is_some() && a.kingdom != Some(local)));
@@ -490,7 +731,7 @@ pub fn battle_input(
                     // the placement: where the press fixed the ghost, with the
                     // facing the drag gave it (native -Y without a drag)
                     TargetOrder::Deploy(truck) => {
-                        if let Some(a) = place.active.take().filter(|a| a.truck == truck && a.press.is_some()) {
+                        if let Some(a) = place.active.take().filter(|a| a.truck == Some(truck) && a.press.is_some()) {
                             b.pending.push(Command::Deploy { kingdom: local, truck, at: a.at, facing: a.facing });
                         }
                     }
@@ -552,12 +793,14 @@ pub fn battle_input(
                             b.pending.push(Command::Repair { kingdom: local, units, target });
                         }
                     }
-                    // a construct page structure at the clicked ground point,
-                    // facing the placement default (0x6894B0)
+                    // a construct page structure: where the press fixed the
+                    // ghost, with the facing the drag gave it (0x621350)
                     TargetOrder::Construct(def) => {
                         let units = own_movable(&b);
-                        if let (false, Some(g)) = (units.is_empty(), ground) {
-                            b.pending.push(Command::Construct { kingdom: local, units, def, at: g.truncate(), facing: crate::ui::placement::DEFAULT_FACING });
+                        if let Some(a) = place.active.take().filter(|a| a.truck.is_none() && a.building == def && a.press.is_some()) {
+                            if !units.is_empty() {
+                                b.pending.push(Command::Construct { kingdom: local, units, def, at: a.at, facing: a.facing });
+                            }
                         }
                     }
                     // an airfield's air attack (0x19, the clicked enemy or
@@ -588,36 +831,55 @@ pub fn battle_input(
                 let double = sel.last_click.is_some_and(|(q, t)| now - t <= DOUBLE_CLICK_S && (q - p).abs().max_element() <= 2.0);
                 sel.last_click = Some((p, now));
                 let unit = hit.and_then(|id| unit_of(&b, id));
-                match unit {
-                    None => {
-                        if !add {
-                            b.selection.clear();
+                let (pw, ph) = (window.physical_width() as f32, window.physical_height() as f32);
+                let on_screen = |pk: &Pick| pk.screen.is_some_and(|s| s.x >= 0.0 && s.y >= 0.0 && s.x < pw && s.y < ph);
+                let head_own = b.selection.first().is_some_and(|h| relation_bits(&b, *h) == 0x800);
+                match (add, double) {
+                    // 0x640CF0 double: the head's like, when the head is own
+                    (false, true) if head_own => {
+                        let head = b.selection[0];
+                        let list = same_definition(&b, &picks, head, on_screen);
+                        if !list.is_empty() {
+                            select_list(&mut b, &list);
                         }
                     }
-                    Some(u) if double && class(&b, u) >= 1 => {
-                        let def = unit_def(&b, u);
-                        let mut same: Vec<Unit> = picks
-                            .iter()
-                            .filter(|pk| pk.screen.is_some_and(|s| s.x >= 0.0 && s.y >= 0.0 && s.x < window.physical_width() as f32 && s.y < window.physical_height() as f32))
-                            .filter_map(|pk| unit_of(&b, pk.id))
-                            .filter(|x| unit_def(&b, *x) == def && class(&b, *x) == class(&b, u))
-                            .collect();
-                        same.insert(0, u);
-                        let mut next = if add { b.selection.clone() } else { Vec::new() };
-                        next.extend(same);
-                        b.selection = cap(&b, next);
+                    // 0x640CF0 -> 0x437B20: the hit alone (none on bare
+                    // ground)
+                    (false, _) => {
+                        b.selection.clear();
+                        if let Some(u) = unit {
+                            let mut class = 0;
+                            select_one(&mut b, &mut class, u);
+                        }
                     }
-                    Some(u) => {
-                        if add {
+                    // 0x640E10: drop a selected hit, add another that fits
+                    (true, false) => {
+                        if let Some(u) = unit {
                             if let Some(i) = b.selection.iter().position(|x| *x == u) {
                                 b.selection.remove(i);
-                            } else if b.selection.first().is_none_or(|f| class(&b, *f) == class(&b, u) && class(&b, u) >= 1) {
-                                if b.selection.len() < MAX_SELECTION {
-                                    b.selection.push(u);
+                            } else {
+                                let mut class = selection_class(&b);
+                                if compatible(&b, class, u) {
+                                    select_one(&mut b, &mut class, u);
                                 }
                             }
-                        } else {
-                            b.selection = vec![u];
+                        }
+                    }
+                    // 0x640E10 double: the hit's like when the hit itself is
+                    // selected, else drop every selected one of its kind
+                    (true, true) => {
+                        if let Some(h) = hit {
+                            let raw = Unit::Actor(h);
+                            if b.selection.contains(&raw) {
+                                let list = same_definition(&b, &picks, raw, on_screen);
+                                if !list.is_empty() {
+                                    select_list(&mut b, &list);
+                                }
+                            } else {
+                                let def = unit_def(&b, raw);
+                                let keep: Vec<Unit> = b.selection.iter().copied().filter(|x| unit_def(&b, *x) != def).collect();
+                                b.selection = keep;
+                            }
                         }
                     }
                 }
@@ -659,8 +921,19 @@ pub fn battle_input(
                 // actor order plays no move VFX; Alt+right (HotkeyAltRight-
                 // ClickCommand retreat) has no command of its own here.
                 if let Some(t) = hit {
-                    debug!("order: follow {t} with {units:?}");
-                    b.pending.push(Command::Follow { kingdom: local, units, target: t });
+                    // each recipient guesses its own command (0x61EEF0 ->
+                    // 0x4DA570 per actor): repair (3, can_hot_command_actor)
+                    // comes before move for one that can repair a target
+                    // meeting repair's flags
+                    let (repairers, others): (Vec<Unit>, Vec<Unit>) = units.into_iter().partition(|u| hot_repair(&b, *u, t));
+                    if !repairers.is_empty() {
+                        debug!("order: repair {t} with {repairers:?}");
+                        b.pending.push(Command::Repair { kingdom: local, units: repairers, target: t });
+                    }
+                    if !others.is_empty() {
+                        debug!("order: follow {t} with {others:?}");
+                        b.pending.push(Command::Follow { kingdom: local, units: others, target: t });
+                    }
                 } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
                     debug!("order: move {units:?} to {g:?}");
                     order_marks::move_command(&mut marks, g.truncate());
@@ -679,7 +952,7 @@ pub fn battle_input(
         b.selection = alive;
     }
     // the placement ends with its armed order (placed or cancelled)
-    if !matches!(sel.armed, Some(TargetOrder::Deploy(_))) {
+    if !matches!(sel.armed, Some(TargetOrder::Deploy(_)) | Some(TargetOrder::Construct(_))) {
         place.active = None;
     }
     let g = placement::ghost_of(&b.world, local, &place);
@@ -699,6 +972,84 @@ fn own_movable(b: &Battle) -> Vec<Unit> {
             Unit::Actor(a) => b.world.actor(*a).is_some_and(|a| a.kingdom == Some(b.local) && b.world.data.def(a.def).class != Some(DefClass::Building)),
         })
         .collect()
+}
+
+/// `0x4D5180(point, 1)` for unit `u`: an organization's least member
+/// relation (stopping at 0), an actor's own (core `point_relation`, the
+/// Performer `0x57EAF0`: 0 in range, 1 out of range, 2 inside the minimum
+/// range, 3 outside the turret arc, 4 no bombard ability); 6 without either.
+fn bombard_relation(b: &Battle, u: Unit, point: Vec2) -> u8 {
+    let w = &b.world;
+    let alive = |a: ActorId| w.actor(a).is_some_and(|x| x.alive);
+    match u {
+        Unit::Org(o) => {
+            let mut best = 6;
+            for m in w.orgs.get(o as usize).map(|o| o.members.clone()).unwrap_or_default() {
+                if alive(m) {
+                    best = best.min(aa_play::combat::tasks::point_relation(w, m, point));
+                    if best == 0 {
+                        break;
+                    }
+                }
+            }
+            best
+        }
+        Unit::Actor(a) if alive(a) => aa_play::combat::tasks::point_relation(w, a, point),
+        Unit::Actor(_) => 6,
+    }
+}
+
+/// Actor command repair's behaviour flags (aa-rules native_actor_command:
+/// 0x1B00): an actor target (0x100) with a ConstructionComponent (0x200),
+/// damaged (0x800) and friendly (0x1000).
+const REPAIR_FLAGS: u32 = 0x1B00;
+
+/// The target description GuessCommandData (`0x4DA570`) builds for actor
+/// `t` as `kingdom` sees it: 0x100 an actor; 0x2000 hostile (virtual
+/// +0x140), 0x1000 friendly (+0x138); for an actor outside the organization
+/// component 0x200 with a ConstructionComponent (actor +0x9C), 0x400 also
+/// under construction (actor state 21), 0x800 damaged (Body +0x10 below
+/// +0x14).
+fn target_flags(b: &Battle, kingdom: aa_play::KingdomId, t: ActorId) -> u32 {
+    let w = &b.world;
+    let Some(a) = w.actor(t) else { return 0 };
+    let d = w.data.def(a.def);
+    let mut f = 0x100;
+    match aa_play::setup::relation(w, Some(kingdom), a.kingdom) {
+        aa_play::books::SELF | aa_play::books::FRIEND => f |= 0x1000,
+        aa_play::books::ENEMY => f |= 0x2000,
+        _ => {}
+    }
+    if d.has_component("ConstructionComponent") {
+        f |= 0x200;
+        if w.books.actor(t).is_some_and(|x| x.constructing) {
+            f |= 0x400;
+        }
+    }
+    if a.health < aa_play::production::max_health(w, a.kingdom, a.def) {
+        f |= 0x800;
+    }
+    f
+}
+
+/// Whether own unit `u` has the repair command (`0x530510`: a member whose
+/// performer has an ability with a HEAL effect, `0x57E1C0` -> `0x4BE970`).
+fn has_repair(b: &Battle, u: Unit) -> bool {
+    let w = &b.world;
+    let heals = |id: ActorId| w.actor(id).is_some_and(|a| a.alive && w.data.def(a.def).weapons.iter().any(|x| !x.defender && x.effects.iter().any(|e| e.kind_name == "HEAL")));
+    match u {
+        Unit::Org(o) => w.orgs.get(o as usize).is_some_and(|o| o.members.iter().any(|m| heals(*m))),
+        Unit::Actor(a) => heals(a),
+    }
+}
+
+/// `0x4DA570` for a right click on actor `t` with recipient `u`: the
+/// commands are tried by type, and of kill, bombard, guard and repair only
+/// repair is a hot command for an actor in the data
+/// (can_hot_command_actor); it is taken when `u` has it and the target's
+/// description holds all of repair's flags (otherwise move follows).
+fn hot_repair(b: &Battle, u: Unit, t: ActorId) -> bool {
+    has_repair(b, u) && target_flags(b, b.local, t) & REPAIR_FLAGS == REPAIR_FLAGS
 }
 
 /// SpeedUp / SpeedDown: the GVar GameSpeed exponent v (speed 2^v) moved

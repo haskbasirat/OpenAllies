@@ -47,9 +47,15 @@ pub struct Quad {
     pub clip: Option<Rect>,
     /// The texture's effect mode (UI texture +0x74, set by `0x73EAF0`):
     /// 0 normal, 1 grey (a disabled icon, `0x5E66E0`: the GrayscaleShader
-    /// stages of `0x742CC0`).
+    /// stages of `0x742CC0`), 2 tinted (the widget's +0x101 flag,
+    /// `0x5E6740`: the texture blended over [`Quad::tint`] by its alpha),
+    /// 3 tinted and grey.
     #[serde(default)]
     pub effect: u8,
+    /// The tint colour of effect modes 2 and 3 (UI texture +0x30, set by
+    /// `0x73EB30`; drawn as the vertices' specular colour), RGB 0..1.
+    #[serde(default)]
+    pub tint: [f32; 3],
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

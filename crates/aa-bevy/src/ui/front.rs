@@ -757,6 +757,7 @@ pub fn frame(
                         address: Default::default(),
                         clip: None,
                         effect: 0,
+                        tint: [0.0; 3],
                     }),
                 },
             );
@@ -778,6 +779,7 @@ pub fn frame(
                     address: Default::default(),
                     clip: None,
                     effect: 0,
+                    tint: [0.0; 3],
                 }),
             },
         );

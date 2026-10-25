@@ -152,7 +152,7 @@ fn quit(mut q: ResMut<Quit>, windows: Query<(), With<bevy::window::PrimaryWindow
 /// The structure the placement mode is placing, for the HUD's economic
 /// impact bar.
 fn placement_impact(mut front: ResMut<front::Front>, place: Option<Res<placement::Placement>>) {
-    let def = place.and_then(|p| p.active.as_ref().map(|a| a.building));
+    let def = place.and_then(|p| p.active.as_ref().map(|a| (a.building, a.truck.is_none())));
     if let Some(h) = front.hud.as_mut() {
         h.set_placing(def);
     }

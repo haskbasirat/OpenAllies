@@ -6,7 +6,9 @@
 //! `{"click": "<widget path below Root>"}`, `{"rclick": "<path>"}`,
 //! `{"move": "<path>"}`, `{"click_at": [fx, fy]}` / `{"rclick_at": [fx, fy]}`
 //! (fractions of the window), `{"drag": [fx0, fy0, fx1, fy1]}`,
-//! `{"key": "Escape"}` (a KeyCode name), `{"text": "abc"}`,
+//! `{"press_at": [fx, fy]}` / `{"release_at": [fx, fy]}` (only the left
+//! press / release there), `{"key": "Escape"}` (a KeyCode name),
+//! `{"text": "abc"}`,
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
@@ -20,7 +22,10 @@
 //! `{"move_actor": kind}` move the pointer there without a click
 //! (appended by the combat owner); `{"spawn_org": "<Thing IDS>"}` creates
 //! an own organization beside the own HQ (`"offset": [dx, dy]` metres), a
-//! verification aid for the HUD's order buttons.
+//! verification aid for the HUD's order buttons (`{"spawn_actor": ...}` the
+//! same for a single actor, a truck); `{"tint_actions": [r, g,
+//! b]}` (or null) draws every action button tinted, a verification aid for
+//! texture effect modes 2 and 3.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -136,6 +141,22 @@ impl Script {
             }
             return;
         }
+        // {"press_at": [fx, fy]} / {"release_at": [fx, fy]}: the pointer
+        // there, then only a left press / only a left release (a held drag
+        // the script can photograph halfway; move_at moves it meanwhile)
+        if let Some((v, press)) = step.get("press_at").map(|v| (v, true)).or(step.get("release_at").map(|v| (v, false))) {
+            let t = Vec2::new(self.frac(v, 0) * self.size.x, self.frac(v, 1) * self.size.y);
+            if self.phase == 0 {
+                self.pointer = Some(t);
+                input.pos = Some(t);
+                self.phase = 1;
+            } else {
+                input.pos = Some(t);
+                if press { input.left_pressed = true } else { input.left_released = true }
+                self.next();
+            }
+            return;
+        }
         if let Some(v) = step.get("drag") {
             let a = Vec2::new(self.frac(v, 0) * self.size.x, self.frac(v, 1) * self.size.y);
             let b = Vec2::new(self.frac(v, 2) * self.size.x, self.frac(v, 3) * self.size.y);
@@ -232,8 +253,20 @@ pub fn run(
     views: Query<(&crate::battle_view::ActorView, &GlobalTransform)>,
     mut requests: ResMut<crate::camera::CameraRequests>,
     banners: Option<Res<super::banners::BannerArt>>,
+    mut front: Option<ResMut<super::front::Front>>,
 ) {
     let Some(mut s) = script else { return };
+    // {"tint_actions": [r, g, b]} / {"tint_actions": null}: a verification
+    // aid that draws every action button tinted (texture effect mode 2, 3
+    // when disabled), for the renderer's tint stages
+    if let Some(v) = s.step().and_then(|v| v.get("tint_actions")).cloned() {
+        let tint = v.as_array().map(|a| [0, 1, 2].map(|i| a.get(i).and_then(|x| x.as_f64()).unwrap_or(1.0) as f32));
+        if let Some(h) = front.as_mut().and_then(|f| f.hud.as_mut()) {
+            h.debug_tint = tint;
+        }
+        s.next();
+        return;
+    }
     // {"spawn_org": "<organization Thing IDS>", "offset": [dx, dy]}: a
     // verification aid that creates an own organization next to the own
     // HQ (metres), so the HUD's buttons for it can be checked
@@ -246,6 +279,23 @@ pub fn run(
             Some(def) => {
                 let org = aa_play::production::spawn_organization(world, def, local, hq + off, 0.0, None);
                 info!("script: spawned {id} as organization {org}");
+            }
+            None => warn!("script: no {id} in the data"),
+        }
+        s.next();
+        return;
+    }
+    // {"spawn_actor": "<Thing IDS>", "offset": [dx, dy]}: the same aid for a
+    // single own actor (a truck)
+    if let (Some(id), Some(b)) = (s.step().and_then(|v| v.get("spawn_actor")).and_then(|v| v.as_str()).map(str::to_string), battle.as_mut()) {
+        let off = s.step().and_then(|v| v.get("offset")).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32)).unwrap_or(Vec2::new(-10.0, -15.0));
+        let local = b.local;
+        let world = &mut b.world;
+        let hq = world.actors.iter().find(|a| a.alive && a.kingdom == Some(local) && world.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate()).unwrap_or_default();
+        match world.data.find(&id) {
+            Some(def) => {
+                let a = aa_play::production::spawn_single(world, def, Some(local), hq + off, -std::f32::consts::FRAC_PI_2);
+                info!("script: spawned {id} as actor {a}");
             }
             None => warn!("script: no {id} in the data"),
         }

@@ -16,10 +16,10 @@
 //! mesh is drawn at its own depth (painter's order). Clip rectangles are
 //! applied on the CPU (quads are axis-aligned: the UVs are cut with them).
 //!
-//! A quad in texture effect mode 1 (a disabled button icon, `0x5E66E0`) is
-//! drawn with `GreyUiMaterial` (`ui_grey.wgsl`, the Direct3D stages of
-//! `0x742CC0`). Effect modes 2 and 3 (the texture's +0x101 flag: the
-//! specular colour blended in by texture alpha) are not ported.
+//! A quad in texture effect mode 1 (a disabled button icon, `0x5E66E0`), 2
+//! (tinted: the widget's +0x101 flag, `0x5E6740`) or 3 (both) is drawn with
+//! `GreyUiMaterial` (`ui_grey.wgsl`, the Direct3D stages of `0x742CC0` /
+//! `0x742630`).
 use super::glyphs::{GlyphAtlas, PAGE};
 use super::tex::{Key, UiTextures, Variant};
 use super::video::VideoPlayer;
@@ -59,8 +59,9 @@ pub struct UiDraw {
 enum MatKey {
     Plain,
     Image(AssetId<Image>),
-    /// Effect mode 1 (a disabled icon, `ui_grey.wgsl`); alpha-blended.
-    Grey(AssetId<Image>, bool),
+    /// Effect modes 1-3 (`ui_grey.wgsl`): alpha-blended, the mode and the
+    /// tint (8-bit RGB, the vertices' specular colour).
+    Grey(AssetId<Image>, bool, u8, [u8; 3]),
 }
 
 /// The material of a batch: the plain colour material, or the grey effect.
@@ -72,14 +73,15 @@ enum UiMat {
 
 pub const GREY_SHADER: Handle<bevy::shader::Shader> = bevy::asset::uuid_handle!("5f0c3b8a-2d71-4e96-8a4b-c71e09d36f52");
 
-/// A UI texture in effect mode 1 (`0x73EAF0`): the fixed-function stages of
-/// `0x742CC0` / `0x742630` as a shader (`ui_grey.wgsl`).
+/// A UI texture in effect mode 1, 2 or 3 (`0x73EAF0`): the fixed-function
+/// stages of `0x742CC0` / `0x742630` as a shader (`ui_grey.wgsl`).
 #[derive(Asset, TypePath, bevy::render::render_resource::AsBindGroup, Debug, Clone)]
 pub struct GreyUiMaterial {
     #[texture(0)]
     #[sampler(1)]
     pub texture: Handle<Image>,
-    /// x: 1 when the texture is alpha-blended (UI texture +0x80 == 2).
+    /// x: 1 when the texture is alpha-blended (UI texture +0x80 == 2);
+    /// y: the effect mode; z: the tint as R | G << 8 | B << 16.
     #[uniform(2)]
     pub params: UVec4,
 }
@@ -272,11 +274,12 @@ impl Builder {
     fn quad(&mut self, image: Option<Handle<Image>>, rect: Rect, uv: [f32; 4], color: [f32; 4], clip: Option<Rect>) {
         self.quad_fx(image, rect, uv, color, clip, None);
     }
-    /// A quad; `grey` = Some(blended) draws it in effect mode 1.
-    fn quad_fx(&mut self, image: Option<Handle<Image>>, rect: Rect, uv: [f32; 4], color: [f32; 4], clip: Option<Rect>, grey: Option<bool>) {
+    /// A quad; `effect` = Some((blended, mode, tint)) draws it in that
+    /// texture effect mode (1-3).
+    fn quad_fx(&mut self, image: Option<Handle<Image>>, rect: Rect, uv: [f32; 4], color: [f32; 4], clip: Option<Rect>, effect: Option<(bool, u8, [u8; 3])>) {
         let Some((r, uv)) = clip_quad(rect, uv, clip) else { return };
-        let key = match (&image, grey) {
-            (Some(h), Some(blended)) => MatKey::Grey(h.id(), blended),
+        let key = match (&image, effect) {
+            (Some(h), Some((blended, mode, tint))) => MatKey::Grey(h.id(), blended, mode, tint),
             (Some(h), None) => MatKey::Image(h.id()),
             (None, _) => MatKey::Plain,
         };
@@ -371,8 +374,10 @@ pub fn paint(
                         let key = Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address) };
                         let Some(e) = r.tex.get(&key) else { continue };
                         let image = e.image.clone();
-                        let grey = (q.effect == 1).then_some(q.blend == Blend::Alpha);
-                        b.quad_fx(Some(image), q.rect, q.uv, color, q.clip, grey);
+                        // the tint as the 8-bit specular colour
+                        let tint = q.tint.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+                        let effect = (1..=3).contains(&q.effect).then_some((q.blend == Blend::Alpha, q.effect, tint));
+                        b.quad_fx(Some(image), q.rect, q.uv, color, q.clip, effect);
                     }
                     None => b.quad(None, q.rect, [0.0, 0.0, 1.0, 1.0], color, q.clip),
                 }
@@ -465,7 +470,10 @@ pub fn paint(
             .materials
             .entry(batch.key.clone())
             .or_insert_with(|| match (&batch.key, &batch.image) {
-                (MatKey::Grey(_, blended), Some(image)) => UiMat::Grey(grey_materials.add(GreyUiMaterial { texture: image.clone(), params: UVec4::new(u32::from(*blended), 0, 0, 0) })),
+                (MatKey::Grey(_, blended, mode, tint), Some(image)) => UiMat::Grey(grey_materials.add(GreyUiMaterial {
+                    texture: image.clone(),
+                    params: UVec4::new(u32::from(*blended), u32::from(*mode), u32::from(tint[0]) | u32::from(tint[1]) << 8 | u32::from(tint[2]) << 16, 0),
+                })),
                 _ => UiMat::Color(materials.add(ColorMaterial { color: Color::WHITE, texture: batch.image.clone(), alpha_mode: bevy::sprite_render::AlphaMode2d::Blend, ..default() })),
             })
             .clone();

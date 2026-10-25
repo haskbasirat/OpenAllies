@@ -724,6 +724,7 @@ impl Ui {
                 );
                 for q in &mut quads {
                     q.effect = d.effect;
+                    q.tint = d.tint;
                 }
                 push_quads(quads, out);
             }

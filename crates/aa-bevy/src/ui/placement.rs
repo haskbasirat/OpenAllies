@@ -1,9 +1,17 @@
-//! Placement mode after Unpack (SharedUIStates placement state, ctor
-//! `0x6895B0`; ghost list `0x693AE0` / `0x693D10` / `0x693EF0`; the facing
-//! state `0x6894B0` / `0x688AA0` / `0x688990`).
+//! Placement mode after Unpack or a construct page item (the game
+//! interface's placement state, `0x622800` on the SharedUIStates placement
+//! base `0x6894B0`; ghost list `0x693AE0` / `0x693D10` / `0x693EF0`; the
+//! facing `0x688AA0` / `0x688990`).
 //!
-//! * While the Unpack order is armed, a ghost of the building the truck
-//!   unpacks into follows the cursor on the ground.
+//! * PerformActorCommand (`0x612A70`) enters it for both: Unpack (command
+//!   11) through the state's virtual +0x5C (`0x6212D0`) with the truck's
+//!   unpacked structure (ActorData +0x534); a construct item (command 4,
+//!   behaviour flag 0x10000, the item chosen) through virtual +0x58
+//!   (`0x6204C0` -> +0x5C with the item, no truck). `0x6212D0` makes the
+//!   ghost (`0x689150` -> `0x688DC0`) and starts the HUD's impact preview
+//!   (with a truck `0x602A80`, without one `0x603B50` -> `0x603A00`).
+//! * While it is armed, a ghost of the structure follows the cursor on the
+//!   ground.
 //!   - Every update (`0x688860`) it is moved there (`0x693D10`: a
 //!     tile_locked building snaps to the half-cell grid, `0x46EE00`; an
 //!     axis_locked one faces native -Y) and its placement is tested.
@@ -18,8 +26,16 @@
 //!   spot it fixes the ghost at the press point. Dragging further than the
 //!   AVar drag threshold (`0x688AA0`, Manhattan pixels) shows VFXSelectFacing
 //!   (`facing_arrow_vfx`) at the press point and turns the ghost to face the
-//!   cursor (`0x688990`). Releasing places the building with that facing.
+//!   cursor (`0x688990`). Releasing places the building with that facing:
+//!   the commit (`0x621350`) sends the stored command with the ghost's point
+//!   and, the command's behaviour flag 0x20 set (unpack, construct), its
+//!   facing (Command::Deploy for the truck, Command::Construct for the
+//!   selection), then leaves the state.
 //! * A right press cancels the mode.
+//! * The legality test is the ghost list's (`0x6202C0` -> `0x6887A0` ->
+//!   `0x693EF0`) for both: the structure's footprint fits there. For Unpack
+//!   the truck must also be able to drive there (the checks Command::Deploy
+//!   makes).
 //!
 //! The ghost and the arrow are drawn by the battle view (effects owner)
 //! from [`Ghost`].
@@ -37,7 +53,9 @@ pub struct Placement {
 
 #[derive(Clone, Debug)]
 pub struct Active {
-    pub truck: ActorId,
+    /// The unpacking truck (Unpack); None for a construct item, which the
+    /// selection builds.
+    pub truck: Option<ActorId>,
     pub building: DefId,
     /// Ghost position (native ground point, after the placement snap) and
     /// facing (rad, 0 = native +X).
@@ -77,13 +95,14 @@ pub struct GhostModel {
     pub illegal: bool,
 }
 
-/// The legality test of a spot: the building's footprint fits there and the
-/// truck can drive there to unpack (the checks Command::Deploy makes).
-pub fn problem(world: &aa_play::World, truck: ActorId, building: DefId, at: Vec2) -> Option<String> {
-    if let Err(e) = aa_play::deploy::spot_clear(world, building, at, Some(truck)) {
+/// The legality test of a spot: the building's footprint fits there and,
+/// for Unpack, the truck can drive there to unpack (the checks
+/// Command::Deploy makes).
+pub fn problem(world: &aa_play::World, truck: Option<ActorId>, building: DefId, at: Vec2) -> Option<String> {
+    if let Err(e) = aa_play::deploy::spot_clear(world, building, at, truck) {
         return Some(e);
     }
-    aa_play::movement::deploy_spot_problem(world, truck, at)
+    truck.and_then(|t| aa_play::movement::deploy_spot_problem(world, t, at))
 }
 
 /// The ghost of this frame from the placement state.
