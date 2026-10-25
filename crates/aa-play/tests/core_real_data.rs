@@ -189,7 +189,7 @@ fn core_step(w: &mut aa_play::World, commands: Vec<aa_play::Command>) {
     for c in commands {
         w.apply(c);
     }
-    aa_play::scheduler::queue_zero(w);
+    aa_play::scheduler::periodic(w);
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);
@@ -1516,6 +1516,30 @@ fn berlin_battle_start_draws_match_the_film() {
         _ => None,
     }).collect();
     assert_eq!(q0, [Some(4), Some(3), Some(1), Some(0), Some(5), Some(2)]);
+    // The saved queue 1 (120 entries in 16 buckets, cursor 0) loses the four
+    // placeholders' Properties and gains each Corps HQ's five 0x563FD0
+    // registrations, at the heads of the buckets their draws pick.
+    let q1 = w.sched.entries(1);
+    assert_eq!(q1.len(), 16);
+    let total: usize = q1.iter().map(Vec::len).sum();
+    let kingdoms = q1.iter().flatten().filter(|o| matches!(o, Owner::KingdomComponent(_, 6))).count();
+    let corps: Vec<u32> = (0..w.actors.len() as u32).filter(|&a| w.ids.actor(a).is_some_and(|g| [0x344D, 0x344F, 0x3450, 0x3451].contains(&g.raw()))).collect();
+    assert_eq!(corps.len(), 4);
+    let created = q1.iter().flatten().filter(|o| matches!(o, Owner::Component(a, _) if corps.contains(a))).count();
+    let unresolved = q1.iter().flatten().filter(|o| matches!(o, Owner::Saved(_))).count();
+    let scenery = q1.iter().flatten().filter(|o| matches!(o, Owner::Placed(..))).count();
+    eprintln!("queue 1: {total} entries, {kingdoms} kingdom Properties, {created} corps registrations, {scenery} scenery, {unresolved} unresolved; per bucket {:?}", q1.iter().map(Vec::len).collect::<Vec<_>>());
+    assert_eq!(kingdoms, 6);
+    assert_eq!(created, 20);
+    // The queue-1 leaves: the four cities' City Ticks, the cities' and the
+    // Corps HQs' supply Ticks.
+    let cities = q1.iter().flatten().filter(|o| matches!(o, Owner::Component(a, 29) if w.data.def(w.actors[*a as usize].def).city)).count();
+    let suppliers = q1.iter().flatten().filter(|o| matches!(o, Owner::Component(a, 11) if w.data.def(w.actors[*a as usize].def).has_supply)).count();
+    assert_eq!(cities, 4);
+    assert_eq!(suppliers, 4 + 4);
+    assert_eq!(unresolved, 0);
+    assert_eq!(total, 120 - 4 + 20);
+    assert!(w.sched.notes.is_empty(), "{:?}", w.sched.notes);
 }
 
 /// Queue 0 delivers the production queues before the kingdom economy ticks

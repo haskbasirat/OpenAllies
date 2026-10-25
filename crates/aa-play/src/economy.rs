@@ -22,9 +22,10 @@
 //!   the shortage ratio and the kingdom_upkeep_shortage / repaired notices,
 //!   the Commander's experience income 0x4CDFD0, then from world time 1.0 the
 //!   victory checks 0x4E9960 / 0x4E9A40 (`crate::victory`);
-//! - shortfall attrition 578660/562D10 (aa-combat `shortfall.rs`): members
-//!   of an out-of-supply supply_used organization of a kingdom in shortage
-//!   lose dt * max_health * shortfall_damage_rate * (0.75 + u).
+//! - shortfall attrition 578660/562D10 (aa-combat `shortfall.rs`), in the
+//!   organization's queue-1 maintenance tick 0x57C8E0: members of an
+//!   out-of-supply supply_used organization of a kingdom in shortage lose
+//!   elapsed * max_health * shortfall_damage_rate * (0.75 + u).
 //!
 //! The kingdom ticks are queue-0 deliveries (`crate::scheduler`), among the
 //! production queues, newest registration first.
@@ -45,10 +46,9 @@ use aa_economy::{Economy, F32Bits, X87Precision};
 /// The simulation thread's x87 precision (PC53).
 const PRECISION: aa_numeric::Precision = aa_numeric::Precision::Double53;
 
-/// After the update's queue-0 deliveries (the kingdom ticks among them,
-/// `crate::scheduler`): the shortfall attrition, then the HUD copy.
+/// After the update's periodic deliveries (the kingdom ticks among them,
+/// `crate::scheduler`): the HUD copy.
 pub fn after_queue(world: &mut World) {
-    shortfall(world, crate::DT);
     for k in 0..world.kingdoms.len() as KingdomId {
         publish(world, k);
     }
@@ -688,37 +688,37 @@ pub fn kingdom_tick(world: &mut World, k: KingdomId, elapsed_bits: u32) {
     }
 }
 
-/// 578660 shortfall attrition (the 57C8E0 gate: supply_used, out of
-/// supply, kingdom shortage ratio above zero).
-fn shortfall(world: &mut World, seconds: f32) {
-    for o in 0..world.orgs.len() {
-        let org = &world.orgs[o];
-        if !org.alive {
+/// 578660 shortfall attrition of organization `o` in its maintenance tick
+/// (`crate::supply::org_maintenance`, `seconds` = its elapsed time; the
+/// 57C8E0 gate: supply_used, out of supply, kingdom shortage ratio above
+/// zero).
+pub fn shortfall(world: &mut World, o: OrgId, seconds: f32) {
+    let Some(org) = world.orgs.get(o as usize) else { return };
+    if !org.alive {
+        return;
+    }
+    let d = world.data.def(org.def);
+    if !d.supply_used || !world.books.org(o).is_some_and(|b| b.out_of_supply) {
+        return;
+    }
+    let ratio = world.books.kingdom(org.kingdom).map_or(0.0, |k| k.shortage_ratio);
+    if ratio <= 0.0 {
+        return;
+    }
+    let rate = d.shortfall_damage_rate;
+    let members = org.members.clone();
+    for m in members {
+        let a = &world.actors[m as usize];
+        if !a.alive || a.removed {
             continue;
         }
-        let d = world.data.def(org.def);
-        if !d.supply_used || !world.books.org(o as u32).is_some_and(|b| b.out_of_supply) {
-            continue;
-        }
-        let ratio = world.books.kingdom(org.kingdom).map_or(0.0, |k| k.shortage_ratio);
-        if ratio <= 0.0 {
-            continue;
-        }
-        let rate = d.shortfall_damage_rate;
-        let members = org.members.clone();
-        for m in members {
-            let a = &world.actors[m as usize];
-            if !a.alive || a.removed {
-                continue;
-            }
-            let max = world.data.def(a.def).health;
-            let base = seconds * max * rate;
-            let u = world.random();
-            let amount = (u - 0.25) * base + base;
-            let a = &mut world.actors[m as usize];
-            a.health = (a.health - amount).max(0.0);
-            world.events.push(Event::Hit { target: m, damage: amount });
-        }
+        let max = world.data.def(a.def).health;
+        let base = seconds * max * rate;
+        let u = world.random();
+        let amount = (u - 0.25) * base + base;
+        let a = &mut world.actors[m as usize];
+        a.health = (a.health - amount).max(0.0);
+        world.events.push(Event::Hit { target: m, damage: amount });
     }
 }
 

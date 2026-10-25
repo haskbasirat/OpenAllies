@@ -158,6 +158,36 @@ pub struct GameMap {
     /// a generated map). See `crate::scheduler`.
     #[serde(default)]
     pub queue0_kingdoms: Option<Vec<usize>>,
+    /// The saved periodic queues 0, 1, 2 (GWorld+1AC/+1C0/+1D4), owners
+    /// resolved; `None` as for `queue0_kingdoms`. See `crate::scheduler`.
+    #[serde(default)]
+    pub saved_queues: Option<Vec<SavedPeriodic>>,
+}
+
+/// aa-rules COMPONENTS slot of the Properties component.
+pub const PROPERTIES_SLOT: u8 = 6;
+
+/// The owner of a saved queue entry: the UPDATABLES table id resolved
+/// through the saved Updatable ids of the kingdoms and the placed things'
+/// components.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SavedOwner {
+    /// Component `slot` (aa-rules COMPONENTS) of `placed[index]`.
+    Placed { index: usize, slot: u8 },
+    /// The economy Updatable (+180) of the kingdom of `slots[slot]`.
+    Kingdom { slot: usize },
+    /// Component `component` of the kingdom of `slots[slot]`.
+    KingdomComponent { slot: usize, component: u8 },
+    /// A table id aa-play does not resolve (negative: the native null id).
+    Unknown(i32),
+}
+
+/// One saved periodic queue: its current bucket and every bucket's entries
+/// (owner, data) in list order.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedPeriodic {
+    pub current: usize,
+    pub buckets: Vec<Vec<(SavedOwner, u32)>>,
 }
 
 /// IDMGR: the next-fit cursor, the highest used slot and the generation of
@@ -401,14 +431,20 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
             serialized_id: None,
         });
     }
-    // Saved Updatable id (UPDATABLES table index) of each kingdom -> slot.
-    let mut kingdom_updatables: std::collections::BTreeMap<i32, usize> = std::collections::BTreeMap::new();
+    // Saved Updatable id (UPDATABLES table index) -> its owner: each
+    // kingdom's economy Updatable and its Properties component, then every
+    // saved component of the placed things.
+    let mut updatable_owners: std::collections::BTreeMap<i32, SavedOwner> = std::collections::BTreeMap::new();
     if let Some(k) = &inventory.kingdoms {
         for r in k.slots.iter().filter_map(|s| s.record.as_ref()) {
             let name = utf16(&r.thing.name_utf16);
             if let Some(i) = slots.iter().position(|s| s.id.eq_ignore_ascii_case(&name)) {
                 if let Some(id) = r.updatable.as_ref().and_then(|u| u.serialized_id).filter(|&id| id >= 0) {
-                    kingdom_updatables.insert(id, i);
+                    updatable_owners.insert(id, SavedOwner::Kingdom { slot: i });
+                }
+                let properties = r.actor.as_ref().and_then(|a| a.tail.properties.as_ref()).and_then(|p| p.updatable.serialized_id);
+                if let Some(id) = properties.filter(|&id| id >= 0) {
+                    updatable_owners.insert(id, SavedOwner::KingdomComponent { slot: i, component: PROPERTIES_SLOT });
                 }
             }
             if let Some(slot) = slots.iter_mut().find(|s| s.id.eq_ignore_ascii_case(&name)) {
@@ -446,7 +482,26 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
         })
         .unwrap_or_default();
     let mut placed = Vec::with_capacity(inventory.dynamic_things.placements.len());
-    for p in &inventory.dynamic_things.placements {
+    let mut component_errors = 0usize;
+    for (index, p) in inventory.dynamic_things.placements.iter().enumerate() {
+        // The saved components' Updatable ids (component Load order, the
+        // actor tail of 0x4D6F10's restore; aa-mapworld component codecs).
+        if let Some(actor) = p.actor.as_ref() {
+            let walked = aa_mapworld::actor_payload::ActorTail::decode_prefix_with_stages(&p.opaque_tail, actor.version, 0, |slot, saved, _, _, bytes| {
+                if !saved {
+                    return Ok((0, None));
+                }
+                let (payload, consumed) = aa_mapworld::saved_components::SavedComponent::decode_prefix(slot, bytes)?;
+                if let Some(id) = payload.updatable().and_then(|u| u.serialized_id).filter(|&id| id >= 0) {
+                    updatable_owners.insert(id, SavedOwner::Placed { index, slot });
+                }
+                let properties = if let aa_mapworld::saved_components::SavedComponent::Properties(v) = &payload { Some(v.clone()) } else { None };
+                Ok((consumed, properties))
+            });
+            if walked.is_err() {
+                component_errors += 1;
+            }
+        }
         let position = p.thing.position_bits.map(f32::from_bits);
         let facing = p.thing.facing_bits.map(f32::from_bits);
         let yaw = if facing[0] != 0.0 || facing[1] != 0.0 { facing[1].atan2(facing[0]) } else { -std::f32::consts::FRAC_PI_2 };
@@ -535,20 +590,37 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
         speed_limit.push(def.map_or(NO_SPEED_LIMIT, |d| d.speed_limit));
         cell_variation.push(def.map_or(u16::MAX, |d| variation_index(&d.id)));
     }
-    // The saved queue 0's kingdom Updatables (the economy Tick 0x4E9C40).
-    let queue0_kingdoms = archive.decode_chunk("UPDATABLES", 1 << 30).ok().and_then(|chunk| saved_queue0(&chunk.bytes, inventory.world.version)).map(|owners| {
-        let mut list = Vec::new();
-        let mut other = 0usize;
-        for o in owners {
-            match kingdom_updatables.get(&o) {
-                Some(&slot) => list.push(slot),
-                None => other += 1,
-            }
+    // The saved periodic queues (UPDATABLES, read by 0x50B8B0).
+    if component_errors > 0 {
+        notes.push(format!("{component_errors} placed things' saved components could not be walked for their Updatable ids"));
+    }
+    let saved_queues = archive.decode_chunk("UPDATABLES", 1 << 30).ok().and_then(|chunk| saved_periodic(&chunk.bytes, inventory.world.version)).map(|queues| {
+        let mut unknown = 0usize;
+        let out: Vec<SavedPeriodic> = queues
+            .into_iter()
+            .map(|(current, buckets)| SavedPeriodic {
+                current,
+                buckets: buckets
+                    .into_iter()
+                    .map(|b| {
+                        b.into_iter()
+                            .map(|(source, data)| {
+                                let owner = updatable_owners.get(&source).copied().unwrap_or(SavedOwner::Unknown(source));
+                                unknown += usize::from(matches!(owner, SavedOwner::Unknown(_)));
+                                (owner, data)
+                            })
+                            .collect()
+                    })
+                    .collect(),
+            })
+            .collect();
+        if unknown > 0 {
+            notes.push(format!("{unknown} saved periodic queue entries have owners aa-play does not resolve"));
         }
-        if other > 0 {
-            notes.push(format!("saved queue 0 holds {other} Updatables that are not kingdoms; they are not restored"));
-        }
-        list
+        out
+    });
+    let queue0_kingdoms = saved_queues.as_ref().map(|q| {
+        q[0].buckets.iter().flatten().filter_map(|(o, _)| if let SavedOwner::Kingdom { slot } = o { Some(*slot) } else { None }).collect()
     });
     let name = std::fs::read(game_root.join("reconstruction").join("game").join("data").join("maps").join("index.json"))
         .ok()
@@ -586,15 +658,19 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
         }),
         team_ids: inventory.teams.iter().flat_map(|t| &t.slots).filter_map(|s| s.record.as_ref()).map(|r| r.serialized_id).collect(),
         queue0_kingdoms,
+        saved_queues,
     })
 }
 
-/// The owner ids (UPDATABLES table indices) of the saved periodic queue 0,
-/// bucket by bucket, each list in its saved (delivery) order. The chunk is
-/// the table count, then for world version >= 22 the queues 3, 4, 0, 1, 2
-/// (version 0, current, bucket count, then per bucket a count and that many
-/// (id, data) pairs), as aa-runtime `saved_queues::decode` reads it.
-fn saved_queue0(bytes: &[u8], world_version: u32) -> Option<Vec<i32>> {
+/// The periodic queues 0, 1, 2 of the UPDATABLES chunk: per queue its
+/// current bucket and, bucket by bucket, the (owner table id, data) entries
+/// in their saved (delivery) order. The chunk is the table count, then for
+/// world version >= 22 the queues 3, 4, 0, 1, 2 (version 0, current, bucket
+/// count, then per bucket a count and that many (id, data) pairs; a
+/// negative count is an empty list), as aa-runtime `saved_queues::decode`
+/// reads it.
+#[allow(clippy::type_complexity)]
+fn saved_periodic(bytes: &[u8], world_version: u32) -> Option<Vec<(usize, Vec<Vec<(i32, u32)>>)>> {
     if world_version < 22 {
         return None;
     }
@@ -605,29 +681,30 @@ fn saved_queue0(bytes: &[u8], world_version: u32) -> Option<Vec<i32>> {
         Some(w)
     };
     word()?;
-    for id in [3u8, 4, 0, 1, 2] {
+    let mut periodic = vec![(0usize, Vec::new()); 3];
+    for id in [3usize, 4, 0, 1, 2] {
         if word()? != 0 {
             return None;
         }
-        let _current = word()?;
+        let current = word()? as i32;
         let count = word()? as i32;
-        if count <= 0 {
+        if count <= 0 || current < 0 || current >= count {
             return None;
         }
-        let mut owners = Vec::new();
+        let mut buckets = Vec::new();
         for _ in 0..count {
             let n = word()? as i32;
+            let mut bucket = Vec::new();
             for _ in 0..n.max(0) {
                 let source = word()? as i32;
-                let _data = word()?;
-                if id == 0 {
-                    owners.push(source);
-                }
+                let data = word()?;
+                bucket.push((source, data));
             }
+            buckets.push(bucket);
         }
-        if id == 0 {
-            return Some(owners);
+        if id < 3 {
+            periodic[id] = (current as usize, buckets);
         }
     }
-    None
+    Some(periodic)
 }

@@ -159,14 +159,6 @@ impl World {
                 None => world.ids.destroy_map_kingdom(&map, s),
             }
         }
-        // The saved queue 0 (0x50B8B0): the kingdom economy Updatables in
-        // their saved order; a destroyed kingdom's entry leaves with it. A
-        // map without saved queues admits its kingdoms (crate::scheduler).
-        if let Some(saved) = &map.queue0_kingdoms {
-            let order: Vec<u32> = saved.iter().filter_map(|&s| slot_kingdom.get(s).copied().flatten()).collect();
-            crate::scheduler::restore_kingdoms(&mut world, &order);
-        }
-        crate::scheduler::admit_kingdoms(&mut world);
         // The map's things in record order keep their saved ids; the
         // placeholders of player kingdoms are resolved afterwards (4FDA70).
         let mut replacements: Vec<(bool, u16, usize, crate::data::DefId, u32)> = Vec::new();
@@ -209,11 +201,32 @@ impl World {
         let mut restored: Vec<(u16, usize)> =
             map.placed.iter().enumerate().filter(|(_, p)| p.serialized_id != 0).map(|(i, p)| (crate::ids::Gtid::from_raw(p.serialized_id).slot(), i)).collect();
         restored.sort_unstable();
-        for (_, i) in restored {
+        for &(_, i) in &restored {
             if let Some(def) = data.find(&map.placed[i].thing_id) {
                 crate::creation::restored(&mut world, def);
             }
         }
+        // The queue Load 0x50B8B0 (crate::scheduler): the saved periodic
+        // queues replace the world's (no draws); a thing destroyed with its
+        // kingdom leaves its entries. A map without saved queues admits its
+        // kingdoms and its kept things' queue-1 components.
+        let mut kept: std::collections::BTreeMap<usize, crate::scheduler::Kept> = std::collections::BTreeMap::new();
+        for a in 0..world.actors.len() as u32 {
+            let Some(i) = world.books.actor(a).and_then(|b| b.placed) else { continue };
+            let organization = data.find(&map.placed[i].thing_id).is_some_and(|d| data.def(d).class == Some(crate::data::DefClass::Organization));
+            match (organization, world.actors[a as usize].org) {
+                (true, Some(o)) => kept.entry(i).or_insert(crate::scheduler::Kept::Org(o)),
+                _ => kept.entry(i).or_insert(crate::scheduler::Kept::Actor(a)),
+            };
+        }
+        match &map.saved_queues {
+            Some(saved) => crate::scheduler::restore_saved(&mut world, saved, &crate::scheduler::Restoring { things: &kept, slot_kingdom: &slot_kingdom }),
+            None => {
+                let order: Vec<crate::scheduler::Kept> = restored.iter().filter_map(|&(_, i)| kept.get(&i).copied()).collect();
+                crate::scheduler::admit_restored(&mut world, &order);
+            }
+        }
+        crate::scheduler::admit_kingdoms(&mut world);
         // StartMission 0x4E6DB0 draws nothing.
         // 4FDA70 queues the placeholders in ascending slot order (4EFBE0),
         // objects and actors apart; 4FC4A0 runs the objects, then the actors;
@@ -225,6 +238,8 @@ impl World {
         replacements.sort_by_key(|&(actor, slot, ..)| (actor, slot));
         for (actor, _, index, def, k) in replacements {
             let p = &map.placed[index];
+            // The placeholder's own Updatables leave the queues with it.
+            crate::scheduler::release_placed(&mut world, index);
             if actor {
                 world.ids.replace_placed(index);
                 spawn_placed(&mut world, def, Some(k), glam::Vec2::new(p.position[0], p.position[1]), p.yaw, index);

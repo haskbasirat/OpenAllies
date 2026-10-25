@@ -245,7 +245,7 @@ fn core_step(w: &mut World, commands: Vec<Command>) {
     for c in commands {
         w.apply(c);
     }
-    aa_play::scheduler::queue_zero(w);
+    aa_play::scheduler::periodic(w);
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);
@@ -420,15 +420,19 @@ fn cut_off_relay_produces_while_its_stockpile_lasts() {
     let (mut w, ids) = world(&[0]);
     let hq = spawn(&mut w, ids.hq, 0, Vec2::new(40.0, 40.0), 0.0);
     let depot = spawn(&mut w, ids.depot, 0, Vec2::new(80.0, 40.0), 0.0);
-    for _ in 0..(16 * 3) {
+    // The depot's supply Tick runs once per second (queue 1): four of them
+    // recharge four seconds of stock at most.
+    for _ in 0..(16 * 4) {
         core_step(&mut w, vec![]);
     }
     assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 20.0 + 5.0);
     let stock = w.books.actor(depot).unwrap().supply_stock;
     assert!(stock > 2.0, "{stock}");
     w.actors[hq as usize].alive = false;
-    core_step(&mut w, vec![]);
-    core_step(&mut w, vec![]);
+    // Cut off at its next supply Tick (within one second).
+    for _ in 0..16 {
+        core_step(&mut w, vec![]);
+    }
     assert!(w.books.out_of_supply(depot));
     assert_eq!(w.books.kingdom(0).unwrap().raw_provided[AMMO], 5.0, "stock left: the depot still produces");
     for _ in 0..(16 * 4) {
@@ -468,12 +472,16 @@ fn attached_regiment_in_supply_heals_and_rebuilds_members() {
     w.orgs[o as usize].members.retain(|&m| m != gone);
     core_step(&mut w, vec![]);
     assert!(!w.books.org(o).unwrap().out_of_supply);
-    // 0.1 * 100 health per second, one slot per tick (17 ticks so far).
+    // 0.1 * 100 health per second, one slot per maintenance Tick 0x57C8E0
+    // (queue 1, once per second in the organization's bucket): 17 updates
+    // hold one or two of them (two when its bucket is the first one).
     for _ in 0..16 {
         core_step(&mut w, vec![]);
     }
     let h = w.actors[first as usize].health;
-    assert!((h - (50.0 + 17.0 * 10.0 / 16.0)).abs() < 1e-3, "{h}");
+    let bucket = w.sched.entries(1).iter().position(|b| b.contains(&aa_play::scheduler::Owner::OrgComponent(o, 7))).expect("the organization is on queue 1");
+    let ticks = if bucket == 0 { 2.0 } else { 1.0 };
+    assert!((h - (50.0 + ticks * 10.0)).abs() < 1e-3, "{h} (bucket {bucket})");
     for _ in 0..(16 * 30) {
         core_step(&mut w, vec![]);
     }
@@ -568,6 +576,8 @@ fn cities_change_hands_by_presence_and_independents_never_lose() {
     let mut city = w.data.def(ids.depot).clone();
     city.id = "city".into();
     city.city = true;
+    // its City component (the queue-1 City Tick 0x5647A0)
+    city.components |= aa_rules::native::COMPONENTS.iter().find(|(c, _)| *c == "CityComponent").map_or(0, |(_, bit)| 1u32 << bit);
     city.city_zone_radius = 30.0;
     city.captureable = true;
     city.destructible = false;
@@ -628,27 +638,36 @@ fn cities_change_hands_by_presence_and_independents_never_lose() {
     // Combat prepares the combat values (Performer +60) of the new definitions.
     aa_play::combat::tick(&mut w);
     assert!(w.combat.extras.as_ref().unwrap().def(armed).combat_value > 0.0);
+    // The City Tick 0x5647A0 runs once per second (queue 1): every change
+    // shows within one second.
+    let second = |w: &mut World| {
+        let mut captured = false;
+        for _ in 0..16 {
+            core_step(w, vec![]);
+            captured |= w.events.iter().any(|e| matches!(e, Event::Captured { .. }));
+        }
+        captured
+    };
     let u = spawn(&mut w, unarmed, 0, Vec2::new(205.0, 200.0), 0.0);
-    core_step(&mut w, vec![]);
+    second(&mut w);
     assert_eq!(w.actors[c as usize].kingdom, Some(2), "unarmed: no value");
     w.actors[u as usize].alive = false;
     let a = spawn(&mut w, armed, 0, Vec2::new(210.0, 200.0), 0.0);
-    core_step(&mut w, vec![]);
+    assert!(second(&mut w), "captured");
     assert_eq!(w.actors[c as usize].kingdom, Some(0));
-    assert!(w.events.iter().any(|e| matches!(e, Event::Captured { kingdom: 0, .. })));
     // An enemy in the zone too: contested, nobody takes it back.
     let b = spawn(&mut w, armed, 1, Vec2::new(190.0, 200.0), 0.0);
-    core_step(&mut w, vec![]);
+    second(&mut w);
     assert_eq!(w.actors[c as usize].kingdom, Some(0));
     // Kingdom 0 leaves: kingdom 1 takes it.
     w.actors[a as usize].alive = false;
-    core_step(&mut w, vec![]);
+    second(&mut w);
     assert_eq!(w.actors[c as usize].kingdom, Some(1));
     // Kingdom 1 leaves and a regiment of kingdom 0 arrives: it takes the city.
     w.actors[b as usize].alive = false;
     let o = aa_play::production::spawn_organization(&mut w, squad_def, 0, Vec2::new(205.0, 205.0), 0.0, Some(hq0));
     assert!(w.orgs[o as usize].members.iter().all(|&m| w.actors[m as usize].org == Some(o)));
-    core_step(&mut w, vec![]);
+    second(&mut w);
     assert_eq!(w.actors[c as usize].kingdom, Some(0), "the regiment counts through its organization");
 }
 
