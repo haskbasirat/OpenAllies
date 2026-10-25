@@ -267,6 +267,7 @@ dependencies = [
  "aa-body",
  "aa-economy",
  "aa-mapworld",
+ "aa-mind",
  "aa-movement",
  "aa-navigation",
  "aa-numeric",

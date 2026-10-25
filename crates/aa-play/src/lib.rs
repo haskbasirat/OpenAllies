@@ -65,3 +65,5 @@ pub mod scheduler;
 pub mod construct;
 /// The DenizenComponent of airfields and carriers (core owner).
 pub mod denizen;
+/// aa-mind's Mind arena hosted for aa-play actors (core owner).
+pub mod minds;

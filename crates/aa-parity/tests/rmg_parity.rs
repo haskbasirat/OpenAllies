@@ -83,6 +83,22 @@ fn native_log_lines(path: &Path) -> Vec<(String, Vec<u64>)> {
             if let Some(v) = v {
                 out.push((format!("terrain {ids} normalized weight"), vec![v]));
             }
+        } else if let Some(rest) = msg.strip_prefix("marker ") {
+            // "marker %d placed %f,%f" / "marker %d created at %f,%f".
+            let mut w = rest.splitn(2, ' ');
+            let index: f64 = w.next().and_then(|s| s.parse().ok()).unwrap_or(-1.0);
+            let rest = w.next().unwrap_or("");
+            let (what, coords) = if let Some(c) = rest.strip_prefix("placed ") {
+                ("marker placed", c)
+            } else if let Some(c) = rest.strip_prefix("created at ") {
+                ("marker created", c)
+            } else {
+                continue;
+            };
+            let xy: Vec<u64> = coords.split(',').filter_map(bits).collect();
+            if xy.len() == 2 {
+                out.push((what.into(), vec![index.to_bits(), xy[0], xy[1]]));
+            }
         } else if let Some(rest) = msg.strip_prefix("balance iteration ") {
             let mut w = rest.split_whitespace();
             let iter: f64 = w.next().and_then(|s| s.parse().ok()).unwrap_or(-1.0);
@@ -192,6 +208,16 @@ fn film_2_world() {
     eprintln!("tiles: {} of {} differ", diff.len(), ours.len());
     for &i in diff.iter().take(12) {
         eprintln!("  ({}, {}) native {} aa-play {} flags {:x}", i % w, i / w, native.tiles[i], ours[i], native.flags[i]);
+    }
+    if let Ok(region) = std::env::var("AA_RMG_TILES") {
+        // "x0,y0,x1,y1": every tile of the region, native / aa-play.
+        let r: Vec<usize> = region.split(',').filter_map(|s| s.parse().ok()).collect();
+        for y in r[1]..=r[3] {
+            for x in r[0]..=r[2] {
+                let i = y * w + x;
+                eprintln!("  tile ({x}, {y}) native {} {:x} aa-play {}", native.tiles[i], native.flags[i], ours[i]);
+            }
+        }
     }
     if !diff.is_empty() && std::env::var_os("AA_RMG_TILEMAP").is_some() {
         for y in 0..ours.len() / w {

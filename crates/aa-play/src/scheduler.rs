@@ -370,6 +370,8 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) => crate::supply::org_maintenance(world, o, f32::from_bits(elapsed)),
         // (movement owner) Mover Tick 0x577E50.
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
+        // (core) the aircraft Mind's queue-4 update 0x51A1A0.
+        Some(Owner::Mind(a)) if crate::combat::air::is_aircraft(world, a) => crate::combat::air::think(world, a),
         // (movement owner) the element Mind's queue-4 Update 0x531D30.
         Some(Owner::Mind(a)) => crate::movement::mind_tick(world, a),
         // Not yet leaves: their systems still run as passes.

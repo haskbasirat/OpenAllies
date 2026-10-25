@@ -90,6 +90,11 @@ pub struct Weapon {
     /// `projectile`; 0 / None without a projectile.
     pub projectile_speed: f32,
     pub projectile_type: Option<String>,
+    // ---- appended by the core owner (aircraft abilities) ----
+    /// AbilityDefinition mana_cost (4C8A40: below it the ability is
+    /// unavailable, code 7).
+    #[serde(default)]
+    pub mana_cost: f32,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -736,7 +741,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v20";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v21";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1831,6 +1836,7 @@ pub(crate) mod loader {
             move_bonus: g(af, "move_bonus"),
             projectile_speed: 0.0,
             projectile_type: None,
+            mana_cost: g(d, "mana_cost"),
         }
     }
 }

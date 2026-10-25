@@ -36,6 +36,17 @@ pub struct Books {
     /// during a battle, so a zone is flooded again only when it moves.
     #[serde(skip)]
     pub zone_floods: std::collections::HashMap<(u32, u32), std::sync::Arc<Vec<u32>>>,
+    /// The live denizen groups (0x568180 objects; the aircraft formation
+    /// groups of AircraftComponent +0xA8/+0xAC), by id (`crate::denizen`).
+    #[serde(default)]
+    pub groups: std::collections::BTreeMap<u32, Mission>,
+    /// The next group id (ids start at 1; not native, the groups are
+    /// pointers there).
+    #[serde(default)]
+    pub next_group: u32,
+    /// The hosted native Minds (`crate::minds`).
+    #[serde(default)]
+    pub minds: crate::minds::Minds,
 }
 
 /// Native relation values (4E52D0).
@@ -146,10 +157,9 @@ pub struct DenizenBooks {
     /// +0x10 / +0x14 the occupants' current and full value (0x569E40).
     pub value: f32,
     pub value_max: f32,
-    /// +0x40 missions, head first.
-    pub missions: Vec<Mission>,
-    /// The next mission id (not native: missions are pointers there).
-    pub next_mission: u32,
+    /// +0x40 missions (`Books::groups` ids), head first; each node holds a
+    /// reference.
+    pub missions: Vec<u32>,
 }
 
 /// One inventory slot (0x56B720 node: +0 occupant, +4 definition,
@@ -168,6 +178,11 @@ pub struct DenizenSlot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Mission {
     pub id: u32,
+    /// +0x24 the base's GTID, as its actor.
+    pub base: ActorId,
+    /// +4 the reference count (0x568180 starts it at 0; the base's list,
+    /// each member Mind +0x30 and each flight +0xA8 / +0xAC hold one).
+    pub refs: u32,
     /// +0xC members in creation order.
     pub members: Vec<ActorId>,
     /// +8 the DenizenGroup (index into `DenizenDef::groups`).
@@ -196,24 +211,29 @@ pub enum AirOrder {
     Escort(u32),
 }
 
-/// A denizen aircraft (CreateDenizen 0x56CC10).
+/// An actor with an AircraftComponent. Its Mind (home +0x28, mode +0x24,
+/// groups +0x30 / +0x1D4) is hosted in `Books::minds` (`crate::combat::air`).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AircraftBooks {
-    /// Mind +0x28 home (0x52C280) and +0x24 mode (0x51C220).
-    pub home: ActorId,
-    pub mode: u32,
-    /// Mind +0x30 the mission (0x52A020).
-    pub mission: u32,
+    /// The AircraftComponent itself (actor+0xBC, constructor 0x55E8E0): the
+    /// movement owner's MoveTick state, read and written by the aircraft
+    /// Mind through its word accessors. Stored once.
+    pub flight: aa_movement::aircraft::AircraftState,
     /// Actor flag +8 bit 30 (0x4D04B0): waiting in the hangar for the
     /// runway release (0x5695B0).
     pub hidden: bool,
-    /// The command of the mission's use.
-    pub order: Option<AirOrder>,
+    /// Actor flag +8 bit 2: a deployed denizen (CreateDenizen 0x56CC10).
+    #[serde(default)]
+    pub denizen: bool,
     /// Actor +0x3C, the model scale: the AircraftComponent taxi_scale at
     /// CreateDenizen; AircraftComponent MoveTick 0x5612F0 rewrites it every
     /// move (the movement owner's flight).
     #[serde(default = "unit_scale")]
     pub scale: f32,
+    /// The Performer's mana (actor+0x74 Performer; PerformerComponent
+    /// mana_max at creation): each ability use pays its mana_cost (57E030).
+    #[serde(default)]
+    pub mana: f32,
 }
 
 fn unit_scale() -> f32 {

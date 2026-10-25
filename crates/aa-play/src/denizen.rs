@@ -35,7 +35,7 @@
 //! - the aircraft Mind (AAI.cpp).
 //!
 //! The orders stay refused until the aircraft fly.
-use crate::books::{AirOrder, AircraftBooks, DenizenBooks, DenizenSlot, Mission, Notice};
+use crate::books::{AirOrder, DenizenBooks, DenizenSlot, Mission, Notice};
 use crate::data::{DefId, DenizenDef};
 use crate::scheduler::{DEFERRED, Owner};
 use crate::world::{ActorId, KingdomId, World};
@@ -202,28 +202,30 @@ fn values(world: &mut World, a: ActorId) {
     }
 }
 
-/// UpdateDeployedDenizens 0x56E480, the part without escorts: a mission
-/// drops the members that no longer resolve (0x5691A0, recomputing the
-/// mean offset when one left) and ends when none is left (0x56A190).
+/// UpdateDeployedDenizens 0x56E480, the part without escorts: each listed
+/// mission (held by a local reference) is pruned (group virtual +0x14,
+/// 0x5691A0); an empty one leaves the list (its node's reference and the
+/// local one released, 0x56A190).
 fn update_deployed(world: &mut World, a: ActorId) {
-    let Some(dd) = denizen_def(world, a).cloned() else { return };
-    let gone: Vec<bool> = (0..world.actors.len()).map(|i| world.actor(i as ActorId).is_none()).collect();
-    let Some(d) = books_mut(world, a) else { return };
-    for m in &mut d.missions {
-        let before = m.members.len();
-        m.members.retain(|&x| !gone.get(x as usize).copied().unwrap_or(true));
-        if m.members.len() != before && !m.members.is_empty() {
-            if let Some(g) = dd.groups.get(m.group) {
-                m.offset = mean_offset(&g.formation, m.members.len());
-            }
+    let list = books(world, a).map(|d| d.missions.clone()).unwrap_or_default();
+    for id in list {
+        if !world.books.groups.contains_key(&id) {
+            continue;
         }
+        retain_group(world, id);
+        if group_disbanded(world, id) {
+            if let Some(d) = books_mut(world, a) {
+                d.missions.retain(|&m| m != id);
+            }
+            release_group(world, id);
+        }
+        release_group(world, id);
     }
-    d.missions.retain(|m| !m.members.is_empty());
 }
 
-/// 0x568180 / 0x5691A0: the mean of the first `members` FormationPositions
-/// (binary32 sums, times 1/used: NaN without positions).
-fn mean_offset(formation: &[[f32; 3]], members: usize) -> [f32; 3] {
+/// 0x568180: the mean of the first min(members, positions) FormationPositions
+/// (binary32 sums times 1/used; NaN without positions, as 0 * (1/0)).
+fn mean_created(formation: &[[f32; 3]], members: usize) -> [f32; 3] {
     let used = members.min(formation.len());
     let mut sum = [0.0f32; 3];
     for p in formation.iter().take(used) {
@@ -233,6 +235,76 @@ fn mean_offset(formation: &[[f32; 3]], members: usize) -> [f32; 3] {
     }
     let scale = 1.0f32 / used as f32;
     [scale * sum[0], scale * sum[1], scale * sum[2]]
+}
+
+/// 0x5691A0's recomputation: the positions of the first min(members,
+/// positions) survivors, times 1/members.
+fn mean_pruned(formation: &[[f32; 3]], members: usize) -> [f32; 3] {
+    let mut sum = [0.0f32; 3];
+    for p in formation.iter().take(members) {
+        for k in 0..3 {
+            sum[k] += p[k];
+        }
+    }
+    let scale = 1.0f32 / members as f32;
+    [sum[0] * scale, sum[1] * scale, sum[2] * scale]
+}
+
+/// Group virtual +0x14 (0x5691A0): members whose GTID no longer resolves
+/// are removed (0x50C510); when one was and members remain, +0x14 is
+/// recomputed. True when no member is left.
+pub fn group_disbanded(world: &mut World, id: u32) -> bool {
+    let Some(m) = world.books.groups.get(&id) else { return true };
+    let (base, group) = (m.base, m.group);
+    let members = m.members.clone();
+    let live: Vec<ActorId> = members.iter().copied().filter(|&x| world.actor(x).is_some()).collect();
+    let formation = world.actors.get(base as usize).and_then(|b| world.data.def(b.def).denizen.as_ref()).and_then(|d| d.groups.get(group)).map(|g| g.formation.clone());
+    if let Some(m) = world.books.groups.get_mut(&id) {
+        let removed = live.len() != members.len();
+        m.members = live;
+        if removed && !m.members.is_empty()
+            && let Some(f) = formation
+        {
+            m.offset = mean_pruned(&f, m.members.len());
+        }
+        m.members.is_empty()
+    } else {
+        true
+    }
+}
+
+/// Group +4 increment.
+pub fn retain_group(world: &mut World, id: u32) {
+    if let Some(m) = world.books.groups.get_mut(&id) {
+        m.refs += 1;
+    }
+}
+
+/// Group +4 decrement; at zero the deleting destructor 0x569180 -> 0x5683E0
+/// frees the member nodes and releases the escort group (+0x28).
+pub fn release_group(world: &mut World, id: u32) {
+    let Some(m) = world.books.groups.get_mut(&id) else { return };
+    m.refs = m.refs.saturating_sub(1);
+    if m.refs == 0 {
+        let escort = m.escort;
+        world.books.groups.remove(&id);
+        if let Some(e) = escort {
+            release_group(world, e);
+        }
+    }
+}
+
+/// Group +0xC: the members in list order (creation order), as actors.
+pub fn group_members(world: &World, id: u32) -> Vec<ActorId> {
+    world.books.groups.get(&id).map(|m| m.members.clone()).unwrap_or_default()
+}
+
+/// Group +8 (the DenizenGroup's FormationPositions; None for a null +8)
+/// and the +0x14 mean offset.
+pub fn group_layout(world: &World, id: u32) -> Option<(Option<Vec<[f32; 3]>>, [f32; 3])> {
+    let m = world.books.groups.get(&id)?;
+    let formation = world.actors.get(m.base as usize).and_then(|b| world.data.def(b.def).denizen.as_ref()).and_then(|d| d.groups.get(m.group)).map(|g| g.formation.clone());
+    Some((formation, m.offset))
 }
 
 /// 0x569440: one housed Element slot of each 0x568880(2) flag heals per
@@ -319,19 +391,30 @@ pub fn create(world: &mut World, base: ActorId, mode: u32) -> Option<u32> {
         }
         // 0x96CC4C: the maximum truncated.
         let n = (group.size[1] as i32).min(ready as i32);
-        let id = books(world, base)?.next_mission;
         let mut members = Vec::new();
         for _ in 0..n.max(0) {
             let Some(slot) = pick(world, base, group.actor) else { break };
-            members.push(launch(world, base, &dd, slot, mode, id));
+            members.push(launch(world, base, &dd, slot, mode));
         }
         if members.is_empty() {
             continue;
         }
-        let offset = mean_offset(&group.formation, members.len());
-        let d = books_mut(world, base)?;
-        d.next_mission += 1;
-        d.missions.insert(0, Mission { id, members, group: gi, offset, mode, order: AirOrder::Recon(Vec2::ZERO), escort: None });
+        // 0x568180: +8 the group, +0x20 its behaviour, +0x24 the base, the
+        // members (the creation list reversed twice: creation order) and the
+        // mean offset; each member Mind's +0x30 takes it (0x52A020).
+        world.books.next_group = world.books.next_group.max(1);
+        let id = world.books.next_group;
+        world.books.next_group += 1;
+        let offset = mean_created(&group.formation, members.len());
+        world.books.groups.insert(id, Mission { id, base, refs: 0, members: members.clone(), group: gi, offset, mode: group.behavior, order: AirOrder::Recon(Vec2::ZERO), escort: None });
+        for &m in &members {
+            crate::combat::air::set_group(world, m, Some(id));
+        }
+        // The base's +0x40 list node holds a reference (head insertion).
+        retain_group(world, id);
+        if let Some(d) = books_mut(world, base) {
+            d.missions.insert(0, id);
+        }
         return Some(id);
     }
     None
@@ -343,7 +426,7 @@ pub fn create(world: &mut World, base: ActorId, mode: u32) -> Option<u32> {
 /// occupied with its health, home and mode on its Mind (0x52C280,
 /// 0x51C220), and queued for the runway when the delay is positive
 /// (0x5689A0).
-fn launch(world: &mut World, base: ActorId, dd: &DenizenDef, slot: usize, mode: u32, mission: u32) -> ActorId {
+fn launch(world: &mut World, base: ActorId, dd: &DenizenDef, slot: usize, mode: u32) -> ActorId {
     let (def, kingdom, origin, facing) = {
         let b = &world.actors[base as usize];
         (world.books.actor(base).and_then(|x| x.denizen.as_ref()).map_or(0, |d| d.slots[slot].def), b.kingdom, b.pos, b.facing)
@@ -363,9 +446,15 @@ fn launch(world: &mut World, base: ActorId, dd: &DenizenDef, slot: usize, mode: 
         s.occupant = Some(id);
         s.health = health;
     }
-    // Actor +0x3C = ActorData +0x408 (taxi_scale), flag +8 bit 2.
+    // Actor +0x3C = ActorData +0x408 (taxi_scale), flag +8 bit 2; the Mind's
+    // home (virtual +0x40, 0x52C280) and mode (virtual +0x3C, 0x51C220).
     let scale = world.data.def(def).aircraft.as_ref().map_or(1.0, |x| x.taxi_scale);
-    world.books.actor_mut(id).aircraft = Some(AircraftBooks { home: base, mode, mission, hidden: false, order: None, scale });
+    if let Some(x) = world.books.actor_mut(id).aircraft.as_mut() {
+        x.scale = scale;
+        x.denizen = true;
+    }
+    crate::combat::air::set_home(world, id, Some(base));
+    crate::combat::air::set_mode(world, id, mode);
     let delay = dd.runway.as_ref().map_or(0.0, |r| r.delay);
     if delay > 0.0 {
         let empty = books(world, base).is_some_and(|d| d.runway.is_empty());
@@ -397,6 +486,8 @@ pub fn runway_release(world: &mut World, base: ActorId) {
     if next <= now {
         while let Some(first) = books_mut(world, base).and_then(|d| (!d.runway.is_empty()).then(|| d.runway.remove(0))) {
             if world.actor(first).is_some_and(|x| x.alive) && has(world, world.actors[first as usize].def, ELEMENT) {
+                // Mind +0x184 (0x518980: takeoff), then 0x4D7EA0.
+                crate::combat::air::release(world, first);
                 if let Some(x) = world.books.actor_mut(first).aircraft.as_mut() {
                     x.hidden = false;
                 }
@@ -413,16 +504,18 @@ pub fn runway_release(world: &mut World, base: ActorId) {
     }
 }
 
-/// 0x568480: the mission's mode, and its command for every member.
-fn use_mission(world: &mut World, base: ActorId, mission: u32, order: AirOrder, mode: u32) {
-    let Some(d) = books_mut(world, base) else { return };
-    let Some(m) = d.missions.iter_mut().find(|m| m.id == mission) else { return };
+/// 0x568480: the mission's +0x20 mode, then the command to every member
+/// with a Mind (0x4D9B60: the kill command 0x4CA330 at an actor or a
+/// point, the move command 0x4CA760 for recon).
+fn use_mission(world: &mut World, mission: u32, order: AirOrder, mode: u32) {
+    let Some(m) = world.books.groups.get_mut(&mission) else { return };
     m.mode = mode;
     m.order = order;
     for x in m.members.clone() {
-        if let Some(a) = world.books.actor_mut(x).aircraft.as_mut() {
-            a.order = Some(order);
+        if world.actor(x).is_none() {
+            continue;
         }
+        crate::combat::air::command(world, x, order);
     }
 }
 
@@ -476,7 +569,7 @@ impl Denizen for Host<'_> {
         Ok(create(self.world, self.base, mode))
     }
     fn use_denizen(&mut self, _purchase: DenizenPurchase, created: u32, mode: u32) -> R<()> {
-        use_mission(self.world, self.base, created, self.order, mode);
+        use_mission(self.world, created, self.order, mode);
         Ok(())
     }
 }
@@ -492,10 +585,10 @@ pub fn purchase(world: &mut World, base: ActorId, order: AirOrder) -> (bool, Opt
         AirOrder::AttackPoint(_) => DenizenPurchase::AirAttackLocation,
         _ => DenizenPurchase::AirRecon,
     };
-    let before = books(world, base).map_or(0, |d| d.next_mission);
+    let before = world.books.next_group.max(1);
     let mut host = Host { world, base, order };
     let paid = aa_production::purchases::purchase_denizen(kind, &mut host).unwrap_or(false);
-    let after = books(world, base).map_or(0, |d| d.next_mission);
+    let after = world.books.next_group.max(1);
     (paid, (after != before).then_some(before))
 }
 
@@ -503,10 +596,7 @@ pub fn purchase(world: &mut World, base: ActorId, order: AirOrder) -> (bool, Opt
 /// there) frees its slot with no health, to be rebuilt from nothing
 /// (0x569440's second pass).
 pub fn died(world: &mut World, a: ActorId) {
-    let Some(home) = world.books.actor(a).and_then(|b| b.aircraft.as_ref()).map(|x| x.home) else { return };
-    if world.actor(home).is_none() {
-        return;
-    }
+    let Some(home) = crate::combat::air::home(world, a) else { return };
     if let Some(s) = books_mut(world, home).and_then(|d| d.slots.iter_mut().find(|s| s.occupant == Some(a))) {
         s.occupant = None;
         s.health = 0.0;
@@ -517,8 +607,7 @@ pub fn died(world: &mut World, a: ActorId) {
 /// housed again with full * (its Body health ratio). Returns false when no
 /// slot holds it; the original then adopts it into a new slot (0x568C20 /
 /// 0x568B80, not ported). The caller removes the actor (0x4F6760).
-pub fn returned(world: &mut World, a: ActorId) -> bool {
-    let Some(home) = world.books.actor(a).and_then(|b| b.aircraft.as_ref()).map(|x| x.home) else { return false };
+pub fn returned(world: &mut World, home: ActorId, a: ActorId) -> bool {
     let ratio = crate::supply::health_ratio(world, a);
     let Some(i) = books(world, home).and_then(|d| d.slots.iter().position(|s| s.occupant == Some(a))) else { return false };
     let full = books(world, home).map_or(0.0, |d| full_health(world, d.slots[i].def));
@@ -529,7 +618,12 @@ pub fn returned(world: &mut World, a: ActorId) -> bool {
     true
 }
 
-/// The mission `id` of `base`.
-pub fn mission(world: &World, base: ActorId, id: u32) -> Option<&Mission> {
-    books(world, base)?.missions.iter().find(|m| m.id == id)
+/// The live group (mission) `id`.
+pub fn mission(world: &World, id: u32) -> Option<&Mission> {
+    world.books.groups.get(&id)
+}
+
+/// The missions listed on `base` (+0x40), head first.
+pub fn missions(world: &World, base: ActorId) -> Vec<u32> {
+    books(world, base).map(|d| d.missions.clone()).unwrap_or_default()
 }

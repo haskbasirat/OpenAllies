@@ -7,11 +7,13 @@ are intercepted; a seam entry address appears in the visited list but its body
 does not execute. No game process is started; no original file is modified.
 """
 from pathlib import Path
-import hashlib, json, struct, sys
+import hashlib, json, os, struct, sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-GAME = ROOT.parent
+# The game directory (AA.exe, reconstruction/); AA_GAME_DIR overrides it for a
+# checkout that is not directly inside the game directory (a git worktree).
+GAME = Path(os.environ['AA_GAME_DIR']) if os.environ.get('AA_GAME_DIR') else ROOT.parent
 sys.path.insert(0, str(GAME / 'reconstruction/tools/python-packages'))
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE  # noqa: E402
 from unicorn.x86_const import *  # noqa: E402,F401,F403

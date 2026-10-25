@@ -875,6 +875,16 @@ fn flush(ms: &mut MovementState, world: &mut World) {
 fn think_in(ms: &mut MovementState, id: ActorId, delay: f32) {
     ms.thinks.push((id, delay));
 }
+/// A Mind's schedule for minds outside the movement code (the aircraft
+/// minds): `0x52DC10` -> `0x50AD80` cancels its pending think (`0x529CD0`:
+/// `0x50B250`), then adds one on queue 4 `delay` after this update's begin
+/// (`0x50AF10`). Immediate, as the native call is.
+pub fn think_mind_in(world: &mut World, id: ActorId, delay: f32) {
+    if world.is_scheduled(Sched::Mind(id)) {
+        world.unschedule(Sched::Mind(id));
+    }
+    world.schedule_after(crate::scheduler::THINK, Sched::Mind(id), 0, delay);
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers.

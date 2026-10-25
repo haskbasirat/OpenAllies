@@ -4,7 +4,8 @@
 //! Every new thing (KKC_GWorld::CreateGThing 0x4F9C10) draws, as the films
 //! show (measured live on Berlin by the parity harness):
 //! 1. its random scale (GObject InitCreate 0x4E9FC0 -> 0x49B440);
-//! 2. an element's mind constructor jitter (0x4CF480 -> 0x535BA0 -> 0x530E50);
+//! 2. an element's mind constructor jitter (0x4CF480 -> 0x535BA0 -> 0x530E50;
+//!    not for an aircraft or organization Mind);
 //! 3. the hitched trailer its GActor InitCreate creates (0x4D70F2: the
 //!    trailer is a new thing with these same draws);
 //! 4. the component InitCreates in slot order (0x4D6F10): every component
@@ -39,6 +40,8 @@ const ELEMENT: u32 = 8;
 const MOVER: u32 = 3;
 const SUPPLY: u32 = 11;
 const DENIZEN: u32 = 10;
+const ORGANIZATION: u32 = 7;
+const AIRCRAFT: u32 = 23;
 
 fn has(d: &Def, bit: u32) -> bool {
     d.components & (1 << bit) != 0
@@ -77,8 +80,10 @@ pub fn created(world: &mut World, def: DefId, made: Made) {
     let d = data.def(def);
     // 1. 0x49B440 random scale.
     world.random_u32();
-    // 2. 0x530E50 mind jitter.
-    if has(d, ELEMENT) {
+    // 2. 0x530E50 mind jitter: only an element Mind draws (0x4CF480 case 4
+    // takes ActorData+0x174 bit 7, then 23, then 8: an organization makes a
+    // regiment Mind and an aircraft an aircraft Mind, neither drawing).
+    if has(d, ELEMENT) && !has(d, ORGANIZATION) && !has(d, AIRCRAFT) {
         world.random_u32();
     }
     // 3. The hitched trailer (a thing of its own).
@@ -126,6 +131,19 @@ pub fn created(world: &mut World, def: DefId, made: Made) {
     // 5. 0x50AB10.
     if has(d, MOVER) {
         world.random_u32();
+    }
+    // The AircraftComponent (constructor 0x55E8E0: definition speed
+    // 0x45D6F0(0), turn radius +0x234) and the aircraft Mind (0x4CF480
+    // case 4); neither draws.
+    if let Made::Actor(a) = made
+        && has(d, AIRCRAFT)
+    {
+        let flight = aa_movement::aircraft::AircraftState::new(d.speed_max, d.turn_radius);
+        world.books.actor_mut(a).aircraft = Some(crate::books::AircraftBooks { flight, hidden: false, denizen: false, scale: 1.0, mana: d.mana_max });
+        crate::combat::air::created(world, a);
+        // The Mind's InitExisting 0x517C60 (4D7230 runs it for a created
+        // actor): aai_queued.
+        crate::combat::air::init_existing(world, a);
     }
 }
 

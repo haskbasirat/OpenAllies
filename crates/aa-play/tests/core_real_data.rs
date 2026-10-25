@@ -1786,7 +1786,7 @@ fn airfield_denizen_inventory_readiness_and_purchase() {
     w.books.kingdom_mut(ger, n).stockpiled[money] = 1000.0;
     let target = at + Vec2::new(150.0, 0.0);
     let (paid, mission) = denizen::purchase(&mut w, a, AirOrder::AttackPoint(target));
-    let m = denizen::mission(&w, a, mission.expect("a mission")).expect("the mission").clone();
+    let m = denizen::mission(&w, mission.expect("a mission")).expect("the mission").clone();
     assert!(paid);
     assert_eq!(w.books.kingdom(ger).unwrap().stockpiled[money], 900.0, "AirAttackCost money 100");
     assert_eq!((m.members.len(), m.mode, m.order, m.offset), (1, 0x10, AirOrder::AttackPoint(target), [-9.0, 15.0, -2.0]));
@@ -1798,7 +1798,13 @@ fn airfield_denizen_inventory_readiness_and_purchase() {
     let hangar = glam::Vec3::new(at.x, at.y - 2.85, w.actors[a as usize].pos.z - 0.75 + 1.0);
     assert!(x.pos.distance(hangar) < 1e-3 && x.facing.abs() < 1e-6, "{:?} {} vs {hangar:?}", x.pos, x.facing);
     let ab = w.books.actor(b).and_then(|q| q.aircraft.clone()).expect("aircraft books");
-    assert_eq!((ab.home, ab.mode, ab.mission, ab.hidden, ab.order), (a, 0x10, m.id, true, Some(AirOrder::AttackPoint(target))));
+    assert!(ab.hidden && ab.denizen && ab.scale == 0.4);
+    // The aircraft Mind: home +0x28, mode +0x24, group +0x30 (0x52A020).
+    use aa_play::combat::air;
+    assert!(air::is_aircraft(&w, b));
+    assert_eq!((air::home(&w, b), w.books.minds.word(b, 0x24), air::group(&w, b)), (Some(a), 0x10, Some(m.id)));
+    // References: the base's list node and the member Mind.
+    assert_eq!((m.refs, m.base, denizen::missions(&w, a).first().copied()), (2, a, Some(m.id)));
     let d = w.books.actor(a).and_then(|q| q.denizen.clone()).unwrap();
     assert_eq!(d.runway, vec![b]);
     assert_eq!(d.slots.iter().filter(|s| s.occupant == Some(b)).count(), 1);
@@ -1811,7 +1817,7 @@ fn airfield_denizen_inventory_readiness_and_purchase() {
     let cash = |w: &aa_play::World| w.books.kingdom(ger).unwrap().stockpiled[money];
     let before = cash(&w);
     let (_, recon) = denizen::purchase(&mut w, a, AirOrder::Recon(target));
-    let r = denizen::mission(&w, a, recon.expect("a recon mission")).unwrap().clone();
+    let r = denizen::mission(&w, recon.expect("a recon mission")).unwrap().clone();
     assert_eq!((r.members.len(), w.actors[r.members[0] as usize].def, r.mode), (1, fighter, 0x40));
     assert!(r.offset.iter().all(|v| v.is_nan()), "0x568180 over a group without positions");
     assert_eq!(before - cash(&w), 25.0);
@@ -1859,7 +1865,87 @@ fn airfield_denizen_inventory_readiness_and_purchase() {
     let held = slots(&w).iter().position(|s| s.occupant == Some(f)).expect("the fighter's slot");
     let full = w.data.def(fighter).health;
     w.actors[f as usize].health = 0.6 * aa_play::production::max_health(&w, Some(ger), fighter);
-    assert!(denizen::returned(&mut w, f));
+    assert!(denizen::returned(&mut w, a, f));
     let s = slots(&w)[held].clone();
     assert!(s.occupant.is_none() && (s.health - 0.6 * full).abs() < 1e-3, "{s:?}");
+}
+
+/// The aircraft Mind of a recon fighter, state by state, with the path ends
+/// (Mind +0x144, which MoveTick will call) given by hand: queued with the
+/// move command pending, takeoff at the runway release (its four legs),
+/// recon after launch, join when the recon is done, landing at the approach,
+/// and back into its slot.
+#[test]
+#[ignore]
+fn airfield_recon_mind_takes_off_scouts_and_lands() {
+    use aa_play::books::AirOrder;
+    use aa_play::combat::air;
+    use aa_play::denizen;
+    use glam::Vec2;
+    const QUEUED: u32 = 0x188;
+    const TAKEOFF: u32 = 0x15c;
+    const RECON: u32 = 0xb4;
+    const JOIN: u32 = 0x12c;
+    const LANDING: u32 = 0x174;
+    const MOVE: u32 = 0x34;
+    let mut w = berlin_world();
+    let airfield = w.data.find("ger_airfield").expect("ger_airfield");
+    let ger = (0..w.kingdoms.len() as u32).find(|&k| w.kingdoms[k as usize].nation == "ger").expect("ger kingdom");
+    let corps = (0..w.actors.len() as u32).find(|&a| w.actors[a as usize].kingdom == Some(ger) && w.data.def(w.actors[a as usize].def).id.ends_with("_corps")).expect("ger corps");
+    let base = w.actors[corps as usize].pos.truncate();
+    let at = (0..40)
+        .flat_map(|r| (0..8).map(move |k| base + Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4) * (40.0 + 2.0 * r as f32)))
+        .find(|&p| aa_play::deploy::spot_clear(&w, airfield, p, None).is_ok())
+        .expect("a clear spot");
+    let a = aa_play::production::spawn_single(&mut w, airfield, Some(ger), at, 0.0);
+    for _ in 0..20 {
+        w.step(vec![]);
+    }
+    let money = w.data.resources.iter().position(|r| r.id.eq_ignore_ascii_case("money")).expect("money");
+    let n = w.data.resources.len();
+    w.books.kingdom_mut(ger, n).stockpiled[money] = 1000.0;
+    let target = at + Vec2::new(120.0, 40.0);
+    let (_, mission) = denizen::purchase(&mut w, a, AirOrder::Recon(target));
+    let f = denizen::mission(&w, mission.expect("a recon mission")).unwrap().members[0];
+    let pending = |w: &aa_play::World| w.books.minds.arena.minds[&aa_mind::MindId(f)].pending_commands.len();
+    assert_eq!(air::current_state(&w, f), Some(QUEUED));
+    assert_eq!(pending(&w), 1, "the move command waits behind aai_queued (priority 3)");
+    // The runway release (deferred) then the takeoff Think (queue 4).
+    w.step(vec![]);
+    assert_eq!(air::current_state(&w, f), Some(TAKEOFF));
+    w.step(vec![]);
+    let word = |w: &aa_play::World, o: u32| f32::from_bits(w.books.minds.word(f, MOVE + o));
+    let z = w.actors[a as usize].pos.z - 0.75;
+    // The last of the four takeoff legs: the runway start (0, 5) in the
+    // base frame, its 4.8 m run along the rotated orientation (0, 1), then
+    // four runs more.
+    let last = (word(&w, 0x18), word(&w, 0x1c), word(&w, 0x20));
+    assert!((last.0 - (at.x + 5.0)).abs() < 1e-3 && (last.1 - (at.y + 24.0)).abs() < 1e-3 && (last.2 - z).abs() < 1e-3, "{last:?}");
+    let flight = w.books.actor(f).and_then(|x| x.aircraft.as_ref()).unwrap().flight.clone();
+    assert_eq!((flight.cruise_altitude, flight.on_ground), (15.0, 1), "final cruise = operational_height");
+    // Launched: the next Think pops takeoff and the pending move command
+    // becomes recon.
+    air::path_finished(&mut w, f);
+    w.step(vec![]);
+    assert_eq!(air::current_state(&w, f), Some(RECON), "{:?}", w.books.minds.notes);
+    assert_eq!(pending(&w), 0);
+    assert_eq!((word(&w, 0x18), word(&w, 0x1c), word(&w, 0x20)), (target.x, target.y, 15.0), "the move goal at operational height");
+    w.step(vec![]);
+    // Recon done at the path end: join, then the approach.
+    air::path_finished(&mut w, f);
+    for _ in 0..3 {
+        w.step(vec![]);
+    }
+    assert_eq!(air::current_state(&w, f), Some(JOIN), "{:?}", w.books.minds.notes);
+    air::path_finished(&mut w, f);
+    for _ in 0..3 {
+        w.step(vec![]);
+    }
+    assert_eq!(air::current_state(&w, f), Some(LANDING), "{:?}", w.books.minds.notes);
+    air::path_finished(&mut w, f);
+    w.step(vec![]);
+    assert!(w.actors[f as usize].removed, "the fighter entered its base");
+    let d = w.books.actor(a).and_then(|q| q.denizen.clone()).unwrap();
+    assert!(d.slots.iter().all(|s| s.occupant != Some(f)));
+    assert!(w.books.minds.notes.is_empty(), "{:?}", w.books.minds.notes);
 }
