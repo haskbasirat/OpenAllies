@@ -240,15 +240,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-parity"
+version = "0.1.0"
+dependencies = [
+ "aa-mapworld",
+ "aa-orders",
+ "aa-play",
+ "aa-rules",
+ "anyhow",
+ "glam 0.32.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aa-play"
 version = "0.1.0"
 dependencies = [
+ "aa-actors",
  "aa-animation",
  "aa-assets",
+ "aa-body",
+ "aa-economy",
  "aa-mapworld",
  "aa-navigation",
  "aa-numeric",
+ "aa-orders",
  "aa-rules",
+ "aa-simulation",
+ "aa-spatial",
+ "aa-zones",
  "anyhow",
  "glam 0.32.1",
  "serde",

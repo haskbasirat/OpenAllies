@@ -219,8 +219,6 @@ pub struct World {
     pub actors: Vec<Actor>,
     pub orgs: Vec<Organization>,
     pub events: Vec<Event>,
-    /// Deterministic random numbers (seeded at setup).
-    pub rng: u64,
     pub winner: Option<u32>,
     /// Core-owner side state (economy books, queues, supply, deployment).
     pub books: crate::books::Books,
@@ -244,11 +242,80 @@ pub struct World {
     /// Generals' special operations (commanders, experience, enchantments);
     /// install the generals data with `crate::special_ops::attach`.
     pub special_ops: crate::special_ops::SpecialOpsState,
+    // ---- appended by the core owner (byte-exact roadmap item 2) ----
+    /// The world random stream, GWorld+0xD4: LCG 0x85D840 seeded by
+    /// KKC_Sim::CreateGWorld 0x76AA90 with 0x85D880(creator seed). Draw it
+    /// through `random` / `random_u32` / `random_below` (each logs the
+    /// GetRNG 0x4F02B0 getter entry).
+    pub native_rng: aa_simulation::NativeRng,
+    /// The world clock fields of 0x4F9970: tick, begin and end time as
+    /// `f32(i32 tick * f32(1/16))`. `tick` and `time` mirror it.
+    pub clock: aa_simulation::NativeClock,
+    /// The simulation S-log emulation and per-tick digests.
+    pub trace: crate::trace::Trace,
+    // ---- appended by the core owner (byte-exact roadmap item 5) ----
+    /// Native GTIDs of the actors, organizations, kingdoms and map things
+    /// (`crate::ids`).
+    pub ids: crate::ids::NativeIds,
 }
 
 impl World {
     pub fn empty(data: Arc<GameData>, map: Arc<GameMap>, seed: u64) -> Self {
-        Self { data, map, tick: 0, time: 0.0, kingdoms: Vec::new(), actors: Vec::new(), orgs: Vec::new(), events: Vec::new(), rng: seed | 1, winner: None, books: Default::default(), movement: Default::default(), combat: Default::default(), ai: Default::default(), fog: Default::default(), player_orders: Default::default(), special_ops: Default::default() }
+        let ids = crate::ids::NativeIds::load(&map, &data);
+        let mut world = Self {
+            data,
+            map,
+            tick: 0,
+            time: 0.0,
+            kingdoms: Vec::new(),
+            actors: Vec::new(),
+            orgs: Vec::new(),
+            events: Vec::new(),
+            winner: None,
+            books: Default::default(),
+            movement: Default::default(),
+            combat: Default::default(),
+            ai: Default::default(),
+            fog: Default::default(),
+            player_orders: Default::default(),
+            special_ops: Default::default(),
+            native_rng: aa_simulation::NativeRng::default(),
+            clock: aa_simulation::NativeClock::stock(),
+            trace: Default::default(),
+            ids,
+        };
+        world.create_rng(seed as u32);
+        world
+    }
+    /// KKC_Sim::CreateGWorld 0x76AA90: the getter logs the default state,
+    /// then 0x85D880 seeds the stream with the creator seed. A map carries
+    /// the stream as its creation left it (`GameMap::rng_state`: the random
+    /// map generator's last state, or a loaded map's saved GWORLD state read
+    /// by 0x4FC600), getter entries included, which replaces this.
+    pub fn create_rng(&mut self, seed: u32) {
+        self.native_rng = aa_simulation::NativeRng::default();
+        self.trace.log(crate::trace::SKind::RngGetter, self.native_rng.state);
+        self.native_rng = aa_simulation::NativeRng::from_native_seed(seed);
+        for _ in 0..crate::trace::GWORLD_INIT_DRAWS {
+            self.random_u32();
+        }
+        if let Some(state) = self.map.rng_state {
+            self.trace = crate::trace::Trace::default();
+            for &s in &self.map.rng_log {
+                self.trace.log(crate::trace::SKind::RngGetter, s);
+            }
+            self.native_rng = aa_simulation::NativeRng { state };
+        }
+    }
+    /// GetRNG 0x4F02B0 then one 0x85D840 draw: the raw u32.
+    pub fn random_u32(&mut self) -> u32 {
+        self.trace.log(crate::trace::SKind::RngGetter, self.native_rng.state);
+        self.native_rng.next_u32()
+    }
+    /// 0x40C8A0 after the getter: one draw `% n`, no rejection (0 for n = 0).
+    pub fn random_below(&mut self, n: u32) -> u32 {
+        let v = self.random_u32();
+        if n == 0 { 0 } else { v % n }
     }
     pub fn spawn_actor(&mut self, def: DefId, kingdom: Option<KingdomId>, pos: Vec3, facing: f32) -> ActorId {
         let id = self.actors.len() as ActorId;
@@ -272,6 +339,8 @@ impl World {
             order: Order::Idle,
             queue: Vec::new(),
         });
+        // (core) its native GTID: a kept map thing's saved id, else next-fit.
+        self.ids.created_actor(id);
         id
     }
     pub fn actor(&self, id: ActorId) -> Option<&Actor> {
@@ -289,12 +358,18 @@ impl World {
             }
         }
     }
-    /// xorshift64*: deterministic for replays and network play.
+    /// GetRNG 0x4F02B0 then the unit float 0x45D400 of one 0x85D840 draw
+    /// (PC53 product, stored binary32; can equal 1.0).
     pub fn random(&mut self) -> f32 {
-        self.rng ^= self.rng >> 12;
-        self.rng ^= self.rng << 25;
-        self.rng ^= self.rng >> 27;
-        ((self.rng.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 40) as f32) / (1u64 << 24) as f32
+        crate::trace::native_unit(self.random_u32())
+    }
+    /// The battle starts after the world is built: the world sync dump
+    /// 0x4F8AE0 -> 0x4F6280 uses one world-RNG draw, then session launch
+    /// 0x775D3F resets S (0x77D900 index 0, hash 0), wiping what world
+    /// creation logged. The next S entry is tick 1's clock with index 1.
+    pub fn begin_battle(&mut self) {
+        self.random_u32();
+        self.trace.reset(0, 0);
     }
     pub fn ground(&self, p: Vec2) -> Vec3 {
         Vec3::new(p.x, p.y, self.map.height_at(p))

@@ -1250,9 +1250,11 @@ pub fn tick(world: &mut World) {
     sai::think(world);
 }
 
-/// `4CDFD0` per second and `4E0FD0` for what the regiments gained.
+/// `4E0FD0` for what the regiments gained. (core) The per-second income
+/// `4CDFD0` runs in the kingdom economy tick (`crate::economy`, aa-economy
+/// `Economy::tick`) on this same `Commander::experience`.
 fn experience_income(world: &mut World) {
-    let periodic = world.data.rule_ci("ExperienceFactionGainPeriodic").unwrap_or(1.0);
+    let periodic = 0.0;
     let multiplier = world.data.rule_ci("ExperienceFactionGainMultiplier").unwrap_or(1.0);
     let ops = &mut world.special_ops;
     if ops.org_experience.len() < world.orgs.len() {

@@ -308,24 +308,26 @@ fn damage_formula_known_stats() {
 }
 
 /// Two lone riflemen at 8 m: shots every 3 s after the reaction delay, 9 per
-/// hit, the 23rd hit kills (200 health).
+/// hit, the 23rd hit kills (200 health). The reaction delays are world-RNG
+/// draws, so whichever rifleman fires first wins (re-baselined for the native
+/// world stream).
 #[test]
 fn rifle_duel_recharge_and_death() {
     let mut w = world_with(data());
-    let a = w.spawn_actor(0, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
-    let b = w.spawn_actor(0, Some(1), Vec3::new(8.0, 0.0, 0.0), 0.0);
-    let mut shots_a = Vec::new();
-    let mut hits_b = Vec::new();
+    let first = w.spawn_actor(0, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
+    let second = w.spawn_actor(0, Some(1), Vec3::new(8.0, 0.0, 0.0), 0.0);
+    let mut shots: BTreeMap<u32, Vec<f32>> = BTreeMap::new();
+    let mut hits: BTreeMap<u32, Vec<f32>> = BTreeMap::new();
     let mut died = None;
     for _ in 0..(90.0 / DT) as u32 {
         for e in step(&mut w) {
             match e {
-                Event::Fired { shooter, target, .. } if shooter == a => {
-                    assert_eq!(target, b);
-                    shots_a.push(w.time - DT);
+                Event::Fired { shooter, target, .. } if shooter == first || shooter == second => {
+                    assert_eq!(target, if shooter == first { second } else { first });
+                    shots.entry(shooter).or_default().push(w.time - DT);
                 }
-                Event::Hit { target, damage } if target == b => hits_b.push(damage),
-                Event::Died { actor } if actor == b => died = Some(w.time - DT),
+                Event::Hit { target, damage } if target == first || target == second => hits.entry(target).or_default().push(damage),
+                Event::Died { actor } if actor == first || actor == second => died = Some((actor, w.time - DT)),
                 _ => {}
             }
         }
@@ -333,13 +335,17 @@ fn rifle_duel_recharge_and_death() {
             break;
         }
     }
+    let (b, died) = died.expect("one rifleman dies");
+    let a = if b == first { second } else { first };
+    let shots_a = shots.remove(&a).unwrap_or_default();
+    let hits_b = hits.remove(&b).unwrap_or_default();
+    assert!(shots.get(&b).is_none_or(|s| s[0] >= shots_a[0]), "the winner fired first");
     assert!(shots_a[0] <= 0.3 + DT, "first shot after the reaction delay: {}", shots_a[0]);
     for pair in shots_a.windows(2) {
         assert!((pair[1] - pair[0] - 3.0).abs() < DT * 0.5 + 1e-4, "recharge 3 s: {pair:?}");
     }
     assert!(hits_b.iter().all(|&d| d == 9.0));
     assert_eq!(hits_b.len(), 23);
-    let died = died.expect("rifleman b dies");
     assert!((died - shots_a[22]).abs() < 1e-4);
     eprintln!("rifle duel: first shot {:.3}s, b died at {died:.3}s after {} hits", shots_a[0], hits_b.len());
     // Dying for the death clip (fallback 1 s), then Dead, removed after rot+sink (2 s).

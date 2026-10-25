@@ -173,6 +173,7 @@ fn per_tick_cost_for_2000_moving_actors() {
     let first = w.fog.stats.last_us;
     let mut total = 0.0;
     let mut max = 0.0f32;
+    let (mut observe, mut detection, mut moves, mut bits) = (0.0f32, 0.0f32, 0u64, 0u64);
     let ticks = 320;
     for t in 0..ticks {
         for (i, v) in velocity.iter().enumerate() {
@@ -191,9 +192,24 @@ fn per_tick_cost_for_2000_moving_actors() {
         fog::tick(&mut w);
         total += w.fog.stats.last_us;
         max = max.max(w.fog.stats.last_us);
+        let s = &fog::engine(&w).expect("engine").parts.stats;
+        observe += s.observe_us;
+        detection += s.detection_us;
+        moves += u64::from(w.fog.stats.zone_moves);
+        bits += u64::from(w.fog.stats.tile_ops);
     }
     let mean = total / ticks as f32;
+    let s = &fog::engine(&w).unwrap().parts.stats;
     println!("fog cost, {} actors, {} organizations, 256x256 tiles: first tick {first:.0} us, mean {mean:.0} us, max {max:.0} us", w.actors.len(), w.orgs.len());
+    println!(
+        "  observe {:.0} us, detection {:.0} us per tick; {:.1} actor tile changes, {:.1} fog bit changes per tick; refusals {:?}",
+        observe / ticks as f32,
+        detection / ticks as f32,
+        moves as f32 / ticks as f32,
+        bits as f32 / ticks as f32,
+        s.refusals
+    );
+    assert!(s.refusals.is_empty(), "{:?}", s.refusals);
     if !cfg!(debug_assertions) {
         assert!(mean < 1000.0, "mean fog tick {mean} us is over 1 ms");
     }

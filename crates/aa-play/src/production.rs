@@ -83,6 +83,8 @@ fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: V
         experience: 0.0,
         alive: true,
     });
+    // CreateOrganization 0x4FA150: the organization's id before its members'.
+    world.ids.created_org(id);
     let slots = world.data.def(def).slots.len();
     world.books.org_mut(id).progress = vec![0.0; slots];
     id
@@ -622,11 +624,20 @@ fn start_head(world: &mut World, building: ActorId) {
     if head.is_none() {
         q.deadline = 0.0;
         q.duration = 0.0;
+        // cancel_schedule.
+        q.scheduled = false;
         return;
     }
     q.duration = duration;
     q.deadline = now + duration;
     process(world, building);
+    // 0x589420 tail: a queue not yet scheduled registers on the periodic
+    // queue 0 (0x50AC00(0) -> 0x50B2C0), whose bucket is one world-RNG draw
+    // (GetRNG 0x4F02B0 at 0x50B2DF, draw % 1 bucket).
+    if world.books.actor(building).is_some_and(|b| !b.queue.scheduled) {
+        world.random_u32();
+        world.books.actor_mut(building).queue.scheduled = true;
+    }
 }
 
 /// 0x5894C0: take an item out, releasing its reserved upkeep and HQ attachment.
@@ -635,11 +646,18 @@ fn remove(world: &mut World, building: ActorId, index: usize) -> Option<QueueIte
     if index >= q.items.len() {
         return None;
     }
-    let item = q.items.remove(index);
+    let mut item = q.items.remove(index);
     if index == 0 {
         q.paused_at = None;
         q.pause_reason = None;
+        // cancel_schedule: the next head registers (and draws) again.
+        q.scheduled = false;
     }
+    // adjust_upkeep(current, false) (0x4E48C0, also for a zero vector).
+    if let Some(k) = world.actors.get(building as usize).and_then(|a| a.kingdom) {
+        crate::economy::adjust_consumption(world, k, &item.current_upkeep, false);
+    }
+    item.current_upkeep.iter_mut().for_each(|v| *v = 0.0);
     if item.attaches
         && let Some(o) = hq_org(world, building)
     {
@@ -708,14 +726,12 @@ fn process(world: &mut World, building: ActorId) {
     if item.current_upkeep != item.requested_upkeep {
         match kingdom {
             Some(k) if can_reserve(world, k, &item) => {
-                let n = world.data.resources.len();
-                let delta: Vec<f32> = item.requested_upkeep.iter().zip(&item.current_upkeep).map(|(a, b)| a - b).collect();
-                let kb = world.books.kingdom_mut(k, n);
-                for (c, d) in kb.consumed.iter_mut().zip(&delta) {
-                    *c += d;
-                }
+                // 0x589F90: current = the limited upkeep, which adjust_upkeep
+                // adds whole (0x4E48C0).
                 let head = &mut world.books.actor_mut(building).queue.items[0];
                 head.current_upkeep = head.requested_upkeep.clone();
+                let reserved = head.current_upkeep.clone();
+                crate::economy::adjust_consumption(world, k, &reserved, true);
                 crate::economy::publish(world, k);
             }
             _ => reason = Some(PauseReason::LimitedResource),

@@ -1,0 +1,29 @@
+[package]
+name = "aa-parity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Film parity harness: decodes original AA.exe films (RFM) into a per-world-tick decree timeline, maps decrees onto aa-play commands and recomputes the original simulation sync log"
+
+[[bin]]
+name = "aa-parity"
+path = "src/main.rs"
+
+[features]
+# The decree -> aa-play Command mapping and the aa-play trace adapter. The
+# film reader and the S-log checker do not need aa-play.
+default = ["play"]
+play = ["dep:aa-play", "dep:glam"]
+
+[dependencies]
+aa-mapworld = { path = "../aa-mapworld" }
+aa-orders = { path = "../aa-orders" }
+aa-play = { path = "../aa-play", optional = true }
+aa-rules = { path = "../aa-rules" }
+anyhow = "1"
+glam = { version = "0.32", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/aa-assets", "crates/aa-animation", "crates/aa-economy", "crates/aa-world", "crates/aa-orders", "crates/aa-actors", "crates/aa-movement", "crates/aa-numeric", "crates/aa-body", "crates/aa-trig", "crates/aa-navigation", "crates/aa-spatial", "crates/aa-heightfield", "crates/aa-formats", "crates/aa-simulation", "crates/aa-transfer", "crates/aa-resources", "crates/aa-rules", "crates/aa-client", "crates/aa-mapworld", "crates/aa-production", "crates/aa-combat", "crates/aa-mind", "crates/aa-runtime", "crates/aa-triggers", "crates/aa-ui", "crates/aa-metagame", "crates/aa-netcode", "crates/aa-zones", "crates/aa-play"]
+members = ["crates/aa-assets", "crates/aa-animation", "crates/aa-economy", "crates/aa-world", "crates/aa-orders", "crates/aa-actors", "crates/aa-movement", "crates/aa-numeric", "crates/aa-body", "crates/aa-trig", "crates/aa-navigation", "crates/aa-spatial", "crates/aa-heightfield", "crates/aa-formats", "crates/aa-simulation", "crates/aa-transfer", "crates/aa-resources", "crates/aa-rules", "crates/aa-client", "crates/aa-mapworld", "crates/aa-production", "crates/aa-combat", "crates/aa-mind", "crates/aa-runtime", "crates/aa-triggers", "crates/aa-ui", "crates/aa-metagame", "crates/aa-netcode", "crates/aa-zones", "crates/aa-play", "crates/aa-parity"]
 resolver = "3"
 
 [workspace.package]

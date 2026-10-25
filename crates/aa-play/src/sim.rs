@@ -3,13 +3,57 @@
 //! victory). Shared file: change only by agreement.
 use crate::world::{Command, World};
 
+/// One decree of a film record for [`World::step_decrees`]: its S entries
+/// (descriptor id and class name, `None` for a decree without an S log such
+/// as SetPlayer 298) and the aa-play commands it maps to (possibly none:
+/// selections, names, sync values).
+#[derive(Clone, Debug, Default)]
+pub struct TracedDecree {
+    pub sync: Option<(u32, Vec<u16>)>,
+    pub commands: Vec<Command>,
+}
+
 impl World {
     /// Advance one tick (1/16 s), applying `commands` first.
+    ///
+    /// As the original frame runs a world tick (0x752AE0): the tick's decrees
+    /// run first, then the driver logs GWorld+0xE0 (`GetGameTimeBeginTick`,
+    /// the begin of the last completed tick: 0, 0, 1/16, 2/16...) to S, then
+    /// 0x4F9970 advances the clock (`tick++`, begin = old end,
+    /// `end = f32(i32 tick * step)`) before any system runs, so the systems
+    /// see the tick's end time.
     pub fn step(&mut self, commands: Vec<Command>) {
         self.events.clear();
+        self.trace.tick = self.clock.tick.wrapping_add(1);
         for command in commands {
             self.apply(command);
         }
+        self.update();
+    }
+
+    /// [`World::step`] for decrees that are logged to S as the original
+    /// executes them (a film replay): each decree's name and id entries, then
+    /// its commands, in order; then the tick.
+    pub fn step_decrees(&mut self, decrees: Vec<TracedDecree>) {
+        self.events.clear();
+        self.trace.tick = self.clock.tick.wrapping_add(1);
+        for decree in decrees {
+            if let Some((id, name)) = &decree.sync {
+                self.trace.log_decree(*id, name);
+            }
+            for command in decree.commands {
+                self.apply(command);
+            }
+        }
+        self.update();
+    }
+
+    /// The update after the tick's decrees: clock, then the systems.
+    fn update(&mut self) {
+        self.trace.log(crate::trace::SKind::Clock, self.clock.begin.0);
+        self.clock.advance_fragment();
+        self.tick = u64::from(self.clock.tick);
+        self.time = f32::from_bits(self.clock.end.0);
         let ai_commands = crate::ai::think(self);
         for command in ai_commands {
             self.apply(command);
@@ -21,7 +65,8 @@ impl World {
         crate::combat::tick(self);
         crate::morale::tick(self);
         crate::supply::tick(self);
-        crate::victory::tick(self);
+        // (core) the victory checks 0x4E9960 / 0x4E9A40 run inside each
+        // kingdom's economy tick (crate::economy).
         // appended by the UI owner: rally points of this tick's recruits,
         // then the detection zones and fog after the actors moved
         crate::player_orders::tick(self);
@@ -30,8 +75,12 @@ impl World {
         // special operations, enchantments (expiry, periodic effects) and
         // the SAI general powers
         crate::special_ops::tick(self);
-        self.tick += 1;
-        self.time = self.tick as f32 * crate::DT;
+        // (core) ids of the things removed this tick go back.
+        crate::ids::sweep(self);
+        if self.trace.recording() {
+            let digest = crate::trace::digest(self);
+            self.trace.digests.push(digest);
+        }
     }
 
     /// Route a command to the system that owns it. Refusals become events.

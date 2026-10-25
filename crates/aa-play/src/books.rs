@@ -91,6 +91,30 @@ pub struct ActorBooks {
     /// `PlacedThing::properties`); their modifiers apply to it.
     #[serde(default)]
     pub properties: Vec<String>,
+    /// Its Economy component's applied contributions (570020).
+    #[serde(default)]
+    pub economy: EconomyCache,
+}
+
+/// An Economy component's state 570020 keeps (EconomyState +0/+1 vectors
+/// and the +10/+11 applied flags): what this thing has added to its owner
+/// kingdom's provided and consumed arrays, so a change removes exactly that
+/// and adds the new values.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct EconomyCache {
+    /// Resources[0]: provided (production) vector, applied while `provides`.
+    pub provided: Vec<f32>,
+    /// Resources[1]: upkeep vector, applied while `pays`.
+    pub upkeep: Vec<f32>,
+    /// +10 / +11 flags.
+    pub provides: bool,
+    pub pays: bool,
+    /// The kingdom the vectors were added to.
+    pub kingdom: Option<KingdomId>,
+    /// The organization the actor was a member of at the last refresh.
+    pub parent: Option<OrgId>,
+    /// Fingerprint of the inputs of the last refresh (not native).
+    pub key: u64,
 }
 
 /// Native production queue (aa-production `Queue`), seconds of battle time.
@@ -103,6 +127,10 @@ pub struct Queue {
     /// Time the head item was paused (None while running).
     pub paused_at: Option<f32>,
     pub pause_reason: Option<PauseReason>,
+    /// Registered on the periodic updatable queue 0 (0x50AC00); a new
+    /// registration draws the world RNG for its bucket (0x50B2C0).
+    #[serde(default)]
+    pub scheduled: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -157,6 +185,9 @@ pub struct OrgBooks {
     pub out_of_supply: bool,
     /// HQ attachment slots reserved by queued recruits (HQ organizations).
     pub reserved_attachments: u32,
+    /// The organization actor's Economy component (570020).
+    #[serde(default)]
+    pub economy: EconomyCache,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
