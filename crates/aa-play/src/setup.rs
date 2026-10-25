@@ -167,18 +167,21 @@ impl World {
         }
         // 4FDA70 queues the placeholders in ascending slot order (4EFBE0),
         // objects and actors apart; 4FC4A0 runs the objects, then the actors;
-        // 4FBA50 destroys each placeholder before it creates the replacement.
+        // 4FBA50 destroys each placeholder, then creates the replacement with
+        // the placeholder's own GTID (4FD7F0 / 4FD8C0 capture the source id
+        // as the requested id), so the replacement keeps the saved id and
+        // the next-fit cursor does not move (film evidence: Berlin's computer
+        // players order their Corps at the placeholders' slots).
         replacements.sort_by_key(|&(actor, slot, ..)| (actor, slot));
         for (actor, _, index, def, k) in replacements {
-            world.ids.destroy_placed(index);
             let p = &map.placed[index];
             if actor {
+                world.ids.replace_placed(index);
                 spawn_placed(&mut world, def, Some(k), glam::Vec2::new(p.position[0], p.position[1]), p.yaw, index);
-            } else {
-                // A replacement object (not modelled by aa-play) still takes
-                // its id.
-                world.ids.created_object(index);
+                world.ids.drop_request();
             }
+            // A replacement object (not modelled by aa-play) keeps the id as
+            // the placed thing.
         }
         // Supply zones and the economy as they stand at the start.
         crate::supply::tick(&mut world);

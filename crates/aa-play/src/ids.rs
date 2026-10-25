@@ -17,7 +17,9 @@
 //!   their things (Remove); then 4FDA70 walks the things in ascending slot
 //!   order and queues every placeholder of a player kingdom; 4FC4A0 runs the
 //!   object requests, then the actor requests, and each (4FBA50) first
-//!   destroys the placeholder, then creates the replacement (next-fit Add);
+//!   destroys the placeholder, then creates the replacement under the
+//!   placeholder's own GTID (4FD7F0 / 4FD8C0 request the source id), so it
+//!   keeps the saved id and the next-fit cursor stays at IDMGR's;
 //! - CreateOrganization 0x4FA150: the organization first, then its leader,
 //!   then every other slot (`production::spawn_organization` order);
 //! - every later creation (recruits, unpacked trucks...) takes the next-fit
@@ -229,6 +231,10 @@ impl NativeIds {
             Some(id) => {
                 if let Some(v) = self.registry.value_mut(id) {
                     *v = thing;
+                } else if let Err(e) = self.registry.register_saved(id, is_actor, thing) {
+                    // 4EE460 requested id: 4F0190 AddID of the freed slot.
+                    self.notes.push(format!("requested id {:#x} of {thing:?}: {e}", id.raw()));
+                    return None;
                 }
                 Some(id)
             }
@@ -236,18 +242,28 @@ impl NativeIds {
         }
     }
 
+    /// 4FBA50 for placed thing `index`: the placeholder is destroyed (its id
+    /// removed, generation + 1) and the next creation registers the very same
+    /// id (4EE460 requested GTID: 4EFB70 sets the slot's generation back,
+    /// 4F0190 adds it).
+    pub fn replace_placed(&mut self, index: usize) {
+        let Some(id) = get(&self.placed, index) else { return };
+        self.remove(id);
+        let _ = self.registry.seed_saved_generation(id);
+        set(&mut self.placed, index, None);
+        self.requested = Some(id);
+    }
+
+    /// Forget an unused request whose thing is gone (a failed replacement).
+    pub fn drop_request(&mut self) {
+        self.requested = None;
+    }
+
     /// `World::spawn_actor`: the actor's id (4EE460: the requested saved id,
     /// else next-fit).
     pub fn created_actor(&mut self, actor: ActorId) {
         let id = self.take(true, Thing::Actor(actor));
         set(&mut self.actors, actor as usize, id);
-    }
-
-    /// A replacement object aa-play does not model (4F9C10 object request at
-    /// placed thing `index`): it still takes the next-fit id.
-    pub fn created_object(&mut self, index: usize) {
-        let id = self.allocate(false, Thing::Placed(index));
-        set(&mut self.placed, index, id);
     }
 
     /// A new organization actor (before its members).

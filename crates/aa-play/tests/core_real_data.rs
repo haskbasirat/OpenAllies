@@ -1278,10 +1278,11 @@ fn biomes_name_their_texture_subfolders() {
 }
 
 /// Native ids on Berlin (`aa_play::ids`): the map's things keep their saved
-/// GTIDs; the unused kingdoms and their things are destroyed; the corps
-/// replacements take next-fit ids from the IDMGR cursor in ascending
-/// placeholder slot order, each placeholder destroyed first (4FDA70 /
-/// 4FC4A0 / 4FBA50); later creations continue the cursor.
+/// GTIDs; the unused kingdoms and their things are destroyed; each corps
+/// replacement takes its placeholder's saved GTID (4FD8C0 requests the
+/// source id; 4FBA50 destroys the placeholder, then creates the
+/// replacement), so the next-fit cursor stays at IDMGR's 13399 for the first
+/// recruit, as the films show.
 #[test]
 #[ignore]
 fn native_ids_on_berlin() {
@@ -1295,22 +1296,22 @@ fn native_ids_on_berlin() {
     for a in &w.actors {
         let Some(index) = w.books.actor(a.id).and_then(|b| b.placed) else { continue };
         let p = &map.placed[index];
+        assert_eq!(w.ids.actor(a.id), Some(Gtid::from_raw(p.serialized_id)), "{} keeps its saved id", p.thing_id);
         if p.thing_id.eq_ignore_ascii_case("placeholder_corpsunpacked") {
-            corps.push((Gtid::from_raw(p.serialized_id).slot(), w.ids.actor(a.id).expect("replacement id").raw(), a.id));
+            corps.push((p.serialized_id, a.id));
         } else {
-            assert_eq!(w.ids.actor(a.id), Some(Gtid::from_raw(p.serialized_id)), "{} keeps its saved id", p.thing_id);
             kept += 1;
         }
     }
     corps.sort();
-    eprintln!("kept {kept} map actors with their saved ids; corps (placeholder slot, new id, actor) {corps:?}; live {}", w.ids.live());
+    eprintln!("kept {kept} map actors with their saved ids; corps (placeholder id, actor) {corps:?}; live {}", w.ids.live());
     assert!(kept > 20);
-    assert_eq!(corps.iter().map(|c| c.1).collect::<Vec<_>>(), [13399, 13400], "next-fit from IDMGR, ascending placeholder slot");
-    for &(slot, _, actor) in &corps {
-        // The placeholder was destroyed: its slot is free, generation + 1.
-        assert_eq!(w.ids.gtid_at_slot(slot), None);
-        assert_eq!(w.ids.thing_at_slot(13399 + corps.iter().position(|c| c.2 == actor).unwrap() as u16), Some(Thing::Actor(actor)));
+    assert_eq!(corps.iter().map(|c| c.0).collect::<Vec<_>>(), [13391, 13392], "the placeholders' saved ids");
+    for &(raw, actor) in &corps {
+        assert_eq!(w.ids.thing(raw), Some(Thing::Actor(actor)));
+        assert_eq!(w.ids.thing_at_slot(raw as u16), Some(Thing::Actor(actor)));
     }
+    assert_eq!(w.ids.next_slot(), 13399, "the replacements leave the cursor alone");
     // The kingdoms keep their map ids; the unused slots' kingdoms and
     // things are gone.
     for k in 0..w.kingdoms.len() as u32 {
@@ -1332,16 +1333,15 @@ fn native_ids_on_berlin() {
     // Scenery keeps its ids.
     let scenery = w.books.scenery[0];
     assert_eq!(w.ids.thing(map.placed[scenery].serialized_id), Some(Thing::Placed(scenery)));
-    // The next creation continues the cursor.
-    let def = w.actors[corps[0].2 as usize].def;
+    // The first creation takes the IDMGR cursor.
+    let def = w.actors[corps[0].1 as usize].def;
     let a = aa_play::production::spawn_single(&mut w, def, Some(0), glam::Vec2::new(100.0, 100.0), 0.0);
-    assert_eq!(w.ids.actor(a).map(Gtid::raw), Some(13401));
+    assert_eq!(w.ids.actor(a).map(Gtid::raw), Some(13399));
     w.actors[a as usize].removed = true;
     w.step(vec![]);
-    assert_eq!(w.ids.thing(13401), None);
-    assert_eq!(w.ids.next_slot(), 13402);
+    assert_eq!(w.ids.thing(13399), None);
+    assert_eq!(w.ids.next_slot(), 13400);
 }
-
 /// Parity trace evidence: the S stream of the first 34 ticks (one film
 /// record each) on Berlin and on a generated map, with the computer player
 /// attached. Every tick logs its clock first; the world-RNG getters follow.

@@ -640,8 +640,8 @@ fn idle_corps_researches_its_technologies() {
         let corps = &mut data.defs[defs.corps as usize];
         corps.recruits.clear();
         corps.research = vec![
-            aa_play::data::ResearchItem { property: "tech_improved_machineguns".into(), kind: "GLOBAL".into(), research_time: 60.0, cost: vec![] },
-            aa_play::data::ResearchItem { property: "tech_special_forces".into(), kind: "GLOBAL".into(), research_time: 60.0, cost: vec![] },
+            aa_play::data::ResearchItem { property: "tech_improved_machineguns".into(), kind: "GLOBAL".into(), research_time: 60.0, cost: vec![], ..Default::default() },
+            aa_play::data::ResearchItem { property: "tech_special_forces".into(), kind: "GLOBAL".into(), research_time: 60.0, cost: vec![], ..Default::default() },
         ];
     }
     building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
