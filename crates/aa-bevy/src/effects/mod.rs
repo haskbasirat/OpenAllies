@@ -472,13 +472,11 @@ struct Flight {
     to: Vec3,
     start: f32,
     end: f32,
-    /// Peak height above the straight line (LOB projectiles).
-    arc: f32,
     target: Option<ActorId>,
     shooter: ActorId,
     entity: Option<Entity>,
-    /// TARGET_HIT_POSITION is `to`: landed away from the target by
-    /// projectile_spread, or fired at a ground point.
+    /// Landed away from the target by projectile_spread (TARGET_HIT_POSITION
+    /// is then `to`).
     scattered: bool,
 }
 
@@ -963,12 +961,14 @@ impl FxState {
             }
             "TARGET_HIT_POSITION" if ctx.hit.is_some() => Some((Mat4::from_translation(ctx.hit?), None, true)),
             "TARGET_HIT_POSITION" => {
+                // KKC_FXCCreateVFX::ConsolidateEventParameters 0x429950
+                // case 5: without a live target thing (a ground bombard, a
+                // target that died) the position stays the (-100, -100,
+                // -100) sentinel 0xB28114, so nothing is seen; the loader
+                // warns area bombards not to use it (0x4BF78D).
                 // compare: where the original puts the hit on the target's
                 // bounds; here the target's centre height, toward the shooter.
-                let tm = match ctx.target.and_then(|t| actor_matrix(frame, t)) {
-                    Some(m) => m,
-                    None => Mat4::from_translation(to_render(ctx.target_ground?)),
-                };
+                let tm = actor_matrix(frame, ctx.target?)?;
                 let mut p = tm.w_axis.truncate() + Vec3::Y * 1.0;
                 let from = ctx.at.or_else(|| ctx.actor.and_then(|a| actor_matrix(frame, a)).map(|m| m.w_axis.truncate()));
                 if let Some(f) = from {
@@ -1785,10 +1785,11 @@ impl FxState {
 
     /// An ability used at an actor (Event::Fired, `target` Some) or at a
     /// ground point (Event::FiredAt, a bombard: 0x5340C0 with the point).
-    /// With a point there is no target thing: TARGET_GROUND and
-    /// TARGET_HIT_POSITION are the point, TARGET_THING commands do nothing
-    /// and the per-target list does not run here (it belongs to the actors
-    /// the landing hits, which the sim does not report).
+    /// With a point there is no target thing (0x429950): TARGET_GROUND is
+    /// the point on the ground, TARGET_THING and TARGET_HIT_POSITION
+    /// commands show nothing ("source/target object dead", the -100
+    /// sentinel), and the per-target list does not run here (it belongs to
+    /// the actors the landing hits, which the sim does not report).
     fn fired(&mut self, shooter: ActorId, target: Option<ActorId>, point: Option<Vec2>, weapon: usize, frame: &Frame, spawn: &mut Spawn) {
         let tables = self.tables.clone();
         let Some(a) = frame.world.actors.get(shooter as usize) else { return };
@@ -1803,6 +1804,9 @@ impl FxState {
             (None, None) => return,
         };
         let at_point = target.is_none();
+        if at_point && std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+            info!("fx: actor {shooter} weapon {weapon} fired at {:?} (projectile {:?}, spawn bone {:?})", ground, fx.projectile, fx.spawn_bone);
+        }
         let ctx = Ctx {
             actor: Some(shooter),
             target,
@@ -1810,7 +1814,7 @@ impl FxState {
             target_ground: Some(ground),
             shooter_ground: Some(a.pos),
             kingdom: None,
-            hit: at_point.then(|| to_render(ground)),
+            hit: None,
         };
         self.run_list(&fx.start, ctx, frame, spawn, ListKind::Other);
         self.run_list(&fx.do_, ctx, frame, spawn, ListKind::Other);
@@ -1823,29 +1827,33 @@ impl FxState {
             && w.projectile_speed > 0.0
         {
             let flight = (ground.truncate() - a.pos.truncate()).length() / w.projectile_speed;
-            let muzzle = ["cannon_ae_01", "gun_ae_01"]
-                .iter()
+            // KKC_Ability::CreateProjectile 0x4C8CB0: the ability's
+            // spawn_bone_ids (the mortar's cannon_ae_01); without one, the
+            // first weapon bone the model has.
+            let muzzle = fx
+                .spawn_bone
+                .as_deref()
+                .into_iter()
+                .chain(["cannon_ae_01", "gun_ae_01"])
                 .find_map(|b| {
                     let m = self.bone(frame, shooter, b)?;
                     let base = actor_matrix(frame, shooter)?;
                     (m.w_axis != base.w_axis).then(|| m.w_axis.truncate())
                 })
                 .unwrap_or_else(|| to_render(a.pos) + Vec3::Y * 1.2);
-            // An actor: its drawn centre, half a metre up; a ground point:
-            // the ground there.
+            // An actor: its drawn centre, half a metre up (compare: the
+            // original aims at the target's height x ProjectileTargetHeight
+            // Ratio, 0x4EEEE0); a ground point: the ground there.
             let lift = if at_point { 0.0 } else { 0.5 };
             let mut to = match target.and_then(|t| actor_matrix(frame, t)) {
                 Some(m) => m.w_axis.truncate(),
                 None => to_render(ground),
             } + Vec3::Y * lift;
-            // compare: LOB arc height from gravity over the flight time.
-            let lob = w.projectile_type.as_deref().is_some_and(|k| k.eq_ignore_ascii_case("LOB"));
-            let arc = if lob { 9.8 * flight * flight / 8.0 } else { 0.0 };
             let pfx = tables.actors.get(p);
             // ProjectileComponent projectile_spread: the view's projectile
             // lands within that radius of the sim's hit point (the damage is
             // the sim's).
-            let mut scattered = at_point;
+            let mut scattered = false;
             if let Some(spread) = pfx.map(|f| f.projectile_spread).filter(|s| *s > 0.0) {
                 scattered = true;
                 let r = spread * self.rng.next().sqrt();
@@ -1860,7 +1868,7 @@ impl FxState {
                 let created = pfx.created.clone();
                 self.run_list(&created, pctx, frame, spawn, ListKind::Other);
             }
-            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), arc, target, shooter, entity, scattered });
+            self.flights.push(Flight { projectile: p.clone(), from: muzzle, to, start: self.time, end: self.time + flight.max(0.05), target, shooter, entity, scattered });
         }
     }
 
@@ -1878,7 +1886,9 @@ impl FxState {
             target_ground: Some(Vec3::new(ground.x, -ground.z, ground.y)),
             shooter_ground: frame.world.actors.get(f.shooter as usize).map(|a| a.pos),
             kingdom: None,
-            hit: f.scattered.then_some(f.to),
+            // a scattered shell's hit is where it landed; without a live
+            // target there is none (0x429950 case 5)
+            hit: (f.scattered && f.target.is_some_and(|t| frame.world.actor(t).is_some())).then_some(f.to),
         };
         self.run_list(&pfx.destroyed, ctx, frame, spawn, ListKind::Other);
     }
@@ -2106,10 +2116,14 @@ impl FxState {
                 landed.push(self.flights.swap_remove(i));
                 continue;
             }
+            // The ProjectileComponent tick (0x580920, every projectile_type):
+            // remaining / total time blends the start into the aim point, a
+            // straight line. LOB and BOMB only aim lower at launch
+            // (ProjectileArcingTargetHeightRatio, 0x580BC0); nothing in
+            // AA.exe lifts the path (Gravity is read only by planes).
             let s = ((now - f.start) / (f.end - f.start)).clamp(0.0, 1.0);
-            let p = f.from.lerp(f.to, s) + Vec3::Y * (f.arc * 4.0 * s * (1.0 - s));
-            let s2 = (s + 0.02).min(1.0);
-            let p2 = f.from.lerp(f.to, s2) + Vec3::Y * (f.arc * 4.0 * s2 * (1.0 - s2));
+            let p = f.from.lerp(f.to, s);
+            let p2 = f.from.lerp(f.to, (s + 0.02).min(1.0));
             if let Some(e) = f.entity
                 && let Ok((mut t, _)) = transforms.get_mut(e)
             {

@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-8";
+const CACHE_VERSION: &str = "aa-bevy-fx-9";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -69,6 +69,10 @@ pub struct WeaponFx {
     pub per_target: Vec<Fxc>,
     /// AbilityDefinition projectile_IDS (lower case).
     pub projectile: Option<String>,
+    /// Ability (or its definition's) spawn_bone_ids, lower case: where
+    /// KKC_Ability::CreateProjectile (0x4C8CB0) starts the projectile.
+    #[serde(default)]
+    pub spawn_bone: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -412,6 +416,7 @@ fn weapon_fx(catalog: &ActorCatalog, ability: &ResolvedNode<'_>) -> WeaponFx {
         end: list(&d, "WhenEnd"),
         per_target: list(&d, "WhenDoPerTarget"),
         projectile: text(&d, "projectile_IDS").map(|p| p.to_ascii_lowercase()),
+        spawn_bone: text(ability, "spawn_bone_ids").or_else(|| text(&d, "spawn_bone_ids")).map(|b| b.to_ascii_lowercase()).filter(|b| !b.is_empty() && b != "null"),
     }
 }
 

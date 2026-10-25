@@ -240,7 +240,6 @@ struct ActorMove {
     requested: f32,
     /// 0x52FD90 waypoint turn offset (+0x54).
     waypoint_offset: f32,
-    next_think: f32,
     mover: Mover,
     /// Overlapping-thing list (+0x110): (actor, until).
     ignore: Vec<(ActorId, f32)>,
@@ -771,8 +770,11 @@ pub struct MovementState {
     occupancy: Occupancy,
     speeds: SpeedCache,
     pub stats: MoveStats,
-    /// Movers stopped since the last [`flush_movers`].
+    /// Movers stopped since the last [`flush`].
     unregister: Vec<ActorId>,
+    /// Element minds re-scheduled since the last [`flush`] (delay after the
+    /// update's begin, in order).
+    thinks: Vec<(ActorId, f32)>,
     /// The world update [`MovementState::prepare`] last ran for, and its rules.
     prepared: Option<u64>,
     rules: Option<MoveRules>,
@@ -848,6 +850,30 @@ fn flush_movers(ms: &mut MovementState, world: &mut World) {
             world.unschedule(Sched::Mover(id));
         }
     }
+}
+/// The element minds' re-thinks go on update queue 4 in the order they were
+/// made: the Mind's schedule (`0x52DC10` -> `0x50AD80`) first cancels its
+/// pending think (its Updatable +10 `0x529CD0`: `0x50B250`), then adds one
+/// `delay` after the update's begin (`0x50AF10`).
+fn flush_minds(ms: &mut MovementState, world: &mut World) {
+    for (id, delay) in ms.thinks.drain(..) {
+        if world.is_scheduled(Sched::Mind(id)) {
+            world.unschedule(Sched::Mind(id));
+        }
+        world.schedule_after(crate::scheduler::THINK, Sched::Mind(id), 0, delay);
+    }
+}
+/// [`flush_movers`] and [`flush_minds`]: before the movement code returns
+/// to the world.
+fn flush(ms: &mut MovementState, world: &mut World) {
+    flush_movers(ms, world);
+    flush_minds(ms, world);
+}
+/// The element Mind thinks again `delay` seconds after this update's begin
+/// (`0x52DC10`; a positive delay under one update becomes the next update,
+/// zero this update's queue-4 pass).
+fn think_in(ms: &mut MovementState, id: ActorId, delay: f32) {
+    ms.thinks.push((id, delay));
 }
 
 // ---------------------------------------------------------------------------
@@ -1014,7 +1040,7 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
     ms.ensure(world);
     let rules = MoveRules::from_data(&world.data);
     let result = apply_command(&mut ms, world, command, &rules);
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
     result
 }
@@ -1264,20 +1290,16 @@ pub fn tick(world: &mut World) {
             reform(&mut ms, world, o as OrgId, &rules);
         }
     }
+    // The element minds think on update queue 4 (`mind_tick`); a dead
+    // element's state ends here.
     for a in 0..world.actors.len() {
-        let am = &mut ms.actors[a];
-        am.depth = 0;
-        if am.active && am.next_think <= now {
-            if alive(world, a as ActorId) {
-                element_think(&mut ms, world, a as ActorId, &rules);
-            } else {
-                complete_element(&mut ms, a as ActorId);
-            }
+        if ms.actors[a].active && !alive(world, a as ActorId) {
+            complete_element(&mut ms, a as ActorId);
         }
     }
     publish(&mut ms, world);
     ms.stats.queued = ms.jobs.len();
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
 }
 
@@ -1295,7 +1317,59 @@ pub fn mover_tick(world: &mut World, id: ActorId) {
     if (id as usize) < ms.actors.len() {
         step_mover(&mut ms, world, id, &rules);
     }
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
+    world.movement = ms;
+}
+
+// ---------------------------------------------------------------------------
+// Aircraft flight (the AAI move state and AircraftComponent). Entry points
+// for the aircraft minds; the flight (MoveTick 0x5612F0, legs 0x55F230,
+// formation follow 0x560A70 / 0x561080) is not ported yet, so these do not
+// move anything.
+
+/// `0x516740(position, direction)`: the AAI move state's goal, and a leg
+/// appended to the flight path (AircraftComponent `0x560DB0` -> `0x5601E0`,
+/// from the pose when the path is empty, else from the last leg's end).
+/// Not ported yet: no effect.
+pub fn fly_to(_world: &mut World, _aircraft: ActorId, _point: glam::Vec3, _direction: glam::Vec3) {}
+/// `0x516720`: the cruise height (flight +0x18 / +0x80). Not ported yet: no
+/// effect.
+pub fn set_cruise(_world: &mut World, _aircraft: ActorId, _height: f32) {}
+/// `0x5166F0`: the flight speed (flight +0x14 / +0x84). Not ported yet: no
+/// effect.
+pub fn set_flight_speed(_world: &mut World, _aircraft: ActorId, _speed: f32) {}
+/// `0x516B10`: the aircraft still follows its flight path. Not ported yet:
+/// false.
+pub fn following_path(_world: &World, _aircraft: ActorId) -> bool {
+    false
+}
+
+/// The 2.0 s re-think of a Mind with nothing scheduled (`0x531D30` step 6).
+const IDLE_RETHINK: f32 = 2.0;
+
+/// The element Mind's queue-4 delivery (`0x531D30`, the Mind's +8
+/// Updatable, newest-scheduled first): its current state thinks (movement's
+/// element move state here), then a live Mind with no pending think re-thinks
+/// in 2.0 s, unless its active Mover is registered (that wakes it).
+pub fn mind_tick(world: &mut World, id: ActorId) {
+    let mut ms = std::mem::take(&mut world.movement);
+    let rules = ms.prepare(world);
+    if ms.actors.len() < world.actors.len() {
+        ms.ensure(world);
+    }
+    if (id as usize) < ms.actors.len() && alive(world, id) {
+        ms.actors[id as usize].depth = 0;
+        if ms.actors[id as usize].active {
+            element_think(&mut ms, world, id, &rules);
+        }
+        flush(&mut ms, world);
+        publish_state(&ms, world, id);
+        let mover_linked = ms.actors[id as usize].mover.active && world.is_scheduled(Sched::Mover(id));
+        if alive(world, id) && !world.is_scheduled(Sched::Mind(id)) && !mover_linked {
+            world.schedule_after(crate::scheduler::THINK, Sched::Mind(id), 0, IDLE_RETHINK);
+        }
+    }
+    flush(&mut ms, world);
     world.movement = ms;
 }
 
@@ -1865,7 +1939,6 @@ fn start_element(ms: &mut MovementState, world: &World, id: ActorId, nodes: Vec<
     am.mode = mode;
     am.nodes = nodes;
     am.requested = speed;
-    am.next_think = world.time;
     am.pursue = None;
     // Any other path (the regiment's EventMoveFormationPath `0x532310`
     // activates the move with mode 2, clearing the state stack) ends a walk
@@ -1875,6 +1948,8 @@ fn start_element(ms: &mut MovementState, world: &World, id: ActorId, nodes: Vec<
     am.plan = false;
     am.event = None;
     am.task = None;
+    // The new state thinks in this update's queue-4 pass.
+    think_in(ms, id, 0.0);
 }
 /// Element move complete: stop the Mover where it is (`0x52D660`; the Mover
 /// keeps its speed value, `0x5767C0(0, 0)`).
@@ -1900,7 +1975,7 @@ fn element_think(ms: &mut MovementState, world: &mut World, id: ActorId, rules: 
     let am = &mut ms.actors[id as usize];
     if am.depth > 16 {
         // A node chain that keeps resolving itself: continue next tick.
-        am.next_think = now + EPSILON;
+        think_in(ms, id, EPSILON);
         return;
     }
     am.depth += 1;
@@ -1944,16 +2019,16 @@ fn element_think(ms: &mut MovementState, world: &mut World, id: ActorId, rules: 
         update_waypoint_offset(am, radius);
         let speed = am.requested;
         action_go(ms, world, id, speed, rules);
-        let am = &mut ms.actors[id as usize];
-        if let Some(first) = am.nodes.first() {
-            am.next_think = now + if first.kind == 0 { 1.0 } else { EPSILON };
+        if let Some(first) = ms.actors[id as usize].nodes.first() {
+            let delay = if first.kind == 0 { 1.0 } else { EPSILON };
+            think_in(ms, id, delay);
         }
         return;
     }
     let head = am.nodes[0];
     if am.mover.desired != head.dir {
         if action_go(ms, world, id, 0.0, rules) {
-            ms.actors[id as usize].next_think = now + EPSILON;
+            think_in(ms, id, EPSILON);
         }
         return;
     }
@@ -1989,13 +2064,12 @@ fn update_waypoint_offset(am: &mut ActorMove, radius: f32) {
 
 /// `0x5300A0` ActionGo: order the Mover toward the head node.
 fn action_go(ms: &mut MovementState, world: &mut World, id: ActorId, speed_arg: f32, rules: &MoveRules) -> bool {
-    let now = world.time;
     let pos = pos2(world, id);
     if ms.actors[id as usize].nodes.is_empty() {
         // 0x52D660 stop, think again in 1 s.
         let am = ms.halt(id);
         am.mover.last_step = 0.0;
-        am.next_think = now + 1.0;
+        think_in(ms, id, 1.0);
         return false;
     }
     let am = &mut ms.actors[id as usize];
@@ -2032,14 +2106,13 @@ fn action_go(ms: &mut MovementState, world: &mut World, id: ActorId, speed_arg: 
         world.unschedule(Sched::Mover(id));
     }
     world.schedule_periodic(crate::scheduler::EVERY_TICK, Sched::Mover(id), 0);
-    let am = &mut ms.actors[id as usize];
     let base = if head.kind == 0 { ACTION_DELAY_INSTANT } else { ACTION_DELAY_PATH };
     // The world stream (getter 0x4F02B0 + unit float 0x45D400, one draw),
     // then f32(base + u * 0.3) at PC53: binary64 arithmetic rounds the same
     // for these magnitudes before the binary32 store.
     let u = world.random();
     let delay = (f64::from(base) + f64::from(u) * f64::from(ACTION_JITTER)) as f32;
-    am.next_think = now + delay;
+    think_in(ms, id, delay);
     true
 }
 
@@ -2087,7 +2160,7 @@ fn formation_speed(ms: &mut MovementState, world: &World, id: ActorId, rules: &M
                 let am = ms.halt(id);
                 am.mover.turning = false;
                 am.mover.last_step = 0.0;
-                am.next_think = world.time + 1.0;
+                think_in(ms, id, 1.0);
             } else {
                 // 0x52A3C0 finish; the regiment re-sends its path (+0x2BC).
                 complete_element(ms, id);
@@ -2359,10 +2432,10 @@ fn step_mover(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &Mo
         let near = (dest - pos2(world, id)).length_squared() < rules.reached_threshold * rules.reached_threshold;
         let am = ms.halt(id);
         am.mover.turning = false;
-        am.next_think = now;
         if near {
             am.event = Some(MoverEvent::Reached);
         }
+        think_in(ms, id, 0.0);
         return;
     }
     let before = ms.actors[a].mover.facing;
@@ -2371,8 +2444,8 @@ fn step_mover(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &Mo
         write_facing(ms, world, id);
     }
     match outcome {
-        Step::Arrived => tell_mind(ms, id, MoverEvent::Reached, now),
-        Step::Blocked(blocker) => tell_mind(ms, id, MoverEvent::Blocked(blocker), now),
+        Step::Arrived => tell_mind(ms, id, MoverEvent::Reached),
+        Step::Blocked(blocker) => tell_mind(ms, id, MoverEvent::Blocked(blocker)),
         Step::Moved(p, crossed) => {
             let z = world.map.height_at(p);
             world.actors[a].pos = glam::Vec3::new(p.x, p.y, z);
@@ -2382,7 +2455,7 @@ fn step_mover(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &Mo
                 org_moved(ms, world, o, id, rules);
             }
             if crossed {
-                tell_mind(ms, id, MoverEvent::Reached, now);
+                tell_mind(ms, id, MoverEvent::Reached);
             }
         }
     }
@@ -2423,10 +2496,9 @@ fn terrain_cap(ms: &mut MovementState, world: &World, id: ActorId) -> f32 {
 
 /// The Mover's event for its Mind (arrival `0x5774A0` -> Mind, scheduled
 /// with delay 0): the element thinks this update, after queue 0.
-fn tell_mind(ms: &mut MovementState, id: ActorId, event: MoverEvent, now: f32) {
-    let am = &mut ms.actors[id as usize];
-    am.event = Some(event);
-    am.next_think = now;
+fn tell_mind(ms: &mut MovementState, id: ActorId, event: MoverEvent) {
+    ms.actors[id as usize].event = Some(event);
+    think_in(ms, id, 0.0);
 }
 fn write_facing(ms: &mut MovementState, world: &mut World, id: ActorId) {
     let angle = facing_angle(ms.actors[id as usize].mover.facing);
@@ -2595,7 +2667,7 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
                     if own_speed - QUEUE_SPEED_MARGIN <= other_speed {
                         let am = ms.halt(id);
                         am.mover.last_step = 0.0;
-                        am.next_think = now + QUEUE_WAIT;
+                        think_in(ms, id, QUEUE_WAIT);
                         return;
                     }
                 }
@@ -2657,7 +2729,10 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
                 // LowPathingWaitMinimum: stand and try again after the wait.
                 let am = ms.halt(id);
                 am.mover.last_step = 0.0;
-                am.next_think = am.last_reroute + rules.low_path_wait;
+                // Think again once the wait since the last re-route is over.
+                let begin = f32::from_bits(world.clock.begin.0);
+                let delay = am.last_reroute + rules.low_path_wait - begin;
+                think_in(ms, id, delay);
                 return;
             }
             let request = Request { from: pos, to: head.pos, class: mover_class(def), max_speed: max_speed(&mut ms.speeds, world, id) };
@@ -2872,12 +2947,14 @@ pub fn walk_member(world: &mut World, member: ActorId, to: Vec2) {
         // update's Mind queue has run): the walk's first ActionGo, and its
         // Mover registration and delay draws, come then (the Berlin film:
         // trucks created in 402 start in 403).
-        let am = &mut ms.actors[member as usize];
+        let am = &ms.actors[member as usize];
         if am.active && am.walk.is_some() {
-            am.next_think = world.time + EPSILON;
+            // The creation schedules 0, 0, 1e-4 replace each other: the
+            // first think is next update.
+            think_in(&mut ms, member, EPSILON);
         }
     }
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
 }
 /// Enter `0x52F560`: the move to `at` (mode 0, own top speed, no facing).
@@ -3186,7 +3263,7 @@ pub fn org_tick(world: &mut World, o: OrgId) {
         let owner = Sched::OrgComponent(o, ORGANIZATION_SLOT);
         let _ = world.sched.queues.remove_matching(owner.key(), crate::scheduler::EVERY_TICK, GOAL_DATA);
     }
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
 }
 
@@ -3207,7 +3284,7 @@ pub fn member_replaced(world: &mut World, o: OrgId, old: ActorId, new: ActorId) 
             org_moved(&mut ms, world, o, new, &rules);
         }
     }
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
 }
 
@@ -3222,13 +3299,12 @@ pub fn org_follow_leader(world: &mut World, o: OrgId) {
     if let Some(leader) = ms.orgs.get(o as usize).and_then(|om| om.leader).filter(|&l| alive(world, l)) {
         org_moved(&mut ms, world, o, leader, &rules);
     }
-    flush_movers(&mut ms, world);
+    flush(&mut ms, world);
     world.movement = ms;
 }
 
 /// Copy the movement results into the shared `Actor` fields.
 fn publish(ms: &mut MovementState, world: &mut World) {
-    let time = world.time;
     for a in 0..world.actors.len() {
         // This update's step (queue 0, `mover_tick`); none until the next.
         let step_speed = std::mem::take(&mut ms.actors[a].step_speed);
@@ -3237,34 +3313,44 @@ fn publish(ms: &mut MovementState, world: &mut World) {
         if !actor.alive || actor.removed {
             continue;
         }
-        let moving = am.mover.active;
-        if am.active || !actor.motion.path.is_empty() {
-            actor.motion.path.clear();
-            if am.active {
-                actor.motion.path.extend(am.nodes.iter().map(|n| n.pos));
-            }
-        }
-        actor.motion.goal = if am.active { am.nodes.last().map(|n| n.pos) } else { None };
         // The Mover's speed (+0x20: zeroed by an arrival, kept by other
         // stops) and this update's displacement.
         actor.motion.speed = am.mover.speed;
         actor.motion.velocity = am.mover.facing * step_speed;
-        let next = if moving {
-            match actor.activity {
-                Activity::Idle | Activity::Attacking => Some(Activity::Moving),
-                _ => None,
-            }
-        } else if actor.activity == Activity::Moving {
-            Some(Activity::Idle)
-        } else {
-            None
-        };
-        if let Some(next) = next
-            && actor.activity != next
-        {
-            actor.activity = next;
-            actor.activity_since = time;
+        publish_state(ms, world, a as ActorId);
+    }
+}
+/// The element's path, goal and activity (also after its queue-4 think).
+fn publish_state(ms: &MovementState, world: &mut World, id: ActorId) {
+    let time = world.time;
+    let am = &ms.actors[id as usize];
+    let actor = &mut world.actors[id as usize];
+    if !actor.alive || actor.removed {
+        return;
+    }
+    let moving = am.mover.active;
+    if am.active || !actor.motion.path.is_empty() {
+        actor.motion.path.clear();
+        if am.active {
+            actor.motion.path.extend(am.nodes.iter().map(|n| n.pos));
         }
+    }
+    actor.motion.goal = if am.active { am.nodes.last().map(|n| n.pos) } else { None };
+    let next = if moving {
+        match actor.activity {
+            Activity::Idle | Activity::Attacking => Some(Activity::Moving),
+            _ => None,
+        }
+    } else if actor.activity == Activity::Moving {
+        Some(Activity::Idle)
+    } else {
+        None
+    };
+    if let Some(next) = next
+        && actor.activity != next
+    {
+        actor.activity = next;
+        actor.activity_since = time;
     }
 }
 

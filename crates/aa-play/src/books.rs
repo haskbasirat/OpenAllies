@@ -118,6 +118,106 @@ pub struct ActorBooks {
     /// first (0x584120).
     #[serde(default)]
     pub research_completed: Vec<u32>,
+    /// Its DenizenComponent (airfields, carriers; `crate::denizen`).
+    #[serde(default)]
+    pub denizen: Option<DenizenBooks>,
+    /// A denizen aircraft's link to its base (CreateDenizen 0x56CC10).
+    #[serde(default)]
+    pub aircraft: Option<AircraftBooks>,
+}
+
+/// A DenizenComponent (Denizen.cpp, component slot 10; constructor
+/// 0x56B720, InitCreate 0x568750, InitExisting 0x5687E0).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DenizenBooks {
+    /// +0x18 inventory slots, head first.
+    pub slots: Vec<DenizenSlot>,
+    /// +0x20 sally_forth / recall and +0x21 escort_on / escort_off (0x56E730).
+    pub sally: bool,
+    pub escort: bool,
+    /// +0x2C runway queue: aircraft waiting in the hangar, head first.
+    pub runway: Vec<ActorId>,
+    /// +0x34 time of the last takeoff release (0x568750: -delay).
+    pub last_release: f32,
+    /// +0x38 behaviours of the definition (0x5687E0) and +0x3C the ready
+    /// ones (0x5696B0).
+    pub behaviors: u32,
+    pub ready: u32,
+    /// +0x10 / +0x14 the occupants' current and full value (0x569E40).
+    pub value: f32,
+    pub value_max: f32,
+    /// +0x40 missions, head first.
+    pub missions: Vec<Mission>,
+    /// The next mission id (not native: missions are pointers there).
+    pub next_mission: u32,
+}
+
+/// One inventory slot (0x56B720 node: +0 occupant, +4 definition,
+/// +8 health, +C / +D the 0x568880 flags for masks 2 and 0x2C).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DenizenSlot {
+    pub def: DefId,
+    /// None while housed.
+    pub occupant: Option<ActorId>,
+    pub health: f32,
+    pub worker: bool,
+    pub defensive: bool,
+}
+
+/// A deployed denizen group (0x568180, vtable 0xA3BC14).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Mission {
+    pub id: u32,
+    /// +0xC members in creation order.
+    pub members: Vec<ActorId>,
+    /// +8 the DenizenGroup (index into `DenizenDef::groups`).
+    pub group: usize,
+    /// +0x14 the mean of the group's FormationPositions over the members
+    /// (0x568180: NaN for a group without positions, as 0 * (1/0)).
+    pub offset: [f32; 3],
+    /// +0x20 the mode of its use (0x568480).
+    pub mode: u32,
+    /// The ability context of the use (0x4CA330 / 0x4CA760).
+    pub order: AirOrder,
+    /// +0x28 its escort mission (0x56E390).
+    pub escort: Option<u32>,
+}
+
+/// The command a mission's use hands each member (0x4D9B60).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum AirOrder {
+    /// 0x4CA330(target): attack (command 0) the actor.
+    AttackActor(ActorId),
+    /// 0x4CA330(0) with the point (flag 4): attack the ground point.
+    AttackPoint(Vec2),
+    /// 0x4CA760: move (command 5) to the point.
+    Recon(Vec2),
+    /// 0x56E390's escort context of the mission.
+    Escort(u32),
+}
+
+/// A denizen aircraft (CreateDenizen 0x56CC10).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AircraftBooks {
+    /// Mind +0x28 home (0x52C280) and +0x24 mode (0x51C220).
+    pub home: ActorId,
+    pub mode: u32,
+    /// Mind +0x30 the mission (0x52A020).
+    pub mission: u32,
+    /// Actor flag +8 bit 30 (0x4D04B0): waiting in the hangar for the
+    /// runway release (0x5695B0).
+    pub hidden: bool,
+    /// The command of the mission's use.
+    pub order: Option<AirOrder>,
+    /// Actor +0x3C, the model scale: the AircraftComponent taxi_scale at
+    /// CreateDenizen; AircraftComponent MoveTick 0x5612F0 rewrites it every
+    /// move (the movement owner's flight).
+    #[serde(default = "unit_scale")]
+    pub scale: f32,
+}
+
+fn unit_scale() -> f32 {
+    1.0
 }
 
 /// An Economy component's state 570020 keeps (EconomyState +0/+1 vectors
@@ -275,6 +375,10 @@ pub enum Notice {
     Attached { org: OrgId, hq: ActorId },
     /// A construct order's BuildActor (0x563160) refused the structure.
     ConstructRefused { kingdom: KingdomId, def: DefId, reason: ConstructRefusal },
+    /// denizen_error_affording|ss (0x56D5A0 / 0x56D7C0 / 0x56DA00): the air
+    /// attack or air recon of `building` could not be afforded. `what` is
+    /// the subject string id (denizen_air_attack / denizen_air_recon).
+    DenizenUnaffordable { kingdom: KingdomId, building: ActorId, what: String, cost: Vec<f32> },
 }
 
 impl Books {

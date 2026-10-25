@@ -501,7 +501,7 @@ struct CityCandidate {
 
 /// Performer +60 (57E430): the combat value of a definition with a
 /// PerformerComponent, None without one.
-fn performer_value(world: &World, def: crate::data::DefId) -> Option<f32> {
+pub(crate) fn performer_value(world: &World, def: crate::data::DefId) -> Option<f32> {
     let d = world.data.def(def);
     if !d.has_component("PerformerComponent") {
         return None;
@@ -510,7 +510,7 @@ fn performer_value(world: &World, def: crate::data::DefId) -> Option<f32> {
 }
 
 /// 57DC40: the Body health ratio (Body +10 / +14), 1 without a Body.
-fn health_ratio(world: &World, a: ActorId) -> f32 {
+pub(crate) fn health_ratio(world: &World, a: ActorId) -> f32 {
     let actor = &world.actors[a as usize];
     let d = world.data.def(actor.def);
     if !d.has_component("BodyComponent") {
@@ -540,7 +540,7 @@ fn major(world: &World, k: Option<KingdomId>) -> Option<KingdomId> {
 /// +34 + Performer +60 + Denizen +14; 4D0180, the weight, uses Organization
 /// +68 (the members' Performer +60 times their health ratio), Settlement
 /// +30, 57DC40 (Performer +60 times the health ratio) and Denizen +10.
-/// aa-play has no Settlement or Denizen occupants: those terms are 0.
+/// aa-play has no Settlement occupants: that term is 0.
 fn city_candidates(world: &World) -> Vec<CityCandidate> {
     let mut out = Vec::new();
     for a in 0..world.actors.len() as ActorId {
@@ -556,11 +556,16 @@ fn city_candidates(world: &World) -> Vec<CityCandidate> {
         if d.has_component("BodyComponent") && !d.captureable && !d.destructible {
             continue;
         }
-        let Some(value) = performer_value(world, actor.def) else { continue };
-        if value <= 0.0 {
+        // Performer +60 and Denizen +14 (the value), 57DC40 and Denizen +10
+        // (the weight).
+        let performer = performer_value(world, actor.def);
+        let (dv, dmax) = world.books.actor(a).and_then(|b| b.denizen.as_ref()).map_or((0.0, 0.0), |d| (d.value, d.value_max));
+        let value = performer.unwrap_or(0.0) + dmax;
+        if !(value > 0.0) {
             continue;
         }
-        out.push(CityCandidate { who: crate::books::CityCandidateRef::Actor(a), kingdom, pos: actor.pos.truncate(), current: value * health_ratio(world, a) });
+        let current = performer.map_or(0.0, |v| v * health_ratio(world, a)) + dv;
+        out.push(CityCandidate { who: crate::books::CityCandidateRef::Actor(a), kingdom, pos: actor.pos.truncate(), current });
     }
     for o in 0..world.orgs.len() as OrgId {
         let org = &world.orgs[o as usize];
