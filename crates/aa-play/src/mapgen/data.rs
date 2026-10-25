@@ -327,6 +327,29 @@ pub(super) struct ThingDef {
     /// starting_location_priority (template_actor.tgi): the owned actor with
     /// the highest priority becomes its kingdom's starting location.
     pub start_priority: i32,
+    /// ObjectData +0x38 blocking shape words (kind, radius, min x, min y,
+    /// max x, max y; aa_rules::objects::Shape), +0x3C its radius, and the
+    /// +0x28 / +0x2C scale range bits.
+    pub shape: [u32; 6],
+    pub shape_radius: f32,
+    pub scale_bits: [u32; 2],
+    /// ObjectData +0x1C final flag word (aa_rules::native::THING_FLAGS bits,
+    /// bit 29 for static things) and the native definition kind (1 object,
+    /// 2 actor, 20/21 doodads; 0 when the catalog has no native class).
+    pub flags: u32,
+    pub native_kind: u32,
+    /// ObjectData soft shape words (the spatial index membership shape).
+    pub soft: [u32; 6],
+    /// Component presence bits (aa_rules::native::COMPONENTS), as
+    /// crate::data::Def::components.
+    pub components: u32,
+    /// EconomyComponent [Resources] supply_required.
+    pub supply_required: bool,
+    /// MoverComponent trailer_actor ids.
+    pub trailer: Option<String>,
+    /// needs_space_for_settlement_zone, or a settlement / city actor
+    /// (definition virtual +0x2C).
+    pub needs_space: bool,
 }
 #[derive(Clone, Debug)]
 pub(super) struct Svars {
@@ -342,6 +365,19 @@ pub(super) struct Svars {
     pub doodad_auto: bool,
     pub tile_bits: u32,
     pub height_bits: u32,
+    /// BuildingPaddingMeters (GameData+0x44, the virtual +0x28 clearance).
+    pub padding: f32,
+    /// The StaticMap* analysis parameters (0x7ACB00, 0x7AA180).
+    pub static_max_width: i32,
+    pub static_base_width: i32,
+    pub static_width_exp: f32,
+    pub static_min_size: i32,
+    pub static_min_width: i32,
+    pub static_max_expansion: i32,
+    pub static_square: i32,
+    pub static_fast: bool,
+    pub static_fast_mult: i32,
+    pub static_fast_div: i32,
 }
 
 pub(super) struct RmgData {
@@ -403,6 +439,17 @@ impl RmgData {
                 doodad_auto: true,
                 tile_bits: 1,
                 height_bits: 1,
+                padding: 2.0,
+                static_max_width: 12,
+                static_base_width: 64,
+                static_width_exp: f32::from_bits(0x3eaa_a64c),
+                static_min_size: 9,
+                static_min_width: 3,
+                static_max_expansion: 1000,
+                static_square: 10,
+                static_fast: true,
+                static_fast_mult: 3,
+                static_fast_div: 4,
             },
             default_rmc: "rmc_southerneurope".into(),
             default_size: [384.0, 384.0],
@@ -446,6 +493,17 @@ impl RmgData {
                 if let Some(v) = bl(&node, "MapDoodadAutoPlacement") { s.doodad_auto = v }
                 if let Some(v) = int(&node, "MapGTileResolutionBits") { s.tile_bits = v.max(0) as u32 }
                 if let Some(v) = int(&node, "HeightmapResolutionBits") { s.height_bits = v.max(0) as u32 }
+                if let Some(v) = fx(&node, "BuildingPaddingMeters") { s.padding = v }
+                if let Some(v) = int(&node, "StaticMapMaxRectangleWidth") { s.static_max_width = v }
+                if let Some(v) = int(&node, "StaticMapBaseMapWidth") { s.static_base_width = v }
+                if let Some(v) = fx(&node, "StaticMapMaxRectangleWidthExp") { s.static_width_exp = v }
+                if let Some(v) = int(&node, "StaticMapMinRegionSize") { s.static_min_size = v }
+                if let Some(v) = int(&node, "StaticMapMinRegionWidth") { s.static_min_width = v }
+                if let Some(v) = int(&node, "StaticMapMaxRegionSizeForExpansion") { s.static_max_expansion = v }
+                if let Some(v) = int(&node, "StaticMapStartingSquareSize") { s.static_square = v }
+                if let Some(v) = bl(&node, "StaticMapUseFastSquareReduction") { s.static_fast = v }
+                if let Some(v) = int(&node, "StaticMapFastSquareReductionMult") { s.static_fast_mult = v }
+                if let Some(v) = int(&node, "StaticMapFastSquareReductionDiv") { s.static_fast_div = v }
             }
         }
         for kind in ["AVars", "Vars"] {
@@ -567,6 +625,35 @@ impl RmgData {
                     }
                 }
             }
+            if let Ok(object) = catalog.native_object_definition(ThingRef::registered(&id), PC) {
+                def.shape = object.blocking.words;
+                def.shape_radius = f32::from_bits(object.blocking.words[1]);
+                def.scale_bits = [object.scale_min.bits, object.scale_max.bits];
+                def.soft = object.soft.words;
+            }
+            for (name, bit) in aa_rules::native::COMPONENTS {
+                if node.child(name).ok().flatten().is_some() {
+                    def.components |= 1 << bit;
+                }
+            }
+            if let Some(economy) = child(&node, "EconomyComponent") {
+                if let Some(resources) = child(&economy, "Resources") {
+                    def.supply_required = bl(&resources, "supply_required").unwrap_or(false);
+                }
+            }
+            if let Some(mover) = child(&node, "MoverComponent") {
+                def.trailer = st(&mover, "trailer_actor").filter(|s| !s.eq_ignore_ascii_case("null"));
+            }
+            if let Ok(flags) = catalog.native_final_flags(ThingRef::registered(&id), PC) {
+                def.flags = flags;
+            }
+            if let Ok(category) = catalog.native_category(ThingRef::registered(&id)) {
+                def.native_kind = category.native_kind;
+            }
+            def.needs_space = matches!(
+                catalog.native_field(ThingRef::registered(&id), "needs_space_for_settlement_zone", PC),
+                Ok(Some(aa_rules::native::TypedValue::Boolean { value: true, .. }))
+            ) || (def.native_kind == 2 && def.components & (1 << 14) != 0);
             if let Some(size) = child(&node, "Size") {
                 def.scale = [fx(&size, "scale_min").unwrap_or(1.0), fx(&size, "scale_max").unwrap_or(1.0)];
                 match st(&size, "blocking_shape").unwrap_or_default().to_ascii_uppercase().as_str() {
@@ -799,12 +886,17 @@ impl RmgData {
                         affect_height: bl(&m, "affect_height").unwrap_or(true),
                     }
                 });
+                // 0x4A2EC0 normalises dir_bias (0x409230) when either
+                // component exceeds 0.0001.
+                let eps = f32::from_bits(0x38D1_B717);
+                let dir_bias = pt(&b, "dir_bias").unwrap_or([0.0, 0.0]);
+                let dir_bias = if dir_bias[0] > eps || dir_bias[1] > eps { super::blob::normalized(dir_bias) } else { dir_bias };
                 BrushKind::Blob(BlobDef {
                     size: pt(&b, "blob_size").unwrap_or([1.0, 3.0]),
                     consistency: fx(&b, "consistency").unwrap_or(0.0),
                     proximity: fx(&b, "proximity").unwrap_or(0.0),
                     fuzzy: fx(&b, "fuzzy_factor").unwrap_or(1.0),
-                    dir_bias: pt(&b, "dir_bias").unwrap_or([0.0, 0.0]),
+                    dir_bias,
                     dir_bias_factor: fx(&b, "dir_bias_factor").unwrap_or(0.0),
                     micro,
                 })

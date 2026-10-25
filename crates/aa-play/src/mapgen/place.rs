@@ -48,7 +48,23 @@ struct GroupInst {
     ids: String,
     kingdom: Option<usize>,
     objects: Vec<usize>,
+    /// The group instance (0x593690) bounding box (min x, min y, max x,
+    /// max y), its centre and radius (0x593700).
+    bbox: [f32; 4],
+    centre: [f32; 2],
+    radius: f32,
+    /// The parsed restriction list (0x4A2150): (target group, proximity_min,
+    /// proximity_desired). A wildcard lists the groups parsed before this one
+    /// whose ids start with its prefix.
+    restr: Vec<(usize, f32, f32)>,
+    /// Group +0x50 resolved by 0x4F48E0 (search_relative_kingdom_ids) and
+    /// +0x4C (search_relative_group_ids).
+    search_kingdom: Option<usize>,
+    search_group: Option<usize>,
 }
+
+#[path = "place_exact.rs"]
+mod exact;
 
 pub(super) struct Placement<'a> {
     data: &'a RmgData,
@@ -63,6 +79,11 @@ pub(super) struct Placement<'a> {
     /// Footprint radius per thing (settlements include their layouts).
     radii: Vec<f32>,
     pub notes: Vec<String>,
+    /// The marker balancer's (iteration, score) log of the kingdom stage
+    /// (the original's "balance iteration %d score %f" lines).
+    pub balance_log: Vec<(i32, f64)>,
+    /// The GMap occupancy the original's placement queries read.
+    space: super::space::Space,
 }
 
 const DEFAULT_FACING: [f32; 2] = [0.0, -1.0];
@@ -87,6 +108,8 @@ impl<'a> Placement<'a> {
             main_region: 0,
             radii: Vec::new(),
             notes: Vec::new(),
+            balance_log: Vec::new(),
+            space: super::space::Space::new(world, data),
         };
         p.radii = (0..data.things.len()).map(|t| p.compute_radius(t)).collect();
         p.update_regions(world);
@@ -520,7 +543,81 @@ impl<'a> Placement<'a> {
         pos.copy_from_slice(&best);
     }
 
-    /// KKC_RMGPlaceKingdomsStage::Run + BalancePlaceKingdoms (0x595940).
+    /// KKC_RMGPlaceKingdomsStage::Run (0x5963B0) with BalancePlaceKingdoms
+    /// (0x595940): one team marker per team with members (team order), then
+    /// per kingdom without a team; all start in the map centre and are
+    /// spread by the marker balancer (0x590B10) to W / (trunc(sqrt(n)) + 1);
+    /// each kingdom marker then starts on its team marker's best position and
+    /// is balanced again (same-team pairs to min(team_desired_distance, that
+    /// distance)). The kingdoms' start locations are their markers' best
+    /// positions. Returns the balance log (iteration, score) of both passes.
+    pub(super) fn place_kingdoms_exact(&mut self, world: &World, rng: &mut Rng) -> anyhow::Result<Vec<(i32, f64)>> {
+        let mut log = Vec::new();
+        let majors: Vec<usize> = (0..self.kingdoms.len()).filter(|&k| self.kingdoms[k].major).collect();
+        let start_thing = self.data.thing_by_id.get("start_loc").copied();
+        // 0x595530: tile + the start location's shape radius (ObjectData
+        // +0x3C) + 0.0001, on the register.
+        let radius = start_thing.map_or(0.0, |t| self.data.things[t].shape_radius);
+        let margin = f64::from(world.tile) + f64::from(radius) + f64::from(f32::from_bits(0x38D1_B717));
+        let orient = DEFAULT_FACING;
+        if majors.is_empty() {
+            return Ok(log);
+        }
+        let sv = &self.data.svars;
+        let (iterations, max_worse) = (sv.balance_iterations, sv.balance_worse);
+        // Team markers: teams with members in team order, then teamless kingdoms.
+        let mut teams: Vec<u32> = majors.iter().filter_map(|&k| self.kingdoms[k].team).collect();
+        teams.sort_unstable();
+        teams.dedup();
+        let mut keys: Vec<(Option<u32>, Option<usize>)> = teams.iter().map(|&t| (Some(t), None)).collect();
+        keys.extend(majors.iter().filter(|&&k| self.kingdoms[k].team.is_none()).map(|&k| (None, Some(k))));
+        if majors.len() == 1 {
+            // A single kingdom (0x595940 first branch): up to 50 uniform
+            // positions in [d, W - d] with d = tile + radius + 0.0001, the
+            // first valid one (CheckPositionValid without context).
+            let d = (f64::from(world.tile) + f64::from(radius) + f64::from(f32::from_bits(0x38D1_B717))) as f32;
+            let d2 = (f64::from(d) + f64::from(d)) as f32;
+            for _ in 0..50 {
+                let x = ((f64::from(world.width) - f64::from(d2)) * rng.at(0x595A43).unit_d() + f64::from(d)) as f32;
+                let y = ((f64::from(world.height) - f64::from(d2)) * rng.at(0x595A8B).unit_d() + f64::from(d)) as f32;
+                if self.in_main_region(world, [x, y]) {
+                    self.kingdoms[majors[0]].start = [x, y];
+                    self.kingdoms[majors[0]].marker = [x, y];
+                    return Ok(log);
+                }
+            }
+            anyhow::bail!("could not place the only kingdom");
+        }
+        let centre = [(f64::from(world.width) * 0.5) as f32, (f64::from(world.height) * 0.5) as f32];
+        let mut team_markers: Vec<Marker> = (0..keys.len()).map(|i| Marker::new(i, centre, orient, None)).collect();
+        let n = team_markers.len() as i32;
+        let desired = (f64::from(world.width) / f64::from(blob_ftol((f64::from(n)).sqrt()) + 1)) as f32;
+        let team_cb = KingdomBalance { mode: 0, desired, same_team: desired, other: desired, margin, teams: Vec::new() };
+        balance_markers(world, rng, &mut team_markers, 2.0, 2.0, &team_cb, iterations, max_worse, &mut log);
+        // Kingdom markers on their team marker's best position.
+        let mut kingdom_markers: Vec<Marker> = Vec::new();
+        let mut kingdom_teams = Vec::new();
+        for (i, &k) in majors.iter().enumerate() {
+            let key = match self.kingdoms[k].team {
+                Some(t) => (Some(t), None),
+                None => (None, Some(k)),
+            };
+            let at = keys.iter().position(|&x| x == key).map_or(centre, |m| team_markers[m].best);
+            kingdom_markers.push(Marker::new(i, at, orient, Some(k)));
+            kingdom_teams.push(self.kingdoms[k].team);
+        }
+        let same_team = if desired < self.rmc.team_desired_distance { desired } else { self.rmc.team_desired_distance };
+        let kingdom_cb = KingdomBalance { mode: 1, desired, same_team, other: desired, margin, teams: kingdom_teams };
+        balance_markers(world, rng, &mut kingdom_markers, 2.0, 2.0, &kingdom_cb, iterations, max_worse, &mut log);
+        for (m, &k) in kingdom_markers.iter().zip(&majors) {
+            self.kingdoms[k].start = m.best;
+            self.kingdoms[k].marker = m.best;
+        }
+        Ok(log)
+    }
+
+    /// The behaviour-level kingdom placement (kept for reference).
+    #[allow(dead_code)]
     pub(super) fn place_kingdoms(&mut self, world: &World, rng: &mut Rng) -> anyhow::Result<()> {
         let majors: Vec<usize> = (0..self.kingdoms.len()).filter(|&k| self.kingdoms[k].major).collect();
         let start_thing = self.data.thing_by_id.get("start_loc").copied();
@@ -624,13 +721,25 @@ impl<'a> Placement<'a> {
     /// 0x4A4600 expands apply_to_all_major_kingdoms into one group per major.
     pub(super) fn setup_groups(&mut self) {
         let lists = [&self.rmc.actor_groups, &self.rmc.doodad_groups];
+        let inst = |def: &GroupDef, ids: String, kingdom: Option<usize>| GroupInst {
+            def: def.clone(),
+            ids,
+            kingdom,
+            objects: Vec::new(),
+            bbox: [0.0; 4],
+            centre: [0.0; 2],
+            radius: 0.0,
+            restr: Vec::new(),
+            search_kingdom: None,
+            search_group: None,
+        };
         for list in lists {
             for g in list.iter() {
                 if g.all_major_kingdoms {
                     for (k, kd) in self.kingdoms.iter().enumerate() {
                         if kd.major {
                             let ids = format!("{}_{}", g.ids, self.rmc.kingdoms[kd.def].ids);
-                            self.groups.push(GroupInst { def: g.clone(), ids, kingdom: Some(k), objects: Vec::new() });
+                            self.groups.push(inst(g, ids, Some(k)));
                         }
                     }
                 } else {
@@ -638,69 +747,109 @@ impl<'a> Placement<'a> {
                     if g.kingdom_ids.is_some() && kingdom.is_none() {
                         continue;
                     }
-                    self.groups.push(GroupInst { def: g.clone(), ids: g.ids.clone(), kingdom, objects: Vec::new() });
+                    self.groups.push(inst(g, g.ids.clone(), kingdom));
+                }
+            }
+        }
+        // 0x4A2150 restrictions in declaration order, wildcards matching the
+        // groups parsed before; 0x4A31A0 / 0x4A4600 search references.
+        for gi in 0..self.groups.len() {
+            let mut restr = Vec::new();
+            for r in &self.groups[gi].def.restrictions {
+                if let Some(at) = r.group_ids.find('*') {
+                    let prefix = &r.group_ids[..at];
+                    for oi in 0..gi {
+                        if self.groups[oi].ids.get(..prefix.len()) == Some(prefix) {
+                            restr.push((oi, r.min, r.desired));
+                        }
+                    }
+                } else if let Some(oi) = self.groups.iter().position(|o| o.ids == r.group_ids) {
+                    restr.push((oi, r.min, r.desired));
+                }
+            }
+            let g = &self.groups[gi];
+            let search_kingdom = match g.def.search_relative_kingdom.as_deref() {
+                Some("this") => g.kingdom,
+                Some(s) => self.kingdoms.iter().position(|k| self.rmc.kingdoms[k.def].ids.eq_ignore_ascii_case(s)),
+                None => None,
+            };
+            let search_group = match g.def.search_relative_group.as_deref() {
+                Some("this") => Some(gi),
+                Some(s) => self.groups.iter().position(|o| o.def.ids == s || o.ids == s),
+                None => None,
+            };
+            let g = &mut self.groups[gi];
+            g.restr = restr;
+            g.search_kingdom = search_kingdom;
+            g.search_group = search_group;
+        }
+    }
+
+    /// The generated groups (AA_RMG_GROUPS debugging aid).
+    pub(super) fn describe_groups(&self) -> String {
+        let mut s = String::new();
+        for (i, g) in self.groups.iter().enumerate() {
+            let d = &g.def;
+            s += &format!(
+                "group {i} {} (def {}) kingdom {:?} required {:?} objects {} balanced {} search {} rel_group {:?} rel_kingdom {:?} intra {} {} start_weight {} restrictions {:?}\n",
+                g.ids,
+                d.ids,
+                g.kingdom.map(|k| &self.rmc.kingdoms[self.kingdoms[k].def].ids),
+                d.required.iter().map(|r| (&r.object, r.position, r.distance_max)).collect::<Vec<_>>(),
+                d.objects.len(),
+                d.balanced,
+                d.search_radius,
+                d.search_relative_group,
+                d.search_relative_kingdom,
+                d.intra_min,
+                d.intra_desired,
+                d.start_weight,
+                d.restrictions.iter().map(|r| (&r.group_ids, r.min, r.desired)).collect::<Vec<_>>()
+            );
+            for r in &d.required {
+                if let Some(&t) = self.data.thing_by_id.get(&r.object.to_ascii_lowercase()) {
+                    let t = &self.data.things[t];
+                    s += &format!(
+                        "  thing {} category {} kind {} flags {:08x} shape {:08x?} radius {} start_priority {}\n",
+                        t.ids, t.category, t.native_kind, t.flags, t.shape, t.shape_radius, t.start_priority
+                    );
+                }
+            }
+        }
+        for id in ["start_loc", "southerneurope_village01"] {
+            if let Some(&t) = self.data.thing_by_id.get(id) {
+                let t = &self.data.things[t];
+                s += &format!("  thing {} category {} kind {} flags {:08x} shape {:08x?} radius {}\n", t.ids, t.category, t.native_kind, t.flags, t.shape, t.shape_radius);
+            }
+        }
+        s
+    }
+
+    /// CreateStartingLocation (0x595820 -> 0x5910D0 -> CreateGActor) for
+    /// every placed kingdom, in kingdom order, on its marker.
+    pub(super) fn create_start_locations(&mut self, rng: &mut Rng) {
+        if let Some(t) = self.data.thing_by_id.get("start_loc").copied() {
+            for k in 0..self.kingdoms.len() {
+                if self.kingdoms[k].major {
+                    let p = self.kingdoms[k].start;
+                    self.create_exact(t, p, DEFAULT_FACING, -1, Some(k), None, rng);
                 }
             }
         }
     }
 
-    /// Start locations and StagePlaceRequiredObjects.
-    pub(super) fn place_required(&mut self, world: &mut World, rng: &mut Rng) -> anyhow::Result<()> {
-        if let Some(t) = self.data.thing_by_id.get("start_loc").copied() {
-            for k in 0..self.kingdoms.len() {
-                if self.kingdoms[k].major {
-                    let p = self.kingdoms[k].start;
-                    self.add(t, p, DEFAULT_FACING, Some(k), None, rng);
-                }
-            }
+    /// CreateGThing's world-RNG draws for a new thing of `thing` (0x4F9C10:
+    /// the GThing constructor's random facing 0x4EF2A0 when the definition
+    /// orients randomly, the variant 0x49B900 when one is requested as -1,
+    /// the scale 0x49B440 in InitCreate), then the object is recorded.
+    /// Component draws follow in later stages of this port.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn create_exact(&mut self, thing: usize, pos: [f32; 2], facing: [f32; 2], variant: i32, owner: Option<usize>, group: Option<usize>, rng: &mut Rng) -> usize {
+        let index = self.create_thing(thing, pos, facing, variant, owner, group, rng);
+        if let Some(g) = group {
+            self.groups[g].objects.push(index);
         }
-        for gi in 0..self.groups.len() {
-            let required = self.groups[gi].def.required.clone();
-            for r in required {
-                let Some(thing) = self.resolve(&r.object, rng) else {
-                    self.notes.push(format!("required object {} is not a known thing", r.object));
-                    continue;
-                };
-                let pos = match self.find_position(world, rng, Some(gi), thing, 90, 4) {
-                    Some(p) => p,
-                    None => {
-                        let circle = self.search_circle(gi);
-                        // Diagnostic: scan the search square for valid points.
-                        let (mut terrain_ok, mut both_ok, mut total) = (0, 0, 0);
-                        if let Some((c, rad)) = circle {
-                            let mut y = c[1] - rad;
-                            while y <= c[1] + rad {
-                                let mut x = c[0] - rad;
-                                while x <= c[0] + rad {
-                                    total += 1;
-                                    if self.position_valid(world, thing, [x, y]) {
-                                        terrain_ok += 1;
-                                        if self.context_valid(gi, [x, y]) {
-                                            both_ok += 1;
-                                        }
-                                    }
-                                    x += 0.5;
-                                }
-                                y += 0.5;
-                            }
-                        }
-                        anyhow::bail!(
-                            "required object {} of {} could not be placed (search {circle:?}: {terrain_ok}/{total} terrain-valid, {both_ok} also group-valid)",
-                            r.object,
-                            self.groups[gi].ids
-                        )
-                    }
-                };
-                let facing = self.random_facing(thing, rng);
-                let owner = self.groups[gi].kingdom;
-                self.add(thing, pos, facing, owner, Some(gi), rng);
-                let half = self.data.things[thing].half_extent;
-                if half[0] > 0.0 {
-                    super::height::flatten(world, pos, [half[0] + 1.0, half[1] + 1.0]);
-                }
-            }
-        }
-        Ok(())
+        index
     }
 
     fn area_scale(&self, world: &World, factor: f32) -> f32 {
@@ -1015,4 +1164,221 @@ fn pair_penalty_fixed(p: [f32; 2], q: [f32; 2], desired: f32, force: &mut [f32; 
     force[0] += inv * dx * f;
     force[1] += inv * dy * f;
     f.abs()
+}
+
+/// One balancer marker (0x5907B0; RMGBalanceMarker): +0 its index, +4/+8
+/// position, +0xC/+0x10 position at the best score, +0x14/+0x18 orientation
+/// (and its best at +0x1C/+0x20), +0x24 nudge step, +0x28/+0x2C force, +0x30
+/// the kingdom of a kingdom marker.
+#[derive(Clone, Debug)]
+pub(super) struct Marker {
+    pub id: usize,
+    pub pos: [f32; 2],
+    pub best: [f32; 2],
+    pub orient: [f32; 2],
+    pub best_orient: [f32; 2],
+    pub step: f32,
+    pub force: [f32; 2],
+    /// The marker's kingdom (kingdom markers); kept for the group balancer.
+    #[allow(dead_code)]
+    pub kingdom: Option<usize>,
+}
+
+impl Marker {
+    pub(super) fn new(id: usize, pos: [f32; 2], orient: [f32; 2], kingdom: Option<usize>) -> Self {
+        Self { id, pos, best: [0.0, 0.0], orient, best_orient: [0.0, 0.0], step: 0.0, force: [0.0, 0.0], kingdom }
+    }
+}
+
+/// The balancer's callback object (vtable +0 pair penalty, +4 validity, +8
+/// margin, +0xC self score).
+pub(super) trait Balance {
+    fn pair(&self, rng: &mut Rng, a: &mut Marker, b: &Marker) -> f32;
+    fn valid(&self, m: &Marker, cand: [f32; 2]) -> bool;
+    fn margin(&self, m: &Marker) -> f64;
+    fn self_score(&self, m: &mut Marker) -> f64;
+}
+
+/// The kingdom balancer (vtable 0xA4228C: 0x5954B0 / 0x595520 / 0x595530 /
+/// 0x5956A0): +0x30 mode (0 team markers, 1 kingdom markers), +0x34 the
+/// desired distance, +0x38 same-team and +0x3C other-team distances.
+pub(super) struct KingdomBalance {
+    pub mode: u32,
+    pub desired: f32,
+    pub same_team: f32,
+    pub other: f32,
+    /// tile + start location radius + 0.0001 (0x595530, on the register).
+    pub margin: f64,
+    /// Team of each kingdom marker (by marker id).
+    pub teams: Vec<Option<u32>>,
+}
+
+impl Balance for KingdomBalance {
+    fn pair(&self, rng: &mut Rng, a: &mut Marker, b: &Marker) -> f32 {
+        let desired = if self.mode == 0 {
+            self.desired
+        } else {
+            match (self.teams.get(a.id).copied().flatten(), self.teams.get(b.id).copied().flatten()) {
+                (Some(x), Some(y)) if x == y => self.same_team,
+                _ => self.other,
+            }
+        };
+        pair_penalty_exact(rng, a, b.pos, desired)
+    }
+    fn valid(&self, _m: &Marker, _cand: [f32; 2]) -> bool {
+        true
+    }
+    fn margin(&self, _m: &Marker) -> f64 {
+        self.margin
+    }
+    fn self_score(&self, _m: &mut Marker) -> f64 {
+        0.0
+    }
+}
+
+/// 0x590E10: the penalty of `a` for being closer than `desired` to `q`,
+/// adding the push-away force to `a` (on the register at PC53, with the
+/// original's binary32 stores). Coincident markers take a random table
+/// direction and a distance of 0.5 (one draw).
+pub(super) fn pair_penalty_exact(rng: &mut Rng, a: &mut Marker, q: [f32; 2], desired: f32) -> f32 {
+    let dx = f64::from(q[0]) - f64::from(a.pos[0]);
+    let dy_d = f64::from(q[1]) - f64::from(a.pos[1]);
+    let dy = dy_d as f32;
+    let d = (dy_d * f64::from(dy) + dx * dx).sqrt() as f32;
+    let (ux, uy, dd) = if d < f32::from_bits(0x38D1_B717) {
+        let table = super::blob::direction_table();
+        let t = table[(rng.at(0x590E66).next_u32() % table.len() as u32) as usize];
+        (f64::from(t[0]), t[1], 0.5f64)
+    } else {
+        let inv = (1.0 / f64::from(d)) as f32;
+        (dx * f64::from(inv), (f64::from(dy) * f64::from(inv)) as f32, f64::from(d))
+    };
+    let f = (dd - f64::from(desired)) as f32;
+    if f > 0.0 {
+        return 0.0;
+    }
+    let inv_des = 1.0 / f64::from(desired);
+    let fx = (inv_des * (ux * f64::from(f))) as f32;
+    let fy = inv_des * (f64::from(uy) * f64::from(f));
+    a.force[0] = (f64::from(fx) + f64::from(a.force[0])) as f32;
+    a.force[1] = (fy + f64::from(a.force[1])) as f32;
+    f.abs()
+}
+
+/// 0x590820: a marker's score, the binary32 sum of its pair penalties
+/// against every other marker (list order) plus its self score.
+fn marker_score(rng: &mut Rng, markers: &mut [Marker], i: usize, cb: &dyn Balance) -> f64 {
+    markers[i].force = [0.0, 0.0];
+    let mut sum = 0.0f32;
+    for j in 0..markers.len() {
+        if markers[j].id == markers[i].id {
+            continue;
+        }
+        let other = markers[j].clone();
+        let p = cb.pair(rng, &mut markers[i], &other);
+        sum = (f64::from(p) + f64::from(sum)) as f32;
+    }
+    cb.self_score(&mut markers[i]) + f64::from(sum)
+}
+
+/// KKC_RMGBalancer::BalanceMarkers (0x590B10): every iteration scores all
+/// markers (the total on the register, logged "balance iteration %d score
+/// %f"), keeps the positions of the best score, stops on a score below
+/// 0.0001, after more than `max_worse` non-improving iterations or after
+/// `iterations`; otherwise each marker moves `step` along its unit force,
+/// clamped to [margin, size - margin - 0.0001], when its new place is valid
+/// (else its step grows by `delta`), and its step then grows by `delta`
+/// after an improving iteration or shrinks by it (down to `step0`) after a
+/// non-improving one.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn balance_markers(world: &World, rng: &mut Rng, markers: &mut [Marker], step0: f32, delta: f32, cb: &dyn Balance, iterations: i32, max_worse: i32, log: &mut Vec<(i32, f64)>) -> bool {
+    let (mut last, mut best) = (f32::MAX, f32::MAX);
+    let mut worse = 0i32;
+    for m in markers.iter_mut() {
+        m.step = step0;
+    }
+    if iterations < 0 {
+        return true;
+    }
+    let eps = f32::from_bits(0x38D1_B717);
+    let mut iter = 0i32;
+    loop {
+        let mut total = 0.0f64;
+        for i in 0..markers.len() {
+            total += marker_score(rng, markers, i, cb);
+        }
+        let score = if markers.is_empty() { 0.0 } else { total as f32 };
+        log.push((iter, total));
+        let mut got_worse = false;
+        if score < best {
+            best = score;
+            for m in markers.iter_mut() {
+                m.best = m.pos;
+                m.best_orient = m.orient;
+            }
+            if worse > 0 {
+                worse -= 1;
+            }
+            if score < eps {
+                return true;
+            }
+        }
+        if score >= last {
+            worse += 1;
+            if worse > max_worse {
+                return true;
+            }
+            got_worse = true;
+        }
+        last = score;
+        if iter == iterations {
+            return true;
+        }
+        for i in 0..markers.len() {
+            let m = &mut markers[i];
+            let len = (f64::from(m.force[0]) * f64::from(m.force[0]) + f64::from(m.force[1]) * f64::from(m.force[1])).sqrt();
+            if len > 0.0 {
+                let inv = 1.0 / len;
+                m.force[0] = (inv * f64::from(m.force[0])) as f32;
+                m.force[1] = (inv * f64::from(m.force[1])) as f32;
+            }
+            let oy = (f64::from(m.force[1]) * f64::from(m.step)) as f32;
+            let mut cand = [(f64::from(m.step) * f64::from(m.force[0]) + f64::from(m.pos[0])) as f32, (f64::from(oy) + f64::from(m.pos[1])) as f32];
+            let margin = cb.margin(m);
+            let lim_x = (f64::from(world.width) - margin) - f64::from(eps);
+            if f64::from(cand[0]) < margin {
+                cand[0] = margin as f32;
+            } else if f64::from(cand[0]) > lim_x {
+                cand[0] = lim_x as f32;
+            }
+            let lim_y = ((f64::from(world.height) - margin) - f64::from(eps)) as f32;
+            if f64::from(cand[1]) < margin {
+                cand[1] = margin as f32;
+            } else if cand[1] > lim_y {
+                cand[1] = lim_y;
+            }
+            let m = &markers[i];
+            if cb.valid(m, cand) {
+                markers[i].pos = cand;
+            } else {
+                markers[i].step = (f64::from(delta) + f64::from(markers[i].step)) as f32;
+            }
+            let m = &mut markers[i];
+            if got_worse {
+                if m.step > step0 {
+                    m.step = (f64::from(m.step) - f64::from(delta)) as f32;
+                }
+            } else {
+                m.step = (f64::from(delta) + f64::from(m.step)) as f32;
+            }
+        }
+        iter += 1;
+        if iter > iterations {
+            return true;
+        }
+    }
+}
+
+fn blob_ftol(v: f64) -> i32 {
+    super::blob::ftol_d(v)
 }

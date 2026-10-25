@@ -57,6 +57,25 @@ fn qa_films_decode_to_their_recorded_aggregates() {
     let fixture = fixture();
     let rows = fixture["films"].as_array().unwrap();
     assert_eq!(rows.len(), 3);
+    if std::env::var_os("AA_QA_FILMS_PRINT").is_some() {
+        // The decoded aggregates of every film, for refreshing the fixture.
+        for row in rows {
+            let path = films_dir().join(row["file"].as_str().unwrap());
+            let (film, strict) = (Film::read(&path, &inferred).unwrap(), Film::read(&path, &proven).unwrap());
+            eprintln!(
+                "{}: {}",
+                row["file"],
+                serde_json::json!({
+                    "decrees": film.decree_count(),
+                    "decode_failures": film.failures().count(),
+                    "proven_only_decrees": strict.decree_count(),
+                    "proven_only_decode_failures": strict.failures().count(),
+                    "histogram": histogram_json(&film),
+                    "actor_commands": actor_commands(&film),
+                })
+            );
+        }
+    }
     for row in rows {
         let path = films_dir().join(row["file"].as_str().unwrap());
         let film = Film::read(&path, &inferred).unwrap();
@@ -87,6 +106,10 @@ fn qa_films_decode_to_their_recorded_aggregates() {
             film.non_empty_ticks() as u64,
             row["non_empty_ticks"].as_u64().unwrap()
         );
+        // Since the measured SharedProperty / Ability counts
+        // (registries::MEASURED_V14) every decree of the three films decodes:
+        // film 1's former failure, a TellSelectedCommand carrying research,
+        // now counts as a decree (fixture 771 -> 772 decrees, 1 -> 0 failures).
         assert_eq!(film.decree_count() as u64, row["decrees"].as_u64().unwrap());
         assert_eq!(
             film.failures().count() as u64,

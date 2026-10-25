@@ -263,171 +263,208 @@ impl Relax {
     }
 }
 
-/// One terrain change batch (0x559980): painted tiles plus the neighbours the
-/// biome transitions convert, committed after up to 16 passes.
+/// 0xB3D610: the eight neighbour offsets of the batch, in its order.
+const BATCH_NEIGHBORS: [[i32; 2]; 8] = [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]];
+
+/// One record of a batch (0x5598B0, 0x14 bytes: tile, x, y, variation,
+/// state 0 untouched / 1 queued / 2 being processed / 3 settled).
+struct Rec {
+    tile: usize,
+    x: i32,
+    y: i32,
+    var: u32,
+    state: u8,
+}
+
+/// One terrain change batch (KKC_GMap change set: constructor 0x559980,
+/// paint 0x5599F0, commit 0x559FB0, per-tile transitions 0x559A70): painted
+/// tiles plus the neighbours the biome transitions convert. The batch's
+/// stamp (GMap +0x48, advanced by the constructor) ties a tile to its
+/// record through tile +0x24/+0x28; here a map does. Records are kept in
+/// creation order (the +0x14 list the commit applies); the work queue
+/// (+0xC) is prepended to and walked from its head.
 pub(super) struct Batch<'a> {
     biome: &'a BiomeDef,
     data: &'a RmgData,
+    /// +0x1C: a painted variation is water (0x5596B0 allows water
+    /// transitions only then).
     water: bool,
-    /// Tile -> (new variation, state 0 untouched / 1 queued / 2 processed / 3 final).
-    records: HashMap<usize, (u32, u8)>,
-    order: Vec<usize>,
-    queue: Vec<usize>,
+    recs: Vec<Rec>,
+    index: HashMap<usize, usize>,
+    queue: std::collections::VecDeque<usize>,
 }
 
 impl<'a> Batch<'a> {
     pub(super) fn new(data: &'a RmgData, biome: &'a BiomeDef) -> Self {
-        Self { biome, data, water: false, records: HashMap::new(), order: Vec::new(), queue: Vec::new() }
-    }
-    fn record(&mut self, world: &World, t: usize) -> &mut (u32, u8) {
-        if !self.records.contains_key(&t) {
-            self.records.insert(t, (world.var[t], 0));
-            self.order.push(t);
-        }
-        self.records.get_mut(&t).unwrap()
-    }
-    /// 0x5599F0.
-    pub(super) fn paint(&mut self, world: &World, t: usize, var: u32) {
-        if self.data.terrains[self.data.variations[var as usize].terrain].kind == 2 {
-            self.water = true;
-        }
-        let r = self.record(world, t);
-        let queue = r.1 == 0;
-        *r = (var, 1);
-        if queue {
-            self.queue.push(t);
-        }
+        Self { biome, data, water: false, recs: Vec::new(), index: HashMap::new(), queue: std::collections::VecDeque::new() }
     }
     fn terrain(&self, var: u32) -> usize {
         self.data.variations[var as usize].terrain
     }
-    /// 0x5596B0: the variation to put next to `a` when `b` is painted beside it
-    /// (following transition chains), 0 = none.
+    /// 0x5598B0: the record of cell (x, y), created from the tile when the
+    /// batch has none; None outside the map.
+    fn record(&mut self, world: &World, x: i32, y: i32) -> Option<usize> {
+        if x < 0 || y < 0 || x >= world.tw as i32 || y >= world.th as i32 {
+            return None;
+        }
+        let tile = y as usize * world.tw + x as usize;
+        if let Some(&r) = self.index.get(&tile) {
+            return Some(r);
+        }
+        let r = self.recs.len();
+        self.recs.push(Rec { tile, x, y, var: world.var[tile], state: 0 });
+        self.index.insert(tile, r);
+        Some(r)
+    }
+    /// 0x5599F0 (the protect flag +0xA is clear for every RMG batch).
+    pub(super) fn paint(&mut self, world: &World, t: usize, var: u32) {
+        let [x, y] = world.tile_xy(t);
+        if self.data.terrains[self.terrain(var)].kind == 2 {
+            self.water = true;
+        }
+        let Some(r) = self.record(world, x, y) else { return };
+        if self.recs[r].state == 0 {
+            self.queue.push_front(r);
+        }
+        self.recs[r].var = var;
+        self.recs[r].state = 1;
+    }
+    /// 0x5596B0: the transition variation to put next to `a` when `b` is
+    /// painted beside it, following the biome's chain (0x4B6D90 per step);
+    /// a water one only when this batch paints water.
     fn chain(&self, a: u32, b: u32) -> Option<u32> {
         let tb = self.terrain(b);
+        let step = |v: u32| self.biome.transitions.get(&(self.terrain(v), tb)).map(|&t| t as u32);
         let mut prev = a;
-        let mut t = self.biome.transitions.get(&(self.terrain(a), tb)).map(|&v| v as u32);
+        let mut t = step(a);
         while let Some(v) = t {
             if v == prev || v == b {
                 break;
             }
             prev = v;
-            t = self.biome.transitions.get(&(self.terrain(v), tb)).map(|&v| v as u32);
-        }
-        if prev == a {
-            return None;
+            t = step(v);
         }
         if self.data.terrains[self.terrain(prev)].kind == 2 && !self.water {
             return None;
         }
-        Some(prev)
+        (prev != a).then_some(prev)
     }
-    /// 0x559A70 for one queued tile.
-    fn process(&mut self, world: &World, t: usize) {
-        let [x, y] = world.tile_xy(t);
-        let p_new = self.records[&t].0;
-        let mut conflict = false;
-        let mut mode = 1u8;
-        let mut trans: [Option<u32>; 8] = [None; 8];
-        let mut neighbors: [Option<usize>; 8] = [None; 8];
-        for (i, d) in NEIGHBORS.iter().enumerate() {
-            neighbors[i] = world.tile_at(x + d[0], y + d[1]);
+    /// 0x5597D0: qsort the eight candidates by pointer (null first; here the
+    /// variation index stands for its address), then the longest run, the
+    /// first one on ties.
+    fn most_common(trans: &[Option<u32>; 8]) -> Option<u32> {
+        let mut p: [u64; 8] = [0; 8];
+        for (slot, t) in p.iter_mut().zip(trans) {
+            *slot = t.map_or(0, |v| u64::from(v) + 1);
         }
-        let target: Option<u32> = 'scan: {
-            for i in 0..8 {
-                let Some(n) = neighbors[i] else { continue };
-                let (n_new, n_state) = *self.record(world, n);
-                if n_state != 0 {
-                    if self.chain(n_new, p_new).is_some() {
+        p.sort_unstable();
+        let (mut cur, mut run, mut best, mut best_v) = (p[0], 1, 0, 0u64);
+        for &v in &p[1..] {
+            if v == 0 {
+                continue;
+            }
+            if v == cur {
+                run += 1;
+            } else {
+                if best < run && cur != 0 {
+                    best = run;
+                    best_v = cur;
+                }
+                run = 1;
+                cur = v;
+            }
+        }
+        let r = if run <= best || cur == 0 { best_v } else { cur };
+        (r != 0).then(|| (r - 1) as u32)
+    }
+    /// 0x559A70 for one record.
+    fn process(&mut self, world: &World, r: usize) {
+        let (x, y, pvar) = (self.recs[r].x, self.recs[r].y, self.recs[r].var);
+        let mut mode = 1u8;
+        let mut conflict = false;
+        let mut target: Option<u32> = 'first: {
+            let mut trans: [Option<u32>; 8] = [None; 8];
+            for (i, d) in BATCH_NEIGHBORS.iter().enumerate() {
+                let Some(n) = self.record(world, x + d[0], y + d[1]) else { continue };
+                if self.recs[n].state != 0 {
+                    if self.chain(self.recs[n].var, pvar).is_some() {
                         mode = 3;
                         conflict = true;
-                        break 'scan Some(p_new);
+                        break 'first Some(pvar);
                     }
                     continue;
                 }
-                trans[i] = self.chain(n_new, p_new);
+                trans[i] = self.chain(self.recs[n].var, pvar);
             }
-            // 0x5597D0: the most common non-zero transition.
-            let mut sorted: Vec<u32> = trans.iter().flatten().copied().collect();
-            sorted.sort_unstable();
-            let mut best: Option<(u32, usize)> = None;
-            let mut i = 0;
-            while i < sorted.len() {
-                let mut j = i;
-                while j < sorted.len() && sorted[j] == sorted[i] {
-                    j += 1;
-                }
-                if best.is_none_or(|b| j - i > b.1) {
-                    best = Some((sorted[i], j - i));
-                }
-                i = j;
-            }
-            best.map(|b| b.0)
+            Self::most_common(&trans)
         };
-        let Some(target) = target else {
-            return;
-        };
-        let p_terrain = self.terrain(p_new);
-        let mut i = 0;
-        while i < 8 {
-            if let Some(n) = neighbors[i] {
-                let cur = world.var[n];
-                let (n_new, n_state) = *self.record(world, n);
-                if n_state == 0 {
-                    if mode == 3 {
-                        self.records.get_mut(&n).unwrap().0 = cur;
-                    } else if self.terrain(cur) != p_terrain {
-                        self.records.get_mut(&n).unwrap().0 = target;
-                    }
-                } else if mode != 0 && mode != 3 && n_state != 3 && self.chain(n_new, target).is_some() {
-                    mode = 3;
-                    conflict = true;
-                    i = 0;
-                    continue;
-                }
-            }
-            i += 1;
+        if target.is_none() {
+            mode = 0;
         }
+        if let Some(t) = target {
+            let pterrain = self.terrain(pvar);
+            let mut i = 0usize;
+            while i < 8 {
+                let d = BATCH_NEIGHBORS[i];
+                if let Some(n) = self.record(world, x + d[0], y + d[1]) {
+                    let cur = world.var[self.recs[n].tile];
+                    if self.recs[n].state == 0 {
+                        if mode == 3 {
+                            self.recs[n].var = cur;
+                        } else if self.terrain(cur) != pterrain {
+                            self.recs[n].var = t;
+                        }
+                    } else if mode != 0 && mode != 3 && self.recs[n].state != 3 && self.chain(self.recs[n].var, t).is_some() {
+                        mode = 3;
+                        conflict = true;
+                        i = 0;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+            target = Some(t);
+        }
+        let _ = target;
         if conflict {
-            self.records.get_mut(&t).unwrap().1 = 1;
-            self.queue.push(t);
-        } else {
-            self.records.get_mut(&t).unwrap().1 = 3;
-            for n in neighbors.into_iter().flatten() {
-                let cur = world.var[n];
-                let r = self.records.get_mut(&n).unwrap();
-                if r.1 == 0 {
-                    r.1 = 1;
-                    if r.0 != cur {
-                        self.queue.push(n);
+            self.recs[r].state = 1;
+            self.queue.push_front(r);
+        } else if mode != 0 {
+            self.recs[r].state = 3;
+            for d in BATCH_NEIGHBORS {
+                let Some(n) = self.record(world, x + d[0], y + d[1]) else { continue };
+                if self.recs[n].state == 0 {
+                    self.recs[n].state = 1;
+                    if self.recs[n].var != world.var[self.recs[n].tile] {
+                        self.queue.push_front(n);
                     }
                 }
             }
         }
     }
-    /// 0x559FB0: up to 16 passes, then every changed record is applied.
-    /// Returns false when changes were still queued after the last pass.
+    /// 0x559FB0(0): up to 16 passes over the queue (records whose variation
+    /// differs from the tile's), then every changed record is applied
+    /// (0x54FDC0). Returns false when the queue was not empty at the end
+    /// (the batch +8 "unsettled" byte).
     pub(super) fn commit(mut self, world: &mut World) -> bool {
         for _ in 0..16 {
             if self.queue.is_empty() {
                 break;
             }
-            // Queue order is LIFO (the native list prepends).
-            let list: Vec<usize> = self.queue.drain(..).rev().filter(|t| self.records[t].0 != world.var[*t]).collect();
-            for &t in &list {
-                self.records.get_mut(&t).unwrap().1 = 2;
+            let list: Vec<usize> = self.queue.drain(..).filter(|&r| self.recs[r].var != world.var[self.recs[r].tile]).collect();
+            for &r in &list {
+                self.recs[r].state = 2;
             }
-            for t in list {
-                self.process(world, t);
-            }
-        }
-        let done = self.queue.is_empty();
-        for t in self.order {
-            let v = self.records[&t].0;
-            if v != world.var[t] {
-                world.var[t] = v;
+            for r in list {
+                self.process(world, r);
             }
         }
-        done
+        let settled = self.queue.is_empty();
+        for rec in &self.recs {
+            if world.var[rec.tile] != rec.var {
+                world.var[rec.tile] = rec.var;
+            }
+        }
+        settled
     }
 }
