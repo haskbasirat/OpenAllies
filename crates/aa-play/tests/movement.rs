@@ -136,6 +136,9 @@ fn spawn_regiment(w: &mut World, def: u32, kingdom: u32, center: Vec2, heading: 
 }
 fn advance(w: &mut World, ticks: u32) {
     for _ in 0..ticks {
+        // As the world update: queue 0 steps the registered Movers, then the
+        // movement minds think.
+        aa_play::scheduler::run_queue(w, aa_play::scheduler::EVERY_TICK);
         movement::tick(w);
         w.tick += 1;
         w.time = w.tick as f32 * aa_play::DT;

@@ -415,6 +415,13 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
                 Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) => return "move".into(),
                 Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
                 Some(crate::ui::hud::TargetOrder::Guard) | Some(crate::ui::hud::TargetOrder::AttachHq) => return "guard".into(),
+                // bombard.tgi cursor_ids (cursor_invalid_ids bombard_invalid
+                // is not ported), actor_commands.tgi repair
+                Some(crate::ui::hud::TargetOrder::Bombard) | Some(crate::ui::hud::TargetOrder::AirAttack(_)) => return "bombard".into(),
+                Some(crate::ui::hud::TargetOrder::Repair) => return "repair".into(),
+                // construct.tgi cursor_ids; air_recon.tgi cursor_ids explore
+                Some(crate::ui::hud::TargetOrder::Construct(_)) => return "construct".into(),
+                Some(crate::ui::hud::TargetOrder::AirRecon(_)) => return "explore".into(),
                 Some(crate::ui::hud::TargetOrder::Explore) => return "explore".into(),
                 // a general ability (cursor ids 0x13 / 0x14)
                 Some(crate::ui::hud::TargetOrder::Ability(_)) => {

@@ -565,7 +565,24 @@ fn every_nation_corps_income_at_start() {
                 let corps = data.find(&format!("{nat}_corps")).map(|d| data.def(d)).expect("corps");
                 let owned: Vec<String> = w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(k as u32)).map(|a| data.def(a.def).id.clone()).collect();
                 let b = w.books.kingdom(k as u32).unwrap();
-                let want = [corps.production_all[0], corps.production_all[1], corps.production_all[2]];
+                let mut want = [corps.production_all[0], corps.production_all[1], corps.production_all[2]];
+                // A generated map may put a village within capture range of a
+                // start: the original checks a group's candidates only against
+                // the restrictions the placing group declares (0x595430 /
+                // 0x595340 / 0x5944A0 read group +0x68), and StartCorps' 96 m
+                // restriction against villages belongs to the group placed
+                // first, so it constrains nothing. On seed 3's terrain (the
+                // exact terrain stage, RMG roadmap item 15) a village lands
+                // 43 m from start 1 and is captured at its first City Tick
+                // (0x5647A0, once per second in its queue-1 bucket, so within
+                // the 16 updates stepped here); a captured city adds its own
+                // production.
+                for a in w.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom == Some(k as u32) && data.def(a.def).city) {
+                    let p = &data.def(a.def).production_all;
+                    for (slot, v) in want.iter_mut().enumerate() {
+                        *v += p.get(slot).copied().unwrap_or(0.0);
+                    }
+                }
                 eprintln!(
                     "{map_kind} {nat}: income {:?} want {want:?} provided {:?} consumed {:?} raw {:?} owned {owned:?}",
                     w.kingdoms[k].income, b.provided, b.consumed, b.raw_provided
@@ -1646,4 +1663,73 @@ fn trace_first_34_ticks() {
             w.trace.digests.last().unwrap().world
         );
     }
+}
+
+/// The HUD orders on real data (`combat::tasks`): an engineer regiment
+/// builds a bunker (construct 4: BuildActor 0x563160, then its
+/// under_construction repair ability up to the bunker's health), and a
+/// mortar section shells a point (bombard 1).
+#[test]
+#[ignore]
+fn engineers_build_a_bunker_and_mortars_bombard() {
+    use aa_play::{AbilityTarget, Command, Event, Unit};
+    let mut w = berlin_world();
+    let find = |id: &str| w.data.find(id).unwrap_or_else(|| panic!("{id}"));
+    let (engineers, bunker) = (find("regiment_ger_engineer"), find("ger_bunker"));
+    let eng = w.data.def(w.data.def(engineers).slots[0].0).clone();
+    let ger = (0..w.kingdoms.len() as u32).find(|&k| w.kingdoms[k as usize].nation == "ger").expect("ger kingdom");
+    let corps = (0..w.actors.len() as u32).find(|&a| w.actors[a as usize].kingdom == Some(ger) && w.data.def(w.actors[a as usize].def).id.ends_with("_corps")).expect("ger corps");
+    let base = w.actors[corps as usize].pos.truncate();
+    let crew = aa_play::production::spawn_organization(&mut w, engineers, ger, base + glam::Vec2::new(0.0, -30.0), 0.0, None);
+    // A clear spot for the footprint near the corps.
+    let at = (0..40)
+        .flat_map(|r| (0..8).map(move |k| base + glam::Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4) * (30.0 + 2.0 * r as f32)))
+        .find(|&p| aa_play::deploy::spot_clear(&w, bunker, p, None).is_ok())
+        .expect("a clear spot");
+    w.step(vec![Command::Construct { kingdom: ger, units: vec![Unit::Org(crew)], def: bunker, at, facing: 0.0 }]);
+    assert!(!w.events.iter().any(|e| matches!(e, Event::Refused { .. })), "{:?}", w.events);
+    let (mut placed, mut finished, mut healed) = (None, false, 0.0);
+    let mut healers = std::collections::BTreeSet::new();
+    for _ in 0..(16 * 600) {
+        w.step(vec![]);
+        for e in &w.events {
+            match e {
+                Event::ConstructionStarted { actor, .. } => placed = Some(*actor),
+                Event::ConstructionFinished { actor, .. } if Some(*actor) == placed => finished = true,
+                Event::Healed { amount, shooter, .. } => {
+                    healed += amount;
+                    healers.insert(*shooter);
+                }
+                _ => {}
+            }
+        }
+        if finished {
+            break;
+        }
+    }
+    let b = placed.expect("the bunker was placed");
+    eprintln!("bunker {b} at {:?}: health {} healed {healed} by {} engineers ({} members, repair recharge {:?}) finished {finished} at {:.1} s", w.actors[b as usize].pos, w.actors[b as usize].health, healers.len(), w.orgs[crew as usize].members.len(), eng.weapons.iter().map(|x| x.recharge).collect::<Vec<_>>(), w.time);
+    assert!(finished, "the engineers built the bunker");
+    // A ger regiment with a bombard member (mortar, artillery) shells a point
+    // 70 m away: it moves up until a member has it in range, then fires.
+    let section = (0..w.data.defs.len() as u32)
+        .find(|&d| {
+            let def = w.data.def(d);
+            def.id.starts_with("regiment_ger") && def.slots.iter().any(|(m, _)| *m != u32::MAX && w.data.def(*m).weapons.iter().any(|x| x.flags & aa_play::combat::tasks::BOMBARD_FLAG != 0 && x.range > 0.0))
+        })
+        .expect("a ger regiment with a bombard member");
+    let o = aa_play::production::spawn_organization(&mut w, section, ger, base + glam::Vec2::new(-30.0, 0.0), 0.0, None);
+    let point = w.orgs[o as usize].anchor + glam::Vec2::new(-70.0, 0.0);
+    w.step(vec![Command::Bombard { kingdom: ger, units: vec![Unit::Org(o)], target: AbilityTarget::Point(point) }]);
+    assert!(!w.events.iter().any(|e| matches!(e, Event::Refused { .. })), "{:?}", w.events);
+    let mut shot = None;
+    for _ in 0..(16 * 90) {
+        w.step(vec![]);
+        if let Some(Event::FiredAt { shooter, at, .. }) = w.events.iter().find(|e| matches!(e, Event::FiredAt { .. })) {
+            shot = Some((*shooter, *at));
+            break;
+        }
+    }
+    let (shooter, at) = shot.expect("the section bombards the point");
+    eprintln!("{} bombards {at:?} from {:.1} m at {:.1} s", w.data.def(section).id, w.actors[shooter as usize].pos.truncate().distance(at), w.time);
 }

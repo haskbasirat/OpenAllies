@@ -20,6 +20,13 @@
 //! number of entries registered by the native-order load is assumed to equal
 //! the live count, which is not oracle-proven. SharedProperty `[0xB3AA2C]` has
 //! no source here.
+//!
+//! Measured counts ([Provenance::Measured], [MEASURED_V14]): NativeSampler read
+//! every registry's live `[registry]+0x28` from the original v14 QA copy
+//! (2026-10-25, `REG` lines of the Berlin film run). They confirm ActorCommand
+//! 39, ThingData 1959, Formation 5 and OrganizationLayout 10, give SharedProperty
+//! 194 (no catalog source) and show AbilityDefinition is 409, not the 53 the
+//! catalog infers, so the measured value replaces the inference.
 use aa_orders::payload::{Registry, SchemaContext};
 use std::collections::BTreeMap;
 
@@ -54,7 +61,12 @@ pub fn registry_name(registry: Registry) -> &'static str {
 pub enum Provenance {
     Proven,
     Inferred,
+    /// Read live from the original process (see the module notes).
+    Measured,
 }
+
+/// The live counts of the v14 data the QA films were recorded with.
+pub const MEASURED_V14: [(Registry, usize); 2] = [(SHARED_PROPERTIES, 194), (ABILITIES, 409)];
 
 #[derive(Clone, Debug)]
 pub struct Registries {
@@ -123,6 +135,13 @@ impl Registries {
                 out.counts
                     .insert(ABILITIES.0, (a.len(), Provenance::Inferred));
                 out.ability_ids = a;
+            }
+            if let Some(p) = ids("SharedProperty") {
+                out.counts
+                    .insert(SHARED_PROPERTIES.0, (p.len(), Provenance::Inferred));
+            }
+            for (registry, count) in MEASURED_V14 {
+                out.counts.insert(registry.0, (count, Provenance::Measured));
             }
         }
         out

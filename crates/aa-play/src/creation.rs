@@ -87,9 +87,12 @@ pub fn created(world: &mut World, def: DefId, made: Made) {
         }
         created(world, t, Made::Other);
     }
-    // 4. The component InitCreates, slot order.
+    // 4. The component InitCreates, slot order. The in-place unpack's Supply
+    // registers when the unpacking ends (the Berlin film: 0x576319 ->
+    // 0x4D3068 -> 0x563FD0 from a deferred delivery, `crate::deploy`).
+    let unpacking = world.ids.unpack_scope;
     for bit in 0..31 {
-        if !has(d, bit) {
+        if !has(d, bit) || (unpacking && bit == SUPPLY) {
             continue;
         }
         if QUEUE_ONE.contains(&bit) || (bit == ECONOMY && d.supply_required) {

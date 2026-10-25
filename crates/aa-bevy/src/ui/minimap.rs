@@ -95,16 +95,22 @@ pub struct MinimapArt {
     /// The terrain under the fog with the supply border (the image without
     /// the objects layer).
     fogged: Vec<u8>,
-    /// Fog refresh: battle time of the last one and the fog revision seen.
+    /// Fog refresh: real time of the last one (seconds of `clock`) and the
+    /// fog revision seen.
     fog_at: f32,
     fog_revision: u64,
     fog_local: Option<u32>,
     /// MINIMAP_NO_FOG at the last fog refresh.
     fog_no_fog: bool,
     /// The objects layer (RGBA like the image, alpha 0 where empty) and the
-    /// battle time it was drawn at.
+    /// real time it was drawn at.
     objects: Vec<u8>,
     objects_at: Option<f32>,
+    /// The minimap's real-time clock: `0x4361B0` compares every layer's
+    /// period AVar with the elapsed milliseconds of its timer (`0x59ABA0`,
+    /// QueryPerformanceCounter), so the layers refresh by wall-clock time,
+    /// also while the battle is paused or sped up.
+    clock: Option<std::time::Instant>,
     /// Minimap TGI values (`0x49B110`).
     pub point_size: i32,
     pub min_icon_radius: f32,
@@ -338,7 +344,7 @@ impl MinimapArt {
         // lower end to the upper one in whole pixel steps, the first (and
         // an exactly reached last) pixel at half alpha; the layer is then
         // blended over the fogged terrain by its alpha (0x712900 mode 1)
-        let now = b.world.time;
+        let now = self.real_now();
         let mut supply_changed = false;
         if now - self.supply_at >= self.period_supply || now < self.supply_at || show_supply != self.supply_shown {
             self.supply_at = now;
@@ -421,7 +427,7 @@ impl MinimapArt {
     /// The fog layer over the terrain, with the supply border, into
     /// `fogged`; whether it changed.
     fn fog_layer(&mut self, b: &Battle, t: usize, supply_changed: bool) -> bool {
-        let now = b.world.time;
+        let now = self.real_now();
         let due = now - self.fog_at >= self.period_fog || now < self.fog_at;
         let no_fog = minimap_no_fog(b);
         let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(b.local) || self.fog_no_fog != no_fog;
@@ -656,6 +662,11 @@ impl MinimapArt {
         // 0x433FC0: a new flash list, its state back to the drawn colours
         self.flashes = r.flashes.into_iter().map(|(i, a, f)| (((t - 1 - i / t) * t + i % t) * 4, a, f)).collect();
         self.flash_on = false;
+    }
+
+    /// Seconds on the minimap's real-time clock.
+    fn real_now(&mut self) -> f32 {
+        self.clock.get_or_insert_with(std::time::Instant::now).elapsed().as_secs_f32()
     }
 
     /// A game event's minimap ping (FXC_CreateRFX: `radar_icon`,

@@ -19,6 +19,11 @@
 //!   one regiment that attaches to HQs, hq_attach / hq_detach (the
 //!   05-regiment layout), plus the formation buttons of the unit panel
 //!   (`FormationChange <id>`, `0x629AB0`, Organizations/Formations icons);
+//! * the members' abilities add kill, bombard and repair (`0x530510`: an
+//!   organization's command mask is the OR of its members'), builders
+//!   with a mover construct (its page lists the builders' structures);
+//! * an airfield adds air_attack / air_recon (its denizen's AirAttackCost /
+//!   AirReconCost); a research structure research (its page: `0x5F77B0`);
 //! * own structures: recruit, CommandAll (ActionButtonInfo index 4, an HQ:
 //!   select its attached regiments, `0x60CCD0`), set_rally_point, pack /
 //!   unpack, sell (SellFactor of the cost in the tooltip, `0x5F6860`;
@@ -102,6 +107,17 @@ pub enum TargetOrder {
     /// A general ability's targeting state (`UseFactionAbility %i`,
     /// ui/abilities.rs, combat owner).
     Ability(usize),
+    /// `bombard` (1): bombard the clicked actor or location.
+    Bombard,
+    /// `repair` (3): repair the clicked friendly actor.
+    Repair,
+    /// A construct page item (`construct` 4): build that structure at the
+    /// clicked location.
+    Construct(aa_play::DefId),
+    /// An airfield's `air_attack` (0x19) / `air_recon` (0x1A) at the
+    /// clicked location.
+    AirAttack(aa_play::ActorId),
+    AirRecon(aa_play::ActorId),
 }
 
 /// HUD output for the battle input this frame.
@@ -156,16 +172,21 @@ enum ActionPage {
     Recruit(aa_play::ActorId),
     /// `research` (`0x5F77B0`): the structure's research items.
     Research(aa_play::ActorId),
+    /// `construct` (`0x5F7350`, flag 0x40000): the structures the selected
+    /// builders can build (actor +0x108, `0x4D4CF0`).
+    Construct,
     /// GoToTeamCommands (ActionButtonInfo index 8): the team commands.
     Team,
 }
 
 /// A Property's research button data (PropertyData +0x30
-/// action_button_icon, +0x18 description).
+/// action_button_icon, +0x18 description) and each of its modifiers'
+/// `repair` field (modifier +0x14 bit 0, in source order).
 #[derive(Clone, Debug, Default)]
 struct ResearchArt {
     icon: String,
     description: String,
+    repair: Vec<bool>,
 }
 
 pub struct GameHud {
@@ -333,9 +354,8 @@ fn load_research_art(ui: &mut Ui) -> std::collections::HashMap<String, ResearchA
             let icon = clean(n.get("action_button_icon"));
             let icon = if icon.is_empty() || icon.eq_ignore_ascii_case("null") || icon.starts_with('/') { icon } else { format!("/Properties/{icon}") };
             let description = clean(n.get("description"));
-            if !icon.is_empty() || !description.is_empty() {
-                out.insert(ids.to_ascii_lowercase(), ResearchArt { icon, description });
-            }
+            let repair = n.children_named("Modifier").into_iter().map(|m| m.get("repair").is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))).collect();
+            out.insert(ids.to_ascii_lowercase(), ResearchArt { icon, description, repair });
         }
     }
     out
@@ -511,6 +531,20 @@ impl GameHud {
                 self.page = ActionPage::Main;
             }
         }
+        // the construct page closes without a builder in the selection
+        if self.page == ActionPage::Construct {
+            let orgs: Vec<&aa_play::Organization> = b
+                .selection
+                .iter()
+                .filter_map(|u| match u {
+                    Unit::Org(o) => b.world.orgs.get(*o as usize).filter(|o| o.alive && o.kingdom == b.local),
+                    _ => None,
+                })
+                .collect();
+            if construct_list(&b.world, &orgs).is_empty() {
+                self.page = ActionPage::Main;
+            }
+        }
         self.names.update(&ui.store.root, &ui.strings, b);
         self.messages(ui, b);
         self.panels.update(ui, b, &self.property_icons);
@@ -642,6 +676,12 @@ impl GameHud {
                     let Some(a) = w.actors.get(*building as usize).filter(|a| a.kingdom == local) else { continue };
                     events.push(("building_construction_complete", vec![actor_name(ui, a)], Some(a.pos.truncate()), local));
                 }
+                // the same 0x565B00 announcement for a structure the
+                // builders finished (construct)
+                aa_play::Event::ConstructionFinished { actor, kingdom } if *kingdom == b.local => {
+                    let Some(a) = w.actors.get(*actor as usize) else { continue };
+                    events.push(("building_construction_complete", vec![actor_name(ui, a)], Some(a.pos.truncate()), local));
+                }
                 aa_play::Event::Promoted { org, .. } => {
                     if w.orgs.get(*org as usize).is_some_and(|o| o.kingdom == b.local) {
                         events.push(("company_experience_gained_level", vec![org_name(ui, *org)], anchor(*org), local));
@@ -717,7 +757,13 @@ impl GameHud {
                     let (key, subject) = match what {
                         aa_play::books::Purchase::Recruit(d) => ("#recruit_error_affording|ss", name(ui, &w.data.def(*d).name)),
                         aa_play::books::Purchase::Research(p) => ("#research_error_affording|ss", w.data.property(p).map(|x| name(ui, &x.name)).unwrap_or_else(|| p.clone())),
-                        aa_play::books::Purchase::Attach(o) => ("#hq_error_attach_affording|ss", org_name(ui, *o)),
+                        // the organization actor's name (actor vfunc +0x24,
+                        // 0x4D99D0 -> 0x4D8CA0 -> 0x4D8AB0): numbered per
+                        // kingdom and definition
+                        aa_play::books::Purchase::Attach(o) => {
+                            let rank = w.orgs.get(*o as usize).map_or(1, |org| 1 + w.orgs.iter().filter(|x| x.id < org.id && x.kingdom == org.kingdom && x.def == org.def).count());
+                            ("#hq_error_attach_affording|ss", numbered(Some(&ui.strings), rank, &org_name(ui, *o)))
+                        }
                     };
                     let text = ui.strings.resolve(key).replacen("%s", &subject, 1).replacen("%s", &price, 1);
                     plain.push(("GENERIC_ERROR", text));
@@ -824,6 +870,15 @@ impl GameHud {
             "retreat" => Some(GameAction::Target(TargetOrder::Run)),
             "guard" => Some(GameAction::Target(TargetOrder::Guard)),
             "explore" => Some(GameAction::Target(TargetOrder::Explore)),
+            "bombard" => Some(GameAction::Target(TargetOrder::Bombard)),
+            "repair" => Some(GameAction::Target(TargetOrder::Repair)),
+            "construct_page" => {
+                self.page = ActionPage::Construct;
+                None
+            }
+            "construct" => Some(GameAction::Target(TargetOrder::Construct(arg?))),
+            "air_attack" => Some(GameAction::Target(TargetOrder::AirAttack(arg?))),
+            "air_recon" => Some(GameAction::Target(TargetOrder::AirRecon(arg?))),
             "hq_attach" => Some(GameAction::Target(TargetOrder::AttachHq)),
             "hq_detach" => Some(GameAction::Detach { org: arg? }),
             "unpack" => Some(GameAction::Target(TargetOrder::Deploy(arg?))),
@@ -1061,6 +1116,30 @@ fn selected_structure(b: &Battle) -> Option<aa_play::ActorId> {
         [Unit::Org(o)] => w.orgs.get(*o as usize).filter(|o| o.alive && o.kingdom == b.local).and_then(|o| hq_structure(w, o)),
         _ => None,
     }
+}
+
+/// The structures the selected own organizations can build (`0x4D4CF0`):
+/// each member with a builder list (ActorData +0x504, `Def::builds`) and a
+/// mover (`0x530510` gives construct only with one) adds the structures
+/// it lists that are not in the list yet, each at the list's head (the
+/// member's own list is itself head-built, so one member keeps the
+/// authored order).
+fn construct_list(w: &World, orgs: &[&aa_play::Organization]) -> Vec<aa_play::DefId> {
+    let mut list: Vec<aa_play::DefId> = Vec::new();
+    for o in orgs {
+        for m in o.members.iter().filter_map(|m| w.actor(*m)).filter(|a| a.alive && !a.removed) {
+            let d = w.data.def(m.def);
+            if !d.has_component("MoverComponent") {
+                continue;
+            }
+            for s in d.builds.iter().rev() {
+                if !list.contains(s) {
+                    list.insert(0, *s);
+                }
+            }
+        }
+    }
+    list
 }
 
 /// A queue entry as the HUD shows it.
@@ -1782,15 +1861,30 @@ impl View<'_> {
                 }
                 // 0x5F6790: the property's name, its research cost
                 // (0x6401E0), "Affects" with the properties it requires of
-                // an actor (0x63B8C0), then its description (0x638D90).
-                // Its modifier lines (0x63BFD0) are not ported yet.
+                // an actor (0x63B8C0), its modifier lines after a blank line
+                // (0x63BFD0, ui/modifiers.rs), then its description
+                // (0x638D90).
                 let cost: Vec<f32> = self.resources.iter().map(|hr| w.data.resource_index(&hr.ids).and_then(|j| r.cost.get(j).copied()).unwrap_or(0.0)).collect();
                 let mut text = format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost));
                 let affects: Vec<String> = prop.map(|p| p.required_properties.iter().map(|q| w.data.property(q).map(|x| resolve(&x.name)).unwrap_or_else(|| q.clone())).collect()).unwrap_or_default();
                 if !affects.is_empty() {
                     text.push_str(&format!("\n{}<setx=100>{}", resolve("#ui_tooltip_item_title_required_properties"), affects.join(", ")));
                 }
-                let description = self.research_art.get(&r.property.to_ascii_lowercase()).map(|x| resolve(&x.description)).unwrap_or_default();
+                let art = self.research_art.get(&r.property.to_ascii_lowercase());
+                let lines: Vec<String> = prop
+                    .map(|p| {
+                        p.modifiers
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, m)| super::modifiers::describe(ui, &w.data, self.resources, m, art.and_then(|a| a.repair.get(i).copied()).unwrap_or(false)))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !lines.is_empty() {
+                    text.push_str("\n\n");
+                    text.push_str(&lines.join("\n"));
+                }
+                let description = art.map(|x| resolve(&x.description)).unwrap_or_default();
                 if !description.is_empty() {
                     text.push_str("\n\n");
                     text.push_str(&description);
@@ -1798,6 +1892,23 @@ impl View<'_> {
                 Some((name, text))
             }
             "research_page" => self.command("research").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+            "construct_page" => self.command("construct").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+            "construct" => {
+                // 0x5F6590: the structure's name, "Cost" (0x640140) and
+                // "Upkeep" (0x640590) rows; its other sections (other
+                // requirements 0x63B270, upgrades 0x63B5C0, properties
+                // 0x63AEF0, researches 0x63B740, general 0x63A440) are not
+                // ported yet
+                let def = arg?;
+                let d = w.data.def(def);
+                let cost = self.cost_of(def);
+                let up = upkeep_text(ui, self.resources, &self.econ_of(def));
+                let mut rows = vec![format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost))];
+                if !up.is_empty() {
+                    rows.push(format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_upkeep"), up));
+                }
+                Some((resolve(&d.name), rows.join("\n")))
+            }
             "recruit_back" => self.command("structure_cancel_queued").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "command_all" => Some((resolve(&self.command_all.name), resolve(&self.command_all.tooltip))),
             "team_page" => Some((resolve(&self.team_go.name), resolve(&self.team_go.tooltip))),
@@ -2054,6 +2165,27 @@ impl HudWorld for View<'_> {
                 }
                 v
             }
+            ActionPage::Construct => {
+                // 0x5F7350 (behavior flag 0x40000): a button per structure of
+                // the builders' list, up to 11 (0x5F6D30 with the
+                // definition's icon), the back button in the last slot
+                let own_orgs: Vec<&aa_play::Organization> = b
+                    .selection
+                    .iter()
+                    .filter_map(|u| match u {
+                        Unit::Org(o) => w.orgs.get(*o as usize).filter(|o| o.alive && own(Some(o.kingdom))),
+                        _ => None,
+                    })
+                    .collect();
+                let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                for (i, d) in construct_list(w, &own_orgs).into_iter().take(11).enumerate() {
+                    v[i] = Some(HudAction { texture: w.data.def(d).icon.clone().unwrap_or_default(), command: format!("AAPlay construct {d}"), enabled: true, selected: false, targeted: false });
+                }
+                if let Some(c) = self.command("structure_cancel_queued") {
+                    v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
+                }
+                v
+            }
             ActionPage::Research(id) => {
                 // 0x5F77B0: the structure's research items in order, up to
                 // 11 slots; 0x5844A0 code 2 shows nothing and takes no
@@ -2123,11 +2255,39 @@ impl HudWorld for View<'_> {
                         _ => None,
                     })
                     .collect();
+                // 0x530510 over the members' performer abilities (an
+                // organization's command mask is the OR of its members',
+                // 0x589A60): kill (0) for one with an ability (0x57E230),
+                // unless all its abilities bombard (0x57E2F0); bombard (1)
+                // for one with an ability flagged bombard (AbilityDefinition
+                // +0x54 bit 3, 0x57E280); repair (3) for one with a healing
+                // ability (0x57E1C0 -> 0x4BE970: a HEAL effect)
+                const BOMBARD: u32 = 1 << 3;
+                const HEAL: u32 = 3;
+                let performer = |d: &aa_play::Def| d.weapons.iter().filter(|x| !x.defender).cloned().collect::<Vec<_>>();
+                let caps: Vec<Vec<aa_play::data::Weapon>> = own_orgs.iter().flat_map(|o| member_defs(o)).map(performer).collect();
+                let can_kill = caps.iter().any(|ws| !ws.is_empty() && (!ws.iter().any(|x| x.flags & BOMBARD != 0) || ws.iter().any(|x| x.flags & BOMBARD == 0)));
+                let can_bombard = caps.iter().any(|ws| ws.iter().any(|x| x.flags & BOMBARD != 0));
+                let can_repair = caps.iter().any(|ws| ws.iter().any(|x| x.effects.iter().any(|e| e.kind == HEAL)));
                 if !own_orgs.is_empty() || !own_trucks.is_empty() {
                     acts.extend(self.act("move", "AAPlay move".into()));
-                    if fighting {
+                    if can_kill {
                         acts.extend(self.act("kill", "AAPlay kill".into()));
+                    }
+                    if fighting {
                         acts.extend(self.act("retreat", "AAPlay retreat".into()));
+                    }
+                    if can_bombard {
+                        acts.extend(self.act("bombard", "AAPlay bombard".into()));
+                    }
+                    if can_repair {
+                        acts.extend(self.act("repair", "AAPlay repair".into()));
+                    }
+                    // construct (4): a member with a mover and a build list
+                    // (0x530510: mover and actor +0x108); the button opens
+                    // the construct page (behavior flags 0x50030)
+                    if !construct_list(w, &own_orgs).is_empty() {
+                        acts.extend(self.act("construct", "AAPlay construct_page".into()));
                     }
                     acts.extend(self.act("stop", "AAPlay stop".into()));
                     if fighting {
@@ -2170,6 +2330,17 @@ impl HudWorld for View<'_> {
                         // (actor_commands_aa.tgi, preferred_position 6)
                         if !def.research.is_empty() {
                             acts.extend(self.act("research", format!("AAPlay research_page {id}")));
+                        }
+                        // an airfield's denizen (0x5F88C0 for one own actor:
+                        // shown while the denizen has the capability, +0x38
+                        // bits 0x10 / 0x40, 0x567F80 / 0x567FA0, which its
+                        // AirAttackCost / AirReconCost give); its readiness
+                        // (+0x3C) is not simulated, so the buttons stay enabled
+                        if def.air_attack_cost.is_some() {
+                            acts.extend(self.act("air_attack", format!("AAPlay air_attack {id}")));
+                        }
+                        if def.air_recon_cost.is_some() {
+                            acts.extend(self.act("air_recon", format!("AAPlay air_recon {id}")));
                         }
                         // an HQ: CommandAll (ActionButtonInfo index 4)
                         let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));

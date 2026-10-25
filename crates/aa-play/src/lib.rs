@@ -61,3 +61,5 @@ pub mod ids;
 pub mod creation;
 /// The native world queues of one update and their leaves (core owner).
 pub mod scheduler;
+/// BuilderComponent::BuildActor for the construct order (core owner).
+pub mod construct;

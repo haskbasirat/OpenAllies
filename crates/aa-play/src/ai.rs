@@ -551,6 +551,8 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
             let units: Vec<Unit> = units.into_iter().filter(live).collect();
             (!units.is_empty() && world.actor(target).is_some_and(|a| !a.removed)).then_some(Command::Follow { kingdom, units, target })
         }
+        // the HUD orders (appended by the core owner; the AI sends none)
+        Command::Bombard { .. } | Command::Repair { .. } | Command::Construct { .. } | Command::AirAttack { .. } | Command::AirRecon { .. } => Some(command),
     }
 }
 

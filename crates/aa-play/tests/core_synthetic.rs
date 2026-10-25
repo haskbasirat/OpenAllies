@@ -638,11 +638,13 @@ fn cities_change_hands_by_presence_and_independents_never_lose() {
     // Combat prepares the combat values (Performer +60) of the new definitions.
     aa_play::combat::tick(&mut w);
     assert!(w.combat.extras.as_ref().unwrap().def(armed).combat_value > 0.0);
-    // The City Tick 0x5647A0 runs once per second (queue 1): every change
-    // shows within one second.
+    // The City Tick 0x5647A0 runs once per second (queue 1) while City+18
+    // holds candidates: an entry admits (0x564300, registering the City) at
+    // the end of its update, so every change shows within one queue-1 cycle
+    // after that.
     let second = |w: &mut World| {
         let mut captured = false;
-        for _ in 0..16 {
+        for _ in 0..17 {
             core_step(w, vec![]);
             captured |= w.events.iter().any(|e| matches!(e, Event::Captured { .. }));
         }

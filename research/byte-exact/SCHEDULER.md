@@ -178,6 +178,36 @@ Each stage is gated by `tests/berlin_replay.rs` (checkpoints) and `tests/berlin_
 Stages 2–4 can be split per owner. A system that is not yet a queue leaf keeps its own pass,
 placed where its queue would run (after queue 0, before queue 4).
 
+### 5a. Status (core, 2026-10-25, uncommitted)
+
+`crates/aa-play/src/scheduler.rs`: `World::sched` (ClockPlan 16/s: 1/16/80 buckets and the two
+deferred rings), `Owner` (Kingdom, Structure, Mover, Mind, Component(actor, slot), Org,
+OrgComponent(org, slot), KingdomComponent(kingdom, slot), Placed(index, slot) for map things aa-play
+keeps no actor for, Saved(table id)), `World::schedule_periodic` (getter logged, draw, head insert),
+`schedule_after`, `unschedule` (50B250), `run_queue` (step API), and `scheduler::periodic` in place
+of the economy / production passes (queues 0, 1, 2 in step 6).
+
+* **Stage 2, done for production and kingdoms.** Queue-0 leaves `production::process` (589F90)
+  and `economy::kingdom_tick` (4E9C40). The kingdoms come from the saved queue 0 (Berlin
+  UPDATABLES [9,7,3,1,11,5] = map slots 4,3,1,0,5,2). Economy lane 402 → 458, where the next
+  divergence is the Mover cursor skip (kingdom_4 skipped in 458 when truck 0x345B's Mover
+  unregisters). Mover (0x577E50) and Organization +7C (0x57C680) leaves: movement owner.
+* **Stage 3, the restore and core leaves are done.** Every saved periodic queue is restored
+  (0x50B8B0, no draws) after the kept things and before ResolvePlaceholders. The owners are
+  resolved through the kingdoms' Updatable ids (economy odd, the kingdom actor tail's Properties
+  even) and the placed things' component Updatable ids. Berlin q1: 120 entries, all resolved,
+  then 136 with the four Corps HQs' 5 × 563FD0. Creation registers the 563FD0 slots and Economy
+  as real queue-1 entries; a destroyed thing's entries are cancelled at `ids::sweep`.
+  Core leaves: Supply Tick → 58AE10(1 s), with InitExisting 58B0E0 → 58AE10(0) when a supplier
+  first appears; City Tick 5647A0; Organization TickMaintenance 57C8E0 → shortfall 578660 and
+  regeneration 57B5A0 (1 s). Supply lane 1 → 715 (the unmapped in-place unpack). Fog lane
+  402 → 489, now that `supply::org_position` is the org's own position (`Organization::anchor`).
+  Its next step is 57C800 follow-leader, a movement-owner item.
+  Still passes: Detection (fog owner), Properties (combat owner), Construction, Economy
+  component (refresh stays per update).
+* Non-queue creation draws: HQ InitCreate's 0x4E2640 is the kingdom's random free HQ number and
+  0x50AB10 is a random countdown phase. Neither registers anything.
+
 ## 6. Measured: the Berlin production order (refutes the bucket hypothesis)
 
 NativeSampler with probes on 589F90 and after the recruit spawn 582E80 (trace

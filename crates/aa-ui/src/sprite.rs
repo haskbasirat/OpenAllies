@@ -124,6 +124,7 @@ pub fn piece_quads(
                 blend: style.blend,
                 address: [Address::Clamp, Address::Clamp],
                 clip: None,
+                effect: 0,
             });
         }
     }

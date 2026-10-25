@@ -33,6 +33,8 @@
 //!
 //! Morale, routing, entrenchment, attack efficiency and experience levels are
 //! in `morale.rs`; both modules share [`CombatState`] (`World::combat`).
+pub mod tasks;
+
 use crate::data::{DefClass, DefId, GameData, Weapon};
 use crate::world::{Activity, ActorId, Event, KingdomId, Order, OrgId, World};
 use crate::DT;
@@ -297,6 +299,8 @@ pub struct Extras {
     pub bit_routing: Option<u32>,
     /// (core) The `neutral` TargetType bit (4C5840 relation 2).
     pub bit_neutral: Option<u32>,
+    /// (core) `under_construction`: actor state 21 (actor +0x100 bit 21).
+    pub bit_under_construction: Option<u32>,
     /// damage_filter group of every `GameData::damage_types` entry.
     pub damage_filters: Vec<i32>,
     /// Definitions using a fallback (count per field).
@@ -400,6 +404,7 @@ impl Extras {
             bit_enemy: bit("enemy"),
             bit_independent: bit("independent"),
             bit_neutral: bit("neutral"),
+            bit_under_construction: bit("under_construction"),
             bit_own: bit("own"),
             bit_self: bit("self"),
             bit_same_organization: bit("same_organization"),
@@ -664,6 +669,13 @@ pub struct OrgCombat {
     pub entrenched: bool,
     /// Last hostile damage on a member (`+90` record): shooter and time.
     pub last_hit: Option<(ActorId, f32)>,
+    // ---- appended by the core owner (HUD orders, `tasks`) ----
+    /// The bombard / repair / construct Mind state replacing the engage one.
+    pub task: Option<tasks::Task>,
+    /// The order the task wrote last (a different one is a new command).
+    pub task_order: Option<Order>,
+    /// Next task Think.
+    pub task_think: f32,
 }
 
 impl OrgCombat {
@@ -703,6 +715,14 @@ pub struct ActorCombat {
     pub roe_retry_at: f32,
     /// Performer turret states (`+4C`, one per `Def::turrets`).
     pub turrets: Vec<TurretState>,
+    // ---- appended by the core owner (HUD orders, `tasks`) ----
+    /// The task of an actor outside an organization.
+    pub task: Option<tasks::Task>,
+    pub task_order: Option<Order>,
+    pub task_think: f32,
+    /// What this actor uses its task ability on (bombard point or actor,
+    /// repair target), set by its own or its organization's task Think.
+    pub aim: Option<tasks::Aim>,
 }
 
 /// One turret of a Performer (`57F4D0` allocates 0x1C bytes per turret).
@@ -724,7 +744,8 @@ pub struct TurretState {
 pub struct Projectile {
     pub shooter: ActorId,
     pub weapon: usize,
-    pub target: ActorId,
+    /// None: fired at a ground point (a bombard).
+    pub target: Option<ActorId>,
     /// Target position at launch (impact point when the target is gone).
     pub point: Vec2,
     pub impact_at: f32,
@@ -1049,6 +1070,9 @@ fn admits(world: &World, st: &CombatState, source: ActorId, w: &Weapon, target: 
     }
     set(&mut flags, ex.bit_body);
     set(&mut flags, ex.bit_actor);
+    if world.books.actor(target).is_some_and(|b| b.constructing) {
+        set(&mut flags, ex.bit_under_construction);
+    }
     if let Some(o) = t.org
         && st.orgs.get(o as usize).is_some_and(|x| x.routing.is_some())
     {
@@ -1485,6 +1509,11 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     if st.orgs[i].routing.is_some() {
         return;
     }
+    // (core) a HUD order's Mind state (bombard, repair, construct) replaces
+    // the engage Think while it lasts.
+    if tasks::org_think(world, st, id) {
+        return;
+    }
     if st.orgs[i].auto_order.is_none()
         && matches!(world.orgs[i].order, Order::Move { attack_move: false, .. } | Order::Deploy { .. })
     {
@@ -1647,6 +1676,10 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
         if !a.alive || a.removed || a.org.is_some() || a.kingdom.is_none() || st.actors[id as usize].queued_death {
             continue;
         }
+        if tasks::lone_think(world, st, id) {
+            continue;
+        }
+        let a = &world.actors[id as usize];
         let def = world.data.def(a.def);
         if def.weapons.is_empty() || matches!(def.class, Some(DefClass::Truck)) {
             continue;
@@ -1697,6 +1730,13 @@ fn fire(world: &mut World, st: &mut CombatState) {
         turret_reset_tick(world, st, id);
         let a = &world.actors[id];
         let Some(target) = a.combat.target else {
+            // (core) a task's ability use (tasks::fire_aim).
+            if let Some(aim) = st.actors[id].aim
+                && !a.org.is_some_and(|o| st.orgs[o as usize].routing.is_some())
+            {
+                tasks::fire_aim(world, st, id, aim);
+                continue;
+            }
             if a.activity == Activity::Attacking {
                 world.set_activity(id as ActorId, Activity::Idle);
             }
@@ -1756,9 +1796,9 @@ fn fire(world: &mut World, st: &mut CombatState) {
         let point = world.actors[target as usize].pos.truncate();
         if w.projectile_speed > 0.0 {
             let flight = delta.length() / w.projectile_speed;
-            st.projectiles.push(Projectile { shooter: id as ActorId, weapon: d.weapon, target, point, impact_at: now + flight });
+            st.projectiles.push(Projectile { shooter: id as ActorId, weapon: d.weapon, target: Some(target), point, impact_at: now + flight });
         } else {
-            deliver(world, st, id as ActorId, d.weapon, target, point);
+            deliver(world, st, id as ActorId, d.weapon, Some(target), point);
         }
     }
     impacts(world, st);
@@ -1880,19 +1920,20 @@ fn impacts(world: &mut World, st: &mut CombatState) {
     }
 }
 
-/// `4C9550` phases: single target, or the area around the target with the
-/// `max_targets` nearest and the attenuation of phase 3.
-fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: usize, target: ActorId, point: Vec2) {
+/// `4C9550` phases: single target, or the area around the target (or the
+/// ground point of a bombard) with the `max_targets` nearest and the
+/// attenuation of phase 3.
+fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: usize, target: Option<ActorId>, point: Vec2) {
     let data = world.data.clone();
     let w = &data.def(world.actors[shooter as usize].def).weapons[weapon];
-    let present = targetable(world, target) && !st.actors[target as usize].queued_death;
+    let present = target.filter(|&t| targetable(world, t) && !st.actors[t as usize].queued_death);
     if w.area <= 0.0 {
-        if present {
-            apply_hit(world, st, shooter, w, target, 1.0);
+        if let Some(t) = present {
+            apply_hit(world, st, shooter, w, t, 1.0);
         }
         return;
     }
-    let center = if present { world.actors[target as usize].pos.truncate() } else { point };
+    let center = present.map_or(point, |t| world.actors[t as usize].pos.truncate());
     let mut found = std::mem::take(&mut st.scratch);
     st.grid.query(center, w.area, &mut found);
     let kingdom = world.actors[shooter as usize].kingdom;

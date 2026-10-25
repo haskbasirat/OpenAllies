@@ -1503,6 +1503,9 @@ impl Hud {
                         if let Some(d) = &mut w.sub_ve {
                             if let crate::ve::VeKind::Decal(dd) = &mut d.kind {
                                 dd.texture = Some(a.texture.clone());
+                                // 0x5F6D30 / 0x5F6EA0 -> 0x5E66E0: a disabled
+                                // button's icon in effect mode 1 (grey)
+                                dd.effect = u8::from(!a.enabled);
                             }
                             crate::layout::parse_bounds(&mut d.layout.outer, &format!("{l}"), &format!("{t}"), &format!("{r}r"), &format!("{b}b"));
                         }

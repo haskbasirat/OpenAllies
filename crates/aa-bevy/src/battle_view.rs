@@ -1120,7 +1120,16 @@ pub fn sync_actors(
     let object = |id: ActorId| object_animations.as_ref().and_then(|o| o.0.get(&id)).map(|(n, t)| (n.as_str(), *t));
     let alpha = tick_fraction(&battle);
     let tables = fx.as_ref().map(|f| f.0.clone());
-    let fired: HashMap<ActorId, u32> = battle.frame_events.iter().filter_map(|e| if let aa_play::Event::Fired { shooter, weapon, .. } = e { Some((*shooter, *weapon)) } else { None }).collect();
+    // An ability used at an actor or at a ground point (a bombard) plays the
+    // same fire animation.
+    let fired: HashMap<ActorId, u32> = battle
+        .frame_events
+        .iter()
+        .filter_map(|e| match e {
+            aa_play::Event::Fired { shooter, weapon, .. } | aa_play::Event::FiredAt { shooter, weapon, .. } => Some((*shooter, *weapon)),
+            _ => None,
+        })
+        .collect();
     let log_characters = std::env::var_os("AA_BEVY_FX_STATS").is_some();
     // Update and remove existing views.
     for (entity, mut view, mut transform, visibility) in &mut views {
