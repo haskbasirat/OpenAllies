@@ -787,6 +787,28 @@ fn in_hangar(world: &World, id: ActorId) -> bool {
     world.books.actor(id).and_then(|b| b.aircraft.as_ref()).is_some_and(|x| x.hidden)
 }
 
+/// How far a corpse has sunk into the ground (view update 0x459E10 ->
+/// 0x457DF0): its Size height (0x469AC0) x the body's sink fraction
+/// 0x5617E0, (t - death - rot_time) / sink_time once rot_time has passed
+/// (sink_time >= 0.0001). The death time is the sim's dead_at, whose corpse
+/// timer (rot + sink, capped at 10 s, 0x562380) removes it, so the sink and
+/// the removal stay together; with rot + sink > 10 s the corpse is removed
+/// before it sinks, as in the original.
+fn corpse_sink(world: &World, actor: &aa_play::Actor, tables: Option<&crate::effects::data::FxTables>, alpha: f32) -> f32 {
+    let def = world.data.def(actor.def);
+    let Some(c) = world.combat.actor(actor.id) else { return 0.0 };
+    if def.sink_time < 1.0e-4 {
+        return 0.0;
+    }
+    let t = world.time - (1.0 - alpha) * aa_play::DT - c.dead_at - def.rot_time;
+    if t <= 0.0 {
+        return 0.0;
+    }
+    let height = tables.and_then(|t| t.actors.get(&def.id.to_ascii_lowercase())).map_or(0.0, |f| f.size_height);
+    let height = if height > 0.0 { height } else { 2.0 };
+    height * (t / def.sink_time).min(1.0)
+}
+
 /// One drawn actor: a parent with its transform and one child per model mesh.
 #[derive(Component)]
 pub struct ActorView {
@@ -1175,6 +1197,11 @@ pub fn sync_actors(
         let facing = view.prev.1 + turn * alpha;
         // The ground tilt, interpolated like position and facing.
         let origin = view.origin.0.lerp(view.origin.1, alpha);
+        let sink = if actor.activity == Activity::Dead { corpse_sink(world, actor, tables.as_deref(), alpha) } else { 0.0 };
+        if log_characters && sink > 0.0 && world.tick % 5 == 0 && view.tick == world.tick {
+            info!("corpse: actor {} {} sunk {sink:.2} m at {:.2}", actor.id, world.data.def(actor.def).id, world.time);
+        }
+        let origin = origin - Vec3::Z * sink;
         let up = view.up.0.lerp(view.up.1, alpha).normalize_or(Vec3::Z);
         let flat = Vec3::new(facing.cos(), facing.sin(), 0.0);
         let forward = (flat - up * flat.dot(up)).normalize_or(flat);

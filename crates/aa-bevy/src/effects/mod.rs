@@ -2107,6 +2107,18 @@ impl FxState {
         for d in due {
             self.run_fxc(&d.fxc, d.ctx, frame, spawn, d.list, true);
         }
+        // A wreck is the actor's aspect_death model: it stays where the
+        // actor's view is, so it sinks with the corpse (0x457DF0).
+        for (actor, entity) in &self.wrecks {
+            if let Some(m) = frame.drawn.get(actor)
+                && let Ok((mut t, _)) = transforms.get_mut(*entity)
+            {
+                let want = Transform::from_matrix(*m);
+                if t.translation != want.translation || t.rotation != want.rotation {
+                    *t = want;
+                }
+            }
+        }
         // Projectiles.
         let mut landed = Vec::new();
         let mut i = 0;

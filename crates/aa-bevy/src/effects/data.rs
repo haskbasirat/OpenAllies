@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-9";
+const CACHE_VERSION: &str = "aa-bevy-fx-10";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -109,6 +109,10 @@ pub struct ActorFx {
     /// around the sim hit point where the view's projectile lands.
     #[serde(default)]
     pub projectile_spread: f32,
+    /// Size height (template_actor default 2): how deep a corpse sinks
+    /// (view 0x457DF0 through 0x469AC0).
+    #[serde(default)]
+    pub size_height: f32,
 }
 
 /// The original's view data of one Thing that battle_view plays.
@@ -500,6 +504,7 @@ fn view_fx(actor: &ResolvedNode<'_>, fx: &mut ActorFx) {
         }
     }
     if let Ok(Some(size)) = actor.child("Size") {
+        fx.size_height = num(&size, "height").unwrap_or(0.0);
         let shape = text(&size, "soft_shape").unwrap_or_default().to_ascii_uppercase();
         let radius = num(&size, "blocking_radius").unwrap_or(0.5);
         fx.view.rear = if shape == "RECT" || shape == "SQUARE" {
