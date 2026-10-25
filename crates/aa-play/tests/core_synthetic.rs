@@ -171,8 +171,8 @@ fn data() -> (GameData, Ids) {
     data.defs[depot as usize].blocking_size = Some([4.0, 4.0]);
     data.defs[hq as usize].blocking_size = Some([10.0, 10.0]);
     data.defs[hq as usize].research = vec![
-        ResearchItem { property: "tech_ammo".into(), kind: "GLOBAL".into(), research_time: 5.0, cost: vec5(&[(MONEY, 40.0)]) },
-        ResearchItem { property: "tech_cheap".into(), kind: "GLOBAL".into(), research_time: 5.0, cost: vec5(&[(MONEY, 10.0)]) },
+        ResearchItem { property: "tech_ammo".into(), kind: "GLOBAL".into(), research_time: 5.0, cost: vec5(&[(MONEY, 40.0)]), ..Default::default() },
+        ResearchItem { property: "tech_cheap".into(), kind: "GLOBAL".into(), research_time: 5.0, cost: vec5(&[(MONEY, 10.0)]), ..Default::default() },
     ];
     let tech = |id: &str, required: &str, m: Modifier| PropertyDef { id: id.into(), is_technology: true, required_properties: vec![required.into()], modifiers: vec![m], ..Default::default() };
     data.properties.insert("tech_ammo".into(), tech("tech_ammo", "depotprop", Modifier { kind: "RESOURCE_PRODUCTION".into(), production: vec5(&[(AMMO, 5.0)]), ..Default::default() }));

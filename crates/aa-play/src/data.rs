@@ -313,6 +313,28 @@ pub struct Def {
     /// creates a member at the nearest such structure with a DeploymentInfo.
     #[serde(default)]
     pub recruited_at: Vec<DefId>,
+    /// ElementComponent requirements (the Requirements object 581F70 tests
+    /// through 4C5250 before a recruit): structures the kingdom must own
+    /// (Thing IDS) and properties the recruiting structure or the kingdom
+    /// must have; both lists all-of.
+    #[serde(default)]
+    pub requirements: Requirements,
+}
+
+/// A Requirements object (ElementComponent or ResearchItem
+/// required_structures / required_properties with their *_any flags).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Requirements {
+    pub structures: Vec<String>,
+    pub any_structure: bool,
+    pub properties: Vec<String>,
+    pub any_property: bool,
+}
+
+impl Requirements {
+    pub fn is_empty(&self) -> bool {
+        self.structures.is_empty() && self.properties.is_empty()
+    }
 }
 
 /// One PerformerComponent `[Turret]` (TurretDefinition, aa-rules turrets.rs),
@@ -448,6 +470,9 @@ pub struct ResearchItem {
     pub research_time: f32,
     /// ResearchCost in `GameData::resources` order.
     pub cost: Vec<f32>,
+    /// required_structures / required_properties (record +4).
+    #[serde(default)]
+    pub requirements: Requirements,
 }
 
 impl Def {
@@ -608,7 +633,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v15";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v16";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -637,6 +662,21 @@ pub(crate) mod loader {
         match node.field(name, PC).ok().flatten() {
             Some(TypedValue::Boolean { value, .. }) => Some(value),
             _ => None,
+        }
+    }
+    /// A Requirements object: comma-separated required_structures /
+    /// required_properties (NULL = none) and the *_any flags (ResearchItem).
+    pub(crate) fn requirements(node: &ResolvedNode<'_>) -> super::Requirements {
+        let list = |name: &str| -> Vec<String> {
+            st(node, name)
+                .map(|v| v.split(',').map(|x| x.trim().to_ascii_lowercase()).filter(|x| !x.is_empty() && x != "null").collect())
+                .unwrap_or_default()
+        };
+        super::Requirements {
+            structures: list("required_structures"),
+            any_structure: bl(node, "required_structures_any").unwrap_or(false),
+            properties: list("required_properties"),
+            any_property: bl(node, "required_properties_any").unwrap_or(false),
         }
     }
     pub(crate) fn pt(node: &ResolvedNode<'_>, name: &str) -> Option<[f32; 2]> {
@@ -1356,6 +1396,7 @@ pub(crate) mod loader {
             def.max_attachments = fx(&hq, "max_attachments").map(|v| v.max(0.0) as u32);
         }
         if let Ok(Some(element)) = node.child("ElementComponent") {
+            def.requirements = requirements(&element);
             def.morale_value = fx(&element, "morale_value").unwrap_or(0.0);
             def.resupply_rate = fx(&element, "resupply_rate").unwrap_or(0.0);
             def.group_priority = fx(&element, "group_priority").unwrap_or(0.0) as i32;
@@ -1388,7 +1429,13 @@ pub(crate) mod loader {
                     .flatten()
                     .map(|c| resource_ids.iter().map(|r| fx(&c, r).unwrap_or(0.0)).collect())
                     .unwrap_or_else(|| vec![0.0; resource_ids.len()]);
-                def.research.push(ResearchItem { property, kind: st(&item, "type").unwrap_or_default(), research_time: fx(&item, "research_time").unwrap_or(0.0), cost });
+                def.research.push(ResearchItem {
+                    property,
+                    kind: st(&item, "type").unwrap_or_default(),
+                    research_time: fx(&item, "research_time").unwrap_or(0.0),
+                    cost,
+                    requirements: requirements(&item),
+                });
             }
         }
         if let Ok(Some(denizen)) = node.child("DenizenComponent")
