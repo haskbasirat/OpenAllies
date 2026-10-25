@@ -1,7 +1,7 @@
 //! Original4DD030/4DD150/4DDDE0 tile traversal, including boundary ties and
 //! asymmetric float32 stores. This enumerates candidate cells, not collision.
 use crate::{Error, Result};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -19,7 +19,7 @@ impl TileGrid {
     fn validate(self) -> Result<()> {
         if self.width <= 0
             || self.height <= 0
-            || b(self.cell_size_bits)?.compare(&Binary::from_i32(0)) != Ordering::Greater
+            || b(self.cell_size_bits)?.compare(&Fast::from_i32(0)) != Ordering::Greater
         {
             return Err(Error::InvalidGrid);
         }
@@ -40,17 +40,17 @@ pub struct TileWalk {
     precision: Precision,
     state: WalkState,
 }
-fn b(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn b(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
-fn abs(value: Binary) -> Binary {
+fn abs(value: Fast) -> Fast {
     if value.is_negative_nonzero() {
         value.negated()
     } else {
         value
     }
 }
-fn step(value: &Binary) -> i32 {
+fn step(value: &Fast) -> i32 {
     if value.is_negative_nonzero() { -1 } else { 1 }
 }
 
@@ -124,22 +124,22 @@ impl TileWalk {
         let dx = b(self.state.delta_bits[0])?;
         let dy = b(self.state.delta_bits[1])?;
         let epsilon = b(0x38d1_b717)?;
-        let axis = if abs(dx.clone()).compare(&epsilon) == Ordering::Less {
+        let axis = if abs(dx).compare(&epsilon) == Ordering::Less {
             1
-        } else if abs(dy.clone()).compare(&epsilon) == Ordering::Less {
+        } else if abs(dy).compare(&epsilon) == Ordering::Less {
             0
         } else {
             let cell = b(self.grid.cell_size_bits)?;
-            let boundary_index = |axis: usize, delta: &Binary| -> Result<i32> {
+            let boundary_index = |axis: usize, delta: &Fast| -> Result<i32> {
                 self.state.current[axis]
                     .checked_add(i32::from(!delta.is_negative_nonzero()))
                     .ok_or(Error::InvalidGrid)
             };
             // Y boundary is stored first; X stays extended until selected.
-            let by_bits = Binary::from_i32(boundary_index(1, &dy)?)
+            let by_bits = Fast::from_i32(boundary_index(1, &dy)?)
                 .mul(&cell, pc)?
                 .store_f32()?;
-            let bx = cell.mul(&Binary::from_i32(boundary_index(0, &dx)?), pc)?;
+            let bx = cell.mul(&Fast::from_i32(boundary_index(0, &dx)?), pc)?;
             let tx = bx.sub(&b(self.state.point_bits[0])?, pc)?.div(&dx, pc)?;
             let tx_stored = b(tx.store_f32()?)?;
             let ty = b(b(by_bits)?

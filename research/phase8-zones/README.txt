@@ -83,7 +83,8 @@ Native architecture (established from the code)
   the ActorData+0x1CC range is > 0 and the actor is not attached/garrisoned
   (0x56EA30); RZOD (type 1) radius ActorData+0x1D0 with the reveal mask of
   kingdoms engaging the actor or flagged enemy kingdoms (0x56EFC0);
-  structures keep a type-6 zone of radius +0x1D0.
+  actors under construction (actor +0x100 bit 21, 0x200000) keep a type-6
+  zone of radius +0x1D0.
 * ZoneSolver: types 1, 2, 6 use the fast circle builder when SVar
   ZoneBuilderFastDetectionZones is set (shipped Data/Game/SVars.tgi: true);
   the others flood: Dijkstra from the zone tile (cost tile, sqrt2*tile
@@ -170,10 +171,10 @@ Proven vs compiled vs untested
   read in flood::scratch_value (see quirks).
 * Partial: 0x4D6350 (only its zone loop is ours), 0x542950 (the iteration
   is aa-spatial's; per-tile body tile::restore_fog is proven).
-* Not bound to the live runtime: aa-runtime does not call aa-zones yet; zone
-  objects, actor detection words, memory slots and detection components need
-  storage in the actor store (requests-to-lead.md). No zone/fog behaviour has
-  been observed in a running map.
+* Bound to the battle: aa-play (crates/aa-play/src/zones.rs) runs the fog of
+  war and the supply zones on aa-zones at PC53 (tile changes 0x4D6350,
+  detection component 0x56F140, supply component 0x58AE10 tail). aa-runtime
+  does not call aa-zones yet.
 
 Threading
 ---------

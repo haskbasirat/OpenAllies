@@ -69,13 +69,81 @@ struct Node {
     len: u32,
 }
 
+/// FxHash (the rustc hasher) for the lookup tables the zone code hits on
+/// every tile change. No table's iteration order is observable (see the
+/// module doc), so the hasher only changes the speed.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FxHasher {
+    hash: u64,
+}
+
+impl FxHasher {
+    fn add(&mut self, word: u64) {
+        self.hash = (self.hash.rotate_left(5) ^ word).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+
+impl std::hash::Hasher for FxHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for chunk in bytes.chunks(8) {
+            let mut w = [0u8; 8];
+            w[..chunk.len()].copy_from_slice(chunk);
+            self.add(u64::from_le_bytes(w));
+        }
+    }
+    fn write_u8(&mut self, i: u8) {
+        self.add(u64::from(i));
+    }
+    fn write_u16(&mut self, i: u16) {
+        self.add(u64::from(i));
+    }
+    fn write_u32(&mut self, i: u32) {
+        self.add(u64::from(i));
+    }
+    fn write_u64(&mut self, i: u64) {
+        self.add(i);
+    }
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64);
+    }
+    fn finish(&self) -> u64 {
+        self.hash
+    }
+}
+
+/// [`FxHasher`] builder.
+pub type FxBuild = std::hash::BuildHasherDefault<FxHasher>;
+
 /// The two global intern tables (GWorld+0x19C leaves, GWorld+0x1A0 unions).
 #[derive(Clone, Debug, Default)]
 pub struct ZonePool {
     nodes: Vec<Option<Node>>,
     free: Vec<u32>,
-    by_pair: HashMap<(SetRef, Entry), NodeId>,
-    leaves: HashMap<Entry, u32>,
+    by_pair: HashMap<(SetRef, Entry), NodeId, FxBuild>,
+    leaves: HashMap<Entry, u32, FxBuild>,
+}
+
+/// The entries of a set in native iteration order ([`ZonePool::iter`]).
+pub struct SetIter<'a> {
+    pool: &'a ZonePool,
+    cur: Option<SetRef>,
+}
+
+impl Iterator for SetIter<'_> {
+    type Item = Entry;
+    fn next(&mut self) -> Option<Entry> {
+        match self.cur? {
+            SetRef::Leaf(e) => {
+                self.cur = None;
+                Some(e)
+            }
+            SetRef::Node(id) => {
+                let n = self.pool.nodes[id.0 as usize].as_ref().expect("chain checked by ZonePool::iter");
+                self.cur = Some(n.tail);
+                Some(n.head)
+            }
+        }
+    }
 }
 
 /// One interned object as reported by [`ZonePool::live`]: its entries in
@@ -123,6 +191,16 @@ impl ZonePool {
             }
         }
         Ok(out)
+    }
+
+    /// [`Self::entries`] without allocating: the chain is checked first, so
+    /// a stale node fails before any entry is visited, as with `entries`.
+    pub fn iter(&self, set: Option<SetRef>) -> Result<SetIter<'_>> {
+        let mut cur = set;
+        while let Some(SetRef::Node(id)) = cur {
+            cur = Some(self.node(id)?.tail);
+        }
+        Ok(SetIter { pool: self, cur: set })
     }
 
     /// Set length (virtual `+0x10`: leaf `0x4F0500` = 1, union `0x5160B0` = +0x1C).

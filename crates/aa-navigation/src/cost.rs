@@ -3,7 +3,7 @@
 //! preserves the original binary32 spills and callback load order.
 
 use crate::search::{DIRECTIONS, QueueEntry};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -52,10 +52,10 @@ pub trait World {
     fn terrain_change_penalty_bits(&mut self) -> Result<u32>;
 }
 
-fn number(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn number(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
-fn stored(value: Binary) -> Result<Binary> {
+fn stored(value: Fast) -> Result<Fast> {
     number(value.store_f32()?)
 }
 
@@ -98,19 +98,19 @@ pub fn accumulated_cost(
         let health = if let Some([health, maximum]) = world.body_health_bits(actor)? {
             number(health)?.div(&number(maximum)?, precision)?
         } else {
-            Binary::from_i32(0)
+            Fast::from_i32(0)
         };
-        let one = Binary::from_i32(1);
+        let one = Fast::from_i32(1);
         let weight = factor
             .sub(&one, precision)?
             .mul(&health, precision)?
             .add(&one, precision)?;
         step = stored(weight.mul(&step, precision)?)?;
     }
-    if number(state.maximum_speed_bits)?.compare(&Binary::from_i32(0)) == Ordering::Greater {
+    if number(state.maximum_speed_bits)?.compare(&Fast::from_i32(0)) == Ordering::Greater {
         world.prepare_terrain_penalty()?;
         let source = number(world.terrain_speed_bits(state.current.cell)?)?;
-        let reference = if source.compare(&Binary::from_i32(0)) == Ordering::Greater {
+        let reference = if source.compare(&Fast::from_i32(0)) == Ordering::Greater {
             let source = number(world.terrain_speed_bits(state.current.cell)?)?;
             let maximum = number(state.maximum_speed_bits)?;
             if maximum.compare(&source) == Ordering::Less {
@@ -122,7 +122,7 @@ pub fn accumulated_cost(
             number(state.maximum_speed_bits)?
         };
         let destination_speed = number(world.terrain_speed_bits(destination)?)?;
-        if destination_speed.compare(&Binary::from_i32(0)) == Ordering::Greater
+        if destination_speed.compare(&Fast::from_i32(0)) == Ordering::Greater
             && destination_speed.compare(&reference) == Ordering::Less
         {
             step = number(world.terrain_change_penalty_bits()?)?

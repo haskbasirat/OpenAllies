@@ -161,6 +161,15 @@ pub trait ZoneWorld: VisitWorld {
     fn sai(&mut self, hook: SaiHook, tile: usize, kingdom: u32) -> Result<()>;
     /// GWorld+0x154 vector (with null holes), in order.
     fn kingdom_list(&mut self) -> Result<Vec<u32>>;
+    /// GWorld+0x158 (the length of [`Self::kingdom_list`]); a world may
+    /// answer it without building the list.
+    fn kingdom_count(&mut self) -> Result<usize> {
+        Ok(self.kingdom_list()?.len())
+    }
+    /// GWorld+0x154[i] for `i <` [`Self::kingdom_count`].
+    fn kingdom_at(&mut self, i: usize) -> Result<u32> {
+        self.kingdom_list()?.get(i).copied().ok_or(Error::World(format!("kingdom list index {i}")))
+    }
     /// Tile `+8` actor list, head first.
     fn tile_actors(&mut self, tile: usize) -> Result<Vec<ActorKey>>;
     /// Actor virtual `+0x64(kingdom, explored, visible)` (`0x4EC010` for GActor).

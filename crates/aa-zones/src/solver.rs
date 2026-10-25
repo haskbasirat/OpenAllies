@@ -36,13 +36,20 @@ enum Span {
     Fog,
 }
 
+/// One circle of the fast builder: its stored binary32 centre and r^2, in
+/// the Binary model or (PC53) as exact binary64 values ([`fpu::pc53`]).
+#[derive(Clone, Debug)]
+pub enum Circle {
+    Exact { centre: [Binary; 2], r2: Binary },
+    /// `half` is the register `tile * 0.5` of `0x53F650`/`0x53F6C0`.
+    Pc53 { centre: [f64; 2], r2: f64, half: f64 },
+}
+
 /// The fast builder's stack object.
 struct Builder {
     moved: bool,
-    old_centre: [Binary; 2],
-    new_centre: [Binary; 2],
-    old_r2: Binary,
-    new_r2: Binary,
+    old: Circle,
+    new: Circle,
     kingdom: u32,
     set: bool,
 }
@@ -68,18 +75,48 @@ pub fn adjust_radius(map: &ZoneMap, r_bits: u32, p: Precision) -> Result<Binary>
     }
 }
 
+/// [`adjust_radius`] at PC53 in binary64 (`None`: take the Binary model).
+pub fn adjust_radius_pc53(map: &ZoneMap, r_bits: u32) -> Option<f64> {
+    use fpu::pc53;
+    let r = pc53::load(r_bits)?;
+    if r_bits == fpu::MINUS_ONE_BITS || r == -1.0 {
+        return Some(r);
+    }
+    let t = pc53::ftol(pc53::load(map.geometry.tile_size_bits)?)?;
+    let q = pc53::load(pc53::store(pc53::int(t))?)?;
+    let a = pc53::load(pc53::store(pc53::mul(pc53::int(t), pc53::load(fpu::QUARTER_BITS)?)?)?)?;
+    let c = pc53::fmod(r, q)?;
+    if c < a { pc53::add(pc53::sub(a, c)?, r) } else { Some(r) }
+}
+
 /// `0x53F650` (old circle, `moved` builders) / `0x53F6C0` (new circle):
 /// squared distance from the tile centre, x term in registers, y centre
 /// stored as binary32, compared with the stored binary32 r^2 (`<=`).
-fn in_circle(map: &ZoneMap, centre: &[Binary; 2], r2: &Binary, x: i32, y: i32, p: Precision) -> Result<bool> {
+pub fn in_circle(map: &ZoneMap, c: &Circle, x: i32, y: i32, p: Precision) -> Result<bool> {
     let g = &map.geometry;
-    let half = fpu::half_tile(g.tile_size_bits, p)?;
-    let tx = fpu::cell_center(x, g.shift, &half, p)?;
-    let ty32 = fpu::f32_store(&fpu::cell_center(y, g.shift, &half, p)?)?;
-    let dx = fpu::sub(&centre[0], &tx, p)?;
-    let dy = fpu::sub(&centre[1], &fpu::load(ty32)?, p)?;
-    let d2 = fpu::add(&fpu::mul(&dy, &dy, p)?, &fpu::mul(&dx, &dx, p)?, p)?;
-    Ok(!fpu::less(r2, &d2))
+    match c {
+        Circle::Exact { centre, r2 } => {
+            let half = fpu::half_tile(g.tile_size_bits, p)?;
+            let tx = fpu::cell_center(x, g.shift, &half, p)?;
+            let ty32 = fpu::f32_store(&fpu::cell_center(y, g.shift, &half, p)?)?;
+            let dx = fpu::sub(&centre[0], &tx, p)?;
+            let dy = fpu::sub(&centre[1], &fpu::load(ty32)?, p)?;
+            let d2 = fpu::add(&fpu::mul(&dy, &dy, p)?, &fpu::mul(&dx, &dx, p)?, p)?;
+            Ok(!fpu::less(r2, &d2))
+        }
+        // The operands are binary32 values (the centre, r^2, tile * 0.5) and
+        // fild integers, so every intermediate is a non-zero multiple of at
+        // least 2^-150 below 2^133 or zero: inside the binary64 normal range
+        // (see fpu::pc53), no fallback needed.
+        Circle::Pc53 { centre, r2, half } => {
+            let tx = f64::from(x.wrapping_shl(g.shift)) + half;
+            let ty32 = f64::from((f64::from(y.wrapping_shl(g.shift)) + half) as f32);
+            let dx = centre[0] - tx;
+            let dy = centre[1] - ty32;
+            let d2 = dy * dy + dx * dx;
+            Ok(!(*r2 < d2))
+        }
+    }
 }
 
 fn centre(map: &ZoneMap, x: i32, y: i32, p: Precision) -> Result<[Binary; 2]> {
@@ -91,13 +128,51 @@ fn centre(map: &ZoneMap, x: i32, y: i32, p: Precision) -> Result<[Binary; 2]> {
     Ok([fpu::load(cx)?, fpu::load(cy)?])
 }
 
+fn centre_pc53(map: &ZoneMap, x: i32, y: i32) -> Option<[f64; 2]> {
+    use fpu::pc53;
+    let g = &map.geometry;
+    let half = pc53::load(pc53::store(pc53::half_tile(g.tile_size_bits)?)?)?;
+    let cx = pc53::store(pc53::cell_center(x, g.shift, half)?)?;
+    let cy = pc53::store(pc53::cell_center(y, g.shift, half)?)?;
+    Some([pc53::load(cx)?, pc53::load(cy)?])
+}
+
+/// The binary32 bits of a PC53 circle value (for tests and reports).
+pub fn circle_bits(c: &Circle) -> Result<([u32; 2], u32)> {
+    Ok(match c {
+        Circle::Exact { centre, r2 } => ([fpu::f32_store(&centre[0])?, fpu::f32_store(&centre[1])?], fpu::f32_store(r2)?),
+        Circle::Pc53 { centre, r2, .. } => ([(centre[0] as f32).to_bits(), (centre[1] as f32).to_bits()], (*r2 as f32).to_bits()),
+    })
+}
+
 /// `0x53F730(cx, cy, r_tiles, callback)`: midpoint circle spans
 /// `(x, y, width)` in native order (pairs of rows `cy + dy`, `cy - dy` from
 /// the outermost row inwards, then the centre row).
 pub fn circle_spans(cx: i32, cy: i32, r_tiles_bits: u32, p: Precision) -> Result<Vec<(i32, i32, i32)>> {
+    let fast = (p == Precision::Double53)
+        .then(|| {
+            let r = fpu::pc53::load(r_tiles_bits)?;
+            Some((fpu::pc53::ftol(r)?, fpu::pc53::ftol(fpu::pc53::mul(r, r)?)?))
+        })
+        .flatten();
+    let (rad, rr) = match fast {
+        Some(v) => v,
+        None => {
+            let r = fpu::load(r_tiles_bits)?;
+            (fpu::ftol(&r)?, fpu::ftol(&fpu::mul(&r, &r, p)?)?)
+        }
+    };
+    Ok(spans(cx, cy, rad, rr))
+}
+
+/// [`circle_spans`] in the Binary model.
+pub fn circle_spans_exact(cx: i32, cy: i32, r_tiles_bits: u32, p: Precision) -> Result<Vec<(i32, i32, i32)>> {
     let r = fpu::load(r_tiles_bits)?;
-    let rad = fpu::ftol(&r)?;
-    let rr = fpu::ftol(&fpu::mul(&r, &r, p)?)?;
+    let (rad, rr) = (fpu::ftol(&r)?, fpu::ftol(&fpu::mul(&r, &r, p)?)?);
+    Ok(spans(cx, cy, rad, rr))
+}
+
+fn spans(cx: i32, cy: i32, rad: i32, rr: i32) -> Vec<(i32, i32, i32)> {
     let mut out = Vec::new();
     let neg = rad.wrapping_neg();
     let mut err = neg.wrapping_mul(neg).wrapping_sub(1);
@@ -126,7 +201,7 @@ pub fn circle_spans(cx: i32, cy: i32, r_tiles_bits: u32, p: Precision) -> Result
     } else {
         out.push((cx.wrapping_add(neg), cy.wrapping_add(dy), 1i32.wrapping_sub(neg.wrapping_mul(2))));
     }
-    Ok(out)
+    out
 }
 
 fn span<W: ZoneWorld + ?Sized>(
@@ -151,22 +226,21 @@ fn span<W: ZoneWorld + ?Sized>(
         let t = map.index(x, y).ok_or(Error::TileOutside(i64::from(x)))?;
         match kind {
             Span::Add => {
-                let skip = b.moved && in_circle(map, &b.old_centre, &b.old_r2, x, y, p)?;
-                if !skip && in_circle(map, &b.new_centre, &b.new_r2, x, y, p)? {
+                let skip = b.moved && in_circle(map, &b.old, x, y, p)?;
+                if !skip && in_circle(map, &b.new, x, y, p)? {
                     tile_add(map, w, zone, t)?;
                 }
             }
             Span::Remove => {
-                if b.moved && in_circle(map, &b.old_centre, &b.old_r2, x, y, p)? {
-                    let gone = zone.radius_bits == fpu::MINUS_ONE_BITS
-                        || !in_circle(map, &b.new_centre, &b.new_r2, x, y, p)?;
+                if b.moved && in_circle(map, &b.old, x, y, p)? {
+                    let gone = zone.radius_bits == fpu::MINUS_ONE_BITS || !in_circle(map, &b.new, x, y, p)?;
                     if gone {
                         tile_remove(map, w, zone, t)?;
                     }
                 }
             }
             Span::Fog => {
-                if in_circle(map, &b.new_centre, &b.new_r2, x, y, p)? {
+                if in_circle(map, &b.new, x, y, p)? {
                     if b.set {
                         reveal(map, w, t, b.kingdom, false, true)?;
                     } else {
@@ -197,6 +271,55 @@ pub fn tile_remove<W: ZoneWorld + ?Sized>(map: &mut ZoneMap, w: &mut W, zone: &Z
     on_tile_removed(map, w, zone, t)
 }
 
+/// The values `0x540020` computes before rasterising.
+#[derive(Clone, Debug)]
+pub struct MovePlan {
+    pub old: Circle,
+    pub new: Circle,
+    /// Binary32 new / old radius in tiles (`0x53F730` argument).
+    pub rn_tiles: u32,
+    pub ro_tiles: u32,
+    /// `-1 < adjusted new radius` (the add pass runs).
+    pub add: bool,
+}
+
+/// [`MovePlan`] in the Binary model.
+#[allow(clippy::too_many_arguments)]
+pub fn move_plan(map: &ZoneMap, old_x: i32, old_y: i32, old_r: u32, x: i32, y: i32, radius_bits: u32, p: Precision) -> Result<MovePlan> {
+    let rn32 = fpu::f32_store(&adjust_radius(map, radius_bits, p)?)?;
+    let ro = adjust_radius(map, old_r, p)?;
+    let old_r2 = fpu::load(fpu::f32_store(&fpu::mul(&ro, &ro, p)?)?)?;
+    let rn = fpu::load(rn32)?;
+    let new_r2 = fpu::load(fpu::f32_store(&fpu::mul(&rn, &rn, p)?)?)?;
+    let old = Circle::Exact { centre: centre(map, old_x, old_y, p)?, r2: old_r2 };
+    let new = Circle::Exact { centre: centre(map, x, y, p)?, r2: new_r2 };
+    let t = fpu::ftol(&fpu::load(map.geometry.tile_size_bits)?)?;
+    let inv = fpu::div(&fpu::load(fpu::ONE_BITS)?, &Binary::from_i32(t), p)?;
+    let rn_tiles = fpu::f32_store(&fpu::mul(&rn, &inv, p)?)?;
+    let ro_tiles = fpu::f32_store(&fpu::mul(&inv, &ro, p)?)?;
+    let add = fpu::less(&fpu::load(fpu::MINUS_ONE_BITS)?, &rn);
+    Ok(MovePlan { old, new, rn_tiles, ro_tiles, add })
+}
+
+/// [`move_plan`] at PC53 in binary64 (`None`: take the Binary model).
+pub fn move_plan_pc53(map: &ZoneMap, old_x: i32, old_y: i32, old_r: u32, x: i32, y: i32, radius_bits: u32) -> Option<MovePlan> {
+    use fpu::pc53;
+    let rn32 = pc53::store(adjust_radius_pc53(map, radius_bits)?)?;
+    let ro = adjust_radius_pc53(map, old_r)?;
+    let old_r2 = pc53::load(pc53::store(pc53::mul(ro, ro)?)?)?;
+    let rn = pc53::load(rn32)?;
+    let new_r2 = pc53::load(pc53::store(pc53::mul(rn, rn)?)?)?;
+    let half = pc53::half_tile(map.geometry.tile_size_bits)?;
+    let old = Circle::Pc53 { centre: centre_pc53(map, old_x, old_y)?, r2: old_r2, half };
+    let new = Circle::Pc53 { centre: centre_pc53(map, x, y)?, r2: new_r2, half };
+    let t = pc53::ftol(pc53::load(map.geometry.tile_size_bits)?)?;
+    let inv = pc53::div(pc53::load(fpu::ONE_BITS)?, pc53::int(t))?;
+    let rn_tiles = pc53::store(pc53::mul(rn, inv)?)?;
+    let ro_tiles = pc53::store(pc53::mul(inv, ro)?)?;
+    let add = pc53::load(fpu::MINUS_ONE_BITS)? < rn;
+    Some(MovePlan { old, new, rn_tiles, ro_tiles, add })
+}
+
 /// `0x540020(zone, x, y, radius, moved)`: store the new placement in the zone,
 /// build both circles and run the add pass (new radius > -1) and, for an
 /// incremental move, the remove pass over the old circle.
@@ -215,25 +338,13 @@ fn fast_move<W: ZoneWorld + ?Sized>(
     zone.x = x;
     zone.y = y;
     zone.radius_bits = radius_bits;
-    let rn32 = fpu::f32_store(&adjust_radius(map, radius_bits, p)?)?;
-    let ro = adjust_radius(map, old_r, p)?;
-    let old_r2 = fpu::load(fpu::f32_store(&fpu::mul(&ro, &ro, p)?)?)?;
-    let rn = fpu::load(rn32)?;
-    let new_r2 = fpu::load(fpu::f32_store(&fpu::mul(&rn, &rn, p)?)?)?;
-    let b = Builder {
-        moved,
-        old_centre: centre(map, old_x, old_y, p)?,
-        new_centre: centre(map, x, y, p)?,
-        old_r2,
-        new_r2,
-        kingdom: 0,
-        set: false,
+    let plan = match (p == Precision::Double53).then(|| move_plan_pc53(map, old_x, old_y, old_r, x, y, radius_bits)).flatten() {
+        Some(plan) => plan,
+        None => move_plan(map, old_x, old_y, old_r, x, y, radius_bits, p)?,
     };
-    let t = fpu::ftol(&fpu::load(map.geometry.tile_size_bits)?)?;
-    let inv = fpu::div(&fpu::load(fpu::ONE_BITS)?, &Binary::from_i32(t), p)?;
-    let rn_tiles = fpu::f32_store(&fpu::mul(&rn, &inv, p)?)?;
-    let ro_tiles = fpu::f32_store(&fpu::mul(&inv, &ro, p)?)?;
-    if fpu::less(&fpu::load(fpu::MINUS_ONE_BITS)?, &rn) {
+    let MovePlan { old, new, rn_tiles, ro_tiles, add } = plan;
+    let b = Builder { moved, old, new, kingdom: 0, set: false };
+    if add {
         for s in circle_spans(x, y, rn_tiles, p)? {
             span(map, w, &b, zone, Span::Add, s, p)?;
         }
@@ -305,20 +416,32 @@ pub fn fast_kingdom_pass<W: ZoneWorld + ?Sized>(
     set: bool,
     p: Precision,
 ) -> Result<()> {
-    let r = adjust_radius(map, zone.radius_bits, p)?;
-    let new_r2 = fpu::load(fpu::f32_store(&fpu::mul(&r, &r, p)?)?)?;
-    let c = centre(map, zone.x, zone.y, p)?;
-    let b = Builder {
-        moved: false,
-        old_centre: c.clone(),
-        new_centre: c,
-        old_r2: fpu::load(fpu::MINUS_ONE_BITS)?,
-        new_r2,
-        kingdom,
-        set,
+    let fast = (p == Precision::Double53)
+        .then(|| {
+            use fpu::pc53;
+            let r = adjust_radius_pc53(map, zone.radius_bits)?;
+            let new_r2 = pc53::load(pc53::store(pc53::mul(r, r)?)?)?;
+            let c = centre_pc53(map, zone.x, zone.y)?;
+            let half = pc53::half_tile(map.geometry.tile_size_bits)?;
+            let old_r2 = pc53::load(fpu::MINUS_ONE_BITS)?;
+            let t = pc53::ftol(pc53::load(map.geometry.tile_size_bits)?)?;
+            let tiles = pc53::store(pc53::div(r, pc53::int(t))?)?;
+            Some((Circle::Pc53 { centre: c, r2: old_r2, half }, Circle::Pc53 { centre: c, r2: new_r2, half }, tiles))
+        })
+        .flatten();
+    let (old, new, tiles) = match fast {
+        Some(v) => v,
+        None => {
+            let r = adjust_radius(map, zone.radius_bits, p)?;
+            let new_r2 = fpu::load(fpu::f32_store(&fpu::mul(&r, &r, p)?)?)?;
+            let c = centre(map, zone.x, zone.y, p)?;
+            let old_r2 = fpu::load(fpu::MINUS_ONE_BITS)?;
+            let t = fpu::ftol(&fpu::load(map.geometry.tile_size_bits)?)?;
+            let tiles = fpu::f32_store(&fpu::div(&r, &Binary::from_i32(t), p)?)?;
+            (Circle::Exact { centre: c.clone(), r2: old_r2 }, Circle::Exact { centre: c, r2: new_r2 }, tiles)
+        }
     };
-    let t = fpu::ftol(&fpu::load(map.geometry.tile_size_bits)?)?;
-    let tiles = fpu::f32_store(&fpu::div(&r, &Binary::from_i32(t), p)?)?;
+    let b = Builder { moved: false, old, new, kingdom, set };
     for s in circle_spans(zone.x, zone.y, tiles, p)? {
         span(map, w, &b, zone, Span::Fog, s, p)?;
     }
