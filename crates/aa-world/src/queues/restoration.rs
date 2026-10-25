@@ -72,6 +72,15 @@ impl Queues {
                 }
                 tail = Some(new);
             }
+            // The list is in file order now: its back links follow it.
+            let mut previous: Option<EventId> = None;
+            let mut cursor = self.queues[&saved.id].buckets[bucket];
+            while let Some(event) = cursor {
+                let node = self.nodes.get_mut(&event.0).ok_or(Error::InvalidCursor)?;
+                node.prev = previous;
+                previous = Some(event);
+                cursor = node.next;
+            }
         }
         Ok(())
     }
