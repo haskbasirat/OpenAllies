@@ -1489,10 +1489,21 @@ pub fn draw_ghost(
             let a = plain.base.base_color.alpha();
             plain.base.base_color.set_alpha(a * g.alpha);
             plain.extension.params.sun.w = 1.0;
-            // illegal_placement_vfx: the red tint (TINT colour 1,0,0).
+            // illegal_placement_vfx: TINT colour 1,0,0 (KKC_VFXMaterialModifier
+            // 0x449920 -> 0x717E40, lirp off, pct 1: factor = lerp(white,
+            // colour, pct); 0x716620 multiplies every material's ambient,
+            // diffuse, specular and emissive by it). A multiply, not an
+            // added glow: only the red channel is left, alpha unchanged.
+            const TINT: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
             let mut tinted = plain.clone();
-            tinted.base.emissive = LinearRgba::rgb(1.0, 0.0, 0.0);
-            tinted.extension.params.emissive = Vec4::new(1.0, 0.0, 0.0, 0.0);
+            let c = tinted.base.base_color.to_linear();
+            tinted.base.base_color = Color::LinearRgba(LinearRgba::new(c.red * TINT.x, c.green * TINT.y, c.blue * TINT.z, c.alpha));
+            let e = tinted.base.emissive;
+            tinted.base.emissive = LinearRgba::new(e.red * TINT.x, e.green * TINT.y, e.blue * TINT.z, e.alpha);
+            let p = &mut tinted.extension.params;
+            p.ambient = Vec4::new(p.ambient.x * TINT.x, p.ambient.y * TINT.y, p.ambient.z * TINT.z, p.ambient.w);
+            p.diffuse = Vec4::new(p.diffuse.x * TINT.x, p.diffuse.y * TINT.y, p.diffuse.z * TINT.z, p.diffuse.w);
+            p.emissive = Vec4::new(p.emissive.x * TINT.x, p.emissive.y * TINT.y, p.emissive.z * TINT.z, p.emissive.w);
             let plain = materials.add(plain);
             let tinted = materials.add(tinted);
             let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(plain.clone()), bevy::light::NotShadowCaster, ChildOf(parent))).id();
