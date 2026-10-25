@@ -813,7 +813,10 @@ fn new_member_walks_to_the_deployment_point_then_to_its_slot() {
 }
 
 #[test]
-fn walking_member_passes_through_others_and_redeploys_off_an_occupied_point() {
+fn walking_member_passes_through_others_and_keeps_its_point() {
+    // Only static blockers count for the arrival check and the redeploy
+    // (mask 0x20000400, Thing flag bit 29): soldiers stepping onto the point
+    // after the walk began do not move the walker on.
     let (data, ids) = data();
     let mut w = world(open_map(64, 64, 2.0), data);
     let (door, point) = (Vec2::new(60.0, 70.0), Vec2::new(60.0, 64.0));
@@ -821,43 +824,40 @@ fn walking_member_passes_through_others_and_redeploys_off_an_occupied_point() {
     let on_the_way = Vec2::new(60.0, 67.0);
     let bystander = w.spawn_actor(ids.infantry, Some(0), w.ground(on_the_way), 0.0);
     movement::walk_member(&mut w, walker, point);
-    // Someone steps onto the point after the walk began.
-    let squatter = w.spawn_actor(ids.infantry, Some(0), w.ground(point), 0.0);
+    w.spawn_actor(ids.infantry, Some(0), w.ground(point), 0.0);
+    w.spawn_actor(ids.infantry, Some(0), w.ground(point + Vec2::new(0.0, 0.6)), 0.0);
     let mut closest = f32::MAX;
     run_until(&mut w, 10.0, |w| {
         closest = closest.min((pos(w, walker) - on_the_way).length());
         false
     });
     let end = pos(&w, walker);
-    let settled = !movement::actor_moving(&w, walker);
-    eprintln!("walker settled {settled} at {end:?}; closest to the bystander {closest:.3}; from the point {:.3}", (end - point).length());
-    assert!(settled);
+    eprintln!("walker at {end:?}; closest to the bystander {closest:.3}; from the point {:.3}", (end - point).length());
+    assert!(!movement::actor_moving(&w, walker));
     // Ethereal on the way: straight through the bystander, who stays put.
     assert!(closest < 0.3, "went around: {closest}");
     assert!((pos(&w, bystander) - on_the_way).length() < 1e-3);
-    // Redeployed to a free spot within 8 m of the occupied point.
-    let gap = (end - pos(&w, squatter)).length();
-    assert!(gap >= 0.7 - 1e-3 && (end - point).length() <= 8.5, "gap {gap}");
+    // At the point itself (mode 1 ends within 0.1 m), alive.
+    assert!((end - point).length() < 0.1, "at {end:?}");
     assert!(w.actors[walker as usize].health > 0.0);
 }
 
 #[test]
-fn a_short_redeploy_reaches_its_spot() {
-    // The walk ends only at the point itself (mode 1, 0.1 m), so a free
-    // spot half a metre away is reached instead of creeping toward it.
+fn walk_target_moves_off_a_soldier_standing_there_at_the_start() {
+    // FindOpenPositionLineThenRadius: its ring search (flags 0) counts every
+    // blocking thing, so a soldier already on the point moves the target.
     let (data, ids) = data();
     let mut w = world(open_map(64, 64, 2.0), data);
     let (door, point) = (Vec2::new(60.0, 70.0), Vec2::new(60.0, 64.0));
     let walker = w.spawn_actor(ids.infantry, Some(0), w.ground(door), -FRAC_PI_2);
+    let squatter = w.spawn_actor(ids.infantry, Some(0), w.ground(point), 0.0);
     movement::walk_member(&mut w, walker, point);
-    let squatter = w.spawn_actor(ids.infantry, Some(0), w.ground(point + Vec2::new(0.0, 0.6)), 0.0);
-    advance(&mut w, 8 * aa_play::TICKS_PER_SECOND);
+    advance(&mut w, 8 * TPS);
     let end = pos(&w, walker);
     let gap = (end - pos(&w, squatter)).length();
     eprintln!("walker at {end:?}, gap to the squatter {gap:.3}");
-    assert!(w.actors[walker as usize].health > 0.0, "died redeploying");
-    assert!(gap >= 0.7 - 1e-3, "still overlapping: {gap}");
-    assert!((end - (point - Vec2::new(0.0, 0.5))).length() < 0.1, "at {end:?}");
+    assert!(gap >= 0.7 - 1e-3 && (end - point).length() <= 4.5, "gap {gap} at {end:?}");
+    assert!(w.actors[walker as usize].health > 0.0);
 }
 
 #[test]
@@ -1014,6 +1014,94 @@ fn real_berlin_routes_and_a_regiment_marches() {
     let error = formation_error_any(&w, id, &offsets);
     eprintln!("start 1 march: settled {settled} at t={:.1} anchor {anchor:?} (goal {goal:?}), error {error:.2}", w.time);
     assert!(settled && error < 1.5 && (anchor - goal).length() < 1.0, "error {error}");
+}
+/// The exact solver (aa_navigation 53E1F0 at PC53) against the f32
+/// reference on the stock maps: seeded random requests, every route
+/// compared node by node; differences are printed for explanation.
+/// `AA_ROUTE_CASES` sets the requests per map.
+#[test]
+#[ignore]
+fn real_maps_exact_solver_against_the_f32_reference() {
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"E:\Games\Axis and Alies".into()));
+    let data = GameData::load(&root).expect("GameData::load");
+    let rules = PathRules::from_data(&data);
+    let cases: usize = std::env::var("AA_ROUTE_CASES").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let (mut total, mut identical, mut close, mut printed) = (0usize, 0usize, 0usize, 0usize);
+    let (mut status_differences, mut fallbacks) = (0usize, 0u64);
+    let (mut exact_time, mut reference_time) = (std::time::Duration::ZERO, std::time::Duration::ZERO);
+    for id in ["(2v2)Berlin", "(2v2)Kursk", "(2v2)Market_Garden", "(2v2)Moscow", "(3v3)Saint_lo", "(3v3)Stalingrad"] {
+        let map = GameMap::load_with(&root, id, &data).expect("map");
+        let extent = Vec2::new(map.width as f32, map.height as f32) * map.cell_size;
+        let mut exact = Pathfinder::exact();
+        let mut reference = Pathfinder::default();
+        let (mut same_here, mut close_here, mut tiles_exact, mut tiles_reference) = (0usize, 0usize, 0u64, 0u64);
+        let mut kinds: std::collections::BTreeMap<String, usize> = Default::default();
+        for i in 0..cases {
+            let point = |r: u64| Vec2::new((r & 0xffff) as f32 / 65536.0 * extent.x, ((r >> 16) & 0xffff) as f32 / 65536.0 * extent.y);
+            // a start on an open land tile, any goal (blocked goals test the endpoint walk)
+            let class = if i % 10 == 9 { MoverClass::Water } else { MoverClass::Land };
+            let grid = Grid::new(&map, class);
+            let from = loop {
+                let p = point(next());
+                if !grid.blocked_at(p) {
+                    break p;
+                }
+            };
+            let to = if i % 4 == 0 { from + (point(next()) - extent * 0.5) * 0.15 } else { point(next()) };
+            let request = Request { from, to, class, max_speed: [0.0, 2.5, 3.5][i % 3] };
+            let t = std::time::Instant::now();
+            let a = exact.solve(&map, &rules, &request);
+            exact_time += t.elapsed();
+            let t = std::time::Instant::now();
+            let b = reference.solve_reference(&map, None, &[], &rules, &request);
+            reference_time += t.elapsed();
+            tiles_exact += u64::from(a.expanded);
+            tiles_reference += u64::from(b.expanded);
+            total += 1;
+            status_differences += usize::from(a.status != b.status);
+            if a == b {
+                identical += 1;
+                same_here += 1;
+                continue;
+            }
+            let near = a.status == b.status
+                && a.waypoints.len() == b.waypoints.len()
+                && a.waypoints.iter().zip(&b.waypoints).all(|(x, y)| (x.pos - y.pos).length() < 1e-3 && (x.dir - y.dir).length() < 1e-3);
+            let kind = if near {
+                close += 1;
+                close_here += 1;
+                "same route within 1e-3".to_string()
+            } else if a.status != b.status {
+                format!("status {:?} / {:?}", a.status, b.status)
+            } else if a.waypoints.len() != b.waypoints.len() {
+                "node count".to_string()
+            } else {
+                "node positions".to_string()
+            };
+            *kinds.entry(kind.clone()).or_default() += 1;
+            if !near && printed < 12 {
+                printed += 1;
+                eprintln!("{id} #{i} {kind}: {from:?} -> {to:?} speed {} {class:?}\n  exact {:?} goal {:?} tiles {} nodes {:?}\n  f32   {:?} goal {:?} tiles {} nodes {:?}", request.max_speed, a.status, a.goal, a.expanded, a.waypoints.iter().map(|w| w.pos).collect::<Vec<_>>(), b.status, b.goal, b.expanded, b.waypoints.iter().map(|w| w.pos).collect::<Vec<_>>());
+            }
+        }
+        eprintln!("{id}: {cases} routes, {same_here} identical, {close_here} within 1e-3, tiles exact {tiles_exact} / f32 {tiles_reference}, differences {kinds:?}, fallbacks {}", exact.fallbacks);
+        fallbacks += exact.fallbacks;
+    }
+    eprintln!("total {total}: {identical} identical, {close} within 1e-3, {status_differences} status differences; time exact {exact_time:?}, f32 {reference_time:?}");
+    // Proven: the stock maps never need the f32 fallback, and the two
+    // solvers agree on reachability. Route shapes differ by design (the f32
+    // reference rounds the heuristic, step cost and priority in binary32 at
+    // every operation, so heap ties and smoothing differ); the exact solver
+    // is proven against the native fixtures in aa-navigation.
+    assert_eq!(fallbacks, 0, "the exact solver refused stock-map requests");
+    assert!(status_differences * 100 <= total, "{status_differences} status differences in {total}");
 }
 fn formation_error_any(w: &World, o: OrgId, offsets: &[[f32; 2]]) -> f32 {
     let org = &w.orgs[o as usize];

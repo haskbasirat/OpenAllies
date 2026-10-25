@@ -45,7 +45,15 @@ pub const DT: f32 = 1.0 / TICKS_PER_SECOND as f32;
 pub mod mapgen;
 /// Fog of war (appended by the UI/fog owner).
 pub mod fog;
+/// The aa-zones engine bound to the battle: fog and supply zones (fog owner).
+pub mod zones;
+/// The earlier f32 fog, kept for the comparison tests (fog owner).
+pub mod fog_legacy;
 /// HUD player orders (appended by the UI owner).
 pub mod player_orders;
 /// Generals' special operations (appended by the combat owner).
 pub mod special_ops;
+/// Parity trace: the S-log emulation and per-tick digests (core owner).
+pub mod trace;
+/// Native GTIDs beside the aa-play indices (core owner).
+pub mod ids;

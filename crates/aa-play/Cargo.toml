@@ -12,9 +12,23 @@ aa-rules = { path = "../aa-rules" }
 aa-mapworld = { path = "../aa-mapworld" }
 aa-assets = { path = "../aa-assets" }
 aa-numeric = { path = "../aa-numeric" }
+# fog owner: the exact zone / fog / detection port (fog and supply zones)
+aa-zones = { path = "../aa-zones" }
 aa-navigation = { path = "../aa-navigation" }
 # core owner: Character animation set for the native derived ability recharge
 aa-animation = { path = "../aa-animation" }
+# core owner: the native world RNG and clock (0x85D840, 0x4F9970) and the
+# S-log hash (TGC_Synchronizer) for the parity trace
+aa-simulation = { path = "../aa-simulation" }
+aa-orders = { path = "../aa-orders" }
+# core owner: the native GTID manager (IdentityRegistry) for crate::ids
+aa-actors = { path = "../aa-actors" }
+# core owner: the exact kingdom economy (0x4E9C40, 0x4E3940/0x4E48C0/0x4E4930)
+# and the native resource value types
+aa-economy = { path = "../aa-economy" }
+aa-body = { path = "../aa-body" }
+# movement owner: the native tile walk 0x4DD150 for the exact path solver
+aa-spatial = { path = "../aa-spatial" }
 anyhow = "1"
 glam = { version = "0.32", features = ["serde"] }
 serde.workspace = true

@@ -194,8 +194,9 @@ fn core_step(w: &mut aa_play::World, commands: Vec<aa_play::Command>) {
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);
-    w.tick += 1;
-    w.time = w.tick as f32 * aa_play::DT;
+    w.clock.advance_fragment();
+    w.tick = u64::from(w.clock.tick);
+    w.time = f32::from_bits(w.clock.end.0);
 }
 
 fn recruited(w: &mut aa_play::World, seconds: u32) -> Option<(Option<u32>, Option<u32>)> {
@@ -581,7 +582,8 @@ fn every_nation_corps_income_at_start() {
 
 /// What a division HQ truck adds to the income while packed, unpacking and
 /// deployed (56F9A0 / 56F960 / 4D0C90): the packed truck produces its own
-/// EconomyComponent (rus_truck_infantry 12/5/2), nothing while unpacking, the
+/// EconomyComponent (rus_truck_infantry 12/5/2), the unpacking HQ as the
+/// member it is (56FC20 has no state gate), the
 /// deployed HQ in supply its own (rus_hq_infantry 25/10/5), and a deployed HQ
 /// cut off with an empty stockpile its packed truck's values. The Corps is
 /// 25/20/10. Supply trucks and depots give no money.
@@ -634,11 +636,18 @@ fn hq_truck_income_packed_unpacking_and_deployed() {
                     assert_eq!(w.kingdoms[0].income, sum(corps_income, truck_income), "{label}: packed truck out of supply");
                 }
             }
-            if w.books.actors.iter().any(|b| b.deploy.is_some()) {
+            if let Some(building) = w.books.actors.iter().position(|b| b.deploy.is_some()) {
                 unpacking_ticks += 1;
                 if unpacking_ticks == 2 {
-                    eprintln!("{label} t={:.1}s unpacking: income {:?}", w.time, w.kingdoms[0].income);
-                    assert_eq!(w.kingdoms[0].income, corps_income, "{label}: nothing while unpacking");
+                    // The unpacking HQ is its organization's member: 56FC20
+                    // counts members without a state gate (only a top-level
+                    // thing in construction / disabled produces nothing,
+                    // 56F9A0), so it produces as the building, or as its
+                    // packed truck when cut off (56F960).
+                    let cut_off = w.books.out_of_supply(building as u32);
+                    eprintln!("{label} t={:.1}s unpacking: income {:?} out {cut_off}", w.time, w.kingdoms[0].income);
+                    let want = if cut_off { sum(corps_income, truck_income) } else { sum(corps_income, hq_income) };
+                    assert_eq!(w.kingdoms[0].income, want, "{label}: the unpacking HQ through its organization");
                 }
             }
         }
@@ -1100,7 +1109,16 @@ fn six_regiments_in_a_row_at_one_hq_all_complete() {
                 if let Event::Died { actor } = e {
                     let a = &w.actors[*actor as usize];
                     let near = w.actors.iter().filter(|x| x.alive && x.id != a.id && x.pos.truncate().distance(a.pos.truncate()) < 0.8).count();
-                    eprintln!("t={:.1}s died: actor {} org {:?} slot {:?} at {} ({near} others within 0.8 m)", w.time, a.id, a.org, a.slot, a.pos.truncate());
+                    eprintln!(
+                        "t={:.1}s died: actor {} {} of {:?} org {:?} slot {:?} at {} ({near} others within 0.8 m)",
+                        w.time,
+                        a.id,
+                        data.def(a.def).id,
+                        a.kingdom,
+                        a.org,
+                        a.slot,
+                        a.pos.truncate()
+                    );
                 }
             }
             deaths += w.events.iter().filter(|e| matches!(e, Event::Died { .. })).count();
@@ -1256,5 +1274,138 @@ fn biomes_name_their_texture_subfolders() {
         if let Ok(map) = GameMap::load_with(&root(), id, &data) {
             eprintln!("{id}: biome {:?} -> {:?}", map.biome, data.terrain.texture_subfolder(&map.biome));
         }
+    }
+}
+
+/// Native ids on Berlin (`aa_play::ids`): the map's things keep their saved
+/// GTIDs; the unused kingdoms and their things are destroyed; the corps
+/// replacements take next-fit ids from the IDMGR cursor in ascending
+/// placeholder slot order, each placeholder destroyed first (4FDA70 /
+/// 4FC4A0 / 4FBA50); later creations continue the cursor.
+#[test]
+#[ignore]
+fn native_ids_on_berlin() {
+    use aa_play::ids::{Gtid, Thing};
+    let mut w = berlin_world();
+    let map = w.map.clone();
+    let idmgr = map.id_manager.clone().expect("IDMGR");
+    assert_eq!((idmgr.next_slot, idmgr.highest_slot), (13399, 13398));
+    let mut kept = 0;
+    let mut corps = Vec::new();
+    for a in &w.actors {
+        let Some(index) = w.books.actor(a.id).and_then(|b| b.placed) else { continue };
+        let p = &map.placed[index];
+        if p.thing_id.eq_ignore_ascii_case("placeholder_corpsunpacked") {
+            corps.push((Gtid::from_raw(p.serialized_id).slot(), w.ids.actor(a.id).expect("replacement id").raw(), a.id));
+        } else {
+            assert_eq!(w.ids.actor(a.id), Some(Gtid::from_raw(p.serialized_id)), "{} keeps its saved id", p.thing_id);
+            kept += 1;
+        }
+    }
+    corps.sort();
+    eprintln!("kept {kept} map actors with their saved ids; corps (placeholder slot, new id, actor) {corps:?}; live {}", w.ids.live());
+    assert!(kept > 20);
+    assert_eq!(corps.iter().map(|c| c.1).collect::<Vec<_>>(), [13399, 13400], "next-fit from IDMGR, ascending placeholder slot");
+    for &(slot, _, actor) in &corps {
+        // The placeholder was destroyed: its slot is free, generation + 1.
+        assert_eq!(w.ids.gtid_at_slot(slot), None);
+        assert_eq!(w.ids.thing_at_slot(13399 + corps.iter().position(|c| c.2 == actor).unwrap() as u16), Some(Thing::Actor(actor)));
+    }
+    // The kingdoms keep their map ids; the unused slots' kingdoms and
+    // things are gone.
+    for k in 0..w.kingdoms.len() as u32 {
+        let slot = w.ids.kingdom_slot(k).expect("bound");
+        assert_eq!(w.ids.kingdom(k).map(Gtid::raw), map.slots[slot].serialized_id);
+        if let Some(index) = map.slots[slot].kingdom_index {
+            assert_eq!(aa_play::ids::kingdom_by_index(&w, index), Some(k));
+        }
+    }
+    let used: Vec<usize> = (0..w.kingdoms.len() as u32).filter_map(|k| w.ids.kingdom_slot(k)).collect();
+    for (s, slot) in map.slots.iter().enumerate().filter(|(s, _)| !used.contains(s)) {
+        let raw = slot.serialized_id.expect("saved kingdom id");
+        assert_eq!(w.ids.thing(raw), None, "unused kingdom {} destroyed", slot.id);
+        for (i, p) in map.placed.iter().enumerate().filter(|(_, p)| p.owner_slot == Some(s as u32)) {
+            assert_eq!(w.ids.placed(i), None, "{} of the unused kingdom destroyed", p.thing_id);
+            assert_eq!(w.ids.thing(p.serialized_id), None);
+        }
+    }
+    // Scenery keeps its ids.
+    let scenery = w.books.scenery[0];
+    assert_eq!(w.ids.thing(map.placed[scenery].serialized_id), Some(Thing::Placed(scenery)));
+    // The next creation continues the cursor.
+    let def = w.actors[corps[0].2 as usize].def;
+    let a = aa_play::production::spawn_single(&mut w, def, Some(0), glam::Vec2::new(100.0, 100.0), 0.0);
+    assert_eq!(w.ids.actor(a).map(Gtid::raw), Some(13401));
+    w.actors[a as usize].removed = true;
+    w.step(vec![]);
+    assert_eq!(w.ids.thing(13401), None);
+    assert_eq!(w.ids.next_slot(), 13402);
+}
+
+/// Parity trace evidence: the S stream of the first 34 ticks (one film
+/// record each) on Berlin and on a generated map, with the computer player
+/// attached. Every tick logs its clock first; the world-RNG getters follow.
+/// The film checkpoints of record 34 carry index 51 (34 clock entries and 17
+/// others); what aa-play logs besides the clock is printed for comparison.
+#[test]
+#[ignore]
+fn trace_first_34_ticks() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    use aa_play::trace::SKind;
+    let data = data();
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let ai = Arc::new(aa_play::ai::AiData::load(&root()).expect("AiData"));
+    for kind in ["berlin", "generated"] {
+        let mut w = if kind == "berlin" {
+            berlin_world()
+        } else {
+            let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, 3)).expect("generate");
+            let setup = aa_play::SkirmishSetup {
+                map_id: "generated".into(),
+                players: vec![
+                    aa_play::PlayerSetup { name: "A".into(), nation: "usa".into(), team: 0, color: [0, 76, 255], controller: aa_play::Controller::Human, start: 0 },
+                    aa_play::PlayerSetup { name: "B".into(), nation: "ger".into(), team: 1, color: [217, 0, 25], controller: aa_play::Controller::Computer(1), start: 1 },
+                ],
+                starting_resources: None,
+                seed: 3,
+            };
+            aa_play::World::new_skirmish(data.clone(), Arc::new(generated.map), &setup).expect("new_skirmish")
+        };
+        w.kingdoms[1].controller = aa_play::Controller::Computer(1);
+        aa_play::ai::attach(&mut w, ai.clone());
+        // After the battle start S is fresh: the next entry gets index 1.
+        assert_eq!(w.trace.checkpoint(), (0, 0));
+        if kind == "berlin" {
+            // 0x4FC600 reads the map's saved GWORLD +0xD4 over the seeded
+            // state; the battle-start sync dump draws once.
+            assert_eq!(w.map.rng_state, Some(0xb846_ce0c));
+            let mut saved = aa_simulation::NativeRng { state: 0xb846_ce0c };
+            saved.next_u32();
+            assert_eq!(w.native_rng.state, saved.state);
+        }
+        w.trace.record(true);
+        for _ in 0..34 {
+            w.step(vec![]);
+        }
+        let entries: Vec<_> = w.trace.entries().collect();
+        let clocks: Vec<_> = entries.iter().filter(|e| e.1 == SKind::Clock).collect();
+        assert_eq!(clocks.len(), 34);
+        for (i, e) in clocks.iter().enumerate() {
+            assert_eq!(e.0, i as u32 + 1);
+            assert_eq!(e.2, ((i as u32).saturating_sub(1) as f32 * 0.0625).to_bits());
+        }
+        let (index, hash) = w.trace.checkpoint();
+        assert_eq!(index as usize, entries.len());
+        let mut per_tick = vec![0u32; 35];
+        for e in entries.iter().filter(|e| e.1 != SKind::Clock) {
+            per_tick[e.0 as usize] += 1;
+        }
+        eprintln!(
+            "{kind}: record 34 checkpoint index {index} hash {hash} (film: index 51); other entries per tick {:?}; rng state {:#010x}; world digest {:#018x}",
+            &per_tick[1..],
+            w.native_rng.state,
+            w.trace.digests.last().unwrap().world
+        );
     }
 }

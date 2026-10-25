@@ -11,7 +11,11 @@
 //!   nation placeholder table (Data/Nations/<nation>.tgi `[Placeholder]`,
 //!   e.g. placeholder_corpsunpacked -> rus_corps, placeholder_bunker ->
 //!   rus_bunker, placeholder_depot_supply -> rus_truck_supply), other owned
-//!   ActorData things (start_loc...) stay that kingdom's actors;
+//!   ActorData things (start_loc...) stay that kingdom's actors; the
+//!   replacements are created after every kept map thing, in the order of
+//!   GWorld::ResolvePlaceholdersAndRandomThings 0x4FDA70 / 0x4FC4A0 (objects,
+//!   then actors, each list in ascending placeholder slot), which is also the
+//!   order their native ids are given in (`crate::ids`);
 //! - independent-owned buildings (cities, farms, city blocks: ActorData of
 //!   category BUILDING or with a City/Economy component) become neutral
 //!   actors; unowned things (doodads, roads, trees) stay scenery;
@@ -118,6 +122,17 @@ impl World {
             world.books.kingdom_mut(id, data.resources.len());
         }
         world.books.relations = relations(&world, &map, &slot_kingdom, players);
+        // Native ids (crate::ids): every kingdom takes its map slot's id; the
+        // kingdoms of unused slots are destroyed with their things.
+        for (s, k) in slot_kingdom.iter().enumerate() {
+            match k {
+                Some(k) => world.ids.bind_kingdom(*k, s),
+                None => world.ids.destroy_map_kingdom(&map, s),
+            }
+        }
+        // The map's things in record order keep their saved ids; the
+        // placeholders of player kingdoms are resolved afterwards (4FDA70).
+        let mut replacements: Vec<(bool, u16, usize, crate::data::DefId, u32)> = Vec::new();
         for (index, p) in map.placed.iter().enumerate() {
             let owner = p.owner_slot.map(|s| s as usize).filter(|&s| s < map.slots.len());
             let thing = p.thing_id.to_ascii_lowercase();
@@ -127,20 +142,42 @@ impl World {
                 Some(s) if !map.slots[s].independent => {
                     let Some(k) = slot_kingdom[s] else { continue };
                     let nation = data.nation(&world.kingdoms[k as usize].nation);
-                    let def = nation.and_then(|n| n.placeholders.get(&thing).copied()).or_else(|| (!placeholder).then(|| data.find(&thing)).flatten());
-                    match def.filter(|&d| data.def(d).actor_data) {
-                        Some(def) => spawn_placed(&mut world, def, Some(k), pos, p.yaw, index),
-                        None if placeholder => {}
+                    if placeholder {
+                        // A missing substitution (GWorld.cpp 0x138E) leaves
+                        // the placeholder as it is.
+                        if let Some(def) = nation.and_then(|n| n.placeholders.get(&thing).copied()) {
+                            let slot = crate::ids::Gtid::from_raw(p.serialized_id).slot();
+                            replacements.push((data.def(def).actor_data, slot, index, def, k));
+                        }
+                        continue;
+                    }
+                    match data.find(&thing).filter(|&d| data.def(d).actor_data) {
+                        Some(def) => keep_placed(&mut world, def, Some(k), pos, p.yaw, index),
                         None => world.books.scenery.push(index),
                     }
                 }
                 Some(s) => match data.find(&thing).filter(|&d| neutral_actor(&data, d)) {
-                    Some(def) => spawn_placed(&mut world, def, slot_kingdom[s], pos, p.yaw, index),
+                    Some(def) => keep_placed(&mut world, def, slot_kingdom[s], pos, p.yaw, index),
                     None if placeholder => {}
                     None => world.books.scenery.push(index),
                 },
                 None if placeholder => {}
                 None => world.books.scenery.push(index),
+            }
+        }
+        // 4FDA70 queues the placeholders in ascending slot order (4EFBE0),
+        // objects and actors apart; 4FC4A0 runs the objects, then the actors;
+        // 4FBA50 destroys each placeholder before it creates the replacement.
+        replacements.sort_by_key(|&(actor, slot, ..)| (actor, slot));
+        for (actor, _, index, def, k) in replacements {
+            world.ids.destroy_placed(index);
+            let p = &map.placed[index];
+            if actor {
+                spawn_placed(&mut world, def, Some(k), glam::Vec2::new(p.position[0], p.position[1]), p.yaw, index);
+            } else {
+                // A replacement object (not modelled by aa-play) still takes
+                // its id.
+                world.ids.created_object(index);
             }
         }
         // Supply zones and the economy as they stand at the start.
@@ -149,6 +186,8 @@ impl World {
         for k in 0..world.kingdoms.len() as u32 {
             crate::economy::publish(&mut world, k);
         }
+        // World sync dump and session launch (one draw, S reset).
+        world.begin_battle();
         Ok(world)
     }
 }
@@ -196,6 +235,14 @@ fn relations(world: &World, map: &GameMap, slot_kingdom: &[Option<u32>], players
 /// How kingdom `a` regards kingdom `b` in `world` (native 4E52D0 values).
 pub fn relation(world: &World, a: Option<u32>, b: Option<u32>) -> u8 {
     world.books.relation(&world.kingdoms, a, b)
+}
+
+/// A map thing aa-play turns into an actor or organization: it keeps its
+/// saved id.
+fn keep_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>, pos: glam::Vec2, facing: f32, index: usize) {
+    world.ids.request_placed(index);
+    spawn_placed(world, def, kingdom, pos, facing, index);
+    world.ids.clear_request(index);
 }
 
 fn spawn_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>, pos: glam::Vec2, facing: f32, index: usize) {

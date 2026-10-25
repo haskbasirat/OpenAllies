@@ -85,6 +85,9 @@ pub struct MapSlot {
     pub relations_to_kingdoms: Vec<u32>,
     #[serde(default)]
     pub relations_to_teams: Vec<u32>,
+    /// Saved GTID of the KINGDOMS record.
+    #[serde(default)]
+    pub serialized_id: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -131,6 +134,32 @@ pub struct GameMap {
     /// Problems met while loading (unresolved terrain ids, missing starts...).
     #[serde(default)]
     pub load_notes: Vec<String>,
+    /// The world random stream (GWorld+0xD4) as map creation leaves it, and
+    /// the state every GetRNG 0x4F02B0 call logged on the way (the
+    /// CreateGWorld getter first). A generated map: as the random map
+    /// generator left it. A loaded map: the GWORLD chunk's saved state, which
+    /// the map load 0x4FC600 reads over the seeded one (with the saved clock,
+    /// tick 0 and step 1/16 on every stock map). The world continues from it.
+    #[serde(default)]
+    pub rng_state: Option<u32>,
+    #[serde(default)]
+    pub rng_log: Vec<u32>,
+    /// The GTID manager state the map was saved with (IDMGR chunk, 0x4F0230);
+    /// `None` for a generated map. See `crate::ids`.
+    #[serde(default)]
+    pub id_manager: Option<IdManager>,
+    /// Saved GTID of each TEAMS record, in team slot order.
+    #[serde(default)]
+    pub team_ids: Vec<u32>,
+}
+
+/// IDMGR: the next-fit cursor, the highest used slot and the generation of
+/// every slot below it (exactly `highest_slot` of them, as 0x4F0230 reads).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct IdManager {
+    pub next_slot: u32,
+    pub highest_slot: u32,
+    pub generations: Vec<u16>,
 }
 
 impl GameMap {
@@ -331,6 +360,13 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
     // The original RMP.
     let archive = aa_mapworld::MapArchive::from_bytes(read_rmp(game_root, map_id)?)?;
     let inventory = aa_mapworld::WorldInventory::decode(&archive, 1 << 30)?;
+    let saved = &inventory.world;
+    if saved.word_dc != 0 || saved.begin_time_bits != 0 || saved.word_e4 != 0 || saved.delta_bits != 0.0625f32.to_bits() {
+        notes.push(format!(
+            "saved GWORLD clock (tick {}, begin {:#x}, end {:#x}, step {:#x}) is not the stock clock and is not applied",
+            saved.word_dc, saved.begin_time_bits, saved.word_e4, saved.delta_bits
+        ));
+    }
     let header = inventory
         .header
         .as_ref()
@@ -355,12 +391,14 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
             kingdom_index: None,
             relations_to_kingdoms: Vec::new(),
             relations_to_teams: Vec::new(),
+            serialized_id: None,
         });
     }
     if let Some(k) = &inventory.kingdoms {
         for r in k.slots.iter().filter_map(|s| s.record.as_ref()) {
             let name = utf16(&r.thing.name_utf16);
             if let Some(slot) = slots.iter_mut().find(|s| s.id.eq_ignore_ascii_case(&name)) {
+                slot.serialized_id = Some(r.serialized_id);
                 slot.kingdom_index = Some(r.payload.word_188);
                 slot.relations_to_kingdoms = r.payload.words_1d0.values.clone();
                 slot.relations_to_teams = r.payload.words_1dc.as_ref().map(|v| v.values.clone()).unwrap_or_default();
@@ -510,5 +548,13 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
         cell_variation,
         variations,
         load_notes: notes,
+        rng_state: Some(inventory.world.rng_state),
+        rng_log: vec![aa_simulation::NativeRng::default().state],
+        id_manager: Some(IdManager {
+            next_slot: inventory.id_manager.next_slot,
+            highest_slot: inventory.id_manager.highest_slot,
+            generations: inventory.id_manager.serialized_generations.clone(),
+        }),
+        team_ids: inventory.teams.iter().flat_map(|t| &t.slots).filter_map(|s| s.record.as_ref()).map(|r| r.serialized_id).collect(),
     })
 }

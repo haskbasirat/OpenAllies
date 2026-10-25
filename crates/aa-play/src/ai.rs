@@ -51,14 +51,18 @@ use std::sync::Arc;
 use view::View;
 
 /// The SAI RNG object (`[B36528]+2C`): `85D8A0` seeding, `85D840` draws.
+/// KKC_SAI's constructor 0x7A0AA0 seeds it once with 0x59ABA0, the
+/// milliseconds of a QueryPerformanceCounter timer, so natively it differs
+/// from run to run; aa-play takes the seed from [`set_seed`] (0 by default).
 #[derive(Clone, Copy, Debug)]
 pub struct SaiRng {
     pub state: u32,
 }
 impl SaiRng {
+    /// 0x85D8A0: `((seed << 16) | seed) ^ 0x8E4B12A5`, zero means the
+    /// default state.
     pub fn from_seed(seed: u32) -> Self {
-        let mixed = ((seed << 16) | (seed & 0xffff)) ^ 0x8e4b_12a5;
-        SaiRng { state: if mixed == 0 { 0x8e4b_12a5 } else { mixed } }
+        SaiRng { state: aa_simulation::NativeRng::from_native_seed(seed).state }
     }
     pub fn next_u32(&mut self) -> u32 {
         let wide = u64::from(self.state) * 0x41c6_4e6d + 0x3039;
@@ -160,6 +164,9 @@ pub struct AiState {
     /// Land reachability of the unpack site search (rebuilt when the
     /// structures change).
     reach: reach::Reach,
+    // ---- appended by the core owner ----
+    /// The 0x59ABA0 value KKC_SAI seeds its RNG with ([`set_seed`]).
+    seed: u32,
 }
 
 impl std::fmt::Debug for AiState {
@@ -171,6 +178,15 @@ impl std::fmt::Debug for AiState {
 /// Install the original SAI data (from [`AiData::load`]).
 pub fn attach(world: &mut World, data: Arc<AiData>) {
     world.ai.data = Some(data);
+}
+
+/// The value the SAI RNG is seeded with (0x7A0AA0: 0x85D8A0 of 0x59ABA0,
+/// the elapsed milliseconds of a performance-counter timer). Pass a clock
+/// reading to vary the AI between runs as the original does; tests keep the
+/// default 0. Takes effect if the SAI has not drawn yet.
+pub fn set_seed(world: &mut World, seed: u32) {
+    world.ai.seed = seed;
+    world.ai.rng = None;
 }
 
 /// Choose the SAI profile of a kingdom by IDS (e.g. `zhukov_sai`), as the
@@ -219,7 +235,8 @@ impl AiState {
             let tiles = svar(world, "StaticMapStartingSquareSize", 10.0).max(1.0) as u32;
             self.regions = Some(Regions::build(&world.map, tiles));
         }
-        let rng = self.rng.get_or_insert_with(|| SaiRng::from_seed((world.rng ^ (world.rng >> 32)) as u32));
+        let seed = self.seed;
+        let rng = self.rng.get_or_insert_with(|| SaiRng::from_seed(seed));
         let mut rng = *rng;
         self.ensure_players(world, &data, &mut rng);
         let regions = self.regions.take().unwrap_or_default();

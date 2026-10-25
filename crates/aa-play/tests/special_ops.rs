@@ -2,7 +2,8 @@
 //! the experience pool (cost, periodic income, maximum), recharge and the
 //! admission codes, area damage with the target filter, an enchantment's
 //! modifiers and expiry, a +SELF ability on the kingdom. The ticks call only
-//! `special_ops::tick` (no movement or combat), so units stay put.
+//! the economy (the Commander's income 4CDFD0) and `special_ops::tick` (no
+//! movement or combat), so units stay put.
 use aa_play::data::{Def, DefClass, GameData};
 use aa_play::map::GameMap;
 use aa_play::special_ops::{self, Enchantment, General, GeneralData, OpEffect, OpModifier, OpTarget, SpecialOp};
@@ -162,9 +163,13 @@ fn world() -> (World, Vec<u32>, Vec<u32>, Vec<u32>) {
 
 fn tick(w: &mut World) {
     w.events.clear();
+    w.clock.advance_fragment();
+    w.tick = u64::from(w.clock.tick);
+    w.time = f32::from_bits(w.clock.end.0);
+    // (core) the Commander's experience income 4CDFD0 runs in the kingdom
+    // economy tick 4E9C40.
+    aa_play::economy::tick(w);
     special_ops::tick(w);
-    w.tick += 1;
-    w.time = w.tick as f32 * DT;
 }
 
 fn apply(w: &mut World, ability: u32, target: Option<AbilityTarget>) -> Result<(), String> {
@@ -264,4 +269,27 @@ fn self_ability_enchants_the_kingdom() {
     // an ability that is not +SELF needs a target
     special_ops::set_starting_experience(&mut w, 1000.0);
     assert_eq!(apply(&mut w, 1, None), Err("special_operation_requires_target".into()));
+}
+
+/// (core) Through `World::step`: the Commander's income 4CDFD0 runs once per
+/// tick in the kingdom economy tick 4E9C40 (aa-economy), seconds x
+/// ExperienceFactionGainPeriodic, so it gains exactly the rate per second:
+/// never twice (special_ops keeps only the regiment gains 4E0FD0) and never
+/// zero.
+#[test]
+fn commander_experience_income_is_the_rate_once_per_second() {
+    let mut w = World::empty(Arc::new(data()), Arc::new(GameMap::default()), 3);
+    w.kingdoms = vec![kingdom(0, 0)];
+    regiment(&mut w, 0, Vec2::new(50.0, 50.0));
+    special_ops::attach(&mut w, Arc::new(generals()));
+    special_ops::set_general(&mut w, 0, Some("tester"));
+    let start = special_ops::experience(&w, 0).unwrap().0;
+    assert_eq!(start, 200.0);
+    for second in 1..=10u32 {
+        for _ in 0..16 {
+            w.step(vec![]);
+        }
+        let (xp, _) = special_ops::experience(&w, 0).unwrap();
+        assert_eq!(xp, start + second as f32, "after {second} s");
+    }
 }

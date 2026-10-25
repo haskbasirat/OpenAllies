@@ -315,6 +315,15 @@ pub struct Pathfinder {
     heap: Vec<Entry>,
     width: i32,
     tables: Vec<Table>,
+    /// The native search grid of the map (see [`exact`]).
+    native: Option<exact::NativeGrid>,
+    /// Requests the exact solver could not take (non-power-of-two cells or
+    /// an exact-path error), solved by the f32 reference instead.
+    pub fallbacks: u64,
+    /// Solve with the exact native solver (see [`Pathfinder::exact`]). Off
+    /// by default until it meets the planning budget: the game uses the f32
+    /// reference.
+    pub exact: bool,
 }
 
 fn normalize(v: Vec2) -> Vec2 {
@@ -415,8 +424,25 @@ impl Pathfinder {
         self.solve_ignoring(map, occupancy, &[], rules, request)
     }
 
-    /// As `solve_with`, with structure footprints the mover ignores.
+    /// A pathfinder that solves with the exact native solver
+    /// (`aa_navigation::solver` 53E1F0 at PC53), falling back to the f32
+    /// reference only where the native code refuses (a cell size that is not
+    /// a power of two, or an exact-path error; counted in `fallbacks`).
+    pub fn exact() -> Self {
+        Self { exact: true, ..Self::default() }
+    }
+    /// As `solve_with`, with structure footprints the mover ignores; exact
+    /// when `self.exact`, else the f32 reference.
     pub fn solve_ignoring(&mut self, map: &GameMap, occupancy: Option<(&[u16], u64)>, ignore: &[[i32; 4]], rules: &PathRules, request: &Request) -> Route {
+        let exact = self.exact;
+        self.solve_by(map, occupancy, ignore, rules, request, exact)
+    }
+    /// The f32 reimplementation, kept as the reference the exact solver is
+    /// compared with.
+    pub fn solve_reference(&mut self, map: &GameMap, occupancy: Option<(&[u16], u64)>, ignore: &[[i32; 4]], rules: &PathRules, request: &Request) -> Route {
+        self.solve_by(map, occupancy, ignore, rules, request, false)
+    }
+    fn solve_by(&mut self, map: &GameMap, occupancy: Option<(&[u16], u64)>, ignore: &[[i32; 4]], rules: &PathRules, request: &Request, native: bool) -> Route {
         let key = (map as *const GameMap as usize, map.width, map.height, map.flags.len(), request.class, occupancy.map_or(0, |o| o.1));
         let mut tables = std::mem::take(&mut self.tables);
         let index = match tables.iter().position(|t| t.key == key) {
@@ -445,7 +471,13 @@ impl Pathfinder {
         };
         grid.table = Some(&tables[index].cells);
         grid.ignore = ignore;
-        let route = self.solve_on(&grid, rules, request);
+        let route = match native.then(|| exact::solve(&mut self.native, &grid, rules, request)).flatten() {
+            Some(route) => route,
+            None => {
+                self.fallbacks += u64::from(native);
+                self.solve_on(&grid, rules, request)
+            }
+        };
         self.tables = tables;
         route
     }
@@ -643,6 +675,198 @@ impl Pathfinder {
         update_head(&mut nodes, start);
         nodes.reverse();
         nodes
+    }
+}
+
+/// The exact native solver over the same tile view: `aa_navigation::solver`
+/// 53E1F0 with its search 53D8D0, step cost 53CB70, endpoint adjustment
+/// 53D340/552640, materialization 53D500/53CF40 and the tile walk 4DD150
+/// (`aa_spatial::tile_walk`), all at the simulation's PC53, with
+/// `aa_numeric::Fast` arithmetic. Not modelled here, as in the f32
+/// reference: wall actors on tiles (53CB70's wall cost), the object
+/// displacement 53CA30 and the region pre-pass 53DC00 (no region topology).
+mod exact {
+    use super::{Grid, PathRules, Request, Route, Status, Waypoint};
+    use aa_navigation::{OwnedPath, cost, endpoint, materialize, search, solver};
+    use aa_numeric::{Fast, Precision};
+    use aa_spatial::tile_walk::{TileGrid, TileWalk};
+    use glam::Vec2;
+    use std::cmp::Ordering;
+
+    /// The simulation thread's precision control (research/phase8-tick/fpu-precision.md).
+    const PC: Precision = Precision::Double53;
+
+    /// The native search grid of one map: flags20 bit0 (hard-blocked tiles and
+    /// the outer ring) and the visit epochs and predecessor directions that
+    /// the searches leave behind, which the native grid keeps between them.
+    #[derive(Debug)]
+    pub struct NativeGrid {
+        key: (usize, i32, i32, u32),
+        grid: search::SearchGrid,
+    }
+
+    /// The host side of one solve: tile predicates from the class view
+    /// (0x54F370 with the descriptor mask), terrain speeds, the tile walk.
+    struct Host<'g, 'a> {
+        grid: &'g Grid<'a>,
+        tile: TileGrid,
+        extent: [u32; 2],
+        max_speed_bits: u32,
+        penalty_bits: u32,
+        walk: Option<TileWalk>,
+    }
+
+    impl endpoint::World for Host<'_, '_> {
+        /// 0x53CE40 as the tile test: inside the map and the tile open.
+        fn acceptable(&mut self, _: [u32; 2], point: [u32; 2]) -> endpoint::Result<bool> {
+            for (axis, &value) in point.iter().enumerate() {
+                let v = Fast::from_f32_bits(value)?;
+                if v.is_negative_nonzero() || v.compare(&Fast::from_f32_bits(self.extent[axis])?) != Ordering::Less {
+                    return Ok(false);
+                }
+            }
+            let shift = self.tile.coordinate_shift & 31;
+            let cell = [Fast::from_f32_bits(point[0])?.truncate_i32()? >> shift, Fast::from_f32_bits(point[1])?.truncate_i32()? >> shift];
+            Ok(!self.grid.blocked(cell))
+        }
+        /// 0x53CA30 moves the point around a blocking object; objects do not
+        /// own tiles here.
+        fn displace_blocked(&mut self, _: [u32; 2], _: &mut [u32; 2]) -> endpoint::Result<bool> {
+            Ok(false)
+        }
+    }
+    impl search::SearchWorld for Host<'_, '_> {
+        fn collision_blocked(&mut self, _: &search::SearchGrid, cell: [i32; 2]) -> search::Result<bool> {
+            Ok(self.grid.blocked(cell))
+        }
+        fn accumulated_cost(&mut self, grid: &search::SearchGrid, current: search::QueueEntry, next: [i32; 2], p: Precision) -> search::Result<u32> {
+            let mut state = cost::State { current, maximum_speed_bits: self.max_speed_bits, collision_owner: None };
+            cost::accumulated_cost(grid.cell_size_bits, next, &mut state, p, self).map_err(|e| search::SearchError::World(e.to_string()))
+        }
+    }
+    impl cost::World for Host<'_, '_> {
+        fn tile_actor(&mut self, _: [i32; 2]) -> cost::Result<Option<u32>> {
+            Ok(None)
+        }
+        fn has_wall_component(&self, _: u32) -> cost::Result<bool> {
+            Ok(false)
+        }
+        fn outer_actor(&mut self, _: u32, _: &mut cost::State) -> cost::Result<Option<u32>> {
+            Ok(None)
+        }
+        fn pathing_wall_cost_bits(&mut self) -> cost::Result<u32> {
+            Err(cost::Error::World("no wall actors own tiles".into()))
+        }
+        fn body_health_bits(&mut self, _: u32) -> cost::Result<Option<[u32; 2]>> {
+            Ok(None)
+        }
+        fn prepare_terrain_penalty(&mut self) -> cost::Result<()> {
+            Ok(())
+        }
+        fn terrain_speed_bits(&mut self, cell: [i32; 2]) -> cost::Result<u32> {
+            Ok(self.grid.speed(cell).to_bits())
+        }
+        fn terrain_change_penalty_bits(&mut self) -> cost::Result<u32> {
+            Ok(self.penalty_bits)
+        }
+    }
+    impl materialize::World for Host<'_, '_> {
+        fn begin_trace(&mut self, from: [u32; 2], to: [u32; 2], _: &mut materialize::State, _: &mut OwnedPath) -> materialize::Result<()> {
+            self.walk = Some(TileWalk::new(self.tile, from, to, PC).map_err(|e| materialize::Error::World(e.to_string()))?);
+            Ok(())
+        }
+        fn next_trace_cell(&mut self, _: &mut materialize::State, _: &mut OwnedPath) -> materialize::Result<Option<[i32; 2]>> {
+            let Some(walk) = self.walk.as_mut() else {
+                return Ok(None);
+            };
+            let mut budget = walk.remaining_candidates();
+            walk.next_cell_with_budget(&mut budget).map_err(|e| materialize::Error::World(e.to_string()))
+        }
+        fn cell_blocked(&mut self, cell: [i32; 2], _: &mut materialize::State, _: &mut OwnedPath) -> materialize::Result<bool> {
+            Ok(self.grid.blocked(cell))
+        }
+    }
+    impl solver::World for Host<'_, '_> {
+        fn disable_path_logging(&mut self) {}
+        fn use_region_pather(&self) -> bool {
+            false
+        }
+        fn collision_actor_flags(&self) -> Option<u32> {
+            None
+        }
+        fn begin_region_probe(&mut self) -> solver::Result<()> {
+            Err(solver::Error::World("the region pre-pass is not modelled".into()))
+        }
+        fn region_line_clear(&mut self, _: [u32; 2], _: [u32; 2]) -> solver::Result<bool> {
+            Err(solver::Error::World("the region pre-pass is not modelled".into()))
+        }
+        fn region_path(&mut self, _: [u32; 2], _: [u32; 2], _: &mut OwnedPath) -> solver::Result<i32> {
+            Err(solver::Error::World("the region pre-pass is not modelled".into()))
+        }
+        fn collision_actor_id(&self) -> Option<u32> {
+            None
+        }
+        fn collision_target_id(&self) -> Option<u32> {
+            None
+        }
+        fn collision_word28(&self) -> u32 {
+            0
+        }
+    }
+
+    /// One native Solve; None when the native code refuses the request (a
+    /// cell size that is not a power of two, or an exact-path error), for the
+    /// f32 reference to take.
+    pub fn solve(native: &mut Option<NativeGrid>, grid: &Grid, rules: &PathRules, request: &Request) -> Option<Route> {
+        let cell = grid.cell;
+        let cell_bits = cell.to_bits();
+        // The native grid addresses tiles as `(int)x >> shift`.
+        if !(cell >= 1.0 && cell_bits & 0x7f_ffff == 0) || grid.width < 3 || grid.height < 3 {
+            return None;
+        }
+        let shift = (cell_bits >> 23) - 127;
+        let key = (grid.map as *const crate::map::GameMap as usize, grid.width, grid.height, cell_bits);
+        if native.as_ref().is_none_or(|n| n.key != key) {
+            let mut cells = Vec::with_capacity((grid.width * grid.height) as usize);
+            for y in 0..grid.height {
+                for x in 0..grid.width {
+                    cells.push(search::SearchCell { flags20: u32::from(grid.hard_blocked([x, y])), visit_epoch: 0, predecessor_direction: 0 });
+                }
+            }
+            *native = Some(NativeGrid { key, grid: search::SearchGrid { width: grid.width, height: grid.height, coordinate_shift: shift, cell_size_bits: cell_bits, epoch: 0, cells } });
+        }
+        let native = native.as_mut()?;
+        let extent = [(grid.width as f32 * cell).to_bits(), (grid.height as f32 * cell).to_bits()];
+        let mut host = Host {
+            grid,
+            tile: TileGrid { width: grid.width, height: grid.height, coordinate_shift: shift, cell_size_bits: cell_bits },
+            extent,
+            max_speed_bits: request.max_speed.to_bits(),
+            penalty_bits: rules.terrain_change_penalty.to_bits(),
+            walk: None,
+        };
+        let mut path = OwnedPath { nodes: Vec::new(), kind1_count: 0, kind2_count: 0, dirty: false, word18: 0 };
+        let mut state = solver::StrategyState {
+            route: materialize::State { start_cell: [0, 0], goal_cell: [0, 0], start_bits: [0, 0], goal_bits: [0, 0], path_linked: false, collision_linked: false, collision_word28: 0 },
+            actor_id: 0,
+            target_id: 0,
+            option_word: 0,
+        };
+        let options = solver::Options { bounds: endpoint::Bounds { cell_size_bits: cell_bits, extent_bits: extent }, precision: PC, queue_limit: rules.queue_limit };
+        let bits = |p: Vec2| [p.x.to_bits(), p.y.to_bits()];
+        let request_bits = solver::Request { start_bits: bits(request.from), goal_bits: bits(request.to), option_word: 0 };
+        let mut summary = solver::Summary::default();
+        let status = solver::solve_detailed(&mut native.grid, request_bits, &mut state, &mut path, options, &mut host, &mut summary).ok()?;
+        let at = |x: u32, y: u32| Vec2::new(f32::from_bits(x), f32::from_bits(y));
+        let waypoints = path.nodes.iter().map(|n| Waypoint { pos: at(n.words[0], n.words[1]), dir: at(n.words[2], n.words[3]) }).collect();
+        let goal = if summary.searched { at(state.route.goal_bits[0], state.route.goal_bits[1]) } else { request.to };
+        let status = match status {
+            1 => Status::Reached,
+            2 if summary.capped => Status::Capped,
+            2 => Status::Partial,
+            _ => Status::Failed,
+        };
+        Some(Route { status, waypoints, goal, expanded: summary.expanded as u32 })
     }
 }
 

@@ -122,7 +122,9 @@ fn data() -> (GameData, Ids) {
         class: Some(DefClass::Building),
         health: 750.0,
         actor_data: true,
-        components: components(&["BodyComponent", "EconomyComponent", "SupplyComponent"]),
+        // Its properties (depotprop) live in its PropertiesComponent, which
+        // also holds the modifier context technologies apply through.
+        components: components(&["BodyComponent", "EconomyComponent", "PropertiesComponent", "SupplyComponent"]),
         has_economy: true,
         cost_all: vec5(&[(MONEY, 50.0)]),
         upkeep_all: vec5(&[]),
@@ -191,15 +193,21 @@ fn data() -> (GameData, Ids) {
     (data, Ids { hq, regiment, soldier, captain, truck, depot })
 }
 
+/// A flat map with the native GMap border (the outermost tile ring BLOCKED,
+/// as `map.rs` marks every real map): the exact ZoneSolver flood relies on it.
 fn map() -> GameMap {
     let (w, h) = (128, 128);
+    let border = |i: u32| {
+        let (x, y) = (i % w, i / w);
+        if x == 0 || y == 0 || x + 1 == w || y + 1 == h { aa_play::map::BLOCKED } else { 0 }
+    };
     GameMap {
         id: "flat".into(),
         width: w,
         height: h,
         cell_size: 2.0,
         heights: vec![0.0; ((w + 1) * (h + 1)) as usize],
-        flags: vec![0; (w * h) as usize],
+        flags: (0..w * h).map(border).collect(),
         speed_limit: vec![aa_play::map::NO_SPEED_LIMIT; (w * h) as usize],
         ..Default::default()
     }
@@ -242,8 +250,9 @@ fn core_step(w: &mut World, commands: Vec<Command>) {
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);
-    w.tick += 1;
-    w.time = w.tick as f32 * aa_play::DT;
+    w.clock.advance_fragment();
+    w.tick = u64::from(w.clock.tick);
+    w.time = f32::from_bits(w.clock.end.0);
 }
 
 fn spawn(w: &mut World, def: u32, k: u32, at: Vec2, facing: f32) -> u32 {

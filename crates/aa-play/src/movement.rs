@@ -601,13 +601,6 @@ impl MovementState {
 // ---------------------------------------------------------------------------
 // Small helpers.
 
-/// xorshift64* exactly as `World::random`.
-fn random(rng: &mut u64) -> f32 {
-    *rng ^= *rng >> 12;
-    *rng ^= *rng << 25;
-    *rng ^= *rng >> 27;
-    ((rng.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 40) as f32) / (1u64 << 24) as f32
-}
 fn normalize(v: Vec2) -> Vec2 {
     let length = v.length();
     if length <= EPSILON { Vec2::ZERO } else { v * (1.0 / length) }
@@ -1687,8 +1680,17 @@ fn action_go(ms: &mut MovementState, world: &mut World, id: ActorId, speed_arg: 
     let am = &mut ms.actors[id as usize];
     let dest = head.pos - head.dir * am.waypoint_offset;
     begin_mover(&mut am.mover, pos, head.dir, dest, speed, factor, rules.reached_threshold);
+    // 0x5773C0 ends by registering the Mover on update queue 0 (0x50AC00 ->
+    // 0x50B2C0): one getter and one draw for its bucket (`% 1`). The early
+    // out of other mover modes ([mover+0x56]) is not modelled.
+    let _bucket = world.random_u32() % 1;
     let base = if head.kind == 0 { ACTION_DELAY_INSTANT } else { ACTION_DELAY_PATH };
-    am.next_think = now + base + ACTION_JITTER * random(&mut world.rng);
+    // The world stream (getter 0x4F02B0 + unit float 0x45D400, one draw),
+    // then f32(base + u * 0.3) at PC53: binary64 arithmetic rounds the same
+    // for these magnitudes before the binary32 store.
+    let u = world.random();
+    let delay = (f64::from(base) + f64::from(u) * f64::from(ACTION_JITTER)) as f32;
+    am.next_think = now + delay;
     true
 }
 
@@ -2313,9 +2315,14 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
 }
 
 /// The mover's blocking circle fits at `p`: no blocked tile under its
-/// bounding square (tiles under the shape, like 0x553BA0) and no other
-/// mover or building circle overlapping.
-fn spot_free(ms: &MovementState, world: &World, mover: ActorId, p: Vec2) -> bool {
+/// bounding square (tiles under the shape, like 0x553BA0) and, with
+/// `movers`, no other mover's circle overlapping. The native queries count
+/// things whose flags hold their mask: 0x400 (blocking) for the ring search
+/// of FindOpenPositionLineThenRadius (`movers`), 0x20000400 (blocking and
+/// static, Thing flag bit 29, cleared for movers with speed) for its line
+/// search, the deploy arrival check and the redeploy search. Static
+/// blockers here are the tile footprints.
+fn spot_free(ms: &MovementState, world: &World, mover: ActorId, p: Vec2, movers: bool) -> bool {
     let def = def_of(world, mover);
     let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
     let grid = ms.occupancy.grid(&world.map, mover_class(def));
@@ -2328,14 +2335,15 @@ fn spot_free(ms: &MovementState, world: &World, mover: ActorId, p: Vec2) -> bool
             }
         }
     }
-    ms.hash.for_each_near(p, r + ms.hash.max_radius, |o, q, rq| o != mover && (q - p).length_squared() < (r + rq) * (r + rq)).is_none()
+    !movers || ms.hash.for_each_near(p, r + ms.hash.max_radius, |o, q, rq| o != mover && (q - p).length_squared() < (r + rq) * (r + rq)).is_none()
 }
 
 /// FindOpenPositionLineThenRadius 0x554BF0: walk from `point` back toward
-/// the mover in steps of its radius (at least a quarter cell, 0x553FA0)
-/// until the spot is free, then search rings of eight directions within
-/// `radius` around it (0x554B30 / 0x554850, starting along the facing).
-/// Keeps the line result when the ring search fails.
+/// the mover in steps of its radius (at least a quarter cell, 0x553FA0,
+/// static blockers) until the spot is free, then search rings of eight
+/// directions within `radius` around it (0x554B30 / 0x554850 with flags 0:
+/// every blocking thing, starting along the facing). Keeps the line result
+/// when the ring search fails.
 fn open_position(ms: &MovementState, world: &World, mover: ActorId, point: Vec2, radius: f32) -> Vec2 {
     let start = pos2(world, mover);
     let cell = world.map.cell_size;
@@ -2348,7 +2356,7 @@ fn open_position(ms: &MovementState, world: &World, mover: ActorId, point: Vec2,
     let mut found = false;
     loop {
         let candidate = clamp_extent(world, p);
-        if spot_free(ms, world, mover, candidate) {
+        if spot_free(ms, world, mover, candidate, false) {
             p = candidate;
             found = true;
             break;
@@ -2363,29 +2371,32 @@ fn open_position(ms: &MovementState, world: &World, mover: ActorId, point: Vec2,
             remaining = 0.0;
         }
     }
-    if found && (p - start).abs().element_sum() >= f32::from_bits(0x3951_b717) {
-        return p;
-    }
+    // The ring search always follows, from the line result, and also counts
+    // movers; the line result stays when the rings find nothing. Natively
+    // a line that finds nothing fails the whole search; here that happens
+    // when a point touches a structure's tile footprint (coarser than the
+    // native shape test), so the rings start at the requested point instead.
     let base = if found { p } else { point };
-    open_position_near(ms, world, mover, base, radius).unwrap_or(p)
+    open_position_near(ms, world, mover, base, radius, true).unwrap_or(p)
 }
 /// FindOpenPositionNear 0x554B30: `base` itself, else rings within `radius`
 /// (steps of the mover's radius, at least a quarter cell), eight rotations
-/// by -pi/4 starting along the mover's facing (0x554850).
-fn open_position_near(ms: &MovementState, world: &World, mover: ActorId, base: Vec2, radius: f32) -> Option<Vec2> {
+/// by -pi/4 starting along the mover's facing (0x554850); `movers` as in
+/// [`spot_free`] (its flag argument 0 counts them, 1 does not).
+fn open_position_near(ms: &MovementState, world: &World, mover: ActorId, base: Vec2, radius: f32, movers: bool) -> Option<Vec2> {
     let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
     let step = r.max(world.map.cell_size * 0.25);
     let rings = ((radius / step) as i32).clamp(1, 20);
     let ring_step = radius / rings as f32;
     let facing = ms.actors[mover as usize].mover.facing;
-    if spot_free(ms, world, mover, base) {
+    if spot_free(ms, world, mover, base, movers) {
         return Some(base);
     }
     for k in 1..=rings {
         let mut offset = facing * (k as f32 * ring_step);
         for _ in 0..8 {
             let candidate = clamp_extent(world, base + offset);
-            if spot_free(ms, world, mover, candidate) {
+            if spot_free(ms, world, mover, candidate, movers) {
                 return Some(candidate);
             }
             offset = rotate(offset, -std::f32::consts::FRAC_PI_4) * offset.length();
@@ -2488,13 +2499,15 @@ fn begin_walk(ms: &mut MovementState, world: &mut World, member: ActorId, at: Ve
 /// it stands (`0x553BA0`), else it redeploys.
 fn walk_arrived(ms: &mut MovementState, world: &mut World, id: ActorId, walk: MemberWalk, rules: &MoveRules) {
     let p = pos2(world, id);
-    if spot_free(ms, world, id, p) {
+    // 0x553BA0 with 0x552210(1, ..): static blocking things only.
+    if spot_free(ms, world, id, p, false) {
         rejoin(ms, world, id);
         return;
     }
     let tries = walk.tries + 1;
-    let next = if tries > REDEPLOY_TRIES { None } else { open_position_near(ms, world, id, p, REDEPLOY_SEARCH_RADIUS) };
-        match next {
+    // FindOpenPositionNear(.., 8, 1, 0): static blocking things only.
+    let next = if tries > REDEPLOY_TRIES { None } else { open_position_near(ms, world, id, p, REDEPLOY_SEARCH_RADIUS, false) };
+    match next {
         Some(q) => begin_walk(ms, world, id, q, tries, rules),
         // "redeploy failed %d times - dying" / "FindOpenPositionNear failed
         // for redeploy - dying" (0x4D7960): zero health, combat's death path.

@@ -21,6 +21,13 @@
 //!   Body; members heal resupply_rate * max_health * (1 - shortage) * dt, an
 //!   empty slot builds up the same amount until it reaches the slot
 //!   definition's health and the member is created (0x57AD30).
+//!
+//! (fog owner) The zones themselves run on aa-zones ([`crate::zones`]): each
+//! provider's zone type 0 is placed, moved and released by the native rules
+//! (`0x58AE10` tail, `0x4D6350` on its tile changes) and flooded by the
+//! exact ZoneSolver port; `books.zone_tiles` lists the tiles whose zone set
+//! holds it. [`flood_tiles`] (the earlier f32 flood) stays for maps aa-zones
+//! cannot describe and for the comparison tests.
 use crate::books::SupplyZone;
 use crate::world::{ActorId, KingdomId, OrgId, World};
 use glam::Vec2;
@@ -199,6 +206,40 @@ pub fn flood_tiles(map: &crate::map::GameMap, sx: i32, sy: i32, radius: f32) -> 
     out
 }
 
+/// (fog owner) The tile changes of this tick's movement (`0x4D6350`, the
+/// supply zones follow their providers) before the relay searches read the
+/// zone tiles.
+fn zone_observe(world: &mut World) {
+    let Some(mut e) = crate::fog::take_engine(world) else { return };
+    e.observe(world);
+    e.refresh_supply_tiles();
+    crate::fog::put_engine(world, e);
+    publish_zone_tiles(world);
+}
+
+/// (fog owner) The supply component zones of `books.zones` on aa-zones
+/// (`0x58AE10` tail), then their tiles; without an engine (a map aa-zones
+/// cannot describe) the f32 flood.
+fn zone_tick(world: &mut World) {
+    let Some(mut e) = crate::fog::take_engine(world) else {
+        flood_zones(world);
+        return;
+    };
+    let providing: Vec<(ActorId, f32)> = world.books.zones.iter().map(|z| (z.provider, z.radius)).collect();
+    e.supply_tick(world, &providing);
+    e.refresh_supply_tiles();
+    crate::fog::put_engine(world, e);
+    publish_zone_tiles(world);
+}
+
+/// (fog owner) `books.zone_tiles` from the engine's supply zone tiles, in
+/// `books.zones` order.
+pub fn publish_zone_tiles(world: &mut World) {
+    let Some(e) = world.fog.engine.as_ref() else { return };
+    let tiles = world.books.zones.iter().map(|z| e.supply_tiles.get(&z.provider).cloned().unwrap_or_default()).collect();
+    world.books.zone_tiles = tiles;
+}
+
 /// The tile set of each zone in `books.zones` (cached floods).
 fn flood_zones(world: &mut World) {
     let map = world.map.clone();
@@ -264,6 +305,7 @@ fn deploying(world: &World, a: ActorId) -> bool {
 }
 
 pub fn tick(world: &mut World) {
+    zone_observe(world);
     let dt = crate::DT;
     let recharge = world.data.rule_ci("SupplyStockpileRechargeRate").unwrap_or(1.0);
     let providers: Vec<ActorId> = (0..world.actors.len() as ActorId)
@@ -325,7 +367,7 @@ pub fn tick(world: &mut World) {
         world.books.actor_mut(a).zone_active = true;
     }
     world.books.zones = zones;
-    flood_zones(world);
+    zone_tick(world);
     // 0x4D0A80 for organizations, their members and lone actors.
     for o in 0..world.orgs.len() as OrgId {
         let org = &world.orgs[o as usize];

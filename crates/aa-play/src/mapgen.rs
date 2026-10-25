@@ -349,7 +349,11 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<
                     }
                     notes.extend(placement.notes.iter().cloned());
                     let out = output::build(d, params, &world, &placement, weather.as_deref(), notes)?;
-                    return Ok(GeneratedMap { params: params.clone(), terrain: out.terrain, placed: out.placed, scenery: out.scenery, map: out.map });
+                    // The world stream continues where generation left it.
+                    let mut map = out.map;
+                    map.rng_state = Some(rng.state());
+                    map.rng_log = rng.log();
+                    return Ok(GeneratedMap { params: params.clone(), terrain: out.terrain, placed: out.placed, scenery: out.scenery, map });
                 }
                 Err(e) => {
                     notes.push(format!("placement try {try_index} of attempt {attempt}: {e}"));
