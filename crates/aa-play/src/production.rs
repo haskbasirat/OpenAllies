@@ -760,6 +760,7 @@ fn mirror(world: &mut World, building: ActorId) {
 }
 
 pub fn tick(world: &mut World) {
+    // Queues of destroyed or ownerless structures are cancelled (refunded).
     let n = world.books.actors.len().min(world.actors.len());
     for id in 0..n as ActorId {
         if world.books.actors[id as usize].queue.items.is_empty() {
@@ -768,10 +769,29 @@ pub fn tick(world: &mut World) {
         let a = &world.actors[id as usize];
         if a.removed || !a.alive || a.kingdom.is_none() {
             cancel_all(world, id);
-            continue;
         }
-        // The queue's periodic update: 0x589F90.
-        let _ = native::with_queue(world, id, |q, ctx, host| aa_production::process(q, ctx, host));
-        mirror(world, id);
+    }
+    // The periodic queue 0 delivers every registered queue (0x50B330 ->
+    // 0x58A460 -> 0x589F90), newest registration first. An entry that
+    // unregisters during its own delivery (its queue emptied) moves the
+    // dispatcher's cursor to its successor, which the dispatcher then passes
+    // over: that successor waits for the next update (aa-world queues
+    // `update_inner`; the Berlin film's ger recruit completes one update
+    // after the two rus ones for this).
+    let mut current = world.books.production_queue0.first().copied();
+    while let Some(b) = current {
+        let list = &world.books.production_queue0;
+        let successor = list.iter().position(|&x| x == b).and_then(|p| list.get(p + 1).copied());
+        world.books.queue0_left = false;
+        if world.books.actor(b).is_some_and(|x| !x.queue.items.is_empty()) {
+            let _ = native::with_queue(world, b, |q, ctx, host| aa_production::process(q, ctx, host));
+            mirror(world, b);
+        } else {
+            world.books.production_queue0.retain(|&x| x != b);
+            world.books.queue0_left = true;
+        }
+        let list = &world.books.production_queue0;
+        let after = |x: ActorId| list.iter().position(|&y| y == x).and_then(|p| list.get(p + 1).copied());
+        current = if world.books.queue0_left { successor.and_then(after) } else { after(b) };
     }
 }
