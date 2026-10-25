@@ -27,21 +27,31 @@ fn protected(world: &World, data: &RmgData) -> Vec<bool> {
     out
 }
 
-/// AddTerrainNoise (0x551360).
+/// AddTerrainNoise (0x551360): the blob count (CRT pow 0x96D890 of the
+/// area factor), then per blob x, y, radius, sign and magnitude, all on the
+/// register at PC53 with the original's binary32 stores. The height brush
+/// itself (0x551140, a round brush of radius 1 m in relative mode) is not
+/// exact yet (see `terrain.rs`).
 pub(super) fn add_noise(world: &mut World, data: &RmgData, noise: &NoiseDef, rng: &mut Rng) {
-    let inv = 1.0 / noise.reference_size;
-    let area = world.height * world.width * inv * inv;
-    let n = (rng.unit() * (noise.num[1] - noise.num[0]) as f32 + noise.num[0] as f32) * noise.area_factor.powf(area - 1.0) * area;
-    let count = n as i32;
+    let inv = 1.0 / f64::from(noise.reference_size);
+    let area = (f64::from(world.height) * f64::from(world.width) * inv * inv) as f32;
+    let u = rng.at(0x5513AA).unit_d();
+    let base = u * f64::from(noise.num[1].wrapping_sub(noise.num[0])) + f64::from(noise.num[0]);
+    let p = aa_numeric::crt_pow::ci_pow(f64::from(noise.area_factor), f64::from(area) - 1.0, aa_numeric::crt_pow::CrtEnvironment::SSE2_DOUBLE53)
+        .map(|o| o.value())
+        .unwrap_or_else(|_| f64::from(noise.area_factor).powf(f64::from(area) - 1.0));
+    let count = super::blob::ftol_d(base * (p * f64::from(area)));
     let guard = protected(world, data);
+    let size_span = (f64::from(noise.size[1]) - f64::from(noise.size[0])) as f32;
     for _ in 0..count.max(0) {
-        let x = rng.unit() * world.width;
-        let y = rng.unit() * world.height;
-        let radius = rng.unit() * (noise.size[1] - noise.size[0]) + noise.size[0];
-        let sign = if rng.unit() < noise.up_frequency { 1.0 } else { -1.0 };
-        let lo = sign * noise.magnitude[0];
-        let magnitude = (sign * noise.magnitude[1] - lo) * rng.unit() + lo;
-        let slope = (magnitude / (radius * 0.5)).abs();
+        let x = (rng.at(0x5514BB).unit_d() * f64::from(world.width)) as f32;
+        let y = (rng.at(0x5514F9).unit_d() * f64::from(world.height)) as f32;
+        let radius = (rng.at(0x55152D).unit_d() * f64::from(size_span) + f64::from(noise.size[0])) as f32;
+        let sign: f32 = if rng.at(0x551564).unit_d() < f64::from(noise.up_frequency) { 1.0 } else { -1.0 };
+        let lo = (f64::from(sign) * f64::from(noise.magnitude[0])) as f32;
+        let u = rng.at(0x5515B5).unit_d();
+        let magnitude = ((f64::from(sign) * f64::from(noise.magnitude[1]) - f64::from(lo)) * u + f64::from(lo)) as f32;
+        let slope = (f64::from(magnitude) / (f64::from(radius) * 0.5)).abs() as f32;
         // Round brush of radius 1 m, relative mode, strength 1 (0x550B00).
         let s = world.spacing;
         let (x0, x1) = (((x - 1.0) / s).floor() as i32, ((x + 1.0) / s).ceil() as i32);

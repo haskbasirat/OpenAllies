@@ -159,15 +159,28 @@ pub struct GeneratedMap {
     /// things such as the audio doodads).
     pub scenery: Vec<GeneratedPlacement>,
     pub map: crate::map::GameMap,
+    /// The generator's log in the original's terms (its RMG log lines:
+    /// normalized brush weights, marker balance scores, ...), for parity.
+    pub log: Vec<LogLine>,
+}
+
+/// One generator log line: the original's message (without its numbers)
+/// and the numbers it prints, as the doubles it passes to the logger.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LogLine {
+    pub what: String,
+    pub values: Vec<f64>,
 }
 
 
+mod blob;
 mod data;
 mod grid;
 mod height;
 mod output;
 mod place;
 mod rng;
+mod space;
 mod terrain;
 
 /// The original random-map data, read once (about a second) and reused for
@@ -228,8 +241,29 @@ impl RandomMapData {
     }
     /// Generate a map; same params + seed = same map.
     pub fn generate(&self, params: &RandomMapParams) -> anyhow::Result<GeneratedMap> {
-        generate_with(&self.data, params)
+        generate_with(&self.data, params, None, false).map(|(m, _)| m)
     }
+    /// Generate on a world stream another part already drew from (natively
+    /// the creator's kingdoms and their random nation/general picks draw
+    /// between the seeding and the generator); `params.seed` is not used.
+    pub fn generate_from(&self, params: &RandomMapParams, start: &StreamStart) -> anyhow::Result<GeneratedMap> {
+        generate_with(&self.data, params, Some(start), false).map(|(m, _)| m)
+    }
+    /// [`Self::generate_from`] (or [`Self::generate`] without `start`) that
+    /// also returns every draw as (stream state before it, native call site:
+    /// the return address after the original's 0x85D840 call or after its
+    /// unit/modulo wrapper), for the parity harness.
+    pub fn generate_traced(&self, params: &RandomMapParams, start: Option<&StreamStart>) -> anyhow::Result<(GeneratedMap, Vec<(u32, u32)>)> {
+        generate_with(&self.data, params, start, true)
+    }
+}
+
+/// The world stream (GWorld+0xD4) where a caller left it: the state and
+/// every getter entry so far (see `GameMap::rng_log`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StreamStart {
+    pub state: u32,
+    pub log: Vec<u32>,
 }
 
 impl RmcCatalog {
@@ -249,6 +283,8 @@ fn midpoint(r: [f32; 2]) -> f32 {
 pub fn generate(params: &RandomMapParams, data_root: &std::path::Path) -> anyhow::Result<GeneratedMap> {
     RandomMapData::load(data_root)?.generate(params)
 }
+
+type Traced = (GeneratedMap, Vec<(u32, u32)>);
 
 /// Slider values per brush: the params, defaults for missing ones, and
 /// hidden brushes following an `override_same` slider of the same terrain
@@ -278,7 +314,7 @@ fn terrain_values(rmc: &data::RmcDef, params: &RandomMapParams) -> Vec<f32> {
     values
 }
 
-fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<GeneratedMap> {
+fn generate_with(d: &data::RmgData, params: &RandomMapParams, start: Option<&StreamStart>, trace: bool) -> anyhow::Result<Traced> {
     let rmc = d.rmc(&params.rmc).ok_or_else(|| anyhow::anyhow!("unknown RMC {}", params.rmc))?;
     let biome = d.biomes.get(&rmc.biome.to_ascii_lowercase()).ok_or_else(|| anyhow::anyhow!("{}: unknown biome {}", rmc.ids, rmc.biome))?;
     anyhow::ensure!(
@@ -296,10 +332,22 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<
         .and_then(|&t| d.terrains[t].variations.first().copied())
         .ok_or_else(|| anyhow::anyhow!("biome {} has no terrain", biome.ids))? as u32;
     let values = terrain_values(rmc, params);
-    let mut rng = rng::Rng::new(params.seed);
+    let mut rng = match start {
+        Some(s) => rng::Rng::resume(s.state, s.log.clone()),
+        None => rng::Rng::new(params.seed),
+    };
+    if trace {
+        rng.trace();
+    }
     let mut notes = Vec::new();
-    // Sun and weather: one of the comma-delimited ids at random (0x5925E0).
-    let weather = (!rmc.weather.is_empty()).then(|| rmc.weather[rng.below(rmc.weather.len() as u32) as usize].clone());
+    // 0x5925E0: the sun, then the weather, each a getter and, when the RMC
+    // lists any, one draw % count.
+    rng.getter();
+    if !rmc.sun.is_empty() {
+        let _sun = &rmc.sun[(rng.at(0x5926B2).draw_after_getter() % rmc.sun.len() as u32) as usize];
+    }
+    rng.getter();
+    let weather = (!rmc.weather.is_empty()).then(|| rmc.weather[(rng.at(0x59270F).draw_after_getter() % rmc.weather.len() as u32) as usize].clone());
     let teams: Vec<u32> = if params.teams.len() == params.sides as usize { params.teams.clone() } else { (0..params.sides).collect() };
     let mut last_error = None;
     for attempt in 0..d.svars.retries.max(1) {
@@ -308,6 +356,12 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<
         let clock = std::time::Instant::now();
         let mut world = grid::World::new(params.width, params.height, d, initial);
         // StageTerrain, then StageAddNoise.
+        let terrain_log: Vec<LogLine> = rmc
+            .brushes
+            .iter()
+            .zip(terrain::normalized_weights(d, rmc, &values))
+            .map(|(b, w)| LogLine { what: format!("terrain {} normalized weight", d.terrains[b.terrain].ids), values: vec![f64::from(w)] })
+            .collect();
         terrain::run(&mut world, d, rmc, biome, &values, &mut stage_rng.fork(1));
         if timing {
             eprintln!("mapgen terrain {:?}", clock.elapsed());
@@ -330,9 +384,13 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<
             let value = |g: &data::GroupDef| counts.get(&g.ids).copied().unwrap_or_else(|| midpoint(g.slider.range));
             let mut run = || -> anyhow::Result<()> {
                 placement.setup_kingdoms(params.sides, &teams)?;
-                placement.place_kingdoms(&world, &mut place_rng)?;
+                placement.balance_log = placement.place_kingdoms_exact(&world, &mut place_rng)?;
+                placement.create_start_locations(&mut place_rng);
                 placement.setup_groups();
-                placement.place_required(&mut world, &mut place_rng)?;
+                if std::env::var_os("AA_RMG_GROUPS").is_some() {
+                    eprint!("{}", placement.describe_groups());
+                }
+                placement.place_required_exact(&mut world, &mut place_rng)?;
                 placement.place_groups(&mut world, &rmc.biome, &value, &mut place_rng)?;
                 Ok(())
             };
@@ -353,7 +411,10 @@ fn generate_with(d: &data::RmgData, params: &RandomMapParams) -> anyhow::Result<
                     let mut map = out.map;
                     map.rng_state = Some(rng.state());
                     map.rng_log = rng.log();
-                    return Ok(GeneratedMap { params: params.clone(), terrain: out.terrain, placed: out.placed, scenery: out.scenery, map });
+                    let draws = rng.take_trace();
+                    let mut log = terrain_log.clone();
+                    log.extend(placement.balance_log.iter().map(|&(i, s)| LogLine { what: "balance iteration".into(), values: vec![f64::from(i), s] }));
+                    return Ok((GeneratedMap { params: params.clone(), terrain: out.terrain, placed: out.placed, scenery: out.scenery, map, log }, draws));
                 }
                 Err(e) => {
                     notes.push(format!("placement try {try_index} of attempt {attempt}: {e}"));
