@@ -136,12 +136,15 @@ fn spawn_regiment(w: &mut World, def: u32, kingdom: u32, center: Vec2, heading: 
 }
 fn advance(w: &mut World, ticks: u32) {
     for _ in 0..ticks {
-        // As the world update: queue 0 steps the registered Movers, then the
-        // movement minds think.
+        // As the world update: the clock, queue 0 (the registered Movers), the
+        // movement minds, then queue 4 (the element minds).
+        w.clock.advance_fragment();
+        w.tick = u64::from(w.clock.tick);
+        w.time = f32::from_bits(w.clock.end.0);
+        aa_play::scheduler::sync_clock(w);
         aa_play::scheduler::run_queue(w, aa_play::scheduler::EVERY_TICK);
         movement::tick(w);
-        w.tick += 1;
-        w.time = w.tick as f32 * aa_play::DT;
+        aa_play::scheduler::run_queue(w, aa_play::scheduler::THINK);
     }
 }
 fn order(w: &mut World, c: Command) {

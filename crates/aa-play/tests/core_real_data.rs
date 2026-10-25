@@ -1733,3 +1733,133 @@ fn engineers_build_a_bunker_and_mortars_bombard() {
     let (shooter, at) = shot.expect("the section bombards the point");
     eprintln!("{} bombards {at:?} from {:.1} m at {:.1} s", w.data.def(section).id, w.actors[shooter as usize].pos.truncate().distance(at), w.time);
 }
+
+/// The ger_airfield DenizenComponent: its data as the loader keeps it, the
+/// InitCreate registration, readiness after the first queue-1 tick, the
+/// purchases (CreateDenizen into the hangar, the runway release, the
+/// unaffordable notice) and the slot regeneration.
+#[test]
+#[ignore]
+fn airfield_denizen_inventory_readiness_and_purchase() {
+    use aa_play::books::{AirOrder, Notice};
+    use aa_play::denizen::{self, COMMAND_AIR_ATTACK, COMMAND_AIR_RECON};
+    use glam::Vec2;
+    let mut w = berlin_world();
+    let find = |id: &str| w.data.find(id).unwrap_or_else(|| panic!("{id}"));
+    let (airfield, bomber, fighter, corps_def) = (find("ger_airfield"), find("ger_bomber"), find("ger_fighter"), find("ger_corps"));
+    let dd = w.data.def(airfield).denizen.clone().expect("a DenizenComponent");
+    // 0x56B720: Inventory bomber x2 then fighter x4, each prepended.
+    assert_eq!(dd.slots, vec![fighter, fighter, fighter, fighter, bomber, bomber]);
+    let groups: Vec<_> = dd.groups.iter().map(|g| (g.actor, g.behavior, g.size, g.formation.len())).collect();
+    assert_eq!(groups, vec![(bomber, 0x10, [1.0, 1.0], 2), (fighter, 0x60, [1.0, 1.0], 0), (fighter, 0x80, [1.0, 2.0], 2)]);
+    assert_eq!((dd.guard_range, dd.guard_operational_range, dd.inventory), (30.0, 48.0, true));
+    let runway = dd.runway.clone().expect("a Runway");
+    assert_eq!((runway.hangar_offset, runway.hangar_orientation, runway.delay, runway.length), ([2.85, 0.0, -0.75], [0.0, 1.0], 1.0, 4.8));
+    let air = w.data.def(bomber).aircraft.clone().expect("an AircraftComponent");
+    assert_eq!((air.taxi_scale, air.taxi_height, air.taxi_speed, air.operational_height, air.bank_factor), (0.4, 1.0, 3.0, 17.0, 14.0));
+    // 0x4676DC: an HQ's empty DenizenComponent has no guard zone.
+    let hq = w.data.def(corps_def).denizen.clone().expect("the corps HQ DenizenComponent");
+    assert!(hq.guard_range == 0.0 && !hq.inventory && hq.slots.is_empty() && !denizen::registers(&hq));
+
+    let ger = (0..w.kingdoms.len() as u32).find(|&k| w.kingdoms[k as usize].nation == "ger").expect("ger kingdom");
+    let corps = (0..w.actors.len() as u32).find(|&a| w.actors[a as usize].kingdom == Some(ger) && w.data.def(w.actors[a as usize].def).id.ends_with("_corps")).expect("ger corps");
+    let base = w.actors[corps as usize].pos.truncate();
+    let at = (0..40)
+        .flat_map(|r| (0..8).map(move |k| base + Vec2::from_angle(k as f32 * std::f32::consts::FRAC_PI_4) * (40.0 + 2.0 * r as f32)))
+        .find(|&p| aa_play::deploy::spot_clear(&w, airfield, p, None).is_ok())
+        .expect("a clear spot");
+    let draws = w.native_rng.state;
+    let a = aa_play::production::spawn_single(&mut w, airfield, Some(ger), at, 0.0);
+    eprintln!("airfield {a}: rng {draws:#x} -> {:#x}", w.native_rng.state);
+    assert!(w.is_scheduled(aa_play::scheduler::Owner::Component(a, denizen::SLOT)), "0x568750 registers on queue 1");
+    let d = w.books.actor(a).and_then(|b| b.denizen.clone()).expect("denizen books");
+    assert_eq!((d.behaviors, d.ready, d.last_release), (0xF0, 0, -1.0));
+    assert!(d.slots.iter().all(|s| s.occupant.is_none() && s.health == w.data.def(s.def).health));
+    for _ in 0..20 {
+        w.step(vec![]);
+    }
+    assert_eq!(denizen::ready(&w, a), 0xF0, "every group has its minimum ready");
+    assert!(denizen::enabled(&w, a, COMMAND_AIR_ATTACK) && denizen::enabled(&w, a, COMMAND_AIR_RECON));
+
+    let money = w.data.resources.iter().position(|r| r.id.eq_ignore_ascii_case("money")).expect("money");
+    let n = w.data.resources.len();
+    w.books.kingdom_mut(ger, n).stockpiled[money] = 1000.0;
+    let target = at + Vec2::new(150.0, 0.0);
+    let (paid, mission) = denizen::purchase(&mut w, a, AirOrder::AttackPoint(target));
+    let m = denizen::mission(&w, a, mission.expect("a mission")).expect("the mission").clone();
+    assert!(paid);
+    assert_eq!(w.books.kingdom(ger).unwrap().stockpiled[money], 900.0, "AirAttackCost money 100");
+    assert_eq!((m.members.len(), m.mode, m.order, m.offset), (1, 0x10, AirOrder::AttackPoint(target), [-9.0, 15.0, -2.0]));
+    let b = m.members[0];
+    let x = &w.actors[b as usize];
+    assert_eq!(x.def, bomber);
+    // The hangar: base + hangar_offset in the base frame (facing +X: right
+    // is -Y), z + taxi_height; facing the rotated hangar_orientation.
+    let hangar = glam::Vec3::new(at.x, at.y - 2.85, w.actors[a as usize].pos.z - 0.75 + 1.0);
+    assert!(x.pos.distance(hangar) < 1e-3 && x.facing.abs() < 1e-6, "{:?} {} vs {hangar:?}", x.pos, x.facing);
+    let ab = w.books.actor(b).and_then(|q| q.aircraft.clone()).expect("aircraft books");
+    assert_eq!((ab.home, ab.mode, ab.mission, ab.hidden, ab.order), (a, 0x10, m.id, true, Some(AirOrder::AttackPoint(target))));
+    let d = w.books.actor(a).and_then(|q| q.denizen.clone()).unwrap();
+    assert_eq!(d.runway, vec![b]);
+    assert_eq!(d.slots.iter().filter(|s| s.occupant == Some(b)).count(), 1);
+    // 0x5695B0: released on the next deferred pass (last release -1 + 1 <= now).
+    w.step(vec![]);
+    assert!(!w.books.actor(b).and_then(|q| q.aircraft.as_ref()).unwrap().hidden, "released from the hangar");
+    assert!(w.books.actor(a).and_then(|q| q.denizen.as_ref()).unwrap().runway.is_empty());
+
+    // Recon: one fighter of the AIR_DEFENSIVE + AIR_RECON group, money 25.
+    let cash = |w: &aa_play::World| w.books.kingdom(ger).unwrap().stockpiled[money];
+    let before = cash(&w);
+    let (_, recon) = denizen::purchase(&mut w, a, AirOrder::Recon(target));
+    let r = denizen::mission(&w, a, recon.expect("a recon mission")).unwrap().clone();
+    assert_eq!((r.members.len(), w.actors[r.members[0] as usize].def, r.mode), (1, fighter, 0x40));
+    assert!(r.offset.iter().all(|v| v.is_nan()), "0x568180 over a group without positions");
+    assert_eq!(before - cash(&w), 25.0);
+    // The second bomber leaves the AIR_OFFENSIVE group empty after a tick.
+    let before = cash(&w);
+    let (_, second) = denizen::purchase(&mut w, a, AirOrder::AttackActor(corps));
+    assert!(second.is_some());
+    assert_eq!(before - cash(&w), 100.0);
+    for _ in 0..20 {
+        w.step(vec![]);
+    }
+    assert_eq!(denizen::ready(&w, a) & 0x10, 0, "no bomber left");
+    assert!(!denizen::enabled(&w, a, COMMAND_AIR_ATTACK) && denizen::enabled(&w, a, COMMAND_AIR_RECON));
+    let before = cash(&w);
+    let (paid, none) = denizen::purchase(&mut w, a, AirOrder::AttackPoint(target));
+    assert!(paid && none.is_none(), "affordable, nothing to create, nothing paid");
+    assert_eq!(cash(&w), before);
+    // Unaffordable: the notice, no aircraft.
+    w.books.kingdom_mut(ger, n).stockpiled[money] = 10.0;
+    w.books.notices.clear();
+    let (paid, none) = denizen::purchase(&mut w, a, AirOrder::Recon(target));
+    assert!(!paid && none.is_none());
+    assert!(w.books.notices.iter().any(|x| matches!(x, Notice::DenizenUnaffordable { building, what, .. } if *building == a && what == "denizen_air_recon")), "{:?}", w.books.notices);
+
+    // 0x569440: a damaged housed fighter heals full * resupply_rate per second.
+    let slot = w.books.actor(a).and_then(|q| q.denizen.as_ref()).unwrap().slots.iter().position(|s| s.occupant.is_none() && s.def == fighter).expect("a housed fighter");
+    w.books.actor_mut(a).denizen.as_mut().unwrap().slots[slot].health = 50.0;
+    let rate = w.data.def(fighter).resupply_rate;
+    let before = w.time;
+    for _ in 0..(16 * 4) {
+        w.step(vec![]);
+    }
+    let health = w.books.actor(a).and_then(|q| q.denizen.as_ref()).unwrap().slots[slot].health;
+    eprintln!("fighter slot {slot}: 50 -> {health} in {:.2} s at rate {rate}", w.time - before);
+    assert!(health > 50.0 && (health - 50.0 - 4.0 * 100.0 * rate).abs() <= 100.0 * rate + 1e-3, "{health}");
+
+    // 0x568B10: a deployed bomber that dies frees its slot with no health.
+    let slots = |w: &aa_play::World| w.books.actor(a).and_then(|q| q.denizen.clone()).unwrap().slots;
+    let held = slots(&w).iter().position(|s| s.occupant == Some(b)).expect("the bomber's slot");
+    denizen::died(&mut w, b);
+    let s = slots(&w)[held].clone();
+    assert!(s.occupant.is_none() && s.health == 0.0, "{s:?}");
+    // 0x569740: the recon fighter lands back at 60 % health.
+    let f = r.members[0];
+    let held = slots(&w).iter().position(|s| s.occupant == Some(f)).expect("the fighter's slot");
+    let full = w.data.def(fighter).health;
+    w.actors[f as usize].health = 0.6 * aa_play::production::max_health(&w, Some(ger), fighter);
+    assert!(denizen::returned(&mut w, f));
+    let s = slots(&w)[held].clone();
+    assert!(s.occupant.is_none() && (s.health - 0.6 * full).abs() < 1e-3, "{s:?}");
+}

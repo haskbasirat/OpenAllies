@@ -63,3 +63,5 @@ pub mod creation;
 pub mod scheduler;
 /// BuilderComponent::BuildActor for the construct order (core owner).
 pub mod construct;
+/// The DenizenComponent of airfields and carriers (core owner).
+pub mod denizen;

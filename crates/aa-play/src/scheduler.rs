@@ -359,6 +359,10 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::Component(a, SUPPLY_SLOT)) => crate::supply::supplier_tick(world, a, f32::from_bits(elapsed)),
         // City Tick 0x5647A0.
         Some(Owner::Component(a, CITY_SLOT)) => crate::supply::city_tick(world, a),
+        // The Denizen Updatable: the runway release 0x5695B0 (deferred,
+        // vtable +0x18) and the Tick 0x56E860 (queue 1).
+        Some(Owner::Component(a, crate::denizen::SLOT)) if event.queue == DEFERRED => crate::denizen::runway_release(world, a),
+        Some(Owner::Component(a, crate::denizen::SLOT)) => crate::denizen::tick(world, a, f32::from_bits(elapsed)),
         // KKC_OrganizationComponent::TickMaintenance 0x57C8E0.
         // (movement owner) the same Updatable's queue-0 goal step (data 1,
         // 0x57D820 -> 0x57C080).
@@ -366,6 +370,8 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) => crate::supply::org_maintenance(world, o, f32::from_bits(elapsed)),
         // (movement owner) Mover Tick 0x577E50.
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
+        // (movement owner) the element Mind's queue-4 Update 0x531D30.
+        Some(Owner::Mind(a)) => crate::movement::mind_tick(world, a),
         // Not yet leaves: their systems still run as passes.
         _ => {}
     }

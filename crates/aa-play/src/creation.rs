@@ -38,6 +38,7 @@ const HQ: u32 = 30;
 const ELEMENT: u32 = 8;
 const MOVER: u32 = 3;
 const SUPPLY: u32 = 11;
+const DENIZEN: u32 = 10;
 
 fn has(d: &Def, bit: u32) -> bool {
     d.components & (1 << bit) != 0
@@ -104,6 +105,22 @@ pub fn created(world: &mut World, def: DefId, made: Made) {
             }
         } else if bit == HQ {
             world.random_u32();
+        } else if bit == DENIZEN {
+            // 0x568750 (with the InitExisting 0x5687E0 a created actor also
+            // runs): queue 1 when the guard range is positive or the
+            // inventory is not empty.
+            let registers = match made {
+                Made::Actor(a) => crate::denizen::created(world, a),
+                _ => d.denizen.as_ref().is_some_and(crate::denizen::registers),
+            };
+            if registers {
+                match made.component(bit) {
+                    Some(owner) => world.schedule_periodic(EVERY_SECOND, owner, 0),
+                    None => {
+                        world.random_u32();
+                    }
+                }
+            }
         }
     }
     // 5. 0x50AB10.

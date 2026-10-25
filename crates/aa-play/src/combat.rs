@@ -2162,6 +2162,8 @@ fn process_deaths(world: &mut World, st: &mut CombatState) {
         }
         world.set_activity(v, Activity::Dying);
         world.events.push(Event::Died { actor: v });
+        // (core) 0x4D7960 -> 0x568B10: a deployed denizen frees its slot.
+        crate::denizen::died(world, v);
         let def = data.def(victim_def);
         let ex = extras.def(victim_def);
         let clip = if def.death_clips.is_empty() {

@@ -775,6 +775,16 @@ struct Look {
     skin: Option<String>,
     /// Per Performer turret: its node's parts, turned by the sim's yaw.
     turrets: Vec<Option<view::TurretView>>,
+    /// An aircraft waiting in its hangar (parts hidden).
+    in_hangar: bool,
+}
+
+/// An aircraft created in its airfield's or carrier's hangar waits there
+/// unseen until the runway releases it (CreateDenizen 0x56CC10 sets actor
+/// +8 flag 0x40000000 and virtual +0x50(0) through 0x4D04B0; the release
+/// 0x5695B0 / 0x4D7EA0 shows it again): no model, so no shadow either.
+fn in_hangar(world: &World, id: ActorId) -> bool {
+    world.books.actor(id).and_then(|b| b.aircraft.as_ref()).is_some_and(|x| x.hidden)
 }
 
 /// One drawn actor: a parent with its transform and one child per model mesh.
@@ -1329,8 +1339,26 @@ pub fn sync_actors(
                 }
             }
         }
+        // An aircraft in its hangar: every part hidden (the fog system owns
+        // the root's visibility); released, the parts come back and the
+        // equipment state below is applied again.
+        let hangar = in_hangar(world, actor.id);
+        if hangar || view.look.in_hangar {
+            for p in &view.parts {
+                if let Ok((_, _, mut v)) = parts_q.get_mut(*p) {
+                    let want = if hangar { Visibility::Hidden } else { Visibility::Inherited };
+                    if *v != want {
+                        *v = want;
+                    }
+                }
+            }
+            if !hangar {
+                view.look.applied = None;
+            }
+            view.look.in_hangar = hangar;
+        }
         // Equipment shown / hidden (FXC_Equipment).
-        if view.look.applied.as_ref() != Some(&view.look.hidden) && !view.look.equipment.is_empty() {
+        if !view.look.in_hangar && view.look.applied.as_ref() != Some(&view.look.hidden) && !view.look.equipment.is_empty() {
             for (i, eq) in view.look.equipment.iter().enumerate() {
                 let Some(eq) = eq else { continue };
                 if let Some(&part) = view.parts.get(i)

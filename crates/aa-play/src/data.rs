@@ -338,6 +338,86 @@ pub struct Def {
     pub air_attack_cost: Option<Vec<f32>>,
     #[serde(default)]
     pub air_recon_cost: Option<Vec<f32>>,
+    /// The DenizenComponent's groups, inventory, guard ranges and runway
+    /// (ActorData +0x34C..+0x3D8); None without one.
+    #[serde(default)]
+    pub denizen: Option<DenizenDef>,
+    /// The AircraftComponent (ActorData +0x408..+0x418); None without one.
+    #[serde(default)]
+    pub aircraft: Option<AircraftDef>,
+}
+
+/// DenizenComponent data as the ActorData loader 0x464BD0 (0x4670xx..0x4677xx)
+/// keeps it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DenizenDef {
+    /// +0x34C `[Organization]` behaviour words (0x463520), authored order.
+    pub organization_behaviors: Vec<u32>,
+    /// +0x354 `[DenizenGroup]` list, authored order.
+    pub groups: Vec<DenizenGroup>,
+    /// The constructor 0x56B720's inventory slots, head first (each
+    /// `[Inventory]` entry `count` times, prepended): the slot definitions.
+    pub slots: Vec<DefId>,
+    /// +0x35C is not empty (an `[Inventory]` entry, even of count 0).
+    pub inventory: bool,
+    /// +0x364 guard_range (template 10; 0 when the inventory list is empty,
+    /// 0x4676DC) and +0x368 guard_operational_range.
+    pub guard_range: f32,
+    pub guard_operational_range: f32,
+    /// +0x370.. the `[Runway]` (None: no runway, delay +0x3A4 stays 0).
+    pub runway: Option<Runway>,
+}
+
+/// One `[DenizenGroup]` (+0x354 list node).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DenizenGroup {
+    /// +0 actor_ids.
+    pub actor: DefId,
+    /// +4 behaviour bits (0x463520: worker 2, militia 4/8, air_offensive
+    /// 0x10, air_defensive 0x20, air_recon 0x40, air_escort 0x80).
+    pub behavior: u32,
+    /// +8 / +C size min and max.
+    pub size: [f32; 2],
+    /// +0x10 FormationPositions offsets (x right, y forward, z up).
+    pub formation: Vec<[f32; 3]>,
+}
+
+/// The `[Runway]` of a DenizenComponent (ActorData +0x374..+0x3D8).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Runway {
+    /// +0x374 hangar_offset, +0x380 hangar_orientation, +0x388 hangar_length.
+    pub hangar_offset: [f32; 3],
+    pub hangar_orientation: [f32; 2],
+    pub hangar_length: f32,
+    /// +0x38C offset, +0x398 orientation, +0x3A0 length (takeoff).
+    pub offset: [f32; 3],
+    pub orientation: [f32; 2],
+    pub length: f32,
+    /// +0x3A4 delay between takeoffs.
+    pub delay: f32,
+    /// +0x3A8 has_landing_runway and the landing legs (+0x3AC..+0x3D8).
+    pub has_landing_runway: bool,
+    pub landing_offset: [f32; 3],
+    pub landing_orientation: [f32; 2],
+    pub landing_length: f32,
+    pub landing_hangar_offset: [f32; 3],
+    pub landing_hangar_orientation: [f32; 2],
+    pub landing_hangar_length: f32,
+}
+
+/// The AircraftComponent fields (ActorData +0x408..+0x418).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AircraftDef {
+    /// +0x408 taxi_scale (copied to actor +0x3C at CreateDenizen).
+    pub taxi_scale: f32,
+    /// +0x40C taxi_height above the runway.
+    pub taxi_height: f32,
+    /// +0x410 taxi_speed.
+    pub taxi_speed: f32,
+    /// +0x414 operational_height (cruise).
+    pub operational_height: f32,
+    /// +0x418 bank_factor.
+    pub bank_factor: f32,
 }
 
 /// A Requirements object (ElementComponent or ResearchItem
@@ -656,7 +736,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v19";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v20";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -705,6 +785,12 @@ pub(crate) mod loader {
     pub(crate) fn pt(node: &ResolvedNode<'_>, name: &str) -> Option<[f32; 2]> {
         match node.field(name, PC).ok().flatten() {
             Some(TypedValue::Point { bits, .. }) if bits.len() >= 2 => Some([f(bits[0]), f(bits[1])]),
+            _ => None,
+        }
+    }
+    pub(crate) fn pt3(node: &ResolvedNode<'_>, name: &str) -> Option<[f32; 3]> {
+        match node.field(name, PC).ok().flatten() {
+            Some(TypedValue::Point { bits, .. }) if bits.len() >= 3 => Some([f(bits[0]), f(bits[1]), f(bits[2])]),
             _ => None,
         }
     }
@@ -946,6 +1032,9 @@ pub(crate) mod loader {
         resists: Vec<(usize, f32)>,
         trailer: Option<String>,
         builds: Vec<String>,
+        /// DenizenComponent slot and group actor references.
+        denizen_slots: Vec<String>,
+        denizen_groups: Vec<String>,
     }
 
     pub(crate) fn build(sources: &mut Sources, catalog: &ActorCatalog) -> anyhow::Result<GameData> {
@@ -1008,6 +1097,8 @@ pub(crate) mod loader {
             let packs_to = p.packs_to.as_deref().and_then(|r| resolve(&data, r));
             let trailer = p.trailer.as_deref().and_then(|r| resolve(&data, r));
             let builds = p.builds.iter().filter_map(|r| resolve(&data, r)).collect();
+            let denizen_slots: Vec<DefId> = p.denizen_slots.iter().filter_map(|r| resolve(&data, r)).collect();
+            let denizen_groups: Vec<DefId> = p.denizen_groups.iter().map(|r| resolve(&data, r).unwrap_or(u32::MAX)).collect();
             let mut factor = vec![1.0f32; data.damage_types.len()];
             for (i, sum) in data.damage_types.iter().enumerate().map(|(i, _)| (i, p.resists.iter().filter(|r| r.0 == i).map(|r| r.1).sum::<f32>())) {
                 factor[i] = (1.0 - sum).max(clamp);
@@ -1027,6 +1118,12 @@ pub(crate) mod loader {
             def.packs_to = packs_to;
             def.trailer = trailer;
             def.builds = builds;
+            if let Some(dd) = def.denizen.as_mut() {
+                dd.slots = denizen_slots;
+                for (g, actor) in dd.groups.iter_mut().zip(denizen_groups) {
+                    g.actor = actor;
+                }
+            }
             // ActorData +0x1B8 (464BD0 at 4664xx): a definition with a
             // ConstructionComponent is `constructable` (4CF410 ORs it into
             // every target flag word, beside the properties' flags).
@@ -1213,7 +1310,17 @@ pub(crate) mod loader {
         property: &mut dyn FnMut(&str) -> (Vec<(usize, f32)>, u32),
     ) -> (Def, Pending) {
         let mut def = Def { id: id.to_owned(), health: 0.0, ..Default::default() };
-        let mut p = Pending { recruits: vec![], slots: vec![], unpacks_to: None, packs_to: None, resists: vec![], trailer: None, builds: vec![] };
+        let mut p = Pending {
+            recruits: vec![],
+            slots: vec![],
+            unpacks_to: None,
+            packs_to: None,
+            resists: vec![],
+            trailer: None,
+            builds: vec![],
+            denizen_slots: vec![],
+            denizen_groups: vec![],
+        };
         let mut note = |what: &str, e: &dyn std::fmt::Display| notes.push(format!("{id}: {what}: {e}"));
         let category = match catalog.native_category(ThingRef::registered(id)) {
             Ok(c) => c,
@@ -1506,6 +1613,64 @@ pub(crate) mod loader {
             let costs = |name: &str| denizen.child(name).ok().flatten().map(|c| resource_ids.iter().map(|r| fx(&c, r).unwrap_or(0.0)).collect::<Vec<f32>>());
             def.air_attack_cost = costs("AirAttackCost");
             def.air_recon_cost = costs("AirReconCost");
+            // 0x467165..0x4672E1 Organization, the DenizenGroup list, the
+            // Inventory (aa-rules: the constructor's head-first slots), the
+            // guard ranges (0x4676DC: no inventory, no guard zone) and the
+            // Runway (0x4675xx..0x467670; template defaults length 4,
+            // delay 0.5).
+            let mut dd = DenizenDef::default();
+            for org in denizen.children("Organization").unwrap_or_default() {
+                if let Some(b) = st(&org, "behavior").and_then(|b| aa_rules::native::denizen::native_behavior_flags(&b).ok()) {
+                    dd.organization_behaviors.push(b);
+                }
+            }
+            for group in denizen.children("DenizenGroup").unwrap_or_default() {
+                let Some(actor) = st(&group, "actor_ids") else { continue };
+                let behavior = st(&group, "behavior").and_then(|b| aa_rules::native::denizen::native_behavior_flags(&b).ok()).unwrap_or(0);
+                let size = pt(&group, "size").unwrap_or([0.0, 0.0]);
+                let formation = group.children("FormationPositions").unwrap_or_default().iter().filter_map(|f| pt3(f, "offset")).collect();
+                p.denizen_groups.push(actor);
+                dd.groups.push(DenizenGroup { actor: u32::MAX, behavior, size, formation });
+            }
+            match catalog.native_denizen_inventory(id, PC) {
+                Ok(Some(inv)) => p.denizen_slots = inv.slots.into_iter().map(|s| s.target).collect(),
+                Ok(None) => {}
+                Err(e) => note("denizen inventory", &e),
+            }
+            let has_inventory = !denizen.children("Inventory").unwrap_or_default().is_empty();
+            dd.inventory = has_inventory;
+            dd.guard_range = if has_inventory { fx(&denizen, "guard_range").unwrap_or(10.0) } else { 0.0 };
+            dd.guard_operational_range = fx(&denizen, "guard_operational_range").unwrap_or(0.0);
+            if let Ok(Some(r)) = denizen.child("Runway") {
+                let p3 = |n: &str| pt3(&r, n).unwrap_or([0.0; 3]);
+                let p2 = |n: &str| pt(&r, n).unwrap_or([0.0; 2]);
+                dd.runway = Some(Runway {
+                    hangar_offset: p3("hangar_offset"),
+                    hangar_orientation: p2("hangar_orientation"),
+                    hangar_length: fx(&r, "hangar_length").unwrap_or(0.0),
+                    offset: p3("offset"),
+                    orientation: p2("orientation"),
+                    length: fx(&r, "length").unwrap_or(4.0),
+                    delay: fx(&r, "delay").unwrap_or(0.5),
+                    has_landing_runway: bl(&r, "has_landing_runway").unwrap_or(false),
+                    landing_offset: p3("landing_offset"),
+                    landing_orientation: p2("landing_orientation"),
+                    landing_length: fx(&r, "landing_length").unwrap_or(0.0),
+                    landing_hangar_offset: p3("landing_hangar_offset"),
+                    landing_hangar_orientation: p2("landing_hangar_orientation"),
+                    landing_hangar_length: fx(&r, "landing_hangar_length").unwrap_or(0.0),
+                });
+            }
+            def.denizen = Some(dd);
+        }
+        if let Ok(Some(air)) = node.child("AircraftComponent") {
+            def.aircraft = Some(AircraftDef {
+                taxi_scale: fx(&air, "taxi_scale").unwrap_or(0.0),
+                taxi_height: fx(&air, "taxi_height").unwrap_or(0.0),
+                taxi_speed: fx(&air, "taxi_speed").unwrap_or(0.0),
+                operational_height: fx(&air, "operational_height").unwrap_or(0.0),
+                bank_factor: fx(&air, "bank_factor").unwrap_or(0.0),
+            });
         }
         def.structure = node.child("StructureComponent").ok().flatten().is_some();
         if let Ok(Some(city)) = node.child("CityComponent") {
