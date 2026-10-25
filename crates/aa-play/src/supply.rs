@@ -349,7 +349,9 @@ pub fn tick(world: &mut World) {
             }
         }
     }
-    // Zones for this tick (0x58ACE0 provides_supply).
+    // Zones for this tick (0x58ACE0 provides_supply). An independent
+    // owner (kingdom +0x190 == 1: cities before their capture) provides
+    // none (the Berlin film: their slot-0 zone stays at radius -1).
     let mut zones = Vec::new();
     for &a in &providers {
         let actor = &world.actors[a as usize];
@@ -357,7 +359,8 @@ pub fn tick(world: &mut World) {
         let def = world.data.def(actor.def);
         let b = world.books.actor(a);
         let stock_ok = !def.supply_relay || b.is_some_and(|b| !b.out_of_supply || b.supply_stock > 0.0);
-        if deploying(world, a) || !stock_ok || def.supply_range < 0.0 {
+        let independent = world.kingdoms.iter().any(|x| x.id == k && x.independent);
+        if independent || deploying(world, a) || !stock_ok || def.supply_range < 0.0 {
             if let Some(b) = world.books.actors.get_mut(a as usize) {
                 b.zone_active = false;
             }

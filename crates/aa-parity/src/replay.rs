@@ -55,6 +55,10 @@ pub struct PlayerPlan {
     pub color_id: String,
     pub handicap: String,
     pub computer: bool,
+    /// The creator kept the staging "Random" (empty nation / general): the
+    /// original draws the pick in WorldParameters 0x50E8B0 at map restore.
+    pub random_nation: bool,
+    pub random_general: bool,
 }
 
 /// The aa-play battle a film is replayed in.
@@ -222,6 +226,8 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
             color_id: info.color.clone(),
             handicap,
             computer: computers.iter().any(|c| c.eq_ignore_ascii_case(&s.id)),
+            random_nation: info.nation.is_empty(),
+            random_general: info.faction.is_empty(),
         });
     }
     // Native kingdom creation follows the creator's kingdom list
@@ -286,15 +292,26 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
     })
 }
 
-/// The aa-play world of `plan`, recording its S trace: the custom battle,
-/// then the film's generals and starting experience (no draw).
+/// The aa-play world of `plan`, recording its S trace: the custom battle
+/// with the original's random picks where the film's creator kept "Random"
+/// (`World::new_skirmish_with`, the WorldParameters draws), then the film's
+/// generals and starting experience (no draw). The picks must reproduce the
+/// film header's; [`pick_mismatches`] reports any that does not.
 pub fn build(
     plan: &ReplayPlan,
     game_root: &std::path::Path,
     data: Arc<GameData>,
     map: Arc<GameMap>,
 ) -> anyhow::Result<World> {
-    let mut world = World::new_skirmish(data.clone(), map, &plan.setup)?;
+    let picks: Vec<aa_play::creation::StartPick> = plan
+        .players
+        .iter()
+        .map(|p| aa_play::creation::StartPick {
+            random_nation: p.random_nation,
+            random_general: p.random_general,
+        })
+        .collect();
+    let mut world = World::new_skirmish_with(data.clone(), map, &plan.setup, &picks)?;
     let generals = aa_play::special_ops::GeneralData::load(game_root, &data)?;
     aa_play::special_ops::attach(&mut world, Arc::new(generals));
     if let Some(x) = plan.starting_experience {
@@ -305,6 +322,39 @@ pub fn build(
     }
     world.trace.record(true);
     Ok(world)
+}
+
+/// Players whose aa-play nation or drawn general differs from the film
+/// header's pick (empty when the random picks reproduce the film).
+pub fn pick_mismatches(plan: &ReplayPlan, world: &World) -> Vec<String> {
+    let mut out = Vec::new();
+    for (k, p) in plan.players.iter().enumerate() {
+        let Some(kingdom) = world.kingdoms.get(k) else {
+            out.push(format!("{}: no aa-play kingdom {k}", p.slot_id));
+            continue;
+        };
+        if kingdom.nation != p.nation {
+            out.push(format!(
+                "{}: nation {} against the film's {}",
+                p.slot_id, kingdom.nation, p.nation
+            ));
+        }
+        let drawn = world
+            .books
+            .kingdom(k as u32)
+            .and_then(|b| b.general.clone());
+        if p.random_general
+            && drawn
+                .as_deref()
+                .is_some_and(|g| !g.eq_ignore_ascii_case(&p.general))
+        {
+            out.push(format!(
+                "{}: general {drawn:?} against the film's {}",
+                p.slot_id, p.general
+            ));
+        }
+    }
+    out
 }
 
 /// What aa-play has in a native GTID slot at the start (creation-order check
@@ -506,6 +556,29 @@ pub fn run_aliased(
     stop_at_difference: bool,
     aliases: &Aliases,
 ) -> ReplayReport {
+    run_observed(
+        film,
+        world,
+        object_ids,
+        max_steps,
+        stop_at_difference,
+        aliases,
+        &mut |_, _| {},
+    )
+}
+
+/// [`run_aliased`] calling `observe(step, world)` after every step (the
+/// world after GWorld update `step`, as the native sampler's 0x76F850
+/// snapshot of the same tick).
+pub fn run_observed(
+    film: &Film,
+    world: &mut World,
+    object_ids: &[String],
+    max_steps: Option<u32>,
+    stop_at_difference: bool,
+    aliases: &Aliases,
+    observe: &mut dyn FnMut(u32, &World),
+) -> ReplayReport {
     let mut report = ReplayReport::default();
     let mut mapper = Mapper::new();
     let checkpoints: BTreeMap<u32, (i32, i32)> = film
@@ -549,6 +622,7 @@ pub fn run_aliased(
         world.step_decrees(traced);
         let step = record + 1;
         report.steps = step;
+        observe(step, world);
         for e in &world.events {
             if let aa_play::Event::Refused { kingdom, reason } = e
                 && report.refused.len() < 256

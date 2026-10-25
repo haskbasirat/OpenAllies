@@ -85,8 +85,11 @@ fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: V
         experience: 0.0,
         alive: true,
     });
-    // CreateOrganization 0x4FA150: the organization's id before its members'.
-    world.ids.created_org(id);
+    // CreateOrganization 0x4FA150: the organization's id (and its creation
+    // draws, 0x4F9C10) before its members'.
+    if world.ids.created_org(id) {
+        crate::creation::created(world, def);
+    }
     let slots = world.data.def(def).slots.len();
     world.books.org_mut(id).progress = vec![0.0; slots];
     id
@@ -495,6 +498,49 @@ fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId)
 /// hold, else 1 (missing structures or properties). For the HUD and AI.
 pub fn recruitability(world: &World, building: ActorId, def: DefId) -> i32 {
     native::recruitability(world, building, def).unwrap_or(1)
+}
+
+/// What a recruit or research button needs from 0x581F70 / 0x5844A0: the
+/// code (0 enabled; 1 missing requirements; 2 not allowed or property
+/// requirements missing, the original hides the button; 4 research known or
+/// in progress) and the missing required structures and properties.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Missing {
+    pub code: i32,
+    pub structures: Vec<DefId>,
+    pub properties: Vec<String>,
+}
+
+/// 0x581F70 with its out lists for a recruit of `def` at `building` (an
+/// organization: over its layout slots, the last failing code wins).
+pub fn recruit_requirements(world: &World, building: ActorId, def: DefId) -> Missing {
+    match native::recruit_missing(world, building, def) {
+        Ok((code, structures, properties)) => Missing { code, structures: native::defs_of(&structures), properties: native::properties_of(world, &properties) },
+        Err(_) => Missing { code: 2, ..Default::default() },
+    }
+}
+
+/// 0x5844A0 / 0x5842F0 for `building`'s research entry `index`: 4 when the
+/// technology is known, queued here or in progress in the kingdom, 2 while
+/// the building packs or unpacks, else the requirement code and lists.
+pub fn research_requirements(world: &World, building: ActorId, index: usize) -> Missing {
+    let Some(a) = world.actors.get(building as usize) else { return Missing { code: 2, ..Default::default() } };
+    let Some(record) = native::research_record(world, a.def, index) else { return Missing { code: 2, ..Default::default() } };
+    if busy(world, building) {
+        return Missing { code: 2, ..Default::default() };
+    }
+    let property = &world.data.def(a.def).research[index].property;
+    let queued = world.books.actor(building).is_some_and(|b| b.queue.items.iter().any(|i| i.research.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(property))));
+    let kingdom = a.kingdom.and_then(|k| world.books.kingdom(k));
+    let in_progress = kingdom.is_some_and(|k| k.research.contains(&record));
+    let known = kingdom.is_some_and(|k| k.technologies.iter().any(|t| t.eq_ignore_ascii_case(property)));
+    if queued || in_progress || known {
+        return Missing { code: 4, ..Default::default() };
+    }
+    match native::research_missing(world, building, &record) {
+        Ok((code, structures, properties)) => Missing { code, structures: native::defs_of(&structures), properties: native::properties_of(world, &properties) },
+        Err(_) => Missing { code: 2, ..Default::default() },
+    }
 }
 
 /// Research request 0x584790 (aa-production `request_research`): blocked

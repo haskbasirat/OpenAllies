@@ -412,7 +412,10 @@ fn commander_mut(world: &mut World, kingdom: KingdomId) -> &mut Commander {
 /// public factions at random, as the setup does for "Random" (0x50E8B0).
 pub fn set_general(world: &mut World, kingdom: KingdomId, general: Option<&str>) -> Option<usize> {
     let data = world.special_ops.data.clone()?;
-    let index = match general.and_then(|g| data.general(g)) {
+    // (core) A general WorldParameters 0x50E8B0 picked at random during the
+    // map restore (`World::new_skirmish_with`) is the one for None.
+    let picked = world.books.kingdom(kingdom).and_then(|b| b.general.clone());
+    let index = match general.or(picked.as_deref()).and_then(|g| data.general(g)) {
         Some(i) => Some(i),
         None => {
             let nation = world.kingdoms.iter().find(|k| k.id == kingdom).map(|k| k.nation.clone()).unwrap_or_default();

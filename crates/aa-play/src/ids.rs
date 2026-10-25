@@ -63,6 +63,9 @@ pub struct NativeIds {
     kingdom_slots: Vec<Option<usize>>,
     /// The saved id the next creation takes (a kept map thing).
     requested: Option<Gtid>,
+    /// Things spawned now are restored from the map (no creation draws), not
+    /// created (setup sets it around a kept map thing and its members).
+    pub restore_scope: bool,
     /// Registrations and allocations that failed (stale generation, no ids
     /// left), for the load notes and the parity harness.
     pub notes: Vec<String>,
@@ -79,6 +82,7 @@ impl Default for NativeIds {
             map_kingdoms: Vec::new(),
             kingdom_slots: Vec::new(),
             requested: None,
+            restore_scope: false,
             notes: Vec::new(),
         }
     }
@@ -260,16 +264,19 @@ impl NativeIds {
     }
 
     /// `World::spawn_actor`: the actor's id (4EE460: the requested saved id,
-    /// else next-fit).
-    pub fn created_actor(&mut self, actor: ActorId) {
+    /// else next-fit). False for a restored map thing (it was not created).
+    pub fn created_actor(&mut self, actor: ActorId) -> bool {
         let id = self.take(true, Thing::Actor(actor));
         set(&mut self.actors, actor as usize, id);
+        !self.restore_scope
     }
 
-    /// A new organization actor (before its members).
-    pub fn created_org(&mut self, org: OrgId) {
+    /// A new organization actor (before its members). False for a restored
+    /// map organization.
+    pub fn created_org(&mut self, org: OrgId) -> bool {
         let id = self.take(true, Thing::Org(org));
         set(&mut self.orgs, org as usize, id);
+        !self.restore_scope
     }
 
     /// Give back the ids of removed actors and dead organizations.

@@ -458,6 +458,64 @@ pub(super) fn recruitability(world: &World, building: ActorId, d: DefId) -> R<i3
     Ok(if outcome.met { 0 } else { 1 })
 }
 
+/// 0x581F70 with its out lists (missing structure definitions, missing
+/// property handles): an organization collects over its layout slots (the
+/// last failing code wins, the lists keep their first appearance).
+pub(super) fn recruit_missing(world: &World, building: ActorId, d: DefId) -> R<(i32, Vec<u32>, Vec<u32>)> {
+    let def = world.data.def(d);
+    if def.has_component("OrganizationComponent") {
+        let (mut code, mut actors, mut properties) = (0, Vec::new(), Vec::new());
+        for s in def.slots.iter().map(|s| s.0).filter(|&s| s != crate::data::NO_DEF) {
+            let (c, a, p) = recruit_missing(world, building, s)?;
+            if c != 0 {
+                code = c;
+            }
+            for x in a {
+                if !actors.contains(&x) {
+                    actors.push(x);
+                }
+            }
+            for x in p {
+                if !properties.contains(&x) {
+                    properties.push(x);
+                }
+            }
+        }
+        return Ok((code, actors, properties));
+    }
+    let req = requirements(world, &def.requirements);
+    if req.properties.is_empty() && req.actors.is_empty() {
+        return Ok((0, Vec::new(), Vec::new()));
+    }
+    let mut reader = Reader { world, building };
+    let kingdom = reader.kingdom();
+    let outcome = research::evaluate_requirements(&req, kingdom, None, Some(actor_handle(building)), &mut reader)?;
+    Ok((if outcome.met { 0 } else { 1 }, outcome.missing_actors, outcome.missing_properties))
+}
+
+/// 0x5842F0 with the lists of 0x4C5250 for a research record of `building`.
+pub(super) fn research_missing(world: &World, building: ActorId, record: &ResearchItem) -> R<(i32, Vec<u32>, Vec<u32>)> {
+    let mut reader = Reader { world, building };
+    let kingdom = reader.kingdom();
+    let outcome = research::evaluate_requirements(&record.requirements, kingdom, None, Some(actor_handle(building)), &mut reader)?;
+    let code = if outcome.met {
+        0
+    } else if outcome.properties_met {
+        1
+    } else {
+        2
+    };
+    Ok((code, outcome.missing_actors, outcome.missing_properties))
+}
+
+/// Handles back to aa-play ids.
+pub(super) fn defs_of(handles: &[u32]) -> Vec<DefId> {
+    handles.iter().filter_map(|&h| def_of(h)).collect()
+}
+pub(super) fn properties_of(world: &World, handles: &[u32]) -> Vec<String> {
+    handles.iter().filter_map(|&h| property_of(world, h).map(str::to_owned)).collect()
+}
+
 /// An actor handle for the requirement callbacks (never zero).
 fn actor_handle(a: ActorId) -> u32 {
     a + 1

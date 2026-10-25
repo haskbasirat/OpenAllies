@@ -295,3 +295,31 @@ Then each truck starts to move one update after creation (403, 403, 404): the Mo
 5773C0 queue-0 registration, then ActionGo 53037F, two draws each.
 
 Total: 3 × 14 + 3 × 2 = 48.
+
+## 11. Native state sampler and the first divergence per lane (Berlin, 2026-10-25)
+
+Tool: `reconstruction/qa-runs/compare-20261022/tools/NativeSampler.cs` (QA copy only), which is
+RngTrace plus a snapshot after every GWorld update (INT3 at 0x76F850, right after the 0x4F9970
+call). It records the world RNG, the GWorld+154 kingdoms (+1A0 provided, +1AC effective,
++1B8 consumed, +1C4 stockpiled, +1F0) and every class-3 GActor of the GTID table, with
+position, direction, active component (+E4), state +100, Body +10/+14, Mover +10/+14/+20/+24/
++28/+56, Organization +28/+2C/+40/+70, Structure +18/+20/+24/+28/+2C plus the head item,
+Supply +18/+1C, Detection +10/+14, and every KKC_Zone of +148/+14C. Driver: `tools/o2.ps1`,
+on its own hidden desktop AACMP2 with its own state files, so it cannot collide with other
+agents on AACMP1. Trace: `traces/berlin2v2_0-native.txt`, every tick 1–1200, then every 8th
+tick to 4544. Reader: `aa_parity::native_trace`; comparison: `aa_parity::state_compare`; run
+with `tests/berlin_native_state.rs`.
+
+Result against the 2026-10-25 tree (battle-start draws and random picks in: checkpoints
+17–391 match):
+
+| lane | first divergence | finding |
+|---|---|---|
+| economy | tick 1 | +1C4 starts at 500 for all 7 resources (money, ammo, oil, unit/building limits); aa-play only for money. Money, +1A0/+1AC/+1B8 match |
+| supply | tick 1 | the independent cities' ZOS (zone 0) is inactive natively (radius −1.0); 0xF68 activates at tick 3608 |
+| existence | tick 402 | each HQ recruit creates 3 GTIDs natively (regiment, truck, trailer); aa-play 2, so later ids are shifted |
+| production | tick 402 | identical queues (deadline 25.0625, duration 25.0), yet the ger recruit completes in 403, the rus ones in 402 |
+| movement | tick 402 | a new truck stays at its spawn (speed 0) in its creation update and moves from 403; aa-play moves it at once. Regiment position 165.0 against anchor 164.67 |
+| fog | tick 402 | the new regiment's ZOD sits on its own position (tile 82) natively, on the corps tile (77) in aa-play. All earlier zones match exactly |
+| rng | tick 402 | the creation and move draws (checkpoint 408) |
+| combat | tick 587 | unpack keeps the truck's GTID: the truck becomes the HQ (health 2000) in place natively |

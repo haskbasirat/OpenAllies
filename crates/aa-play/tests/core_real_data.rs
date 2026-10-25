@@ -779,7 +779,7 @@ fn every_nation_recruits_from_every_division_hq() {
             // A division HQ that needs another one first (mechanized: an
             // infantry HQ; armor: a mechanized HQ; 0x581F70 requirements):
             // give the kingdom the required structures, away from the Corps.
-            if aa_play::production::recruitability(&mut w, corps, item) != 0 {
+            if aa_play::production::recruitability(&w, corps, item) != 0 {
                 let mut needed: Vec<String> = Vec::new();
                 for &(m, _) in &data.def(item).slots {
                     if m != aa_play::data::NO_DEF {
@@ -792,7 +792,7 @@ fn every_nation_recruits_from_every_division_hq() {
                     let sd = data.find(s).expect("required structure");
                     aa_play::production::spawn_single(&mut w, sd, Some(0), cpos + glam::Vec2::new(-80.0 - 40.0 * i as f32, 60.0), 0.0);
                 }
-                assert_eq!(aa_play::production::recruitability(&mut w, corps, item), 0, "{nation}: {item_id} after {needed:?}");
+                assert_eq!(aa_play::production::recruitability(&w, corps, item), 0, "{nation}: {item_id} after {needed:?}");
             }
             w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: item }]);
             let r = refused(&w);
@@ -875,7 +875,7 @@ fn every_nation_recruits_from_every_division_hq() {
                 }
                 // 0x581F70: an element whose required structures / properties
                 // the kingdom lacks (a motor pool, a technology) is refused.
-                if r == ["missing requirements".to_string()] && aa_play::production::recruitability(&mut w, building, unit) != 0 {
+                if r == ["missing requirements".to_string()] && aa_play::production::recruitability(&w, building, unit) != 0 {
                     eprintln!("  {unit_id}: missing requirements");
                     continue;
                 }
@@ -941,7 +941,7 @@ fn element_requirements_gate_recruits() {
             }
         }
         if structures.is_empty() && properties.is_empty() {
-            assert_eq!(aa_play::production::recruitability(&mut w, corps, d as u32), 0, "{}", def.id);
+            assert_eq!(aa_play::production::recruitability(&w, corps, d as u32), 0, "{}", def.id);
             continue;
         }
         let owned = |w: &aa_play::World, s: &str| w.actors.iter().any(|a| a.alive && a.kingdom == Some(0) && data.def(a.def).id.eq_ignore_ascii_case(s));
@@ -952,7 +952,14 @@ fn element_requirements_gate_recruits() {
         if structures.iter().all(|s| owned(&w, s)) && properties.iter().filter(|p| technology(p)).all(|p| known(&w, p)) {
             continue;
         }
-        assert_ne!(aa_play::production::recruitability(&mut w, corps, d as u32), 0, "{} needs {structures:?} {properties:?}", def.id);
+        assert_ne!(aa_play::production::recruitability(&w, corps, d as u32), 0, "{} needs {structures:?} {properties:?}", def.id);
+        // The HUD's lists (0x581F70 out lists): every structure the kingdom
+        // lacks is named.
+        let missing = aa_play::production::recruit_requirements(&w, corps, d as u32);
+        assert_ne!(missing.code, 0);
+        for s in structures.iter().filter(|s| !owned(&w, s)) {
+            assert!(missing.structures.iter().any(|&m| data.def(m).id.eq_ignore_ascii_case(s)), "{}: {s} listed in {missing:?}", def.id);
+        }
         // Grant them: the structures (complete, owned) and the technologies.
         for s in &structures {
             if !owned(&w, s) {
@@ -965,7 +972,7 @@ fn element_requirements_gate_recruits() {
                 w.books.kingdom_mut(0, data.resources.len()).technologies.push(p.clone());
             }
         }
-        let code = aa_play::production::recruitability(&mut w, corps, d as u32);
+        let code = aa_play::production::recruitability(&w, corps, d as u32);
         eprintln!("{}: needs {structures:?} {properties:?} -> granted, recruitability {code}", def.id);
         if properties.iter().all(|p| data.property(p).is_some_and(|x| x.is_technology)) {
             assert_eq!(code, 0, "{} unlocked", def.id);
@@ -1424,6 +1431,39 @@ fn native_ids_on_berlin() {
     assert_eq!(w.ids.thing(13399), None);
     assert_eq!(w.ids.next_slot(), 13400);
 }
+/// The battle-start world-RNG draws of the 4-player Berlin film (measured
+/// live by the parity harness): from the map's saved GWORLD state
+/// 0xB846CE0C, WorldParameters 0x50E8B0 draws each kingdom's random nation
+/// and general (8), the restore draws once per doodad component and per
+/// Supply component in ascending GTID order (6190 + 4), the four corps
+/// replacements draw 7 each (scale, mind jitter, five queue-1 components),
+/// and the sync dump once: 6231 draws, so the first battle getter sees
+/// 0x4F1E05E7. The random picks give rus chuikov, rus zhukov, ger
+/// rundstedt, rus konev, as the film's header.
+#[test]
+#[ignore]
+fn berlin_battle_start_draws_match_the_film() {
+    let data = data();
+    let map = Arc::new(GameMap::load_with(&root(), "(2v2)Berlin", &data).expect("Berlin"));
+    let player = |name: &str, team: u32, start: usize| aa_play::PlayerSetup { name: name.into(), nation: String::new(), team, color: [0, 76, 255], controller: aa_play::Controller::Human, start };
+    let setup = aa_play::SkirmishSetup {
+        map_id: "(2v2)Berlin".into(),
+        players: vec![player("A", 0, 0), player("B", 0, 1), player("C", 1, 2), player("D", 1, 3)],
+        starting_resources: None,
+        seed: 0xBB55_6C83,
+    };
+    eprintln!("player slots {:?}", map.player_slots);
+    let picks = vec![aa_play::creation::StartPick { random_nation: true, random_general: true }; 4];
+    let w = aa_play::World::new_skirmish_with(data.clone(), map, &setup, &picks).expect("new_skirmish");
+    let nations: Vec<String> = w.kingdoms.iter().take(4).map(|k| k.nation.clone()).collect();
+    let generals: Vec<Option<String>> = (0..4).map(|k| w.books.kingdom(k).unwrap().general.clone()).collect();
+    eprintln!("nations {nations:?} generals {generals:?} state {:#010x}", w.native_rng.state);
+    assert_eq!(nations, ["rus", "rus", "ger", "rus"]);
+    let g = |i: usize, name: &str| generals[i].as_deref().is_some_and(|x| x.to_ascii_lowercase().contains(name));
+    assert!(g(0, "chuikov") && g(1, "zhukov") && g(2, "rundstedt") && g(3, "konev"), "{generals:?}");
+    assert_eq!(w.native_rng.state, 0x4F1E_05E7, "the first battle getter's state");
+}
+
 /// Parity trace evidence: the S stream of the first 34 ticks (one film
 /// record each) on Berlin and on a generated map, with the computer player
 /// attached. Every tick logs its clock first; the world-RNG getters follow.
@@ -1460,10 +1500,14 @@ fn trace_first_34_ticks() {
         assert_eq!(w.trace.checkpoint(), (0, 0));
         if kind == "berlin" {
             // 0x4FC600 reads the map's saved GWORLD +0xD4 over the seeded
-            // state; the battle-start sync dump draws once.
+            // state; then the restore draws (6190 doodad components, 4
+            // Supply components), the two corps replacements (7 each) and
+            // the sync dump (1): 6209 draws (no random picks here).
             assert_eq!(w.map.rng_state, Some(0xb846_ce0c));
             let mut saved = aa_simulation::NativeRng { state: 0xb846_ce0c };
-            saved.next_u32();
+            for _ in 0..6209 {
+                saved.next_u32();
+            }
             assert_eq!(w.native_rng.state, saved.state);
         }
         w.trace.record(true);

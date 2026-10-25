@@ -339,8 +339,11 @@ impl World {
             order: Order::Idle,
             queue: Vec::new(),
         });
-        // (core) its native GTID: a kept map thing's saved id, else next-fit.
-        self.ids.created_actor(id);
+        // (core) its native GTID: a kept map thing's saved id, else next-fit;
+        // a created (not restored) thing draws as 0x4F9C10 does.
+        if self.ids.created_actor(id) {
+            crate::creation::created(self, def);
+        }
         id
     }
     pub fn actor(&self, id: ActorId) -> Option<&Actor> {
