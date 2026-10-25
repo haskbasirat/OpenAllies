@@ -33,8 +33,10 @@ fn has(d: &Def, bit: u32) -> bool {
     d.components & (1 << bit) != 0
 }
 
-/// The draws of creating a thing of `def` (0x4F9C10).
-pub fn created(world: &mut World, def: DefId) {
+/// The draws of creating a thing of `def` (0x4F9C10); `actor` is the
+/// aa-play actor it is (None for an organization), whose trailer then takes
+/// its own GTID.
+pub fn created(world: &mut World, def: DefId, actor: Option<crate::world::ActorId>) {
     let data = world.data.clone();
     let d = data.def(def);
     // 1. 0x49B440 random scale.
@@ -45,7 +47,10 @@ pub fn created(world: &mut World, def: DefId) {
     }
     // 3. The hitched trailer (a thing of its own).
     if let Some(t) = d.trailer.filter(|&t| t != def) {
-        created(world, t);
+        if let Some(a) = actor {
+            world.ids.created_trailer(a);
+        }
+        created(world, t, None);
     }
     // 4. The component InitCreates, slot order.
     for bit in 0..31 {

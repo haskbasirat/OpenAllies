@@ -70,8 +70,13 @@ impl World {
         if setup.players.is_empty() {
             anyhow::bail!("a custom battle needs at least one player");
         }
-        let money = data.resource_index("money");
         let start = setup.starting_resources.or_else(|| data.rule_ci("ResourceStockpileDefault")).unwrap_or(0.0);
+        // StartMission 0x4E6DB0 (aa-economy kingdom_start): every stockpile
+        // row of every kingdom is reset to the starting value (+0 unless
+        // positive), at most EconomyStockpileResourceMax.
+        let start_max = data.rule_ci("EconomyStockpileResourceMax").unwrap_or(f32::MAX);
+        let start_value = if start > 0.0 { start } else { 0.0 };
+        let start_row = if start_max < start_value { start_max } else { start_value };
         // 0x50E8B0 per player kingdom in creator (map slot) order.
         let mut order: Vec<usize> = (0..setup.players.len()).collect();
         order.sort_by_key(|&i| map.player_slots.get(setup.players[i].start).copied().unwrap_or(usize::MAX));
@@ -118,9 +123,7 @@ impl World {
                 _ => None,
             };
             let kb = world.books.kingdom_mut(i as u32, data.resources.len());
-            if let Some(m) = money {
-                kb.stockpiled[m] = start;
-            }
+            kb.stockpiled.iter_mut().for_each(|s| *s = start_row);
             kb.handicap = handicap;
             kb.general = generals[i].clone();
         }
@@ -145,7 +148,7 @@ impl World {
                 defeated: false,
                 independent: true,
             });
-            world.books.kingdom_mut(id, data.resources.len());
+            world.books.kingdom_mut(id, data.resources.len()).stockpiled.iter_mut().for_each(|s| *s = start_row);
         }
         world.books.relations = relations(&world, &map, &slot_kingdom, players);
         // Native ids (crate::ids): every kingdom takes its map slot's id; the

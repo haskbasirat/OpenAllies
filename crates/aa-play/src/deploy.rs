@@ -151,7 +151,11 @@ fn arrived(world: &World, truck: ActorId) -> bool {
 fn replace(world: &mut World, old: ActorId, def: DefId, pos: Vec2, facing: f32) -> ActorId {
     let kingdom = world.actors[old as usize].kingdom;
     let (org, slot) = (world.actors[old as usize].org, world.actors[old as usize].slot);
+    // The new actor takes the old one's GTID (the film: the unpacked HQ keeps
+    // its truck's id); the old one's trailer is destroyed with it.
+    world.ids.replace_actor(old);
     let new = crate::production::spawn_single(world, def, kingdom, pos, facing);
+    world.ids.drop_request();
     {
         let n = &mut world.actors[new as usize];
         n.org = org;

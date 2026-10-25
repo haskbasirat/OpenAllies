@@ -88,7 +88,7 @@ fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: V
     // CreateOrganization 0x4FA150: the organization's id (and its creation
     // draws, 0x4F9C10) before its members'.
     if world.ids.created_org(id) {
-        crate::creation::created(world, def);
+        crate::creation::created(world, def, None);
     }
     let slots = world.data.def(def).slots.len();
     world.books.org_mut(id).progress = vec![0.0; slots];

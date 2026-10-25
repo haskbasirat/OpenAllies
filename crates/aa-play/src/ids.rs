@@ -48,6 +48,9 @@ pub enum Thing {
     /// A map placed thing aa-play keeps as scenery (or not at all), by
     /// `GameMap::placed` index.
     Placed(usize),
+    /// The trailer hitched to this actor (a GActor of its own natively,
+    /// created by the truck's InitCreate 0x4D70F2; aa-play draws no trailer).
+    Trailer(ActorId),
 }
 
 /// The GTID side table (`World::ids`).
@@ -56,6 +59,7 @@ pub struct NativeIds {
     registry: IdentityRegistry<Thing>,
     actors: Vec<Option<Gtid>>,
     orgs: Vec<Option<Gtid>>,
+    trailers: Vec<Option<Gtid>>,
     kingdoms: Vec<Option<Gtid>>,
     placed: Vec<Option<Gtid>>,
     map_kingdoms: Vec<Option<Gtid>>,
@@ -77,6 +81,7 @@ impl Default for NativeIds {
             registry: IdentityRegistry::new(),
             actors: Vec::new(),
             orgs: Vec::new(),
+            trailers: Vec::new(),
             kingdoms: Vec::new(),
             placed: Vec::new(),
             map_kingdoms: Vec::new(),
@@ -271,6 +276,28 @@ impl NativeIds {
         !self.restore_scope
     }
 
+    /// The trailer `actor`'s InitCreate creates (next-fit, after the truck's
+    /// own id).
+    pub fn created_trailer(&mut self, actor: ActorId) {
+        let id = self.allocate(true, Thing::Trailer(actor));
+        set(&mut self.trailers, actor as usize, id);
+    }
+
+    /// An actor replaced in place (MobileDeployment unpack / pack): the old
+    /// actor is destroyed (its id removed, its trailer with it) and the next
+    /// creation registers the very same id (the requested GTID of 4EE460).
+    pub fn replace_actor(&mut self, actor: ActorId) {
+        if let Some(t) = get(&self.trailers, actor as usize) {
+            self.remove(t);
+            self.trailers[actor as usize] = None;
+        }
+        let Some(id) = get(&self.actors, actor as usize) else { return };
+        self.remove(id);
+        let _ = self.registry.seed_saved_generation(id);
+        self.actors[actor as usize] = None;
+        self.requested = Some(id);
+    }
+
     /// A new organization actor (before its members). False for a restored
     /// map organization.
     pub fn created_org(&mut self, org: OrgId) -> bool {
@@ -287,6 +314,12 @@ impl NativeIds {
             {
                 self.remove(id);
                 self.actors[i] = None;
+            }
+            if a.removed
+                && let Some(id) = get(&self.trailers, i)
+            {
+                self.remove(id);
+                self.trailers[i] = None;
             }
         }
         for (i, o) in world_orgs.iter().enumerate() {
@@ -306,6 +339,10 @@ impl NativeIds {
     }
     pub fn org(&self, org: OrgId) -> Option<Gtid> {
         get(&self.orgs, org as usize)
+    }
+    /// The GTID of the trailer hitched to `actor`.
+    pub fn trailer(&self, actor: ActorId) -> Option<Gtid> {
+        get(&self.trailers, actor as usize)
     }
     pub fn kingdom(&self, kingdom: KingdomId) -> Option<Gtid> {
         get(&self.kingdoms, kingdom as usize)
@@ -353,6 +390,8 @@ pub fn unit(thing: Thing) -> Option<Unit> {
     match thing {
         Thing::Actor(a) => Some(Unit::Actor(a)),
         Thing::Org(o) => Some(Unit::Org(o)),
+        // A trailer is ordered as its truck.
+        Thing::Trailer(a) => Some(Unit::Actor(a)),
         _ => None,
     }
 }

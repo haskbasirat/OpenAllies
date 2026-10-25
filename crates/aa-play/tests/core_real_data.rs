@@ -1431,6 +1431,51 @@ fn native_ids_on_berlin() {
     assert_eq!(w.ids.thing(13399), None);
     assert_eq!(w.ids.next_slot(), 13400);
 }
+/// StartMission 0x4E6DB0 resets every stockpile row of every kingdom to the
+/// starting value (the Berlin film's sampled +1C4: 500 in all 7 rows).
+/// A recruited HQ regiment takes three GTIDs (regiment, truck, its trailer,
+/// in that order, as natively), and the unpacked HQ keeps its truck's GTID.
+#[test]
+#[ignore]
+fn start_stockpiles_trailer_ids_and_unpack_identity() {
+    use aa_play::{Command, Event};
+    let mut w = berlin_world();
+    let data = w.data.clone();
+    for k in 0..w.kingdoms.len() as u32 {
+        assert!(w.books.kingdom(k).unwrap().stockpiled.iter().all(|&s| s == 500.0), "kingdom {k}: {:?}", w.books.kingdom(k).unwrap().stockpiled);
+    }
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+    let cpos = w.actors[corps as usize].pos.truncate();
+    w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: data.find("regiment_rus_hq_infantry").unwrap() }]);
+    let mut got = None;
+    for _ in 0..(16 * 60) {
+        w.step(vec![]);
+        if let Some(Event::Recruited { org: Some(o), .. }) = w.events.iter().find(|e| matches!(e, Event::Recruited { .. })) {
+            got = Some(*o);
+            break;
+        }
+    }
+    let o = got.expect("HQ regiment");
+    let truck = w.orgs[o as usize].members[0];
+    let (org_id, truck_id, trailer_id) = (w.ids.org(o).unwrap().raw(), w.ids.actor(truck).unwrap().raw(), w.ids.trailer(truck).expect("trailer id").raw());
+    eprintln!("regiment {org_id:#x} truck {truck_id:#x} trailer {trailer_id:#x}");
+    assert_eq!((truck_id, trailer_id), (org_id + 1, org_id + 2));
+    w.step(vec![Command::Deploy { kingdom: 0, truck, at: cpos + glam::Vec2::new(0.0, -35.0), facing: -std::f32::consts::FRAC_PI_2 }]);
+    let mut hq = None;
+    for _ in 0..(16 * 120) {
+        w.step(vec![]);
+        if let Some(Event::Deployed { building }) = w.events.iter().find(|e| matches!(e, Event::Deployed { .. })) {
+            hq = Some(*building);
+            break;
+        }
+    }
+    let hq = hq.expect("deployed");
+    let unpacking = w.actors.iter().position(|a| !a.removed && w.ids.actor(a.id).map(|g| g.raw()) == Some(truck_id)).map(|i| i as u32);
+    eprintln!("deployed {hq} id {:?}; the truck's id is held by {unpacking:?}", w.ids.actor(hq).map(|g| g.raw()));
+    assert_eq!(w.ids.actor(hq).map(|g| g.raw()), Some(truck_id), "the HQ keeps its truck's GTID");
+    assert_eq!(w.ids.thing(trailer_id), None, "the trailer is gone");
+}
+
 /// The battle-start world-RNG draws of the 4-player Berlin film (measured
 /// live by the parity harness): from the map's saved GWORLD state
 /// 0xB846CE0C, WorldParameters 0x50E8B0 draws each kingdom's random nation
