@@ -173,17 +173,30 @@ dependencies = [
  "aa-body",
  "aa-economy",
  "aa-mapworld",
+ "aa-movement",
  "aa-navigation",
  "aa-numeric",
  "aa-orders",
+ "aa-production",
  "aa-rules",
  "aa-simulation",
  "aa-spatial",
+ "aa-world",
  "aa-zones",
  "anyhow",
  "glam 0.32.1",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-production"
+version = "0.1.0"
+dependencies = [
+ "aa-economy",
+ "aa-numeric",
+ "serde",
  "thiserror 2.0.21",
 ]
 

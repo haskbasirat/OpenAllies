@@ -11,8 +11,10 @@
 //!   the aa-play world can carry out;
 //! * a building that recruits shows `recruit` (slot 0); pressing it opens
 //!   the recruit page: one button per recruitable organization (its
-//!   RegimentButtons icon) and `structure_cancel_queued`'s IconCancel in the
-//!   last slot to go back (07-recruit.png);
+//!   RegimentButtons icon), greyed while a required structure or property
+//!   is missing, with a "Requires" tooltip row (`0x5F7350`, `0x63BDF0`),
+//!   and `structure_cancel_queued`'s IconCancel in the last slot to go
+//!   back (07-recruit.png);
 //! * own regiments: move, kill, retreat (Run), stop, guard, explore and, for
 //!   one regiment that attaches to HQs, hq_attach / hq_detach (the
 //!   05-regiment layout), plus the formation buttons of the unit panel
@@ -40,6 +42,9 @@ pub enum GameAction {
     Stop,
     /// `recruit`: queue an organization at a building.
     Recruit { building: aa_play::ActorId, def: aa_play::DefId },
+    /// A research page item (`PropertyDataSelectCommand`): research the
+    /// building definition's research entry `index`.
+    Research { building: aa_play::ActorId, index: usize },
     /// `pack`: a building back into its truck.
     Pack { building: aa_play::ActorId },
     /// `sell` (0x14).
@@ -149,8 +154,18 @@ struct ButtonInfo {
 enum ActionPage {
     Main,
     Recruit(aa_play::ActorId),
+    /// `research` (`0x5F77B0`): the structure's research items.
+    Research(aa_play::ActorId),
     /// GoToTeamCommands (ActionButtonInfo index 8): the team commands.
     Team,
+}
+
+/// A Property's research button data (PropertyData +0x30
+/// action_button_icon, +0x18 description).
+#[derive(Clone, Debug, Default)]
+struct ResearchArt {
+    icon: String,
+    description: String,
 }
 
 pub struct GameHud {
@@ -163,6 +178,7 @@ pub struct GameHud {
     team_cancel: ButtonInfo,
     team_commands: Vec<TeamCommand>,
     property_icons: std::collections::HashMap<String, String>,
+    research_art: std::collections::HashMap<String, ResearchArt>,
     /// The command of the action button under the pointer (the economic
     /// impact preview of 0x602640).
     hovered: Option<String>,
@@ -178,6 +194,8 @@ pub struct GameHud {
     menu_open: bool,
     game_over: bool,
     last_events: usize,
+    /// Economy notices already announced (books.notices accumulates).
+    seen_notices: usize,
     /// The game speed of the last frame (the change message).
     last_speed: Option<f32>,
     /// The owned displays (F1 objectives, F2 technology, F3 message log,
@@ -196,6 +214,8 @@ pub struct GameHud {
     /// (ui/abilities.rs, combat owner).
     abilities: Vec<aa_play::special_ops::AbilityView>,
     ability_tips: Vec<(String, String)>,
+    /// Game events (message, sound, minimap ping; ui/game_events.rs).
+    pub events: super::game_events::GameEvents,
 }
 
 const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResource", 1), ("LimitedConsumedResource", 2)];
@@ -296,6 +316,25 @@ fn load_property_icons(ui: &mut Ui) -> std::collections::HashMap<String, String>
                 // PropertyIcons/...)
                 let icon = if icon.starts_with('/') { icon } else { format!("/Properties/{icon}") };
                 out.insert(ids.to_ascii_lowercase(), icon);
+            }
+        }
+    }
+    out
+}
+
+/// Properties/*.tgi: property IDS (lower case) -> its research button icon
+/// (action_button_icon, below Properties/ when relative) and description.
+fn load_research_art(ui: &mut Ui) -> std::collections::HashMap<String, ResearchArt> {
+    let mut out = std::collections::HashMap::new();
+    for f in ui.store.root.list_dir("Properties").into_iter().filter(|f| f.to_ascii_lowercase().ends_with(".tgi")) {
+        for n in super::datafile::load(&ui.store.root, &format!("Properties/{f}")).iter() {
+            let Some(ids) = n.get("IDS") else { continue };
+            let clean = |s: Option<&str>| s.unwrap_or_default().trim_matches('"').trim().to_string();
+            let icon = clean(n.get("action_button_icon"));
+            let icon = if icon.is_empty() || icon.eq_ignore_ascii_case("null") || icon.starts_with('/') { icon } else { format!("/Properties/{icon}") };
+            let description = clean(n.get("description"));
+            if !icon.is_empty() || !description.is_empty() {
+                out.insert(ids.to_ascii_lowercase(), ResearchArt { icon, description });
             }
         }
     }
@@ -403,6 +442,7 @@ impl GameHud {
         let team_cancel = load_button_info(ui, "CancelTeamCommands");
         let team_commands = load_team_commands(ui);
         let property_icons = load_property_icons(ui);
+        let research_art = load_research_art(ui);
         let names = super::names::Names::default();
         let view = View {
             battle,
@@ -416,6 +456,7 @@ impl GameHud {
             team_cancel: &team_cancel,
             team_commands: &team_commands,
             property_icons: &property_icons,
+            research_art: &research_art,
             hovered: None,
             placing: None,
             starting_experience: 0.0,
@@ -434,6 +475,7 @@ impl GameHud {
             team_cancel,
             team_commands,
             property_icons,
+            research_art,
             hovered: None,
             placing: None,
             slot_tips: vec![None; 12],
@@ -443,6 +485,7 @@ impl GameHud {
             menu_open: false,
             game_over: false,
             last_events: 0,
+            seen_notices: 0,
             last_speed: None,
             panels: Default::default(),
             starting_experience: 0.0,
@@ -451,6 +494,7 @@ impl GameHud {
             owned_before: Default::default(),
             abilities: Vec::new(),
             ability_tips: Vec::new(),
+            events: Default::default(),
         };
         if let Some(b) = battle {
             g.update(ui, b);
@@ -460,8 +504,9 @@ impl GameHud {
 
     /// Per-frame update from the battle.
     pub fn update(&mut self, ui: &mut Ui, b: &Battle) {
-        // a recruit page whose building left the selection closes
-        if let ActionPage::Recruit(id) = self.page {
+        // a recruit or research page whose building left the selection
+        // closes
+        if let ActionPage::Recruit(id) | ActionPage::Research(id) = self.page {
             if selected_structure(b) != Some(id) || b.world.actor(id).is_none() {
                 self.page = ActionPage::Main;
             }
@@ -488,6 +533,7 @@ impl GameHud {
             team_cancel: &self.team_cancel,
             team_commands: &self.team_commands,
             property_icons: &self.property_icons,
+            research_art: &self.research_art,
             hovered: self.hovered.as_deref(),
             placing: self.placing,
             starting_experience: self.starting_experience,
@@ -523,7 +569,7 @@ impl GameHud {
         for part in ["BannerButton", "Morale", "AttackEfficiency"] {
             ui.with_widget(&format!("Game/ControlPanel/ObjectDisplay/CompanyDisplay/{part}"), |w| w.set_visible(!truck));
         }
-        recruit_queue(ui, b);
+        recruit_queue(ui, b, &self.research_art);
     }
 
     /// The 3D portrait model of a kingdom's general (its Faction
@@ -546,8 +592,10 @@ impl GameHud {
         found
     }
 
-    /// The game message log from this frame's battle events (message
-    /// system send 0x40B5C0 with the original message types).
+    /// This frame's game events (KKC_GameEventManager AddEvent 0x42D130,
+    /// ui/game_events.rs: the message, its sound and its minimap ping) from
+    /// the battle events and the economy notices, and the other messages
+    /// (message system send 0x40B5C0 with the original message types).
     fn messages(&mut self, ui: &mut Ui, b: &Battle) {
         let w = &b.world;
         let names = &self.names;
@@ -555,29 +603,22 @@ impl GameHud {
         // an actor's name: its own (a city) or its definition's
         let actor_name = |ui: &Ui, a: &aa_play::Actor| names.actor(a.id).map(str::to_string).unwrap_or_else(|| name(ui, &w.data.def(a.def).name));
         let org_name = |ui: &Ui, o: aa_play::OrgId| w.orgs.get(o as usize).map(|o| name(ui, &w.data.def(o.def).name)).unwrap_or_default();
-        // Data/Game/game_events.tgi: event -> message type, text
-        // game_events_<event>_game_message (Localization strings)
-        let fmt = |ui: &Ui, event: &str, args: &[&str]| -> String {
-            let mut s = ui.strings.resolve(&format!("#game_events_{event}_game_message|*"));
-            for a in args {
-                s = s.replacen("%s", a, 1);
-            }
-            s
-        };
-        let mut out: Vec<(&str, String, Option<(f32, f32)>)> = Vec::new();
+        let anchor = |o: aa_play::OrgId| w.orgs.get(o as usize).map(|o| o.anchor);
+        // (event, its %s arguments, its ground point, its kingdom)
+        let mut events: Vec<(&str, Vec<String>, Option<Vec2>, Option<aa_play::KingdomId>)> = Vec::new();
+        let mut plain: Vec<(&str, String)> = Vec::new();
+        let local = Some(b.local);
         for e in &b.frame_events {
             match e {
                 aa_play::Event::Recruited { kingdom, org: Some(o), .. } if *kingdom == b.local => {
-                    let at = w.orgs.get(*o as usize).map(|o| (o.anchor.x, o.anchor.y));
-                    out.push(("COMPANY_GENERIC", fmt(ui, "company_recruited", &[&org_name(ui, *o)]), at));
+                    events.push(("company_recruited", vec![org_name(ui, *o)], anchor(*o), local));
                 }
                 aa_play::Event::OrgDestroyed { org } => {
                     let Some(o) = w.orgs.get(*org as usize) else { continue };
-                    let at = Some((o.anchor.x, o.anchor.y));
                     if o.kingdom == b.local {
-                        out.push(("COMPANY_DESTROYED", fmt(ui, "mobile_actor_lost", &[&org_name(ui, *org)]), at));
+                        events.push(("mobile_actor_lost", vec![org_name(ui, *org)], Some(o.anchor), local));
                     } else {
-                        out.push(("COMPANY_POSITIVE", fmt(ui, "actor_destroyed", &[&kingdom_name(Some(o.kingdom)), &org_name(ui, *org)]), at));
+                        events.push(("actor_destroyed", vec![kingdom_name(Some(o.kingdom)), org_name(ui, *org)], Some(o.anchor), local));
                     }
                 }
                 aa_play::Event::Died { actor } => {
@@ -586,31 +627,48 @@ impl GameHud {
                     if def.class != Some(DefClass::Building) {
                         continue;
                     }
-                    let at = Some((a.pos.x, a.pos.y));
+                    let at = Some(a.pos.truncate());
                     if a.kingdom == Some(b.local) {
-                        out.push(("BUILDING_DESTROYED", fmt(ui, "static_actor_lost", &[&name(ui, &def.name)]), at));
+                        events.push(("static_actor_lost", vec![name(ui, &def.name)], at, local));
                     } else if a.kingdom.is_some() {
-                        out.push(("COMPANY_POSITIVE", fmt(ui, "actor_destroyed", &[&kingdom_name(a.kingdom), &name(ui, &def.name)]), at));
+                        events.push(("actor_destroyed", vec![kingdom_name(a.kingdom), name(ui, &def.name)], at, local));
                     }
                 }
+                // KKC_ConstructionComponent::OnConstructionFinished (0x565B00):
+                // a finished structure (an unpacked truck's building) without a
+                // wall link announces building_construction_complete to its
+                // owner, the building's name
+                aa_play::Event::Deployed { building } => {
+                    let Some(a) = w.actors.get(*building as usize).filter(|a| a.kingdom == local) else { continue };
+                    events.push(("building_construction_complete", vec![actor_name(ui, a)], Some(a.pos.truncate()), local));
+                }
+                aa_play::Event::Promoted { org, .. } => {
+                    if w.orgs.get(*org as usize).is_some_and(|o| o.kingdom == b.local) {
+                        events.push(("company_experience_gained_level", vec![org_name(ui, *org)], anchor(*org), local));
+                    }
+                }
+                // company_routed: UVar UIEventFilterEngagement (false by
+                // default) drops it
                 aa_play::Event::Routed { org } => {
                     if w.orgs.get(*org as usize).is_some_and(|o| o.kingdom == b.local) {
-                        out.push(("COMPANY_ROUTED", fmt(ui, "company_routed", &[&org_name(ui, *org)]), None));
+                        events.push(("company_routed", vec![org_name(ui, *org)], anchor(*org), local));
                     }
                 }
+                // global: every player hears allies_lost / enemies_won by the
+                // defeated kingdom's relation (the sounds' who_flags)
                 aa_play::Event::KingdomDefeated { kingdom } => {
-                    out.push(("KINGDOM_DEFEATED", fmt(ui, "kingdom_defeated", &[&kingdom_name(Some(*kingdom))]), None));
+                    events.push(("kingdom_defeated", vec![kingdom_name(Some(*kingdom))], None, Some(*kingdom)));
                 }
                 // game_events actor_captured (BUILDING_CAPTURED, "You have
                 // captured %s") / actor_captured_by_enemy
                 // (BUILDING_NEGATIVE, "%s captured by %s")
                 aa_play::Event::Captured { actor, kingdom } => {
                     let Some(a) = w.actors.get(*actor as usize) else { continue };
-                    let at = Some((a.pos.x, a.pos.y));
+                    let at = Some(a.pos.truncate());
                     if *kingdom == b.local {
-                        out.push(("BUILDING_CAPTURED", fmt(ui, "actor_captured", &[&actor_name(ui, a)]), at));
+                        events.push(("actor_captured", vec![actor_name(ui, a)], at, local));
                     } else if self.owned_before.get(actor).is_some_and(|k| *k == b.local) {
-                        out.push(("BUILDING_NEGATIVE", fmt(ui, "actor_captured_by_enemy", &[&actor_name(ui, a), &kingdom_name(Some(*kingdom))]), at));
+                        events.push(("actor_captured_by_enemy", vec![actor_name(ui, a), kingdom_name(Some(*kingdom))], at, local));
                     }
                 }
                 // refusals play a sound in the original, no log line (the
@@ -624,22 +682,64 @@ impl GameHud {
                     let economy = describe_economy(ui, &self.resources, w, *of);
                     let text = ui.strings.resolve("#ability_effect_describe_economy|ss").replacen("%s", &name, 1).replacen("%s", &economy, 1);
                     info!("economy described: {text}");
-                    out.push(("GENERIC_EVENT", text, None));
+                    plain.push(("GENERIC_EVENT", text));
                 }
                 _ => {}
             }
         }
+        // the economy's notices since the last frame (they accumulate)
+        let notices = &w.books.notices;
+        if notices.len() < self.seen_notices {
+            self.seen_notices = 0;
+        }
+        for n in &notices[self.seen_notices..] {
+            match n {
+                // 0x4E9C40: kingdom_upkeep_shortage (the short percent) /
+                // kingdom_upkeep_repaired
+                aa_play::books::Notice::UpkeepShortage { kingdom, percent } if *kingdom == b.local => {
+                    events.push(("kingdom_upkeep_shortage", vec![percent.to_string()], None, local));
+                }
+                aa_play::books::Notice::UpkeepRepaired { kingdom } if *kingdom == b.local => {
+                    events.push(("kingdom_upkeep_repaired", Vec::new(), None, local));
+                }
+                // 0x584120: research_complete, the property's name
+                aa_play::books::Notice::Researched { kingdom, property } if *kingdom == b.local => {
+                    let p = w.data.property(property).map(|p| name(ui, &p.name)).unwrap_or_else(|| property.clone());
+                    events.push(("research_complete", vec![p], None, local));
+                }
+                // an unaffordable purchase (0x582950 recruit, 0x5845F0
+                // research, 0x574A10 HQ attach): the error message with the
+                // name and the price (0x5C4D10) as GENERIC_ERROR (0x40C230
+                // type 0x11) to the buyer
+                aa_play::books::Notice::Unaffordable { kingdom, what, cost, .. } if *kingdom == b.local => {
+                    let price: Vec<f32> = self.resources.iter().map(|r| w.data.resource_index(&r.ids).and_then(|j| cost.get(j).copied()).unwrap_or(0.0)).collect();
+                    let price = cost_text(ui, &self.resources, &price);
+                    let (key, subject) = match what {
+                        aa_play::books::Purchase::Recruit(d) => ("#recruit_error_affording|ss", name(ui, &w.data.def(*d).name)),
+                        aa_play::books::Purchase::Research(p) => ("#research_error_affording|ss", w.data.property(p).map(|x| name(ui, &x.name)).unwrap_or_else(|| p.clone())),
+                        aa_play::books::Purchase::Attach(o) => ("#hq_error_attach_affording|ss", org_name(ui, *o)),
+                    };
+                    let text = ui.strings.resolve(key).replacen("%s", &subject, 1).replacen("%s", &price, 1);
+                    plain.push(("GENERIC_ERROR", text));
+                }
+                _ => {}
+            }
+        }
+        self.seen_notices = notices.len();
         // a game speed change (0x76F3F0: |old - new| >= 0.0001 posts
         // networking_change_game_speed|f, 100 * 2^v, as GENERIC_EVENT)
         if self.last_speed.is_some_and(|s| (s.log2() - b.speed.log2()).abs() >= 0.0001) {
             let t = ui.strings.resolve("#networking_change_game_speed|f");
             let text = t.replacen("%.0f", &format!("{:.0}", b.speed * 100.0), 1).replace("%%", "%");
-            out.push(("GENERIC_EVENT", text, None));
+            plain.push(("GENERIC_EVENT", text));
         }
         self.last_speed = Some(b.speed);
-        for (kind, text, at) in out {
-            let uv = ui.uvars.clone();
-            ui.messages.send(&uv, kind, &text, at);
+        for (ids, args, at, owner) in events {
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            self.events.fire(ui, ids, &args, at, owner);
+        }
+        for (kind, text) in plain {
+            self.events.send_message(ui, kind, &text, None);
         }
         self.owned_before = w
             .actors
@@ -711,7 +811,12 @@ impl GameHud {
                 self.page = ActionPage::Main;
                 None
             }
+            "research_page" => {
+                self.page = ActionPage::Research(arg?);
+                None
+            }
             "recruit" => Some(GameAction::Recruit { building: arg?, def: arg2? }),
+            "research" => Some(GameAction::Research { building: arg?, index: arg2? as usize }),
             "cancel_recruit" => Some(GameAction::CancelRecruit { building: arg?, index: arg2? as usize }),
             "stop" => Some(GameAction::Stop),
             "kill" => Some(GameAction::Target(TargetOrder::Attack)),
@@ -958,16 +1063,6 @@ fn selected_structure(b: &Battle) -> Option<aa_play::ActorId> {
     }
 }
 
-/// The stockpiled resources cover a price (production `can_afford`).
-fn affordable(w: &World, kingdom: aa_play::KingdomId, cost: &[f32]) -> bool {
-    let Some(k) = w.books.kingdom(kingdom) else { return false };
-    w.data
-        .resources
-        .iter()
-        .enumerate()
-        .all(|(i, r)| r.kind != aa_play::data::ResourceKind::Stockpiled || k.stockpiled.get(i).copied().unwrap_or(0.0) >= cost.get(i).copied().unwrap_or(0.0))
-}
-
 /// A queue entry as the HUD shows it.
 struct QueueEntry {
     def: aa_play::DefId,
@@ -978,6 +1073,8 @@ struct QueueEntry {
     /// `0x5889B0` for the head (1 - (deadline - now or pause) / duration),
     /// 0 for the waiting ones.
     progress: f32,
+    /// A research item (queue kind 1): its property id.
+    research: Option<String>,
 }
 
 fn queue_items(w: &World, building: aa_play::ActorId) -> Vec<QueueEntry> {
@@ -986,12 +1083,12 @@ fn queue_items(w: &World, building: aa_play::ActorId) -> Vec<QueueEntry> {
     q.items
         .iter()
         .enumerate()
-        .filter(|(_, it)| it.research.is_none())
         .map(|(i, it)| QueueEntry {
             def: it.def,
             attaches: it.attaches,
             index: i,
             progress: if i == 0 && q.duration > 0.0 { (1.0 - (q.deadline - now) / q.duration).clamp(0.0, 1.0) } else { 0.0 },
+            research: it.research.clone(),
         })
         .collect()
 }
@@ -1059,11 +1156,14 @@ fn queue_panel(ui: &mut Ui) -> Widget {
 ///   (`0x62E0F0` / `0x62D9D0` type 2): the icon and the RecruitProgress bar
 ///   (the head's progress, 0 for the waiting ones) instead of health and
 ///   morale.
+/// A research item (queue kind 1) shows its property's action_button_icon
+/// (PropertyData +0x30, `0x6286F0`), a recruit its definition's icon
+/// (ActorData +0xF0).
 /// A queue button cancels its entry (CancelRecruit, the paid cost comes
 /// back).
-fn recruit_queue(ui: &mut Ui, b: &Battle) {
+fn recruit_queue(ui: &mut Ui, b: &Battle, research_art: &std::collections::HashMap<String, ResearchArt>) {
     let w = &b.world;
-    let structure = selected_structure(b).filter(|id| w.actor(*id).is_some_and(|a| !w.data.def(a.def).recruits.is_empty()));
+    let structure = selected_structure(b).filter(|id| w.actor(*id).is_some_and(|a| !w.data.def(a.def).recruits.is_empty() || !w.data.def(a.def).research.is_empty()));
     let hq = structure.and_then(|id| aa_play::production::hq_org(w, id));
     let simple = structure.filter(|_| hq.is_none());
     if ui.widget(DISPLAY).is_none() {
@@ -1109,9 +1209,18 @@ fn recruit_queue(ui: &mut Ui, b: &Battle) {
         for i in 0..QUEUE_WIDGETS {
             let bp = if i == 0 { format!("{qp}/CurrentButton") } else { format!("{qp}/Queue/{}", seg("QueueButton", i - 1)) };
             let item = items.get(i);
-            let name = item.map(|it| name(ui, &w.data.def(it.def).name)).unwrap_or_default();
+            let name = item
+                .map(|it| match &it.research {
+                    Some(p) => w.data.property(p).map(|x| name(ui, &x.name)).unwrap_or_else(|| p.clone()),
+                    None => name(ui, &w.data.def(it.def).name),
+                })
+                .unwrap_or_default();
             let cmd = item.map(|it| format!("AAPlay cancel_recruit {id} {}", it.index));
-            set_decal(ui, &rel(&format!("{bp}/UnitButtonDecal")), item.and_then(|it| w.data.def(it.def).icon.clone()));
+            let icon = item.and_then(|it| match &it.research {
+                Some(p) => research_art.get(&p.to_ascii_lowercase()).map(|x| x.icon.clone()).filter(|s| !s.is_empty()),
+                None => w.data.def(it.def).icon.clone(),
+            });
+            set_decal(ui, &rel(&format!("{bp}/UnitButtonDecal")), icon);
             ui.with_widget(&rel(&bp), |x| {
                 x.set_visible(item.is_some());
                 x.command = cmd.clone();
@@ -1184,6 +1293,7 @@ struct View<'a> {
     team_cancel: &'a ButtonInfo,
     team_commands: &'a [TeamCommand],
     property_icons: &'a std::collections::HashMap<String, String>,
+    research_art: &'a std::collections::HashMap<String, ResearchArt>,
     hovered: Option<&'a str>,
     placing: Option<aa_play::DefId>,
     starting_experience: f32,
@@ -1476,7 +1586,9 @@ impl View<'_> {
             states.push(if d.kind == aa_play::books::DeployKind::Packing { "structure_packing" } else { "structure_unpacking" });
         }
         if !a.queue.is_empty() {
-            states.push("structure_recruiting");
+            // 4D64F0 by the item in progress (queue kind 1 is research)
+            let research = w.books.actor(a.id).and_then(|s| s.queue.items.first()).is_some_and(|it| it.research.is_some());
+            states.push(if research { "structure_researching" } else { "structure_recruiting" });
         }
         if aa_play::player_orders::under_siege(w, a.id) {
             states.push("under_siege");
@@ -1516,6 +1628,81 @@ impl View<'_> {
             properties: Vec::new(),
         })
     }
+    /// `0x63BDF0`, the "Requires" row of an item tooltip while some of its
+    /// requirements are missing (`0x581F70`'s / `0x5842F0`'s out lists):
+    /// ui_tooltip_item_title_requires in UIColorOptionInvalid and, in the
+    /// value column, every required structure (`0x638FB0`) and then every
+    /// required property (`0x63BA00`) of the definition (an organization:
+    /// of each layout slot), each list without repeats and sorted by display
+    /// name, then id (`0x638650`), joined by ", " (`0x638A00`). A missing
+    /// one is in UIColorOptionInvalid, and so is the separator after it. A
+    /// missing property reads recruit_missing_required_property ("%s
+    /// (Tech)"), or recruit_missing_required_property_tech_known ("%s (%s)")
+    /// with the name of a structure of the kingdom's nation that researches
+    /// it (ActorData +0x558).
+    fn requires_row(&self, ui: &Ui, def: aa_play::DefId, missing_structures: &[aa_play::DefId], missing_properties: &[String]) -> Option<String> {
+        if missing_structures.is_empty() && missing_properties.is_empty() {
+            return None;
+        }
+        let w = self.world()?;
+        let d = w.data.def(def);
+        let reqs: Vec<&aa_play::data::Requirements> = if d.has_component("OrganizationComponent") {
+            d.slots.iter().map(|s| s.0).filter(|&s| s != aa_play::data::NO_DEF).map(|s| &w.data.def(s).requirements).collect()
+        } else {
+            vec![&d.requirements]
+        };
+        let sorted = |mut v: Vec<(String, String)>| {
+            v.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase())));
+            v
+        };
+        let mut structures: Vec<(String, String)> = Vec::new();
+        let mut structure_defs: Vec<aa_play::DefId> = Vec::new();
+        for s in reqs.iter().flat_map(|r| r.structures.iter()) {
+            if let Some(sd) = w.data.find(s).filter(|sd| !structure_defs.contains(sd)) {
+                structure_defs.push(sd);
+                structures.push((self.name(&w.data.def(sd).name), w.data.def(sd).id.clone()));
+            }
+        }
+        let mut properties: Vec<(String, String)> = Vec::new();
+        for p in reqs.iter().flat_map(|r| r.properties.iter()) {
+            if !properties.iter().any(|(_, id)| id.eq_ignore_ascii_case(p)) {
+                let name = w.data.property(p).map(|x| self.name(&x.name)).unwrap_or_else(|| p.clone());
+                properties.push((name, p.clone()));
+            }
+        }
+        let invalid = ui.uvars.get_point3("UIColorOptionInvalid");
+        let red = |s: &str| aa_ui::text::color_wrap(s, invalid);
+        let mut text = String::new();
+        let mut prev_red = false;
+        let mut add = |item: String, missing: bool| {
+            if !text.is_empty() {
+                text.push_str(&if prev_red { red(", ") } else { ", ".to_string() });
+            }
+            text.push_str(&if missing { red(&item) } else { item });
+            prev_red = missing;
+        };
+        for (name, id) in sorted(structures) {
+            let missing = w.data.find(&id).is_some_and(|sd| missing_structures.contains(&sd));
+            add(name, missing);
+        }
+        let nation = self.local().map(|k| k.nation.clone()).unwrap_or_default();
+        for (name, id) in sorted(properties) {
+            if !missing_properties.iter().any(|m| m.eq_ignore_ascii_case(&id)) {
+                add(name, false);
+                continue;
+            }
+            let researcher = w.data.defs.iter().find(|x| {
+                x.nation.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(&nation)) && x.research.iter().any(|r| r.property.eq_ignore_ascii_case(&id))
+            });
+            let item = match (researcher, self.ui_strings) {
+                (Some(r), Some(s)) => s.resolve("#recruit_missing_required_property_tech_known|ss").replacen("%s", &name, 1).replacen("%s", &self.name(&r.name), 1),
+                (None, Some(s)) => s.resolve("#recruit_missing_required_property|s").replacen("%s", &name, 1),
+                (_, None) => name,
+            };
+            add(item, true);
+        }
+        Some(format!("{}<setx=100>{text}", red(&self.name("#ui_tooltip_item_title_requires"))))
+    }
     fn act(&self, ids: &str, cmd: String) -> Option<(i32, HudAction)> {
         let c = self.command(ids)?;
         Some((c.position, HudAction { texture: c.icon.clone(), command: cmd, enabled: true, selected: false, targeted: false }))
@@ -1553,20 +1740,64 @@ impl View<'_> {
         let w = self.world()?;
         match verb {
             "recruit" => {
-                // a recruit page item: the organization's name and cost
-                let d = w.data.def(arg2?);
-                let cost = self.cost_of(arg2?);
-                // name, then "Cost" and "Upkeep" rows with the values in a
-                // second column (the original recruit item tooltip)
-                let upkeep = self.econ_of(arg2?);
+                // a recruit page item (0x5F64A0): the organization's name,
+                // then the "Requires" row while a requirement is missing
+                // (0x63BDF0), the "Cost" and "Upkeep" rows with the values
+                // in a second column
+                let (building, def) = (arg?, arg2?);
+                let d = w.data.def(def);
+                let cost = self.cost_of(def);
+                let upkeep = self.econ_of(def);
                 let up = upkeep_text(ui, self.resources, &upkeep);
-                let mut text = format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost));
+                let mut rows = Vec::new();
+                let missing = aa_play::production::recruit_requirements(w, building, def);
+                rows.extend(self.requires_row(ui, def, &missing.structures, &missing.properties));
+                rows.push(format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost)));
                 if !up.is_empty() {
-                    text.push_str(&format!("
-{}<setx=100>{}", resolve("#ui_tooltip_item_title_upkeep"), up));
+                    rows.push(format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_upkeep"), up));
                 }
-                Some((resolve(&d.name), text))
+                Some((resolve(&d.name), rows.join("\n")))
             }
+            "research" => {
+                let (building, index) = (arg?, arg2? as usize);
+                let a = w.actor(building)?;
+                let r = w.data.def(a.def).research.get(index)?;
+                let prop = w.data.property(&r.property);
+                let name = prop.map(|p| resolve(&p.name)).unwrap_or_else(|| r.property.clone());
+                let missing = aa_play::production::research_requirements(w, building, index);
+                if missing.code == 1 {
+                    // 0x5842F0: the button's whole tooltip is
+                    // research_error_missing_requirements ("%s required:
+                    // %s"), the missing structures then properties joined
+                    // by grammatical_element_separator (0x4C5630 / 0x4C5560)
+                    let sep = resolve("#grammatical_element_separator");
+                    let list: Vec<String> = missing
+                        .structures
+                        .iter()
+                        .map(|d| resolve(&w.data.def(*d).name))
+                        .chain(missing.properties.iter().map(|p| w.data.property(p).map(|x| resolve(&x.name)).unwrap_or_else(|| p.clone())))
+                        .collect();
+                    let text = resolve("#research_error_missing_requirements|ss").replacen("%s", &name, 1).replacen("%s", &list.join(&sep), 1);
+                    return Some((String::new(), text));
+                }
+                // 0x5F6790: the property's name, its research cost
+                // (0x6401E0), "Affects" with the properties it requires of
+                // an actor (0x63B8C0), then its description (0x638D90).
+                // Its modifier lines (0x63BFD0) are not ported yet.
+                let cost: Vec<f32> = self.resources.iter().map(|hr| w.data.resource_index(&hr.ids).and_then(|j| r.cost.get(j).copied()).unwrap_or(0.0)).collect();
+                let mut text = format!("{}<setx=100>{}", resolve("#ui_tooltip_item_title_cost"), cost_text(ui, self.resources, &cost));
+                let affects: Vec<String> = prop.map(|p| p.required_properties.iter().map(|q| w.data.property(q).map(|x| resolve(&x.name)).unwrap_or_else(|| q.clone())).collect()).unwrap_or_default();
+                if !affects.is_empty() {
+                    text.push_str(&format!("\n{}<setx=100>{}", resolve("#ui_tooltip_item_title_required_properties"), affects.join(", ")));
+                }
+                let description = self.research_art.get(&r.property.to_ascii_lowercase()).map(|x| resolve(&x.description)).unwrap_or_default();
+                if !description.is_empty() {
+                    text.push_str("\n\n");
+                    text.push_str(&description);
+                }
+                Some((name, text))
+            }
+            "research_page" => self.command("research").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "recruit_back" => self.command("structure_cancel_queued").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "command_all" => Some((resolve(&self.command_all.name), resolve(&self.command_all.tooltip))),
             "team_page" => Some((resolve(&self.team_go.name), resolve(&self.team_go.tooltip))),
@@ -1800,18 +2031,56 @@ impl HudWorld for View<'_> {
                 let Some(a) = w.actor(id) else { return vec![None; 12] };
                 let def = w.data.def(a.def);
                 let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                // 0x5F7350: a button per recruit, enabled while 0x581F70
+                // finds its requirements met (code 0); code 2 leaves its
+                // slot empty. The price is not part of it: an unaffordable
+                // recruit is refused when pressed (0x6157B0 -> 0x582950).
                 for (i, r) in def.recruits.iter().take(11).enumerate() {
+                    let code = aa_play::production::recruit_requirements(w, id, *r).code;
+                    if code == 2 {
+                        continue;
+                    }
                     let rd = w.data.def(*r);
-                    // the recruit price at this building (501730) against
-                    // the stockpiled resources
-                    let affordable = affordable(w, b.local, &aa_play::production::recruit_cost(w, id, *r));
                     v[i] = Some(HudAction {
                         texture: rd.icon.clone().unwrap_or_default(),
                         command: format!("AAPlay recruit {id} {r}"),
-                        enabled: affordable,
+                        enabled: code == 0,
                         selected: false,
                         targeted: false,
                     });
+                }
+                if let Some(c) = self.command("structure_cancel_queued") {
+                    v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
+                }
+                v
+            }
+            ActionPage::Research(id) => {
+                // 0x5F77B0: the structure's research items in order, up to
+                // 11 slots; 0x5844A0 code 2 shows nothing and takes no
+                // slot, code 4 (known, queued here or in progress in the
+                // kingdom) leaves its slot empty, code 1 (a structure
+                // missing) a disabled button, code 0 an enabled one
+                // (0x5F6EA0: PropertyDataSelectCommand, the property's
+                // action_button_icon); the back button as on the recruit
+                // page (0x5F6FE0 on the last slot)
+                let id = *id;
+                let Some(a) = w.actor(id) else { return vec![None; 12] };
+                let mut v: Vec<Option<HudAction>> = vec![None; 12];
+                let mut slot = 0;
+                for (index, r) in w.data.def(a.def).research.iter().enumerate() {
+                    if slot > 10 {
+                        break;
+                    }
+                    let code = aa_play::production::research_requirements(w, id, index).code;
+                    match code {
+                        2 => continue,
+                        4 => {}
+                        _ => {
+                            let texture = self.research_art.get(&r.property.to_ascii_lowercase()).map(|x| x.icon.clone()).unwrap_or_default();
+                            v[slot] = Some(HudAction { texture, command: format!("AAPlay research {id} {index}"), enabled: code == 0, selected: false, targeted: false });
+                        }
+                    }
+                    slot += 1;
                 }
                 if let Some(c) = self.command("structure_cancel_queued") {
                     v[11] = Some(HudAction { texture: c.icon.clone(), command: "AAPlay recruit_back".into(), enabled: true, selected: false, targeted: false });
@@ -1896,6 +2165,11 @@ impl HudWorld for View<'_> {
                         if !def.recruits.is_empty() {
                             acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
                             acts.extend(self.act("set_rally_point", format!("AAPlay set_rally_point {id}")));
+                        }
+                        // a ResearchComponent (actor +0xB4): research
+                        // (actor_commands_aa.tgi, preferred_position 6)
+                        if !def.research.is_empty() {
+                            acts.extend(self.act("research", format!("AAPlay research_page {id}")));
                         }
                         // an HQ: CommandAll (ActionButtonInfo index 4)
                         let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));

@@ -210,6 +210,12 @@ pub fn battle_input(
                     }
                 }
                 GameAction::Recruit { building, def } => b.pending.push(Command::Recruit { kingdom: local, building: *building, def: *def }),
+                GameAction::Research { building, index } => {
+                    let property = b.world.actor(*building).and_then(|a| b.world.data.def(a.def).research.get(*index)).map(|r| r.property.clone());
+                    if let Some(property) = property {
+                        b.pending.push(Command::Research { kingdom: local, building: *building, property });
+                    }
+                }
                 GameAction::CancelRecruit { building, index } => b.pending.push(Command::CancelRecruit { kingdom: local, building: *building, index: *index }),
                 GameAction::Pack { building } => b.pending.push(Command::Pack { kingdom: local, building: *building }),
                 GameAction::Sell { building } => b.pending.push(Command::Sell { kingdom: local, building: *building }),
