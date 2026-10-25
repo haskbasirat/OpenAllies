@@ -59,3 +59,5 @@ pub mod trace;
 pub mod ids;
 /// The world-RNG draws of creating and restoring things (core owner).
 pub mod creation;
+/// The native world queues of one update and their leaves (core owner).
+pub mod scheduler;

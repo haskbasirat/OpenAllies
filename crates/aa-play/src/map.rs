@@ -151,6 +151,13 @@ pub struct GameMap {
     /// Saved GTID of each TEAMS record, in team slot order.
     #[serde(default)]
     pub team_ids: Vec<u32>,
+    /// The saved periodic queue 0 (GWorld+0x1AC, UPDATABLES chunk, read by
+    /// the queue Load 0x50B8B0): the `slots` index of every kingdom whose
+    /// Updatable is on it, in list order (head first = delivered first).
+    /// `None` when the map saves no periodic queues (world version < 22, or
+    /// a generated map). See `crate::scheduler`.
+    #[serde(default)]
+    pub queue0_kingdoms: Option<Vec<usize>>,
 }
 
 /// IDMGR: the next-fit cursor, the highest used slot and the generation of
@@ -394,9 +401,16 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
             serialized_id: None,
         });
     }
+    // Saved Updatable id (UPDATABLES table index) of each kingdom -> slot.
+    let mut kingdom_updatables: std::collections::BTreeMap<i32, usize> = std::collections::BTreeMap::new();
     if let Some(k) = &inventory.kingdoms {
         for r in k.slots.iter().filter_map(|s| s.record.as_ref()) {
             let name = utf16(&r.thing.name_utf16);
+            if let Some(i) = slots.iter().position(|s| s.id.eq_ignore_ascii_case(&name)) {
+                if let Some(id) = r.updatable.as_ref().and_then(|u| u.serialized_id).filter(|&id| id >= 0) {
+                    kingdom_updatables.insert(id, i);
+                }
+            }
             if let Some(slot) = slots.iter_mut().find(|s| s.id.eq_ignore_ascii_case(&name)) {
                 slot.serialized_id = Some(r.serialized_id);
                 slot.kingdom_index = Some(r.payload.word_188);
@@ -521,6 +535,21 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
         speed_limit.push(def.map_or(NO_SPEED_LIMIT, |d| d.speed_limit));
         cell_variation.push(def.map_or(u16::MAX, |d| variation_index(&d.id)));
     }
+    // The saved queue 0's kingdom Updatables (the economy Tick 0x4E9C40).
+    let queue0_kingdoms = archive.decode_chunk("UPDATABLES", 1 << 30).ok().and_then(|chunk| saved_queue0(&chunk.bytes, inventory.world.version)).map(|owners| {
+        let mut list = Vec::new();
+        let mut other = 0usize;
+        for o in owners {
+            match kingdom_updatables.get(&o) {
+                Some(&slot) => list.push(slot),
+                None => other += 1,
+            }
+        }
+        if other > 0 {
+            notes.push(format!("saved queue 0 holds {other} Updatables that are not kingdoms; they are not restored"));
+        }
+        list
+    });
     let name = std::fs::read(game_root.join("reconstruction").join("game").join("data").join("maps").join("index.json"))
         .ok()
         .and_then(|b| serde_json::from_slice::<Vec<aa_assets::MapInfo>>(&b).ok())
@@ -556,5 +585,49 @@ fn load(game_root: &std::path::Path, map_id: &str, data: &crate::data::GameData)
             generations: inventory.id_manager.serialized_generations.clone(),
         }),
         team_ids: inventory.teams.iter().flat_map(|t| &t.slots).filter_map(|s| s.record.as_ref()).map(|r| r.serialized_id).collect(),
+        queue0_kingdoms,
     })
+}
+
+/// The owner ids (UPDATABLES table indices) of the saved periodic queue 0,
+/// bucket by bucket, each list in its saved (delivery) order. The chunk is
+/// the table count, then for world version >= 22 the queues 3, 4, 0, 1, 2
+/// (version 0, current, bucket count, then per bucket a count and that many
+/// (id, data) pairs), as aa-runtime `saved_queues::decode` reads it.
+fn saved_queue0(bytes: &[u8], world_version: u32) -> Option<Vec<i32>> {
+    if world_version < 22 {
+        return None;
+    }
+    let mut at = 0usize;
+    let mut word = || -> Option<u32> {
+        let w = u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?);
+        at += 4;
+        Some(w)
+    };
+    word()?;
+    for id in [3u8, 4, 0, 1, 2] {
+        if word()? != 0 {
+            return None;
+        }
+        let _current = word()?;
+        let count = word()? as i32;
+        if count <= 0 {
+            return None;
+        }
+        let mut owners = Vec::new();
+        for _ in 0..count {
+            let n = word()? as i32;
+            for _ in 0..n.max(0) {
+                let source = word()? as i32;
+                let _data = word()?;
+                if id == 0 {
+                    owners.push(source);
+                }
+            }
+        }
+        if id == 0 {
+            return Some(owners);
+        }
+    }
+    None
 }

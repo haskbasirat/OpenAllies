@@ -159,6 +159,14 @@ impl World {
                 None => world.ids.destroy_map_kingdom(&map, s),
             }
         }
+        // The saved queue 0 (0x50B8B0): the kingdom economy Updatables in
+        // their saved order; a destroyed kingdom's entry leaves with it. A
+        // map without saved queues admits its kingdoms (crate::scheduler).
+        if let Some(saved) = &map.queue0_kingdoms {
+            let order: Vec<u32> = saved.iter().filter_map(|&s| slot_kingdom.get(s).copied().flatten()).collect();
+            crate::scheduler::restore_kingdoms(&mut world, &order);
+        }
+        crate::scheduler::admit_kingdoms(&mut world);
         // The map's things in record order keep their saved ids; the
         // placeholders of player kingdoms are resolved afterwards (4FDA70).
         let mut replacements: Vec<(bool, u16, usize, crate::data::DefId, u32)> = Vec::new();

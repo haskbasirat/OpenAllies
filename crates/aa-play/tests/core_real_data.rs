@@ -189,8 +189,7 @@ fn core_step(w: &mut aa_play::World, commands: Vec<aa_play::Command>) {
     for c in commands {
         w.apply(c);
     }
-    aa_play::economy::tick(w);
-    aa_play::production::tick(w);
+    aa_play::scheduler::queue_zero(w);
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);
@@ -1507,6 +1506,50 @@ fn berlin_battle_start_draws_match_the_film() {
     let g = |i: usize, name: &str| generals[i].as_deref().is_some_and(|x| x.to_ascii_lowercase().contains(name));
     assert!(g(0, "chuikov") && g(1, "zhukov") && g(2, "rundstedt") && g(3, "konev"), "{generals:?}");
     assert_eq!(w.native_rng.state, 0x4F1E_05E7, "the first battle getter's state");
+    // The saved queue 0 holds the six kingdom economy Updatables (UPDATABLES
+    // ids 9, 7, 3, 1, 11, 5 = map slots 4, 3, 1, 0, 5, 2), restored without
+    // a draw (the state above is unchanged by it).
+    use aa_play::scheduler::Owner;
+    let slot_of = |k: u32| w.ids.kingdom_slot(k);
+    let q0: Vec<Option<usize>> = w.sched.entries(0)[0].iter().map(|o| match o {
+        Owner::Kingdom(k) => slot_of(*k),
+        _ => None,
+    }).collect();
+    assert_eq!(q0, [Some(4), Some(3), Some(1), Some(0), Some(5), Some(2)]);
+}
+
+/// Queue 0 delivers the production queues before the kingdom economy ticks
+/// (registered later, at the head), so a recruit's contribution counts in its
+/// creation update; an emptied queue unregisters and its successor is passed
+/// over in that update (SCHEDULER.md section 6).
+#[test]
+#[ignore]
+fn queue_zero_delivers_newest_first() {
+    use aa_play::scheduler::Owner;
+    let data = data();
+    let map = Arc::new(GameMap::load_with(&root(), "(2v2)Berlin", &data).expect("Berlin"));
+    assert_eq!(map.queue0_kingdoms.as_deref(), Some(&[4usize, 3, 1, 0, 5, 2][..]));
+    let mut w = berlin_world();
+    let kingdoms = w.sched.entries(0)[0].clone();
+    assert_eq!(kingdoms.len(), w.kingdoms.len());
+    assert!(kingdoms.iter().all(|o| matches!(o, Owner::Kingdom(_))));
+    // Player 0 recruits at its Corps HQ: the queue registers at the head.
+    let corps = (0..w.actors.len() as u32)
+        .find(|&a| w.actors[a as usize].kingdom == Some(0) && !w.data.def(w.actors[a as usize].def).recruits.is_empty())
+        .expect("a corps HQ");
+    let def = w.data.def(w.actors[corps as usize].def).recruits[0];
+    let before = w.native_rng.state;
+    core_step(&mut w, vec![aa_play::Command::Recruit { kingdom: 0, building: corps, def }]);
+    assert_ne!(w.native_rng.state, before, "the registration draws");
+    let q0 = w.sched.entries(0)[0].clone();
+    assert_eq!(q0[0], Owner::Structure(corps), "{q0:?}");
+    assert_eq!(&q0[1..], &kingdoms[..]);
+    // The queue completes and leaves queue 0.
+    assert!(recruited(&mut w, 120).is_some(), "the recruit completes");
+    core_step(&mut w, vec![]);
+    assert!(!w.is_scheduled(Owner::Structure(corps)));
+    assert_eq!(w.sched.entries(0)[0], kingdoms);
+    assert!(w.sched.notes.is_empty(), "{:?}", w.sched.notes);
 }
 
 /// Parity trace evidence: the S stream of the first 34 ticks (one film
