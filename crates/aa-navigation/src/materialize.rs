@@ -2,7 +2,7 @@
 //! Grid tracing and collision predicates are required native world boundaries.
 
 use crate::{OwnedPath, PathNode};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -95,8 +95,8 @@ pub trait World {
     ) -> Result<bool>;
 }
 
-fn b(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn b(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
 fn direction<G: PredecessorGrid>(grid: &G, cell: [i32; 2]) -> Result<u8> {
     let [w, h] = grid.dimensions();
@@ -132,18 +132,18 @@ fn center<G: PredecessorGrid>(
     cell: [i32; 2],
     p: Precision,
     stored_half: bool,
-) -> Result<[Binary; 2]> {
+) -> Result<[Fast; 2]> {
     let mut half = b(grid.cell_size_bits())?.mul(&b(0x3f000000)?, p)?;
     if stored_half {
         half = b(half.store_f32()?)?;
     }
     let shift = grid.coordinate_shift() & 31;
     Ok([
-        Binary::from_i32(cell[0].wrapping_shl(shift)).add(&half, p)?,
-        Binary::from_i32(cell[1].wrapping_shl(shift)).add(&half, p)?,
+        Fast::from_i32(cell[0].wrapping_shl(shift)).add(&half, p)?,
+        Fast::from_i32(cell[1].wrapping_shl(shift)).add(&half, p)?,
     ])
 }
-fn stored(point: &[Binary; 2]) -> Result<[u32; 2]> {
+fn stored(point: &[Fast; 2]) -> Result<[u32; 2]> {
     Ok([point[0].store_f32()?, point[1].store_f32()?])
 }
 fn prepend(path: &mut OwnedPath, xy: [u32; 2], dir: [u32; 2]) -> Result<()> {
@@ -165,7 +165,7 @@ fn normalize(delta: [u32; 2], p: Precision) -> Result<([u32; 2], bool)> {
     if length.compare(&b(0x38d1b717)?) != Ordering::Greater {
         return Ok(([0, 0], false));
     }
-    let reciprocal = Binary::from_u32(1).div(&length, p)?;
+    let reciprocal = Fast::from_u32(1).div(&length, p)?;
     Ok((
         [
             reciprocal.mul(&x, p)?.store_f32()?,
@@ -174,7 +174,7 @@ fn normalize(delta: [u32; 2], p: Precision) -> Result<([u32; 2], bool)> {
         true,
     ))
 }
-fn update_head(path: &mut OwnedPath, from: &[Binary; 2], p: Precision) -> Result<()> {
+fn update_head(path: &mut OwnedPath, from: &[Fast; 2], p: Precision) -> Result<()> {
     let head = path.nodes.first_mut().ok_or(Error::MissingHead)?;
     let dx = b(head.words[0])?.sub(&from[0], p)?.store_f32()?;
     let dy = b(head.words[1])?.sub(&from[1], p)?.store_f32()?;

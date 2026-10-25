@@ -106,6 +106,18 @@ pub trait ZoneObjectWorld: crate::flood::FloodWorld {
 
 fn presentation_point(map: &ZoneMap, zone: &Zone, p: Precision) -> Result<(u32, u32)> {
     let g = &map.geometry;
+    if p == Precision::Double53 {
+        use fpu::pc53;
+        let fast = (|| {
+            let half = pc53::half_tile(g.tile_size_bits)?;
+            let y = pc53::cell_center(zone.y, g.shift, half)?;
+            let x = pc53::cell_center(zone.x, g.shift, half)?;
+            Some((pc53::store(x)?, pc53::store(y)?))
+        })();
+        if let Some(v) = fast {
+            return Ok(v);
+        }
+    }
     let half = fpu::half_tile(g.tile_size_bits, p)?;
     let y = fpu::cell_center(zone.y, g.shift, &half, p)?;
     let x = fpu::cell_center(zone.x, g.shift, &half, p)?;
@@ -171,6 +183,16 @@ pub fn move_to_tile<W: ZoneObjectWorld + ?Sized>(
 /// `0x552640`: clamp a world position into `[tile, extent - tile - 1e-4]`
 /// per axis (the maximum computed at PC and stored as binary32; NaN kept).
 pub fn clamp_position(map: &ZoneMap, pos: [u32; 2], p: Precision) -> Result<[u32; 2]> {
+    if p == Precision::Double53
+        && let Some(v) = clamp_position_pc53(map, pos)
+    {
+        return Ok(v);
+    }
+    clamp_position_exact(map, pos, p)
+}
+
+/// [`clamp_position`] in the Binary model.
+pub fn clamp_position_exact(map: &ZoneMap, pos: [u32; 2], p: Precision) -> Result<[u32; 2]> {
     let g = &map.geometry;
     let tile = fpu::load(g.tile_size_bits)?;
     let margin = fpu::load(fpu::CLAMP_MARGIN_BITS)?;
@@ -188,6 +210,25 @@ pub fn clamp_position(map: &ZoneMap, pos: [u32; 2], p: Precision) -> Result<[u32
     Ok(out)
 }
 
+/// [`clamp_position`] at PC53 in binary64 (`None`: take the Binary model).
+pub fn clamp_position_pc53(map: &ZoneMap, pos: [u32; 2]) -> Option<[u32; 2]> {
+    use fpu::pc53;
+    let g = &map.geometry;
+    let tile = pc53::load(g.tile_size_bits)?;
+    let margin = pc53::load(fpu::CLAMP_MARGIN_BITS)?;
+    let mut out = pos;
+    for axis in 0..2 {
+        let hi_bits = pc53::store(pc53::sub(pc53::sub(pc53::load(g.extent_bits[axis])?, tile)?, margin)?)?;
+        let v = pc53::load(pos[axis])?;
+        if v < tile {
+            out[axis] = g.tile_size_bits;
+        } else if pc53::load(hi_bits)? < v {
+            out[axis] = hi_bits;
+        }
+    }
+    Some(out)
+}
+
 /// `0x515F40`: move a zone to a world position: clamp (`0x552640`), `_ftol`
 /// each axis, arithmetic shift by the map shift, then [`move_to_tile`].
 pub fn move_to_position<W: ZoneObjectWorld + ?Sized>(
@@ -198,11 +239,22 @@ pub fn move_to_position<W: ZoneObjectWorld + ?Sized>(
     radius_bits: u32,
     p: Precision,
 ) -> Result<()> {
+    let (tx, ty) = position_tile(map, pos_bits, p)?;
+    move_to_tile(map, w, zone, tx, ty, radius_bits, p)
+}
+
+/// The tile `0x515F40` moves a zone to: clamp, `_ftol`, shift.
+pub fn position_tile(map: &ZoneMap, pos_bits: [u32; 2], p: Precision) -> Result<(i32, i32)> {
     let pos = clamp_position(map, pos_bits, p)?;
     let s = map.geometry.shift;
+    let fast = (|| Some((fpu::pc53::ftol(fpu::pc53::load(pos[0])?)?, fpu::pc53::ftol(fpu::pc53::load(pos[1])?)?)))();
+    // _ftol of a binary32 load does not depend on the precision control
+    if let Some((x, y)) = fast {
+        return Ok((x.wrapping_shr(s), y.wrapping_shr(s)));
+    }
     let ty = fpu::ftol(&fpu::load(pos[1])?)?.wrapping_shr(s);
     let tx = fpu::ftol(&fpu::load(pos[0])?)?.wrapping_shr(s);
-    move_to_tile(map, w, zone, tx, ty, radius_bits, p)
+    Ok((tx, ty))
 }
 
 fn reveal_mask<W: ZoneWorld + ?Sized>(w: &mut W, actor: ActorKey) -> Result<u32> {

@@ -6,8 +6,9 @@
 //! +0x14 (binary32)}`. The ZOD (zone type 6) radius is ActorData `+0x1CC`
 //! (`detection_range`, through `0x45D790` and the modifier system
 //! `0x501C30`); the RZOD (type 1) radius is ActorData `+0x1D0`
-//! (`remote_detection_range`). Structures (actor `+0x100` bit 0x200000) use
-//! `+0x1D0` for their type-6 zone.
+//! (`remote_detection_range`). An actor under construction (actor `+0x100`
+//! bit 21, 0x200000; aa-production `construction.rs`) uses `+0x1D0` for its
+//! type-6 zone.
 //!
 //! Also here: `KKC_GActor::CreateZone` `0x4D69A0` over the actor zone vector
 //! (`actor+0x148`).
@@ -137,7 +138,7 @@ pub fn enable_zone<W: DetectionComponentWorld + ?Sized>(
         create_zone(w, actor, index)?;
     }
     let z = slot(w, actor, index)?.ok_or(Error::NativeNull("zone after CreateZone"))?;
-    if z.active() && fpu::equal(&fpu::load(z.radius_bits)?, &fpu::load(radius_bits)?) {
+    if z.active() && fpu::equal_bits(z.radius_bits, radius_bits)? {
         return Ok(());
     }
     let pos = w.actor_position(actor)?;
@@ -145,7 +146,7 @@ pub fn enable_zone<W: DetectionComponentWorld + ?Sized>(
 }
 
 fn positive(bits: u32) -> Result<bool> {
-    Ok(fpu::less(&fpu::load(0)?, &fpu::load(bits)?))
+    fpu::less_bits(0, bits)
 }
 
 /// Shared tail of `0x56EA30`/`0x56EC10`: an attached actor (virtual +0x100)
@@ -216,7 +217,8 @@ pub fn update_reveal_mask<W: DetectionComponentWorld + ?Sized>(
             }
         }
     }
-    for k in w.kingdom_list()? {
+    for i in 0..w.kingdom_count()? {
+        let k = w.kingdom_at(i)?;
         if k == 0 {
             continue;
         }
@@ -246,8 +248,9 @@ pub fn update_reveal_mask<W: DetectionComponentWorld + ?Sized>(
     Ok(())
 }
 
-/// Updatable tick (`0x56F140`): nothing for a dead actor; a structure
-/// (`+0x100` bit 0x200000) without `+0x138` keeps a type-6 zone of radius
+/// Updatable tick (`0x56F140`): nothing for a dead actor; an actor under
+/// construction (`+0x100` bit 21, 0x200000) without `+0x138` keeps a type-6
+/// zone of radius
 /// ActorData+0x1D0 at its position; other actors update the ZOD
 /// (`0x56EB40(6, 0x56EA30, +0x14)`), the reveal mask (`0x56EFC0`) and the
 /// RZOD (`0x56EB40(1, 0x56EC10, ActorData+0x1D0)`).
@@ -276,7 +279,7 @@ fn structure_zod<W: DetectionComponentWorld + ?Sized>(map: &mut ZoneMap, w: &mut
         create_zone(w, actor, 6)?;
     }
     let z = slot(w, actor, 6)?.ok_or(Error::NativeNull("zone 6 after CreateZone"))?;
-    if z.active() && fpu::equal(&fpu::load(z.radius_bits)?, &fpu::load(r)?) {
+    if z.active() && fpu::equal_bits(z.radius_bits, r)? {
         return Ok(());
     }
     let pos = w.actor_position(actor)?;

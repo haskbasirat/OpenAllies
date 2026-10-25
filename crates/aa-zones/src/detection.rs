@@ -137,10 +137,28 @@ pub fn hide<W: ActorDetectionWorld + ?Sized>(
     kingdom: u32,
     p: Precision,
 ) -> Result<()> {
-    let t = fpu::ftol(&fpu::load(geometry.tile_size_bits)?)?;
-    let size = fpu::load(w.actor_size_bits(actor)?)?;
-    let twice = fpu::add(&size, &size, p)?;
-    if fpu::less(&Binary::from_i32(t), &twice) {
+    use fpu::pc53;
+    // _ftol of a binary32 load does not depend on the precision control
+    let t = match pc53::load(geometry.tile_size_bits).and_then(pc53::ftol) {
+        Some(t) => t,
+        None => fpu::ftol(&fpu::load(geometry.tile_size_bits)?)?,
+    };
+    let size_bits = w.actor_size_bits(actor)?;
+    let fast = (p == Precision::Double53)
+        .then(|| {
+            let size = pc53::load(size_bits)?;
+            Some(pc53::int(t) < pc53::add(size, size)?)
+        })
+        .flatten();
+    let multi = match fast {
+        Some(v) => v,
+        None => {
+            let size = fpu::load(size_bits)?;
+            let twice = fpu::add(&size, &size, p)?;
+            fpu::less(&Binary::from_i32(t), &twice)
+        }
+    };
+    if multi {
         let k = kingdom_of(w, kingdom)?;
         for tile in w.shape_tiles(actor)? {
             if !w.fog_enabled()? || word_shared_visible(w.tile_fog(tile)?, k.as_ref()) {
@@ -249,7 +267,8 @@ pub fn refresh_memory<W: ActorDetectionWorld + ?Sized>(w: &mut W, actor: ActorKe
         return Ok(());
     }
     let mut deleted = false;
-    for key in w.kingdom_list()? {
+    for i in 0..w.kingdom_count()? {
+        let key = w.kingdom_at(i)?;
         if key == 0 {
             continue; // 0x4F0680 / 0x4F06B0 skip null entries
         }
@@ -284,7 +303,7 @@ pub fn refresh_memory<W: ActorDetectionWorld + ?Sized>(w: &mut W, actor: ActorKe
 pub fn refresh_from_tiles<W: ActorDetectionWorld + ?Sized>(map: &ZoneMap, w: &mut W, actor: ActorKey) -> Result<()> {
     for t in w.occupancy_tiles(actor)? {
         let Some(set) = map.tile(t)?.set else { continue };
-        for e in map.pool.entries(Some(set))? {
+        for e in map.pool.iter(Some(set))? {
             if e.flags & 0x40 != 0 {
                 let owner = w.owner(e.actor)?;
                 if owner != 0 && w.kingdom(owner)?.nonmajor == 0 {

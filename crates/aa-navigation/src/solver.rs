@@ -1,6 +1,6 @@
 //! Original Solve sequencing around the concrete search and path materializer.
 use crate::{OwnedPath, endpoint, materialize, search};
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -89,6 +89,33 @@ pub fn solve<W: World>(
     options: Options,
     world: &mut W,
 ) -> Result<i32> {
+    solve_detailed(grid, request, state, path, options, world, &mut Summary::default())
+}
+
+/// What the tile search of one [`solve_detailed`] call did (host
+/// bookkeeping; the native code keeps no such record).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Summary {
+    /// The tile search ran (the endpoint and distance checks passed).
+    pub searched: bool,
+    /// Queue entries taken by the search.
+    pub expanded: usize,
+    /// A partial result (2) cut by the depth cap or the queue limit rather
+    /// than an exhausted queue.
+    pub capped: bool,
+}
+
+/// [`solve`], also reporting the search figures in `summary`.
+pub fn solve_detailed<W: World>(
+    grid: &mut search::SearchGrid,
+    request: Request,
+    state: &mut StrategyState,
+    path: &mut OwnedPath,
+    options: Options,
+    world: &mut W,
+    summary: &mut Summary,
+) -> Result<i32> {
+    *summary = Summary::default();
     let Options {
         bounds,
         precision: p,
@@ -109,19 +136,19 @@ pub fn solve<W: World>(
     )? {
         return Ok(0);
     }
-    let x = Binary::from_f32_bits(
-        Binary::from_f32_bits(goal[0])?
-            .sub(&Binary::from_f32_bits(request.start_bits[0])?, p)?
+    let x = Fast::from_f32_bits(
+        Fast::from_f32_bits(goal[0])?
+            .sub(&Fast::from_f32_bits(request.start_bits[0])?, p)?
             .store_f32()?,
     )?;
-    let y = Binary::from_f32_bits(
-        Binary::from_f32_bits(goal[1])?
-            .sub(&Binary::from_f32_bits(request.start_bits[1])?, p)?
+    let y = Fast::from_f32_bits(
+        Fast::from_f32_bits(goal[1])?
+            .sub(&Fast::from_f32_bits(request.start_bits[1])?, p)?
             .store_f32()?,
     )?;
     //409230 reports zero when the stored delta's norm is <=0.0001.
     let norm = x.mul(&x, p)?.add(&y.mul(&y, p)?, p)?.sqrt(p)?;
-    if norm.compare(&Binary::from_f32_bits(0x38d1b717)?) != Ordering::Greater {
+    if norm.compare(&Fast::from_f32_bits(0x38d1b717)?) != Ordering::Greater {
         return Ok(0);
     }
     reset_path(path);
@@ -145,8 +172,8 @@ pub fn solve<W: World>(
     let shift = grid.coordinate_shift & 31;
     let cells = |bits: [u32; 2]| -> Result<[i32; 2]> {
         Ok([
-            Binary::from_f32_bits(bits[0])?.truncate_i32()? >> shift,
-            Binary::from_f32_bits(bits[1])?.truncate_i32()? >> shift,
+            Fast::from_f32_bits(bits[0])?.truncate_i32()? >> shift,
+            Fast::from_f32_bits(bits[1])?.truncate_i32()? >> shift,
         ])
     };
     state.route = materialize::State {
@@ -169,6 +196,11 @@ pub fn solve<W: World>(
         queue_limit,
     };
     let outcome = search::search(grid, input, world)?;
+    *summary = Summary {
+        searched: true,
+        expanded: outcome.expanded.len(),
+        capped: outcome.status == 2 && (outcome.queue_remaining > 0 || outcome.expanded.last().is_some_and(|e| e.depth >= 255)),
+    };
     if let Some(end) = outcome.end_cell {
         materialize::materialize(&mut state.route, path, end, grid, p, world)?;
     } else {

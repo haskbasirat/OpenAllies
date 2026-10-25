@@ -1,5 +1,5 @@
 //! Original destination adjustment (0x53d340) and map-interior clamp (0x552640).
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -30,8 +30,8 @@ pub trait World {
     /// Original 0x53ca30: candidate displacement around a blocking object.
     fn displace_blocked(&mut self, fallback: [u32; 2], candidate: &mut [u32; 2]) -> Result<bool>;
 }
-fn b(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn b(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
 
 pub fn clamp_to_interior(bounds: Bounds, point: &mut [u32; 2], p: Precision) -> Result<()> {
@@ -66,13 +66,13 @@ pub fn adjust<W: World>(
     if step <= 0 {
         return Err(Error::InvalidStep);
     }
-    let step = b(Binary::from_i32(step).store_f32()?)?;
+    let step = b(Fast::from_i32(step).store_f32()?)?;
     let dx = b(b(destination[0])?.sub(&b(fallback[0])?, p)?.store_f32()?)?;
     let dy = b(destination[1])?.sub(&b(fallback[1])?, p)?;
     let mut direction = [dx.store_f32()?, dy.store_f32()?];
     let distance = dx.mul(&dx, p)?.add(&dy.mul(&dy, p)?, p)?.sqrt(p)?;
     let mut remaining = distance.store_f32()?;
-    if distance.compare(&Binary::from_u32(0)) == Ordering::Greater {
+    if distance.compare(&Fast::from_u32(0)) == Ordering::Greater {
         let ratio = step.div(&b(remaining)?, p)?;
         direction = [
             dx.mul(&ratio, p)?.store_f32()?,
@@ -89,7 +89,7 @@ pub fn adjust<W: World>(
             *destination = candidate;
             break true;
         }
-        if b(remaining)?.compare(&Binary::from_u32(0)) != Ordering::Greater {
+        if b(remaining)?.compare(&Fast::from_u32(0)) != Ordering::Greater {
             break false;
         }
         destination[0] = b(destination[0])?.sub(&b(direction[0])?, p)?.store_f32()?;
@@ -97,7 +97,7 @@ pub fn adjust<W: World>(
         let previous = remaining;
         let next = b(remaining)?.sub(&step, p)?;
         remaining = next.store_f32()?;
-        if next.compare(&Binary::from_u32(0)) != Ordering::Greater {
+        if next.compare(&Fast::from_u32(0)) != Ordering::Greater {
             *destination = fallback;
             remaining = 0;
         } else if remaining == previous {

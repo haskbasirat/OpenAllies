@@ -93,7 +93,7 @@ fn first<R, F>(pool: &ZonePool, set: SetRef, mut f: F) -> Result<Option<R>>
 where
     F: FnMut(Entry) -> Result<Option<R>>,
 {
-    for e in pool.entries(Some(set))? {
+    for e in pool.iter(Some(set))? {
         if let Some(r) = f(e)? {
             return Ok(Some(r));
         }
@@ -272,7 +272,7 @@ pub fn collect_allied<W: ZoneActors + ?Sized>(
     exclude: ActorKey,
 ) -> Result<bool> {
     let mut leaf_result = false;
-    for e in pool.entries(Some(set))? {
+    for e in pool.iter(Some(set))? {
         leaf_result = false;
         if masked(e.flags, mask) && e.actor != exclude && w.allied(e.actor, kingdom)? {
             if !list.items.contains(&e.actor) {
@@ -336,7 +336,7 @@ pub fn visit<W: VisitWorld + ?Sized, V: DetectionVisitor + ?Sized>(
     w: &mut W,
     v: &mut V,
 ) -> Result<()> {
-    for e in pool.entries(Some(set))? {
+    for e in pool.iter(Some(set))? {
         if e.flags & 0x40 != 0 {
             let owner = w.owner(e.actor)?;
             if owner != 0 && w.kingdom(owner)?.nonmajor == 0 {
@@ -369,7 +369,7 @@ pub fn notify_type<W: ZoneActors + ?Sized>(
     zone_type: u32,
     notify: &mut dyn FnMut(u32) -> Result<()>,
 ) -> Result<()> {
-    for e in pool.entries(Some(set))? {
+    for e in pool.iter(Some(set))? {
         if u32::from(e.flags) & 1u32.wrapping_shl(zone_type) & 0xffff != 0 {
             let z = if (zone_type as i32) < 0 { 0 } else { w.zone_slot(e.actor, zone_type)? };
             notify(z)?;

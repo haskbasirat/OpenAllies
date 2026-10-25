@@ -5,7 +5,7 @@
 //! on insertion; the right child wins ties during removal. Those rules affect
 //! route choice and must not be replaced with Rust's ordinary BinaryHeap order.
 
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -74,7 +74,7 @@ impl SearchGrid {
         if self.width <= 0
             || self.height <= 0
             || (self.width as usize).checked_mul(self.height as usize) != Some(self.cells.len())
-            || Binary::from_f32_bits(self.cell_size_bits)?.compare(&Binary::from_i32(0))
+            || Fast::from_f32_bits(self.cell_size_bits)?.compare(&Fast::from_i32(0))
                 != Ordering::Greater
         {
             return Err(SearchError::InvalidGrid);
@@ -189,7 +189,7 @@ impl NativeQueue {
     }
     /// 0x53d090: ties move above their parent, so insertion is not stable.
     pub fn push(&mut self, entry: QueueEntry) -> Result<bool> {
-        Binary::from_f32_bits(entry.priority_bits)?;
+        Fast::from_f32_bits(entry.priority_bits)?;
         if self
             .maximum_entries
             .is_some_and(|limit| limit > 0 && self.len() == limit)
@@ -244,25 +244,25 @@ impl NativeQueue {
     }
 }
 
-fn scalar(bits: u32) -> Result<Binary> {
-    Ok(Binary::from_f32_bits(bits)?)
+fn scalar(bits: u32) -> Result<Fast> {
+    Ok(Fast::from_f32_bits(bits)?)
 }
-fn stored(value: Binary) -> Result<Binary> {
+fn stored(value: Fast) -> Result<Fast> {
     scalar(value.store_f32()?)
 }
 
 /// 0x53c7a0. The extended result is retained for closest-cell comparison;
 /// callers explicitly store binary32 when writing a queue or best-distance word.
-pub fn heuristic(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Result<Binary> {
+pub fn heuristic(grid: &SearchGrid, input: &SearchInput, cell: [i32; 2]) -> Result<Fast> {
     if cell == input.goal_cell {
-        return Ok(Binary::from_i32(0));
+        return Ok(Fast::from_i32(0));
     }
     let p = input.precision;
     let half = scalar(grid.cell_size_bits)?.mul(&scalar(0x3f00_0000)?, p)?;
-    let mut delta = [Binary::from_i32(0), Binary::from_i32(0)];
+    let mut delta = [Fast::from_i32(0), Fast::from_i32(0)];
     for i in 0..2 {
         let shifted = cell[i].wrapping_shl(grid.coordinate_shift & 31);
-        let center = stored(Binary::from_i32(shifted).add(&half, p)?)?;
+        let center = stored(Fast::from_i32(shifted).add(&half, p)?)?;
         let value = center.sub(&scalar(input.goal_world_bits[i])?, p)?;
         delta[i] = if value.is_negative_nonzero() {
             value.negated()

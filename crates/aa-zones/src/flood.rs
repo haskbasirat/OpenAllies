@@ -143,6 +143,69 @@ fn f(bits: u32) -> Result<Binary> {
     fpu::load(bits)
 }
 
+/// The `fld dword` domain check of a value that is only compared.
+fn finite(bits: u32) -> Result<()> {
+    if f32::from_bits(bits).is_finite() { Ok(()) } else { Err(Error::NonFinite(bits)) }
+}
+
+/// The register arithmetic of the ZoneSolver visit `0x53F9F0` (PC53: exact
+/// binary64, [`fpu::pc53`]; other precisions and the fallback: Binary).
+struct Ops {
+    p: Precision,
+    tile_bits: u32,
+    half: Binary,
+}
+
+impl Ops {
+    fn pc53(&self) -> bool {
+        self.p == Precision::Double53
+    }
+
+    /// `0x53C5C0`: `fstp(factor * tile + cost)`.
+    fn step(&self, factor: u32, cost: u32) -> Result<u32> {
+        use fpu::pc53;
+        if self.pc53()
+            && let Some(v) = (|| pc53::store(pc53::add(pc53::mul(pc53::load(factor)?, pc53::load(self.tile_bits)?)?, pc53::load(cost)?)?))()
+        {
+            return Ok(v);
+        }
+        fpu::f32_store(&fpu::add(&fpu::mul(&f(factor)?, &f(self.tile_bits)?, self.p)?, &f(cost)?, self.p)?)
+    }
+
+    /// `d + 1e-4 < old`.
+    fn eps_less(&self, d: u32, old: u32) -> Result<bool> {
+        use fpu::pc53;
+        if self.pc53()
+            && let Some(v) = (|| Some(pc53::add(pc53::load(d)?, pc53::load(EPSILON_BITS)?)? < pc53::load(old)?))()
+        {
+            return Ok(v);
+        }
+        Ok(fpu::less(&fpu::add(&f(d)?, &f(EPSILON_BITS)?, self.p)?, &f(old)?))
+    }
+
+    /// `tile / 2 + d < radius`.
+    fn half_less(&self, d: u32, radius: u32) -> Result<bool> {
+        use fpu::pc53;
+        if self.pc53()
+            && let Some(v) = (|| Some(pc53::add(pc53::half_tile(self.tile_bits)?, pc53::load(d)?)? < pc53::load(radius)?))()
+        {
+            return Ok(v);
+        }
+        Ok(fpu::less(&fpu::add(&self.half, &f(d)?, self.p)?, &f(radius)?))
+    }
+
+    /// `fstp(a + b)`.
+    fn sum(&self, a: u32, b: u32) -> Result<u32> {
+        use fpu::pc53;
+        if self.pc53()
+            && let Some(v) = (|| pc53::store(pc53::add(pc53::load(a)?, pc53::load(b)?)?))()
+        {
+            return Ok(v);
+        }
+        fpu::f32_store(&fpu::add(&f(a)?, &f(b)?, self.p)?)
+    }
+}
+
 /// `0x53CDF0` binary heap (min-priority, native tie rules).
 struct Queue {
     entries: Vec<Entry>,
@@ -155,12 +218,12 @@ impl Queue {
         if self.limit.is_some_and(|l| l > 0 && self.entries.len() == l) {
             return Ok(false);
         }
-        let p = f(e.priority)?;
+        finite(e.priority)?;
         let mut i = self.entries.len();
         self.entries.push(e);
         while i > 0 {
             let parent = (i - 1) / 2;
-            if p.compare(&f(self.entries[parent].priority)?) == std::cmp::Ordering::Greater {
+            if fpu::compare_bits(e.priority, self.entries[parent].priority)? == std::cmp::Ordering::Greater {
                 break;
             }
             self.entries[i] = self.entries[parent];
@@ -180,22 +243,20 @@ impl Queue {
         let out = self.entries[0];
         let n = self.entries.len() - 1;
         let last = self.entries[n];
-        let lp = f(last.priority)?;
+        finite(last.priority)?;
         let mut hole = 0usize;
         let mut child = 1usize;
         if n > 1 {
             loop {
                 let right = 2 * hole + 2;
-                let pick = if right < n
-                    && fpu::less(&f(self.entries[child].priority)?, &f(self.entries[right].priority)?)
-                {
+                let pick = if right < n && fpu::less_bits(self.entries[child].priority, self.entries[right].priority)? {
                     child
                 } else if right < n {
                     right
                 } else {
                     child
                 };
-                if lp.compare(&f(self.entries[pick].priority)?) != std::cmp::Ordering::Greater {
+                if fpu::compare_bits(last.priority, self.entries[pick].priority)? != std::cmp::Ordering::Greater {
                     break;
                 }
                 self.entries[hole] = self.entries[pick];
@@ -251,7 +312,7 @@ struct Functor {
 /// Per-solve tile state (stamp == current, +0x2D arrival direction).
 #[derive(Default)]
 struct Visits {
-    came: HashMap<usize, u32>,
+    came: HashMap<usize, u32, crate::set::FxBuild>,
 }
 
 /// The blocked test (functor +0x1C) of each functor class.
@@ -429,20 +490,16 @@ fn run_dijkstra<W: FloodWorld + ?Sized>(
         st.busy = false;
         return Ok(0);
     }
-    let radius = f(zone.radius_bits)?;
+    finite(zone.radius_bits)?;
     let tile = f(map.geometry.tile_size_bits)?;
-    let half = fpu::mul(&tile, &f(fpu::HALF_BITS)?, p)?;
-    let flt_max = f(UNREACHED_BITS)?;
+    let ops = Ops { p, tile_bits: map.geometry.tile_size_bits, half: fpu::mul(&tile, &f(fpu::HALF_BITS)?, p)? };
     while let Some(node) = queue.pop()? {
         let cur = node.cell;
         let dirs = neighbours(map, w, fu, &Blocked::Impassable, &visits, cur)?;
         for dir in dirs {
             let n = offset(cur, dir);
             let nt = linear(map, n)?;
-            visit_dijkstra(
-                map, st, w, zone, &mut queue, &mut visits, node, cur, n, nt, moved, &radius, &tile, &half,
-                &flt_max, p,
-            )?;
+            visit_dijkstra(map, st, w, zone, &mut queue, &mut visits, node, cur, n, nt, moved, &ops)?;
         }
     }
     st.busy = false;
@@ -463,12 +520,9 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
     n: [i32; 2],
     nt: usize,
     moved: bool,
-    radius: &Binary,
-    tile: &Binary,
-    half: &Binary,
-    flt_max: &Binary,
-    p: Precision,
+    ops: &Ops,
 ) -> Result<()> {
+    let radius = zone.radius_bits;
     // Functor +0x30 (0x53F970): FLT_MAX priority stays unreached; else
     // 0x53C5C0: (diagonal ? sqrt2 : 1) * tile + entry cost (+0x10).
     let mut d = if node.priority == UNREACHED_BITS {
@@ -476,7 +530,7 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
     } else {
         let dir = direction(cur, n)?;
         let factor = if dir & 1 != 0 { DIAGONAL_BITS } else { fpu::ONE_BITS };
-        fpu::f32_store(&fpu::add(&fpu::mul(&f(factor)?, tile, p)?, &f(node.cost)?, p)?)?
+        ops.step(factor, node.cost)?
     };
     let mut had_zone = false; // [esp+0x12]
     let mut within_before = false; // [esp+0x13]
@@ -487,15 +541,14 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
             had_zone = tile_has_zone_entry(map, nt, zone)?;
         }
     } else {
-        let dv = f(d)?;
-        if fpu::less(radius, &dv) {
+        if fpu::less_bits(radius, d)? {
             return Ok(());
         }
-        let old = scratch_value(st.scratch[nt])?;
-        if !fpu::less(&fpu::add(&dv, &f(EPSILON_BITS)?, p)?, &old) {
+        let old = scratch_bits(st.scratch[nt]);
+        if !ops.eps_less(d, old)? {
             return Ok(());
         }
-        within_before = !fpu::less(radius, &old);
+        within_before = !fpu::less_bits(radius, old)?;
     }
     st.scratch[nt] = Scratch::Bits(d);
     let mut pass = true;
@@ -509,7 +562,7 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
             }
         }
         if pass {
-            if fpu::less(radius, &f(d)?) {
+            if fpu::less_bits(radius, d)? {
                 pass = false;
             } else {
                 let blocker = w.tile_blocker(nt)?;
@@ -551,15 +604,14 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
         tile_remove(map, w, zone, nt)?;
     }
     if !had_zone {
-        let dv = f(d)?;
-        if !fpu::less(&dv, flt_max) {
+        if !fpu::less_bits(d, UNREACHED_BITS)? {
             return Ok(());
         }
-        if !fpu::less(&fpu::add(half, &dv, p)?, radius) {
+        if !ops.half_less(d, radius)? {
             return Ok(());
         }
     }
-    let priority = fpu::f32_store(&fpu::add(&f(d)?, &f(0)?, p)?)?;
+    let priority = ops.sum(d, 0)?;
     queue.push(Entry { cell: n, priority, cost: d })?;
     Ok(())
 }
@@ -571,12 +623,12 @@ fn reentry_guard(map: &ZoneMap, st: &SolverState) -> Result<()> {
     Ok(())
 }
 
-fn scratch_value(s: Scratch) -> Result<Binary> {
+fn scratch_bits(s: Scratch) -> u32 {
     match s {
-        Scratch::Bits(b) => f(b),
+        Scratch::Bits(b) => b,
         // A tile address below 0x3F800000 read as binary32: positive, < 1.0.
         // Only `cost + 1e-4 < value` reads it, and costs here are >= one tile.
-        Scratch::Link(_) => f(0x0080_0000),
+        Scratch::Link(_) => 0x0080_0000,
     }
 }
 

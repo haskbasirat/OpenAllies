@@ -461,3 +461,5 @@ impl Binary {
 }
 
 pub mod crt_pow;
+pub mod fast;
+pub use fast::Fast;
