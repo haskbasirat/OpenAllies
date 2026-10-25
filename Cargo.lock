@@ -267,6 +267,7 @@ dependencies = [
  "aa-navigation",
  "aa-numeric",
  "aa-orders",
+ "aa-production",
  "aa-rules",
  "aa-simulation",
  "aa-spatial",

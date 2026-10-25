@@ -8,7 +8,9 @@
 //! (0x4FA2C4: leader slot first, then every slot with a definition) with the
 //! Denizen DeploymentInfo placement of 0x4FACA0 (creation point, walk to the
 //! deployment point, both turned by the building facing).
-use crate::books::{PauseReason, Queue, QueueItem};
+mod native;
+
+use crate::books::{Queue, QueueItem};
 use crate::data::{DefClass, DefId, ResourceKind};
 use crate::world::{ActorId, Command, Event, KingdomId, Order, OrgId, Organization, World};
 use glam::Vec2;
@@ -453,6 +455,12 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
     }
 }
 
+/// Recruit request 0x5836E0 -> 0x582AE0 -> 0x589E00 (aa-production
+/// `request_recruit`): the HQ enrolment gate 574BF0, the recruitability
+/// 0x5827B0 / 0x581F70 (ElementComponent requirements, every layout slot of
+/// an organization), the affordability 0x582950, the debit 0x4E1690, the
+/// upkeep quote and the queue admission. The building checks before it
+/// (ownership, its recruit list, packing, recruitable) give the refusal.
 fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId) -> Result<(), String> {
     let a = world.actor(building).ok_or("no such building")?;
     if !a.alive || a.kingdom != Some(kingdom) {
@@ -464,98 +472,67 @@ fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId)
     if busy(world, building) {
         return Err("the building is packing or unpacking".into());
     }
-    if !can_enroll(world, building, def) {
-        return Err("the HQ has no free attachment".into());
-    }
     if world.data.def(def).recruitable == 0 {
         return Err("not recruitable".into());
     }
-    let cost = recruit_cost(world, building, def);
-    if !can_afford(world, kingdom, &cost) {
-        world.books.notices.push(crate::books::Notice::Unaffordable { kingdom, building });
-        return Err("not enough resources".into());
-    }
-    credit(world, kingdom, &cost, -1.0);
-    let upkeep = quote(world, def, Vector::Upkeep);
-    let requested_upkeep = limited_part(world, &upkeep);
     let attaches = world.data.def(def).class == Some(DefClass::Organization) && hq_org(world, building).is_some();
-    if attaches && let Some(o) = hq_org(world, building) {
-        world.books.org_mut(o).reserved_attachments += 1;
-    }
-    world.books.next_item += 1;
-    let item = QueueItem {
-        id: world.books.next_item,
-        def,
-        paid: cost,
-        current_upkeep: vec![0.0; requested_upkeep.len()],
-        requested_upkeep,
-        attaches,
-        research: None,
-    };
-    let queue = &mut world.books.actor_mut(building).queue;
-    queue.items.push(item);
-    if queue.items.len() == 1 {
-        start_head(world, building);
-    }
+    let request = aa_production::RecruitRequest { actor_definition: native::def_handle(def), organization_layout: 0, location_bits: None };
+    let (result, unaffordable, _) = native::with_queue(world, building, |q, ctx, host| {
+        host.pending = Some(native::Extra { def, attaches, research: None });
+        aa_production::request_recruit(q, request, ctx, host)
+    });
     mirror(world, building);
-    Ok(())
+    match result {
+        Ok(true) => Ok(()),
+        Ok(false) if unaffordable => Err("not enough resources".into()),
+        Ok(false) if !can_enroll(world, building, def) => Err("the HQ has no free attachment".into()),
+        Ok(false) => Err("missing requirements".into()),
+        Err(e) => Err(format!("production: {e}")),
+    }
 }
 
-/// Research request (0x584790): the building lists the item, the kingdom
-/// neither owns nor already researches the technology (0x5844A0), the cost
-/// is affordable (0x5845F0) and paid; the item joins the building's queue
-/// (0x589F00) and takes research_time. Callable by the UI and the AI until a
-/// `Command` variant routes it (see the core report).
+/// 0x5827B0 for a recruit of `def` at `building`: 0 when its requirements
+/// hold, else 1 (missing structures or properties). For the HUD and AI.
+pub fn recruitability(world: &World, building: ActorId, def: DefId) -> i32 {
+    native::recruitability(world, building, def).unwrap_or(1)
+}
+
+/// Research request 0x584790 (aa-production `request_research`): blocked
+/// 0x5844A0 (already queued here, in progress in the kingdom 0x4E2390,
+/// already known, requirements 0x5842F0), affordable 0x5845F0, the debit,
+/// the queue admission (kind 1) and the kingdom-level reservation 0x4E2310.
 pub fn research(world: &mut World, kingdom: KingdomId, building: ActorId, property: &str) -> Result<(), String> {
     let a = world.actor(building).ok_or("no such building")?;
     if !a.alive || a.kingdom != Some(kingdom) {
         return Err("not your building".into());
     }
-    let Some(item) = world.data.def(a.def).research.iter().find(|r| r.property.eq_ignore_ascii_case(property)).cloned() else {
-        return Err(format!("{} cannot research {property}", world.data.def(a.def).id));
+    let bdef = a.def;
+    let Some(index) = world.data.def(bdef).research.iter().position(|r| r.property.eq_ignore_ascii_case(property)) else {
+        return Err(format!("{} cannot research {property}", world.data.def(bdef).id));
     };
     if busy(world, building) {
         return Err("the building is packing or unpacking".into());
     }
-    if world.books.kingdom(kingdom).is_some_and(|k| k.technologies.iter().any(|t| t.eq_ignore_ascii_case(property))) {
-        return Err("already researched".into());
-    }
-    let queued = world.books.actors.iter().enumerate().any(|(i, b)| {
-        world.actors.get(i).is_some_and(|x| x.kingdom == Some(kingdom) && !x.removed)
-            && b.queue.items.iter().any(|it| it.research.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(property)))
+    let record = native::research_record(world, bdef, index).ok_or("no research record")?;
+    let name = world.data.def(bdef).research[index].property.clone();
+    let component = aa_production::research::ResearchComponent { completed: world.books.actor(building).map(|b| b.research_completed.clone()).unwrap_or_default() };
+    let (result, unaffordable, _) = native::with_queue(world, building, |q, ctx, host| {
+        host.pending = Some(native::Extra { def: bdef, attaches: false, research: Some(name) });
+        aa_production::research::request_research(&component, q, &record, ctx, host)
     });
-    if queued {
-        return Err("already being researched".into());
-    }
-    if !can_afford(world, kingdom, &item.cost) {
-        world.books.notices.push(crate::books::Notice::Unaffordable { kingdom, building });
-        return Err("not enough resources".into());
-    }
-    credit(world, kingdom, &item.cost, -1.0);
-    world.books.next_item += 1;
-    let n = world.data.resources.len();
-    let it = QueueItem {
-        id: world.books.next_item,
-        def: world.actors[building as usize].def,
-        paid: item.cost.clone(),
-        requested_upkeep: vec![0.0; n],
-        current_upkeep: vec![0.0; n],
-        attaches: false,
-        research: Some(item.property.clone()),
-    };
-    let queue = &mut world.books.actor_mut(building).queue;
-    queue.items.push(it);
-    if queue.items.len() == 1 {
-        start_head(world, building);
-    }
     mirror(world, building);
-    Ok(())
+    match result {
+        Ok(true) => Ok(()),
+        Ok(false) if unaffordable => Err("not enough resources".into()),
+        Ok(false) => Err(format!("{property} cannot be researched now (known, in progress or missing requirements)")),
+        Err(e) => Err(format!("production: {e}")),
+    }
 }
 
-/// HQ attach (0x574A10 gate, 0x574C10 attach, 0x5735D0 cost): attach an own
-/// supply-using organization to the HQ of `hq` when that HQ has a free
-/// attachment; the price is the organization cost times
-/// HQAttachCostPercentage (0 in the shipped SVars).
+/// HQ attach 0x574C10 (aa-production `hq_attach`): the cost 0x5735D0 (the
+/// organization cost times HQAttachCostPercentage, 0 in the shipped SVars)
+/// when affordable, the HQ gate 0x574810 (a free attachment for a
+/// supply-using organization), then the organization's HQ.
 pub fn attach(world: &mut World, kingdom: KingdomId, org: OrgId, hq: ActorId) -> Result<(), String> {
     let o = world.orgs.get(org as usize).filter(|o| o.alive && o.kingdom == kingdom).ok_or("not your organization")?;
     let od = world.data.def(o.def);
@@ -569,27 +546,24 @@ pub fn attach(world: &mut World, kingdom: KingdomId, org: OrgId, hq: ActorId) ->
     if !h.alive || h.kingdom != Some(kingdom) {
         return Err("not your HQ".into());
     }
-    let Some(hq_org) = hq_org(world, hq) else {
+    if hq_org(world, hq).is_none() {
         return Err("not an HQ".into());
-    };
-    let max = world.data.def(world.orgs[hq_org as usize].def).max_attachments.unwrap_or(0);
-    let reserved = world.books.org(hq_org).map_or(0, |b| b.reserved_attachments);
-    if attachments(world, hq) + reserved >= max {
-        return Err("the HQ has no free attachment".into());
     }
-    let factor = world.data.rule_ci("HQAttachCostPercentage").unwrap_or(0.0);
-    let cost: Vec<f32> = quote(world, o.def, Vector::Cost).iter().map(|c| c * factor).collect();
-    if !can_afford(world, kingdom, &cost) {
-        return Err("not enough resources".into());
+    let handle = org + 1;
+    let mut purchase = native::Attach { world, hq, org };
+    let affordable = aa_production::purchases::hq_attach_affordable(Some(handle), true, false, &mut purchase);
+    match aa_production::purchases::hq_attach(Some(handle), true, 0, &mut purchase) {
+        Ok(true) => Ok(()),
+        Ok(false) if affordable.is_ok_and(|a| !a) && !purchase_free(&mut purchase) => Err("the HQ has no free attachment".into()),
+        Ok(false) => Err("not enough resources".into()),
+        Err(e) => Err(format!("production: {e}")),
     }
-    if cost.iter().any(|c| *c != 0.0) {
-        credit(world, kingdom, &cost, -1.0);
-    }
-    world.orgs[org as usize].hq = Some(hq);
-    world.books.notices.push(crate::books::Notice::Attached { org, hq });
-    Ok(())
 }
 
+/// The HQ gate alone (0x574810).
+fn purchase_free(p: &mut native::Attach<'_>) -> bool {
+    aa_production::purchases::HqAttach::attach_allowed(p, 0, false).unwrap_or(false)
+}
 /// 0x588D60: organization recruit_time, else 1 / ElementComponent
 /// resupply_rate (+2CC), else half a tick (instant).
 pub fn duration(world: &World, def: DefId) -> f32 {
@@ -614,70 +588,20 @@ pub fn item_duration(world: &World, building: ActorId, item: &QueueItem) -> f32 
     }
 }
 
-fn start_head(world: &mut World, building: ActorId) {
-    let now = world.time;
-    let head = world.books.actor(building).and_then(|b| b.queue.items.first().cloned());
-    let duration = head.as_ref().map_or(0.0, |i| item_duration(world, building, i));
-    let q = &mut world.books.actor_mut(building).queue;
-    q.paused_at = None;
-    q.pause_reason = None;
-    if head.is_none() {
-        q.deadline = 0.0;
-        q.duration = 0.0;
-        // cancel_schedule.
-        q.scheduled = false;
-        return;
-    }
-    q.duration = duration;
-    q.deadline = now + duration;
-    process(world, building);
-    // 0x589420 tail: a queue not yet scheduled registers on the periodic
-    // queue 0 (0x50AC00(0) -> 0x50B2C0), whose bucket is one world-RNG draw
-    // (GetRNG 0x4F02B0 at 0x50B2DF, draw % 1 bucket).
-    if world.books.actor(building).is_some_and(|b| !b.queue.scheduled) {
-        world.random_u32();
-        world.books.actor_mut(building).queue.scheduled = true;
-    }
-}
-
-/// 0x5894C0: take an item out, releasing its reserved upkeep and HQ attachment.
-fn remove(world: &mut World, building: ActorId, index: usize) -> Option<QueueItem> {
-    let q = &mut world.books.actor_mut(building).queue;
-    if index >= q.items.len() {
-        return None;
-    }
-    let mut item = q.items.remove(index);
-    if index == 0 {
-        q.paused_at = None;
-        q.pause_reason = None;
-        // cancel_schedule: the next head registers (and draws) again.
-        q.scheduled = false;
-    }
-    // adjust_upkeep(current, false) (0x4E48C0, also for a zero vector).
-    if let Some(k) = world.actors.get(building as usize).and_then(|a| a.kingdom) {
-        crate::economy::adjust_consumption(world, k, &item.current_upkeep, false);
-    }
-    item.current_upkeep.iter_mut().for_each(|v| *v = 0.0);
-    if item.attaches
-        && let Some(o) = hq_org(world, building)
-    {
-        let b = world.books.org_mut(o);
-        b.reserved_attachments = b.reserved_attachments.saturating_sub(1);
-    }
-    Some(item)
-}
-
-/// 0x589BD0 cancel with refund, then the caller restarts the head.
+/// 0x589BD0 cancel (aa-production `cancel`: remove 0x5894C0 releasing the
+/// reserved upkeep and the HQ attachment, the refund, the release), then, as
+/// its caller does, the new head starts (0x589420).
 pub fn cancel(world: &mut World, building: ActorId, index: usize) -> Option<()> {
-    let item = remove(world, building, index)?;
-    if let Some(k) = world.actors[building as usize].kingdom {
-        credit(world, k, &item.paid, 1.0);
-    }
-    if index == 0 {
-        start_head(world, building);
-    }
+    let id = world.books.actor(building)?.queue.items.get(index)?.id;
+    let (result, _, _) = native::with_queue(world, building, |q, ctx, host| {
+        let removed = aa_production::cancel(q, id, host);
+        if matches!(removed, Ok(Some(0))) {
+            let _ = aa_production::start_head(q, ctx, host);
+        }
+        removed
+    });
     mirror(world, building);
-    Some(())
+    result.ok().flatten().map(|_| ())
 }
 
 /// Cancel (refund) every queued item of a building.
@@ -689,79 +613,6 @@ pub fn cancel_all(world: &mut World, building: ActorId) {
         }
     }
 }
-
-fn can_reserve(world: &World, kingdom: KingdomId, item: &QueueItem) -> bool {
-    let Some(k) = world.books.kingdom(kingdom) else { return false };
-    world.data.resources.iter().enumerate().all(|(i, r)| {
-        let need = item.requested_upkeep.get(i).copied().unwrap_or(0.0) - item.current_upkeep.get(i).copied().unwrap_or(0.0);
-        if r.kind != ResourceKind::LimitedConsumed || need <= 0.0 {
-            return true;
-        }
-        let Some(p) = r.limited_by else { return true };
-        k.consumed.get(i).copied().unwrap_or(0.0) + need <= k.provided.get(p).copied().unwrap_or(0.0)
-    })
-}
-
-/// 0x589F90: completion first, then the reservation, disabled and supply
-/// pauses; a paused head's deadline moves on with the paused time.
-fn process(world: &mut World, building: ActorId) {
-    let now = world.time;
-    let Some(item) = world.books.actor(building).and_then(|b| b.queue.items.first().cloned()) else {
-        return;
-    };
-    let deadline = world.books.actor(building).map_or(0.0, |b| b.queue.deadline);
-    let kingdom = world.actors[building as usize].kingdom;
-    if now >= deadline {
-        let item = remove(world, building, 0).expect("head");
-        if !fulfill(world, building, &item)
-            && let Some(k) = kingdom
-        {
-            credit(world, k, &item.paid, 1.0);
-        }
-        start_head(world, building);
-        return;
-    }
-    let mut reason = None;
-    let notify_first = world.books.actor(building).is_some_and(|b| b.queue.paused_at.is_none());
-    if item.current_upkeep != item.requested_upkeep {
-        match kingdom {
-            Some(k) if can_reserve(world, k, &item) => {
-                // 0x589F90: current = the limited upkeep, which adjust_upkeep
-                // adds whole (0x4E48C0).
-                let head = &mut world.books.actor_mut(building).queue.items[0];
-                head.current_upkeep = head.requested_upkeep.clone();
-                let reserved = head.current_upkeep.clone();
-                crate::economy::adjust_consumption(world, k, &reserved, true);
-                crate::economy::publish(world, k);
-            }
-            _ => reason = Some(PauseReason::LimitedResource),
-        }
-    }
-    if reason.is_none() {
-        let def = world.data.def(world.actors[building as usize].def);
-        if busy(world, building) {
-            reason = Some(PauseReason::Disabled);
-        } else if def.supply_required && world.books.out_of_supply(building) {
-            reason = Some(PauseReason::Supply);
-        } else {
-            let q = &mut world.books.actor_mut(building).queue;
-            q.paused_at = None;
-            q.pause_reason = None;
-            return;
-        }
-    }
-    let q = &mut world.books.actor_mut(building).queue;
-    let changed = q.pause_reason != reason;
-    if let Some(at) = q.paused_at {
-        q.deadline += now - at;
-    }
-    q.paused_at = Some(now);
-    q.pause_reason = reason;
-    if changed && (notify_first || reason == Some(PauseReason::LimitedResource)) {
-        world.books.notices.push(crate::books::Notice::ProductionPaused { building, reason: reason.unwrap() });
-    }
-}
-
 /// Recruit completion: spawn at the DeploymentInfo creation point turned by
 /// the building facing and walk to the deployment point (0x4FACA0).
 /// Research completion (0x584120): the kingdom gains the technology.
@@ -873,7 +724,8 @@ pub fn tick(world: &mut World) {
             cancel_all(world, id);
             continue;
         }
-        process(world, id);
+        // The queue's periodic update: 0x589F90.
+        let _ = native::with_queue(world, id, |q, ctx, host| aa_production::process(q, ctx, host));
         mirror(world, id);
     }
 }

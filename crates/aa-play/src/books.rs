@@ -69,6 +69,9 @@ pub struct KingdomBooks {
     /// property_handicap_easy), applied to every kingdom actor like a
     /// technology.
     pub handicap: Option<String>,
+    /// Kingdom +0x324: kingdom-level research in progress (0x4E2310).
+    #[serde(default)]
+    pub research: aa_production::research::KingdomResearch,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -94,6 +97,10 @@ pub struct ActorBooks {
     /// Its Economy component's applied contributions (570020).
     #[serde(default)]
     pub economy: EconomyCache,
+    /// ResearchComponent +0x10: the research records it completed, newest
+    /// first (0x584120).
+    #[serde(default)]
+    pub research_completed: Vec<u32>,
 }
 
 /// An Economy component's state 570020 keeps (EconomyState +0/+1 vectors
@@ -158,6 +165,9 @@ pub struct QueueItem {
     /// A research item (native queue kind 1): the technology Property IDS.
     /// Its `def` is the researching building's own definition.
     pub research: Option<String>,
+    /// Item +0x4C: the HQ attachment slot released at removal.
+    #[serde(default)]
+    pub organization_slot: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -776,6 +776,24 @@ fn every_nation_recruits_from_every_division_hq() {
             let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && a.def == corps_def).unwrap().id;
             let cpos = w.actors[corps as usize].pos.truncate();
             let refused = |w: &aa_play::World| w.events.iter().filter_map(|e| if let Event::Refused { kingdom: 0, reason } = e { Some(reason.clone()) } else { None }).collect::<Vec<_>>();
+            // A division HQ that needs another one first (mechanized: an
+            // infantry HQ; armor: a mechanized HQ; 0x581F70 requirements):
+            // give the kingdom the required structures, away from the Corps.
+            if aa_play::production::recruitability(&mut w, corps, item) != 0 {
+                let mut needed: Vec<String> = Vec::new();
+                for &(m, _) in &data.def(item).slots {
+                    if m != aa_play::data::NO_DEF {
+                        needed.extend(data.def(m).requirements.structures.iter().cloned());
+                    }
+                }
+                needed.sort();
+                needed.dedup();
+                for (i, s) in needed.iter().enumerate() {
+                    let sd = data.find(s).expect("required structure");
+                    aa_play::production::spawn_single(&mut w, sd, Some(0), cpos + glam::Vec2::new(-80.0 - 40.0 * i as f32, 60.0), 0.0);
+                }
+                assert_eq!(aa_play::production::recruitability(&mut w, corps, item), 0, "{nation}: {item_id} after {needed:?}");
+            }
             w.step(vec![Command::Recruit { kingdom: 0, building: corps, def: item }]);
             let r = refused(&w);
             if !r.is_empty() {
@@ -855,6 +873,12 @@ fn every_nation_recruits_from_every_division_hq() {
                     }
                     continue;
                 }
+                // 0x581F70: an element whose required structures / properties
+                // the kingdom lacks (a motor pool, a technology) is refused.
+                if r == ["missing requirements".to_string()] && aa_play::production::recruitability(&mut w, building, unit) != 0 {
+                    eprintln!("  {unit_id}: missing requirements");
+                    continue;
+                }
                 if !r.is_empty() {
                     failures.push(format!("{nation}: {} refuses {unit_id} with {recruited} attached: {r:?}", bdef.id));
                     continue;
@@ -891,6 +915,64 @@ fn every_nation_recruits_from_every_division_hq() {
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// 0x581F70 / 0x4C5250: a regiment is recruitable only when every member's
+/// ElementComponent requirements hold (the kingdom owns each required
+/// structure, complete; the recruiting structure or the kingdom has each
+/// required property, e.g. a technology).
+#[test]
+#[ignore]
+fn element_requirements_gate_recruits() {
+    let data = data();
+    let mut w = berlin_world();
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(0) && data.def(a.def).id == "rus_corps").unwrap().id;
+    let mut checked = 0;
+    for (d, def) in data.defs.iter().enumerate() {
+        if !def.id.starts_with("regiment_rus") || def.class != Some(aa_play::data::DefClass::Organization) {
+            continue;
+        }
+        let mut structures = Vec::new();
+        let mut properties = Vec::new();
+        for &(m, _) in &def.slots {
+            if m != aa_play::data::NO_DEF {
+                structures.extend(data.def(m).requirements.structures.iter().cloned());
+                properties.extend(data.def(m).requirements.properties.iter().cloned());
+            }
+        }
+        if structures.is_empty() && properties.is_empty() {
+            assert_eq!(aa_play::production::recruitability(&mut w, corps, d as u32), 0, "{}", def.id);
+            continue;
+        }
+        let owned = |w: &aa_play::World, s: &str| w.actors.iter().any(|a| a.alive && a.kingdom == Some(0) && data.def(a.def).id.eq_ignore_ascii_case(s));
+        let known = |w: &aa_play::World, p: &str| w.books.kingdom(0).unwrap().technologies.iter().any(|t| t.eq_ignore_ascii_case(p));
+        // Non-technology properties (air_support...) come from the recruiting
+        // structure itself; only structures and technologies are checked here.
+        let technology = |p: &String| data.property(p).is_some_and(|x| x.is_technology);
+        if structures.iter().all(|s| owned(&w, s)) && properties.iter().filter(|p| technology(p)).all(|p| known(&w, p)) {
+            continue;
+        }
+        assert_ne!(aa_play::production::recruitability(&mut w, corps, d as u32), 0, "{} needs {structures:?} {properties:?}", def.id);
+        // Grant them: the structures (complete, owned) and the technologies.
+        for s in &structures {
+            if !owned(&w, s) {
+                let sd = data.find(s).expect("required structure");
+                aa_play::production::spawn_single(&mut w, sd, Some(0), glam::Vec2::new(60.0 + 20.0 * checked as f32, 60.0), 0.0);
+            }
+        }
+        for p in &properties {
+            if data.property(p).is_some_and(|x| x.is_technology) && !known(&w, p) {
+                w.books.kingdom_mut(0, data.resources.len()).technologies.push(p.clone());
+            }
+        }
+        let code = aa_play::production::recruitability(&mut w, corps, d as u32);
+        eprintln!("{}: needs {structures:?} {properties:?} -> granted, recruitability {code}", def.id);
+        if properties.iter().all(|p| data.property(p).is_some_and(|x| x.is_technology)) {
+            assert_eq!(code, 0, "{} unlocked", def.id);
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "some rus regiment has requirements");
 }
 
 /// The same supply check on a generated map with two computers.
