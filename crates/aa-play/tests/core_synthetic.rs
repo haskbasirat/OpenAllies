@@ -245,8 +245,7 @@ fn core_step(w: &mut World, commands: Vec<Command>) {
     for c in commands {
         w.apply(c);
     }
-    aa_play::economy::tick(w);
-    aa_play::production::tick(w);
+    aa_play::scheduler::queue_zero(w);
     aa_play::deploy::tick(w);
     aa_play::supply::tick(w);
     aa_play::victory::tick(w);

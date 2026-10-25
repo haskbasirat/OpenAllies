@@ -26,10 +26,14 @@
 //!   of an out-of-supply supply_used organization of a kingdom in shortage
 //!   lose dt * max_health * shortfall_damage_rate * (0.75 + u).
 //!
+//! The kingdom ticks are queue-0 deliveries (`crate::scheduler`), among the
+//! production queues, newest registration first.
+//!
 //! Not native here: aa-play refreshes the contributions once per tick, before
-//! the kingdom ticks, for every thing whose inputs changed since the last
-//! refresh, in ascending native id order; the original refreshes at each
-//! state change as it happens. The modifier context of an actor is its
+//! the queue-0 deliveries, and after a production delivery that completed an
+//! item, for every thing whose inputs changed since the last refresh, in
+//! ascending native id order; the original refreshes at each state change as
+//! it happens. The modifier context of an actor is its
 //! definition's and map properties plus the kingdom technologies and
 //! handicap, in that order.
 use crate::data::{DefId, ResourceKind};
@@ -41,9 +45,9 @@ use aa_economy::{Economy, F32Bits, X87Precision};
 /// The simulation thread's x87 precision (PC53).
 const PRECISION: aa_numeric::Precision = aa_numeric::Precision::Double53;
 
-pub fn tick(world: &mut World) {
-    refresh(world);
-    kingdom_ticks(world);
+/// After the update's queue-0 deliveries (the kingdom ticks among them,
+/// `crate::scheduler`): the shortfall attrition, then the HUD copy.
+pub fn after_queue(world: &mut World) {
     shortfall(world, crate::DT);
     for k in 0..world.kingdoms.len() as KingdomId {
         publish(world, k);
@@ -618,18 +622,19 @@ impl aa_economy::tick::TickWorld for Leaves<'_> {
     }
 }
 
-/// Every kingdom's 0x4E9C40 for one tick of the queue-0 periodic delivery
-/// (elapsed = the tick step).
-fn kingdom_ticks(world: &mut World) {
+/// Kingdom `k`'s economy Updatable delivered by the periodic queue 0
+/// (0x4E5DF0 registration, Tick 0x4E9C40) with `elapsed_bits` = buckets x
+/// step (the tick step).
+pub fn kingdom_tick(world: &mut World, k: KingdomId, elapsed_bits: u32) {
     let n = world.data.resources.len();
-    let seconds = F32Bits(world.clock.step.0);
+    let seconds = F32Bits(elapsed_bits);
     let world_time = F32Bits(world.clock.begin.0);
     let rate = F32Bits(world.data.rule_ci("ExperienceFactionGainPeriodic").unwrap_or(1.0).to_bits());
     let catalog = catalog(world);
     let limits = limits(world);
-    for k in 0..world.kingdoms.len() as KingdomId {
-        if world.kingdoms[k as usize].defeated {
-            continue;
+    {
+        if world.kingdoms.get(k as usize).is_none_or(|x| x.defeated) {
+            return;
         }
         let kb = world.books.kingdom_mut(k, n).clone();
         let state = aa_economy::State {
@@ -638,7 +643,7 @@ fn kingdom_ticks(world: &mut World) {
             consumed: bits(&kb.consumed[..n]),
             stockpiled: bits(&kb.stockpiled[..n]),
         };
-        let Ok(mut economy) = Economy::new(catalog.clone(), state, limits, X87Precision::Double53) else { continue };
+        let Ok(mut economy) = Economy::new(catalog, state, limits, X87Precision::Double53) else { return };
         let mut tick_state = aa_economy::tick::TickState {
             // Kingdom +0x190 (independent) suppresses the overdraw flag.
             suppress_overdrawn: world.kingdoms[k as usize].independent,

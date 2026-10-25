@@ -759,8 +759,9 @@ fn mirror(world: &mut World, building: ActorId) {
     }
 }
 
-pub fn tick(world: &mut World) {
-    // Queues of destroyed or ownerless structures are cancelled (refunded).
+/// Queues of destroyed or ownerless structures are cancelled (refunded),
+/// before the update's queue-0 deliveries.
+pub fn sweep(world: &mut World) {
     let n = world.books.actors.len().min(world.actors.len());
     for id in 0..n as ActorId {
         if world.books.actors[id as usize].queue.items.is_empty() {
@@ -771,27 +772,27 @@ pub fn tick(world: &mut World) {
             cancel_all(world, id);
         }
     }
-    // The periodic queue 0 delivers every registered queue (0x50B330 ->
-    // 0x58A460 -> 0x589F90), newest registration first. An entry that
-    // unregisters during its own delivery (its queue emptied) moves the
-    // dispatcher's cursor to its successor, which the dispatcher then passes
-    // over: that successor waits for the next update (aa-world queues
-    // `update_inner`; the Berlin film's ger recruit completes one update
-    // after the two rus ones for this).
-    let mut current = world.books.production_queue0.first().copied();
-    while let Some(b) = current {
-        let list = &world.books.production_queue0;
-        let successor = list.iter().position(|&x| x == b).and_then(|p| list.get(p + 1).copied());
-        world.books.queue0_left = false;
-        if world.books.actor(b).is_some_and(|x| !x.queue.items.is_empty()) {
-            let _ = native::with_queue(world, b, |q, ctx, host| aa_production::process(q, ctx, host));
-            mirror(world, b);
-        } else {
-            world.books.production_queue0.retain(|&x| x != b);
-            world.books.queue0_left = true;
-        }
-        let list = &world.books.production_queue0;
-        let after = |x: ActorId| list.iter().position(|&y| y == x).and_then(|p| list.get(p + 1).copied());
-        current = if world.books.queue0_left { successor.and_then(after) } else { after(b) };
+}
+
+/// The Structure's queue-0 delivery (0x50B330 -> 0x58A460 -> 0x589F90).
+/// A queue that empties unregisters (0x50B250) during its own delivery, so
+/// the dispatcher passes over the next registered queue this update
+/// (`crate::scheduler`; the Berlin film's ger recruit completes one update
+/// after the two rus ones for this).
+pub fn process(world: &mut World, building: ActorId) {
+    let items = world.books.actor(building).map_or(0, |x| x.queue.items.len());
+    if items == 0 {
+        world.unschedule(crate::scheduler::Owner::Structure(building));
+        return;
+    }
+    let things = (world.actors.len(), world.orgs.len());
+    let _ = native::with_queue(world, building, |q, ctx, host| aa_production::process(q, ctx, host));
+    mirror(world, building);
+    // A completed item: the new things' and the research's contributions
+    // count from now, as their InitCreate / completion refreshes 0x570020 at
+    // once (the kingdom ticks after this delivery see them).
+    let left = world.books.actor(building).map_or(0, |x| x.queue.items.len());
+    if left != items || things != (world.actors.len(), world.orgs.len()) {
+        crate::economy::refresh(world);
     }
 }

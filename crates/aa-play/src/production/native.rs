@@ -8,6 +8,7 @@
 use super::{busy, can_afford, can_enroll, credit, fulfill as recruit_fulfill, hq_org, limited_part, recruit_cost, Vector};
 use crate::books::{PauseReason, QueueItem};
 use crate::data::{DefClass, DefId};
+use crate::scheduler::Owner;
 use crate::world::{ActorId, KingdomId, OrgId, World};
 use aa_numeric::{Binary, Precision};
 use aa_production::research::{self, KingdomResearch, PropertyTarget, ResearchComponent, ResearchItem};
@@ -254,26 +255,20 @@ impl aa_production::World for Host<'_> {
         // no structure states.
         Ok(())
     }
-    /// 0x50B250: the queue leaves the periodic queue 0.
+    /// 0x50B250: the Structure's Updatable leaves the world queues (during
+    /// its own queue-0 delivery the dispatcher then passes over its
+    /// successor, `crate::scheduler`).
     fn cancel_schedule(&mut self, queue: &mut Queue) -> R<()> {
         queue.scheduled = false;
-        let list = &mut self.world.books.production_queue0;
-        if let Some(i) = list.iter().position(|&b| b == self.building) {
-            list.remove(i);
-            self.world.books.queue0_left = true;
-        }
+        self.world.unschedule(Owner::Structure(self.building));
         Ok(())
     }
-    /// 0x50AC00(0): the periodic queue-0 registration draws its bucket from
-    /// the world RNG (0x50B2C0: GetRNG then one draw, % 1 bucket).
+    /// 0x50AC00(0): the periodic queue-0 registration (0x50B2C0: GetRNG,
+    /// one draw for the bucket, head insertion: the newest registration is
+    /// delivered first).
     fn schedule_zero(&mut self, queue: &mut Queue) -> R<()> {
-        self.world.random_u32();
+        self.world.schedule_periodic(crate::scheduler::EVERY_TICK, Owner::Structure(self.building), 0);
         queue.scheduled = true;
-        // Head insertion: the newest registration is delivered first.
-        let list = &mut self.world.books.production_queue0;
-        if !list.contains(&self.building) {
-            list.insert(0, self.building);
-        }
         Ok(())
     }
     fn organization_definition(&mut self, actor_definition: u32) -> R<bool> {

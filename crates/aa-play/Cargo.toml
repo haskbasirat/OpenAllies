@@ -31,6 +31,10 @@ aa-body = { path = "../aa-body" }
 aa-production = { path = "../aa-production" }
 # movement owner: the native tile walk 0x4DD150 for the exact path solver
 aa-spatial = { path = "../aa-spatial" }
+# core owner: the native world queues (0x50B330 / 0x50B020) for crate::scheduler
+aa-world = { path = "../aa-world" }
+# movement owner: the exact formation slot table (0x5797E0 / 0x57BEF0 / 0x57BA80)
+aa-movement = { path = "../aa-movement" }
 anyhow = "1"
 glam = { version = "0.32", features = ["serde"] }
 serde.workspace = true

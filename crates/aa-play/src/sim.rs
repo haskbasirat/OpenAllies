@@ -1,6 +1,9 @@
 //! One battle tick, in the original's system order as far as it is known
-//! (commands, AI, economy, production, movement, combat, morale, supply,
-//! victory). Shared file: change only by agreement.
+//! (commands, AI, the queue-0 deliveries of production and the kingdom
+//! economy, movement, combat, morale, supply). The native update 0x4F9970
+//! delivers queue registrations (`crate::scheduler`); the systems not yet
+//! migrated to queue leaves run as passes where their queues run.
+//! Shared file: change only by agreement.
 use crate::world::{Command, World};
 
 /// One decree of a film record for [`World::step_decrees`]: its S entries
@@ -54,12 +57,15 @@ impl World {
         self.clock.advance_fragment();
         self.tick = u64::from(self.clock.tick);
         self.time = f32::from_bits(self.clock.end.0);
+        crate::scheduler::sync_clock(self);
         let ai_commands = crate::ai::think(self);
         for command in ai_commands {
             self.apply(command);
         }
-        crate::economy::tick(self);
-        crate::production::tick(self);
+        // (core) queue 0 (GWorld+1AC, step 6 of 0x4F9970): the production
+        // queues and the kingdom economy ticks (victory inside), newest
+        // registration first (crate::scheduler).
+        crate::scheduler::queue_zero(self);
         crate::deploy::tick(self);
         crate::movement::tick(self);
         crate::combat::tick(self);

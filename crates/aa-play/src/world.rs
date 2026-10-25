@@ -257,6 +257,9 @@ pub struct World {
     /// Native GTIDs of the actors, organizations, kingdoms and map things
     /// (`crate::ids`).
     pub ids: crate::ids::NativeIds,
+    // ---- appended by the core owner (byte-exact roadmap item 10) ----
+    /// The five world queues of 0x4F9970 (`crate::scheduler`).
+    pub sched: crate::scheduler::Scheduler,
 }
 
 impl World {
@@ -283,6 +286,7 @@ impl World {
             clock: aa_simulation::NativeClock::stock(),
             trace: Default::default(),
             ids,
+            sched: crate::scheduler::Scheduler::new(),
         };
         world.create_rng(seed as u32);
         world

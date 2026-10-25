@@ -36,14 +36,6 @@ pub struct Books {
     /// during a battle, so a zone is flooded again only when it moves.
     #[serde(skip)]
     pub zone_floods: std::collections::HashMap<(u32, u32), std::sync::Arc<Vec<u32>>>,
-    /// The structure production queues registered on the periodic queue 0
-    /// (0x50AC00), newest first (head insertion); delivered in this order
-    /// each update (0x50B330).
-    #[serde(default)]
-    pub production_queue0: Vec<ActorId>,
-    /// A queue unregistered (0x50B250) during the current delivery.
-    #[serde(default)]
-    pub queue0_left: bool,
 }
 
 /// Native relation values (4E52D0).
