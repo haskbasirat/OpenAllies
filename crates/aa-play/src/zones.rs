@@ -692,6 +692,13 @@ impl Engine {
                 continue;
             }
             let provides = on.get(&id).copied();
+            // 0x58B0E0 (Supply InitExisting): a supply component's actor
+            // gets its slot-0 record at once, inactive (radius -1, tile
+            // (0,0)) until it provides (an independent city stays so)
+            if s.zone(ZOS).is_none() && world.data.def(world.actors[i].def).has_supply {
+                self.with(world, |_, c| component::create_zone(c, key, ZOS));
+            }
+            let s = &mut self.parts.actors[i];
             if let Some(r) = provides
                 && s.supply_radius != Some(r.to_bits())
             {

@@ -43,6 +43,12 @@
 //!     is a square of `object_point_size` pixels with a
 //!     `color_object_border` ring; anything else is its blocking shape
 //!     turned by its facing, filled, with a one pixel border;
+//!   - an own object that is engaged or under siege flashes in
+//!     `color_under_siege`, one out of supply that requires supply in
+//!     `color_requires_supply` (`0x434390`): its drawn pixels (an icon's
+//!     times the icon pixel) alternate between the drawn colour and the
+//!     flash colour, toggled after every rebuild and every half
+//!     MinimapPeriodUpdateObjects (`0x4361B0` / `0x432F60`);
 //!   - last, over everything, the last own selected object's rally point
 //!     (static: `rallypoint_icon`) or its current order's target (mobile:
 //!     `waypoint_icon`);
@@ -114,6 +120,16 @@ pub struct MinimapArt {
     pub neutral_static: [f32; 3],
     pub neutral_mobile: [f32; 3],
     pub requires_supply: [f32; 3],
+    pub under_siege: [f32; 3],
+    /// The objects layer's flashing pixels (image byte offset, drawn colour,
+    /// flash colour), the flash state (`+0x70`) and the time of the last
+    /// toggle (the minimap timer `+0x64`, real time).
+    flashes: Vec<(usize, [u8; 4], [u8; 4])>,
+    flash_on: bool,
+    flash_timer: Option<std::time::Instant>,
+    /// Game event pings (FXC_CreateRFX, the radar FX list `+0x48`): icon,
+    /// source / destination colour, refreshes left, native ground point.
+    pings: Vec<(String, [u8; 4], [u8; 4], u32, Vec2)>,
     /// priority_multiplier_icon / _selected / _enemy / _owned / _friendly /
     /// _static (bytes).
     pub mul_icon: u8,
@@ -247,6 +263,7 @@ impl MinimapArt {
         self.neutral_static = c("color_neutral_static", [0.729; 3]);
         self.neutral_mobile = c("color_neutral_mobile", [0.729; 3]);
         self.requires_supply = c("color_requires_supply", [0.0, 1.0, 0.0]);
+        self.under_siege = c("color_under_siege", [1.0, 0.0, 0.0]);
         self.mul_selected = int("priority_multiplier_selected", 10.0) as u8;
         self.mul_icon = int("priority_multiplier_icon", 2.0) as u8;
         self.mul_enemy = int("priority_multiplier_enemy", 4.0) as u8;
@@ -367,10 +384,24 @@ impl MinimapArt {
         }
         let mut dirty = self.fog_layer(b, t, supply_changed);
         // the objects layer every MinimapPeriodUpdateObjects
-        if self.objects_at.is_none_or(|at| now - at >= self.period_objects || now < at) {
+        let rebuilt = self.objects_at.is_none_or(|at| now - at >= self.period_objects || now < at);
+        if rebuilt {
             self.objects_at = Some(now);
             self.objects_layer(data, b, t);
+            let (mw, mh) = (m.width as f32 * m.cell_size, m.height as f32 * m.cell_size);
+            self.ping_layer(data, t as f32 / mw.max(1e-3), t as f32 / mh.max(1e-3), t);
             dirty = true;
+        }
+        // 0x4361B0: the flashing pixels toggle right after a rebuild and
+        // whenever half of AVar MinimapPeriodUpdateObjects (slot 0x38) has
+        // passed since the last toggle (0x432F60 restarts the timer)
+        let half = std::time::Duration::from_secs_f32((self.period_objects * 0.5).max(0.0));
+        if rebuilt || self.flash_timer.is_none_or(|at| at.elapsed() > half) {
+            self.flash_timer = Some(std::time::Instant::now());
+            if !self.flashes.is_empty() {
+                self.toggle_flash();
+                dirty = true;
+            }
         }
         if !dirty {
             return;
@@ -476,7 +507,7 @@ impl MinimapArt {
         let w = &b.world;
         let map = &w.map;
         let (mw, mh) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
-        let mut r = Raster { t: t as i32, px: vec![[0u8; 4]; t * t], prio: vec![0u8; t * t], border: rgba(self.border) };
+        let mut r = Raster { t: t as i32, px: vec![[0u8; 4]; t * t], prio: vec![0u8; t * t], border: rgba(self.border), flash: None, flashes: Vec::new() };
         let (sx, sy) = (t as f32 / mw.max(1e-3), t as f32 / mh.max(1e-3));
         let selected: std::collections::HashSet<u32> = b
             .selection
@@ -566,6 +597,8 @@ impl MinimapArt {
             }
             let c = rgba(color);
             let at = pos.truncate();
+            // 0x434390: an own live object flashes
+            r.flash = id.filter(|_| relation == Relation::Own).and_then(|a| flash_of(w, a, self.under_siege, self.requires_supply)).map(rgba);
             // 0x434D70
             if let Some(px) = icon.as_deref().and_then(|i| self.icon(data, i)) {
                 blit(&mut r, px, at, sx, c, p);
@@ -584,6 +617,7 @@ impl MinimapArt {
         // the marked object's rally point (static) or its current order's
         // target (mobile), over everything (priority 0xFF, colour
         // 0xFFFEFFFF: the icon's own colours)
+        r.flash = None;
         if let Some(id) = marked {
             let a = &w.actors[id as usize];
             let def = w.data.def(a.def);
@@ -619,7 +653,84 @@ impl MinimapArt {
                 out[i..i + 4].copy_from_slice(&r.px[y * t + x]);
             }
         }
+        // 0x433FC0: a new flash list, its state back to the drawn colours
+        self.flashes = r.flashes.into_iter().map(|(i, a, f)| (((t - 1 - i / t) * t + i % t) * 4, a, f)).collect();
+        self.flash_on = false;
     }
+
+    /// A game event's minimap ping (FXC_CreateRFX: `radar_icon`,
+    /// `src_color`, `dst_color`, `blink_count` at the event's ground point).
+    pub fn ping(&mut self, p: &super::game_events::Ping) {
+        self.pings.push((p.icon.clone(), rgba(p.src), rgba(p.dst), p.blinks, p.at));
+    }
+
+    /// `0x434AD0` after an objects refresh: a ping with no refresh left
+    /// goes; every other one counts one down and adds its icon's pixels
+    /// (alpha above 0x7F) to the flash list, the source colour times the
+    /// pixel and the destination colour times the pixel, centred on its
+    /// point.
+    fn ping_layer(&mut self, data: &aa_ui::fs::DataRoot, sx: f32, sy: f32, t: usize) {
+        let pings = std::mem::take(&mut self.pings);
+        let mut kept = Vec::new();
+        for (icon, src, dst, left, at) in pings {
+            if left == 0 {
+                continue;
+            }
+            let (cx, cy) = ((at.x * sx) as i32, (at.y * sy) as i32);
+            if let Some(px) = self.icon(data, &icon) {
+                let (w, h, rgba) = (px.w, px.h, px.rgba.clone());
+                let m = |a: u8, b: u8| ((u16::from(a) * u16::from(b)) >> 8) as u8;
+                for row in 0..h {
+                    for col in 0..w {
+                        let k = ((row * w + col) * 4) as usize;
+                        let s = &rgba[k..k + 4];
+                        if s[3] <= 0x7F {
+                            continue;
+                        }
+                        let (x, y) = (cx - w / 2 + col, cy - h / 2 + row);
+                        if x < 0 || y < 0 || x >= t as i32 || y >= t as i32 {
+                            continue;
+                        }
+                        let i = ((t - 1 - y as usize) * t + x as usize) * 4;
+                        let a = [m(src[0], s[0]), m(src[1], s[1]), m(src[2], s[2]), 0xFF];
+                        let b = [m(dst[0], s[0]), m(dst[1], s[1]), m(dst[2], s[2]), 0xFF];
+                        self.flashes.insert(0, (i, a, b));
+                    }
+                }
+            }
+            kept.push((icon, src, dst, left - 1, at));
+        }
+        self.pings = kept;
+    }
+
+    /// `0x432F60`: every flashing pixel in its drawn colour or (next time)
+    /// its flash colour, alternately.
+    fn toggle_flash(&mut self) {
+        for &(i, a, f) in &self.flashes {
+            if let Some(px) = self.objects.get_mut(i..i + 4) {
+                px.copy_from_slice(if self.flash_on { &f } else { &a });
+            }
+        }
+        self.flash_on = !self.flash_on;
+    }
+}
+
+/// `0x434390` for an own object (`+0x134(local)`, `+0xB4`): the flash
+/// colour while it is mind_engaged (actor state 4, its organization's for
+/// a member) or under_siege (state 20; an enemy targets it) (`0x433F50`):
+/// minimap.tgi `color_under_siege`; else while it is out_of_supply (state
+/// 19) and its EconomyData supply_required (ActorData +0x348) holds
+/// (`0x433F90`): `color_requires_supply`.
+fn flash_of(w: &aa_play::World, a: aa_play::ActorId, siege: [f32; 3], supply: [f32; 3]) -> Option<[f32; 3]> {
+    let actor = w.actor(a).filter(|x| x.alive && !x.removed)?;
+    let engaged = match actor.org.and_then(|o| w.combat.org(o)) {
+        Some(o) => !o.exhausted && o.engaging(),
+        None => actor.combat.target.is_some(),
+    };
+    if engaged || aa_play::player_orders::under_siege(w, a) {
+        return Some(siege);
+    }
+    (w.books.out_of_supply(a) && w.data.def(actor.def).supply_required).then_some(supply)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -673,6 +784,11 @@ struct Raster {
     px: Vec<[u8; 4]>,
     prio: Vec<u8>,
     border: [u8; 4],
+    /// The flash colour of the object being drawn (`0x434390`), if any.
+    flash: Option<[u8; 4]>,
+    /// Flashing pixels (`0x434930` / `0x434140`, newest first): raster
+    /// index, the drawn colour, the flash colour.
+    flashes: Vec<(usize, [u8; 4], [u8; 4])>,
 }
 
 impl Raster {
@@ -680,12 +796,16 @@ impl Raster {
         (x >= 0 && y >= 0 && x < self.t && y < self.t).then(|| (y * self.t + x) as usize)
     }
 
-    /// An object pixel: it replaces only a lower priority.
+    /// An object pixel: it replaces only a lower priority. A flashing
+    /// object's written pixel joins the flash list with the flash colour.
     fn put(&mut self, x: i32, y: i32, c: [u8; 4], p: u8) {
         if let Some(i) = self.idx(x, y) {
             if self.prio[i] < p {
                 self.px[i] = c;
                 self.prio[i] = p;
+                if let Some(f) = self.flash {
+                    self.flashes.insert(0, (i, c, f));
+                }
             }
         }
     }
@@ -719,13 +839,14 @@ fn blit(r: &mut Raster, icon: &IconPixels, at: Vec2, s: f32, c: [u8; 4], p: u8) 
             if r.prio[i] >= p || src[3] == 0 {
                 continue;
             }
-            r.px[i] = if white {
-                [0xFF, 0xFF, 0xFF, 0xFF]
-            } else {
-                let m = |a: u8, b: u8| ((u16::from(a) * u16::from(b)) >> 8) as u8;
-                [m(src[0], c[0]), m(src[1], c[1]), m(src[2], c[2]), 0xFF]
-            };
+            let m = |a: u8, b: u8| ((u16::from(a) * u16::from(b)) >> 8) as u8;
+            r.px[i] = if white { [0xFF, 0xFF, 0xFF, 0xFF] } else { [m(src[0], c[0]), m(src[1], c[1]), m(src[2], c[2]), 0xFF] };
             r.prio[i] = p;
+            // the flash colour times the icon pixel (no white case)
+            if let Some(f) = r.flash {
+                let drawn = r.px[i];
+                r.flashes.insert(0, (i, drawn, [m(src[0], f[0]), m(src[1], f[1]), m(src[2], f[2]), 0xFF]));
+            }
         }
     }
 }

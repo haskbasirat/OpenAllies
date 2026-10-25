@@ -9,6 +9,7 @@ pub mod datafile;
 pub mod dialogs;
 pub mod fog;
 pub mod front;
+pub mod game_events;
 pub mod gamedata;
 pub mod glyphs;
 pub mod hud;
@@ -75,7 +76,7 @@ impl Plugin for UiPlugin {
             .init_resource::<order_marks::Issued>()
             .init_resource::<zone_border::ZoneBorder>()
             .add_systems(Last, (quit, long_frames, order_marks::drop_stale))
-            .add_systems(Update, (script::run, front::frame, minimap_update, portrait::update, names::place, render::update_camera, render::paint, selection::cursor).chain())
+            .add_systems(Update, (script::run, front::frame, game_event_fx, minimap_update, portrait::update, names::place, render::update_camera, render::paint, selection::cursor).chain())
             .add_systems(
                 Update,
                 (selection::update, banners::update).after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)),
@@ -151,6 +152,32 @@ fn placement_impact(mut front: ResMut<front::Front>, place: Option<Res<placement
     let def = place.and_then(|p| p.active.as_ref().map(|a| a.building));
     if let Some(h) = front.hud.as_mut() {
         h.set_placing(def);
+    }
+}
+
+/// This frame's game event effects (ui/game_events.rs): the messages'
+/// type sounds and the events' sounds to the sound queue (2-D, or at the
+/// event's ground point), their pings to the minimap.
+fn game_event_fx(
+    mut front: ResMut<front::Front>,
+    mut art: ResMut<minimap::MinimapArt>,
+    battle: Option<Res<crate::session::Battle>>,
+    sfx: Option<ResMut<crate::audio::SfxQueue>>,
+) {
+    let front = &mut *front;
+    let Some(h) = front.hud.as_mut() else { return };
+    h.events.message_sounds(&front.ui);
+    for p in h.events.pings.drain(..) {
+        art.ping(&p);
+    }
+    let sounds: Vec<_> = h.events.sounds.drain(..).collect();
+    let Some(mut q) = sfx else { return };
+    for s in sounds {
+        let place = match (s.at, battle.as_deref()) {
+            (Some(p), Some(b)) => crate::audio::Place::Location(Vec3::new(p.x, p.y, b.world.map.height_at(p))),
+            _ => crate::audio::Place::Global,
+        };
+        q.play.push(crate::audio::Sfx { ids: s.ids, place, owner: s.owner, voice: None, looping: false });
     }
 }
 
