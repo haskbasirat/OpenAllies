@@ -304,73 +304,101 @@ fn deploying(world: &World, a: ActorId) -> bool {
     world.books.actor(a).is_some_and(|b| b.deploy.is_some())
 }
 
-pub fn tick(world: &mut World) {
-    zone_observe(world);
-    let dt = crate::DT;
+/// SupplyComponent 0x58AE10 for supplier `a`: its queue-1 Tick (`elapsed`
+/// = 1 s, in the bucket its InitCreate registration or the saved list gave
+/// it, `crate::scheduler`) and the immediate call of its InitExisting
+/// 0x58B0E0 (`elapsed` = 0; a created thing runs it after its InitCreate).
+/// A relay searches the zones of its kingdom over its footprint for a
+/// supplier that reaches a primary source; out of supply it drains `elapsed`
+/// of its stockpile, connected it recharges SupplyStockpileRechargeRate x
+/// `elapsed` up to stockpile_max. Then 0x58ACE0 decides whether its zone
+/// provides until its next tick: owned by a major kingdom (kingdom +0x190 ==
+/// 1, a city before its capture, provides none: the Berlin film's slot-0
+/// zones stay at radius -1), not packing or unpacking, a relay's stock,
+/// radius >= 0.
+pub fn supplier_tick(world: &mut World, a: ActorId, elapsed: f32) {
+    if !live(world, a) || !world.data.def(world.actors[a as usize].def).has_supply {
+        return;
+    }
     let recharge = world.data.rule_ci("SupplyStockpileRechargeRate").unwrap_or(1.0);
-    let providers: Vec<ActorId> = (0..world.actors.len() as ActorId)
-        .filter(|&a| live(world, a) && world.data.def(world.actors[a as usize].def).has_supply)
-        .collect();
-    // 0x58AE10 per supplier.
-    for &a in &providers {
-        let def = world.data.def(world.actors[a as usize].def);
-        let (relay, max) = (def.supply_relay, def.supply_stockpile_max);
-        let kingdom = world.actors[a as usize].kingdom;
-        let p = pos2(world, a);
-        if relay {
-            let mut link = None;
-            if let Some(k) = kingdom {
-                let half = footprint_half(def, world.actors[a as usize].facing);
-                for (i, z) in world.books.zones.iter().enumerate() {
-                    // 004CF210 + 00554CC0: the zones over the tiles of the
-                    // relay's footprint rectangle, not only its centre.
-                    if z.kingdom != k || z.provider == a || !zone_covers_rect(world, i, p - half, p + half) {
-                        continue;
-                    }
-                    if world.books.out_of_supply(z.provider) {
-                        continue;
-                    }
-                    if reaches_source(world, z.provider) {
-                        link = Some(z.provider);
-                        break;
-                    }
+    let def = world.data.def(world.actors[a as usize].def);
+    let (relay, max) = (def.supply_relay, def.supply_stockpile_max);
+    let kingdom = world.actors[a as usize].kingdom;
+    let p = pos2(world, a);
+    if relay {
+        let mut link = None;
+        if let Some(k) = kingdom {
+            let half = footprint_half(def, world.actors[a as usize].facing);
+            for (i, z) in world.books.zones.iter().enumerate() {
+                // 004CF210 + 00554CC0: the zones over the tiles of the
+                // relay's footprint rectangle, not only its centre.
+                if z.kingdom != k || z.provider == a || !zone_covers_rect(world, i, p - half, p + half) {
+                    continue;
+                }
+                if world.books.out_of_supply(z.provider) {
+                    continue;
+                }
+                if reaches_source(world, z.provider) {
+                    link = Some(z.provider);
+                    break;
                 }
             }
-            world.books.actor_mut(a).supply_relay = link;
         }
-        let in_supply = kingdom.is_some() && (!relay || world.books.actor(a).and_then(|b| b.supply_relay).is_some_and(|r| live(world, r)));
-        let b = world.books.actor_mut(a);
-        b.out_of_supply = !in_supply;
-        if relay {
-            if !in_supply {
-                b.supply_stock = (b.supply_stock - dt).max(0.0);
-            } else if b.supply_stock < max {
-                b.supply_stock = (recharge * dt + b.supply_stock).min(max);
-            }
+        world.books.actor_mut(a).supply_relay = link;
+    }
+    let in_supply = kingdom.is_some() && (!relay || world.books.actor(a).and_then(|b| b.supply_relay).is_some_and(|r| live(world, r)));
+    let b = world.books.actor_mut(a);
+    b.supply_started = true;
+    b.out_of_supply = !in_supply;
+    if relay {
+        if !in_supply {
+            b.supply_stock = (b.supply_stock - elapsed).max(0.0);
+        } else if b.supply_stock < max {
+            b.supply_stock = (recharge * elapsed + b.supply_stock).min(max);
         }
     }
-    // Zones for this tick (0x58ACE0 provides_supply). An independent
-    // owner (kingdom +0x190 == 1: cities before their capture) provides
-    // none (the Berlin film: their slot-0 zone stays at radius -1).
-    let mut zones = Vec::new();
-    for &a in &providers {
-        let actor = &world.actors[a as usize];
-        let Some(k) = actor.kingdom else { continue };
-        let def = world.data.def(actor.def);
-        let b = world.books.actor(a);
-        let stock_ok = !def.supply_relay || b.is_some_and(|b| !b.out_of_supply || b.supply_stock > 0.0);
+    let provides = kingdom.is_some_and(|k| {
+        let stock_ok = !relay || world.books.actor(a).is_some_and(|b| !b.out_of_supply || b.supply_stock > 0.0);
         let independent = world.kingdoms.iter().any(|x| x.id == k && x.independent);
-        if independent || deploying(world, a) || !stock_ok || def.supply_range < 0.0 {
-            if let Some(b) = world.books.actors.get_mut(a as usize) {
-                b.zone_active = false;
-            }
+        !(independent || deploying(world, a) || !stock_ok || def.supply_range < 0.0)
+    });
+    world.books.actor_mut(a).zone_active = provides;
+}
+
+/// `books.zones` from the suppliers whose last 0x58AE10 found them
+/// providing, at their current positions, then their tiles.
+fn publish_zones(world: &mut World) {
+    let mut zones = Vec::new();
+    for a in 0..world.actors.len() as ActorId {
+        if !live(world, a) || !world.books.actor(a).is_some_and(|b| b.zone_active) {
             continue;
         }
+        let actor = &world.actors[a as usize];
+        let def = world.data.def(actor.def);
+        let Some(k) = actor.kingdom.filter(|_| def.has_supply) else { continue };
         zones.push(SupplyZone { provider: a, kingdom: k, centre: actor.pos.truncate(), radius: def.supply_range });
-        world.books.actor_mut(a).zone_active = true;
     }
     world.books.zones = zones;
     zone_tick(world);
+}
+
+/// The per-update supply pass: the InitExisting 0x58AE10(0) of suppliers
+/// new this update, the zones of the suppliers whose last 0x58AE10 found
+/// them providing (following their providers' tiles), then every actor's
+/// and organization's in-supply state.
+pub fn tick(world: &mut World) {
+    zone_observe(world);
+    // The new suppliers' InitExisting in creation (index) order, each seeing
+    // the zones of those before it, as each runs inside its own creation.
+    for a in 0..world.actors.len() as ActorId {
+        if live(world, a) && world.data.def(world.actors[a as usize].def).has_supply && !world.books.actor(a).is_some_and(|b| b.supply_started) {
+            supplier_tick(world, a, 0.0);
+            if world.books.actor(a).is_some_and(|b| b.zone_active) {
+                publish_zones(world);
+            }
+        }
+    }
+    publish_zones(world);
     // 0x4D0A80 for organizations, their members and lone actors.
     for o in 0..world.orgs.len() as OrgId {
         let org = &world.orgs[o as usize];
@@ -404,8 +432,18 @@ pub fn tick(world: &mut World) {
         let in_supply = actor.kingdom.is_some_and(|k| supplied_at(world, k, actor.pos.truncate()));
         world.books.actor_mut(a).out_of_supply = !in_supply;
     }
-    regenerate(world, dt);
-    cities(world);
+}
+
+/// KKC_OrganizationComponent::TickMaintenance 0x57C8E0 for organization
+/// `o` (queue 1, `elapsed` = 1 s): the shortfall attrition 0x578660 of an
+/// out-of-supply supply_used organization of a kingdom short of upkeep,
+/// then behind the 0x579110 gate the regeneration 0x57B5A0 of one slot.
+pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
+    if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
+        return;
+    }
+    crate::economy::shortfall(world, o, elapsed);
+    regenerate(world, o, elapsed);
 }
 
 /// One city zone candidate: a lone actor or an organization (as the native
@@ -520,26 +558,31 @@ fn city_candidates(world: &World) -> Vec<CityCandidate> {
     out
 }
 
-/// City tick 0x5647A0. Against the current owner: the value of its friends
+/// City tick 0x5647A0 (queue 1, the City component) for city `c`. Against
+/// the current owner: the value of its friends
 /// in the zone defends, the value of its enemies attacks. Attackers with no
 /// defender (or no owner at all) let the zone decide: the first kingdom in
 /// kingdom order that has value there, no enemy value against it, and no
 /// friend with more value or under threat takes the city (0x4D5230 owner
 /// change, reason 10). The neutral buildings of the old owner around the
 /// city change hands with it.
-fn cities(world: &mut World) {
+pub fn city_tick(world: &mut World, c: ActorId) {
     use crate::books::{ENEMY, FRIEND, SELF};
     let n = world.kingdoms.len();
-    let candidates = city_candidates(world);
-    for c in 0..world.actors.len() as ActorId {
-        let city = &world.actors[c as usize];
+    {
+        let Some(city) = world.actors.get(c as usize) else { return };
         if !city.alive || city.removed {
-            continue;
+            return;
         }
         let def = world.data.def(city.def);
         if !def.city || def.city_zone_radius <= 0.0 {
-            continue;
+            return;
         }
+    }
+    let candidates = city_candidates(world);
+    {
+        let city = &world.actors[c as usize];
+        let def = world.data.def(city.def);
         let (centre, radius, owner) = (city.pos.truncate(), def.city_zone_radius, city.kingdom);
         // The candidates in the zone (the city itself never is one: it has no
         // Performer and belongs to its owner).
@@ -552,7 +595,7 @@ fn cities(world: &mut World) {
             }
         }
         if !any {
-            continue;
+            return;
         }
         let rel = |a: usize, b: usize| world.books.relation(&world.kingdoms, Some(a as u32), Some(b as u32));
         let decide = match owner {
@@ -570,7 +613,7 @@ fn cities(world: &mut World) {
             }
         };
         if !decide {
-            continue;
+            return;
         }
         let threat: Vec<f32> = (0..n).map(|k| (0..n).filter(|&e| e != k && rel(e, k) == ENEMY).map(|e| present[e]).sum()).collect();
         let winner = (0..n).find(|&k| {
@@ -578,9 +621,9 @@ fn cities(world: &mut World) {
                 && present[k] > 0.0
                 && !(0..n).any(|f| f != k && rel(k, f) == FRIEND && (present[k] < present[f] || threat[f] > 0.0))
         });
-        let Some(w) = winner.map(|k| k as u32) else { continue };
+        let Some(w) = winner.map(|k| k as u32) else { return };
         if Some(w) == owner {
-            continue;
+            return;
         }
         world.actors[c as usize].kingdom = Some(w);
         world.events.push(crate::world::Event::Captured { actor: c, kingdom: w });
@@ -601,18 +644,13 @@ fn cities(world: &mut World) {
         }
     }
 }
-
-/// The organization's own position: it follows its leader (57C800), so the
-/// primary member when alive, else the formation anchor.
+/// The organization's own position (its GActor +20/+24): set at its
+/// creation and moved after its leader only by its maintenance tick
+/// 0x57C8E0 -> 0x57C800 -> 0x57C680 (the Berlin film: a new regiment stays
+/// at its creation spot while its truck stands 10 m away). The movement
+/// owner keeps it in `Organization::anchor`.
 pub fn org_position(world: &World, o: OrgId) -> Vec2 {
-    let org = &world.orgs[o as usize];
-    let leader = world.data.def(org.def).leader_slot;
-    org.members
-        .iter()
-        .copied()
-        .find(|&m| live(world, m) && world.actors[m as usize].slot == leader && leader.is_some())
-        .or_else(|| org.members.iter().copied().find(|&m| live(world, m)))
-        .map_or(org.anchor, |m| pos2(world, m))
+    world.orgs[o as usize].anchor
 }
 
 /// 0x579110 gate inputs owned by combat: engaged (an engage target) or
@@ -624,15 +662,17 @@ fn engaged(world: &World, o: OrgId) -> bool {
     world.orgs[o as usize].members.iter().any(|&m| live(world, m) && world.actors[m as usize].combat.target.is_some())
 }
 
-fn regenerate(world: &mut World, dt: f32) {
-    for o in 0..world.orgs.len() as OrgId {
+/// 0x57B5A0 behind the 0x579110 gate for organization `o`, `dt` = the
+/// maintenance tick's elapsed time.
+fn regenerate(world: &mut World, o: OrgId, dt: f32) {
+    {
         let org = &world.orgs[o as usize];
         if !org.alive {
-            continue;
+            return;
         }
         let def = world.data.def(org.def);
         if !def.supply_used || world.books.org(o).is_none_or(|b| b.out_of_supply) || engaged(world, o) {
-            continue;
+            return;
         }
         let shortage = world.books.kingdom(org.kingdom).map_or(0.0, |k| k.shortage_ratio);
         let factor = if shortage > 0.0 { 1.0 - shortage } else { 1.0 };
@@ -649,7 +689,7 @@ fn regenerate(world: &mut World, dt: f32) {
             .or_else(|| (0..slots).find(|&s| member_at(s).is_some_and(damaged)))
             .or_else(|| leader.filter(|&l| member_at(l).is_none() && def.slots[l].0 != u32::MAX))
             .or_else(|| (0..slots).find(|&s| member_at(s).is_none() && def.slots[s].0 != u32::MAX && world.data.def(def.slots[s].0).has_component("BodyComponent")));
-        let Some(slot) = choice else { continue };
+        let Some(slot) = choice else { return };
         if let Some(m) = member_at(slot) {
             // Element +20 (5704D0: resupply_rate through the member's
             // RESUPPLY_RATE modifier) * Body +14 * (1 - shortage) * delta,
@@ -661,7 +701,7 @@ fn regenerate(world: &mut World, dt: f32) {
             let amount = rate * max * factor * dt;
             let a = &mut world.actors[m as usize];
             a.health = (a.health + amount).min(max);
-            continue;
+            return;
         }
         let slot_def = def.slots[slot].0;
         let sd = world.data.def(slot_def);

@@ -20,19 +20,26 @@
 //! Migrated (SCHEDULER.md section 5, stage 2): queue 0 delivers the structure
 //! production queues (Structure +94, 0x589420 registration, 0x58A460 ->
 //! 0x589F90) and the kingdom economy ticks (kingdom +180, 0x4E5DF0, Tick
-//! 0x4E9C40). The other owners still run as their own passes in `sim.rs`,
-//! placed where their queues run.
+//! 0x4E9C40). Queue 1 holds the real entries (the saved lists, the
+//! component InitCreate registrations of `crate::creation`, removed with
+//! their things) but delivers to no leaf yet. The other owners still run as
+//! their own passes in `sim.rs`, placed where their queues run.
 //!
-//! The kingdom entries are the map's saved queue 0 (`GameMap::queue0_kingdoms`,
-//! the queue Load 0x50B8B0, no draws). Compare against the original: a world
-//! without saved queues (a generated map, a test world) admits its kingdoms
-//! without a draw in the order the one measured map shows (Berlin: the
-//! independents, then the players, each in slot order, registered at the
-//! head), not from a measured 0x4E5DF0 kingdom start.
+//! The saved entries are the map's saved periodic queues
+//! (`GameMap::saved_queues`, the queue Load 0x50B8B0, no draws): kingdoms,
+//! the kept things' components, and the components of map things aa-play
+//! keeps no actor for (delivered without effect, so the list order and the
+//! cursor skip stay native). Compare against the original: a world without
+//! saved queues (a generated map, a test world) admits its kingdoms without a
+//! draw in the order the one measured map shows (Berlin: the independents,
+//! then the players, each in slot order, registered at the head), not from a
+//! measured 0x4E5DF0 kingdom start.
+use crate::map::{SavedOwner, SavedPeriodic};
 use crate::trace::SKind;
 use crate::world::{ActorId, KingdomId, OrgId, World};
 use aa_world::initialization::ClockPlan;
 use aa_world::queues::{Clock, Delivery, Queues};
+use std::collections::BTreeMap;
 
 /// GWorld+1AC: periodic, every update (one bucket).
 pub const EVERY_TICK: u8 = 0;
@@ -60,10 +67,21 @@ pub enum Owner {
     Mover(ActorId),
     /// An element's mind.
     Mind(ActorId),
-    /// An actor's component in an aa-rules COMPONENTS slot.
+    /// An actor's component in an aa-rules COMPONENTS slot (its Updatable
+    /// at component +8).
     Component(ActorId, u8),
-    /// An organization's Organization component (+7C).
+    /// An organization's Organization component's second Updatable (+7C,
+    /// the queue-0 goal update 0x57C680).
     Org(OrgId),
+    /// An organization thing's component in a COMPONENTS slot.
+    OrgComponent(OrgId, u8),
+    /// A kingdom's own component (its Properties).
+    KingdomComponent(KingdomId, u8),
+    /// A component of `GameMap::placed[index]` that aa-play keeps no actor
+    /// for (scenery): delivered without effect, kept for the list order.
+    Placed(u32, u8),
+    /// A saved Updatable aa-play does not resolve (UPDATABLES table id).
+    Saved(u32),
 }
 
 impl Owner {
@@ -76,6 +94,10 @@ impl Owner {
             Owner::Mind(a) => (4, 0, a),
             Owner::Component(a, s) => (5, u64::from(s), a),
             Owner::Org(o) => (6, 0, o),
+            Owner::OrgComponent(o, s) => (7, u64::from(s), o),
+            Owner::KingdomComponent(k, s) => (8, u64::from(s), k),
+            Owner::Placed(i, s) => (9, u64::from(s), i),
+            Owner::Saved(id) => (10, 0, id),
         };
         kind << 56 | slot << 48 | u64::from(id)
     }
@@ -89,10 +111,17 @@ impl Owner {
             4 => Owner::Mind(id),
             5 => Owner::Component(id, slot),
             6 => Owner::Org(id),
+            7 => Owner::OrgComponent(id, slot),
+            8 => Owner::KingdomComponent(id, slot),
+            9 => Owner::Placed(id, slot),
+            10 => Owner::Saved(id),
             _ => return None,
         })
     }
 }
+
+/// Component slots an Updatable can sit in (aa-rules COMPONENTS bits).
+const SLOTS: u8 = 32;
 
 /// The world's queues (`World::sched`).
 pub struct Scheduler {
@@ -166,19 +195,103 @@ pub fn sync_clock(world: &mut World) {
     world.sched.queues.clock = Clock { begin_bits: world.clock.begin.0, end_bits: world.clock.end.0, step_bits: world.clock.step.0 };
 }
 
-/// The map's saved queue 0 (the queue Load 0x50B8B0): `order` is the
-/// kingdoms in list order (head first), no draws. Replaces queue 0.
-pub fn restore_kingdoms(world: &mut World, order: &[KingdomId]) {
-    let saved = aa_world::queues::restoration::SavedQueue {
-        id: EVERY_TICK,
-        kind: aa_world::queues::Kind::Periodic,
-        current: 0,
-        buckets: vec![order.iter().map(|&k| (Owner::Kingdom(k).key(), 0)).collect()],
-    };
-    if let Err(e) = world.sched.queues.restore_saved(saved) {
-        world.sched.note("queue 0 restore", e);
+/// The map things as the saved queues load (setup): the aa-play owner of
+/// each kept placed thing, and the kingdom of each map slot.
+pub struct Restoring<'a> {
+    /// Placed index -> the actor it became, or its organization (a placed
+    /// organization thing).
+    pub things: &'a BTreeMap<usize, Kept>,
+    pub slot_kingdom: &'a [Option<KingdomId>],
+}
+
+/// What a kept placed thing became.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kept {
+    Actor(ActorId),
+    Org(OrgId),
+}
+
+fn saved_owner(world: &World, owner: SavedOwner, r: &Restoring<'_>) -> Option<Owner> {
+    match owner {
+        SavedOwner::Placed { index, slot } => match r.things.get(&index) {
+            Some(Kept::Actor(a)) => Some(Owner::Component(*a, slot)),
+            Some(Kept::Org(o)) => Some(Owner::OrgComponent(*o, slot)),
+            // A thing aa-play keeps no actor for stays on the list; a
+            // destroyed one (a kingdom left out of the battle) leaves it.
+            None => world.ids.placed(index).is_some().then_some(Owner::Placed(index as u32, slot)),
+        },
+        SavedOwner::Kingdom { slot } => r.slot_kingdom.get(slot).copied().flatten().map(Owner::Kingdom),
+        SavedOwner::KingdomComponent { slot, component } => r.slot_kingdom.get(slot).copied().flatten().map(|k| Owner::KingdomComponent(k, component)),
+        // 0x50B8B0 discards a null id.
+        SavedOwner::Unknown(id) => u32::try_from(id).ok().map(Owner::Saved),
     }
-    world.sched.kingdoms.extend(order.iter().copied());
+}
+
+/// The queue Load 0x50B8B0 of the map's saved periodic queues (after the
+/// map things are restored, before the placeholders are resolved): each
+/// queue is replaced by its saved lists and cursor, no draws.
+pub fn restore_saved(world: &mut World, saved: &[SavedPeriodic], r: &Restoring<'_>) {
+    for (id, q) in saved.iter().enumerate().take(3) {
+        let buckets: Vec<Vec<(u64, u32)>> =
+            q.buckets.iter().map(|b| b.iter().filter_map(|&(o, data)| saved_owner(world, o, r).map(|o| (o.key(), data))).collect()).collect();
+        let kingdoms: Vec<KingdomId> =
+            buckets.iter().flatten().filter_map(|&(key, _)| if let Some(Owner::Kingdom(k)) = Owner::from_key(key) { Some(k) } else { None }).collect();
+        let queue = aa_world::queues::restoration::SavedQueue { id: id as u8, kind: aa_world::queues::Kind::Periodic, current: q.current, buckets };
+        if let Err(e) = world.sched.queues.restore_saved(queue) {
+            world.sched.note("saved queue restore", e);
+            continue;
+        }
+        world.sched.kingdoms.extend(kingdoms);
+    }
+}
+
+/// A map without saved queues: its kept things' queue-1 components
+/// (`crate::creation::queue_one_slots`) join queue 1 as an InitExisting
+/// would, in `order` (restore order), with their buckets from a stream of
+/// their own instead of the world's. Compare against the original: not a
+/// measured path (no film of a map without saved queues reaches it).
+pub fn admit_restored(world: &mut World, order: &[Kept]) {
+    let data = world.data.clone();
+    let mut buckets = aa_simulation::NativeRng::default();
+    for &kept in order {
+        let (def, made) = match kept {
+            Kept::Actor(a) => (world.actors[a as usize].def, Owner::Component as fn(u32, u8) -> Owner),
+            Kept::Org(o) => (world.orgs[o as usize].def, Owner::OrgComponent as fn(u32, u8) -> Owner),
+        };
+        let id = match kept {
+            Kept::Actor(a) => a,
+            Kept::Org(o) => o,
+        };
+        for slot in crate::creation::queue_one_slots(data.def(def)) {
+            if let Err(e) = world.sched.queues.add_periodic(EVERY_SECOND, made(id, slot as u8).key(), 0, &mut buckets) {
+                world.sched.note("restored registration", e);
+            }
+        }
+    }
+}
+
+/// A destroyed thing's Updatables leave the queues (its components'
+/// destructors, 0x50B250 each).
+pub fn release_actor(world: &mut World, a: ActorId) {
+    for owner in [Owner::Structure(a), Owner::Mover(a), Owner::Mind(a)] {
+        world.unschedule(owner);
+    }
+    for slot in 0..SLOTS {
+        world.unschedule(Owner::Component(a, slot));
+    }
+}
+pub fn release_org(world: &mut World, o: OrgId) {
+    world.unschedule(Owner::Org(o));
+    for slot in 0..SLOTS {
+        world.unschedule(Owner::OrgComponent(o, slot));
+    }
+}
+/// A placed thing aa-play keeps no actor for is destroyed (a resolved
+/// placeholder).
+pub fn release_placed(world: &mut World, index: usize) {
+    for slot in 0..SLOTS {
+        world.unschedule(Owner::Placed(index as u32, slot));
+    }
 }
 
 /// Kingdoms not yet on queue 0 join it at the head without a world draw:
@@ -226,24 +339,38 @@ pub fn run_queue(world: &mut World, id: u8) {
     }
 }
 
+/// COMPONENTS slots of the queue-1 leaves.
+const ORGANIZATION_SLOT: u8 = 7;
+const SUPPLY_SLOT: u8 = 11;
+const CITY_SLOT: u8 = 29;
+
 fn deliver(world: &mut World, event: Delivery) {
     let elapsed = event.elapsed_bits.unwrap_or(world.clock.step.0);
     match Owner::from_key(event.owner) {
         Some(Owner::Kingdom(k)) => crate::economy::kingdom_tick(world, k, elapsed),
         Some(Owner::Structure(a)) => crate::production::process(world, a),
+        // SupplyComponent Tick -> 0x58AE10.
+        Some(Owner::Component(a, SUPPLY_SLOT)) => crate::supply::supplier_tick(world, a, f32::from_bits(elapsed)),
+        // City Tick 0x5647A0.
+        Some(Owner::Component(a, CITY_SLOT)) => crate::supply::city_tick(world, a),
+        // KKC_OrganizationComponent::TickMaintenance 0x57C8E0.
+        Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) => crate::supply::org_maintenance(world, o, f32::from_bits(elapsed)),
         // Not yet leaves: their systems still run as passes.
         _ => {}
     }
 }
 
-/// Step 6 of 0x4F9970 for queue 0, with the core passes around it: the
-/// economy contributions and the dead structures' queues before, the
-/// shortfall attrition and the HUD copy after.
-pub fn queue_zero(world: &mut World) {
+/// Step 6 of 0x4F9970 for the periodic queues 0, 1, 2 (every update, 1 s,
+/// 5 s), with the core passes around them: the economy contributions and
+/// the dead structures' queues before, the shortfall attrition and the HUD
+/// copy after.
+pub fn periodic(world: &mut World) {
     sync_clock(world);
     crate::economy::refresh(world);
     crate::production::sweep(world);
     admit_kingdoms(world);
     run_queue(world, EVERY_TICK);
+    run_queue(world, EVERY_SECOND);
+    run_queue(world, EVERY_FIVE_SECONDS);
     crate::economy::after_queue(world);
 }

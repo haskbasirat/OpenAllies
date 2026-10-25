@@ -62,10 +62,11 @@ impl World {
         for command in ai_commands {
             self.apply(command);
         }
-        // (core) queue 0 (GWorld+1AC, step 6 of 0x4F9970): the production
-        // queues and the kingdom economy ticks (victory inside), newest
-        // registration first (crate::scheduler).
-        crate::scheduler::queue_zero(self);
+        // (core) the periodic queues (GWorld+1AC/+1C0/+1D4, step 6 of
+        // 0x4F9970): the production queues and the kingdom economy ticks
+        // (victory inside) on queue 0, newest registration first
+        // (crate::scheduler).
+        crate::scheduler::periodic(self);
         crate::deploy::tick(self);
         crate::movement::tick(self);
         crate::combat::tick(self);

@@ -101,11 +101,14 @@ pub(super) struct Host<'a> {
     /// Refusal facts for the command's reason.
     pub unaffordable: bool,
     pub blocked: Option<i32>,
+    /// The last recruit cost quote (definition, price) for the
+    /// unaffordable notice.
+    quoted: Option<(DefId, Vec<f32>)>,
 }
 
 impl<'a> Host<'a> {
     pub fn new(world: &'a mut World, building: ActorId) -> Self {
-        Self { world, building, extras: BTreeMap::new(), pending: None, unaffordable: false, blocked: None }
+        Self { world, building, extras: BTreeMap::new(), pending: None, unaffordable: false, blocked: None, quoted: None }
     }
     fn kingdom(&self) -> Option<KingdomId> {
         self.world.actors.get(self.building as usize).and_then(|a| a.kingdom)
@@ -391,15 +394,20 @@ impl aa_production::Recruitment for Host<'_> {
     }
     fn quote_cost(&mut self, definition: u32, _layout: u32) -> R<Vec<u32>> {
         let d = def_of(definition).ok_or(aa_production::Error::Invalid("definition"))?;
-        Ok(bits(&recruit_cost(self.world, self.building, d)))
+        let cost = recruit_cost(self.world, self.building, d);
+        let out = bits(&cost);
+        self.quoted = Some((d, cost));
+        Ok(out)
     }
     fn can_afford(&mut self, kingdom: u32, cost: &[u32]) -> R<bool> {
         Ok(can_afford(self.world, kingdom, &floats(cost)))
     }
+    /// 0x582950(notify): recruit_error_affording for the quoted definition.
     fn notify_unaffordable(&mut self) -> R<()> {
         self.unaffordable = true;
-        if let Some(k) = Host::kingdom(self) {
-            self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom: k, building: self.building });
+        let what = self.quoted.clone().or_else(|| self.pending.as_ref().map(|p| (p.def, Vec::new())));
+        if let (Some(k), Some((def, cost))) = (Host::kingdom(self), what) {
+            self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom: k, building: self.building, what: crate::books::Purchase::Recruit(def), cost });
         }
         Ok(())
     }
@@ -630,10 +638,12 @@ impl research::Research for Host<'_> {
         self.blocked.get_or_insert(1);
         Ok(())
     }
-    fn notify_research_unaffordable(&mut self, _item: &ResearchItem, _cost: &[u32], kingdom: Option<u32>) -> R<()> {
+    /// research_error_affording.
+    fn notify_research_unaffordable(&mut self, item: &ResearchItem, cost: &[u32], kingdom: Option<u32>) -> R<()> {
         self.unaffordable = true;
+        let property = property_of(self.world, item.definition).map(str::to_owned).unwrap_or_default();
         if let Some(k) = kingdom {
-            self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom: k, building: self.building });
+            self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom: k, building: self.building, what: crate::books::Purchase::Research(property), cost: floats(cost) });
         }
         Ok(())
     }
@@ -712,8 +722,9 @@ impl aa_production::purchases::HqAttach for Attach<'_> {
     fn precision(&self) -> aa_economy::X87Precision {
         aa_economy::X87Precision::Double53
     }
-    fn attach_unaffordable(&mut self, _organization: u32, _cost: &[u32], kingdom: u32) -> R<()> {
-        self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom, building: self.hq });
+    /// hq_error_attach_affording.
+    fn attach_unaffordable(&mut self, _organization: u32, cost: &[u32], kingdom: u32) -> R<()> {
+        self.world.books.notices.push(crate::books::Notice::Unaffordable { kingdom, building: self.hq, what: crate::books::Purchase::Attach(self.org), cost: floats(cost) });
         Ok(())
     }
     /// 0x574810: the HQ takes another supply-using organization while it has

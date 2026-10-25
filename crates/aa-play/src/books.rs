@@ -88,8 +88,12 @@ pub struct ActorBooks {
     pub supply_stock: f32,
     /// SupplyComponent +1C relay this actor draws from.
     pub supply_relay: Option<ActorId>,
-    /// SupplyComponent zone active (the actor provides supply).
+    /// SupplyComponent zone active (the actor provides supply), as its last
+    /// 0x58AE10 decided.
     pub zone_active: bool,
+    /// Its InitExisting 0x58B0E0 ran (the first 0x58AE10).
+    #[serde(default)]
+    pub supply_started: bool,
     pub queue: Queue,
     pub deploy: Option<Deployment>,
     /// Battle time this actor was created (construction/unpack start).
@@ -212,6 +216,17 @@ pub struct SupplyZone {
     pub radius: f32,
 }
 
+/// The refused purchase of `Notice::Unaffordable`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Purchase {
+    /// A recruit of this definition.
+    Recruit(DefId),
+    /// Research of this property id.
+    Research(String),
+    /// Attaching this organization to the HQ.
+    Attach(OrgId),
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Notice {
     /// Event 3 kingdom_upkeep_shortage (percent of upkeep that cannot be paid).
@@ -220,8 +235,11 @@ pub enum Notice {
     UpkeepRepaired { kingdom: KingdomId },
     /// The head of a production queue paused (native notify_pause).
     ProductionPaused { building: ActorId, reason: PauseReason },
-    /// A recruit could not be afforded.
-    Unaffordable { kingdom: KingdomId, building: ActorId },
+    /// A purchase could not be afforded (0x582950 recruit_error_affording,
+    /// research_error_affording, hq_error_attach_affording): what was
+    /// refused at `building` (the HQ for an attach) and the quoted price, in
+    /// `GameData::resources` order.
+    Unaffordable { kingdom: KingdomId, building: ActorId, what: Purchase, cost: Vec<f32> },
     /// A building finished unpacking or a truck finished packing.
     Packed { truck: ActorId },
     /// A truck or building changed into another actor (old -> new).

@@ -425,5 +425,14 @@ pub fn target_actor(world: &World, unit: Unit) -> Option<ActorId> {
 
 /// End of tick: ids of things aa-play removed this tick go back.
 pub fn sweep(world: &mut World) {
+    // (scheduler) a destroyed thing's Updatables leave the world queues.
+    let actors: Vec<ActorId> = (0..world.actors.len() as ActorId).filter(|&a| world.actors[a as usize].removed && world.ids.actor(a).is_some()).collect();
+    let orgs: Vec<OrgId> = (0..world.orgs.len() as OrgId).filter(|&o| !world.orgs[o as usize].alive && world.ids.org(o).is_some()).collect();
+    for a in actors {
+        crate::scheduler::release_actor(world, a);
+    }
+    for o in orgs {
+        crate::scheduler::release_org(world, o);
+    }
     world.ids.sweep(&world.actors, &world.orgs);
 }
