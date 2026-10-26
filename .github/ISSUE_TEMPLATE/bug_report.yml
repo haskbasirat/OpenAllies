@@ -1,0 +1,61 @@
+name: Bug report
+description: A crash, an error, or something in OpenAllies that is broken.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If OpenAllies works but behaves differently from the original game, use the **Difference from the original** template instead.
+        Never attach the original game's files (art, audio, maps, rules data, executables). Screenshots and logs are fine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Describe the problem. Include any error message.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can someone else make it happen?
+      placeholder: |
+        1. Main menu -> Single Player -> Custom
+        2. Random map, 2 players, ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The Development build (for example Development 21) or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Windows version, graphics card and driver.
+      placeholder: Windows 11 23H2, GeForce RTX 3060, driver 560.94
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: The console output or a log file, and screenshots if they help.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues for this problem.
+          required: true
+        - label: I am not attaching any files from the original game.
+          required: true

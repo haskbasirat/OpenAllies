@@ -1,0 +1,71 @@
+name: Difference from the original
+description: Something that looks, sounds or behaves differently from the original Axis & Allies (2004).
+title: "[Difference] "
+labels: ["difference"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenAllies aims to be indistinguishable from the original game, so every difference counts, however small.
+        New features the original doesn't have are out of scope.
+        Never attach the original game's files. Screenshots of the original running on your own copy are fine.
+  - type: textarea
+    id: original
+    attributes:
+      label: What the original does
+      description: Describe the original's behaviour as exactly as you can.
+    validations:
+      required: true
+  - type: textarea
+    id: ours
+    attributes:
+      label: What OpenAllies does
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How to see it
+      description: The map, units and steps that show the difference, in both games.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Interface and HUD
+        - Menus and game setup
+        - Combat
+        - Movement and pathfinding
+        - Computer opponent
+        - Economy, recruiting and research
+        - Supply and fog of war
+        - Generals and special abilities
+        - Maps and random map generator
+        - Graphics and effects
+        - Sound and music
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Screenshots of both games and, if you know them, the original's function addresses or data entries involved.
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The Development build or the commit you tested.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues for this difference.
+          required: true
+        - label: I am not attaching any files from the original game.
+          required: true

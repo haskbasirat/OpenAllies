@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How OpenAllies is built
+    url: https://github.com/haskbasirat/OpenAllies#how-it-is-built
+    about: The project's goals and why it doesn't add features the original game lacks.
+  - name: Contributing guide
+    url: https://github.com/haskbasirat/OpenAllies/blob/main/CONTRIBUTING.md
+    about: How to set up, find work and send a pull request.
