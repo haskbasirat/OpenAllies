@@ -170,3 +170,67 @@ fn qa_film_checkpoints_are_not_clock_only() {
         );
     }
 }
+
+/// The census of the real films (`aa-parity corpus`, local to this machine in
+/// `target/film-corpus`): every film decodes on the data set it recorded, with
+/// the same totals. Nothing to do on a machine without the census.
+#[test]
+#[ignore = "reads the local film census in target/film-corpus"]
+fn every_corpus_film_decodes_to_its_recorded_end() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/film-corpus");
+    let Ok(text) = std::fs::read_to_string(root.join("corpus.json")) else {
+        eprintln!("no census at {}", root.display());
+        return;
+    };
+    let census: Value = serde_json::from_str(&text).unwrap();
+    let mut decoded = 0;
+    for row in census["films"].as_array().unwrap() {
+        let sha = row["sha256"].as_str().unwrap();
+        let set = row["data_set"].as_str().unwrap();
+        if row["ticks"].as_u64().unwrap() == 0 {
+            continue;
+        }
+        let registries: Registries = if set == "widths" {
+            let widths = &row["widths"][0];
+            let bits = |name: &str| (1usize << widths[name].as_u64().unwrap()) - 1;
+            use aa_parity::registries::*;
+            let inferred = Provenance::Inferred;
+            Registries::builtin()
+                .with_count(OBJECT_DEFINITIONS, bits("ThingData"), inferred)
+                .with_count(SHARED_PROPERTIES, bits("SharedProperty"), inferred)
+                .with_count(ABILITIES, bits("AbilityDefinition"), inferred)
+                .with_count(FORMATIONS, bits("Formation"), inferred)
+                .with_count(ORGANIZATION_LAYOUTS, bits("OrganizationLayout"), inferred)
+        } else {
+            let path = root.join("registries").join(format!("{set}.json"));
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        };
+        let film = Film::read(&root.join("films").join(format!("{sha}.RFM")), &registries).unwrap();
+        assert_eq!(film.failures().count(), 0, "{sha}");
+        assert_eq!(film.world_ticks() as u64, row["ticks"].as_u64().unwrap(), "{sha}");
+        assert_eq!(film.decree_count() as u64, row["decrees"].as_u64().unwrap(), "{sha}");
+        assert_eq!(film.checkpoints.len() as u64, row["checkpoints"].as_u64().unwrap(), "{sha}");
+        // Checkpoints only count up, one per sync interval.
+        assert!(
+            film.checkpoints
+                .windows(2)
+                .all(|w| w[1].count >= w[0].count && w[1].tick > w[0].tick),
+            "{sha}"
+        );
+        // Every decree's ordering player is on the film's roster, or was created
+        // by a 329 KKC_MidgameCreateAIsAndSessionPlayers before it acts.
+        let mut midgame = false;
+        for d in film.ticks.iter().flat_map(|t| &t.decrees) {
+            midgame |= d.descriptor == 329;
+            if let Some(player) = d.player {
+                assert!(
+                    midgame || film.players.iter().any(|p| p.id == player),
+                    "{sha}: player {player}"
+                );
+            }
+        }
+        decoded += 1;
+    }
+    eprintln!("{decoded} films decoded to their end");
+    assert!(decoded > 0);
+}

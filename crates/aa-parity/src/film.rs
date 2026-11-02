@@ -16,6 +16,13 @@
 //! (9-bit ids) and the aa-orders payload schemas. The film ordering player
 //! (Admin+0x284) persists across records and changes on
 //! `TGC_SetPlayerOrderDecree`, as in `AdminNode::play_film_record`.
+//!
+//! Decoding a real film takes the registries of the data it was recorded with:
+//! a mod's definition references are wider than the stock ones
+//! (`Registries::load_overlay`). A record decoded with the wrong widths stops
+//! with an error or at a descriptor past the 358, so a record only counts when
+//! it ends exactly on its last bit. `aa-parity corpus` runs this over every real
+//! film; research/byte-exact/FILM-CORPUS.md holds the result.
 use crate::decree::{Decree, id};
 use crate::registries::Registries;
 use crate::{Error, Result};
@@ -275,6 +282,75 @@ pub fn decode_record(
     }
 }
 
+/// Offset of the creator's WorldRules mode word in a MAP_HEADER, or `None` when
+/// the header names no creator class. The class name closes the header's fixed
+/// part (59EA60); after it come the derived version of a `KKC_WorldCreatorLoad`
+/// (512C30), the creator version and the rules version (0x512420).
+fn creator_mode_offset(bytes: &[u8]) -> Option<usize> {
+    const CLASS: &str = "KKC_WorldCreator";
+    let units: Vec<u8> = CLASS.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let at = bytes.windows(units.len()).rposition(|w| w == units)?;
+    let length_at = at.checked_sub(2)?;
+    let length =
+        u16::from_le_bytes(bytes.get(length_at..at)?.try_into().expect("two bytes")) as usize;
+    let name = bytes.get(at..at + length * 2)?;
+    let derived = usize::from(name.len() == "KKC_WorldCreatorLoad".len() * 2);
+    Some(at + name.len() + (derived + 2) * 4)
+}
+
+/// MAP_HEADER of a film. aa-mapworld accepts only mode 0 (`playable`) in the
+/// creator's own rules, but the original reads the mode word without branching
+/// on it (WorldRules::Load 0x512420 stores it at +4; the modes are 0x4981A0's
+/// `playable`, `cutscene`, `savegame`, `film`, `savegame_metagame_rts`, ...), and
+/// a film of a saved game has mode 2 there. So the word is set aside for the
+/// decode and put back into the decoded header.
+pub fn decode_film_header(chunk: &aa_mapworld::Chunk) -> Result<(MapHeader, DerivedCreator)> {
+    let mode_at = creator_mode_offset(&chunk.bytes).filter(|&at| at + 4 <= chunk.bytes.len());
+    let mode = mode_at.map_or(0, |at| {
+        u32::from_le_bytes(chunk.bytes[at..at + 4].try_into().expect("four bytes"))
+    });
+    if mode == 0 {
+        return Ok(MapHeader::decode_any_creator(chunk)?);
+    }
+    let at = mode_at.expect("a nonzero mode was read from this offset");
+    let mut neutral = chunk.clone();
+    neutral.bytes[at..at + 4].copy_from_slice(&0u32.to_le_bytes());
+    neutral.payload_source = SourceIdentity::of(&neutral.bytes);
+    let (mut header, creator) = MapHeader::decode_any_creator(&neutral)?;
+    header.source = chunk.payload_source.clone();
+    header.creator.rules.mode = mode;
+    Ok((header, creator))
+}
+
+/// What the film version check in 0x5A3980 (before CreateGWorld) does with a
+/// film header on a target with this version string
+/// (`[0xB3888C]`, the data's `Version` var) and build (`[0xB27A80]`, 4129.7 in
+/// every AA.exe of the project). `FilmForcePlayback` skips the check.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum FilmVersionCheck {
+    Accepted,
+    /// `failed_film_wrong_version|s`, thrown with the film's version.
+    WrongVersion { film: String },
+    /// `failed_film_wrong_build|g`, thrown with the film's build.
+    WrongBuild { film: f32 },
+}
+
+/// See [`FilmVersionCheck`]. `string_58` is header+0x58, `word_50` header+0x50,
+/// filled by the header constructor 0x5A14C0 when the film was recorded. The
+/// strings compare with `wcscmp`; the build with `fucompp`, as binary32.
+pub fn film_version_check(header: &MapHeader, version: &str, build: f32) -> FilmVersionCheck {
+    let film_version = text(&header.string_58);
+    if film_version != version {
+        return FilmVersionCheck::WrongVersion { film: film_version };
+    }
+    let film_build = f32::from_bits(header.word_50);
+    if film_build == build {
+        FilmVersionCheck::Accepted
+    } else {
+        FilmVersionCheck::WrongBuild { film: film_build }
+    }
+}
+
 impl Film {
     pub fn read(path: &std::path::Path, registries: &Registries) -> Result<Self> {
         let bytes = std::fs::read(path).map_err(|source| Error::Io {
@@ -304,7 +380,13 @@ impl Film {
                 .ok_or_else(|| chunk_error(name, "chunk missing"))
         };
 
-        let (map_header, creator) = MapHeader::decode_any_creator(get("MAP_HEADER")?)?;
+        if decoded.is_empty() {
+            return Err(chunk_error(
+                "MAP_HEADER",
+                "empty chunk directory: the game never closed this film",
+            ));
+        }
+        let (map_header, creator) = decode_film_header(get("MAP_HEADER")?)?;
         let rmc = match &creator {
             DerivedCreator::Random(s) => Some(text(&s.rmc)),
             _ => None,
@@ -352,6 +434,19 @@ impl Film {
             ticks,
             checkpoints,
         })
+    }
+
+    /// The decoded Orders chunk of a film file, for trying other registries
+    /// without decoding the rest again.
+    pub fn orders_chunk(bytes: Vec<u8>) -> Result<Vec<u8>> {
+        let archive = MapArchive::from_bytes(bytes)?;
+        if archive.directory().is_empty() {
+            return Err(chunk_error(
+                "Orders",
+                "empty chunk directory: the game never closed this film",
+            ));
+        }
+        Ok(archive.decode_chunk("Orders", CHUNK_BUDGET)?.bytes)
     }
 
     /// Decrees of world tick `tick` (empty for an empty or absent record).

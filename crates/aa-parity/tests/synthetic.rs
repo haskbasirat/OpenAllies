@@ -31,6 +31,10 @@ fn parameters(out: &mut Vec<u8>) {
 }
 /// A film MAP_HEADER: header rules in film mode 3, random creator.
 fn map_header(seed: u32) -> Vec<u8> {
+    map_header_mode("KKC_WorldCreatorRandom", 0, seed)
+}
+/// The header with this creator class and mode in the creator's own rules.
+fn map_header_mode(class: &str, creator_mode: u32, seed: u32) -> Vec<u8> {
     let mut b = Vec::new();
     word(&mut b, 7);
     rules(&mut b, 3);
@@ -53,21 +57,29 @@ fn map_header(seed: u32) -> Vec<u8> {
     word(&mut b, 1);
     word(&mut b, 8);
     b.push(0);
-    string(&mut b, "KKC_WorldCreatorRandom");
+    string(&mut b, class);
+    let load = class == "KKC_WorldCreatorLoad";
+    if load {
+        word(&mut b, 0);
+    }
     word(&mut b, 3);
-    rules(&mut b, 0);
+    rules(&mut b, creator_mode);
     parameters(&mut b);
     word(&mut b, 384.0_f32.to_bits());
     word(&mut b, 384.0_f32.to_bits());
     string(&mut b, "chaparral");
     string(&mut b, "");
     word(&mut b, seed);
-    word(&mut b, 1);
-    string(&mut b, "rmc_test");
-    word(&mut b, 0);
-    word(&mut b, 120.0_f32.to_bits());
-    word(&mut b, 0);
-    word(&mut b, 0);
+    if load {
+        string(&mut b, "source_map");
+    } else {
+        word(&mut b, 1);
+        string(&mut b, "rmc_test");
+        word(&mut b, 0);
+        word(&mut b, 120.0_f32.to_bits());
+        word(&mut b, 0);
+        word(&mut b, 0);
+    }
     b
 }
 fn session_players() -> Vec<u8> {
@@ -401,4 +413,118 @@ mod mapping {
         // Player 2 has an empty selection: the recruit has no building.
         assert!(matches!(out[7], Mapped::Unresolved(_)));
     }
+}
+
+/// A creator's rules in a mode other than `playable` (a film of a saved game has
+/// `savegame`, 2): 0x512420 stores the word and reads the rest the same way.
+#[test]
+fn creator_rules_keep_any_world_mode() {
+    let film_with = |class: &str, mode: u32| {
+        tgck(&[
+            ("MAP", vec![0; 4]),
+            ("MAP_HEADER", map_header_mode(class, mode, 77)),
+            ("MAPSTRINGS", Vec::new()),
+            ("SessionPlayers", session_players()),
+            ("Orders", Vec::new()),
+        ])
+    };
+    for class in ["KKC_WorldCreatorRandom", "KKC_WorldCreatorLoad"] {
+        for mode in [0, 1, 2, 4] {
+            let film = Film::from_bytes(film_with(class, mode), &registries()).unwrap();
+            assert_eq!(film.header.map_header.creator.rules.mode, mode, "{class}");
+            assert_eq!(film.header.map_header.rules.mode, 3);
+            assert_eq!(film.header.seed, 77);
+            assert_eq!(film.header.creator_class, class);
+        }
+    }
+}
+
+/// A film the game never closed has no chunk directory: an explicit error.
+#[test]
+fn a_film_without_a_chunk_directory_is_refused() {
+    let error = Film::from_bytes(tgck(&[]), &registries()).unwrap_err();
+    assert!(error.to_string().contains("never closed"), "{error}");
+}
+
+/// The 0x5A3980 comparison: version string first, then the build as binary32.
+#[test]
+fn film_version_check_follows_the_original_order() {
+    use aa_parity::film::{FilmVersionCheck, film_version_check};
+    // The synthetic header says version "1.0", build 2004.
+    let film = Film::from_bytes(
+        tgck(&[
+            ("MAP", vec![0; 4]),
+            ("MAP_HEADER", map_header(1)),
+            ("MAPSTRINGS", Vec::new()),
+            ("SessionPlayers", session_players()),
+            ("Orders", Vec::new()),
+        ]),
+        &registries(),
+    )
+    .unwrap();
+    let header = &film.header.map_header;
+    assert_eq!(film_version_check(header, "1.0", 2004.0), FilmVersionCheck::Accepted);
+    assert_eq!(
+        film_version_check(header, "1.0", 4129.7),
+        FilmVersionCheck::WrongBuild { film: 2004.0 }
+    );
+    assert_eq!(
+        film_version_check(header, "1.0.5.0", 2004.0),
+        FilmVersionCheck::WrongVersion { film: "1.0".into() }
+    );
+    // A build that differs does not matter when the version already does.
+    assert_eq!(
+        film_version_check(header, "1.0.5.0", 4129.7),
+        FilmVersionCheck::WrongVersion { film: "1.0".into() }
+    );
+}
+
+/// KKC_TeamCommand 0x509090: the first word picks one of the ten code-defined
+/// definitions and its flags pick the optional fields (0x475590's table).
+#[test]
+fn team_commands_read_the_fields_their_definition_asks_for() {
+    use aa_parity::registries::TEAM_COMMANDS;
+    let r = registries();
+    let thing = |slot| Field::Thing {
+        check: ThingCheck::A8,
+        slot,
+    };
+    let no_target = Field::Uint { width: 1, value: 0 };
+    // Words per flag: bit 0 one, bit 1 two, bit 3 one.
+    for (index, (name, flags)) in TEAM_COMMANDS.iter().enumerate() {
+        let mut fields = vec![u32f(index as u32), thing(7), no_target.clone()];
+        if flags & 1 != 0 {
+            fields.push(u32f(0x11));
+        }
+        if flags & 2 != 0 {
+            fields.push(u32f(0x22));
+            fields.push(u32f(0x33));
+        }
+        if flags & 8 != 0 {
+            fields.push(u32f(0x44));
+        }
+        let body = packet(&[(id::TEAM_COMMAND, fields.clone())], &r);
+        let mut player = None;
+        let registry = aa_orders::native::registry().unwrap();
+        let record = aa_parity::film::decode_record(0, &body, &registry, &r, &mut player);
+        assert!(record.error.is_none(), "{name}: {:?}", record.error);
+        assert_eq!(record.decrees.len(), 1, "{name}");
+        assert_eq!(record.decrees[0].fields, fields, "{name}");
+    }
+    assert_eq!(
+        TEAM_COMMANDS.iter().map(|(_, flags)| *flags).collect::<Vec<_>>(),
+        [0x103, 0x403, 2, 0x120008, 0x110801, 0x140008, 0x101001, 0x207, 0x10, 0x20]
+    );
+    // An index past the ten is not a film: an explicit stop.
+    let body = packet(
+        &[(id::TEAM_COMMAND, vec![u32f(0), thing(7), no_target.clone(), u32f(1), u32f(2), u32f(3)])],
+        &r,
+    );
+    let mut wrong = body.clone();
+    // The word starts right after the 3-bit header and the 9-bit descriptor.
+    wrong[1] |= 0xF0;
+    wrong[2] |= 0xFF;
+    let registry = aa_orders::native::registry().unwrap();
+    let record = aa_parity::film::decode_record(0, &wrong, &registry, &r, &mut None);
+    assert!(record.error.is_some());
 }

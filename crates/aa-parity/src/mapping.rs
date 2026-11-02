@@ -26,6 +26,18 @@
 //! scalar = speed). Two choices are inferred: the unpack facing (taken
 //! from `auxiliary` as a direction) and `attack_move: false` for every
 //! move. They are marked where used.
+//!
+//! A command names the thing selected, not the thing that acts on it. The
+//! delivery 0x4D9B60 (`KKC_GActorCommand::Process`) gives it to the selected
+//! actor's component of the command definition's slot; an actor without that
+//! component passes it on through vtable +0x158 / +0x15C or to its
+//! organization's leader (+0x7C -> +0x44), and so on. So a recruit selected
+//! on an HQ regiment reaches the structure its leader unpacked into
+//! (0x4D9BE8 -> 0x4CE6BA -> 0x583BF8 in the film's native chain), and an
+//! unpack selected on it reaches the regiment Mind (`KKC_CAIStateUnpack`
+//! 0x526E60), which orders its leader. [`Mapper::dropped`] counts the order
+//! fields that aa-play's `Command` cannot carry yet, so a replay reports them
+//! rather than losing them silently.
 use crate::decree::Decree;
 use crate::film::FilmDecree;
 use aa_orders::commands::CommandWire;
@@ -85,6 +97,8 @@ fn point(bits: [u32; 2]) -> Vec2 {
 pub struct Mapper {
     pub player: Option<u32>,
     pub selections: BTreeMap<u32, Vec<u16>>,
+    /// Order fields aa-play's `Command` cannot carry: how many, by name.
+    pub dropped: BTreeMap<&'static str, u32>,
 }
 
 impl Mapper {
@@ -253,6 +267,17 @@ impl Mapper {
                 .map(|u| if let Unit::Org(o) = u { Some(*o) } else { None })
                 .collect()
         };
+        // 0x4D9B60: an organization passes the command to its leader
+        // (+0x7C -> +0x44) when it lacks the command's component.
+        let acting = || -> Option<Vec<ActorId>> {
+            units
+                .iter()
+                .map(|u| match u {
+                    Unit::Actor(a) => Some(*a),
+                    Unit::Org(_) => ids.target_actor(*u),
+                })
+                .collect()
+        };
         let target_of = |word: u32| ids.gtid(word).and_then(|u| ids.target_actor(u));
         let out: Vec<Command> = match name {
             "kill" => {
@@ -290,10 +315,17 @@ impl Mapper {
             "stop" => vec![Command::Stop { kingdom, units }],
             "disband" => vec![Command::Disband { kingdom, units }],
             "unpack" => {
-                let (Some(trucks), true, true) = (actors(), has(2), has(3)) else {
-                    return unresolved("unpack truck actors, position and facing");
+                let (Some(trucks), true) = (acting(), has(2)) else {
+                    return unresolved("unpack truck actors and position");
                 };
-                // Facing from the auxiliary direction words (inferred).
+                // Facing from the auxiliary direction words (inferred). The
+                // Berlin film's unpacks carry none (flags 0x44): 0x575C80 then
+                // hands the zero words to the creation record, and every
+                // building it unpacks is axis_locked (0x4F3640; the sampler
+                // shows direction (0, -1)), which `deploy::placement`
+                // overrides. `atan2(0, 0)` = 0 is a stand-in for a zero
+                // direction: a building that is not axis_locked would need the
+                // zero-direction rule of 0x4F3640 / 0x4F9C10, not measured.
                 let facing =
                     f32::from_bits(wire.auxiliary[1]).atan2(f32::from_bits(wire.auxiliary[0]));
                 let at = point(wire.position);
@@ -309,10 +341,19 @@ impl Mapper {
             }
             "recruit" => {
                 let (Some(buildings), Some(def)) =
-                    (actors(), wire.object.and_then(|o| ids.definition(o)))
+                    (acting(), wire.object.and_then(|o| ids.definition(o)))
                 else {
                     return unresolved("recruit buildings and object definition");
                 };
+                // ParameterSet (flag 5): the organization layout and the
+                // element of each layout entry the order chose. aa-play's
+                // recruit always builds the definition's own elements.
+                if wire.parameters.is_some() {
+                    *self
+                        .dropped
+                        .entry("recruit ParameterSet (layout, elements)")
+                        .or_default() += 1;
+                }
                 buildings
                     .into_iter()
                     .map(|building| Command::Recruit {
@@ -440,15 +481,19 @@ pub fn map_tick(
 /// definitions through the ThingData IDS (`Registries::object_ids`) and
 /// `GameData::find`, SharedProperty references through the native slot
 /// table (`property_ids`: the wire value indexes the registry's +0x24 entry
-/// vector, as for ThingData). Formation, general-ability and selector
-/// references are not mapped yet and stay `None` (the mapper then reports
-/// `Mapped::Unresolved`).
+/// vector, as for ThingData), FormationData references through the catalog's
+/// registration order (`formation_ids`, `Registries::formation_ids`: the +C
+/// ordinal of 0x481C70, count 5 measured live, the slot order itself inferred
+/// from that registration). General-ability and selector references are not
+/// mapped yet and stay `None` (the mapper then reports `Mapped::Unresolved`).
 pub struct PlayIds<'a> {
     pub world: &'a aa_play::World,
     pub players: &'a [crate::film::SessionPlayer],
     pub object_ids: &'a [String],
     /// SharedPropertyData slot -> property IDS (empty: unmapped).
     pub property_ids: &'a [String],
+    /// FormationData slot -> formation IDS (empty: unmapped).
+    pub formation_ids: &'a [String],
 }
 impl NativeIds for PlayIds<'_> {
     fn kingdom(&self, player: u32) -> Option<KingdomId> {
@@ -471,8 +516,15 @@ impl NativeIds for PlayIds<'_> {
     fn definition(&self, object: u32) -> Option<DefId> {
         self.world.data.find(self.object_ids.get(object as usize)?)
     }
-    fn formation(&self, _org: OrgId, _formation: u32) -> Option<usize> {
-        None
+    fn formation(&self, org: OrgId, formation: u32) -> Option<usize> {
+        let id = self.formation_ids.get(formation as usize)?;
+        let org = self.world.orgs.get(org as usize)?;
+        self.world
+            .data
+            .def(org.def)
+            .formations
+            .iter()
+            .position(|f| f.id.eq_ignore_ascii_case(id))
     }
     fn property(&self, property: u32) -> Option<String> {
         self.property_ids.get(property as usize).cloned()
@@ -482,5 +534,116 @@ impl NativeIds for PlayIds<'_> {
     }
     fn named(&self, _selector: &[u16]) -> Option<Unit> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aa_orders::commands::ParameterSet;
+
+    struct Ids;
+    impl NativeIds for Ids {
+        fn kingdom(&self, player: u32) -> Option<KingdomId> {
+            (player == 2).then_some(1)
+        }
+        fn thing(&self, slot: u16) -> Option<Unit> {
+            match slot {
+                13399 => Some(Unit::Org(7)),
+                13410 => Some(Unit::Actor(30)),
+                _ => None,
+            }
+        }
+        fn gtid(&self, gtid: u32) -> Option<Unit> {
+            self.thing(gtid as u16)
+        }
+        fn target_actor(&self, unit: Unit) -> Option<ActorId> {
+            match unit {
+                Unit::Actor(a) => Some(a),
+                Unit::Org(7) => Some(41),
+                Unit::Org(_) => None,
+            }
+        }
+        fn definition(&self, object: u32) -> Option<DefId> {
+            (object == 954).then_some(5)
+        }
+        fn formation(&self, _org: OrgId, _formation: u32) -> Option<usize> {
+            None
+        }
+        fn property(&self, _property: u32) -> Option<String> {
+            None
+        }
+        fn general_ability(&self, _kingdom: KingdomId, _ability: u32) -> Option<u32> {
+            None
+        }
+        fn named(&self, _selector: &[u16]) -> Option<Unit> {
+            None
+        }
+    }
+
+    fn decree(decree: Decree) -> FilmDecree {
+        FilmDecree {
+            descriptor: 86,
+            name: "KKC_TellSelectedCommandOrderDecree",
+            player: Some(2),
+            payload_bit: 0,
+            decree,
+            fields: Vec::new(),
+        }
+    }
+
+    /// Film flags 0x44: an unpack with a position and no auxiliary words,
+    /// selected on the HQ regiment, goes to its leader (0x4D9B60).
+    #[test]
+    fn unpack_on_a_regiment_goes_to_its_leader_without_facing_words() {
+        let mut m = Mapper::new();
+        m.map(&decree(Decree::SelectionSet { slot: 13399 }), &Ids);
+        let wire = CommandWire {
+            flags: 0x44,
+            command: Some(11),
+            position: [160.0f32.to_bits(), 366.0f32.to_bits()],
+            ..Default::default()
+        };
+        let out = m.map(&decree(Decree::TellSelectedCommand(wire)), &Ids);
+        let Mapped::Commands(c) = out else {
+            panic!("{out:?}")
+        };
+        assert!(matches!(
+            c[0],
+            Command::Deploy {
+                kingdom: 1,
+                truck: 41,
+                ..
+            }
+        ));
+    }
+
+    /// A recruit selected on an HQ regiment reaches its leader's structure,
+    /// and the order's ParameterSet is counted as dropped, not lost silently.
+    #[test]
+    fn recruit_on_a_regiment_counts_its_dropped_parameter_set() {
+        let mut m = Mapper::new();
+        m.map(&decree(Decree::SelectionSet { slot: 13399 }), &Ids);
+        let wire = CommandWire {
+            flags: 0x62,
+            command: Some(15),
+            object: Some(954),
+            parameters: Some(ParameterSet {
+                definition: Some(5),
+                objects: vec![Some(713)],
+                negative_count: None,
+            }),
+            ..Default::default()
+        };
+        let out = m.map(&decree(Decree::TellSelectedCommand(wire)), &Ids);
+        assert_eq!(
+            out,
+            Mapped::Commands(vec![Command::Recruit {
+                kingdom: 1,
+                building: 41,
+                def: 5
+            }])
+        );
+        assert_eq!(m.dropped["recruit ParameterSet (layout, elements)"], 1);
     }
 }

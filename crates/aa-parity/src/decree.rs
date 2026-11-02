@@ -34,6 +34,7 @@ pub mod id {
     pub const SYNC_VALUE: usize = 314;
     pub const VERSION_ACK: usize = 323;
     pub const UPDATE_KINGDOM_NAME: usize = 328;
+    pub const MIDGAME_CREATE_AIS: usize = 329;
     pub const SELECTION_SET: usize = 333;
 }
 

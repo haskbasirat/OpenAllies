@@ -103,6 +103,7 @@ fn print_difference(label: &str, report: &replay::ReplayReport) {
         report.unresolved.iter().take(12).collect::<Vec<_>>()
     );
     eprintln!("{label} refused: {:?}", report.refused);
+    eprintln!("{label} order fields dropped: {:?}", report.dropped);
 }
 
 /// The gate: replays the whole film, reports the first checkpoint that
@@ -116,6 +117,7 @@ fn berlin_film_replays_into_aa_play() {
     let film = Film::read(&film_path(), &registries).unwrap();
     // SharedProperty slots (research orders), measured from the original.
     let slots = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/native_shared_property_slots_v14.json");
+    replay::set_formation_ids(registries.formation_ids.clone());
     if let Ok(text) = std::fs::read_to_string(&slots) {
         let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
         replay::set_property_ids(v["ids"].as_array().unwrap().iter().map(|s| s.as_str().unwrap().to_owned()).collect());
@@ -164,9 +166,10 @@ fn berlin_film_replays_into_aa_play() {
     print_difference("replay", &report);
     assert_eq!(report.steps as usize, film.world_ticks());
     assert_eq!(report.checked, film.checkpoints.len());
-    // Reached 2026-10-25 with the battle-start draws and the random picks
-    // (`World::new_skirmish_with`): checkpoints 17..391 match.
-    assert!(report.matched >= 23, "checkpoints 17..391 match ({} matched)", report.matched);
+    // Reached 2026-11-01 with the mapper's organization orders: checkpoints
+    // 17..544 match (research/byte-exact/PARITY-CENSUS.md has what stands
+    // between that and 266).
+    assert!(report.matched >= 32, "checkpoints 17..544 match ({} matched)", report.matched);
     let first = report.first_difference.as_ref().map(|d| d.check);
     if let Some(d) = &report.first_difference {
         // The getters of the first interval are where the film needs them

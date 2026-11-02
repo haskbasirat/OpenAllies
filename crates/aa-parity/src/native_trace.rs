@@ -95,13 +95,102 @@ pub struct NativeTick {
     pub actors: BTreeMap<u32, NativeActor>,
 }
 
+/// One world-RNG getter 0x4F02B0 of the original (`G` line): the GWorld tick
+/// counter when it ran (decrees of record `r` run at tick `r`, update `u` at
+/// tick `u`), the state before its draw, the call site and the return
+/// addresses the sampler's stack scan found (nearest first; a scan, so an
+/// entry can be stale).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct NativeGetter {
+    pub tick: u32,
+    pub state: u32,
+    pub site: u32,
+    pub chain: Vec<u32>,
+    /// The last sampled tick before it in the trace (0: none yet). The
+    /// snapshot at tick `t` closes after update `t`, so the getters with
+    /// `after == t` are the decrees of record `t` and the updates up to the
+    /// next sampled tick: the replay's steps `t + 1 ..= next`.
+    pub after: u32,
+}
+
+/// One thing creation of the original (`M ... CreateGThing_4F9C10` line).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct NativeCreation {
+    pub tick: u32,
+    pub definition: String,
+    pub ret: u32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct NativeTrace {
     pub ticks: BTreeMap<u32, NativeTick>,
     /// GTID → definition IDS.
     pub names: BTreeMap<u32, String>,
-    /// (tick, state, call site) of every world-RNG getter.
-    pub getters: Vec<(u32, u32, u32)>,
+    /// Every world-RNG getter of the battle and of the world creation.
+    pub getters: Vec<NativeGetter>,
+    /// Every thing created after the battle started.
+    pub creations: Vec<NativeCreation>,
+}
+
+/// What a world-RNG getter belongs to, from its call site and the nearest
+/// return addresses. The Berlin film has exactly nine getter sites:
+/// * 0x50B2E4 periodic registration 0x50B2C0, by queue and registrant;
+/// * 0x530384 ActionGo 0x5300A0 (re-think delay), by the Mind state that
+///   runs it;
+/// * 0x4E9FF8 random scale (InitCreate 0x4E9FC0), 0x530E5F element Mind
+///   jitter, 0x50AB60 the mover's countdown phase, 0x4E2663 the kingdom's HQ
+///   number;
+/// * 0x563C59 / 0x563D12 Character 0x563BA0 / 0x563CA0 (animation pick),
+///   0x590323 the Disturbable delay 0x5902C0.
+pub fn getter_group(site: u32, chain: &[u32]) -> String {
+    let c = |i: usize| chain.get(i).copied().unwrap_or(0);
+    match site {
+        0x50B2E4 => match c(0) {
+            0x50AC27 => match c(1) {
+                0x577489 | 0x577469 => "mover order 5773C0 -> queue 0".into(),
+                0x5894AD => "production start 589420 -> queue 0".into(),
+                0x57C751 => "organization goal 57C680 -> queue 0".into(),
+                o => format!("queue 0 from {o:x}"),
+            },
+            0x50AC87 => match c(1) {
+                0x563FDA => match c(2) {
+                    0x4D3068 => "unpack end 4D21A0 -> component 563FD0 -> queue 1".into(),
+                    _ => "component InitCreate 563FD0 -> queue 1".into(),
+                },
+                0x56F26C => "economy InitCreate 56F250 -> queue 1".into(),
+                0x56438E => "564300 -> queue 1".into(),
+                0x57465D => "hq InitCreate 5745F0 -> queue 1".into(),
+                o => format!("queue 1 from {o:x}"),
+            },
+            o => format!("periodic registration from {o:x}"),
+        },
+        0x530384 => match c(0) {
+            0x537251 | 0x5372A3 | 0x53728B | 0x53725F => "ActionGo from 537150".into(),
+            0x537A71 | 0x537A9B | 0x5379F7 | 0x537A8F | 0x537AE4 => {
+                "ActionGo from continuation 5379C0".into()
+            }
+            0x5330DA => "ActionGo from get-back-to-path 532B50".into(),
+            0x533699 => "ActionGo from 533140".into(),
+            0x533C10 => "ActionGo from low path 5336B0".into(),
+            0x537005 | 0x537106 | 0x53713A | 0x537142 | 0x5370A4 => "ActionGo from 536F40".into(),
+            0x531766 => "ActionGo from 531520".into(),
+            0x536DBA | 0x536BEE => "ActionGo from queue wait 536AD0".into(),
+            o => format!("ActionGo from {o:x}"),
+        },
+        0x4E9FF8 => "random scale InitCreate 4E9FC0".into(),
+        0x530E5F => "element mind jitter 530E50".into(),
+        0x50AB60 => "mover countdown phase 50AB10".into(),
+        0x4E2663 => "HQ number 4E2640".into(),
+        0x563C59 => match c(0) {
+            0x4D6FE0 => "character 563BA0 at creation".into(),
+            0x530DA9 => "character 563BA0 from node reached 530AE0".into(),
+            0x563EB9 => "character 563BA0 queue 1 tick 563E10".into(),
+            o => format!("character 563BA0 from {o:x}"),
+        },
+        0x563D12 => "character 563CA0 queue 1 tick 563E10".into(),
+        0x590323 => "disturbable delay 5902C0".into(),
+        s => format!("site {s:x}"),
+    }
 }
 
 fn hex(s: &str) -> u32 {
@@ -122,12 +211,14 @@ impl NativeTrace {
 
     pub fn parse(text: &str) -> Self {
         let mut out = NativeTrace::default();
+        let mut sampled = 0u32;
         for line in text.lines() {
             let mut it = line.split(' ');
             match it.next() {
                 Some("T") => {
                     let tick: u32 = it.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                     let rng = it.nth(1).map_or(0, hex);
+                    sampled = tick;
                     out.ticks.insert(
                         tick,
                         NativeTick {
@@ -178,11 +269,30 @@ impl NativeTrace {
                     };
                     let tick = get("tick").and_then(|v| v.parse().ok()).unwrap_or(0);
                     if tick < 0x0100_0000 {
-                        out.getters.push((
+                        out.getters.push(NativeGetter {
                             tick,
-                            get("state").map_or(0, |v| hex(v)),
-                            get("site").map_or(0, |v| hex(v)),
-                        ));
+                            state: get("state").map_or(0, |v| hex(v)),
+                            site: get("site").map_or(0, |v| hex(v)),
+                            chain: get("chain").map_or(Vec::new(), |v| list(v)),
+                            after: sampled,
+                        });
+                    }
+                }
+                Some("M") => {
+                    // M seq tTID tick N CreateGThing_4F9C10 def D ids NAME ret R chain ...
+                    let toks: Vec<&str> = it.collect();
+                    let get = |key: &str| {
+                        toks.iter()
+                            .position(|t| *t == key)
+                            .and_then(|i| toks.get(i + 1))
+                    };
+                    let tick: u32 = get("tick").and_then(|v| v.parse().ok()).unwrap_or(u32::MAX);
+                    if (1..0x0100_0000).contains(&tick) && toks.contains(&"CreateGThing_4F9C10") {
+                        out.creations.push(NativeCreation {
+                            tick,
+                            definition: get("ids").map_or(String::new(), |v| (*v).to_owned()),
+                            ret: get("ret").map_or(0, |v| hex(v)),
+                        });
                     }
                 }
                 Some("A") => {
@@ -304,5 +414,48 @@ impl NativeTrace {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEXT: &str = "\
+G 1 t1 tick 0 gw 2 state 8e4b12a5 site 76ab30 chain 5126fd,5a2e19
+T 1 rng 5
+G 2 t1 tick 2 gw 2 state 4f1e05e7 site 50b2e4 chain 50ac27,5894ad,589eb2
+M 3 t1 tick 402 CreateGThing_4F9C10 def 0915d97c ids regiment_rus_hq_infantry ret 5830ac chain 58a414
+M 4 t1 tick 402 SpawnMember_4FBF40 ecx 2 gw 2 ret 58334b chain 58a414
+T 3 rng 6
+G 5 t1 tick 4 gw 2 state 21e5d5bb site 530384 chain 537251,53725f
+";
+
+    /// A getter remembers the sampled tick before it, which is what puts the
+    /// decrees of a record with the update that follows them.
+    #[test]
+    fn getters_keep_their_window_and_chain() {
+        let t = NativeTrace::parse(TEXT);
+        let g: Vec<(u32, u32, u32)> = t
+            .getters
+            .iter()
+            .map(|g| (g.tick, g.state, g.after))
+            .collect();
+        assert_eq!(
+            g,
+            vec![(0, 0x8e4b12a5, 0), (2, 0x4f1e05e7, 1), (4, 0x21e5d5bb, 3)]
+        );
+        assert_eq!(t.getters[1].chain, vec![0x50ac27, 0x5894ad, 0x589eb2]);
+        assert_eq!(t.creations.len(), 1, "only CreateGThing lines");
+        assert_eq!(t.creations[0].definition, "regiment_rus_hq_infantry");
+    }
+
+    #[test]
+    fn getters_group_by_site_and_registrant() {
+        let t = NativeTrace::parse(TEXT);
+        let group = |i: usize| getter_group(t.getters[i].site, &t.getters[i].chain);
+        assert_eq!(group(1), "production start 589420 -> queue 0");
+        assert_eq!(group(2), "ActionGo from 537150");
+        assert_eq!(getter_group(0x590323, &[]), "disturbable delay 5902C0");
     }
 }

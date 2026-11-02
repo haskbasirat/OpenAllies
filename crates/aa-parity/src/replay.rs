@@ -22,6 +22,9 @@
 //!   other) and, when the getter count agrees, solves the film's interval for
 //!   the low 16 bits of the world-RNG state at aa-play's getter placement
 //!   ([`crate::chain::solve`]), so a state difference shows as a value.
+//! * The replay does not stop there: [`ReplayReport::intervals`] keeps every
+//!   checkpoint's S counts and [`ReplayReport::orders`] every film order's
+//!   outcome, to the end of the film.
 use crate::chain;
 use crate::decree::Decree;
 use crate::film::{Film, KingdomInfo};
@@ -457,6 +460,32 @@ pub struct FirstDifference {
     pub film_states_at_our_placement: Option<Vec<u32>>,
 }
 
+/// One checkpoint's S counts: entries of the film and of aa-play since the
+/// previous checkpoint.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct IntervalCheck {
+    pub check: CheckpointCheck,
+    pub film_entries: i32,
+    pub our_entries: i32,
+}
+
+/// One film command decree (86, 87, 65, 66, 67, 70) and what became of it.
+#[derive(Clone, Debug, Serialize)]
+pub struct OrderRow {
+    pub record: u32,
+    pub player: Option<u32>,
+    /// The ActorCommand name, or the decree name.
+    pub name: String,
+    /// The selection it applied to (thing slots).
+    pub slots: Vec<u16>,
+    /// `outcome_key` of the mapping.
+    pub outcome: String,
+    /// What the mapper made of it, in order.
+    pub commands: Vec<String>,
+    /// aa-play's refusals of those commands.
+    pub refused: Vec<String>,
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ReplayReport {
     pub steps: u32,
@@ -466,11 +495,17 @@ pub struct ReplayReport {
     /// Decrees by mapping outcome ("commands", "state", "no effect: ...",
     /// "no equivalent: ...", "unresolved: ...").
     pub outcomes: BTreeMap<String, usize>,
-    /// (record, ordering player, reason) of the first unresolved decrees.
+    /// (record, ordering player, reason) of the unresolved decrees.
     pub unresolved: Vec<(u32, Option<u32>, String)>,
     /// (step, kingdom, reason) of commands aa-play refused.
     pub refused: Vec<(u32, u32, String)>,
     pub commands: usize,
+    /// Every checkpoint, to the end of the film.
+    pub intervals: Vec<IntervalCheck>,
+    /// Every film order.
+    pub orders: Vec<OrderRow>,
+    /// Order fields aa-play's `Command` cannot carry, by name.
+    pub dropped: BTreeMap<&'static str, u32>,
 }
 
 fn outcome_key(m: &Mapped) -> String {
@@ -487,25 +522,150 @@ fn outcome_key(m: &Mapped) -> String {
 /// asked (a diagnostic override for a known id difference).
 pub type Aliases = BTreeMap<u16, aa_play::Unit>;
 
+/// The things created during the battle, native GTID to aa-play GTID: the
+/// k-th native thing of a definition with the k-th aa-play thing of it. The
+/// native ids come from the sampler's names (`NativeTrace::names`) in ascending
+/// slot, which is creation order. A census of the whole film needs this: one
+/// slot shift (the first one is the unpack's next-fit id, 0x4D5EA0 -> 0x4EFB90)
+/// would otherwise send every later film order and comparison to another
+/// thing. Where the two ids differ is a cause of its own ([`Pairing::shifted`]).
+/// Things of the map keep their saved ids on both sides.
+#[derive(Clone, Debug, Default)]
+pub struct Pairing {
+    first_slot: u16,
+    scan: u32,
+    pending: BTreeMap<String, std::collections::VecDeque<u32>>,
+    native_to_ours: BTreeMap<u16, u32>,
+    ours_to_native: BTreeMap<u16, u32>,
+}
+
+impl Pairing {
+    /// `first_slot`: the id cursor at battle start. `names`: GTID -> definition
+    /// IDS of the native things.
+    pub fn new(first_slot: u16, names: &BTreeMap<u32, String>) -> Self {
+        let mut natives: Vec<(u16, u32, &String)> = names
+            .iter()
+            .filter(|(g, _)| (**g & 0xFFFF) as u16 >= first_slot)
+            .map(|(g, n)| ((*g & 0xFFFF) as u16, *g, n))
+            .collect();
+        natives.sort_by_key(|n| n.0);
+        let mut pending: BTreeMap<String, std::collections::VecDeque<u32>> = BTreeMap::new();
+        for (_, g, n) in natives {
+            pending
+                .entry(n.to_ascii_lowercase())
+                .or_default()
+                .push_back(g);
+        }
+        Self {
+            first_slot,
+            scan: u32::from(first_slot),
+            pending,
+            ..Default::default()
+        }
+    }
+    /// Pair the things aa-play created since the last call.
+    pub fn update(&mut self, world: &World) {
+        let cursor = u32::from(world.ids.next_slot());
+        while self.scan < cursor {
+            let slot = self.scan as u16;
+            self.scan += 1;
+            let Some(gtid) = world.ids.gtid_at_slot(slot) else {
+                continue;
+            };
+            let Some(thing) = world.ids.thing_at_slot(slot) else {
+                continue;
+            };
+            let name = thing_definition(world, thing).to_ascii_lowercase();
+            if let Some(native) = self.pending.get_mut(&name).and_then(|q| q.pop_front()) {
+                self.native_to_ours
+                    .insert((native & 0xFFFF) as u16, gtid.raw());
+                self.ours_to_native.insert(slot, native);
+            }
+        }
+    }
+    /// aa-play's GTID for a native thing, `None` when it has no counterpart
+    /// yet. Map things are themselves.
+    pub fn ours(&self, native: u32) -> Option<u32> {
+        let slot = (native & 0xFFFF) as u16;
+        if slot < self.first_slot {
+            return Some(native);
+        }
+        self.native_to_ours.get(&slot).copied()
+    }
+    /// The native GTID of aa-play's thing, `None` when it has no counterpart.
+    pub fn native(&self, ours: u32) -> Option<u32> {
+        let slot = (ours & 0xFFFF) as u16;
+        if slot < self.first_slot {
+            return Some(ours);
+        }
+        self.ours_to_native.get(&slot).copied()
+    }
+    /// (native, aa-play) GTIDs of the pairs whose slots differ.
+    pub fn shifted(&self) -> Vec<(u32, u32)> {
+        self.ours_to_native
+            .iter()
+            .filter(|(o, n)| **o != (**n & 0xFFFF) as u16)
+            .map(|(o, n)| (*n, u32::from(*o)))
+            .collect()
+    }
+}
+
+/// The definition IDS of an aa-play thing.
+pub fn thing_definition(world: &World, thing: aa_play::ids::Thing) -> String {
+    use aa_play::ids::Thing;
+    let id_of = |d: aa_play::DefId| world.data.def(d).id.clone();
+    match thing {
+        Thing::Actor(a) => world
+            .actors
+            .get(a as usize)
+            .map_or(String::new(), |x| id_of(x.def)),
+        Thing::Org(o) => world
+            .orgs
+            .get(o as usize)
+            .map_or(String::new(), |x| id_of(x.def)),
+        Thing::Trailer(a) => world
+            .actors
+            .get(a as usize)
+            .and_then(|x| world.data.def(x.def).trailer)
+            .map_or(String::new(), id_of),
+        _ => String::new(),
+    }
+}
+
 struct Aliased<'a> {
     ids: PlayIds<'a>,
     aliases: &'a Aliases,
+    pairing: Option<&'a Pairing>,
 }
 impl crate::mapping::NativeIds for Aliased<'_> {
     fn kingdom(&self, player: u32) -> Option<aa_play::KingdomId> {
         self.ids.kingdom(player)
     }
     fn thing(&self, slot: u16) -> Option<aa_play::Unit> {
-        self.aliases
-            .get(&slot)
-            .copied()
-            .or_else(|| self.ids.thing(slot))
+        if let Some(u) = self.aliases.get(&slot) {
+            return Some(*u);
+        }
+        match self.pairing {
+            // A film slot names the native thing that has it now.
+            Some(p) => {
+                let ours = p.ours(u32::from(slot))?;
+                aa_play::ids::unit(self.ids.world.ids.thing_at_slot(ours as u16)?)
+            }
+            None => self.ids.thing(slot),
+        }
     }
     fn gtid(&self, gtid: u32) -> Option<aa_play::Unit> {
-        self.aliases
-            .get(&(gtid as u16))
-            .copied()
-            .or_else(|| self.ids.gtid(gtid))
+        if let Some(u) = self.aliases.get(&(gtid as u16)) {
+            return Some(*u);
+        }
+        match self.pairing {
+            // The generations are the native's, the slot is what pairs.
+            Some(p) if (gtid & 0xFFFF) as u16 >= p.first_slot => {
+                let ours = p.ours(gtid)?;
+                aa_play::ids::unit(self.ids.world.ids.thing_at_slot(ours as u16)?)
+            }
+            _ => self.ids.gtid(gtid),
+        }
     }
     fn target_actor(&self, unit: aa_play::Unit) -> Option<aa_play::ActorId> {
         self.ids.target_actor(unit)
@@ -563,7 +723,8 @@ pub fn run_aliased(
         max_steps,
         stop_at_difference,
         aliases,
-        &mut |_, _| {},
+        None,
+        &mut |_, _, _| {},
     )
 }
 
@@ -577,9 +738,20 @@ pub fn set_property_ids(ids: Vec<String>) {
 }
 static PROPERTY_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
+/// FormationData slot -> formation IDS for every replay of this process, set
+/// once by the caller (`Registries::formation_ids`). Unset: set_formation
+/// orders stay unresolved.
+pub fn set_formation_ids(ids: Vec<String>) {
+    let _ = FORMATION_IDS.set(ids);
+}
+static FORMATION_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
 /// [`run_aliased`] calling `observe(step, world)` after every step (the
 /// world after GWorld update `step`, as the native sampler's 0x76F850
-/// snapshot of the same tick).
+/// snapshot of the same tick). The hook may change the world
+/// (`state_compare::force`). With a [`Pairing`], film thing references go
+/// through it, and it is updated before every record and handed to the hook.
+#[allow(clippy::too_many_arguments)]
 pub fn run_observed(
     film: &Film,
     world: &mut World,
@@ -587,7 +759,8 @@ pub fn run_observed(
     max_steps: Option<u32>,
     stop_at_difference: bool,
     aliases: &Aliases,
-    observe: &mut dyn FnMut(u32, &World),
+    mut pairing: Option<&mut Pairing>,
+    observe: &mut dyn FnMut(u32, &mut World, Option<&Pairing>),
 ) -> ReplayReport {
     let mut report = ReplayReport::default();
     let mut mapper = Mapper::new();
@@ -599,9 +772,13 @@ pub fn run_observed(
     let intervals = slog::account(film);
     let prepared = chain::prepare(film);
     let mut previous_tick = 0u32;
+    let mut previous_counts = (0i32, 0i32);
     let steps = max_steps.map_or(film.ticks.len() as u32, |m| m.min(film.ticks.len() as u32));
     for record in 0..steps {
         let mut traced = Vec::new();
+        if let Some(p) = pairing.as_deref_mut() {
+            p.update(world);
+        }
         {
             let ids = Aliased {
                 ids: PlayIds {
@@ -609,16 +786,37 @@ pub fn run_observed(
                     players: &film.players,
                     object_ids,
                     property_ids: PROPERTY_IDS.get().map_or(&[], |v| v.as_slice()),
+                    formation_ids: FORMATION_IDS.get().map_or(&[], |v| v.as_slice()),
                 },
                 aliases,
+                pairing: pairing.as_deref(),
             };
             for d in film.decrees_at(record) {
+                let slots = mapper
+                    .selections
+                    .get(&d.player.unwrap_or(0))
+                    .cloned()
+                    .unwrap_or_default();
                 let mapped = mapper.map(d, &ids);
                 *report.outcomes.entry(outcome_key(&mapped)).or_default() += 1;
-                if let Mapped::Unresolved(why) = &mapped
-                    && report.unresolved.len() < 64
-                {
+                if let Mapped::Unresolved(why) = &mapped {
                     report.unresolved.push((record, d.player, why.clone()));
+                }
+                if crate::classify::decree_class(&d.decree) == "command" {
+                    let name = crate::classify::actor_command(&d.decree)
+                        .map_or_else(|| d.name.to_owned(), |(_, n, _)| n.to_owned());
+                    report.orders.push(OrderRow {
+                        record,
+                        player: d.player,
+                        name,
+                        slots,
+                        outcome: outcome_key(&mapped),
+                        commands: match &mapped {
+                            Mapped::Commands(c) => c.iter().map(|c| format!("{c:?}")).collect(),
+                            _ => Vec::new(),
+                        },
+                        refused: Vec::new(),
+                    });
                 }
                 let sync = decree_s_entries(d.descriptor as usize)
                     .map(|name| (u32::from(d.descriptor), name.encode_utf16().collect()));
@@ -633,17 +831,33 @@ pub fn run_observed(
         world.step_decrees(traced);
         let step = record + 1;
         report.steps = step;
-        observe(step, world);
         for e in &world.events {
-            if let aa_play::Event::Refused { kingdom, reason } = e
-                && report.refused.len() < 256
-            {
+            if let aa_play::Event::Refused { kingdom, reason } = e {
                 report.refused.push((step, *kingdom, reason.clone()));
+                for row in report.orders.iter_mut().rev() {
+                    if row.record != record {
+                        break;
+                    }
+                    if !row.commands.is_empty() {
+                        row.refused.push(reason.clone());
+                        break;
+                    }
+                }
             }
         }
         if let Some(&film_state) = checkpoints.get(&step) {
             report.checked += 1;
             let ours = world.trace.checkpoint();
+            report.intervals.push(IntervalCheck {
+                check: CheckpointCheck {
+                    tick: step,
+                    film: film_state,
+                    ours,
+                },
+                film_entries: film_state.0 - previous_counts.0,
+                our_entries: ours.0 - previous_counts.1,
+            });
+            previous_counts = (film_state.0, ours.0);
             if ours == film_state {
                 report.matched += 1;
             } else if report.first_difference.is_none() {
@@ -677,7 +891,12 @@ pub fn run_observed(
             }
             previous_tick = step;
         }
+        if let Some(p) = pairing.as_deref_mut() {
+            p.update(world);
+        }
+        observe(step, world, pairing.as_deref());
     }
+    report.dropped = mapper.dropped.clone();
     report
 }
 

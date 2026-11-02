@@ -92,3 +92,63 @@ pub fn actor_command(decree: &Decree) -> Option<(u32, &'static str, Option<&'sta
         .unwrap_or(("unknown", None));
     Some((index, name, to))
 }
+
+/// A generic command without an ActorCommand (flag bit 6 clear): the player's
+/// plain click. The kernel picks the command from the selected actor and these
+/// fields (0x4DA570, 0x61F210). Named by the fields it carries.
+fn default_order(decree: &Decree) -> String {
+    let wire = match decree {
+        Decree::TellSelectedCommand(wire) => wire,
+        Decree::TellActorCommand { command, .. } => command,
+        _ => return "default order".into(),
+    };
+    const FIELDS: [(u16, &str); 9] = [
+        (0, "target"),
+        (1, "object"),
+        (2, "position"),
+        (3, "auxiliary"),
+        (4, "scalar"),
+        (5, "parameters"),
+        (7, "formation"),
+        (8, "property"),
+        (9, "boolean"),
+    ];
+    let names: Vec<&str> = FIELDS
+        .iter()
+        .filter(|(bit, _)| wire.flags >> bit & 1 != 0)
+        .map(|(_, name)| *name)
+        .collect();
+    format!("default order ({})", names.join(", "))
+}
+
+/// The order a gameplay decree gives, for coverage reports: the ActorCommand of
+/// an 86/87, the definition of a 23 and the decree itself otherwise, with what
+/// aa-play does with it (`mapping::Mapper`). `None` for bookkeeping decrees.
+pub fn order_kind(descriptor: usize, decree: &Decree) -> Option<String> {
+    let mapped = |name: &str, to: Option<&str>| {
+        format!("{name} -> {}", to.unwrap_or("NO EQUIVALENT"))
+    };
+    Some(match decree {
+        Decree::TellSelectedCommand(_) | Decree::TellActorCommand { .. } => {
+            match actor_command(decree) {
+                Some((index, name, to)) => mapped(&format!("command {index:02} {name}"), to),
+                None => mapped(&default_order(decree), None),
+            }
+        }
+        Decree::TellActorAttack { .. } => mapped("65 TellActorAttack", Some("Attack")),
+        Decree::TellActorMove { .. } => mapped("66 TellActorMove", Some("Move")),
+        Decree::TellActorAbility { .. } => mapped("67 TellActorAbility", None),
+        Decree::FactionUseAbility { .. } => mapped("70 FactionUseAbility", Some("UseAbility")),
+        Decree::GamePlayerKingdom { .. } => mapped("68 GamePlayerKingdom", None),
+        Decree::Other { fields } if descriptor == crate::decree::id::TEAM_COMMAND => {
+            let name = match fields.first() {
+                Some(aa_orders::payload::Field::Uint { value, .. }) => crate::registries::TEAM_COMMANDS
+                    .get(*value as usize)
+                    .map_or("unknown", |(name, _)| name),
+                _ => "unknown",
+            };
+            mapped(&format!("23 TeamCommand {name}"), None)
+        }
+        _ => return None,
+    })
+}

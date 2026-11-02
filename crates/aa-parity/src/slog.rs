@@ -368,20 +368,32 @@ pub fn account(film: &crate::Film) -> Vec<Interval> {
 /// (interval, predicted hash, film hash) for those intervals. Matching hashes
 /// confirm the entry kinds, their values and their order.
 pub fn verify_zero_residual(film: &crate::Film) -> Vec<(Interval, i32, i32)> {
+    verify_zero_residual_at(film, &account(film), 0)
+}
+
+/// [`verify_zero_residual`] over an [`account`] of `film`, for a world whose
+/// clock had already run `clock_offset` updates when the film started: a film of
+/// a saved game (creator rules in mode `savegame`) continues the saved
+/// GWorld+0xE0.
+pub fn verify_zero_residual_at(
+    film: &crate::Film,
+    account: &[Interval],
+    clock_offset: u32,
+) -> Vec<(Interval, i32, i32)> {
     let mut out = Vec::new();
     let mut prev = Checkpoint {
         tick: 0,
         count: 0,
         hash: 0,
     };
-    for (interval, c) in account(film).into_iter().zip(&film.checkpoints) {
+    for (&interval, c) in account.iter().zip(&film.checkpoints) {
         if interval.residual == 0 {
             let mut log = SLog::with_reset(prev.count, prev.hash);
             for d in film.decrees_at(prev.tick) {
                 log.push_decree(prev.tick, d.descriptor as usize);
             }
             for k in prev.tick + 1..=c.tick {
-                log.push(k, SEntryKind::Clock, clock_bits_before_update(k));
+                log.push(k, SEntryKind::Clock, clock_bits_before_update(k + clock_offset));
                 if k < c.tick {
                     for d in film.decrees_at(k) {
                         log.push_decree(k, d.descriptor as usize);
