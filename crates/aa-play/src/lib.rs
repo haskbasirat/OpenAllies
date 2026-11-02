@@ -67,3 +67,5 @@ pub mod construct;
 pub mod denizen;
 /// aa-mind's Mind arena hosted for aa-play actors (core owner).
 pub mod minds;
+/// The map's scripted triggers on the aa-triggers port (scenarios owner).
+pub mod triggers;

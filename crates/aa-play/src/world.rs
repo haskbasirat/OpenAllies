@@ -288,6 +288,9 @@ pub struct World {
     // ---- appended by the core owner (byte-exact roadmap item 10) ----
     /// The five world queues of 0x4F9970 (`crate::scheduler`).
     pub sched: crate::scheduler::Scheduler,
+    // ---- appended by the scenarios owner ----
+    /// The World+0x13C trigger manager of the map (`crate::triggers`).
+    pub triggers: crate::triggers::TriggerState,
 }
 
 impl World {
@@ -315,6 +318,7 @@ impl World {
             trace: Default::default(),
             ids,
             sched: crate::scheduler::Scheduler::new(),
+            triggers: Default::default(),
         };
         world.create_rng(seed as u32);
         world

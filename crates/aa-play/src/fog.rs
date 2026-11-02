@@ -19,9 +19,14 @@
 //!   bit k + 16 = visible to kingdom k (cleared when no detecting zone of k
 //!   covers the tile, `0x54F5E0`). Non-major (independent) kingdoms are never
 //!   marked and always see.
-//! * Detection component (`0x56F140`): ZOD (type 6, ActorData `+0x1CC`) and
-//!   RZOD (type 1, `+0x1D0`, revealed to the reveal-mask kingdoms); see
-//!   [`crate::zones`] for the bindings.
+//! * Detection component (`0x56F140`, queue 1: one Tick a second in its
+//!   bucket, activated `0x56EC90` when created): ZOD (type 6, ActorData
+//!   `+0x1CC` through the DETECTION_RANGE modifiers) and RZOD (type 1,
+//!   `+0x1D0`, revealed to the reveal-mask kingdoms: the engagers and,
+//!   EngagementShowReverseRZOD, the kingdoms the thing attacks); see
+//!   [`crate::zones`] for the bindings. Sight is a circle (the fast circle
+//!   builder, SVar ZoneBuilderFastDetectionZones): height, forests and
+//!   buildings neither block nor hide.
 //! * Actor detection word (actor `+0x54`): `0x4EC010` reveal, `0x4EC1B0`
 //!   hide, `0x4EC270` tile change; the queries use the shared-vision mask
 //!   (`0x4E0F90`): `0x4EA1D0` visible, `0x4EA0D0` seen, `0x4D3B80` with
@@ -158,14 +163,28 @@ pub fn ensure(world: &mut World) {
     }
 }
 
-/// The zone engine, created for the world's map when missing (the supply
-/// zones may need it before the first fog tick). None for a map aa-zones
-/// cannot describe.
+/// The zone engine, created for the world's map when missing (the queue-1
+/// supply and detection ticks of the first update come before the first fog
+/// tick, whose world start keeps what they revealed). None for a map
+/// aa-zones cannot describe.
 pub fn take_engine(world: &mut World) -> Option<Engine> {
     match world.fog.engine.take() {
         Some(e) if e.fits(world) => Some(e),
         _ => Engine::new(world),
     }
+}
+
+/// The Detection component's queue-1 Tick `0x56F140` of an actor or an
+/// organization (its Updatable +0x14, one second in its bucket; the
+/// scheduler's delivery): the moves since the last observe first.
+pub fn detection_delivery(world: &mut World, key: crate::zones::Key) {
+    let Some(mut e) = take_engine(world) else { return };
+    e.observe_update(world);
+    e.observe_key(world, key);
+    if world.fog.enabled() {
+        e.detection_key_tick(world, key);
+    }
+    put_engine(world, e);
 }
 
 /// Put the engine back after [`take_engine`].
@@ -225,7 +244,9 @@ impl FogState {
 }
 
 /// One fog tick (after the other systems of the battle tick): tile changes,
-/// detection component ticks, the supply tiles of moved zones.
+/// the detection component ticks of things without a queue-1 registration
+/// (the registered ones tick from [`detection_delivery`]), the supply tiles
+/// of moved zones.
 pub fn tick(world: &mut World) {
     let started = std::time::Instant::now();
     let mut st = std::mem::take(&mut world.fog);

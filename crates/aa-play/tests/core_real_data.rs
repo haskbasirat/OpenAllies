@@ -644,8 +644,11 @@ fn hq_truck_income_packed_unpacking_and_deployed() {
                 break;
             }
             // A packed truck outside every zone still produces as itself
-            // (it has no +548 packed form).
-            if w.actors[truck as usize].alive && !w.actors[truck as usize].removed && w.books.out_of_supply(truck) {
+            // (it has no +548 packed form). (supplyfog) The cut-off is its HQ
+            // organization's (EconomyComponent supply_required, 0x56F2B0):
+            // the truck, a member without one, never takes state 19.
+            let hq_org_out = w.actors[truck as usize].org.is_some_and(|o| w.books.org(o).is_some_and(|b| b.out_of_supply));
+            if w.actors[truck as usize].alive && !w.actors[truck as usize].removed && hq_org_out {
                 cut_off_ticks += 1;
                 if cut_off_ticks == 2 {
                     eprintln!("{label} t={:.1}s truck out of supply: income {:?}", w.time, w.kingdoms[0].income);
@@ -1031,10 +1034,13 @@ fn generated_map_supply_with_two_computers() {
         for o in w.orgs.iter().filter(|o| o.alive && o.kingdom < 2 && data.def(o.def).supply_used) {
             let out = w.books.org(o.id).is_some_and(|b| b.out_of_supply);
             let d = o.hq.and_then(|h| w.actor(h)).map(|h| h.pos.truncate().distance(aa_play::supply::org_position(&w, o.id)));
-            if out && d.is_some_and(|d| d < 40.0) {
+            // (supplyfog) 0x4D0A80: an organization somebody engages (+0x118)
+            // is out of supply wherever it stands
+            let engaged = w.combat.orgs.get(o.id as usize).is_some_and(|c| !c.engaged_by.is_empty());
+            if out && !engaged && d.is_some_and(|d| d < 40.0) {
                 bad += 1;
             }
-            eprintln!("t={minute}m org {} k{} out {out} hq dist {:?}", o.id, o.kingdom, d.map(|d| d.round()));
+            eprintln!("t={minute}m org {} k{} out {out} engaged {engaged} hq dist {:?}", o.id, o.kingdom, d.map(|d| d.round()));
         }
     }
     assert_eq!(bad, 0);

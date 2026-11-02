@@ -2,7 +2,7 @@
 //! economy books, recruiting, deployment, supply, regeneration and victory.
 use aa_play::books::{DeployKind, PauseReason};
 use aa_play::data::{DefClass, Formation, Modifier, PropertyDef, ResearchItem, ResourceDef, ResourceKind};
-use aa_play::{Command, Controller, Def, Event, GameData, GameMap, Kingdom, Order, World};
+use aa_play::{Command, Controller, Def, Event, GameData, GameMap, Kingdom, World};
 use glam::{Vec2, Vec3};
 use std::sync::Arc;
 
@@ -168,6 +168,7 @@ fn data() -> (GameData, Ids) {
     data.defs[depot as usize].properties = vec!["depotprop".into()];
     data.defs[depot as usize].tile_locked = true;
     data.defs[depot as usize].axis_locked = true;
+    data.defs[depot as usize].blocking = true;
     data.defs[depot as usize].blocking_size = Some([4.0, 4.0]);
     data.defs[hq as usize].blocking_size = Some([10.0, 10.0]);
     data.defs[hq as usize].research = vec![
@@ -486,9 +487,12 @@ fn attached_regiment_in_supply_heals_and_rebuilds_members() {
         core_step(&mut w, vec![]);
     }
     assert_eq!(w.orgs[o as usize].members.len(), 3, "the fallen soldier was rebuilt");
-    // Detached (no HQ) regiments are out of supply.
+    // Detached (no HQ) regiments are out of supply, from the organization's
+    // next maintenance Tick (0x57C8E0 -> 0x4D7CE0, within a second).
     w.orgs[o as usize].hq = None;
-    core_step(&mut w, vec![]);
+    for _ in 0..17 {
+        core_step(&mut w, vec![]);
+    }
     assert!(w.books.org(o).unwrap().out_of_supply);
 }
 
@@ -687,4 +691,85 @@ fn handicaps_change_recruit_cost_and_health_the_original_way() {
     assert_eq!(aa_play::production::recruit_cost(&w, hq, ids.regiment)[MONEY], 62.5);
     let s = spawn(&mut w, ids.soldier, 0, Vec2::new(50.0, 50.0), 0.0);
     assert_eq!(w.actors[s as usize].health, 75.0);
+}
+
+/// The exhausted Mind state (Mind +270) reports actor state 0xC at its
+/// vtable +0x20 (0x7C5440): it reads as mind_resting, with no broken
+/// formation; a new order replaces it.
+#[test]
+fn the_exhausted_mind_state_reads_as_resting() {
+    let (mut w, ids) = world(&[0]);
+    let hq = spawn(&mut w, ids.hq, 0, Vec2::new(100.0, 100.0), 0.0);
+    let o = aa_play::production::spawn_organization(&mut w, ids.regiment, 0, Vec2::new(110.0, 100.0), 0.0, Some(hq));
+    aa_play::combat::tick(&mut w);
+    let resting = aa_play::morale::descriptor(&w, &w.combat, o);
+    assert_eq!(resting, aa_play::morale::Descriptor { morale_replenish: true, broken: false, entrenchable: true });
+    w.combat.orgs[o as usize].exhausted_state = true;
+    assert_eq!(aa_play::morale::descriptor(&w, &w.combat, o), resting);
+    w.orgs[o as usize].order = aa_play::world::Order::Move { to: Vec2::new(150.0, 100.0), attack_move: false };
+    aa_play::morale::tick(&mut w);
+    assert!(!w.combat.orgs[o as usize].exhausted_state, "a new order replaces the state");
+}
+
+/// The wire forms of the battle commands: every field of the generic command
+/// reads back as written, and a decree gives the command the request came
+/// from, through the replicated selection or the named actor.
+#[test]
+fn player_orders_round_trip_through_the_wire() {
+    use aa_play::player_orders::native::{self, Outbox, Replay, Tables, Wire};
+    let (mut w, ids) = world(&[0]);
+    let hq = spawn(&mut w, ids.hq, 0, Vec2::new(100.0, 100.0), 0.0);
+    let o = aa_play::production::spawn_organization(&mut w, ids.regiment, 0, Vec2::new(110.0, 100.0), 0.0, None);
+    let tables = Tables { objects: vec!["regiment".into()], formations: vec!["line".into()], ..Tables::default() };
+
+    // The generic command, field by field (0x61EBA0 order).
+    let wire = Wire {
+        flags: (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 6) | (1 << 7),
+        command: Some(native::command::CONSTRUCT),
+        word: 7,
+        object: Some(0),
+        position: [1, 2],
+        auxiliary: [3, 4],
+        scalar: 5,
+        parameter: Some(0),
+        trailing: true,
+        ..Wire::default()
+    };
+    let fields = wire.fields(&tables);
+    let (read, rest) = Wire::read(&fields, &tables).expect("reads back");
+    assert_eq!(read, wire);
+    assert!(rest.is_empty());
+    // The null definition reference is the registry count.
+    let null = Wire { flags: 1 << 1, ..Wire::default() };
+    let (read, _) = Wire::read(&null.fields(&tables), &tables).expect("reads back");
+    assert_eq!(read.object, None);
+
+    // A selection order then the command on it.
+    let mut outbox = Outbox::default();
+    let mut replay = Replay::default();
+    let order = Command::Stop { kingdom: 0, units: vec![aa_play::Unit::Org(o)] };
+    let requests = native::requests(&w, &tables, &mut outbox, &order).expect("requests");
+    let got: Vec<usize> = requests.iter().map(|(d, _)| *d).collect();
+    assert_eq!(got, [native::SELECTION_SET_REQUEST, native::TELL_SELECTED_REQUEST]);
+    // The selection stands: the next command needs no selection order.
+    let again = native::requests(&w, &tables, &mut outbox, &order).expect("requests");
+    assert_eq!(again.iter().map(|(d, _)| *d).collect::<Vec<_>>(), [native::TELL_SELECTED_REQUEST]);
+    assert!(native::commands(&w, &tables, &mut replay, Some(0), 1, native::SELECTION_SET_DECREE, &requests[0].1).expect("decree").is_empty());
+    let decoded = native::commands(&w, &tables, &mut replay, Some(0), 1, native::TELL_SELECTED_DECREE, &requests[1].1).expect("decree");
+    assert!(matches!(decoded.as_slice(), [Command::Stop { kingdom: 0, units }] if units == &[aa_play::Unit::Org(o)]));
+    // Another player's selection is its own.
+    assert!(native::commands(&w, &tables, &mut replay, Some(0), 2, native::TELL_SELECTED_DECREE, &requests[1].1).expect("decree").is_empty());
+
+    // Attaching to an HQ is hq_attach (31), an order of the one organization;
+    // command 29 attaches a hero.
+    let order = Command::Attach { kingdom: 0, org: o, hq };
+    let requests = native::requests(&w, &tables, &mut outbox, &order).expect("requests");
+    assert_eq!(requests.iter().map(|(d, _)| *d).collect::<Vec<_>>(), [native::TELL_ACTOR_REQUEST]);
+    let (read, _) = Wire::read(&requests[0].1, &tables).expect("reads back");
+    assert_eq!(read.command, Some(native::command::HQ_ATTACH));
+    let decoded = native::commands(&w, &tables, &mut replay, Some(0), 1, native::TELL_ACTOR_DECREE, &requests[0].1).expect("decree");
+    assert!(matches!(decoded.as_slice(), [Command::Attach { kingdom: 0, org, hq: h }] if *org == o && *h == hq));
+
+    // Decrees that name their actor by text are refused, not dropped.
+    assert!(native::commands(&w, &tables, &mut replay, Some(0), 1, native::TELL_ACTOR_MOVE_DECREE, &[]).is_err());
 }

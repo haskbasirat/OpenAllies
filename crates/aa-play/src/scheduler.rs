@@ -22,8 +22,9 @@
 //! 0x589F90) and the kingdom economy ticks (kingdom +180, 0x4E5DF0, Tick
 //! 0x4E9C40). Queue 1 holds the real entries (the saved lists, the
 //! component InitCreate registrations of `crate::creation`, removed with
-//! their things) but delivers to no leaf yet. The other owners still run as
-//! their own passes in `sim.rs`, placed where their queues run.
+//! their things) and delivers to the leaves `deliver` names: Supply, City,
+//! Denizen, Organization, Economy and Detection. The other owners still run
+//! as their own passes in `sim.rs`, placed where their queues run.
 //!
 //! The saved entries are the map's saved periodic queues
 //! (`GameMap::saved_queues`, the queue Load 0x50B8B0, no draws): kingdoms,
@@ -368,6 +369,13 @@ fn deliver(world: &mut World, event: Delivery) {
         // 0x57D820 -> 0x57C080).
         Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) if event.data == 1 => crate::movement::org_tick(world, o),
         Some(Owner::OrgComponent(o, ORGANIZATION_SLOT)) => crate::supply::org_maintenance(world, o, f32::from_bits(elapsed)),
+        // (supplyfog owner) EconomyComponent::Tick 0x56F2B0 (the supply
+        // state 0x4D7CE0 of a supply_required thing) and the Detection Tick
+        // 0x56F140 (queue 1; its deferred +0x18 0x56E9F0 ticks the same).
+        Some(Owner::Component(a, crate::supply::ECONOMY_SLOT)) => crate::supply::economy_tick(world, crate::zones::Key::Actor(a)),
+        Some(Owner::OrgComponent(o, crate::supply::ECONOMY_SLOT)) => crate::supply::economy_tick(world, crate::zones::Key::Org(o)),
+        Some(Owner::Component(a, crate::zones::DETECTION_SLOT)) => crate::fog::detection_delivery(world, crate::zones::Key::Actor(a)),
+        Some(Owner::OrgComponent(o, crate::zones::DETECTION_SLOT)) => crate::fog::detection_delivery(world, crate::zones::Key::Org(o)),
         // (movement owner) Mover Tick 0x577E50.
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
         // (core) the aircraft Mind's queue-4 update 0x51A1A0.

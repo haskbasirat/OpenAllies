@@ -12,6 +12,7 @@ pub mod predicates;
 pub mod program;
 mod registrations;
 pub mod selectors;
+pub mod sun;
 pub mod world_program;
 
 /// Which ported module executes a native element opcode, if any. `None` means

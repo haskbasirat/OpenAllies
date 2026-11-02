@@ -1,8 +1,9 @@
 //! Target acquisition, weapon ranges and recharge, the original damage
 //! formula, area damage, death, kill credit and combat value. Owner: combat.
 //!
-//! Behaviour-faithful plain `f32` rendition of the exact ports (read them for
-//! the native detail):
+//! A rendition of the exact ports on aa-play's world, with their x87 chains
+//! at PC53 and binary32 stores (`x87` below; read the ports for the native
+//! detail):
 //! - hit arithmetic `004CA400` (aa_combat::hit): kind-4 damage is
 //!   `max(CombatDamageMinimum, (offense*power*scale - max(defense,0)) * type
 //!   factor)`, weapon flag bit1 forces offense 1, bit0 forces defense 0;
@@ -19,11 +20,13 @@
 //!   damage-driven engage `579490` (aa_combat::engagement), engage Think
 //!   `526A70` (1.0 s, aa_mind::cai_engage_think), target priority `527240`
 //!   (aa_mind::cai_reactions::target_priority).
-//! - member target choice `536E10 -> 535910 -> 534700` over the target
-//!   organization's members within the operational range (`558150`, def
-//!   `+300`), ranked by `52F010` (priority, then score, then distance), the
-//!   per-ability decision `5340C0` (aa_mind::uai_kill) with the `52ED30`
-//!   score (aa_mind::decision_score), the engage reaction delay `52E830`.
+//! - member target choice `536E10 -> 535910 -> 534700` over the actors
+//!   within the operational range (`558150`, def `+300`/`+304`) that the
+//!   regiment's engage list holds (`52DCA0 -> 5210D0`), with the element
+//!   priority `537530`, ranked by `52F010` (priority, then score, then
+//!   distance), the per-ability decision `5340C0` (aa_mind::uai_kill) with
+//!   the `52ED30` score (aa_mind::decision_score), the engage reaction
+//!   delay `52E830`; a kill target is kept while valid and engaged.
 //! - death: kill credit `4D57C0` (aa_body::credit) with experience
 //!   `571820/571960` (aa_body::experience_amounts), slayer morale `578F10`,
 //!   member removal `57CD70` (aa_combat::organization::remove_member),
@@ -469,16 +472,53 @@ struct Means {
     offense: f32,
 }
 
-/// `4BBF90`: trimmed means (descending sort, `count*discard` dropped at
-/// each end) over the combat members' powers, defenses, speeds and healths.
+/// The ActorData `+174` component bits the combat value reads (Body 0,
+/// Mover 3, Performer 5, Element 8, Experience 17). The component's own
+/// fields count too (health, speed, performer abilities, an element
+/// class), which only that component loads: definitions built without the
+/// bits (synthetic data) answer the same.
+struct Components {
+    body: bool,
+    mover: bool,
+    performer: bool,
+    element: bool,
+    experience: bool,
+}
+impl Components {
+    fn of(def: &crate::data::Def) -> Self {
+        Components {
+            body: def.has_component("BodyComponent") || def.health > 0.0,
+            mover: def.has_component("MoverComponent") || def.speed_max > 0.0,
+            performer: def.has_component("PerformerComponent") || def.weapons.iter().any(|w| !w.defender),
+            element: def.has_component("ElementComponent") || matches!(def.class, Some(DefClass::Member)),
+            experience: def.has_component("ExperienceComponent"),
+        }
+    }
+}
+
+/// The CRT `pow` (`_CIpow` 0x96D890, SSE2 body at PC53; aa_numeric::crt_pow),
+/// the host `powf` only where the port declines.
+fn crt_pow(x: f64, y: f64) -> f64 {
+    aa_numeric::crt_pow::ci_pow(x, y, aa_numeric::crt_pow::CrtEnvironment::SSE2_DOUBLE53).map_or_else(|_| x.powf(y), |o| o.value())
+}
+
+/// `4BBF90` (aa_combat::combat_value::mean_values) over the combat things
+/// in definition order (Performer, Body and Mover, not an Element with an
+/// ExperienceComponent): every positive PerformerComponent ability power,
+/// the body defense, the mover speed and the body health. Each column is
+/// sorted descending (`869D30`/`4BB850`: new equal keys after the existing
+/// ones), `ftol(count * discard)` dropped at each end, summed in order with
+/// a store per add, times the unstored `1/n`, stored. Offense is
+/// `attack - defense` and lifetime `fstp(health / offense)`.
 fn means(data: &GameData, rules: &Rules) -> Means {
     let mut attack = Vec::new();
     let (mut defense, mut movement, mut health) = (Vec::new(), Vec::new(), Vec::new());
     for def in &data.defs {
-        if !matches!(def.class, Some(DefClass::Member)) || def.health <= 0.0 {
+        let c = Components::of(def);
+        if !(c.performer && c.body && c.mover && (!c.experience || !c.element)) {
             continue;
         }
-        for w in &def.weapons {
+        for w in def.weapons.iter().filter(|w| !w.defender) {
             if w.damage > 0.0 {
                 attack.push(w.damage);
             }
@@ -492,9 +532,14 @@ fn means(data: &GameData, rules: &Rules) -> Means {
             return 0.0;
         }
         v.sort_by(|a, b| b.total_cmp(a));
-        let k = (v.len() as f32 * rules.cv_discard) as usize;
-        let slice = if 2 * k < v.len() { &v[k..v.len() - k] } else { &v[..] };
-        slice.iter().sum::<f32>() / slice.len() as f32
+        let mut k = x87::mul(v.len() as f64, ld(rules.cv_discard)).trunc() as usize;
+        if 2 * k >= v.len() {
+            // Outside the native domain (an empty trimmed range divides by zero).
+            k = 0;
+        }
+        let slice = &v[k..v.len() - k];
+        let sum = slice.iter().fold(0.0f32, |s, &x| fstp(x87::add(ld(x), ld(s))));
+        fstp(x87::mul(x87::div(1.0, slice.len() as f64), ld(sum)))
     };
     let mut m = Means {
         attack: trimmed(&mut attack),
@@ -503,68 +548,102 @@ fn means(data: &GameData, rules: &Rules) -> Means {
         health: trimmed(&mut health),
         ..Means::default()
     };
-    m.offense = m.attack - m.defense;
-    m.lifetime = if m.offense != 0.0 { m.health / m.offense } else { 0.0 };
+    let offense = x87::sub(ld(m.attack), ld(m.defense));
+    // A zero offense divides by zero natively (degenerate data only).
+    m.lifetime = if offense != 0.0 { fstp(x87::div(ld(m.health), offense)) } else { 0.0 };
+    m.offense = fstp(offense);
     m
 }
 
-/// `45E090` for one ability of a definition without modifiers.
+/// `45E090` (aa_combat::combat_value::ability_value) for one ability of a
+/// definition without modifiers: 0 for an ignore_for_cv ability (`+54` bit
+/// 7); the offense `fstp(area_factor * fstp(range^RangePower) * rate)`
+/// with `rate = fstp(max(power - mean defense, CombatDamageMinimum) /
+/// cycle)`; lifetime, movement, weighted offense, life ratio and defense
+/// factor each stored; the value `fstp(defense_factor * weighted_offense *
+/// movement)` (the property cv sum and the `+210` bias add 0 in the
+/// shipped data). Where the original would divide by zero (a zero cycle,
+/// zero mean movement or lifetime: degenerate data, never the shipped
+/// one) the value stays finite.
 fn ability_value(w: &Weapon, defense: f32, health: f32, speed: f32, m: &Means, r: &Rules) -> f32 {
-    let ranged = w.range >= r.cv_ranged_minimum;
-    let mut offense = 0.0;
-    if w.damage > 0.0 {
-        let damage = (w.damage - m.defense).max(r.damage_minimum);
-        let cycle = w.recharge.max(EPSILON);
-        let rate = damage / cycle;
-        let range_factor = w.range.max(0.0).powf(r.cv_range_power);
-        let area_factor = (w.area * 0.5 + 1.0).powf(r.cv_area_power);
-        offense = area_factor * range_factor * rate;
+    if w.flags & 0x80 != 0 {
+        return 0.0;
     }
-    let lifetime = if health > 0.0 { health / (m.attack - defense) } else { 0.0 };
-    let mut movement = if m.movement != 0.0 { (speed / m.movement - 1.0) * r.cv_movement_weight + 1.0 } else { 0.0 };
-    if movement.is_nan() || movement <= 0.0 {
+    let ranged = !(w.range < r.cv_ranged_minimum);
+    let mut offense = 0.0f32;
+    if w.damage > 0.0 {
+        let mut damage = fstp(x87::sub(ld(w.damage), ld(m.defense)));
+        if damage < r.damage_minimum {
+            damage = r.damage_minimum;
+        }
+        let rate = fstp(x87::div(ld(damage), ld(w.recharge.max(EPSILON))));
+        let range_factor = fstp(crt_pow(ld(w.range), ld(r.cv_range_power)));
+        let area = x87::add(x87::mul(ld(w.area), 0.5), 1.0);
+        let area_factor = crt_pow(area, ld(r.cv_area_power));
+        offense = fstp(x87::mul(x87::mul(area_factor, ld(range_factor)), ld(rate)));
+    }
+    let mut lifetime = 0.0f32;
+    if health > 0.0 {
+        lifetime = fstp(x87::div(ld(health), x87::sub(ld(m.attack), ld(defense))));
+    }
+    let mut movement = if m.movement != 0.0 {
+        fstp(x87::add(x87::mul(x87::sub(x87::div(ld(speed), ld(m.movement)), 1.0), ld(r.cv_movement_weight)), 1.0))
+    } else {
+        0.0
+    };
+    if !(movement > 0.0) {
         movement = r.cv_movement_default;
     }
-    let weighted_offense = (offense - m.offense) * r.cv_offense_weight + m.offense;
-    let life_ratio = if m.lifetime != 0.0 { lifetime / m.lifetime } else { 0.0 };
+    let weighted_offense = fstp(x87::add(x87::mul(x87::sub(ld(offense), ld(m.offense)), ld(r.cv_offense_weight)), ld(m.offense)));
+    let life_ratio = if m.lifetime != 0.0 { fstp(x87::div(ld(lifetime), ld(m.lifetime))) } else { 0.0 };
     let weight = if life_ratio < 1.0 && ranged { r.cv_defense_weight_ranged } else { r.cv_defense_weight };
-    let defense_factor = (life_ratio - 1.0) * weight + 1.0;
-    let value = defense_factor * weighted_offense * movement;
+    let defense_factor = fstp(x87::add(x87::mul(x87::sub(ld(life_ratio), 1.0), ld(weight)), 1.0));
+    let value = fstp(x87::mul(x87::mul(ld(defense_factor), ld(weighted_offense)), ld(movement)));
     if value.is_finite() { value } else { 0.0 }
 }
 
-/// `4618B0` definition value: the best ability value (0 without abilities).
+/// `4618B0` definition value (`+1E4`): with a PerformerComponent the best
+/// `45E090` value over its abilities (a later equal value replaces), with
+/// the body's defense and health and the mover's speed; 0 otherwise.
 pub fn combat_values(data: &GameData, rules: &Rules) -> Vec<f32> {
     let m = means(data, rules);
     data.defs
         .iter()
         .map(|def| {
+            let c = Components::of(def);
+            if !c.performer {
+                return 0.0;
+            }
+            let (defense, health) = if c.body { (def.defense, def.health) } else { (0.0, 0.0) };
+            let speed = if c.mover { def.speed_max } else { 0.0 };
             def.weapons
                 .iter()
-                .map(|w| ability_value(w, def.defense, def.health, def.speed_max, &m, rules))
-                .fold(0.0f32, |best, v| if v >= best { v } else { best })
+                .filter(|w| !w.defender)
+                .map(|w| ability_value(w, defense, health, speed, &m, rules))
+                .fold(0.0f32, |best, v| if !(best > v) { v } else { best })
         })
         .collect()
 }
 
-/// `571820`: `victim/source*0.5 + 0.5`; a zero victim value becomes -1 when
-/// the victim's fake_cv_value is -1, else ExperienceDefaultValue; a
-/// nonpositive source value gives 0.
-pub fn experience_ratio(victim_value: f32, victim_fake_cv: f32, source_value: f32, rules: &Rules) -> f32 {
+/// `571820` (aa_body::experience_amounts::ratio): `victim/source*0.5 + 0.5`
+/// left unstored (x87); a zero victim value becomes -1 when the victim's
+/// fake_cv_value (+4F4) is -1, else ExperienceDefaultValue; a nonpositive
+/// source value gives 0.
+pub fn experience_ratio(victim_value: f32, victim_fake_cv: f32, source_value: f32, rules: &Rules) -> f64 {
     let mut victim = victim_value;
     if victim == 0.0 {
-        victim = if victim_fake_cv == -1.0 { -1.0 } else { rules.experience_default };
+        victim = if victim_fake_cv.to_bits() == 0xbf80_0000 { -1.0 } else { rules.experience_default };
     }
     if source_value <= 0.0 {
         return 0.0;
     }
-    victim / source_value * 0.5 + 0.5
+    x87::add(x87::mul(x87::div(ld(victim), ld(source_value)), 0.5), 0.5)
 }
 
-/// `571960`/`5718E0`: the ratio times the multiplier, clamped to
+/// `571960`/`5718E0`: the ratio times the multiplier, stored, then clamped to
 /// [ExperienceGainMinimum, ExperienceGainMaximum] (minimum checked first).
-pub fn experience_clamped(ratio: f32, multiplier: f32, rules: &Rules) -> f32 {
-    let product = ratio * multiplier;
+pub fn experience_clamped(ratio: f64, multiplier: f32, rules: &Rules) -> f32 {
+    let product = fstp(x87::mul(ratio, ld(multiplier)));
     if product < rules.experience_minimum {
         rules.experience_minimum
     } else if product > rules.experience_maximum {
@@ -575,15 +654,57 @@ pub fn experience_clamped(ratio: f32, multiplier: f32, rules: &Rules) -> f32 {
 }
 
 // ---------------------------------------------------------------------------
+// x87 arithmetic
+
+/// The simulation thread's x87 at PC53 for binary32 operands: one rounding
+/// to 53 bits per operation, binary32 only where the original stores
+/// (`fstp dword`). `aa_numeric::pc53` is exact for every normal-range
+/// result; where it declines (subnormal or overflowing results, which the
+/// combat values never reach) the plain binary64 operation is used.
+pub(crate) mod x87 {
+    use aa_numeric::pc53;
+    #[inline]
+    pub fn add(a: f64, b: f64) -> f64 {
+        pc53::add(a, b).unwrap_or(a + b)
+    }
+    #[inline]
+    pub fn sub(a: f64, b: f64) -> f64 {
+        pc53::sub(a, b).unwrap_or(a - b)
+    }
+    #[inline]
+    pub fn mul(a: f64, b: f64) -> f64 {
+        pc53::mul(a, b).unwrap_or(a * b)
+    }
+    #[inline]
+    pub fn div(a: f64, b: f64) -> f64 {
+        pc53::div(a, b).unwrap_or(a / b)
+    }
+    /// `fstp dword`.
+    #[inline]
+    pub fn store(v: f64) -> f32 {
+        v as f32
+    }
+    /// `fld dword`.
+    #[inline]
+    pub fn load(v: f32) -> f64 {
+        f64::from(v)
+    }
+}
+use x87::{load as ld, store as fstp};
+
+// ---------------------------------------------------------------------------
 // The damage formula
 
-/// `004CA400` kind-4 arithmetic. `power` is the ability power (already with
-/// AV), `defense` the body defense (with DV), `factor` the damage-type factor.
+/// `004CA400` kind-4 arithmetic (aa_combat::hit). `power` is the ability
+/// power (already with AV), `defense` the body defense (with DV), `factor`
+/// the damage-type factor: `offense*power*scale - defense`, times the
+/// factor, in one x87 chain with a single binary32 store, then
+/// CombatDamageMinimum.
 pub fn damage_amount(power: f32, offense: f32, scale: f32, defense: f32, factor: f32, flags: u32, minimum: f32) -> f32 {
-    let base = power.max(0.0);
+    let base = if power < 0.0 { 0.0 } else { power };
     let offense = if flags & 2 != 0 { 1.0 } else { offense };
-    let defense = if flags & 1 != 0 { 0.0 } else { defense.max(0.0) };
-    let amount = (offense * base * scale - defense) * factor;
+    let defense = if flags & 1 != 0 || defense < 0.0 { 0.0 } else { defense };
+    let amount = fstp(x87::mul(x87::sub(x87::mul(x87::mul(ld(offense), ld(base)), ld(scale)), ld(defense)), ld(factor)));
     if amount < minimum { minimum } else { amount }
 }
 
@@ -626,6 +747,15 @@ pub struct Rout {
     pub next_think: f32,
 }
 
+/// `KKC_CAIStateReform` (Mind `+1B8`, Think `51DE70`): entered when a rout
+/// reaches its destination with the regiment no longer exhausted.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reform {
+    /// State `+10` start time.
+    pub since: f32,
+    pub next_think: f32,
+}
+
 /// Combat and morale state of one organization (OrganizationComponent and
 /// its regiment Mind). Readable by the UI and the opponent.
 #[derive(Clone, Debug, Default)]
@@ -663,6 +793,11 @@ pub struct OrgCombat {
     /// Actor state 5 `mind_exhausted`.
     pub exhausted: bool,
     pub routing: Option<Rout>,
+    /// The reform state after a rout's arrival (`5222E0`).
+    pub reform: Option<Reform>,
+    /// The exhausted Mind state (Mind `+270`, Think `51E260`) that follows a
+    /// rout ending at zero morale, until the morale is steady.
+    pub exhausted_state: bool,
     /// Current experience level index (into `DefExtras::levels`).
     pub level: usize,
     /// Since when the organization has been in an entrenchable state.
@@ -717,6 +852,9 @@ pub struct ActorCombat {
     pub roe_retry_at: f32,
     /// Performer turret states (`+4C`, one per `Def::turrets`).
     pub turrets: Vec<TurretState>,
+    /// The regiment target last handed to this member (UAI engage state
+    /// `+10`, written by `532070`).
+    pub engage_target: Option<TargetRef>,
     // ---- appended by the core owner (HUD orders, `tasks`) ----
     /// The task of an actor outside an organization.
     pub task: Option<tasks::Task>,
@@ -1169,41 +1307,63 @@ struct Decision {
 }
 
 /// `5340C0`: the best ability of `shooter` against `target` (the ROE
-/// back-off is checked by the callers through [`roe_backoff`]).
-fn decide(world: &World, st: &CombatState, shooter: ActorId, target: ActorId) -> Option<Decision> {
-    let s = &world.actors[shooter as usize];
-    let t = &world.actors[target as usize];
-    let def = world.data.def(s.def);
-    let distance = s.pos.truncate().distance(t.pos.truncate());
+/// back-off is checked by the callers through [`roe_backoff`]). Each score
+/// (`52ED30`, stored) gets the attacker bonus (`4D4420`,
+/// AbilityScoreAttackerBonus) and is stored again; the higher score wins.
+/// Equal scores: in pursuit (status 2) the longer effective range
+/// (`4C8270`) wins, otherwise the higher ability priority (`4C81C0`, local
+/// `+20`), then the shorter effective range, then one world-RNG draw
+/// (`85D840`, bit 0 takes the newer ability).
+fn decide(world: &mut World, st: &CombatState, shooter: ActorId, target: ActorId) -> Option<Decision> {
+    let data = world.data.clone();
+    let def = data.def(world.actors[shooter as usize].def);
+    let distance = world.actors[shooter as usize].pos.truncate().distance(world.actors[target as usize].pos.truncate());
+    let bonus = if attacks(world, target, shooter) { st.rules().attacker_bonus } else { 0.0 };
     let mut best: Option<Decision> = None;
     for (i, w) in def.weapons.iter().enumerate() {
         if !admits(world, st, shooter, w, target) {
             continue;
         }
-        let left = s.combat.recharge.get(i).copied().unwrap_or(0.0);
+        let left = world.actors[shooter as usize].combat.recharge.get(i).copied().unwrap_or(0.0);
         let status = weapon_status(w, left, distance);
         if status == 3 {
             continue;
         }
-        // 52ED30: factor*priority + bonus + the performer bonus; pursuit takes
-        // the wait weights while the ability is recharging (4C8A40), the move
-        // weights otherwise, and always the performer move bonus.
+        // 52ED30: factor*priority + bonus + the performer bonus, stored; a
+        // pursuit takes the wait weights while the ability is recharging
+        // (4C8A40), the move weights otherwise, stored, then always adds the
+        // performer move bonus (stored again).
+        let weighted = |factor: f32, bonus: f32| x87::add(x87::mul(ld(factor), ld(w.priority)), ld(bonus));
         let mut score = match status {
-            0 => w.use_weight * w.priority + w.use_bonus + def.performer_use_bonus,
-            1 => w.wait_weight * w.priority + w.wait_bonus + def.performer_wait_bonus,
-            _ if left > 0.0 => w.wait_weight * w.priority + w.wait_bonus + def.performer_move_bonus,
-            _ => w.move_weight * w.priority + w.move_bonus + def.performer_move_bonus,
+            0 => fstp(x87::add(weighted(w.use_weight, w.use_bonus), ld(def.performer_use_bonus))),
+            1 => fstp(x87::add(weighted(w.wait_weight, w.wait_bonus), ld(def.performer_wait_bonus))),
+            _ => {
+                let s = if left > 0.0 { fstp(weighted(w.wait_weight, w.wait_bonus)) } else { fstp(weighted(w.move_weight, w.move_bonus)) };
+                fstp(x87::add(ld(def.performer_move_bonus), ld(s)))
+            }
         };
         if w.damage > 0.0 {
-            // 52ED30 player weight: the 501650 damage-type factor of the target.
-            score *= type_factor(world, st, w.damage_type, t);
+            // 52ED30 player weight: the 501650 damage-type factor of the
+            // target times the stored utility, stored by 5340C0.
+            score = fstp(x87::mul(ld(type_factor(world, st, w.damage_type, &world.actors[target as usize])), ld(score)));
         }
+        score = fstp(x87::add(ld(score), ld(bonus)));
         let take = match best {
             None => true,
             Some(b) if score > b.score => true,
             Some(b) if score < b.score => false,
-            // Equal scores: the shorter range wins ("chooses the shortest ranged ability").
-            Some(b) => status != 2 && w.range < def.weapons[b.weapon].range,
+            Some(b) => {
+                let held = &def.weapons[b.weapon];
+                if status == 2 {
+                    held.range < w.range
+                } else if held.priority != w.priority {
+                    held.priority < w.priority
+                } else if held.range != w.range {
+                    held.range > w.range
+                } else {
+                    world.random_u32() & 1 != 0
+                }
+            }
         };
         if take {
             best = Some(Decision { weapon: i, status, score });
@@ -1245,12 +1405,16 @@ fn roe_backoff(world: &World, st: &mut CombatState, actor: ActorId) -> bool {
     }
     let r = st.rules();
     let max = st.actors[i].max_health.max(EPSILON);
-    let mut back = a.health / max < def.primary_minimum_health;
+    let mut back = x87::div(ld(a.health), ld(max)) < ld(def.primary_minimum_health);
     if !back && def.primary_time_to_death > 0.0 {
-        let window = r.roe_history_length.max(EPSILON);
-        let sum: f32 = st.actors[i].history.iter().filter(|(t, _)| now - *t < window).map(|(_, d)| *d).sum();
-        let rate = sum / window;
-        back = rate > 0.0 && a.health / rate < def.primary_time_to_death;
+        // 570E30: records not older than fstp(now - length) (570A70), the
+        // in-order unstored sum over the length, stored by 5340C0; 5617B0
+        // is health / rate.
+        let length = r.roe_history_length.max(EPSILON);
+        let cutoff = fstp(x87::sub(ld(now), ld(length)));
+        let sum = st.actors[i].history.iter().filter(|(t, _)| *t >= cutoff).fold(0.0, |s, (_, d)| x87::add(s, ld(*d)));
+        let rate = fstp(x87::div(sum, ld(length)));
+        back = rate > 0.0 && x87::div(ld(a.health), ld(rate)) < ld(def.primary_time_to_death);
     }
     if back {
         let timeout = r.roe_return_timeout;
@@ -1268,16 +1432,20 @@ struct Candidate {
 }
 
 /// `52F010`: true when `c` beats `best` (priority, then score beyond 1e-4,
-/// then the nearer target).
+/// then the nearer target; squared distances within 1e-4 are equal,
+/// `455000` with `[A02790]`).
 fn better(best: &Option<Candidate>, c: &Candidate) -> bool {
     let Some(b) = best else { return true };
     if b.priority != c.priority {
         return c.priority > b.priority;
     }
-    if (b.score - c.score).abs() >= EPSILON {
-        return c.score > b.score;
+    if !((b.score - c.score).abs() < EPSILON) {
+        return b.score <= c.score;
     }
-    c.distance2 < b.distance2
+    if (b.distance2 - c.distance2).abs() < EPSILON {
+        return false;
+    }
+    !(b.distance2 < c.distance2)
 }
 
 /// `4D4420`: `actor` (or its organization) is attacking `us` (or our organization).
@@ -1288,39 +1456,96 @@ fn attacks(world: &World, actor: ActorId, us: ActorId) -> bool {
     t == us || (our_org.is_some() && world.actors.get(t as usize).and_then(|x| x.org) == our_org)
 }
 
-/// `527240` for an element Mind choosing among elements.
+/// The organization an actor is attached to (membership `+80` with its
+/// `+10` organization and the attached byte `+1C`).
+fn attached_org(world: &World, actor: &crate::world::Actor) -> Option<OrgId> {
+    actor.org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive))
+}
+
+/// The target's Mind virtual `+58`: an attached element answers with its
+/// organization's behaviour (`52DD00` -> CAI `51D410`: the Mind state's
+/// behavior_required, DESIRED reading the organization `+8D` byte), an
+/// unattached element with whether it has a performer (`+74`); an actor
+/// without a Mind (a building) answers false.
+fn mind_aggressive(world: &World, st: &CombatState, t: TargetRef) -> bool {
+    match t {
+        TargetRef::Org(o) => behavior(world, st, o).0,
+        TargetRef::Actor(a) => {
+            let Some(actor) = world.actors.get(a as usize) else { return false };
+            if let Some(o) = attached_org(world, actor) {
+                return behavior(world, st, o).0;
+            }
+            let def = world.data.def(actor.def);
+            matches!(def.class, Some(DefClass::Member)) && !def.weapons.is_empty()
+        }
+    }
+}
+
+/// The harmless classes of `527240` / `537530`: 4 for the current target,
+/// 1 for a plain body (Body `+60`, neither captureable `+290` nor
+/// destructible `+291`), else 2.
+fn harmless_priority(world: &World, target: ActorId, current: bool) -> i32 {
+    if current {
+        return 4;
+    }
+    let def = world.data.def(world.actors[target as usize].def);
+    if def.health > 0.0 && !def.captureable && !def.destructible { 1 } else { 2 }
+}
+
+/// `537530` (element Mind virtual `+1AC`): 0 for a target `4D4FF0(target,
+/// 1, 0)` refuses (not an attackable enemy). The current target is the
+/// regiment's (CAI `+4C`, `522700`: the target of its attack command, none
+/// for a wall `+90`) for an attached element, the element's own kill target
+/// (`530DC0`) otherwise; a member of the current target organization counts
+/// as it.
+/// Then 6 with KillTargetIsHighestPriority, the harmless classes, 5 when
+/// current or the target's Mind is aggressive, else 3.
 fn element_priority(world: &World, st: &CombatState, shooter: ActorId, target: ActorId) -> i32 {
-    let current = world.actors[shooter as usize].combat.target == Some(target);
-    if current && st.rules().kill_target_highest {
+    let s = &world.actors[shooter as usize];
+    let t = &world.actors[target as usize];
+    if !targetable(world, target) || !st.hostile(s.kingdom, t.kingdom) {
+        return 0;
+    }
+    let current = match attached_org(world, s) {
+        Some(o) => st.orgs[o as usize].explicit.filter(|c| match c {
+            TargetRef::Actor(a) => world.actors.get(*a as usize).is_none_or(|x| !world.data.def(x.def).has_component("WallComponent")),
+            TargetRef::Org(_) => true,
+        }),
+        None => s.combat.target.map(TargetRef::Actor),
+    };
+    let target_org = attached_org(world, t);
+    let is_current = current.is_some_and(|c| c == TargetRef::Actor(target) || target_org.is_some_and(|o| c == TargetRef::Org(o)));
+    if is_current && st.rules().kill_target_highest {
         return 6;
     }
     if harmless(world, target) {
-        return if current { 4 } else { 1 };
+        return harmless_priority(world, target, is_current);
     }
-    let fighting = world.actors[target as usize].combat.target.is_some();
-    if current || fighting { 5 } else { 3 }
+    if is_current || mind_aggressive(world, st, TargetRef::Actor(target)) { 5 } else { 3 }
 }
 
-/// `534700` over the given candidates for one shooter.
-fn choose(world: &World, st: &CombatState, shooter: ActorId, candidates: &[ActorId]) -> Option<ActorId> {
-    let s = &world.actors[shooter as usize];
+/// `534700` over the given candidates for one shooter: a candidate needs a
+/// nonzero priority (`+1AC`) not below the best one's so far, and at least
+/// `min_priority` unless it is `engage_object` (`535910` passes 2 and the
+/// engage target object); then its `5340C0` decision ranked by `52F010`.
+/// The distance is `5340C0`'s stored `dy*dy + dx*dx`.
+fn choose(world: &mut World, st: &CombatState, shooter: ActorId, candidates: &[ActorId], engage_object: Option<ActorId>, min_priority: i32) -> Option<ActorId> {
     let mut best: Option<Candidate> = None;
     for &c in candidates {
-        if c == shooter || !targetable(world, c) || !st.hostile(s.kingdom, world.actors[c as usize].kingdom) {
+        if c == shooter {
+            continue;
+        }
+        let priority = element_priority(world, st, shooter, c);
+        if priority == 0
+            || best.is_some_and(|b| priority < b.priority)
+            || (Some(c) != engage_object && priority < min_priority)
+        {
             continue;
         }
         let Some(d) = decide(world, st, shooter, c) else { continue };
-        let priority = element_priority(world, st, shooter, c);
-        if priority == 0 {
-            continue;
-        }
-        let bonus = if attacks(world, c, shooter) { st.rules().attacker_bonus } else { 0.0 };
-        let cand = Candidate {
-            actor: c,
-            priority,
-            score: d.score + bonus,
-            distance2: s.pos.truncate().distance_squared(world.actors[c as usize].pos.truncate()),
-        };
+        let (s, t) = (world.actors[shooter as usize].pos, world.actors[c as usize].pos);
+        let (dx, dy) = (x87::sub(ld(s.x), ld(t.x)), x87::sub(ld(s.y), ld(t.y)));
+        let cand = Candidate { actor: c, priority, score: d.score, distance2: fstp(x87::add(x87::mul(dy, dy), x87::mul(dx, dx))) };
         if better(&best, &cand) {
             best = Some(cand);
         }
@@ -1328,20 +1553,30 @@ fn choose(world: &World, st: &CombatState, shooter: ActorId, candidates: &[Actor
     best.map(|c| c.actor)
 }
 
-/// `527240` for the regiment Mind (organization targets are never harmless).
+/// `527240` for the regiment Mind: its current target is the explicit
+/// attack (CAI `+4C`); an organization target is never harmless (`4D03F0`
+/// is false with an OrganizationComponent).
 fn regiment_priority(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> i32 {
     let current = st.orgs[org as usize].explicit == Some(t);
     if current && st.rules().kill_target_highest {
         return 6;
     }
-    let (harmless_target, fighting) = match t {
-        TargetRef::Org(o) => (false, st.orgs.get(o as usize).is_some_and(|x| x.engaging())),
-        TargetRef::Actor(a) => (harmless(world, a), world.actors.get(a as usize).is_some_and(|x| x.combat.target.is_some())),
-    };
-    if harmless_target {
-        return if current { 4 } else { 1 };
+    if let TargetRef::Actor(a) = t
+        && harmless(world, a)
+    {
+        return harmless_priority(world, a, current);
     }
-    if current || fighting { 5 } else { 3 }
+    if current || mind_aggressive(world, st, t) { 5 } else { 3 }
+}
+
+/// `5210D0` on the regiment engage state: the actor itself or its
+/// organization is on the engage list (any priority).
+fn engage_keeps(world: &World, st: &CombatState, org: OrgId, actor: ActorId) -> bool {
+    let own = world.actors.get(actor as usize).and_then(|a| attached_org(world, a));
+    st.orgs[org as usize]
+        .engage
+        .iter()
+        .any(|n| n.target == TargetRef::Actor(actor) || own.is_some_and(|o| n.target == TargetRef::Org(o)))
 }
 
 /// `51FE60` (from the head): before the first node whose priority is >= it.
@@ -1355,9 +1590,15 @@ fn insert_sorted(list: &mut Vec<EngageTarget>, target: TargetRef, priority: i32)
 fn within_operating(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
     let o = &world.orgs[org as usize];
     let radius = world.data.def(o.def).operational_range;
-    let r2 = radius * radius;
+    // 466D3D: +304 = fstp(operational_range^2); 578470 (aa_combat::
+    // engagement::within_operating_radius): unstored dx*dx + dy*dy <= +304.
+    let r2 = ld(fstp(x87::mul(ld(radius), ld(radius))));
     let pos = st.orgs[org as usize].position;
-    let near = |a: ActorId| alive(world, a) && world.actors[a as usize].pos.truncate().distance_squared(pos) <= r2;
+    let near = |a: ActorId| {
+        let p = world.actors[a as usize].pos;
+        let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
+        alive(world, a) && x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= r2
+    };
     match t {
         TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&m| near(m)),
         TargetRef::Actor(a) => near(a),
@@ -1618,48 +1859,94 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
         }
         _ => {}
     }
-    assign_members(world, st, id, think);
+    assign_members(world, st, id);
 }
 
-/// `536E10` per member: keep or reselect a target inside the engaged target.
-fn assign_members(world: &mut World, st: &mut CombatState, id: OrgId, think: bool) {
+/// The regiment's members against its engaged target. `526A70` step 5 hands
+/// every member the tail target (UAI `+F0`, `532070`); `536E10` keeps a
+/// member's kill target while its kill state is active (the target valid)
+/// and the regiment's engage list still holds the handed target (`5210D0`;
+/// the tail always is on it here); otherwise `535910` picks one: `534700`
+/// over the eligible actors within the operational range of the organization
+/// position (`558150` -> `578470`: `dx*dx + dy*dy <= +304`, the squared
+/// range) that the regiment's engage list holds, itself or through its
+/// organization (UAI `+A0`, `52DCA0` -> `5210D0`), with minimum priority 2.
+/// `52DCA0` also admits allies (actor virtual `+164`: `+138` on the
+/// candidate's owner), which `537530` then answers with priority 0.
+fn assign_members(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
     let now = world.time;
     let tail = st.orgs[i].current_target();
-    let explicit = st.orgs[i].explicit;
     let members = world.orgs[i].members.clone();
     let Some(t) = tail.filter(|_| st.orgs[i].routing.is_none()) else {
         for m in members {
             if let Some(a) = world.actors.get_mut(m as usize) {
                 a.combat.target = None;
             }
+            if let Some(s) = st.actors.get_mut(m as usize) {
+                s.engage_target = None;
+            }
         }
         return;
     };
-    // Candidates (558150): the target's live members within the operational
-    // range of the organization (no radius limit for an explicit attack).
     let pos = st.orgs[i].position;
-    let radius = world.data.def(world.orgs[i].def).operational_range;
+    let range = world.data.def(world.orgs[i].def).operational_range;
+    // 466D3D: +304 = fstp(operational_range * operational_range).
+    let r2 = fstp(x87::mul(ld(range), ld(range)));
+    let within = |world: &World, a: ActorId| {
+        let p = world.actors[a as usize].pos;
+        let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
+        x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= ld(r2)
+    };
     let mut candidates = std::mem::take(&mut st.scratch);
     candidates.clear();
-    match t {
-        TargetRef::Org(o) => candidates.extend(world.orgs[o as usize].members.iter().copied().filter(|&m| {
-            alive(world, m) && (explicit == Some(t) || world.actors[m as usize].pos.truncate().distance_squared(pos) <= radius * radius)
-        })),
-        TargetRef::Actor(a) => candidates.push(a),
+    // Playability bridge: the movement system holds an attacking regiment
+    // at its weapon range (not the original CAI kill move, which walks on
+    // until the target enters the control zone), so the explicit target's
+    // members stay candidates beyond the operational range.
+    let explicit = st.orgs[i].explicit;
+    for n in &st.orgs[i].engage {
+        let reach = |world: &World, a: ActorId| Some(n.target) == explicit || within(world, a);
+        match n.target {
+            TargetRef::Org(o) => {
+                for &m in &world.orgs[o as usize].members {
+                    if alive(world, m) && reach(world, m) && !candidates.contains(&m) {
+                        candidates.push(m);
+                    }
+                }
+            }
+            TargetRef::Actor(a) => {
+                if alive(world, a) && reach(world, a) && !candidates.contains(&a) {
+                    candidates.push(a);
+                }
+            }
+        }
     }
+    // 535910's object: the engage target, an organization actor (never a
+    // member candidate) or the actor itself.
+    let engage_object = match t {
+        TargetRef::Actor(a) => Some(a),
+        TargetRef::Org(_) => None,
+    };
     for m in members {
         if !alive(world, m) || st.actors[m as usize].queued_death {
             continue;
         }
         let current = world.actors[m as usize].combat.target;
-        let valid = current.is_some_and(|c| valid_target(world, st, m, c) && candidates.contains(&c));
-        if !think && valid {
+        let kill_active = current.is_some_and(|c| valid_target(world, st, m, c));
+        // 532070: a new engage target re-enters the engage state (reselect).
+        let handed = st.actors[m as usize].engage_target.replace(t);
+        // Playability bridge: `536E10` asks `5210D0` about the handed target
+        // only, and the kill state walks after its target. Members here do
+        // not chase, so a kill target that left the engage list is dropped
+        // rather than kept out of reach.
+        if handed == Some(t) && kill_active && current.is_some_and(|c| engage_keeps(world, st, id, c)) {
             continue;
         }
-        let chosen = if now < st.actors[m as usize].roe_retry_at { None } else { choose(world, st, m, &candidates) };
-        if chosen.is_some() && current.is_none() {
-            // 52E830 engage reaction delay: u * EngageReactionTimeRange.
+        let chosen = if now < st.actors[m as usize].roe_retry_at { None } else { choose(world, st, m, &candidates, engage_object, 2) };
+        if chosen.is_some() && !kill_active {
+            // 536E10 -> 52E830 engage reaction delay (the kill state was not
+            // active): u * EngageReactionTimeRange.
             let delay = (world.random() * st.rules().engage_reaction_range).max(EPSILON);
             st.actors[m as usize].ready_at = now + delay;
         }
@@ -1681,8 +1968,9 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
         if tasks::lone_think(world, st, id) {
             continue;
         }
+        let data = world.data.clone();
         let a = &world.actors[id as usize];
-        let def = world.data.def(a.def);
+        let def = data.def(a.def);
         if def.weapons.is_empty() || matches!(def.class, Some(DefClass::Truck)) {
             continue;
         }
@@ -1693,8 +1981,12 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
         st.actors[id as usize].next_think = now + ENGAGE_THINK_SECONDS;
         let mut candidates = std::mem::take(&mut st.scratch);
         candidates.clear();
+        let mut ordered = None;
         match a.order {
-            Order::Attack { target } => candidates.push(target),
+            Order::Attack { target } => {
+                candidates.push(target);
+                ordered = Some(target);
+            }
             _ => {
                 let range = def.weapons.iter().map(|w| w.range).fold(0.0f32, f32::max);
                 let pos = a.pos.truncate();
@@ -1702,7 +1994,9 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
                 candidates.retain(|&c| world.actors[c as usize].pos.truncate().distance_squared(pos) <= range * range);
             }
         }
-        let chosen = choose(world, st, id, &candidates);
+        // Outside an organization there is no regiment engage list: every
+        // nonzero priority competes (the ordered target is the object).
+        let chosen = choose(world, st, id, &candidates, ordered, 0);
         st.scratch = candidates;
         let prev = world.actors[id as usize].combat.target;
         if chosen.is_some() && prev.is_none() {
@@ -1938,12 +2232,10 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
     let center = present.map_or(point, |t| world.actors[t as usize].pos.truncate());
     let mut found = std::mem::take(&mut st.scratch);
     st.grid.query(center, w.area, &mut found);
-    let kingdom = world.actors[shooter as usize].kingdom;
+    // 4C9C90: every actor of the area query the ability admits (4C8740 with
+    // the ability's target filter, which decides friend or enemy).
     found.retain(|&c| {
-        targetable(world, c)
-            && st.hostile(kingdom, world.actors[c as usize].kingdom)
-            && world.actors[c as usize].pos.truncate().distance(center) <= w.area
-            && admits(world, st, shooter, w, c)
+        targetable(world, c) && world.actors[c as usize].pos.truncate().distance(center) <= w.area && admits(world, st, shooter, w, c)
     });
     if w.max_targets > 0 {
         found.sort_by(|&a, &b| {
@@ -1953,16 +2245,35 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
         });
         found.truncate(w.max_targets as usize);
     }
+    // 4C9550 phase 3 (aa_combat::execution::use_ability): attenuated when
+    // attenuation_range_min < area and attenuation_factor_max < 0x3F7FF972
+    // (0.9999). The distance is fstp(sqrt(dx*dx + dy*dy)) less the target
+    // radius (DefaultRadius here), at least 0; past attenuation_range_min
+    // the scale is fstp(1 - (1 - factor) * (distance - min) / (area - min)),
+    // clamped to [factor, 1].
     let radius = st.rules().default_radius;
-    let attenuated = w.attenuation_range_min < w.area && w.attenuation_factor_max < 0.99999;
+    let attenuated = w.attenuation_range_min < w.area && w.attenuation_factor_max < f32::from_bits(0x3f7f_f972);
     for &c in &found {
         let mut scale = 1.0;
         if attenuated {
-            let distance = (world.actors[c as usize].pos.truncate().distance(center) - radius).max(0.0);
-            let width = w.area - w.attenuation_range_min;
-            if distance > w.attenuation_range_min && width > 0.0 {
-                let ratio = (distance - w.attenuation_range_min) / width;
-                scale = (1.0 - (1.0 - w.attenuation_factor_max) * ratio).clamp(w.attenuation_factor_max, 1.0);
+            let p = world.actors[c as usize].pos;
+            let (dx, dy) = (x87::sub(ld(center.x), ld(p.x)), x87::sub(ld(center.y), ld(p.y)));
+            let length = fstp(x87::add(x87::mul(dx, dx), x87::mul(dy, dy)).sqrt());
+            let mut distance = x87::sub(ld(length), ld(radius));
+            if distance < 0.0 {
+                distance = 0.0;
+            }
+            let (min, factor) = (ld(w.attenuation_range_min), ld(w.attenuation_factor_max));
+            let width = x87::sub(ld(w.area), min);
+            if distance > min && width > 0.0 {
+                let ratio = x87::div(x87::sub(distance, min), width);
+                scale = fstp(x87::sub(1.0, x87::mul(x87::sub(1.0, factor), ratio)));
+                if scale < w.attenuation_factor_max {
+                    scale = w.attenuation_factor_max;
+                }
+                if scale > 1.0 {
+                    scale = 1.0;
+                }
             }
         }
         apply_hit(world, st, shooter, w, c, scale);
@@ -1997,10 +2308,11 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
     st.actors[target as usize].last_hit = Some((shooter, now));
     st.actors[target as usize].last_damage = Some((amount, Some(w.damage_type)));
     if is_primary(world, target) {
-        // 570F70 / 570A70: the primary's damage history.
-        let window = st.rules().roe_history_length;
+        // 570F70 / 570A70: the primary's damage history, pruned of records
+        // older than fstp(now - ROEPrimaryDamageHistoryLength).
+        let cutoff = fstp(x87::sub(ld(now), ld(st.rules().roe_history_length)));
         let h = &mut st.actors[target as usize].history;
-        h.retain(|(t, _)| now - *t < window);
+        h.retain(|(t, _)| *t >= cutoff);
         h.push((now, amount));
     }
     let kingdom = world.actors[shooter as usize].kingdom;
@@ -2027,14 +2339,14 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
     }
     if let Some(o) = victim_org {
         st.orgs[o as usize].last_hit = Some((shooter, now));
-        // 579490 OnElementDamaged: attacker inside the operating radius is
-        // engaged when the behavior is aggressive or the Mind is free.
+        // 579490 OnElementDamaged: an attacker itself inside the operating
+        // radius (578470 on the attacker) is engaged (524C10, resolved to
+        // its organization) when the behavior is aggressive or the Mind is
+        // free.
         let (aggressive, free) = behavior(world, st, o);
-        if (aggressive || free) && st.orgs[o as usize].routing.is_none() {
+        if (aggressive || free) && st.orgs[o as usize].routing.is_none() && within_operating(world, st, o, TargetRef::Actor(shooter)) {
             let t = target_ref(world, shooter);
-            if within_operating(world, st, o, t) {
-                add_engage_target(world, st, o, t);
-            }
+            add_engage_target(world, st, o, t);
         }
     }
 }
@@ -2074,9 +2386,10 @@ pub(crate) fn kingdom_hit_amount(world: &World, st: &CombatState, target: ActorI
 }
 
 /// ADD_DAMAGE and periodic damage (`4CA400` other kinds): type factor x
-/// amount, no defense, no minimum.
+/// amount (stored once), no defense, no minimum.
 pub(crate) fn add_damage_amount(world: &World, st: &CombatState, target: ActorId, amount: f32, damage_type: u32) -> f32 {
-    amount.max(0.0) * type_factor(world, st, damage_type, &world.actors[target as usize])
+    let base = if amount < 0.0 { 0.0 } else { amount };
+    fstp(x87::mul(ld(type_factor(world, st, damage_type, &world.actors[target as usize])), ld(base)))
 }
 
 /// Damage from a kingdom (a special operation): Body `5625C0` without an
@@ -2287,6 +2600,48 @@ fn corpses(world: &mut World, st: &mut CombatState) {
 /// Combat state of an organization, for the UI and the opponent.
 pub fn org_state(world: &World, org: OrgId) -> Option<&OrgCombat> {
     world.combat.org(org)
+}
+
+#[cfg(test)]
+mod native_tests {
+    use super::*;
+
+    /// 4CA400 keeps the chain on the x87 stack and stores once:
+    /// (0.7f * 5 - 2) * 0.8f is stored as 0x3F999999, where rounding every
+    /// operation to binary32 would give 0x3F99999A.
+    #[test]
+    fn hit_arithmetic_stores_once() {
+        let amount = damage_amount(5.0, 0.7, 1.0, 2.0, 0.8, 0, 1.0);
+        assert_eq!(amount.to_bits(), 0x3f99_9999);
+        assert_eq!(((0.7f32 * 5.0 - 2.0) * 0.8).to_bits(), 0x3f99_999a);
+    }
+
+    /// 52F010: priority first, scores within 1e-4 tie, squared distances
+    /// within 1e-4 are equal (455000), otherwise the nearer wins.
+    #[test]
+    fn candidate_ranking() {
+        let c = |priority, score, distance2| Candidate { actor: 0, priority, score, distance2 };
+        assert!(better(&None, &c(1, 0.0, 0.0)));
+        assert!(better(&Some(c(3, 9.0, 1.0)), &c(5, 1.0, 9.0)));
+        assert!(!better(&Some(c(5, 1.0, 1.0)), &c(3, 9.0, 0.0)));
+        assert!(better(&Some(c(5, 1.0, 9.0)), &c(5, 1.5, 9.0)));
+        assert!(better(&Some(c(5, 1.0, 9.0)), &c(5, 1.00005, 4.0)), "scores tie, nearer wins");
+        assert!(!better(&Some(c(5, 1.0, 100.0)), &c(5, 1.0, 100.00005)), "equal distances keep the best");
+        assert!(!better(&Some(c(5, 1.0, 4.0)), &c(5, 1.0, 9.0)));
+    }
+
+    /// 571820 / 571960: the ratio stays unstored until the multiplier
+    /// product is stored and clamped.
+    #[test]
+    fn experience_amounts() {
+        let rules = Rules::from_data(&GameData::default());
+        let ratio = experience_ratio(30.0, -1.0, 20.0, &rules);
+        assert_eq!(ratio, 1.25);
+        assert_eq!(experience_clamped(ratio, 1.0, &rules), 1.25);
+        assert_eq!(experience_ratio(0.0, -1.0, 20.0, &rules), x87::add(x87::mul(-1.0 / 20.0, 0.5), 0.5));
+        assert_eq!(experience_ratio(5.0, -1.0, 0.0, &rules), 0.0);
+        assert_eq!(experience_clamped(100.0, 1.0, &rules), rules.experience_maximum);
+    }
 }
 
 #[cfg(test)]

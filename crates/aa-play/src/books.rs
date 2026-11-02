@@ -29,13 +29,9 @@ pub struct Books {
     /// empty means the team rule (same team friend, else enemy).
     pub relations: Vec<Vec<u8>>,
     /// The tiles each zone of `zones` covers (same order; sorted tile
-    /// indices of the ZoneSolver flood, `supply::flood_tiles`).
+    /// indices of the ZoneSolver flood, read from the zone engine).
     #[serde(skip)]
     pub zone_tiles: Vec<std::sync::Arc<Vec<u32>>>,
-    /// Flood results by (start tile, radius bits): the map does not change
-    /// during a battle, so a zone is flooded again only when it moves.
-    #[serde(skip)]
-    pub zone_floods: std::collections::HashMap<(u32, u32), std::sync::Arc<Vec<u32>>>,
     /// The live denizen groups (0x568180 objects; the aircraft formation
     /// groups of AircraftComponent +0xA8/+0xAC), by id (`crate::denizen`).
     #[serde(default)]
@@ -114,6 +110,12 @@ pub struct ActorBooks {
     /// the city zone (head first), pruned by the City Tick 0x564C10.
     #[serde(default)]
     pub city_candidates: Vec<CityCandidateRef>,
+    /// (supplyfog) CityComponent +0x20: under siege, set by the City Tick
+    /// 0x5647A0 (an attack that neither takes the city nor falls below the
+    /// last allied candidate's value), cleared at each tick and when the
+    /// zone empties (0x564C10); such a city provides no supply (0x58ACE0).
+    #[serde(default)]
+    pub city_siege: bool,
     pub queue: Queue,
     pub deploy: Option<Deployment>,
     /// Battle time this actor was created (construction/unpack start).

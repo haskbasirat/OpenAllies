@@ -83,6 +83,10 @@ impl World {
         // special operations, enchantments (expiry, periodic effects) and
         // the SAI general powers
         crate::special_ops::tick(self);
+        // appended by the scenarios owner: the World+13C trigger manager
+        // (0x4F9AC2 `call 54C280`, after the queues and phase 4, before
+        // phase 5 and the +208 queue).
+        crate::triggers::tick(self);
         // (core) step 8 of 0x4F9970: the deferred +208 (the minds' "schedule
         // in" re-thinks), after the passes that stand for phases 4 and 5.
         crate::scheduler::think(self);

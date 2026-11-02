@@ -40,6 +40,47 @@ pub mod message {
     pub const MISSION_WON: u32 = 0x35;
 }
 
+/// The OBJECTIVES chunk as the map load reads it between TEAMS and KINGDOMS
+/// (`4FCB3B`): a signed count, then per World+250 MapString object
+/// (`502FC0`, version 0 only): version word, key string, display key string
+/// (u16 length + UTF-16 units), the display text resolved by 49AD70 when the
+/// display key is not empty, and the +10 flag byte; then the World+25C word.
+/// An object is appended only after its whole record was read (4FCBB2).
+/// Returns the definitions and World+25C.
+pub fn load_chunk(
+    bytes: &[u8],
+    mut lookup: impl FnMut(&[u16]) -> std::result::Result<Vec<u16>, String>,
+) -> std::result::Result<(Vec<ObjectiveDef>, u32), String> {
+    let mut at = 0usize;
+    let mut take = |n: usize| -> std::result::Result<&[u8], String> {
+        let end = at.checked_add(n).ok_or("OBJECTIVES stream position overflow")?;
+        let v = bytes.get(at..end).ok_or("OBJECTIVES stream is truncated")?;
+        at = end;
+        Ok(v)
+    };
+    fn word(v: &[u8]) -> u32 {
+        u32::from_le_bytes(v.try_into().unwrap())
+    }
+    let count = word(take(4)?) as i32;
+    let mut out = Vec::new();
+    for _ in 0..count.max(0) {
+        if word(take(4)?) != 0 {
+            return Err("MapString objective version other than 0 (502FC0 diagnostic path)".into());
+        }
+        let mut string = || -> std::result::Result<Vec<u16>, String> {
+            let n = u16::from_le_bytes(take(2)?.try_into().unwrap()) as usize;
+            Ok(take(n * 2)?.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect())
+        };
+        let name = string()?;
+        let display_key = string()?;
+        let text = if display_key.is_empty() { Vec::new() } else { lookup(&display_key)? };
+        let flag_10 = take(1)?[0];
+        out.push(ObjectiveDef { name, text, flag_10 });
+    }
+    let word_25c = word(take(4)?);
+    Ok((out, word_25c))
+}
+
 pub fn wcscmp(a: &[u16], b: &[u16]) -> Ordering {
     let a = a.iter().copied().take_while(|c| *c != 0);
     let b = b.iter().copied().take_while(|c| *c != 0);
@@ -226,4 +267,67 @@ pub fn set_mission_result<S: MissionServices + ?Sized>(
         s.world_mission_result(kingdom)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod chunk_tests {
+    use super::load_chunk;
+
+    fn string(out: &mut Vec<u8>, s: &str) {
+        let u: Vec<u16> = s.encode_utf16().collect();
+        out.extend((u.len() as u16).to_le_bytes());
+        for c in u {
+            out.extend(c.to_le_bytes());
+        }
+    }
+
+    fn chunk() -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend(2i32.to_le_bytes());
+        // version 0, key, display key, +10 flag
+        b.extend(0u32.to_le_bytes());
+        string(&mut b, "Primary1");
+        string(&mut b, "obj_text");
+        b.push(1);
+        // an empty display key resolves nothing
+        b.extend(0u32.to_le_bytes());
+        string(&mut b, "Secondary1");
+        string(&mut b, "");
+        b.push(0);
+        // World+25C
+        b.extend(7u32.to_le_bytes());
+        b
+    }
+
+    #[test]
+    fn load_chunk_reads_the_map_objectives() {
+        let (defs, word) = load_chunk(&chunk(), |k| {
+            assert_eq!(String::from_utf16_lossy(k), "obj_text");
+            Ok("Take the bridge".encode_utf16().collect())
+        })
+        .unwrap();
+        assert_eq!(word, 7);
+        assert_eq!(defs.len(), 2);
+        assert_eq!(String::from_utf16_lossy(&defs[0].name), "Primary1");
+        assert_eq!(String::from_utf16_lossy(&defs[0].text), "Take the bridge");
+        assert_eq!(defs[0].flag_10, 1);
+        assert_eq!(String::from_utf16_lossy(&defs[1].name), "Secondary1");
+        assert!(defs[1].text.is_empty());
+        assert_eq!(defs[1].flag_10, 0);
+    }
+
+    #[test]
+    fn load_chunk_refuses_what_the_original_refuses() {
+        // a truncated stream and a newer record version are errors, not a
+        // partial list
+        let whole = chunk();
+        assert!(load_chunk(&whole[..whole.len() - 1], |_| Ok(Vec::new())).is_err());
+        let mut newer = whole;
+        newer[4] = 1;
+        assert!(load_chunk(&newer, |_| Ok(Vec::new())).is_err());
+        // a negative count reads no record
+        let mut none = (-1i32).to_le_bytes().to_vec();
+        none.extend(9u32.to_le_bytes());
+        assert_eq!(load_chunk(&none, |_| Ok(Vec::new())).unwrap(), (Vec::new(), 9));
+    }
 }

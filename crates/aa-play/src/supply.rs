@@ -1,48 +1,76 @@
-//! Supply zones of HQs, depots and cities: healing and member
-//! replacement for attached regiments inside a zone. Owner: core.
+//! Supply: the supply components of HQs, depots, HQ trucks and cities, the
+//! in-supply state (actor state 19) of the things that need supply,
+//! regeneration and member replacement, and the city capture. Owner:
+//! supplyfog.
 //!
-//! Behaviour-faithful port of the original supply (aa-economy `supply.rs`):
-//! - SupplyComponent Tick 0x58AE10: a relay (division HQ, depot) searches
-//!   the supply zones of its kingdom it stands in for a supplier that reaches
-//!   a primary (non-relay) source 0x58ADB0; a relay without one is out of
-//!   supply, drains its stockpile one second per second and keeps providing
-//!   supply while it lasts (0x4D0C90); a connected relay recharges at
-//!   SupplyStockpileRechargeRate up to stockpile_max; the zone (centre,
-//!   supply_range) is active while 0x58ACE0 provides_supply holds (owned,
-//!   not packing/unpacking, relay stock, radius >= 0);
-//! - actor in supply 0x4D0A80 and state 19 update 0x4D7CE0: suppliers that
-//!   are primary sources always, members of a supply_used organization with
-//!   their organization, an organization only while attached to a living HQ
-//!   (unless in_supply_detached) and standing in a zone of its kingdom,
-//!   everything else when its tile is in a zone of its kingdom;
+//! The supply rules run on the exact port of AA.exe (aa-economy `supply`,
+//! proven against the native code, x87 arithmetic at PC53), bound to the
+//! battle world by [`Binding`] and to the exact zones of [`crate::zones`]:
+//! - SupplyComponent Tick 0x58AE10 ([`supplier_tick`], queue 1: one second in
+//!   its bucket; InitExisting 0x58B0E0 runs it with 0 s when the supplier
+//!   first appears): a relay (division HQ, depot, HQ truck) collects the
+//!   supply providers of every kingdom allied with its owner whose zone
+//!   covers its tile (its shape's tiles for a large structure, 0x554CC0 +
+//!   0x54F8F0, newest found first) and links to the first one that is in
+//!   supply and reaches a primary source (0x58ADB0); then the state 0x4D7CE0;
+//!   a relay out of supply drains its stockpile by the elapsed time (its zone
+//!   stays while stock is left, 0x4D0C90), a connected one recharges at
+//!   SupplyStockpileRechargeRate up to stockpile_max, starting empty
+//!   (constructor 0x58AA50); then the zone: 0x58ACE0 provides (a major
+//!   kingdom's, not disabled (packing/unpacking), not under construction, not
+//!   dead, a relay's stock, radius >= 0, a city not under siege) against the
+//!   active zone 0: release 0x514CE0, (re)place 0x515F40 when it starts
+//!   providing or its radius changed (0x58AA20: SUPPLY_RANGE modifiers, such
+//!   as tech_improved_logistics +5, through 0x45D550 / 0x501BD0);
+//! - in supply 0x4D0A80: a primary source always; an organization member
+//!   with its supply_used organization's state; nothing of an independent
+//!   kingdom; an organization only when nobody engages it (+0x118), it rides
+//!   no transport (+0xD4) and it is in_supply_detached, attached to an HQ
+//!   (+0xD0), an HQ itself (+0xD8) or SUPPLIED; SUPPLIED without an upkeep
+//!   shortage is in supply; a relay while its link resolves; anything else
+//!   when a supply zone of any kingdom allied with its owner, not its own,
+//!   covers its tile (0x54F8B0, any shape tile for a large structure);
+//! - the state 0x4D7CE0 is taken only by the things that need supply: the
+//!   suppliers (their Tick), an EconomyComponent with supply_required (its
+//!   queue-1 Tick 0x56F2B0, [`economy_tick`]), a supply_used organization
+//!   (its TickMaintenance 0x57C8E0, [`org_maintenance`]) and a lone Body with
+//!   unit_shortfall_damage_rate (0x562E10, [`body_supply_tick`]); members and
+//!   the rest never leave supply;
 //! - regeneration 0x57B5A0 behind the 0x579110 gate (supply_used, in supply,
-//!   not engaged): one slot per tick, a damaged primary first, then the first
-//!   damaged member, then an absent primary, then the first empty slot with a
-//!   Body; members heal resupply_rate * max_health * (1 - shortage) * dt, an
-//!   empty slot builds up the same amount until it reaches the slot
-//!   definition's health and the member is created (0x57AD30).
+//!   nobody engaging it, a resupply mind state): one slot per tick, a damaged
+//!   primary first, then the first damaged member, then an absent primary,
+//!   then the first empty slot with a Body; members heal resupply_rate *
+//!   max_health * (1 - shortage) * dt, an empty slot builds up the same
+//!   amount until it reaches the slot definition's health and the member is
+//!   created (0x57AD30).
 //!
-//! (fog owner) The zones themselves run on aa-zones ([`crate::zones`]): each
-//! provider's zone type 0 is placed, moved and released by the native rules
-//! (`0x58AE10` tail, `0x4D6350` on its tile changes) and flooded by the
-//! exact ZoneSolver port; `books.zone_tiles` lists the tiles whose zone set
-//! holds it. [`flood_tiles`] (the earlier f32 flood) stays for maps aa-zones
-//! cannot describe and for the comparison tests.
+//! [`flood_tiles`] (the earlier f32 flood) stays for the comparison tests.
 use crate::books::SupplyZone;
 use crate::world::{ActorId, KingdomId, OrgId, World};
+use crate::zones::{Engine, Key};
+use aa_economy::supply::{self as native, KingdomSupply, SupplyActor, SupplyComponent, SupplyDefinition, SupplyWorld};
+use aa_economy::{EconomyError, F32Bits, X87Precision};
 use glam::Vec2;
+use std::collections::BTreeMap;
 
-fn pos2(world: &World, a: ActorId) -> Vec2 {
-    world.actors[a as usize].pos.truncate()
-}
+/// The EconomyComponent slot (aa-rules COMPONENTS bit 9).
+pub const ECONOMY_SLOT: u8 = 9;
+const BODY_SLOT: u32 = 0;
+const PROPERTIES_SLOT: u32 = 6;
+const ELEMENT_SLOT: u32 = 8;
+const CITY_SLOT: u32 = 29;
+const HQ_SLOT: u32 = 30;
+/// The simulation thread's x87 precision.
+const PRECISION: X87Precision = X87Precision::Double53;
+/// Actor state bits (+0x100/+0x104): 19 out of supply, 20 under siege, 21
+/// under construction, 39 disabled.
+const STATE_OUT_OF_SUPPLY: u32 = 0x13;
+const STATE_UNDER_SIEGE: u32 = 0x14;
+const STATE_CONSTRUCTION: u32 = 0x15;
+const STATE_DISABLED: u32 = 0x27;
 
 fn live(world: &World, a: ActorId) -> bool {
     world.actors.get(a as usize).is_some_and(|x| x.alive && !x.removed)
-}
-
-/// True when `p` lies in an active supply zone of `kingdom`.
-pub fn supplied_at(world: &World, kingdom: KingdomId, p: Vec2) -> bool {
-    (0..world.books.zones.len()).any(|i| world.books.zones[i].kingdom == kingdom && zone_covers(world, i, p))
 }
 
 /// The tile under a ground point (the `0x552640` clamp into the map, then
@@ -54,30 +82,6 @@ fn tile_index(map: &crate::map::GameMap, p: Vec2) -> Option<u32> {
     let x = ((p.x / map.cell_size).floor() as i64).clamp(0, map.width as i64 - 1);
     let y = ((p.y / map.cell_size).floor() as i64).clamp(0, map.height as i64 - 1);
     Some((y * map.width as i64 + x) as u32)
-}
-
-/// Zone `i` of `books.zones` covers the tile under `p` (its tile set, the
-/// supply word of the tile, 004CF210/00554CC0). Without a tile map: the
-/// zone circle.
-pub fn zone_covers(world: &World, i: usize, p: Vec2) -> bool {
-    let Some(z) = world.books.zones.get(i) else { return false };
-    match (tile_index(&world.map, p), world.books.zone_tiles.get(i)) {
-        (Some(t), Some(tiles)) => tiles.binary_search(&t).is_ok(),
-        _ => (p - z.centre).length_squared() <= z.radius * z.radius,
-    }
-}
-
-/// Zone `i` covers a tile of the rectangle `lo..=hi` (a footprint).
-fn zone_covers_rect(world: &World, i: usize, lo: Vec2, hi: Vec2) -> bool {
-    let map = &world.map;
-    let (Some(a), Some(b), Some(tiles)) = (tile_index(map, lo), tile_index(map, hi), world.books.zone_tiles.get(i)) else {
-        let Some(z) = world.books.zones.get(i) else { return false };
-        let d = (z.centre - (lo + hi) * 0.5).abs() - (hi - lo) * 0.5;
-        return d.max(Vec2::ZERO).length_squared() <= z.radius * z.radius;
-    };
-    let w = map.width;
-    let (x0, y0, x1, y1) = (a % w, a / w, b % w, b / w);
-    (y0..=y1).any(|y| (x0..=x1).any(|x| tiles.binary_search(&(y * w + x)).is_ok()))
 }
 
 /// ZoneSolver neighbour tables (`0xB322E0` deltas; `0xAB7804` next,
@@ -206,234 +210,513 @@ pub fn flood_tiles(map: &crate::map::GameMap, sx: i32, sy: i32, radius: f32) -> 
     out
 }
 
-/// (fog owner) The tile changes of this tick's movement (`0x4D6350`, the
-/// supply zones follow their providers) before the relay searches read the
-/// zone tiles.
-fn zone_observe(world: &mut World) {
-    let Some(mut e) = crate::fog::take_engine(world) else { return };
-    e.observe(world);
-    e.refresh_supply_tiles();
-    crate::fog::put_engine(world, e);
-    publish_zone_tiles(world);
-}
-
-/// (fog owner) The supply component zones of `books.zones` on aa-zones
-/// (`0x58AE10` tail), then their tiles; without an engine (a map aa-zones
-/// cannot describe) the f32 flood.
-fn zone_tick(world: &mut World) {
-    let Some(mut e) = crate::fog::take_engine(world) else {
-        flood_zones(world);
-        return;
-    };
-    let providing: Vec<(ActorId, f32)> = world.books.zones.iter().map(|z| (z.provider, z.radius)).collect();
-    e.supply_tick(world, &providing);
-    e.refresh_supply_tiles();
-    crate::fog::put_engine(world, e);
-    publish_zone_tiles(world);
-}
-
-/// (fog owner) `books.zone_tiles` from the engine's supply zone tiles, in
-/// `books.zones` order.
+/// `books.zone_tiles` from the engine's supply zone tiles, in `books.zones`
+/// order.
 pub fn publish_zone_tiles(world: &mut World) {
     let Some(e) = world.fog.engine.as_ref() else { return };
     let tiles = world.books.zones.iter().map(|z| e.supply_tiles.get(&z.provider).cloned().unwrap_or_default()).collect();
     world.books.zone_tiles = tiles;
 }
 
-/// The tile set of each zone in `books.zones` (cached floods).
-fn flood_zones(world: &mut World) {
-    let map = world.map.clone();
-    let mut tiles = Vec::with_capacity(world.books.zones.len());
-    if world.books.zone_floods.len() > 4096 {
-        world.books.zone_floods.clear();
-    }
-    for z in world.books.zones.clone() {
-        let Some(t) = tile_index(&map, z.centre) else {
-            tiles.push(std::sync::Arc::new(Vec::new()));
-            continue;
-        };
-        let key = (t, z.radius.to_bits());
-        let set = world
-            .books
-            .zone_floods
-            .entry(key)
-            .or_insert_with(|| std::sync::Arc::new(flood_tiles(&map, (t % map.width) as i32, (t / map.width) as i32, z.radius)))
-            .clone();
-        tiles.push(set);
-    }
-    world.books.zone_tiles = tiles;
-}
-
-/// 0x58ADB0: follow relay links until a primary source.
-fn reaches_source(world: &World, start: ActorId) -> bool {
-    let mut seen = Vec::new();
-    let mut a = start;
-    loop {
-        if !live(world, a) || !world.data.def(world.actors[a as usize].def).has_supply {
-            return false;
-        }
-        if !world.data.def(world.actors[a as usize].def).supply_relay {
-            return true;
-        }
-        if seen.contains(&a) {
-            return false;
-        }
-        seen.push(a);
-        match world.books.actor(a).and_then(|b| b.supply_relay) {
-            Some(next) => a = next,
-            None => return false,
-        }
+/// The native key of a thing (the aa-zones key: actor `i` -> `i + 1`,
+/// organization `o` -> `ORG | (o + 1)`); it also stands for the GTID the
+/// relay link (Supply +0x1C) holds.
+fn raw(key: Key) -> u32 {
+    match key {
+        Key::Actor(a) => crate::zones::actor_key(a),
+        Key::Org(o) => crate::zones::org_key(o),
     }
 }
 
-/// Half extents of the axis-aligned rectangle around a structure's blocking
-/// shape (the actor's tile bounds +0x20..+0x30), zero without one. Same
-/// convention as the movement footprint: the shape's width lies across the
-/// facing, its height along it; a CIRCLE's size is its radius.
-fn footprint_half(def: &crate::data::Def, facing: f32) -> Vec2 {
-    let Some(size) = def.blocking_size else { return Vec2::ZERO };
-    if def.blocking_shape.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("CIRCLE")) {
-        return Vec2::splat(size[0].max(0.0));
+fn key_of(raw: u32) -> Option<Key> {
+    if raw == 0 {
+        None
+    } else if raw & crate::zones::ORG != 0 {
+        Some(Key::Org((raw & !crate::zones::ORG) - 1))
+    } else {
+        Some(Key::Actor(raw - 1))
     }
-    let (hw, hh) = (size[0].max(0.0) * 0.5, size[1].max(0.0) * 0.5);
-    let (s, c) = facing.sin_cos();
-    Vec2::new(hw * s.abs() + hh * c.abs(), hw * c.abs() + hh * s.abs())
 }
 
-fn deploying(world: &World, a: ActorId) -> bool {
-    world.books.actor(a).is_some_and(|b| b.deploy.is_some())
+fn tile_xy(map: &crate::map::GameMap, p: Vec2) -> (i32, i32) {
+    match tile_index(map, p) {
+        Some(t) => ((t % map.width) as i32, (t / map.width) as i32),
+        None => (0, 0),
+    }
 }
 
-/// SupplyComponent 0x58AE10 for supplier `a`: its queue-1 Tick (`elapsed`
-/// = 1 s, in the bucket its InitCreate registration or the saved list gave
-/// it, `crate::scheduler`) and the immediate call of its InitExisting
-/// 0x58B0E0 (`elapsed` = 0; a created thing runs it after its InitCreate).
-/// A relay searches the zones of its kingdom over its footprint for a
-/// supplier that reaches a primary source; out of supply it drains `elapsed`
-/// of its stockpile, connected it recharges SupplyStockpileRechargeRate x
-/// `elapsed` up to stockpile_max. Then 0x58ACE0 decides whether its zone
-/// provides until its next tick: owned by a major kingdom (kingdom +0x190 ==
-/// 1, a city before its capture, provides none: the Berlin film's slot-0
-/// zones stay at radius -1), not packing or unpacking, a relay's stock,
-/// radius >= 0.
+/// The supply component radius +0x10: the supply range ActorData +0x420
+/// (0x45D550 without a context) through the modifier context (0x58AA20 ->
+/// 0x45D550 -> 0x501BD0: the SUPPLY_RANGE ADD modifiers, at least the
+/// smaller of the range and ModifierAttributeClampAdd, at least 0).
+fn supply_radius(world: &World, a: ActorId) -> f32 {
+    let d = world.data.def(world.actors[a as usize].def);
+    match crate::zones::modifier_add(world, Key::Actor(a), "SUPPLY_RANGE") {
+        Some(add) => crate::zones::clamp_add(d.supply_range, add, world.data.rule_ci("ModifierAttributeClampAdd").unwrap_or(1.0)),
+        None => d.supply_range,
+    }
+}
+
+/// ActorData fields of the supply code.
+fn definition(d: &crate::data::Def) -> SupplyDefinition {
+    SupplyDefinition {
+        relay: d.supply_relay,
+        stockpile_max: F32Bits::from_f32(d.supply_stockpile_max),
+        // +0x348: the EconomyComponent's supply_required
+        economy_ticks: d.supply_required,
+        byte_31d: d.in_supply_detached,
+        byte_2f4: d.supply_used,
+    }
+}
+
+/// The native supply fields of one thing from the battle world and the zone
+/// engine; None when it is not in the GTID table any more.
+fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> {
+    let has = |d: &crate::data::Def, bit: u32| d.components & (1 << bit) != 0;
+    match key {
+        Key::Actor(a) => {
+            let x = world.actors.get(a as usize).filter(|x| !x.removed)?;
+            let d = world.data.def(x.def);
+            let b = world.books.actor(a);
+            let mut states = 0u64;
+            let mut set = |s: u32, on: bool| {
+                if on {
+                    states |= 1u64 << s;
+                }
+            };
+            set(STATE_OUT_OF_SUPPLY, b.is_some_and(|b| b.out_of_supply));
+            // 0x4D6660: a city held under siege (City +0x20)
+            set(STATE_UNDER_SIEGE, b.is_some_and(|b| b.city_siege));
+            // +0x100 bit 21: placed by BuildActor or still unpacking
+            set(STATE_CONSTRUCTION, b.is_some_and(|b| b.constructing || b.deploy.as_ref().is_some_and(|d| d.kind == crate::books::DeployKind::Unpacking)));
+            // +0x104 bit 7: packing and unpacking disable the actor
+            set(STATE_DISABLED, b.is_some_and(|b| b.deploy.is_some()));
+            let slot = e.and_then(|e| e.parts.actors.get(a as usize));
+            let tile = e.and_then(|e| e.placement(key)).map(|(t, _)| t).unwrap_or_else(|| tile_xy(&world.map, x.pos.truncate()));
+            Some(SupplyActor {
+                gtid: raw(key),
+                flags8: u32::from(!x.alive),
+                states,
+                definition: definition(d),
+                supply: d.has_supply.then(|| SupplyComponent {
+                    radius: F32Bits(slot.and_then(|s| s.supply_radius).unwrap_or(d.supply_range.to_bits())),
+                    dirty: slot.is_some_and(|s| s.supply_dirty),
+                    stockpile: F32Bits::from_f32(b.map_or(0.0, |b| b.supply_stock)),
+                    relay: b.and_then(|b| b.supply_relay).map_or(0, |r| raw(Key::Actor(r))),
+                }),
+                // +0x80 and its organization +0x10
+                element: has(d, ELEMENT_SLOT).then(|| x.org.filter(|&o| world.orgs.get(o as usize).is_some_and(|g| g.alive)).map(|o| raw(Key::Org(o)))),
+                organization_component: None,
+                // Properties +0x1C bit 5: the SUPPLIED flag (Resupply)
+                properties_flag20: has(d, PROPERTIES_SLOT).then(|| crate::special_ops::has_flag(world, a, "SUPPLIED")),
+                // City +0x20: held under siege
+                city_flag20: (has(d, CITY_SLOT) || d.city).then(|| b.is_some_and(|b| b.city_siege)),
+                word_118: false,
+                word_128: false,
+                word_d8: has(d, HQ_SLOT),
+                gtid_d0: 0,
+                kingdom: x.kingdom,
+                position: [F32Bits(x.pos.x.to_bits()), F32Bits(x.pos.y.to_bits())],
+                tile: [tile.0.max(0) as u32, tile.1.max(0) as u32],
+                zone_word8: e.and_then(|e| e.supply_zone(a)).map(|z| F32Bits(z.radius_bits)),
+            })
+        }
+        Key::Org(o) => {
+            let g = world.orgs.get(o as usize).filter(|g| g.alive)?;
+            let d = world.data.def(g.def);
+            let mut states = 0u64;
+            if world.books.org(o).is_some_and(|b| b.out_of_supply) {
+                states |= 1u64 << STATE_OUT_OF_SUPPLY;
+            }
+            let tile = e.and_then(|e| e.placement(key)).map(|(t, _)| t).unwrap_or_else(|| tile_xy(&world.map, g.anchor));
+            // +0x118: the organizations whose engage list holds it (0x4D3990)
+            let engaged = world.combat.orgs.get(o as usize).is_some_and(|c| !c.engaged_by.is_empty());
+            Some(SupplyActor {
+                gtid: raw(key),
+                flags8: 0,
+                states,
+                definition: definition(d),
+                supply: None,
+                element: None,
+                // +0x7C and its +0xD4 transport: aa-play carries no organization
+                organization_component: Some(false),
+                properties_flag20: (has(d, PROPERTIES_SLOT) || d.components == 0).then(|| crate::special_ops::org_has_flag(world, o, "SUPPLIED")),
+                city_flag20: None,
+                word_118: engaged,
+                word_128: false,
+                // +0xD8: an HQ (its HQComponent)
+                word_d8: has(d, HQ_SLOT),
+                // +0xD0: the HQ it is attached to (0x44DEE0 resolves it)
+                gtid_d0: g.hq.map_or(0, |h| raw(Key::Actor(h))),
+                kingdom: Some(g.kingdom),
+                position: [F32Bits(g.anchor.x.to_bits()), F32Bits(g.anchor.y.to_bits())],
+                tile: [tile.0.max(0) as u32, tile.1.max(0) as u32],
+                zone_word8: None,
+            })
+        }
+    }
+}
+
+/// `0x4EE700`: Thing flags `0x20000400` (blocking, static) and `(int)tile <=
+/// virtual +4 * 4` (0x9FD59C; the shape's +4 is the circle radius or the
+/// rectangle's half diagonal, 0x46E0E0): its shape's tiles count.
+fn large(world: &World, raw: u32) -> bool {
+    let Some(Key::Actor(a)) = key_of(raw) else { return false };
+    let Some(x) = world.actors.get(a as usize) else { return false };
+    let d = crate::zones::def_detection(world.data.def(x.def));
+    d.large_shape && (world.map.cell_size as i32) as f32 <= d.size * 4.0
+}
+
+/// The supply port's world (aa-economy `SupplyWorld`) over the battle: the
+/// native fields of the ticking thing and of every supplier, the zone
+/// engine for the tile queries and the supply zone, and the SVars.
+struct Binding<'a> {
+    w: &'a World,
+    e: Option<&'a mut Engine>,
+    store: BTreeMap<u32, SupplyActor>,
+    /// `0x50B1C0(1, 0)` asked: the Economy component leaves queue 1.
+    stop: bool,
+}
+
+impl<'a> Binding<'a> {
+    /// Only a relay's Tick reads other suppliers (the search and 0x58ADB0);
+    /// everything else asks about the ticking thing and its organization.
+    fn new(w: &'a World, e: Option<&'a mut Engine>, ticking: Key) -> Self {
+        let mut store = BTreeMap::new();
+        {
+            let er = e.as_deref();
+            let mut keys = vec![ticking];
+            if let Key::Actor(a) = ticking
+                && let Some(x) = w.actors.get(a as usize)
+            {
+                if let Some(o) = x.org {
+                    keys.push(Key::Org(o));
+                }
+                let d = w.data.def(x.def);
+                if d.has_supply && d.supply_relay {
+                    keys.extend(w.actors.iter().filter(|x| !x.removed && w.data.def(x.def).has_supply).map(|x| Key::Actor(x.id)));
+                }
+            }
+            for k in keys {
+                if !store.contains_key(&raw(k))
+                    && let Some(s) = snapshot(w, er, k)
+                {
+                    store.insert(raw(k), s);
+                }
+            }
+        }
+        Binding { w, e, store, stop: false }
+    }
+}
+
+fn missing(actor: u32) -> EconomyError {
+    EconomyError::World(format!("thing {actor:#x} is not in the supply snapshot"))
+}
+
+impl SupplyWorld for Binding<'_> {
+    fn actor(&self, actor: u32) -> Result<&SupplyActor, EconomyError> {
+        self.store.get(&actor).ok_or_else(|| missing(actor))
+    }
+    fn actor_mut(&mut self, actor: u32) -> Result<&mut SupplyActor, EconomyError> {
+        self.store.get_mut(&actor).ok_or_else(|| missing(actor))
+    }
+    fn resolve(&self, gtid: u32) -> Option<u32> {
+        // 0xB364C0: still in the GTID table (a dead thing until it is removed)
+        match key_of(gtid)? {
+            Key::Actor(a) => self.w.actors.get(a as usize).filter(|x| !x.removed).map(|_| gtid),
+            Key::Org(o) => self.w.orgs.get(o as usize).filter(|g| g.alive).map(|_| gtid),
+        }
+    }
+    fn kingdom(&self, kingdom: u32) -> Result<KingdomSupply, EconomyError> {
+        let k = self.w.kingdoms.get(kingdom as usize).ok_or_else(|| EconomyError::World(format!("kingdom {kingdom}")))?;
+        Ok(KingdomSupply {
+            // +0x190: 1 for a non-major kingdom
+            word_190: u32::from(k.independent || kingdom >= crate::zones::KINGDOM_BITS),
+            shortage_ratio: F32Bits::from_f32(self.w.books.kingdom(kingdom).map_or(0.0, |b| b.shortage_ratio)),
+        })
+    }
+    fn owner(&mut self, actor: u32) -> Result<Option<u32>, EconomyError> {
+        Ok(self.actor(actor)?.kingdom)
+    }
+    fn world_suspended(&mut self) -> Result<bool, EconomyError> {
+        Ok(false)
+    }
+    fn provide_under_siege(&self) -> bool {
+        // SVar cache +0xFC (SVars_AA: true)
+        self.w.data.rule_ci("SupplyProvideUnderSiege").is_some_and(|v| v != 0.0)
+    }
+    fn recharge_rate(&self) -> F32Bits {
+        // SVar cache +0x100
+        F32Bits::from_f32(self.w.data.rule_ci("SupplyStockpileRechargeRate").unwrap_or(1.0))
+    }
+    fn map_width(&self) -> u32 {
+        self.w.map.width
+    }
+    fn large_actor(&mut self, actor: u32) -> Result<bool, EconomyError> {
+        Ok(large(self.w, actor))
+    }
+    fn tile_supplied(&mut self, tile: u32, kingdom: Option<u32>, actor: u32) -> Result<bool, EconomyError> {
+        let w = self.w;
+        let (Some(e), Some(k)) = (self.e.as_deref_mut(), key_of(actor)) else { return Ok(false) };
+        Ok(e.friendly_supply(w, tile as usize, kingdom, k))
+    }
+    fn covered_tiles(&mut self, actor: u32) -> Result<Vec<u32>, EconomyError> {
+        let (Some(e), Some(k)) = (self.e.as_deref(), key_of(actor)) else { return Ok(Vec::new()) };
+        Ok(e.placement(k).map(|(_, t)| t.iter().map(|&t| t as u32).collect()).unwrap_or_default())
+    }
+    fn relay_candidates(&mut self, actor: u32, kingdom: Option<u32>) -> Result<Vec<u32>, EconomyError> {
+        let w = self.w;
+        let large = large(w, actor);
+        let (Some(e), Some(Key::Actor(a))) = (self.e.as_deref_mut(), key_of(actor)) else { return Ok(Vec::new()) };
+        let list = e.supply_candidates(w, a, kingdom, large);
+        Ok(list.into_iter().map(|c| raw(Key::Actor(c))).filter(|c| self.store.contains_key(c)).collect())
+    }
+    fn set_state(&mut self, actor: u32, state: u32, enabled: bool) -> Result<(), EconomyError> {
+        let a = self.actor_mut(actor)?;
+        if enabled {
+            a.states |= 1u64 << state;
+        } else {
+            a.states &= !(1u64 << state);
+        }
+        Ok(())
+    }
+    fn refresh_actor(&mut self, _actor: u32) -> Result<(), EconomyError> {
+        // 0x4D1350: the components' modifier refresh (the economy reads the
+        // state at its next pass)
+        Ok(())
+    }
+    fn refresh_economy(&mut self, _actor: u32) -> Result<(), EconomyError> {
+        // 0x4CF0F0
+        Ok(())
+    }
+    fn stop_economy_ticks(&mut self, _actor: u32) -> Result<(), EconomyError> {
+        self.stop = true;
+        Ok(())
+    }
+    fn clear_zone(&mut self, actor: u32) -> Result<(), EconomyError> {
+        let w = self.w;
+        if let (Some(e), Some(Key::Actor(a))) = (self.e.as_deref_mut(), key_of(actor)) {
+            e.supply_release(w, a);
+            let z = e.supply_zone(a).map(|z| F32Bits(z.radius_bits));
+            if let Some(s) = self.store.get_mut(&actor) {
+                s.zone_word8 = z;
+            }
+        }
+        Ok(())
+    }
+    fn set_zone(&mut self, actor: u32, position: [F32Bits; 2], radius: F32Bits) -> Result<(), EconomyError> {
+        let w = self.w;
+        if let (Some(e), Some(Key::Actor(a))) = (self.e.as_deref_mut(), key_of(actor)) {
+            e.supply_place(w, a, [position[0].0, position[1].0], radius.0);
+            let z = e.supply_zone(a).map(|z| F32Bits(z.radius_bits));
+            if let Some(s) = self.store.get_mut(&actor) {
+                s.zone_word8 = z;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A refusal of the supply port: the battle keeps running on the fields
+/// written so far; counted with the zone engine's refusals (`stats.refusals`).
+fn refused(engine: Option<&mut Engine>, err: &EconomyError) {
+    let text = format!("supply: {err}");
+    if let Some(e) = engine {
+        *e.parts.stats.refusals.entry(text.clone()).or_insert(0) += 1;
+    }
+    #[cfg(debug_assertions)]
+    eprintln!("{text}");
+    #[cfg(not(debug_assertions))]
+    let _ = text;
+}
+
+/// The ticking thing's native fields back into the battle books: its state
+/// and a supplier's stockpile, relay link, radius and dirty byte.
+fn write_back(world: &mut World, e: Option<&mut Engine>, key: Key, s: &SupplyActor) {
+    let oos = s.states & (1u64 << STATE_OUT_OF_SUPPLY) != 0;
+    match key {
+        Key::Actor(a) => {
+            let b = world.books.actor_mut(a);
+            b.out_of_supply = oos;
+            if let Some(c) = &s.supply {
+                b.supply_stock = c.stockpile.as_f32();
+                b.supply_relay = match key_of(c.relay) {
+                    Some(Key::Actor(r)) => Some(r),
+                    _ => None,
+                };
+                b.zone_active = native::zone_active(s);
+                if let Some(slot) = e.and_then(|e| e.supply_component(a)) {
+                    slot.supply_radius = Some(c.radius.0);
+                    slot.supply_dirty = c.dirty;
+                }
+            }
+        }
+        Key::Org(o) => world.books.org_mut(o).out_of_supply = oos,
+    }
+}
+
+/// Run one native supply entry point for `key` over the battle world.
+fn run(world: &mut World, key: Key, f: impl FnOnce(&mut Binding<'_>, u32) -> Result<(), EconomyError>) -> bool {
+    let mut engine = crate::fog::take_engine(world);
+    if let Some(e) = engine.as_mut() {
+        e.observe_update(world);
+        e.observe_key(world, key);
+    }
+    let (store, stop, failed) = {
+        let mut b = Binding::new(world, engine.as_mut(), key);
+        let failed = f(&mut b, raw(key)).err();
+        (b.store, b.stop, failed)
+    };
+    if let Some(err) = failed {
+        refused(engine.as_mut(), &err);
+    }
+    if let Some(s) = store.get(&raw(key)) {
+        write_back(world, engine.as_mut(), key, s);
+    }
+    if let Some(e) = engine {
+        crate::fog::put_engine(world, e);
+    }
+    stop
+}
+
+/// SupplyComponent Tick 0x58AE10 (aa-economy `supply_tick`) for supplier
+/// `a`: its queue-1 Tick (`elapsed` = 1 s, in the bucket its InitCreate
+/// registration or the saved list gave it, `crate::scheduler`) and the
+/// immediate call of its InitExisting 0x58B0E0 (`elapsed` = 0). First the
+/// radius +0x10 as the modifier context gives it (0x58AA20 marks the zone
+/// dirty when SUPPLY_RANGE modifiers change it; the constructor 0x58AA50
+/// reads it without marking).
 pub fn supplier_tick(world: &mut World, a: ActorId, elapsed: f32) {
-    if !live(world, a) || !world.data.def(world.actors[a as usize].def).has_supply {
+    let Some(x) = world.actors.get(a as usize) else { return };
+    if x.removed || !world.data.def(x.def).has_supply {
         return;
     }
-    let recharge = world.data.rule_ci("SupplyStockpileRechargeRate").unwrap_or(1.0);
-    let def = world.data.def(world.actors[a as usize].def);
-    let (relay, max) = (def.supply_relay, def.supply_stockpile_max);
-    let kingdom = world.actors[a as usize].kingdom;
-    let p = pos2(world, a);
-    if relay {
-        let mut link = None;
-        if let Some(k) = kingdom {
-            let half = footprint_half(def, world.actors[a as usize].facing);
-            for (i, z) in world.books.zones.iter().enumerate() {
-                // 004CF210 + 00554CC0: the zones over the tiles of the
-                // relay's footprint rectangle, not only its centre.
-                if z.kingdom != k || z.provider == a || !zone_covers_rect(world, i, p - half, p + half) {
-                    continue;
+    let r = supply_radius(world, a).to_bits();
+    if let Some(mut e) = crate::fog::take_engine(world) {
+        e.observe_update(world);
+        e.observe_key(world, Key::Actor(a));
+        if let Some(s) = e.supply_component(a) {
+            match s.supply_radius {
+                None => s.supply_radius = Some(r),
+                Some(old) if old != r => {
+                    s.supply_radius = Some(r);
+                    s.supply_dirty = true;
                 }
-                if world.books.out_of_supply(z.provider) {
-                    continue;
-                }
-                if reaches_source(world, z.provider) {
-                    link = Some(z.provider);
-                    break;
-                }
+                _ => {}
             }
         }
-        world.books.actor_mut(a).supply_relay = link;
+        crate::fog::put_engine(world, e);
     }
-    let in_supply = kingdom.is_some() && (!relay || world.books.actor(a).and_then(|b| b.supply_relay).is_some_and(|r| live(world, r)));
-    let b = world.books.actor_mut(a);
-    b.supply_started = true;
-    b.out_of_supply = !in_supply;
-    if relay {
-        if !in_supply {
-            b.supply_stock = (b.supply_stock - elapsed).max(0.0);
-        } else if b.supply_stock < max {
-            b.supply_stock = (recharge * elapsed + b.supply_stock).min(max);
-        }
-    }
-    let provides = kingdom.is_some_and(|k| {
-        let stock_ok = !relay || world.books.actor(a).is_some_and(|b| !b.out_of_supply || b.supply_stock > 0.0);
-        let independent = world.kingdoms.iter().any(|x| x.id == k && x.independent);
-        // actor +0x100 bit 21: under construction.
-        let constructing = world.books.actor(a).is_some_and(|b| b.constructing);
-        !(independent || deploying(world, a) || constructing || !stock_ok || def.supply_range < 0.0)
-    });
-    world.books.actor_mut(a).zone_active = provides;
+    let seconds = F32Bits(elapsed.to_bits());
+    run(world, Key::Actor(a), |b, k| native::supply_tick(b, k, seconds, PRECISION));
+    world.books.actor_mut(a).supply_started = true;
 }
 
-/// `books.zones` from the suppliers whose last 0x58AE10 found them
-/// providing, at their current positions, then their tiles.
+/// Supply InitExisting 0x58B0E0: CreateZone(0) when the zone vector has no
+/// zone 0 (inactive, radius -1, until it provides), then 0x58AE10(0).
+fn init_existing(world: &mut World, a: ActorId) {
+    if let Some(mut e) = crate::fog::take_engine(world) {
+        e.observe_key(world, Key::Actor(a));
+        e.supply_create(world, a);
+        crate::fog::put_engine(world, e);
+    }
+    supplier_tick(world, a, 0.0);
+}
+
+/// EconomyComponent::Tick 0x56F2B0 (its queue-1 Updatable, registered at
+/// InitCreate 0x56F250 for a definition requiring supply): the state
+/// 0x4D7CE0; without supply_required (+0x348) the component logs and leaves
+/// queue 1 (0x50B1C0(1, 0)).
+pub fn economy_tick(world: &mut World, key: Key) {
+    let present = match key {
+        Key::Actor(a) => world.actors.get(a as usize).is_some_and(|x| !x.removed),
+        Key::Org(o) => world.orgs.get(o as usize).is_some_and(|g| g.alive),
+    };
+    if !present {
+        return;
+    }
+    if run(world, key, |b, k| native::economy_component_tick(b, k)) {
+        world.unschedule(match key {
+            Key::Actor(a) => crate::scheduler::Owner::Component(a, ECONOMY_SLOT),
+            Key::Org(o) => crate::scheduler::Owner::OrgComponent(o, ECONOMY_SLOT),
+        });
+    }
+}
+
+/// 0x4D7CE0 on one thing: the state 19 follows 0x4D0A80.
+fn update_state(world: &mut World, key: Key) {
+    run(world, key, |b, k| native::update_supply_state(b, k).map(|_| ()));
+}
+
+/// 0x561C60, the gate of the Body Updatable 0x562E10: UnitSupplyEnabled, not
+/// an organization, unit_shortfall_damage_rate (ActorData +0x2A8) above 0
+/// (0x561B40), not an organization member; the `+0x16C` GTID (not bound) is
+/// taken as unresolved.
+pub fn body_supplies(world: &World, a: ActorId) -> bool {
+    let Some(x) = world.actors.get(a as usize).filter(|x| !x.removed) else { return false };
+    let d = world.data.def(x.def);
+    world.data.rule_ci("UnitSupplyEnabled").is_some_and(|v| v != 0.0)
+        && d.class != Some(crate::data::DefClass::Organization)
+        && d.components & (1 << BODY_SLOT) != 0
+        && d.unit_shortfall_damage_rate > 0.0
+        && x.org.is_none()
+}
+
+/// Body Updatable +0x14 0x562E10 (queue 1 when its InitCreate 0x562310
+/// registers it, 0x561B40): the state 0x4D7CE0 of a lone Body that bleeds out
+/// of supply (the shortfall damage 0x562D10 that follows belongs to the
+/// economy).
+pub fn body_supply_tick(world: &mut World, a: ActorId) {
+    if body_supplies(world, a) {
+        update_state(world, Key::Actor(a));
+    }
+}
+
+/// `books.zones`: the active supply zones (zone 0 radius not -1) by
+/// provider, then their tiles.
 fn publish_zones(world: &mut World) {
+    let Some(mut e) = world.fog.engine.take() else {
+        world.books.zones.clear();
+        world.books.zone_tiles.clear();
+        return;
+    };
     let mut zones = Vec::new();
     for a in 0..world.actors.len() as ActorId {
-        if !live(world, a) || !world.books.actor(a).is_some_and(|b| b.zone_active) {
+        let x = &world.actors[a as usize];
+        if x.removed || !world.data.def(x.def).has_supply {
             continue;
         }
-        let actor = &world.actors[a as usize];
-        let def = world.data.def(actor.def);
-        let Some(k) = actor.kingdom.filter(|_| def.has_supply) else { continue };
-        zones.push(SupplyZone { provider: a, kingdom: k, centre: actor.pos.truncate(), radius: def.supply_range });
+        let (Some(z), Some(k)) = (e.supply_zone(a).filter(|z| z.active()), x.kingdom) else { continue };
+        zones.push(SupplyZone { provider: a, kingdom: k, centre: x.pos.truncate(), radius: f32::from_bits(z.radius_bits) });
     }
+    e.refresh_supply_tiles();
+    world.fog.engine = Some(e);
     world.books.zones = zones;
-    zone_tick(world);
+    publish_zone_tiles(world);
 }
 
-/// The per-update supply pass: the InitExisting 0x58AE10(0) of suppliers
-/// new this update, the zones of the suppliers whose last 0x58AE10 found
-/// them providing (following their providers' tiles), then every actor's
-/// and organization's in-supply state.
+/// The per-update supply pass: the tile changes of this update's moves, the
+/// InitExisting 0x58B0E0 of the suppliers new this update (creation order,
+/// each seeing the zones of those before it), the Body supply ticks of lone
+/// bleeding Bodies without a queue-1 registration (every update until their
+/// Body registers), `books.zones` and the city admissions.
 pub fn tick(world: &mut World) {
-    zone_observe(world);
-    // The new suppliers' InitExisting in creation (index) order, each seeing
-    // the zones of those before it, as each runs inside its own creation.
+    if let Some(mut e) = crate::fog::take_engine(world) {
+        e.observe(world);
+        crate::fog::put_engine(world, e);
+    }
     for a in 0..world.actors.len() as ActorId {
-        if live(world, a) && world.data.def(world.actors[a as usize].def).has_supply && !world.books.actor(a).is_some_and(|b| b.supply_started) {
-            supplier_tick(world, a, 0.0);
-            if world.books.actor(a).is_some_and(|b| b.zone_active) {
-                publish_zones(world);
-            }
+        let x = &world.actors[a as usize];
+        if !x.removed && world.data.def(x.def).has_supply && !world.books.actor(a).is_some_and(|b| b.supply_started) {
+            init_existing(world, a);
+        }
+    }
+    for a in 0..world.actors.len() as ActorId {
+        if body_supplies(world, a) && !world.is_scheduled(crate::scheduler::Owner::Component(a, BODY_SLOT as u8)) {
+            body_supply_tick(world, a);
         }
     }
     publish_zones(world);
-    // 0x4D0A80 for organizations, their members and lone actors.
-    for o in 0..world.orgs.len() as OrgId {
-        let org = &world.orgs[o as usize];
-        if !org.alive {
-            continue;
-        }
-        let def = world.data.def(org.def);
-        if !def.supply_used {
-            continue;
-        }
-        let attached = def.in_supply_detached || org.hq.is_some_and(|h| live(world, h));
-        let at = org_position(world, o);
-        // (combat owner) a Resupply special operation's SUPPLIED flag
-        // keeps the organization in supply while it lasts
-        let in_supply = (attached && supplied_at(world, org.kingdom, at)) || crate::special_ops::org_has_flag(world, o, "SUPPLIED");
-        world.books.org_mut(o).out_of_supply = !in_supply;
-        for m in world.orgs[o as usize].members.clone() {
-            world.books.actor_mut(m).out_of_supply = !in_supply;
-        }
-    }
-    for a in 0..world.actors.len() as ActorId {
-        let actor = &world.actors[a as usize];
-        if !actor.alive || actor.removed || world.data.def(actor.def).has_supply {
-            continue;
-        }
-        if let Some(o) = actor.org
-            && world.data.def(world.orgs[o as usize].def).supply_used
-        {
-            continue;
-        }
-        let in_supply = actor.kingdom.is_some_and(|k| supplied_at(world, k, actor.pos.truncate()));
-        world.books.actor_mut(a).out_of_supply = !in_supply;
-    }
     city_admissions(world);
 }
 
@@ -473,10 +756,12 @@ fn city_admissions(world: &mut World) {
 
 /// KKC_OrganizationComponent::TickMaintenance 0x57C8E0 for organization
 /// `o` (queue 1, `elapsed` = 1 s): after the zone update 0x515F40 the
-/// organization follows its moving leader (0x57C800, movement owner), then
-/// the shortfall attrition 0x578660 of an out-of-supply supply_used
-/// organization of a kingdom short of upkeep, then behind the 0x579110 gate
-/// the regeneration 0x57B5A0 of one slot.
+/// organization follows its moving leader (0x57C800, movement owner); a
+/// supply_used one (ActorData +0x2F4) takes its supply state 0x4D7CE0 (on a
+/// change 0x4D1350 refreshes every member's modifiers), then the shortfall
+/// attrition 0x578660 of an out-of-supply organization of a kingdom short of
+/// upkeep; then behind the 0x579110 gate the regeneration 0x57B5A0 of one
+/// slot.
 pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
     if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
         return;
@@ -484,6 +769,9 @@ pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
     crate::movement::org_follow_leader(world, o);
     if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
         return;
+    }
+    if world.data.def(world.orgs[o as usize].def).supply_used {
+        update_state(world, Key::Org(o));
     }
     crate::economy::shortfall(world, o, elapsed);
     regenerate(world, o, elapsed);
@@ -608,15 +896,20 @@ fn city_candidates(world: &World) -> Vec<CityCandidate> {
 }
 
 /// City tick 0x5647A0 (queue 1, the City component) for city `c`. Against
-/// the current owner: the value of its friends
-/// in the zone defends, the value of its enemies attacks. Attackers with no
-/// defender (or no owner at all) let the zone decide: the first kingdom in
-/// kingdom order that has value there, no enemy value against it, and no
-/// friend with more value or under threat takes the city (0x4D5230 owner
-/// change, reason 10). The neutral buildings of the old owner around the
-/// city change hands with it.
+/// the current owner: the value of the owner's own candidates in the zone
+/// defends (actor virtual +0x138 allied and +0x134 owned: a friend's value
+/// does not defend), the value of its enemies (+0x140) attacks. Attackers
+/// with no defender (or no owner at all) let the zone decide: the first
+/// kingdom in kingdom order that has value there, no value of kingdoms it
+/// regards as enemies, and no friend with more value or under threat takes
+/// the city (0x4D5230 owner change, reason 10). Otherwise the city is under
+/// siege (City +0x20 = 1, reset at each tick and when the zone empties,
+/// 0x564C10) unless the attack is below the summed value of the allied
+/// candidates of City+18 (0x5648BC, so friends alone hold it in peace); a
+/// city under siege provides no supply (0x58ACE0). The neutral buildings of
+/// the old owner around the city change hands with it.
 pub fn city_tick(world: &mut World, c: ActorId) {
-    use crate::books::{ENEMY, FRIEND, SELF};
+    use crate::books::{ENEMY, FRIEND};
     let n = world.kingdoms.len();
     {
         let Some(city) = world.actors.get(c as usize) else { return };
@@ -642,10 +935,14 @@ pub fn city_tick(world: &mut World, c: ActorId) {
         let empty = list.is_empty();
         world.books.actor_mut(c).city_candidates = list;
         if empty {
+            // City +0x20 cleared (then the siege state 0x4D6660)
+            world.books.actor_mut(c).city_siege = false;
             world.unschedule(crate::scheduler::Owner::Component(c, crate::scheduler::CITY_SLOT));
             return;
         }
     }
+    // 0x5647A0: City +0x20 = 0 first
+    world.books.actor_mut(c).city_siege = false;
     {
         let city = &world.actors[c as usize];
         let def = world.data.def(city.def);
@@ -661,28 +958,45 @@ pub fn city_tick(world: &mut World, c: ActorId) {
                 any = true;
             }
         }
-        if !any {
-            return;
-        }
         let rel = |a: usize, b: usize| world.books.relation(&world.kingdoms, Some(a as u32), Some(b as u32));
-        let decide = match owner {
-            None => true,
+        let (decide, siege) = match owner {
+            None => (any, false),
             Some(o) => {
-                let (mut defend, mut attack) = (0.0f32, 0.0f32);
-                for k in 0..n {
-                    match rel(k, o as usize) {
-                        SELF | FRIEND => defend += present[k],
-                        ENEMY => attack += present[k],
-                        _ => {}
+                // over City+18 head first: an allied candidate (+0x138: owned
+                // or a friend) adds its value to the allied sum (0x564846 ..
+                // 0x564854 `fadd`/`fstp` of the same local) and to the defence
+                // when owned (+0x134); an enemy (+0x140) adds to the attack
+                let o = o as usize;
+                let (mut defend, mut attack, mut ally) = (0.0f32, 0.0f32, 0.0f32);
+                for who in &listed {
+                    let Some(cand) = candidates.iter().find(|x| x.who == *who) else { continue };
+                    let k = cand.kingdom as usize;
+                    if k >= n {
+                        continue;
+                    }
+                    let r = rel(k, o);
+                    if k == o || r == FRIEND {
+                        ally += cand.current;
+                        if k == o {
+                            defend += cand.current;
+                        }
+                    } else if r == ENEMY {
+                        attack += cand.current;
                     }
                 }
-                attack > 0.0 && defend <= 0.0
+                let decide = attack > 0.0 && defend <= 0.0;
+                // 0x5648BC: under siege unless the attack is below the allied sum
+                (decide, !decide && !(attack < ally))
             }
         };
         if !decide {
+            // 0x5648E8: held under siege
+            world.books.actor_mut(c).city_siege = siege;
             return;
         }
-        let threat: Vec<f32> = (0..n).map(|k| (0..n).filter(|&e| e != k && rel(e, k) == ENEMY).map(|e| present[e]).sum()).collect();
+        // threat[k]: the value of the candidates whose kingdom k regards as
+        // an enemy (kingdom virtual +0x140)
+        let threat: Vec<f32> = (0..n).map(|k| (0..n).filter(|&e| e != k && rel(k, e) == ENEMY).map(|e| present[e]).sum()).collect();
         let winner = (0..n).find(|&k| {
             threat[k] <= 0.0
                 && present[k] > 0.0
@@ -720,10 +1034,14 @@ pub fn org_position(world: &World, o: OrgId) -> Vec2 {
     world.orgs[o as usize].anchor
 }
 
-/// 0x579110 gate inputs owned by combat: engaged (an engage target) or
-/// routing (mind_routing has resupply = false); a member shooting counts too.
+/// 0x579110 gate inputs owned by combat: somebody engages the organization
+/// (actor +0x118, its engagers' list), or its mind state has resupply =
+/// false: engaged (an engage target), routing, bombarding; a member
+/// shooting counts too.
 fn engaged(world: &World, o: OrgId) -> bool {
-    if crate::combat::org_state(world, o).is_some_and(|c| c.engaging() || c.routing.is_some()) {
+    if crate::combat::org_state(world, o)
+        .is_some_and(|c| c.engaging() || c.routing.is_some() || !c.engaged_by.is_empty() || matches!(c.task, Some(crate::combat::tasks::Task::Bombard(_))))
+    {
         return true;
     }
     world.orgs[o as usize].members.iter().any(|&m| live(world, m) && world.actors[m as usize].combat.target.is_some())

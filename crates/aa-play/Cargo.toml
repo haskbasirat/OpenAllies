@@ -38,6 +38,8 @@ aa-movement = { path = "../aa-movement" }
 # core owner: the native Mind arena, constructors and the AAI state Thinks
 # (crate::minds, crate::combat::air)
 aa-mind = { path = "../aa-mind" }
+# scenarios owner: the native trigger manager and elements (crate::triggers)
+aa-triggers = { path = "../aa-triggers" }
 anyhow = "1"
 glam = { version = "0.32", features = ["serde"] }
 serde.workspace = true
