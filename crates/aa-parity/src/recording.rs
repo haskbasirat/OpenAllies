@@ -1127,6 +1127,8 @@ pub struct RecordingStats {
     /// Commands that have no decree yet, by reason. The world still got them,
     /// so a film with any of these will go out of sync.
     pub unmapped: BTreeMap<String, u64>,
+    /// The orders of a person the Mapper turned into no command, logged once each.
+    pub dropped: std::collections::BTreeSet<&'static str>,
 }
 
 /// One request waiting for the next admin tick: who asked, the decree, and the
@@ -1461,6 +1463,13 @@ impl Recorder {
         };
         match mapped {
             Mapped::Commands(commands) => {
+                // The Mapper's guess found nothing for a person's order: it does nothing.
+                if commands.is_empty() && !fallback.is_empty() {
+                    let name = aa_orders::native::DESCRIPTORS[decree.descriptor].name;
+                    if self.stats.dropped.insert(name) {
+                        eprintln!("film: an order of a person came to nothing: {name}");
+                    }
+                }
                 for command in commands {
                     world.apply(command);
                 }
