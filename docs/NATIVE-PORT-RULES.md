@@ -22,9 +22,8 @@ instead of from the original code. The user rejected it. It is archived in
 | What | Where |
 |---|---|
 | Original executable (never modify) | `<game root>\AA.exe` (image base 0x400000) |
-| Decompiled pseudocode, one file per function | `reconstruction/research/native-aa/pseudocode/<addr>.c` (42,171 files, decompiler auto names `an automatic label`) |
+| Decompiled pseudocode, one file per function | `reconstruction/research/native-aa/pseudocode/<addr>.c` (42,171 files, auto names `an automatic label`) |
 | Inventories | `reconstruction/research/native-aa/{functions,calls,symbols,strings,string-references}.tsv`, `findings.json`, `object-serialization.json` |
-| decompiler CLI (decompiler 6.3.0, decompiler provider) | `rust-rebuild/research/decompile-locked.ps1 <command> ...` (machine-wide lock: only one decompiler at a time). See `reconstruction/research/decompiler-SETUP.md`. Prefer the exported pseudocode; use decompiler for xrefs, instructions, data types, value tracing and fresh decompiles. |
 | Unicorn/Capstone/Keystone for Python | `PYTHONPATH="<game root>\reconstruction\tools\python-packages"` |
 | Native oracle harness pattern | `research/phase6-kingdoms/native_teams.py` (`Machine`), `research/phase7-restoration/native_*.py` |
 | Original data (TGI rules, UI, maps, art, audio) | `reconstruction/assets/original/Data`, converted art in `reconstruction/assets/converted` |
