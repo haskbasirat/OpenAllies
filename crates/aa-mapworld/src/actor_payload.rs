@@ -137,6 +137,9 @@ pub struct ActorTail {
     pub word_164: Option<PresentWord>,
     /// Mode-zero map stream stores the localization key only.
     pub localized_name_key_utf16: Option<Vec<u16>>,
+    /// A saved game's stream (mode 1) keeps the text after a key (0x49AD70).
+    #[serde(default)]
+    pub localized_name_text_utf16: Option<Vec<u16>>,
     pub word_168: Option<u32>,
     pub word_16c: Option<u32>,
     pub word_170: Option<u32>,
@@ -211,7 +214,7 @@ impl ActorTail {
                 "unsupported actor tail version {actor_version}; supported 1..14"
             )));
         }
-        if localization_mode != 0 {
+        if localization_mode > 1 {
             return Err(Error::Format(format!(
                 "unsupported actor localization mode {localization_mode}"
             )));
@@ -286,6 +289,13 @@ impl ActorTail {
         } else {
             None
         };
+        let localized_name_text_utf16 = if localization_mode == 1
+            && localized_name_key_utf16.as_ref().is_some_and(|k| !k.is_empty())
+        {
+            Some(r.string()?)
+        } else {
+            None
+        };
         let word_168 = if actor_version >= 8 {
             Some(r.u32()?)
         } else {
@@ -328,6 +338,7 @@ impl ActorTail {
                 word_160_source,
                 word_164,
                 localized_name_key_utf16,
+                localized_name_text_utf16,
                 word_168,
                 word_16c,
                 word_170,

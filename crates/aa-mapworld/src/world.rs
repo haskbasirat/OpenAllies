@@ -136,6 +136,12 @@ pub struct WorldInventory {
     pub absent_sections: Vec<String>,
 }
 impl WorldInventory {
+    /// A saved game's stream: its rules' mode is `savegame` or
+    /// `savegame_metagame_rts` (4981A0), and its localized strings hold their
+    /// text after the key (0x49AD70).
+    pub fn is_saved_game(&self) -> bool {
+        self.header.as_ref().is_some_and(|h| matches!(h.rules.mode, 2 | 4))
+    }
     pub fn decode(map: &MapArchive, max_chunk_bytes: u64) -> Result<Self> {
         let world = WorldState::decode(&map.decode_chunk("GWORLD", max_chunk_bytes)?)?;
         let id_manager = IdManagerState::decode(&map.decode_chunk("IDMGR", max_chunk_bytes)?)?;
@@ -149,7 +155,13 @@ impl WorldInventory {
         let mut opaque_initialization = Vec::new();
         let mut absent_sections = Vec::new();
         let header_chunk = map.decode_chunk("MAP_HEADER", max_chunk_bytes)?;
-        let (header, header_error) = match crate::header::MapHeader::decode(&header_chunk) {
+        let saved = matches!(crate::header::MapHeader::rules_mode(&header_chunk), Ok(2 | 4));
+        let decoded = if saved {
+            crate::header::MapHeader::decode_saved(&header_chunk).map(|(header, _)| header)
+        } else {
+            crate::header::MapHeader::decode(&header_chunk)
+        };
+        let (header, header_error) = match decoded {
             Ok(header) => (Some(header), None),
             Err(error) => {
                 let reason = format!("MAP_HEADER decoding is unsupported: {error}");
@@ -163,7 +175,7 @@ impl WorldInventory {
             }
         };
         let teams_chunk = map.decode_chunk("TEAMS", max_chunk_bytes)?;
-        let (teams, teams_error) = match crate::kingdoms::Teams::decode(&teams_chunk) {
+        let (teams, teams_error) = match crate::kingdoms::Teams::decode_stream(&teams_chunk, saved) {
             Ok(teams) => (Some(teams), None),
             Err(error) => {
                 let reason = format!("TEAMS decoding is unsupported: {error}");
@@ -185,7 +197,7 @@ impl WorldInventory {
             .collect();
         let kingdoms_chunk = map.decode_chunk("KINGDOMS", max_chunk_bytes)?;
         let (kingdoms, kingdoms_error) =
-            match crate::kingdoms::Kingdoms::decode(&kingdoms_chunk, world.version) {
+            match crate::kingdoms::Kingdoms::decode_stream(&kingdoms_chunk, world.version, saved) {
                 Ok(kingdoms) => (Some(kingdoms), None),
                 Err(error) => {
                     let reason = format!("KINGDOMS decoding is unsupported: {error}");

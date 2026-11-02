@@ -6,7 +6,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use thiserror::Error;
 pub const BASELINE_LEDGER_SHA256: &str =
@@ -70,10 +70,19 @@ struct Overlay {
     logical_path: String,
     bytes: Vec<u8>,
 }
+/// One file of a loose data folder ([`V14Sources::open_over_folder`]).
+struct LooseFile {
+    logical_path: String,
+    disk: PathBuf,
+    size: u64,
+}
 pub struct V14Sources {
     archive: RwdArchive<File>,
     overlays: Vec<Overlay>,
     lookup: BTreeMap<String, usize>,
+    /// The loose folder lying over the archive, by lowercase path; empty for
+    /// the v14 data. Read when asked for: a mod's folder holds 46,000 files.
+    loose: BTreeMap<String, LooseFile>,
     limits: SourceLimits,
     /// Built once at open: the archive and overlays never change afterwards.
     catalog: Vec<CatalogEntry>,
@@ -172,11 +181,49 @@ impl V14Sources {
             archive,
             overlays,
             lookup,
+            loose: BTreeMap::new(),
             limits,
             catalog: Vec::new(),
             lookup_keys: std::sync::OnceLock::new(),
         };
         sources.catalog = sources.build_catalog();
+        Ok(sources)
+    }
+    /// The data of a profile the way an install resolves it: the loose files of
+    /// `folder` (a profile's `data`, the resources 0x85B040 scans at
+    /// `<profile>/data/`) over the stock archive. A mod's own copies replace the
+    /// archive's, and the v14 overlay is not part of it: the films recorded on a
+    /// mod's data decode on exactly this (`aa_parity::registries`, FILM-CORPUS.md).
+    ///
+    /// The catalog is the archive's files by lowercase path that the folder does
+    /// not replace, then the folder's by lowercase path.
+    pub fn open_over_folder(
+        archive_path: impl AsRef<Path>,
+        folder: impl AsRef<Path>,
+        limits: SourceLimits,
+    ) -> Result<Self> {
+        let ledger: Ledger = serde_json::from_slice(LEDGER)?;
+        let original = ledger
+            .v14_files
+            .iter()
+            .find(|f| f.path == "Data.rwd")
+            .ok_or_else(|| SourceError::Integrity("archive identity absent".into()))?;
+        let mut file = checked_open(archive_path.as_ref())?;
+        verify_file(&mut file, original)?;
+        file.seek(SeekFrom::Start(0))?;
+        let archive = RwdArchive::new(file)?;
+        let mut loose = BTreeMap::new();
+        walk_folder(folder.as_ref(), "", &mut loose)?;
+        let mut sources = Self {
+            archive,
+            overlays: Vec::new(),
+            lookup: BTreeMap::new(),
+            loose,
+            limits,
+            catalog: Vec::new(),
+            lookup_keys: std::sync::OnceLock::new(),
+        };
+        sources.catalog = sources.build_folder_catalog();
         Ok(sources)
     }
     /// Footer order, replaced in place; added files follow pinned ledger order.
@@ -217,6 +264,31 @@ impl V14Sources {
             .map(|rows| rows.iter().map(|&index| self.catalog[index].clone()).collect())
             .unwrap_or_default()
     }
+    fn build_folder_catalog(&self) -> Vec<CatalogEntry> {
+        let mut stock: BTreeMap<String, CatalogEntry> = BTreeMap::new();
+        for (index, entry) in self.archive.entries().iter().enumerate() {
+            let key = entry.path().to_ascii_lowercase();
+            if !self.loose.contains_key(&key) {
+                stock.insert(
+                    key,
+                    CatalogEntry {
+                        logical_path: entry.path().into(),
+                        size: entry.size(),
+                        origin: Origin::OriginalArchive {
+                            member_index: index,
+                        },
+                    },
+                );
+            }
+        }
+        let mut result: Vec<CatalogEntry> = stock.into_values().collect();
+        result.extend(self.loose.values().map(|f| CatalogEntry {
+            logical_path: f.logical_path.clone(),
+            size: f.size,
+            origin: Origin::V14Loose,
+        }));
+        result
+    }
     fn build_catalog(&self) -> Vec<CatalogEntry> {
         let mut result = Vec::new();
         for (index, entry) in self.archive.entries().iter().enumerate() {
@@ -255,6 +327,27 @@ impl V14Sources {
     }
     /// Relative to Data. Slash/ASCII-case-insensitive lookup; spelling preserved.
     pub fn read(&mut self, path: &str) -> Result<ResolvedFile> {
+        if !self.loose.is_empty() {
+            // A name the depots do not hold is a missing file whatever it looks
+            // like: a mod's index lines are not checked against its folder.
+            let key = path.replace('\\', "/").to_ascii_lowercase();
+            let Some(f) = self.loose.get(&key) else {
+                return match aa_formats::rwd::normalized_member_path(path) {
+                    Ok(_) => self.read_original(path),
+                    Err(_) => Err(SourceError::Missing(path.into())),
+                };
+            };
+            if f.size > self.limits.max_member_bytes {
+                return Err(SourceError::TooLarge(path.into()));
+            }
+            let bytes = fs::read(&f.disk)?;
+            return Ok(ResolvedFile {
+                logical_path: f.logical_path.clone(),
+                origin: Origin::V14Loose,
+                sha256: sha256(&bytes),
+                bytes,
+            });
+        }
         let key = aa_formats::rwd::normalized_member_path(path)?.to_ascii_lowercase();
         if let Some(&i) = self.lookup.get(&key) {
             let r = &self.overlays[i];
@@ -293,6 +386,37 @@ impl V14Sources {
             bytes,
         })
     }
+}
+/// Every file below a loose data folder, by lowercase path relative to it.
+/// A file that cannot be listed is not a resource: the scan skips it.
+fn walk_folder(dir: &Path, prefix: &str, out: &mut BTreeMap<String, LooseFile>) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let logical = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            walk_folder(&entry.path(), &logical, out)?;
+        } else if kind.is_file()
+            && let Ok(meta) = entry.metadata()
+        {
+            out.insert(
+                logical.to_ascii_lowercase(),
+                LooseFile {
+                    logical_path: logical,
+                    disk: entry.path(),
+                    size: meta.len(),
+                },
+            );
+        }
+    }
+    Ok(())
 }
 fn buffer_for(bytes: u64) -> Result<Vec<u8>> {
     let size = usize::try_from(bytes).map_err(|_| SourceError::Allocation)?;

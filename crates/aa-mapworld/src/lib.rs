@@ -24,6 +24,7 @@ pub mod restore;
 pub mod restore_components;
 pub mod special_state;
 pub mod saved_components;
+pub mod saved_world;
 pub mod terrain;
 pub mod world;
 pub use archive::{Chunk, ChunkDirectory, MapArchive, SourceIdentity};

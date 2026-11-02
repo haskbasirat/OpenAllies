@@ -45,6 +45,10 @@ impl Teams {
     /// stream+48=true/editor=false. The translated display string is a later
     /// host lookup; this decoder preserves only the serialized key.
     pub fn decode(chunk: &Chunk) -> Result<Self> {
+        Self::decode_stream(chunk, false)
+    }
+    /// `saved`: a saved game's stream, where 0x49AD70 keeps the text after a key.
+    pub fn decode_stream(chunk: &Chunk, saved: bool) -> Result<Self> {
         chunk.verify()?;
         if chunk.directory.name != "TEAMS" {
             return Err(Error::Format("incorrect TEAMS chunk identity".into()));
@@ -80,6 +84,9 @@ impl Teams {
                     )));
                 }
                 let display_key_utf16 = r.string()?;
+                if saved && !display_key_utf16.is_empty() {
+                    r.string()?;
+                }
                 let words_4c = words(&mut r)?;
                 let words_58 = words(&mut r)?;
                 let string_64_utf16 = if version >= 1 {
@@ -238,6 +245,10 @@ pub struct PropertyState {
     pub byte_10: Option<u8>,
     pub word_14: Option<u32>,
 }
+/// 503B10, the property object's Load, also of a Properties component's objects.
+pub(crate) fn read_property(r: &mut Reader<'_>) -> Result<PropertyState> {
+    property(r)
+}
 fn property(r: &mut Reader<'_>) -> Result<PropertyState> {
     let version = r.version(3)?;
     let word_04 = r.u32()?;
@@ -323,6 +334,35 @@ pub struct AiState {
     pub entries: CountedList<StrategicEntry>,
     pub word_334: u32,
 }
+/// A kingdom's static group (4E76B0, Load 4E77F0): its two names, its members and
+/// its words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedState {
+    pub version: u32,
+    pub name_utf16: Vec<u16>,
+    pub text_utf16: Vec<u16>,
+    pub members: Vec<u32>,
+    pub byte_18: u8,
+    pub word_1c: u32,
+}
+fn named_state(r: &mut Reader<'_>) -> Result<NamedState> {
+    let version = r.version(0)?;
+    let name_utf16 = r.string()?;
+    let text_utf16 = r.string()?;
+    let count = (r.u32()? as i32).max(0);
+    let mut members = Vec::new();
+    for _ in 0..count {
+        members.push(r.u32()?);
+    }
+    Ok(NamedState {
+        version,
+        name_utf16,
+        text_utf16,
+        members,
+        byte_18: r.take(1)?[0],
+        word_1c: r.u32()?,
+    })
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KingdomPayload {
     pub version: u32,
@@ -330,6 +370,9 @@ pub struct KingdomPayload {
     pub word_18c: u32,
     pub word_190: u32,
     pub display_key_utf16: Vec<u16>,
+    /// A saved game's text after the key (0x49AD70).
+    #[serde(default)]
+    pub display_text_utf16: Option<Vec<u16>>,
     pub color_reference_utf16: Vec<u16>,
     pub words_1d0: CountedList<u32>,
     pub resources_1c4: CountedList<ReferenceWord>,
@@ -348,6 +391,9 @@ pub struct KingdomPayload {
     pub string_348_utf16: Option<Vec<u16>>,
     pub ai: Option<AiState>,
     pub named_states_count: Option<u32>,
+    /// The kingdom's static groups (+0x34C, 4E76B0, Load 4E77F0).
+    #[serde(default)]
+    pub named_states: Vec<NamedState>,
     pub references_35c: Option<CountedList<ReferenceWord>>,
     pub words_36c: Option<CountedList<u32>>,
     pub byte_238: Option<u8>,
@@ -358,15 +404,20 @@ pub struct KingdomPayload {
 impl KingdomPayload {
     pub fn decode_prefix(bytes: &[u8]) -> Result<(Self, usize)> {
         let mut r = Reader::new(bytes);
-        let value = Self::read(&mut r)?;
+        let value = Self::read(&mut r, false)?;
         Ok((value, r.at))
     }
-    fn read(r: &mut Reader<'_>) -> Result<Self> {
+    fn read(r: &mut Reader<'_>, saved: bool) -> Result<Self> {
         let version = r.version(20)?;
         let word_188 = r.u32()?;
         let word_18c = r.u32()?;
         let word_190 = r.u32()?;
         let display_key_utf16 = r.string()?;
+        let display_text_utf16 = if saved && !display_key_utf16.is_empty() {
+            Some(r.string()?)
+        } else {
+            None
+        };
         let color_reference_utf16 = r.string()?;
         let words_1d0 = word_list(r)?;
         let resources_1c4 = reference_words(r)?;
@@ -442,13 +493,11 @@ impl KingdomPayload {
         } else {
             None
         };
+        let mut named_states = Vec::new();
         let named_states_count = if version > 11 {
             let count = r.u32()?;
-            if count as i32 > 0 {
-                return Err(Error::Format(format!(
-                    "unported named kingdom state records at byte {}",
-                    r.at - 4
-                )));
+            for _ in 0..(count as i32).max(0) {
+                named_states.push(named_state(r)?);
             }
             Some(count)
         } else {
@@ -490,6 +539,7 @@ impl KingdomPayload {
             word_18c,
             word_190,
             display_key_utf16,
+            display_text_utf16,
             color_reference_utf16,
             words_1d0,
             resources_1c4,
@@ -508,6 +558,7 @@ impl KingdomPayload {
             string_348_utf16,
             ai,
             named_states_count,
+            named_states,
             references_35c,
             words_36c,
             byte_238,
@@ -542,6 +593,10 @@ pub struct Kingdoms {
 }
 impl Kingdoms {
     pub fn decode(chunk: &Chunk, world_version: u32) -> Result<Self> {
+        Self::decode_stream(chunk, world_version, false)
+    }
+    /// `saved`: a saved game's stream, where 0x49AD70 keeps the text after a key.
+    pub fn decode_stream(chunk: &Chunk, world_version: u32, saved: bool) -> Result<Self> {
         chunk.verify()?;
         if chunk.directory.name != "KINGDOMS" {
             return Err(Error::Format("incorrect KINGDOMS chunk identity".into()));
@@ -591,7 +646,7 @@ impl Kingdoms {
                             "nested kingdom Object payload is unsupported".into(),
                         ));
                     }
-                    let (actor, n) = ActorPayload::decode_prefix(&r.bytes[r.at..], 0)?;
+                    let (actor, n) = ActorPayload::decode_prefix(&r.bytes[r.at..], u32::from(saved))?;
                     r.take(n)?;
                     (Some(object), Some(actor))
                 } else {
@@ -604,7 +659,7 @@ impl Kingdoms {
                 } else {
                     None
                 };
-                let payload = KingdomPayload::read(&mut r)?;
+                let payload = KingdomPayload::read(&mut r, saved)?;
                 if payload.word_188 != index as u32 {
                     return Err(Error::Format(format!(
                         "kingdom slot field {} differs from source slot {index}",

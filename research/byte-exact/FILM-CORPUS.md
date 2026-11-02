@@ -527,3 +527,141 @@ The ordering player of a decree is the last 298 SetPlayer (Admin+0x284, 0x75D710
 | ger_truck_engineer | 55 | 0.56% | 16 | 54 | 1 |
 
 (383 more kinds, not listed.)
+
+## Sources: a profile's data and saved games
+
+A film holds no map. What it needs lies beside it, in the data folder of the profile it lives in (lead's decision 6). `aa_parity::playback` now finds all of it. `tests/film_sources.rs` holds the checks.
+
+**A film on a profile's data.** `FilmData::for_film` takes `<profile>/data` as the overlay when the film lies in its `Films` folder. A folder with an `index*.lst` holds definitions of its own; a folder without one holds only what the game wrote there, and the definitions stay the game's. On definitions of its own:
+
+- `V14Sources::open_over_folder` reads the loose folder over the archive, by lowercase path, without the v14 overlay. `GameData`, `GeneralData`, `RandomMapData` and `Registries` load on it through `DataFolder`, and the results are cached by a key made from every file's path, size and time, leaving out what the game writes while it plays (films, saves, screenshots).
+- `GameMap::load_file` reads an RMP the way the original does, without the extracted JSON. A map the folder holds also brings its own triggers (`triggers::attach_bytes`) and its SUN chunk.
+- `AssetStore::set_art_overlay` lays the folder's converted art over the stock art for the length of the battle. `research/film-sources/convert_overlay.py` converts a folder with the same exporter as the stock art, into `<own profile>/art/<key>`. The client does not run it by itself: a film on a folder not converted logs the command and draws only what the stock art holds.
+
+**Closed sides of a random map.** Some creators list more sides than the session plays: a film with `side01`, `side02`, `side03`, `side05`. A kingdom's +0x188 is its place in the RMC's list, so the header's order is wrong for these films. The generator now takes the session's sides by name (`WorldSpec::present`) and the film's players give the indices. The creator's other sides still make their world-start draws. Whether the original also generates them and then leaves them out is not known yet.
+
+**A film of a saved game (creator mode 2).** `aa_mapworld::saved_world` walks every record of a save with the original's readers, an organization's embedded members included. `aa_play::saved_world::restore` builds the world from it, and a Load Game can use the same function later. Its `Restored::notes` say what is left out, and the film keeps them (`FilmPlayer::notes`).
+
+Restored:
+
+- the clock
+- the world stream, with the record pass's draws
+- the GTIDs
+- kingdoms: stockpiles, relations, properties, generals, experience and ability recharges
+- things: position, facing and health
+- organizations: members by slot, morale, experience and attack efficiency
+- production queues
+- the Supply's stock
+- the periodic and deferred queues (`UPDATABLES`)
+
+Held by a save, with no place in aa-play yet:
+
+| what | what happens instead |
+|---|---|
+| Minds (stack, pending and current commands) | the Mind starts idle in Sleep; element and regiment payloads decode (`aa_mind::saved_load`) but are not applied. The aircraft Mind (51C3C0) is not ported |
+| Movers (speed, destination, path) | a unit moving at the save stands until the film's next order |
+| aircraft in flight, projectiles in flight, trailers, corpses | not created; the notes count them per film |
+| Character stances | the default stance |
+| a Mobile Deployment under way | not resumed |
+| fog memories (GObject's sightings) | start empty |
+| kingdom statistics | start over (0x4F1E10) |
+| the AI's state | a film attaches no AI, so a film does not need it; a Load Game will |
+| recruit lists, GGroups, denizen groups in flight, trigger state | start empty |
+
+**Against the original.** Two films of saved games on v14 data were played on the QA copy under `FightSampler`, about 360 ticks each.
+
+- **Things:** every native actor at the first sample has its thing here, by GTID, in both films (0 missing).
+- **The world stream is exact.** The load draws once per record part, in record order. In the first film that is 6,337 draws: the Mind jitter (0x530E50), Economy (0x56F280), Supply (0x58B0E0), each DynamicDoodad (0x5904A0, 0x58F960), aircraft (0x576B20), the mover countdown (0x50AB10) and the first admission to each city (0x564300, from the record's publish 0x4FB514). After them the stream equals the native first getter of the battle on both films.
+- **Production:** the production lane of the state comparison shows no difference over all 220 sampled ticks of the first film.
+- **What differs from the first sampled tick, by lane:**
+  - fog: the ZOD and supply radii, see below
+  - combat and movement: the Minds, Movers and leftovers above; the thing's height at the same x, y and `under_siege` state bit 20 are not explained yet
+  - the world stream, which diverges during the first update because of these
+
+**Natively a loaded world keeps stale modifiers.** The organization's Load reads its morale before the InitExisting applies the kingdom's properties to its members, and +60 stands until something refreshes it. At level 0 a technology's MORALE counts once, for the organization (45 + 1). At a higher level it counts for every member, because the level refreshed them (45 + 10 * 1.5). The restore copies this. The same staleness shows in the Detection and Supply radii: a technology's DETECTION_RANGE add is not in them after a load (18 where aa-play reads 23). aa-play has no place for a stale radius yet.
+
+**The never-closed film (F24).** The original on a copy: the file is not in the dialog's list (the log says `RESOURCE: exception loading header`), and its name typed into the dialog gives the box `File missing: '<name>'`. The refusal here is the same text.
+
+## Played through the client's library
+
+Every film of this census run through `aa_parity::playback` in `Report` mode, on the working tree of 2026-11-02 (`tests/playback.rs`, `sweep_every_film_of_the_corpus`; `AA_FILM_SWEEP_OUT` writes this text). `aa-parity corpus` does not write this section, so it needs putting back after a regeneration.
+
+The whole corpus to its natural ends takes hours while other builds run, so the run below stops each film at 2000 ticks (`AA_FILM_SWEEP_CAP`). An earlier build of the same round played F01, F04, F06, F09 and F12 to their natural ends with no panic; the rest of the films that used to refuse have not been played past the cap. Run it uncapped on a quiet machine.
+
+Before these sources, 25 films refused with `unknown CreateGWorld failure`: 8 saved games, 15 on a profile's nation, 2 on a profile's campaign map. In the rows below none does. The refusals left are the original's own: `failed_film_wrong_version|s` (the version check 0x5A3980 stays native) and `load_error_missing_map|s` for the film that was never closed.
+
+Reading the numbers: `matched` counts checkpoints by the native rule 0x77D050. A film is out of step from its first mismatch on: the native stop is at that tick. Most `unresolved` orders name a selection whose things are gone, because film thing slots are the original's GTIDs and diverge from aa-play's as soon as the two create different things (`PARITY-CENSUS.md`, K1).
+
+| result | films |
+|---|---:|
+| failed_film_wrong_version|s | 9 |
+| load_error_missing_map|s | 1 |
+| played to its natural end | 8 |
+| stopped at the sweep's cap | 44 |
+
+91585 world ticks stepped in 377 s of simulation: 243 ticks per second. 3324 checkpoints checked, 732 matched. 2364 commands reached the world, 798 orders unresolved, 0 without an aa-play command, 438 commands refused.
+
+| film | result | ticks | ticks/s | checkpoints | matched | first mismatch tick | commands | unresolved | refused | load s |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| F01 | stopped at the sweep's cap | 2000 | 304 | 61 | 0 | 1 | 9 | 0 | 47 | 17.7 |
+| F02 | stopped at the sweep's cap | 2000 | 484 | 117 | 0 | 17 | 0 | 63 | 0 | 45.4 |
+| F03 | stopped at the sweep's cap | 2000 | 305 | 41 | 3 | 68 | 62 | 1 | 1 | 15.0 |
+| F04 | stopped at the sweep's cap | 2000 | 334 | 63 | 1 | 34 | 71 | 0 | 0 | 2.2 |
+| F05 | stopped at the sweep's cap | 2000 | 1793 | 117 | 93 | 1598 | 19 | 0 | 0 | 0.4 |
+| F06 | stopped at the sweep's cap | 2000 | 118 | 62 | 0 | 16 | 78 | 2 | 10 | 2.3 |
+| F07 | stopped at the sweep's cap | 2000 | 217 | 55 | 23 | 505 | 45 | 0 | 0 | 14.8 |
+| F08 | played to its natural end | 275 | 60 | 16 | 3 | 68 | 7 | 0 | 0 | 1.2 |
+| F09 | stopped at the sweep's cap | 2000 | 422 | 50 | 0 | 2 | 10 | 15 | 8 | 803.9 |
+| F10 | played to its natural end | 257 | 56 | 15 | 15 | - | 2 | 0 | 0 | 1.8 |
+| F11 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
+| F12 | stopped at the sweep's cap | 2000 | 165 | 43 | 0 | 7 | 7 | 234 | 7 | 2.2 |
+| F13 | stopped at the sweep's cap | 2000 | 337 | 55 | 0 | 11 | 8 | 17 | 7 | 1.0 |
+| F14 | stopped at the sweep's cap | 2000 | 72 | 68 | 0 | 16 | 82 | 2 | 16 | 7.7 |
+| F15 | stopped at the sweep's cap | 2000 | 61 | 117 | 0 | 16 | 78 | 13 | 7 | 4.3 |
+| F16 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 3.1 |
+| F17 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.3 |
+| F18 | stopped at the sweep's cap | 2000 | 1921 | 66 | 8 | 153 | 5 | 0 | 0 | 0.3 |
+| F19 | played to its natural end | 923 | 175 | 15 | 7 | 416 | 0 | 2 | 0 | 1.0 |
+| F20 | stopped at the sweep's cap | 2000 | 3032 | 117 | 85 | 1462 | 51 | 0 | 0 | 0.5 |
+| F21 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.1 |
+| F22 | stopped at the sweep's cap | 2000 | 433 | 55 | 13 | 238 | 4 | 0 | 0 | 1.6 |
+| F23 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
+| F24 | load_error_missing_map|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
+| F25 | stopped at the sweep's cap | 2000 | 571 | 49 | 0 | 5 | 7 | 23 | 7 | 1.1 |
+| F26 | stopped at the sweep's cap | 2000 | 279 | 61 | 1 | 34 | 110 | 19 | 36 | 1.4 |
+| F27 | stopped at the sweep's cap | 2000 | 282 | 45 | 0 | 17 | 0 | 32 | 0 | 1.2 |
+| F28 | stopped at the sweep's cap | 2000 | 477 | 57 | 0 | 9 | 33 | 25 | 33 | 1.8 |
+| F29 | stopped at the sweep's cap | 2000 | 237 | 71 | 2 | 51 | 58 | 1 | 6 | 1.9 |
+| F30 | played to its natural end | 1301 | 126 | 34 | 3 | 68 | 34 | 0 | 0 | 1.9 |
+| F31 | stopped at the sweep's cap | 2000 | 250 | 45 | 0 | 5 | 79 | 22 | 13 | 55.3 |
+| F32 | stopped at the sweep's cap | 2000 | 378 | 46 | 0 | 17 | 11 | 9 | 1 | 1.2 |
+| F33 | stopped at the sweep's cap | 2000 | 4392 | 117 | 117 | - | 3 | 0 | 0 | 5.1 |
+| F34 | stopped at the sweep's cap | 2000 | 367 | 65 | 0 | 14 | 12 | 13 | 59 | 1.0 |
+| F35 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
+| F36 | stopped at the sweep's cap | 2000 | 247 | 63 | 0 | 2 | 15 | 4 | 5 | 0.7 |
+| F37 | stopped at the sweep's cap | 2000 | 349 | 59 | 2 | 40 | 8 | 19 | 8 | 1.2 |
+| F38 | played to its natural end | 260 | 1712 | 15 | 0 | 17 | 4 | 0 | 0 | 0.3 |
+| F39 | stopped at the sweep's cap | 2000 | 255 | 59 | 0 | 17 | 17 | 14 | 11 | 1.2 |
+| F40 | stopped at the sweep's cap | 2000 | 32 | 45 | 0 | 9 | 706 | 115 | 31 | 2.6 |
+| F41 | stopped at the sweep's cap | 2000 | 317 | 59 | 0 | 6 | 50 | 13 | 9 | 2.6 |
+| F42 | stopped at the sweep's cap | 2000 | 276 | 117 | 28 | 493 | 10 | 1 | 1 | 1.6 |
+| F43 | stopped at the sweep's cap | 2000 | 884 | 117 | 0 | 17 | 16 | 0 | 0 | 0.6 |
+| F44 | stopped at the sweep's cap | 2000 | 779 | 117 | 0 | 17 | 17 | 0 | 0 | 0.7 |
+| F45 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
+| F46 | played to its natural end | 120 | 757 | 6 | 6 | - | 0 | 0 | 0 | 1313.6 |
+| F47 | played to its natural end | 5 | 1 | 0 | 0 | - | 13 | 0 | 0 | 2.5 |
+| F48 | played to its natural end | 444 | 149 | 26 | 26 | - | 8 | 0 | 0 | 9.2 |
+| F49 | stopped at the sweep's cap | 2000 | 410 | 76 | 0 | 17 | 100 | 24 | 22 | 2.5 |
+| F50 | stopped at the sweep's cap | 2000 | 463 | 83 | 0 | 17 | 35 | 33 | 35 | 4.0 |
+| F51 | stopped at the sweep's cap | 2000 | 420 | 45 | 0 | 5 | 50 | 6 | 10 | 2.9 |
+| F52 | stopped at the sweep's cap | 2000 | 410 | 68 | 3 | 68 | 104 | 2 | 0 | 2.3 |
+| F53 | stopped at the sweep's cap | 2000 | 390 | 68 | 17 | 306 | 104 | 7 | 8 | 1.5 |
+| F54 | stopped at the sweep's cap | 2000 | 284 | 49 | 16 | 449 | 46 | 7 | 11 | 1.2 |
+| F55 | stopped at the sweep's cap | 2000 | 797 | 65 | 0 | 17 | 11 | 23 | 11 | 2.8 |
+| F56 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
+| F57 | stopped at the sweep's cap | 2000 | 572 | 109 | 0 | 17 | 102 | 36 | 16 | 2.2 |
+| F58 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
+| F59 | stopped at the sweep's cap | 2000 | 355 | 48 | 0 | 16 | 18 | 1 | 2 | 0.3 |
+| F60 | stopped at the sweep's cap | 2000 | 604 | 73 | 26 | 455 | 35 | 0 | 0 | 0.8 |
+| F61 | stopped at the sweep's cap | 2000 | 796 | 117 | 117 | - | 10 | 0 | 0 | 0.6 |
+| F62 | stopped at the sweep's cap | 2000 | 584 | 117 | 117 | - | 0 | 0 | 0 | 0.8 |

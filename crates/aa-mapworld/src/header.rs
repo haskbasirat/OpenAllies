@@ -123,7 +123,8 @@ pub struct RandomCreatorSettings {
     /// The binary32 stored after the terrain weights; taken to be
     /// `m_total_terrain_weight` (inferred from the 0x505EA0 field names).
     pub total_terrain_weight_bits: u32,
-    /// `m_object_counts`: object group IDS and count, in stored order.
+    /// `m_object_counts`: object group IDS and count (binary32 bits), in stored
+    /// order.
     pub object_counts: Vec<(Utf16, u32)>,
     /// `m_num_heroes`.
     pub num_heroes: u32,
@@ -189,9 +190,14 @@ fn many<T>(
 /// not by a native reader port.
 const FILM_WORLD_MODE: u32 = 3;
 fn rules(r: &mut Reader<'_>) -> Result<WorldRules> {
-    rules_in_mode(r, false)
+    rules_in_mode(r, |mode| mode == 0)
 }
-fn rules_in_mode(r: &mut Reader<'_>, film: bool) -> Result<WorldRules> {
+/// WorldRules::Load 0x512420. The native reader stores the mode word at +4
+/// without branching on it (the 4981A0 modes `playable`, `cutscene`, `savegame`,
+/// `film`, `savegame_metagame_rts`, ...). A map stays on the verified mode 0, a
+/// film's own rules on mode 3, and a film's creator takes any: the creator of a
+/// film of a saved game has mode 2.
+fn rules_in_mode(r: &mut Reader<'_>, accepted: impl Fn(u32) -> bool) -> Result<WorldRules> {
     let version = r.version(4)?;
     if version != 4 {
         return Err(Error::Format(
@@ -199,7 +205,7 @@ fn rules_in_mode(r: &mut Reader<'_>, film: bool) -> Result<WorldRules> {
         ));
     }
     let mode = r.u32()?;
-    if mode != 0 && !(film && mode == FILM_WORLD_MODE) {
+    if !accepted(mode) {
         return Err(Error::Format(
             "nonzero world mode is outside the verified original-map corpus".into(),
         ));
@@ -228,7 +234,23 @@ fn rules_in_mode(r: &mut Reader<'_>, film: bool) -> Result<WorldRules> {
         rules,
     })
 }
-fn parameters(r: &mut Reader<'_>) -> Result<WorldParameters> {
+/// How the stream holds a localized string, 0x49AD70: the key, and only outside a
+/// map or film stream (the stream's virtual +0x48) the text after a non-empty key,
+/// so a saved game keeps the names its players saw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeaderStream {
+    Map,
+    Film,
+    Saved,
+}
+fn localized(r: &mut Reader<'_>, stream: HeaderStream) -> Result<Utf16> {
+    let key = r.string()?;
+    if stream == HeaderStream::Saved && !key.is_empty() {
+        r.string()?;
+    }
+    Ok(key)
+}
+fn parameters(r: &mut Reader<'_>, stream: HeaderStream) -> Result<WorldParameters> {
     let version = r.version(13)?;
     if version < 11 {
         return Err(Error::Format(
@@ -238,7 +260,7 @@ fn parameters(r: &mut Reader<'_>) -> Result<WorldParameters> {
     let teams = many(r, 4, |r| {
         Ok(TeamParameter {
             id: r.string()?,
-            display_key: r.string()?,
+            display_key: localized(r, stream)?,
         })
     })?;
     //Even an empty record has length prefixes, four count fields and three
@@ -251,7 +273,7 @@ fn parameters(r: &mut Reader<'_>) -> Result<WorldParameters> {
         let faction = r.string()?;
         let color = r.string()?;
         let handicap = r.string()?;
-        let display_key = r.string()?;
+        let display_key = localized(r, stream)?;
         let string_0c = if version >= 12 {
             Some(r.string()?)
         } else {
@@ -300,7 +322,7 @@ fn parameters(r: &mut Reader<'_>) -> Result<WorldParameters> {
         kingdoms,
     })
 }
-fn creator_base(r: &mut Reader<'_>, class_name: Utf16) -> Result<WorldCreator> {
+fn creator_base(r: &mut Reader<'_>, class_name: Utf16, stream: HeaderStream) -> Result<WorldCreator> {
     let creator_version = r.version(3)?;
     if creator_version != 3 {
         return Err(Error::Format(
@@ -310,8 +332,8 @@ fn creator_base(r: &mut Reader<'_>, class_name: Utf16) -> Result<WorldCreator> {
     Ok(WorldCreator {
         class_name,
         version: creator_version,
-        rules: rules(r)?,
-        parameters: parameters(r)?,
+        rules: rules_in_mode(r, |mode| stream != HeaderStream::Map || mode == 0)?,
+        parameters: parameters(r, stream)?,
         world_extents_bits: [r.u32()?, r.u32()?],
         biome: r.string()?,
         weather: r.string()?,
@@ -345,7 +367,7 @@ impl MapHeader {
     /// Original map headers: only the base `KKC_WorldCreator` class is
     /// accepted (derived creators are an explicit error).
     pub fn decode(chunk: &Chunk) -> Result<Self> {
-        match Self::decode_inner(chunk, false)? {
+        match Self::decode_inner(chunk, HeaderStream::Map)? {
             (header, DerivedCreator::Base) => Ok(header),
             _ => Err(Error::Format(
                 "unsupported polymorphic world creator".into(),
@@ -354,12 +376,24 @@ impl MapHeader {
     }
     /// Film (RFM) headers: any of the three creator classes
     /// (`KKC_WorldCreator`, `KKC_WorldCreatorLoad`, `KKC_WorldCreatorRandom`)
-    /// and the film WorldRuleMode 3 in the header's own rules. `creator`
-    /// holds the base payload; `creator.class_name` the class tag.
+    /// and the film world rule modes (`rules_in_mode`). `creator` holds the base
+    /// payload; `creator.class_name` the class tag.
     pub fn decode_any_creator(chunk: &Chunk) -> Result<(Self, DerivedCreator)> {
-        Self::decode_inner(chunk, true)
+        Self::decode_inner(chunk, HeaderStream::Film)
     }
-    fn decode_inner(chunk: &Chunk, film: bool) -> Result<(Self, DerivedCreator)> {
+    /// A saved game's header: its rules' mode says so, and its localized strings
+    /// hold their text too (0x5A19C0, 0x510580 through 0x49AD70).
+    pub fn decode_saved(chunk: &Chunk) -> Result<(Self, DerivedCreator)> {
+        Self::decode_inner(chunk, HeaderStream::Saved)
+    }
+    /// The mode word of the header's own WorldRules, without decoding the rest.
+    pub fn rules_mode(chunk: &Chunk) -> Result<u32> {
+        let mut r = Reader::new(&chunk.bytes);
+        r.version(7)?;
+        r.version(4)?;
+        r.u32()
+    }
+    fn decode_inner(chunk: &Chunk, stream: HeaderStream) -> Result<(Self, DerivedCreator)> {
         chunk.verify()?;
         if chunk.directory.name != "MAP_HEADER" {
             return Err(Error::Format("incorrect MAP_HEADER chunk identity".into()));
@@ -371,11 +405,15 @@ impl MapHeader {
                 "MapHeader version requires an older decoder".into(),
             ));
         }
-        let rules = rules_in_mode(&mut r, film)?;
-        let parameters = parameters(&mut r)?;
+        let rules = rules_in_mode(&mut r, |mode| {
+            mode == 0
+                || (stream == HeaderStream::Film && mode == FILM_WORLD_MODE)
+                || stream == HeaderStream::Saved
+        })?;
+        let parameters = parameters(&mut r, stream)?;
         let words_0c_10 = [r.u32()?, r.u32()?];
-        let name_key = r.string()?;
-        let description_key = r.string()?;
+        let name_key = localized(&mut r, stream)?;
+        let description_key = localized(&mut r, stream)?;
         let display_extents_bits = if version >= 7 {
             Some([r.u32()?, r.u32()?])
         } else {
@@ -408,10 +446,10 @@ impl MapHeader {
         let creator_offset = r.at;
         let class_name = r.string()?;
         let (creator, derived) = if class_name == utf16("KKC_WorldCreator") {
-            (creator_base(&mut r, class_name)?, DerivedCreator::Base)
+            (creator_base(&mut r, class_name, stream)?, DerivedCreator::Base)
         } else if class_name == utf16("KKC_WorldCreatorLoad") {
             let derived_version = r.version(0)?;
-            let creator = creator_base(&mut r, class_name)?;
+            let creator = creator_base(&mut r, class_name, stream)?;
             let source_resource_ids = r.string()?;
             (
                 creator,
@@ -421,7 +459,7 @@ impl MapHeader {
                 },
             )
         } else if class_name == utf16("KKC_WorldCreatorRandom") {
-            let creator = creator_base(&mut r, class_name)?;
+            let creator = creator_base(&mut r, class_name, stream)?;
             (creator, DerivedCreator::Random(random_settings(&mut r)?))
         } else {
             return Err(Error::Format(

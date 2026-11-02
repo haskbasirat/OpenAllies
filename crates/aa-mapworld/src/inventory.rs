@@ -171,14 +171,24 @@ impl<'a> Reader<'a> {
 pub fn decode_embedded_record(bytes: &[u8], ordinal: usize) -> Result<Placement> {
     record(bytes, ordinal, 0)
 }
+/// A saved game's GGroup record (class 8, 4DE490, Load 4E0A90): a GActor with the
+/// group's own words after it. A map holds none, and [`Inventory`] lists them as
+/// unsupported.
+pub fn decode_group_record(bytes: &[u8], ordinal: usize) -> Result<Placement> {
+    record_of(bytes, ordinal, 0, true)
+}
 fn record(bytes: &[u8], ordinal: usize, offset: usize) -> Result<Placement> {
+    record_of(bytes, ordinal, offset, false)
+}
+fn record_of(bytes: &[u8], ordinal: usize, offset: usize, groups: bool) -> Result<Placement> {
     let mut r = Reader::new(bytes);
     let thing_id_utf16 = r.string()?;
     let class_code = r.u32()?;
     let serialized_id = r.u32()?;
     let (thing, consumed) = ThingState::decode_prefix(&bytes[r.at..])?;
     r.take(consumed)?;
-    let object = if matches!(class_code, 2 | 3 | 6 | 7 | 9) {
+    let is_group = groups && class_code == 8;
+    let object = if is_group || matches!(class_code, 2 | 3 | 6 | 7 | 9) {
         let version = r.version(5)?;
         Some(ObjectState {
             version,
@@ -199,7 +209,7 @@ fn record(bytes: &[u8], ordinal: usize, offset: usize) -> Result<Placement> {
             "unsupported native class {class_code}"
         )));
     };
-    let actor = if class_code == 3
+    let actor = if (class_code == 3 || is_group)
         && object
             .as_ref()
             .is_some_and(|o| o.nested_count.unwrap_or(0) == 0)

@@ -557,7 +557,13 @@ pub fn load(sources: &mut V14Sources) -> Result<(ActorCatalog, NativeLoadReport)
     };
     let mut files = Vec::new();
     for entry in &index.files {
-        files.push(sources.read(&entry.path)?);
+        // An index line naming a file no depot has adds no definition (a mod's
+        // index is not checked against its own folder; the v14 data has none).
+        match sources.read(&entry.path) {
+            Ok(file) => files.push(file),
+            Err(SourceError::Missing(_)) => {}
+            Err(e) => return Err(e),
+        }
     }
     let mut report = NativeLoadReport {
         index,
