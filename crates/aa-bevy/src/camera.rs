@@ -14,8 +14,14 @@
 //!   by CameraScalePan (0x5CD320 / 0x5CCC20 / 0x700500), the target held
 //!   CameraScrollEdgePadding / 2 inside the map (0x6FEDB0);
 //! * mouse wheel: one notch = 0.1 zoom (0x5EFCCC / 0x43BC80); Page Up/Down
-//!   zoom by CameraScaleZoom (the current zoom) * CameraScrollSpeed per
-//!   second (0x5C29B0); Home / End = closest / farthest zoom.
+//!   zoom by CameraScaleZoom (the last requested zoom) * CameraScrollSpeed
+//!   per second (0x5C29B0); Home / End = closest / farthest zoom.
+//! * the screen edge starts scrolling only while the world view is the
+//!   widget under the cursor (0x5CD420 / 0x5EFA80); keys and a running
+//!   scroll then also take the edge, and nothing pans while the cursor is
+//!   outside the window (0x5CD320 KKC_Input+24);
+//! * the battle opens on the local kingdom's start location (0x4F61A0 ->
+//!   0x43F0A0).
 //!
 //! Native coordinates (X/Y ground, Z up) map to render as (x, z, -y)
 //! (`battle_view::to_render`).
@@ -55,12 +61,22 @@ pub const ZOOM_MIN: f32 = 0.7;
 pub const ZOOM_MAX: f32 = 2.1;
 pub const ZOOM_DEFAULT: f32 = 1.0;
 
+/// The kingdom's start location (native ground point): Kingdom+1F8, the
+/// start-location thing of its map slot, whose position 4F61A0
+/// (VWorldState::StartMission) hands to the camera.
+pub fn start_location(world: &aa_play::World, kingdom: aa_play::KingdomId) -> Option<Vec2> {
+    let slot = world.ids.kingdom_slot(kingdom)?;
+    let index = world.map.player_slots.iter().position(|&s| s == slot)?;
+    world.map.start_locations.get(index).copied()
+}
+
 /// The original camera state, in native coordinates.
 #[derive(Component, Clone, Debug)]
 pub struct NativeCamera {
     pub target: Vec3,
     pub zoom: f32,
-    /// UVar CameraScaleZoom: 0x7005F0 writes the current zoom on every zoom.
+    /// UVar CameraScaleZoom: 0x7005F0 stores every requested zoom (before
+    /// the clamp) through 0x40E0A0; the zoom keys' rate reads it back.
     pub scale_zoom: f32,
     /// Scroll accumulator (µs) of 0x5CD320; reset when scrolling starts.
     scroll_acc: f32,
@@ -158,15 +174,29 @@ pub fn attach(
     }
 }
 
+impl NativeCamera {
+    /// 0x7005F0 (through 0x7010F0 for a relative zoom): the zoom clamped to
+    /// the gameplay range (0x6FE470), the requested value stored to UVar
+    /// CameraScaleZoom (0x40E0A0).
+    fn set_zoom_7005f0(&mut self, value: f32) {
+        if !value.is_finite() {
+            return;
+        }
+        self.zoom = value.clamp(ZOOM_MIN, ZOOM_MAX);
+        self.scale_zoom = value;
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn update(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    logical: Res<ButtonInput<bevy::input::keyboard::Key>>,
     mut wheel: MessageReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
     ground: Option<Res<Ground>>,
     battle: Option<Res<Battle>>,
-    front: Option<Res<crate::ui::front::Front>>,
+    mut front: Option<ResMut<crate::ui::front::Front>>,
     mut requests: ResMut<CameraRequests>,
     mut cameras: Query<(&mut NativeCamera, &mut Transform)>,
 ) {
@@ -177,17 +207,21 @@ pub fn update(
     let speed_max = uv("CameraScrollSpeedMax", 10.0);
     let pad = front.as_ref().map(|f| f.ui.uvars.get_f32("CameraScrollEdgePadding")).unwrap_or(10.0);
     let scale_pan = uv("CameraScalePan", 10.0);
+    // UVar 34 CameraScaleZoom (UVars.tgi 0.5, or the profile's last zoom)
+    let scale_zoom_uvar = front.as_ref().map(|f| f.ui.uvars.get_f32("CameraScaleZoom")).filter(|v| v.is_finite());
     // the UI takes the keyboard while an edit box has focus or a dialog is up
     let ui_busy = front.as_ref().is_some_and(|f| f.ui.message_box.is_some() || f.hud.as_ref().is_some_and(|h| h.menu_open()));
     let dt_us = (time.delta_secs() * 1.0e6).clamp(10_000.0, 100_000.0);
     let ms = (dt_us / 1000.0).trunc();
-    let notches: f32 = wheel
+    // one 0x5EFCCC "deltazoom" command per wheel message (delta / 1200)
+    let notches: Vec<f32> = wheel
         .read()
         .map(|e| match e.unit {
             MouseScrollUnit::Line => e.y,
             MouseScrollUnit::Pixel => e.y / 120.0,
         })
-        .sum();
+        .filter(|n| *n != 0.0)
+        .collect();
     let window = windows.single().ok();
     let cursor = window.and_then(|w| front.as_ref().and_then(|f| f.pointer.pos).or(w.physical_cursor_position()).map(|c| (c, Vec2::new(w.physical_width() as f32, w.physical_height() as f32))));
     let over_world = front.as_ref().is_none_or(|f| !f.pointer_over_ui);
@@ -199,26 +233,34 @@ pub fn update(
     };
     for (mut cam, mut transform) in &mut cameras {
         if !cam.placed {
-            // the game starts on the local player's HQ (LookAt of the
-            // start location)
+            // the game starts on the local kingdom's start location
+            // (4F61A0 -> 43F0A0 LookAt), else on its first building
             if let Some(b) = &battle {
-                let hq = b.world.actors.iter().find(|a| a.kingdom == Some(b.local) && !a.removed && b.world.data.def(a.def).class == Some(aa_play::DefClass::Building));
                 cam.map = Vec2::new(b.world.map.width as f32 * b.world.map.cell_size, b.world.map.height as f32 * b.world.map.cell_size);
-                if let Some(hq) = hq {
-                    cam.target = hq.pos;
+                let hq = b.world.actors.iter().find(|a| a.kingdom == Some(b.local) && !a.removed && b.world.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate());
+                if let Some(p) = start_location(&b.world, b.local).or(hq) {
+                    cam.look_at(p, pad);
                 }
+            }
+            if let Some(s) = scale_zoom_uvar {
+                cam.scale_zoom = s;
             }
             cam.placed = true;
         }
+        let zoom_before = cam.zoom;
+        let mut stored = None;
         if let Some(p) = requests.look_at.take() {
             cam.look_at(p, pad);
         }
         if let Some(z) = requests.zoom.take() {
-            cam.zoom = z.clamp(ZOOM_MIN, ZOOM_MAX);
-            cam.scale_zoom = cam.zoom;
+            cam.set_zoom_7005f0(z);
+            stored = Some(cam.scale_zoom);
         }
-        if !requests.blocked && !ui_busy {
-            // scroll bits: arrows (+left/+right/+up/+down), edge pixels
+        // 5C92F0 / 5CD320 run the scroller and the impulses only while the
+        // application is active (App+34 bit 1, window activation)
+        let active = window.is_none_or(|w| w.focused);
+        if !requests.blocked && !ui_busy && active {
+            // scroll bits: arrows (+left/+right/+up/+down) ...
             let mut s = Vec2::ZERO;
             if keys.pressed(KeyCode::ArrowLeft) {
                 s.x -= 1.0;
@@ -232,7 +274,11 @@ pub fn update(
             if keys.pressed(KeyCode::ArrowDown) {
                 s.y -= 1.0;
             }
-            if let Some((c, size)) = cursor {
+            // ... and the outermost pixels (5CCC90); an edge only starts a
+            // scroll with the world view under the cursor (5CD420/5EFA80),
+            // an active scroller keeps taking it (5CD410)
+            let edge_counts = over_world || cam.scrolling || s != Vec2::ZERO;
+            if let Some((c, size)) = cursor.filter(|_| edge_counts) {
                 if c.x <= 0.0 {
                     s.x = -1.0;
                 }
@@ -251,45 +297,65 @@ pub fn update(
                     cam.scroll_acc = 0.0;
                     cam.scrolling = true;
                 }
-                cam.scroll_acc += dt_us;
-                let v = (speed + accel * cam.scroll_acc * 1.0e-6).min(speed_max);
-                let factor = v / speed;
-                let k = scale_pan * speed * ms / 1000.0;
-                let (sx, sy) = (factor * s.x * k, factor * s.y * k);
-                let d = NativeCamera::view_dir();
-                let next = Vec2::new(cam.target.x + sx * d.y + sy * d.x, cam.target.y + sy * d.y - sx * d.x);
-                cam.look_at(next, pad);
+                // 5CD320 pans only with the cursor inside the client area
+                if cursor.is_some() {
+                    cam.scroll_acc += dt_us;
+                    let v = (speed + accel * cam.scroll_acc * 1.0e-6).min(speed_max);
+                    let factor = v / speed;
+                    let k = scale_pan * speed * ms / 1000.0;
+                    let (sx, sy) = (factor * s.x * k, factor * s.y * k);
+                    let d = NativeCamera::view_dir();
+                    let next = Vec2::new(cam.target.x + sx * d.y + sy * d.x, cam.target.y + sy * d.y - sx * d.x);
+                    cam.look_at(next, pad);
+                }
             } else {
                 cam.scrolling = false;
             }
-            // zoom: wheel over the world, Page Up / Down, Home / End
-            let mut zoom = cam.zoom;
-            if notches != 0.0 && over_world {
-                zoom -= notches * 0.1;
+            // zoom: each wheel message over the world (43BC80 -> 7010F0)
+            if over_world {
+                for n in &notches {
+                    let value = cam.zoom - n * 0.1;
+                    cam.set_zoom_7005f0(value);
+                    stored = Some(cam.scale_zoom);
+                }
             }
+            // +zoomin / +zoomout impulses: pageup / pagedown, numpad-9 /
+            // numpad-3 and their NumLock-off pageup / pagedown (5C29B0:
+            // ms * CameraScaleZoom * CameraScrollSpeed * -/+0.001)
             let rate = ms * cam.scale_zoom * speed / 1000.0;
             if keys.pressed(KeyCode::PageUp) || keys.pressed(KeyCode::Numpad9) {
-                zoom -= rate;
+                let value = cam.zoom - rate;
+                cam.set_zoom_7005f0(value);
+                stored = Some(cam.scale_zoom);
             }
             if keys.pressed(KeyCode::PageDown) || keys.pressed(KeyCode::Numpad3) {
-                zoom += rate;
+                let value = cam.zoom + rate;
+                cam.set_zoom_7005f0(value);
+                stored = Some(cam.scale_zoom);
             }
-            if keys.just_pressed(KeyCode::Home) {
-                zoom = ZOOM_MIN;
+            // ZoomMin / ZoomMax (43BC20 / 43BC50): home / end and the
+            // NumLock-off numpad-home / numpad-end (the logical keys)
+            use bevy::input::keyboard::Key;
+            if keys.just_pressed(KeyCode::Home) || logical.just_pressed(Key::Home) {
+                cam.set_zoom_7005f0(ZOOM_MIN);
+                stored = Some(cam.scale_zoom);
             }
-            if keys.just_pressed(KeyCode::End) {
-                zoom = ZOOM_MAX;
+            if keys.just_pressed(KeyCode::End) || logical.just_pressed(Key::End) {
+                cam.set_zoom_7005f0(ZOOM_MAX);
+                stored = Some(cam.scale_zoom);
             }
-            let zoom = zoom.clamp(ZOOM_MIN, ZOOM_MAX);
-            if zoom != cam.zoom && std::env::var_os("AA_UI_CAMLOG").is_some() {
-                info!("camera zoom {} -> {zoom} (wheel {notches}, pgup {}, pgdn {})", cam.zoom, keys.pressed(KeyCode::PageUp), keys.pressed(KeyCode::PageDown));
-            }
-            if zoom != cam.zoom {
-                cam.zoom = zoom;
-                cam.scale_zoom = zoom;
+            if cam.zoom != zoom_before && std::env::var_os("AA_UI_CAMLOG").is_some() {
+                info!("camera zoom {zoom_before} -> {} (wheel {notches:?}, pgup {}, pgdn {}, scale {})", cam.zoom, keys.pressed(KeyCode::PageUp), keys.pressed(KeyCode::PageDown), cam.scale_zoom);
             }
         } else {
             cam.scrolling = false;
+        }
+        // 7005F0 -> 40E0A0: the requested zoom becomes UVar CameraScaleZoom
+        if let (Some(value), Some(front)) = (stored, front.as_mut()) {
+            let uvars = &mut front.ui.uvars;
+            if uvars.store_camera_scale_zoom_34(value.to_bits()).is_err() {
+                uvars.set_f32("CameraScaleZoom", value);
+            }
         }
         // the target follows the ground (ground-tracking byte +0x33C)
         cam.target.z = height(cam.target.truncate());
@@ -298,5 +364,26 @@ pub fn update(
             info!("camera target {:?} zoom {} eye {:?}", cam.target, cam.zoom, eye);
         }
         *transform = Transform::from_translation(to_render(eye)).looking_at(to_render(cam.target), Vec3::Y);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_requested_zoom_is_clamped_and_stored_unclamped() {
+        let mut cam = NativeCamera { target: Vec3::ZERO, zoom: ZOOM_DEFAULT, scale_zoom: 0.5, scroll_acc: 0.0, scrolling: false, map: Vec2::splat(1000.0), placed: true };
+        // above the gameplay range: the camera stops, the UVar keeps the request
+        cam.set_zoom_7005f0(2.6);
+        assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MAX, 2.6));
+        // 7010F0 is relative to the clamped zoom, not the stored request
+        cam.set_zoom_7005f0(cam.zoom - 0.1);
+        assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MAX - 0.1, ZOOM_MAX - 0.1));
+        cam.set_zoom_7005f0(0.1);
+        assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MIN, 0.1));
+        // no native domain for a non-finite request: nothing changes
+        cam.set_zoom_7005f0(f32::NAN);
+        assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MIN, 0.1));
     }
 }

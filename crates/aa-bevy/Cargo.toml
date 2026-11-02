@@ -36,6 +36,9 @@ sha2 = "0.10"
 aa-rules = { path = "../aa-rules" }
 aa-numeric = { path = "../aa-numeric" }
 rodio = { version = "0.22", default-features = false, features = ["mp3"] }
+# The World War II campaign (campaign/): the ported metagame rules and its
+# single-player driver.
+aa-metagame = { path = "../aa-metagame" }
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both

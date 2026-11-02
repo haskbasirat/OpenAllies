@@ -36,6 +36,17 @@ impl Plugin for BattleViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, sync_actors.run_if(in_state(crate::session::AppState::Battle)));
         app.add_systems(Update, draw_ghost.after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)));
+        app.add_systems(OnExit(crate::session::AppState::Battle), leave_battle);
+    }
+}
+
+/// Leaving a battle takes its actor views with it.
+fn leave_battle(mut commands: Commands, views: Query<(Entity, &ActorView)>) {
+    for (entity, view) in &views {
+        if let Some(t) = &view.look.trailer {
+            commands.entity(t.entity).despawn();
+        }
+        commands.entity(entity).despawn();
     }
 }
 
@@ -1148,6 +1159,9 @@ pub fn sync_actors(
         *log_timer = 0.0;
     }
     let (Some(battle), Some(mut library)) = (battle, library) else { return };
+    if battle.is_added() {
+        known.clear();
+    }
     let world = &battle.world;
     let object = |id: ActorId| object_animations.as_ref().and_then(|o| o.0.get(&id)).map(|(n, t)| (n.as_str(), *t));
     let alpha = tick_fraction(&battle);

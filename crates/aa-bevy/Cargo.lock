@@ -50,6 +50,7 @@ dependencies = [
  "aa-assets",
  "aa-formats",
  "aa-mapworld",
+ "aa-metagame",
  "aa-numeric",
  "aa-play",
  "aa-rules",
@@ -127,6 +128,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-metagame"
+version = "0.1.0"
+dependencies = [
+ "aa-formats",
+ "aa-numeric",
+ "aa-rules",
+ "aa-trig",
+ "flate2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aa-mind"
 version = "0.1.0"
 dependencies = [
@@ -196,6 +211,7 @@ dependencies = [
  "aa-rules",
  "aa-simulation",
  "aa-spatial",
+ "aa-triggers",
  "aa-world",
  "aa-zones",
  "anyhow",
@@ -253,6 +269,17 @@ name = "aa-trig"
 version = "0.1.0"
 dependencies = [
  "aa-numeric",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-triggers"
+version = "0.1.0"
+dependencies = [
+ "aa-body",
+ "aa-navigation",
+ "aa-numeric",
+ "serde",
  "thiserror 2.0.21",
 ]
 

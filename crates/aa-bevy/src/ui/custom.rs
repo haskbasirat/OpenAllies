@@ -372,6 +372,9 @@ pub struct Custom {
     /// choice, a computer's SAI profile faction; None = random for the
     /// nation (appended by the combat owner, for ui/abilities.rs).
     pub launched_factions: Vec<(usize, Option<String>)>,
+    /// A finished world exists (StagingOpenScoring 0x65BD60 needs
+    /// `0xB36534`): the Score button is enabled.
+    scoring: bool,
 }
 
 /// The staging screen's game data (nations, SAIs, rules, RMCs), parsed on a
@@ -404,7 +407,19 @@ impl Custom {
             launched_nation: None,
             launched_profiles: Vec::new(),
             launched_factions: Vec::new(),
+            scoring: false,
         }
+    }
+
+    /// The profile's LAN name (profile+0x2C) for the local player, as the
+    /// options dialog's nickname sets it.
+    pub fn set_player_name(&mut self, name: &str) {
+        self.player_name = Some(name.to_string());
+    }
+
+    /// Whether the staging's Score button opens a finished world.
+    pub fn scoring_available(&mut self, on: bool) {
+        self.scoring = on;
     }
 
     fn data(&mut self, ui: &Ui) -> &GameData {
@@ -659,7 +674,7 @@ impl Custom {
             players: (humans, s.seats() as i32),
             team_formats: formats,
             team_format: Some(s.format.clone()),
-            scoring_available: false,
+            scoring_available: self.scoring,
             observers_allowed: true,
             map_name,
             map_size,

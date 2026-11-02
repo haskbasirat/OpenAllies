@@ -618,7 +618,7 @@ impl RandomDialog {
         let vp = format!("{RD}/TerrainsSlidersPanel/TerrainsSliders");
         let _ = ui.viewport_clear(&vp);
         self.sliders.clear();
-        for (i, t) in rmc.terrains.iter().enumerate().filter(|(_, t)| t.show_ui) {
+        for (i, _) in rmc.terrains.iter().enumerate().filter(|(_, t)| t.show_ui) {
             let mut item = w(C::Panel, "Slider");
             item.add_child(w(C::Label, "NameLabel"));
             item.add_child(slider("RangeSlider"));

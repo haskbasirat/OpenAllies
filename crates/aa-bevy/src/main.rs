@@ -3,6 +3,7 @@
 mod audio;
 mod battle_view;
 mod camera;
+mod campaign;
 mod debug_battle;
 mod effects;
 mod model_fixes;
@@ -54,10 +55,14 @@ fn main() -> anyhow::Result<()> {
         _ => session::AppState::Menu,
     })
     .add_systems(Update, session::step_battle)
+    // the intro movies before the main menu (ui/video.rs)
+    .add_systems(Update, ui::video::intro.after(ui::front::frame))
     // the original camera, selection and orders (after the UI took its input)
     .add_plugins(input::InputPlugin)
     // original effects and sound (effects.rs adds the sound plugin)
-    .add_plugins(effects::EffectsPlugin);
+    .add_plugins(effects::EffectsPlugin)
+    // the World War II campaign's strategic map (campaign/)
+    .add_plugins(campaign::CampaignPlugin);
     app.run();
     Ok(())
 }

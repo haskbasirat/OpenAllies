@@ -8,8 +8,17 @@
 //! `RequestCredits` 0x64F290, `CreditsEndCredits` 0x645800, `QuitConfirm`
 //! 0x413230, `OpenOptionsMenu` 0x650700) with every button enabled as in the
 //! original. Commands whose screens are not built yet are logged.
+//!
+//! The end of a battle (Game interface 0x61A650 commands): the local
+//! player's mission result box (0x4E9720 -> 0x50D370 -> 0x50C600 case 2 ->
+//! 0x440190; an observer's mission-over box 0x4F4DA0 -> 0x50D330 -> case 3
+//! -> 0x4408A0), `RequestFinishedConfirm` 0x615D40, `RequestFinished`
+//! 0x6125A0 (0x774C80 case 2 -> 0x60A140: the end order with 6, 0x651BD0:
+//! the score screen, slot 5), `RequestKeepPlaying` 0x60CAE0 and
+//! `RequestObserve` 0x60CB40; the score screen is ui/scoring.rs.
 use super::custom::Custom;
 use super::hud::GameHud;
+use super::scoring;
 use crate::session::{AppState, Battle, LoadProgress};
 use aa_ui::fs::DataRoot;
 use aa_ui::layout::Screen;
@@ -28,6 +37,9 @@ use std::time::Instant;
 /// Front-end pages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
+    /// The intro movies before the main menu (0x5C4910 / 0x5C4AF0,
+    /// ui/video.rs `intro`).
+    Intro,
     MainMenu,
     SinglePlayer,
     /// CreditsInterface (0x646150).
@@ -38,6 +50,25 @@ pub enum Page {
     Loading,
     /// The Game interface (0x61A650) over the battle.
     Game,
+    /// The Scoring interface (0x6594D0, menu slot 5) after a battle.
+    Scoring,
+    /// The World War II campaign pages (campaign/: ChooseDynamicCampaign
+    /// 0x942AE0, the MetaGame interface 0x935130).
+    Campaign,
+}
+
+/// What a launch inserts for the loader, kept for the score screen's
+/// Replay (0x6590B0 -> 0x641660 / 0x652960: the session's launch settings
+/// again).
+#[derive(Clone)]
+struct Launch {
+    setup: aa_play::SkirmishSetup,
+    random: Option<aa_play::mapgen::RandomMapParams>,
+    profiles: Vec<(usize, String)>,
+    generals: super::abilities::PendingGenerals,
+    fog: Option<aa_play::fog::FogMode>,
+    kingdom_names: std::collections::HashMap<String, String>,
+    starting_experience: f32,
 }
 
 /// Windows default double-click time (GetDoubleClickTime 500 ms); AA.exe
@@ -84,6 +115,27 @@ pub struct Front {
     battle_speed: Option<f32>,
     /// The launched session's independent kingdoms' display names.
     kingdom_names: std::collections::HashMap<String, String>,
+    /// Data/Scoring/Scoring.tgi, loaded for the first score screen.
+    scoring_defs: Option<scoring::Defs>,
+    /// The score screen on show.
+    scoring: Option<scoring::Scoring>,
+    /// The last finished world for the score screen (StagingOpenScoring
+    /// 0x65BD60 opens it again while the world exists).
+    score_data: Option<scoring::ScoreData>,
+    /// The local kingdom's mission result was announced (GKingdom+0x19C is
+    /// set once, 0x4E9720), and the observer's mission-over box (0x4408A0).
+    result_shown: bool,
+    over_shown: bool,
+    /// The last launch (Replay).
+    last_launch: Option<Launch>,
+    /// The options dialog's nickname (profile+0x2C, default_lan_name).
+    lan_name: Option<String>,
+    /// UI sounds of this frame (`UiEvent::Sound`: a button's `set_sound` /
+    /// `unset_sound`, the options dialog's volume test sounds), drained by
+    /// ui/mod.rs `game_event_fx`.
+    pub sounds: Vec<String>,
+    /// The World War II campaign (campaign owner).
+    pub campaign: crate::campaign::CampaignUi,
 }
 
 /// Commands the front end does not run yet (their screens are not built).
@@ -93,7 +145,6 @@ const NOT_BUILT: &[&str] = &[
     "RequestFilm",
     "CheckForUpdates",
     "RequestCampaign",
-    "ConfirmPlayDynamicCampaign",
 ];
 
 impl Front {
@@ -105,7 +156,12 @@ impl Front {
         if let Some(vars) = settings_path.as_ref().and_then(|p| load_uvars(p)) {
             ui.uvars.apply_overrides(&vars);
         }
-        let custom = Custom::new(root);
+        let mut custom = Custom::new(root);
+        // the profile's LAN name saved by an earlier options OK
+        let lan_name = settings_path.as_ref().and_then(|p| load_lan_name(p));
+        if let Some(n) = &lan_name {
+            custom.set_player_name(n);
+        }
         // the staging data parses in the background from the start
         super::custom::warm(ui.store.root.clone());
         super::banners::warm(ui.store.root.clone());
@@ -113,7 +169,7 @@ impl Front {
         super::names::warm(ui.store.root.clone());
         Self {
             ui,
-            page: Page::MainMenu,
+            page: if super::video::intro_enabled() { Page::Intro } else { Page::MainMenu },
             built_for: None,
             dialog: None,
             options: None,
@@ -137,6 +193,15 @@ impl Front {
             starting_experience: 0.0,
             battle_speed: None,
             kingdom_names: Default::default(),
+            scoring_defs: None,
+            scoring: None,
+            score_data: None,
+            result_shown: false,
+            over_shown: false,
+            last_launch: None,
+            lan_name,
+            sounds: Vec::new(),
+            campaign: crate::campaign::CampaignUi::new(root),
         }
     }
 
@@ -157,6 +222,9 @@ impl Front {
             if page != Page::Game {
                 self.hud = None;
             }
+            if page != Page::Scoring {
+                self.scoring = None;
+            }
         }
         self.page = page;
         self.built_for = None;
@@ -168,10 +236,14 @@ impl Front {
         }
     }
 
-    /// The options dialog (`OpenOptionsMenu` 0x650700 -> 0x6792A0("")).
-    fn open_options(&mut self, size: (i32, i32)) {
+    /// The options dialog (`OpenOptionsMenu` 0x650700 -> 0x6792A0(""); the
+    /// staging's `StagingOpenOptions` 0x65DE10 -> 0x6792A0("Network")).
+    fn open_options(&mut self, size: (i32, i32), tab: &str) {
         self.ensure_options();
         let default_connection = self.ui.avars.get("DefaultNetworkConnectionType").unwrap_or("").to_string();
+        // the network page's nickname is the profile's LAN name (profile
+        // +0x2C, the defaults 0x41E160: Format(default_lan_name))
+        let nickname = self.lan_name.clone().unwrap_or_else(|| self.ui.strings.resolve("#default_lan_name"));
         if let Some(o) = &mut self.options {
             // the window is the renderer's only display mode
             o.video_modes = vec![(size.0, size.1, 32)];
@@ -179,11 +251,12 @@ impl Front {
             if o.connection.is_empty() {
                 o.connection = default_connection;
             }
+            o.nickname = nickname;
             // 0x76B2F0: a game in progress (single player: this player hosts)
             // lets the slider change the speed, GameSpeedMin / GameSpeedMax
             // (SVars -2 / +2) around the current exponent
             o.game_speed = self.battle_speed.filter(|_| self.page == Page::Game).map(|s| (-2.0, 2.0, s.max(1e-3).log2()));
-            o.show(&mut self.ui, "");
+            o.show(&mut self.ui, tab);
         }
     }
 
@@ -212,6 +285,51 @@ impl Front {
         self.remember_dialog();
     }
 
+    /// The mission boxes of the game interface. The local kingdom's result
+    /// (GKingdom+0x19C, set once by 0x4E9720: 1 won with its team, 2 lost;
+    /// a winner settles every open kingdom outside its team as lost, 0x4F4DA0)
+    /// queues 0x50D370 -> 0x440190 (host, single player): "Mission Won"
+    /// with End Mission / Keep Playing, "Mission Lost" with End Mission /
+    /// Observe (0x76BA40: no other human left). Without a local kingdom
+    /// (an observer) the game's end (0x4F4DA0: GWorld+0x48 = 2 ->
+    /// 0x50D330 -> 0x4408A0) asks "Mission Over" with End Mission / Keep
+    /// Playing.
+    fn mission_boxes(&mut self, b: &Battle) {
+        let w = &b.world;
+        let button = |ui: &Ui, cmd: &str, key: &str| (ui.strings.resolve(key), cmd.to_string());
+        if b.local_kingdom().is_none() {
+            if !self.over_shown && w.winner.is_some() {
+                self.over_shown = true;
+                let text = self.ui.strings.resolve("#ui_mission_message_over");
+                let buttons = vec![
+                    button(&self.ui, "RequestFinished", "#ui_mission_label_end_game"),
+                    button(&self.ui, "RequestKeepPlaying", "#ui_mission_label_keep_playing"),
+                ];
+                self.ask(&text, buttons);
+            }
+            return;
+        }
+        // the game's end with a local kingdom: 0x4408A0 shows nothing (a
+        // later Observe does not bring its box back)
+        if w.winner.is_some() {
+            self.over_shown = true;
+        }
+        if self.result_shown {
+            return;
+        }
+        let Some(k) = w.kingdoms.get(b.local as usize) else { return };
+        let Some(lost) = mission_result_lost(k.defeated, k.team, w.winner) else { return };
+        self.result_shown = true;
+        let (text, second) = if lost {
+            ("#ui_mission_message_lost", button(&self.ui, "RequestObserve", "#ui_mission_label_observe"))
+        } else {
+            ("#ui_mission_message_won", button(&self.ui, "RequestKeepPlaying", "#ui_mission_label_keep_playing"))
+        };
+        let text = self.ui.strings.resolve(text);
+        let buttons = vec![button(&self.ui, "RequestFinished", "#ui_mission_label_end_game"), second];
+        self.ask(&text, buttons);
+    }
+
     fn build(&mut self, size: (i32, i32), battle: Option<&Battle>, progress: Option<&LoadProgress>) {
         let t0 = std::time::Instant::now();
         self.build_page(size, battle, progress);
@@ -237,6 +355,8 @@ impl Front {
             }
         }
         match self.page {
+            // the FullscreenVideoWidget alone (ui/video.rs draws the movie)
+            Page::Intro => self.ui.clear(),
             Page::MainMenu => screens::main_menu(&mut self.ui),
             Page::SinglePlayer => screens::single_player_menu(&mut self.ui),
             Page::Credits => {
@@ -254,6 +374,20 @@ impl Front {
                 let hud = GameHud::show(&mut self.ui, battle);
                 self.hud = Some(hud);
             }
+            Page::Scoring => {
+                if self.scoring_defs.is_none() {
+                    self.scoring_defs = Some(scoring::Defs::load(&self.ui.store.root));
+                }
+                let defs = self.scoring_defs.as_ref().unwrap();
+                match &mut self.scoring {
+                    Some(s) => s.rebuild(&mut self.ui, defs),
+                    None => {
+                        let data = self.score_data.clone().unwrap_or_default();
+                        self.scoring = Some(scoring::Scoring::show(&mut self.ui, defs, data));
+                    }
+                }
+            }
+            Page::Campaign => self.campaign.show(&mut self.ui),
         }
         if !matches!(self.page, Page::Game) {
             self.ui.set_skin(None, self.root.join("assets/original/Skins"));
@@ -294,8 +428,10 @@ impl Front {
             hide_map_labels: false,
             map_name,
             map_description,
-            // a custom game: the objectives list is shown (kind 0)
-            kind: 0,
+            // a custom game is session kind 1 (RequestCustom 0x64EF00 ->
+            // 0x7840B0(1): the fallback of 0x651BD0 maps kind 1 to the
+            // staging): the objectives list (kind 0, a campaign) is hidden
+            kind: 1,
             mission_textures: None,
             local_player: nation.is_some(),
             nation,
@@ -346,13 +482,70 @@ impl Front {
                 }
             }
         }
+        if self.page == Page::Scoring {
+            if let (Some(s), Some(defs)) = (self.scoring.as_mut(), self.scoring_defs.as_ref()) {
+                if let Some(outcome) = s.command(&mut self.ui, defs, command) {
+                    match outcome {
+                        scoring::Outcome::None => {}
+                        // 0x659290: a custom game goes back to the staging
+                        // (slot 3)
+                        scoring::Outcome::Exit => {
+                            self.custom.scoring_available(self.score_data.is_some());
+                            self.show(Page::Staging);
+                        }
+                        scoring::Outcome::Replay => out.replay = true,
+                        // slot 4 (campaign only; the button is hidden)
+                        scoring::Outcome::Debriefing => info!("UI command ScoringDebriefing: the debriefing is the campaign's"),
+                    }
+                    return;
+                }
+            }
+        }
+        // the World War II campaign (campaign/)
+        if self.page == Page::Campaign || crate::campaign::CampaignUi::handles(command) {
+            if let Some(action) = self.campaign.command(&mut self.ui, command, widget) {
+                self.campaign_action(action, size);
+                return;
+            }
+        }
         match command {
             "" => {}
             "Quit" => self.quit = true,
             "RequestSinglePlayer" => self.show(Page::SinglePlayer),
             "RequestMainMenu" => self.show(Page::MainMenu),
             // main menu Options (0x650700) / game menu Options
-            "OpenOptionsMenu" | "OptionsDialog" => self.open_options(size),
+            "OpenOptionsMenu" | "OptionsDialog" => self.open_options(size, ""),
+            // the staging's options button (0x65DE10): the Network page
+            "StagingOpenOptions" => self.open_options(size, "Network"),
+            // the staging's score button (0x65BD60): the last world's score
+            // screen (slot 5) while it exists
+            "StagingOpenScoring" if self.page == Page::Staging => {
+                if self.score_data.is_some() {
+                    self.show(Page::Scoring);
+                }
+            }
+            // the game menu's leave button and the confirmation the
+            // mission boxes skip (0x615D40): single player asks
+            // `score_screen_confirm` (a campaign `campaign_end_confirm`,
+            // the editor test `editor_confirm`) with OK -> RequestFinished
+            "RequestFinishedConfirm" if self.page == Page::Game => {
+                let text = self.ui.strings.resolve("#score_screen_confirm");
+                let ok = self.ui.strings.resolve("#button_ok");
+                let cancel = self.ui.strings.resolve("#button_cancel");
+                self.ask(&text, vec![(ok, "RequestFinished".into()), (cancel, String::new())]);
+            }
+            // 0x6125A0 -> 0x774C80 (host, single player: 2) -> 0x60A140:
+            // the end order with 6 -> 0x651BD0 case 6: the score screen
+            "RequestFinished" if self.page == Page::Game => out.leave = true,
+            // 0x60CAE0: the host of a finished game keeps playing (decree
+            // 0x60F2B0 -> 0x772DD0: GENERIC_EVENT
+            // ui_mission_message_host_elected_keep_playing)
+            "RequestKeepPlaying" if self.page == Page::Game => out.keep_playing = true,
+            // 0x60CB40: observe (0x61EE60), then keep playing when over
+            "RequestObserve" if self.page == Page::Game => {
+                out.observe = true;
+                out.keep_playing = true;
+            }
             "QuitConfirm" => {
                 screens::quit_confirm(&mut self.ui, self.page == Page::Game);
                 self.remember_dialog();
@@ -364,8 +557,37 @@ impl Front {
                 self.show(Page::Staging);
             }
             "UserReady" if self.page == Page::Loading && self.loading_finished => out.ready = true,
+            // 0x65B780: the dependent-campaign confirmation, then the
+            // dynamic campaign chooser (campaign/)
+            "ConfirmPlayDynamicCampaign" => {
+                if self.campaign.confirm_play(&mut self.ui) {
+                    self.campaign.enter(&mut self.ui);
+                    self.show(Page::Campaign);
+                } else {
+                    self.remember_dialog();
+                }
+            }
             other if NOT_BUILT.contains(&other) => info!("UI command {other}: its screen is not built yet"),
             other => info!("UI command not handled yet: {other}"),
+        }
+    }
+
+    /// What a campaign command asked for (campaign owner).
+    fn campaign_action(&mut self, action: crate::campaign::Action, size: (i32, i32)) {
+        use crate::campaign::Action as A;
+        if self.ui.message_box.is_some() {
+            self.remember_dialog();
+        }
+        match action {
+            A::None => {}
+            A::Exit => self.show(Page::SinglePlayer),
+            A::MainMenu => self.show(Page::MainMenu),
+            A::Rebuild => self.show(Page::Campaign),
+            A::QuitConfirm => {
+                screens::quit_confirm(&mut self.ui, true);
+                self.remember_dialog();
+            }
+            A::Options => self.open_options(size, ""),
         }
     }
 
@@ -376,8 +598,22 @@ impl Front {
                 Effect::Save => self.save_settings(),
                 Effect::CameraZoom(z) => self.pending.push(super::hud::GameAction::CameraZoom(z)),
                 Effect::GameSpeed(s) => self.pending.push(super::hud::GameAction::SetSpeed(2f32.powf(s))),
-                // no sound output in this client yet
-                Effect::Volume { .. } | Effect::PlaySound(_) | Effect::Nickname(_) | Effect::Closed | Effect::HotkeyConfiguration(_) => {}
+                // the options dialog's volume test sounds, as UI sounds
+                Effect::PlaySound(ids) => self.sounds.push(ids),
+                // the network page's nickname becomes the profile's LAN
+                // name: the staging's local player (0x41E160 profile+0x2C)
+                Effect::Nickname(n) => {
+                    let n = n.trim().to_string();
+                    if !n.is_empty() {
+                        self.custom.set_player_name(&n);
+                        self.lan_name = Some(n);
+                        self.save_settings();
+                    }
+                }
+                // the UVars change and are saved; the sound manager still
+                // takes its volumes from the data files (audio/mod.rs
+                // read_vars), not from these UVars
+                Effect::Volume { .. } | Effect::Closed | Effect::HotkeyConfiguration(_) => {}
             }
         }
     }
@@ -391,6 +627,9 @@ impl Front {
         let vars = self.ui.uvars.overrides();
         if let Some(obj) = v.as_object_mut() {
             obj.insert("uvars".into(), serde_json::to_value(vars).unwrap_or_default());
+            if let Some(n) = &self.lan_name {
+                obj.insert("lan_name".into(), serde_json::Value::String(n.clone()));
+            }
         }
         let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
         if let Ok(text) = serde_json::to_string_pretty(&v) {
@@ -410,12 +649,88 @@ fn load_uvars(path: &Path) -> Option<BTreeMap<String, String>> {
     serde_json::from_value(v.get("uvars")?.clone()).ok()
 }
 
+/// The profile's LAN name (profile+0x2C) saved with the options.
+fn load_lan_name(path: &Path) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    v.get("lan_name")?.as_str().filter(|s| !s.is_empty()).map(str::to_string)
+}
+
+/// The local kingdom's mission result as far as aa-play knows it:
+/// `Some(true)` lost, `Some(false)` won, `None` still playing. A kingdom
+/// defeated on its own lost whoever wins later (GKingdom+0x19C is set once,
+/// 0x4E9720); a winner's team won and every other open kingdom lost
+/// (0x4F4DA0 settles them with 4E9720(2)).
+fn mission_result_lost(defeated: bool, team: u32, winner: Option<u32>) -> Option<bool> {
+    if defeated {
+        return Some(true);
+    }
+    winner.map(|t| t != team)
+}
+
+/// The finished world for the score screen: every kingdom of the world
+/// (GWorld+0x154) with its `0x4E9560` name (`0x4E93C0`: the kingdom glyph
+/// in the kingdom colour unless independent) and colour. aa-play keeps no
+/// statistics snapshots (GKingdom+0x338; economy.rs `statistics_snapshot`
+/// is empty), so the rows read 0 and the graph has no lines until it does.
+fn score_data(ui: &Ui, b: &Battle, names: &std::collections::HashMap<String, String>) -> scoring::ScoreData {
+    let gem = ui.strings.glyphs.get(&ui.avars.get("KingdomGlyphInfo").unwrap_or("ch_gem").to_ascii_lowercase()).copied().unwrap_or('#');
+    let g = |v: f32| aa_ui::staging::fmt_g(v as f64);
+    // The sheet (0x65A460) and the graph skip null kingdom slots. The
+    // original lists only the player kingdoms: the QA captures of a scenario
+    // (Market Garden 2v2) and of a random map (Southern Europe 2v2), both
+    // with independent-owned cities, show the four players and no
+    // independent row, so the independent kingdoms are empty slots here.
+    let kingdoms = b
+        .world
+        .kingdoms
+        .iter()
+        .map(|k| {
+            if k.independent {
+                return None;
+            }
+            let color = [k.color[0] as f32 / 255.0, k.color[1] as f32 / 255.0, k.color[2] as f32 / 255.0];
+            let display = names.get(&k.name.to_ascii_lowercase()).cloned().unwrap_or_else(|| ui.strings.resolve(&k.name));
+            let name = format!("<color={},{},{}>{gem} <rc>{display}", g(color[0]), g(color[1]), g(color[2]));
+            Some(scoring::KingdomScores { name, color, snapshots: Vec::new(), favorites: Default::default() })
+        })
+        .collect();
+    scoring::ScoreData { kingdoms, kind: 1, networked: false, film: false }
+}
+
+/// Hand a launch to the loader (session::PendingSetup and its companions)
+/// and show the loading screen.
+fn start(f: &mut Front, commands: &mut Commands, next: &mut NextState<AppState>, launch: Launch) {
+    commands.insert_resource(crate::session::PendingAiProfiles(launch.profiles));
+    f.kingdom_names = launch.kingdom_names;
+    f.starting_experience = launch.starting_experience;
+    commands.insert_resource(launch.generals);
+    match launch.fog {
+        Some(mode) => commands.insert_resource(super::fog::PendingFog(mode)),
+        None => commands.remove_resource::<super::fog::PendingFog>(),
+    }
+    commands.insert_resource(crate::session::PendingSetup(launch.setup));
+    if let Some(params) = launch.random {
+        commands.insert_resource(crate::session::PendingRandomMap(params));
+    } else {
+        commands.remove_resource::<crate::session::PendingRandomMap>();
+    }
+    commands.insert_resource(LoadProgress::default());
+    next.set(AppState::Loading);
+}
+
 /// What a frame of the front end asks the app to do.
 #[derive(Default)]
 pub struct FrameOut {
     pub launch: bool,
     pub ready: bool,
     pub game: Vec<super::hud::GameAction>,
+    /// RequestFinished: leave the battle for the score screen.
+    pub leave: bool,
+    /// RequestKeepPlaying / RequestObserve.
+    pub keep_playing: bool,
+    pub observe: bool,
+    /// The score screen's Replay.
+    pub replay: bool,
 }
 
 /// One frame's pointer and keyboard input, in window pixels.
@@ -506,13 +821,17 @@ pub fn frame(
                 screens::loading_finished(&mut f.ui);
                 None
             }
-            Page::Loading | Page::Game => None,
+            // the score screen while the battle state is left
+            Page::Loading | Page::Game | Page::Scoring => None,
             _ => Some(Page::Game),
         },
     };
     if let Some(p) = want {
         if p == Page::Loading {
             f.loading_finished = false;
+            // a new world: its mission results are still to come
+            f.result_shown = false;
+            f.over_shown = false;
         }
         f.show(p);
     }
@@ -654,11 +973,29 @@ pub fn frame(
                 }
             }
             UiEvent::Minimap { u, v, .. } => out.game.push(super::hud::GameAction::MinimapJump(u, v)),
-            UiEvent::Sound { .. } | UiEvent::Clipboard { .. } => {}
+            // button set_sound / unset_sound and the other UI sounds
+            UiEvent::Sound { name } => {
+                if !name.is_empty() && !name.eq_ignore_ascii_case("null") {
+                    f.sounds.push(name);
+                }
+            }
+            UiEvent::Clipboard { .. } => {}
         }
     }
     if f.page == Page::Staging {
         f.custom.update(&mut f.ui);
+    }
+    // the campaign pages: world ticks, labels and the MetaGame hotkeys (campaign/)
+    if f.page == Page::Campaign {
+        let now = f.now_ms();
+        if f.campaign.update(&mut f.ui, now) {
+            f.built_for = None;
+        }
+        for k in std::mem::take(&mut game_keys) {
+            if let Some(a) = f.campaign.key(&mut f.ui, k) {
+                f.campaign_action(a, size);
+            }
+        }
     }
     // the HUD reads the battle every frame
     if f.page == Page::Game {
@@ -672,32 +1009,61 @@ pub fn frame(
             hud.set_hover(hovered.as_deref());
             hud.update(&mut f.ui, b);
         }
+        if let Some(b) = battle.as_deref() {
+            f.mission_boxes(b);
+        }
+    }
+    // RequestObserve (0x61EE60): ClearSelection, no local kingdom
+    if out.observe {
+        if let Some(b) = battle.as_mut() {
+            b.selection.clear();
+            b.observer = true;
+        }
+    }
+    // RequestKeepPlaying for a finished game (0x60CAE0: GWorld+0x48 == 2):
+    // the keep-playing decree's GENERIC_EVENT (0x772DD0, type 0xF)
+    if out.keep_playing && battle.as_deref().is_some_and(|b| b.world.winner.is_some()) {
+        let text = f.ui.strings.resolve("#ui_mission_message_host_elected_keep_playing");
+        if let Some(hud) = f.hud.as_mut() {
+            hud.events.send_message(&mut f.ui, "GENERIC_EVENT", &text, None);
+        }
+    }
+    // RequestFinished: the world's scores for the score screen (slot 5); the
+    // world itself ends with the battle state (scene::leave_battle)
+    if out.leave {
+        if let Some(b) = battle.as_deref() {
+            f.score_data = Some(score_data(&f.ui, b, &f.kingdom_names));
+        }
+        commands.remove_resource::<Battle>();
+        next.set(AppState::Menu);
+        f.show(Page::Scoring);
     }
     if out.launch {
         if let Some((mut setup, random)) = f.custom.launch_setup() {
             f.custom.localize_setup(&f.ui, &mut setup);
             info!("launch: {setup:?}, generals {:?}", f.custom.launched_profiles);
-            commands.insert_resource(crate::session::PendingAiProfiles(f.custom.launched_profiles.clone()));
-            f.kingdom_names = f.custom.kingdom_names();
-            f.starting_experience = f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
-            // the generals and the StartingExperience rule (ui/abilities.rs)
-            commands.insert_resource(super::abilities::PendingGenerals {
-                factions: f.custom.launched_factions.clone(),
-                starting_experience: f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok()),
-            });
-            // the FogOfWar world rule of the session (EnumValue IDS)
-            match f.custom.rule_value("FogOfWar").and_then(|v| aa_play::fog::FogMode::from_ids(&v)) {
-                Some(mode) => commands.insert_resource(super::fog::PendingFog(mode)),
-                None => commands.remove_resource::<super::fog::PendingFog>(),
-            }
-            commands.insert_resource(crate::session::PendingSetup(setup));
-            if let Some(params) = random {
-                commands.insert_resource(crate::session::PendingRandomMap(params));
-            } else {
-                commands.remove_resource::<crate::session::PendingRandomMap>();
-            }
-            commands.insert_resource(LoadProgress::default());
-            next.set(AppState::Loading);
+            let starting = f.custom.rule_value("StartingExperience").and_then(|v| v.trim().parse::<f32>().ok());
+            let launch = Launch {
+                setup,
+                random,
+                profiles: f.custom.launched_profiles.clone(),
+                // the generals and the StartingExperience rule (ui/abilities.rs)
+                generals: super::abilities::PendingGenerals { factions: f.custom.launched_factions.clone(), starting_experience: starting },
+                // the FogOfWar world rule of the session (EnumValue IDS)
+                fog: f.custom.rule_value("FogOfWar").and_then(|v| aa_play::fog::FogMode::from_ids(&v)),
+                kingdom_names: f.custom.kingdom_names(),
+                starting_experience: starting.unwrap_or(0.0),
+            };
+            f.last_launch = Some(launch.clone());
+            start(f, &mut commands, &mut next, launch);
+        }
+    }
+    // the score screen's Replay: the same launch again (INFERRED: the
+    // session's launch settings 0x76B4C0+0x4C are the staging's, resolved
+    // at the launch, so the same setup and map seed)
+    if out.replay {
+        if let Some(launch) = f.last_launch.clone() {
+            start(f, &mut commands, &mut next, launch);
         }
     }
     if out.ready {
@@ -720,7 +1086,8 @@ pub fn frame(
             });
         }
     }
-    if !out.game.is_empty() || !game_keys.is_empty() {
+    // only a running battle reads them (a menu's would wait for the next one)
+    if battle.is_some() && !out.leave && (!out.game.is_empty() || !game_keys.is_empty()) {
         commands.insert_resource(super::hud::GameInput { actions: std::mem::take(&mut out.game), keys: game_keys });
     }
     if f.built_for != Some((size.0, size.1, f.page)) {
@@ -763,8 +1130,15 @@ pub fn frame(
             );
         }
     }
-    if f.page == Page::Loading {
-        // the frame clears to black (uncovered areas of 03-launch.png)
+    // the score screen's graph lines (GraphVE, ui/scoring.rs)
+    if f.page == Page::Scoring {
+        if let (Some(s), Some(defs)) = (f.scoring.as_ref(), f.scoring_defs.as_ref()) {
+            s.draw(&mut f.ui, defs, &mut list);
+        }
+    }
+    if matches!(f.page, Page::Loading | Page::Scoring) {
+        // the frame clears to black (uncovered areas of 03-launch.png); the
+        // score screen's alpha-blended panel shows no world either
         list.commands.insert(
             0,
             aa_ui::draw::DrawCmd {
@@ -787,5 +1161,27 @@ pub fn frame(
     draw.list = list;
     if f.quit {
         quit.requested = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mission_result_lost;
+
+    #[test]
+    fn mission_result_follows_the_winner_and_the_defeat() {
+        // still playing
+        assert_eq!(mission_result_lost(false, 0, None), None);
+        // defeated on its own while the others play on
+        assert_eq!(mission_result_lost(true, 0, None), Some(true));
+        // its team won
+        assert_eq!(mission_result_lost(false, 0, Some(0)), Some(false));
+        // another team won by the city ratio (0x4E9A40): nobody was
+        // defeated, 0x4F4DA0 settles the open kingdom as lost
+        assert_eq!(mission_result_lost(false, 0, Some(1)), Some(true));
+        // defeated earlier stays lost when its team wins later (+0x19C once)
+        assert_eq!(mission_result_lost(true, 0, Some(0)), Some(true));
+        // everybody fell in the same tick
+        assert_eq!(mission_result_lost(true, 0, Some(u32::MAX)), Some(true));
     }
 }

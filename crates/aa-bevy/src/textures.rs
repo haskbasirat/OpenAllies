@@ -147,7 +147,11 @@ pub fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {
         mipmap_filter: filter,
         // Masks: native compositor point sampling, no mip filtering (8A0830(0)).
         lod_max_clamp: if kind == Kind::Mask { 0.0 } else { 32.0 },
-        anisotropy_clamp: if kind == Kind::Mask { 1 } else { 4 },
+        // No anisotropic filtering: the Gamebryo 10.1 NiTexturingProperty
+        // filter modes are nearest / bilerp / trilerp (UVar
+        // TerrainTrilinearFilter), and the shipped dgVoodoo.conf leaves
+        // Filtering "appdriven".
+        anisotropy_clamp: 1,
         ..default()
     });
     Ok(image)

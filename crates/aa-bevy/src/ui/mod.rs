@@ -20,10 +20,15 @@ pub mod minimap;
 pub mod modifiers;
 pub mod nifart;
 pub mod names;
+/// The map triggers' banner, counter, objective events and speech
+/// (appended by the scenarios owner).
+pub mod objectives;
 pub mod order_marks;
 pub mod panels;
 pub mod placement;
 pub mod portrait;
+/// The score screen after a battle (appended by the front-end owner).
+pub mod scoring;
 pub mod tex;
 pub mod tooltip;
 pub mod video;
@@ -99,6 +104,13 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 fog::hide_unseen.after(crate::session::step_battle).after(crate::battle_view::sync_actors).run_if(in_state(crate::session::AppState::Battle)),
+            )
+            // (scenarios owner) the trigger notices after the tick, before
+            // the frame's UI is painted
+            .init_resource::<objectives::ScenarioUi>()
+            .add_systems(
+                Update,
+                objectives::update.after(crate::session::step_battle).after(front::frame).before(render::paint).run_if(in_state(crate::session::AppState::Battle)),
             );
         if let Some(s) = script::Script::from_env() {
             app.insert_resource(s);
@@ -160,14 +172,24 @@ fn placement_impact(mut front: ResMut<front::Front>, place: Option<Res<placement
 
 /// This frame's game event effects (ui/game_events.rs): the messages'
 /// type sounds and the events' sounds to the sound queue (2-D, or at the
-/// event's ground point), their pings to the minimap.
+/// event's ground point), their pings to the minimap. The front end's UI
+/// sounds (`Front::sounds`) join them as 2-D sounds; the sound manager only
+/// exists in a battle, so in the menus they are dropped.
 fn game_event_fx(
     mut front: ResMut<front::Front>,
     mut art: ResMut<minimap::MinimapArt>,
     battle: Option<Res<crate::session::Battle>>,
-    sfx: Option<ResMut<crate::audio::SfxQueue>>,
+    mut sfx: Option<ResMut<crate::audio::SfxQueue>>,
 ) {
     let front = &mut *front;
+    let ui_sounds = std::mem::take(&mut front.sounds);
+    if battle.is_some()
+        && let Some(q) = sfx.as_mut()
+    {
+        for ids in ui_sounds {
+            q.play.push(crate::audio::Sfx { ids, place: crate::audio::Place::Global, owner: None, voice: None, looping: false });
+        }
+    }
     let Some(h) = front.hud.as_mut() else { return };
     h.events.message_sounds(&front.ui);
     for p in h.events.pings.drain(..) {

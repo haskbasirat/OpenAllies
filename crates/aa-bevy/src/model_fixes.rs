@@ -33,6 +33,37 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    /// The NiMaterialProperty ambient through the node path of a shipped
+    /// model (when the original data is present): the high grass has 0.745
+    /// instead of the common 0.502.
+    #[test]
+    fn nif_ambient_of_a_shipped_model() {
+        let Some(root) = crate::ui::reconstruction_root() else { return };
+        let path = root.join("assets/original/Data/Doodads/Temperate/TemperateHighGrass/TemperateHighGrass01.nif");
+        let Ok(bytes) = fs::read(&path) else { return };
+        let f = aa_formats::nif::load(&bytes).unwrap();
+        let names: Vec<String> = f
+            .objects
+            .iter()
+            .filter(|o| aa_formats::nif::is_kind_of(o.class, "NiGeometry"))
+            .filter_map(|o| match o.fields.get("name") {
+                Some(aa_formats::nif::Value::Str(Some(s))) => Some(String::from_utf8_lossy(&s[..]).into_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(!names.is_empty());
+        let meshes: Vec<(&str, &[String])> = names.iter().map(|n| (n.as_str(), &[][..])).collect();
+        let found = nif_ambients(&bytes, &meshes);
+        assert_eq!(found.len(), names.len());
+        for a in &found {
+            let a = a.expect("every geometry has a material");
+            assert!((a[0] - 0.745).abs() < 0.001, "{a:?}");
+        }
+        // an unknown mesh has none, garbage bytes give none for every mesh
+        assert_eq!(nif_ambients(&bytes, &[("no such mesh", &[][..])]), vec![None]);
+        assert_eq!(nif_ambients(b"not a nif", &[("x", &[][..])]), vec![None]);
+    }
+
     #[test]
     fn selected_resource_digest_and_same_read_output_are_required(){
         let fixture=Fixture::new();let fixes=fixture.fixes();
@@ -608,6 +639,68 @@ struct Entry {
     // Verification is once per model in this loader instance, not per frame.
     // Repeated calls still verify the supplied prepared geometry against identity.
     verified: OnceLock<std::result::Result<VerifiedModel, String>>,
+    /// Per converted mesh, the NiMaterialProperty ambient of the original
+    /// NIF (read once per model).
+    ambients: OnceLock<Vec<Option<[f32; 3]>>>,
+}
+
+/// The NiMaterialProperty ambient of every audited mesh, found by its node
+/// path (the audited hierarchy names) in the original NIF: the nearest
+/// NiMaterialProperty on the geometry or an ancestor (Gamebryo property
+/// inheritance; the converted meshes keep only the diffuse colour).
+fn nif_ambients(bytes: &[u8], meshes: &[(&str, &[String])]) -> Vec<Option<[f32; 3]>> {
+    use aa_formats::nif::{self, Value};
+    let Ok(f) = nif::load(bytes) else { return vec![None; meshes.len()] };
+    let name = |i: usize| match f.objects[i].fields.get("name") {
+        Some(Value::Str(Some(s))) => String::from_utf8_lossy(&s[..]).into_owned(),
+        _ => String::new(),
+    };
+    // preorder geometry paths from the top-level objects
+    let mut geometry: Vec<(Vec<String>, usize)> = Vec::new();
+    let mut seen = vec![false; f.objects.len()];
+    let mut stack: Vec<(usize, Vec<String>)> = f.top_level.iter().rev().flatten().map(|&i| (i, Vec::new())).collect();
+    while let Some((i, mut path)) = stack.pop() {
+        if i >= f.objects.len() || std::mem::replace(&mut seen[i], true) {
+            continue;
+        }
+        path.push(name(i));
+        if nif::is_kind_of(f.objects[i].class, "NiGeometry") {
+            geometry.push((path.clone(), i));
+        }
+        if let Some(children) = f.children.get(i) {
+            for c in children.iter().rev().flatten() {
+                stack.push((*c, path.clone()));
+            }
+        }
+    }
+    let material = |mut i: usize| -> Option<[f32; 3]> {
+        for _ in 0..64 {
+            if let Some(Value::Links(properties)) = f.objects[i].fields.get("properties") {
+                for &link in properties {
+                    if let Some(o) = f.object(link)
+                        && o.class == "NiMaterialProperty"
+                        && let Some(Value::F32s(a)) = o.fields.get("ambient")
+                        && a.len() == 3
+                    {
+                        return Some([f32::from_bits(a[0]), f32::from_bits(a[1]), f32::from_bits(a[2])]);
+                    }
+                }
+            }
+            i = f.parents.get(i).copied().flatten()?;
+        }
+        None
+    };
+    let mut used = vec![false; geometry.len()];
+    meshes
+        .iter()
+        .map(|(mesh_name, hierarchy)| {
+            let exact = (0..geometry.len()).find(|&j| !used[j] && geometry[j].0.as_slice() == *hierarchy);
+            let named = || (0..geometry.len()).find(|&j| !used[j] && geometry[j].0.last().is_some_and(|n| n == mesh_name));
+            let j = exact.or_else(named)?;
+            used[j] = true;
+            material(geometry[j].1)
+        })
+        .collect()
 }
 
 struct VerifiedModel {
@@ -844,7 +937,8 @@ impl ModelFixes {
                         Entry {
                             source,
                             record,
-                            verified: OnceLock::new()
+                            verified: OnceLock::new(),
+                            ambients: OnceLock::new(),
                         }
                     )
                     .is_none(),
@@ -1042,7 +1136,18 @@ impl ModelFixes {
             meshes_before: model.meshes.len(),
             ..Default::default()
         };
-        for (mesh, row) in model.meshes.iter_mut().zip(&entry.record.corrections) {
+        // the original NIF's NiMaterialProperty ambient per mesh (once per model)
+        let ambients = entry.ambients.get_or_init(|| {
+            let source = entry.source.replace('\\', "/");
+            let meshes: Vec<(&str, &[String])> = entry.record.corrections.iter().map(|c| (c.name.as_str(), c.hierarchy.as_slice())).collect();
+            store
+                .resolve_url(&format!("/assets/original/Data/{source}"))
+                .ok()
+                .and_then(|p| fs::read(p).ok())
+                .map(|bytes| nif_ambients(&bytes, &meshes))
+                .unwrap_or_else(|| vec![None; meshes.len()])
+        });
+        for (index, (mesh, row)) in model.meshes.iter_mut().zip(&entry.record.corrections).enumerate() {
             if row.skip {
                 stats.shadow_helpers_removed += 1;
             } else {
@@ -1052,6 +1157,9 @@ impl ModelFixes {
                 mesh.material.team_color_mask = row.team_color_mask;
                 mesh.material.native_render_state = row.render_state;
                 mesh.material.native_sort_center = row.sort_center;
+                if let Some(ambient) = ambients.get(index).copied().flatten() {
+                    crate::look::record_ambient(&mesh.material, ambient);
+                }
             }
         }
         let mut index = 0;

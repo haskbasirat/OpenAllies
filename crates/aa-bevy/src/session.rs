@@ -72,11 +72,25 @@ pub struct Battle {
     accumulator: f32,
     /// Events of every tick since the last frame, for HUD/sound/effects.
     pub frame_events: Vec<aa_play::Event>,
+    /// The local player observes (the mission-lost box's Observe,
+    /// `RequestObserve` 0x60CB40 -> KKC_GamePlayerObserverOrderDecree
+    /// 0x60EE60 -> 0x61EE60: ClearSelection, then the player's kingdom is
+    /// set to none, 0x74B3B0(0) / 0x765E10(0)). `local` is kept for the
+    /// views. [`Self::local_kingdom`] is what "no local kingdom" reads:
+    /// the mission boxes and `step_battle` (no orders, no selection) use it;
+    /// the HUD panels and the fog still draw for `local`.
+    /// (Appended by the front-end owner.)
+    pub observer: bool,
 }
 
 impl Battle {
     pub fn new(world: World, local: KingdomId) -> Self {
-        Self { world, local, selection: Vec::new(), pending: Vec::new(), paused: false, speed: 1.0, accumulator: 0.0, frame_events: Vec::new() }
+        Self { world, local, selection: Vec::new(), pending: Vec::new(), paused: false, speed: 1.0, accumulator: 0.0, frame_events: Vec::new(), observer: false }
+    }
+
+    /// The player's kingdom (0x5C0E30): none while observing.
+    pub fn local_kingdom(&self) -> Option<KingdomId> {
+        (!self.observer).then_some(self.local)
     }
 }
 
@@ -84,6 +98,11 @@ impl Battle {
 pub fn step_battle(time: Res<Time>, battle: Option<ResMut<Battle>>) {
     let Some(mut battle) = battle else { return };
     battle.frame_events.clear();
+    // an observer has no kingdom to give orders for (0x61EE60)
+    if battle.local_kingdom().is_none() {
+        battle.selection.clear();
+        battle.pending.clear();
+    }
     if battle.paused {
         return;
     }

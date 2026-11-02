@@ -23,9 +23,13 @@ use textures::Kind;
 use std::sync::Mutex;
 
 pub const TITLE: &str = "Axis & Allies - Bevy test (Development 12)";
-/// Team colours mixed into team-masked textures (display choice).
+/// Team colours mixed into team-masked textures: the direct start's player
+/// colour when the kingdom colour table is missing (display choice), and
+/// the replacement colour of a thing without a kingdom colour: AVar 30
+/// ReplacementColorDefault = 1,1,1 (Data/AVars.tgi; Game/kingdom_colors.tgi
+/// lists the same white "default" last, for the code).
 pub const PLAYER_TEAM: [u8; 3] = [178, 34, 30];
-pub const NEUTRAL_TEAM: [u8; 3] = [120, 120, 112];
+pub const NEUTRAL_TEAM: [u8; 3] = [255, 255, 255];
 
 
 #[derive(Clone)]
@@ -102,6 +106,21 @@ struct Loaded {
     seconds: f32,
     /// The battle world (aa-play) for this map and setup.
     world: Option<aa_play::World>,
+    /// The battle's sun: the map's saved SUN chunk, or the SVars sun of a
+    /// new (random) world.
+    sun: look::SceneSun,
+    /// Every thing's View shadow type (0x49DC40).
+    shadows: Option<Arc<crate::preload::ShadowTypes>>,
+}
+
+/// The saved Sun of an original map file (`<reconstruction>/assets/original/
+/// Data/Maps/<id>.RMP`, chunk "SUN"), if the file has one.
+fn map_sun(reconstruction: &std::path::Path, id: &str) -> Option<look::SceneSun> {
+    let maps = reconstruction.join("assets/original/Data/Maps");
+    let path = ["RMP", "rmp"].iter().map(|ext| maps.join(format!("{id}.{ext}"))).find(|p| p.exists())?;
+    let archive = aa_mapworld::MapArchive::from_bytes(std::fs::read(path).ok()?).ok()?;
+    let chunk = archive.decode_chunk("SUN", 1 << 16).ok()?;
+    look::SceneSun::from_map_chunk(&chunk.bytes)
 }
 
 fn model(store: &AssetStore, path: &str) -> Result<PreparedModel> {
@@ -304,6 +323,15 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
     }
     let (images, failures) = textures::decode(&store, requests);
     steps.mark("textures");
+    // A loaded map keeps its saved Sun (4FC600 -> 4EDBD0); a generated world
+    // has the SVars sun of 4EE1F0 (the RMCs list no suns for 5925E0).
+    let sun = match source {
+        MapSource::File(id) => map_sun(&args.assets, id),
+        MapSource::Random(_) => None,
+    }
+    .unwrap_or_else(|| look::vars().sun);
+    info!("battle sun: {sun:?}");
+    let shadows = crate::preload::shadow_types(&args.assets).map_err(|e| warn!("shadow types: {e:#}")).ok();
     Ok(Loaded {
         store: store.clone(),
         fixes,
@@ -317,6 +345,8 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         focus: args.focus,
         seconds: start.elapsed().as_secs_f32(),
         world: Some(world),
+        sun,
+        shadows,
     })
 }
 
@@ -390,11 +420,21 @@ fn poll_loading(mut commands: Commands, task: Option<Res<LoadTask>>, mut progres
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         crate::preload::start(self.args.assets.clone());
+        // the original lighting variables, before any material is made
+        look::load_vars(&self.args.assets);
         app.add_plugins(look::LookPlugin)
-            .insert_resource(ClearColor(Color::srgb(0.62, 0.68, 0.74)))
-            // Lighter, softer shadows like the original: more ambient, less direct sun.
-            // Matched to the original screenshots (brightness and saturation, darker shadows).
-            .insert_resource(GlobalAmbientLight { color: Color::WHITE, brightness: env_f32("AA_BEVY_AMBIENT", 340.0), ..default() })
+            // Outside the map the original shows black (screenshot of
+            // (2v2)Market_Garden at the map edge: (0,0,0); the map-edge skirt
+            // Special/SkirtTexture.dds is near-black too).
+            .insert_resource(ClearColor(Color::BLACK))
+            // The fixed-function look takes the battle's sun at unit
+            // intensity (look::apply_sun); the PBR comparison look
+            // (AA_BEVY_PBR_LOOK) keeps the Development 12 tuning.
+            .insert_resource(GlobalAmbientLight {
+                color: Color::WHITE,
+                brightness: if look::fixed_function() { 1.0 } else { env_f32("AA_BEVY_AMBIENT", 340.0) },
+                ..default()
+            })
             .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
             // Spread a new battle's texture and mesh uploads over the frames
             // the loading screen still covers (a whole map in one frame took
@@ -405,8 +445,9 @@ impl Plugin for ScenePlugin {
             .add_systems(OnEnter(session::AppState::Loading), start_loading)
             .add_systems(Update, poll_loading.run_if(in_state(session::AppState::Loading)))
             .add_systems(OnEnter(session::AppState::Battle), setup)
+            .add_systems(OnExit(session::AppState::Battle), leave_battle)
             .add_plugins(crate::battle_view::BattleViewPlugin)
-            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain).run_if(in_state(session::AppState::Battle)));
+            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain, look::apply_sun).run_if(in_state(session::AppState::Battle)));
         if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
@@ -435,6 +476,33 @@ fn screenshot(mut commands: Commands, time: Res<Time>, mut plan: ResMut<ShotPlan
 
 #[derive(Component)]
 struct HudText;
+
+/// What `setup` and `stream_terrain` spawned: map objects, terrain layers,
+/// the sun and the camera.
+#[derive(Component)]
+struct SceneEntity;
+
+/// The battle ended (`RequestFinished` 0x6125A0, ui/front.rs): its drawing
+/// and per-battle state go with its world, so the next launch (the staging's
+/// Launch, the score screen's Replay) starts from nothing. The actor views
+/// are battle_view's, the effects and sounds their owners'.
+fn leave_battle(mut commands: Commands, scene: Query<Entity, With<SceneEntity>>) {
+    for e in &scene {
+        commands.entity(e).despawn();
+    }
+    commands.remove_resource::<TerrainStream>();
+    commands.remove_resource::<Loaded>();
+    commands.remove_resource::<camera::Ground>();
+    commands.remove_resource::<crate::battle_view::Library>();
+    commands.remove_resource::<look::SceneSun>();
+    commands.insert_resource(session::ObjectAnimations::default());
+    commands.insert_resource(crate::input::Selecting::default());
+    commands.insert_resource(camera::CameraRequests::default());
+    commands.insert_resource(crate::ui::placement::Placement::default());
+    commands.insert_resource(crate::ui::placement::Ghost::default());
+    commands.insert_resource(crate::ui::order_marks::PointVfx::default());
+    commands.insert_resource(crate::ui::order_marks::Issued::default());
+}
 
 pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> OriginalMaterial {
     look::model_material(m, texture)
@@ -512,6 +580,7 @@ fn setup(
         .map(|(_, p)| key(&p.thing_id, p.position[0], p.position[1]))
         .collect();
     let mut modes = std::collections::BTreeMap::new();
+    let mut shadow_counts = std::collections::BTreeMap::new();
     let no_objects = std::env::var_os("AA_BEVY_NO_OBJECTS").is_some();
     for p in loaded.scene.instances.iter().filter(|_| !no_objects) {
         let category = loaded.scene.map.placements.types.get(&p.thing_id).and_then(|t| t.category.as_deref());
@@ -525,8 +594,18 @@ fn setup(
         let transform = Transform::from_translation(Vec3::from_array(p.position))
             .with_rotation(Quat::from_rotation_y(p.yaw_radians))
             .with_scale(Vec3::splat(p.scale));
+        // Only things with a shadow cast one (0x49DC40): shadow_type NONE
+        // (tall grass, logs, docks...) or no shadow_texture casts nothing.
+        // The sun's shadow map stands in for STENCIL volumes and, until the
+        // ground blobs are drawn, for TEXTURE / PROJECTED shadows.
+        let shadow = loaded.shadows.as_ref().and_then(|s| s.get(&p.thing_id));
+        *shadow_counts.entry(format!("{shadow:?}")).or_insert(0usize) += 1;
+        let casts = shadow != Some(crate::preload::ShadowType::None);
         for (mesh, material) in list {
-            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform));
+            let mut entity = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform, SceneEntity));
+            if !casts {
+                entity.insert(bevy::light::NotShadowCaster);
+            }
             let mode = materials.get(material).map(|m| format!("{:?}", m.base.alpha_mode)).unwrap_or_default();
             *modes.entry(mode).or_insert(0usize) += 1;
         }
@@ -561,24 +640,39 @@ fn setup(
     let hq_y = ground(hq_at.x, hq_at.y);
     // Display test world: aa-play actors drawn by battle_view (no gameplay yet).
     let _ = world_heights;
-    // The camera starts over the local player's first building (its Corps HQ).
-    let hq_at = world
-        .actors
-        .iter()
-        .find(|a| a.kingdom == Some(0) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
-        .map(|a| Vec2::new(a.pos.x, -a.pos.y))
+    // The camera starts on the local kingdom's start location (4F61A0
+    // StartMission: Kingdom+1F8 position -> World+22C, 43F0A0 LookAt), else
+    // over the local player's first building (its Corps HQ).
+    let hq_at = camera::start_location(&world, 0)
+        .or_else(|| {
+            world
+                .actors
+                .iter()
+                .find(|a| a.kingdom == Some(0) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
+                .map(|a| a.pos.truncate())
+        })
+        .map(|p| Vec2::new(p.x, -p.y))
         .unwrap_or(hq_at);
     let hq_y = ground(hq_at.x, hq_at.y);
     commands.insert_resource(session::Battle::new(world, 0));
     commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs, loaded.fixes.clone()));
-    // Sun with cascaded shadows over the battlefield.
+    // The battle's sun (look::apply_sun hands it to this light every frame).
+    let sun = loaded.sun.clone();
+    let to_light = if std::env::var_os("AA_BEVY_SUN_DIR").is_some() { sun_dir() } else { sun.to_light() };
+    commands.insert_resource(look::SceneSun { direction: Vec3::new(-to_light.x, to_light.z, -to_light.y).normalize_or_zero(), ..sun });
+    // Sun with cascaded shadows over the battlefield: Bevy's shadow map
+    // stands in for the original's stencil shadow volumes.
     commands.spawn((
-        // Shadows on, as in Development 12 (off with the fixed-function look).
-        DirectionalLight { illuminance: env_f32("AA_BEVY_SUN", 1300.0), shadow_maps_enabled: !look::fixed_function(), ..default() },
-        Transform::default().looking_to(-sun_dir(), Vec3::Y),
+        DirectionalLight {
+            illuminance: if look::fixed_function() { 1.0 } else { env_f32("AA_BEVY_SUN", 1300.0) },
+            shadow_maps_enabled: true,
+            ..default()
+        },
+        Transform::default().looking_to(-to_light, Vec3::Y),
         // The original camera looks from about 155 m (CameraHeight 100 / sin 40 deg,
         // zoom 0.7..2.1 = 110..325 m): the sharp cascade must cover that range.
         CascadeShadowConfigBuilder { num_cascades: 2, minimum_distance: 40.0, first_cascade_far_bound: 230.0, maximum_distance: 420.0, ..default() }.build(),
+        SceneEntity,
     ));
     let b = loaded.scene.terrain.bounds;
     let focus2 = loaded.focus.map(|f| Vec2::new(f.x, -f.y)).unwrap_or(hq_at);
@@ -587,6 +681,9 @@ fn setup(
         Camera3d::default(),
         // The original is fixed-function lighting: keep authored colours.
         bevy::core_pipeline::tonemapping::Tonemapping::None,
+        // No multisampling: the original's edges are aliased (its
+        // screenshots; dgVoodoo.conf Antialiasing "appdriven").
+        Msaa::Off,
         Transform::default(),
         camera::RtsCamera {
             focus,
@@ -597,6 +694,7 @@ fn setup(
             min: Vec2::new(b.min[0], b.min[2]),
             max: Vec2::new(b.max[0], b.max[2]),
         },
+        SceneEntity,
     ));
     commands.insert_resource(camera::Ground(Box::new(ground)));
     // Debug overlay only on request (AA_BEVY_DEBUG): the original shows no such text.
@@ -607,9 +705,11 @@ fn setup(
             TextColor(Color::WHITE),
             Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
             HudText,
+            SceneEntity,
         ));
     }
     info!("object meshes by alpha mode: {modes:?}");
+    info!("map objects by shadow type: {shadow_counts:?}");
     info!("load step battle scene setup: {:.0} ms", setup_started.elapsed().as_secs_f64() * 1000.0);
     info!("Bevy test: {objects} objects, {} terrain layers, {} textures, loaded in {:.1} s", loaded.terrain.len(), tex.len(), loaded.seconds);
 }
@@ -649,7 +749,7 @@ fn stream_terrain(
         let mask = draw.mask.as_ref().and_then(|m| stream.textures.get(&(m.texture.clone(), Kind::Mask)).cloned());
         let mask = mask.zip(draw.mask.as_ref().map(|m| m.rows));
         let material = materials.add(look::terrain_material(texture, draw.color, mask, order));
-        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster));
+        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster, SceneEntity));
     }
     stream.next = end;
     stream.frames += 1;
@@ -688,4 +788,26 @@ fn sun_dir() -> Vec3 {
             (p.len() == 3).then(|| -Vec3::new(p[0], p[2], -p[1]).normalize())
         })
         .unwrap_or_else(look::sun_to_light)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn leaving_a_battle_clears_the_scene_and_its_state() {
+        let mut world = bevy::prelude::World::new();
+        let scene = world.spawn(SceneEntity).id();
+        let other = world.spawn_empty().id();
+        world.insert_resource(camera::Ground(Box::new(|_, _| 0.0)));
+        world.insert_resource(session::ObjectAnimations([(1, ("recoil1".to_string(), 0.0))].into_iter().collect()));
+        world.run_system_once(leave_battle).unwrap();
+        assert!(world.get_entity(scene).is_err());
+        assert!(world.get_entity(other).is_ok());
+        assert!(!world.contains_resource::<camera::Ground>());
+        assert!(world.resource::<session::ObjectAnimations>().0.is_empty());
+        assert!(world.contains_resource::<crate::input::Selecting>());
+        assert!(world.contains_resource::<camera::CameraRequests>());
+    }
 }

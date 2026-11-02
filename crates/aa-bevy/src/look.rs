@@ -40,6 +40,9 @@ pub struct LookParams {
     pub diffuse: Vec4,
     pub emissive: Vec4,
     pub sun: Vec4,
+    /// rgb: the stencil shadow multiplier (AVar C0
+    /// StencilShadowColorMultiplier, the camera's shadow quad 7016A0).
+    pub shadow: Vec4,
 }
 
 impl MaterialExtension for OriginalLook {
@@ -88,8 +91,9 @@ impl Plugin for LookPlugin {
     }
 }
 
-/// Sun of Data/Sun/sun_default.tgi and Game/SVars_AA.tgi: diffuse 1,1,1,
-/// ambient 1,1,1, SunDirection 1,1,-2 (native, the way the light travels).
+/// The light of the HUD's own model views (portraits): white. The battle's
+/// materials take the sun's colours from the scene lights instead (see
+/// [`apply_sun`]), so their params hold the material colours alone.
 pub const SUN_AMBIENT: [f32; 3] = [1.0, 1.0, 1.0];
 pub const SUN_DIFFUSE: [f32; 3] = [1.0, 1.0, 1.0];
 pub fn sun_to_light() -> Vec3 {
@@ -97,26 +101,51 @@ pub fn sun_to_light() -> Vec3 {
     Vec3::new(-1.0, 2.0, 1.0).normalize()
 }
 
-/// Fixed-function material colours of a textured original mesh: the
-/// shipped NIFs use NiMaterialProperty ambient 0.502, diffuse 1.0 (measured
-/// on the Corps, trees, infantry, tanks, the Reichstag, high grass) with the
-/// texture MODULATE; untextured meshes use their colour for both.
+/// Fixed-function material colours of an original mesh: its
+/// NiMaterialProperty ambient (read from the original NIF by the model
+/// fixes, [`record_ambient`]; most shipped materials have 0.502, the high
+/// grass 0.745, some units 0.588 or 0.42) and diffuse (the converted
+/// colour: 1.0 on most, 0.588 on the tank treads), with the texture
+/// MODULATE. Without a recorded ambient a textured mesh keeps the common
+/// 0.502 and an untextured one its colour.
 fn material_colours(m: &aa_assets::Material) -> ([f32; 3], [f32; 3]) {
-    if m.texture.is_some() {
-        ([0.502; 3], [1.0; 3])
-    } else {
-        (m.color, m.color)
+    let recorded = AMBIENT.read().ok().and_then(|t| t.get(&material_key(m)).copied());
+    let ambient = recorded.unwrap_or(if m.texture.is_some() { [0.502; 3] } else { m.color });
+    (ambient, m.color)
+}
+
+/// NiMaterialProperty ambient by converted material (the converted meshes
+/// keep only the diffuse colour), filled before the materials are made.
+static AMBIENT: std::sync::RwLock<std::collections::BTreeMap<u64, [f32; 3]>> = std::sync::RwLock::new(std::collections::BTreeMap::new());
+
+fn material_key(m: &aa_assets::Material) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (&m.name, &m.texture, &m.source_texture, m.double_sided, m.team_color_mask).hash(&mut h);
+    for v in m.color.iter().chain(&m.emissive).chain(std::iter::once(&m.opacity)) {
+        v.to_bits().hash(&mut h);
+    }
+    h.finish()
+}
+
+/// The original NIF ambient of a converted mesh material.
+pub fn record_ambient(m: &aa_assets::Material, ambient: [f32; 3]) {
+    if let Ok(mut t) = AMBIENT.write() {
+        t.insert(material_key(m), ambient);
     }
 }
 
-/// Lighting style: Bevy's lit shading with shadows (the Development 12 look,
-/// default) or the original fixed-function formula (AA_BEVY_FIXED_FUNCTION=1).
+/// Lighting style: the original Direct3D fixed-function formula with the
+/// battle's sun and the stencil shadow multiplier (default), or Bevy's lit
+/// PBR shading of the Development 12 test (AA_BEVY_PBR_LOOK=1, kept for
+/// comparison).
 pub fn fixed_function() -> bool {
-    std::env::var_os("AA_BEVY_FIXED_FUNCTION").is_some()
+    std::env::var_os("AA_BEVY_PBR_LOOK").is_none()
 }
 
 fn params(ambient: [f32; 3], diffuse: [f32; 3], emissive: [f32; 3], alpha: (f32, f32)) -> LookParams {
     let mul = |c: [f32; 3], s: [f32; 3]| Vec4::new(c[0] * s[0], c[1] * s[1], c[2] * s[2], 1.0);
+    let shadow = vars().stencil_shadow_color;
     LookParams {
         mask_u: Vec4::ZERO,
         mask_v: Vec4::ZERO,
@@ -125,6 +154,216 @@ fn params(ambient: [f32; 3], diffuse: [f32; 3], emissive: [f32; 3], alpha: (f32,
         diffuse: mul(diffuse, SUN_DIFFUSE),
         emissive: Vec4::new(emissive[0], emissive[1], emissive[2], 0.0),
         sun: sun_to_light().extend(0.0),
+        shadow: Vec4::new(shadow[0], shadow[1], shadow[2], 1.0),
+    }
+}
+
+/// The original's lighting variables (Data/AVars*.tgi, Data/Game/SVars*.tgi
+/// in loader order, a later file replacing an earlier value), read once.
+#[derive(Clone, Debug)]
+pub struct OriginalVars {
+    /// AVar fast +0C / +08 (723E00: the terrain NiMaterialProperty ambient
+    /// and diffuse are white B322A4 times these).
+    pub terrain_ambient: f32,
+    pub terrain_diffuse: f32,
+    /// AVar fast +10: 43A400 multiplies the sun dimmer by it while paused.
+    pub sun_dimmer_when_paused: f32,
+    /// AVar C0 (7016A0: the stencil shadow quad's material emissive; its
+    /// NiAlphaProperty 0x243 blends ZERO / SRCCOLOR, so a shadowed pixel is
+    /// multiplied by this colour).
+    pub stencil_shadow_color: [f32; 3],
+    /// The new world's Sun from the SVars (4EE1F0 at world init 4F27E0):
+    /// SunDirection (normalised by 4453A0), SunDimmer, SunDiffuse,
+    /// SunAmbient, SunSpecular.
+    pub sun: SceneSun,
+}
+
+impl Default for OriginalVars {
+    /// The shipped values (AVars.tgi, AVars_AA.tgi, SVars.tgi, SVars_AA.tgi).
+    fn default() -> Self {
+        Self {
+            terrain_ambient: 0.15,
+            terrain_diffuse: 1.0,
+            sun_dimmer_when_paused: 0.8,
+            stencil_shadow_color: [0.7, 0.7, 0.6],
+            sun: SceneSun { direction: Vec3::new(1.0, 1.0, -2.0).normalize(), diffuse: [1.0; 3], ambient: [1.0; 3], specular: [0.0; 3], dimmer: 1.0 },
+        }
+    }
+}
+
+static VARS: std::sync::OnceLock<OriginalVars> = std::sync::OnceLock::new();
+
+/// The lighting variables (the shipped values until [`load_vars`] ran).
+pub fn vars() -> OriginalVars {
+    VARS.get().cloned().unwrap_or_default()
+}
+
+/// Read the lighting variables from the install (`reconstruction` is the
+/// converted-assets root, its parent the install). The v14 runtime's
+/// replacement files come before the original Data copies.
+pub fn load_vars(reconstruction: &std::path::Path) {
+    let Some(vars) = read_vars(reconstruction) else { return };
+    info!("original lighting variables: {vars:?}");
+    let _ = VARS.set(vars);
+}
+
+/// Every numeric variable of the four files, by lower-case name.
+fn read_values(reconstruction: &std::path::Path) -> Option<std::collections::HashMap<String, Vec<f32>>> {
+    let install = reconstruction.parent()?;
+    let runtime = install.join("reconstruction/native-game/runtime-expanded-v14/Data");
+    let original = reconstruction.join("assets/original/Data");
+    let mut values: std::collections::HashMap<String, Vec<f32>> = std::collections::HashMap::new();
+    for (file, header) in [("AVars.tgi", "Vars"), ("AVars_AA.tgi", "Vars"), ("Game/SVars.tgi", "SVars"), ("Game/SVars_AA.tgi", "SVars")] {
+        let path = [runtime.join(file), original.join(file)].into_iter().find(|p| p.exists());
+        let Some(bytes) = path.and_then(|p| std::fs::read(p).ok()) else { continue };
+        let Ok(doc) = aa_rules::tgi::Document::parse_native(bytes, aa_rules::tgi::Limits::default()) else { continue };
+        for item in &doc.items {
+            let aa_rules::tgi::Item::Node(node) = item else { continue };
+            if !doc.header_name(&node.header).is_some_and(|h| h.eq_ignore_ascii_case(header)) {
+                continue;
+            }
+            for item in &node.items {
+                let aa_rules::tgi::Item::Property(p) = item else { continue };
+                let (Some(name), Some(raw)) = (doc.property_name(p), doc.property_value(p)) else { continue };
+                let parts: Option<Vec<f32>> = raw.split(';').next().unwrap_or("").split(',').map(|v| number(v.trim())).collect();
+                if let Some(parts) = parts.filter(|p| !p.is_empty()) {
+                    values.insert(name.to_ascii_lowercase(), parts);
+                }
+            }
+        }
+    }
+    Some(values)
+}
+
+fn read_vars(reconstruction: &std::path::Path) -> Option<OriginalVars> {
+    let values = read_values(reconstruction)?;
+    let mut vars = OriginalVars::default();
+    let one = |name: &str, v: &mut f32| {
+        if let Some(x) = values.get(name).and_then(|p| p.first()) {
+            *v = *x;
+        }
+    };
+    let three = |name: &str, v: &mut [f32; 3]| {
+        if let Some(p) = values.get(name).filter(|p| p.len() == 3) {
+            *v = [p[0], p[1], p[2]];
+        }
+    };
+    one("terrainambient", &mut vars.terrain_ambient);
+    one("terraindiffuse", &mut vars.terrain_diffuse);
+    one("sundimmermultiplierwhenpaused", &mut vars.sun_dimmer_when_paused);
+    three("stencilshadowcolormultiplier", &mut vars.stencil_shadow_color);
+    let mut direction = [1.0, 1.0, -2.0];
+    three("sundirection", &mut direction);
+    vars.sun.direction = Vec3::from_array(direction).normalize_or_zero();
+    one("sundimmer", &mut vars.sun.dimmer);
+    three("sundiffuse", &mut vars.sun.diffuse);
+    three("sunambient", &mut vars.sun.ambient);
+    three("sunspecular", &mut vars.sun.specular);
+    Some(vars)
+}
+
+/// A TGI number (`15%` = 0.15).
+fn number(s: &str) -> Option<f32> {
+    let t = s.trim().trim_matches('"');
+    match t.strip_suffix('%') {
+        Some(p) => p.trim().parse::<f32>().ok().map(|v| v / 100.0),
+        None => t.parse::<f32>().ok(),
+    }
+}
+
+/// The battle's sun as 43A400 hands it to the scene light (VWorld+108):
+/// NiLight dimmer +F4, ambient +F8, diffuse +104, specular +110 and the
+/// direction the light travels (native coordinates).
+#[derive(Resource, Clone, Debug)]
+pub struct SceneSun {
+    pub direction: Vec3,
+    pub diffuse: [f32; 3],
+    pub ambient: [f32; 3],
+    pub specular: [f32; 3],
+    pub dimmer: f32,
+}
+
+impl SceneSun {
+    /// The map's saved Sun (MAP chunk "SUN", GWorld+4C Load 4EDBD0): the
+    /// direction, three current and three target colours (diffuse, ambient,
+    /// specular), the colour duration and the dimmer. With no colour or
+    /// dimmer transition running (duration <= 0) 43A400 lights the scene
+    /// with the target colours and the current dimmer.
+    pub fn from_map_chunk(bytes: &[u8]) -> Option<Self> {
+        let mut at = 0usize;
+        let mut word = || -> Option<u32> {
+            let w = u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?);
+            at += 4;
+            Some(w)
+        };
+        let version = word()? as i32;
+        let updatable = word()? as i32;
+        if !(0..=2).contains(&version) || !(0..=1).contains(&updatable) {
+            return None;
+        }
+        if updatable >= 1 {
+            word()?;
+        }
+        let mut f = || word().map(f32::from_bits);
+        let direction = Vec3::new(f()?, f()?, f()?);
+        let mut triple = || -> Option<[f32; 3]> { Some([f()?, f()?, f()?]) };
+        let current = [triple()?, triple()?, triple()?];
+        let target = [triple()?, triple()?, triple()?];
+        let mut f = || word().map(f32::from_bits);
+        let color_duration = f()?;
+        let current_dimmer = f()?;
+        // a running transition starts from the current colours (43A390 at
+        // no elapsed time); the dimmer lerp starts from the current dimmer
+        let colors = if color_duration > 0.0 { current } else { target };
+        Some(Self { direction: direction.normalize_or_zero(), diffuse: colors[0], ambient: colors[1], specular: colors[2], dimmer: current_dimmer })
+    }
+
+    /// Render-space direction to the sun.
+    pub fn to_light(&self) -> Vec3 {
+        let d = -self.direction;
+        Vec3::new(d.x, d.z, -d.y).normalize_or_zero()
+    }
+}
+
+/// Hand the battle's sun to the scene lights every frame (43A400): the
+/// directional light carries diffuse x dimmer, the ambient light ambient x
+/// dimmer (Gamebryo scales every light colour by its dimmer), both at unit
+/// intensity so the fixed-function shader reads the original colours. While
+/// the game is paused the dimmer is multiplied by
+/// SunDimmerMultiplierWhenPaused.
+pub fn apply_sun(
+    sun: Option<Res<SceneSun>>,
+    battle: Option<Res<crate::session::Battle>>,
+    mut ambient: ResMut<GlobalAmbientLight>,
+    mut lights: Query<(&mut DirectionalLight, &mut Transform)>,
+) {
+    let Some(sun) = sun.filter(|_| fixed_function()) else { return };
+    let paused = battle.as_ref().is_some_and(|b| b.paused);
+    // The World+4C Sun the map's triggers drive (sun_colors / sun_dimmer:
+    // 4EDB10 / 4ED820, moved by 4EDDC0), when the scenario runs them; else
+    // the battle's starting sun.
+    let (diffuse, ambient_colour, dimmer) = match battle.as_ref().and_then(|b| aa_play::triggers::sun(&b.world)) {
+        Some(([diffuse, ambient, _specular], dimmer)) => (diffuse, ambient, dimmer),
+        None => (sun.diffuse, sun.ambient, sun.dimmer),
+    };
+    let dimmer = dimmer * if paused { vars().sun_dimmer_when_paused } else { 1.0 };
+    let scaled = |c: [f32; 3]| Color::linear_rgb(c[0] * dimmer, c[1] * dimmer, c[2] * dimmer);
+    let colour = scaled(ambient_colour);
+    if ambient.color != colour || ambient.brightness != 1.0 {
+        ambient.color = colour;
+        ambient.brightness = 1.0;
+    }
+    let to_light = sun.to_light();
+    for (mut light, mut transform) in &mut lights {
+        let colour = scaled(diffuse);
+        if light.color != colour || light.illuminance != 1.0 {
+            light.color = colour;
+            light.illuminance = 1.0;
+        }
+        let want = Transform::default().looking_to(-to_light, Vec3::Y);
+        if transform.rotation != want.rotation {
+            transform.rotation = want.rotation;
+        }
     }
 }
 
@@ -176,7 +415,10 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
 /// original mask with its compositor rows. `order` stacks layers.
 pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: Option<(Handle<Image>, [[f32; 4]; 2])>, order: usize) -> OriginalMaterial {
     let overlay = mask.is_some();
-    let mut p = params([0.502; 3], [1.0; 3], [0.0; 3], (0.0, 0.0));
+    // 723E00: the terrain's NiMaterialProperty is white (B322A4) times
+    // TerrainAmbient / TerrainDiffuse, no specular or emissive (B43E68)
+    let v = vars();
+    let mut p = params([v.terrain_ambient; 3], [v.terrain_diffuse; 3], [0.0; 3], (0.0, 0.0));
     if let Some((_, rows)) = &mask {
         p.mask_u = Vec4::from_array(rows[0]);
         p.mask_v = Vec4::from_array(rows[1]);
@@ -194,5 +436,121 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
             ..default()
         },
         extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE) },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk(version: u32, updatable: u32, color_duration: f32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut w = |v: u32| out.extend_from_slice(&v.to_le_bytes());
+        w(version);
+        w(updatable);
+        if updatable >= 1 {
+            w(7);
+        }
+        for v in [0.408_248_3f32, 0.408_248_3, -0.816_496_6] {
+            w(v.to_bits());
+        }
+        // current diffuse / ambient / specular, then the targets
+        for c in [[0.4f32, 0.4, 0.7], [0.4, 0.4, 0.7], [0.1, 0.1, 0.25], [1.0, 1.0, 1.0], [0.8, 0.8, 0.8], [0.0, 0.0, 0.0]] {
+            for v in c {
+                w(v.to_bits());
+            }
+        }
+        for v in [color_duration, 1.0, 1.0, 0.0, -1.0] {
+            w(v.to_bits());
+        }
+        if version >= 1 {
+            out.push(0);
+            out.extend_from_slice(&[0; 8]);
+            out.push(0);
+            out.extend_from_slice(&[0; 8]);
+        }
+        out
+    }
+
+    #[test]
+    fn saved_sun_chunk_lights_with_targets_and_current_dimmer() {
+        let sun = SceneSun::from_map_chunk(&chunk(2, 1, 0.0)).unwrap();
+        assert_eq!(sun.diffuse, [1.0; 3]);
+        assert_eq!(sun.ambient, [0.8; 3]);
+        assert_eq!(sun.specular, [0.0; 3]);
+        assert_eq!(sun.dimmer, 1.0);
+        // native (1,1,-2) travel direction -> render direction to the sun
+        assert!((sun.to_light() - Vec3::new(-1.0, 2.0, 1.0).normalize()).length() < 1e-5);
+        // a running transition starts from the current colours
+        let sun = SceneSun::from_map_chunk(&chunk(2, 0, 5.0)).unwrap();
+        assert_eq!(sun.diffuse, [0.4, 0.4, 0.7]);
+        // the Load's version gates (4EDBD0 accepts outer 0..2, Updatable 0..1)
+        assert!(SceneSun::from_map_chunk(&chunk(3, 1, 0.0)).is_none());
+        assert!(SceneSun::from_map_chunk(&chunk(2, 1, 0.0)[..20]).is_none());
+    }
+
+    /// The shipped files through the reader (when the data is present).
+    #[test]
+    fn shipped_lighting_variables() {
+        let Some(root) = crate::ui::reconstruction_root() else { return };
+        // the files themselves, not the defaults (they hold the same values)
+        let values = read_values(&root).unwrap();
+        let value = |name: &str| values.get(name).cloned().unwrap_or_else(|| panic!("{name} not read"));
+        assert_eq!(value("terrainambient"), [0.15]);
+        assert_eq!(value("terraindiffuse"), [1.0]);
+        assert_eq!(value("sundimmermultiplierwhenpaused"), [0.8]);
+        assert_eq!(value("stencilshadowcolormultiplier"), [0.7, 0.7, 0.6]);
+        assert_eq!(value("sundirection"), [1.0, 1.0, -2.0]);
+        assert_eq!(value("sundimmer"), [1.0]);
+        assert_eq!(value("sunambient"), [1.0, 1.0, 1.0]);
+        let v = read_vars(&root).unwrap();
+        assert_eq!(v.terrain_ambient, 0.15);
+        assert_eq!(v.terrain_diffuse, 1.0);
+        assert_eq!(v.sun_dimmer_when_paused, 0.8);
+        assert_eq!(v.stencil_shadow_color, [0.7, 0.7, 0.6]);
+        assert!((v.sun.direction - Vec3::new(1.0, 1.0, -2.0).normalize()).length() < 1e-6);
+        assert_eq!(v.sun.dimmer, 1.0);
+        // SVars_AA replaces SVars' 0.8
+        assert_eq!(v.sun.ambient, [1.0; 3]);
+        assert_eq!(v.sun.diffuse, [1.0; 3]);
+        assert_eq!(v.sun.specular, [0.0; 3]);
+    }
+
+    /// Every shipped map file decodes its saved Sun (when the data is present).
+    #[test]
+    fn shipped_maps_have_a_sun() {
+        let Some(root) = crate::ui::reconstruction_root() else { return };
+        let dir = root.join("assets/original/Data/Maps");
+        let Ok(entries) = std::fs::read_dir(&dir) else { return };
+        let mut maps = 0;
+        for e in entries.flatten() {
+            let path = e.path();
+            if !path.extension().is_some_and(|x| x.eq_ignore_ascii_case("rmp")) {
+                continue;
+            }
+            let archive = aa_mapworld::MapArchive::from_bytes(std::fs::read(&path).unwrap()).unwrap();
+            let chunk = archive.decode_chunk("SUN", 1 << 16).unwrap_or_else(|e| panic!("{path:?}: {e}"));
+            let sun = SceneSun::from_map_chunk(&chunk.bytes).unwrap_or_else(|| panic!("{path:?}: SUN does not parse"));
+            assert!((sun.direction.length() - 1.0).abs() < 1e-3, "{path:?}: {sun:?}");
+            assert!(sun.dimmer > 0.0 && sun.dimmer <= 1.0, "{path:?}: {sun:?}");
+            // the trigger Sun reads the current colours, 43A400 the targets
+            // while no transition runs: the shipped maps save them equal
+            let word = |i: usize| f32::from_le_bytes(chunk.bytes[i * 4..i * 4 + 4].try_into().unwrap());
+            let at = if u32::from_le_bytes(chunk.bytes[4..8].try_into().unwrap()) >= 1 { 3 } else { 2 } + 3;
+            let (current, target, duration) = ((at..at + 9).map(word).collect::<Vec<_>>(), (at + 9..at + 18).map(word).collect::<Vec<_>>(), word(at + 18));
+            eprintln!("{:?}: {sun:?} current {current:?} target {target:?} duration {duration}", path.file_name().unwrap());
+            assert_eq!(current, target, "{path:?}");
+            assert!(duration <= 0.0, "{path:?}");
+            maps += 1;
+        }
+        assert!(maps > 0);
+    }
+
+    #[test]
+    fn tgi_numbers_take_percent() {
+        assert_eq!(number("15%"), Some(0.15));
+        assert_eq!(number("0.8"), Some(0.8));
+        assert_eq!(number(" 1 "), Some(1.0));
+        assert_eq!(number("x"), None);
     }
 }
