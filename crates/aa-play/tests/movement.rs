@@ -29,17 +29,38 @@ struct Ids {
     tank_regiment: u32,
 }
 
+/// The object definition's shapes as `0x5531F0` reads them (the words of the shipped
+/// units): the circle of the blocking size, and the `Size` soft shape, a circle for
+/// infantry, a box for a vehicle (half width, half length, the radius its corner).
+fn circle(radius: f32) -> [u32; 6] {
+    [1, radius.to_bits(), 0, 0, 0, 0]
+}
+fn soft_box(half_width: f32, half_length: f32) -> [u32; 6] {
+    let radius = (half_width * half_width + half_length * half_length).sqrt();
+    [3, radius.to_bits(), (-half_width).to_bits(), (-half_length).to_bits(), half_width.to_bits(), half_length.to_bits()]
+}
+/// `Def::components`: the native COMPONENTS slots the definition lists.
+fn components(names: &[&str]) -> u32 {
+    names.iter().map(|n| aa_rules::native::COMPONENTS.iter().find(|(c, _)| c == n).map(|(_, b)| 1u32 << b).unwrap()).fold(0, |a, b| a | b)
+}
 fn member(id: &str, speed: f32, acceleration: f32, turn_type: u32, turn_radius: f32, radius: f32, range: f32) -> Def {
     Def {
         id: id.into(),
         class: Some(DefClass::Member),
+        actor_data: true,
+        components: components(&["BodyComponent", "ElementComponent", "MoverComponent", "PerformerComponent"]),
         health: 200.0,
         speed_max: speed,
         acceleration,
         turn_type,
         turn_radius,
+        blocking: true,
         blocking_shape: Some("CIRCLE".into()),
         blocking_size: Some([radius, radius]),
+        blocking_words: circle(radius),
+        soft_shape: circle(0.5),
+        soft_radius: 0.5,
+        targetable: true,
         weapons: vec![Weapon { name: "rifle".into(), range, ..Default::default() }],
         ..Default::default()
     }
@@ -48,18 +69,24 @@ fn regiment(id: &str, members: [u32; 9]) -> Def {
     Def {
         id: id.into(),
         class: Some(DefClass::Organization),
+        actor_data: true,
+        components: components(&["OrganizationComponent"]),
         slots: members.iter().zip(INFANTRY_POSITIONS).map(|(&m, p)| (m, p)).collect(),
         slot_entries: INFANTRY_ENTRIES.to_vec(),
         leader_slot: Some(8),
-        formations: vec![Formation { id: "regiment_defensive".into(), positions: INFANTRY_POSITIONS.to_vec(), ..Default::default() }],
+        formations: vec![Formation { id: "regiment_defensive".into(), positions: INFANTRY_POSITIONS.to_vec(), group_positions: aa_play::formation::group_positions("group_defensive"), ..Default::default() }],
         default_formation: Some(0),
         // Templates/template_organization_aa.tgi
         control_range: 18.0,
+        operational_range: 34.0,
+        morale_breakpoint: 20.0,
         ..Default::default()
     }
 }
 fn data() -> (GameData, Ids) {
     let mut data = GameData::default();
+    // Data/Game/SVars_AA.tgi
+    data.rules.insert("GroupZoneRangeMin".into(), 18.0);
     let mut add = |d: Def| {
         data.by_id.insert(d.id.clone(), data.defs.len() as u32);
         data.defs.push(d);
@@ -67,12 +94,17 @@ fn data() -> (GameData, Ids) {
     };
     let infantry = add(member("rus_infantry", 2.5, 0.0, 0, 0.0, 0.35, 30.0));
     let slow = add(member("slow_infantry", 1.5, 0.0, 0, 0.0, 0.35, 30.0));
-    let tank = add(member("rus_tank_medium", 3.5, 1.0, 1, 0.9, 0.8, 40.0));
+    let mut tank_def = member("rus_tank_medium", 3.5, 1.0, 1, 0.9, 0.8, 40.0);
+    tank_def.soft_shape = soft_box(0.8, 1.5);
+    tank_def.soft_radius = 1.7;
+    let tank = add(tank_def);
     // rus_truck_*: speed_max 3, no acceleration, AAUnitVehicleHQTruck
     // turn_radius 3 WHILE_MOVING, blocking_radius 0.65.
     let mut truck_def = member("rus_truck", 3.0, 0.0, 2, 3.0, 0.65, 0.0);
     truck_def.class = Some(DefClass::Truck);
     truck_def.weapons.clear();
+    truck_def.soft_shape = soft_box(0.75, 1.5);
+    truck_def.soft_radius = 1.677_051;
     let truck = add(truck_def);
     let regiment_id = add(regiment("regiment_rus_infantry", [infantry; 9]));
     let mut slow_members = [infantry; 9];
@@ -160,6 +192,17 @@ fn run_until(w: &mut World, seconds: f32, mut done: impl FnMut(&World) -> bool) 
     let ticks = (seconds * aa_play::TICKS_PER_SECOND as f32) as u32;
     for _ in 0..ticks {
         advance(w, 1);
+        if done(w) {
+            return true;
+        }
+    }
+    false
+}
+/// [`run_until`] on whole world updates (combat, the zones, the Minds).
+fn step_until(w: &mut World, seconds: f32, mut done: impl FnMut(&World) -> bool) -> bool {
+    let ticks = (seconds * aa_play::TICKS_PER_SECOND as f32) as u32;
+    for _ in 0..ticks {
+        w.step(Vec::new());
         if done(w) {
             return true;
         }
@@ -385,21 +428,30 @@ fn terrain_speed_limit_caps_movers() {
 
 #[test]
 fn attack_moves_into_weapon_range_and_holds() {
-    let (data, ids) = data();
+    let (mut data, ids) = data();
+    // It stands through the fight.
+    data.defs[ids.tank as usize].health = 1e7;
     let mut w = world(open_map(128, 128, 4.0), data);
     let o = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(100.0, 100.0), 0.0);
     let enemy = w.spawn_actor(ids.tank, Some(1), w.ground(Vec2::new(250.0, 100.0)), PI);
-    order(&mut w, Command::Attack { kingdom: 0, units: vec![Unit::Org(o)], target: enemy });
-    assert!(run_until(&mut w, 120.0, |w| w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(w, m)) && w.time > 5.0));
+    w.step(vec![Command::Attack { kingdom: 0, units: vec![Unit::Org(o)], target: enemy }]);
+    assert!(step_until(&mut w, 120.0, |w| w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(w, m)) && w.time > 5.0));
+    // 0x520730 walks on until the target is in the regiment's ZOC, the engage state
+    // 0x524A00 holds it. The zone's radius is the longest of control_range (18) and
+    // the weapons (0x579DD0): the rifles' 30 m here.
     let d = (w.orgs[o as usize].anchor - pos(&w, enemy)).length();
     assert!(d <= 30.5 && d > 25.0, "holds at rifle range: {d}");
     assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
+    assert!(aa_play::combat::org_state(&w, o).is_some_and(|c| c.engaging()));
     assert!(w.orgs[o as usize].members.iter().all(|&m| w.actors[m as usize].combat.target == Some(enemy)));
     // The target drives away: the regiment follows.
     let p = w.ground(Vec2::new(350.0, 100.0));
     w.actors[enemy as usize].pos = p;
-    advance(&mut w, 16 * 3);
+    for _ in 0..16 * 3 {
+        w.step(Vec::new());
+    }
     assert!(w.orgs[o as usize].members.iter().any(|&m| movement::actor_moving(&w, m)));
+    assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
 }
 
 #[test]
@@ -410,10 +462,20 @@ fn stop_halts_a_regiment() {
     order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to: Vec2::new(400.0, 100.0), attack_move: false });
     advance(&mut w, 16 * 4);
     order(&mut w, Command::Stop { kingdom: 0, units: vec![Unit::Org(o)] });
+    assert_eq!(w.orgs[o as usize].order, Order::Idle);
     let before: Vec<Vec2> = w.orgs[o as usize].members.iter().map(|&m| pos(&w, m)).collect();
+    let anchor = w.orgs[o as usize].anchor;
+    // 0x51D1C0 -> Sleep (0x524D70): the regiment's point stays where the order found
+    // it, and each member takes the Stop through 0x52C320, a think 1e-4 on. Its Mover
+    // runs on queue 0 first, so it takes one more step, then stands in its slot.
+    let one_step = 2.5 / aa_play::TICKS_PER_SECOND as f32 + 1e-3;
     advance(&mut w, 16);
     let after: Vec<Vec2> = w.orgs[o as usize].members.iter().map(|&m| pos(&w, m)).collect();
-    assert_eq!(before, after);
+    for (b, a) in before.iter().zip(&after) {
+        assert!((*a - *b).length() <= one_step, "walked on after the stop: {b:?} {a:?}");
+    }
+    assert!((w.orgs[o as usize].anchor - anchor).length() <= one_step);
+    assert!(w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(&w, m)));
     assert_eq!(w.orgs[o as usize].order, Order::Idle);
     // Commands for another kingdom's units are refused.
     assert!(movement::command(&mut w, &Command::Stop { kingdom: 1, units: vec![Unit::Org(o)] }).is_err());
@@ -574,20 +636,42 @@ fn group_move_spreads_regiments_in_the_group_formation() {
     let a = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(90.0, 100.0), FRAC_PI_2);
     let b = spawn_regiment(&mut w, ids.slow_regiment, 0, Vec2::new(110.0, 100.0), FRAC_PI_2);
     let to = Vec2::new(100.0, 300.0);
-    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)], to, attack_move: false });
+    // Group behaviour on (0x4ED360 cases 0x25 / 0x26, the HUD button).
+    w.step(vec![Command::Order { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)], order: aa_play::orders::ActorOrder::GroupBehavior { enable: true, boolean: None } }]);
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)], to, attack_move: false }]);
+    for _ in 0..8 {
+        w.step(Vec::new());
+    }
+    assert!(step_until(&mut w, 300.0, |w| org_settled(w, a) && org_settled(w, b)));
+    // 0x4DF600: group_defensive's first two places, (6.5,10) and (-6.5,10), less their
+    // mean, turned to the group's facing: side by side, 13 m apart, around the goal.
+    let pa = w.orgs[a as usize].anchor;
+    let pb = w.orgs[b as usize].anchor;
+    assert!(((pa - pb).length() - 13.0).abs() < 0.6, "anchors {pa:?} {pb:?}");
+    assert!((((pa + pb) * 0.5) - to).length() < 0.6, "anchors {pa:?} {pb:?}");
+}
+
+/// Group behaviour off, a human's default: 0x4ED360's lower path. Each regiment takes
+/// the Move itself, at its own speed, moved by where it stands in the selection
+/// (0x4DD860: within GroupZoneRangeMin as it is).
+#[test]
+fn a_selection_keeps_its_spread_on_a_move() {
+    let (data, ids) = data();
+    let mut w = world(open_map(128, 128, 4.0), data);
+    let a = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(90.0, 100.0), FRAC_PI_2);
+    let b = spawn_regiment(&mut w, ids.slow_regiment, 0, Vec2::new(110.0, 100.0), FRAC_PI_2);
+    let to = Vec2::new(100.0, 300.0);
+    w.apply(Command::Move { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)], to, attack_move: false });
     advance(&mut w, 8);
     let start = [w.orgs[a as usize].anchor.y, w.orgs[b as usize].anchor.y];
     advance(&mut w, 16 * 10);
-    // Both move at the slower regiment's speed.
     let va = (w.orgs[a as usize].anchor.y - start[0]) / 10.0;
     let vb = (w.orgs[b as usize].anchor.y - start[1]) / 10.0;
-    assert!((va - 1.5).abs() < 0.06 && (vb - 1.5).abs() < 0.06, "group speeds {va} {vb}");
+    assert!((va - 2.5).abs() < 0.06 && (vb - 1.5).abs() < 0.06, "own speeds {va} {vb}");
     assert!(run_until(&mut w, 300.0, |w| org_settled(w, a) && org_settled(w, b)));
-    // group_defensive: (6.5,10) and (-6.5,10) turned to face north.
     let pa = w.orgs[a as usize].anchor;
     let pb = w.orgs[b as usize].anchor;
-    let expected = [to + Vec2::new(-6.5, 10.0), to + Vec2::new(6.5, 10.0)];
-    assert!((pa - expected[0]).length() < 0.6 && (pb - expected[1]).length() < 0.6, "anchors {pa:?} {pb:?}");
+    assert!((pa - Vec2::new(90.0, 300.0)).length() < 0.6 && (pb - Vec2::new(110.0, 300.0)).length() < 0.6, "anchors {pa:?} {pb:?}");
 }
 
 #[test]
@@ -610,19 +694,28 @@ fn moving_truck_goes_around_a_parked_tank() {
 
 #[test]
 fn members_pursue_their_own_targets_while_the_regiment_holds() {
-    let (data, ids) = data();
+    let (mut data, ids) = data();
+    // It stands through the fight and does not shoot (a shot from beyond the ZOC would
+    // start the engage state, 0x579490). The rifles reach 12 m (rus_infantry), less
+    // than the regiment's ZOC of 18 m.
+    data.defs[ids.tank as usize].health = 1e7;
+    data.defs[ids.tank as usize].weapons.clear();
+    data.defs[ids.infantry as usize].weapons[0].range = 12.0;
     let mut w = world(open_map(128, 128, 4.0), data);
     let o = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(100.0, 100.0), 0.0);
     let enemy = w.spawn_actor(ids.tank, Some(1), w.ground(Vec2::new(200.0, 100.0)), PI);
-    let far = w.spawn_actor(ids.tank, Some(1), w.ground(Vec2::new(200.0, 160.0)), PI);
-    order(&mut w, Command::Attack { kingdom: 0, units: vec![Unit::Org(o)], target: enemy });
-    assert!(run_until(&mut w, 60.0, |w| (w.orgs[o as usize].anchor - Vec2::new(200.0, 100.0)).length() <= 30.5));
-    // Combat gives one member another target, out of its rifle range.
-    let m = w.orgs[o as usize].members[0];
-    w.actors[m as usize].combat.target = Some(far);
-    assert!(run_until(&mut w, 60.0, |w| (pos(w, m) - pos(w, far)).length() <= 30.0 && !movement::actor_moving(w, m)), "member at {:?}", pos(&w, m));
-    let d = (pos(&w, m) - pos(&w, far)).length();
-    assert!(d > 28.0, "stops at weapon range: {d}");
+    w.step(vec![Command::Attack { kingdom: 0, units: vec![Unit::Org(o)], target: enemy }]);
+    // The target in the ZOC: the engage state (0x57AB70 -> 0x524A00) gives the members
+    // their targets. Each walks up until the target is in its rifle range and stands.
+    assert!(step_until(&mut w, 60.0, |w| aa_play::combat::org_state(w, o).is_some_and(|c| c.engaging())));
+    let at_engage = (w.orgs[o as usize].anchor - pos(&w, enemy)).length();
+    assert!(at_engage <= 18.5 && at_engage > 12.0, "engaged at {at_engage}");
+    assert!(step_until(&mut w, 30.0, |w| w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(w, m))));
+    for &m in &w.orgs[o as usize].members {
+        let d = (pos(&w, m) - pos(&w, enemy)).length();
+        assert!(d <= 12.5 && w.actors[m as usize].combat.target == Some(enemy), "member {m} at {d} with {:?}", w.actors[m as usize].combat.target);
+    }
+    assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
 }
 
 #[test]
@@ -768,9 +861,13 @@ fn performance_150_regiments() {
     }
     let meeting = t.elapsed().as_secs_f64() * 1000.0 / meet_ticks as f64;
     eprintln!("columns meeting: {meeting:.3} ms per tick on average, worst tick {worst:.3} ms, {} searches total", w.movement.stats.searches);
+    // The ports do the original's x87 arithmetic, each mover some 4 us a tick where the
+    // f32 rendition took 2. What counts is the game's speed: a tick is 62.5 ms, and
+    // moving these 1350 men may take a quarter of it.
     if !cfg!(debug_assertions) {
-        assert!(per_tick < 3.0, "movement tick {per_tick:.3} ms");
-        assert!(meeting < 3.0, "movement tick while meeting {meeting:.3} ms");
+        let budget = 1000.0 / aa_play::TICKS_PER_SECOND as f64 / 4.0;
+        assert!(per_tick < budget, "movement tick {per_tick:.3} ms");
+        assert!(meeting < budget, "movement tick while meeting {meeting:.3} ms");
     }
 }
 
@@ -871,7 +968,11 @@ fn walk_target_moves_off_a_soldier_standing_there_at_the_start() {
 }
 
 #[test]
-fn a_regiment_order_replaces_the_walk_out() {
+/// A member walking out of its structure holds its Deploy state: 0x52DF60 tests
+/// 0x529C00 first, so the regiment's formation path (0x532310) is refused and the
+/// walk goes on. At the point it reattaches (0x5324A0 -> 0x534000), and walks to the
+/// regiment, which is what the Berlin film's recruits do (research/byte-exact).
+fn a_regiment_order_waits_for_the_walk_out() {
     let (data, ids) = data();
     let mut w = world(open_map(64, 64, 2.0), data);
     let center = Vec2::new(40.0, 50.0);
@@ -879,18 +980,20 @@ fn a_regiment_order_replaces_the_walk_out() {
     let (door, point) = (center + Vec2::new(0.0, 20.0), center + Vec2::new(0.0, 16.0));
     let a = member_at_door(&mut w, o, door, point);
     movement::walk_member(&mut w, a, point);
-    advance(&mut w, (0.3 * aa_play::TICKS_PER_SECOND as f32) as u32);
+    for _ in 0..(0.3 * aa_play::TICKS_PER_SECOND as f32) as u32 {
+        w.step(Vec::new());
+    }
     let to = center + Vec2::new(40.0, 0.0);
-    order(&mut w, Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to, attack_move: false });
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to, attack_move: false }]);
     let mut closest = f32::MAX;
-    let settled = run_until(&mut w, 60.0, |w| {
+    let settled = step_until(&mut w, 60.0, |w| {
         closest = closest.min((pos(w, a) - point).length());
         org_settled(w, o)
     });
     let error = formation_error(&w, o);
     eprintln!("settled {settled} at t={:.1}, formation error {error:.2}, walker's closest to the point {closest:.2}", w.time);
     assert!(settled && error < 1.5, "error {error}");
-    assert!(closest > 1.0, "kept walking to the point");
+    assert!(closest < 0.5, "the walk went on to the point: {closest}");
     assert!((w.orgs[o as usize].anchor - to).length() < 1.0);
 }
 
@@ -969,6 +1072,130 @@ fn following_ends_when_the_target_is_gone_or_dead() {
 
 // ---------------------------------------------------------------------------
 // Real data (needs AA_GAME_ROOT).
+
+/// A person's orders through `World::step` on a real map and on a generated one (which
+/// has no saved topology: `0x7ACB00` analyses its tiles): the regiments walk, stop,
+/// follow, keep their spread and fight.
+fn real_orders(mut w: World) {
+    let data = w.data.clone();
+    let (rifle, foe_rifle) = (data.find("regiment_rus_infantry").unwrap(), data.find("regiment_ger_infantry").unwrap());
+    let corps = |w: &World, k: u32| w.actors.iter().find(|a| a.kingdom == Some(k) && w.data.def(a.def).id.ends_with("_corps")).map(|a| a.pos.truncate()).unwrap();
+    let (c, e) = (corps(&w, 0), corps(&w, 1));
+    let dir = (e - c).normalize();
+    // Open land with room around it.
+    let open = |w: &World, p: Vec2| {
+        let m = &w.map;
+        let clear = |q: Vec2| {
+            let (cx, cy) = ((q.x / m.cell_size) as i32, (q.y / m.cell_size) as i32);
+            (cy - 5..=cy + 5).all(|y| {
+                (cx - 5..=cx + 5).all(|x| {
+                    x >= 0 && y >= 0 && (x as u32) < m.width && (y as u32) < m.height && m.flags[(y as u32 * m.width + x as u32) as usize] & (BLOCKED | NOT_LAND_PASSABLE) == 0
+                })
+            }) && !w.actors.iter().any(|a| a.alive && !a.removed && (a.pos.truncate() - q).length() < 14.0)
+        };
+        (0..200).flat_map(|ring| (0..32).map(move |i| p + Vec2::from_angle(i as f32 / 32.0 * std::f32::consts::TAU) * ring as f32 * 4.0)).find(|&q| clear(q)).expect("open land")
+    };
+    let seconds = |w: &mut World, s: f32| {
+        for _ in 0..(s * TPS as f32) as u32 {
+            w.step(Vec::new());
+        }
+    };
+    let anchor = |w: &World, o: OrgId| w.orgs[o as usize].anchor;
+    let spawn = |w: &mut World, def: u32, kingdom: u32, at: Vec2| aa_play::production::spawn_organization(w, def, kingdom, at, dir.y.atan2(dir.x), None);
+
+    // Move: arrives, in formation.
+    let at = open(&w, c + dir * 45.0);
+    let a = spawn(&mut w, rifle, 0, at);
+    seconds(&mut w, 1.0);
+    let to = open(&w, at + dir * 60.0);
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(a)], to, attack_move: false }]);
+    assert!(step_until(&mut w, 120.0, |w| org_settled(w, a)), "the move never ended at {:?}", anchor(&w, a));
+    assert!((anchor(&w, a) - to).length() < 1.0, "stopped at {:?} of {to:?}", anchor(&w, a));
+    // Stop: the order ends now, the regiment's point stays, all stand within a second.
+    let on = open(&w, to + dir * 80.0);
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(a)], to: on, attack_move: false }]);
+    seconds(&mut w, 4.0);
+    assert!((anchor(&w, a) - to).length() > 3.0, "it walked");
+    let held = anchor(&w, a);
+    w.step(vec![Command::Stop { kingdom: 0, units: vec![Unit::Org(a)] }]);
+    assert_eq!(w.orgs[a as usize].order, Order::Idle);
+    assert!((anchor(&w, a) - held).length() < 0.5);
+    assert!(step_until(&mut w, 4.0, |w| org_settled(w, a)));
+    assert!((anchor(&w, a) - held).length() < 0.5);
+    // Follow: the follower walks up to a moving regiment and holds in range of it.
+    let b_at = open(&w, anchor(&w, a) + dir * 40.0);
+    let b = spawn(&mut w, rifle, 0, b_at);
+    seconds(&mut w, 1.0);
+    let target = *w.orgs[b as usize].members.last().unwrap();
+    let on = open(&w, b_at + dir * 50.0);
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(b)], to: on, attack_move: false }, Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target }]);
+    seconds(&mut w, 5.0);
+    assert!(w.orgs[a as usize].members.iter().any(|&m| movement::actor_moving(&w, m)), "the follower walks");
+    assert!(step_until(&mut w, 150.0, |w| org_settled(w, b) && (anchor(w, a) - pos(w, target)).length() <= 0.6 * 18.0 + 2.0), "follower at {:?}, target {:?}", anchor(&w, a), pos(&w, target));
+    assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }), "still following");
+    w.step(vec![Command::Stop { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)] }]);
+    // A selection: each keeps its place around the goal.
+    let (p, q) = (open(&w, c - dir * 40.0), open(&w, c - dir * 62.0));
+    let (g1, g2) = (spawn(&mut w, rifle, 0, p), spawn(&mut w, rifle, 0, q));
+    seconds(&mut w, 1.0);
+    let goal = open(&w, c + dir * 15.0 + Vec2::new(-dir.y, dir.x) * 50.0);
+    let spread = anchor(&w, g1) - anchor(&w, g2);
+    w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(g1), Unit::Org(g2)], to: goal, attack_move: false }]);
+    assert!(step_until(&mut w, 180.0, |w| org_settled(w, g1) && org_settled(w, g2)), "the selection never arrived: {:?} {:?}", anchor(&w, g1), anchor(&w, g2));
+    assert!((anchor(&w, g1) - anchor(&w, g2) - spread).length() < 6.0 && (((anchor(&w, g1) + anchor(&w, g2)) * 0.5) - goal).length() < 6.0, "{:?} {:?} of {goal:?}", anchor(&w, g1), anchor(&w, g2));
+    // Attack: walks up, the target in the ZOC it engages, the rifles (12 m) reach, men die.
+    let foe_at = open(&w, anchor(&w, g1) + dir * 70.0);
+    let foe = spawn(&mut w, foe_rifle, 1, foe_at);
+    seconds(&mut w, 1.0);
+    let t = w.orgs[foe as usize].members[0];
+    w.step(vec![Command::Attack { kingdom: 0, units: vec![Unit::Org(g1)], target: t }]);
+    assert!(matches!(w.orgs[g1 as usize].order, Order::Attack { .. }));
+    let engaged = step_until(&mut w, 120.0, |w| aa_play::combat::org_state(w, g1).is_some_and(|c| c.engaging()));
+    assert!(engaged, "no fight: {:?} and {:?}", anchor(&w, g1), anchor(&w, foe));
+    assert!((anchor(&w, g1) - anchor(&w, foe)).length() < 25.0);
+    // The dead leave the member list.
+    let men = |w: &World| w.orgs[g1 as usize].members.len() + w.orgs[foe as usize].members.len();
+    let start = men(&w);
+    assert!(step_until(&mut w, 60.0, |w| men(w) < start), "nobody died");
+}
+
+#[test]
+#[ignore]
+fn real_berlin_orders_as_a_person_gives_them() {
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let data = Arc::new(GameData::load(&root).expect("GameData::load"));
+    let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
+    let w = World::new_skirmish(data, map, &two_humans("(2v2)Berlin", [0, 2])).expect("new_skirmish");
+    real_orders(w);
+}
+
+#[test]
+#[ignore]
+fn real_random_map_orders_as_a_person_gives_them() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let data = Arc::new(GameData::load(&root).expect("GameData::load"));
+    let rmg = RandomMapData::load(&root).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    for seed in [7, 11] {
+        let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, seed)).expect("generate");
+        assert!(generated.map.saved_topology.is_none());
+        let w = World::new_skirmish(data.clone(), Arc::new(generated.map), &two_humans("generated", [0, 1])).expect("new_skirmish");
+        real_orders(w);
+    }
+}
+
+fn two_humans(map_id: &str, starts: [usize; 2]) -> aa_play::SkirmishSetup {
+    aa_play::SkirmishSetup {
+        map_id: map_id.into(),
+        players: vec![
+            aa_play::PlayerSetup { name: "A".into(), nation: "rus".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: starts[0] },
+            aa_play::PlayerSetup { name: "B".into(), nation: "ger".into(), team: 1, color: [217, 0, 25], controller: Controller::Human, start: starts[1] },
+        ],
+        starting_resources: None,
+        seed: 3,
+    }
+}
 
 #[test]
 #[ignore]

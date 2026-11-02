@@ -995,6 +995,12 @@ impl Host<'_> {
     fn lone_order_over(&mut self) {
         let id = self.id;
         if self.world.actors[id as usize].org.is_none() && self.am().order.active {
+            // A cut route (0x53D8D0 depth 255; no region hops on a lone actor here): the
+            // order goes on from where it ended, as `order_think` does for a regiment.
+            if self.am().order.capped {
+                self.am().order.next_think = self.world.time;
+                return;
+            }
             self.am().order.active = false;
             if self.world.actors[id as usize].order != Order::Idle {
                 set_order(self.world, self.ms, Owner::Actor(id), Order::Idle);

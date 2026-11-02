@@ -1263,6 +1263,7 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
                     let offset = crate::orders::group::member_offset(world, owner_unit(owner), to);
                     start(ms, world, owner, to, offset, Some(*target), false, None, None);
                     ms.order(owner).follow = true;
+                    regiment_move_to_actor(ms, world, owner, *target, rules);
                     set_order(world, ms, owner, Order::Move { to: clamp_extent(world, to + offset), attack_move: false });
                     continue;
                 }
@@ -1303,6 +1304,13 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
             for &owner in &owners {
                 stop(ms, world, owner);
                 set_order(world, ms, owner, Order::Idle);
+                // (combat) 0x51D1C0: the sleep state replaces the engage state
+                // (0x52A420), whose exit 0x520FE0 empties the list.
+                if let Owner::Org(o) = owner
+                    && let Some(s) = world.combat.orgs.get_mut(o as usize)
+                {
+                    s.engage.clear();
+                }
             }
             Ok(())
         }
@@ -1326,11 +1334,22 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
             for (&owner, &offset) in owners.iter().zip(&offsets) {
                 start(ms, world, owner, tp, offset, Some(*target), false, group_speed, None);
                 ms.order(owner).follow = true;
+                regiment_move_to_actor(ms, world, owner, *target, rules);
                 set_order(world, ms, owner, Order::Move { to: clamp_extent(world, tp + offset), attack_move: false });
             }
             Ok(())
         }
         other => Err(format!("{other:?} is not a movement command")),
+    }
+}
+
+/// A regiment's Move command at an actor: `0x520320` on its Mind, which then thinks it
+/// (`0x5276B0`). A lone actor's move to an actor stays with [`order_think`].
+fn regiment_move_to_actor(ms: &mut MovementState, world: &mut World, owner: Owner, target: ActorId, rules: &MoveRules) {
+    if let Owner::Org(o) = owner
+        && element::enabled()
+    {
+        regiment::activate_to_actor(ms, world, *rules, o, target);
     }
 }
 

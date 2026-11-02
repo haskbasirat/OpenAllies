@@ -1240,6 +1240,32 @@ pub(super) fn activate_move(ms: &mut MovementState, world: &mut World, rules: Mo
     }
 }
 
+/// `0x520320(2, target, speed, auxiliary)`, the Move command at an actor: the target's
+/// id, `0x51E9B0` at its position, then `0x52A810`. False when the Mind refused it.
+pub(super) fn activate_to_actor(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, target: ActorId) -> bool {
+    let result = with_regiment(ms, world, rules, o, |host, a| {
+        let Some(position) = host.world.actor(target).filter(|t| !t.removed).map(|t| bits(t.pos.truncate())) else {
+            return Ok(false);
+        };
+        let speed = host.order().speed.to_bits();
+        let extents = host.extents();
+        let mut fields = company(host.order(), 0);
+        fields.target_id = target + 1;
+        cm::set_destination(&mut fields, position, extents, PC, host).map_err(err)?;
+        fields.speed_bits = speed;
+        store(host.order(), &fields);
+        let mv = host.state(MOVE)?;
+        aa_mind::activate(mv, 2, a, host)
+    });
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            ms.note(format!("regiment {o} move to actor: {e}"));
+            false
+        }
+    }
+}
+
 /// `0x51E2E0(2, point, direction)` from the unpack command `0x51E550`.
 pub(super) fn activate_unpack(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, at: Vec2, facing: f32) -> bool {
     let result = with_regiment(ms, world, rules, o, |host, a| {

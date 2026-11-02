@@ -117,7 +117,7 @@ pub struct WeaponEffect {
 }
 
 /// One organization formation from the layout (Data/Organizations/Layouts).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Formation {
     /// FormationData IDS, e.g. "regiment_defensive".
     pub id: String,
@@ -133,11 +133,21 @@ pub struct Formation {
     pub group_positions: Vec<[f32; 2]>,
     /// FormationData `organized` (+18, 1 from the constructor 4C2540). False: the
     /// slots of a member-less position scatter (0x5797E0, two draws each).
-    #[serde(default)]
+    #[serde(default = "formation_organized")]
     pub organized: bool,
     /// FormationData `herding` (+19).
     #[serde(default)]
     pub herding: bool,
+}
+
+/// The constructor 0x4C2540: `organized` 1, the other bytes 0.
+fn formation_organized() -> bool {
+    true
+}
+impl Default for Formation {
+    fn default() -> Self {
+        Formation { id: String::new(), positions: Vec::new(), aggressive: false, group_positions: Vec::new(), organized: true, herding: false }
+    }
 }
 
 /// The organization definition's rampage config (+0x314, 464BD0): its words as the

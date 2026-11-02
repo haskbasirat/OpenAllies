@@ -514,6 +514,16 @@ pub(super) fn query_for(space: &Space, policy: &Policy<'_>, id: ActorId, strict:
 
 /// `0x4D67F0` over [`ActorMove::overlaps`].
 pub(super) fn refresh_overlaps(space: &mut Space, ms: &mut MovementState, world: &World, id: ActorId) {
+    // The list is empty and no thing's shape comes near: the query finds nothing and
+    // the port changes nothing, so this answers without its x87 arithmetic.
+    if ms.actors[id as usize].overlaps.is_empty() {
+        let policy = Policy { ms: &*ms, world };
+        if let Some(query) = query_for(space, &policy, id, false)
+            && space.surely_clear(placed(&query.placement), bounding(&query), 0, actor_key(id))
+        {
+            return;
+        }
+    }
     let mut entries = std::mem::take(&mut ms.actors[id as usize].overlaps);
     let now = world.clock.begin.0;
     let geometry = space.geometry.clone();
