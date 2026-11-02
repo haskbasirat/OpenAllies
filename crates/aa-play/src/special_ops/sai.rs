@@ -1,14 +1,38 @@
-//! The computer players' general powers: the GENERAL_POWER goal of the SAI
-//! goal engine (`7C40C0` candidates: the commander abilities the current ego
-//! has a GeneralPower for; `7C42F0` the "ping-pong ball" order by the
-//! squared base priority; `7C3C10` the use on the chosen actor or location),
-//! with each power's Location and Priority from the ego data
-//! (Templates/template_sai.tgi GeneralPower, loader `4AFD50`).
+//! The computer players' general powers: the GENERAL_POWER goal (type 0x15,
+//! vtable A9E9D8) that the SAI goal engine builds at each of its thinks
+//! (`7A4A60` -> `7C40C0`):
+//! - `7C40C0`: the Commander's abilities, in order, that the current ego has
+//!   a GeneralPower for (ego `+884` by definition);
+//! - `7C4490` -> `7C42F0`: with more than one, the "ping-pong ball" order by
+//!   the squared base priority (SAI RNG `[B36528]+2C`);
+//! - `7C3A60`: in that order while the experience left covers each cost
+//!   (`4CDD40`, the first that does not stops it), the power's location
+//!   (`4AE190`: NEAR_ACTOR `4AD590`, ON_ACTOR `4AD3F0`, FOG `4AD8C0`) and its
+//!   priority (`4AD2B0`: base, then CV `4A8030`, ActorValue `4ACFA0`,
+//!   ActorEconomy `4AB560`, EnemyInfluence `4A82B0`, InfluenceRatio
+//!   `4A83F0`, TimeSinceExplored `4A85B0`, EconomyGenerated `4AB7A0`; any
+//!   factor below its minimum, or the total below the power's, gives 0;
+//!   then the fuzzy factor times an SAI draw); the best above zero flags
+//!   the power and adds to the goal's priority (`+38`);
+//! - `7C3C10`: each flagged power is ordered (`61E270` on its target actor
+//!   while it lives, else `61E2B0` at its location) with the attack flare
+//!   of its Followup when it has a priority and a duration (`7B0610`, here
+//!   the player's region flare `ai::Player::flares`).
 //!
+//! The loader `4AFD50` reads neither ActorEconomy (its words stay zero, so
+//! it adds nothing) nor uses GeneralRequirements (no_*_actors and
+//! requires_supply are read but no evaluation consults them). Recharging
+//! powers are evaluated and ordered like the others; `4C8F20` refuses them.
+//!
+//! The leaf values come from the opponent's tables: combat values
+//! (`ai::AiState::bound`), the region analysis and its influence
+//! (`ai::AiState::regions` / `influence`, mobile and settlement standing for
+//! the region record's `+8` / `+14` vectors), the player's region scouting
+//! times, and the `4AC240` / `4AAA30` valuations (`ai::value::Val`).
 //! Evaluated once per goal-engine think of the player (`ai::Player::ge_count`).
-//! Influence comes from the opponent's region analysis (`ai::AiState::
-//! influence`), combat values from its tables (`ai::AiState::bound`).
 use super::*;
+use crate::ai::SaiRng;
+use crate::ai::value::Val;
 
 #[derive(Clone, Debug, Default)]
 pub struct SaiState {
@@ -18,242 +42,428 @@ pub struct SaiState {
     pub uses: u64,
 }
 
-fn engaged(world: &World, t: OpTarget) -> bool {
-    let org = match t {
-        OpTarget::Org(o) => Some(o),
-        OpTarget::Actor(a) => world.actors[a as usize].org,
-    };
-    if let Some(o) = org
-        && let Some(s) = world.combat.org(o)
-    {
-        return s.engaging() || !s.engaged_by.is_empty();
-    }
-    match t {
-        OpTarget::Actor(a) => world.actors[a as usize].combat.target.is_some(),
-        OpTarget::Org(_) => false,
-    }
+/// `45D400`: FILD of the signed draw, +2^32 when negative, times binary64
+/// 0x3DF0000000100000; extended, never stored.
+fn unit(draw: u32) -> f64 {
+    f64::from(draw) * f64::from_bits(0x3df0_0000_0010_0000)
 }
 
-fn health_ratio(world: &World, t: OpTarget) -> f32 {
-    let one = |a: ActorId| {
-        let x = &world.actors[a as usize];
-        let max = world.combat.actor(a).map(|c| c.max_health).filter(|&m| m > 0.0).unwrap_or(world.data.def(x.def).health);
-        (x.health, max)
-    };
-    let (h, m) = match t {
-        OpTarget::Actor(a) => one(a),
-        OpTarget::Org(o) => world.orgs[o as usize].members.iter().filter(|&&m| world.actors[m as usize].alive).map(|&m| one(m)).fold((0.0, 0.0), |s, v| (s.0 + v.0, s.1 + v.1)),
-    };
-    if m > 0.0 { h / m } else { 1.0 }
+/// What a flagged power is ordered on.
+#[derive(Clone, Copy, Debug)]
+enum Place {
+    Actor(ActorId),
+    Point(Vec2),
 }
 
-fn properties<'a>(world: &'a World, t: OpTarget) -> &'a [String] {
-    match t {
-        OpTarget::Actor(a) => &world.data.def(world.actors[a as usize].def).properties,
-        OpTarget::Org(o) => &world.data.def(world.orgs[o as usize].def).properties,
-    }
+/// The evaluation context of one player's think.
+struct Eval<'a> {
+    world: &'a World,
+    me: KingdomId,
+    player: &'a crate::ai::Player,
+    val: Option<&'a Val<'a, 'a, 'a>>,
+    rng: &'a mut SaiRng,
 }
 
-/// GeneralPowerActorRequirements against one actor or organization.
-fn meets(world: &World, me: KingdomId, r: &Requirements, t: OpTarget) -> bool {
-    let k = owner(world, t);
-    if k.is_none() {
-        return false;
+impl Eval<'_> {
+    fn draw(&mut self) -> u32 {
+        self.rng.next_u32()
     }
-    if r.friendly && !allied(world, k, Some(me)) {
-        return false;
-    }
-    if r.enemy && relation(world, Some(me), k) != crate::books::ENEMY {
-        return false;
-    }
-    if r.owned && k != Some(me) {
-        return false;
-    }
-    if r.must_be_engaged && !engaged(world, t) {
-        return false;
-    }
-    if r.must_not_be_engaged && engaged(world, t) {
-        return false;
-    }
-    if health_ratio(world, t) > r.max_health + 1e-6 {
-        return false;
-    }
-    r.properties.is_empty() || r.properties.iter().any(|p| properties(world, t).iter().any(|q| q.eq_ignore_ascii_case(p)))
-}
 
-fn considered(world: &World, me: KingdomId, f: &Factor, t: OpTarget) -> bool {
-    let k = owner(world, t);
-    (f.consider_owned && k == Some(me)) || (f.consider_friendly && allied(world, k, Some(me))) || (f.consider_enemy && relation(world, Some(me), k) == crate::books::ENEMY)
-}
-
-fn cv(world: &World, t: OpTarget) -> f32 {
-    let table = &world.ai.bound.cv;
-    let v = |d: u32| table.get(d as usize).copied().unwrap_or(0.0);
-    match t {
-        OpTarget::Actor(a) => v(world.actors[a as usize].def),
-        OpTarget::Org(o) => world.orgs[o as usize].members.iter().filter(|&&m| world.actors[m as usize].alive).map(|&m| v(world.actors[m as usize].def)).sum(),
-    }
-}
-
-/// One CV / ActorValue factor over the actors concerned; None below its minimum.
-fn value_factor(world: &World, me: KingdomId, f: &Factor, targets: &[OpTarget]) -> Option<f32> {
-    let mut sum = 0.0;
-    for &t in targets {
-        if !considered(world, me, f, t) {
-            continue;
-        }
-        let m = f.categories.iter().find(|c| meets(world, me, c, t)).map_or(f.multiplier, |c| c.multiplier);
-        sum += cv(world, t) * m;
-    }
-    if f.maximum >= 0.0 {
-        sum = sum.min(f.maximum);
-    }
-    (sum >= f.minimum).then_some(sum)
-}
-
-fn capped(f: &Factor, v: f32) -> Option<f32> {
-    let mut v = v * f.multiplier;
-    if f.maximum >= 0.0 {
-        v = v.min(f.maximum);
-    }
-    (v >= f.minimum).then_some(v)
-}
-
-/// Friendly (or owned) and enemy mobile influence of the region at `p`.
-fn influence(world: &World, me: KingdomId, p: Vec2, owned_only: bool) -> (f32, f32) {
-    let Some(regions) = world.ai.regions.as_ref() else { return (0.0, 0.0) };
-    let inf = &world.ai.influence;
-    if inf.kingdoms == 0 {
-        return (0.0, 0.0);
-    }
-    let region = regions.region_at(p);
-    let mut friendly = 0.0;
-    let mut enemy = 0.0;
-    for k in 0..inf.kingdoms {
-        let v = inf.at(&inf.mobile, region, k);
-        let kid = Some(k as KingdomId);
-        if owned_only && kid == Some(me) || !owned_only && allied(world, kid, Some(me)) {
-            friendly += v;
-        } else if relation(world, Some(me), kid) == crate::books::ENEMY {
-            enemy += v;
-        }
-    }
-    (friendly, enemy)
-}
-
-/// The priority of one candidate (Priority: base + each factor + fuzzy).
-fn priority(world: &mut World, me: KingdomId, op: &SpecialOp, pc: &PowerConfig, point: Vec2, on: Option<OpTarget>) -> Option<f32> {
-    // The actors the power affects: in its area, or the targeted one.
-    let affected: Vec<OpTarget> = match on {
-        Some(t) if op.area <= 0.0 => vec![t],
-        _ => in_area(world, point, op.area.max(0.0)),
-    };
-    let around: Vec<OpTarget> = in_area(world, point, op.area.max(0.0));
-    // GeneralRequirements.
-    for &t in &around {
-        let k = owner(world, t);
-        if (pc.no_owned && k == Some(me)) || (pc.no_friendly && allied(world, k, Some(me))) || (pc.no_enemy && relation(world, Some(me), k) == crate::books::ENEMY) {
-            return None;
-        }
-    }
-    if pc.requires_supply && !world.books.zones.iter().enumerate().any(|(i, z)| allied(world, Some(z.kingdom), Some(me)) && crate::supply::zone_covers(world, i, point)) {
-        return None;
-    }
-    let mut total = pc.base;
-    total += value_factor(world, me, &pc.cv, &affected)?;
-    total += value_factor(world, me, &pc.actor_value, &affected)?;
-    if pc.actor_economy.multiplier != 0.0 {
-        let production = match on {
-            Some(OpTarget::Actor(a)) => world.data.def(world.actors[a as usize].def).production_all.iter().sum::<f32>(),
-            _ => 0.0,
-        };
-        total += capped(&pc.actor_economy, production)?;
-    }
-    let (friendly, enemy) = influence(world, me, point, false);
-    if pc.enemy_influence.multiplier != 0.0 || pc.enemy_influence.minimum > 0.0 {
-        total += capped(&pc.enemy_influence, enemy.max(0.0).powf(pc.enemy_influence.exponent))?;
-    }
-    if pc.influence_ratio.multiplier != 0.0 || pc.influence_ratio.minimum > 0.0 {
-        let (f, e) = if pc.influence_ratio.count_owned_only { influence(world, me, point, true) } else { (friendly, enemy) };
-        let ratio = if e > 0.0 { f / e } else if f > 0.0 { f32::MAX.sqrt() } else { 1.0 };
-        let shaped = if ratio > 1.0 { ratio.powf(pc.influence_ratio.exponent_over_one) } else { ratio.powf(pc.influence_ratio.exponent_under_one) };
-        total += capped(&pc.influence_ratio, shaped)?;
-    }
-    if pc.economy_generated.multiplier != 0.0 {
-        total += pc.economy_generated.resources.iter().map(|(_, a)| a).sum::<f32>() * pc.economy_generated.multiplier;
-    }
-    total += world.random() * pc.fuzzy;
-    (total >= pc.minimum).then_some(total)
-}
-
-/// The best location of one power (Location type, Placement candidates).
-fn best(world: &mut World, me: KingdomId, index: usize, op: &SpecialOp, pc: &PowerConfig) -> Option<(f32, AbilityTarget)> {
-    let mut targets: Vec<OpTarget> = world.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom.is_some()).map(|a| OpTarget::Actor(a.id)).collect();
-    targets.extend(world.orgs.iter().filter(|o| o.alive).map(|o| OpTarget::Org(o.id)));
-    targets.retain(|&t| alive(world, t) && meets(world, me, &pc.actor_requirements, t));
-    let mut best: Option<(f32, AbilityTarget)> = None;
-    for t in targets {
-        let candidates: Vec<(Vec2, Option<OpTarget>)> = match pc.location {
-            // ON_ACTOR: the actor itself.
-            2 => vec![(position(world, t), Some(t))],
-            // NEAR_ACTOR: random points within the placement radius.
-            1 => (0..pc.candidates.max(1))
-                .map(|_| {
-                    let r = pc.radius.max(0.0) * world.random();
-                    let a = world.random() * std::f32::consts::TAU;
-                    (position(world, t) + Vec2::new(a.cos(), a.sin()) * r, None)
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-        for (p, on) in candidates {
-            let mut check = on;
-            if admit(world, me, index, &mut check).is_err() {
+    /// `4A7ED0`: the kingdoms in order whose relation the flags admit
+    /// (me +138 allied, owned, me +140 enemy), each with `79EAF0`: the
+    /// SAI's actors of the kingdom, organizations as their members, within
+    /// `radius` of `at` (all with a negative radius), prepended.
+    fn candidates(&self, friendly: bool, hostile: bool, owned: bool, at: Vec2, radius: f32) -> Vec<ActorId> {
+        let w = self.world;
+        let mut out = Vec::new();
+        let r2 = f64::from(radius * radius);
+        for k in &w.kingdoms {
+            let kid = Some(k.id);
+            let take = (friendly && allied(w, Some(self.me), kid)) || (owned && k.id == self.me) || (hostile && enemy(w, Some(self.me), kid));
+            if !take {
                 continue;
             }
-            let Some(v) = priority(world, me, op, pc, p, on) else { continue };
-            if best.as_ref().is_none_or(|b| v > b.0) {
-                let target = match on {
-                    Some(OpTarget::Actor(a)) => AbilityTarget::Actor(a),
-                    Some(OpTarget::Org(o)) => match world.orgs[o as usize].members.iter().copied().find(|&m| world.actors[m as usize].alive) {
-                        Some(m) => AbilityTarget::Actor(m),
-                        None => continue,
-                    },
-                    None => AbilityTarget::Point(p),
-                };
-                best = Some((v, target));
+            let mut list: Vec<ActorId> = w
+                .actors
+                .iter()
+                .filter(|a| a.kingdom == kid && a.alive && !a.removed)
+                .filter(|a| radius < 0.0 || squared(at, a.pos.truncate()) <= r2)
+                .map(|a| a.id)
+                .collect();
+            list.reverse();
+            out.extend(list);
+        }
+        out
+    }
+
+    /// `4A6A70`: must_be_friendly (owner +138 me), must_be_enemy (owner
+    /// +140 me), must_be_owned.
+    fn relation_ok(&self, r: &Requirements, a: ActorId) -> bool {
+        let k = self.world.actors[a as usize].kingdom;
+        (!r.friendly || allied(self.world, k, Some(self.me))) && (!r.enemy || enemy(self.world, k, Some(self.me))) && (!r.owned || k == Some(self.me))
+    }
+
+    /// `4A7B00`: health ratio (`4D0230`) at most max_percent_health; engaged
+    /// (actor +100 bit 4 or +118) as required; any one required property.
+    fn actor_ok(&self, r: &Requirements, a: ActorId) -> bool {
+        let w = self.world;
+        if f64::from(r.max_health) < health_ratio(w, a) {
+            return false;
+        }
+        let engaged = engaged(w, a);
+        if (r.must_be_engaged && !engaged) || (r.must_not_be_engaged && engaged) {
+            return false;
+        }
+        r.properties.is_empty() || r.properties.iter().any(|p| has_property(w, OpTarget::Actor(a), p))
+    }
+
+    /// `4D0180`: the actor's combat value.
+    fn cv(&self, a: ActorId) -> f32 {
+        self.world.ai.bound.cv.get(self.world.actors[a as usize].def as usize).copied().unwrap_or(0.0)
+    }
+
+    /// `4AC240` (definition, owner, 1, 0, 0, 1, actor).
+    fn value(&self, a: ActorId) -> f32 {
+        let Some(val) = self.val else { return 0.0 };
+        let x = &self.world.actors[a as usize];
+        let mobile = self.world.data.def(x.def).speed_max > 0.0;
+        val.actor_value(x.def, x.kingdom, self.cv(a), mobile, x.pos.truncate(), false)
+    }
+
+    /// `4A8030` (CV) / `4ACFA0` (ActorValue): NEAR_ACTOR sums the considered
+    /// actors in the ability's area, ON_ACTOR takes the target; each with
+    /// the first matching category's multiplier, else the factor's; a zero
+    /// multiplier adds nothing. Clamped to a non-negative maximum; None
+    /// below the minimum. FOG passes without adding.
+    fn actors_factor(&self, f: &Factor, pc: &PowerConfig, area: f32, actor: Option<ActorId>, at: Vec2, cv: bool) -> Option<f32> {
+        let worth = |a: ActorId| if cv { self.cv(a) } else { self.value(a) };
+        let multiplier = |a: ActorId| f.categories.iter().find(|c| self.relation_ok(c, a) && self.actor_ok(c, a)).map_or(f.multiplier, |c| c.multiplier);
+        let mut sum = 0.0f32;
+        match pc.location {
+            1 => {
+                for a in self.candidates(f.consider_friendly, f.consider_enemy, f.consider_owned, at, area) {
+                    let m = multiplier(a);
+                    if m != 0.0 {
+                        sum = (f64::from(worth(a)) * f64::from(m) + f64::from(sum)) as f32;
+                    }
+                }
+            }
+            2 => {
+                if let Some(a) = actor.filter(|&a| alive(self.world, OpTarget::Actor(a))) {
+                    let m = multiplier(a);
+                    if m != 0.0 {
+                        sum = (f64::from(worth(a)) * f64::from(m)) as f32;
+                    }
+                }
+            }
+            _ => return Some(0.0),
+        }
+        bounded(f, f64::from(sum)).map(|v| v as f32)
+    }
+
+    /// The region at a point inside the map (`4282A0`, `7B9300`).
+    fn region(&self, at: Vec2) -> Option<u32> {
+        let [w, h] = map_extent(self.world);
+        if !(at.x >= 0.0 && at.x < w && at.y >= 0.0 && at.y < h) {
+            return None;
+        }
+        let regions = self.world.ai.regions.as_ref()?;
+        (!regions.is_empty()).then(|| regions.region_at(at))
+    }
+
+    /// The player's region record (`7B9050`): (`7B9600` friendly, `7B9570`
+    /// owned, `7B96E0` enemy) mobile and static influence.
+    fn influence(&self, region: u32) -> (f64, f64, f64) {
+        let inf = &self.world.ai.influence;
+        let (mut friendly, mut owned, mut hostile) = (0.0f32, 0.0f32, 0.0f32);
+        for k in (0..inf.kingdoms).rev() {
+            let kid = Some(k as KingdomId);
+            let mobile = inf.at(&inf.mobile, region, k);
+            let fixed = inf.at(&inf.settlement, region, k);
+            if kid == Some(self.me) {
+                owned = mobile + fixed;
+            }
+            for v in [mobile, fixed] {
+                if v > 0.0 {
+                    if allied(self.world, Some(self.me), kid) {
+                        friendly += v;
+                    }
+                    if enemy(self.world, Some(self.me), kid) {
+                        hostile += v;
+                    }
+                }
             }
         }
+        (f64::from(friendly), f64::from(owned), f64::from(hostile))
     }
-    best
+
+    /// `4A82B0`: inside the map, pow(enemy influence, exponent) (0 without
+    /// any) times the multiplier, bounded.
+    fn enemy_influence(&self, pc: &PowerConfig, at: Vec2) -> Option<f32> {
+        let Some(r) = self.region(at) else { return Some(0.0) };
+        let f = &pc.enemy_influence;
+        let (_, _, hostile) = self.influence(r);
+        let v = if hostile as f32 != 0.0 { hostile.powf(f64::from(f.exponent)) } else { 0.0 };
+        bounded(f, v * f64::from(f.multiplier)).map(|v| v as f32)
+    }
+
+    /// `4A83F0`: inside the map, friendly (owned only with
+    /// count_owned_only) over enemy influence, stored binary32 (friendly
+    /// times 999.99994 without enemies); above one pow with
+    /// exponent_over_one, else when not zero with exponent_under_one;
+    /// times the multiplier, bounded.
+    fn influence_ratio(&self, pc: &PowerConfig, at: Vec2) -> Option<f32> {
+        let Some(r) = self.region(at) else { return Some(0.0) };
+        let f = &pc.influence_ratio;
+        let (friendly, owned, hostile) = self.influence(r);
+        let mine = if f.count_owned_only { owned } else { friendly };
+        let ratio = if hostile != 0.0 { (mine / hostile) as f32 } else { (mine * f64::from(f32::from_bits(0x4479_ffff))) as f32 };
+        let shaped = if ratio > 1.0 {
+            f64::from(ratio).powf(f64::from(f.exponent_over_one))
+        } else if ratio != 0.0 {
+            f64::from(ratio).powf(f64::from(f.exponent_under_one))
+        } else {
+            0.0
+        };
+        bounded(f, shaped * f64::from(f.multiplier)).map(|v| v as f32)
+    }
+
+    /// `4A85B0`: inside the map, (GWorld+0xE0 - the region's explored time
+    /// `7B8F00`) times the multiplier, bounded.
+    fn time_since_explored(&self, pc: &PowerConfig, at: Vec2) -> Option<f32> {
+        let Some(r) = self.region(at) else { return Some(0.0) };
+        let f = &pc.time_since_explored;
+        let seen = self.player.scouted.get(r as usize).copied().filter(|t| t.is_finite()).unwrap_or(0.0);
+        bounded(f, (f64::from(native_now(self.world)) - f64::from(seen)) * f64::from(f.multiplier)).map(|v| v as f32)
+    }
+
+    /// `4AB7A0`: the `4AAA30` value of the resource amounts times the
+    /// multiplier; None below the minimum (no maximum).
+    fn economy_generated(&self, pc: &PowerConfig) -> Option<f32> {
+        let f = &pc.economy_generated;
+        let v = match self.val {
+            Some(val) => {
+                let n = self.world.data.resources.len();
+                let mut delta = vec![0.0f32; n];
+                for (id, amount) in &f.resources {
+                    if let Some(i) = self.world.data.resource_index(id).filter(|&i| i < n) {
+                        delta[i] = *amount;
+                    }
+                }
+                val.econ_value(&delta, &val.income)
+            }
+            None => 0.0,
+        };
+        let v = f64::from(v) * f64::from(f.multiplier);
+        (v >= f64::from(f.minimum)).then_some(v as f32)
+    }
+
+    /// `4AD2B0`: the base plus every factor (stored binary32 after each);
+    /// 0 when a factor fails or the total is below the minimum; then the
+    /// fuzzy factor times an SAI unit draw.
+    fn priority(&mut self, op: &SpecialOp, pc: &PowerConfig, actor: Option<ActorId>, at: Vec2) -> f32 {
+        let area = op.area;
+        let mut total = pc.base;
+        let add = |total: &mut f32, v: Option<f32>| -> bool {
+            match v {
+                Some(v) => {
+                    *total = (f64::from(v) + f64::from(*total)) as f32;
+                    true
+                }
+                None => false,
+            }
+        };
+        if !add(&mut total, self.actors_factor(&pc.cv, pc, area, actor, at, true))
+            || !add(&mut total, self.actors_factor(&pc.actor_value, pc, area, actor, at, false))
+            // 4AB560 ActorEconomy: not loaded by 4AFD50, adds 0.
+            || !add(&mut total, self.enemy_influence(pc, at))
+            || !add(&mut total, self.influence_ratio(pc, at))
+            || !add(&mut total, self.time_since_explored(pc, at))
+            || !add(&mut total, self.economy_generated(pc))
+        {
+            return 0.0;
+        }
+        if total < pc.minimum {
+            return 0.0;
+        }
+        let u = unit(self.draw());
+        (u * f64::from(pc.fuzzy) + f64::from(total)) as f32
+    }
+
+    /// `4AD3F0` ON_ACTOR: the visible (virtual +58) live candidates of the
+    /// Location requirements; the best priority above zero.
+    fn on_actor(&mut self, op: &SpecialOp, pc: &PowerConfig) -> (f32, Option<Place>) {
+        let r = &pc.actor_requirements;
+        let mut best = 0.0f32;
+        let mut place = None;
+        for a in self.candidates(r.friendly, r.enemy, r.owned, Vec2::splat(-1.0), -1.0) {
+            if !crate::ai::view::knows(self.world, a, self.me) || !alive(self.world, OpTarget::Actor(a)) {
+                continue;
+            }
+            if !self.relation_ok(r, a) || !self.actor_ok(r, a) {
+                continue;
+            }
+            let at = self.world.actors[a as usize].pos.truncate();
+            let p = self.priority(op, pc, Some(a), at);
+            if best < p {
+                best = p;
+                place = Some(Place::Actor(a));
+            }
+        }
+        (best, place)
+    }
+
+    /// `4AD590` NEAR_ACTOR: around each visible live candidate,
+    /// num_candidates points in a direction of the `[B39AF8]` table (draw %
+    /// 2048) at a unit draw times the radius; for a summoning ability the
+    /// spot must be open (`554500` within twice the candidate's radius,
+    /// which may move it); inside the map; the best priority above zero.
+    fn near_actor(&mut self, op: &SpecialOp, pc: &PowerConfig) -> (f32, Option<Place>) {
+        let r = &pc.actor_requirements;
+        let mut best = 0.0f32;
+        let mut place = None;
+        let summon = op.summon().and_then(|s| self.world.data.find(&s.object));
+        let [width, height] = map_extent(self.world);
+        for a in self.candidates(r.friendly, r.enemy, r.owned, Vec2::splat(-1.0), -1.0) {
+            if !crate::ai::view::knows(self.world, a, self.me) || !alive(self.world, OpTarget::Actor(a)) {
+                continue;
+            }
+            if !self.relation_ok(r, a) || !self.actor_ok(r, a) {
+                continue;
+            }
+            let count = pc.candidates as f32;
+            if count <= 0.0 {
+                continue;
+            }
+            let origin = self.world.actors[a as usize].pos.truncate();
+            let actor_radius = self.world.data.def(self.world.actors[a as usize].def).blocking_size.map_or(0.0, |s| s[0]);
+            let mut i = 0i32;
+            while (i as f32) < count {
+                i += 1;
+                let [dx, dy] = aa_movement::formation::random_direction(self.draw());
+                let distance = unit(self.draw()) * f64::from(pc.radius);
+                let y_offset = (f64::from(dy) * distance) as f32;
+                let mut at = Vec2::new((distance * f64::from(dx) + f64::from(origin.x)) as f32, (f64::from(y_offset) + f64::from(origin.y)) as f32);
+                if let Some(def) = summon
+                    && !open_position_within(self.world, def, &mut at, actor_radius + actor_radius)
+                {
+                    continue;
+                }
+                if !(at.x >= 0.0 && at.x < width && at.y >= 0.0 && at.y < height) {
+                    continue;
+                }
+                let p = self.priority(op, pc, None, at);
+                if best < p {
+                    best = p;
+                    place = Some(Place::Point(at));
+                }
+            }
+        }
+        (best, place)
+    }
+
+    /// `4AD8C0` FOG: the centre of every region of the primary island; the
+    /// best priority above zero.
+    fn fog(&mut self, op: &SpecialOp, pc: &PowerConfig) -> (f32, Option<Place>) {
+        let world = self.world;
+        let Some(regions) = world.ai.regions.as_ref() else { return (0.0, None) };
+        let Some(primary) = regions.primary else { return (0.0, None) };
+        let centers: Vec<Vec2> = (0..regions.len()).filter(|&r| regions.island[r] == primary).map(|r| regions.centers[r]).collect();
+        let mut best = 0.0f32;
+        let mut place = None;
+        for at in centers {
+            let p = self.priority(op, pc, None, at);
+            if best < p {
+                best = p;
+                place = Some(Place::Point(at));
+            }
+        }
+        (best, place)
+    }
+
+    /// `4AE190`.
+    fn locate(&mut self, op: &SpecialOp, pc: &PowerConfig) -> (f32, Option<Place>) {
+        match pc.location {
+            1 => self.near_actor(op, pc),
+            2 => self.on_actor(op, pc),
+            3 => self.fog(op, pc),
+            _ => (0.0, None),
+        }
+    }
 }
 
-/// `7C42F0`: order the powers by drawing "ping-pong balls" weighted by the
-/// squared base priority.
-fn ping_pong(world: &mut World, list: &mut [(usize, PowerConfig)]) {
+/// A factor's maximum (when not negative and not above the value) and
+/// minimum (None below it).
+fn bounded(f: &Factor, mut v: f64) -> Option<f64> {
+    if f.maximum >= 0.0 && f64::from(f.maximum) <= v {
+        v = f64::from(f.maximum);
+    }
+    (v >= f64::from(f.minimum)).then_some(v)
+}
+
+/// Engaged: the actor attacks (actor +100 bit 4, +118), or its regiment is
+/// engaging or engaged.
+fn engaged(world: &World, a: ActorId) -> bool {
+    if let Some(o) = world.actors[a as usize].org
+        && let Some(s) = world.combat.org(o)
+        && (s.engaging() || !s.engaged_by.is_empty())
+    {
+        return true;
+    }
+    world.actors[a as usize].combat.target.is_some()
+}
+
+/// `4D0230(1)`: a body's health over its maximum (extended).
+fn health_ratio(world: &World, a: ActorId) -> f64 {
+    let x = &world.actors[a as usize];
+    let max = world.combat.actor(a).map(|c| c.max_health).filter(|&m| m > 0.0).unwrap_or(world.data.def(x.def).health);
+    if max > 0.0 { f64::from(x.health) / f64::from(max) } else { 0.0 }
+}
+
+/// `7C42F0` from index 0: weights base² (binary32), their binary32 sum;
+/// for each place a unit SAI draw times the sum (binary64) walks the
+/// weights from it while each is below the rest, the found power swaps
+/// in, the sum loses its weight.
+fn ping_pong(list: &mut [(usize, PowerConfig)], rng: &mut SaiRng) {
     let n = list.len();
     if n < 2 {
         return;
     }
-    let mut weights: Vec<f32> = list.iter().map(|(_, p)| p.base * p.base).collect();
-    let mut total: f32 = weights.iter().sum();
+    let mut weights: Vec<f32> = Vec::with_capacity(n);
+    let mut total = 0.0f32;
+    for (_, p) in list.iter() {
+        let w = p.base * p.base;
+        weights.push(w);
+        total += w;
+    }
     for start in 0..n {
-        let mut r = world.random() * total;
+        let mut r = unit(rng.next_u32()) * f64::from(total);
         let mut j = start;
-        while j + 1 < n && weights[j] < r {
-            r -= weights[j];
-            j += 1;
+        if f64::from(weights[start]) < r {
+            loop {
+                r -= f64::from(weights[j]);
+                if j + 1 >= n {
+                    break;
+                }
+                j += 1;
+                if f64::from(weights[j]) >= r {
+                    break;
+                }
+            }
+            if j != start {
+                list.swap(start, j);
+                weights.swap(start, j);
+            }
         }
-        list.swap(start, j);
-        weights.swap(start, j);
         total -= weights[start];
     }
 }
 
 pub fn think(world: &mut World) {
     let (Some(data), Some(ai)) = (world.special_ops.data.clone(), world.ai.data.clone()) else { return };
-    let players: Vec<(KingdomId, usize, u32)> = world.ai.players.iter().map(|p| (p.kingdom, p.ego, p.ge_count)).collect();
-    for (kingdom, ego, ge) in players {
+    let players: Vec<(usize, KingdomId, usize, u32)> = world.ai.players.iter().enumerate().map(|(i, p)| (i, p.kingdom, p.ego, p.ge_count)).collect();
+    let now = world.time;
+    for (pi, kingdom, ego, ge) in players {
         let i = kingdom as usize;
         if world.special_ops.sai.seen.len() <= i {
             world.special_ops.sai.seen.resize(i + 1, 0);
@@ -265,7 +475,8 @@ pub fn think(world: &mut World) {
         if world.kingdoms.iter().find(|k| k.id == kingdom).is_none_or(|k| k.defeated) {
             continue;
         }
-        let Some(gi) = world.special_ops.commanders.get(i).and_then(|c| c.general) else { continue };
+        let Some(c) = world.special_ops.commanders.get(i) else { continue };
+        let (Some(gi), balance) = (c.general, c.experience) else { continue };
         let Some(ego) = ai.egos.get(ego) else { continue };
         let powers = data.powers(&ego.ids);
         // 7C40C0: the commander's abilities the ego configures.
@@ -275,16 +486,75 @@ pub fn think(world: &mut World) {
             .enumerate()
             .filter_map(|(a, op)| powers.iter().find(|p| p.ability.eq_ignore_ascii_case(&op.id)).map(|p| (a, p.clone())))
             .collect();
-        ping_pong(world, &mut list);
-        for (a, pc) in list {
-            if !view(world, kingdom, a).is_some_and(|v| v.usable) {
-                continue;
-            }
-            let op = data.generals[gi].abilities[a].clone();
-            if let Some((_, target)) = best(world, kingdom, a, &op, &pc) {
-                world.apply(Command::UseAbility { kingdom, ability: a as u32, target: Some(target) });
+        if list.is_empty() {
+            continue;
+        }
+        let mut rng = world.ai.rng.unwrap_or_else(|| SaiRng::from_seed(world.ai.seed));
+        ping_pong(&mut list, &mut rng);
+        let orders = decide(world, pi, kingdom, ego, &data.generals[gi], &list, balance, &mut rng);
+        world.ai.rng = Some(rng);
+        // 7C3C10: order each flagged power, then its Followup flare.
+        for (a, place, pc) in orders {
+            let (target, at) = match place {
+                Place::Actor(x) => {
+                    if !world.actors.get(x as usize).is_some_and(|y| !y.removed) {
+                        continue;
+                    }
+                    if !world.actors[x as usize].alive {
+                        continue;
+                    }
+                    (AbilityTarget::Actor(x), world.actors[x as usize].pos.truncate())
+                }
+                Place::Point(p) => (AbilityTarget::Point(p), p),
+            };
+            if super::use_from_sai(world, kingdom, a, target) {
                 world.special_ops.sai.uses += 1;
+            }
+            if pc.flare_priority != 0.0
+                && pc.flare_duration > 0.0
+                && let Some(r) = world.ai.regions.as_ref().map(|r| r.region_at(at))
+            {
+                world.ai.players[pi].flares.push((crate::ai::goals::Key::Attack(r), pc.flare_priority, now + pc.flare_duration));
             }
         }
     }
+}
+
+/// `7C3A60`: in order, while the experience left covers each power's cost,
+/// its location; the flagged powers with their places.
+#[allow(clippy::too_many_arguments)]
+fn decide(world: &World, pi: usize, me: KingdomId, ego: &crate::ai::data::Ego, general: &General, list: &[(usize, PowerConfig)], balance: f32, rng: &mut SaiRng) -> Vec<(usize, Place, PowerConfig)> {
+    let player = &world.ai.players[pi];
+    let view;
+    let census;
+    let ctx;
+    let val;
+    let valuation = match (world.ai.regions.as_ref(), crate::ai::view::kingdom_index(world, me)) {
+        (Some(regions), Some(index)) => {
+            view = crate::ai::view::View::build(world, &world.ai.bound, index);
+            ctx = crate::ai::goals::Ctx { view: &view, bound: &world.ai.bound, ego, regions, inf: &world.ai.influence, now: world.time };
+            census = crate::ai::value::Census::build(&ctx);
+            val = Val::new(&ctx, &census);
+            Some(&val)
+        }
+        _ => None,
+    };
+    let mut eval = Eval { world, me, player, val: valuation, rng };
+    let mut left = balance;
+    let mut out = Vec::new();
+    for (a, pc) in list {
+        let op = &general.abilities[*a];
+        // 4CDD40: the integer cost as a float.
+        if left < op.cost {
+            break;
+        }
+        left -= op.cost;
+        let (best, place) = eval.locate(op, pc);
+        if best > 0.0
+            && let Some(place) = place
+        {
+            out.push((*a, place, pc.clone()));
+        }
+    }
+    out
 }

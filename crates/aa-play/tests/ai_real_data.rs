@@ -178,6 +178,7 @@ fn computer_builds_recruits_and_attacks_on_berlin() {
     let minutes = std::env::var("AA_AI_MINUTES").ok().and_then(|v| v.parse().ok()).unwrap_or(15);
     let w = play(Some("rommel_sai"), 1, minutes);
     timeline(&w);
+    assert!(w.ai.regions.as_ref().is_some_and(|r| r.exact && r.primary.is_some()), "the SAI map is not the 7ACB00 analysis");
     let p = &w.ai.players[0];
     for o in w.orgs.iter().filter(|o| o.alive && o.kingdom == 1) {
         let lead = o.members.iter().find(|&&m| w.actors[m as usize].alive).map(|&m| &w.actors[m as usize]);
@@ -299,6 +300,9 @@ fn computer_plays_a_generated_map() {
     w.ai.logging = true;
     for tick in 0..(minutes as u64 * 60 * aa_play::TICKS_PER_SECOND as u64) {
         w.step(Vec::new());
+        if tick == 16 {
+            assert!(w.ai.regions.as_ref().is_some_and(|r| r.exact && r.primary.is_some()), "the SAI map is not the 7ACB00 analysis");
+        }
         for e in &w.events {
             if let aa_play::Event::Refused { kingdom: 1, reason } = e {
                 eprintln!("t={:>6.1}s refused: {reason}", w.time);
@@ -464,7 +468,7 @@ fn measure(mut w: World, minutes: u32) {
         }
         let early_goal = l.text.starts_with("  goal") && (window.is_some_and(|(a, b)| l.time >= a && l.time <= b) || (l.time < 130.0 && (l.text.contains("Recruit") || l.text.contains("Unpack") || l.text.contains("Research"))));
         let sends = std::env::var_os("AA_AI_SENDS").is_some() && l.text.starts_with("send Move");
-        if sends || early_goal || ["recruit", "deploy", "research", "attack", "ego", "retreat", "explore", "halt"].iter().any(|k| l.text.starts_with(k)) {
+        if sends || early_goal || ["recruit", "deploy", "research", "attack", "ego", "retreat", "explore", "halt", "bombard", "air attack", "  bombard pool"].iter().any(|k| l.text.starts_with(k)) {
             eprintln!("{:>6.1}s {}", l.time, l.text);
         }
     }
@@ -514,6 +518,88 @@ fn chuikov_southern_europe_timeline() {
     ai::set_profile(&mut w, 1, "chuikov_sai");
     w.ai.logging = true;
     measure(w, minutes);
+}
+
+/// The first goal-engine think of Chuikov on a Southern Europe map: the
+/// recruit goals of the original's goal log (7CFEA0: Infantry Division HQ, Oil
+/// Depot Truck, Ammo Depot Truck; max_goals_per_think 3), their values within
+/// what the map's income changes.
+#[test]
+#[ignore]
+fn chuikov_first_think_recruit_goals_are_the_originals() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, 1)).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed: 1,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    w.ai.logging = true;
+    for _ in 0..8 {
+        w.step(Vec::new());
+    }
+    let raw = |id: &str| -> Option<f32> {
+        w.ai.log.iter().find(|l| l.text.starts_with(&format!("  goal Recruit {id} "))).and_then(|l| l.text.split(" raw ").nth(1)?.split(' ').next()?.parse().ok())
+    };
+    let recruits = w.ai.log.iter().filter(|l| l.text.starts_with("  goal Recruit")).count();
+    assert_eq!(recruits, 3, "{:#?}", w.ai.log);
+    for (id, original) in [("regiment_rus_hq_infantry", 1070.7), ("rus_truck_oil", 304.5), ("rus_truck_ammo", 266.0)] {
+        let v = raw(id).unwrap_or_else(|| panic!("no goal for {id}: {:#?}", w.ai.log));
+        assert!((v - original).abs() < original * 0.2, "{id}: {v} against {original}");
+    }
+}
+
+/// Probe (ignored): the Chuikov comparison map with two halftrack artillery
+/// regiments given to the computer at 20 s: its BOMBARD goals (7C8750 /
+/// 7C6500) and the bombard orders they give.
+#[test]
+#[ignore]
+fn probe_bombard_with_artillery() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let rmg = RandomMapData::load(&root()).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, 1)).expect("generate");
+    let setup = SkirmishSetup {
+        map_id: "generated".into(),
+        players: vec![
+            PlayerSetup { name: "Player".into(), nation: "jpn".into(), team: 0, color: [0, 76, 255], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "Computer".into(), nation: "rus".into(), team: 1, color: [217, 0, 25], controller: Controller::Computer(1), start: 1 },
+        ],
+        starting_resources: None,
+        seed: 1,
+    };
+    let mut w = World::new_skirmish(data(), Arc::new(generated.map), &setup).expect("new_skirmish");
+    ai::attach(&mut w, sai());
+    ai::set_profile(&mut w, 1, "chuikov_sai");
+    w.ai.logging = true;
+    let def = w.data.find("regiment_rus_halftrack_artillery").expect("halftrack artillery");
+    let mut given = Vec::new();
+    for tick in 0..(150 * aa_play::TICKS_PER_SECOND as u64) {
+        if tick == 20 * aa_play::TICKS_PER_SECOND as u64 {
+            let corps = w.actors.iter().find(|a| a.alive && a.kingdom == Some(1) && w.data.def(a.def).id.ends_with("_corps")).map(|a| a.pos.truncate()).expect("corps");
+            for i in 0..2 {
+                given.push(aa_play::production::spawn_organization(&mut w, def, 1, corps + glam::Vec2::new(30.0 + 12.0 * i as f32, 20.0), 0.0, None));
+            }
+        }
+        w.step(Vec::<Command>::new());
+    }
+    for &o in &given {
+        let org = &w.orgs[o as usize];
+        let members: Vec<(String, bool)> = org.members.iter().map(|&m| (w.data.def(w.actors[m as usize].def).id.clone(), aa_play::combat::tasks::can_bombard(&w, m))).collect();
+        eprintln!("org {o}: alive {} members {members:?} task {:?}", org.alive, w.combat.org(o).and_then(|s| s.task.clone()));
+    }
+    for l in w.ai.log.iter().filter(|l| l.text.contains("ombard") || l.text.contains("air attack")) {
+        eprintln!("{:>6.1}s {}", l.time, l.text);
+    }
 }
 
 /// Rommel (Normal) on (2v2)Berlin against an idle human: the deploy

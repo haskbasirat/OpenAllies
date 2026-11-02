@@ -16,7 +16,43 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 const PC: Precision = Precision::Double53;
-const CACHE_VERSION: &str = "aa-play-sai-v3";
+const CACHE_VERSION: &str = "aa-play-sai-v4";
+
+/// `499940` component types (`[list ComponentValue]` component_IDS), in the
+/// order of the definition +174 component mask (`Def::components` bits).
+pub const COMPONENT_TYPES: [&str; 31] = [
+    "BODY",
+    "PROJECTILE",
+    "CHARACTER",
+    "MOVER",
+    "MIND",
+    "PERFORMER",
+    "PROPERTIES",
+    "ORGANIZATION",
+    "ELEMENT",
+    "ECONOMY",
+    "DENIZEN",
+    "SUPPLY",
+    "WALL",
+    "STRUCTURE",
+    "SETTLEMENT",
+    "CONSTRUCTION",
+    "RECRUIT",
+    "EXPERIENCE",
+    "BUILDER",
+    "MOBILE_DEPLOYMENT",
+    "DEFENDER",
+    "RESEARCH",
+    "DETECTION",
+    "AIRCRAFT",
+    "TRANSPORT",
+    "LAIR",
+    "FLARE",
+    "METAGAME",
+    "PORTAL",
+    "CITY",
+    "HQ",
+];
 
 /// `tables::GOAL_TYPES` order of the native `7BDB70` enum.
 pub const GOAL_TYPES: [&str; 23] = [
@@ -46,11 +82,13 @@ pub const GOAL_TYPES: [&str; 23] = [
 ];
 pub const ATTACK_REGION: usize = 0;
 pub const DEFEND_REGION: usize = 2;
+pub const AIR_ATTACK: usize = 4;
 pub const RECOVER: usize = 5;
 pub const EXPLORE: usize = 7;
 pub const UNPACK: usize = 11;
 pub const RECRUIT: usize = 12;
 pub const RESEARCH: usize = 19;
+pub const BOMBARD: usize = 20;
 pub const ATTACH: usize = 22;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -279,6 +317,12 @@ pub struct Flares {
     pub defend_new_structure_priority: f32,
     pub defend_captured_structure_duration: f32,
     pub defend_captured_structure_priority: f32,
+    /// +8F0/+8F4 and +900/+904: the variants of `7B2350` / `7B21C0` for a
+    /// building that is the centre of its parent settlement (not played).
+    pub defend_new_settlement_duration: f32,
+    pub defend_new_settlement_priority: f32,
+    pub defend_captured_settlement_duration: f32,
+    pub defend_captured_settlement_priority: f32,
 }
 
 /// `[ReactiveAI]` (ego +894..+8BC, think `7B8AC0`).
@@ -300,6 +344,25 @@ pub struct Reactive {
     pub min_attack_advantage: f32,
     pub max_attack_advantage: f32,
     pub threatened_region_influence_ratio: f32,
+}
+
+/// `[Combat/AirAttacks]` (ego +420..+450, read by the AIR_ATTACK base
+/// priority `7C7E90` and its actor priority `7C55B0`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AirAttacks {
+    pub engaged_bonus: f32,
+    pub target_damage_floor: f32,
+    pub target_damage_ceiling: f32,
+    pub target_damage_bonus: f32,
+    pub support_ground_attack_bonus: f32,
+    pub no_bonus_penalty: f32,
+    pub absolute_min_health: f32,
+    pub absolute_min_health_engaged_mult: f32,
+    pub absolute_min_health_unengaged_mult: f32,
+    pub extra_planes_multiplier_max: f32,
+    pub extra_planes_multiplier_per_plane: f32,
+    pub resupplying_mult: f32,
+    pub min_time_between_attacks: f32,
 }
 
 /// One `[Ego]` (native `KKC_SAIEgo`, loader `4B0560`).
@@ -374,6 +437,16 @@ pub struct Ego {
     /// `[Attach]` (ego +7A4, +7A8).
     pub attach_when_engaged: bool,
     pub attach_cv_multiplier: f32,
+    /// `ActorValue/[list ComponentValue]` (ego +2C0/+2C4, loader `4AAD80`)
+    /// by `COMPONENT_TYPES` index: (value, new_construction_only); missing
+    /// entries are the `4A6C40` growth default (0, true).
+    pub component_values: Vec<(f32, bool)>,
+    /// `[Combat/AirAttacks]`.
+    pub air: AirAttacks,
+    /// `[Combat/Bombardement]` unengaged_target_multiplier (+454) and
+    /// balancing_constant (+458).
+    pub bombard_unengaged_target_multiplier: f32,
+    pub bombard_balancing_constant: f32,
 }
 
 impl Ego {
@@ -383,6 +456,23 @@ impl Ego {
     }
     pub fn goal(&self, kind: usize) -> GoalPriority {
         self.goal_priorities.get(kind).cloned().unwrap_or_default()
+    }
+    /// The ComponentValue term of `4AC240`: every component type the
+    /// definition has (+174 bits 0..30) adds its value, except an entry
+    /// marked new_construction_only when a standing actor is valued.
+    pub fn component_value(&self, components: u32, actor: bool) -> f32 {
+        let mut sum = 0.0;
+        for bit in 0..31usize {
+            if components & (1 << bit) == 0 {
+                continue;
+            }
+            if let Some(&(value, new_only)) = self.component_values.get(bit)
+                && !(actor && new_only)
+            {
+                sum += value;
+            }
+        }
+        sum
     }
 }
 
@@ -737,6 +827,18 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
     ego.military_value_scaling_mult = av.f("military_value_scaling_mult")?;
     ego.distance_mult_min = av.f("distance_mult_min")?;
     ego.distance_mult_max = av.f("distance_mult_max")?;
+    // 4AAD80: one ComponentValue per component type (later entries replace
+    // earlier ones); 4A6C40 grows the table with {0, 1}.
+    for cv in av.children("ComponentValue")? {
+        let Some(name) = cv.s("component_IDS")? else { continue };
+        let Some(t) = COMPONENT_TYPES.iter().position(|c| c.eq_ignore_ascii_case(&name)) else {
+            return Err(anyhow!("{}: component type ({name}) not found", cv.path));
+        };
+        while ego.component_values.len() <= t {
+            ego.component_values.push((0.0, true));
+        }
+        ego.component_values[t] = (cv.f("value")?, cv.b("new_construction_only")?);
+    }
     ego.offensive = load_curve(&ge.child("OffensiveCV")?, true)?;
     ego.defensive = load_curve(&ge.child("DefensiveCV")?, false)?;
     let tt = ge.child("TravelTime")?;
@@ -781,6 +883,25 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
     ego.congruency_min_multiplier = combat.f("congruency_min_multiplier")?;
     ego.congruency_power = combat.f("congruency_power")?;
     ego.penalty_to_builder_cv = combat.f("penalty_to_builder_cv")?;
+    let aa = combat.child("AirAttacks")?;
+    ego.air = AirAttacks {
+        engaged_bonus: aa.f("engaged_bonus")?,
+        target_damage_floor: aa.f("target_damage_floor")?,
+        target_damage_ceiling: aa.f("target_damage_ceiling")?,
+        target_damage_bonus: aa.f("target_damage_bonus")?,
+        support_ground_attack_bonus: aa.f("support_ground_attack_bonus")?,
+        no_bonus_penalty: aa.f("no_bonus_penalty")?,
+        absolute_min_health: aa.f("absolute_min_health")?,
+        absolute_min_health_engaged_mult: aa.f("absolute_min_health_engaged_mult")?,
+        absolute_min_health_unengaged_mult: aa.f("absolute_min_health_unengaged_mult")?,
+        extra_planes_multiplier_max: aa.f("extra_planes_multiplier_max")?,
+        extra_planes_multiplier_per_plane: aa.f("extra_planes_multiplier_per_plane")?,
+        resupplying_mult: aa.f("resupplying_mult")?,
+        min_time_between_attacks: aa.f("min_time_between_attacks")?,
+    };
+    let bb = combat.child("Bombardement")?;
+    ego.bombard_unengaged_target_multiplier = bb.f("unengaged_target_multiplier")?;
+    ego.bombard_balancing_constant = bb.f("balancing_constant")?;
     let ex = ge.child("Exploration")?;
     ego.kingdom_center_min_time_owned = ex.f("kingdom_center_min_time_owned")?;
     ego.exploration = [
@@ -861,6 +982,10 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
         defend_new_structure_priority: fl.f("defend_new_structure_flare_priority")?,
         defend_captured_structure_duration: fl.f("defend_captured_structure_flare_duration")?,
         defend_captured_structure_priority: fl.f("defend_captured_structure_flare_priority")?,
+        defend_new_settlement_duration: fl.f("defend_new_settlement_flare_duration")?,
+        defend_new_settlement_priority: fl.f("defend_new_settlement_flare_priority")?,
+        defend_captured_settlement_duration: fl.f("defend_captured_settlement_flare_duration")?,
+        defend_captured_settlement_priority: fl.f("defend_captured_settlement_flare_priority")?,
     };
     let research = ge.child("Research")?;
     ego.research_base_priority = research.f("base_priority")?;

@@ -271,6 +271,9 @@ impl<'a, 'b, 'w> Val<'a, 'b, 'w> {
                 v = unpacked;
             }
         }
+        // 4AC240: the ego ComponentValue of every component type the
+        // definition has (+174 bits 0..30, ego +2C0/+2C4).
+        v += self.c.ego.component_value(def.components, false);
         if military && def.class != Some(DefClass::Organization) {
             v += self.c.ego.military_value_scaling_mult * self.c.ego.military_cv_mult * self.c.cv(d);
         }
@@ -298,6 +301,9 @@ impl<'a, 'b, 'w> Val<'a, 'b, 'w> {
         let delta = self.vector(d);
         let without: Vec<f32> = income.iter().zip(delta.iter().chain(std::iter::repeat(&0.0))).map(|(i, x)| i - x).collect();
         let mut v = self.econ_value(&delta, &without);
+        // 4AC240 with an actor: the ComponentValues not marked
+        // new_construction_only.
+        v += self.c.ego.component_value(self.c.def(d).components, true);
         if mobile {
             v += self.c.ego.military_value_scaling_mult * self.c.ego.military_cv_mult * cv;
         }

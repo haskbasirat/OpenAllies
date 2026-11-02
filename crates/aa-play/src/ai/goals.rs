@@ -16,6 +16,8 @@
 //! - DEFEND_REGION: `7C5F80` -> `7BD360` region threat;
 //! - ATTACK_REGION: `7C5AE0` -> `7C6BB0`/`7BCCB0` juiciest target value;
 //! - EXPLORE: `7C29F0` (deep and close exploration goals);
+//! - BOMBARD: one per foreign structure (`7A83A0`), `7C8750` base,
+//!   `7C6500` actor value, `7C8340`/`7C84F0` orders;
 //! - military priority with actors `7A3B00` -> `7C9080` -> `7ACF90` CV curve
 //!   (`7C6A70` target/maximum CV, linked goals), ActorPreference modifiers
 //!   and the travel weight `4A7130`.
@@ -26,7 +28,7 @@ use super::view::{View, has};
 use super::{Bound, Player, SaiRng, enqueue};
 use crate::data::{DefClass, DefId};
 use crate::map::{BLOCKED, NOT_LAND_PASSABLE};
-use crate::world::{ActorId, Command, Order, OrgId, Unit};
+use crate::world::{AbilityTarget, ActorId, Command, Order, OrgId, Unit};
 use glam::Vec2;
 use std::collections::{BTreeMap, HashMap};
 
@@ -42,6 +44,10 @@ pub enum Key {
     /// Researching building and the technology's index in its list.
     Research(ActorId, u32),
     Attach(OrgId),
+    /// BOMBARD of a target actor (goal `+3C`).
+    Bombard(ActorId),
+    /// AIR_ATTACK on a target actor (goal `+3C`).
+    AirAttack(ActorId),
 }
 
 #[derive(Clone, Debug)]
@@ -63,9 +69,6 @@ pub struct UnpackMemo {
     /// Battle time the Deploy command left the send queue (0 = not yet).
     pub sent_at: f32,
     pub bad: Vec<u32>,
-    /// Battle time of the last immediate replan after a refused deploy
-    /// (0 = none).
-    pub replanned_at: f32,
 }
 
 /// What the goal engine keeps between thinks.
@@ -83,6 +86,9 @@ pub struct Memory {
     pub deployed: Vec<(f32, DefId)>,
     /// Attack orders given: (time, region, organizations).
     pub attacks: Vec<(f32, u32, usize)>,
+    /// AIR_ATTACK goal `+40`: the battle time each target was last air
+    /// attacked.
+    pub air_attacked: BTreeMap<ActorId, f32>,
 }
 
 pub(crate) struct Ctx<'a, 'w> {
@@ -248,6 +254,8 @@ pub struct Goal {
     /// RESEARCH: building and technology property; ATTACH: organization and HQ.
     pub research: Option<(ActorId, String)>,
     pub attach: Option<(OrgId, ActorId)>,
+    /// AIR_ATTACK: the airfield assigned to it.
+    pub airfield: Option<ActorId>,
     // assignment state
     pub actors: Vec<usize>,
     pub sum_cv: f32,
@@ -281,6 +289,7 @@ impl Goal {
             explore: None,
             research: None,
             attach: None,
+            airfield: None,
             actors: Vec::new(),
             sum_cv: 0.0,
             sum_travel: 0.0,
@@ -307,6 +316,7 @@ pub fn think(
     rng: &mut SaiRng,
     log: &mut Vec<String>,
     logging: bool,
+    air_orders: bool,
 ) {
     select_ego(view, data, player, rng, log);
     let ego = &data.egos[player.ego];
@@ -319,7 +329,9 @@ pub fn think(
     unpack_goals(&c, player, rng, reach, &mut goals);
     recover_goals(&c, &mut goals);
     defend_goals(&c, &val, &mut goals);
-    attack_goals(&c, &val, player, &mut goals);
+    attack_goals(&c, &val, &mut goals);
+    bombard_goals(&c, &val, player, &mut goals);
+    air_attack_goals(&c, &val, player, &mut goals);
     apply_flares(&c, player, &mut goals);
     explore_goals(&c, player, &mut goals);
     recruit_goals(&c, &val, data, rng, &mut goals);
@@ -330,8 +342,12 @@ pub fn think(
     }
     // 7A93B0: candidates sorted by base priority (comparator 7A30B0).
     goals.sort_by(|a, b| b.base.partial_cmp(&a.base).unwrap_or(std::cmp::Ordering::Equal));
-    select(&c, player, rng, &mut goals);
+    select(&c, player, rng, &mut goals, air_orders);
     if logging {
+        let bombarders: Vec<String> = c.view.orgs.iter().filter(|o| o.owner == c.view.me && bombards(&c, o)).map(|o| c.def(o.def).id.clone()).collect();
+        if !bombarders.is_empty() {
+            log.push(format!("  bombard pool {bombarders:?}"));
+        }
         let mut shown = 0;
         for g in goals.iter().filter(|g| g.base > 0.0) {
             let other = matches!(g.key, Key::Attack(_) | Key::Defend(_));
@@ -397,10 +413,8 @@ fn select_ego(view: &View<'_>, data: &AiData, player: &mut Player, rng: &mut Sai
     player.ego = chosen;
 }
 
-/// Seen records: hostile static actors within sight of the player's actors
-/// become known; regions in sight are scouted now.
+/// Regions within sight of the player's actors are scouted now.
 fn update_knowledge(c: &Ctx<'_, '_>, player: &mut Player) {
-    let w = c.view.world;
     if player.scouted.len() != c.regions.len() {
         player.scouted = vec![f32::NEG_INFINITY; c.regions.len()];
     }
@@ -417,20 +431,18 @@ fn update_knowledge(c: &Ctx<'_, '_>, player: &mut Player) {
             }
         }
     }
-    for b in &c.view.buildings {
-        if b.owner == Some(c.view.me) {
-            continue;
-        }
-        if eyes.iter().any(|&(p, r)| p.distance(b.pos) <= r + b.radius) {
-            player.known.insert(b.id);
-        }
-    }
-    player.known.retain(|&id| w.actor(id).is_some_and(|a| a.alive));
 }
 
 /// Internal flares (`[InternalFlares]`, ego +8C0..+908): a structure that
-/// loses health is defended (`defend_attacked_target_flare_*`), one taken by
-/// the enemy is counter-attacked (`counter_attack_captured_actor_flare_*`).
+/// loses health is defended (`7B1ED0`, `defend_attacked_target_flare_*`),
+/// one taken by the enemy is counter-attacked (`7B2050`,
+/// `counter_attack_captured_actor_flare_*`), one the player takes is
+/// defended (`7B21C0`: `defend_captured_structure_flare_*`; a building that
+/// belongs to a settlement, virtual +100, gets none unless it is its centre,
+/// and then `defend_captured_settlement_flare_*`, which aa-play does not
+/// tell apart: the goal CSV shows +500 for 180 s on a captured city). The
+/// original makes them at the events (`4D3990`, `4D5230`); here each
+/// goal-engine think compares.
 fn update_flares(c: &Ctx<'_, '_>, player: &mut Player) {
     let f = &c.ego.flares;
     player.flares.retain(|(_, _, until)| *until > c.now);
@@ -440,29 +452,44 @@ fn update_flares(c: &Ctx<'_, '_>, player: &mut Player) {
         if player.structure_health.get(&b.id).is_some_and(|&h| a.health < h - 1e-3) {
             player.flares.push((Key::Defend(c.region_of(b.pos)), f.defend_attacked_target_priority, c.now + f.defend_attacked_target_duration));
         }
+        if player.foreign.contains(&b.id) && admitted(c.def(b.def)) {
+            player.flares.push((Key::Defend(c.region_of(b.pos)), f.defend_captured_structure_priority, c.now + f.defend_captured_structure_duration));
+        }
         health.insert(b.id, a.health);
     }
+    player.foreign = c.view.buildings.iter().filter(|b| b.owner.is_some_and(|o| o != c.view.me)).map(|b| b.id).collect();
     for &id in player.structure_health.keys() {
         let a = &c.view.world.actors[id as usize];
-        if a.alive && !a.removed && a.kingdom.is_some_and(|k| k != c.view.kingdom) {
+        if a.alive && !a.removed && a.kingdom.is_some_and(|k| k != c.view.kingdom) && admitted(c.def(a.def)) {
             player.flares.push((Key::Attack(c.region_of(a.pos.truncate())), f.counter_attack_captured_actor_priority, c.now + f.counter_attack_captured_actor_duration));
         }
     }
     player.structure_health = health;
 }
 
-/// A flare adds its priority to its goal and the goals linked to it.
+/// Flares are general-power instances of the player (`7B0610`), scanned by
+/// the class base priorities (`7C5AE0` / `7C5F80`): an ATTACK_REGION goal
+/// counts the attack flares within `linked_region_distance` route hops of
+/// its region (`572810`), a DEFEND_REGION goal the defend flares in its
+/// region (`572940`); of the non-additive ones only the largest bonus is
+/// added.
 fn apply_flares(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal]) {
     let reach = c.ego.linked_region_distance.max(0) as u32;
-    for (key, priority, _) in &player.flares {
-        let (kind, region) = match *key {
-            Key::Defend(r) => (data::DEFEND_REGION, r),
-            Key::Attack(r) => (data::ATTACK_REGION, r),
-            _ => continue,
-        };
-        for g in goals.iter_mut().filter(|g| g.kind == kind && c.regions.hops(g.region, region) <= reach) {
-            g.raw += priority;
+    for g in goals.iter_mut() {
+        let mut max = 0.0f32;
+        for (key, priority, _) in &player.flares {
+            let matched = match *key {
+                Key::Defend(r) => g.kind == data::DEFEND_REGION && g.region == r,
+                Key::Attack(r) => g.kind == data::ATTACK_REGION && c.regions.hops(g.region, r) <= reach,
+                _ => false,
+            };
+            // 571C60 / the largest-bonus update: a zero maximum or one
+            // below the bonus takes it.
+            if matched && (max == 0.0 || max < *priority) {
+                max = *priority;
+            }
         }
+        g.raw += max;
     }
 }
 
@@ -511,17 +538,20 @@ fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, from: Vec
     let radius = d.blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
     let pad = c.view.world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0);
     let center = c.regions.centers[region as usize];
-    let half = c.regions.size * 0.5;
-    let (rx, ry) = c.regions.coords(region);
-    let lo = Vec2::new(rx as f32, ry as f32) * c.regions.size;
+    // The region's extent: its rectangles' tile bounds.
+    let cell = c.regions.cell();
+    let span = c.regions.rects[region as usize]
+        .iter()
+        .map(|b| (Vec2::new(b[0] as f32 * cell, b[1] as f32 * cell).distance(center)).max(Vec2::new((b[2] + 1) as f32 * cell, (b[3] + 1) as f32 * cell).distance(center)))
+        .fold(c.regions.size * 0.5, f32::max);
     let step = (radius * 2.0 + pad).max(4.0);
-    let rings = (c.regions.size / step).ceil() as i32 + 1;
+    let rings = (span / step).ceil() as i32 + 1;
     for ring in 0..=rings {
         let count = if ring == 0 { 1 } else { 8 * ring };
         for k in 0..count {
             let a = k as f32 / count as f32 * std::f32::consts::TAU;
             let p = center + Vec2::new(a.cos(), a.sin()) * step * ring as f32;
-            if p.x < lo.x || p.y < lo.y || p.x > lo.x + 2.0 * half || p.y > lo.y + 2.0 * half {
+            if c.region_of(p) != region {
                 continue;
             }
             let corners = [Vec2::new(-radius, -radius), Vec2::new(radius, -radius), Vec2::new(-radius, radius), Vec2::new(radius, radius), Vec2::ZERO];
@@ -731,7 +761,7 @@ fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
 
 /// ATTACK_REGION goals (`7C5AE0`, value `7BCCB0`: the juiciest visible
 /// hostile static or mobile actor of the region, `7AD9E0`).
-fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: &mut Vec<Goal>) {
+fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
     let mut best: BTreeMap<u32, (f32, Vec2, Option<ActorId>)> = BTreeMap::new();
     let mut home_islands: Vec<u32> = c.view.orgs.iter().filter(|o| o.owner == c.view.me).map(|o| c.regions.island[c.region_of(o.pos) as usize]).collect();
     home_islands.extend(c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| c.regions.island[c.region_of(b.pos) as usize]));
@@ -743,8 +773,11 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: 
             *e = (v, p, a);
         }
     };
+    // 7BB5E0 over the region's static lists: the view holds exactly the
+    // static actors the player knows (visible, seen static map objects,
+    // remembered ones at their record position).
     for b in &c.view.buildings {
-        if b.owner == Some(c.view.me) || !player.known.contains(&b.id) || !attack_target(c, b) {
+        if b.owner == Some(c.view.me) || !attack_target(c, b) {
             continue;
         }
         let r = c.region_of(b.pos);
@@ -756,15 +789,23 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: 
         let owner = b.owner.map(|o| c.view.world.kingdoms[o].id);
         consider(r, val.actor_value(b.def, owner, b.cv, false, b.pos, true) + val.actor_priority(b.def, false), b.pos, Some(b.id));
     }
-    let mut eyes: Vec<(Vec2, f32)> = c.view.orgs.iter().filter(|o| o.owner == c.view.me).map(|o| (o.pos, o.sight)).collect();
-    for b in c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)) {
-        let d = c.def(b.def);
-        eyes.push((b.pos, d.sight_range.max(d.detection_range)));
-    }
-    for o in c.view.orgs.iter().filter(|o| c.view.hostile[o.owner] && o.cv > 0.0) {
-        if !eyes.iter().any(|&(p, s)| p.distance(o.pos) <= s) {
+    // 7BA1F0: the kingdom's records of hostile actors gone since (7AD2D0
+    // without an actor) keep the region a target without a target actor.
+    for g in &c.view.ghosts {
+        if !g.owner.is_some_and(|o| c.view.hostile[o]) || !admitted(c.def(g.def)) {
             continue;
         }
+        let r = c.region_of(g.pos);
+        if !reachable(r) {
+            continue;
+        }
+        let owner = g.owner.map(|o| c.view.world.kingdoms[o].id);
+        consider(r, val.actor_value(g.def, owner, 0.0, false, g.pos, true) + val.actor_priority(g.def, false), g.pos, None);
+    }
+    // 7BB5E0 over the mobile lists (79E380: visibility only; the view holds
+    // the visible hostile organizations; without fog everything is visible,
+    // 4EA1D0).
+    for o in c.view.orgs.iter().filter(|o| c.view.hostile[o.owner] && o.cv > 0.0) {
         let r = c.region_of(o.pos);
         if reachable(r) {
             let owner = Some(c.view.world.kingdoms[o.owner].id);
@@ -783,22 +824,197 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: 
     }
 }
 
+/// BOMBARD goals: the actor registration `7A83A0` gives the player one per
+/// foreign actor (class `A9ED50`, type 20, pool category 12: actors with a
+/// bombard ability). Base priority `7C8750`: 0 once the target is gone or
+/// invulnerable (`7C7930`, +8 bit 11), unless it is known (visible, +70,
+/// or the kingdom's record, `4EA430`), static (+8 bit 29) or under attack
+/// (`4CFE90`, its +118 attacker list), and hostile (player virtual +140);
+/// then the attack value `7AD9E0`, times the Bombardement
+/// unengaged_target_multiplier while neither the target region's
+/// ATTACK_REGION goal (region entry +2C) is selected (status 2) nor the
+/// target is under attack. The targets here: the hostile structures the view
+/// holds and the visible members of hostile organizations under attack. The
+/// goal's attack-flare scan (`572040` / `5720C0` on the target actor) is not
+/// played: flares here are by region.
+fn bombard_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: &mut Vec<Goal>) {
+    let w = c.view.world;
+    let attacked = |t: ActorId| w.combat.actor(t).is_some_and(|s| s.targeted);
+    let mut push = |t: ActorId, d: DefId, o: usize, cv: f32, mobile: bool, pos: Vec2| {
+        if c.def(d).invulnerable {
+            return;
+        }
+        let r = c.region_of(pos);
+        let mut p = val.actor_value(d, Some(w.kingdoms[o].id), cv, mobile, pos, true) + val.actor_priority(d, false);
+        if !player.memory.selected.contains_key(&Key::Attack(r)) && !attacked(t) {
+            p *= c.ego.bombard_unengaged_target_multiplier;
+        }
+        let mut g = Goal::new(Key::Bombard(t), data::BOMBARD, p, r, pos);
+        g.target_actor = Some(t);
+        goals.push(g);
+    };
+    for b in &c.view.buildings {
+        if let Some(o) = b.owner.filter(|&o| o != c.view.me && c.view.hostile[o]) {
+            push(b.id, b.def, o, b.cv, false, b.pos);
+        }
+    }
+    for ov in c.view.orgs.iter().filter(|o| c.view.hostile[o.owner]) {
+        for &m in &w.orgs[ov.id as usize].members {
+            if let Some(x) = w.actor(m).filter(|x| x.alive && !x.removed && attacked(x.id)) {
+                push(m, x.def, ov.owner, c.cv(x.def), true, x.pos.truncate());
+            }
+        }
+    }
+}
+
+/// AIR_ATTACK goals: with the SVar UseAirAttacks, `7A83A0` gives the player
+/// one per foreign actor (class `A9ECC8`, type 4, pool category 13: the
+/// air-attack denizens of its airfields, `7A1680`). Base priority `7C7E90`:
+/// 0 once the target is gone or invulnerable (`7C7930`), within
+/// min_time_between_attacks of the goal's last attack (+40), unless the
+/// target is known (visible or the kingdom's record) and hostile; then the
+/// attack value `7AD9E0`, times engaged_bonus while it is under attack
+/// (`4CFE90`), target_damage_bonus at a health between the damage floor and
+/// ceiling, absolute_min_health_engaged/unengaged_mult at or below
+/// absolute_min_health, and support_ground_attack_bonus while the region's
+/// ATTACK_REGION goal is selected (else no_bonus_penalty when no other
+/// factor applied). Targets here: the hostile structures and the members
+/// of the hostile organizations the view holds. Not played (see
+/// [`AiState::air_orders`](super::AiState)): resupplying_mult, the flare scan
+/// and `7C55B0`'s extra planes.
+fn air_attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, player: &Player, goals: &mut Vec<Goal>) {
+    let w = c.view.world;
+    if w.data.rule_ci("UseAirAttacks").unwrap_or(1.0) == 0.0 {
+        return;
+    }
+    let a = &c.ego.air;
+    let base = |t: ActorId, cv: f32, mobile: bool, pos: Vec2, owner: usize, health: f32| -> Option<(f32, u32)> {
+        let actor = w.actor(t).filter(|x| x.alive && !x.removed)?;
+        let def = c.def(actor.def);
+        if def.invulnerable {
+            return None;
+        }
+        if let Some(&last) = player.memory.air_attacked.get(&t)
+            && a.min_time_between_attacks > 0.0
+            && last >= 0.0
+            && a.min_time_between_attacks + last > c.now
+        {
+            return None;
+        }
+        let r = c.region_of(pos);
+        let mut p = val.actor_value(actor.def, Some(w.kingdoms[owner].id), cv, mobile, pos, true) + val.actor_priority(actor.def, false);
+        let mut scaled = false;
+        let engaged = w.combat.actor(t).is_some_and(|s| s.targeted);
+        if engaged {
+            p *= a.engaged_bonus;
+            scaled = true;
+        }
+        if health >= a.target_damage_floor && health <= a.target_damage_ceiling {
+            p *= a.target_damage_bonus;
+            scaled = true;
+        }
+        if health <= a.absolute_min_health {
+            p *= if engaged { a.absolute_min_health_engaged_mult } else { a.absolute_min_health_unengaged_mult };
+            scaled = true;
+        }
+        if player.memory.selected.contains_key(&Key::Attack(r)) {
+            p *= a.support_ground_attack_bonus;
+        } else if !scaled {
+            p *= a.no_bonus_penalty;
+        }
+        Some((p, r))
+    };
+    // A goal at priority 0 neither draws its fuzz (7A5200) nor takes an
+    // actor; only the positive ones are kept.
+    let mut push = |t: ActorId, pos: Vec2, p: f32, r: u32| {
+        if p <= 0.0 {
+            return;
+        }
+        let mut g = Goal::new(Key::AirAttack(t), data::AIR_ATTACK, p, r, pos);
+        g.target_actor = Some(t);
+        goals.push(g);
+    };
+    for b in &c.view.buildings {
+        let Some(o) = b.owner.filter(|&o| o != c.view.me && c.view.hostile[o]) else { continue };
+        if let Some((p, r)) = base(b.id, b.cv, false, b.pos, o, b.health) {
+            push(b.id, b.pos, p, r);
+        }
+    }
+    for ov in c.view.orgs.iter().filter(|o| c.view.hostile[o.owner]) {
+        for &m in &w.orgs[ov.id as usize].members {
+            let Some(x) = w.actor(m).filter(|x| x.alive && !x.removed) else { continue };
+            let max = w.combat.actor(m).filter(|s| s.initialized && s.max_health > 0.0).map_or(c.def(x.def).health, |s| s.max_health);
+            let health = if max > 0.0 { (x.health / max).clamp(0.0, 1.0) } else { 1.0 };
+            let pos = x.pos.truncate();
+            let cv = c.cv(x.def) * health;
+            if let Some((p, r)) = base(m, cv, true, pos, ov.owner, health) {
+                push(m, pos, p, r);
+            }
+        }
+    }
+}
+
+/// The player's airfields: its structures with an air-attack (or, with
+/// `recon`, air-recon) denizen purchase (DenizenComponent AirAttackCost /
+/// AirReconCost).
+fn airfields(c: &Ctx<'_, '_>, recon: bool) -> Vec<ActorId> {
+    let w = c.view.world;
+    c.view
+        .buildings
+        .iter()
+        .filter(|b| {
+            let d = c.def(b.def);
+            b.owner == Some(c.view.me) && if recon { d.air_recon_cost.is_some() } else { d.air_attack_cost.is_some() } && w.books.actor(b.id).is_none_or(|bk| bk.deploy.is_none())
+        })
+        .map(|b| b.id)
+        .collect()
+}
+
+/// An organization with a member that has a bombard ability (SAI actor
+/// category bit 12, `7A1150`: an ability of the +1EC or +21C lists with
+/// flag +54 bit 3).
+fn bombards(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> bool {
+    let w = c.view.world;
+    w.orgs[o.id as usize].members.iter().any(|&m| w.actor(m).is_some_and(|a| a.alive) && crate::combat::tasks::can_bombard(w, m))
+}
+
+/// `7A2310` -> `7A1A00`: the range of the first bombard ability of the
+/// Performer list of the organization's first member that has one (0 without
+/// one). A record takes a BOMBARD goal only with the target inside it
+/// (`7A25F0` case 0x14, the distance `7C82D0`).
+fn bombard_range(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> f32 {
+    let w = c.view.world;
+    w.orgs[o.id as usize]
+        .members
+        .iter()
+        .filter_map(|&m| w.actor(m).filter(|a| a.alive))
+        .find_map(|a| c.def(a.def).weapons.iter().find(|x| !x.defender && x.flags & crate::special_ops::FLAG_BOMBARD != 0 && x.range > 0.0).map(|x| x.range))
+        .unwrap_or(0.0)
+}
+
 /// The static actors `7BB5E0` admits as region targets: owned by a kingdom
-/// the player regards as an enemy, and either a city (object +D4, the
-/// CityComponent, admits it regardless of the other tests) or an actor
-/// passing the targetable tests (+8 bit 11 clear, bit 14 set, definition
-/// +291). Closest reading of those tests here: the buildings of enemy
-/// players; an independent's other buildings (city blocks, farms) change
-/// hands with their city and are not targets. A city nobody owns is taken
-/// by presence and is admitted too.
+/// the player regards as an enemy (player virtual +140), and either a city
+/// (object +D4, the CityComponent, admits it regardless of the other tests)
+/// or an actor passing the targetable tests: +8 bit 11 (`invulnerable`)
+/// clear, bit 14 (`targetable`) set and the definition +291
+/// (BodyComponent `destructible`). The blocks, farms and resource buildings
+/// of a city change hands with it and fail these tests. A city nobody owns
+/// is taken by presence and is admitted too.
 pub(crate) fn attack_target(c: &Ctx<'_, '_>, b: &super::view::BuildingView) -> bool {
-    let def = c.def(b.def);
-    let city = def.city && def.city_zone_radius > 0.0;
     match b.owner {
-        None => city,
-        Some(o) if c.view.hostile[o] => city || !c.view.world.kingdoms[o].independent,
+        None => is_city(c.def(b.def)),
+        Some(o) if c.view.hostile[o] => admitted(c.def(b.def)),
         Some(_) => false,
     }
+}
+
+fn is_city(def: &crate::data::Def) -> bool {
+    def.city && def.city_zone_radius > 0.0
+}
+
+/// The flag tests of `7BB5E0` on a hostile actor's definition.
+fn admitted(def: &crate::data::Def) -> bool {
+    is_city(def) || (!def.invulnerable && def.targetable && def.destructible)
 }
 
 /// Where a regiment of a combat goal goes: its own slot around the target;
@@ -822,8 +1038,9 @@ pub(crate) fn city_target(c: &Ctx<'_, '_>, target_actor: Option<ActorId>) -> boo
     })
 }
 
-/// EXPLORE goals (`7C29F0`): close (0) and deep (1); air recon needs
-/// aircraft. Above its floor the base shrinks by the share of island
+/// EXPLORE goals (`7C29F0`): close (0), deep (1) and air recon (2, its
+/// actors the air-recon denizens of the airfields, pool category 14 of
+/// `7A1680`). Above its floor the base shrinks by the share of island
 /// regions already explored.
 fn explore_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
     let home = c.view.buildings.iter().find(|b| b.owner == Some(c.view.me)).map(|b| c.region_of(b.pos));
@@ -831,7 +1048,8 @@ fn explore_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
     let center = (!mine.is_empty()).then(|| mine.iter().copied().sum::<Vec2>() / mine.len() as f32);
     let island: Vec<u32> = (0..c.regions.len() as u32).filter(|&r| home.is_some_and(|h| c.regions.same_island(r, h))).collect();
     let explored = island.iter().filter(|&&r| player.scouted.get(r as usize).is_some_and(|t| t.is_finite())).count() as f32;
-    for kind in 0..2usize {
+    // CloseGoals, DeepGoals and AirReconGoals (ego +464/+528/+5EC sets).
+    for kind in 0..3usize {
         let e = &c.ego.exploration[kind];
         for slot in 0..e.num_goals.max(0) {
             let mut base = e.base_priority - slot as f32 * e.repeat_penalty;
@@ -851,18 +1069,28 @@ fn explore_goals(c: &Ctx<'_, '_>, player: &Player, goals: &mut Vec<Goal>) {
     }
 }
 
-/// RECRUIT goals (`7CFEA0`): the candidates are the things the player's
+/// RECRUIT goals (`7CFEA0`). The candidates are the things the player's
 /// recruiters list whose element requirements hold (`7B4380`: `4E65E0`,
-/// `5827B0`); every SpecificRecruitRequest makes a request per matching
-/// candidate (`7CD330`, priority `7CC640`, dropped when not positive), the
-/// military requests the best company (`7CFB60`/`7CF340`); a goal's base
-/// is its request priority plus the recruit value (`7CEE50` -> `7CE5E0`).
-/// The best `max_goals_per_think` goals are kept, at most
-/// `max_recruited_per_think` of a definition.
+/// `5827B0`). In the planner's order:
+/// - `7CD330`: every SpecificRecruitRequest makes `number_to_request`
+///   requests per matching candidate (`4A6EA0`), priority `7CC640`. Of what
+///   an HQ recruits (list `+104`) those not above zero are dropped, of what
+///   the other recruiters list (hash `+C4`) none is;
+/// - `num_military_goals` placeholders of priority 0 join them, and the list
+///   is sorted by priority, highest first (`7CC3B0`);
+/// - each request makes a goal (`7CFD30`, `7CF340`) unless the definition has
+///   reached its `max_recruited_per_think` (`4A9F10`, the think's count
+///   `+C`) or nothing recruits it; a placeholder (`7CFB60`), until one has
+///   succeeded, makes goals of the best company (`7CF010`) until their
+///   combat value (`7CCD30`) covers its 10. A goal's base is its request
+///   priority plus the recruit value (`7CEE50` -> `7CE5E0`);
+/// - the goals are sorted by base (`7A30B0`) and at most `max_goals_per_think`
+///   of them are looked at: one whose LIMITED_CONSUMED upkeep does not fit
+///   the running limits (`7CC300`) counts and is dropped (`7CCF00`: its
+///   company replacement is not played), the others are registered.
 fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mut SaiRng, goals: &mut Vec<Goal>) {
     let w = c.view.world;
     let rr = &c.ego.recruiting;
-    let king = &w.kingdoms[c.view.me];
     let queue_max = if c.ego.build_queue_max_items > 0 { c.ego.build_queue_max_items as usize } else { usize::MAX };
     // Recruiting buildings with room in their queue, by recruitable def.
     let mut sites: BTreeMap<DefId, Vec<ActorId>> = BTreeMap::new();
@@ -879,11 +1107,6 @@ fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mu
     if sites.is_empty() {
         return;
     }
-    let unit_room = king.unit_limit - king.units_used;
-    let fits = |d: DefId| -> bool {
-        let need = c.unit_need(d);
-        need <= 0.0 || need <= unit_room + 1e-3
-    };
     let owned_props: Vec<String> = c
         .view
         .buildings
@@ -950,8 +1173,13 @@ fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mu
         c.view.trucks.iter().any(|t| t.owner == c.view.me && types.iter().any(|ty| has(c.props(t.def), ty)))
             || types.iter().any(|t| val.census.prop(t) > c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me) && has(c.props(b.def), t)).count() as i32)
     };
-    let eligible: Vec<DefId> = sites.keys().copied().filter(|&d| fits(d) && requirements_met(d)).collect();
-    let mut candidates: Vec<Goal> = Vec::new();
+    // 7B4380: +C4 holds the things a recruiter without an HQ lists, +104 the
+    // companies an HQ recruits.
+    let hq_list = |d: DefId| -> bool { sites.get(&d).is_some_and(|l| l.iter().all(|&b| crate::production::hq_org(w, b).is_some())) };
+    let eligible: Vec<DefId> = sites.keys().copied().filter(|&d| requirements_met(d)).collect();
+    // 7CD330 and the placeholders: (priority, definition, request index);
+    // None is a military placeholder.
+    let mut requests: Vec<(f32, Option<DefId>, u32)> = Vec::new();
     for (index, req) in rr.requests.iter().enumerate() {
         for &d in &eligible {
             let id = c.def(d).id.to_ascii_lowercase();
@@ -967,60 +1195,141 @@ fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mu
             if count < 1 {
                 p += req.one_time_bonus;
             }
-            let is_hq = c.def(d).max_attachments.is_some();
-            if is_hq && !hq_available(d) {
+            if c.def(d).max_attachments.is_some() && !hq_available(d) {
                 p += req.hq_type_not_available_bonus;
             }
-            if p <= 0.0 {
+            if p <= 0.0 && hq_list(d) {
                 continue;
             }
-            for n in 0..req.number_to_request.max(1) {
-                let base = p + val.recruit_value(d, false, true, rng);
-                let mut g = Goal::new(Key::Recruit(index as u32 * 16 + n as u32, d), data::RECRUIT, base, 0, Vec2::ZERO);
-                g.cost = c.quote(d, crate::production::Vector::Cost);
-                g.recruit = Some((d, 0));
-                candidates.push(g);
+            for n in 0..req.number_to_request.max(0) {
+                requests.push((p, Some(d), index as u32 * 16 + n as u32));
             }
         }
     }
     for n in 0..rr.num_military_goals.max(0) {
-        let mut best: Option<(f32, DefId)> = None;
-        for &d in &eligible {
-            let def = c.def(d);
-            if def.class != Some(DefClass::Organization) || def.max_attachments.is_some() || has(&def.properties, "hq") || c.cv(d) <= 0.0 {
-                continue;
+        requests.push((0.0, None, u32::MAX - n as u32));
+    }
+    requests.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    // The think's count per definition (hash +C) and the recruits' goals.
+    let mut per_def: HashMap<DefId, i32> = HashMap::new();
+    let mut made: Vec<Goal> = Vec::new();
+    let room = |d: DefId, per_def: &HashMap<DefId, i32>| -> bool {
+        let max = val.max_per_think(d);
+        max <= 0 || per_def.get(&d).copied().unwrap_or(0) < max
+    };
+    let mut military_done = false;
+    for (priority, def, index) in requests {
+        match def {
+            Some(d) => {
+                if !room(d, &per_def) {
+                    continue;
+                }
+                let Some(b) = location(d, rng) else { continue };
+                let base = priority + val.recruit_value(d, false, true, rng);
+                let mut g = Goal::new(Key::Recruit(index, d), data::RECRUIT, base, 0, Vec2::ZERO);
+                g.cost = c.quote(d, crate::production::Vector::Cost);
+                g.recruit = Some((d, b));
+                *per_def.entry(d).or_default() += 1;
+                made.push(g);
             }
-            let v = val.recruit_value(d, true, true, rng);
-            if best.is_none_or(|(bv, _)| v > bv) {
-                best = Some((v, d));
+            None if military_done => {}
+            None => {
+                // 7CFB60: goals of the best company until their combat value
+                // covers the placeholder's 10; a goal without a company or
+                // without a recruiter ends it unsuccessfully.
+                let mut left = 10.0f32;
+                let mut k = index;
+                while left > 0.0 {
+                    let mut best: Option<(f32, DefId)> = None;
+                    for &d in &eligible {
+                        let def = c.def(d);
+                        if def.class != Some(DefClass::Organization) || def.max_attachments.is_some() || has(&def.properties, "hq") || c.cv(d) <= 0.0 || !room(d, &per_def) {
+                            continue;
+                        }
+                        let v = val.recruit_value(d, true, true, rng);
+                        if best.is_none_or(|(bv, _)| v > bv) {
+                            best = Some((v, d));
+                        }
+                    }
+                    let Some((_, d)) = best else { break };
+                    let Some(b) = location(d, rng) else { break };
+                    let base = val.recruit_value(d, true, true, rng);
+                    let mut g = Goal::new(Key::Recruit(k, d), data::RECRUIT, base, 0, Vec2::ZERO);
+                    g.cost = c.quote(d, crate::production::Vector::Cost);
+                    g.recruit = Some((d, b));
+                    *per_def.entry(d).or_default() += 1;
+                    made.push(g);
+                    left -= c.cv(d);
+                    k = k.wrapping_sub(1 << 8);
+                    if left <= 0.0 {
+                        military_done = true;
+                    }
+                }
             }
-        }
-        if let Some((p, d)) = best {
-            let mut g = Goal::new(Key::Recruit(u32::MAX - n as u32, d), data::RECRUIT, p, 0, Vec2::ZERO);
-            g.cost = c.quote(d, crate::production::Vector::Cost);
-            g.recruit = Some((d, 0));
-            candidates.push(g);
         }
     }
-    candidates.sort_by(|a, b| b.raw.partial_cmp(&a.raw).unwrap_or(std::cmp::Ordering::Equal));
+    made.sort_by(|a, b| b.raw.partial_cmp(&a.raw).unwrap_or(std::cmp::Ordering::Equal));
     let limit = if rr.max_goals_per_think < 0 { usize::MAX } else { rr.max_goals_per_think as usize };
-    let mut per_def: HashMap<DefId, i32> = HashMap::new();
-    let mut taken = 0;
-    for mut g in candidates {
-        if taken >= limit {
+    let mut limits = RunningLimits::new(c);
+    for (looked, g) in made.into_iter().enumerate() {
+        if looked >= limit {
             break;
         }
         let (d, _) = g.recruit.expect("recruit goal");
-        let max = val.max_per_think(d);
-        let count = per_def.entry(d).or_default();
-        if max > 0 && *count >= max {
-            continue;
+        if limits.take(c, d) {
+            goals.push(g);
         }
-        let Some(b) = location(d, rng) else { continue };
-        *count += 1;
-        g.recruit = Some((d, b));
-        goals.push(g);
-        taken += 1;
+    }
+}
+
+/// The LIMITED_CONSUMED resources of `7CC300`, running over one planning
+/// pass: `4CD980` compares a positive upkeep plus the consumed amount with
+/// the limit's provider, `4CCD80` adds it to the consumed copy (kingdom
+/// `+1A0` / `+1B8`). Synthetic data has only the kingdom's unit limit.
+struct RunningLimits {
+    provided: Vec<f32>,
+    consumed: Vec<f32>,
+    unit_room: f32,
+}
+
+impl RunningLimits {
+    fn new(c: &Ctx<'_, '_>) -> Self {
+        let w = c.view.world;
+        let books = w.books.kingdom(c.view.kingdom);
+        let king = &w.kingdoms[c.view.me];
+        RunningLimits {
+            provided: books.map(|b| b.provided.clone()).unwrap_or_default(),
+            consumed: books.map(|b| b.consumed.clone()).unwrap_or_default(),
+            unit_room: king.unit_limit - king.units_used,
+        }
+    }
+    fn take(&mut self, c: &Ctx<'_, '_>, d: DefId) -> bool {
+        let w = c.view.world;
+        if w.data.resources.is_empty() {
+            let need = c.unit_need(d);
+            if need > 0.0 && need > self.unit_room + 1e-3 {
+                return false;
+            }
+            self.unit_room -= need;
+            return true;
+        }
+        let need = crate::production::quote(w, d, crate::production::Vector::Upkeep);
+        for (i, r) in w.data.resources.iter().enumerate() {
+            let amount = need.get(i).copied().unwrap_or(0.0);
+            if r.kind == crate::data::ResourceKind::LimitedConsumed
+                && amount > 0.0
+                && let Some(p) = r.limited_by
+                && self.provided.get(p).copied().unwrap_or(0.0) < self.consumed.get(i).copied().unwrap_or(0.0) + amount
+            {
+                return false;
+            }
+        }
+        for (i, v) in need.iter().enumerate() {
+            if let Some(x) = self.consumed.get_mut(i) {
+                *x += v;
+            }
+        }
+        true
     }
 }
 
@@ -1242,6 +1551,12 @@ impl Assign<'_, '_, '_> {
                 v += if e.subtract_cv { -cvt } else { cvt };
             }
             v
+        } else if g.kind == data::BOMBARD {
+            // 7C6500 (BOMBARD +7C): +38 times the hypothetical actors'
+            // combat values (actor record +1C, 4D0180) over the
+            // Bombardement balancing_constant (ego +458).
+            let bc = c.ego.bombard_balancing_constant;
+            if bc > 0.0 { g.base * cv / bc } else { 0.0 }
         } else {
             g.base
         };
@@ -1281,11 +1596,17 @@ impl Assign<'_, '_, '_> {
     }
 }
 
-fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal]) {
+fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal], air_orders: bool) {
     let ego = c.ego;
     let mut available = c.view.stockpile;
     let rate = ego.saving_time_limit / 60.0;
     let pool_ok = |o: &super::view::OrgView| o.owner == c.view.me && o.military && !o.routing && !player.rai.retreating.contains_key(&o.id);
+    // Goal +8 pool category: BOMBARD takes its actors from category 12
+    // (a bombard ability, 7A1150) and only with its target in range (7A25F0).
+    let reach: Vec<f32> = c.view.orgs.iter().map(|o| if bombards(c, o) { bombard_range(c, o) } else { 0.0 }).collect();
+    // A refused air order must not hold money back from the other goals.
+    let mut free_airfields = if air_orders { airfields(c, false) } else { Vec::new() };
+    let mut free_recon = if air_orders { airfields(c, true) } else { Vec::new() };
     // Holder of every pooled organization: None = free.
     let mut holder: HashMap<usize, usize> = HashMap::new();
     let mut a = Assign { c, prefs: HashMap::new() };
@@ -1310,6 +1631,35 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
                 goals[gi].selected = true;
                 goals[gi].current = goals[gi].base;
             }
+            data::AIR_ATTACK | data::EXPLORE if goals[gi].kind == data::AIR_ATTACK || goals[gi].explore == Some(2) => {
+                // Pool 13 / 14 (the air-attack / air-recon denizens, here
+                // the airfields): the goal takes a free one (7A7EB0);
+                // 7C55B0 values one plane at the base; 7A3860 with its
+                // AirAttackCost / AirReconCost.
+                let recon = goals[gi].kind == data::EXPLORE;
+                let free = if recon { &mut free_recon } else { &mut free_airfields };
+                let Some(i) = free.first().copied() else { continue };
+                let w = c.view.world;
+                let mut cost = [0.0f32; 3];
+                let def = c.def(w.actors[i as usize].def);
+                if let Some(v) = if recon { &def.air_recon_cost } else { &def.air_attack_cost } {
+                    for (slot, name) in RESOURCES.iter().enumerate() {
+                        if let Some(r) = w.data.resource_index(name) {
+                            cost[slot] = v.get(r).copied().unwrap_or(0.0);
+                        }
+                    }
+                }
+                if (0..3).all(|r| cost[r] <= available[r] + c.view.income[r].max(0.0) * rate) {
+                    for r in 0..3 {
+                        available[r] -= cost[r];
+                    }
+                    free.remove(0);
+                    goals[gi].cost = cost;
+                    goals[gi].airfield = Some(i);
+                    goals[gi].selected = true;
+                    goals[gi].current = goals[gi].base;
+                }
+            }
             data::RECOVER => {
                 // 7A35D0: the required actor is claimed when free, or taken
                 // from an owner valuing it below this base priority.
@@ -1328,12 +1678,17 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
                 goals[gi].current = goals[gi].base;
             }
             _ => {
-                let single = goals[gi].kind == data::EXPLORE;
+                // Goal +C: an explore or BOMBARD goal (7C54D0) is full with
+                // one actor.
+                let single = matches!(goals[gi].kind, data::EXPLORE | data::BOMBARD);
                 // Previous holders first (continuity), then the greedy gather
                 // (7A7EB0) and the take-from-higher trade (7A3F30).
                 let key = goals[gi].key;
+                let kind = goals[gi].kind;
+                let target = goals[gi].target;
+                let in_pool = |o: usize| pool_ok(&c.view.orgs[o]) && (kind != data::BOMBARD || (reach[o] > 0.0 && c.view.orgs[o].pos.distance(target) <= reach[o]));
                 let previous: Vec<usize> =
-                    (0..c.view.orgs.len()).filter(|&o| pool_ok(&c.view.orgs[o]) && !holder.contains_key(&o) && player.memory.assigned.get(&c.view.orgs[o].id).is_some_and(|x| x.key == key)).collect();
+                    (0..c.view.orgs.len()).filter(|&o| in_pool(o) && !holder.contains_key(&o) && player.memory.assigned.get(&c.view.orgs[o].id).is_some_and(|x| x.key == key)).collect();
                 for o in previous {
                     if single && !goals[gi].actors.is_empty() {
                         break;
@@ -1351,7 +1706,7 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
                     let now = a.priority(goals, gi, None, None);
                     let mut best: Option<(f32, usize)> = None;
                     for o in 0..c.view.orgs.len() {
-                        if !pool_ok(&c.view.orgs[o]) || goals[gi].actors.contains(&o) {
+                        if !in_pool(o) || goals[gi].actors.contains(&o) {
                             continue;
                         }
                         let mut gain = a.priority(goals, gi, Some(o), None) - now;
@@ -1486,11 +1841,59 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                     }
                 }
             }
+            data::BOMBARD => {
+                // 7C8340 (BOMBARD +58): while the target stands, is known
+                // (visible +70 or the kingdom's record 4EA430) and hostile,
+                // every assigned actor is sent the goal's +5C order
+                // (7C84F0): bombard the target when visible, else the
+                // record position (command flag 4).
+                let Some(t) = g.target_actor else { continue };
+                let target = if crate::fog::actor_visible(w, t, Some(me)) { AbilityTarget::Actor(t) } else { AbilityTarget::Point(g.target) };
+                for &o in &g.actors {
+                    let ov = &c.view.orgs[o];
+                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: Some(t), region: g.region, since: c.now, combat: false });
+                    let busy = w.combat.org(ov.id).and_then(|s| s.task.as_ref()).is_some_and(|task| *task == crate::combat::tasks::Task::Bombard(target));
+                    if busy || player.pending(ov.id, c.now) {
+                        continue;
+                    }
+                    commands.push(Command::Bombard { kingdom: me, units: vec![Unit::Org(ov.id)], target });
+                    log.push(format!("bombard {} with {} (priority {:.0})", c.def(w.actors[t as usize].def).id, c.def(ov.def).id, g.current));
+                }
+            }
+            data::AIR_ATTACK => {
+                // 7C79C0 (AIR_ATTACK +58): the denizen's air_attack order
+                // (7C7C30: the target when visible, else its record
+                // position), paid with the AirAttackCost; the goal's +40
+                // takes the attack time.
+                let (Some(t), Some(field)) = (g.target_actor, g.airfield) else { continue };
+                if !pay(g.cost, &mut stock) {
+                    continue;
+                }
+                let target = if crate::fog::actor_visible(w, t, Some(me)) { AbilityTarget::Actor(t) } else { AbilityTarget::Point(g.target) };
+                commands.push(Command::AirAttack { kingdom: me, building: field, target });
+                player.memory.air_attacked.insert(t, c.now);
+                log.push(format!("air attack {} from {} (priority {:.0})", c.def(w.actors[t as usize].def).id, c.def(w.actors[field as usize].def).id, g.current));
+            }
+            data::EXPLORE if g.airfield.is_some() => {
+                // An air-recon goal (7C3440 with a recon denizen): the
+                // region from the airfield, the air_recon order there, paid
+                // with the AirReconCost.
+                let Some(field) = g.airfield else { continue };
+                if !pay(g.cost, &mut stock) {
+                    continue;
+                }
+                let from = w.actors[field as usize].pos.truncate();
+                let region = explore_region(c, player, g, from, rng).unwrap_or_else(|| c.region_of(from));
+                let target = c.regions.centers[region as usize];
+                player.memory.explore_region.insert(g.key, region);
+                commands.push(Command::AirRecon { kingdom: me, building: field, target: AbilityTarget::Point(target) });
+                log.push(format!("explore by air from {} to region {region} ({:.0},{:.0})", c.def(w.actors[field as usize].def).id, target.x, target.y));
+            }
             data::EXPLORE => {
                 let Some(&o) = g.actors.first() else { continue };
                 let ov = &c.view.orgs[o];
                 // 7C3440: no candidate region -> the actor's own region.
-                let region = explore_region(c, player, g, ov, rng).unwrap_or_else(|| c.region_of(ov.pos));
+                let region = explore_region(c, player, g, ov.pos, rng).unwrap_or_else(|| c.region_of(ov.pos));
                 let target = c.regions.centers[region as usize];
                 player.memory.explore_region.insert(g.key, region);
                 player.memory.explore_actor.insert(g.key, ov.id);
@@ -1551,6 +1954,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
         }
     }
     player.memory.assigned = assigned;
+    player.memory.air_attacked.retain(|&t, _| w.actor(t).is_some_and(|a| a.alive));
     let profile = &data.profiles[player.profile];
     enqueue(player, data, c.now, c.ego.reaction_time, profile.max_ge_commands, commands);
 }
@@ -1573,12 +1977,12 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
 /// Regions with a positive bonus are valued by `4A9450` and the best is
 /// explored; None when no region qualifies (`7C3440` then uses the actor's
 /// own region).
-fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::OrgView, rng: &mut SaiRng) -> Option<u32> {
+fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, from: Vec2, rng: &mut SaiRng) -> Option<u32> {
     let kind = g.explore.unwrap_or(1);
     let e = &c.ego.exploration[kind];
     let w = c.view.world;
     let n = c.regions.len();
-    let home = c.region_of(ov.pos);
+    let home = c.region_of(from);
     let island: Vec<u32> = (0..n as u32).filter(|&r| c.regions.same_island(r, home)).collect();
     let mut bonus = vec![0.0f32; n];
     let raise = |bonus: &mut Vec<f32>, r: u32, v: f32| {
@@ -1645,7 +2049,7 @@ fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::
     }
     let center = {
         let pts: Vec<Vec2> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| b.pos).collect();
-        if pts.is_empty() { ov.pos } else { pts.iter().copied().sum::<Vec2>() / pts.len() as f32 }
+        if pts.is_empty() { from } else { pts.iter().copied().sum::<Vec2>() / pts.len() as f32 }
     };
     let mut best: Option<(u32, f32)> = None;
     for r in 0..n as u32 {
@@ -1653,7 +2057,7 @@ fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::
         if b <= 0.0 || !c.regions.same_island(r, home) {
             continue;
         }
-        let v = explore_value(c, player, e, b, r, last, ov, center, rng);
+        let v = explore_value(c, player, e, b, r, last, from, center, rng);
         if v > best.map_or(0.0, |x| x.1) {
             best = Some((r, v));
         }
@@ -1671,7 +2075,7 @@ fn explore_region(c: &Ctx<'_, '_>, player: &Player, g: &Goal, ov: &super::view::
 /// scouted (`min(t, max) ^ exp`, for a region not itself unexplored) and
 /// `fuzzy_factor` times a draw of the SAI RNG.
 #[allow(clippy::too_many_arguments)]
-fn explore_value(c: &Ctx<'_, '_>, player: &Player, e: &super::data::Exploration, bonus: f32, r: u32, last: Option<u32>, ov: &super::view::OrgView, center: Vec2, rng: &mut SaiRng) -> f32 {
+fn explore_value(c: &Ctx<'_, '_>, player: &Player, e: &super::data::Exploration, bonus: f32, r: u32, last: Option<u32>, from: Vec2, center: Vec2, rng: &mut SaiRng) -> f32 {
     let depth = e.fog_search_depth;
     let mut steps = (depth + 1).max(0);
     let span = if steps < 2 {
@@ -1714,7 +2118,7 @@ fn explore_value(c: &Ctx<'_, '_>, player: &Player, e: &super::data::Exploration,
         v *= factor(d, e.last_region_distance_max, e.last_region_distance_prefer_close, e.last_region_distance_exp, e.last_region_distance_floor, e.last_region_distance_ceil);
     }
     if e.consider_distance_to_actor {
-        let d = ov.pos.distance(p);
+        let d = from.distance(p);
         if e.actor_distance_cap > 0.0 && d > e.actor_distance_cap {
             return 0.0;
         }
@@ -1734,16 +2138,14 @@ fn explore_value(c: &Ctx<'_, '_>, player: &Player, e: &super::data::Exploration,
 /// white fog).
 fn explored_share(c: &Ctx<'_, '_>, r: u32) -> f32 {
     let w = c.view.world;
-    let cell = w.map.cell_size.max(1e-3);
-    let (rx, ry) = c.regions.coords(r);
-    let per = (c.regions.size / cell).round().max(1.0) as i32;
-    let (x0, y0) = (rx * per, ry * per);
     let (mut seen, mut all) = (0u32, 0u32);
-    for y in y0..(y0 + per).min(w.map.height as i32) {
-        for x in x0..(x0 + per).min(w.map.width as i32) {
-            all += 1;
-            if crate::fog::tile_view(w, Some(c.view.kingdom), x, y) != crate::fog::TileView::Unexplored {
-                seen += 1;
+    for b in c.regions.rects.get(r as usize).into_iter().flatten() {
+        for y in b[1].max(0)..=b[3].min(w.map.height as i32 - 1) {
+            for x in b[0].max(0)..=b[2].min(w.map.width as i32 - 1) {
+                all += 1;
+                if crate::fog::tile_view(w, Some(c.view.kingdom), x, y) != crate::fog::TileView::Unexplored {
+                    seen += 1;
+                }
             }
         }
     }

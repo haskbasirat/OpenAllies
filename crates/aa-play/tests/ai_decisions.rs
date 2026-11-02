@@ -2,7 +2,7 @@
 //! The test ego carries the values of the shipped `ArmorLowIncomeEgo`
 //! (Templates/template_sai*.tgi) that these rules read.
 use aa_play::ai::data::{
-    ActorPreference, ActorPriority, AiData, CvCurve, DefendPriority, Ego, Exploration, Filter, GoalPriority, Profile, Reactive, Recover, RecruitRequest,
+    ActorPreference, ActorPriority, AiData, AirAttacks, CvCurve, DefendPriority, Ego, Exploration, Filter, GoalPriority, Profile, Reactive, Recover, RecruitRequest,
     Recruiting, Unpacking, ATTACH, ATTACK_REGION, DEFEND_REGION, EXPLORE, RECOVER, RECRUIT, RESEARCH, UNPACK,
 };
 use aa_play::ai::{self, goals::cv_curve};
@@ -194,6 +194,24 @@ fn ego(ids: &str, min: f32, max: f32) -> Ego {
         tech_priorities: vec![("tech_special_forces".into(), 50.0)],
         attach_when_engaged: false,
         attach_cv_multiplier: 5.0,
+        // [Combat/Bombardement] and [Combat/AirAttacks] of the shipped egos.
+        bombard_unengaged_target_multiplier: 0.1,
+        bombard_balancing_constant: 0.001,
+        air: AirAttacks {
+            engaged_bonus: 2.0,
+            target_damage_floor: 0.5,
+            target_damage_ceiling: 0.8,
+            target_damage_bonus: 2.0,
+            support_ground_attack_bonus: 2.0,
+            no_bonus_penalty: 0.0,
+            absolute_min_health: 0.3,
+            absolute_min_health_engaged_mult: 0.0,
+            absolute_min_health_unengaged_mult: 5.0,
+            extra_planes_multiplier_max: 2.0,
+            extra_planes_multiplier_per_plane: 0.5,
+            resupplying_mult: 0.0,
+            min_time_between_attacks: 120.0,
+        },
         ..Default::default()
     }
 }
@@ -274,6 +292,8 @@ fn game_data() -> (GameData, Defs) {
         production: [12.0, 5.0, 2.0],
         properties: vec!["building".into(), "infhq".into()],
         blocking_size: Some([12.0, 12.0]),
+        targetable: true,
+        destructible: true,
         ..Default::default()
     });
     let hq_truck = push(Def {
@@ -316,6 +336,9 @@ fn game_data() -> (GameData, Defs) {
         properties: vec!["building".into(), "corpshq".into()],
         blocking_size: Some([16.0, 16.0]),
         weapons: vec![gun(15.0, 40.0)],
+        // Thing [Flags] targetable, BodyComponent destructible (7BB5E0).
+        targetable: true,
+        destructible: true,
         ..Default::default()
     });
     d.defs[oil_truck as usize].unpacks_to = Some(hq);
@@ -421,17 +444,18 @@ fn goal_engine_thinks_on_its_schedule() {
     building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
     building(&mut w, defs.corps, Some(1), Vec2::new(650.0, 650.0));
     building(&mut w, defs.corps, Some(2), Vec2::new(650.0, 100.0));
-    run(&mut w, 0.1);
-    assert_eq!(w.ai.stats.ge_thinks, 1, "only one goal-engine think per GoalEngineThinkFrequencyMinOffset");
-    run(&mut w, 2.1);
-    assert_eq!(w.ai.stats.ge_thinks, 2);
-    // Player 0 next at 30 s, player 1 at 2 + 30 - 1/3*30 = 22 s.
+    // 79FC40 queues both new players at time 0 (never spaced), so both
+    // think at the SAI's first tick (the world's second, 0.125 s).
+    run(&mut w, 0.2);
+    assert_eq!(w.ai.stats.ge_thinks, 2, "both players at the first SAI tick");
+    // 79EFF0 staggers the first reschedule by id / (players + 1): player 0
+    // next at 0.125 + 30 s, player 1 at 0.125 + 30 - 1/3 * 30 s.
     let p0 = w.ai.players[0].ge_due;
     let p1 = w.ai.players[1].ge_due;
-    assert!((p0 - 30.0).abs() < 0.1, "{p0}");
-    assert!((p1 - 22.0).abs() < 0.2, "{p1}");
+    assert!((p0 - 30.125).abs() < 0.01, "{p0}");
+    assert!((p1 - 20.125).abs() < 0.01, "{p1}");
     run(&mut w, 61.0);
-    assert_eq!(w.ai.stats.ge_thinks, 6, "0, 2, 22, 30, 52, 60");
+    assert_eq!(w.ai.stats.ge_thinks, 6, "0.125 (both), 20.125, 30.125, 50.125, 60.125");
     assert!(w.ai.stats.rai_thinks > 25);
 }
 
@@ -601,9 +625,11 @@ fn recon_regiment_explores_toward_unknown_buildings() {
         org(&mut w, defs.infantry, defs.rifle, 6, 1, corps_pos + Vec2::new(-20.0 + i as f32 * 10.0, 30.0));
     }
     let scout = org(&mut w, defs.recon, defs.scout, 3, 1, corps_pos + Vec2::new(0.0, -30.0));
-    run(&mut w, 0.2);
+    // With the fog running (EXPLORED start), a side's base is known only
+    // once seen (7BB5E0 via virtual +58), so the scout has to find it.
+    run_fogged(&mut w, 0.2);
     building(&mut w, defs.hq, Some(0), Vec2::new(150.0, 700.0));
-    let cmds = run(&mut w, 31.0);
+    let cmds = run_fogged(&mut w, 31.0);
     let explore = cmds.iter().any(|c| matches!(c, Command::Move { units, attack_move: false, .. } if units == &vec![Unit::Org(scout)]));
     assert!(explore, "{:#?}", w.ai.log);
     assert!(w.ai.log.iter().any(|l| l.text.contains("explore with regiment_rus_infantry_recon")), "{:#?}", w.ai.log);
@@ -721,6 +747,219 @@ fn city_of_an_enemy_independent_is_taken_by_presence_and_neutral_blocks_are_igno
     assert!(moves.iter().any(|to| to.distance(city_pos) <= 30.0), "into the city zone: {moves:?} {:#?}", w.ai.log);
     assert!(moves.iter().all(|to| to.distance(block_pos) > 40.0), "neutral block targeted: {moves:?}");
     assert!(!cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == city)), "a city is taken by presence, not attacked");
+}
+
+/// The opponent with the fog running (the battle's order: the SAI, then the
+/// fog), from the world's current time to `to` seconds.
+fn run_fogged(w: &mut World, to: f32) -> Vec<Command> {
+    let mut all = Vec::new();
+    while w.time < to {
+        all.extend(ai::think(w));
+        aa_play::fog::tick(w);
+        w.tick += 1;
+        w.time = w.tick as f32 * aa_play::DT;
+    }
+    all
+}
+
+#[test]
+fn neutral_cities_are_known_from_the_start_and_a_base_only_once_seen() {
+    // EXPLORED start (0x551F90 -> 0x54F400) explores the map's neutral
+    // static objects; 7BB5E0 knows a static target through virtual +58
+    // (seen static map object), so the city is attacked at the first think
+    // while the other side's base, never seen, is no target.
+    let (mut w, defs) = world();
+    let city_def = {
+        let data = Arc::get_mut(&mut w.data).expect("unique data");
+        let id = data.defs.len() as u32;
+        let def = Def {
+            id: "western_europe_city_center01_small".into(),
+            class: Some(DefClass::Building),
+            health: 500.0,
+            production: [25.0, 10.0, 10.0],
+            properties: vec!["property_city".into()],
+            city: true,
+            city_zone_radius: 30.0,
+            captureable: true,
+            blocking_size: Some([10.0, 10.0]),
+            ..Default::default()
+        };
+        data.by_id.insert(def.id.to_ascii_lowercase(), id);
+        data.defs.push(def);
+        id
+    };
+    let human = Vec2::new(60.0, 60.0);
+    building(&mut w, defs.corps, Some(0), human);
+    let base = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), base);
+    let mut enemy = kingdom(2, 0x8000_0005, Controller::Independent, 0.0);
+    enemy.independent = true;
+    w.kingdoms.push(enemy);
+    w.books.relations = vec![vec![0, 3, 3], vec![3, 0, 3], vec![3, 3, 0]];
+    let city_pos = Vec2::new(500.0, 650.0);
+    building(&mut w, city_def, Some(2), city_pos);
+    for i in 0..2 {
+        org(&mut w, defs.infantry, defs.rifle, 6, 1, base + Vec2::new(-20.0 + i as f32 * 10.0, 30.0));
+    }
+    let cmds = run_fogged(&mut w, 1.0);
+    let moves: Vec<Vec2> = cmds.iter().filter_map(|c| if let Command::Move { to, attack_move: true, .. } = c { Some(*to) } else { None }).collect();
+    assert!(moves.iter().any(|to| to.distance(city_pos) <= 30.0), "into the city zone: {moves:?} {:#?}", w.ai.log);
+    let regions = w.ai.regions.as_ref().expect("regions");
+    let home = regions.region_at(human);
+    assert!(!w.ai.log.iter().any(|l| l.text.contains(&format!("goal Attack({home})"))), "the unseen base is a target: {:#?}", w.ai.log);
+    assert!(moves.iter().all(|to| to.distance(human) > 60.0), "{moves:?}");
+}
+
+#[test]
+fn bombard_capable_regiment_bombards_a_known_structure() {
+    // 7A83A0 gives every foreign actor a BOMBARD goal; its pool (category
+    // 12, 7A1150) holds the actors with a bombard ability, and 7C6500 values
+    // them by their combat value over the balancing constant.
+    let (mut w, defs) = world();
+    let mortar_org = {
+        let data = Arc::get_mut(&mut w.data).expect("unique data");
+        let mut push = |def: Def| -> u32 {
+            let id = data.defs.len() as u32;
+            data.by_id.insert(def.id.to_ascii_lowercase(), id);
+            data.defs.push(def);
+            id
+        };
+        let mortar = push(Def {
+            id: "rus_mortar".into(),
+            class: Some(DefClass::Member),
+            health: 100.0,
+            speed_max: 3.0,
+            sight_range: 40.0,
+            weapons: vec![Weapon { name: "mortar".into(), damage: 20.0, range: 200.0, recharge: 4.0, flags: 1 << 3, ..Default::default() }],
+            ..Default::default()
+        });
+        let regiment = push(Def {
+            id: "regiment_rus_infantry_mortar".into(),
+            class: Some(DefClass::Organization),
+            cost: [120.0, 0.0, 0.0],
+            unit_limit_consumed: 1.0,
+            slots: (0..4).map(|i| (mortar, [i as f32 * 2.0, 0.0])).collect(),
+            properties: vec!["infantry_company".into()],
+            supply_used: true,
+            ..Default::default()
+        });
+        (mortar, regiment)
+    };
+    let enemy = building(&mut w, defs.corps, Some(0), Vec2::new(500.0, 650.0));
+    let base = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), base);
+    let o = org(&mut w, mortar_org.1, mortar_org.0, 4, 1, base + Vec2::new(0.0, 30.0));
+    let cmds = run(&mut w, 1.0);
+    let bombard = cmds.iter().any(|c| matches!(c, Command::Bombard { units, target: aa_play::world::AbilityTarget::Actor(t), .. } if units == &vec![Unit::Org(o)] && *t == enemy));
+    assert!(bombard, "{:#?}", w.ai.log);
+    // 7A25F0 case 0x14: out of its bombard range (200) the regiment takes no
+    // BOMBARD goal.
+    w.actors[enemy as usize].pos = Vec3::new(300.0, 650.0, 0.0);
+    let cmds = run(&mut w, 40.0);
+    assert!(!cmds.iter().any(|c| matches!(c, Command::Bombard { target: aa_play::world::AbilityTarget::Actor(t), .. } if *t == enemy)), "{:#?}", w.ai.log);
+}
+
+#[test]
+fn airfield_air_attacks_a_damaged_target_once_per_attack_delay() {
+    // AIR_ATTACK (7C7E90): no_bonus_penalty 0 leaves only targets with a
+    // bonus; a structure at 60% health takes target_damage_bonus. The
+    // airfield's air_attack order follows (7C79C0), and the goal waits
+    // min_time_between_attacks before the next one.
+    let (mut w, defs) = world();
+    w.ai.air_orders = true;
+    let field_def = {
+        let data = Arc::get_mut(&mut w.data).expect("unique data");
+        let id = data.defs.len() as u32;
+        let def = Def { id: "rus_airfield".into(), class: Some(DefClass::Building), health: 2000.0, air_attack_cost: Some(Vec::new()), blocking_size: Some([20.0, 20.0]), ..Default::default() };
+        data.by_id.insert(def.id.to_ascii_lowercase(), id);
+        data.defs.push(def);
+        id
+    };
+    let enemy = building(&mut w, defs.corps, Some(0), Vec2::new(300.0, 300.0));
+    w.actors[enemy as usize].health = 1800.0;
+    let base = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), base);
+    let field = building(&mut w, field_def, Some(1), base + Vec2::new(0.0, 60.0));
+    let air = |cmds: &[Command]| cmds.iter().filter(|c| matches!(c, Command::AirAttack { building, target: aa_play::world::AbilityTarget::Actor(t), .. } if *building == field && *t == enemy)).count();
+    let cmds = run(&mut w, 1.0);
+    assert_eq!(air(&cmds), 1, "{:#?}", w.ai.log);
+    let cmds = run(&mut w, 61.0);
+    assert_eq!(air(&cmds), 0, "within min_time_between_attacks: {:#?}", w.ai.log);
+}
+
+#[test]
+fn air_goals_hold_nothing_back_while_the_air_orders_are_refused() {
+    // Command::AirAttack is refused until the aircraft orders are wired, so
+    // the airfield is not taken, nothing is sent and no money is reserved.
+    let (mut w, defs) = world();
+    let field_def = {
+        let data = Arc::get_mut(&mut w.data).expect("unique data");
+        let id = data.defs.len() as u32;
+        let def = Def { id: "rus_airfield".into(), class: Some(DefClass::Building), health: 2000.0, air_attack_cost: Some(vec![1000.0]), blocking_size: Some([20.0, 20.0]), ..Default::default() };
+        data.by_id.insert(def.id.to_ascii_lowercase(), id);
+        data.defs.push(def);
+        id
+    };
+    let enemy = building(&mut w, defs.corps, Some(0), Vec2::new(300.0, 300.0));
+    w.actors[enemy as usize].health = 1800.0;
+    let base = Vec2::new(650.0, 650.0);
+    let corps = building(&mut w, defs.corps, Some(1), base);
+    building(&mut w, field_def, Some(1), base + Vec2::new(0.0, 60.0));
+    let cmds = run(&mut w, 1.0);
+    assert!(!cmds.iter().any(|c| matches!(c, Command::AirAttack { .. } | Command::AirRecon { .. })), "{cmds:?}");
+    assert!(cmds.iter().any(|c| matches!(c, Command::Recruit { kingdom: 1, building, def } if *building == corps && *def == defs.hq_regiment)), "{:#?}", w.ai.log);
+}
+
+#[test]
+fn recruit_limit_counts_goals_not_the_requests_a_think_limit_dropped() {
+    // 7CD330 makes number_to_request requests of the oil truck; 7CF010 finds
+    // no definition for those past max_recruited_per_think, so 7CFD30 makes
+    // no goal and the second definition still fits max_goals_per_think.
+    let (mut w, defs) = world();
+    let mut data = ai_data();
+    for e in &mut data.egos {
+        e.recruiting.max_goals_per_think = 2;
+        e.recruiting.num_military_goals = 0;
+        e.recruiting.requests = vec![
+            RecruitRequest { property: Some("oil".into()), number_to_request: 3, base_priority: 500.0, ..Default::default() },
+            RecruitRequest { property: Some("infhq".into()), number_to_request: 1, base_priority: 100.0, ..Default::default() },
+        ];
+        e.default_max_recruited_per_think = 1;
+    }
+    ai::attach(&mut w, Arc::new(data));
+    building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
+    building(&mut w, defs.corps, Some(1), Vec2::new(650.0, 650.0));
+    run(&mut w, 1.0);
+    let goals: Vec<&str> = w.ai.log.iter().filter(|l| l.text.starts_with("  goal Recruit")).map(|l| l.text.as_str()).collect();
+    assert_eq!(goals.len(), 2, "{goals:#?}");
+    let id = |d: u32| w.data.def(d).id.clone();
+    assert!(goals.iter().any(|g| g.contains(&id(defs.hq_regiment))), "{goals:#?}");
+}
+
+#[test]
+fn finished_construction_rethinks_and_flares() {
+    // 565B00 -> 7B2350: when a construction ends the goal engine is due at
+    // once and the structure gets its defend flare.
+    let (mut w, defs) = world();
+    let mut data = ai_data();
+    for e in &mut data.egos {
+        e.flares.defend_new_structure_priority = 500.0;
+        e.flares.defend_new_structure_duration = 120.0;
+    }
+    ai::attach(&mut w, Arc::new(data));
+    building(&mut w, defs.corps, Some(0), Vec2::new(100.0, 100.0));
+    let corps_pos = Vec2::new(650.0, 650.0);
+    building(&mut w, defs.corps, Some(1), corps_pos);
+    run(&mut w, 3.0);
+    let new = building(&mut w, defs.hq, Some(1), corps_pos + Vec2::new(40.0, 0.0));
+    w.books.actor_mut(new).constructing = true;
+    run(&mut w, 4.0);
+    let due = w.ai.players[0].ge_due;
+    assert!(due > 20.0 && w.ai.players[0].flares.is_empty(), "under construction: {due} {:?}", w.ai.players[0].flares);
+    w.books.actor_mut(new).constructing = false;
+    run(&mut w, 4.5);
+    assert!(w.ai.players[0].ge_due < due, "the think did not move: {} {due}", w.ai.players[0].ge_due);
+    assert_eq!(w.ai.players[0].flares.len(), 1, "{:?}", w.ai.players[0].flares);
 }
 
 #[test]

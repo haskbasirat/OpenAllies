@@ -50,6 +50,16 @@ pub struct BuildingView {
     pub radius: f32,
 }
 
+/// A static actor the player remembers that no longer stands (the region
+/// kingdom record list `+18` read by `7BA1F0`: a target without an actor,
+/// "Attack Region (no target -> region #n)" in the original's goal CSV).
+#[derive(Clone, Debug)]
+pub struct GhostView {
+    pub def: DefId,
+    pub owner: Option<usize>,
+    pub pos: Vec2,
+}
+
 #[derive(Clone, Debug)]
 pub struct TruckView {
     pub id: ActorId,
@@ -75,6 +85,8 @@ pub struct View<'w> {
     pub orgs: Vec<OrgView>,
     pub buildings: Vec<BuildingView>,
     pub trucks: Vec<TruckView>,
+    /// Remembered static actors of the other sides that are gone.
+    pub ghosts: Vec<GhostView>,
     /// Per resource (money, ammo, oil): net income per minute.
     pub income: [f32; 3],
     pub stockpile: [f32; 3],
@@ -204,11 +216,19 @@ impl<'w> View<'w> {
             }
         }
         // Fog of war (UI/fog owner hook): a computer player knows the other
-        // sides' actors as its kingdom sees them. The original SAI asks the
-        // actor's visible_to (virtual +0x70, `0x4D3B80`) before it engages
-        // (`0x7BD360`) and, for a target it does not see, orders the attack
-        // at the position of its kingdom's memory record (`0x7C7C30` with
-        // `0x4EA430`); a structure it saw stays known where it saw it.
+        // sides' actors as its kingdom sees them. The region target scan
+        // `7BB5E0` asks a mobile target (`79E380` of its definition) its
+        // visibility (virtual +5C -> +70 `4D3B80`) and a static one virtual
+        // +58(player, 1) (`4EE3C0`): visible, else +60 (`4EAB20`): seen by
+        // the kingdom's side (+74) and either a static map object
+        // (`4EA350`) or remembered (the kingdom's record, `4EA430`). The
+        // EXPLORED start (`0x551F90` -> `0x54F400`) explores the map's
+        // neutral static objects, so every city is known from the first
+        // think while another side's base is known only once seen (the
+        // original's goal CSV: five city attack goals at 0.19 s, the
+        // enemy Corps HQ first at 270 s). A target it does not see is
+        // ordered at its kingdom's record position (`0x7C7C30`/`0x4EA430`).
+        let mut ghosts = Vec::new();
         if crate::fog::enabled(world) {
             let others = |owner: Option<usize>| owner.is_some_and(|o| o != me && !allied.get(o).copied().unwrap_or(false));
             orgs.retain(|o| !others(Some(o.owner)) || crate::fog::org_visible(world, o.id, Some(kingdom)));
@@ -216,16 +236,21 @@ impl<'w> View<'w> {
                 if !others(b.owner) {
                     return true;
                 }
-                match crate::fog::sighting(world, b.id, Some(kingdom)) {
-                    crate::fog::Sighting::Visible => true,
-                    crate::fog::Sighting::Remembered(m) => {
-                        b.pos = m.pos.truncate();
-                        true
-                    }
-                    crate::fog::Sighting::Hidden => false,
+                if let crate::fog::Sighting::Remembered(m) = crate::fog::sighting(world, b.id, Some(kingdom)) {
+                    b.pos = m.pos.truncate();
                 }
+                knows(world, b.id, kingdom)
             });
             trucks.retain(|t| !others(Some(t.owner)) || crate::fog::actor_visible(world, t.id, Some(kingdom)));
+            for (id, m) in crate::fog::memories(world, Some(kingdom)) {
+                if world.actors.get(id as usize).is_some_and(|a| a.alive && !a.removed) {
+                    continue;
+                }
+                let owner = m.kingdom.and_then(|k| kingdom_index(world, k));
+                if others(owner) {
+                    ghosts.push(GhostView { def: m.def, owner, pos: m.pos.truncate() });
+                }
+            }
         }
         let k = &world.kingdoms[me];
         let mut income = k.income;
@@ -238,7 +263,7 @@ impl<'w> View<'w> {
                 }
             }
         }
-        View { world, me, kingdom, team, hostile, allied, orgs, buildings, trucks, income, stockpile: k.stockpile }
+        View { world, me, kingdom, team, hostile, allied, orgs, buildings, trucks, ghosts, income, stockpile: k.stockpile }
     }
 
     pub fn mine(&self, owner: Option<usize>) -> bool {
@@ -253,6 +278,19 @@ impl<'w> View<'w> {
     }
     pub fn computer(&self) -> bool {
         matches!(self.world.kingdoms[self.me].controller, Controller::Computer(_))
+    }
+}
+
+/// Actor virtual +58 (player, 1): visible, or for a static actor (`4EE3C0`)
+/// +60 `4EAB20`: seen by the kingdom's side and a static map object or
+/// remembered.
+pub(crate) fn knows(world: &World, actor: ActorId, kingdom: crate::world::KingdomId) -> bool {
+    match crate::fog::sighting(world, actor, Some(kingdom)) {
+        crate::fog::Sighting::Visible | crate::fog::Sighting::Remembered(_) => true,
+        crate::fog::Sighting::Hidden => {
+            let def = world.data.def(world.actors[actor as usize].def);
+            crate::fog::actor_seen(world, actor, Some(kingdom)) && matches!(def.class, Some(DefClass::Building)) && crate::zones::def_detection(def).keeps_memory
+        }
     }
 }
 

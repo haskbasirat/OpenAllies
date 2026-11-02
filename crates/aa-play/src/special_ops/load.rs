@@ -312,6 +312,9 @@ fn ego_powers(ego: &ResolvedNode<'_>, notes: &mut Vec<String>) -> Vec<PowerConfi
             fuzzy: priority.as_ref().and_then(|pr| fx(pr, "fuzzy_factor")).unwrap_or(100.0),
             cv: factor(pchild("CV")),
             actor_value: factor(pchild("ActorValue")),
+            // 4AFD50 never reads ActorEconomy (power +6C..+74 stay zero) and
+            // reads GeneralRequirements without any evaluation using them:
+            // both are kept for reference only (`sai` ignores them).
             actor_economy: factor(pchild("ActorEconomy")),
             enemy_influence: factor(pchild("EnemyInfluence")),
             influence_ratio: factor(pchild("InfluenceRatio")),

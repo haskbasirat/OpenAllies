@@ -3,23 +3,27 @@
 //! of its pieces live in `aa_mind::sai`). Owner: opponent.
 //!
 //! Behaviour-faithful, plain `f32`. Structure, as in the original:
-//! - `KKC_SAI::Think` (`7A0080`) runs every AI player's goal engine and
-//!   reactive AI on their own schedules (`79EFF0`): the goal engine every ego
-//!   `think_frequency` seconds (30 in every shipped ego), the reactive AI
-//!   every `ReactiveAI/think_frequency` (2); the first reschedule staggers the
-//!   players by `index / (players + 1) * frequency`, and two thinks of any
-//!   players are at least `GoalEngineThinkFrequencyMinOffset` /
-//!   `RAIThinkFrequencyMinOffset` seconds apart. The goal engine also
-//!   rethinks at once when one of the player's constructions finishes while
-//!   its settlements are at most `immediate_think_on_build_max_settlements`
-//!   and the battle is younger than `immediate_think_on_build_max_time`
-//!   (`7B2350`/`7AD9A0`, called from
-//!   `KKC_ConstructionComponent::OnConstructionFinished`; a truck's unpacked
-//!   building is not a construction, so in a skirmish without engineer
-//!   constructions the thinks stay on the 30 s schedule, as in the
+//! - `KKC_SAI::Think` (`7A0080`) runs the reactive AI fiber, then the goal
+//!   engine fiber; each takes the due head nodes of its queue in turn
+//!   (`79E1D0`): `[B36528]+54` (reactive AI) and `+4C` (goal engine, with
+//!   the dynamic map analysis `7AC0D0` as id -1). A new AI slot is
+//!   prepended to both with time 0 (`79FC40`), so every player thinks at
+//!   the start; the goal-engine fiber first analyses the map (`79E900`).
+//!   Each think reschedules itself (`79EFF0`): the goal engine after ego
+//!   `think_frequency` (30 s in every shipped ego), the reactive AI after
+//!   `ReactiveAI/think_frequency` (2 s), the analysis after
+//!   `dynamic_map_analysis_think_frequency`; the first reschedule is
+//!   staggered by `id / (players + 1)` of the period (the analysis by
+//!   `players / (players + 1)`), and the queue keeps its nodes
+//!   `GoalEngineThinkFrequencyMinOffset` / `RAIThinkFrequencyMinOffset`
+//!   apart. The goal engine also rethinks when one of the player's
+//!   constructions finishes while its settlements are at most
+//!   `immediate_think_on_build_max_settlements` and the battle is younger
+//!   than `immediate_think_on_build_max_time` (`7B2350`/`7AD9A0`, called
+//!   from `KKC_ConstructionComponent::OnConstructionFinished`; a truck's
+//!   unpacked building is not a construction, so in a skirmish without
+//!   engineer constructions the thinks stay on the 30 s schedule, as in the
 //!   original's goal CSV).
-//! - The dynamic map analysis (`7AC0D0`) every
-//!   `dynamic_map_analysis_think_frequency` seconds, shared by the players.
 //! - Decisions leave the AI only as `Command`s (`KKC_SAICommandData::Send`
 //!   `7AF220`), spaced by the profile's `command_max_delay` within
 //!   `command_max_total_delay` and capped by `max_ge_commands` /
@@ -43,7 +47,7 @@ pub mod view;
 
 pub use data::AiData;
 
-use crate::world::{ActorId, Command, Controller, KingdomId, Unit, World};
+use crate::world::{AbilityTarget, ActorId, Command, Controller, KingdomId, Unit, World};
 use glam::Vec2;
 use regions::{Influence, Regions, Source, SpreadSettings};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -75,6 +79,68 @@ impl SaiRng {
     }
     pub fn below(&mut self, n: usize) -> usize {
         if n == 0 { 0 } else { self.next_u32() as usize % n }
+    }
+}
+
+/// One SAI think queue (`[B36528]+4C` goal engine, `+54` reactive AI):
+/// `{id, time, next}` nodes, earliest first.
+#[derive(Clone, Debug, Default)]
+pub struct ThinkQueue {
+    pub entries: Vec<(i32, f32)>,
+}
+
+impl ThinkQueue {
+    /// `79FC40`: a newly selected AI slot is prepended with time 0.
+    fn prepend(&mut self, id: i32) {
+        self.entries.insert(0, (id, 0.0));
+    }
+    /// `79E430`: drop the id's node.
+    fn remove(&mut self, id: i32) {
+        if let Some(i) = self.entries.iter().position(|e| e.0 == id) {
+            self.entries.remove(i);
+        }
+    }
+    /// `79EFF0(id, delay, immediate)`: due at now + delay unless already due
+    /// no later; the first reschedule is staggered by `id / (count + 1)` of
+    /// the delay (the analysis, id -1, by `count / (count + 1)`); inserted
+    /// before the first node due later; then every node not due at 0 is
+    /// pushed to at least `offset` after its predecessor (the head after
+    /// now).
+    fn schedule(&mut self, id: i32, delay: f32, immediate: bool, count: usize, now: f32, offset: f32) {
+        let mut t = now + delay;
+        if let Some(i) = self.entries.iter().position(|e| e.0 == id) {
+            if self.entries[i].1 <= t {
+                return;
+            }
+            self.entries.remove(i);
+        }
+        if immediate {
+            let k = if id == -1 { count as f32 } else { id as f32 };
+            t -= k / (count as f32 + 1.0) * delay;
+        }
+        let at = self.entries.iter().position(|e| t < e.1).unwrap_or(self.entries.len());
+        self.entries.insert(at, (id, t));
+        let mut prev = now;
+        for e in self.entries.iter_mut() {
+            if e.1 != 0.0 {
+                e.1 = e.1.max(prev + offset);
+            }
+            prev = e.1;
+        }
+    }
+    /// `79E1D0`: pop the head node when it is due.
+    fn pop_due(&mut self, now: f32) -> Option<i32> {
+        let &(id, t) = self.entries.first()?;
+        if t <= now {
+            self.entries.remove(0);
+            Some(id)
+        } else {
+            None
+        }
+    }
+    /// The time a node is due (None when not queued).
+    pub fn due(&self, id: i32) -> Option<f32> {
+        self.entries.iter().find(|e| e.0 == id).map(|e| e.1)
     }
 }
 
@@ -120,12 +186,8 @@ pub struct Player {
     pub rai: rai::Memory,
     /// Commands waiting for their send time.
     pub queue: VecDeque<(f32, Command)>,
-    /// Hostile static actors this player has seen (or were explored at the start).
-    pub known: BTreeSet<ActorId>,
     /// Battle time each region was last seen by this player.
     pub scouted: Vec<f32>,
-    /// Structures owned at the last check (immediate rethink).
-    pub structures: BTreeSet<ActorId>,
     /// Organizations with a command queued or just sent (the SAI actor
     /// record `+20` pending byte), until the given battle time.
     pub pending: BTreeMap<crate::world::OrgId, f32>,
@@ -133,6 +195,9 @@ pub struct Player {
     pub flares: Vec<(goals::Key, f32, f32)>,
     /// Health of the player's structures at the last goal-engine think.
     pub structure_health: BTreeMap<ActorId, f32>,
+    /// The other sides' structures the player knew at the last goal-engine
+    /// think (a capture shows as one of them turning the player's).
+    pub foreign: BTreeSet<ActorId>,
 }
 
 impl Player {
@@ -149,13 +214,27 @@ pub struct AiState {
     pub bound: Bound,
     pub regions: Option<Regions>,
     pub influence: Influence,
-    next_analysis: f32,
     pub players: Vec<Player>,
     /// SAI profile ids chosen by the setup screen, by kingdom.
     pub profiles: BTreeMap<KingdomId, String>,
-    rng: Option<SaiRng>,
-    last_ge: f32,
-    last_rai: f32,
+    /// The SAI's one stream (`[B36528]+2C`).
+    pub(crate) rng: Option<SaiRng>,
+    /// `Command::AirAttack` / `AirRecon` reach an aircraft. Until
+    /// `crate::combat::tasks` stops refusing them the air goals take no
+    /// airfield and reserve no money (tests of the goals turn it on).
+    pub air_orders: bool,
+    /// The player's structures under construction, watched for
+    /// `OnConstructionFinished` (`565B00` -> `7B2350`).
+    constructing: Vec<ActorId>,
+    /// `[B36528]+4C`: the goal-engine queue (player ids, and the dynamic map
+    /// analysis as id -1); `+54`: the reactive AI queue.
+    pub ge_queue: ThinkQueue,
+    pub rai_queue: ThinkQueue,
+    /// The goal-engine fiber started (`79E900` ran its first analysis).
+    ge_started: bool,
+    /// `[B28A88]`: the next analysis reschedule is staggered (cleared by
+    /// `7AC0D0` after its first use).
+    analysis_stagger_used: bool,
     actors_seen: usize,
     pub stats: Stats,
     pub log: Vec<LogEntry>,
@@ -166,7 +245,7 @@ pub struct AiState {
     reach: reach::Reach,
     // ---- appended by the core owner ----
     /// The 0x59ABA0 value KKC_SAI seeds its RNG with ([`set_seed`]).
-    seed: u32,
+    pub(crate) seed: u32,
 }
 
 impl std::fmt::Debug for AiState {
@@ -193,7 +272,12 @@ pub fn set_seed(world: &mut World, seed: u32) {
 /// custom-battle setup does when a general is picked.
 pub fn set_profile(world: &mut World, kingdom: KingdomId, profile: &str) {
     world.ai.profiles.insert(kingdom, profile.to_ascii_lowercase());
-    world.ai.players.retain(|p| p.kingdom != kingdom);
+    let st = &mut world.ai;
+    for p in st.players.iter().filter(|p| p.kingdom == kingdom) {
+        st.ge_queue.remove(p.index as i32);
+        st.rai_queue.remove(p.index as i32);
+    }
+    st.players.retain(|p| p.kingdom != kingdom);
 }
 
 /// The handicap multiply modifiers for an original difficulty index
@@ -205,6 +289,24 @@ pub fn handicap(data: &AiData, level: u8) -> Vec<(String, f32)> {
 
 fn svar(world: &World, name: &str, shipped: f32) -> f32 {
     world.data.rule_ci(name).filter(|v| v.is_finite()).unwrap_or(shipped)
+}
+
+/// The SVars of the static map analysis `7ACB00` and `7AA180`.
+fn static_svars(world: &World) -> regions::StaticSvars {
+    let d = regions::StaticSvars::default();
+    let int = |name: &str, v: i32| svar(world, name, v as f32) as i32;
+    regions::StaticSvars {
+        starting_square_size: int("StaticMapStartingSquareSize", d.starting_square_size),
+        use_fast_square_reduction: svar(world, "StaticMapUseFastSquareReduction", f32::from(u8::from(d.use_fast_square_reduction))) != 0.0,
+        fast_square_reduction_mult: int("StaticMapFastSquareReductionMult", d.fast_square_reduction_mult),
+        fast_square_reduction_div: int("StaticMapFastSquareReductionDiv", d.fast_square_reduction_div),
+        min_region_size: int("StaticMapMinRegionSize", d.min_region_size),
+        min_region_width: int("StaticMapMinRegionWidth", d.min_region_width),
+        max_region_size_for_expansion: int("StaticMapMaxRegionSizeForExpansion", d.max_region_size_for_expansion),
+        max_rectangle_width: int("StaticMapMaxRectangleWidth", d.max_rectangle_width),
+        base_map_width: int("StaticMapBaseMapWidth", d.base_map_width),
+        max_rectangle_width_exp: svar(world, "StaticMapMaxRectangleWidthExp", d.max_rectangle_width_exp),
+    }
 }
 
 pub fn think(world: &mut World) -> Vec<Command> {
@@ -227,73 +329,85 @@ impl AiState {
     fn run(&mut self, world: &World) -> Vec<Command> {
         // Without the original SAI data (`attach`) the computer stays idle.
         let Some(data) = self.data.clone() else { return Vec::new() };
+        // 7A0080 runs the SAI only once the world has ticked ([B36534]+DC
+        // >= 1) on the analysed map; by then the battle start has explored
+        // the map for the FogOfWar rule (0x4FDCE0 -> 0x551F90), so the
+        // first think already knows the neutral cities. Here the think runs
+        // inside the update, before the fog: the second update.
+        if world.tick < 2 {
+            return Vec::new();
+        }
         let key = Arc::as_ptr(&world.data) as usize;
         if self.bound_for != key || self.bound.cv.len() != world.data.defs.len() {
             let (cv, props) = view::tables(&world.data);
             self.bound = Bound { cv, props };
             self.bound_for = key;
-            let tiles = svar(world, "StaticMapStartingSquareSize", 10.0).max(1.0) as u32;
-            self.regions = Some(Regions::build(&world.map, tiles));
+            self.regions = Some(Regions::build(&world.map, static_svars(world)));
         }
         let seed = self.seed;
         let rng = self.rng.get_or_insert_with(|| SaiRng::from_seed(seed));
         let mut rng = *rng;
         self.ensure_players(world, &data, &mut rng);
         let regions = self.regions.take().unwrap_or_default();
-        if world.time >= self.next_analysis {
-            self.analyse(world, &data, &regions);
-            self.next_analysis = world.time + svar(world, "dynamic_map_analysis_think_frequency", 10.0).max(0.5);
-        }
-        self.detect_structures(world, &data);
-        self.detect_refused_deploys(world, &data);
+        self.detect_structures(world, &data, &regions);
+        self.detect_refused_deploys(world);
         let now = world.time;
         let ge_gap = svar(world, "GoalEngineThinkFrequencyMinOffset", 2.0);
         let rai_gap = svar(world, "RAIThinkFrequencyMinOffset", 0.2);
         let count = self.players.len();
-        let mut ge_done = false;
-        let mut rai_done = false;
-        for i in 0..self.players.len() {
-            let Some(me) = view::kingdom_index(world, self.players[i].kingdom) else { continue };
-            if world.kingdoms[me].defeated {
-                continue;
-            }
-            let ego = &data.egos[self.players[i].ego];
-            let ge_due = !ge_done && now >= self.players[i].ge_due && (self.stats.ge_thinks == 0 || now >= self.last_ge + ge_gap);
-            let rai_due = !rai_done && now >= self.players[i].rai_due && (self.stats.rai_thinks == 0 || now >= self.last_rai + rai_gap);
-            if !ge_due && !rai_due {
-                continue;
-            }
-            let view = View::build(world, &self.bound, me);
-            if ge_due {
-                ge_done = true;
-                self.last_ge = now;
-                self.stats.ge_thinks += 1;
-                let mut log = Vec::new();
-                let first = self.players[i].ge_count == 0;
-                self.reach.update(world);
-                goals::think(&view, &self.bound, &data, &regions, &self.influence, &self.reach, &mut self.players[i], &mut rng, &mut log, self.logging);
-                let p = &mut self.players[i];
-                let ego = &data.egos[p.ego];
-                let freq = ego.think_frequency.max(0.5);
-                p.ge_due = now + freq - if first { p.index as f32 / (count as f32 + 1.0) * freq } else { 0.0 };
-                p.ge_count += 1;
-                let kingdom = p.kingdom;
-                self.push_log(now, kingdom, log);
-            }
-            if rai_due {
-                rai_done = true;
-                self.last_rai = now;
+        // 7A0080: the RAI fiber (79E280), then the goal-engine fiber
+        // (79E900); each runs its queue's due head nodes in turn (79E1D0).
+        // The native fibers stop at wall-clock slice deadlines; here every
+        // due node runs in the tick it falls due.
+        while let Some(id) = self.rai_queue.pop_due(now) {
+            let Some(i) = self.players.iter().position(|p| p.index as i32 == id) else { continue };
+            // 7B8AC0: think count, the think while the kingdom stands, then
+            // 79EFF0(id, ReactiveAI think_frequency, first think, 1).
+            let first = self.players[i].rai_count == 0;
+            self.players[i].rai_count += 1;
+            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated) {
                 self.stats.rai_thinks += 1;
+                let view = View::build(world, &self.bound, me);
                 let mut log = Vec::new();
-                let first = self.players[i].rai_count == 0;
                 rai::think(&view, &self.bound, &data, &regions, &self.influence, &mut self.players[i], &mut rng, &mut log);
-                let p = &mut self.players[i];
-                let freq = ego.reactive.think_frequency.max(0.1);
-                p.rai_due = now + freq - if first { p.index as f32 / (count as f32 + 1.0) * freq } else { 0.0 };
-                p.rai_count += 1;
-                let kingdom = p.kingdom;
+                let kingdom = self.players[i].kingdom;
                 self.push_log(now, kingdom, log);
             }
+            let freq = data.egos[self.players[i].ego].reactive.think_frequency.max(0.1);
+            self.rai_queue.schedule(id, freq, first, count, now, rai_gap);
+        }
+        if !self.ge_started {
+            // 79E900: the fiber's first act drops the analysis node (79E430)
+            // and analyses the map (7AC0D0), which reschedules itself.
+            self.ge_started = true;
+            self.ge_queue.remove(-1);
+            self.analyse_now(world, &data, &regions, count, ge_gap);
+        }
+        while let Some(id) = self.ge_queue.pop_due(now) {
+            if id == -1 {
+                self.analyse_now(world, &data, &regions, count, ge_gap);
+                continue;
+            }
+            let Some(i) = self.players.iter().position(|p| p.index as i32 == id) else { continue };
+            // 7B4AD0: think count, the think while the kingdom stands, then
+            // 79EFF0(id, ego think_frequency, first think, 0).
+            let first = self.players[i].ge_count == 0;
+            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated) {
+                self.stats.ge_thinks += 1;
+                let view = View::build(world, &self.bound, me);
+                let mut log = Vec::new();
+                self.reach.update(world);
+                goals::think(&view, &self.bound, &data, &regions, &self.influence, &self.reach, &mut self.players[i], &mut rng, &mut log, self.logging, self.air_orders);
+                let kingdom = self.players[i].kingdom;
+                self.push_log(now, kingdom, log);
+            }
+            self.players[i].ge_count += 1;
+            let freq = data.egos[self.players[i].ego].think_frequency.max(0.5);
+            self.ge_queue.schedule(id, freq, first, count, now, ge_gap);
+        }
+        for p in &mut self.players {
+            p.ge_due = self.ge_queue.due(p.index as i32).unwrap_or(now);
+            p.rai_due = self.rai_queue.due(p.index as i32).unwrap_or(now);
         }
         self.regions = Some(regions);
         self.rng = Some(rng);
@@ -332,7 +446,15 @@ impl AiState {
 
     fn ensure_players(&mut self, world: &World, data: &AiData, rng: &mut SaiRng) {
         let computers: Vec<KingdomId> = world.kingdoms.iter().filter(|k| matches!(k.controller, Controller::Computer(_))).map(|k| k.id).collect();
-        self.players.retain(|p| computers.contains(&p.kingdom));
+        let (ge_queue, rai_queue) = (&mut self.ge_queue, &mut self.rai_queue);
+        self.players.retain(|p| {
+            let keep = computers.contains(&p.kingdom);
+            if !keep {
+                ge_queue.remove(p.index as i32);
+                rai_queue.remove(p.index as i32);
+            }
+            keep
+        });
         for (index, &id) in computers.iter().enumerate() {
             if self.players.iter().any(|p| p.kingdom == id) {
                 continue;
@@ -340,17 +462,9 @@ impl AiState {
             let k = &world.kingdoms[view::kingdom_index(world, id).expect("listed")];
             let Some(profile) = choose_profile(data, self.profiles.get(&id).map(String::as_str), &k.nation, rng) else { continue };
             let ego = data.profiles[profile].egos.first().copied().unwrap_or(0);
-            let mut known = BTreeSet::new();
-            // FogOfWar EXPLORED (the world_rules_aa default): the static
-            // actors placed at the start are explored for every kingdom.
-            if world.data.rule_ci("FogOfWar").unwrap_or(1.0) >= 1.0 {
-                for a in world.actors.iter().filter(|a| a.alive && !a.removed && a.kingdom != Some(id)) {
-                    if matches!(world.data.def(a.def).class, Some(crate::data::DefClass::Building)) || world.data.def(a.def).city {
-                        known.insert(a.id);
-                    }
-                }
-            }
             let regions = self.regions.as_ref().map_or(0, |r| r.len());
+            // What the player knows of the other sides comes from the fog
+            // (`view`); the seen records start empty.
             self.players.push(Player {
                 kingdom: id,
                 index,
@@ -358,20 +472,22 @@ impl AiState {
                 ego,
                 ge_due: world.time,
                 rai_due: world.time,
-                known,
                 scouted: vec![f32::NEG_INFINITY; regions],
                 ..Default::default()
             });
+            // 79FC40: the new AI slot is prepended to both think queues with
+            // time 0 (due at once, never spaced).
+            self.ge_queue.prepend(index as i32);
+            self.rai_queue.prepend(index as i32);
         }
     }
 
     /// A Deploy refused by the deploy owner (spot blocked or not reachable:
     /// `Event::Refused`, the truck's order reset to Idle) leaves the truck
     /// without a deployment once the command was sent. The AI drops that
-    /// region; a truck is planned again at once at most once per goal-engine
-    /// period, later refusals wait for the next regular think (no retry
-    /// loop when the truck itself cannot move).
-    fn detect_refused_deploys(&mut self, world: &World, data: &AiData) {
+    /// region; the truck is planned again by the next regular think (the
+    /// original has no rethink on a refused order).
+    fn detect_refused_deploys(&mut self, world: &World) {
         let now = world.time;
         let logging = self.logging;
         let mut lines = Vec::new();
@@ -387,11 +503,6 @@ impl AiState {
                 memo.bad.push(memo.region);
                 memo.ordered_at = 0.0;
                 memo.sent_at = 0.0;
-                let period = data.egos[p.ego].think_frequency.max(0.5);
-                if memo.replanned_at <= 0.0 || now - memo.replanned_at >= period {
-                    memo.replanned_at = now;
-                    p.ge_due = p.ge_due.min(now);
-                }
                 if logging {
                     lines.push((p.kingdom, format!("deploy of {} refused at ({:.0},{:.0}); another site", world.data.def(a.def).id, memo.site.x, memo.site.y)));
                 }
@@ -402,40 +513,72 @@ impl AiState {
         }
     }
 
-    /// Structures created since the last tick trigger the immediate rethink
-    /// and the new-structure defend flare of `7B2350`. The original calls it
-    /// from `KKC_ConstructionComponent::OnConstructionFinished` only: a
-    /// truck's unpacked building is not a construction (the goal CSV shows
-    /// no extra think and no +500 defend flare when the supply depot, the
-    /// Infantry Division HQ or the Artillery Brigade unpack).
-    fn detect_structures(&mut self, world: &World, data: &AiData) {
-        if world.actors.len() == self.actors_seen {
+    /// The immediate rethink and the new-structure defend flare of `7B2350`.
+    /// The original calls it from `KKC_ConstructionComponent::
+    /// OnConstructionFinished` (`565B00`) only: a truck's unpacked building
+    /// is not a construction (the goal CSV shows no extra think and no +500
+    /// defend flare when the supply depot, the Infantry Division HQ or the
+    /// Artillery Brigade unpack). Here: a structure placed under construction
+    /// is watched until its construction ends.
+    fn detect_structures(&mut self, world: &World, data: &AiData, regions: &Regions) {
+        let from = self.actors_seen.min(world.actors.len());
+        self.actors_seen = world.actors.len();
+        for a in &world.actors[from..] {
+            if world.books.actor(a.id).is_some_and(|b| b.constructing) {
+                self.constructing.push(a.id);
+            }
+        }
+        if self.constructing.is_empty() {
             return;
         }
-        let from = self.actors_seen;
-        self.actors_seen = world.actors.len();
-        for a in &world.actors[from.min(world.actors.len())..] {
-            if !a.alive || a.removed || !matches!(world.data.def(a.def).class, Some(crate::data::DefClass::Building)) {
-                continue;
+        let mut finished = Vec::new();
+        self.constructing.retain(|&a| {
+            let actor = &world.actors[a as usize];
+            if !actor.alive || actor.removed {
+                return false;
             }
-            if world.data.defs.iter().any(|d| d.unpacks_to == Some(a.def)) {
-                continue;
+            if world.books.actor(a).is_some_and(|b| b.constructing) {
+                return true;
             }
-            let Some(k) = a.kingdom else { continue };
+            finished.push(a);
+            false
+        });
+        let count = self.players.len();
+        let gap = svar(world, "GoalEngineThinkFrequencyMinOffset", 2.0);
+        for a in finished {
+            let actor = &world.actors[a as usize];
+            let Some(k) = actor.kingdom else { continue };
             for p in self.players.iter_mut().filter(|p| p.kingdom == k) {
-                if !p.structures.insert(a.id) || p.ge_count == 0 {
-                    continue;
-                }
                 let ego = &data.egos[p.ego];
-                if 0 <= ego.immediate_think_on_build_max_settlements && world.time < ego.immediate_think_on_build_max_time {
-                    p.ge_due = p.ge_due.min(world.time);
+                // 7B2350 / 7AD9A0: while the player's settlements are at
+                // most immediate_think_on_build_max_settlements and the
+                // battle is not older than immediate_think_on_build_max_time,
+                // 79EFF0(id, 0, 0, 0): due now, then spaced by
+                // GoalEngineThinkFrequencyMinOffset.
+                let settlements = world.actors.iter().filter(|x| x.alive && !x.removed && x.kingdom == Some(k) && world.data.def(x.def).city).count() as i32;
+                if settlements <= ego.immediate_think_on_build_max_settlements && world.time <= ego.immediate_think_on_build_max_time {
+                    self.ge_queue.schedule(p.index as i32, 0.0, false, count, world.time, gap);
                 }
-                // 7B2350: a new structure is defended for a while.
-                if let Some(r) = self.regions.as_ref().map(|r| r.region_at(a.pos.truncate())) {
-                    p.flares.push((goals::Key::Defend(r), ego.flares.defend_new_structure_priority, world.time + ego.flares.defend_new_structure_duration));
-                }
+                // 7B2350: a new structure is defended for a while. A thing
+                // without a parent (virtual +100) takes the structure values;
+                // the settlement ones are for a building that is the centre
+                // of its parent settlement (+158), which aa-play does not
+                // keep: the goal CSV shows +500 on a city, not +750.
+                let (priority, duration) = (ego.flares.defend_new_structure_priority, ego.flares.defend_new_structure_duration);
+                p.flares.push((goals::Key::Defend(regions.region_at(actor.pos.truncate())), priority, world.time + duration));
             }
         }
+    }
+
+    /// `7AC0D0` and its reschedule `79EFF0(-1, dynamic_map_analysis_
+    /// think_frequency, [B28A88], 0)`; `[B28A88]` is cleared after the
+    /// first use, so only the first reschedule is staggered.
+    fn analyse_now(&mut self, world: &World, data: &AiData, regions: &Regions, count: usize, gap: f32) {
+        self.analyse(world, data, regions);
+        let stagger = !self.analysis_stagger_used;
+        self.analysis_stagger_used = true;
+        let freq = svar(world, "dynamic_map_analysis_think_frequency", 10.0).max(0.5);
+        self.ge_queue.schedule(-1, freq, stagger, count, world.time, gap);
     }
 
     /// `7AC0D0`: spread every live actor's combat value.
@@ -551,8 +694,29 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
             let units: Vec<Unit> = units.into_iter().filter(live).collect();
             (!units.is_empty() && world.actor(target).is_some_and(|a| !a.removed)).then_some(Command::Follow { kingdom, units, target })
         }
+        // the BOMBARD goal's order (7C84F0): its live actors, and a target
+        // actor that still stands and is still an enemy's
+        Command::Bombard { kingdom, units, target } => {
+            let units: Vec<Unit> = units.into_iter().filter(live).collect();
+            let ok = match target {
+                AbilityTarget::Actor(t) => world.actor(t).is_some_and(|a| a.alive && enemy_of(world, kingdom, a.kingdom)),
+                AbilityTarget::Point(_) => true,
+            };
+            (!units.is_empty() && ok).then_some(Command::Bombard { kingdom, units, target })
+        }
+        // the AIR_ATTACK goal's order (7C7C30): the airfield still stands,
+        // and so does a target actor, still an enemy's
+        Command::AirAttack { kingdom, building, target } => {
+            let ok = match target {
+                AbilityTarget::Actor(t) => world.actor(t).is_some_and(|a| a.alive && enemy_of(world, kingdom, a.kingdom)),
+                AbilityTarget::Point(_) => true,
+            };
+            (ok && world.actor(building).is_some_and(|a| a.alive)).then_some(command)
+        }
+        // an air-recon EXPLORE goal's order: the airfield still stands
+        Command::AirRecon { building, .. } => world.actor(building).is_some_and(|a| a.alive).then_some(command),
         // the HUD orders (appended by the core owner; the AI sends none)
-        Command::Bombard { .. } | Command::Repair { .. } | Command::Construct { .. } | Command::AirAttack { .. } | Command::AirRecon { .. } => Some(command),
+        Command::Repair { .. } | Command::Construct { .. } => Some(command),
     }
 }
 
@@ -567,7 +731,7 @@ pub(crate) fn enqueue(player: &mut Player, data: &AiData, now: f32, reaction: f3
     player.pending.retain(|_, t| *t > now);
     for (i, c) in commands.into_iter().take(n).enumerate() {
         let due = now + reaction + spacing * i as f32;
-        if let Command::Move { units, .. } | Command::Attack { units, .. } | Command::Stop { units, .. } = &c {
+        if let Command::Move { units, .. } | Command::Attack { units, .. } | Command::Stop { units, .. } | Command::Bombard { units, .. } = &c {
             for u in units {
                 if let Unit::Org(o) = u {
                     // The order shows on the organization a tick after it is sent.

@@ -175,7 +175,9 @@ fn every_ability_runs_on_berlin() {
             used += ok as usize;
             let mut mid = None;
             let mut no_fog = false;
-            for t in 0..16 * 10 {
+            // 11 s: the kingdom's Properties Tick (5818D0, queue 1) checks the
+            // 10 s radar scan once a second, at its bucket.
+            for t in 0..16 * 11 {
                 w.step(Vec::new());
                 if t == 16 * 4 {
                     mid = Some((side(&w, 0), side(&w, 1)));
