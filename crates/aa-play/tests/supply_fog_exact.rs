@@ -225,8 +225,10 @@ fn detection_range_follows_the_modifiers() {
     assert_eq!(zod(&w), 44.0);
 }
 
-/// 0x56EDC0 with EngagementShowReverseRZOD: an attacker's RZOD shows to the
-/// kingdom it attacks, without exploring.
+/// 0x56EDC0 with EngagementShowReverseRZOD: the owner of the thing's Mind's target
+/// (+0x70 virtual +0x90) sees the thing's RZOD, without exploring. Such a target is
+/// the Mind's, not a weapon's: here a member the engage state handed one (its kill
+/// state, UAI +0x13C). A member out of its regiment's ZOC carries its own Detection.
 #[test]
 fn an_attacker_is_revealed_to_its_target() {
     let (mut w, ids) = world(&[0, 1]);
@@ -238,10 +240,21 @@ fn an_attacker_is_revealed_to_its_target() {
     w.data = Arc::new(d);
     fog::set_mode(&mut w, FogMode::Full);
     let target = w.spawn_actor(ids.soldier, Some(1), Vec3::new(100.0, 100.0, 0.0), 0.0);
+    let leader = w.spawn_actor(ids.soldier, Some(0), Vec3::new(160.0, 200.0, 0.0), 0.0);
     let shooter = w.spawn_actor(ids.soldier, Some(0), Vec3::new(160.0, 100.0, 0.0), 0.0);
+    let o = w.orgs.len() as u32;
+    for (i, &m) in [leader, shooter].iter().enumerate() {
+        w.actors[m as usize].org = Some(o);
+        w.actors[m as usize].slot = Some(i as u16);
+    }
+    w.orgs.push(aa_play::Organization { id: o, def: ids.regiment, kingdom: 0, members: vec![leader, shooter], hq: None, order: aa_play::Order::Idle, anchor: Vec2::new(160.0, 200.0), heading: 0.0, morale: 1.0, experience: 0.0, alive: true });
+    seconds(&mut w, 2);
     fog::tick(&mut w);
+    assert_eq!(fog::engine(&w).unwrap().attached(shooter), Some(false));
     assert!(!fog::actor_visible(&w, shooter, Some(1)));
+    aa_play::combat::tick(&mut w);
     w.actors[shooter as usize].combat.target = Some(target);
+    w.combat.actors[shooter as usize].engage_target = Some(aa_play::combat::TargetRef::Actor(target));
     seconds(&mut w, 1);
     fog::tick(&mut w);
     assert!(fog::actor_visible(&w, shooter, Some(1)), "the target's side sees the shooter");

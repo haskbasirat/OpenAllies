@@ -1,12 +1,14 @@
 //! Combat and morale checks on synthetic data with known stats, plus an
 //! ignored real-data run (AA_GAME_ROOT, e.g. `<game root>`):
 //! `cargo test -p aa-play --test combat_morale -- --ignored --nocapture`.
-//! The ticks call only `combat::tick` and `morale::tick` (no movement), so
-//! units stay where they were placed.
+//! The ticks call `combat::tick`, `morale::tick` and the zone observation (no
+//! movement), so units stay where they were placed. A regiment fights what enters
+//! its ZOC (zone type 4, `0x514DA0` -> `0x57AB70`), so the scenes stand on a flat
+//! map the zone engine can describe, with the native blocked border.
 use aa_play::combat::{self, damage_amount, modified_defense, modified_power};
 use aa_play::data::{ActorStateDef, DeathClip, Def, DefClass, GameData, Modifier, PropertyDef, Weapon};
 use aa_play::map::GameMap;
-use aa_play::world::{Activity, Controller, Event, Kingdom, Order, Organization, World};
+use aa_play::world::{Activity, Command, Controller, Event, Kingdom, Order, Organization, Unit, World};
 use aa_play::{DT, OrgId};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
@@ -51,6 +53,12 @@ fn member(id: &str, health: f32, defense: f32, morale_value: f32, factors: [f32;
         rot_time: 0.0,
         sink_time: 2.0,
         properties: vec!["infantry".into()],
+        // Thing `[Flags] targetable`, actor +8 bit 14: what 0x514DA0 asks of a
+        // thing before the ZOC's enemy-entered effects.
+        targetable: true,
+        // `Size` soft radius of the shipped infantry: the area query 558040 and
+        // the attenuation distance of 4C9550 phase 3 take it off.
+        soft_radius: 0.5,
         ..Default::default()
     }
 }
@@ -224,8 +232,21 @@ fn kingdom(id: u32, team: u32) -> Kingdom {
     }
 }
 
+/// The middle of the map the synthetic scenes stand on.
+const C: Vec2 = Vec2::new(400.0, 400.0);
+
+/// A point of a scene, from the middle of the map.
+fn o(x: f32, y: f32) -> Vec2 {
+    C + Vec2::new(x, y)
+}
+
+/// A standing point of a scene, from the middle of the map.
+fn spot(x: f32, y: f32) -> Vec3 {
+    o(x, y).extend(0.0)
+}
+
 fn world_with(data: GameData) -> World {
-    let mut w = World::empty(Arc::new(data), Arc::new(GameMap::default()), 7);
+    let mut w = World::empty(Arc::new(data), Arc::new(open_map(200, 200, 4.0)), 7);
     w.kingdoms = vec![kingdom(0, 0), kingdom(1, 1)];
     w
 }
@@ -267,6 +288,8 @@ fn step(w: &mut World) -> Vec<Event> {
     w.events.clear();
     combat::tick(w);
     aa_play::morale::tick(w);
+    // The zones after the things: their tile changes and what the ZOCs ask.
+    aa_play::fog::observe_now(w);
     w.tick += 1;
     w.time = w.tick as f32 * DT;
     std::mem::take(&mut w.events)
@@ -314,8 +337,8 @@ fn damage_formula_known_stats() {
 #[test]
 fn rifle_duel_recharge_and_death() {
     let mut w = world_with(data());
-    let first = w.spawn_actor(0, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
-    let second = w.spawn_actor(0, Some(1), Vec3::new(8.0, 0.0, 0.0), 0.0);
+    let first = w.spawn_actor(0, Some(0), spot(0.0, 0.0), 0.0);
+    let second = w.spawn_actor(0, Some(1), spot(8.0, 0.0), 0.0);
     let mut shots: BTreeMap<u32, Vec<f32>> = BTreeMap::new();
     let mut hits: BTreeMap<u32, Vec<f32>> = BTreeMap::new();
     let mut died = None;
@@ -369,10 +392,10 @@ fn at_vs_tank_and_scratches() {
     d.defs.push(unarmed);
     let unarmed = d.defs.len() as u32 - 1;
     let mut w = world_with(d);
-    let at = w.spawn_actor(2, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
-    let rifle = w.spawn_actor(0, Some(0), Vec3::new(0.0, 4.0, 0.0), 0.0);
-    let pistol = w.spawn_actor(3, Some(0), Vec3::new(0.0, -3.0, 0.0), 0.0);
-    let tank = w.spawn_actor(unarmed, Some(1), Vec3::new(5.0, 0.0, 0.0), 0.0);
+    let at = w.spawn_actor(2, Some(0), spot(0.0, 0.0), 0.0);
+    let rifle = w.spawn_actor(0, Some(0), spot(0.0, 4.0), 0.0);
+    let pistol = w.spawn_actor(3, Some(0), spot(0.0, -3.0), 0.0);
+    let tank = w.spawn_actor(unarmed, Some(1), spot(5.0, 0.0), 0.0);
     let mut per_shooter: BTreeMap<u32, Vec<f32>> = BTreeMap::new();
     let mut last_shooter = None;
     let died = run_until(&mut w, 60.0, |w, ev| {
@@ -401,8 +424,8 @@ fn at_vs_tank_and_scratches() {
 #[test]
 fn tank_regiment_vs_infantry_regiment() {
     let mut w = world_with(data());
-    let inf = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
-    let tanks = spawn_org(&mut w, 5, 1, Vec2::new(18.0, 0.0), 0.0);
+    let inf = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let tanks = spawn_org(&mut w, 5, 1, o(18.0, 0.0), 0.0);
     let mut routed = None;
     let mut destroyed = None;
     let mut deaths = Vec::new();
@@ -429,8 +452,8 @@ fn tank_regiment_vs_infantry_regiment() {
 #[test]
 fn regiments_engage_kill_and_destroy() {
     let mut w = world_with(data());
-    let a = spawn_org(&mut w, 8, 0, Vec2::new(0.0, 0.0), 0.0);
-    let b = spawn_org(&mut w, 4, 1, Vec2::new(8.0, 0.0), 0.0);
+    let a = spawn_org(&mut w, 8, 0, o(0.0, 0.0), 0.0);
+    let b = spawn_org(&mut w, 4, 1, o(8.0, 0.0), 0.0);
     // Regiment a is too weak to rout before it dies (breakpoint 5, 2 members).
     let mut destroyed = Vec::new();
     let mut routed = Vec::new();
@@ -464,8 +487,8 @@ fn regiments_engage_kill_and_destroy() {
 #[test]
 fn morale_break_rout_and_regroup() {
     let mut w = world_with(data());
-    let victim = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
-    let attacker = spawn_org(&mut w, 7, 1, Vec2::new(9.0, 0.0), 0.0);
+    let victim = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let attacker = spawn_org(&mut w, 7, 1, o(9.0, 0.0), 0.0);
     // Prepare once to initialise morale, then put the victim just above its breakpoint.
     step(&mut w);
     assert_eq!(w.orgs[victim as usize].morale, 30.0, "6 x morale_value 5");
@@ -487,7 +510,7 @@ fn morale_break_rout_and_regroup() {
     let to = rout.destination.expect("rout destination");
     assert_eq!(w.orgs[victim as usize].order, Order::Move { to, attack_move: false });
     let enemy = w.orgs[attacker as usize].anchor;
-    assert!(to.distance(enemy) > Vec2::ZERO.distance(enemy), "flees away from the enemy: {to}");
+    assert!(to.distance(enemy) > C.distance(enemy), "flees away from the enemy: {to}");
     assert!(w.orgs[victim as usize].members.iter().all(|&m| w.actors[m as usize].combat.target.is_none()));
     // The attacker gained breaker morale and rout experience.
     assert!(w.orgs[attacker as usize].experience > 0.0);
@@ -515,8 +538,8 @@ fn morale_break_rout_and_regroup() {
 #[test]
 fn experience_promotion_changes_damage() {
     let mut w = world_with(data());
-    let vet = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
-    let foe = spawn_org(&mut w, 4, 1, Vec2::new(9.0, 0.0), 0.0);
+    let vet = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let foe = spawn_org(&mut w, 4, 1, o(9.0, 0.0), 0.0);
     w.orgs[vet as usize].experience = 149.0;
     // The foe must not rout before the check.
     w.orgs[foe as usize].morale = 1000.0;
@@ -548,9 +571,9 @@ fn experience_promotion_changes_damage() {
 #[test]
 fn grenade_area_damage() {
     let mut w = world_with(data());
-    let g = w.spawn_actor(9, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
-    let t1 = w.spawn_actor(3, Some(1), Vec3::new(8.0, 0.0, 0.0), 0.0);
-    let t2 = w.spawn_actor(3, Some(1), Vec3::new(8.0, 1.9, 0.0), 0.0);
+    let g = w.spawn_actor(9, Some(0), spot(0.0, 0.0), 0.0);
+    let t1 = w.spawn_actor(3, Some(1), spot(8.0, 0.0), 0.0);
+    let t2 = w.spawn_actor(3, Some(1), spot(8.0, 1.9), 0.0);
     let mut grenade_hits = Vec::new();
     let mut weapon_fired = None;
     run_until(&mut w, 1.0, |_, ev| {
@@ -575,9 +598,9 @@ fn grenade_area_damage() {
 #[test]
 fn explicit_attack_targets_the_order() {
     let mut w = world_with(data());
-    let a = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
-    let near = spawn_org(&mut w, 4, 1, Vec2::new(9.0, 0.0), 0.0);
-    let far = spawn_org(&mut w, 4, 1, Vec2::new(0.0, 9.0), 0.0);
+    let a = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let near = spawn_org(&mut w, 4, 1, o(9.0, 0.0), 0.0);
+    let far = spawn_org(&mut w, 4, 1, o(0.0, 9.0), 0.0);
     let target = w.orgs[far as usize].members[2];
     w.orgs[a as usize].order = Order::Attack { target };
     run_until(&mut w, 2.0, |_, _| false);
@@ -589,18 +612,39 @@ fn explicit_attack_targets_the_order() {
     let _ = near;
 }
 
+/// `0x51D1C0` stop: the sleep state replaces the engage state (`0x52A420`), whose
+/// exit `0x520FE0` empties the list (`0x51F040`). A thing that stands in the ZOC and
+/// does not shoot is not entered again, so the regiment stops for good.
+#[test]
+fn stop_ends_an_attack_on_a_thing_that_does_not_shoot() {
+    let mut d = data();
+    d.defs.push(Def { id: "depot".into(), class: Some(DefClass::Building), health: 750.0, destructible: true, targetable: true, damage_factor: vec![1.0; 4], ..Default::default() });
+    let depot = d.defs.len() as u32 - 1;
+    let mut w = world_with(d);
+    let a = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let t = w.spawn_actor(depot, Some(1), spot(9.0, 0.0), 0.0);
+    let fired = |ev: &[Event]| ev.iter().any(|e| matches!(e, Event::Fired { .. }));
+    assert!(run_until(&mut w, 5.0, |_, ev| fired(ev)).is_some(), "a regiment shoots an enemy thing in its ZOC, unordered");
+    assert_eq!(w.orgs[a as usize].order, Order::Attack { target: t });
+    w.apply(Command::Stop { kingdom: 0, units: vec![Unit::Org(a)] });
+    assert!(run_until(&mut w, 10.0, |_, ev| fired(ev)).is_none(), "stop ends the shooting");
+    assert_eq!(w.orgs[a as usize].order, Order::Idle);
+    assert!(combat::org_state(&w, a).unwrap().engage.is_empty());
+    assert!(w.orgs[a as usize].members.iter().all(|&m| w.actors[m as usize].combat.target.is_none()));
+}
+
 /// Entrenchment: a resting regiment entrenches after entrenchment_time (30 s);
 /// infantry_entrench gives DV +4 and armor_piercing resist 0.4.
 #[test]
 fn entrenchment_after_rest() {
     let mut w = world_with(data());
-    let inf = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
+    let inf = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
     let entrenched_at = run_until(&mut w, 40.0, |w, _| combat::org_state(w, inf).unwrap().entrenched);
     let at = entrenched_at.expect("entrenches");
     eprintln!("entrenched after {at:.2}s of rest");
     assert!((at - 30.0).abs() <= 2.0 * DT);
     // A tank now hits the entrenched infantry for (70 - (1 + 4)) * (0.8 - 0.4) = 26.
-    let tank = w.spawn_actor(1, Some(1), Vec3::new(15.0, 0.0, 0.0), 0.0);
+    let tank = w.spawn_actor(1, Some(1), spot(15.0, 0.0), 0.0);
     let mut hit = None;
     run_until(&mut w, 2.0, |_, ev| {
         for e in ev {
@@ -613,7 +657,7 @@ fn entrenchment_after_rest() {
     assert_eq!(hit, Some(26.0));
     let _ = tank;
     // A move order leaves the trenches.
-    w.orgs[inf as usize].order = Order::Move { to: Vec2::new(-50.0, 0.0), attack_move: false };
+    w.orgs[inf as usize].order = Order::Move { to: o(-50.0, 0.0), attack_move: false };
     step(&mut w);
     assert!(!combat::org_state(&w, inf).unwrap().entrenched);
 }
@@ -638,8 +682,8 @@ fn city_capture() {
     });
     let city_def = d.defs.len() as u32 - 1;
     let mut w = world_with(d);
-    let rifle = w.spawn_actor(0, Some(0), Vec3::new(0.0, 0.0, 0.0), 0.0);
-    let city = w.spawn_actor(city_def, Some(1), Vec3::new(6.0, 0.0, 0.0), 0.0);
+    let rifle = w.spawn_actor(0, Some(0), spot(0.0, 0.0), 0.0);
+    let city = w.spawn_actor(city_def, Some(1), spot(6.0, 0.0), 0.0);
     let mut captured = None;
     run_until(&mut w, 60.0, |w, ev| {
         for e in ev {
@@ -668,8 +712,8 @@ fn city_capture() {
 #[test]
 fn shortfall_death_takes_the_death_path() {
     let mut w = world_with(data());
-    let org = spawn_org(&mut w, 8, 0, Vec2::new(0.0, 0.0), 0.0);
-    let foe = spawn_org(&mut w, 4, 1, Vec2::new(200.0, 0.0), 0.0);
+    let org = spawn_org(&mut w, 8, 0, o(0.0, 0.0), 0.0);
+    let foe = spawn_org(&mut w, 4, 1, o(200.0, 0.0), 0.0);
     step(&mut w);
     let [a, b] = [w.orgs[org as usize].members[0], w.orgs[org as usize].members[1]];
     let morale = w.orgs[org as usize].morale;
@@ -696,16 +740,17 @@ fn shortfall_death_takes_the_death_path() {
     assert_eq!(w.orgs[foe as usize].experience, 0.0);
     run_until(&mut w, 3.2, |_, _| false);
     assert!(w.actors[a as usize].removed && w.actors[b as usize].removed);
-    // A non-destructible building at 0 health is restored to 1.
+    // A non-destructible building that cannot be captured stays at 0 health
+    // (`5625C0`; the Comrades film's block e81 holds hp 0 for 168 ticks).
     let mut d = data();
     d.defs.push(Def { id: "hq".into(), class: Some(DefClass::Building), health: 500.0, destructible: false, ..Default::default() });
     let hq_def = d.defs.len() as u32 - 1;
     let mut w = world_with(d);
-    let hq = w.spawn_actor(hq_def, Some(0), Vec3::ZERO, 0.0);
+    let hq = w.spawn_actor(hq_def, Some(0), spot(0.0, 0.0), 0.0);
     w.actors[hq as usize].health = 0.0;
     step(&mut w);
     assert!(w.actors[hq as usize].alive);
-    assert_eq!(w.actors[hq as usize].health, 1.0);
+    assert_eq!(w.actors[hq as usize].health, 0.0);
 }
 
 /// Die clip choice (DieAnimation): threshold, damage filter group, 666 for a
@@ -728,7 +773,7 @@ fn death_clip_choice() {
     d.defs[0].death_clips = vec![clip("die_long", 2.5, 1.0, -1.0, 0.0)];
     d.defs[0].death_time = Some(2.5);
     let mut w = world_with(d);
-    let a = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+    let a = w.spawn_actor(0, Some(0), spot(0.0, 0.0), 0.0);
     w.actors[a as usize].health = 0.0;
     step(&mut w);
     assert_eq!(w.combat.actor(a).unwrap().death_clip, Some(0));
@@ -744,8 +789,8 @@ fn projectile_flight_time() {
     let mut d = data();
     d.defs[1].weapons[0].projectile_speed = 40.0;
     let mut w = world_with(d);
-    let tank = w.spawn_actor(1, Some(0), Vec3::ZERO, 0.0);
-    let target = w.spawn_actor(3, Some(1), Vec3::new(16.0, 0.0, 0.0), 0.0);
+    let tank = w.spawn_actor(1, Some(0), spot(0.0, 0.0), 0.0);
+    let target = w.spawn_actor(3, Some(1), spot(16.0, 0.0), 0.0);
     let mut fired = None;
     let mut hit = None;
     run_until(&mut w, 3.0, |w, ev| {
@@ -772,10 +817,10 @@ fn roe_primary_backs_off() {
     d.defs[4].leader_slot = Some(0);
     d.rules.insert("ROEPrimaryEngageReturnTimeout".into(), 5.0);
     let mut w = world_with(d);
-    let org = spawn_org(&mut w, 4, 0, Vec2::new(0.0, 0.0), 0.0);
-    let foe = w.spawn_actor(0, Some(1), Vec3::new(-2.0, 8.0, 0.0), 0.0);
+    let org = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let foe = w.spawn_actor(0, Some(1), spot(-2.0, 8.0), 0.0);
     let primary = w.orgs[org as usize].members[0];
-    w.orgs[org as usize].anchor = Vec2::new(0.0, -20.0);
+    w.orgs[org as usize].anchor = o(0.0, -20.0);
     w.actors[primary as usize].health = 80.0;
     let mut primary_shots = 0;
     run_until(&mut w, 4.0, |_, ev| {
@@ -797,7 +842,7 @@ fn performance_150_regiments() {
         for r in 0..75 {
             let x = (r % 15) as f32 * 40.0;
             let y = (r / 15) as f32 * 60.0 + if side == 0 { 0.0 } else { 16.0 };
-            spawn_org(&mut w, 7, side, Vec2::new(x, y), 0.0);
+            spawn_org(&mut w, 7, side, Vec2::new(x, y) + Vec2::new(100.0, 200.0), 0.0);
         }
     }
     assert_eq!(w.actors.len(), 1350);
@@ -982,4 +1027,601 @@ fn real_data_battle_with_movement() {
             o.id, o.alive, o.members.len(), o.morale, s.morale_max, o.experience, s.level, o.order, s.position
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// A real map through `World::step`, with no computer player.
+
+/// `(2v2)Berlin` with two human kingdoms (no SAI) and the spot nearest the
+/// map's centre with `clear` metres of passable land around it and no
+/// armed thing within 120 m.
+fn berlin_scene(clear: f32) -> (World, Vec2) {
+    let data = real().expect("original data");
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
+    let player = |name: &str, nation: &str, team, start| aa_play::PlayerSetup { name: name.into(), nation: nation.into(), team, color: [0, 76, 255], controller: Controller::Human, start };
+    let setup = aa_play::SkirmishSetup {
+        map_id: "(2v2)Berlin".into(),
+        players: vec![player("A", "rus", 0, 0), player("B", "ger", 1, 2)],
+        starting_resources: None,
+        seed: 5,
+    };
+    let w = World::new_skirmish(data, map.clone(), &setup).expect("new_skirmish");
+    let tile = map.cell_size;
+    let open = |p: Vec2| {
+        let r = (clear / tile) as i32;
+        let (cx, cy) = ((p.x / tile) as i32, (p.y / tile) as i32);
+        (-r..=r).all(|dy| {
+            (-r..=r).all(|dx| {
+                let (x, y) = (cx + dx, cy + dy);
+                x >= 0 && y >= 0 && x < map.width as i32 && y < map.height as i32 && map.flags[(y as u32 * map.width + x as u32) as usize] & (aa_play::map::BLOCKED | aa_play::map::NOT_LAND_PASSABLE) == 0
+            })
+        })
+    };
+    let mid = Vec2::new(map.width as f32, map.height as f32) * tile * 0.5;
+    let mut spots = Vec::new();
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * tile;
+            if w.actors.iter().all(|a| a.removed || w.data.def(a.def).weapons.is_empty() || a.pos.truncate().distance(p) > 120.0) && open(p) {
+                spots.push(p);
+            }
+        }
+    }
+    spots.sort_by(|a, b| a.distance(mid).total_cmp(&b.distance(mid)));
+    let spot = *spots.first().expect("an open spot on Berlin");
+    (w, spot)
+}
+
+#[derive(Default)]
+struct Fight {
+    log: Vec<String>,
+    first_shot: Option<f32>,
+    shots: BTreeMap<String, u32>,
+    damage: BTreeMap<String, Vec<f32>>,
+    deaths: u32,
+}
+
+/// `World::step` for `seconds` with what happens noted, until `stop`.
+fn watch(w: &mut World, f: &mut Fight, seconds: f32, mut stop: impl FnMut(&World) -> bool) {
+    for _ in 0..(seconds / DT) as u32 {
+        w.step(Vec::new());
+        let mut last: Option<String> = None;
+        for e in w.events.clone() {
+            match e {
+                Event::Fired { shooter, weapon, .. } => {
+                    f.first_shot = f.first_shot.or(Some(w.time));
+                    let def = w.data.def(w.actors[shooter as usize].def);
+                    let name = format!("k{} {} {}", w.actors[shooter as usize].kingdom.unwrap_or(99), def.id, def.weapons[weapon as usize].name);
+                    *f.shots.entry(name.clone()).or_default() += 1;
+                    last = Some(name);
+                }
+                Event::Hit { damage, .. } => {
+                    if let Some(n) = &last {
+                        f.damage.entry(n.clone()).or_default().push(damage);
+                    }
+                }
+                Event::Died { .. } => f.deaths += 1,
+                Event::Routed { org } => f.log.push(format!("{:.1}s routed {org} morale {:.1} -> {:?}", w.time, w.orgs[org as usize].morale, w.orgs[org as usize].order)),
+                Event::OrgDestroyed { org } => f.log.push(format!("{:.1}s destroyed {org}", w.time)),
+                Event::Promoted { org, level } => f.log.push(format!("{:.1}s promoted {org} to {level}", w.time)),
+                Event::Refused { reason, .. } => f.log.push(format!("{:.1}s refused {reason}", w.time)),
+                _ => {}
+            }
+        }
+        if stop(w) {
+            break;
+        }
+    }
+}
+
+fn show(w: &World, f: &Fight, orgs: &[OrgId]) {
+    eprintln!("first shot {:?}, deaths {}", f.first_shot, f.deaths);
+    for l in &f.log {
+        eprintln!("  {l}");
+    }
+    for (n, c) in &f.shots {
+        let d = f.damage.get(n).cloned().unwrap_or_default();
+        let (min, max) = d.iter().fold((f32::MAX, 0.0f32), |(a, b), &x| (a.min(x), b.max(x)));
+        eprintln!("  {n}: {c} shots, {} hits {min}..{max}", d.len());
+    }
+    for &o in orgs {
+        let s = combat::org_state(w, o).unwrap();
+        let g = &w.orgs[o as usize];
+        eprintln!("  org {o} alive {} members {} morale {:.1}/{:.1} xp {:.1} level {} order {:?} pos {} engage {}", g.alive, g.members.len(), g.morale, s.morale_max, g.experience, s.level, g.order, s.position, s.engage.len());
+    }
+}
+
+/// On a real map, two enemy regiments that come near each other engage and
+/// shoot with no attack order; men die.
+#[test]
+#[ignore]
+fn real_map_regiments_fight() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    eprintln!("Berlin spot {c}");
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(55.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(55.0, 0.0), std::f32::consts::PI, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 5.0, |_| false);
+    assert!(f.first_shot.is_none(), "too far apart to shoot");
+    w.step(vec![aa_play::Command::Move { kingdom: 0, units: vec![aa_play::Unit::Org(a)], to: c + Vec2::new(40.0, 0.0), attack_move: false }]);
+    watch(&mut w, &mut f, 240.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
+    eprintln!("--- plain move into the enemy");
+    show(&w, &f, &[a, b]);
+    assert!(f.first_shot.is_some(), "they shoot with no attack order");
+    assert!(f.deaths > 0, "men die");
+}
+
+/// A person's `Command::Attack` on a regiment far beyond its control range.
+#[test]
+#[ignore]
+fn real_map_attack_command() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(60.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(60.0, 0.0), std::f32::consts::PI, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 5.0, |_| false);
+    let target = w.orgs[b as usize].members[0];
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target }]);
+    let start = combat::org_state(&w, a).unwrap().position;
+    watch(&mut w, &mut f, 5.0, |_| false);
+    let walked = combat::org_state(&w, a).unwrap().position.distance(start);
+    eprintln!("--- attack command: walked {walked} m in 5 s, order {:?}", w.orgs[a as usize].order);
+    assert!(walked > 2.0, "the attacker walks");
+    watch(&mut w, &mut f, 240.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
+    show(&w, &f, &[a, b]);
+    assert!(f.first_shot.is_some(), "the attack shoots");
+    assert!(f.deaths > 0, "men die");
+}
+
+/// Real infantry at grenade range: the grenade (ability 1, area 2 m) splashes,
+/// experience promotes (AAInfantryExperienceComponent: 150 xp, HEALTH x1.05),
+/// and the promoted regiment hits harder.
+#[test]
+#[ignore]
+fn real_map_grenades_and_promotion() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(8.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(8.0, 0.0), std::f32::consts::PI, None);
+    w.orgs[a as usize].experience = 149.0;
+    w.step(Vec::new());
+    let base = w.combat.actor(w.orgs[a as usize].members[0]).unwrap().max_health;
+    let (mut grenades, mut splashes, mut promoted) = (0, 0, None);
+    let mut rifle_before = Vec::new();
+    let mut rifle_after = Vec::new();
+    for _ in 0..(60.0 / DT) as u32 {
+        w.step(Vec::new());
+        let events = w.events.clone();
+        for e in &events {
+            match *e {
+                Event::Promoted { org, level } if org == a => promoted = Some((level, w.time)),
+                Event::Fired { shooter, weapon, .. } => {
+                    let name = w.data.def(w.actors[shooter as usize].def).id.clone();
+                    if weapon == 1 && name.ends_with("infantry") {
+                        grenades += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        // A tick's hits on one kingdom from rifles of the other.
+        for win in events.windows(2) {
+            if let [Event::Fired { shooter, weapon: 0, .. }, Event::Hit { target, damage }] = win
+                && w.actors[*shooter as usize].kingdom == Some(0)
+                && w.actors[*target as usize].kingdom == Some(1)
+                && w.data.def(w.actors[*shooter as usize].def).id == "rus_infantry"
+            {
+                if promoted.is_some() { rifle_after.push(*damage) } else { rifle_before.push(*damage) }
+            }
+            if let [Event::Hit { .. }, Event::Hit { .. }] = win {
+                splashes += 1;
+            }
+        }
+        if !w.orgs[a as usize].alive || !w.orgs[b as usize].alive {
+            break;
+        }
+    }
+    eprintln!("grenades {grenades}, double hits {splashes}, promoted {promoted:?}");
+    eprintln!("rifle hits before {rifle_before:?}");
+    eprintln!("rifle hits after {rifle_after:?}");
+    let (level, _) = promoted.expect("the regiment is promoted");
+    assert_eq!(level, 1);
+    assert!(grenades > 0, "riflemen throw grenades at 9 m");
+    if w.orgs[a as usize].alive {
+        let now = w.combat.actor(w.orgs[a as usize].members[0]).unwrap().max_health;
+        eprintln!("max health {base} -> {now}");
+        assert!(now > base, "a promotion raises the maximum health");
+    }
+}
+
+/// A real regiment breaks: it routs away, the rout ends, it rests and regains
+/// morale, stands together again, and obeys and fights again.
+#[test]
+#[ignore]
+fn real_map_rout_and_regroup() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(9.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(9.0, 0.0), std::f32::consts::PI, None);
+    w.step(Vec::new());
+    w.orgs[a as usize].morale = combat::org_state(&w, a).unwrap().breakpoint + 1.0;
+    let mut f = Fight::default();
+    let mut routed = None;
+    for _ in 0..(40.0 / DT) as u32 {
+        w.step(Vec::new());
+        if w.events.contains(&Event::Routed { org: a }) {
+            routed = Some(w.time);
+            break;
+        }
+    }
+    let routed = routed.expect("the regiment routs");
+    let from = combat::org_state(&w, a).unwrap().position;
+    eprintln!("routed at {routed:.1}s from {from}, morale {:.1}, order {:?}", w.orgs[a as usize].morale, w.orgs[a as usize].order);
+    assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }), "it runs");
+    assert!(w.orgs[a as usize].members.iter().all(|&m| w.actors[m as usize].combat.target.is_none()), "it stops shooting");
+    // The enemy goes away with a retreat (mind_retreating is PASSIVE: a plain move
+    // would turn on the regiment in its ZOC), so the regiment can rest.
+    w.step(vec![aa_play::Command::Order { kingdom: 1, units: vec![aa_play::Unit::Org(b)], order: aa_play::orders::ActorOrder::Retreat { target: None, at: c + Vec2::new(200.0, 0.0) } }]);
+    let mut ended = None;
+    let mut states = Vec::new();
+    for _ in 0..(90.0 / DT) as u32 {
+        w.step(Vec::new());
+        let st = aa_play::morale::regiment_state(&w, a);
+        if states.last().map(|(s, _, _)| *s) != Some(st) {
+            states.push((st, w.time, w.orgs[a as usize].morale));
+        }
+        if ended.is_none() && combat::org_state(&w, a).unwrap().routing.is_none() {
+            ended = Some(w.time);
+        }
+    }
+    eprintln!("states {states:?}");
+    let ended = ended.expect("the rout ends");
+    eprintln!("rout over {:.1}s after it began, ran {} m", ended - routed, combat::org_state(&w, a).unwrap().position.distance(from));
+    assert!(ended - routed <= 10.5, "RoutingTime");
+    let s = combat::org_state(&w, a).unwrap();
+    let g = &w.orgs[a as usize];
+    let spread = g.members.iter().map(|&m| w.actors[m as usize].pos.truncate().distance(s.position)).fold(0.0f32, f32::max);
+    eprintln!("after 90 s: morale {:.1}/{:.1}, members {}, spread {spread:.1} m, order {:?}, state {:?}", g.morale, s.morale_max, g.members.len(), g.order, aa_play::morale::regiment_state(&w, a));
+    assert_eq!(g.order, Order::Idle);
+    assert!(g.morale > 40.0, "morale came back: {}", g.morale);
+    assert!(spread < 12.0, "together again: {spread}");
+    // It obeys and fights again.
+    let target = w.orgs[b as usize].members[0];
+    let before = combat::org_state(&w, a).unwrap().position;
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target }]);
+    watch(&mut w, &mut f, 90.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
+    eprintln!("--- attacks again, walked {}", combat::org_state(&w, a).unwrap().position.distance(before));
+    show(&w, &f, &[a, b]);
+    assert!(f.shots.keys().any(|k| k.starts_with("k0")), "it shoots again");
+}
+
+/// Medium tanks ordered onto a rifle regiment: guns kill, rifles scratch, the
+/// infantry breaks.
+#[test]
+#[ignore]
+fn real_map_tanks_against_infantry() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let t = aa_play::production::spawn_organization(&mut w, id("regiment_rus_tank_medium"), 0, c - Vec2::new(30.0, 0.0), 0.0, None);
+    let i = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(30.0, 0.0), std::f32::consts::PI, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 2.0, |_| false);
+    let target = w.orgs[i as usize].members[0];
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(t)], target }]);
+    watch(&mut w, &mut f, 240.0, |w| !w.orgs[t as usize].alive || !w.orgs[i as usize].alive);
+    eprintln!("--- tanks on infantry");
+    show(&w, &f, &[t, i]);
+    assert!(f.shots.keys().any(|k| k.contains("rus_tank")), "the guns fire");
+    assert!(f.log.iter().any(|l| l.contains("routed") || l.contains("destroyed")), "the infantry breaks");
+}
+
+/// Column formation (`aggressive = false`): walking through the enemy's control
+/// range it does not stop to fight (+8D off); the enemy does engage it.
+#[test]
+#[ignore]
+fn real_map_column_keeps_walking() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(45.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(10.0, 12.0), std::f32::consts::PI, None);
+    let column = w.data.def(w.orgs[a as usize].def).formations.iter().position(|f| f.id == "regiment_column").expect("column");
+    w.step(vec![aa_play::Command::SetFormation { kingdom: 0, orgs: vec![a], formation: column }]);
+    w.step(vec![aa_play::Command::Move { kingdom: 0, units: vec![aa_play::Unit::Org(a)], to: c + Vec2::new(45.0, 0.0), attack_move: false }]);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 40.0, |_| false);
+    eprintln!("--- column walking past");
+    show(&w, &f, &[a, b]);
+    assert!(combat::org_state(&w, a).unwrap().engage.is_empty(), "the column does not engage by itself");
+    assert!(f.shots.keys().any(|k| k.starts_with("k1")), "the resting regiment shoots at it");
+}
+
+/// 150 real regiments fighting through `World::step` on an open map.
+#[test]
+#[ignore]
+fn real_data_performance_150_regiments() {
+    let data = real().expect("original data");
+    let mut w = World::empty(data.clone(), Arc::new(open_map(256, 256, 4.0)), 3);
+    w.kingdoms = vec![kingdom(0, 0), kingdom(1, 1)];
+    let (r1, r2) = (data.find("regiment_rus_infantry").unwrap(), data.find("regiment_ger_infantry").unwrap());
+    for side in 0..2u32 {
+        for r in 0..75 {
+            let x = 40.0 + (r % 15) as f32 * 40.0;
+            let y = 40.0 + (r / 15) as f32 * 80.0 + if side == 0 { 0.0 } else { 16.0 };
+            let (def, facing) = if side == 0 { (r1, std::f32::consts::FRAC_PI_2) } else { (r2, -std::f32::consts::FRAC_PI_2) };
+            aa_play::production::spawn_organization(&mut w, def, side, Vec2::new(x, y), facing, None);
+        }
+    }
+    let ticks = 960;
+    let t = std::time::Instant::now();
+    w.step(Vec::new());
+    eprintln!("first tick {:?}", t.elapsed());
+    let (mut worst, mut fired) = ((std::time::Duration::ZERO, 0), 0);
+    let t0 = std::time::Instant::now();
+    for i in 0..ticks {
+        let t = std::time::Instant::now();
+        w.step(Vec::new());
+        if t.elapsed() > worst.0 {
+            worst = (t.elapsed(), i);
+        }
+        fired += w.events.iter().filter(|e| matches!(e, Event::Fired { .. })).count();
+    }
+    let dead = w.actors.iter().filter(|a| !a.alive).count();
+    eprintln!("150 real regiments: avg {:?} per tick, worst (time, tick) {worst:?}, {fired} shots in {ticks} ticks, {dead} dead", t0.elapsed() / ticks);
+    assert!(fired > 1000, "they fight");
+}
+
+/// A person's selection of three regiments attacking one enemy (the group path
+/// `0x4ED360` -> `0x4DF840`): all of them walk and fight.
+#[test]
+#[ignore]
+fn real_map_group_attack() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a: Vec<OrgId> = (0..3).map(|i| aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c + Vec2::new(-60.0, -25.0 + 25.0 * i as f32), 0.0, None)).collect();
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(25.0, 0.0), std::f32::consts::PI, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 2.0, |_| false);
+    let target = w.orgs[b as usize].members[0];
+    let units = a.iter().map(|&o| aa_play::Unit::Org(o)).collect();
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units, target }]);
+    let start: Vec<Vec2> = a.iter().map(|&o| combat::org_state(&w, o).unwrap().position).collect();
+    watch(&mut w, &mut f, 8.0, |_| false);
+    for (i, &o) in a.iter().enumerate() {
+        let walked = combat::org_state(&w, o).unwrap().position.distance(start[i]);
+        eprintln!("regiment {o}: walked {walked} in 8 s, order {:?}", w.orgs[o as usize].order);
+        assert!(walked > 5.0, "regiment {o} walks");
+    }
+    watch(&mut w, &mut f, 120.0, |w| !w.orgs[b as usize].alive);
+    let mut all = a.clone();
+    all.push(b);
+    show(&w, &f, &all);
+    assert!(f.deaths > 0);
+    assert!(!w.orgs[b as usize].alive || f.log.iter().any(|l| l.contains("routed")), "three on one: the one breaks");
+}
+
+/// Attacking a building: the regiment walks to it and shoots it down, and the
+/// building's ZOC or guns do what the data says.
+#[test]
+#[ignore]
+fn real_map_attack_a_building() {
+    let (mut w, _) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let corps = w.actors.iter().find(|a| a.kingdom == Some(1) && !d.def(a.def).weapons.is_empty() && d.def(a.def).class == Some(DefClass::Building)).map(|a| a.id);
+    let any = w.actors.iter().find(|a| a.kingdom == Some(1) && d.def(a.def).class == Some(DefClass::Building)).map(|a| a.id).expect("a building of kingdom 1");
+    let target = corps.unwrap_or(any);
+    let tp = w.actors[target as usize].pos.truncate();
+    eprintln!("target {} at {tp} health {}, weapons {}", d.def(w.actors[target as usize].def).id, w.actors[target as usize].health, d.def(w.actors[target as usize].def).weapons.len());
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_tank_medium"), 0, tp + Vec2::new(-70.0, 0.0), 0.0, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 2.0, |_| false);
+    let h0 = w.actors[target as usize].health;
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target }]);
+    watch(&mut w, &mut f, 120.0, |w| !w.orgs[a as usize].alive || !w.actors[target as usize].alive);
+    show(&w, &f, &[a]);
+    eprintln!("building health {h0} -> {}, alive {}, owner {:?}", w.actors[target as usize].health, w.actors[target as usize].alive, w.actors[target as usize].kingdom);
+    assert!(f.shots.keys().any(|k| k.starts_with("k0")), "the regiment shoots the building");
+    assert!(w.actors[target as usize].health < h0, "the building takes damage");
+}
+
+/// Fog on a real map: an enemy regiment beyond sight is hidden; once two regiments
+/// fight, each sees the other, and an artillery regiment shelling from beyond the
+/// target's sight is shown to it by its fire (reverse RZOD) only as the data says.
+#[test]
+#[ignore]
+fn real_map_fog_in_a_fight() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    aa_play::fog::set_mode(&mut w, aa_play::fog::FogMode::Full);
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(60.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(60.0, 0.0), std::f32::consts::PI, None);
+    for _ in 0..48 {
+        w.step(Vec::new());
+    }
+    let seen = |w: &World, o: OrgId, by: u32| w.orgs[o as usize].members.iter().filter(|&&m| aa_play::fog::actor_visible(w, m, Some(by))).count();
+    eprintln!("120 m apart: a sees {} of b, b sees {} of a", seen(&w, b, 0), seen(&w, a, 1));
+    assert_eq!(seen(&w, b, 0), 0, "the enemy is hidden");
+    let target = w.orgs[b as usize].members[0];
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target }]);
+    let mut first = None;
+    let mut seen_at = None;
+    for _ in 0..(120.0 / DT) as u32 {
+        w.step(Vec::new());
+        if seen_at.is_none() && seen(&w, b, 0) > 0 {
+            seen_at = Some((w.time, combat::org_state(&w, a).unwrap().position.distance(combat::org_state(&w, b).unwrap().position)));
+        }
+        if first.is_none() && w.events.iter().any(|e| matches!(e, Event::Fired { .. })) {
+            first = Some((w.time, seen(&w, b, 0), seen(&w, a, 1)));
+            break;
+        }
+    }
+    eprintln!("a first sees b at (time, distance) {seen_at:?}; first shot (time, a sees of b, b sees of a) {first:?}");
+    let (_, sa, sb) = first.expect("they fight");
+    assert!(sa > 0 && sb > 0, "fighters see each other");
+}
+
+/// A plain Move that meets a weak enemy stops to fight (`0x524A00` takes over from
+/// the move, `0x52A810(3)`) and goes on afterwards.
+#[test]
+#[ignore]
+fn real_map_move_goes_on_after_the_fight() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_tank_medium"), 0, c - Vec2::new(50.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_engineer"), 1, c, std::f32::consts::PI, None);
+    let to = c + Vec2::new(60.0, 0.0);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 1.0, |_| false);
+    w.step(vec![aa_play::Command::Move { kingdom: 0, units: vec![aa_play::Unit::Org(a)], to, attack_move: false }]);
+    let mut stopped_for_it = false;
+    watch(&mut w, &mut f, 200.0, |w| {
+        stopped_for_it |= matches!(w.orgs[a as usize].order, Order::Attack { .. });
+        w.orgs[a as usize].order == Order::Idle
+    });
+    eprintln!("--- move through a weak enemy, stopped for it: {stopped_for_it}");
+    show(&w, &f, &[a, b]);
+    let at = combat::org_state(&w, a).unwrap().position;
+    eprintln!("ended at {at}, wanted {to}");
+    assert!(stopped_for_it, "the regiment turns on what enters its ZOC");
+    assert!(w.orgs[a as usize].order == Order::Idle && at.distance(to) < 12.0, "the move goes on afterwards: {at}");
+}
+
+/// A plain Move ordered in the middle of a fight leaves the engage state
+/// (`0x527E30` -> `0x51F040`); the enemy still in the ZOC comes back on the list as
+/// the ZOC moves over it. A retreat (`mind_retreating`, PASSIVE) leaves for good.
+#[test]
+#[ignore]
+fn real_map_leaving_a_fight() {
+    for retreat in [false, true] {
+        let (mut w, c) = berlin_scene(30.0);
+        let d = w.data.clone();
+        let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+        let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(8.0, 0.0), 0.0, None);
+        let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(8.0, 0.0), std::f32::consts::PI, None);
+        let mut f = Fight::default();
+        watch(&mut w, &mut f, 5.0, |_| false);
+        assert!(f.first_shot.is_some());
+        let start = combat::org_state(&w, a).unwrap().position;
+        let to = c - Vec2::new(150.0, 0.0);
+        let unit = vec![aa_play::Unit::Org(a)];
+        let command = if retreat {
+            aa_play::Command::Order { kingdom: 0, units: unit, order: aa_play::orders::ActorOrder::Retreat { target: None, at: to } }
+        } else {
+            aa_play::Command::Move { kingdom: 0, units: unit, to, attack_move: false }
+        };
+        w.step(vec![command]);
+        watch(&mut w, &mut f, 20.0, |_| false);
+        let s = combat::org_state(&w, a).unwrap();
+        eprintln!("--- {} in a fight: walked {} m in 20 s, order {:?}, state {:?}, engage {:?}", if retreat { "retreat" } else { "plain move" }, s.position.distance(start), w.orgs[a as usize].order, aa_play::morale::regiment_state(&w, a), s.engage);
+        show(&w, &f, &[a, b]);
+    }
+}
+
+/// A person's attack on a city: the regiment walks to it and takes it by presence.
+#[test]
+#[ignore]
+fn real_map_attack_on_a_city() {
+    let (mut w, _) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let hostile = |w: &World, a: u32| aa_play::orders::hostile_to(w, 0, a);
+    let list: Vec<(u32, String, Option<u32>, Vec2, bool)> = w.actors.iter().filter(|a| !a.removed && d.def(a.def).city).map(|a| (a.id, d.def(a.def).id.clone(), a.kingdom, a.pos.truncate(), hostile(&w, a.id))).collect();
+    eprintln!("cities {list:?}");
+    let target = list.iter().find(|c| c.4).unwrap_or_else(|| panic!("a hostile city")).clone();
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, target.3 + Vec2::new(-45.0, -5.0), 0.0, None);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 1.0, |_| false);
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target: target.0 }]);
+    let mut taken = None;
+    for _ in 0..(300.0 / DT) as u32 {
+        w.step(Vec::new());
+        if taken.is_none() && w.actors[target.0 as usize].kingdom == Some(0) {
+            taken = Some(w.time);
+            break;
+        }
+    }
+    let s = combat::org_state(&w, a).unwrap();
+    eprintln!("--- city {} taken at {taken:?}; regiment at {} ({} m from it), order {:?}, state {:?}, members {}", target.1, s.position, s.position.distance(target.3), w.orgs[a as usize].order, aa_play::morale::regiment_state(&w, a), w.orgs[a as usize].members.len());
+    assert!(taken.is_some(), "the city changes hands");
+}
+
+/// Artillery's kill is the bombard state (`0x527FB0`): it shells from where it can
+/// reach, and the shelled regiment takes the fire.
+#[test]
+#[ignore]
+fn real_map_artillery_shells() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_tank_artillery"), 0, c - Vec2::new(40.0, 0.0), 0.0, None);
+    let b = aa_play::production::spawn_organization(&mut w, id("regiment_ger_infantry"), 1, c + Vec2::new(40.0, 0.0), std::f32::consts::PI, None);
+    let indirect = aa_play::orders::guess::bombard_layout(&w, a);
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 2.0, |_| false);
+    let target = w.orgs[b as usize].members[0];
+    let from = combat::org_state(&w, a).unwrap().position;
+    w.step(vec![aa_play::Command::Bombard { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target: aa_play::AbilityTarget::Actor(target) }]);
+    watch(&mut w, &mut f, 60.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
+    eprintln!("--- artillery: bombard layout {indirect}, walked {}, state {:?}", combat::org_state(&w, a).unwrap().position.distance(from), aa_play::morale::regiment_state(&w, a));
+    show(&w, &f, &[a, b]);
+    assert!(f.shots.keys().any(|k| k.starts_with("k0")), "the artillery fires");
+}
+
+/// `0x51D1C0` (stop: the sleep state) and the kill at a location (`0x520440`) replace
+/// the engage state (`0x52A420`), whose exit `0x520FE0` empties the list: the regiment
+/// leaves a target that does not move and does not shoot.
+#[test]
+#[ignore]
+fn real_map_stop_leaves_a_harmless_target() {
+    let (mut w, c) = berlin_scene(30.0);
+    let d = w.data.clone();
+    let id = |n: &str| d.find(n).unwrap_or_else(|| panic!("{n}"));
+    let building = id("ger_depot_supply");
+    eprintln!("target {}", d.def(building).id);
+    let t = aa_play::production::spawn_single(&mut w, building, Some(1), c + Vec2::new(25.0, 0.0), 0.0);
+    let a = aa_play::production::spawn_organization(&mut w, id("regiment_rus_infantry"), 0, c - Vec2::new(25.0, 0.0), 0.0, None);
+    let own = vec![aa_play::Unit::Org(a)];
+    let mut f = Fight::default();
+    watch(&mut w, &mut f, 1.0, |_| false);
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: own.clone(), target: t }]);
+    watch(&mut w, &mut f, 90.0, |w| w.events.iter().any(|e| matches!(e, Event::Fired { .. })));
+    eprintln!("first shot at the building {:?}, order {:?}, health {}", f.first_shot, w.orgs[a as usize].order, w.actors[t as usize].health);
+    assert!(f.first_shot.is_some(), "the regiment shoots the building");
+    watch(&mut w, &mut f, 3.0, |_| false);
+    w.step(vec![aa_play::Command::Stop { kingdom: 0, units: own.clone() }]);
+    w.step(Vec::new());
+    let mut after = Fight::default();
+    watch(&mut w, &mut after, 10.0, |_| false);
+    eprintln!("after stop: {:?} order {:?} engage {:?}", after.shots, w.orgs[a as usize].order, combat::org_state(&w, a).unwrap().engage);
+    assert!(after.shots.is_empty(), "stop ends the shooting");
+    assert_eq!(w.orgs[a as usize].order, Order::Idle);
+    // The kill at a location leaves it too, and a new attack from outside the ZOC
+    // brings it back in (a thing already in the ZOC is not entered again: only
+    // 0x57AB70 and 0x579490 fill the list).
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: own.clone(), target: t }]);
+    let mut again = Fight::default();
+    watch(&mut w, &mut again, 2.0, |_| false);
+    let from = combat::org_state(&w, a).unwrap().position;
+    w.step(vec![aa_play::Command::Move { kingdom: 0, units: own.clone(), to: c - Vec2::new(30.0, 0.0), attack_move: true }]);
+    watch(&mut w, &mut again, 30.0, |w| w.orgs[a as usize].order == Order::Idle);
+    let walked = combat::org_state(&w, a).unwrap().position.distance(from);
+    eprintln!("kill at a location: walked {walked}, order {:?}", w.orgs[a as usize].order);
+    w.step(vec![aa_play::Command::Attack { kingdom: 0, units: own, target: t }]);
+    let mut third = Fight::default();
+    watch(&mut w, &mut third, 40.0, |w| w.events.iter().any(|e| matches!(e, Event::Fired { .. })));
+    eprintln!("attacks again from outside: first shot {:?}, order {:?}", third.first_shot, w.orgs[a as usize].order);
+    assert!(third.first_shot.is_some(), "it attacks again");
+    assert!(walked > 5.0, "the order is obeyed");
 }

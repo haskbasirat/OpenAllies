@@ -70,7 +70,9 @@ pub fn descriptor(world: &World, st: &CombatState, id: OrgId) -> Descriptor {
         RegimentState::Rout => d(false, true, false), // mind_routing
         RegimentState::Engage => d(false, false, false), // mind_engaged
         RegimentState::Reform => d(true, false, false), // mind_reforming (DESIRED formation)
-        RegimentState::Guard => d(true, false, false), // mind_guarding
+        // 51DC20: a Guard state walking reports its Move state, mind_moving.
+        RegimentState::Guard if crate::movement::org_move_active(world, id) => d(false, false, false),
+        RegimentState::Guard => d(true, false, true), // mind_guarding (entrenchable)
         RegimentState::Sleep | RegimentState::Exhausted => d(true, false, true), // mind_resting
         // mind_unpacking, mind_moving, mind_attacking, mind_bombard, ...: none replenishes.
         _ => d(false, false, false),

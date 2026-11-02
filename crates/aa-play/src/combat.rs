@@ -2192,9 +2192,9 @@ pub fn tick(world: &mut World) {
 
 /// Bodies brought to zero health by something other than a weapon (the
 /// upkeep shortfall `578660`, periodic damage) take the same `5625C0` zero
-/// health path: a non-destructible body is restored to 1, anything else
-/// joins the death queue. That damage record has no source, so it replaces
-/// the last shooter and no kill credit follows.
+/// health path: a capturable body is restored to 1, another non-destructible
+/// one stays at zero, anything else joins the death queue. That damage record
+/// has no source, so it replaces the last shooter and no kill credit follows.
 fn queue_other_deaths(world: &mut World, st: &mut CombatState) {
     for id in 0..world.actors.len() {
         let a = &world.actors[id];
@@ -2206,7 +2206,9 @@ fn queue_other_deaths(world: &mut World, st: &mut CombatState) {
             continue;
         }
         if !def.destructible && !matches!(def.class, Some(DefClass::Member)) {
-            world.actors[id].health = 1.0;
+            if capturable(world, id as ActorId) {
+                world.actors[id].health = 1.0;
+            }
             continue;
         }
         st.actors[id].last_hit = None;
@@ -2249,6 +2251,7 @@ fn refresh_orders(world: &mut World, st: &mut CombatState) {
             None if auto => {
                 st.orgs[i].auto_order = None;
                 world.orgs[i].order = st.orgs[i].saved_order.take().unwrap_or(Order::Idle);
+                st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
             }
             None => {}
         }
@@ -2293,7 +2296,9 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     if tasks::org_think(world, st, id) {
         return;
     }
-    if command && matches!(world.orgs[i].order, Order::Move { attack_move: false, .. } | Order::Deploy { .. }) {
+    if command && matches!(world.orgs[i].order, Order::Move { .. } | Order::Deploy { .. }) {
+        // 0x52A420 replaces the engage state, whose exit 0x520FE0 empties the list
+        // (0x51F040): a move and a kill at a location alike (0x520440).
         // (orders) only the retreat command pays the penalty (0x51D1E0, in
         // `crate::orders`): the move handler 0x527E30 does not.
         st.orgs[i].engage.clear();
@@ -2359,6 +2364,8 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
         None if st.orgs[i].auto_order.is_some() => {
             st.orgs[i].auto_order = None;
             world.orgs[i].order = st.orgs[i].saved_order.take().unwrap_or(Order::Idle);
+            // the move goes on: no new command
+            st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
         }
         _ => {}
     }
@@ -2737,7 +2744,7 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
     // 4C9550 phase 3 (aa_combat::execution::use_ability): attenuated when
     // attenuation_range_min < area and attenuation_factor_max < 0x3F7FF972
     // (0.9999). The distance is fstp(sqrt(dx*dx + dy*dy)) less the target
-    // radius (DefaultRadius here), at least 0; past attenuation_range_min
+    // radius (its `Size` soft radius), at least 0; past attenuation_range_min
     // the scale is fstp(1 - (1 - factor) * (distance - min) / (area - min)),
     // clamped to [factor, 1].
     let attenuated = w.attenuation_range_min < w.area && w.attenuation_factor_max < f32::from_bits(0x3f7f_f972);
@@ -2929,8 +2936,9 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
 
 /// `5625C0` at zero health before the death queue: a capturable actor
 /// (`4D1120`: captureable, hostile source) changes owner with
-/// CaptureHealthFactor of its maximum health (`4D5230`); a non-destructible
-/// body is restored to 1. Returns true when the actor does not die.
+/// CaptureHealthFactor of its maximum health (`4D5230`), or without a capture
+/// is restored to 1; a non-destructible body stays at zero. Returns true when
+/// the actor does not die.
 fn zero_health(world: &mut World, st: &mut CombatState, kingdom: Option<KingdomId>, target: ActorId) -> bool {
     let def = world.data.def(world.actors[target as usize].def);
     // (core) 4D1120: an actor with a CityComponent is never captured by
@@ -2947,11 +2955,14 @@ fn zero_health(world: &mut World, st: &mut CombatState, kingdom: Option<KingdomI
         world.events.push(Event::Captured { actor: target, kingdom: k });
         return true;
     }
-    if !destructible && def.health > 0.0 && !matches!(def.class, Some(DefClass::Member)) {
+    // 4D1120 and no capture: 561E50(1.0) (+100 bit 30 is never set here).
+    if captureable {
         world.actors[target as usize].health = 1.0;
         return true;
     }
-    false
+    // Otherwise the body stays at zero until +291 says it dies: a city block in the
+    // Comrades film holds hp 0 for 168 ticks, then heals.
+    !destructible && def.health > 0.0 && !matches!(def.class, Some(DefClass::Member))
 }
 
 /// MAIN_DAMAGE of a faction ability (`4CA400` with a kingdom source: no
