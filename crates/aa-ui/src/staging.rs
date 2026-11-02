@@ -681,7 +681,8 @@ impl Staging {
                 r.flags &= !wf::SELECTED;
             }
         }
-        visible(wdg, "HostIcon", mode == Mode::Human && on_host);
+        // (an observer on the host too: 05-staging-film-loaded.png)
+        visible(wdg, "HostIcon", matches!(mode, Mode::Human | Mode::Observer) && on_host);
         match download {
             Some(p) => {
                 set_text(wdg, "Progress", &ui.strings.format("staging_percent_downloaded|d", &[&((p * 100.0) as i32).to_string()]));
@@ -966,6 +967,26 @@ pub fn map_preview_text(ui: &Ui, st: &StagingState) -> String {
         }
     }
     out
+}
+
+impl Ui {
+    /// An edit box takes the keys with its whole text selected, as a click
+    /// on it does (the file dialog's Activate and row selection,
+    /// 03-film-file-dialog.png).
+    pub fn focus_editbox(&mut self, path: &str) {
+        if let Some(w) = self.widget_mut(path) {
+            w.flags |= wf::EDIT_FOCUS;
+            if let Some(e) = w.editbox_mut() {
+                let n = e.text.chars().count();
+                e.selection = if n > 0 { Some((0, n)) } else { None };
+                e.caret = n;
+                e.blink_ms = 0;
+            }
+        }
+        if self.capture.last().map(String::as_str) != Some(path) {
+            self.capture.push(path.to_string());
+        }
+    }
 }
 
 /// Label fit-height (`0x5EF5C0`): B = the measured text height at the

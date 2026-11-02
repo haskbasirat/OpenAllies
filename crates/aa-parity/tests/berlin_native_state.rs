@@ -32,25 +32,21 @@ const FILM: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Pr
 const NATIVE: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\traces\berlin2v2_0-native.txt";
 const MAP: &str = "(2v2)Berlin";
 
+/// `AA_PARITY_BERLIN_MAP` with `AA_PARITY_BERLIN_FILM` and `AA_PARITY_BERLIN_NATIVE` runs
+/// this census on another film and its trace (`FIGHT-FILMS.md`).
+fn map_id() -> String {
+    std::env::var("AA_PARITY_BERLIN_MAP").unwrap_or_else(|_| MAP.to_owned())
+}
+
 fn env_path(var: &str, default: &str) -> PathBuf {
     std::env::var_os(var).map_or_else(|| PathBuf::from(default), PathBuf::from)
 }
 
 fn install_id_tables(registries: &Registries) {
-    let slots = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/native_shared_property_slots_v14.json");
-    if let Ok(text) = std::fs::read_to_string(&slots) {
-        let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
-        replay::set_property_ids(
-            v["ids"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|s| s.as_str().unwrap().to_owned())
-                .collect(),
-        );
-    }
+    replay::set_property_ids(registries.property_ids.clone());
     replay::set_formation_ids(registries.formation_ids.clone());
+    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
+    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
 }
 
 struct Run {
@@ -133,7 +129,7 @@ fn watch_print(
                 a.state,
                 a.active,
                 a.flags,
-            )
+            ) + &format!(" ms {:x?} mor {:?}", a.mind.map(|m| m[1]), a.morale.map(|m| (f32b(m[0]), f32b(m[1]), m[3], f32b(m[6]), f32b(m[7]))))
         });
         let thing = pairing
             .and_then(|p| p.ours(*gtid))
@@ -142,7 +138,9 @@ fn watch_print(
             Some(Thing::Actor(a)) => {
                 let x = &world.actors[a as usize];
                 format!(
-                    "ours kingdom {:?} p {:.5},{:.5} d {:.5},{:.5} v {} path {:?} goal {:?} activity {:?}",
+                    "ours hp {} target {:?} kingdom {:?} p {:.5},{:.5} d {:.5},{:.5} v {} path {:?} goal {:?} activity {:?}",
+                    x.health,
+                    x.combat.target,
                     x.kingdom,
                     x.pos.x,
                     x.pos.y,
@@ -162,8 +160,14 @@ fn watch_print(
             Some(Thing::Org(o)) => {
                 let x = &world.orgs[o as usize];
                 format!(
-                    "ours org anchor {:.5},{:.5} heading {:.5} order {:?}",
-                    x.anchor.x, x.anchor.y, x.heading, x.order
+                    "ours org eff {:?} anchor {:.5},{:.5} heading {:.5} order {:?} state {:?} engage {:?} explicit {:?} engaged_by {:?} morale {}",
+                    world.combat.org(o).map(|s| (s.attack_efficiency, s.attack_efficiency_desired, s.morale_max, s.living)),
+                    x.anchor.x, x.anchor.y, x.heading, x.order,
+                    aa_play::morale::regiment_state(world, o),
+                    world.combat.org(o).map(|s| s.engage.iter().map(|t| t.target).collect::<Vec<_>>()),
+                    world.combat.org(o).and_then(|s| s.explicit),
+                    world.combat.org(o).map(|s| s.engaged_by.clone()),
+                    x.morale,
                 )
             }
             other => format!("ours {other:?}"),
@@ -180,7 +184,7 @@ fn run(
     forcing: Forcing,
 ) -> Run {
     let data = Arc::new(aa_play::GameData::load(root).unwrap());
-    let map = Arc::new(aa_play::GameMap::load_with(root, MAP, &data).unwrap());
+    let map = Arc::new(aa_play::GameMap::load_with(root, &map_id(), &data).unwrap());
     let plan = replay::plan(film, &data, &map).unwrap();
     let mut world = replay::build(&plan, root, data, map).unwrap();
     assert!(
@@ -286,6 +290,13 @@ fn print_run(label: &str, r: &Run) {
             e.first_difference_tick
         );
     }
+    eprintln!("--- aa-play getters by site (count, first tick):");
+    for (site, (n, first)) in &g.ours_by_site {
+        eprintln!("  {n:>5} from {first:>5}: {site}");
+    }
+    for w in g.first_windows.iter().take(12) {
+        eprintln!("  window ending {}: native {:?} ours {:?}", w.tick, w.native, w.ours_sites);
+    }
     eprintln!("--- orders:");
     for o in &r.report.orders {
         eprintln!(
@@ -372,7 +383,7 @@ fn save(label: &str, r: &Run) {
 fn saved_deferred(root: &Path) -> Option<[(i32, i32, usize); 2]> {
     let bytes = std::fs::read(
         root.join("reconstruction/assets/original/Data/Maps")
-            .join(format!("{MAP}.RMP")),
+            .join(format!("{}.RMP", map_id())),
     )
     .ok()?;
     let archive = aa_mapworld::MapArchive::from_bytes(bytes).ok()?;

@@ -389,7 +389,14 @@ pub fn battle_input(
     // HUD actions first
     if let Some(g) = &game {
         for a in &g.actions {
+            // the order gate: no selection or command from a viewer without a
+            // kingdom (rule 0x766C70, FILM-PLAYBACK.md 8.1)
+            if b.local_kingdom().is_none() && !viewer_action(a) {
+                continue;
+            }
             match a {
+                // SelectObservingKingdom (0x5F4780 -> 0x5C0E90)
+                GameAction::ObserveKingdom(k) => b.set_view_kingdom(*k),
                 GameAction::Stop => {
                     let units = own_movable(&b);
                     if !units.is_empty() {
@@ -418,6 +425,16 @@ pub fn battle_input(
                         .collect();
                     if !orgs.is_empty() {
                         b.pending.push(Command::SetFormation { kingdom: local, orgs, formation: *i });
+                    }
+                }
+                GameAction::Order(order) => {
+                    // An escort order goes to the selected structure's Denizen.
+                    let units = match order {
+                        aa_play::orders::ActorOrder::Escort { .. } | aa_play::orders::ActorOrder::ConstructionCancel => b.selection.clone(),
+                        _ => own_movable(&b),
+                    };
+                    if !units.is_empty() {
+                        b.pending.push(Command::Order { kingdom: local, units, order: order.clone() });
                     }
                 }
                 GameAction::Disband => {
@@ -464,10 +481,10 @@ pub fn battle_input(
                 }
                 GameAction::TogglePause => b.paused = !b.paused,
                 GameAction::SetPaused(p) => b.paused = *p,
-                GameAction::SetSpeed(s) => b.speed = s.clamp(0.25, 4.0),
+                GameAction::SetSpeed(s) => b.set_speed_exponent(s.max(1e-6).log2()),
                 GameAction::CameraZoom(z) => requests.zoom = Some(*z),
-                GameAction::SpeedUp => b.speed = speed_step(b.speed, 1.0),
-                GameAction::SpeedDown => b.speed = speed_step(b.speed, -1.0),
+                GameAction::SpeedUp => b.speed_step(1.0),
+                GameAction::SpeedDown => b.speed_step(-1.0),
             }
         }
     }
@@ -478,14 +495,14 @@ pub fn battle_input(
         for k in &g.keys {
             match k {
                 KeyCode::Pause => b.paused = !b.paused,
-                KeyCode::Minus | KeyCode::NumpadSubtract => b.speed = speed_step(b.speed, -1.0),
-                KeyCode::Equal | KeyCode::NumpadAdd => b.speed = speed_step(b.speed, 1.0),
+                KeyCode::Minus | KeyCode::NumpadSubtract => b.speed_step(-1.0),
+                KeyCode::Equal | KeyCode::NumpadAdd => b.speed_step(1.0),
                 // backslash: "GameSpeed" without an argument (0x60D690):
                 // exponent 0, 100%
                 KeyCode::Backslash | KeyCode::IntlBackslash => b.speed = 1.0,
                 _ => {}
             }
-            if let Some(i) = digit(*k) {
+            if let Some(i) = digit(*k).filter(|_| b.local_kingdom().is_some()) {
                 if sel.groups.len() < 10 {
                     sel.groups.resize(10, Vec::new());
                 }
@@ -580,6 +597,25 @@ pub fn battle_input(
         _ => false,
     };
     sel.hover_banner = on_banner && sel.hover.is_some();
+    // the order gate: a viewer without a kingdom selects nothing and gives no
+    // order (SelectionSet and the world commands are rejected, 0x766C70); the
+    // camera stays free
+    if b.local_kingdom().is_none() {
+        sel.armed = None;
+        sel.press = None;
+        sel.drag = None;
+        sel.ability_valid = false;
+        sel.bombard_invalid = false;
+        requests.blocked = false;
+        place.active = None;
+        if *ghost != Ghost::default() {
+            *ghost = Ghost::default();
+        }
+        if !b.selection.is_empty() {
+            b.selection.clear();
+        }
+        return;
+    }
     // the targeting state's cursor (0x620C30): bombard (command 1, which
     // has cursor_invalid_ids) shows its invalid cursor while the first
     // selected object relates to the ground point under the cursor
@@ -735,11 +771,10 @@ pub fn battle_input(
                             b.pending.push(Command::Deploy { kingdom: local, truck, at: a.at, facing: a.facing });
                         }
                     }
-                    // move (5) and Run (7): a plain (passive) move; guard (2)
-                    // and explore (9) move there engaging on the way
+                    // move (5), Run (7), guard (2) and explore (9): a location,
+                    // for guard also the clicked object
                     TargetOrder::Move | TargetOrder::Run | TargetOrder::Guard | TargetOrder::Explore => {
                         let units = own_movable(&b);
-                        let engage = matches!(order, TargetOrder::Guard | TargetOrder::Explore);
                         // guard an object: its position
                         let object = hit.filter(|_| matches!(order, TargetOrder::Guard)).and_then(|id| b.world.actor(id)).map(|a| a.pos.truncate());
                         if let Some(to) = object.or(ground.map(|g| g.truncate())) {
@@ -757,7 +792,19 @@ pub fn battle_input(
                                     _ => "waypoint_move_actor",
                                 };
                                 issued.give(&units, to, vfx);
-                                b.pending.push(Command::Move { kingdom: local, units, to, attack_move: engage });
+                                // retreat (7) 0x51D1E0, guard (2) 0x51F360 and
+                                // explore (9) 0x5249A0 are their own Mind states
+                                // (`aa_play::orders`).
+                                let order = match order {
+                                    TargetOrder::Run => Some(aa_play::orders::ActorOrder::Retreat { target: None, at: to }),
+                                    TargetOrder::Guard => Some(aa_play::orders::ActorOrder::Guard { target: hit.filter(|_| object.is_some()).map(Unit::Actor), at: to, aux: None }),
+                                    TargetOrder::Explore => Some(aa_play::orders::ActorOrder::Explore { at: to, scalar: None }),
+                                    _ => None,
+                                };
+                                match order {
+                                    Some(order) => b.pending.push(Command::Order { kingdom: local, units, order }),
+                                    None => b.pending.push(Command::Move { kingdom: local, units, to, attack_move: false }),
+                                }
                             }
                         }
                     }
@@ -917,10 +964,21 @@ pub fn battle_input(
                 // actor (own, allied, enemy, neutral, a building) only the
                 // target is sent, and the first command whose
                 // can_hot_command_actor allows it is move (kill's is
-                // switched off in the data): the selection follows it. An
-                // actor order plays no move VFX; Alt+right (HotkeyAltRight-
-                // ClickCommand retreat) has no command of its own here.
-                if let Some(t) = hit {
+                // switched off in the data), and the move handler 0x527E30
+                // takes a hostile actor down the kill path: the selection
+                // attacks it, or follows a friend. An actor order plays no
+                // move VFX. Alt+right is HotkeyAltRightClickCommand, retreat
+                // (0x4DA570 flag bit 10 picks it as the hot index).
+                let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
+                if alt {
+                    let order = match hit {
+                        Some(t) => Some(aa_play::orders::ActorOrder::Retreat { target: Some(t), at: Vec2::ZERO }),
+                        None => ray.and_then(|r| ground_hit(&b, r)).map(|g| aa_play::orders::ActorOrder::Retreat { target: None, at: g.truncate() }),
+                    };
+                    if let Some(order) = order {
+                        b.pending.push(Command::Order { kingdom: local, units, order });
+                    }
+                } else if let Some(t) = hit {
                     // each recipient guesses its own command (0x61EEF0 ->
                     // 0x4DA570 per actor): repair (3, can_hot_command_actor)
                     // comes before move for one that can repair a target
@@ -931,14 +989,39 @@ pub fn battle_input(
                         b.pending.push(Command::Repair { kingdom: local, units: repairers, target: t });
                     }
                     if !others.is_empty() {
-                        debug!("order: follow {t} with {others:?}");
-                        b.pending.push(Command::Follow { kingdom: local, units: others, target: t });
+                        if aa_play::orders::hostile_to(&b.world, local, t) {
+                            // 0x527E30: bombard when the layout fires indirect
+                            // (0x578AC0, 0x57A5E0), else the kill state 0x51D920.
+                            let (bombard, attack): (Vec<Unit>, Vec<Unit>) = others.into_iter().partition(|u| matches!(u, Unit::Org(o) if aa_play::orders::guess::bombard_layout(&b.world, *o)));
+                            if !bombard.is_empty() {
+                                b.pending.push(Command::Bombard { kingdom: local, units: bombard, target: aa_play::AbilityTarget::Actor(t) });
+                            }
+                            if !attack.is_empty() {
+                                debug!("order: kill {t} with {attack:?}");
+                                b.pending.push(Command::Attack { kingdom: local, units: attack, target: t });
+                            }
+                        } else {
+                            debug!("order: follow {t} with {others:?}");
+                            b.pending.push(Command::Follow { kingdom: local, units: others, target: t });
+                        }
                     }
                 } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
                     debug!("order: move {units:?} to {g:?}");
                     order_marks::move_command(&mut marks, g.truncate());
                     issued.give(&units, g.truncate(), "waypoint_move_actor");
                     b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: false });
+                }
+            } else if let [Unit::Actor(a)] = b.selection.as_slice() {
+                // A lone own structure: 0x4DA570 takes its hot location command,
+                // set_rally_point (16, non_group_command).
+                let a = *a;
+                let flags = aa_play::orders::guess::Fields { flags: 0x14, target: 0 };
+                if b.world.actor(a).is_some_and(|x| x.kingdom == Some(local))
+                    && aa_play::orders::guess::guess(&b.world, Unit::Actor(a), flags, false) == Some(aa_play::orders::guess::SET_RALLY_POINT)
+                    && let Some(g) = ray.and_then(|r| ground_hit(&b, r))
+                {
+                    order_marks::move_command(&mut marks, g.truncate());
+                    b.pending.push(Command::SetRallyPoint { kingdom: local, building: a, at: g.truncate() });
                 }
             }
         }
@@ -1052,12 +1135,20 @@ fn hot_repair(b: &Battle, u: Unit, t: ActorId) -> bool {
     has_repair(b, u) && target_flags(b, b.local, t) & REPAIR_FLAGS == REPAIR_FLAGS
 }
 
-/// SpeedUp / SpeedDown: the GVar GameSpeed exponent v (speed 2^v) moved
-/// by half a step, clamped to SVars GameSpeedMin / GameSpeedMax (-2 / +2:
-/// 25% .. 400%), so 100% -> 141% -> 200%.
-fn speed_step(speed: f32, dir: f32) -> f32 {
-    let v = (speed.max(1e-3).log2() * 2.0).round() / 2.0 + 0.5 * dir;
-    2f32.powf(v.clamp(-2.0, 2.0))
+/// What a viewer without a kingdom may still do (the orders that have no
+/// film check, FILM-PLAYBACK.md 8.1): speed, pause, the camera, the view.
+fn viewer_action(a: &GameAction) -> bool {
+    matches!(
+        a,
+        GameAction::ObserveKingdom(_)
+            | GameAction::MinimapJump(..)
+            | GameAction::TogglePause
+            | GameAction::SetPaused(_)
+            | GameAction::SetSpeed(_)
+            | GameAction::CameraZoom(_)
+            | GameAction::SpeedUp
+            | GameAction::SpeedDown
+    )
 }
 
 fn digit(k: KeyCode) -> Option<usize> {

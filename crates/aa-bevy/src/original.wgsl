@@ -161,6 +161,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // values; the shadow quad and the fog layer multiply the result.
     let light = clamp(look.emissive.rgb + look.ambient.rgb * sun_ambient + look.diffuse.rgb * sun_diffuse * lambert, vec3<f32>(0.0), vec3<f32>(1.0));
     let colour = to_gamma(base.rgb) * light * shadow * (1.0 - fog_at(in.world_position.xyz));
-    out.color = vec4<f32>(to_linear(colour), base.a);
+    // emissive.w: AlphaMode::Add (ONE / ONE), whose blend state takes alpha 0
+    out.color = vec4<f32>(to_linear(colour), select(base.a, 0.0, look.emissive.w > 0.5));
     return out;
 }

@@ -387,20 +387,8 @@ fn getters_against_film(film: &Film, stats: &TraceStats) -> (usize, Option<Value
 
 fn install_id_tables(registries: &Registries) {
     replay::set_formation_ids(registries.formation_ids.clone());
-    // SharedProperty slots (research orders), measured from the original.
-    let slots = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/native_shared_property_slots_v14.json");
-    if let Ok(text) = std::fs::read_to_string(&slots) {
-        let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
-        replay::set_property_ids(
-            v["ids"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|s| s.as_str().unwrap().to_owned())
-                .collect(),
-        );
-    }
+    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
+    replay::set_property_ids(registries.property_ids.clone());
 }
 
 /// Rewrites the fixture. Only with `AA_FIGHT_FILMS_WRITE=1`, after recording.

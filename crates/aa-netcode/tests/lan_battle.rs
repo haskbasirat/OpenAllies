@@ -186,7 +186,7 @@ impl LanGame for Play {
             .world
             .trace
             .entries()
-            .filter(|e| e.1 == aa_play::trace::SKind::RngGetter)
+            .filter(|e| matches!(e.1, aa_play::trace::SKind::RngGetter(_)))
             .map(|e| e.2)
             .collect();
         if let Some(log) = self.world.trace.log.as_mut() {
@@ -211,6 +211,7 @@ fn tables() -> Tables {
         abilities: slots(registries::ABILITIES),
         ability_count: r.count(registries::ABILITIES).unwrap_or(0),
         organization_layout_count: r.count(registries::ORGANIZATION_LAYOUTS).unwrap_or(0),
+        layouts: slots(registries::ORGANIZATION_LAYOUTS),
     }
 }
 

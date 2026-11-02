@@ -115,13 +115,12 @@ fn berlin_film_replays_into_aa_play() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
     let film = Film::read(&film_path(), &registries).unwrap();
-    // SharedProperty slots (research orders), measured from the original.
-    let slots = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/native_shared_property_slots_v14.json");
+    // The id tables, computed from the data; `tests/registry_counts.rs` proves
+    // the SharedProperty slots against the original.
     replay::set_formation_ids(registries.formation_ids.clone());
-    if let Ok(text) = std::fs::read_to_string(&slots) {
-        let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
-        replay::set_property_ids(v["ids"].as_array().unwrap().iter().map(|s| s.as_str().unwrap().to_owned()).collect());
-    }
+    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
+    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
+    replay::set_property_ids(registries.property_ids.clone());
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let map = Arc::new(aa_play::GameMap::load_with(&root, MAP, &data).unwrap());
 
@@ -166,6 +165,10 @@ fn berlin_film_replays_into_aa_play() {
     print_difference("replay", &report);
     assert_eq!(report.steps as usize, film.world_ticks());
     assert_eq!(report.checked, film.checkpoints.len());
+    // K1: an unpack takes a new id and swaps it, so film slots name the same
+    // things here without any pairing: every order of the film resolves. X2 has
+    // its command now, so nothing is excepted.
+    assert!(report.unresolved.is_empty(), "orders unresolved: {:?}", report.unresolved);
     // Reached 2026-11-01 with the mapper's organization orders: checkpoints
     // 17..544 match (research/byte-exact/PARITY-CENSUS.md has what stands
     // between that and 266).

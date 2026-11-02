@@ -321,7 +321,10 @@ impl Ui {
     pub fn load_widget(&mut self, w: &mut Widget, parent_threshold: Option<i32>) {
         let strings = self.strings.clone();
         let resolve = text_resolver(&strings);
-        w.load(&mut self.store, None, parent_threshold.or(Some(self.root.render_threshold)), &resolve);
+        // 0x5F2312: without a RenderThreshold node a widget takes its parent's; one
+        // that has no parent yet keeps the constructor's 10 (so the letterbox's
+        // render level 0x14 hides the game interface, not the root's 25)
+        w.load(&mut self.store, None, parent_threshold, &resolve);
     }
 
     /// Connect a loaded top-level widget to Root (append = on top) and
@@ -671,12 +674,20 @@ impl Ui {
         if w.flags & widget_flag::SHOWN == 0 || !w.loaded {
             return;
         }
+        if w.sub_ve_under {
+            if let Some(v) = &w.sub_ve {
+                let name = v.name.clone();
+                self.draw_ve(v, w, &path, &name, out);
+            }
+        }
         if let Some(v) = &w.view {
             self.draw_ve(v, w, &path, "View", out);
         }
-        if let Some(v) = &w.sub_ve {
-            let name = v.name.clone();
-            self.draw_ve(v, w, &path, &name, out);
+        if !w.sub_ve_under {
+            if let Some(v) = &w.sub_ve {
+                let name = v.name.clone();
+                self.draw_ve(v, w, &path, &name, out);
+            }
         }
         if w.class.internals_ported() {
             for (c, seg) in w.children.iter().zip(child_segments(w)) {

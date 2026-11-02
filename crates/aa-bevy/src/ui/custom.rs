@@ -25,8 +25,9 @@
 //!   `PendingRandomMap` for a random map). "Random" nations and computer
 //!   generals are resolved here, as the original does when the world is
 //!   configured (0x50E8B0, PickRandomProfile 0x79FAF0).
-use super::dialogs::{self, FileDialog, Outcome, RandomDialog, RuleValue};
+use super::dialogs::{self, FileDialog, FilmDialog, Outcome, RandomDialog, RuleValue};
 use super::gamedata::{GameData, MapInfo};
+use aa_parity::playback::{FilmDir, FilmRow};
 use aa_play::mapgen::RandomMapParams;
 use aa_play::{Controller, PlayerSetup, SkirmishSetup};
 use aa_ui::staging::{FactionInfo, KingdomSlot, LaunchType, NationInfo, Occupant, Staging, StagingState, TeamInfo};
@@ -39,6 +40,10 @@ pub enum Action {
     None,
     Exit,
     Launch,
+    /// The film dialog closed with a film: the session holds it.
+    FilmChosen,
+    /// A dialog was cancelled (`FilmCancel` 0x645540 asks the route).
+    FilmDialogCancelled,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -80,6 +85,84 @@ struct Record {
 enum Source {
     Random { rmc: String, size: (f32, f32), terrain: Vec<f32> },
     Map(MapInfo),
+    /// SetSessionLoadFilm 0x779B30 (Session+0x54 = 4, +0x58 = 2, +0x60 = 5).
+    Film(FilmChoice),
+}
+
+/// The film of a film session: its row of the dialog, and what the staging
+/// reads of the header (0x65F880: the kingdoms of the preview).
+#[derive(Clone, Debug)]
+pub struct FilmChoice {
+    pub path: PathBuf,
+    /// The header's name without `(Film)`.
+    pub name: String,
+    pub size: (i32, i32),
+    /// The preview's kingdom rows: name and colour.
+    pub kingdoms: Vec<(String, [f32; 3])>,
+}
+
+/// The folder the original's `%USERDATA%` resolves to, `0xB38AF0`
+/// (`0x85B040`, called from `0x85B690` in KKC_Application::Init):
+/// `SHGetFolderPathW(CSIDL_PERSONAL)` plus `/` and the AVar ApplicationIDS
+/// ("A&A"), backslashes turned into slashes; when that lookup gives nothing,
+/// `<folder of the executable>/Profile`. (The QA copy's AA.exe forces the
+/// second branch: its byte at 0x85B0AA is a `jmp` for the original's `je`.)
+pub fn original_personal_folder(personal: Option<&str>, application_ids: &str, exe_folder: &Path) -> PathBuf {
+    match personal.filter(|p| !p.is_empty()) {
+        Some(p) => {
+            let p = p.replace('\\', "/");
+            let sep = if p.ends_with('/') { "" } else { "/" };
+            PathBuf::from(format!("{p}{sep}{application_ids}"))
+        }
+        None => exe_folder.join("Profile"),
+    }
+}
+
+/// `SHGetFolderPathW(0, CSIDL_PERSONAL | CSIDL_FLAG_CREATE, 0, 0, buffer)`
+/// through `shfolder.dll` natively (`0x85A9D0`), empty on failure. Here
+/// without the create flag: nothing is ever made in the original's folders.
+#[cfg(windows)]
+fn csidl_personal() -> Option<String> {
+    const CSIDL_PERSONAL: i32 = 5;
+    #[link(name = "shell32")]
+    unsafe extern "system" {
+        fn SHGetFolderPathW(hwnd: *mut core::ffi::c_void, csidl: i32, token: *mut core::ffi::c_void, flags: u32, path: *mut u16) -> i32;
+    }
+    let mut buffer = [0u16; 261];
+    // SAFETY: the buffer holds MAX_PATH wide characters, as the call requires.
+    let hr = unsafe { SHGetFolderPathW(std::ptr::null_mut(), CSIDL_PERSONAL, std::ptr::null_mut(), 0, buffer.as_mut_ptr()) };
+    if hr < 0 {
+        return None;
+    }
+    let len = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..len]))
+}
+
+#[cfg(not(windows))]
+fn csidl_personal() -> Option<String> {
+    None
+}
+
+/// The film folders the dialog lists (lead's decision 6): the client's own
+/// profile, where its recordings go, then the folder the original writes to,
+/// read-only: `<personal folder>/data/` + AVar PathFilms ("Scanning
+/// .../data/ for resources", [O]). `AA_FILM_ORIGINAL_PERSONAL=<folder>` stands
+/// for the personal folder in test runs, as the QA copy's `game/Profile` does.
+pub fn film_dirs(ui: &Ui, game_root: &Path) -> Vec<FilmDir> {
+    let films = ui.avars.get("PathFilms").map(aa_ui::node::unquote).unwrap_or_else(|| "Films/".into());
+    let mut out = Vec::new();
+    if let Some(profile) = crate::session::own_profile() {
+        out.push(FilmDir::own(profile.join("data").join(&films)).with_game_root(game_root));
+    }
+    let personal = match std::env::var_os("AA_FILM_ORIGINAL_PERSONAL") {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ids = ui.avars.get("ApplicationIDS").map(aa_ui::node::unquote).unwrap_or_else(|| "A&A".into());
+            original_personal_folder(csidl_personal().as_deref(), &ids, game_root)
+        }
+    };
+    out.push(FilmDir::original(personal.join("data").join(&films)).with_game_root(game_root));
+    out
 }
 
 #[derive(Clone, Debug)]
@@ -351,6 +434,7 @@ fn format_list(ui: &Ui, s: &Session) -> Vec<(String, String)> {
 enum Dialog {
     File(FileDialog),
     Random(RandomDialog),
+    Film(FilmDialog),
 }
 
 pub struct Custom {
@@ -375,6 +459,9 @@ pub struct Custom {
     /// A finished world exists (StagingOpenScoring 0x65BD60 needs
     /// `0xB36534`): the Score button is enabled.
     scoring: bool,
+    /// The film dialog's remembered name (+0x120, the preferences block
+    /// `[0xB39D04]+0x18`: saved with the profile, `Front::save_settings`).
+    remembered_film: Option<PathBuf>,
 }
 
 /// The staging screen's game data (nations, SAIs, rules, RMCs), parsed on a
@@ -408,7 +495,55 @@ impl Custom {
             launched_profiles: Vec::new(),
             launched_factions: Vec::new(),
             scoring: false,
+            remembered_film: None,
         }
+    }
+
+    /// The film of the session, if it is a film session.
+    pub fn film(&self) -> Option<&FilmChoice> {
+        match self.session.as_ref().map(|s| &s.source) {
+            Some(Source::Film(f)) => Some(f),
+            _ => None,
+        }
+    }
+
+    /// `0x68DB60(5, staging flag)`: the file dialog in its film mode, from
+    /// the staging's Film button or from ChooseFilm (`0x6455B0`, the main
+    /// menu's route).
+    pub fn open_film_dialog(&mut self, ui: &mut Ui, staging: bool) {
+        let game_root = self.root.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        let dirs = film_dirs(ui, &game_root);
+        self.data(ui);
+        let data = self.data.as_ref().unwrap();
+        let d = FilmDialog::open(ui, data, dirs, game_root, staging, self.remembered_film.as_deref());
+        self.dialog = Some(Dialog::Film(d));
+    }
+
+    /// The profile's remembered film (preferences +0x18).
+    pub fn remembered_film(&self) -> Option<&Path> {
+        self.remembered_film.as_deref()
+    }
+
+    /// Preferences +0x18: the name 0x75F6E7 stores when the session takes a
+    /// film and 0x690D75 when a film is saved.
+    pub fn remember_film(&mut self, path: PathBuf) {
+        self.remembered_film = Some(path);
+    }
+
+    /// The session takes the chosen film (0x779B30).
+    fn choose_film(&mut self, ui: &Ui, row: &FilmRow) -> Option<FilmChoice> {
+        self.remembered_film = Some(row.path.clone());
+        let data = self.data.as_ref()?;
+        let (w, h) = row.preview.size.split_once('x').map(|(a, b)| (a.trim().parse().unwrap_or(0), b.trim().parse().unwrap_or(0))).unwrap_or((0, 0));
+        let name = if row.preview.name.starts_with('#') { ui.strings.resolve(&row.preview.name) } else { row.preview.name.clone() };
+        Some(FilmChoice { path: row.path.clone(), name, size: (w, h), kingdoms: row.preview.kingdoms.iter().map(|k| (k.name.clone(), data.color(&k.color_id))).collect() })
+    }
+
+    /// A film session: no records, no teams (the staging's rows come from
+    /// the launch type; 0x779B30 refreshes them).
+    fn set_film_session(&mut self, film: FilmChoice) {
+        self.session = Some(Session { source: Source::Film(film), rules: Vec::new(), records: Vec::new(), map_teams: Vec::new(), has_ffa: false, format: String::new() });
+        self.launched_nation = None;
     }
 
     /// The profile's LAN name (profile+0x2C) for the local player, as the
@@ -420,6 +555,11 @@ impl Custom {
     /// Whether the staging's Score button opens a finished world.
     pub fn scoring_available(&mut self, on: bool) {
         self.scoring = on;
+    }
+
+    /// The staging screen's game data, for a dialog of another screen.
+    pub fn game_data(&mut self, ui: &Ui) -> &GameData {
+        self.data(ui)
     }
 
     fn data(&mut self, ui: &Ui) -> &GameData {
@@ -659,7 +799,21 @@ impl Custom {
                 (LaunchType::RandomMap, name, (size.0 as i32, size.1 as i32))
             }
             Source::Map(m) => (LaunchType::LoadMap, m.name.clone(), m.size),
+            Source::Film(f) => (LaunchType::LoadFilm, f.name.clone(), f.size),
         };
+        // a film: the roster is the Observer header and the local player
+        // (05-staging-film-loaded.png); the kingdoms only fill the preview
+        // (the slots of `LaunchType::LoadFilm` read no team)
+        let mut observers = Vec::new();
+        if let Source::Film(f) = &s.source {
+            observers.push(Occupant::Human { name: player.clone(), local: true, on_host: true, ready: false, ping_ms: 0, download: None, swap_from: false, swap_to: false });
+            let kingdoms = f
+                .kingdoms
+                .iter()
+                .map(|(name, color)| KingdomSlot { closed: false, required: false, color: *color, record_name: name.clone(), nation: None, faction: None, handicap: None, fixed_nation: None, fixed_faction: None, occupant: Occupant::None })
+                .collect();
+            teams.push(TeamInfo { name: None, kingdoms });
+        }
         let humans = s.records.iter().filter(|r| r.occ == Occ::Human).count() as i32;
         let can_join = vec![false; teams.len()];
         StagingState {
@@ -682,7 +836,7 @@ impl Custom {
             local_has_kingdom: humans > 0,
             local_ready: false,
             teams,
-            observers: Vec::new(),
+            observers,
             nations,
             handicaps,
             sais,
@@ -699,6 +853,12 @@ impl Custom {
         self.staging = Some(Staging::show(ui, self.state.clone()));
         self.dialog = None;
         self.after_update(ui);
+    }
+
+    /// The staging on show takes the session's new state (0x781DD0, 0x7791F0,
+    /// 0x770280 after the film's order, 0x779B30).
+    pub fn refresh_staging(&mut self, ui: &mut Ui) {
+        self.refresh(ui);
     }
 
     fn refresh(&mut self, ui: &mut Ui) {
@@ -763,13 +923,27 @@ impl Custom {
                     let o = r.command(ui, data, cmd);
                     (Dialog::Random(r), o)
                 }
+                Dialog::Film(mut f) => {
+                    let o = f.command(ui, data, cmd);
+                    (Dialog::Film(f), o)
+                }
             };
             match out {
                 Some(Outcome::Open) => {
                     self.dialog = Some(d);
                     return Some(Action::None);
                 }
-                Some(Outcome::Cancelled) => return Some(Action::None),
+                Some(Outcome::Cancelled) => return Some(Action::FilmDialogCancelled),
+                // Commit 0x68EF50, mode 5: the staging's KKC_HostSetLoadFilmOrder
+                // (0x75F470 -> 0x779B30, 0x781DD0 reset, 0x7791F0), or the
+                // main menu's `FilmOK "<name>"` (0x645200: the same session,
+                // then 0x652B10 launches at once)
+                Some(Outcome::Film { row }) => {
+                    if let Some(film) = self.choose_film(ui, &row) {
+                        self.set_film_session(film);
+                    }
+                    return Some(Action::FilmChosen);
+                }
                 Some(Outcome::Map { map, rules }) => {
                     let previous = self.session.as_ref().map(|s| s.format.clone()).unwrap_or_default();
                     let people = self.people();
@@ -790,7 +964,11 @@ impl Custom {
                     self.refresh(ui);
                     return Some(Action::None);
                 }
-                None => self.dialog = Some(d),
+                // an open dialog is modal: nothing behind it answers
+                None => {
+                    self.dialog = Some(d);
+                    return Some(Action::None);
+                }
             }
         }
         let current_map = match self.session.as_ref().map(|s| &s.source) {
@@ -818,8 +996,13 @@ impl Custom {
                 self.dialog = Some(Dialog::File(d));
                 Some(Action::None)
             }
+            // 0x65C1C0 -> 0x68DB60(5, staging flag 1)
+            "SelectLaunchType LOAD_FILM" => {
+                self.open_film_dialog(ui, true);
+                Some(Action::None)
+            }
             c if c.starts_with("SelectLaunchType") => {
-                info!("staging: {c}: the saved game / film dialog is not built yet");
+                info!("staging: {c}: the saved game dialog is not built yet");
                 Some(Action::None)
             }
             // the exit confirmation (ui_staging_confirm_exit)
@@ -975,6 +1158,9 @@ impl Custom {
     /// [`Custom::localize_setup`].
     pub fn launch_setup(&mut self) -> Option<(SkirmishSetup, Option<RandomMapParams>)> {
         let s = self.session.clone()?;
+        if matches!(s.source, Source::Film(_)) {
+            return None;
+        }
         let player = self.player_name.clone().unwrap_or_else(|| "Player".into());
         let data = self.data.take()?;
         let mut players = Vec::new();
@@ -1052,8 +1238,10 @@ impl Custom {
         let default_money = data.rules.iter().find(|r| r.ids.eq_ignore_ascii_case("ResourceStockpileDefault")).and_then(|r| r.default.parse::<f32>().ok());
         self.data = Some(data);
         let starting_resources = money.filter(|m| Some(*m) != default_money);
-        let game_seed = self.next_random();
+        // The creator seed is a native 32-bit word (0x76AA90): a film holds no more.
+        let game_seed = self.next_random() & 0xFFFF_FFFF;
         let (map_id, random) = match &s.source {
+            Source::Film(_) => return None,
             Source::Map(m) => (m.title.clone(), None),
             Source::Random { rmc, size, terrain } => {
                 let params = RandomMapParams {
@@ -1086,6 +1274,26 @@ impl Custom {
             .unwrap_or_default()
     }
 
+    /// The session's world rules as a film header holds them (WorldRules
+    /// 0x512420), in the registry's order: IDS, native kind (0 bool byte, 1 int,
+    /// 2 fixed as binary32 bits, 3 enum value index) and raw value.
+    pub fn film_rule_rows(&self) -> Vec<(String, u32, u32)> {
+        let (Some(s), Some(data)) = (&self.session, &self.data) else { return Vec::new() };
+        data.rules
+            .iter()
+            .map(|rule| {
+                let value = s.rules.iter().find(|r| r.ids.eq_ignore_ascii_case(&rule.ids)).map_or(rule.default.as_str(), |r| r.value.as_str());
+                let (kind, raw) = match rule.kind.as_str() {
+                    "bool" => (0, u32::from(value.trim().eq_ignore_ascii_case("true"))),
+                    "int" => (1, value.trim().parse::<f32>().map_or(0, |v| v as i32 as u32)),
+                    "fixed" => (2, value.trim().parse::<f32>().map_or(0, f32::to_bits)),
+                    _ => (3, rule.enum_values.iter().position(|(i, _)| i.eq_ignore_ascii_case(value)).unwrap_or(0) as u32),
+                };
+                (rule.ids.clone(), kind, raw)
+            })
+            .collect()
+    }
+
     /// The value of a world rule (IDS) of the session being launched.
     pub fn rule_value(&self, ids: &str) -> Option<String> {
         self.session.as_ref()?.rules.iter().find(|r| r.ids.eq_ignore_ascii_case(ids)).map(|r| r.value.clone())
@@ -1106,6 +1314,8 @@ impl Custom {
         let Some(s) = &self.session else { return (String::new(), String::new(), None) };
         let nation = self.launched_nation.clone();
         match &s.source {
+            // the title and nothing else ([O] 10-loading-after-60s.png)
+            Source::Film(f) => (f.name.clone(), String::new(), None),
             Source::Map(m) => (m.name.clone(), m.description.clone(), nation),
             // the generated world's description: the RMC's (a '#' key)
             Source::Random { rmc, .. } => {
@@ -1122,5 +1332,22 @@ impl Custom {
     #[allow(dead_code)]
     pub fn root(&self) -> &Path {
         &self.root
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::original_personal_folder;
+    use std::path::{Path, PathBuf};
+
+    /// 0x85B040: the unpatched game's folder ([O] the log's `Personal Folder:
+    /// <documents>/A&A`), and the QA copy's `<game>/Profile` when the lookup
+    /// gives nothing.
+    #[test]
+    fn the_original_film_folder_follows_0x85b040() {
+        assert_eq!(original_personal_folder(Some(r"<user profile>\Documents"), "A&A", Path::new("game")), PathBuf::from("<user profile>/Documents/A&A"));
+        assert_eq!(original_personal_folder(Some("D:/Docs/"), "A&A", Path::new("game")), PathBuf::from("D:/Docs/A&A"));
+        assert_eq!(original_personal_folder(Some(""), "A&A", Path::new("game")), Path::new("game").join("Profile"));
+        assert_eq!(original_personal_folder(None, "A&A", Path::new("game")), Path::new("game").join("Profile"));
     }
 }

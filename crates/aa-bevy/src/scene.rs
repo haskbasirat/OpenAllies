@@ -5,6 +5,7 @@
 use crate::{camera, session, terrain, textures, units};
 
 use aa_animation::AnimatedAsset;
+use aa_parity::playback::FilmPlayer;
 use aa_assets::{AssetStore, HeightMode, PreparedModel, PreparedScene};
 use anyhow::{Context, Result};
 use bevy::asset::{RenderAssetUsages, uuid_handle};
@@ -106,6 +107,8 @@ struct Loaded {
     seconds: f32,
     /// The battle world (aa-play) for this map and setup.
     world: Option<aa_play::World>,
+    /// The film being played on that world.
+    film: Option<FilmPlayer>,
     /// The battle's sun: the map's saved SUN chunk, or the SVars sun of a
     /// new (random) world.
     sun: look::SceneSun,
@@ -118,9 +121,43 @@ struct Loaded {
 fn map_sun(reconstruction: &std::path::Path, id: &str) -> Option<look::SceneSun> {
     let maps = reconstruction.join("assets/original/Data/Maps");
     let path = ["RMP", "rmp"].iter().map(|ext| maps.join(format!("{id}.{ext}"))).find(|p| p.exists())?;
+    file_sun(&path)
+}
+
+/// The saved Sun of a map or saved game file, chunk "SUN".
+fn file_sun(path: &std::path::Path) -> Option<look::SceneSun> {
     let archive = aa_mapworld::MapArchive::from_bytes(std::fs::read(path).ok()?).ok()?;
     let chunk = archive.decode_chunk("SUN", 1 << 16).ok()?;
     look::SceneSun::from_map_chunk(&chunk.bytes)
+}
+
+/// `KKC_GWorld::StartMission` 0x4FDCE0: a Sun world rule away from its default
+/// sets the sun's colours (0x48D500 finds `Data/Sun/<ids>`, 0x4EDB10 with no
+/// transition); at its default the map's or the SVars' sun stays. The rule is
+/// its EnumValue IDS or, in a film's header, its value index (0x512420). Returns
+/// the Sun's IDS when it applies, for the world's own Sun (`set_rule_sun`).
+fn apply_sun_rule(sun: &mut look::SceneSun, reconstruction: &std::path::Path, ids: Option<&str>, index: Option<u32>) -> Option<String> {
+    let data = aa_ui::fs::DataRoot::with_overlay(reconstruction.join("assets/original/Data"), reconstruction.join("native-game/runtime-expanded-v14/Data"));
+    let rules = crate::ui::datafile::load(&data, "Game/world_rules_aa.tgi");
+    let rule = rules.iter().find(|n| n.name.eq_ignore_ascii_case("WorldRule") && n.get("ids").is_some_and(|i| i.eq_ignore_ascii_case("Sun")))?;
+    let values: Vec<&str> = rule.children_named("EnumValue").filter_map(|v| v.get("ids")).collect();
+    let chosen = ids.or_else(|| values.get(index? as usize).copied());
+    let chosen = chosen.filter(|c| !rule.get("default").is_some_and(|d| d.eq_ignore_ascii_case(c)))?;
+    let file = crate::ui::datafile::load(&data, &format!("Sun/{chosen}.tgi"));
+    let Some(found) = file.iter().find(|n| n.name.eq_ignore_ascii_case("Sun")) else {
+        warn!("World rule specified sun '{chosen}' no found - using default");
+        return None;
+    };
+    let triple = |key: &str, into: &mut [f32; 3]| {
+        let parts: Vec<f32> = found.get(key).map(|v| v.split(',').filter_map(|p| p.trim().parse().ok()).collect()).unwrap_or_default();
+        if let [a, b, c] = parts[..] {
+            *into = [a, b, c];
+        }
+    };
+    triple("Diffuse", &mut sun.diffuse);
+    triple("Ambient", &mut sun.ambient);
+    triple("Specular", &mut sun.specular);
+    Some(chosen.to_owned())
 }
 
 fn model(store: &AssetStore, path: &str) -> Result<PreparedModel> {
@@ -138,12 +175,14 @@ enum MapSource {
     File(String),
     /// The original random map generator with the setup screen's options.
     Random(aa_play::mapgen::RandomMapParams),
+    /// A random-map film: the generator's run its world's map comes from.
+    Generated(Box<aa_play::mapgen::GeneratedMap>),
 }
 
 /// A generated map as a scene: its terrain plus every scenery model.
-fn generated_scene(args: &Args, store: &AssetStore, params: &aa_play::mapgen::RandomMapParams) -> Result<(PreparedScene, aa_play::GameMap)> {
-    let root = args.assets.parent().context("the install root above the reconstruction folder")?;
-    let generated = crate::preload::random_maps(root)?.generate(params)?;
+fn generated_scene(store: &AssetStore, mut generated: aa_play::mapgen::GeneratedMap) -> Result<PreparedScene> {
+    // A map file's own palette names ids `Data/translate.tgi` renames.
+    store.fill_palette(&mut generated.terrain);
     let terrain = generated.terrain.prepare(HeightMode::NativeConditional)?;
     // Every distinct scenery model, read and prepared in parallel.
     let mut unique: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
@@ -198,8 +237,7 @@ fn generated_scene(args: &Args, store: &AssetStore, params: &aa_play::mapgen::Ra
         errors: Vec::new(),
         limitations: Vec::new(),
     };
-    let scene = PreparedScene { map: aa_assets::MapAsset { terrain: generated.terrain, placements }, terrain, instances, models, warnings };
-    Ok((scene, generated.map))
+    Ok(PreparedScene { map: aa_assets::MapAsset { terrain: generated.terrain, placements }, terrain, instances, models, warnings })
 }
 
 /// Direct start without the menus: you as Russia against a German computer
@@ -228,18 +266,43 @@ impl Steps {
     }
 }
 
-fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, profiles: Vec<(usize, String)>) -> Result<Loaded> {
+#[allow(clippy::too_many_arguments)]
+fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, profiles: Vec<(usize, String)>, factions: Vec<(usize, Option<String>)>, film: Option<(aa_play::World, FilmPlayer)>, sun_rule: Option<String>) -> Result<Loaded> {
     let start = Instant::now();
     let mut steps = Steps(Instant::now());
     let store = (*crate::preload::store(&args.assets)?).clone();
     steps.mark("asset store");
+    let root = args.assets.parent().context("the install root above the reconstruction folder")?;
+    let mut map_id = None;
+    let mut random_generals = None;
     let (mut scene, game_map) = match source {
-        MapSource::File(id) => (store.load_scene(id, HeightMode::NativeConditional)?, None),
+        MapSource::File(id) => {
+            let scene = store.load_scene(&id, HeightMode::NativeConditional)?;
+            map_id = Some(id);
+            (scene, None)
+        }
         MapSource::Random(params) => {
             session::set_load_status("app_status_generating_map");
-            let (scene, map) = generated_scene(args, &store, params)?;
+            // The battle starts as a film of it starts (0x513410): the creator's
+            // lists, the kingdoms' picks on the world stream, then the generator.
+            let maps = crate::preload::random_maps(root)?;
+            let generated = match &setup {
+                Some(setup) => {
+                    let data = crate::preload::game_data(root)?;
+                    let battle = aa_parity::recording::random_battle(&maps, &data, &params, setup, &factions)?;
+                    random_generals = Some(battle.generals);
+                    battle.generated
+                }
+                None => maps.generate(&params)?,
+            };
+            let map = generated.map.clone();
+            let scene = generated_scene(&store, generated)?;
             session::set_load_status("app_status_verifying_map");
             (scene, Some(map))
+        }
+        MapSource::Generated(generated) => {
+            session::set_load_status("app_status_verifying_map");
+            (generated_scene(&store, *generated)?, None)
         }
     };
     steps.mark("map scene");
@@ -257,37 +320,60 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
     steps.mark("model fixes");
     let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
     steps.mark("terrain layers");
-    // The battle world from the original rules and map.
-    let root = args.assets.parent().context("the install root above the reconstruction folder")?;
-    let data = crate::preload::game_data(root)?;
-    steps.mark("game data");
-    let map_id = match source {
-        MapSource::File(id) => id.clone(),
-        MapSource::Random(_) => "random".to_owned(),
+    let (mut world, film) = match film {
+        // The film's own world (0x5A3980 made it from the film's map).
+        Some((world, player)) => {
+            session::set_load_status("app_status_loading_objects");
+            (world, Some(player))
+        }
+        None => {
+            // The battle world from the original rules and map.
+            let data = crate::preload::game_data(root)?;
+            steps.mark("game data");
+            let random_map = game_map.is_some();
+            let map_id = map_id.clone().unwrap_or_else(|| "random".to_owned());
+            let world_map = match &game_map {
+                Some(m) => m.clone(),
+                None => aa_play::GameMap::load_with(root, &map_id, &data)?,
+            };
+            steps.mark("game map");
+            let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
+            session::set_load_status("app_status_loading_objects");
+            // WorldParameters 0x50E8B0 draws the general of a kingdom staging left open,
+            // during the map's restore (a film's replay draws the same way).
+            let chosen = |i: usize| factions.iter().any(|(p, f)| *p == i && f.is_some());
+            let picks: Vec<aa_play::creation::StartPick> =
+                (0..setup.players.len()).map(|i| aa_play::creation::StartPick { random_nation: false, random_general: !random_map && !chosen(i) }).collect();
+            let resources = data.resources.len();
+            let mut world = aa_play::World::new_skirmish_with(data, Arc::new(world_map), &setup, &picks)?;
+            // A random map's creator drew its picks before the generator.
+            for (k, general) in random_generals.into_iter().flatten().enumerate() {
+                if general.is_some() {
+                    world.books.kingdom_mut(k as u32, resources).general = general;
+                }
+            }
+            // The film tables, on this thread rather than in the battle's first frame.
+            if let Err(e) = aa_parity::registries::Registries::cached(root, None) {
+                warn!("film registries: {e:#}");
+            }
+            steps.mark("new skirmish");
+            // The original computer players (Data/SAI profiles); cached after the first load.
+            aa_play::ai::attach(&mut world, crate::preload::ai_data(root)?);
+            steps.mark("ai data");
+            // The generals the setup screen chose for the computer slots (kingdom id = player index).
+            for (player, profile) in &profiles {
+                aa_play::ai::set_profile(&mut world, *player as u32, profile);
+            }
+            // The generals' special operations (Data/Generals; each kingdom's general
+            // is set at battle start, ui/abilities.rs). Appended by the combat owner.
+            match crate::preload::generals(root) {
+                Ok(g) => aa_play::special_ops::attach(&mut world, g),
+                Err(e) => warn!("generals: {e:#}"),
+            }
+            steps.mark("generals");
+            (world, None)
+        }
     };
-    let world_map = match &game_map {
-        Some(m) => m.clone(),
-        None => aa_play::GameMap::load_with(root, &map_id, &data)?,
-    };
-    steps.mark("game map");
-    let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
-    session::set_load_status("app_status_loading_objects");
-    let mut world = aa_play::World::new_skirmish(data, Arc::new(world_map), &setup)?;
-    steps.mark("new skirmish");
-    // The original computer players (Data/SAI profiles); cached after the first load.
-    aa_play::ai::attach(&mut world, crate::preload::ai_data(root)?);
-    steps.mark("ai data");
-    // The generals the setup screen chose for the computer slots (kingdom id = player index).
-    for (player, profile) in &profiles {
-        aa_play::ai::set_profile(&mut world, *player as u32, profile);
-    }
-    // The generals' special operations (Data/Generals; each kingdom's general
-    // is set at battle start, ui/abilities.rs). Appended by the combat owner.
-    match crate::preload::generals(root) {
-        Ok(g) => aa_play::special_ops::attach(&mut world, g),
-        Err(e) => warn!("generals: {e:#}"),
-    }
-    steps.mark("generals");
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
         .map
@@ -325,11 +411,12 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
     steps.mark("textures");
     // A loaded map keeps its saved Sun (4FC600 -> 4EDBD0); a generated world
     // has the SVars sun of 4EE1F0 (the RMCs list no suns for 5925E0).
-    let sun = match source {
-        MapSource::File(id) => map_sun(&args.assets, id),
-        MapSource::Random(_) => None,
+    let source_file = film.as_ref().and_then(|p| p.scene().source_file.as_deref());
+    let mut sun = map_id.as_deref().and_then(|id| map_sun(&args.assets, id)).or_else(|| source_file.and_then(file_sun)).unwrap_or_else(|| look::vars().sun);
+    let film_rule = film.as_ref().and_then(|p| p.film().header.map_header.creator.rules.rules.iter().find(|r| String::from_utf16_lossy(&r.key).eq_ignore_ascii_case("Sun")).map(|r| r.value));
+    if let Some(ids) = apply_sun_rule(&mut sun, &args.assets, sun_rule.as_deref(), film_rule) {
+        aa_play::triggers::set_rule_sun(&mut world, &ids);
     }
-    .unwrap_or_else(|| look::vars().sun);
     info!("battle sun: {sun:?}");
     let shadows = crate::preload::shadow_types(&args.assets).map_err(|e| warn!("shadow types: {e:#}")).ok();
     Ok(Loaded {
@@ -345,6 +432,7 @@ fn load(args: &Args, source: &MapSource, setup: Option<aa_play::SkirmishSetup>, 
         focus: args.focus,
         seconds: start.elapsed().as_secs_f32(),
         world: Some(world),
+        film,
         sun,
         shadows,
     })
@@ -374,16 +462,24 @@ fn start_loading(
     setup: Option<Res<session::PendingSetup>>,
     random: Option<Res<session::PendingRandomMap>>,
     profiles: Option<Res<session::PendingAiProfiles>>,
+    generals: Option<Res<crate::ui::abilities::PendingGenerals>>,
+    pending_film: Option<Res<session::PendingFilm>>,
+    sun_rule: Option<Res<session::PendingSunRule>>,
     mut progress: ResMut<session::LoadProgress>,
 ) {
-    let map = match (&random, &setup) {
-        (Some(r), _) => MapSource::Random(r.0.clone()),
-        (None, Some(s)) => MapSource::File(s.0.map_id.clone()),
-        (None, None) => MapSource::File(args.0.map.clone()),
+    let mut film = pending_film.and_then(|p| p.0.lock().ok().and_then(|mut f| f.take()));
+    commands.remove_resource::<session::PendingFilm>();
+    let generated = film.as_mut().and_then(|(_, player)| player.take_generated());
+    let map = match (generated, &random, &setup) {
+        (Some(g), _, _) => MapSource::Generated(Box::new(g)),
+        (None, Some(r), _) => MapSource::Random(r.0.clone()),
+        (None, None, Some(s)) => MapSource::File(s.0.map_id.clone()),
+        (None, None, None) => MapSource::File(args.0.map.clone()),
     };
     let label = match &map {
         MapSource::File(id) => id.clone(),
         MapSource::Random(r) => format!("random map {}", r.rmc),
+        MapSource::Generated(g) => format!("random map {}", g.params.rmc),
     };
     *progress = session::LoadProgress { fraction: 0.0, status: format!("Loading {label}"), error: None };
     session::set_load_status("app_status_loading_data");
@@ -392,8 +488,10 @@ fn start_loading(
     let args = args.0.clone();
     let setup = setup.map(|s| s.0.clone());
     let profiles = profiles.map(|p| p.0.clone()).unwrap_or_default();
+    let factions: Vec<(usize, Option<String>)> = generals.map_or_else(Vec::new, |g| g.factions.clone());
+    let sun_rule = sun_rule.map(|s| s.0.clone());
     std::thread::spawn(move || {
-        let result = load(&args, &map, setup, profiles).map_err(|e| format!("{e:#}"));
+        let result = load(&args, map, setup, profiles, factions, film, sun_rule).map_err(|e| format!("{e:#}"));
         *out.lock().unwrap() = Some(result);
     });
     commands.insert_resource(LoadTask(slot));
@@ -436,10 +534,7 @@ impl Plugin for ScenePlugin {
                 ..default()
             })
             .insert_resource(bevy::light::DirectionalLightShadowMap { size: 4096 })
-            // Spread a new battle's texture and mesh uploads over the frames
-            // the loading screen still covers (a whole map in one frame took
-            // about 0.3 s).
-            .insert_resource(bevy::render::render_asset::RenderAssetBytesPerFrame::new(32 << 20))
+            .add_systems(Update, textures::stream)
             .insert_resource(SceneArgs(self.args.clone()))
             .init_resource::<session::LoadProgress>()
             .add_systems(OnEnter(session::AppState::Loading), start_loading)
@@ -502,6 +597,10 @@ fn leave_battle(mut commands: Commands, scene: Query<Entity, With<SceneEntity>>)
     commands.insert_resource(crate::ui::placement::Ghost::default());
     commands.insert_resource(crate::ui::order_marks::PointVfx::default());
     commands.insert_resource(crate::ui::order_marks::Issued::default());
+    // A film on a profile's data has drawn its art (ui/front.rs launch_film).
+    if let Some(store) = crate::ui::reconstruction_root().and_then(|r| crate::preload::store(&r).ok()) {
+        store.set_art_overlay(None);
+    }
 }
 
 pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> OriginalMaterial {
@@ -584,10 +683,16 @@ fn setup(
     let no_objects = std::env::var_os("AA_BEVY_NO_OBJECTS").is_some();
     for p in loaded.scene.instances.iter().filter(|_| !no_objects) {
         let category = loaded.scene.map.placements.types.get(&p.thing_id).and_then(|t| t.category.as_deref());
-        if matches!(category, Some("START_LOC" | "PLACEHOLDER")) {
+        // (AREA, CAMERA: Flags invisible, template_area / template_camera: the
+        // script's markers show in the editor only)
+        if matches!(category, Some("START_LOC" | "PLACEHOLDER" | "AREA" | "CAMERA")) {
             continue;
         }
         if not_scenery.contains(&key(&p.thing_id, p.position[0], -p.position[2])) {
+            continue;
+        }
+        // Flags invisible: the audio doodads' speakers show in the editor only
+        if world.data.find(&p.thing_id).is_some_and(|d| world.data.def(d).invisible) {
             continue;
         }
         let Some(list) = p.model_key.as_ref().and_then(|k| parts.get(k)) else { continue };
@@ -627,6 +732,33 @@ fn setup(
                 .unwrap_or(0.0)
         })
         .collect();
+    // AA_BEVY_TERRAIN_CHECK=1: the drawn terrain against the world the units
+    // stand on, and the scenery the world keeps against what is drawn (test runs).
+    if std::env::var_os("AA_BEVY_TERRAIN_CHECK").is_some() {
+        let mut worst = (0.0f32, 0u32, 0u32);
+        let mut differ = 0u32;
+        let mut kinds = std::collections::BTreeMap::<String, u32>::new();
+        for y in 0..=gh {
+            for x in 0..=gw {
+                let drawn = corners[(y * (gw + 1) + x) as usize];
+                let there = world.map.height_at(Vec2::new(x as f32 * cell, y as f32 * cell));
+                let d = (drawn - there).abs();
+                if d > 0.01 {
+                    differ += 1;
+                    let tile = map.tiles.get((y.min(gh - 1) * gw + x.min(gw - 1)) as usize);
+                    let name = tile.and_then(|t| map.palette.get(t)).map_or("?".to_owned(), |p| p.id.clone());
+                    *kinds.entry(name).or_default() += 1;
+                }
+                if d > worst.0 {
+                    worst = (d, x, y);
+                }
+            }
+        }
+        info!(
+            "terrain check: {}x{} cells of {cell} m, world {}x{} of {}, worst height difference {} at corner ({}, {}), {differ} corners differ, on {kinds:?}; {objects} objects drawn, {} placed on the world's map",
+            gw, gh, world.map.width, world.map.height, world.map.cell_size, worst.0, worst.1, worst.2, world.map.placed.len()
+        );
+    }
     let world_heights = corners.clone();
     let ground = move |x: f32, z: f32| {
         let (gx, gy) = ((x / cell).clamp(0.0, gw as f32), (-z / cell).clamp(0.0, gh as f32));
@@ -642,8 +774,12 @@ fn setup(
     let _ = world_heights;
     // The camera starts on the local kingdom's start location (4F61A0
     // StartMission: Kingdom+1F8 position -> World+22C, 43F0A0 LookAt), else
-    // over the local player's first building (its Corps HQ).
-    let hq_at = camera::start_location(&world, 0)
+    // over the local player's first building (its Corps HQ). A film's viewer
+    // has no kingdom: half the map's width and height ([O]: lookat=(160,160)
+    // on a 320x320 map).
+    let film_view = loaded.film.is_some().then(|| Vec2::new(world.map.width as f32 * world.map.cell_size * 0.5, world.map.height as f32 * world.map.cell_size * 0.5));
+    let hq_at = film_view
+        .or_else(|| camera::start_location(&world, 0))
         .or_else(|| {
             world
                 .actors
@@ -654,7 +790,11 @@ fn setup(
         .map(|p| Vec2::new(p.x, -p.y))
         .unwrap_or(hq_at);
     let hq_y = ground(hq_at.x, hq_at.y);
-    commands.insert_resource(session::Battle::new(world, 0));
+    let mut battle = session::Battle::new(world, 0);
+    if let Some(player) = loaded.film.take() {
+        battle.attach_film(player);
+    }
+    commands.insert_resource(battle);
     commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs, loaded.fixes.clone()));
     // The battle's sun (look::apply_sun hands it to this light every frame).
     let sun = loaded.sun.clone();
@@ -794,6 +934,29 @@ fn sun_dir() -> Vec3 {
 mod tests {
     use super::*;
     use bevy::ecs::system::RunSystemOnce;
+
+    /// 0x4FDCE0: a Sun rule away from its default takes the colours of its
+    /// `Data/Sun/*.tgi`, by IDS or by a film's value index; the direction and
+    /// the dimmer stay, and at the default nothing changes.
+    #[test]
+    fn a_sun_rule_away_from_its_default_sets_the_colours() {
+        let Some(root) = crate::ui::reconstruction_root() else { return };
+        let start = look::SceneSun { direction: Vec3::X, diffuse: [0.1; 3], ambient: [0.2; 3], specular: [0.3; 3], dimmer: 0.5 };
+        let same = |s: &look::SceneSun| s.diffuse == [0.1; 3] && s.ambient == [0.2; 3] && s.specular == [0.3; 3];
+        let mut sun = start.clone();
+        apply_sun_rule(&mut sun, &root, Some("sun_default"), None);
+        assert!(same(&sun));
+        apply_sun_rule(&mut sun, &root, None, Some(0));
+        assert!(same(&sun));
+        apply_sun_rule(&mut sun, &root, None, None);
+        assert!(same(&sun));
+        apply_sun_rule(&mut sun, &root, Some("sun_dusk"), None);
+        assert_eq!((sun.diffuse, sun.ambient, sun.specular), ([1.0, 0.8, 0.55], [0.8, 0.6, 0.4], [0.2, 0.1, 0.05]));
+        assert_eq!((sun.direction, sun.dimmer), (Vec3::X, 0.5));
+        let mut indexed = start.clone();
+        apply_sun_rule(&mut indexed, &root, None, Some(2));
+        assert_eq!(indexed.diffuse, [1.0, 0.8, 0.55]);
+    }
 
     #[test]
     fn leaving_a_battle_clears_the_scene_and_its_state() {

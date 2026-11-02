@@ -75,7 +75,7 @@ impl From<aa_play::trace::SKind> for SEntryKind {
         use aa_play::trace::SKind;
         match kind {
             SKind::Clock => SEntryKind::Clock,
-            SKind::RngGetter => SEntryKind::RngGetter,
+            SKind::RngGetter(_) => SEntryKind::RngGetter,
             SKind::Int(l) => SEntryKind::Int(l),
             SKind::Float(l) => SEntryKind::Float(l),
             SKind::Bool(l) => SEntryKind::Bool(l),

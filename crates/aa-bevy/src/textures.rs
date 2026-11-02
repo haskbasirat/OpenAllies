@@ -8,8 +8,9 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
+use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 /// The current biome texture subfolder: the original's ResourceManager+80,
 /// copied from the map's Biome texture_subfolder_name at world init
@@ -80,9 +81,45 @@ pub fn decode(store: &AssetStore, requests: Requests) -> (Vec<((String, Kind), I
     (images, failures)
 }
 
+/// Image bytes handed to the renderer per frame ([`stream`]).
+const UPLOAD_PER_FRAME: usize = 32 << 20;
+
+/// Images waiting for their frame, with the handles that keep their slots.
+static STREAM: Mutex<VecDeque<(Handle<Image>, Image)>> = Mutex::new(VecDeque::new());
+
+/// The handles at once, the images over the next frames ([`stream`]). A
+/// material waits for its texture.
 pub fn upload(images: Vec<((String, Kind), Image)>, failures: Vec<String>, assets: &mut Assets<Image>) -> Loaded {
-    let handles = images.into_iter().map(|(key, image)| (key, assets.add(image))).collect();
+    let mut stream = STREAM.lock().unwrap_or_else(|e| e.into_inner());
+    let handles = images
+        .into_iter()
+        .map(|(key, image)| {
+            let handle = assets.reserve_handle();
+            stream.push_back((handle.clone(), image));
+            (key, handle)
+        })
+        .collect();
     Loaded { handles, failures }
+}
+
+/// Spread a new battle's textures over the frames the loading screen still
+/// covers (a whole map in one frame took about 0.3 s).
+///
+/// Not Bevy's `RenderAssetBytesPerFrame`: what it defers goes wrong in two ways
+/// in Bevy 0.19. An entity whose mesh is deferred is passed over by
+/// `specialize_material_meshes` / `specialize_material2d_meshes` and stays
+/// undrawn until its mesh or material changes (the loading screen's batches);
+/// and a rewritten image that is deferred loses its GPU texture, so its upload
+/// makes a new one while the materials keep the old (the letters of a new glyph
+/// on a font page, the fog).
+pub fn stream(mut assets: ResMut<Assets<Image>>) {
+    let mut stream = STREAM.lock().unwrap_or_else(|e| e.into_inner());
+    let mut bytes = 0;
+    while bytes < UPLOAD_PER_FRAME {
+        let Some((handle, image)) = stream.pop_front() else { break };
+        bytes += image.data.as_ref().map_or(0, Vec::len);
+        let _ = assets.insert(handle.id(), image);
+    }
 }
 
 pub fn load(store: &AssetStore, url: &str, kind: Kind) -> Result<Image> {

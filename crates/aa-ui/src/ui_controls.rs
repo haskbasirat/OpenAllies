@@ -1120,9 +1120,12 @@ impl Ui {
                         }
                         has
                     }
+                    // 0x5D17E0, case 0x1B: the capture goes (0x5E0890) and the
+                    // key is not consumed, the hotkeys still see it ([O] Esc
+                    // with the film dialog's edit box focused closes the dialog)
                     UiKey::Escape => {
                         self.editbox_unfocus(&path);
-                        true
+                        false
                     }
                     UiKey::Insert => {
                         if let Some(w) = self.widget_mut(&path) {

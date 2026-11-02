@@ -39,6 +39,9 @@ rodio = { version = "0.22", default-features = false, features = ["mp3"] }
 # The World War II campaign (campaign/): the ported metagame rules and its
 # single-player driver.
 aa-metagame = { path = "../aa-metagame" }
+# The film reader and player (research/byte-exact/FILM-PLAYBACK.md): the film
+# dialog, the film session and the tick driver.
+aa-parity = { path = "../aa-parity", features = ["play"] }
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both

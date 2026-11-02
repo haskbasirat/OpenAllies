@@ -27,8 +27,10 @@ pub struct PendingFog(pub FogMode);
 /// The shown fog per tile and its fades.
 #[derive(Resource, Default)]
 pub struct FogDraw {
-    built_for: Option<(String, u32, u32, u32)>,
+    built_for: Option<(String, u32, u32)>,
     revision: u64,
+    /// The view kingdom of the last texture (`0x5C0E50`).
+    view: Option<aa_play::KingdomId>,
     /// Per tile: the target value, the value the fade starts from, the fade
     /// start (s) and what is shown.
     target: Vec<u8>,
@@ -67,7 +69,9 @@ pub fn start(mut battle: Option<ResMut<Battle>>, pending: Option<Res<PendingFog>
             fog::set_mode(&mut b.world, mode);
         }
     }
-    if b.world.fog.stats.ticks == 0 {
+    // a film's world runs what its records run and nothing else (the viewer
+    // has no fog before the first tick anyway)
+    if b.world.fog.stats.ticks == 0 && !b.in_film() {
         fog::ensure(&mut b.world);
     }
 }
@@ -89,7 +93,8 @@ pub fn update(battle: Option<Res<Battle>>, mut fd: ResMut<FogDraw>, mut images: 
     };
     let started = std::time::Instant::now();
     let w = &b.world;
-    let key = (w.map.id.clone(), w.map.width, w.map.height, b.local);
+    let view = b.view_kingdom();
+    let key = (w.map.id.clone(), w.map.width, w.map.height);
     let mut changed = false;
     if fd.built_for.as_ref() != Some(&key) {
         let n = (w.map.width * w.map.height) as usize;
@@ -101,9 +106,10 @@ pub fn update(battle: Option<Res<Battle>>, mut fd: ResMut<FogDraw>, mut images: 
         fd.size = (w.map.width, w.map.height);
         fd.tile = if w.map.cell_size > 0.0 { w.map.cell_size } else { FOG_TEXEL };
         fd.revision = w.fog.revision.wrapping_sub(1);
+        fd.view = view;
         // the first picture has no fade
         let mut scratch = std::mem::take(&mut fd.scratch);
-        fog::shade(w, Some(b.local), gray_value(), &mut scratch);
+        fog::shade(w, view, gray_value(), &mut scratch);
         if scratch.len() == n {
             fd.target.copy_from_slice(&scratch);
             fd.shown.copy_from_slice(&scratch);
@@ -111,10 +117,13 @@ pub fn update(battle: Option<Res<Battle>>, mut fd: ResMut<FogDraw>, mut images: 
         fd.scratch = scratch;
         changed = true;
     }
-    if fd.revision != w.fog.revision {
+    // the world's fog changed or the observer changed the view kingdom
+    // (0x5C0E90): the tiles that differ fade
+    if fd.revision != w.fog.revision || fd.view != view {
         fd.revision = w.fog.revision;
+        fd.view = view;
         let mut scratch = std::mem::take(&mut fd.scratch);
-        fog::shade(w, Some(b.local), gray_value(), &mut scratch);
+        fog::shade(w, view, gray_value(), &mut scratch);
         if scratch.len() == fd.target.len() {
             for t in 0..scratch.len() {
                 if scratch[t] != fd.target[t] {
@@ -212,7 +221,7 @@ pub fn hide_unseen(battle: Option<Res<Battle>>, mut views: Query<(&ActorView, &m
     let Some(b) = battle else { return };
     let w = &b.world;
     for (view, mut vis) in &mut views {
-        let show = match fog::sighting(w, view.id, Some(b.local)) {
+        let show = match fog::sighting(w, view.id, b.view_kingdom()) {
             Sighting::Visible => true,
             Sighting::Remembered(_) => w.actor(view.id).is_some_and(|a| a.alive),
             Sighting::Hidden => false,
@@ -226,7 +235,7 @@ pub fn hide_unseen(battle: Option<Res<Battle>>, mut views: Query<(&ActorView, &m
 
 /// The local kingdom sees the actor (drawn live, not as a memory).
 pub fn sees(b: &Battle, actor: aa_play::ActorId) -> bool {
-    !in_hangar(b, actor) && matches!(fog::sighting(&b.world, actor, Some(b.local)), Sighting::Visible)
+    !in_hangar(b, actor) && matches!(fog::sighting(&b.world, actor, b.view_kingdom()), Sighting::Visible)
 }
 
 /// A denizen aircraft waiting in its hangar for the runway (actor flag
@@ -241,7 +250,7 @@ pub fn drawn(b: &Battle, actor: aa_play::ActorId) -> bool {
     if in_hangar(b, actor) {
         return false;
     }
-    match fog::sighting(&b.world, actor, Some(b.local)) {
+    match fog::sighting(&b.world, actor, b.view_kingdom()) {
         Sighting::Visible => true,
         Sighting::Remembered(_) => b.world.actor(actor).is_some_and(|a| a.alive),
         Sighting::Hidden => false,

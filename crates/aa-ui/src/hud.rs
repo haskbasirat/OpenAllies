@@ -615,7 +615,9 @@ impl Hud {
         g.add_child(w(C::Decal, "ControlPanelTop"));
         ui.load_widget(&mut g, None);
         // ActionButtonsButton LoadData 0x5F4820: the ActionButtonsButtonDecal
-        // decal VE (type 2) joins the button's root view element
+        // decal VE (type 2) joins the button's root view element (0x5E37A0:
+        // lowest key, so the hollow ButtonUnfocused.png frame lies over the
+        // icon's edge, [O] film/12-ingame-3s.png)
         if let Ok(dn) = ui.store.node("UI/Game/action_buttons.tgi:ActionButtons/ActionButtonsButton/ActionButtonsButtonDecal") {
             let strings = ui.strings.clone();
             let resolve = |v: &str| strings.resolve(v);
@@ -623,6 +625,7 @@ impl Hud {
                 if let Some(ab) = g.find_mut("ControlPanel/ActionButtons") {
                     for b in &mut ab.children {
                         b.sub_ve = Some(ve.clone());
+                        b.sub_ve_under = true;
                     }
                 }
             }
@@ -1495,14 +1498,16 @@ impl Hud {
                     });
                     ui.set_flag(&bp, wf::SELECTED, a.selected);
                     ui.set_flag(&bp, wf::TARGETED, a.targeted);
-                    // decal inset in pixels: action_button_(un)pressed_client_*
-                    // (+0x118.. / +0x14C..); pressed while selected
-                    // (INFERRED: the state hook was not traced)
+                    // decal inset: action_button_(un)pressed_client_* (+0x118.. /
+                    // +0x14C..), bounds of the button's layout, so they scale
+                    // with it: 1 is 1.875 pixels at 1920 ([O] the icon's second
+                    // texel starts 4 pixels into the button at 1920x1080);
+                    // pressed while selected (INFERRED: the state hook was not
+                    // traced)
                     let key = if a.selected { "action_button_pressed_client_" } else { "action_button_unpressed_client_" };
                     let node = ui.store.node("UI/Game/action_buttons.tgi:ActionButtons/ActionButtonsButton").ok();
                     let px = |s: &str| node.as_ref().and_then(|n| n.int(&format!("{key}{s}")).ok()).unwrap_or(0) as f32;
-                    let g = ui.geo();
-                    let (l, t, r, b) = (px("L") / g.sx, px("T") / g.sy, px("R") / g.sx, px("B") / g.sy);
+                    let (l, t, r, b) = (px("L"), px("T"), px("R"), px("B"));
                     ui.with_widget(rel(&bp), |w| {
                         if let Some(d) = &mut w.sub_ve {
                             if let crate::ve::VeKind::Decal(dd) = &mut d.kind {

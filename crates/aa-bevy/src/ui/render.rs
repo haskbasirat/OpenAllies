@@ -299,8 +299,12 @@ impl Builder {
     }
 }
 
-fn variant(blend: Blend, address: [Address; 2]) -> Variant {
-    Variant { alpha_test: blend != Blend::Alpha, wrap_u: address[0] == Address::Wrap, wrap_v: address[1] == Address::Wrap }
+/// The image of a quad. Effect modes 2 and 3 (`0x5E6740`, stage 0
+/// BLENDTEXTUREALPHA) lay the texture over the tint by the whole of its alpha,
+/// with the alpha test off (`ui_grey.wgsl`): not the ALPHATEST variant, whose
+/// alpha is 0/255.
+fn variant(blend: Blend, address: [Address; 2], effect: u8) -> Variant {
+    Variant { alpha_test: blend != Blend::Alpha && effect < 2, wrap_u: address[0] == Address::Wrap, wrap_v: address[1] == Address::Wrap }
 }
 
 /// Build the meshes for this frame's draw list (only when it changed).
@@ -341,7 +345,7 @@ pub fn paint(
         match &cmd.kind {
             DrawKind::Quad(q) => {
                 if let Some(t) = &q.texture {
-                    keys.push(Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address) });
+                    keys.push(Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address, q.effect) });
                 }
             }
             DrawKind::Text(t) => {
@@ -371,7 +375,7 @@ pub fn paint(
                 }
                 match &q.texture {
                     Some(t) => {
-                        let key = Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address) };
+                        let key = Key { path: t.clone(), skin: skin.clone(), variant: variant(q.blend, q.address, q.effect) };
                         let Some(e) = r.tex.get(&key) else { continue };
                         let image = e.image.clone();
                         // the tint as the 8-bit specular colour

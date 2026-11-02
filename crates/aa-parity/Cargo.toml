@@ -19,6 +19,9 @@ play = ["dep:aa-play", "dep:glam"]
 
 [dependencies]
 aa-mapworld = { path = "../aa-mapworld" }
+# The chunk file writer of a recorded film (`film_writer`).
+aa-metagame = { path = "../aa-metagame" }
+aa-numeric = { path = "../aa-numeric" }
 aa-orders = { path = "../aa-orders" }
 aa-play = { path = "../aa-play", optional = true }
 aa-rules = { path = "../aa-rules" }
@@ -32,4 +35,3 @@ thiserror.workspace = true
 # The native scheduler prototype (tests/scheduler_prototype.rs).
 aa-world = { path = "../aa-world" }
 aa-simulation = { path = "../aa-simulation" }
-aa-numeric = { path = "../aa-numeric" }

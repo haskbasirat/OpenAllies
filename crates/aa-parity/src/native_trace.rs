@@ -85,6 +85,12 @@ pub struct NativeActor {
     pub supply: Option<[u32; 2]>,
     pub detection: Option<[u32; 2]>,
     pub zones: Vec<NativeZone>,
+    /// `mor=` of the fight traces (`FightSampler`): Organization morale +5C,
+    /// maximum +60, breakpoint +B8, living +64, combat value +68 / +6C, attack
+    /// efficiency +84 / +88, watched target +D4.
+    pub morale: Option<[u32; 9]>,
+    /// `ms=` of the fight traces: the Mind's vtable and its current state's vtable.
+    pub mind: Option<[u32; 2]>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -150,6 +156,7 @@ pub fn getter_group(site: u32, chain: &[u32]) -> String {
                 0x577489 | 0x577469 => "mover order 5773C0 -> queue 0".into(),
                 0x5894AD => "production start 589420 -> queue 0".into(),
                 0x57C751 => "organization goal 57C680 -> queue 0".into(),
+                0x580BE1 => "projectile launch 580BC0 -> queue 0".into(),
                 o => format!("queue 0 from {o:x}"),
             },
             0x50AC87 => match c(1) {
@@ -189,6 +196,7 @@ pub fn getter_group(site: u32, chain: &[u32]) -> String {
         },
         0x563D12 => "character 563CA0 queue 1 tick 563E10".into(),
         0x590323 => "disturbable delay 5902C0".into(),
+        0x5798BB | 0x5798CD => "organization scatter 5797E0".into(),
         s => format!("site {s:x}"),
     }
 }
@@ -323,6 +331,18 @@ impl NativeTrace {
                                     v.first().copied().unwrap_or(0),
                                     v.get(1).copied().unwrap_or(0),
                                 ];
+                            }
+                            "mor" => {
+                                let v = list(value);
+                                let mut m = [0u32; 9];
+                                for (slot, x) in m.iter_mut().zip(&v) {
+                                    *slot = *x;
+                                }
+                                a.morale = Some(m);
+                            }
+                            "ms" => {
+                                let v = list(value);
+                                a.mind = Some([v.first().copied().unwrap_or(0), v.get(1).copied().unwrap_or(0)]);
                             }
                             "act" => a.active = value.parse().unwrap_or(-1),
                             "st" => a.state = hex(value),

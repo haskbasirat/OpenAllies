@@ -37,7 +37,7 @@ pub mod zone_border;
 use bevy::prelude::*;
 use std::path::PathBuf;
 
-fn find_up(rel: &str) -> Option<PathBuf> {
+pub(crate) fn find_up(rel: &str) -> Option<PathBuf> {
     let mut starts = vec![];
     if let Ok(exe) = std::env::current_exe() {
         starts.push(exe);
@@ -73,6 +73,7 @@ impl Plugin for UiPlugin {
             .insert_resource(front::Front::new(&root))
             .add_systems(Startup, render::spawn_camera)
             .init_resource::<selection::SelectionArt>()
+            .init_resource::<objectives::ViewFlash>()
             .init_resource::<banners::BannerArt>()
             .init_resource::<minimap::MinimapArt>()
             .init_resource::<fog::FogDraw>()
@@ -94,6 +95,8 @@ impl Plugin for UiPlugin {
             .add_systems(Update, fog::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             // the generals of the battle before its first tick (combat owner)
             .add_systems(Update, abilities::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
+            // the film of the battle (0x7757F0), once its generals are set
+            .add_systems(Update, crate::film_record::start.after(abilities::start).after(fog::start).before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             .add_systems(Update, fog::update.after(crate::session::step_battle))
             // the friendly supply border in 3D (zone renderer type 0)
             .add_systems(Update, zone_border::update.after(crate::session::step_battle))
@@ -108,6 +111,7 @@ impl Plugin for UiPlugin {
             // (scenarios owner) the trigger notices after the tick, before
             // the frame's UI is painted
             .init_resource::<objectives::ScenarioUi>()
+            .add_systems(Update, objectives::start.before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)))
             .add_systems(
                 Update,
                 objectives::update.after(crate::session::step_battle).after(front::frame).before(render::paint).run_if(in_state(crate::session::AppState::Battle)),
@@ -216,6 +220,10 @@ fn minimap_update(
     windows: Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<crate::camera::NativeCamera>>,
 ) {
+    // the strategic map's minimap is campaign/map.rs's
+    if front.page == front::Page::Campaign && front.campaign.game.is_some() {
+        return;
+    }
     let (Some(b), true) = (battle, front.page == front::Page::Game) else {
         draw.minimap = None;
         return;

@@ -4,13 +4,15 @@
 //! 0x68A820 / 0x6612E0, Commit 0x68EF50) and the Random Map dialog
 //! (RandomMapDialog, ctor 0x6846C0, Init 0x684880, Activate 0x685240,
 //! types 0x6880B0, apply 0x686B10, description 0x683920, Commit 0x6875A0),
-//! with the shared world-rules panel (KKC_WorldRulesPanel 0x6A2D80,
+//! the Film mode of the file dialog ([`FilmDialog`], mode 5 in
+//! StagingFileLoadSavedDialog, setup 0x68BB70, delete 0x68C5B0), with the shared world-rules panel (KKC_WorldRulesPanel 0x6A2D80,
 //! ConfigureUI 0x6A3070, rule widgets 0x6A2580 / 0x6A2730 / 0x6A29F0 /
 //! 0x6A2B90 / 0x6A28A0, read back 0x6A0240).
 //!
 //! Widgets are built in the native AddChild order and laid out from the
 //! original TGI nodes; the data comes from [`super::gamedata`].
 use super::gamedata::{GameData, MapInfo, Rmc, WorldRule};
+use aa_parity::playback::{FailureArgument, FilmData, FilmDir, FilmFailure, FilmRow, check_film_choice, list_films_named};
 use aa_ui::controls::{Control, ListCallback, SliderCallback};
 use aa_ui::ui::Ui;
 use aa_ui::widget::{Widget, WidgetClass as C};
@@ -23,7 +25,7 @@ fn w(class: C, name: &str) -> Widget {
 }
 
 /// Push button whose client is a code-set label (0x5F3410 + 0x5CF4F0).
-fn label_button(name: &str, command: &str) -> Widget {
+pub(crate) fn label_button(name: &str, command: &str) -> Widget {
     let mut b = w(C::PushButton, name);
     b.command = Some(command.into());
     b.add_child(w(C::Label, "Client"));
@@ -57,7 +59,7 @@ fn slider(name: &str) -> Widget {
 
 /// Load a code-built item against `parent_node` (a `file:node/...` path)
 /// as the native item pools do (staging `0x6919D0`).
-fn load_item(ui: &mut Ui, item: &mut Widget, parent_node: &str) {
+pub(crate) fn load_item(ui: &mut Ui, item: &mut Widget, parent_node: &str) {
     if let Ok(n) = ui.store.node(parent_node) {
         let strings = ui.strings.clone();
         let resolve = |v: &str| strings.resolve(v);
@@ -331,6 +333,8 @@ pub enum Outcome {
     Map { map: MapInfo, rules: Vec<RuleValue> },
     /// Random Map settings chosen.
     Random { rmc: String, size: (f32, f32), terrain: Vec<f32>, rules: Vec<RuleValue>, prefs: std::collections::HashMap<String, RmcPrefs> },
+    /// A film chosen (mode 5 of the file dialog).
+    Film { row: FilmRow },
 }
 
 /// The world rule values a setup starts from (rule defaults).
@@ -492,6 +496,264 @@ impl FileDialog {
         close(ui, "StagingFileDialog");
         Outcome::Map { map: m, rules }
     }
+}
+
+// ------------------------------------------------------------ Film
+
+/// Mode 5 of the file dialog (`0x68DB60(5, ..)`, setup `0x68BB70`): PathFilms
+/// of each folder, no subfolders, extension RFM. `Commit` hands the row back;
+/// the caller runs what 0x68EF50 runs for its route.
+pub struct FilmDialog {
+    dirs: Vec<FilmDir>,
+    /// The install, for the check of a film's source.
+    game_root: std::path::PathBuf,
+    /// The staging flag of `0x68DB60` (+0x12A): the staging's Film button, or
+    /// the main menu's route (off).
+    staging: bool,
+    rows: Vec<FilmRow>,
+    selected: Option<usize>,
+    /// +0xE4 once the edit box was typed in (`EditBoxChanged`): the name
+    /// Commit opens instead of the selected row's file.
+    typed: Option<String>,
+}
+
+/// Every mode but 1 and 2 opens this dialog (`0x68DB60`), the same class over
+/// its own node: the list and preview are longer, the edit box and the three
+/// buttons have their places ([O] 03-film-file-dialog.png).
+pub const FILM_DIALOG: &str = "UI/Shared/staging_file_dialog.tgi:StagingFileLoadSavedDialog";
+const FILM_ROOT: &str = "StagingFileLoadSavedDialog";
+const FILM_FD: &str = "Root/StagingFileLoadSavedDialog";
+const FILM_LIST: &str = "Root/StagingFileLoadSavedDialog/SelectPanel/SelectListBox";
+const FILM_EDIT: &str = "Root/StagingFileLoadSavedDialog/DescriptionEditBox";
+
+impl FilmDialog {
+    /// Init 0x68D280 + Activate 0x68B6B0 in mode 5: the Scenario Map dialog's
+    /// widgets without its rules panel, with Delete and the edit box.
+    pub fn open(ui: &mut Ui, data: &GameData, dirs: Vec<FilmDir>, game_root: std::path::PathBuf, staging: bool, remembered: Option<&std::path::Path>) -> Self {
+        let mut d = Widget::new(C::TopLevel, FILM_DIALOG, true);
+        let mut sp = w(C::Panel, "SelectPanel");
+        sp.add_child(listbox("SelectListBox"));
+        d.add_child(sp);
+        d.add_child(label_button("SelectButton", "Commit"));
+        d.add_child(Widget::push_button("CancelButton", false, "Cancel"));
+        let mut mp = w(C::Panel, "MapPreviewPanel");
+        mp.add_child(Widget::composite(C::Viewport, "MapPreviewViewport", false));
+        d.add_child(mp);
+        let mut rules = RulesPanel::widget();
+        rules.set_visible(false);
+        d.add_child(rules);
+        d.add_child(Widget::push_button("DeleteButton", false, "Delete"));
+        d.add_child(Widget::composite(C::Editbox, "DescriptionEditBox", false));
+        let mut notice = w(C::Panel, "NoticeDialog");
+        notice.add_child(w(C::Label, "StatLabel"));
+        notice.set_visible(false);
+        d.add_child(notice);
+        aa_ui::screens::show(ui, d);
+        let load = ui.strings.resolve("#staging_file_load_button");
+        set_text(ui, &format!("{FILM_ROOT}/SelectButton/Client"), &load);
+        let mut label = w(C::Label, "MapPreviewLabel");
+        load_item(ui, &mut label, &format!("{FILM_DIALOG}/MapPreviewPanel/MapPreviewViewport/ItemPanel"));
+        ui.viewport_add(&format!("{FILM_FD}/MapPreviewPanel/MapPreviewViewport"), label);
+        if let Some(e) = ui.widget_mut(FILM_EDIT).and_then(|x| x.editbox_mut()) {
+            e.change_command = Some("EditBoxChanged".into());
+        }
+        let mut dlg = FilmDialog { dirs, game_root, staging, rows: Vec::new(), selected: None, typed: None };
+        dlg.fill(ui, data, remembered);
+        ui.layout();
+        dlg
+    }
+
+    /// List 0x68E340, then the preselected row: the remembered name (+0x120)
+    /// if it is in the list, else the newest by 0x59E210 (+0x11C is set in
+    /// mode 5), else the first.
+    fn fill(&mut self, ui: &mut Ui, data: &GameData, remembered: Option<&std::path::Path>) {
+        // the row text rule compares with the localized last_film_filename
+        self.rows = list_films_named(&self.dirs, &ui.strings.resolve("#last_film_filename"));
+        ui.listbox_clear(FILM_LIST);
+        for r in &self.rows {
+            ui.listbox_add(FILM_LIST, &r.text, &r.path.to_string_lossy());
+        }
+        match preselected(&self.rows, remembered) {
+            Some(i) => {
+                ui.listbox_select(FILM_LIST, i, false);
+                self.select_row(ui, data, i);
+            }
+            None => self.select_none(ui),
+        }
+    }
+
+    fn select_none(&mut self, ui: &mut Ui) {
+        self.selected = None;
+        ui.set_label(&format!("{}/MapPreviewPanel/MapPreviewViewport/ItemPanel/MapPreviewLabel", FILM_ROOT), "");
+        ui.editbox_set_text(FILM_EDIT, "");
+        ui.with_widget(&format!("{FILM_ROOT}/DeleteButton"), |x| x.set_enabled(false));
+    }
+
+    /// A row picked: its preview (0x68A820 -> 0x6612E0), its text in the edit
+    /// box, fully selected with the focus ([O] 03-film-file-dialog). Delete
+    /// only for the client's own films (lead's decision 6: nothing is ever
+    /// written in the folder the original writes to).
+    fn select_row(&mut self, ui: &mut Ui, data: &GameData, index: usize) {
+        self.selected = Some(index);
+        self.typed = None;
+        let row = self.rows[index].clone();
+        let lp = format!("{FILM_FD}/MapPreviewPanel/MapPreviewViewport/ItemPanel/MapPreviewLabel");
+        let text = film_preview_text(ui, data, &row);
+        ui.set_label(rel(&lp), &text);
+        aa_ui::staging::label_fit_height(ui, &lp);
+        ui.viewport_refresh(&format!("{FILM_FD}/MapPreviewPanel/MapPreviewViewport"));
+        ui.editbox_set_text(FILM_EDIT, &row.text);
+        ui.focus_editbox(FILM_EDIT);
+        let own = !row.read_only;
+        ui.with_widget(&format!("{FILM_ROOT}/DeleteButton"), |x| x.set_enabled(own));
+        ui.layout();
+    }
+
+    pub fn command(&mut self, ui: &mut Ui, data: &GameData, cmd: &str) -> Option<Outcome> {
+        let arg = |c: &str| c.split_once(' ').map(|(_, a)| a.trim().trim_matches('"').to_string());
+        let row_of = |p: &str| self.rows.iter().position(|r| r.path.to_string_lossy() == p);
+        if cmd.starts_with("SelectFromDouble") {
+            if let Some(i) = arg(cmd).and_then(|p| row_of(&p)) {
+                self.select_row(ui, data, i);
+            }
+            return Some(self.commit(ui));
+        }
+        if cmd.starts_with("Select ") {
+            if let Some(i) = arg(cmd).and_then(|p| row_of(&p)) {
+                self.select_row(ui, data, i);
+            }
+            return Some(Outcome::Open);
+        }
+        // the Delete handler before 0x68C5B0: `delete_confirm|s` with the
+        // row, Ok runs `FileDelete "%s"`
+        if cmd == "Delete" {
+            if let Some(r) = self.selected.and_then(|i| self.rows.get(i)).filter(|r| !r.read_only) {
+                let text = ui.strings.resolve("#delete_confirm|s").replacen("%s", &r.text, 1);
+                let ok = ui.strings.resolve("#button_ok");
+                let cancel = ui.strings.resolve("#button_cancel");
+                let command = format!("FileDelete \"{}\"", r.path.to_string_lossy());
+                ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, command), (cancel, String::new())] });
+            }
+            return Some(Outcome::Open);
+        }
+        if cmd.starts_with("FileDelete") {
+            if let Some(path) = arg(cmd) {
+                self.delete(ui, data, &path);
+            }
+            return Some(Outcome::Open);
+        }
+        match cmd {
+            "Commit" => Some(self.commit(ui)),
+            "Cancel" => {
+                close(ui, FILM_ROOT);
+                Some(Outcome::Cancelled)
+            }
+            "EditBoxChanged" => {
+                self.typed = ui.editbox_text(FILM_EDIT);
+                Some(Outcome::Open)
+            }
+            _ => None,
+        }
+    }
+
+    /// `0x68C5B0`: the film and the text table beside it go, the list is read
+    /// again. A failure shows `ui_file_dialog_file_delete_failed|s`. Only ever
+    /// a row of a writable folder.
+    fn delete(&mut self, ui: &mut Ui, data: &GameData, path: &str) {
+        let Some(row) = self.rows.iter().find(|r| r.path.to_string_lossy() == path).filter(|r| !r.read_only).cloned() else { return };
+        if let Err(e) = std::fs::remove_file(&row.path) {
+            bevy::log::warn!("film delete {}: {e}", row.path.display());
+            let text = ui.strings.resolve("#ui_file_dialog_file_delete_failed|s").replacen("%s", &row.text, 1);
+            let ok = ui.strings.resolve("#button_ok");
+            ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+            return;
+        }
+        let _ = std::fs::remove_file(row.path.with_extension("TGI"));
+        self.fill(ui, data, None);
+    }
+
+    /// Commit 0x68EF50: what was typed cannot be opened, as natively for a
+    /// bare name (`File missing`, [O]); a name with a folder crashes the
+    /// original, here it gets the same box (lead's decision 4).
+    fn commit(&mut self, ui: &mut Ui) -> Outcome {
+        if let Some(name) = self.typed.clone() {
+            let text = ui.strings.resolve("#load_error_missing_map|s").replacen("%s", &name, 1);
+            let ok = ui.strings.resolve("#button_ok");
+            ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+            return Outcome::Open;
+        }
+        let Some(row) = self.selected.and_then(|i| self.rows.get(i)).cloned() else { return Outcome::Open };
+        // 0x59F570: a film gone since the list was read is the same box
+        if !row.path.is_file() {
+            let name = row.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let text = ui.strings.resolve("#load_error_missing_map|s").replacen("%s", &name, 1);
+            let ok = ui.strings.resolve("#button_ok");
+            ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+            return Outcome::Open;
+        }
+        // the film's source: 0x75F470 on the staging's order writes the text to
+        // the message log (channel 0x11) and the session stays as it was;
+        // `FilmOK` 0x645200 shows it in a box over the open dialog
+        if let Err(failure) = check_film_choice(&row.path, &FilmData::for_film(self.game_root.clone(), &row.path)) {
+            let text = film_failure_text(ui, &failure);
+            bevy::log::warn!("film: {failure:?}");
+            if self.staging {
+                let uv = ui.uvars.clone();
+                ui.messages.send(&uv, "GENERIC_ERROR", &text, None);
+                close(ui, FILM_ROOT);
+                return Outcome::Cancelled;
+            }
+            let ok = ui.strings.resolve("#button_ok");
+            ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+            return Outcome::Open;
+        }
+        close(ui, FILM_ROOT);
+        Outcome::Film { row }
+    }
+}
+
+/// The text of a film's failure: its string with the argument.
+pub fn film_failure_text(ui: &Ui, failure: &FilmFailure) -> String {
+    let key = failure.key();
+    match failure.argument() {
+        FailureArgument::Text(a) => ui.strings.resolve(&format!("#{key}")).replacen("%s", &a, 1),
+        FailureArgument::Number(v) => ui.strings.resolve(&format!("#{key}")).replacen("%g", &aa_ui::staging::fmt_g(f64::from(v)), 1),
+        // the literal text of 0x5A3980
+        FailureArgument::None => key.to_string(),
+    }
+}
+
+/// The preselected row (0x68E340): the remembered film, else the newest,
+/// else nothing to select.
+fn preselected(rows: &[FilmRow], remembered: Option<&std::path::Path>) -> Option<usize> {
+    remembered.and_then(|p| rows.iter().position(|r| r.path == p)).or_else(|| {
+        // the first of the newest, as a scan that keeps a strictly newer one
+        let mut best: Option<usize> = None;
+        for (i, r) in rows.iter().enumerate() {
+            if best.is_none_or(|b| r.time > rows[b].time) {
+                best = Some(i);
+            }
+        }
+        best
+    })
+}
+
+/// The preview on the right, `0x6612E0` for a film ([O]
+/// 03-film-file-dialog.png): `<name> (Film)` (`0x65F9D0`), Source, File, Time,
+/// Size, a blank line, then one row per kingdom with its colour pip.
+pub(crate) fn film_preview_text(ui: &Ui, data: &GameData, row: &FilmRow) -> String {
+    let p = &row.preview;
+    let source = if p.source_map.starts_with('#') { ui.strings.resolve(&p.source_map) } else { p.source_map.clone() };
+    let mut lines = vec![ui.strings.format("staging_map_preview_append_film|s", &[&p.name])];
+    lines.push(line(ui, "#staging_map_preview_source_of_a_saved_game", &source));
+    lines.push(line(ui, "#staging_map_preview_file_name", &p.file));
+    lines.push(line(ui, "#staging_map_preview_time", &p.time));
+    lines.push(line(ui, "#staging_map_preview_map_size", &p.size));
+    lines.push(String::new());
+    for k in &p.kingdoms {
+        lines.push(kingdom_row(ui, data.color(&k.color_id), &k.name));
+    }
+    lines.join("\n")
 }
 
 // ------------------------------------------------------------ Random Map
@@ -748,4 +1010,26 @@ impl RandomDialog {
 fn close(ui: &mut Ui, name: &str) {
     ui.disconnect(name);
     ui.layout();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aa_parity::playback::FilmPreview;
+    use std::path::PathBuf;
+
+    fn row(name: &str, time: u64) -> FilmRow {
+        FilmRow { path: PathBuf::from(name), text: name.to_string(), preview: FilmPreview::default(), read_only: false, time }
+    }
+
+    /// 0x68E340: the remembered film if it is listed, else the newest, the
+    /// first of equals; nothing on an empty list.
+    #[test]
+    fn the_preselected_film_is_the_remembered_one_else_the_newest() {
+        let rows = vec![row("a", 5), row("b", 9), row("c", 9), row("d", 1)];
+        assert_eq!(preselected(&rows, None), Some(1));
+        assert_eq!(preselected(&rows, Some(std::path::Path::new("d"))), Some(3));
+        assert_eq!(preselected(&rows, Some(std::path::Path::new("gone"))), Some(1));
+        assert_eq!(preselected(&[], None), None);
+    }
 }

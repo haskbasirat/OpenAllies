@@ -58,7 +58,7 @@ def terrain_metadata():
         noise = {}
         if typ == 1:
             for f in defaults:
-                m = re.search(r'^\s*'+f+r'\s*=\s*([-\d.]+)',base,re.M|re.I)
+                m = re.search(r'^\s*(?:fixed\s+|float\s+)?'+f+r'\s*=\s*([-\d.]+)',base,re.M|re.I)
                 noise[f] = float(m[1]) if m else defaults[f]
         record = pin(p); inputs.append(record)
         for section in re.split(r'\[Variation\]', raw, flags=re.I)[1:]:

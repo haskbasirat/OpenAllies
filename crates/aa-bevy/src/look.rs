@@ -384,8 +384,13 @@ fn alpha_test(m: &aa_assets::Material) -> (f32, f32) {
 pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> OriginalMaterial {
     let blend = !m.team_color_mask && m.native_render_state.map_or(m.alpha_blend || m.opacity < 1.0, |s| s.alpha_flags & 1 != 0);
     let alpha = alpha_test(m);
+    // NiAlphaProperty bits 1-4 source, 5-8 destination: ONE / ONE adds (the strategic
+    // map's lamp lights, flags 0x1001)
+    let additive = m.native_render_state.is_some_and(|s| (s.alpha_flags >> 1) & 15 == 0 && (s.alpha_flags >> 5) & 15 == 0);
     let alpha_mode = if m.team_color_mask {
         AlphaMode::Opaque
+    } else if blend && additive {
+        AlphaMode::Add
     } else if blend {
         AlphaMode::Blend
     } else if alpha.0 > 0.0 {
@@ -395,6 +400,8 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
         AlphaMode::Opaque
     };
     let (ambient, diffuse) = material_colours(m);
+    let mut look_params = params(ambient, diffuse, m.emissive, alpha);
+    look_params.emissive.w = f32::from(u8::from(alpha_mode == AlphaMode::Add));
     OriginalMaterial {
         base: StandardMaterial {
             base_color: if m.texture.is_some() { Color::srgba(1.0, 1.0, 1.0, m.opacity) } else { Color::srgba(1.0, 1.0, 1.0, m.opacity) },
@@ -407,7 +414,7 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
             metallic: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: params(ambient, diffuse, m.emissive, alpha), mask: None, fog: Some(FOG_IMAGE) },
+        extension: OriginalLook { params: look_params, mask: None, fog: Some(FOG_IMAGE) },
     }
 }
 

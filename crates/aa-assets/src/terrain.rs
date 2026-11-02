@@ -31,10 +31,25 @@ pub struct TerrainMetadata {
 impl TerrainMetadata {
     /// Reviewed original-TGI evidence embedded in this build; no installed game data is changed.
     pub fn bundled() -> Result<Self> {
-        let metadata: Self = serde_json::from_str(include_str!(
+        let mut metadata: Self = serde_json::from_str(include_str!(
             "../../../research/engine-baseline/terrain-variation-metadata.json"
         ))
         .map_err(|e| AssetError::Invalid(format!("bundled terrain metadata: {e}")))?;
+        // The evidence file (its bytes are pinned by fixtures) took the template's
+        // 1.0..2.0 for the terrains that write `fixed noise_min = ...`: its
+        // generator missed the type word. The shipped TGI hold these, and they are
+        // what the native binding 0x4B87A0 reads and `aa_play`'s world uses.
+        for v in metadata.variations.values_mut() {
+            let noise = match v.terrain_id.as_str() {
+                "chaparral_mountain" | "desert_mountain" => Some((0.25, 0.65)),
+                "chaparral_mountaintrans" | "desert_mountaintrans" => Some((0.25, 0.55)),
+                _ => None,
+            };
+            if let Some((min, max)) = noise {
+                v.noise_min = Some(min);
+                v.noise_max = Some(max);
+            }
+        }
         if metadata.schema != "aa-native-terrain-variation-evidence-v1"
             || metadata.variations.values().any(|v| {
                 v.native_type > 2

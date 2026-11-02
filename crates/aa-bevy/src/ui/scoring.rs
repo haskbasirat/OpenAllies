@@ -212,6 +212,8 @@ pub enum Outcome {
     Replay,
     /// ScoringDebriefing (`0x658FD0`): the debriefing (slot 4).
     Debriefing,
+    /// ScoringSaveFilm (`0x658F90`): the film save dialog `0x68DCE0(5, 0, 0)`.
+    SaveFilm,
 }
 
 /// The SCORE_GRAPH view element's ranges (`0x5EC140`).
@@ -436,7 +438,8 @@ impl Scoring {
             let text = ui.strings.resolve(&defs.stats[s].name);
             ui.set_label(rel(&p), &text);
         }
-        // the rows: DataRowEven for even kingdom indices, DataRowOdd for odd
+        // the rows (0x65A460): an even kingdom index takes the +A8 pool, whose name
+        // (+A0, constructor 0x65A580) is DataRowOdd, an odd one the +B4 pool, DataRowEven
         let vp = "Root/Scoring/ScoreChart/ScoreSheet/ViewportPanel/Viewport";
         let _ = ui.viewport_clear(vp);
         let pool_node = format!("{FILE}:ScoreSheet/ViewportPanel/Viewport");
@@ -444,7 +447,7 @@ impl Scoring {
             if kingdom.is_none() {
                 continue;
             }
-            let name = if k % 2 == 0 { "DataRowEven" } else { "DataRowOdd" };
+            let name = if k % 2 == 0 { "DataRowOdd" } else { "DataRowEven" };
             // DataRow Init 0x65ABA0: RowHeader (+Client), then a Datum each
             let mut row = Widget::new(C::Panel, name, false);
             row.add_child(label_toggle("RowHeader", "ToggleScoreGraphKingdom -1"));
@@ -715,12 +718,9 @@ impl Scoring {
             "ScoringExit" => Outcome::Exit,
             "ScoringReplay" => Outcome::Replay,
             "ScoringDebriefing" => Outcome::Debriefing,
-            // 0x658F90: the film save dialog 0x68DCE0(5, 0, 0). Refused until
-            // films are recorded (the button is hidden without one, `film`).
-            "ScoringSaveFilm" => {
-                bevy::log::warn!("ScoringSaveFilm refused: the film save dialog (0x68DCE0) is not built");
-                Outcome::None
-            }
+            // 0x658F90: the film save dialog 0x68DCE0(5, 0, 0) (the button is
+            // hidden without a film, `film`).
+            "ScoringSaveFilm" => Outcome::SaveFilm,
             // 0x658F80: closes that dialog (0x68C190)
             "FilmCancel" => Outcome::None,
             "UpdateSaveFilmButton" => {
@@ -730,6 +730,13 @@ impl Scoring {
             }
             _ => return None,
         })
+    }
+
+    /// UpdateSaveFilmButton `0x658FB0`: SaveFilm by what `0x772BB0` says now (a
+    /// saved film has moved away).
+    pub fn update_save_film(&mut self, ui: &mut Ui, film: bool) {
+        self.data.film = film;
+        ui.with_widget("Scoring/SaveFilm", |w| w.set_visible(film));
     }
 
     /// The GraphVE's lines (Draw `0x5ECA60`, lines `0x5EC5C0`), placed after

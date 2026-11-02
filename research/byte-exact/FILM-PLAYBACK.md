@@ -50,6 +50,8 @@ The film state 4, the film launch type 5 and the map type 2 are three different 
 ## 3. Film files on disk
 
 - **Folder.** AVars `PathFilms = Films/`, resolved under the profile data root: `Profile/data/Films/` in the QA copy. [O]
+- **Which profile, 0x85B040** (from 0x85B690 in KKC_Application::Init 0x4196A0). [C] SHGetFolderPathW through shfolder.dll (0x85A9D0) with CSIDL_PERSONAL gives `%USERDATA%`. Empty: `<exe folder>/Profile` (0x85A910, 0x85ACA0). Otherwise `<personal>/<ApplicationIDS>` ("A&A"), backslashes turned to slashes; the resources are scanned at `<that>/data/`. [O: the log's `Personal Folder` line] The QA copy's AA.exe has byte 0x85B0AA patched from `74` to `eb`, which forces `Profile`.
+- **Our client** lists two folders (`aa_bevy::ui::custom::film_dirs`): its own `<own profile>/data/Films`, where it records and may delete, and the folder the rule above gives the original, read-only: Delete is off for its rows and nothing is ever written there. A film under some `<profile>/data/Films` plays on that profile's data overlay.
 - **Names.** `<name>.RFM` (extension constant 0xA4772C, appended by 0x85AB30) plus `<name>.TGI` beside it. The TGI is a text file holding the `map_strings` table (`File Films/LastFilm_1.TGI TextData 'map_strings' loaded 33 strings`). Its timestamp is the film's start; the RFM's is its end. [O]
 - **Automatic names (rotation), 0x76FE60.** The base is the localized `last_film_filename` ("LastFilm"); if that is empty, AVars `LastFilmName = LastFilm.RFM`. The name is base + `_%d` (format 0xA93F98) with UVar `LastFilmIndex` clamped to 0..queue-1. Then `LastFilmIndex = (index + 1) % FilmRotationQueueSize` (AVars: 5). The result is kept at Session+0x150. Called again without the "next" flag, it returns Session+0x150. [C]; the 5 files `LastFilm_0..4` are on disk. [O]
 - **Layout.** TGCK chunks `MAP`, `MAP_HEADER`, `MAPSTRINGS`, `SessionPlayers`, `Orders`, documented in `ROADMAP.md` 5.1 and read by `aa_parity::Film`.
@@ -78,9 +80,9 @@ The main menu has a Film button. [O: `00-main-menu.png`]
 - `FilmButton` (0x65D350; `staging.tgi` L 794, T 564, R +181, B +44; tooltip "View a Film"; label "Film") runs `SelectLaunchType LOAD_FILM`. [O: `02-staging-default.png`, log `(SelectLaunchType LOAD_FILM)`]
 - The handler is 0x65C1C0, which calls 0x68DB60(5, staging flag 1) (call site 0x65BEDD), which opens `StagingFileDialog`. The main-menu route passes flag 0.
 
-### 4.3 The file dialog (`UI/Shared/staging_file_dialog.tgi:StagingFileDialog`)
+### 4.3 The file dialog (`UI/Shared/staging_file_dialog.tgi:StagingFileLoadSavedDialog`)
 
-Same class as the scenario-map dialog our client already has (`crates/aa-bevy/src/ui/dialogs.rs`): ctor 0x68B0D0, Init 0x68D280, Activate 0x68B6B0, list 0x68E340, preview 0x68A820 then 0x6612E0, Commit 0x68EF50.
+Same class as the scenario-map dialog our client already has (`crates/aa-bevy/src/ui/dialogs.rs`): ctor 0x68B0D0, Init 0x68D280, Activate 0x68B6B0, list 0x68E340, preview 0x68A820 then 0x6612E0, Commit 0x68EF50. The widget comes from 0x68DB60: mode 1 `RandomMapDialog`, mode 2 `StagingFileDialog`, the others (3, 4 and this mode 5) `StagingFileLoadSavedDialog`. [C] [O: its layout, Load, Delete, Cancel under the list]
 
 **Mode 5 setup, 0x68BB70.** [C]
 - Directory PathFilms, subfolders off (+0xDC = 0), extension RFM.
@@ -89,16 +91,18 @@ Same class as the scenario-map dialog our client already has (`crates/aa-bevy/sr
 
 **List, 0x68E340.** [C] unless noted.
 - Every file of that extension in the directory is opened with 0x59F570 and listed if its header reads.
-- Row text is the file's name without extension. If that name, stripped of its `_N` suffix (0x41D2F0), equals `last_film_filename` case-insensitively, the row becomes `LastFilm <time> <date>`, with the time from 0x59E210. [O: `LastFilm 3:39:08 PM 10/24/2026`]
+- Row text is the file's name without extension. If its first `len(last_film_filename)` units (0x41D2F0 is a left-substring with that length, read from the instructions at 0x68E827) equal `last_film_filename` case-insensitively, the row becomes that prefix, a space and the film's time, so `LastFilm_1 (2)` is a LastFilm row too. The time is the map header's +0x18, a FILETIME set by the header's constructor (0x59E210, 0x5A14C0), not the file's; 0x6FBF50 formats it with GetTimeFormatW and GetDateFormatW in the user's locale, without converting a time zone. [O: `LastFilm 3:39:08 PM 10/24/2026`]
 - Rows appear in alphabetical order of their text, so `12:53:07 AM` sorts before `3:39:08 PM`. [O]
 - Rows with equal text get ` [file]` appended (`%s [%s]`).
 - Preselected row: the remembered name (+0x120) if it is in the list, else the newest by 0x59E210 if +0x11C is set, else the first row. [C] [O: `LastFilm_2` selected while readable; `LastFilm_1`, the newest, once `LastFilm_2` was locked]
 
-**Preview on the right, 0x6612E0.** [O: `03-film-file-dialog.png`] `<name> (Film)` (`staging_map_preview_append_film|s`, 0x65F9D0), then Source (map name), File, Time, Size (`384x384`), then one row per kingdom with a colour pip and the name (`Player`, `Random`).
+**Preview on the right, 0x6612E0.** [O: `03-film-file-dialog.png`] `<name> (Film)` (`staging_map_preview_append_film|s`, 0x65F9D0), then Source (map name), File, Time, Size (`384x384`), then one row per kingdom with a colour pip and the name (`Player`, `Random`). A film's name key is empty and the name shown is the file's [O], how it gets there is not read [I]. Source is header+0x38: an RMC's name, or the map's name, or the file's name when the map does not open (0x660850). The kingdoms are the header's own parameters that are not independent, have +0x28 set and +0x29 or a colour (0x65F880). Their names are the display keys through the film's own `MAPSTRINGS` (`side01 = "Player"`), which is why a computer slot reads `Random`; the colour and glyph are the kingdom's +0xC string (0x50F970).
 
 **Edit box.** Shows the selected row's text, fully selected, with focus. [O]
 
 **Buttons.** Load, Delete, Cancel. [O] Hotkeys `enter StagingFileDialog Commit`, `esc StagingFileDialog Cancel`.
+
+**Delete** (around 0x68C420). [C] A box `delete_confirm|s` with Ok and Cancel; Ok runs the command `FileDelete "<name>"`, 0x68C5B0, which removes the file, or shows `ui_file_dialog_file_delete_failed|s`, and refills the list. Our client also removes the `.TGI` beside the film and offers Delete only on rows of its own folder. [client: proven on the hidden desktop; native: not run]
 
 **Commit, 0x68EF50.** Opens the name in +0xE4 (0x59F570). Then:
 - Staging flag on and not in a running game (Session+0xE4 not 2 or 5): mode 5 builds KKC_HostSetLoadFilmOrder (0x61E930, 0x68A370), sends it and closes.
@@ -112,7 +116,7 @@ Same class as the scenario-map dialog our client already has (`crates/aa-bevy/sr
 
 - The team format dropdown and the teams are gone. The list shows only `Observer` and one row, `Player`. No slot, nation or colour controls.
 - The right panel shows `LastFilm_1 (Film)`, `320x320`, and the film's kingdoms with colour pips.
-- `launch_film_text` ("Play Film") is the title choice for this launch type (around 0x68DA28).
+- `launch_film_text` ("Play Film") is loaded into +0xF8 by LoadData (0x68DA35) and nothing reads that member: the button stays `Launch`. [C] [O: `05-staging-film-loaded.png`]
 
 Session work on the way (0x68DFD0 ProcessRequest, 0x75F470 Process, then 0x644FE0 / 0x75DE80, then 0x779B30). [O] in the log: `HostSetLoadMapOrder::Process() - ComputeChecksum`, `GetSourceFilename: looking at source_res Films/LastFilm_1.RFM`, `KKC_Session::SetSessionLoadFilm(Films/LastFilm_1.RFM)`, then the AI players are created and destroyed, `SetNewState(4)`.
 
@@ -139,6 +143,8 @@ Pressing Continue (Enter, `UserReady`): `ALL_TASKS_SUCCEEDED` → `g_sim->SetFro
   5. Finish via 0x4FBCE0, 0x5A3D30.
 - **Source map check, 0x5A2B90.** The load creator's source resource (creator+0x50) is null: `failed_film_source_map_missing|s` ("Source map missing (%s)."). Only outside film state (Session+0xE4 != 4) does it run the campaign checks. [C]
 - **Camera, 0x4F61A0.** Viewer has no kingdom: look-at = half the map width and height. [O: (160,160) on 320x320; `VWorld::Init, set camera to (160,160)`]
+- **Camera zoom, 0x7010D0** (from 0x43FB44). Reset 0x700E30, then 0x7005F0 with UVar `CameraScaleZoom`, clamped to 0.7..2.1. So a battle opens at the profile's last zoom. [C] The QA profile holds 2.1, which is why the film shots show a wider view than a fresh profile; `Data/UVars.tgi` has 0.5, so a fresh profile opens at 0.7.
+- **Failure of the load.** The task's text travels on session event 8 GWORLD_CREATE_FAILED (0x773AE0, `failed_to_create_map` when it has none, after event 10 SOME_TASK_FAILED). TGC_AppState 0x414620, case 8, queues it as a message (0x414520, 0x40F580) and leaves the state (slot +0x24). [C] Our client shows that text in a box with Ok on the page the launch came from. [client: proven on the hidden desktop with a film of another version, both routes; native: not run]
 - **OnGWorldReadyForState 0x7757F0**, state 4: [C]
   1. Calls 0x76E1D0, which opens chunk `SessionPlayers`, reads the count, and for each row reads id (4 bytes), name length (2), UTF-16 name, kingdom index (4) and calls CreateFilmPlayer 0x76CD00.
   2. Opens chunk `Orders` and hands the stream to 0x74B320, which sets Admin+0x26C = stream and Admin+0x288 = 0.
@@ -247,7 +253,7 @@ The film runs in **app state 8**, class vtable 0xA6559C (ctor 0x651640, slot at 
 - The box does not pause the world. [P]
 - It is the only effect of the event. No text in the log panel. [O]
 - Keep Watching only closes the box: the viewer stays in app state 8 with the world running and the film gone. [C]
-- GWorld+0x275 is set by 0x4F1080 and read by the speed limit (0x76B3A0) and the game-over paths. It is the game's kept-playing/finished flag. [I]
+- GWorld+0x275 is set by 0x4F1080 and read by the speed limit (0x76B3A0) and the game-over paths: the world's cutscene mode (`aa_play::triggers::cutscene`). [I]
 
 ### 7.3 Leaving
 
@@ -352,10 +358,36 @@ The census is reproducible by comparing the `ProcessRequest` strings with the `i
 - **Scoring.** `SaveFilm` is visible only when 0x772BB0 is true, command `ScoringSaveFilm` 0x658F90, which runs 0x68DCE0(5, 0, 0): `StagingFileSavedDialog` in mode 5. `FilmCancel` 0x658F80 runs 0x68C190.
 - **Debriefing.** `SaveFilmButton` / `DebriefingSaveFilm` (0x6014B0, 0x600FE0, visibility 0x600CE0, 0x600D40).
 - **0x772BB0.** Session+0x150 non-empty and `<PathFilms><name>.RFM` exists.
-- **Commit 0x6911F0, mode 5,** calls 0x690A00: source = current film path, target = PathFilms + typed name; 0x8597B0 copies (with an overwrite and failure message path), then runs `UpdateSaveFilmButton`. 0x7729E0 tests "target is the current film".
+- **Commit 0x6911F0, mode 5,** calls 0x690A00: source = current film path, target = PathFilms + typed name; 0x8597B0 moves it (MoveFileW; a film at the target is deleted first by 0x5AD860, with a failure message), then runs `UpdateSaveFilmButton`, which finds no film any more. The `.TGI` stays: the saved films of a real profile have none. Before that, 0x6901D0 turns every character 0x859710 refuses into `_`, so the default name's `:` and `/` come out as `3_15_05 PM 3_30_2024`, as in a real profile. 0x7729E0 tests "target is the current film".
 - **Default name** in 0x690E80 (mode 5) comes from the current time. [I]
 
-Our `crates/aa-bevy/src/ui/scoring.rs` already wires the command names and keeps the button hidden (`film: false`).
+### 9.3 In our client
+
+Code: `crates/aa-parity/src/film_writer.rs` (the bytes), `crates/aa-parity/src/recording.rs` (the decree stream, the checkpoints, the header, the rotation), `crates/aa-bevy/src/film_record.rs` (the session's film, Save Film). Tests: `crates/aa-parity/tests/film_writer.rs`, `crates/aa-parity/tests/film_round_trip.rs`.
+
+**One path.** A battle always runs on the decree stream, film or no film: `Recorder::step` is the admin tick and the world tick over `aa_play::World`, and every decree runs the way a film's does (its S entries, then what `aa_parity::Mapper` makes of it, applied at once). A test launch has a recorder with no file. So the world and S do not depend on recording, and a film replays the same world by construction. The plain `World::step` remains for tools and tests; its orders do not pass the Mind handlers' shaping (a move at a hostile actor as a kill, 0x527E30), so it is another battle as soon as anyone orders such a thing.
+
+**The computer players.** `World::update` no longer applies the SAI's commands: they wait in `World::sai_orders` for the next tick's decrees, as the requests 0x7AF220 emits wait for the admin tick 0x752E60. The SAI's general powers go the same way (`special_ops::use_from_sai`). This moves every computer order one tick later than before, which is the native order.
+
+**What is written.**
+- A human's selection is 18 and 16, sent when it changes; a computer's is 333 before every order, 16 for further units, and 86 `group_behavior_enable` first with more than one unit (0x7AF220). Every order is 86 or 70: the request form 85 for a single building is written as a selection and an 86, because no real film holds an 87.
+- 298 as 0x7509F0 and 0x74B360 write it: one for the node's player when a tick has requests, one when the requesting player changes. Record 0 holds the two the version acknowledgements leave. The stream of a real film has exactly this shape.
+- 311 every 17th admin tick that ran (0x755290 with 0x76AEE0, so not while paused), the first in record 17, with {S last index, S hash} captured before the tick's decrees; 328 `<name> AI` for the computers in record 1.
+- Not the pause or the speed. [O] A game of the original with the pause key twice and three speed steps left a film with none of 73, 75, 76, 80, 81: the 311s stay 17 records apart across the pause and go to 24 at 141% and 34 at 200%, because the admin ticks are real time and stop while paused. A 76 in a film crashes the original's playback (0x754880 asks 0x74B3C0 for the ordering client, which a film player does not have, and 0x74B080 reads through the null).
+- The header: the map's own MAP_HEADER and text, the session's rules, the world's kingdoms (the header keeps what the world has, the creator every kingdom of the map), the version from AVars and the build 4129.7. MAP_HEADER and SessionPlayers come out byte for byte as the original's on 4 stock and 5 random real films (`film_header_*` tests).
+- The order shapes are the real films': a census over every real film (`order_shapes_against_the_original_s`) shows that flag 5 goes with organizations (recruit 0x62 for a regiment, 0x42 for anything else, for people and computers alike), and that the two write differently, so `player_orders::native::OrderForm` says whose request it is. A person: a move on the ground is the default order 0x14, the placement drag sends a direction and a scalar of -1 (unpack 0x5C, construct 0x5E, recruit_location 0x76), an aimed order a scalar of 0 (0x51, 0x54). A computer: no scalar, no direction on unpack and construct (0x44, 0x46), hq_attach 0x41, repair 0x241. A computer's move on the ground and kill at a point still have shapes no real film has: our SAI gives those where the original's gives guard, retreat and move at a thing.
+
+**Not native, on purpose.**
+- A click other than a move on the ground (attack, follow, repair) is written with the ActorCommand the client guessed (flag bit 6), where the original sends a default order and guesses on every machine.
+- `Command::Attach` names its HQ, which `hq_attach` (31) cannot say (0x57B0A0 reads no field). It is written with the HQ in the word and the scalar flag set, which no real film has (`film_writer.rs` test), and only this port's decoders read it. In the original that decree cycles to another HQ.
+- A metagame battle's start technologies, bonus stockpile and additional actors go into the kingdom rows' properties, resources and definitions (`recording::BattleExtras`), and a random film's rows are applied at its start. Which field is which is read from their names: there is no metagame film of the original to compare with. The placement of the additional actors stays the labelled rendition of `campaign/battle.rs`.
+
+**A battle on a random map** starts as a film of it starts: `recording::random_battle` gives `RandomMapData::generate_world` the creator's lists as staging left them and the settings the creator keeps, so the kingdoms' picks are the first draws of the one stream (0x513410, 0x50E8B0, `GeneratedMap::world_picks`), and the generals the staging left open are those picks. `playback::generated_map` runs the same on the film's rows.
+
+**The original opens our films** (2026-11-02, QA copy, hidden desktop). A film of the headless test on Berlin, computers only: staging shows `RecLane0 (Film)`, the loading screen, `Creating film player id=1..4`, and it plays. Every checkpoint through tick 391 passes on the original's own S, with our SAI's orders in it. With the recruits in their real shape it goes on to tick 476, 28 checkpoints, then `FILM OUT OF SYNC(647)` with `getting a value beyond what we've currently seen`: the first order that differs from what the original's SAI gave in a real film of this map is the unpack at tick 482 (another truck, another place), and from there the two battles are not the same battle. That is the SAI's exactness, not the film's format.
+A film of the headless test on a random map: `RMG: rmc_southerneurope Try #1`, the generator's log, it plays, and every checkpoint through tick 408 (24 of them, S index 638) passes on the original's own S, so the world it generated from our header is ours, with our SAI's unpacks and recruits in it. `FILM OUT OF SYNC(663)` at tick 425: same index, another hash. Before the recruits had their ParameterSet the same film went out at tick 34. A film the client itself recorded on Berlin, with a person's recruit, rally point and moves in it: it opens, the staging screen lists Player and the computers' names, it plays through tick 475, then `FILM OUT OF SYNC(658)`, beyond, at the same unpack as above.
+
+**Save Film.** `Scoring/SaveFilm` and `DebriefingInterface/SaveFilmButton` show when 0x772BB0 holds and open `film_record::SaveFilmDialog` (`StagingFileSavedDialog`), Commit moves the film (0x690A00), after the name's characters are cleaned (0x6901D0). Only the client's own folder is listed, deleted from or written to.
 
 ## 10. QA log: what I ran and saw
 
@@ -398,7 +430,7 @@ Our `crates/aa-bevy/src/ui/scoring.rs` already wires the command names and keeps
 - Natively, the first differing checkpoint ends the film. Checkpoints come every 17 ticks, about once a second.
 - Our best current result, the stock-map film `Berlin2v2_0`, first differs at tick 493 (`NEXT-ROUND.md`), which is 31 seconds into a 4.7 minute film.
 - `LastFilm_0` of the earlier set has 10,711 ticks, about 11 minutes.
-- The three films of `ROADMAP.md` 5.1 and `LastFilm_1` are random-map films. Our generator is not yet exact (`NEXT-ROUND.md`), so those would differ from the first tick.
+- The three films of `ROADMAP.md` 5.1 and `LastFilm_1` are random-map films. The generator is exact on the stock data (12 of 12 world dumps, `NEXT-ROUND.md`), so they start in sync and differ where the simulation does.
 - Even with hashes ignored, decrees name native GTID slots. Once ids shift, `aa_parity::Mapper` reports them as unresolved and nothing happens for those orders.
 
 The native rule is not in doubt; what follows is a decision for the lead.
@@ -415,6 +447,16 @@ The native rule is not in doubt; what follows is a decision for the lead.
 
 `FilmForcePlayback` is **not** this switch: natively it only skips the version check.
 
+**The lead's decision, as built (`aa_parity::playback::SyncMode`).** The native stop is the code path: `Strict` is 0x752F60, 0x751EB0 and END_OF_FILM with out-of-sync set. The client's default is `Report` until films pass, a deliberate, temporary departure from the original:
+
+- The first mismatch gives `FilmEvent::FirstMismatch`: the client logs `FILM OUT OF SYNC(n)` once and writes the native text `film_end_of_film_oos` to the in-game message log, so the player is not misled. The film keeps playing.
+- At the natural end the event is `EndOfFilm { out_of_sync: true }` if any mismatch happened (the box `film_end_of_film_oos`, Ok, to Scoring), otherwise the native End of Film box with Exit to Scoring and Keep Watching.
+- An unknown ordering player (0x75D710) in `Report` is told once (`FilmEvent::NoOrderingPlayer`), counts as a mismatch and the film plays on; in `Strict` it is the native stop and ends the record's decree loop.
+- `AA_FILM_SYNC=strict` gives the native behaviour. Tests run `Strict` unless they measure `Report`.
+- Random-map films are not refused (option D is not taken): they load through the generator with the film's own settings, and `Report` covers the divergence until the generator is exact.
+
+Remove `Report` when the stock films pass.
+
 ## 12. Ordered build list
 
 Each item is playable on its own. Numbers are the order to build in.
@@ -424,6 +466,7 @@ Each item is playable on its own. Numbers are the order to build in.
 - Data: `.RFM` bytes.
 - Today: `aa_parity::film` depends only on aa-mapworld, aa-orders and aa-rules, and `crates/aa-bevy` does not depend on aa-parity. Add the dependency, or move `film`, `decree` and `registries` to a library. Your call (see the requests to the lead).
 - Also needs: the SharedProperty registry count, still missing for one record of film 1 (`ROADMAP.md` 5.1).
+- **Built:** `aa_parity::playback`, reached by a path dependency of aa-bevy on aa-parity (feature `play`). The registries come from the data set in use, cached under `assets-cache/aa-parity`: 6.6 s to compute for v14 under load, under a millisecond to read back, about 3 minutes once for a large mod.
 
 **F2. Film mode of the file dialog.**
 - Natively: 0x68DB60(5), 0x68BB70, 0x68E340, 0x6612E0, 0x65F9D0, 0x68EF50.
@@ -443,6 +486,7 @@ Each item is playable on its own. Numbers are the order to build in.
 - Build: `aa_parity::replay::plan` and `build` already give an aa-play world from a film on a stock map, including kingdoms, nations, generals, colours and starting rules. Lift them into the client's load path.
 - Random-map films: refuse (option D) or generate (`aa-play` mapgen), by the lead's decision.
 - Failures: the three `failed_film_*` messages on the loading screen's failure path. The world stays frozen until Continue.
+- **Built:** `playback::open_film`: the file, the source (the saved game's chain too), the version, the build, then the world. A scenario map and a random map from the film's settings open; what aa-play cannot create is the literal `unknown CreateGWorld failure` of 0x5A3980, with the reason for the log. A film in `<profile>/data/Films` plays on that profile's data, and a film of a saved game starts from the save's restored world: see `FILM-CORPUS.md`, "Sources".
 
 **F5. The tick driver and end of film.**
 - Natively: 0x752AE0, 0x751A40, 0x75D710, 0x752F60, 0x751EB0, the catch at 0x751B07.
@@ -450,6 +494,7 @@ Each item is playable on its own. Numbers are the order to build in.
 - Sync: S from `aa_play::trace` and `aa_parity::slog`; checkpoint check per section 6; mode per section 11.
 - Add: the unknown-player stop; unresolved decrees logged, never fatal.
 - Commands: 26 of the 39 ActorCommands have no aa-play equivalent yet (`classify::ACTOR_COMMAND_MAPPING`: guard, retreat, bombard and so on). Guard and retreat are the most common in film 0. Each one missing is a visible divergence.
+- **Built:** `playback::FilmPlayer::step` over `replay::FilmDriver`, the decree loop the Berlin gate runs too. Each decree logs its S entries and takes effect in record order; a 311 is checked by the native rule 0x77D050 on S's entry at its index, through `aa_orders::net::sync::Synchronizer`. `tests/playback.rs` proves the two agree, the stops, and every corpus film (`FILM-CORPUS.md`).
 
 **F6. The viewer.**
 - Natively: 0x4F61A0, 0x5C0E50, 0x5C0E90, 0x5F8E00, 0x5F7E50, 0x5F7150, 0x5F4780, 0x5F4750, 0x4F96D0.
@@ -478,11 +523,11 @@ Each item is playable on its own. Numbers are the order to build in.
 **F11. Recording in the client.**
 - Natively: 0x7757F0, 0x76FE60, 0x76C310, 0x74D640, 0x755290.
 - Data: the mirror stream of decrees for the client's commands.
-- Today: the writer is proven piece by piece (`crates/aa-runtime/src/film_*.rs`, `research/skirmish-20261017-film`), and `aa-netcode local_frame_host` calls `record_film`. But the Bevy client runs `aa_play::World` directly with `aa_play::Command`, with no decree stream, no native ids for orders, and no checkpoints at the original's cadence. This is the largest item. It also needs a stable S, otherwise our own films check against nothing.
+- Built: section 9.3.
 
 **F12. Save Film.**
 - Natively: 0x658F90, 0x68DCE0(5), 0x6911F0, 0x690A00, 0x772BB0, 0x7729E0, 0x6014B0.
-- Build: `ScoreData.film` true after F11. Debriefing button too.
+- Built: section 9.3.
 
 **F13. Save during a film, delete, network.** Last, and only if wanted: GameSave from film state (0x776200), Delete in the dialog, and the network film paths (`map_will_not_transfer_host_film|ss`, 0x7554B0, 0x7725A0, 0x770B70, 0x7770B0).
 
@@ -504,11 +549,70 @@ Each item is playable on its own. Numbers are the order to build in.
 
 ## 13. Open items
 
-1. **Typed folder path crash.** The original crashes; I propose "File missing" instead. That is a deliberate difference; lead to confirm.
+1. **Typed folder path crash.** The original crashes; the client shows "File missing" instead, by the lead's decision. A deliberate difference.
 2. **Session+0x168 and header+0x3C** (campaign films lock the view): inferred, not exercised. No campaign film on hand.
 3. **Scripts and triggers during a film** were not traced. KKC_HeardScriptCommand and KKC_NotifyTriggerManagerOfVideoCompletion are rejected as live requests; whether their decree forms carry the whole story in the film is unchecked. Needs a film of a scripted map.
 4. **Speed reset.** Speed returns to 100% at the next film launch [O]; I did not find which call does it (candidates 0x4F1080, 0x61E620, the world setup).
-5. **The main-menu route skips staging**: read from the calls, untested.
-6. **Mouse-only paths** in section 10.
+5. **The main-menu route skips staging**: read from the calls, untested in the original. The client follows it (0x64F3F0, 0x645200, Cancel 0x645540, Scoring Exit 0x659290 to slot 9), proven on the hidden desktop.
+6. **Mouse-only paths** in section 10 stay unrun in the original; all but Save Film and clicks on units on a real film are built and run in the client.
 7. **Slot +0x24 of the film state (0x652880)**: who calls it against 0x652790. The observed exit used 0x652790's route. [I]
 8. **Hotkey `w`.** The file says `map w`, my log printed `map alt-w` from the merged tables. Harmless, but check when binding.
+9. **A saved world's Minds.** `aa_play::saved_world::restore` starts the hosted Minds idle and gives the saved current command again as a new order, labelled in the film's notes as a rendition. To be exact, the saved Mind goes through `aa_mind::saved_load::apply_with_commands` onto the hosted Mind and its movement state (`crate::movement`), with the Mover's speed and path. The aircraft Mind's Load (51C3C0) is still unported, so aircraft in flight are left out.
+10. **Stale modifiers after a load.** On the original, a loaded world's Detection and Supply radii do not hold the kingdom technologies' adds until something refreshes them (18 where aa-play reads 23). aa-play computes them fresh. The morale maximum is copied (`OrgCombat::saved_morale_living`).
+11. **Art of a profile's data.** `research/film-sources/convert_overlay.py` converts a data folder into `<own profile>/art/<key>`. The client logs the command when a folder is not converted and does not run it by itself. A mod's effects, sounds and interface text are still the stock ones.
+12. **Sides a session leaves out.** A random map's creator can list more sides than the session plays. The generator takes the session's sides by name. Whether the original generates the others too and then removes them is not read yet.
+9. **Recording, what is still not the original's** (section 9.3). A person's selection is written with the order, not when it changes. A click other than a move on the ground names the command the HUD guessed. A nation left to Random is drawn by staging, so the creator row holds it where the original's is empty and draws 0x50ECA6. The HUD's attach-to-this-HQ click writes a shape only this port reads (a real person's hq_attach is 0x40, the cycle).
+
+## 14. The client sweep
+
+The real client (`AxisAlliesBevy`, fast release build) on a hidden desktop, scripted with `AA_UI_SCRIPT`, muted, in a scratch profile: pick the film in the dialog, launch, Continue, objectives, view kingdom 1 and back, zoom 2.1 and look at a building, speed to the top, look at units twice, the end box, Scoring, Exit to staging. Nine other builds ran on the machine throughout, so the frame rates are what a machine with no room left gives, not what the client can do. The previous round's runs, with fewer builds going, read 11 to 33 FPS on the same films.
+
+`AA_BEVY_TERRAIN_CHECK=1` compares every drawn terrain corner with the height the world keeps. Checkpoints are the film's own 311s, matched in `Report`. "Not reached" means the run's time limit came first: at top speed the client takes at most 8 ticks a frame, so at 5 FPS a film plays at about 40 ticks a second, not 256.
+
+| film | map | end tick | checkpoints | first mismatch tick | corners differ | objects drawn / placed | panics | median FPS | end box | back at staging |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Market Garden, short | 448 scenario | 263 | 0/15 | 40 | 0 | 5644/5683 | 0 | 8 | yes | yes |
+| Market Garden, 7107 ticks | 448 scenario | 7114 | 0/418 | 38 | 0 | 5644/5683 | 0 | 15 | yes | yes |
+| Berlin, fight | 448 scenario | 20203 | 123/1187 | 2726 | 0 | 7930/7971 | 0 | 9 | yes | yes |
+| Kursk, fight | 448 scenario | 22415 | 0/1318 | 59 | 0 | 4623/4683 | 0 | 7 | yes | yes |
+| Comrades, fight | 256 scenario | 16182 | 86/951 | 2014 | 0 | 1123/1139 | 0 | 8 | yes | yes |
+| Mountain Pass | 256 developer | 12452 | 171/732 | 3482 | 0 | 1378/1429 | 0 | 7 | yes | yes |
+| Farmhouses, fight | 320 developer | 30921 | 64/1818 | 1534 | 0 | 1783/1831 | 0 | 9 | yes | yes |
+| Tutorial (view locked) | 256 campaign | 2313 | 0/135 | 30 | 0 | 2679/2765 | 0 | 8 | yes | yes |
+| Southern Europe | 384 random | 260 | **15/15** | none | 0 | 2319/2371 | 0 | 7 | yes, End of Film | yes |
+| Southern Europe | 384 random | 10718 | 5/630 | 140 | 0 | 2023/2082 | 0 | 10 | yes | yes |
+| Southern Europe, long | 384 random | not reached | | 33499 | 0 | 2182/2231 | 0 | 6 | no | no |
+| Southern Europe | 320 random | 277 | 3/16 | 135 | 0 | 1639/1701 | 0 | 5 | yes | yes |
+| Southern Europe, the longest film | 640 random | not reached | | 188 | 0 | 3965/4134 | 0 | 5 | no | no |
+| Alaska | 640 random | 4275 | 13/88 | 283 | 0 | 6236/6330 | 0 | 6 | yes | yes |
+| Germany | 640 random | 90452 | 1/2636 | 133 | 0 | 6177/6390 | 0 | 7 | yes | yes |
+| India | 512 random | 83659 | 9/2475 | 270 | 0 | 2822/2904 | 0 | 7 | yes | run's limit |
+
+No panic, no stall and no error line in any run. The gap between objects drawn and placed is the world's invisible things.
+
+**Against the original.** The first Southern Europe film above played in both, same keys, at the QA profile's zoom 2.1. The view registers to one pixel (correlation search over the shots). The resource bar at view kingdom 2 reads the same (252(+35), +20, +10, 2/100); at kingdom 1 the shots, not taken on the same tick, read 502 and 501 (+35), +25, +20, 1/100. The fog's shape and its 0.50 on the terrain are the same, and so are the minimap and its rectangle. Exit to Scoring and Keep Watching are the same box.
+
+**Causes found and closed by the sweep.**
+- The camera's target stood on the drawn ground. Natively 0x6FEDB0 -> 0x6FF288 reads HEIGHT_MAP through 0x550210, no overlay, so on a mountain our view sat 182 px low at zoom 2.1. Every battle with a mountain under the camera had this.
+- Developer, trailer and campaign maps drew flat colour on 20 to 80% of their tiles and disagreed with the world on height: their files and recovered palettes name ids `Data/translate.tgi` renames. `AssetStore::fill_palette` is now 0x48D500: translation first, its target only, the entry takes the variation it comes to; a tile whose id comes to nothing keeps the previous tile's terrain (0x557D4B), the same rule the world uses. The stripes this leaves on Mountain Pass are in the original's minimap too.
+- 11 mountain variations of chaparral and desert were drawn with the template's noise, up to 1.45 m off the world (`TerrainMetadata::bundled`).
+- The film's own Sun world rule is applied to scene and world (0x4FDCE0: only when the rule differs from the default). Checked with a film whose rule was edited to sun_dusk.
+
+**Failure paths, proven on the client:** source map missing shows `Source map for film 'x' missing.` in the log and stays on the session; a wrong build and a wrong version show their boxes from staging and from the main menu.
+
+**Settled against the native code, shown on the client.**
+- A view-locked film (the tutorial's, header +0x3C set; `FilmPlayer::view_locked`, Session+0x168). The empty action panel is native (0x5F8E00 -> 0x5F5300), and so is the flashing book button (0x50C880 is not gated on film).
+- The message log clears at a launch from state 1 (0x77A950 -> 0x770500 case 1 -> 0x40B450) and stays through Scoring and Exit, as `27-after-scoring-exit.png` shows. Launch again and Replay start with no old messages and at 100%.
+- The remembered film persists as preferences block +0x18 does (written at 0x75F6E7 and 0x690D75, saved by 0x41D570): `last_film` in the client's settings, chosen again by a second process.
+- The first Esc closes the film dialog even with the edit box focused (0x5D17E0 case 0x1B returns 0).
+- A battle opens at the profile's zoom (0x43FB44 -> 0x7010D0 -> 0x7005F0 with CameraScaleZoom): 0.7 on a fresh profile, 2.1 on the QA profile.
+- A film on a mod's own data opens from its profile folder (14 s) and plays with that data's definitions; what only that data holds is not drawn until its art is converted (`research/film-sources/convert_overlay.py`).
+
+**Not settled.**
+- The biome's `detail_texture` and `macro_texture` (0x4B8E80: Biome +0x88, +0x8C, repetitions +0x90, +0x94) are not drawn. It is why the original's ground is grainy and ours smoother on temperate maps. `look.rs` and `original.wgsl` own it; the native reader of those fields is not yet found.
+- Tree shadows are Bevy's cascades, the original's are stencil volumes: thinner and darker. Trees under fog read 0.50 in ours, 0.53 in the original.
+- The map's edge in the viewer with no fog is hard in ours. No shot of the original at an edge in film mode yet: posted keys do not scroll it.
+- `ObserverGameMusic`: the original writes no sound log. Its log only names missing resources, and the UVar `AudioDebugIDS` would only silence the others (and saves into the profile). The client plays what 0x4F96D0 reads, `menu_background_music`, on the first world tick. [C] only.
+- A film copied into a profile whose data differs fails to decode there. Corpus film 0c01c516f8 decodes on v14 but sits in a folder whose data it does not fit: `record 13 does not decode on this data`, with the failure box. That follows the lead's decision 6; the native result on that data is untested.
+
+10. **A scripted map does not yet round-trip.** `scripted_map_round_trip` on `Campaign/allies01_el_alamein`: 39 of 40 checkpoints, then at tick 678 the live battle has 12 S entries the film's replay does not, the world digest the same and the RNG on. The stock and random maps have run 64000 and 16000 ticks without it, so it comes with the script. Not traced yet: what draws there in the battle and not in the film.

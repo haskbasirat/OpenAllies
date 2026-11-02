@@ -6,8 +6,8 @@
 //!   1, far 512;
 //! * eye = target - d * zoom * CameraHeight / sin(pitch) with the view
 //!   direction d = (sin yaw cos pitch, cos yaw cos pitch, -sin pitch)
-//!   (0x6FF220 / zoom 0x6FE470); the target follows the ground height
-//!   (0x6FEDB0); zoom 0.7..2.1, default 1.0 (CameraZoomGameplay*);
+//!   (0x6FF220 / zoom 0x6FE470); the target follows the base height map
+//!   (0x6FEDB0, no mountain overlay); zoom 0.7..2.1, default 1.0 (CameraZoomGameplay*);
 //! * scrolling with the arrow keys and the outermost screen pixel
 //!   (0x5CCC90), accelerating from CameraScrollSpeed by
 //!   CameraScrollAcceleration per second up to CameraScrollSpeedMax, scaled
@@ -21,7 +21,14 @@
 //!   scroll then also take the edge, and nothing pans while the cursor is
 //!   outside the window (0x5CD320 KKC_Input+24);
 //! * the battle opens on the local kingdom's start location (0x4F61A0 ->
-//!   0x43F0A0).
+//!   0x43F0A0);
+//! * the scripted camera of the map's triggers (ui/objectives.rs): MoveTo
+//!   0x701110 and its per-frame 0x7007B0 (time, zoom, pitch, yaw and point
+//!   from where the camera is to the command's, the sine ease), the follow of
+//!   +2D0 (0x701570 -> 0x6FF130 on the actor's point), the shake spring
+//!   0x6FE6B0 / 0x701590, and the cutscene's store and restore 0x6FE710 /
+//!   0x700B10 / 0x700A90. World+275 (cutscene mode) frees the yaw and widens
+//!   the pitch and zoom ranges (0x6FE9C0 -> 0x6FEA20).
 //!
 //! Native coordinates (X/Y ground, Z up) map to render as (x, z, -y)
 //! (`battle_view::to_render`).
@@ -60,6 +67,11 @@ pub const ZOOM_MIN: f32 = 0.7;
 /// The v12/v14 runtime's patched maximum (the retail image has 1.4).
 pub const ZOOM_MAX: f32 = 2.1;
 pub const ZOOM_DEFAULT: f32 = 1.0;
+/// AVar index 0x15 CameraPitchMin (registered at 0x401BD0: 10 deg).
+pub const PITCH_MIN_DEG: f32 = 10.0;
+/// AVars.tgi CameraZoomMin / CameraZoomMax: the cutscene's range (0x6FEA20).
+pub const ZOOM_SCRIPT_MIN: f32 = 0.1;
+pub const ZOOM_SCRIPT_MAX: f32 = 1.5;
 
 /// The kingdom's start location (native ground point): Kingdom+1F8, the
 /// start-location thing of its map slot, whose position 4F61A0
@@ -84,6 +96,82 @@ pub struct NativeCamera {
     /// Map size in metres (camera clamp).
     pub map: Vec2,
     placed: bool,
+    /// Camera+2BC yaw and +2B8 pitch, radians.
+    pub yaw: f32,
+    pub pitch: f32,
+    /// Camera+2C0: the scripted move in progress (0x701110).
+    moving: Option<ScriptedMove>,
+    /// Camera+2D0: the thing the camera follows (0x701570).
+    follow: Option<aa_play::Unit>,
+    /// Camera+22C: the zoom stored at a cutscene's start (0x6FE710).
+    stored_zoom: f32,
+    /// Camera+378 and +384: the shake's displacement and velocity along
+    /// their first axis (0x6FE6B0 only ever pushes that one).
+    shake: f32,
+    shake_velocity: f32,
+}
+
+/// Camera+2C4..+338 of 0x701110.
+#[derive(Clone, Debug)]
+struct ScriptedMove {
+    realtime: bool,
+    start: f32,
+    duration: f32,
+    /// +310 / +314 / +318 where the camera was, +304 / +308 / +30C its zoom,
+    /// pitch and yaw.
+    from: Vec3,
+    from_zoom: f32,
+    from_pitch: f32,
+    from_yaw: f32,
+    /// +32C / +330 / +334 the point (its height 0x550210), +320 / +324 / +328.
+    to: Vec3,
+    to_zoom: f32,
+    to_pitch: f32,
+    to_yaw: f32,
+    /// +338.
+    ease: bool,
+}
+
+/// `0x96DB7A` fmod into [0, 2pi) and the shorter way round (0x701110).
+fn shorter_way(from: f32, to: f32) -> (f32, f32) {
+    let tau = std::f32::consts::TAU;
+    let wrap = |v: f32| {
+        let m = v % tau;
+        if m < 0.0 { m + tau } else { m }
+    };
+    let (mut a, mut b) = (wrap(from), wrap(to));
+    let d = (b - a).abs();
+    if tau - d <= d {
+        if a < b {
+            a += tau;
+        } else {
+            b += tau;
+        }
+    }
+    (a, b)
+}
+
+/// The position of 0x7007B0 between its start and end: 0 at the start, 1 from
+/// `duration` on; the ease is (sin((t * 180 - 90) deg) + 1) * 0.5.
+fn move_fraction(now: f32, start: f32, duration: f32, ease: bool) -> f32 {
+    if duration <= 0.0 {
+        return 1.0;
+    }
+    let t = ((now - start) / duration).clamp(0.0, 1.0);
+    if ease { (((t * 180.0 - 90.0) * 0.017_453_292).sin() + 1.0) * 0.5 } else { t }
+}
+
+/// The original's camera limits 0x6FEA20: (min zoom, max zoom, min pitch, max
+/// pitch, forced yaw). In cutscene mode (0x6FE9C0: World+275) the AVars
+/// CameraZoomMin / CameraZoomMax and CameraPitchMin to 1.5525 rad with a free
+/// yaw; otherwise the gameplay zoom range, CameraPitch and CameraYaw.
+fn limits(cutscene: bool, zoom_min: f32, zoom_max: f32) -> (f32, f32, f32, f32, Option<f32>) {
+    if cutscene {
+        (zoom_min, zoom_max, PITCH_MIN_DEG.to_radians(), 1.5525, None)
+    } else {
+        let p = PITCH_DEG.to_radians();
+        (ZOOM_MIN, ZOOM_MAX, p, p, Some(YAW_DEG.to_radians()))
+    }
 }
 
 impl NativeCamera {
@@ -91,9 +179,16 @@ impl NativeCamera {
         let (y, p) = (YAW_DEG.to_radians(), PITCH_DEG.to_radians());
         Vec3::new(y.sin() * p.cos(), y.cos() * p.cos(), -p.sin())
     }
+    /// The view direction at the camera's yaw and pitch now.
+    pub fn view_dir_now(&self) -> Vec3 {
+        let (y, p) = (self.yaw, self.pitch);
+        Vec3::new(y.sin() * p.cos(), y.cos() * p.cos(), -p.sin())
+    }
+    /// 0x6FF220 keeps the distance of the reset (CameraHeight / sin of the
+    /// CameraPitch, 0x700E30) whatever pitch comes later.
     pub fn eye(&self) -> Vec3 {
         let base = HEIGHT / PITCH_DEG.to_radians().sin();
-        self.target - Self::view_dir() * (self.zoom * base)
+        self.target - self.view_dir_now() * (self.zoom * base)
     }
     /// LookAt (0x6FF130) through the map clamp (0x6FEDB0).
     pub fn look_at(&mut self, p: Vec2, pad: f32) {
@@ -153,6 +248,24 @@ pub struct CameraRequests {
     pub zoom: Option<f32>,
     /// Pan/zoom blocked (drag box or facing drag active: camera byte +0x214).
     pub blocked: bool,
+    /// What the map's triggers asked for this frame, in their order.
+    pub script: Vec<ScriptRequest>,
+}
+
+/// A camera request of a trigger (ui/objectives.rs).
+#[derive(Clone, Debug)]
+pub enum ScriptRequest {
+    /// `MoveCamera` (0x43DD10 -> 0x701110): end time, realtime flag, point,
+    /// zoom (1 / the command's), pitch and yaw in radians, ease.
+    Move { until: f32, realtime: bool, at: Vec2, zoom: f32, pitch: f32, yaw: f32, ease: bool },
+    /// `CameraFollow` (0x43E150 -> 0x701570).
+    Follow(aa_play::Unit),
+    /// `ShakeCamera` (0x43E020 -> 0x6FE6B0).
+    Shake(f32),
+    /// 0x6FE710 at the start of a cutscene.
+    Store,
+    /// 0x700B10 / 0x700A90 at its end.
+    Restore,
 }
 
 /// Turn the scene's camera into the original camera on its first frame.
@@ -168,13 +281,107 @@ pub fn attach(
             .unwrap_or_else(|| Vec2::new(rts.max.x - rts.min.x, rts.max.y - rts.min.y).abs());
         let target = from_render(rts.home);
         commands.entity(e).insert((
-            NativeCamera { target, zoom: ZOOM_DEFAULT, scale_zoom: 0.5, scroll_acc: 0.0, scrolling: false, map, placed: false },
+            NativeCamera::new(target, map),
             Projection::custom(NativeProjection::new()),
         ));
     }
 }
 
 impl NativeCamera {
+    fn new(target: Vec3, map: Vec2) -> Self {
+        Self {
+            target,
+            zoom: ZOOM_DEFAULT,
+            scale_zoom: 0.5,
+            scroll_acc: 0.0,
+            scrolling: false,
+            map,
+            placed: false,
+            yaw: YAW_DEG.to_radians(),
+            pitch: PITCH_DEG.to_radians(),
+            moving: None,
+            follow: None,
+            stored_zoom: ZOOM_DEFAULT,
+            shake: 0.0,
+            shake_velocity: 0.0,
+        }
+    }
+
+    /// 0x701110 (the follow ends; a move never starts while the camera is
+    /// locked, +214).
+    fn move_to(&mut self, request: &ScriptRequest, now: f32, real_now: f32, ground: f32) {
+        let ScriptRequest::Move { until, realtime, at, zoom, pitch, yaw, ease } = *request else { return };
+        self.follow = None;
+        let start = if realtime { real_now } else { now };
+        // a realtime move's end was computed on the same clock as its start:
+        // the trigger's clock is the world's here (triggers.rs real_time_ms)
+        let duration = if realtime { until - now } else { until - start }.max(0.0);
+        let (from_yaw, to_yaw) = shorter_way(self.yaw, yaw);
+        self.moving = Some(ScriptedMove {
+            realtime,
+            start,
+            duration,
+            from: self.target,
+            from_zoom: self.zoom,
+            from_pitch: self.pitch,
+            from_yaw,
+            to: Vec3::new(at.x, at.y, ground),
+            to_zoom: zoom,
+            to_pitch: pitch,
+            to_yaw,
+            ease,
+        });
+    }
+
+    /// 0x7007B0 for the move: 0x6FF220 with the values at this moment, through
+    /// the limits of 0x6FEA20.
+    fn step_move(&mut self, now: f32, real_now: f32, limit: (f32, f32, f32, f32, Option<f32>), track: bool, height: &dyn Fn(Vec2) -> f32) {
+        let Some(m) = self.moving.clone() else { return };
+        let clock = if m.realtime { real_now } else { now };
+        let t = move_fraction(clock, m.start, m.duration, m.ease);
+        if m.start + m.duration <= clock {
+            self.moving = None;
+        }
+        let lerp = |a: f32, b: f32| (b - a) * t + a;
+        let (x, y) = (lerp(m.from.x, m.to.x), lerp(m.from.y, m.to.y));
+        // 6FE670: the ground, unless a move in cutscene mode goes its own way
+        let z = if track { height(Vec2::new(x, y)) } else { lerp(m.from.z, m.to.z) };
+        self.target = Vec3::new(x, y, z);
+        let (zoom_min, zoom_max, pitch_min, pitch_max, forced_yaw) = limit;
+        self.yaw = forced_yaw.unwrap_or(lerp(m.from_yaw, m.to_yaw));
+        self.pitch = lerp(m.from_pitch, m.to_pitch).clamp(pitch_min, pitch_max);
+        self.zoom = lerp(m.from_zoom, m.to_zoom).clamp(zoom_min, zoom_max);
+    }
+
+    /// The spring of 0x701590 (mass +390 = 1, spring -50, velocity damped by
+    /// pow(0.1, dt), both zeroed under 0.01), dt being the view's last frame
+    /// clamped to 0..0.1.
+    fn step_shake(&mut self, dt: f32) {
+        if self.shake == 0.0 && self.shake_velocity == 0.0 {
+            return;
+        }
+        if self.shake_velocity.abs() <= 0.01 {
+            self.shake_velocity = 0.0;
+        }
+        let dt = dt.clamp(0.0, 0.1);
+        if self.shake_velocity != 0.0 {
+            self.shake += dt * self.shake_velocity;
+            self.shake_velocity *= 0.1f32.powf(dt);
+        }
+        if self.shake.abs() >= 0.01 {
+            self.shake_velocity += self.shake * -50.0 * dt;
+        } else {
+            self.shake = 0.0;
+        }
+    }
+
+    /// 0x701590 moves the camera by the displacement through the transposed
+    /// rotation: its first axis comes out as (-sin pitch, cos pitch, 0).
+    fn shake_offset(&self) -> Vec3 {
+        let (s, c) = self.pitch.sin_cos();
+        Vec3::new(-s, c, 0.0) * self.shake
+    }
+
     /// 0x7005F0 (through 0x7010F0 for a relative zoom): the zoom clamped to
     /// the gameplay range (0x6FE470), the requested value stored to UVar
     /// CameraScaleZoom (0x40E0A0).
@@ -225,9 +432,14 @@ pub fn update(
     let window = windows.single().ok();
     let cursor = window.and_then(|w| front.as_ref().and_then(|f| f.pointer.pos).or(w.physical_cursor_position()).map(|c| (c, Vec2::new(w.physical_width() as f32, w.physical_height() as f32))));
     let over_world = front.as_ref().is_none_or(|f| !f.pointer_over_ui);
+    // 0x6FEDB0 -> 0x6FF288: the target stands on the world's HEIGHT_MAP (0x550210),
+    // without the mountain overlay.
     let height = |p: Vec2| -> f32 {
         if let Some(b) = &battle {
-            return b.world.map.height_at(p);
+            return match &b.world.map.native_terrain {
+                Some(terrain) => terrain.base_height(p.x, p.y),
+                None => b.world.map.height_at(p),
+            };
         }
         ground.as_ref().map(|g| (g.0)(p.x, -p.y)).unwrap_or(0.0)
     };
@@ -242,11 +454,58 @@ pub fn update(
                     cam.look_at(p, pad);
                 }
             }
+            // 0x43FB44 -> 0x7010D0: the reset 0x700E30, then 0x7005F0 with UVar
+            // CameraScaleZoom: every battle opens at the profile's last zoom,
+            // clamped to the gameplay range (Data/UVars.tgi holds 0.5, so a
+            // fresh profile opens at 0.7; the QA profile holds 2.1)
             if let Some(s) = scale_zoom_uvar {
-                cam.scale_zoom = s;
+                cam.set_zoom_7005f0(s);
             }
             cam.placed = true;
         }
+        // the scripted camera (ui/objectives.rs)
+        let cutscene = battle.as_ref().is_some_and(|b| aa_play::triggers::cutscene(&b.world));
+        let view_now = battle.as_ref().map_or(0.0, |b| b.world.time + crate::session::tick_fraction(b) * aa_play::DT);
+        let real_now = time.elapsed_secs();
+        let limit = limits(cutscene, ZOOM_SCRIPT_MIN, ZOOM_SCRIPT_MAX);
+        for request in std::mem::take(&mut requests.script) {
+            match &request {
+                ScriptRequest::Move { at, .. } => {
+                    let ground = height(*at);
+                    cam.move_to(&request, view_now, real_now, ground);
+                }
+                ScriptRequest::Follow(u) => cam.follow = Some(*u),
+                ScriptRequest::Shake(v) => {
+                    if *v > 0.0 {
+                        cam.shake_velocity += *v;
+                    }
+                }
+                ScriptRequest::Store => cam.stored_zoom = cam.zoom,
+                ScriptRequest::Restore => {
+                    cam.yaw = YAW_DEG.to_radians();
+                    cam.pitch = PITCH_DEG.to_radians();
+                    let z = cam.stored_zoom;
+                    cam.set_zoom_7005f0(z);
+                    cam.stored_zoom = ZOOM_DEFAULT;
+                }
+            }
+        }
+        let track = !(cutscene && cam.moving.is_some());
+        cam.step_move(view_now, real_now, limit, track, &height);
+        if cam.moving.is_none() {
+            // +2D0: the actor's point (0x6FF130), until it is gone
+            if let (Some(u), Some(b)) = (cam.follow, battle.as_ref()) {
+                let at = match u {
+                    aa_play::Unit::Actor(a) => b.world.actor(a).filter(|x| x.alive && !x.removed).map(|x| x.pos.truncate()),
+                    aa_play::Unit::Org(o) => b.world.orgs.get(o as usize).filter(|x| x.alive).map(|_| aa_play::supply::org_position(&b.world, o)),
+                };
+                match at {
+                    Some(p) => cam.look_at(p, pad),
+                    None => cam.follow = None,
+                }
+            }
+        }
+        cam.step_shake(time.delta_secs());
         let zoom_before = cam.zoom;
         let mut stored = None;
         if let Some(p) = requests.look_at.take() {
@@ -357,13 +616,17 @@ pub fn update(
                 uvars.set_f32("CameraScaleZoom", value);
             }
         }
-        // the target follows the ground (ground-tracking byte +0x33C)
-        cam.target.z = height(cam.target.truncate());
-        let eye = cam.eye();
+        // the target follows the ground (ground-tracking byte +0x33C), but for
+        // a scripted move in cutscene mode (0x6FE670)
+        if track {
+            cam.target.z = height(cam.target.truncate());
+        }
+        let offset = cam.shake_offset();
+        let eye = cam.eye() + offset;
         if std::env::var_os("AA_UI_CAMLOG").is_some() && (time.elapsed_secs() * 2.0).fract() < time.delta_secs() * 2.0 {
             info!("camera target {:?} zoom {} eye {:?}", cam.target, cam.zoom, eye);
         }
-        *transform = Transform::from_translation(to_render(eye)).looking_at(to_render(cam.target), Vec3::Y);
+        *transform = Transform::from_translation(to_render(eye)).looking_at(to_render(cam.target + offset), Vec3::Y);
     }
 }
 
@@ -373,7 +636,7 @@ mod tests {
 
     #[test]
     fn a_requested_zoom_is_clamped_and_stored_unclamped() {
-        let mut cam = NativeCamera { target: Vec3::ZERO, zoom: ZOOM_DEFAULT, scale_zoom: 0.5, scroll_acc: 0.0, scrolling: false, map: Vec2::splat(1000.0), placed: true };
+        let mut cam = NativeCamera::new(Vec3::ZERO, Vec2::splat(1000.0));
         // above the gameplay range: the camera stops, the UVar keeps the request
         cam.set_zoom_7005f0(2.6);
         assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MAX, 2.6));
@@ -385,5 +648,50 @@ mod tests {
         // no native domain for a non-finite request: nothing changes
         cam.set_zoom_7005f0(f32::NAN);
         assert_eq!((cam.zoom, cam.scale_zoom), (ZOOM_MIN, 0.1));
+    }
+
+    #[test]
+    fn a_scripted_move_goes_the_shorter_way_and_ends_at_its_values() {
+        // 0x701110: -170 deg to +170 deg is 20 deg through the wrap
+        let (a, b) = shorter_way((-170f32).to_radians(), 170f32.to_radians());
+        assert!(((a - b).abs() - 20f32.to_radians()).abs() < 1e-3, "{a} {b}");
+        // 0x7007B0: the sine ease
+        assert_eq!(move_fraction(5.0, 0.0, 10.0, false), 0.5);
+        assert!((move_fraction(5.0, 0.0, 10.0, true) - 0.5).abs() < 1e-5);
+        assert!(move_fraction(2.5, 0.0, 10.0, true) < 0.25);
+        assert_eq!(move_fraction(11.0, 0.0, 10.0, true), 1.0);
+        assert_eq!(move_fraction(0.0, 0.0, 0.0, true), 1.0);
+        let mut cam = NativeCamera::new(Vec3::new(10.0, 10.0, 0.0), Vec2::splat(1000.0));
+        let request = ScriptRequest::Move { until: 2.0, realtime: false, at: Vec2::new(30.0, 50.0), zoom: 1.2, pitch: 0.5, yaw: 1.0, ease: false };
+        cam.move_to(&request, 0.0, 0.0, 3.0);
+        let flat = |_: Vec2| 3.0;
+        // in cutscene mode the pose is free
+        let limit = limits(true, 0.1, 1.5);
+        cam.step_move(1.0, 0.0, limit, false, &flat);
+        assert_eq!((cam.target.x, cam.target.y), (20.0, 30.0));
+        assert!(cam.moving.is_some());
+        cam.step_move(2.0, 0.0, limit, false, &flat);
+        assert!(cam.moving.is_none());
+        assert_eq!((cam.target.x, cam.target.y, cam.target.z), (30.0, 50.0, 3.0));
+        assert!((cam.zoom - 1.2).abs() < 1e-5 && (cam.pitch - 0.5).abs() < 1e-5 && (cam.yaw % std::f32::consts::TAU - 1.0).abs() < 1e-5);
+        // out of it the yaw, the pitch and the zoom range are the gameplay's
+        let request = ScriptRequest::Move { until: 1.0, realtime: false, at: Vec2::ZERO, zoom: 5.0, pitch: 0.5, yaw: 1.0, ease: false };
+        cam.move_to(&request, 0.0, 0.0, 0.0);
+        cam.step_move(1.0, 0.0, limits(false, 0.1, 1.5), true, &flat);
+        assert!((cam.yaw - YAW_DEG.to_radians()).abs() < 1e-5 && (cam.pitch - PITCH_DEG.to_radians()).abs() < 1e-5);
+        assert_eq!(cam.zoom, ZOOM_MAX);
+    }
+
+    #[test]
+    fn the_shake_spring_rings_down() {
+        let mut cam = NativeCamera::new(Vec3::ZERO, Vec2::splat(1000.0));
+        cam.shake_velocity = 3.0;
+        let mut peak = 0f32;
+        for _ in 0..400 {
+            cam.step_shake(1.0 / 60.0);
+            peak = peak.max(cam.shake.abs());
+        }
+        assert!(peak > 0.1, "{peak}");
+        assert_eq!(cam.shake, 0.0);
     }
 }

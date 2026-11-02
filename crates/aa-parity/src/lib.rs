@@ -17,19 +17,28 @@
 //!   needs ([`aa_orders::payload::SchemaContext`]).
 //! * [`replay`]: the H4 replay driver: a film's decrees into aa-play on the
 //!   film's own stock map, checkpoint by checkpoint.
+//! * [`playback`]: the library the game client plays a film with: the film
+//!   dialog's rows, opening a film with the original's failures, and one world
+//!   tick at a time, on the decree loop [`replay`] runs too.
 //! * [`native_trace`]: reader of the native state sampler's per-tick
 //!   snapshots of the original (kingdoms, actors, components, zones), and
 //!   [`state_compare`]: their field-by-field comparison with aa-play, lane by
 //!   lane (economy, production, movement, combat, supply, fog).
 //!
-//! Nothing here reproduces a simulation; it measures one.
+//! Nothing here reproduces a simulation; it measures one, or feeds the one the
+//! client runs a film's orders.
 pub mod chain;
 pub mod classify;
 pub mod decree;
 pub mod film;
+pub mod film_writer;
 #[cfg(feature = "play")]
 pub mod mapping;
 pub mod native_trace;
+#[cfg(feature = "play")]
+pub mod playback;
+#[cfg(feature = "play")]
+pub mod recording;
 pub mod registries;
 #[cfg(feature = "play")]
 pub mod replay;

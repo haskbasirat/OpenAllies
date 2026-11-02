@@ -20,6 +20,7 @@ use super::custom::Custom;
 use super::hud::GameHud;
 use super::scoring;
 use crate::session::{AppState, Battle, LoadProgress};
+use aa_parity::playback::{FilmData, FilmEvent, FilmFailure, FilmPlayer, SyncMode, open_film};
 use aa_ui::fs::DataRoot;
 use aa_ui::layout::Screen;
 use aa_ui::screens;
@@ -55,6 +56,10 @@ pub enum Page {
     /// The World War II campaign pages (campaign/: ChooseDynamicCampaign
     /// 0x942AE0, the MetaGame interface 0x935130).
     Campaign,
+    /// The main menu's film route (`RequestFilm` 0x64F3F0 -> 0x64EFF0: session
+    /// kind 3, menu slot 9): ChooseFilm (0x6455B0, `UI/Menus/choose_film.tgi`)
+    /// shows the menu background and only the film mode of the file dialog.
+    ChooseFilm,
 }
 
 /// What a launch inserts for the loader, kept for the score screen's
@@ -69,6 +74,10 @@ struct Launch {
     fog: Option<aa_play::fog::FogMode>,
     kingdom_names: std::collections::HashMap<String, String>,
     starting_experience: f32,
+    /// The DifficultyLevel world rule of the session (ui/objectives.rs).
+    difficulty: Option<String>,
+    /// The Sun world rule of the session (scene.rs, 0x4FDCE0).
+    sun: Option<String>,
 }
 
 /// Windows default double-click time (GetDoubleClickTime 500 ms); AA.exe
@@ -134,17 +143,53 @@ pub struct Front {
     /// `unset_sound`, the options dialog's volume test sounds), drained by
     /// ui/mod.rs `game_event_fx`.
     pub sounds: Vec<String>,
-    /// The World War II campaign (campaign owner).
+    /// The World War II campaign and the scripted campaigns (campaign owner).
     pub campaign: crate::campaign::CampaignUi,
+    /// A battle a campaign page launches, for this frame's `start`.
+    campaign_launch: Option<Box<crate::campaign::BattleLaunch>>,
+    /// The local kingdom's result when the battle was left (Kingdom+19C == 1).
+    campaign_won: bool,
+    /// The world's winning team then.
+    campaign_winner: Option<u32>,
+    /// The running battle's speed limits (exponents), for the options slider.
+    battle_speed_limits: (f32, f32),
+    /// The film being opened (`KKC_ResourceManagerTaskLoadFilm`, 0x5A3980).
+    film_load: Option<FilmLoad>,
+    /// The End of Film box is up: it has neither an accept nor a cancel
+    /// button, Enter and Esc do nothing (0x66E790, [O]).
+    film_box_without_keys: bool,
+    /// ObserverGameMusic was asked for (0x4F96D0, first world tick).
+    observer_music: bool,
+    /// The out-of-sync text went to the message log.
+    film_oos_told: bool,
+    /// The film session started from the main menu (session kind 3): Exit on
+    /// the score screen goes to slot 9 (`0x659290`).
+    film_from_menu: bool,
+    /// Session+0x150: the film of the running or last game (`0x76FE60`), none
+    /// while viewing one. (Appended by the recording owner.)
+    pub session_film: Option<aa_parity::recording::FilmOpened>,
+    /// The score screen's film save dialog (`0x68DCE0(5, 0, 0)`).
+    save_film: Option<crate::film_record::SaveFilmDialog>,
+}
+
+/// The background open of a film.
+type FilmLoad = std::sync::Arc<std::sync::Mutex<Option<Result<(aa_play::World, FilmPlayer), FilmFailure>>>>;
+
+/// `AA_FILM_SYNC=strict`: the native stop at the first differing checkpoint
+/// (0x752F60, 0x751EB0). Default until films pass: report and keep playing
+/// (FILM-PLAYBACK.md section 11).
+fn film_sync_mode() -> SyncMode {
+    match std::env::var("AA_FILM_SYNC").as_deref() {
+        Ok(v) if v.eq_ignore_ascii_case("strict") => SyncMode::Strict,
+        _ => SyncMode::Report,
+    }
 }
 
 /// Commands the front end does not run yet (their screens are not built).
 const NOT_BUILT: &[&str] = &[
     "RequestMultiplayer",
     "RequestEditor",
-    "RequestFilm",
     "CheckForUpdates",
-    "RequestCampaign",
 ];
 
 impl Front {
@@ -161,6 +206,10 @@ impl Front {
         let lan_name = settings_path.as_ref().and_then(|p| load_lan_name(p));
         if let Some(n) = &lan_name {
             custom.set_player_name(n);
+        }
+        // the profile's film (preferences +0x18, saved with the rest, 0x41D570)
+        if let Some(film) = settings_path.as_ref().and_then(|p| load_last_film(p)) {
+            custom.remember_film(film);
         }
         // the staging data parses in the background from the start
         super::custom::warm(ui.store.root.clone());
@@ -202,6 +251,136 @@ impl Front {
             lan_name,
             sounds: Vec::new(),
             campaign: crate::campaign::CampaignUi::new(root),
+            campaign_launch: None,
+            campaign_won: false,
+            campaign_winner: None,
+            battle_speed_limits: (-2.0, 2.0),
+            film_load: None,
+            film_box_without_keys: false,
+            observer_music: false,
+            film_oos_told: false,
+            film_from_menu: false,
+            session_film: None,
+            save_film: None,
+        }
+    }
+
+    /// `0x652B10` / KKC_Session::Launch for the session's film: the film
+    /// opens on a background thread behind the loading screen (0x76C0A0 ->
+    /// 0x5A3980); the map's scene loads once it has, with the world frozen
+    /// until Continue. The speed starts at 100% (a new `Battle`, [O]).
+    fn launch_film(&mut self) {
+        let Some(film) = self.custom.film().cloned() else { return };
+        let game_root = self.root.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        let mut data = FilmData::for_film(game_root.clone(), &film.path);
+        data.force_playback = self.ui.uvars.get_bool("FilmForcePlayback");
+        data.draws_scene = true;
+        let sync = film_sync_mode();
+        info!("film: launch {} (sync {sync:?}, overlay {:?})", film.path.display(), data.overlay);
+        let slot: FilmLoad = Default::default();
+        let out = slot.clone();
+        let path = film.path.clone();
+        let reconstruction = self.root.clone();
+        crate::session::set_load_status("app_status_loading_data");
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            // A film on a profile's data (lead's decision 6) draws that data's art:
+            // its conversion lies over the stock art until the battle ends.
+            let art = data.definition_overlay().and_then(crate::session::art_folder);
+            if let (Some(art), Some(folder)) = (&art, data.definition_overlay())
+                && !art.join("assets/converted/models/manifest.json").is_file()
+            {
+                warn!("film: the art of {} is not converted, what it alone holds is not drawn: python research/film-sources/convert_overlay.py {:?} {:?}", folder.display(), folder, art);
+            }
+            if let Ok(store) = crate::preload::store(&reconstruction) {
+                store.set_art_overlay(art.as_deref());
+            }
+            // what the client has loaded already
+            data.preloaded.game = crate::preload::game_data(&game_root).ok();
+            data.preloaded.generals = crate::preload::generals(&game_root).ok();
+            data.preloaded.random_maps = crate::preload::random_maps(&game_root).ok();
+            // the world load's stages (`session::LOAD_STATUS`): a random map's
+            // creator runs the generator
+            if std::fs::read(&path).ok().and_then(|b| aa_parity::film::read_header(b).ok()).is_some_and(|h| matches!(h.header.creator, aa_mapworld::header::DerivedCreator::Random(_))) {
+                crate::session::set_load_status("app_status_generating_map");
+            }
+            // a panic of the load is the task's failure, not a screen that
+            // waits for ever
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| open_film(&path, &data, sync)))
+                .unwrap_or_else(|_| Err(FilmFailure::CreateWorld { detail: "the film's load panicked".into() }));
+            info!("film: opened in {:.2} s", started.elapsed().as_secs_f32());
+            if let Ok(mut s) = out.lock() {
+                *s = Some(result);
+            }
+        });
+        self.film_load = Some(slot);
+        self.clear_message_log();
+        self.loading_finished = false;
+        self.result_shown = false;
+        self.over_shown = false;
+        self.observer_music = false;
+        self.film_oos_told = false;
+        self.show(Page::Loading);
+    }
+
+    /// KKC_Session::Launch 0x77A950 -> 0x770500, leaving state 1 (the staging):
+    /// `KKC_MessageSystem::Clear` 0x40B450 empties the log and starts its ids
+    /// over, so a launch never shows the last battle's messages.
+    fn clear_message_log(&mut self) {
+        self.ui.messages.clear();
+        self.ui.messages.last = 0;
+    }
+
+    /// The failure of a film's open: the text of `FilmFailure`
+    /// (`failed_film_*`, 0x5A3980 / 0x5A2B90, `load_error_missing_map|s`,
+    /// `unable_to_select_film_source_file_not_found|s`) with one Ok on the
+    /// page the launch came from; no world was made.
+    fn film_failed(&mut self, failure: &FilmFailure) {
+        warn!("film: {failure:?}");
+        let text = super::dialogs::film_failure_text(&self.ui, failure);
+        self.show(if self.film_from_menu { Page::ChooseFilm } else { Page::Staging });
+        self.dialog = Some((aa_ui::message_box::SHARED.to_string(), aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(self.ui.strings.resolve("#button_ok"), String::new())] }));
+    }
+
+    /// `SyncMode::Report` (lead's decision 1): the native text in the message
+    /// log, once, so the player is not misled; the film keeps playing.
+    fn film_out_of_sync_message(&mut self) {
+        if self.film_oos_told {
+            return;
+        }
+        self.film_oos_told = true;
+        let text = self.ui.strings.resolve("#film_end_of_film_oos");
+        if let Some(hud) = self.hud.as_mut() {
+            hud.events.send_message(&mut self.ui, "GENERIC_EVENT", &text, None);
+        }
+    }
+
+    /// The film state's notification handler `0x652020`, END_OF_FILM (type
+    /// 0x13) on the host: out of sync one Ok with `RequestFinished` (0x66F4F0),
+    /// a natural end `film_end_of_film2` with `film_exit_to_scoring` and
+    /// `film_keep_watching` (0x66D360 / 0x66E790; the second only while
+    /// GWorld+0x275 is clear, which `aa-play` does not keep yet).
+    ///
+    /// Lead's decision 1: in `SyncMode::Report` a mismatch logs once and goes
+    /// to the message log (`FirstMismatch`), and the natural end then comes
+    /// with `out_of_sync` set (`aa_parity::playback`), the out-of-sync box.
+    fn film_end(&mut self, out_of_sync: bool, keep_watching: bool) {
+        if out_of_sync {
+            let text = self.ui.strings.resolve("#film_end_of_film_oos");
+            let ok = self.ui.strings.resolve("#button_ok");
+            self.film_box_without_keys = false;
+            self.ask(&text, vec![(ok, "RequestFinished".into())]);
+        } else {
+            let text = self.ui.strings.resolve("#film_end_of_film2");
+            let exit = self.ui.strings.resolve("#film_exit_to_scoring");
+            let keep = self.ui.strings.resolve("#film_keep_watching");
+            self.film_box_without_keys = true;
+            // the second button only with GWorld+0x275 clear
+            let mut buttons = vec![(exit, "RequestFinished".to_string())];
+            if keep_watching {
+                buttons.push((keep, String::new()));
+            }
+            self.ask(&text, buttons);
         }
     }
 
@@ -255,7 +434,9 @@ impl Front {
             // 0x76B2F0: a game in progress (single player: this player hosts)
             // lets the slider change the speed, GameSpeedMin / GameSpeedMax
             // (SVars -2 / +2) around the current exponent
-            o.game_speed = self.battle_speed.filter(|_| self.page == Page::Game).map(|s| (-2.0, 2.0, s.max(1e-3).log2()));
+            // (a film: GameSpeedFilmMin / GameSpeedFilmMax, 0x675F80, 0x6A2670)
+            let (lo, hi) = self.battle_speed_limits;
+            o.game_speed = self.battle_speed.filter(|_| self.page == Page::Game).map(|s| (lo, hi, s.max(1e-3).log2()));
             o.show(&mut self.ui, tab);
         }
     }
@@ -295,6 +476,11 @@ impl Front {
     /// 0x50D330 -> 0x4408A0) asks "Mission Over" with End Mission / Keep
     /// Playing.
     fn mission_boxes(&mut self, b: &Battle) {
+        // a film: 0x440190 returns after its first branch, 0x4408A0 is skipped
+        // by its first check
+        if b.in_film() {
+            return;
+        }
         let w = &b.world;
         let button = |ui: &Ui, cmd: &str, key: &str| (ui.strings.resolve(key), cmd.to_string());
         if b.local_kingdom().is_none() {
@@ -388,6 +574,13 @@ impl Front {
                 }
             }
             Page::Campaign => self.campaign.show(&mut self.ui),
+            // show_menu_background = true, no interface of its own: the
+            // staging file dialog in mode 5 (0x6455B0, 0x68DB60(5, 0))
+            Page::ChooseFilm => {
+                self.ui.clear();
+                screens::menu_backdrop(&mut self.ui);
+                self.custom.open_film_dialog(&mut self.ui, false);
+            }
         }
         if !matches!(self.page, Page::Game) {
             self.ui.set_skin(None, self.root.join("assets/original/Skins"));
@@ -458,7 +651,7 @@ impl Front {
                 return;
             }
         }
-        if self.page == Page::Staging {
+        if matches!(self.page, Page::Staging | Page::ChooseFilm) {
             if let Some(action) = self.custom.command(&mut self.ui, command, widget) {
                 if self.ui.message_box.is_some() {
                     self.remember_dialog();
@@ -467,6 +660,25 @@ impl Front {
                     super::custom::Action::None => {}
                     super::custom::Action::Exit => self.show(Page::SinglePlayer),
                     super::custom::Action::Launch => out.launch = true,
+                    // Commit 0x68EF50, mode 5: the staging shows the film;
+                    // the main menu's `FilmOK` (0x645200) launches at once
+                    // (0x652B10)
+                    super::custom::Action::FilmChosen => {
+                        self.save_settings();
+                        if self.page == Page::ChooseFilm {
+                            out.launch = true;
+                        } else {
+                            self.custom.refresh_staging(&mut self.ui);
+                        }
+                    }
+                    // FilmCancel 0x645540, session kind 3: 0x651990 leaves
+                    // the local session and shows the main menu
+                    super::custom::Action::FilmDialogCancelled => {
+                        if self.page == Page::ChooseFilm {
+                            self.film_from_menu = false;
+                            self.show(Page::MainMenu);
+                        }
+                    }
                 }
                 return;
             }
@@ -482,20 +694,52 @@ impl Front {
                 }
             }
         }
+        if let Some(dialog) = self.save_film.as_mut() {
+            let data = self.custom.game_data(&self.ui);
+            if let Some(outcome) = dialog.command(&mut self.ui, data, command) {
+                if outcome == crate::film_record::SaveOutcome::Closed {
+                    // 0x690D75: the saved film is the profile's film now
+                    if let Some(path) = self.save_film.take().and_then(|d| d.saved) {
+                        self.custom.remember_film(path);
+                        self.save_settings();
+                    }
+                    let film = crate::film_record::film_exists(self.session_film.as_ref());
+                    if let Some(s) = self.scoring.as_mut() {
+                        s.update_save_film(&mut self.ui, film);
+                    }
+                    // 0x600CE0: the debriefing's button goes the same way.
+                    self.ui.with_widget("DebriefingInterface/SaveFilmButton", |w| w.set_visible(film));
+                }
+                return;
+            }
+        }
         if self.page == Page::Scoring {
             if let (Some(s), Some(defs)) = (self.scoring.as_mut(), self.scoring_defs.as_ref()) {
                 if let Some(outcome) = s.command(&mut self.ui, defs, command) {
                     match outcome {
                         scoring::Outcome::None => {}
                         // 0x659290: a custom game goes back to the staging
-                        // (slot 3)
+                        // (slot 3), the film still selected; a film from the
+                        // main menu (session kind 3) to slot 9, ChooseFilm
                         scoring::Outcome::Exit => {
-                            self.custom.scoring_available(self.score_data.is_some());
-                            self.show(Page::Staging);
+                            // a campaign's battle goes back to its campaign page
+                            if self.campaign.battle_ended(self.campaign_won, self.campaign_winner) {
+                                self.show(Page::Campaign);
+                            } else {
+                                self.custom.scoring_available(self.score_data.is_some());
+                                self.show(if self.film_from_menu { Page::ChooseFilm } else { Page::Staging });
+                            }
                         }
                         scoring::Outcome::Replay => out.replay = true,
-                        // slot 4 (campaign only; the button is hidden)
-                        scoring::Outcome::Debriefing => info!("UI command ScoringDebriefing: the debriefing is the campaign's"),
+                        // slot 4 (a campaign's mission)
+                        scoring::Outcome::Debriefing => self.show(Page::Campaign),
+                        // 0x658F90 -> 0x68DCE0(5, 0, 0)
+                        scoring::Outcome::SaveFilm => {
+                            if let Some(film) = self.session_film.clone() {
+                                let name = self.custom.loading_info().0;
+                                self.save_film = Some(crate::film_record::SaveFilmDialog::open(&mut self.ui, &film, &name));
+                            }
+                        }
                     }
                     return;
                 }
@@ -529,7 +773,7 @@ impl Front {
             // `score_screen_confirm` (a campaign `campaign_end_confirm`,
             // the editor test `editor_confirm`) with OK -> RequestFinished
             "RequestFinishedConfirm" if self.page == Page::Game => {
-                let text = self.ui.strings.resolve("#score_screen_confirm");
+                let text = self.ui.strings.resolve(if self.campaign.in_mission() { "#campaign_end_confirm" } else { "#score_screen_confirm" });
                 let ok = self.ui.strings.resolve("#button_ok");
                 let cancel = self.ui.strings.resolve("#button_cancel");
                 self.ask(&text, vec![(ok, "RequestFinished".into()), (cancel, String::new())]);
@@ -552,9 +796,21 @@ impl Front {
             }
             "RequestCredits" => self.show(Page::Credits),
             "CreditsEndCredits" => self.show(Page::MainMenu),
+            // 0x65B9D0: the scripted campaigns' chooser (campaign/missions.rs)
+            "RequestCampaign" => {
+                self.campaign.enter_missions(&mut self.ui);
+                self.show(Page::Campaign);
+            }
             "RequestCustom" => {
                 self.custom.enter(&mut self.ui);
+                self.film_from_menu = false;
                 self.show(Page::Staging);
+            }
+            // 0x64F3F0 -> 0x64EFF0 (0x7513F0(3, 1), 0x7840B0(3, 0, 0)): the
+            // local session, kind 3, whose menu is ChooseFilm (slot 9)
+            "RequestFilm" => {
+                self.film_from_menu = true;
+                self.show(Page::ChooseFilm);
             }
             "UserReady" if self.page == Page::Loading && self.loading_finished => out.ready = true,
             // 0x65B780: the dependent-campaign confirmation, then the
@@ -588,6 +844,17 @@ impl Front {
                 self.remember_dialog();
             }
             A::Options => self.open_options(size, ""),
+            // the frame hands it to the loader
+            A::Launch(l) => self.campaign_launch = Some(l),
+            // 0x600C70: the score screen (slot 5)
+            A::Scoring => self.show(Page::Scoring),
+            // DebriefingSaveFilm: the score screen's dialog (0x68DCE0(5, 0, 0))
+            A::SaveFilm => {
+                if let Some(film) = self.session_film.clone() {
+                    let name = self.custom.loading_info().0;
+                    self.save_film = Some(crate::film_record::SaveFilmDialog::open(&mut self.ui, &film, &name));
+                }
+            }
         }
     }
 
@@ -630,6 +897,9 @@ impl Front {
             if let Some(n) = &self.lan_name {
                 obj.insert("lan_name".into(), serde_json::Value::String(n.clone()));
             }
+            if let Some(film) = self.custom.remembered_film() {
+                obj.insert("last_film".into(), serde_json::Value::String(film.to_string_lossy().into_owned()));
+            }
         }
         let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
         if let Ok(text) = serde_json::to_string_pretty(&v) {
@@ -655,6 +925,12 @@ fn load_lan_name(path: &Path) -> Option<String> {
     v.get("lan_name")?.as_str().filter(|s| !s.is_empty()).map(str::to_string)
 }
 
+/// The profile's film (preferences +0x18).
+fn load_last_film(path: &Path) -> Option<PathBuf> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    v.get("last_film")?.as_str().filter(|s| !s.is_empty()).map(PathBuf::from)
+}
+
 /// The local kingdom's mission result as far as aa-play knows it:
 /// `Some(true)` lost, `Some(false)` won, `None` still playing. A kingdom
 /// defeated on its own lost whoever wins later (GKingdom+0x19C is set once,
@@ -669,12 +945,16 @@ fn mission_result_lost(defeated: bool, team: u32, winner: Option<u32>) -> Option
 
 /// The finished world for the score screen: every kingdom of the world
 /// (GWorld+0x154) with its `0x4E9560` name (`0x4E93C0`: the kingdom glyph
-/// in the kingdom colour unless independent) and colour. aa-play keeps no
-/// statistics snapshots (GKingdom+0x338; economy.rs `statistics_snapshot`
-/// is empty), so the rows read 0 and the graph has no lines until it does.
+/// in the kingdom colour unless independent), colour, statistics snapshots
+/// (GKingdom+0x338, `aa_play::statistics`, each read through `0x58F3C0` by
+/// StatData index) and favourites (`0x58F820` -> `0x58D9D0`: a definition's name, a
+/// kingdom's `0x4E9560` for the enemy, no entry reads score_graph_none).
 fn score_data(ui: &Ui, b: &Battle, names: &std::collections::HashMap<String, String>) -> scoring::ScoreData {
     let gem = ui.strings.glyphs.get(&ui.avars.get("KingdomGlyphInfo").unwrap_or("ch_gem").to_ascii_lowercase()).copied().unwrap_or('#');
     let g = |v: f32| aa_ui::staging::fmt_g(v as f64);
+    let table = &b.world.data.statistics;
+    let total = table.derived_start + table.derived.len();
+    let shown_name = |name: &str| names.get(&name.to_ascii_lowercase()).cloned().unwrap_or_else(|| ui.strings.resolve(name));
     // The sheet (0x65A460) and the graph skip null kingdom slots. The
     // original lists only the player kingdoms: the QA captures of a scenario
     // (Market Garden 2v2) and of a random map (Southern Europe 2v2), both
@@ -689,17 +969,59 @@ fn score_data(ui: &Ui, b: &Battle, names: &std::collections::HashMap<String, Str
                 return None;
             }
             let color = [k.color[0] as f32 / 255.0, k.color[1] as f32 / 255.0, k.color[2] as f32 / 255.0];
-            let display = names.get(&k.name.to_ascii_lowercase()).cloned().unwrap_or_else(|| ui.strings.resolve(&k.name));
+            let display = shown_name(&k.name);
             let name = format!("<color={},{},{}>{gem} <rc>{display}", g(color[0]), g(color[1]), g(color[2]));
-            Some(scoring::KingdomScores { name, color, snapshots: Vec::new(), favorites: Default::default() })
+            let snapshots = b
+                .world
+                .books
+                .kingdom(k.id)
+                .map(|books| books.statistics.snapshots.iter().map(|s| (0..total).map(|i| s.value(table, i)).collect()).collect())
+                .unwrap_or_default();
+            let mut favorites = std::collections::HashMap::new();
+            for index in [aa_play::statistics::FAVORITE_UNIT, aa_play::statistics::FAVORITE_UNIT + 1, aa_play::statistics::FAVORITE_UNIT + 2, aa_play::statistics::FAVORITE_ORGANIZATION] {
+                if let Some(def) = aa_play::statistics::favorite_definition(&b.world, k.id, index) {
+                    favorites.insert(index, ui.strings.resolve(&b.world.data.def(def).name));
+                }
+            }
+            if let Some(enemy) = aa_play::statistics::favorite_enemy(&b.world, k.id).and_then(|e| b.world.kingdoms.get(e as usize)) {
+                favorites.insert(aa_play::statistics::FAVORITE_ENEMY, shown_name(&enemy.name));
+            }
+            Some(scoring::KingdomScores { name, color, snapshots, favorites })
         })
         .collect();
     scoring::ScoreData { kingdoms, kind: 1, networked: false, film: false }
 }
 
+/// What the launch takes for a film: its loader draws the film's own world
+/// (`session::PendingFilm`), with no computer players (the SAI main is gated off
+/// in state 4, 0x7A0080), and the generals and fog of that world
+/// (`aa_parity::playback`).
+fn film_launch(world: &aa_play::World, player: &FilmPlayer) -> Option<Launch> {
+    let setup = player.scene().setup.clone()?;
+    let names = world.kingdoms.iter().filter(|k| k.independent).map(|k| (k.name.to_ascii_lowercase(), k.name.clone())).collect();
+    Some(Launch { setup, random: None, profiles: Vec::new(), generals: Default::default(), fog: None, kingdom_names: names, starting_experience: 0.0, difficulty: None, sun: None })
+}
+
 /// Hand a launch to the loader (session::PendingSetup and its companions)
 /// and show the loading screen.
 fn start(f: &mut Front, commands: &mut Commands, next: &mut NextState<AppState>, launch: Launch) {
+    // OnGWorldReadyForState 0x7757F0 will open a film for this launch; a film
+    // being viewed records none.
+    if f.custom.film().is_some() {
+        commands.remove_resource::<crate::film_record::PendingFilmSession>();
+    } else {
+        let random_generals = (0..launch.setup.players.len())
+            .filter(|i| !launch.generals.factions.iter().any(|(p, faction)| p == i && faction.is_some()))
+            .collect();
+        commands.insert_resource(crate::film_record::PendingFilmSession {
+            setup: launch.setup.clone(),
+            random: launch.random.clone(),
+            // A campaign's battle is no staging session's: its map's rows or the defaults.
+            rules: if f.campaign.battle.is_some() { Vec::new() } else { f.custom.film_rule_rows() },
+            profiles: launch.profiles.clone(),
+            random_generals,
+        });
+    }
     commands.insert_resource(crate::session::PendingAiProfiles(launch.profiles));
     f.kingdom_names = launch.kingdom_names;
     f.starting_experience = launch.starting_experience;
@@ -707,6 +1029,14 @@ fn start(f: &mut Front, commands: &mut Commands, next: &mut NextState<AppState>,
     match launch.fog {
         Some(mode) => commands.insert_resource(super::fog::PendingFog(mode)),
         None => commands.remove_resource::<super::fog::PendingFog>(),
+    }
+    match launch.difficulty {
+        Some(d) => commands.insert_resource(super::objectives::PendingDifficulty(d)),
+        None => commands.remove_resource::<super::objectives::PendingDifficulty>(),
+    }
+    match launch.sun {
+        Some(ids) => commands.insert_resource(crate::session::PendingSunRule(ids)),
+        None => commands.remove_resource::<crate::session::PendingSunRule>(),
     }
     commands.insert_resource(crate::session::PendingSetup(launch.setup));
     if let Some(params) = launch.random {
@@ -742,6 +1072,22 @@ pub struct PointerInput {
     pub right_pressed: bool,
     pub right_released: bool,
     pub wheel: f32,
+}
+
+fn digit_key(text: &str) -> Option<KeyCode> {
+    Some(match text {
+        "0" => KeyCode::Digit0,
+        "1" => KeyCode::Digit1,
+        "2" => KeyCode::Digit2,
+        "3" => KeyCode::Digit3,
+        "4" => KeyCode::Digit4,
+        "5" => KeyCode::Digit5,
+        "6" => KeyCode::Digit6,
+        "7" => KeyCode::Digit7,
+        "8" => KeyCode::Digit8,
+        "9" => KeyCode::Digit9,
+        _ => return None,
+    })
 }
 
 fn ui_key(code: KeyCode) -> Option<(UiKey, &'static str)> {
@@ -789,15 +1135,21 @@ pub fn frame(
     selecting: Option<Res<crate::input::Selecting>>,
     mut commands: Commands,
     mut quit: ResMut<super::Quit>,
+    mut sfx: Option<ResMut<crate::audio::SfxQueue>>,
 ) {
     let Ok(window) = windows.single() else { return };
     let size = (window.physical_width().max(1) as i32, window.physical_height().max(1) as i32);
     let _slow = SlowFrame(std::time::Instant::now(), front.page);
     let f = front.as_mut();
     f.battle_speed = battle.as_ref().map(|b| b.speed);
+    if let Some(b) = battle.as_ref() {
+        f.battle_speed_limits = b.speed_limits();
+    }
     // the app state decides the page
     let want = match state.get() {
         AppState::Menu => match f.page {
+            // the film is opening: its loading screen stays
+            Page::Loading if f.film_load.is_some() => None,
             Page::Loading | Page::Game => {
                 // back from a load that failed (LoadProgress.error) or a game
                 if let Some(err) = progress.as_ref().and_then(|p| p.error.clone()) {
@@ -805,7 +1157,7 @@ pub fn frame(
                     f.message(&err);
                     commands.insert_resource(LoadProgress::default());
                 }
-                Some(Page::Staging)
+                Some(if f.film_from_menu { Page::ChooseFilm } else { Page::Staging })
             }
             _ => None,
         },
@@ -915,6 +1267,12 @@ pub fn frame(
     // keyboard: the focused edit box / open drop-down, then the UI hotkeys
     let mut game_keys = Vec::new();
     for (code, text) in typed {
+        // a character a script types is its key when no edit box takes it
+        // (the observer's `map 1 ... SelectObservingKingdom 0`)
+        let code = match (code, text.as_deref()) {
+            (KeyCode::Unidentified(_), Some(t)) if !editbox_focused(&f.ui.root) => digit_key(t).unwrap_or(code),
+            _ => code,
+        };
         if code == KeyCode::Tab {
             f.ui.hotkey(if shift { "shift-tab" } else { "tab" });
             continue;
@@ -925,6 +1283,9 @@ pub fn frame(
         }
         if ctrl && matches!(code, KeyCode::KeyC | KeyCode::KeyX) {
             f.ui.editbox_command(if code == KeyCode::KeyC { "EditboxCopy" } else { "EditboxCut" });
+            continue;
+        }
+        if f.film_box_without_keys && f.ui.message_box.is_some() && matches!(code, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Escape) {
             continue;
         }
         if let Some((k, name)) = ui_key(code) {
@@ -954,6 +1315,9 @@ pub fn frame(
     if f.dialog.is_some() && f.ui.message_box.is_none() {
         f.dialog = None;
     }
+    if f.ui.message_box.is_none() {
+        f.film_box_without_keys = false;
+    }
     let mut out = FrameOut::default();
     for e in f.ui.take_events() {
         match e {
@@ -972,6 +1336,8 @@ pub fn frame(
                     f.custom.event(&mut f.ui, &e);
                 }
             }
+            // the strategic map's camera goes there (0x5D77A0 -> 6FF200)
+            UiEvent::Minimap { u, v, .. } if f.page == Page::Campaign => f.campaign.minimap_jump(u, v),
             UiEvent::Minimap { u, v, .. } => out.game.push(super::hud::GameAction::MinimapJump(u, v)),
             // button set_sound / unset_sound and the other UI sounds
             UiEvent::Sound { name } => {
@@ -1012,12 +1378,43 @@ pub fn frame(
         if let Some(b) = battle.as_deref() {
             f.mission_boxes(b);
         }
+        // the film state's notifications (0x652020) and, under Report, the
+        // first mismatch (lead's decision 1); 0x4F96D0 on the first world
+        // tick: no kingdom plays AVars ObserverGameMusic
+        if let Some(b) = battle.as_mut().filter(|b| b.in_film()) {
+            let events = b.take_film_events();
+            let tick = b.world.tick;
+            for e in events {
+                match e {
+                    FilmEvent::FirstMismatch { index } => {
+                        warn!("FILM OUT OF SYNC({index})");
+                        f.film_out_of_sync_message();
+                    }
+                    // 0x75D710: the same stop as a differing checkpoint
+                    FilmEvent::NoOrderingPlayer { player } => {
+                        warn!("Film order with no ordering player {player}");
+                        f.film_out_of_sync_message();
+                    }
+                    // a 328's kingdom name: `World::kingdoms[k].name` has it
+                    FilmEvent::KingdomRenamed { kingdom, name } => info!("film: kingdom {kingdom} is now {name}"),
+                    FilmEvent::EndOfFilm { out_of_sync } => {
+                        info!("film: END_OF_FILM out_of_sync={out_of_sync} at tick {tick}: {:?}", b.film.as_ref().map(|p| p.stats()));
+                        f.film_end(out_of_sync, !aa_play::triggers::cutscene(&b.world));
+                    }
+                }
+            }
+            if !f.observer_music && tick > 0 {
+                f.observer_music = true;
+                if let (Some(ids), Some(q)) = (f.ui.avars.get("ObserverGameMusic").map(aa_ui::node::unquote), sfx.as_mut()) {
+                    q.play.push(crate::audio::Sfx { ids, place: crate::audio::Place::Global, owner: None, voice: None, looping: true });
+                }
+            }
+        }
     }
     // RequestObserve (0x61EE60): ClearSelection, no local kingdom
     if out.observe {
         if let Some(b) = battle.as_mut() {
-            b.selection.clear();
-            b.observer = true;
+            b.observe();
         }
     }
     // RequestKeepPlaying for a finished game (0x60CAE0: GWorld+0x48 == 2):
@@ -1033,12 +1430,62 @@ pub fn frame(
     if out.leave {
         if let Some(b) = battle.as_deref() {
             f.score_data = Some(score_data(&f.ui, b, &f.kingdom_names));
+            // 0x658FF0: SaveFilm while the game's film exists (0x772BB0)
+            if let Some(data) = f.score_data.as_mut() {
+                data.film = crate::film_record::film_exists(f.session_film.as_ref());
+            }
+            // Kingdom+19C of the local kingdom: what the campaign page reads
+            f.campaign_won = aa_play::triggers::mission_result(&b.world, b.local) == 1;
+            f.campaign_winner = b.world.winner;
+            // 0x60A140 / 0x651BD0: a scripted mission's end order goes to the
+            // debriefing (slot 4), whose scores are a campaign's (kind 0)
+            if f.campaign.in_mission() {
+                let film = f.score_data.as_ref().is_some_and(|d| d.film);
+                if let Some(data) = f.score_data.as_mut() {
+                    data.kind = 0;
+                }
+                let result = crate::campaign::debriefing::MissionResult {
+                    won: f.campaign_won,
+                    film,
+                    objectives: aa_play::triggers::objectives(&b.world, b.local)
+                        .into_iter()
+                        .map(|o| crate::campaign::debriefing::ObjectiveLine {
+                            text: if o.text.starts_with('#') { f.ui.strings.resolve(&o.text) } else { o.text.clone() },
+                            primary: o.primary,
+                            state: o.state as u8,
+                        })
+                        .collect(),
+                };
+                f.campaign.mission_ended(&f.ui, result);
+            }
         }
+        let mission_page = f.campaign.screen == crate::campaign::Screen::Debriefing || (f.campaign.screen == crate::campaign::Screen::Missions && f.campaign.battle.is_none() && f.film_load.is_none() && f.score_data.as_ref().is_some_and(|d| d.kind == 0));
         commands.remove_resource::<Battle>();
         next.set(AppState::Menu);
-        f.show(Page::Scoring);
+        f.show(if mission_page { Page::Campaign } else { Page::Scoring });
     }
-    if out.launch {
+    // a campaign page's battle (campaign owner)
+    if let Some(l) = f.campaign_launch.take() {
+        let launch = Launch {
+            setup: l.setup,
+            random: l.random,
+            profiles: l.profiles,
+            generals: super::abilities::PendingGenerals { factions: l.factions, starting_experience: l.starting_experience },
+            fog: l.fog.and_then(|v| aa_play::fog::FogMode::from_ids(&v)),
+            kingdom_names: l.names.into_iter().collect(),
+            starting_experience: l.starting_experience.unwrap_or(0.0),
+            difficulty: l.difficulty,
+            sun: None,
+        };
+        start(f, &mut commands, &mut next, launch);
+        match f.campaign.pending_battle.take() {
+            Some(p) => commands.insert_resource(p),
+            None => commands.remove_resource::<crate::campaign::battle::PendingBattle>(),
+        }
+    }
+    if out.launch && f.custom.film().is_some() {
+        f.launch_film();
+    } else if out.launch {
         if let Some((mut setup, random)) = f.custom.launch_setup() {
             f.custom.localize_setup(&f.ui, &mut setup);
             info!("launch: {setup:?}, generals {:?}", f.custom.launched_profiles);
@@ -1053,17 +1500,41 @@ pub fn frame(
                 fog: f.custom.rule_value("FogOfWar").and_then(|v| aa_play::fog::FogMode::from_ids(&v)),
                 kingdom_names: f.custom.kingdom_names(),
                 starting_experience: starting.unwrap_or(0.0),
+                difficulty: f.custom.rule_value("DifficultyLevel"),
+                sun: f.custom.rule_value("Sun"),
             };
             f.last_launch = Some(launch.clone());
+            f.clear_message_log();
             start(f, &mut commands, &mut next, launch);
         }
     }
-    // the score screen's Replay: the same launch again (INFERRED: the
-    // session's launch settings 0x76B4C0+0x4C are the staging's, resolved
-    // at the launch, so the same setup and map seed)
-    if out.replay {
+    // the score screen's Replay: a film starts again (0x6590B0, +0x54 == 4:
+    // 0x652B10); else the same launch again (INFERRED: the session's launch
+    // settings 0x76B4C0+0x4C are the staging's, resolved at the launch, so
+    // the same setup and map seed)
+    if out.replay && f.custom.film().is_some() {
+        f.launch_film();
+    } else if out.replay {
         if let Some(launch) = f.last_launch.clone() {
+            // the score screen is state 1 too (`KKC_Session::SetNewState(1)`)
+            f.clear_message_log();
             start(f, &mut commands, &mut next, launch);
+        }
+    }
+    // the film being opened behind the loading screen: the map's scene next,
+    // or the failure on the page it came from
+    let opened = f.film_load.as_ref().and_then(|slot| slot.lock().ok().and_then(|mut s| s.take()));
+    if let Some(result) = opened {
+        f.film_load = None;
+        match result {
+            Ok((world, player)) => match film_launch(&world, &player) {
+                Some(launch) => {
+                    commands.insert_resource(crate::session::PendingFilm(std::sync::Mutex::new(Some((world, player)))));
+                    start(f, &mut commands, &mut next, launch);
+                }
+                None => f.film_failed(&FilmFailure::CreateWorld { detail: "the film's battle has no setup".into() }),
+            },
+            Err(failure) => f.film_failed(&failure),
         }
     }
     if out.ready {
@@ -1100,7 +1571,8 @@ pub fn frame(
         let game = f.page == Page::Game;
         let now = f.now_ms();
         let hud = f.hud.as_ref();
-        let dynamic = |p: &str| hud.and_then(|h| h.tooltip(p));
+        let campaign_iface = (f.page == Page::Campaign).then_some(&f.campaign.iface);
+        let dynamic = |p: &str| hud.and_then(|h| h.tooltip(p)).or_else(|| campaign_iface.and_then(|i| i.tooltip(p)));
         f.tooltips.frame(&mut f.ui, pointer, pressed, now, game, &dynamic);
     }
     f.ui.layout();

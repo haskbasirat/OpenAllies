@@ -312,6 +312,62 @@ impl Registries {
         };
         Self::load_resources(&resources, &mut read)
     }
+    /// The registries of a data set for a film's load: [`Registries::load_v14`]
+    /// without `overlay`, [`Registries::load_overlay`] with it, read from the game's
+    /// cache folder when computed before. The stock load walks 4,000 TGI files and a
+    /// large mod 12,000, which a player should wait for once only. The name of a
+    /// cached file says what it was computed from: the source ledger, or every file
+    /// of the overlay with its size and time.
+    pub fn cached(game_root: &Path, overlay: Option<&Path>) -> anyhow::Result<Self> {
+        const CACHE_VERSION: &str = "aa-parity-registries-v1";
+        let key = match overlay {
+            None => format!("{CACHE_VERSION}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256),
+            Some(dir) => {
+                let mut loose = BTreeMap::new();
+                walk_data(dir, "", &mut loose)?;
+                // The folder's files, not where it lies: a copy shares its tables.
+                let mut listing = format!("{CACHE_VERSION}:");
+                for (key, (_, path)) in &loose {
+                    // What the game writes in a profile while it plays defines
+                    // nothing: a new film must not cost the mod's reload.
+                    let written = ["films/", "save/", "screenshots/", "user/", "synclogs/", "campaignsave/"];
+                    if written.iter().any(|w| key.starts_with(w)) {
+                        continue;
+                    }
+                    let meta = std::fs::metadata(path)?;
+                    let time = meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map_or(0, |d| d.as_secs());
+                    listing.push_str(&format!("\n{key} {} {time}", meta.len()));
+                }
+                sha256(listing.as_bytes())
+            }
+        };
+        let path = game_root
+            .join("rust-rebuild/assets-cache/aa-parity")
+            .join(format!("registries-{}.json", sha256(key.as_bytes())));
+        if let Ok(bytes) = std::fs::read(&path)
+            && let Ok(cached) = serde_json::from_slice::<Registries>(&bytes)
+        {
+            return Ok(cached);
+        }
+        let out = match overlay {
+            None => Self::load_v14(game_root, true)?,
+            Some(dir) => Self::load_overlay(game_root, Some(dir))?,
+        };
+        // Write then rename, so a concurrent reader never sees half a file. A
+        // folder that cannot be written costs only the next load.
+        if let (Some(dir), Ok(bytes)) = (path.parent(), serde_json::to_vec(&out)) {
+            let _ = std::fs::create_dir_all(dir);
+            let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+            if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+                let _ = std::fs::remove_file(&tmp);
+            }
+        }
+        Ok(out)
+    }
     /// The 48DB60 load over registered resources.
     fn load_resources(resources: &[String], read: &mut DataRead<'_>) -> anyhow::Result<Self> {
         let index = aa_rules::native::index::native_expand_index(resources, read)
@@ -664,10 +720,8 @@ fn plain(node: &ResolvedNode<'_>, name: &str) -> Option<String> {
     if let Ok(Some(TypedValue::String { value, .. })) = node.plain_string_field(name) {
         return Some(value);
     }
-    // The getter's precision only matters for numbers. `aa_numeric` is a
-    // dev-dependency of this crate, so its `Precision` is inferred from the call.
-    let precision = serde_json::from_str("\"Double53\"").ok()?;
-    match node.field(name, precision) {
+    // The getter's precision only matters for numbers.
+    match node.field(name, aa_numeric::Precision::Double53) {
         Ok(Some(TypedValue::String { value, .. })) => Some(value),
         _ => None,
     }

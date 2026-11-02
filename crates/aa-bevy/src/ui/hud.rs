@@ -63,6 +63,8 @@ pub enum GameAction {
     CommandAll { building: aa_play::ActorId },
     /// `disband` (10) of the selection.
     Disband,
+    /// An actor order with no target (`crate::orders`): rout, hq_attach.
+    Order(aa_play::orders::ActorOrder),
     /// An idle button / F5-F6 (`CycleSelection 1` idle builder, `2` idle
     /// detached organization): select the next one and centre on it.
     CycleIdle(u32),
@@ -86,6 +88,9 @@ pub enum GameAction {
     /// A recruit queue button (the structure's queue panel or an HQ slot
     /// holding a queued organization): cancel that queue entry.
     CancelRecruit { building: aa_play::ActorId, index: usize },
+    /// `SelectObservingKingdom` (`0x5F4780` -> `0x5C0E90`): the observer's
+    /// view kingdom.
+    ObserveKingdom(Option<aa_play::KingdomId>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -191,7 +196,36 @@ struct ResearchArt {
     repair: Vec<bool>,
 }
 
+/// The observer buttons of the action panel (ActionButtonInfo
+/// SelectObservingKingdomDefault, SelectObservingKingdom,
+/// SelectObservingKingdomPage, `0x5F60D0`; the three go through `0x5F6FE0`).
+#[derive(Clone, Debug, Default)]
+struct ObserverButtons {
+    kingdom: ButtonInfo,
+    no_kingdom: ButtonInfo,
+    page: ButtonInfo,
+}
+
+/// The kingdoms the observer panel shows from `page`, in slot order, and the
+/// list position the page arrow continues at (`0x5F7E50`: up to 10 binoculars).
+fn observer_kingdoms(w: &World, page: usize) -> (Vec<aa_play::KingdomId>, Option<usize>) {
+    let mut shown = Vec::new();
+    for (i, k) in w.kingdoms.iter().filter(|k| !k.independent).enumerate() {
+        if i < page {
+            continue;
+        }
+        if shown.len() > 9 {
+            return (shown, Some(i));
+        }
+        shown.push(k.id);
+    }
+    (shown, None)
+}
+
 pub struct GameHud {
+    /// The commands run this frame for the script listeners (5C44D0,
+    /// ui/objectives.rs reads them).
+    pub heard: Vec<String>,
     hud: Hud,
     resources: Vec<HudResource>,
     commands: Vec<ActorCommand>,
@@ -246,6 +280,15 @@ pub struct GameHud {
     ability_tips: Vec<(String, String)>,
     /// Game events (message, sound, minimap ping; ui/game_events.rs).
     pub events: super::game_events::GameEvents,
+    observer_buttons: ObserverButtons,
+    /// The local player has no kingdom (the keys 0..9, q, w of the observer).
+    observing: bool,
+    /// Session+0xE4 == 4.
+    in_film: bool,
+    /// Action panel +0x1D4: the kingdom list position the page starts at.
+    observer_page: usize,
+    /// Action panel +0x1B8: the kingdoms of the buttons shown.
+    observer_list: Vec<aa_play::KingdomId>,
 }
 
 const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResource", 1), ("LimitedConsumedResource", 2)];
@@ -470,6 +513,11 @@ impl GameHud {
         let team_go = load_button_info(ui, "GoToTeamCommands");
         let team_cancel = load_button_info(ui, "CancelTeamCommands");
         let command_cancel = load_button_info(ui, "ActorCommandCancel");
+        let observer_buttons = ObserverButtons {
+            kingdom: load_button_info(ui, "SelectObservingKingdomDefault"),
+            no_kingdom: load_button_info(ui, "SelectObservingKingdom"),
+            page: load_button_info(ui, "SelectObservingKingdomPage"),
+        };
         let team_commands = load_team_commands(ui);
         let property_icons = load_property_icons(ui);
         let research_art = load_research_art(ui);
@@ -485,6 +533,8 @@ impl GameHud {
             team_go: &team_go,
             team_cancel: &team_cancel,
             command_cancel: &command_cancel,
+            observer_buttons: &observer_buttons,
+            observer_page: 0,
             team_commands: &team_commands,
             property_icons: &property_icons,
             research_art: &research_art,
@@ -498,6 +548,7 @@ impl GameHud {
         let hud = Hud::show(ui, &view);
         drop(view);
         let mut g = GameHud {
+            heard: Vec::new(),
             hud,
             resources,
             commands,
@@ -529,6 +580,11 @@ impl GameHud {
             abilities: Vec::new(),
             ability_tips: Vec::new(),
             events: Default::default(),
+            observer_buttons,
+            observing: false,
+            in_film: false,
+            observer_page: 0,
+            observer_list: Vec::new(),
         };
         if let Some(b) = battle {
             g.update(ui, b);
@@ -538,6 +594,11 @@ impl GameHud {
 
     /// Per-frame update from the battle.
     pub fn update(&mut self, ui: &mut Ui, b: &Battle) {
+        self.observing = b.local_kingdom().is_none();
+        self.in_film = b.in_film();
+        if self.observing {
+            self.observer_list = observer_kingdoms(&b.world, self.observer_page).0;
+        }
         // a recruit or research page whose building left the selection
         // closes
         if let ActionPage::Recruit(id) | ActionPage::Research(id) = self.page {
@@ -580,6 +641,8 @@ impl GameHud {
             team_go: &self.team_go,
             team_cancel: &self.team_cancel,
             command_cancel: &self.command_cancel,
+            observer_buttons: &self.observer_buttons,
+            observer_page: self.observer_page,
             team_commands: &self.team_commands,
             property_icons: &self.property_icons,
             research_art: &self.research_art,
@@ -598,6 +661,13 @@ impl GameHud {
             _ => Vec::new(),
         };
         self.hud.update(ui, &view);
+        if self.observing {
+            // no local kingdom: neither the group floater nor the abilities
+            // floater ([O] 12-ingame-3s.png, 40-observe-kingdom-1.png)
+            for floater in ["Game/GroupFloater", "Game/FactionAbilitiesFloater"] {
+                ui.with_widget(floater, |w| w.set_visible(false));
+            }
+        }
         // the generals' ability buttons: enabled state and tooltips
         self.abilities = aa_play::special_ops::abilities(&b.world, b.local);
         self.ability_tips = self.abilities.iter().map(|v| super::abilities::tip(ui, v)).collect();
@@ -799,6 +869,12 @@ impl GameHud {
             }
         }
         self.seen_notices = notices.len();
+        // no view kingdom: an event goes to the local kingdom or to all
+        // (AddEvent 0x42D130), so only the global one is left ([O]: nothing
+        // in the log of a film run without a view kingdom)
+        if b.view_kingdom().is_none() {
+            events.retain(|e| e.0 == "kingdom_defeated");
+        }
         // a game speed change (0x76F3F0: |old - new| >= 0.0001 posts
         // networking_change_game_speed|f, 100 * 2^v, as GENERIC_EVENT)
         if self.last_speed.is_some_and(|s| (s.log2() - b.speed.log2()).abs() >= 0.0001) {
@@ -826,6 +902,23 @@ impl GameHud {
     /// HUD commands: action buttons, control panel buttons, game menu.
     /// `None` = not a HUD command; `Some(actions)` = handled.
     pub fn command(&mut self, ui: &mut Ui, cmd: &str) -> Option<Vec<GameAction>> {
+        self.heard.push(cmd.to_string());
+        // the observer buttons and keys: 0x5F4750 the page (no argument or a
+        // bad one: the first), 0x5F4780 only without a local kingdom: no
+        // argument clears the view, else a position in the buttons' list
+        if let Some(rest) = cmd.strip_prefix("SelectObservingKingdomPage") {
+            self.observer_page = rest.trim().parse::<usize>().unwrap_or(0);
+            return Some(Vec::new());
+        }
+        if let Some(rest) = cmd.strip_prefix("SelectObservingKingdom") {
+            if !self.observing {
+                return Some(Vec::new());
+            }
+            return Some(match rest.trim() {
+                "" => vec![GameAction::ObserveKingdom(None)],
+                n => n.parse::<usize>().ok().and_then(|i| self.observer_list.get(i)).map(|k| GameAction::ObserveKingdom(Some(*k))).into_iter().collect(),
+            });
+        }
         if let Some(rest) = cmd.strip_prefix("AAPlay ") {
             return Some(self.action(rest).into_iter().collect());
         }
@@ -906,7 +999,17 @@ impl GameHud {
             "construct" => Some(GameAction::Target(TargetOrder::Construct(arg?))),
             "air_attack" => Some(GameAction::Target(TargetOrder::AirAttack(arg?))),
             "air_recon" => Some(GameAction::Target(TargetOrder::AirRecon(arg?))),
-            "hq_attach" => Some(GameAction::Target(TargetOrder::AttachHq)),
+            // TellHQAttachCycle 0x57B0A0: no target, the next HQ.
+            "hq_attach" => Some(GameAction::Order(aa_play::orders::ActorOrder::HqCycle)),
+            // rout (8): the command mask's bit 8, while engaged (0x521E10).
+            "rout" => Some(GameAction::Order(aa_play::orders::ActorOrder::Rout)),
+            "escort_on" => Some(GameAction::Order(aa_play::orders::ActorOrder::Escort { on: true })),
+            "escort_off" => Some(GameAction::Order(aa_play::orders::ActorOrder::Escort { on: false })),
+            // 0x4ED360 cases 0x25 / 0x26: the selection's group behaviour.
+            "group_behavior_enable" => Some(GameAction::Order(aa_play::orders::ActorOrder::GroupBehavior { enable: true, boolean: None })),
+            "group_behavior_disable" => Some(GameAction::Order(aa_play::orders::ActorOrder::GroupBehavior { enable: false, boolean: None })),
+            // construction_cancel (19), 0x565860: bit 19 of the mask, 0x565140.
+            "construction_cancel" => Some(GameAction::Order(aa_play::orders::ActorOrder::ConstructionCancel)),
             "hq_detach" => Some(GameAction::Detach { org: arg? }),
             "unpack" => Some(GameAction::Target(TargetOrder::Deploy(arg?))),
             "pack" => Some(GameAction::Pack { building: arg? }),
@@ -948,9 +1051,19 @@ impl GameHud {
         aa_ui::screens::show(ui, d);
         // the leave-game button's text by the game state (host, single
         // player against computer opponents); no connection status offline
-        let key = if self.game_over { "#ui_game_menu_leave_game_host_game_over" } else { "#ui_game_menu_leave_game_host_game_not_over_only_human_vs_ai_left" };
+        // (0x774C80: a film host's is End Film; Load stays disabled, 0x76AD40)
+        let key = if self.in_film {
+            "#ui_game_menu_leave_game_host_film"
+        } else if self.game_over {
+            "#ui_game_menu_leave_game_host_game_over"
+        } else {
+            "#ui_game_menu_leave_game_host_game_not_over_only_human_vs_ai_left"
+        };
         let text = ui.strings.resolve(key);
         ui.set_label("GameMenuDialog/ButtonFinished", &text);
+        if self.in_film {
+            ui.with_widget("GameMenuDialog/ButtonLoad", |w| w.set_enabled(false));
+        }
         ui.with_widget("GameMenuDialog/ButtonConnectionStatus", |w| w.set_enabled(false));
         ui.layout();
         self.menu_open = true;
@@ -972,6 +1085,32 @@ impl GameHud {
     /// hotkeys_standard_aa.txt, `game|action|verify "ActorCommand <ids>"`):
     /// a key fires the action button showing that command.
     pub fn hotkey(&mut self, ui: &mut Ui, key: KeyCode) -> Option<Vec<GameAction>> {
+        // hotkeys_standard_aa.txt, Observer Commands (`game|action|verify|1`):
+        // 0 no kingdom, 1..9 and q, w the panel's first eleven
+        if self.observing {
+            let digit = match key {
+                KeyCode::Digit0 => Some(None),
+                KeyCode::Digit1 => Some(Some(0)),
+                KeyCode::Digit2 => Some(Some(1)),
+                KeyCode::Digit3 => Some(Some(2)),
+                KeyCode::Digit4 => Some(Some(3)),
+                KeyCode::Digit5 => Some(Some(4)),
+                KeyCode::Digit6 => Some(Some(5)),
+                KeyCode::Digit7 => Some(Some(6)),
+                KeyCode::Digit8 => Some(Some(7)),
+                KeyCode::Digit9 => Some(Some(8)),
+                KeyCode::KeyQ => Some(Some(9)),
+                KeyCode::KeyW => Some(Some(10)),
+                _ => None,
+            };
+            if let Some(slot) = digit {
+                let cmd = match slot {
+                    Some(i) => format!("SelectObservingKingdom {i}"),
+                    None => "SelectObservingKingdom".to_string(),
+                };
+                return self.command(ui, &cmd);
+            }
+        }
         // the formation buttons: q / w / e (CompanyFormationButtons_0..2)
         let formation = match key {
             KeyCode::KeyQ => Some(0),
@@ -980,10 +1119,16 @@ impl GameHud {
             _ => None,
         };
         if let Some(i) = formation {
+            if i < self.formation_tips.len() {
+                self.heard.push(format!("FormationChange {i}"));
+            }
             return (i < self.formation_tips.len()).then(|| vec![GameAction::SetFormation(i)]);
         }
         // F1..F4: the control panel's display buttons
         if self.panels.hotkey(ui, key) {
+            if let Some(cmd) = super::panels::Panels::hotkey_command(key) {
+                self.heard.push(cmd.to_string());
+            }
             return Some(Vec::new());
         }
         // the idle buttons: F5 idle builder, F6 idle detached organization
@@ -1023,6 +1168,11 @@ impl GameHud {
         })?;
         let cmd = cmd.clone();
         self.command(ui, &cmd)
+    }
+
+    /// The action slots' commands of this frame (the script's button flash).
+    pub fn slot_command_list(&self) -> Vec<Option<String>> {
+        self.slot_commands.clone()
     }
 
     /// The widget under the pointer: an action button's command is
@@ -1422,6 +1572,8 @@ struct View<'a> {
     team_go: &'a ButtonInfo,
     team_cancel: &'a ButtonInfo,
     command_cancel: &'a ButtonInfo,
+    observer_buttons: &'a ObserverButtons,
+    observer_page: usize,
     team_commands: &'a [TeamCommand],
     property_icons: &'a std::collections::HashMap<String, String>,
     research_art: &'a std::collections::HashMap<String, ResearchArt>,
@@ -1452,6 +1604,9 @@ impl View<'_> {
             }
             None => key.to_string(),
         }
+    }
+    fn name_or_empty(&self, key: &str) -> String {
+        if key.is_empty() { String::new() } else { self.name(key) }
     }
     fn res_index(&self, ids: &str) -> Option<usize> {
         self.resources.iter().position(|r| r.ids.eq_ignore_ascii_case(ids))
@@ -1862,8 +2017,48 @@ impl View<'_> {
             None => text,
         }
     }
+    /// The observer panel, `0x5F7E50`: binoculars tinted with the kingdom's
+    /// colour (`0x5F7150`, `SelectObservingKingdom <i>`) for up to 10 kingdoms
+    /// from the page start, a page arrow when more follow or the world's list
+    /// is longer than 11 (GWorld+0x158, every shot of a four-kingdom film
+    /// shows it, so the list holds its null slots too: [I], the same 16 slots
+    /// as the score graph), and the globe with no argument in its slot.
+    fn observer_panel(&self) -> Vec<Option<HudAction>> {
+        let mut v: Vec<Option<HudAction>> = vec![None; 12];
+        let Some(w) = self.world() else { return v };
+        let o = self.observer_buttons;
+        let button = |texture: &str, command: String, tint: Option<[f32; 3]>| Some(HudAction { texture: texture.to_string(), command, enabled: true, selected: false, targeted: false, tint });
+        let (shown, more) = observer_kingdoms(w, self.observer_page);
+        for (slot, id) in shown.iter().enumerate() {
+            let Some(k) = w.kingdoms.iter().find(|k| k.id == *id) else { continue };
+            v[slot] = button(&o.kingdom.texture, format!("SelectObservingKingdom {slot}"), Some(k.color.map(|c| c as f32 / 255.0)));
+        }
+        if let Some(i) = usize::try_from(o.page.index).ok().filter(|i| *i < 12) {
+            v[i] = button(&o.page.texture, format!("SelectObservingKingdomPage {}", more.unwrap_or(0)), None);
+        }
+        if let Some(i) = usize::try_from(o.no_kingdom.index).ok().filter(|i| *i < 12) {
+            v[i] = button(&o.no_kingdom.texture, "SelectObservingKingdom".to_string(), None);
+        }
+        v
+    }
     /// The (name, tooltip) of an action button's command (`0x5F6860`).
     fn tip(&self, ui: &Ui, cmd: &str) -> Option<(String, String)> {
+        // the observer buttons (0x5F7150): the kingdom's name, the button
+        // info's texts
+        if let Some(rest) = cmd.strip_prefix("SelectObservingKingdomPage") {
+            let _ = rest;
+            return Some((self.name_or_empty(&self.observer_buttons.page.name), self.name_or_empty(&self.observer_buttons.page.tooltip)));
+        }
+        if let Some(rest) = cmd.strip_prefix("SelectObservingKingdom") {
+            let info = if rest.trim().is_empty() { &self.observer_buttons.no_kingdom } else { &self.observer_buttons.kingdom };
+            let name = rest.trim().parse::<usize>().ok().and_then(|slot| {
+                let w = self.world()?;
+                let id = *observer_kingdoms(w, self.observer_page).0.get(slot)?;
+                let k = w.kingdoms.iter().find(|k| k.id == id)?;
+                Some(self.names.kingdom(&k.name).to_string())
+            });
+            return Some((name.unwrap_or_else(|| self.name_or_empty(&info.name)), self.name_or_empty(&info.tooltip)));
+        }
         let rest = cmd.strip_prefix("AAPlay ")?;
         let mut it = rest.split_whitespace();
         let verb = it.next()?;
@@ -2165,6 +2360,8 @@ impl HudWorld for View<'_> {
     /// 5000). Abilities spending it are not implemented.
     fn faction_experience(&self) -> Option<aa_ui::hud::FactionExperience> {
         let (b, w) = (self.battle?, self.world()?);
+        // no view kingdom: no experience counter ([O] 12-ingame-3s.png)
+        b.view_kingdom()?;
         // the commander's balance and maximum (special operations spend it)
         if let Some((value, max)) = aa_play::special_ops::experience(w, b.local) {
             return Some(aa_ui::hud::FactionExperience { value: value.floor(), max });
@@ -2243,6 +2440,11 @@ impl HudWorld for View<'_> {
         // disabled)
         let mut v = (|| -> Vec<Option<HudAction>> {
             let (Some(b), Some(w)) = (self.battle, self.world()) else { return vec![None; 12] };
+            // 0x5F8E00: no local kingdom and nothing selected
+            if b.local_kingdom().is_none() && b.selection.is_empty() {
+                // Session+0x168 clears the panel (0x5F5300)
+                return if b.view_locked() { vec![None; 12] } else { self.observer_panel() };
+            }
             let own = |k: Option<aa_play::KingdomId>| k == Some(b.local);
             // placing a construct item (0x612A70 -> 0x5F85A0): the panel holds
             // only ActorCommandCancel, in the last slot, until the placement
@@ -2396,6 +2598,11 @@ impl HudWorld for View<'_> {
                         if fighting {
                             acts.extend(self.act("retreat", "AAPlay retreat".into()));
                         }
+                        // rout (8): bit 8 of an organization's mask, only while
+                        // the engage state runs (0x521E10).
+                        if own_orgs.iter().any(|o| aa_play::orders::guess::action_bits(w, Unit::Org(o.id)) >> 8 & 1 != 0) {
+                            acts.extend(self.act("rout", "AAPlay rout".into()));
+                        }
                         if can_bombard {
                             acts.extend(self.act("bombard", "AAPlay bombard".into()));
                         }
@@ -2421,6 +2628,13 @@ impl HudWorld for View<'_> {
                             }
                         }
                         acts.extend(self.act("stop", "AAPlay stop".into()));
+                        // 0x437810 -> 0x436950: with more than one thing selected the
+                        // settings exist (0x4ECF00), and one of the two commands shows.
+                        if b.selection.len() > 1 {
+                            let on = w.orders.groups.settings.get(&b.local).is_some_and(|s| s.on);
+                            let ids = if on { "group_behavior_disable" } else { "group_behavior_enable" };
+                            acts.extend(self.act(ids, format!("AAPlay {ids}")));
+                        }
                         if fighting {
                             acts.extend(self.act("guard", "AAPlay guard".into()));
                             acts.extend(self.act("explore", "AAPlay explore".into()));
@@ -2438,7 +2652,9 @@ impl HudWorld for View<'_> {
                         if let Some(org) = w.orgs.get(*o as usize).filter(|x| x.alive && own(Some(x.kingdom))) {
                             let od = w.data.def(org.def);
                             if od.max_attachments.is_none() && od.supply_used && fighting {
-                                acts.extend(self.act_enabled("hq_attach", "AAPlay hq_attach".into(), org.hq.is_none()));
+                                // 0x579580(1): an HQ to cycle to, attached or not.
+                                let bits = aa_play::orders::guess::action_bits(w, Unit::Org(*o));
+                                acts.extend(self.act_enabled("hq_attach", "AAPlay hq_attach".into(), bits >> 31 & 1 != 0));
                                 acts.extend(self.act_enabled("hq_detach", format!("AAPlay hq_detach {o}"), org.hq.is_some()));
                             }
                             // an HQ truck organization unpacks through its truck
@@ -2474,6 +2690,12 @@ impl HudWorld for View<'_> {
                             if air_capable(w, *id, AIR_RECON) {
                                 acts.extend(self.act_enabled("air_recon", format!("AAPlay air_recon {id}"), air_ready(w, *id, AIR_RECON)));
                             }
+                            // escort_on / escort_off, bits 27 and 28 of 0x569C70:
+                            // +0x38 bit 0x80 and which of the two +0x21 allows
+                            if let Some(d) = w.books.actor(*id).and_then(|b| b.denizen.as_ref()).filter(|d| d.behaviors & aa_play::denizen::AIR_ESCORT != 0) {
+                                let (ids, cmd) = if d.escort { ("escort_off", "AAPlay escort_off") } else { ("escort_on", "AAPlay escort_on") };
+                                acts.extend(self.act(ids, cmd.into()));
+                            }
                             // an HQ: CommandAll (ActionButtonInfo index 4)
                             let hq = aa_play::production::hq_org(w, *id).is_some() || def.has_component("HQComponent") || w.orgs.iter().any(|o| o.alive && o.hq == Some(*id));
                             if hq && !self.command_all.texture.is_empty() {
@@ -2484,6 +2706,9 @@ impl HudWorld for View<'_> {
                             }
                             if def.packs_to.is_some() {
                                 acts.extend(self.act("pack", format!("AAPlay pack {id}")));
+                            }
+                            if aa_play::orders::guess::action_bits(w, Unit::Actor(*id)) >> 19 & 1 != 0 {
+                                acts.extend(self.act("construction_cancel", "AAPlay construction_cancel".into()));
                             }
                             if aa_play::player_orders::sellable(w, *id) {
                                 acts.extend(self.act_enabled("sell", format!("AAPlay sell {id}"), aa_play::player_orders::sell_refused(w, *id).is_none()));

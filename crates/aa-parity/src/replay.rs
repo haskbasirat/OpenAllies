@@ -11,12 +11,14 @@
 //!   handicap, but the SAI is never attached: their decisions are the film's
 //!   decrees. Everything the plan could not take from the film is listed in
 //!   [`ReplayPlan::notes`].
-//! * [`run`] steps the world once per film record: record `r` runs right
-//!   before update `r + 1` (`World::step_decrees`), each decree first logs its
-//!   S entries (class name and descriptor, nothing for SetPlayer) and then
-//!   applies the commands [`Mapper`] made of it through [`PlayIds`]. After
-//!   step `c` the trace must equal a checkpoint carried by record `c` (S last
-//!   index and hash: `c` updates and the decrees of records `0..c`).
+//! * [`run`] steps the world once per film record through [`FilmDriver`], the
+//!   decree loop the game client plays through too (`crate::playback`), so the
+//!   gate and the library cannot drift: record `r` runs right before update
+//!   `r + 1`, each decree first logs its S entries (class name and descriptor,
+//!   nothing for SetPlayer) and then applies the commands [`Mapper`] made of it
+//!   through [`PlayIds`]. A 311 carried by record `c` is checked by the native
+//!   rule 0x77D050 against S's entry at its index (`c` updates and the decrees
+//!   of records `0..c`).
 //! * At the first checkpoint that differs, [`FirstDifference`] counts the S
 //!   entries of both sides in that interval by kind (clock, decree, getter,
 //!   other) and, when the getter count agrees, solves the film's interval for
@@ -26,11 +28,12 @@
 //!   checkpoint's S counts and [`ReplayReport::orders`] every film order's
 //!   outcome, to the end of the film.
 use crate::chain;
-use crate::decree::Decree;
-use crate::film::{Film, KingdomInfo};
+use crate::decree::{Decree, id};
+use crate::film::{Film, FilmDecree, KingdomInfo, SessionPlayer};
 use crate::mapping::{Mapped, Mapper, PlayIds};
 use crate::slog::{self, decree_s_entries};
-use aa_play::sim::TracedDecree;
+use aa_orders::net::sync::{DEFAULT_MAX_ENTRIES, Synchronizer};
+use aa_orders::payload::Field;
 use aa_play::trace::{DECREE_ID_LABEL, SKind};
 use aa_play::{Controller, GameData, GameMap, PlayerSetup, SkirmishSetup, World};
 use serde::Serialize;
@@ -104,7 +107,7 @@ fn rule_value(film: &Film, key: &str) -> Option<f32> {
 
 /// The kingdom ids the film renamed to "<General> AI" (the SAI naming of a
 /// computer player's kingdom).
-fn computer_kingdoms(film: &Film) -> Vec<String> {
+pub fn computer_kingdoms(film: &Film) -> Vec<String> {
     let mut out = Vec::new();
     for t in &film.ticks {
         for d in &t.decrees {
@@ -146,6 +149,12 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
                 anyhow::anyhow!("player {}: no map slot with kingdom index {index}", p.id)
             })?;
         let s = &map.slots[slot];
+        // Two session players on one kingdom: both order for it (0x76E1D0 binds
+        // each to GWorld+0x148[index]), the world has one.
+        if players.iter().any(|q: &PlayerPlan| q.slot == slot) {
+            notes.push(format!("player {} shares kingdom {index} with another player", p.id));
+            continue;
+        }
         if !s.id.eq_ignore_ascii_case(&p.name) {
             notes.push(format!(
                 "player {} {:?}: kingdom index {index} is map slot {:?}",
@@ -198,11 +207,16 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
                 s.id
             ));
         }
-        let team = map
-            .teams
-            .iter()
-            .position(|t| t.eq_ignore_ascii_case(&info.team))
-            .map_or(s.team, |t| t as u32);
+        // A kingdom with no team stands alone (a team number past the map's,
+        // as the staging's no-team team).
+        let team = if info.team.is_empty() {
+            (map.teams.len() + start) as u32
+        } else {
+            map.teams
+                .iter()
+                .position(|t| t.eq_ignore_ascii_case(&info.team))
+                .map_or(s.team, |t| t as u32)
+        };
         if !info.team.is_empty() && !info.team.eq_ignore_ascii_case(&s.team_id) {
             notes.push(format!(
                 "{}: map team {:?}, film team {:?} (film kept)",
@@ -262,7 +276,9 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
                 team: p.team,
                 color: rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8),
                 controller: if p.computer {
-                    Controller::Computer(level)
+                    // A kingdom's own handicap, else the rule's level.
+                    let own = data.handicaps.iter().position(|h| !p.handicap.is_empty() && h.0.eq_ignore_ascii_case(&p.handicap));
+                    Controller::Computer(own.map_or(level, |i| i as u8))
                 } else {
                     Controller::Human
                 },
@@ -306,6 +322,17 @@ pub fn build(
     data: Arc<GameData>,
     map: Arc<GameMap>,
 ) -> anyhow::Result<World> {
+    let generals = aa_play::special_ops::GeneralData::load(game_root, &data)?;
+    build_with(plan, Arc::new(generals), data, map)
+}
+
+/// [`build`] with the generals' data already loaded.
+pub fn build_with(
+    plan: &ReplayPlan,
+    generals: Arc<aa_play::special_ops::GeneralData>,
+    data: Arc<GameData>,
+    map: Arc<GameMap>,
+) -> anyhow::Result<World> {
     let picks: Vec<aa_play::creation::StartPick> = plan
         .players
         .iter()
@@ -315,8 +342,7 @@ pub fn build(
         })
         .collect();
     let mut world = World::new_skirmish_with(data.clone(), map, &plan.setup, &picks)?;
-    let generals = aa_play::special_ops::GeneralData::load(game_root, &data)?;
-    aa_play::special_ops::attach(&mut world, Arc::new(generals));
+    aa_play::special_ops::attach(&mut world, generals);
     if let Some(x) = plan.starting_experience {
         aa_play::special_ops::set_starting_experience(&mut world, x);
     }
@@ -673,6 +699,9 @@ impl crate::mapping::NativeIds for Aliased<'_> {
     fn definition(&self, object: u32) -> Option<aa_play::DefId> {
         self.ids.definition(object)
     }
+    fn layout(&self, layout: u32) -> Option<String> {
+        self.ids.layout(layout)
+    }
     fn formation(&self, org: aa_play::OrgId, formation: u32) -> Option<usize> {
         self.ids.formation(org, formation)
     }
@@ -684,6 +713,32 @@ impl crate::mapping::NativeIds for Aliased<'_> {
     }
     fn named(&self, selector: &[u16]) -> Option<aa_play::Unit> {
         self.ids.named(selector)
+    }
+    fn guess(
+        &self,
+        unit: aa_play::Unit,
+        flags: u16,
+        word: u32,
+        non_group_excluded: bool,
+    ) -> Option<u32> {
+        // A target word names the native thing (flag bit 0).
+        let word = match self.pairing {
+            Some(p) if flags & 1 != 0 => p.ours(word).unwrap_or(word),
+            _ => word,
+        };
+        self.ids.guess(unit, flags, word, non_group_excluded)
+    }
+    fn accepts(&self, unit: aa_play::Unit, index: u32) -> bool {
+        self.ids.accepts(unit, index)
+    }
+    fn bombards(&self, unit: aa_play::Unit) -> bool {
+        self.ids.bombards(unit)
+    }
+    fn hostile(&self, kingdom: aa_play::KingdomId, target: aa_play::ActorId) -> bool {
+        self.ids.hostile(kingdom, target)
+    }
+    fn thing_kingdom(&self, slot: u16) -> Option<aa_play::KingdomId> {
+        self.ids.thing_kingdom(slot)
     }
 }
 
@@ -729,10 +784,10 @@ pub fn run_aliased(
 }
 
 /// SharedPropertyData slot -> property IDS for every replay of this process,
-/// set once by the caller from the measured native table (the v14 one is the
-/// git-ignored fixture `tests/fixtures/native_shared_property_slots_v14.json`,
-/// NativeSampler `REGIDS` of `[0xB3AA2C]`). Unset: research orders stay
-/// unresolved.
+/// set once by the caller (`Registries::property_ids`, computed from the data
+/// and proven against the original's 194 live IDS in `tests/registry_counts.rs`).
+/// Unset: research orders stay unresolved. The library does not use this: a
+/// [`FilmDriver`] is handed the tables of its own data set ([`IdTables`]).
 pub fn set_property_ids(ids: Vec<String>) {
     let _ = PROPERTY_IDS.set(ids);
 }
@@ -745,6 +800,310 @@ pub fn set_formation_ids(ids: Vec<String>) {
     let _ = FORMATION_IDS.set(ids);
 }
 static FORMATION_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// The native id tables of the data set a film plays on (`Registries`).
+#[derive(Clone, Copy, Debug)]
+pub struct IdTables<'a> {
+    /// Thing DataManager slot -> definition IDS.
+    pub object_ids: &'a [String],
+    /// SharedPropertyData slot -> property IDS.
+    pub property_ids: &'a [String],
+    /// FormationData slot -> formation IDS.
+    pub formation_ids: &'a [String],
+    /// AbilityDefinition slot -> IDS (empty: `mapping::set_ability_ids`).
+    pub ability_ids: &'a [String],
+    /// OrganizationLayout slot -> IDS (empty: `mapping::set_layout_ids`).
+    pub layout_ids: &'a [String],
+}
+
+/// S (`[0xB36560]`) as the film check 0x77D050 sees it: the native
+/// `Synchronizer` fed from what the world logged to `World::trace` (which keeps
+/// only the running hash, not the hash after every entry).
+#[derive(Clone, Debug)]
+pub struct SimSync {
+    sync: Synchronizer,
+    /// Entries of `World::trace`'s stream already taken.
+    fed: usize,
+}
+
+impl SimSync {
+    /// S as `world` has it now. Its trace must be recording.
+    pub fn new(world: &World) -> Self {
+        let (index, hash) = world.trace.checkpoint();
+        let mut sync = Synchronizer::new(DEFAULT_MAX_ENTRIES);
+        sync.reset(index, hash);
+        Self {
+            sync,
+            fed: world.trace.log.as_ref().map_or(0, Vec::len),
+        }
+    }
+    /// Take what the world logged since the last call.
+    pub fn feed(&mut self, world: &World) {
+        let Some(log) = &world.trace.log else {
+            return;
+        };
+        for entry in &log[self.fed.min(log.len())..] {
+            let label = entry.kind.label();
+            match entry.kind {
+                SKind::Clock | SKind::Float(_) => {
+                    self.sync.log_float_bits(true, label, entry.value)
+                }
+                SKind::RngGetter(_) | SKind::Int(_) => self.sync.log_int(true, label, entry.value),
+                SKind::Bool(_) => self.sync.log_bool(true, label, entry.value != 0),
+                SKind::Marker(_) => self.sync.log_marker(true, label),
+                SKind::DecreeName => {
+                    let units = world.trace.decree_name(entry.value).unwrap_or(&[]);
+                    self.sync.log_text(true, label, units);
+                }
+            }
+        }
+        self.fed = log.len();
+    }
+    /// [`SimSync::feed`], then drop the world's stream and digests: a player
+    /// runs for hours, and S itself retains what the check needs.
+    pub fn feed_and_forget(&mut self, world: &mut World) {
+        self.feed(world);
+        if let Some(log) = &mut world.trace.log {
+            log.clear();
+        }
+        world.trace.digests.clear();
+        self.fed = 0;
+    }
+    /// The check of a 311 (0x77D050, which `Synchronizer::validate` ports) on
+    /// the entries taken so far.
+    ///
+    /// `index == end` is the native accessor's quirk: 0x77D010 appends an empty
+    /// entry first, and S's numbering moves by one. `native_append` keeps it for
+    /// the native stop, where the film ends here unless the hash happens to be
+    /// 0; a film that plays on would have every later check misnumbered, so
+    /// without it the case only compares with the empty entry's hash.
+    pub fn validate(&mut self, index: i32, hash: i32, native_append: bool) -> bool {
+        if !native_append && index == self.sync.end() {
+            return hash == 0;
+        }
+        self.sync.validate(index, hash)
+    }
+    /// The hash stored after entry `index`, when S still has it.
+    pub fn hash_at(&self, index: i32) -> Option<i32> {
+        self.sync.entry(index).map(|e| e.hash)
+    }
+}
+
+/// What a record's decree does beyond its world effect, in decree order.
+#[derive(Debug)]
+pub enum DecreeSignal<'a> {
+    /// What a decree became, before its commands apply. `selection` is the
+    /// ordering player's selection before it.
+    Mapped {
+        decree: &'a FilmDecree,
+        selection: &'a [u16],
+        mapped: &'a Mapped,
+    },
+    /// A 311 was checked (0x752F60): its S index, its hash and the result.
+    Checkpoint { index: i32, hash: i32, passed: bool },
+    /// A 298 named a player the session does not have (0x75D710).
+    NoOrderingPlayer { player: u32 },
+    /// A 328 renamed a kingdom.
+    KingdomRenamed {
+        kingdom: aa_play::KingdomId,
+        name: String,
+    },
+}
+
+/// What the receiver of [`DecreeSignal`]s wants next.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecreeFlow {
+    Continue,
+    /// End the record's loop here (0x74D710 with Admin+0x2E5 set).
+    Stop,
+}
+
+/// How a record's decree loop ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecordEnd {
+    Finished,
+    Stopped,
+}
+
+/// The film's side of a playback: the mapper's selections, the film session's
+/// players and S. One record of it is the native 0x751A40 and decree loop
+/// 0x74D710: every decree in order logs its S entries and takes effect before
+/// the next one is even mapped, and only then the world updates (0x752AE0).
+#[derive(Clone, Debug)]
+pub struct FilmDriver {
+    pub mapper: Mapper,
+    pub sim: SimSync,
+    /// The film players: SessionPlayers (0x76E1D0), and those a 329 created
+    /// (0x776870 in film state calls CreateFilmPlayer 0x76CD00 too).
+    pub roster: Vec<SessionPlayer>,
+}
+
+/// The world about to run a tick's decrees (the head of `World::step_decrees`).
+fn begin_tick(world: &mut World) {
+    world.events.clear();
+    world.trace.tick = world.clock.tick.wrapping_add(1);
+}
+
+/// The world update after a tick's decrees. `World::step_decrees` clears the
+/// events, so the decrees' own (refusals, say) are put back in front.
+pub fn update_world(world: &mut World) {
+    let decrees = std::mem::take(&mut world.events);
+    world.step_decrees(Vec::new());
+    if !decrees.is_empty() {
+        world.events.splice(0..0, decrees);
+    }
+}
+
+impl FilmDriver {
+    pub fn new(film: &Film, world: &World) -> Self {
+        Self {
+            mapper: Mapper::new(),
+            sim: SimSync::new(world),
+            roster: film.players.clone(),
+        }
+    }
+
+    /// One record's decrees, in order (0x74D710). The caller then updates the
+    /// world ([`update_world`]) and takes S ([`SimSync::feed`]).
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_record(
+        &mut self,
+        decrees: &[FilmDecree],
+        world: &mut World,
+        tables: IdTables<'_>,
+        aliases: &Aliases,
+        pairing: Option<&Pairing>,
+        native_append: bool,
+        sink: &mut dyn FnMut(DecreeSignal<'_>, &mut World) -> DecreeFlow,
+    ) -> RecordEnd {
+        begin_tick(world);
+        for d in decrees {
+            // The handlers log the class name and the id before Process.
+            if let Some(name) = decree_s_entries(d.descriptor as usize) {
+                let units: Vec<u16> = name.encode_utf16().collect();
+                world.trace.log_decree(u32::from(d.descriptor), &units);
+            }
+            let flow = match &d.decree {
+                // 0x75D710: 0x76B8F0(id, film flag) finds only a film player.
+                Decree::SetPlayer { player } if !self.roster.iter().any(|p| p.id == *player) => {
+                    sink(DecreeSignal::NoOrderingPlayer { player: *player }, world)
+                }
+                // 0x75D7F0 -> 0x752F60: every film player has the film flag.
+                Decree::SimSyncValue { index, hash } => {
+                    self.sim.feed(world);
+                    let passed = self.sim.validate(*index, *hash, native_append);
+                    sink(
+                        DecreeSignal::Checkpoint {
+                            index: *index,
+                            hash: *hash,
+                            passed,
+                        },
+                        world,
+                    )
+                }
+                Decree::UpdateKingdomName { kingdom, name, .. } => {
+                    rename_kingdom(kingdom, name, world, sink)
+                }
+                Decree::Other { fields } if d.descriptor as usize == id::MIDGAME_CREATE_AIS => {
+                    self.create_film_player(fields, world);
+                    DecreeFlow::Continue
+                }
+                _ => DecreeFlow::Continue,
+            };
+            if flow == DecreeFlow::Stop {
+                return RecordEnd::Stopped;
+            }
+            let selection = self
+                .mapper
+                .selections
+                .get(&d.player.unwrap_or(0))
+                .cloned()
+                .unwrap_or_default();
+            let mapped = {
+                let ids = Aliased {
+                    ids: PlayIds {
+                        world: &*world,
+                        players: &self.roster,
+                        object_ids: tables.object_ids,
+                        property_ids: tables.property_ids,
+                        formation_ids: tables.formation_ids,
+                        ability_ids: tables.ability_ids,
+                        layout_ids: tables.layout_ids,
+                    },
+                    aliases,
+                    pairing,
+                };
+                self.mapper.map(d, &ids)
+            };
+            sink(
+                DecreeSignal::Mapped {
+                    decree: d,
+                    selection: &selection,
+                    mapped: &mapped,
+                },
+                world,
+            );
+            if let Mapped::Commands(commands) = mapped {
+                for command in commands {
+                    world.apply(command);
+                }
+            }
+        }
+        RecordEnd::Finished
+    }
+
+    /// 329 in film state (0x75DE50 -> 0x776870): a kingdom found by the name
+    /// (0x4F8F00) gets a film player with the decree's id (0x76CD00). Without
+    /// the kingdom nothing happens.
+    fn create_film_player(&mut self, fields: &[Field], world: &World) {
+        let (Some(Field::Text(name)), Some(Field::Uint { value: player, .. })) =
+            (fields.first(), fields.get(1))
+        else {
+            return;
+        };
+        let name = utf16(name);
+        let Some(slot) = world
+            .map
+            .slots
+            .iter()
+            .find(|s| s.id.eq_ignore_ascii_case(&name))
+        else {
+            return;
+        };
+        self.roster.push(SessionPlayer {
+            id: *player,
+            name,
+            kingdom_index: slot.kingdom_index,
+        });
+    }
+}
+
+/// 328 KKC_UpdateKingdomNameOrderDecree: the name the Scoring screen and the HUD
+/// show (`Rommel AI`).
+fn rename_kingdom(
+    kingdom: &[u16],
+    name: &[u16],
+    world: &mut World,
+    sink: &mut dyn FnMut(DecreeSignal<'_>, &mut World) -> DecreeFlow,
+) -> DecreeFlow {
+    let id = utf16(kingdom);
+    let name = utf16(name);
+    let Some(slot) = world
+        .map
+        .slots
+        .iter()
+        .position(|s| s.id.eq_ignore_ascii_case(&id))
+    else {
+        return DecreeFlow::Continue;
+    };
+    let Some(k) = (0..world.kingdoms.len() as aa_play::KingdomId)
+        .find(|&k| world.ids.kingdom_slot(k) == Some(slot))
+    else {
+        return DecreeFlow::Continue;
+    };
+    world.kingdoms[k as usize].name.clone_from(&name);
+    sink(DecreeSignal::KingdomRenamed { kingdom: k, name }, world)
+}
 
 /// [`run_aliased`] calling `observe(step, world)` after every step (the
 /// world after GWorld update `step`, as the native sampler's 0x76F850
@@ -762,73 +1121,103 @@ pub fn run_observed(
     mut pairing: Option<&mut Pairing>,
     observe: &mut dyn FnMut(u32, &mut World, Option<&Pairing>),
 ) -> ReplayReport {
+    let tables = IdTables {
+        object_ids,
+        property_ids: PROPERTY_IDS.get().map_or(&[], |v| v.as_slice()),
+        formation_ids: FORMATION_IDS.get().map_or(&[], |v| v.as_slice()),
+        ability_ids: &[],
+        layout_ids: &[],
+    };
     let mut report = ReplayReport::default();
-    let mut mapper = Mapper::new();
-    let checkpoints: BTreeMap<u32, (i32, i32)> = film
-        .checkpoints
-        .iter()
-        .map(|c| (c.tick, (c.count, c.hash)))
-        .collect();
+    let mut driver = FilmDriver::new(film, world);
     let intervals = slog::account(film);
     let prepared = chain::prepare(film);
     let mut previous_tick = 0u32;
     let mut previous_counts = (0i32, 0i32);
     let steps = max_steps.map_or(film.ticks.len() as u32, |m| m.min(film.ticks.len() as u32));
+    let mut stopped = false;
     for record in 0..steps {
-        let mut traced = Vec::new();
         if let Some(p) = pairing.as_deref_mut() {
             p.update(world);
         }
-        {
-            let ids = Aliased {
-                ids: PlayIds {
-                    world: &*world,
-                    players: &film.players,
-                    object_ids,
-                    property_ids: PROPERTY_IDS.get().map_or(&[], |v| v.as_slice()),
-                    formation_ids: FORMATION_IDS.get().map_or(&[], |v| v.as_slice()),
-                },
-                aliases,
-                pairing: pairing.as_deref(),
-            };
-            for d in film.decrees_at(record) {
-                let slots = mapper
-                    .selections
-                    .get(&d.player.unwrap_or(0))
-                    .cloned()
-                    .unwrap_or_default();
-                let mapped = mapper.map(d, &ids);
-                *report.outcomes.entry(outcome_key(&mapped)).or_default() += 1;
-                if let Mapped::Unresolved(why) = &mapped {
-                    report.unresolved.push((record, d.player, why.clone()));
+        // S as this record's checkpoint holds it: `record` updates and the
+        // decrees of the records before.
+        let at_start = world.trace.checkpoint();
+        let end = driver.run_record(
+            film.decrees_at(record),
+            world,
+            tables,
+            aliases,
+            pairing.as_deref(),
+            false,
+            &mut |signal, world| {
+                if let DecreeSignal::Mapped {
+                    decree: d,
+                    selection,
+                    mapped,
+                } = &signal
+                {
+                    report_mapped(&mut report, record, d, selection, mapped);
                 }
-                if crate::classify::decree_class(&d.decree) == "command" {
-                    let name = crate::classify::actor_command(&d.decree)
-                        .map_or_else(|| d.name.to_owned(), |(_, n, _)| n.to_owned());
-                    report.orders.push(OrderRow {
-                        record,
-                        player: d.player,
-                        name,
-                        slots,
-                        outcome: outcome_key(&mapped),
-                        commands: match &mapped {
-                            Mapped::Commands(c) => c.iter().map(|c| format!("{c:?}")).collect(),
-                            _ => Vec::new(),
-                        },
-                        refused: Vec::new(),
-                    });
-                }
-                let sync = decree_s_entries(d.descriptor as usize)
-                    .map(|name| (u32::from(d.descriptor), name.encode_utf16().collect()));
-                let commands = match mapped {
-                    Mapped::Commands(c) => c,
-                    _ => Vec::new(),
+                let DecreeSignal::Checkpoint {
+                    index,
+                    hash,
+                    passed,
+                } = signal
+                else {
+                    return DecreeFlow::Continue;
                 };
-                report.commands += commands.len();
-                traced.push(TracedDecree { sync, commands });
-            }
+                // The native check is on entry `index`; the report keeps both
+                // sides' (S last index, hash) at the record's start.
+                let film_state = (index, hash);
+                report.checked += 1;
+                let check = CheckpointCheck {
+                    tick: record,
+                    film: film_state,
+                    ours: at_start,
+                };
+                report.intervals.push(IntervalCheck {
+                    check,
+                    film_entries: film_state.0 - previous_counts.0,
+                    our_entries: at_start.0 - previous_counts.1,
+                });
+                previous_counts = (film_state.0, at_start.0);
+                if passed {
+                    report.matched += 1;
+                } else if report.first_difference.is_none() {
+                    let film_iv = intervals.iter().find(|iv| iv.to_tick == record).cloned();
+                    let prepared_iv = prepared.iter().find(|iv| iv.to_tick == record);
+                    let ours_kinds = kinds(world, previous_tick, record, prepared_iv);
+                    let film_states = match (&film_iv, prepared_iv) {
+                        (Some(f), Some(p)) if f.residual.max(0) as u32 == ours_kinds.getters => {
+                            let pick = pick_of(world, previous_tick, record, p);
+                            pick.map(|pick| chain::solve(p, &pick, 1))
+                        }
+                        _ => None,
+                    };
+                    if let Some(film) = film_iv {
+                        report.first_difference = Some(FirstDifference {
+                            check,
+                            from_tick: previous_tick,
+                            film,
+                            ours: ours_kinds,
+                            film_states_at_our_placement: film_states,
+                        });
+                    }
+                    if stop_at_difference {
+                        return DecreeFlow::Stop;
+                    }
+                }
+                previous_tick = record;
+                DecreeFlow::Continue
+            },
+        );
+        if end == RecordEnd::Stopped {
+            stopped = true;
+            break;
         }
-        world.step_decrees(traced);
+        update_world(world);
+        driver.sim.feed(world);
         let step = record + 1;
         report.steps = step;
         for e in &world.events {
@@ -845,59 +1234,66 @@ pub fn run_observed(
                 }
             }
         }
-        if let Some(&film_state) = checkpoints.get(&step) {
-            report.checked += 1;
-            let ours = world.trace.checkpoint();
-            report.intervals.push(IntervalCheck {
-                check: CheckpointCheck {
-                    tick: step,
-                    film: film_state,
-                    ours,
-                },
-                film_entries: film_state.0 - previous_counts.0,
-                our_entries: ours.0 - previous_counts.1,
-            });
-            previous_counts = (film_state.0, ours.0);
-            if ours == film_state {
-                report.matched += 1;
-            } else if report.first_difference.is_none() {
-                let check = CheckpointCheck {
-                    tick: step,
-                    film: film_state,
-                    ours,
-                };
-                let film_iv = intervals.iter().find(|iv| iv.to_tick == step).cloned();
-                let prepared_iv = prepared.iter().find(|iv| iv.to_tick == step);
-                let ours_kinds = kinds(world, previous_tick, step, prepared_iv);
-                let film_states = match (&film_iv, prepared_iv) {
-                    (Some(f), Some(p)) if f.residual.max(0) as u32 == ours_kinds.getters => {
-                        let pick = pick_of(world, previous_tick, step, p);
-                        pick.map(|pick| chain::solve(p, &pick, 1))
-                    }
-                    _ => None,
-                };
-                if let Some(film) = film_iv {
-                    report.first_difference = Some(FirstDifference {
-                        check,
-                        from_tick: previous_tick,
-                        film,
-                        ours: ours_kinds,
-                        film_states_at_our_placement: film_states,
-                    });
-                }
-                if stop_at_difference {
-                    break;
-                }
-            }
-            previous_tick = step;
-        }
         if let Some(p) = pairing.as_deref_mut() {
             p.update(world);
         }
         observe(step, world, pairing.as_deref());
     }
-    report.dropped = mapper.dropped.clone();
+    // A run that ends early still answers the checkpoint its last update
+    // reached, carried by the record it does not run.
+    if !stopped && (steps as usize) < film.ticks.len() {
+        for c in film.checkpoints.iter().filter(|c| c.tick == steps) {
+            driver.sim.feed(world);
+            report.checked += 1;
+            let ours = world.trace.checkpoint();
+            let passed = driver.sim.validate(c.count, c.hash, false);
+            report.intervals.push(IntervalCheck {
+                check: CheckpointCheck {
+                    tick: steps,
+                    film: (c.count, c.hash),
+                    ours,
+                },
+                film_entries: c.count - previous_counts.0,
+                our_entries: ours.0 - previous_counts.1,
+            });
+            report.matched += usize::from(passed);
+        }
+    }
+    report.dropped = driver.mapper.dropped.clone();
     report
+}
+
+/// The accounting of one mapped decree.
+fn report_mapped(
+    report: &mut ReplayReport,
+    record: u32,
+    d: &FilmDecree,
+    selection: &[u16],
+    mapped: &Mapped,
+) {
+    *report.outcomes.entry(outcome_key(mapped)).or_default() += 1;
+    if let Mapped::Unresolved(why) = mapped {
+        report.unresolved.push((record, d.player, why.clone()));
+    }
+    if let Mapped::Commands(c) = mapped {
+        report.commands += c.len();
+    }
+    if crate::classify::decree_class(&d.decree) == "command" {
+        let name = crate::classify::actor_command(&d.decree)
+            .map_or_else(|| d.name.to_owned(), |(_, n, _)| n.to_owned());
+        report.orders.push(OrderRow {
+            record,
+            player: d.player,
+            name,
+            slots: selection.to_vec(),
+            outcome: outcome_key(mapped),
+            commands: match mapped {
+                Mapped::Commands(c) => c.iter().map(|c| format!("{c:?}")).collect(),
+                _ => Vec::new(),
+            },
+            refused: Vec::new(),
+        });
+    }
 }
 
 /// aa-play's entries logged in steps `from + 1 ..= to`.
@@ -916,7 +1312,7 @@ fn kinds(world: &World, from: u32, to: u32, prepared: Option<&chain::Interval>) 
             SKind::Clock => k.clock += 1,
             SKind::DecreeName => k.decree += 1,
             SKind::Int(l) if l == DECREE_ID_LABEL => k.decree += 1,
-            SKind::RngGetter => {
+            SKind::RngGetter(_) => {
                 k.getters += 1;
                 k.getter_states.push((tick, value & 0xFFFF));
             }
@@ -958,7 +1354,7 @@ fn pick_of(world: &World, from: u32, to: u32, prepared: &chain::Interval) -> Opt
                 passed = Some(next);
                 next += 1;
             }
-            SKind::RngGetter => pick.push(passed?),
+            SKind::RngGetter(_) => pick.push(passed?),
             _ => {}
         }
     }

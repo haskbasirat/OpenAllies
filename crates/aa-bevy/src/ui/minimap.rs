@@ -430,17 +430,18 @@ impl MinimapArt {
         let now = self.real_now();
         let due = now - self.fog_at >= self.period_fog || now < self.fog_at;
         let no_fog = minimap_no_fog(b);
-        let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(b.local) || self.fog_no_fog != no_fog;
+        let view = b.view_kingdom().unwrap_or(crate::session::NO_KINGDOM);
+        let changed = self.fog_revision != b.world.fog.revision || self.fog_local != Some(view) || self.fog_no_fog != no_fog;
         if !(due && changed) && self.fog_local.is_some() && !supply_changed {
             return false;
         }
         self.fog_at = now;
         self.fog_revision = b.world.fog.revision;
-        self.fog_local = Some(b.local);
+        self.fog_local = Some(view);
         self.fog_no_fog = no_fog;
         // tile states: 0 visible, 1 explored, 255 never explored
         let mut shade = Vec::new();
-        fog::shade(&b.world, Some(b.local), 1, &mut shade);
+        fog::shade(&b.world, b.view_kingdom(), 1, &mut shade);
         let (fw, fh) = (b.world.fog.width.max(0) as usize, b.world.fog.height.max(0) as usize);
         let px = &mut self.fogged;
         if px.len() != self.base.len() || fw == 0 || fh == 0 || shade.len() != fw * fh {
@@ -537,7 +538,7 @@ impl MinimapArt {
             if a.kingdom.is_none() || d.invisible || !d.radar {
                 continue;
             }
-            let sighting = if no_fog { Sighting::Visible } else { fog::sighting(w, a.id, Some(b.local)) };
+            let sighting = if no_fog { Sighting::Visible } else { fog::sighting(w, a.id, b.view_kingdom()) };
             // the owner as the local kingdom saw it last
             let (pos, facing, owner) = match sighting {
                 Sighting::Visible => (a.pos, a.facing, a.kingdom),
@@ -548,7 +549,7 @@ impl MinimapArt {
         }
         // ghosts of remembered actors already gone (none while everything
         // live is shown)
-        for (id, m) in fog::memories(w, Some(b.local)).into_iter().filter(|_| !no_fog) {
+        for (id, m) in fog::memories(w, b.view_kingdom()).into_iter().filter(|_| !no_fog) {
             if w.actor(id).is_some_and(|a| a.alive) || !w.data.def(m.def).radar {
                 continue;
             }
@@ -570,7 +571,12 @@ impl MinimapArt {
             let icon = def.minimap_icon.clone();
             // 0x433B50: the relation colour; an object of no relation is
             // drawn only by its icon
+            // 0x433B50 with no view kingdom: the neutral colour, replaced by
+            // the owner's kingdom colour (GKingdom+0x1E8); every object is
+            // drawn ([O] 12-ingame-3s.png: the kingdoms' colours)
+            let view_colour = kingdom.filter(|_| b.view_kingdom().is_none()).map(|k| k.color.map(|v| v as f32 / 255.0));
             let color = match relation {
+                _ if view_colour.is_some() => view_colour.unwrap_or_default(),
                 Relation::Own if selected => self.owned_selected,
                 Relation::Own if mobile => self.owned_mobile,
                 Relation::Own => self.owned_static,
@@ -581,7 +587,7 @@ impl MinimapArt {
                 Relation::Other if mobile => self.neutral_mobile,
                 Relation::Other => self.neutral_static,
             };
-            if relation == Relation::Other && icon.is_none() {
+            if relation == Relation::Other && icon.is_none() && b.view_kingdom().is_some() {
                 continue;
             }
             // 0x433E40: the priority (byte arithmetic)
@@ -1013,7 +1019,7 @@ fn footprint(r: &mut Raster, shape: &Shape, at: Vec2, dir: Vec2, sx: f32, sy: f3
 /// The local kingdom's enchantments carry MINIMAP_NO_FOG (Radar Scan;
 /// `0x4CF110` flags bit 8).
 fn minimap_no_fog(b: &Battle) -> bool {
-    aa_play::special_ops::kingdom_has_flag(&b.world, b.local, "MINIMAP_NO_FOG")
+    b.view_kingdom().is_some_and(|k| aa_play::special_ops::kingdom_has_flag(&b.world, k, "MINIMAP_NO_FOG"))
 }
 
 /// The GameMiniMap widget's layer size in pixels (`minimap_size`, 172; the

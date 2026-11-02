@@ -50,6 +50,8 @@ pub struct KingdomInfo {
     pub faction: String,
     pub color: String,
     pub handicap: String,
+    /// The display key (+8 through the film's strings: `side01` -> `Player`).
+    pub display: String,
     /// The kingdom's team id (`string_14`, e.g. "team_1").
     pub team: String,
     /// `byte_10`: a map independent kingdom (cities), not a player slot.
@@ -66,6 +68,7 @@ impl KingdomInfo {
                 faction: text(&k.faction),
                 color: text(&k.color),
                 handicap: text(&k.handicap),
+                display: text(&k.display_key),
                 team: text(&k.string_14),
                 independent: k.byte_10 != 0,
             })
@@ -282,44 +285,93 @@ pub fn decode_record(
     }
 }
 
-/// Offset of the creator's WorldRules mode word in a MAP_HEADER, or `None` when
-/// the header names no creator class. The class name closes the header's fixed
-/// part (59EA60); after it come the derived version of a `KKC_WorldCreatorLoad`
-/// (512C30), the creator version and the rules version (0x512420).
-fn creator_mode_offset(bytes: &[u8]) -> Option<usize> {
-    const CLASS: &str = "KKC_WorldCreator";
-    let units: Vec<u8> = CLASS.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    let at = bytes.windows(units.len()).rposition(|w| w == units)?;
-    let length_at = at.checked_sub(2)?;
-    let length =
-        u16::from_le_bytes(bytes.get(length_at..at)?.try_into().expect("two bytes")) as usize;
-    let name = bytes.get(at..at + length * 2)?;
-    let derived = usize::from(name.len() == "KKC_WorldCreatorLoad".len() * 2);
-    Some(at + name.len() + (derived + 2) * 4)
+/// MAP_HEADER of a film: the header, its derived creator data. The mode word of
+/// the rules is read whatever it holds (WorldRules::Load 0x512420 stores it
+/// without branching on it); a film of a saved game has mode 2 in its creator.
+pub fn decode_film_header(chunk: &aa_mapworld::Chunk) -> Result<(MapHeader, DerivedCreator)> {
+    // A saved game's own header, when a film's chain walks through it (0x59F600):
+    // its stream keeps the text of its localized strings (0x49AD70).
+    if matches!(MapHeader::rules_mode(chunk), Ok(2 | 4)) {
+        return Ok(MapHeader::decode_saved(chunk)?);
+    }
+    Ok(MapHeader::decode_any_creator(chunk)?)
 }
 
-/// MAP_HEADER of a film. aa-mapworld accepts only mode 0 (`playable`) in the
-/// creator's own rules, but the original reads the mode word without branching
-/// on it (WorldRules::Load 0x512420 stores it at +4; the modes are 0x4981A0's
-/// `playable`, `cutscene`, `savegame`, `film`, `savegame_metagame_rts`, ...), and
-/// a film of a saved game has mode 2 there. So the word is set aside for the
-/// decode and put back into the decoded header.
-pub fn decode_film_header(chunk: &aa_mapworld::Chunk) -> Result<(MapHeader, DerivedCreator)> {
-    let mode_at = creator_mode_offset(&chunk.bytes).filter(|&at| at + 4 <= chunk.bytes.len());
-    let mode = mode_at.map_or(0, |at| {
-        u32::from_le_bytes(chunk.bytes[at..at + 4].try_into().expect("four bytes"))
-    });
-    if mode == 0 {
-        return Ok(MapHeader::decode_any_creator(chunk)?);
+fn film_header(chunk: &aa_mapworld::Chunk) -> Result<FilmHeader> {
+    let (map_header, creator) = decode_film_header(chunk)?;
+    let rmc = match &creator {
+        DerivedCreator::Random(s) => Some(text(&s.rmc)),
+        _ => None,
+    };
+    Ok(FilmHeader {
+        creator_class: text(&map_header.creator.class_name),
+        seed: map_header.creator.rng_seed,
+        creator_kingdoms: KingdomInfo::list(&map_header.creator.parameters),
+        header_kingdoms: KingdomInfo::list(&map_header.parameters),
+        rmc,
+        creator,
+        map_header,
+    })
+}
+
+/// A film's header and its text table, without its records: what the file dialog
+/// reads of each film (0x59F570 and the resource's load).
+#[derive(Clone, Debug)]
+pub struct HeaderOnly {
+    pub header: FilmHeader,
+    /// `MAPSTRINGS` (59FDA0): the map's text table, lower-case key to text.
+    pub strings: BTreeMap<String, String>,
+}
+
+impl HeaderOnly {
+    /// The film's text for `key`; the key itself when it has none.
+    pub fn map_string(&self, key: &str) -> String {
+        self.strings
+            .get(&key.to_ascii_lowercase())
+            .cloned()
+            .unwrap_or_else(|| key.to_owned())
     }
-    let at = mode_at.expect("a nonzero mode was read from this offset");
-    let mut neutral = chunk.clone();
-    neutral.bytes[at..at + 4].copy_from_slice(&0u32.to_le_bytes());
-    neutral.payload_source = SourceIdentity::of(&neutral.bytes);
-    let (mut header, creator) = MapHeader::decode_any_creator(&neutral)?;
-    header.source = chunk.payload_source.clone();
-    header.creator.rules.mode = mode;
-    Ok((header, creator))
+}
+
+/// See [`HeaderOnly`]. A film the game never closed has an empty chunk directory
+/// and no header (`Not a KKC_MapResource`).
+pub fn read_header(bytes: Vec<u8>) -> Result<HeaderOnly> {
+    let archive = MapArchive::from_bytes(bytes)?;
+    if archive.directory().is_empty() {
+        return Err(chunk_error(
+            "MAP_HEADER",
+            "empty chunk directory: the game never closed this film",
+        ));
+    }
+    let header = film_header(&archive.decode_chunk("MAP_HEADER", CHUNK_BUDGET)?)?;
+    let strings = archive
+        .decode_chunk("MAPSTRINGS", CHUNK_BUDGET)
+        .map_or_else(|_| BTreeMap::new(), |c| map_strings(&c.bytes));
+    Ok(HeaderOnly { header, strings })
+}
+
+/// The `key = "text"` lines of a film's `[Text]` table.
+fn map_strings(bytes: &[u8]) -> BTreeMap<String, String> {
+    let text = if bytes.starts_with(&[0xFF, 0xFE]) {
+        let units: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|p| u16::from_le_bytes([p[0], p[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+    text.lines()
+        .filter_map(|line| {
+            let (key, value) = line.split_once('=')?;
+            let value = value.trim();
+            let value = value
+                .strip_prefix('"')
+                .and_then(|v| v.strip_suffix('"'))
+                .unwrap_or(value);
+            Some((key.trim().to_ascii_lowercase(), value.to_owned()))
+        })
+        .collect()
 }
 
 /// What the film version check in 0x5A3980 (before CreateGWorld) does with a
@@ -386,20 +438,7 @@ impl Film {
                 "empty chunk directory: the game never closed this film",
             ));
         }
-        let (map_header, creator) = decode_film_header(get("MAP_HEADER")?)?;
-        let rmc = match &creator {
-            DerivedCreator::Random(s) => Some(text(&s.rmc)),
-            _ => None,
-        };
-        let header = FilmHeader {
-            creator_class: text(&map_header.creator.class_name),
-            seed: map_header.creator.rng_seed,
-            creator_kingdoms: KingdomInfo::list(&map_header.creator.parameters),
-            header_kingdoms: KingdomInfo::list(&map_header.parameters),
-            rmc,
-            creator,
-            map_header,
-        };
+        let header = film_header(get("MAP_HEADER")?)?;
         let players = decode_session_players(&get("SessionPlayers")?.bytes)?;
         let map_strings_bytes = decoded.get("MAPSTRINGS").map_or(0, |c| c.bytes.len());
 

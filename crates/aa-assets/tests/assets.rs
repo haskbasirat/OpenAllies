@@ -221,6 +221,14 @@ fn recovered_assets_and_path_safety() {
     assert_eq!(names.len(), 80);
     let map = store.load_map("Campaign/tutorial01").unwrap();
     assert_eq!(map.placements.actors.len(), 2732);
+    // A palette id `translate.tgi` renames draws the variation it comes to, and a
+    // tile of an id that comes to nothing keeps the previous tile's terrain (0x557D4B).
+    let farm = store.load_map("DeveloperMaps/(4FFA)Farmhouses").unwrap();
+    assert!(farm.terrain.tiles.iter().all(|t| farm.terrain.palette[t].texture.is_some()));
+    assert!(!farm.terrain.palette.values().any(|p| p.id == "temperate_grassdry04"));
+    let renamed = farm.terrain.palette.values().find(|p| p.id == "temperate_grassdry02").unwrap();
+    assert!(renamed.texture.as_deref().unwrap().ends_with("Terrain/Temperate/TemperateGrassDry/TemperateGrassDry02.png"));
+    assert!(renamed.width.is_some() && renamed.height.is_some());
     for bad in [
         "../Data.rwd",
         "Campaign/../tutorial01",

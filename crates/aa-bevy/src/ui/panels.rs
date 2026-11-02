@@ -5,11 +5,12 @@
 //! * F1 / ButtonObjectives: ObjectivesDisplay (Init `0x632E90`: the
 //!   ObjectivesRequired / ObjectivesOptional panels with their viewports,
 //!   ButtonClose and SecondaryButtonClose sending ObjectivesDisplayClose).
-//!   Refresh `0x633A50` once a second: a world without scripted primary
-//!   objectives gets the required `objective_defeat_all_enemies`
-//!   (`0x633690`); each objective is an ObjectiveWidget (`0x633960`) whose
-//!   Text takes text_color_required / _optional / _completed / _failed and
-//!   whose Icon takes the matching icon_* texture;
+//!   Refresh `0x633A50` once a second: the city objective (`0x633430`), the
+//!   kingdom's scripted list, and for a kingdom with neither the required
+//!   `objective_defeat_all_enemies` (`0x633690`); each objective is an
+//!   ObjectiveWidget (`0x633960`) whose Text takes text_color_required /
+//!   _optional / _completed / _failed and whose Icon takes the matching
+//!   icon_* texture;
 //! * F2 / ButtonTechnology: TechnologyDisplay (Init `0x637AB0`), refresh
 //!   `0x638170` once a second: one Technology item per technology property
 //!   of the local kingdom that has an icon (Icon = the property icon, Name =
@@ -56,7 +57,7 @@ pub struct Panels {
     refreshed: Option<f32>,
     /// What the politics display shows (rebuilt when it changes).
     politics_rows: Vec<String>,
-    shown_objectives: Vec<(String, u8)>,
+    shown_objectives: Vec<(String, bool, u8)>,
     shown_technologies: Vec<String>,
 }
 
@@ -124,15 +125,20 @@ impl Panels {
     /// ButtonMessageLog, f4 ButtonPolitics (and f1 / f2 / f3 close their
     /// display while it is open).
     pub fn hotkey(&mut self, ui: &mut Ui, key: bevy::prelude::KeyCode) -> bool {
+        let Some(cmd) = Self::hotkey_command(key) else { return false };
+        self.command(ui, cmd)
+    }
+
+    /// The console command of a display hotkey.
+    pub fn hotkey_command(key: bevy::prelude::KeyCode) -> Option<&'static str> {
         use bevy::prelude::KeyCode;
-        let cmd = match key {
+        Some(match key {
             KeyCode::F1 => "ObjectivesDisplayToggle",
             KeyCode::F2 => "TechnologyDisplayToggle",
             KeyCode::F3 => "MessageLogToggle",
             KeyCode::F4 => "PoliticsDisplayToggle",
-            _ => return false,
-        };
-        self.command(ui, cmd)
+            _ => return None,
+        })
     }
 
     fn set_objectives(&mut self, ui: &mut Ui, open: bool) {
@@ -238,44 +244,64 @@ impl Panels {
         }
     }
 
-    /// `0x633A50` with the default objective of `0x633690`: state 0
-    /// required, 1 completed, 2 failed.
+    /// `0x633A50`, once a second: the local kingdom's list (Kingdom+300), after
+    /// the city objective of `0x633430` (`objective_city_ratio|ddd`, while the
+    /// CityVictoryRatio rule is on, its text changing with the owned cities;
+    /// completed is Kingdom+314) and, for a kingdom without either, the default
+    /// `objective_defeat_all_enemies` of `0x633690` (never shown completed or
+    /// failed). An entry's flag +10 chooses the panel (`0x633960`: the required
+    /// list +108 / ObjectivesViewport, else the optional +114 /
+    /// ObjectivesOptionalViewport); its state (0 incomplete, 1 complete, 2
+    /// failed) the text colour and icon, completed and failed over the list's.
     fn refresh_objectives(&mut self, ui: &mut Ui, b: &Battle) {
         let world = &b.world;
-        let state = match world.winner {
-            Some(team) if world.kingdoms.iter().find(|k| k.id == b.local).is_some_and(|k| k.team == team) => 1,
-            Some(_) => 2,
-            None => 0,
-        };
-        let want = vec![("objective_defeat_all_enemies".to_string(), state)];
+        let list = aa_play::triggers::objectives(world, b.local);
+        let city = aa_play::victory::city_objective(world, b.local);
+        let mut want: Vec<(String, bool, u8)> = Vec::new();
+        // no view kingdom: the panel opens empty ([O] 22-f1-objectives.png)
+        if b.view_kingdom().is_none() {
+        } else if let Some(c) = &city {
+            want.push((ui.strings.format("objective_city_ratio|ddd", &[&c.needed.to_string(), &c.owned.to_string(), &c.available.to_string()]), true, u8::from(c.complete)));
+        } else if list.is_empty() {
+            want.push((ui.strings.resolve("#objective_defeat_all_enemies"), true, 0));
+        }
+        for o in &list {
+            // the MAPSTRINGS text; a key the map text lacks stays "#key"
+            // (4B9F40 falls back to the global tables)
+            let text = if o.text.starts_with('#') { ui.strings.resolve(&o.text) } else { o.text.clone() };
+            want.push((text, o.primary, o.state as u8));
+        }
         if want == self.shown_objectives {
             return;
         }
         self.shown_objectives = want.clone();
-        let vp = format!("Root/{}/ObjectivesRequired/ObjectivesViewport", "ObjectivesDisplay");
-        let _ = ui.viewport_clear(&vp);
+        let required = "Root/ObjectivesDisplay/ObjectivesRequired/ObjectivesViewport".to_string();
+        let optional = "Root/ObjectivesDisplay/ObjectivesOptional/ObjectivesOptionalViewport".to_string();
+        let _ = ui.viewport_clear(&required);
+        let _ = ui.viewport_clear(&optional);
         let node = ui.store.node(OBJECTIVES).ok();
         let color = |k: &str, d: [f32; 3]| node.as_ref().and_then(|n| n.point3(k).ok()).unwrap_or(d);
         let icon = |k: &str| node.as_ref().map(|n| n.string_or_empty(k)).filter(|s| !s.is_empty());
-        for (i, (key, st)) in want.iter().enumerate() {
+        for (i, (text, primary, st)) in want.iter().enumerate() {
             let mut item = w(C::Panel, "ObjectiveWidget");
             item.add_child(w(C::Label, "Text"));
             item.add_child(w(C::Decal, "Icon"));
             load_under(ui, &mut item, OBJECTIVES);
             item.tag = TAG_OBJECTIVE + i as u64;
-            ui.viewport_add(&vp, item);
+            ui.viewport_add(if *primary { &required } else { &optional }, item);
             let Some(p) = ui.find_tag(TAG_OBJECTIVE + i as u64) else { continue };
-            let text = ui.strings.resolve(&format!("#{key}"));
-            ui.set_label(&format!("{}/Text", rel(&p)), &text);
-            let (c, t) = match st {
-                1 => (color("text_color_completed", [0.0, 1.0, 0.0]), icon("icon_completed")),
-                2 => (color("text_color_failed", [1.0, 0.0, 0.0]), icon("icon_failed")),
-                _ => (color("text_color_required", [1.0, 1.0, 1.0]), icon("icon_required")),
+            ui.set_label(&format!("{}/Text", rel(&p)), text);
+            let (c, t) = match (st, primary) {
+                (1, _) => (color("text_color_completed", [0.0, 1.0, 0.0]), icon("icon_completed")),
+                (2, _) => (color("text_color_failed", [1.0, 0.0, 0.0]), icon("icon_failed")),
+                (_, true) => (color("text_color_required", [1.0, 1.0, 1.0]), icon("icon_required")),
+                (_, false) => (color("text_color_optional", [1.0, 1.0, 1.0]), icon("icon_optional")),
             };
             set_label_color(ui, &format!("{}/Text", rel(&p)), c);
             set_decal(ui, &format!("{}/Icon", rel(&p)), t);
         }
-        ui.viewport_refresh(&vp);
+        ui.viewport_refresh(&required);
+        ui.viewport_refresh(&optional);
         ui.layout();
     }
 

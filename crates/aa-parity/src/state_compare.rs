@@ -874,7 +874,8 @@ fn compare_thing(c: &mut Collector, gtid: u32, n: &NativeActor, thing: Thing, wo
                 );
             }
             if let Some(h) = n.health {
-                let max = aa_play::production::max_health(world, actor.kingdom, actor.def);
+                // the level's HEALTH amount is in combat's (0x561D40)
+                let max = world.combat.actor(a).filter(|s| s.initialized).map_or_else(|| aa_play::production::max_health(world, actor.kingdom, actor.def), |s| s.max_health);
                 c.bits(
                     "combat",
                     g,
@@ -993,6 +994,41 @@ fn compare_thing(c: &mut Collector, gtid: u32, n: &NativeActor, thing: Thing, wo
         }
         _ => return,
     }
+    // morale and the state bit under_siege, where the trace has them
+    if let (Thing::Org(o), Some(m)) = (thing, n.morale)
+        && let (Some(org), Some(st)) = (world.orgs.get(o as usize), world.combat.org(o))
+    {
+        for (field, native, ours) in [
+            ("organization morale +5C", m[0], org.morale.to_bits()),
+            ("organization morale maximum +60", m[1], st.morale_max.to_bits()),
+            ("organization breakpoint +B8", m[2], st.breakpoint.to_bits()),
+            ("organization attack efficiency +84", m[6], st.attack_efficiency.to_bits()),
+            ("organization attack efficiency desired +88", m[7], st.attack_efficiency_desired.to_bits()),
+        ] {
+            c.bits("combat", g, field, |_, _| field.to_string(), native, ours);
+        }
+        // The regiment's Mind state, by the state's vtable of the fight traces.
+        if let Some([_, state]) = n.mind
+            && let Some(native) = aa_play::morale::RegimentState::from_vtable(state)
+        {
+            let ours = aa_play::morale::regiment_state(world, o);
+            if native != ours {
+                c.push("combat", g, "regiment Mind state", format!("regiment Mind state: native {native:?} / ours {ours:?}"), format!("{native:?}"), format!("{ours:?}"));
+            }
+        }
+        if m[3] != st.living as u32 {
+            c.push("combat", g, "organization living +64", "organization living +64".into(), m[3].to_string(), st.living.to_string());
+        }
+    }
+    if let Thing::Actor(a) = thing
+        && n.morale.is_none()
+        && n.health.is_some()
+    {
+        let (native, ours) = (n.state >> 20 & 1 != 0, aa_play::supply::under_siege(world, a));
+        if native != ours {
+            c.push("combat", g, "under_siege", format!("{who} under_siege state 20: {}", if native { "native has it" } else { "aa-play has it" }), native.to_string(), ours.to_string());
+        }
+    }
     // zones (actors and organizations)
     let zone = |slot: u32| n.zones.iter().find(|z| z.slot == slot);
     for (lane, slot) in [
@@ -1048,6 +1084,8 @@ pub struct TickGetters {
     pub native: Vec<String>,
     pub native_states: Vec<u32>,
     pub ours_states: Vec<u32>,
+    /// `SKind::RngGetter`'s site of each of ours.
+    pub ours_sites: Vec<&'static str>,
 }
 
 /// Every world-RNG getter of the battle, native against aa-play.
@@ -1071,6 +1109,8 @@ pub struct GetterCensus {
     pub windows_short: u32,
     pub windows_long: u32,
     pub by_group: BTreeMap<String, GetterGroup>,
+    /// aa-play's getters by their site: how many over the film, the first tick.
+    pub ours_by_site: BTreeMap<&'static str, (u32, u32)>,
     /// The first windows that differ.
     pub first_windows: Vec<TickGetters>,
 }
@@ -1095,17 +1135,21 @@ pub fn getter_census(world: &World, trace: &NativeTrace, last_tick: u32) -> Gett
         .iter()
         .filter(|g| g.tick >= 1 && g.after < last_window)
         .collect();
-    let ours: Vec<(u32, u32)> = world
+    let ours: Vec<(u32, u32, &'static str)> = world
         .trace
         .entries()
-        .filter(|(t, k, _)| *t <= last_window && matches!(k, SKind::RngGetter))
-        .map(|(t, _, v)| (t, v))
+        .filter(|(t, _, _)| *t <= last_window)
+        .filter_map(|(t, k, v)| if let SKind::RngGetter(site) = k { Some((t, v, site)) } else { None })
         .collect();
+    for &(t, _, site) in &ours {
+        let e = out.ours_by_site.entry(site).or_insert((0, t));
+        e.0 += 1;
+    }
     out.native_total = native.len() as u32;
     out.ours_total = ours.len() as u32;
     for (i, g) in native.iter().enumerate() {
         match ours.get(i) {
-            Some(&(_, s)) if s == g.state => {}
+            Some(&(_, s, _)) if s == g.state => {}
             other => {
                 out.first_stream_difference =
                     Some((i as u32, g.tick, g.state, other.map_or(0, |o| o.1)));
@@ -1141,11 +1185,13 @@ pub fn getter_census(world: &World, trace: &NativeTrace, last_tick: u32) -> Gett
         let empty = Vec::new();
         let native_list = by_window.get(&start).unwrap_or(&empty);
         let mut ours_list = Vec::new();
-        while let Some(&(t, s)) = ours.get(cursor) {
+        let mut ours_sites = Vec::new();
+        while let Some(&(t, s, site)) = ours.get(cursor) {
             if t > end {
                 break;
             }
             ours_list.push(s);
+            ours_sites.push(site);
             cursor += 1;
         }
         out.windows += 1;
@@ -1188,6 +1234,7 @@ pub fn getter_census(world: &World, trace: &NativeTrace, last_tick: u32) -> Gett
                         .collect(),
                     native_states: native_list.iter().map(|g| g.state).collect(),
                     ours_states: ours_list,
+                    ours_sites,
                 });
             }
         }

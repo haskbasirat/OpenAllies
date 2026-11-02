@@ -133,6 +133,9 @@ pub struct Widget {
     pub view: Option<ViewElement>,
     /// `[Label]` / `[Decal]` view element of label and decal widgets.
     pub sub_ve: Option<ViewElement>,
+    /// `sub_ve` paints under `view`: it joined the root view element's children
+    /// at the lowest key (0x5E37A0, an action button's icon under its frame).
+    pub sub_ve_under: bool,
     pub children: Vec<Widget>,
     /// Console command string fired by a button (`0x50CBE0`).
     pub command: Option<String>,
@@ -189,6 +192,7 @@ impl Widget {
             root,
             view: None,
             sub_ve: None,
+            sub_ve_under: false,
             children: Vec::new(),
             command: None,
             client_name: "Client".into(),

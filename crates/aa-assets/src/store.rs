@@ -9,10 +9,162 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// One `[Variation]` of a terrain file, as a palette entry takes it.
+struct VariationArt {
+    texture: String,
+    width: Option<f32>,
+    height: Option<f32>,
+    color: Option<[f32; 3]>,
+}
+
+/// A TGI file's lines as (lower-case key, value): comments out, a type word before
+/// the key dropped (`fixed noise_min = 0.25`), a node header as (header, "").
+fn tgi_lines(text: &str) -> Vec<(String, String)> {
+    let mut clean = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("/*") {
+        clean.push_str(&rest[..at]);
+        match rest[at..].find("*/") {
+            Some(end) => rest = &rest[at + end + 2..],
+            None => rest = "",
+        }
+    }
+    clean.push_str(rest);
+    clean
+        .lines()
+        .filter_map(|line| {
+            let line = line.split(';').next().unwrap_or("").trim();
+            if line.starts_with('[') {
+                return Some((line.to_ascii_lowercase(), String::new()));
+            }
+            let (key, value) = line.split_once('=')?;
+            let key = key.split_whitespace().last()?.to_ascii_lowercase();
+            Some((key, value.trim().trim_matches('"').to_owned()))
+        })
+        .collect()
+}
+
+fn tgi_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            tgi_files(&path, out);
+        } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tgi")) {
+            out.push(path);
+        }
+    }
+}
+
+/// What `Data/Terrain/**/*.tgi` holds for a map's palette.
+#[derive(Default)]
+struct TerrainArt {
+    /// Every variation by lower-case IDS. A value the variation leaves out is its
+    /// terrain's.
+    variations: BTreeMap<String, VariationArt>,
+    /// Terrain IDS -> its first variation.
+    first_variation: BTreeMap<String, String>,
+    /// Biome IDS -> its first terrain.
+    first_terrain: BTreeMap<String, String>,
+}
+
+fn terrain_art(data: &Path) -> TerrainArt {
+    let terrain_root = data.join("Terrain");
+    let mut files = Vec::new();
+    tgi_files(&terrain_root, &mut files);
+    let float = |v: &str| v.trim().parse::<f32>().ok();
+    let color = |v: &str| {
+        let c: Vec<f32> = v.split(',').filter_map(|p| p.trim().parse().ok()).collect();
+        // -1, -1, -1 in the template: the terrain's
+        (c.len() == 3 && c[0] >= 0.0).then(|| [c[0], c[1], c[2]])
+    };
+    let mut out = TerrainArt::default();
+    for path in files {
+        let Ok(bytes) = fs::read(&path) else { continue };
+        let text: String = bytes.iter().map(|&b| b as char).collect();
+        let folder = path.parent().and_then(|p| p.strip_prefix(&terrain_root).ok()).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+        let (mut base_color, mut base_w, mut base_h) = (None, None, None);
+        let mut node = String::new();
+        let (mut terrain, mut biome) = (String::new(), String::new());
+        let mut current: Option<(String, VariationArt)> = None;
+        let finish = |current: &mut Option<(String, VariationArt)>, terrain: &str, first: &mut BTreeMap<String, String>, all: &mut BTreeMap<String, VariationArt>| {
+            if let Some((id, v)) = current.take().filter(|(_, v)| !v.texture.is_empty()) {
+                first.entry(terrain.to_owned()).or_insert_with(|| id.clone());
+                all.insert(id, v);
+            }
+        };
+        for (key, value) in tgi_lines(&text) {
+            if key.starts_with('[') {
+                finish(&mut current, &terrain, &mut out.first_variation, &mut out.variations);
+                if key.starts_with("[variation") {
+                    current = Some((String::new(), VariationArt { texture: String::new(), width: base_w, height: base_h, color: base_color }));
+                }
+                node = key;
+                continue;
+            }
+            match (&mut current, key.as_str()) {
+                (Some((id, _)), "ids") => *id = value.to_ascii_lowercase(),
+                (Some((_, v)), "texture") => {
+                    let name = value.replace('\\', "/");
+                    let stem = name.rsplit_once('.').map_or(name.as_str(), |(s, _)| s);
+                    v.texture = format!("/assets/converted/textures/Terrain/{folder}/{stem}.png");
+                }
+                (Some((_, v)), "texture_width") => v.width = float(&value),
+                (Some((_, v)), "texture_height") => v.height = float(&value),
+                (Some((_, v)), "terrain_color") => v.color = color(&value).or(v.color),
+                (None, "ids") if node.starts_with("[biome") => biome = value.to_ascii_lowercase(),
+                (None, "ids") if node.starts_with("[terrain") => {
+                    terrain = value.to_ascii_lowercase();
+                    (base_color, base_w, base_h) = (None, None, None);
+                }
+                (None, "terrain_ids") => {
+                    out.first_terrain.entry(biome.clone()).or_insert_with(|| value.to_ascii_lowercase());
+                }
+                (None, "texture_width") => base_w = float(&value),
+                (None, "texture_height") => base_h = float(&value),
+                (None, "terrain_color") => base_color = color(&value),
+                _ => {}
+            }
+        }
+        finish(&mut current, &terrain, &mut out.first_variation, &mut out.variations);
+    }
+    out
+}
+
+/// `Data/translate.tgi`, node Variation: old IDS to new IDS, lower case.
+fn variation_translations(data: &Path) -> BTreeMap<String, String> {
+    let Ok(bytes) = fs::read(data.join("translate.tgi")) else { return BTreeMap::new() };
+    let text: String = bytes.iter().map(|&b| b as char).collect();
+    let mut out = BTreeMap::new();
+    let (mut node, mut old): (String, String) = (String::new(), String::new());
+    for (key, value) in tgi_lines(&text) {
+        match key.as_str() {
+            "node" => node = value.to_ascii_lowercase(),
+            "ids_old" => old = value.to_ascii_lowercase(),
+            "ids_new" if node == "variation" => {
+                out.insert(std::mem::take(&mut old), value.to_ascii_lowercase());
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone)]
 pub struct AssetStore {
     root: PathBuf,
     maps: Vec<MapInfo>,
+    models: ModelManifest,
+    /// A profile's own art, converted the way the stock art is: consulted first.
+    /// Shared by every clone of the store, so one battle sets it for all its readers.
+    art: std::sync::Arc<std::sync::RwLock<Option<ArtOverlay>>>,
+}
+
+/// The converted art of one loose data folder (`research/film-sources/convert_overlay.py`):
+/// `<root>/assets/converted/...` beside its own model manifest.
+#[derive(Debug, Clone)]
+struct ArtOverlay {
+    root: PathBuf,
     models: ModelManifest,
 }
 
@@ -84,6 +236,7 @@ impl AssetStore {
                 models: Vec::new(),
                 by_path: BTreeMap::new(),
             },
+            art: Default::default(),
         };
         store.maps = store.read_json("game/data/maps/index.json")?;
         store.models = store.read_json("assets/converted/models/manifest.json")?;
@@ -110,6 +263,19 @@ impl AssetStore {
     pub fn root(&self) -> &Path {
         &self.root
     }
+    /// The art of a battle on a profile's data: `root` holds what its conversion
+    /// wrote, `None` (or a folder with no conversion) leaves the stock art alone.
+    pub fn set_art_overlay(&self, root: Option<&Path>) {
+        let overlay = root.and_then(|root| {
+            let path = root.join("assets/converted/models/manifest.json");
+            let bytes = fs::read(path).ok()?;
+            let models: ModelManifest = serde_json::from_slice(&bytes).ok()?;
+            Some(ArtOverlay { root: root.to_path_buf(), models })
+        });
+        if let Ok(mut art) = self.art.write() {
+            *art = overlay;
+        }
+    }
     pub fn maps(&self) -> &[MapInfo] {
         &self.maps
     }
@@ -121,6 +287,15 @@ impl AssetStore {
     }
     /// Resolves only allowlisted local asset URL namespaces and checks symlinks.
     pub fn resolve_url(&self, url: &str) -> Result<PathBuf> {
+        if let Some(path) = url.strip_prefix("/assets/")
+            && let Ok(art) = self.art.read()
+            && let Some(overlay) = art.as_ref()
+        {
+            let file = overlay.root.join("assets").join(relative_parts(path)?);
+            if file.is_file() {
+                return Ok(file);
+            }
+        }
         if let Some(path) = url.strip_prefix("/assets/") {
             self.resolve_relative(&format!("assets/{}", relative_parts(path)?))
         } else if let Some(path) = url.strip_prefix("/data/") {
@@ -181,7 +356,8 @@ impl AssetStore {
             .iter()
             .find(|m| m.id == id)
             .ok_or_else(|| AssetError::UnknownMap(id.into()))?;
-        let terrain: TerrainMap = self.read_json(&format!("game/data/maps/{id}.json"))?;
+        let mut terrain: TerrainMap = self.read_json(&format!("game/data/maps/{id}.json"))?;
+        self.fill_palette(&mut terrain);
         let placements: PlacementMap =
             self.read_json(&format!("game/data/map-actors/{id}.json"))?;
         if terrain.id != id
@@ -206,6 +382,69 @@ impl AssetStore {
             placements,
         })
     }
+    /// A map's palette as the game reads it: the file stores old ids and 0x48D500
+    /// finds them through `Data/translate.tgi` (node Variation: the translation
+    /// first, its target only, else the id itself). Recovered palettes and a map
+    /// file's own list name such ids, which is a third of many a developer map and
+    /// most of some. Each entry with no texture becomes the variation it comes to
+    /// (`Data/Terrain/**/*.tgi`), id included, so the height rule and the layer
+    /// order see the real terrain. A tile whose id comes to nothing keeps the
+    /// previous tile's terrain, the walk starting on the biome's first variation
+    /// (0x557D4B), as the world does (`aa_play::map`).
+    pub fn fill_palette(&self, terrain: &mut TerrainMap) {
+        if terrain.palette.values().all(|p| p.texture.is_some()) {
+            return;
+        }
+        let data = self.root.join("assets/original/Data");
+        let art = terrain_art(&data);
+        let translate = variation_translations(&data);
+        let find = |id: &str| -> Option<(String, &VariationArt)> {
+            let key = id.to_ascii_lowercase();
+            let found = match translate.get(&key) {
+                Some(new) => art.variations.contains_key(new).then(|| new.clone()).or_else(|| translate.get(new).filter(|n| art.variations.contains_key(*n)).cloned()),
+                None => art.variations.contains_key(&key).then_some(key),
+            }?;
+            let v = art.variations.get(&found)?;
+            self.resolve_url(&v.texture).ok()?;
+            Some((found, v))
+        };
+        let mut unresolved = std::collections::BTreeSet::new();
+        for (&index, entry) in terrain.palette.iter_mut().filter(|(_, p)| p.texture.is_none()) {
+            let Some((id, v)) = find(&entry.id) else {
+                unresolved.insert(index);
+                continue;
+            };
+            entry.id = id;
+            entry.texture = Some(v.texture.clone());
+            entry.width = v.width;
+            entry.height = v.height;
+            if let Some(color) = v.color {
+                entry.color = color;
+            }
+        }
+        if unresolved.is_empty() || !terrain.tiles.iter().any(|t| unresolved.contains(t)) {
+            return;
+        }
+        // The walk's start, only when the first tiles need it.
+        let mut previous = None;
+        if terrain.tiles.first().is_some_and(|t| unresolved.contains(t)) {
+            let initial = terrain.biomes.first().and_then(|b| art.first_terrain.get(&b.to_ascii_lowercase())).and_then(|t| art.first_variation.get(t));
+            if let Some((id, v)) = initial.and_then(|id| find(id)) {
+                let index = terrain.palette.keys().next_back().map_or(0, |k| k + 1);
+                terrain.palette.insert(index, TerrainPaletteEntry { id, texture: Some(v.texture.clone()), color: v.color.unwrap_or([0.4, 0.5, 0.3]), width: v.width, height: v.height });
+                previous = Some(index);
+            }
+        }
+        for tile in &mut terrain.tiles {
+            if unresolved.contains(tile) {
+                if let Some(p) = previous {
+                    *tile = p;
+                }
+            } else {
+                previous = Some(*tile);
+            }
+        }
+    }
     pub fn model_url(&self, resource_path: &str) -> Result<&str> {
         let key = relative_parts(resource_path)?.to_lowercase();
         self.models
@@ -215,6 +454,12 @@ impl AssetStore {
             .ok_or_else(|| AssetError::UnknownModel(resource_path.into()))
     }
     pub fn load_model(&self, resource_path: &str) -> Result<ModelAsset> {
+        // A model the profile's data holds replaces the archive's, as the file does.
+        let key = relative_parts(resource_path)?.to_lowercase();
+        let own = self.art.read().ok().and_then(|art| art.as_ref().and_then(|o| o.models.by_path.get(&key).cloned()));
+        if let Some(url) = own {
+            return self.read_path(&self.resolve_url(&url)?);
+        }
         let url = self.model_url(resource_path)?;
         self.read_path(&self.resolve_url(url)?)
     }
