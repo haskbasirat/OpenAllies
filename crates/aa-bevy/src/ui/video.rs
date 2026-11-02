@@ -165,7 +165,7 @@ impl VideoPlayer {
     }
 
     /// The current movie's baked sound track file.
-    fn audio(&self) -> Option<PathBuf> {
+    pub(crate) fn audio(&self) -> Option<PathBuf> {
         self.movies.get(self.current).and_then(|m| m.audio.as_ref()).map(|a| self.dir.join(a))
     }
 }

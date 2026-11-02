@@ -34,20 +34,23 @@
 //! through [`notices`] and the getters for the client (ui/objectives.rs).
 //!
 //! Compare against the original (behaviour-faithful seams, not exact):
-//! - the Area member iteration (558720/558650/558750 spatial query, 46EF30
-//!   shape overlap) is a point / circle test of the actors and organization
-//!   positions against the transformed area shape, in ascending GTID order;
-//!   the areas update right before the manager instead of at their queue-0
-//!   delivery;
+//! - the Area member iteration (558720/558650/558750 spatial query) walks the
+//!   living actors and organizations in ascending GTID order, each tested with
+//!   the exact 46EF30 overlap (aa_spatial::shape_overlap) of its blocking shape
+//!   (4EA0F0; an organization's leader point) and the area's; the areas update
+//!   right before the manager instead of at their queue-0 delivery;
 //! - 4D7960 (object_destroyed) brings the body to zero health; the death,
 //!   and its Destroyed event, follow in the next tick's combat pass;
-//! - 554B30 placement is a ring search on the static cell flags only;
-//! - transported creation (543BA0) creates the cargo at the unload point: the
-//!   transport vehicle (ActorData+184 transport_actor) is not in aa-play's
-//!   data and is not modelled;
+//! - 554B30 placement is the ring search of 554850 with the occupancy test of
+//!   `special_ops::spot_open` (553BA0's query, not the spatial index port);
+//! - transported creation (543BA0): the transport (ActorData+184
+//!   transport_actor) has no simulation actor: it is a flight of distance /
+//!   speed_max from the spawn point (Notice::Transport for the view), and the
+//!   cargo is created at the unload point on arrival;
 //! - actor commands from triggers (4D9B60) map to aa-play's commands (move,
-//!   stop, kill, bombard, air_attack, unpack, guard as follow);
-//! - camera pitch / yaw (4DBD80 / 4DBD40 table lookups) use f32 asin/atan2;
+//!   stop, kill, bombard, air_attack, unpack, guard, retreat, explore, rout);
+//! - camera pitch / yaw (4DBD80 / 4DBD40 table lookups) use f32 asin/atan2
+//!   (within 0.15 deg of the original's log);
 //! - a seam failure stops the native-exact manager; the update is then
 //!   rebuilt from the manager's state with the failing trigger disabled, and
 //!   the failure is kept in `notes` (the original never fails there).
@@ -55,14 +58,16 @@
 //! Refused (an error, or a note, never a success) because aa-play has no
 //! counterpart. No shipped map reaches the errors (tests/triggers.rs, the
 //! census): the hero table (26, 35, 48, 49), the fidget variable (41), the
-//! teleports (33, 37), the fog tile pass (106). Shipped maps do reach the
-//! notes: abilities used by a trigger (96: 4C9F10 is not a faction ability),
-//! team command flares (77, 78: 572E50 creates an actor and SAI priority).
+//! teleports (33, 37), the fog tile pass (106). Abilities used by a trigger
+//! (96: 4C9F10) run as `special_ops::trigger_use` when a general's data holds
+//! the ability; a team command flare (77, 78: 572E50) is a Notice for the view
+//! and its SAI priority for the computer team mates (`ai::team_flare`); the
+//! flare's actor itself (4FA030) has no simulation counterpart.
 //!
-//! Read by nobody yet (the owners are asked for them): `sai_disabled` /
-//! `unit_sai_disabled` (crate::ai), `default_victory` (crate::victory),
-//! `listening` / `script_heard` (the client's UI commands), `set_difficulty`
-//! (the session), `objectives` (the objectives display).
+//! The readers: `sai_disabled` / `unit_sai_disabled` (crate::ai),
+//! `default_victory` (crate::victory), `listening` / `script_heard` (the
+//! client's UI commands, ui/objectives.rs), `set_difficulty` (the session's
+//! launch), `objectives` (the objectives display, ui/panels.rs).
 use crate::data::DefClass;
 use crate::world::{ActorId, Command, Event, KingdomId, OrgId, Unit, World};
 use aa_numeric::Precision;
@@ -143,6 +148,19 @@ pub enum Notice {
     Ability { kingdom: KingdomId, ids: String, from: [f32; 3], at: [f32; 3] },
     /// 79F5D0: a kingdom's SAI profile changed.
     SaiProfile { kingdom: KingdomId, ids: String },
+    /// 543BA0: a transport (`ids`, ActorData+184) flies from a point to the
+    /// unload point in `seconds`; the cargo appears on arrival.
+    Transport { kingdom: KingdomId, ids: String, from: [f32; 3], to: [f32; 2], seconds: f32 },
+}
+
+/// A transported creation on its way (543BA0, see the module documentation).
+#[derive(Clone, Debug)]
+struct Drop {
+    due: f32,
+    kingdom: KingdomId,
+    cargo: crate::data::DefId,
+    name: Vec<u16>,
+    at: Vec2,
 }
 
 /// One Area (map thing class 6): its shape and the Area+84 member list.
@@ -214,9 +232,15 @@ struct Env {
     next_payload: u64,
     sort_objectives: bool,
     team_victory: Option<bool>,
-    /// The kingdom of the transported creation 543BA0 in progress (its
-    /// spawn request reaches create_transport, not transport_load).
+    /// The kingdom and transport of the transported creation 543BA0 in
+    /// progress (its spawn request reaches create_transport, not transport_load).
     pending_kingdom: Option<KingdomId>,
+    pending_transport: Option<(crate::data::DefId, [f32; 3])>,
+    /// ActorData+184 by lower-case actor IDS (the rules catalog, read on the
+    /// first transported creation).
+    transports: Option<BTreeMap<String, String>>,
+    /// The transported creations on their way.
+    drops: Vec<Drop>,
     /// The ability of the element 96 in progress (4C8C20 .. 4C9F10).
     pending_ability: Option<String>,
     /// What was already noted as not modelled (once per kind).
@@ -250,6 +274,11 @@ pub struct TriggerState {
     probed: bool,
     /// [`set_difficulty`] before the map loaded.
     difficulty: Option<i32>,
+    /// [`set_rule_sun`] before the map loaded.
+    rule_sun: Option<String>,
+    /// `World::events` the manager queue has taken this tick ([`tick`] and
+    /// [`late_events`]).
+    events_queued: usize,
     /// Load problems and seam failures (the original has none).
     pub notes: Vec<String>,
 }
@@ -497,6 +526,22 @@ fn load_suns(root: &Path, notes: &mut Vec<String>) -> Vec<SunData> {
     out
 }
 
+/// ActorData+184 for every thing: the rules catalog's `transport_actor` by
+/// lower-case IDS (read only for a map with a transported creation element).
+fn transport_table(root: &Path, data: &crate::data::GameData) -> Option<BTreeMap<String, String>> {
+    let mut sources = crate::data::Sources::open(root).ok()?;
+    let catalog = aa_rules::actors::ActorCatalog::load_v14(&mut sources.files).ok()?;
+    let mut out = BTreeMap::new();
+    for d in &data.defs {
+        let Ok(a) = catalog.resolved_actor(d.id.as_str()) else { continue };
+        let raw = crate::data::loader::st(&a, "transport_actor");
+        if let Some(raw) = raw.filter(|r| !r.is_empty() && !r.eq_ignore_ascii_case("null")) {
+            out.insert(d.id.to_ascii_lowercase(), raw);
+        }
+    }
+    Some(out)
+}
+
 fn word(b: &[u8], at: &mut usize) -> Option<u32> {
     let v = u32::from_le_bytes(b.get(*at..*at + 4)?.try_into().ok()?);
     *at += 4;
@@ -567,10 +612,11 @@ pub fn attach_bytes(world: &mut World, rmp: Vec<u8>, root: &Path) -> bool {
     let mut notes = Vec::new();
     let suns = load_suns(root, &mut notes);
     let difficulties = load_difficulties(root, &mut notes);
-    load(world, rmp, &language, suns, difficulties, camera_zoom_default(root), notes)
+    load(world, rmp, &language, suns, difficulties, camera_zoom_default(root), notes, Some(root))
 }
 
-fn load(world: &mut World, rmp: Vec<u8>, language: &str, suns: Vec<SunData>, difficulties: (Vec<String>, Option<i32>), camera_zoom_default: u32, mut notes: Vec<String>) -> bool {
+#[allow(clippy::too_many_arguments)]
+fn load(world: &mut World, rmp: Vec<u8>, language: &str, suns: Vec<SunData>, difficulties: (Vec<String>, Option<i32>), camera_zoom_default: u32, mut notes: Vec<String>, root: Option<&Path>) -> bool {
     let archive = match aa_mapworld::MapArchive::from_bytes(rmp) {
         Ok(a) => a,
         Err(e) => {
@@ -709,6 +755,9 @@ fn load(world: &mut World, rmp: Vec<u8>, language: &str, suns: Vec<SunData>, dif
         sort_objectives,
         team_victory,
         pending_kingdom: None,
+        pending_transport: None,
+        transports: None,
+        drops: Vec::new(),
         pending_ability: None,
         not_modelled: Vec::new(),
         camera_zoom_default,
@@ -718,6 +767,10 @@ fn load(world: &mut World, rmp: Vec<u8>, language: &str, suns: Vec<SunData>, dif
     };
     let manager = Manager::from_saved(saved);
     let id = world.map.id.clone();
+    let mut env = env;
+    if manager.definitions().iter().any(|t| t.actions.iter().any(|e| e.opcode == 30)) {
+        env.transports = root.and_then(|r| transport_table(r, &world.data));
+    }
     world.triggers.notes.extend(notes.into_iter().map(|n| format!("{id}: {n}")));
     world.triggers.scenario = Some(Box::new(Scenario { manager, core: CoreProgram::new(now, 0, PC), env, map_id: id }));
     true
@@ -737,9 +790,14 @@ pub fn tick(world: &mut World) {
             }
             None => world.triggers.notes.push("the install was not found: the map's triggers do not run".into()),
         }
+        if let Some(ids) = world.triggers.rule_sun.take() {
+            apply_rule_sun(world, &ids);
+        }
     }
     let Some(mut sc) = world.triggers.scenario.take() else { return };
-    queue_engine_events(world, &mut sc);
+    deliver_drops(world, &mut sc);
+    queue_engine_events(world, &mut sc, 0);
+    world.triggers.events_queued = world.events.len();
     areas_update(world, &mut sc);
     // World+1E8: the Sun's deferred update scheduled on an earlier tick.
     if sc.env.sun.scheduled
@@ -751,6 +809,43 @@ pub fn tick(world: &mut World) {
     let notes = std::mem::take(&mut sc.env.notes);
     world.triggers.notes.extend(notes.into_iter().map(|n| format!("{}: {n}", sc.map_id)));
     world.triggers.scenario = Some(sc);
+}
+
+/// The events of the rest of the update (phase 5 and the +208 queue, 0x4F9970):
+/// natively each goes into the manager's queue when it happens, for the
+/// manager's next update. `sim.rs` calls this at the end of the update.
+pub fn late_events(world: &mut World) {
+    let Some(mut sc) = world.triggers.scenario.take() else { return };
+    let from = world.triggers.events_queued;
+    queue_engine_events(world, &mut sc, from);
+    world.triggers.events_queued = 0;
+    world.triggers.scenario = Some(sc);
+}
+
+/// A transported creation's arrival (58BA90's unload): the cargo at the first
+/// free spot around the point (554B30 within 8 m, facing (0, -1)), its name
+/// published.
+fn deliver_drops(world: &mut World, sc: &mut Scenario) {
+    if sc.env.drops.is_empty() {
+        return;
+    }
+    let now = f(world.clock.begin.0);
+    let due: Vec<Drop> = {
+        let mut out = Vec::new();
+        sc.env.drops.retain(|d| {
+            let ready = d.due <= now;
+            if ready {
+                out.push(d.clone());
+            }
+            !ready
+        });
+        out
+    };
+    let mut host = Host { world, env: &mut sc.env };
+    for d in due {
+        let at = host.open_spot(d.at, Vec2::new(0.0, -1.0), Some(d.cargo), 8.0).unwrap_or(d.at);
+        host.create(d.cargo, d.kingdom, at, Vec2::new(0.0, -1.0), &d.name);
+    }
 }
 
 fn run_manager(world: &mut World, sc: &mut Scenario) {
@@ -804,12 +899,12 @@ fn push(sc: &mut Scenario, data: Payload) {
 
 /// The engine's trigger events of this tick, in the order they happened
 /// (each prepended to manager+50, newest first).
-fn queue_engine_events(world: &World, sc: &mut Scenario) {
+fn queue_engine_events(world: &World, sc: &mut Scenario, from: usize) {
     let gtid_actor = |a: ActorId| world.ids.actor(a).map_or(0, |g| g.raw());
     let gtid_org = |o: OrgId| world.ids.org(o).map_or(0, |g| g.raw());
     let gtid_kingdom = |k: KingdomId| world.ids.kingdom(k).map_or(0, |g| g.raw());
     let mut out = Vec::new();
-    for e in &world.events {
+    for e in world.events.get(from..).unwrap_or(&[]) {
         match e {
             // 4D57C0 -> 54BE10 / 54B7B0: victim, then the body's (or the
             // organization's +90) last damage record (attacker GTID).
@@ -850,45 +945,51 @@ fn queue_engine_events(world: &World, sc: &mut Scenario) {
     }
 }
 
-/// The world position, and the 4EA0F0 shape radius, of a thing an area can
-/// hold: a living actor (body) or an organization (its leader's position).
-fn member_position(world: &World, gtid: u32) -> Option<(Vec2, f32)> {
+/// A thing an area can hold: its position and blocking shape (4EA0F0): a
+/// living actor (body) or an organization (its leader's point).
+#[derive(Clone, Copy, Debug)]
+struct Member {
+    position: Vec2,
+    facing: Vec2,
+    /// Shape68: kind, radius, min x, min y, max x, max y (binary32 bits).
+    shape: [u32; 6],
+}
+
+fn member_position(world: &World, gtid: u32) -> Option<Member> {
     match world.ids.thing(gtid)? {
         crate::ids::Thing::Actor(a) => {
             let x = world.actors.get(a as usize).filter(|x| x.alive && !x.removed)?;
             let d = world.data.def(x.def);
-            let r = match d.blocking_shape.as_deref() {
-                Some(s) if s.eq_ignore_ascii_case("CIRCLE") => d.blocking_size.map_or(0.0, |v| v[0]),
-                _ => 0.0,
+            let (sin, cos) = x.facing.sin_cos();
+            let shape = match (d.blocking_shape.as_deref(), d.blocking_size) {
+                (Some(s), Some(v)) if s.eq_ignore_ascii_case("CIRCLE") => [1, v[0].to_bits(), 0, 0, 0, 0],
+                (Some(s), Some(v)) if s.eq_ignore_ascii_case("SQUARE") || s.eq_ignore_ascii_case("RECTANGLE") || s.eq_ignore_ascii_case("RECT") => {
+                    let (hx, hy) = (v[0] * 0.5, v[1] * 0.5);
+                    [3, hx.hypot(hy).to_bits(), (-hx).to_bits(), (-hy).to_bits(), hx.to_bits(), hy.to_bits()]
+                }
+                _ => [0, 0, 0, 0, 0, 0],
             };
-            Some((x.pos.truncate(), r))
+            Some(Member { position: x.pos.truncate(), facing: Vec2::new(cos, sin), shape })
         }
         crate::ids::Thing::Org(o) => {
             world.orgs.get(o as usize).filter(|x| x.alive)?;
-            Some((crate::supply::org_position(world, o), 0.0))
+            Some(Member { position: crate::supply::org_position(world, o), facing: Vec2::new(0.0, -1.0), shape: [0, 0, 0, 0, 0, 0] })
         }
         _ => None,
     }
 }
 
-/// 46EF30 for a point (with the member's radius) against the area shape:
-/// the point is brought into the area frame (facing = local +Y, the 4FAD28
-/// rotation), then tested against the circle radius or the box bounds.
-fn inside(area: &Area, p: Vec2, r: f32) -> bool {
-    let d = p - area.position;
-    let len = area.facing.length();
-    let (s, c) = if len > 0.0 { (area.facing.y / len, area.facing.x / len) } else { (1.0, 0.0) };
-    let local = Vec2::new(s * d.x - c * d.y, c * d.x + s * d.y);
-    let w = area.shape.map(f32::from_bits);
-    match area.shape[0] {
-        0 => d.length_squared() <= r * r,
-        1 => d.length() <= w[1] + r,
-        _ => {
-            let (lo, hi) = (Vec2::new(w[2].min(w[4]), w[3].min(w[5])), Vec2::new(w[2].max(w[4]), w[3].max(w[5])));
-            let q = local.clamp(lo, hi);
-            (local - q).length_squared() <= r * r
-        }
-    }
+/// 46EF30 of the member's shape and the area's (aa_spatial::shape_overlap).
+fn inside(area: &Area, m: &Member) -> bool {
+    use aa_spatial::{collision::Shape, geometry::Placement};
+    let placement = |shape: &[u32; 6], facing: Vec2, position: Vec2| Placement {
+        shape: Shape { kind: shape[0], radius_bits: shape[1], bounds: [shape[2], shape[3], shape[4], shape[5]] },
+        facing: [facing.x.to_bits(), facing.y.to_bits()],
+        position: [position.x.to_bits(), position.y.to_bits()],
+    };
+    let a = placement(&area.shape, area.facing, area.position);
+    let b = placement(&m.shape, m.facing, m.position);
+    aa_spatial::shape_overlap::overlaps(&a, &b, PC).unwrap_or(false)
 }
 
 /// 4DB430 for every Area (queue 0, its saved delivery order; areas not on
@@ -916,15 +1017,15 @@ fn areas_update(world: &World, sc: &mut Scenario) {
         }
     }
     // Candidates in ascending GTID slot order (4EFBE0 enumeration).
-    let mut things: Vec<(u32, Vec2, f32)> = world.ids.iter().filter_map(|(g, _)| member_position(world, g.raw()).map(|(p, r)| (g.raw(), p, r))).collect();
+    let mut things: Vec<(u32, Member)> = world.ids.iter().filter_map(|(g, _)| member_position(world, g.raw()).map(|m| (g.raw(), m))).collect();
     things.sort_by_key(|t| t.0 & 0xffff);
     for i in order {
         let area_obj = obj(tag::PLACED, sc.env.areas[i].placed as u64).0;
         let mut entered = Vec::new();
         {
             let area = &mut sc.env.areas[i];
-            for (gtid, p, r) in &things {
-                if !inside(area, *p, *r) {
+            for (gtid, m) in &things {
+                if !inside(area, m) {
                     continue;
                 }
                 if let Some(m) = area.members.iter_mut().find(|m| m.0 & 0xffff == gtid & 0xffff) {
@@ -989,6 +1090,26 @@ pub fn objectives(world: &World, kingdom: KingdomId) -> Vec<ObjectiveView> {
 /// The World+4C Sun now: (diffuse, ambient, specular) colours and the dimmer.
 pub fn sun(world: &World) -> Option<([[f32; 3]; 3], f32)> {
     world.triggers.scenario.as_ref().map(|s| s.env.sun.current())
+}
+
+/// `KKC_GWorld::StartMission` 0x4FDCE0: the Sun world rule away from its default
+/// sets the World+4C Sun's colours: 0x48D500 finds the Sun by IDS, 0x4EDB10 with
+/// no transition. A map without a trigger manager has none of this Sun here (the
+/// client lights it from its own copy, `look::SceneSun`).
+pub fn set_rule_sun(world: &mut World, ids: &str) {
+    if world.triggers.probed {
+        apply_rule_sun(world, ids);
+    } else {
+        world.triggers.rule_sun = Some(ids.to_owned());
+    }
+}
+
+fn apply_rule_sun(world: &mut World, ids: &str) {
+    let now = world.clock.begin.0;
+    let Some(sc) = world.triggers.scenario.as_mut() else { return };
+    if let Some(colors) = sc.env.suns.iter().find(|s| s.ids.eq_ignore_ascii_case(ids)).map(|s| s.colors) {
+        sc.env.sun.set_colors(colors, 0, now);
+    }
 }
 
 /// One presentation transition: (enabled, start, duration) in seconds of
@@ -1103,12 +1224,32 @@ pub fn set_difficulty(world: &mut World, difficulty: i32) {
     }
 }
 
+/// [`set_difficulty`] by a DifficultyLevel IDS (the world rule's EnumValue,
+/// any case; 48D500 on the bank of Game/difficulty_level.tgi). False when the
+/// bank does not have it (nothing changes).
+pub fn set_difficulty_ids(world: &mut World, ids: &str, root: &Path) -> bool {
+    let mut notes = Vec::new();
+    let (levels, _) = load_difficulties(root, &mut notes);
+    match levels.iter().position(|l| l.eq_ignore_ascii_case(ids)) {
+        Some(i) => {
+            set_difficulty(world, i as i32);
+            true
+        }
+        None => false,
+    }
+}
+
 /// The local player's current selection (Player+50), for the selection
 /// conditions 18 / 19.
 pub fn set_selection(world: &mut World, kingdom: KingdomId, units: Vec<Unit>) {
     if let Some(sc) = world.triggers.scenario.as_deref_mut() {
         sc.env.selections.insert(kingdom, units);
     }
+}
+
+/// 4BEDF0: a kingdom's name in the script commands (its map slot id).
+pub fn kingdom_script_name(world: &World, kingdom: KingdomId) -> Option<String> {
+    world.ids.kingdom_slot(kingdom).and_then(|s| world.map.slots.get(s)).map(|s| s.id.clone())
 }
 
 /// A `MoveCamera` UI command of the camera elements 71 / 72 / 73
@@ -1183,6 +1324,10 @@ impl Host<'_> {
             Thing::Team(t) => obj(tag::TEAM, t as u64),
             Thing::Placed(i) => obj(tag::PLACED, i as u64),
             Thing::Trailer(a) => obj(tag::TRAILER, u64::from(a)),
+            // A GGroup (orders): no trigger names one, this index resolves to nothing.
+            Thing::Group(g) => obj(tag::PLACED, u64::from(g) | 1 << 40),
+            // A projectile: no trigger names one, likewise.
+            Thing::Transient(d) => obj(tag::PLACED, u64::from(d) | 1 << 41),
         }
     }
     fn kingdom_of(&self, o: Object) -> Option<KingdomId> {
@@ -1297,32 +1442,13 @@ impl Host<'_> {
     fn settle(&mut self, k: KingdomId, result: u32) -> Result<()> {
         aa_triggers::objectives::set_mission_result(self, obj(tag::KINGDOM, u64::from(k)), result, false)
     }
-    /// The placement search 554B30 (radius around `p`) on the static cells.
+    /// The placement search 554B30 (554850: the point itself, else rings k =
+    /// 1..=rings at k * step along the direction, turned eight times by the
+    /// native -pi/4 table; the ring count trunc(distance / radius) clamped to
+    /// 1..=20 with the radius the blocking radius, at least a quarter cell).
     fn open_spot(&self, p: Vec2, facing: Vec2, def: Option<crate::data::DefId>, radius: f32) -> Option<Vec2> {
-        let map = &self.world.map;
-        let r = def.map(|d| self.world.data.def(d)).and_then(|d| d.blocking_size).map_or(0.0, |s| s[0].max(s[1]) * 0.5);
-        let free = |q: Vec2| -> bool {
-            let fl = map.cell_flags(q);
-            fl & crate::map::BLOCKED == 0 && fl & crate::map::NOT_LAND_PASSABLE == 0
-        };
-        if free(p) {
-            return Some(p);
-        }
-        let step = r.max(map.cell_size * 0.25).max(0.05);
-        let rings = ((radius / step) as i32).clamp(1, 20);
-        let ring_step = radius / rings as f32;
-        let dir = if facing.length_squared() > 0.0 { facing.normalize() } else { Vec2::X };
-        let (s, c) = (-std::f32::consts::FRAC_PI_4).sin_cos();
-        for k in 1..=rings {
-            let mut off = dir * (k as f32 * ring_step);
-            for _ in 0..8 {
-                if free(p + off) {
-                    return Some(p + off);
-                }
-                off = Vec2::new(off.x * c - off.y * s, off.x * s + off.y * c);
-            }
-        }
-        None
+        let Some(def) = def else { return Some(p) };
+        crate::special_ops::open_position_along(self.world, def, p, facing, radius)
     }
     /// 4FA030 / 4FA150 on aa-play: the actor or organization at `p`, the
     /// name published (4F9510), its GTID.
@@ -1583,6 +1709,7 @@ impl aa_triggers::elements::Services for Host<'_> {
                 let members = self.world.orgs.get(g as usize).map(|o| o.members.clone()).unwrap_or_default();
                 if let Some(o) = self.world.orgs.get_mut(g as usize) {
                     o.kingdom = k;
+                    o.hq = None;
                 }
                 for m in members {
                     if let Some(a) = self.world.actors.get_mut(m as usize) {
@@ -1762,7 +1889,7 @@ impl aa_triggers::elements::Services for Host<'_> {
         let (Some(actor), Some((tag::PLACED, i))) = (actor, area.map(split)) else { return Ok(false) };
         let raw = aa_triggers::selectors::Registry::raw_id(self, actor)?;
         let Some(a) = self.env.areas.iter().find(|a| a.placed as u64 == i) else { return Ok(false) };
-        Ok(member_position(self.world, raw).is_some_and(|(p, r)| inside(a, p, r)))
+        Ok(member_position(self.world, raw).is_some_and(|m| inside(a, &m)))
     }
     /// 76B960: a human kingdom's player.
     fn kingdom_player(&mut self, kingdom: Object) -> Result<Option<Object>> {
@@ -1842,20 +1969,31 @@ impl aa_triggers::actions::Effects for Host<'_> {
         let c = self.env.cameras.iter().find(|c| c.placed as u64 == i).ok_or_else(|| state("not a camera"))?;
         Ok(CameraFields { look_at: c.position, zoom: c.zoom })
     }
-    /// 4DBD80: -(85D8D0 atan2 table of facing (+2C, +30) + pi/2 [A028D4])
-    /// times 57.29578 [9FDA94]: the camera's heading in degrees (the table
-    /// is exact math here).
+    /// 4DBD80: -(85D8D0 atan2 of facing (+2C, +30), in [0, 2pi), + pi/2 [A028D4])
+    /// times 57.29578 [9FDA94]: the camera's heading in degrees (the original's
+    /// log of tutorial01: -404.852754 where this gives -405.0: its table is
+    /// exact math here, within 0.15 deg).
     fn camera_pitch(&mut self, camera: Object) -> Result<u32> {
         let (tag::PLACED, i) = split(camera) else { return Ok(0) };
         let c = self.env.cameras.iter().find(|c| c.placed as u64 == i).ok_or_else(|| state("not a camera"))?;
-        Ok((-(c.facing[1].atan2(c.facing[0]) + std::f32::consts::FRAC_PI_2) * 57.295_78).to_bits())
+        let mut a = c.facing[1].atan2(c.facing[0]);
+        if a < 0.0 {
+            a += std::f32::consts::TAU;
+        }
+        Ok((-(a + std::f32::consts::FRAC_PI_2) * 57.295_78).to_bits())
     }
-    /// 4DBD40: 85DA10 asin table of facing +34 * 57.29578: the camera's
-    /// elevation in degrees.
+    /// 4DBD40: 85DAE0 (asin table) of facing +34 * 57.29578: the camera's
+    /// elevation in degrees. The saved facing holds the 2-D unit direction and the
+    /// tangent of the elevation; a Thing's facing at +2C is the unit vector
+    /// (the original's log of tutorial01: 39.901750 where this gives 40.0: its
+    /// table is exact math here, within 0.1 deg).
     fn camera_yaw(&mut self, camera: Object) -> Result<u32> {
         let (tag::PLACED, i) = split(camera) else { return Ok(0) };
         let c = self.env.cameras.iter().find(|c| c.placed as u64 == i).ok_or_else(|| state("not a camera"))?;
-        Ok((c.facing[2].clamp(-1.0, 1.0).asin() * 57.295_78).to_bits())
+        let v = glam::Vec3::from(c.facing);
+        let len = v.length();
+        let z = if len > 0.0 { v.z / len } else { 0.0 };
+        Ok((z.clamp(-1.0, 1.0).asin() * 57.295_78).to_bits())
     }
     /// 59ABA0: the simulation keeps no real clock; world time in ms.
     fn real_time_ms(&mut self) -> Result<u32> {
@@ -2146,8 +2284,12 @@ impl aa_triggers::actions::Effects for Host<'_> {
             ("stop", _, _) => Command::Stop { kingdom, units },
             ("kill" | "attack", _, Some(t)) if t != u32::MAX => Command::Attack { kingdom, units, target: t },
             ("kill" | "attack", Some(to), _) => Command::Move { kingdom, units, to, attack_move: true },
-            ("guard", _, Some(t)) if t != u32::MAX => Command::Follow { kingdom, units, target: t },
-            ("guard", Some(to), _) => Command::Move { kingdom, units, to, attack_move: true },
+            // (orders) the Mind states of `crate::orders`
+            ("guard", at, Some(t)) if t != u32::MAX => Command::Order { kingdom, units, order: crate::orders::ActorOrder::Guard { target: Some(Unit::Actor(t)), at: at.unwrap_or_default(), aux: None } },
+            ("guard", Some(to), _) => Command::Order { kingdom, units, order: crate::orders::ActorOrder::Guard { target: None, at: to, aux: None } },
+            ("retreat", Some(to), _) => Command::Order { kingdom, units, order: crate::orders::ActorOrder::Retreat { target: None, at: to } },
+            ("explore", Some(to), _) => Command::Order { kingdom, units, order: crate::orders::ActorOrder::Explore { at: to, scalar: None } },
+            ("rout", _, _) => Command::Order { kingdom, units, order: crate::orders::ActorOrder::Rout },
             ("bombard", Some(p), _) => Command::Bombard { kingdom, units, target: crate::world::AbilityTarget::Point(p) },
             ("bombard", _, Some(t)) if t != u32::MAX => Command::Bombard { kingdom, units, target: crate::world::AbilityTarget::Actor(t) },
             ("air_attack" | "air_recon", tgt_at, tgt) => {
@@ -2247,7 +2389,9 @@ impl aa_triggers::actions::Effects for Host<'_> {
         Ok(match (split(object), offset) {
             ((tag::DATA, d), 0x174) => self.world.data.defs.get(d as usize).map_or(0, |x| if x.class == Some(DefClass::Organization) || !x.slots.is_empty() { 0x80 } else { 0 }),
             ((tag::DATA, d), 0x1c) => self.world.data.defs.get(d as usize).map_or(0, |x| if x.flying { 0x1000 } else { 0 }),
-            ((tag::TRANSPORT, _), 0x1c) => 0x1000,
+            // ActorData +1C bit 12 (flying), +414 the aircraft's operational
+            // height is the view's: the flight is not simulated (module doc)
+            ((tag::TRANSPORT, d), 0x1c) => self.world.data.defs.get(d as usize).map_or(0, |x| if x.flying { 0x1000 } else { 0 }),
             ((tag::TRANSPORT, _), 0x414) => 0,
             ((tag::DATA, _), _) | ((tag::TRANSPORT, _), _) => 0,
             (_, 0x20 | 0x24 | 0x28) => {
@@ -2266,7 +2410,10 @@ impl aa_triggers::actions::Effects for Host<'_> {
     /// flare +57C (the flare configuration).
     fn data_ref(&self, object: Object, offset: u32) -> Result<Option<Object>> {
         Ok(match (split(object), offset) {
-            ((tag::DATA, d), 0x184) => Some(obj(tag::TRANSPORT, d)),
+            ((tag::DATA, d), 0x184) => {
+                let id = self.world.data.defs.get(d as usize).map(|x| x.id.to_ascii_lowercase()).unwrap_or_default();
+                self.env.transports.as_ref().and_then(|t| t.get(&id)).and_then(|t| self.world.data.find(t)).map(|t| obj(tag::TRANSPORT, u64::from(t)))
+            }
             ((tag::VEHICLE, d), 0xc0) => Some(obj(tag::COMPONENT, d)),
             ((tag::DATA, d), 0x57c) => Some(obj(tag::COMPONENT, d)),
             _ => None,
@@ -2284,6 +2431,7 @@ impl aa_triggers::actions::Effects for Host<'_> {
     fn create_transport(&mut self, request: &SpawnRequest) -> Result<Option<Object>> {
         let (_, d) = split(request.definition);
         self.env.pending_kingdom = self.kingdom_of(request.kingdom);
+        self.env.pending_transport = Some((d as crate::data::DefId, request.position.map(f)));
         Ok(Some(obj(tag::VEHICLE, d)))
     }
     /// Object+8 |= bits.
@@ -2303,12 +2451,22 @@ impl aa_triggers::actions::Effects for Host<'_> {
         Ok(self.world.data.rule_ci("SAITriggerTeamCommandPriority").unwrap_or(0.0).to_bits())
     }
     /// 572E50.
-    fn create_flare(&mut self, request: &SpawnRequest, kingdom: Object, actor: Option<Object>, duration: u32, _variable: u32) -> Result<()> {
+    fn create_flare(&mut self, request: &SpawnRequest, kingdom: Object, actor: Option<Object>, duration: u32, variable: u32) -> Result<()> {
         let (Some(k), (tag::DATA, d)) = (self.kingdom_of(kingdom), split(request.definition)) else { return Ok(()) };
         let ids = self.world.data.def(d as u32).id.clone();
         let actor = actor.and_then(|a| self.unit(a));
-        self.not_modelled(format!("the team command flare {ids} (572E50)"));
-        self.notice(Notice::Flare { kingdom: k, ids, at: request.position.map(f), actor, seconds: f(duration) });
+        // 572E50's SAI priority (variable, SAITriggerTeamCommandPriority) for the
+        // kingdom's computer team mates; the flare's actor is the view's
+        let at = match actor.and_then(|u| self.position(match u {
+            Unit::Org(g) => obj(tag::ORG, u64::from(g)),
+            Unit::Actor(a) => obj(tag::ACTOR, u64::from(a)),
+        })) {
+            Some(p) => p,
+            None => glam::Vec3::from(request.position.map(f)),
+        };
+        let attack = ids.to_ascii_lowercase().contains("attack");
+        crate::ai::team_flare(self.world, k, at.truncate(), attack, f(variable), f(duration));
+        self.notice(Notice::Flare { kingdom: k, ids, at: at.to_array(), actor, seconds: f(duration) });
         Ok(())
     }
     /// 4C8C20: the ability user of the element.
@@ -2318,14 +2476,16 @@ impl aa_triggers::actions::Effects for Host<'_> {
         }
         Ok(())
     }
-    /// 4C9F10: the ability request. aa-play runs only a general's faction
-    /// abilities (crate::special_ops), so the effect is missing; the notice
-    /// tells the client where it happens.
+    /// 4C9F10: the ability at the point, when a general's data holds it
+    /// (crate::special_ops::trigger_use); the notice tells the client where.
     fn ability_use(&mut self, request: &AbilityRequest) -> Result<()> {
         let ids = self.env.pending_ability.clone().unwrap_or_default();
-        self.not_modelled(format!("the trigger ability {ids} (4C9F10)"));
         if let Some(k) = self.kingdom_of(request.kingdom) {
-            self.notice(Notice::Ability { kingdom: k, ids, from: request.from.map(f), at: request.at.map(f) });
+            let at = request.at.map(f);
+            if !crate::special_ops::trigger_use(self.world, k, &ids, Vec2::new(at[0], at[1])) {
+                self.not_modelled(format!("the trigger ability {ids} (4C9F10)"));
+            }
+            self.notice(Notice::Ability { kingdom: k, ids, from: request.from.map(f), at });
         }
         Ok(())
     }
@@ -2333,14 +2493,19 @@ impl aa_triggers::actions::Effects for Host<'_> {
         self.env.pending_ability = None;
         Ok(())
     }
-    /// 58BA90 on the transport: the cargo is created at its unload point
-    /// (see the module documentation).
-    fn transport_load(&mut self, _component: Object, cargo: Object, name: &[u16], _group: Option<Object>, _position: [u32; 2], destination: [u32; 2]) -> Result<()> {
+    /// 58BA90 on the transport: the flight begins, the cargo is created at the
+    /// unload point when it arrives (see the module documentation).
+    fn transport_load(&mut self, _component: Object, cargo: Object, name: &[u16], _group: Option<Object>, position: [u32; 2], destination: [u32; 2]) -> Result<()> {
         let (tag::DATA, d) = split(cargo) else { return Ok(()) };
         let Some(k) = self.env.pending_kingdom.take() else { return Ok(()) };
         let to = Vec2::new(f(destination[0]), f(destination[1]));
-        let at = self.open_spot(to, Vec2::Y, Some(d as u32), 8.0).unwrap_or(to);
-        self.create(d as u32, k, at, Vec2::new(0.0, -1.0), name);
+        let (transport, from) = self.env.pending_transport.take().unwrap_or((d as crate::data::DefId, [f(position[0]), f(position[1]), 0.0]));
+        let t = self.world.data.def(transport);
+        let (speed, ids) = (t.speed_max, t.id.clone());
+        let seconds = if speed > 0.0 { Vec2::new(from[0], from[1]).distance(to) / speed } else { 0.0 };
+        let now = f(self.world.clock.begin.0);
+        self.env.drops.push(Drop { due: now + seconds, kingdom: k, cargo: d as crate::data::DefId, name: name.to_vec(), at: to });
+        self.notice(Notice::Transport { kingdom: k, ids, from, to: [to.x, to.y], seconds });
         Ok(())
     }
     /// ActorData +174.
@@ -2648,20 +2813,26 @@ mod tests {
         Area { placed: 0, updatable: None, position: Vec2::from(position), facing: Vec2::from(facing), shape: w, members: Vec::new() }
     }
 
+    /// A circle member at the point (radius 0: a point).
+    fn at(x: f32, y: f32, r: f32) -> Member {
+        let shape = if r > 0.0 { [1, r.to_bits(), 0, 0, 0, 0] } else { [0, 0, 0, 0, 0, 0] };
+        Member { position: Vec2::new(x, y), facing: Vec2::new(0.0, -1.0), shape }
+    }
+
     #[test]
     fn moscow_cow_pen_areas() {
         // (2v2)Moscow area_0 "Cow1": RECT radius 23.491, x -23.38..23.38,
         // y -2.28..2.28, facing (0, -1): a strip along native X.
         let a = area([255.97, 121.99], [0.0, -1.0], [3.0, 23.491, -23.38, -2.28, 23.38, 2.28]);
-        assert!(inside(&a, Vec2::new(270.0, 122.5), 0.0));
-        assert!(!inside(&a, Vec2::new(255.97, 126.0), 0.0));
-        assert!(inside(&a, Vec2::new(255.97, 126.0), 2.0));
+        assert!(inside(&a, &at(270.0, 122.5, 0.0)));
+        assert!(!inside(&a, &at(255.97, 126.0, 0.0)));
+        assert!(inside(&a, &at(255.97, 126.0, 2.0)));
         // area_3 "Cow4" is turned by its facing (0.085, -0.996).
         let b = area([231.78, 137.75], [0.085, -0.996], [3.0, 17.02, -1.84, -16.92, 1.84, 16.92]);
-        assert!(inside(&b, Vec2::new(231.78, 150.0), 0.0));
-        assert!(!inside(&b, Vec2::new(240.0, 137.75), 0.0));
+        assert!(inside(&b, &at(231.78, 150.0, 0.0)));
+        assert!(!inside(&b, &at(240.0, 137.75, 0.0)));
         let c = area([10.0, 10.0], [0.0, -1.0], [1.0, 5.0, 0.0, 0.0, 0.0, 0.0]);
-        assert!(inside(&c, Vec2::new(14.0, 10.0), 0.0) && !inside(&c, Vec2::new(16.0, 10.0), 0.5));
+        assert!(inside(&c, &at(14.0, 10.0, 0.0)) && !inside(&c, &at(16.0, 10.0, 0.5)));
     }
 
     #[test]

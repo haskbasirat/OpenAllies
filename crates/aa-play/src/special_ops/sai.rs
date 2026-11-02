@@ -507,9 +507,8 @@ pub fn think(world: &mut World) {
                 }
                 Place::Point(p) => (AbilityTarget::Point(p), p),
             };
-            if super::use_from_sai(world, kingdom, a, target) {
-                world.special_ops.sai.uses += 1;
-            }
+            super::use_from_sai(world, kingdom, a, target);
+            world.special_ops.sai.uses += 1;
             if pc.flare_priority != 0.0
                 && pc.flare_duration > 0.0
                 && let Some(r) = world.ai.regions.as_ref().map(|r| r.region_at(at))

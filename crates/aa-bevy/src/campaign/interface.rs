@@ -6,17 +6,20 @@
 //! 965A10, the turn status 935760 and the battle block 93694D..936A07); the
 //! game menu (94B100) and the Start Battle dialog (94D9D0).
 //!
-//! Refused with a log line until they are built: the purchasing dialog
-//! (94BFE0), the history dialog (94AD40), the politics display, the saved-game
-//! dialogs (68DB60 / 68DCE0 type 3) and the RTS battle launch (LaunchRTSGame
-//! 9336E0 -> 932210, `aa_metagame::launch`): a battle ends only by Quick
-//! Battle or Cancel until then. Not built at all: the help popups (94A5C0),
-//! the minimap (MetaGameMiniMap), the object display's portrait and division
-//! list, the start dialog's army lists (94DFE0) and tooltips (94E610, 94E920),
-//! the upgrade buttons (966650 hides them here), the drag move (957130), the
-//! double click (957540), CycleSelection (933DB0), the computer turn's camera
-//! follow (933320), the territory game events (0x3A / 0x3B of 953A20) and the
-//! end of the campaign (938E10 -> 50D370, only logged).
+//! Refused with a log line until it is built: the politics display. The saved-game
+//! dialogs (68DB60 / 68DCE0 type 3) are campaign/saves.rs. The RTS battle launch is
+//! campaign/battle.rs; the history dialog (94AD40) is the whole message log;
+//! the purchasing dialog (94BFE0) lists the shop rows, the technologies without
+//! their icons and tooltips (94CAE0).
+//! The help popups (94A5C0) are campaign/help.rs. The tooltips of the army rows
+//! (94DFE0, 94C7B0: 6388F0 the name, 63C160 the divisions, 638D90 the description) and
+//! of the quick battle (94E610) are [`MetaGameUi::tooltip`].
+//! The object display's portrait (96AD80, 96B1D0 -> 96ABF0: the army's own model in
+//! the ModelWidget) is drawn by `ui::portrait`. Not built at all: the Play button's
+//! tooltip (94E920),
+//! CycleSelection (933DB0). The computer turn's camera
+//! follow (933320) is campaign/map.rs.
+//! The end of the campaign (938E10 -> 50D370) shows the mission box.
 use super::Game;
 use aa_metagame::battle::Side;
 use aa_metagame::commands::Command;
@@ -40,6 +43,10 @@ const OBJECT: &str = "MetaGame/MetaGameControlPanel/MetaGameObjectDisplay";
 pub enum Dialog {
     Menu,
     StartBattle,
+    /// MetaGamePurchasingDialog (94BFE0).
+    Purchase,
+    /// MetaGameHistoryDialog (94AD40).
+    History,
 }
 
 /// What an interface command asks the front end for.
@@ -50,6 +57,11 @@ pub enum Out {
     Finished,
     QuitConfirm,
     Options,
+    /// LaunchRTSGame: the playbattle order was sent, the RTS battle follows.
+    LaunchBattle,
+    /// MetaGameLoadDialog / MetaGameSaveDialog (saves.rs).
+    LoadDialog,
+    SaveDialog,
 }
 
 #[derive(Default)]
@@ -65,6 +77,97 @@ pub struct MetaGameUi {
     last: Vec<(String, String)>,
     /// `MGState+0x44` at the last update (957710 flag 0x80).
     battle_started: bool,
+    /// The purchase waiting for PurchaseConfirm (+0xF4, 94C410).
+    purchase: Option<Command>,
+    /// The purchase page on show: armies (true) or technologies.
+    purchase_armies: bool,
+    /// The upgrade buttons on show: (button, division). `None`: the page was just built.
+    upgrade_shown: Option<Vec<(usize, usize)>>,
+    /// The divisions the object display's list shows.
+    divisions_shown: Option<Vec<usize>>,
+    /// The help popups (94A5C0).
+    pub help: super::help::Help,
+    /// 94F2F0 on the way: its help popup (local player involved).
+    battle_dialog: Option<bool>,
+    /// The dynamic tooltips of the open dialog: (the widget's path, name, text).
+    tips: Vec<(String, String, String)>,
+}
+
+/// The tooltip of an army row (94DFE0 / 94C7B0): the Thing's name, the divisions it
+/// starts with (63C160), the MetaGameComponent's tooltip (638D90).
+fn army_tip(ui: &Ui, game: &Game, d: usize) -> (String, String) {
+    let data = &game.campaign.data;
+    let mut body = String::new();
+    for i in &data.armies[d].divisions {
+        if let Some(div) = data.divisions.get(*i) {
+            if !body.is_empty() {
+                body.push('\n');
+            }
+            body.push_str(&ui.strings.resolve(&div.name));
+        }
+    }
+    let tooltip = ui.strings.resolve(&data.armies[d].tooltip);
+    if !tooltip.is_empty() {
+        if !body.is_empty() {
+            body.push_str("\n\n");
+        }
+        body.push_str(&tooltip);
+    }
+    (army_name(ui, game, d), body)
+}
+
+/// `0x94E610`: the Quick Battle button's tooltip: per side (63C2A0) its name, its
+/// armies, its kingdom's technologies and its win chance (95F370; the defender's the
+/// rest of 1). The row's column (638B70) is the AVar tab width of the battle tooltips,
+/// 100 reference pixels here as the HUD's (labelled until the AVar is identified).
+fn quick_tip(ui: &Ui, game: &Game) -> Option<(String, String)> {
+    let t = game.campaign.pending_battle().ok().flatten()?;
+    let odds = f32::from_bits(game.campaign.attack_odds_bits(t, aa_numeric::Precision::Double53).ok()?);
+    let x = (100.0 * ui.screen.height as f32 / ui.reference.height.max(1.0)) as i32;
+    let row = |label: &str, value: String| format!("{}<SetX={x}>{value}", ui.strings.resolve(label));
+    let mut lines = Vec::new();
+    for (side, label, chance) in [(Side::Attacker, "#metagame_tooltip_quickbattle_attacker", odds), (Side::Defender, "#metagame_tooltip_quickbattle_defender", 1.0 - odds)] {
+        let armies = game.campaign.side_armies(t, side);
+        let kingdom = match side {
+            Side::Attacker => armies.first().and_then(|&a| game.campaign.kingdom_of_actor(game.campaign.state.army(a).owner)),
+            Side::Defender => game.campaign.defending_kingdom(t).ok().flatten(),
+        };
+        let name = kingdom.map(|k| kingdom_name(ui, game, k)).unwrap_or_default();
+        let techs = kingdom.map_or(0, |k| game.campaign.state.kingdoms[k].technologies.len());
+        lines.push(row(label, name));
+        lines.push(row("#metagame_tooltip_quickbattle_armies", ui.strings.format("metagame_tooltip_quickbattle_armies_format|d", &[&armies.len().to_string()])));
+        lines.push(row("#metagame_tooltip_quickbattle_techs", ui.strings.format("metagame_tooltip_quickbattle_techs_format|d", &[&techs.to_string()])));
+        lines.push(row("#metagame_tooltip_quickbattle_win_chance", format!("{:.1}%", chance * 100.0)));
+    }
+    Some((ui.strings.resolve("#metagame_tooltip_quickbattle_title"), lines.join("\n")))
+}
+
+/// metagame_object_display.tgi's MGDivisionItem0..5.
+const DIVISION_ITEMS: usize = 6;
+/// metagame_command_buttons.tgi's MetaGameButtonUpgrade0..3.
+const UPGRADE_BUTTONS: usize = 4;
+
+/// `0x965950`: every decal of the view whose `when` a list entry names takes
+/// that entry's texture (`5E7B20`).
+fn set_ve_textures(ves: &mut [aa_ui::ve::ViewElement], list: &[super::data::ChooseVe]) {
+    for ve in ves {
+        if let aa_ui::ve::VeKind::Decal(d) = &mut ve.kind
+            && let Some(b) = list.iter().find(|b| aa_ui::state::parse_when(&b.when).bits == ve.when)
+        {
+            d.texture = Some(format!("/{}", b.texture.trim_start_matches('/')));
+        }
+        set_ve_textures(&mut ve.children, list);
+    }
+}
+
+/// A decal's texture, also inside a group.
+fn set_decal_texture(ve: &mut aa_ui::ve::ViewElement, texture: &Option<String>) {
+    if let aa_ui::ve::VeKind::Decal(d) = &mut ve.kind {
+        d.texture = texture.clone();
+    }
+    for c in &mut ve.children {
+        set_decal_texture(c, texture);
+    }
 }
 
 /// The kingdom's name (kingdom data +8): the labels.
@@ -184,9 +287,22 @@ impl MetaGameUi {
             d.add_child(Widget::new(C::Label, "Owner", false));
             if display == "ActorDisplay" {
                 d.add_child(Widget::new(C::Label, "MovesRemaining", false));
+                // 96B890: the list's MGDivisionItem%d, all hidden until 96BA60
+                let mut list = Widget::new(C::Panel, "MGDivisionList", false);
+                for i in 0..DIVISION_ITEMS {
+                    let mut item = Widget::new(C::Decal, &format!("MGDivisionItem{i}"), false);
+                    item.set_visible(false);
+                    list.add_child(item);
+                }
+                d.add_child(list);
             } else {
                 d.add_child(Widget::new(C::Label, "Money", false));
             }
+            // 96AD80: PortraitButton, its client the Portrait ModelWidget
+            let mut pb = Widget::new(C::PushButton, "PortraitButton", false);
+            pb.client_name = "Portrait".into();
+            pb.add_child(Widget::new(C::Model, "Portrait", false));
+            d.add_child(pb);
             let mut k = Widget::new(C::Decal, "KingdomDecal", false);
             k.set_visible(true);
             d.add_child(k);
@@ -215,6 +331,8 @@ impl MetaGameUi {
             player.add_child(Widget::new(C::Label, l, false));
         }
         iface.add_child(player);
+        // 935130: the minimap (campaign/map.rs draws into it)
+        iface.add_child(Widget::new(C::MiniMap, "/MetaGame/UI/metagame_minimap.tgi:MetaGameMiniMap", true));
         // 5FD6D0(name, 0, 0xCA MetaGameUIMessageLogMaximumLines, fades, no auto height)
         iface.add_child(aa_ui::message_log::message_log(
             "/MetaGame/UI/metagame_message_log.tgi:MetaGameMessageLog",
@@ -233,10 +351,13 @@ impl MetaGameUi {
         ui.load_widget(&mut iface, None);
         ui.connect(iface);
         self.last.clear();
+        self.upgrade_shown = None;
+        self.divisions_shown = None;
         if let Some(d) = self.dialog {
             self.open(ui, game, d);
         }
         self.update(ui, game);
+        self.help.rebuilt(ui);
         ui.layout();
     }
 
@@ -251,6 +372,10 @@ impl MetaGameUi {
 
     /// The per-frame update.
     pub fn update(&mut self, ui: &mut Ui, game: &mut Game) {
+        self.help.update(ui, game);
+        if let Some(involved) = self.battle_dialog.take() {
+            self.help.ask(ui, game, if involved { super::help::START_BATTLE_SELECTED } else { super::help::WATCH_BATTLE_SELECTED }, None);
+        }
         // the UVars are read when they are used (`[B39940]+0x338`, `+0x334`)
         game.campaign.options.computer_quick_battle = ui.uvars.get_bool("MetaGameUIComputerQuickBattle");
         game.campaign.options.fast_mgai = ui.uvars.get_bool("MetaGameUIFastMGAI");
@@ -282,16 +407,7 @@ impl MetaGameUi {
         ui.with_widget(&format!("{BUTTONS}/MetaGameButtonEndTurn"), |w| w.set_visible(!pending && local_turn));
         ui.with_widget(&format!("{BUTTONS}/MetaGameButtonStartBattle"), |w| w.set_visible(!play && pending && local_turn));
         ui.with_widget(&format!("{BUTTONS}/MetaGameButtonPurchase"), |w| w.set_visible(local_turn));
-        // 966650: the army buttons show for an own army of the local player
-        let own_army = game.selected_army.filter(|&a| {
-            game.campaign.state.armies.get(a.0 as usize).is_some_and(|x| x.as_ref().is_some_and(|x| Some(x.owner) == game.campaign.local_actor()))
-        });
-        for b in ["MetaGameButtonAttack", "MetaGameButtonMove"] {
-            ui.with_widget(&format!("{BUTTONS}/{b}"), |w| w.set_visible(own_army.is_some() && local_turn));
-        }
-        for b in ["MetaGameButtonUpgradeAll", "MetaGameButtonUpgrade0", "MetaGameButtonUpgrade1", "MetaGameButtonUpgrade2", "MetaGameButtonUpgrade3"] {
-            ui.with_widget(&format!("{BUTTONS}/{b}"), |w| w.set_visible(false));
-        }
+        self.army_buttons(ui, game);
         self.object_display(ui, game);
         // 0x9367AD: a turn change centres on the selection during the local
         // player's turn (9335E0), otherwise on the capital of the kingdom
@@ -320,6 +436,103 @@ impl MetaGameUi {
             self.close(ui);
         }
         ui.message_log_update(LOG);
+        if self.dialog == Some(Dialog::History) {
+            ui.message_log_update("Root/MetaGameHistoryDialog/MetaGameMessageLog");
+        }
+    }
+
+    /// `0x966650`: the buttons of the selected army. An army of the kingdom
+    /// whose turn it is, when that is the local player's: Move while it has moves
+    /// (93EB40: the type's `movement` above 0, 93E900: it has not fought), Attack
+    /// the same and while the kingdom has fought no battle (+3C); UpgradeAll stays
+    /// hidden; an upgradable type (+5B8 +1D) shows the upgrade button at
+    /// `upgrade_button_location` of each division the kingdom's shop sells (961A20),
+    /// the army lacks (93E9E0) and whose prerequisites it has (93EA70):
+    /// `MGCommand upgradeactor <ids>` with the division's UpgradeButtonVE textures
+    /// (965950) and the tooltip of its name, cost and `upgrade_tooltip`.
+    fn army_buttons(&mut self, ui: &mut Ui, game: &Game) {
+        let path = |b: &str| format!("{BUTTONS}/{b}");
+        let local = game.campaign.local_actor();
+        let cur = game.campaign.state.current.and_then(|k| game.campaign.actor(k));
+        let army = game.selected_army.and_then(|a| game.campaign.state.armies.get(a.0 as usize).and_then(|x| x.as_ref())).filter(|a| local.is_some() && Some(a.owner) == local && cur == local);
+        let mut shown: Vec<(usize, usize, i32)> = Vec::new();
+        if let (Some(a), Some(l)) = (army, game.campaign.local) {
+            let def = &game.campaign.data.armies[a.definition];
+            if def.upgradable {
+                let kingdom = game.campaign.state.kingdoms[l].data;
+                let shop = &game.campaign.data.campaigns[game.campaign.state.campaign].kingdoms[kingdom].shop;
+                for (i, d) in game.campaign.data.divisions.iter().enumerate() {
+                    let cost = shop.divisions.iter().find(|r| r.ids.as_deref() == Some(d.ids.as_str())).map(|r| r.cost);
+                    let has = |x: usize| a.divisions.contains(&aa_metagame::battle::DivisionRef(x as u32));
+                    if let Some(cost) = cost
+                        && !has(i)
+                        && d.prerequisites.iter().all(|p| has(*p))
+                    {
+                        shown.push((d.upgrade_button_location.max(0) as usize, i, cost));
+                    }
+                }
+            }
+        }
+        let key: Vec<(usize, usize)> = shown.iter().map(|s| (s.0, s.1)).collect();
+        if self.upgrade_shown.as_ref() != Some(&key) {
+            self.upgrade_shown = Some(key);
+            for i in 0..UPGRADE_BUTTONS {
+                ui.with_widget(&path(&format!("MetaGameButtonUpgrade{i}")), |w| w.set_visible(false));
+            }
+            let glyph = money_glyph(ui);
+            for (slot, d, cost) in shown {
+                let def = &game.campaign.data.divisions[d];
+                let view = game.data.view.divisions.get(&def.ids.to_ascii_lowercase()).cloned().unwrap_or_default();
+                let cost_title = ui.strings.resolve("#ui_tooltip_item_title_cost");
+                let cost_text = glyph.map(|g| format!("{g} {cost}")).unwrap_or_else(|| cost.to_string());
+                let name = ui.strings.resolve(&def.name);
+                let body = format!("{cost_title} {cost_text}\n\n{}", ui.strings.resolve(&def.upgrade_tooltip));
+                let command = format!("MGCommand upgradeactor {}", def.ids);
+                ui.with_widget(&path(&format!("MetaGameButtonUpgrade{slot}")), |w| {
+                    w.set_visible(true);
+                    w.command = Some(command.clone());
+                    w.tooltip_name = name.clone();
+                    w.tooltip = body.clone();
+                    for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+                        set_ve_textures(std::slice::from_mut(ve), &view.buttons);
+                    }
+                });
+            }
+        }
+        // 93EB40 > 0 and 93E900 > 0
+        let moves = army.is_some_and(|a| game.campaign.data.armies[a.definition].movement > 0 && 1 - a.fought > 0);
+        let attack = moves && game.campaign.local.is_some_and(|l| game.campaign.state.kingdoms[l].battles < 1);
+        ui.with_widget(&path("MetaGameButtonUpgradeAll"), |w| w.set_visible(false));
+        ui.with_widget(&path("MetaGameButtonMove"), |w| w.set_visible(moves));
+        ui.with_widget(&path("MetaGameButtonAttack"), |w| w.set_visible(attack));
+    }
+
+    /// `0x96BA60`: the army's divisions on the items of their `icon_location`,
+    /// with the division's name and tooltip.
+    fn division_list(&mut self, ui: &mut Ui, game: &Game, army: &aa_metagame::state::MgArmy) {
+        let list: Vec<usize> = army.divisions.iter().map(|d| d.0 as usize).collect();
+        if self.divisions_shown.as_ref() == Some(&list) {
+            return;
+        }
+        self.divisions_shown = Some(list.clone());
+        let base = format!("{OBJECT}/ActorDisplay/MGDivisionList");
+        for i in 0..DIVISION_ITEMS {
+            ui.with_widget(&format!("{base}/MGDivisionItem{i}"), |w| w.set_visible(false));
+        }
+        for d in list {
+            let Some(def) = game.campaign.data.divisions.get(d) else { continue };
+            let texture = game.data.view.divisions.get(&def.ids.to_ascii_lowercase()).map(|v| format!("/MetaGame/{}", v.icon.trim_start_matches('/')));
+            let name = ui.strings.resolve(&def.name);
+            let tip = ui.strings.resolve(&def.tooltip);
+            ui.with_widget(&format!("{base}/MGDivisionItem{}", def.icon_location), |w| {
+                w.set_visible(true);
+                w.tooltip_name = name.clone();
+                w.tooltip = tip.clone();
+                for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+                    set_decal_texture(ve, &texture);
+                }
+            });
+        }
     }
 
     fn object_display(&mut self, ui: &mut Ui, game: &Game) {
@@ -337,8 +550,15 @@ impl MetaGameUi {
                 self.set_text(ui, &format!("{actor}/Owner"), &owner);
                 set_label_color(ui, &format!("{actor}/Owner"), relation_color(game, k));
                 set_kingdom_decal(ui, game, &format!("{actor}/KingdomDecal"), k);
+                self.division_list(ui, game, &a);
+                // 96ABF0: the army's model
+                let model = game.data.model(&game.campaign.data.armies[a.definition].ids).map(str::to_string);
+                ui.with_widget(&format!("{actor}/PortraitButton/Portrait"), |w| {
+                    w.control = model.map(|m| Box::new(aa_ui::controls::Control::Model(m)));
+                });
             }
             (None, Some(t)) => {
+                self.divisions_shown = None;
                 ui.with_widget(&actor, |w| w.set_visible(false));
                 ui.with_widget(&territory, |w| w.set_visible(true));
                 let name = territory_name(ui, game, t);
@@ -370,6 +590,7 @@ impl MetaGameUi {
                 self.set_text(ui, &format!("{territory}/Money"), &text);
             }
             (None, None) => {
+                self.divisions_shown = None;
                 ui.with_widget(&actor, |w| w.set_visible(false));
                 ui.with_widget(&territory, |w| w.set_visible(false));
             }
@@ -405,24 +626,168 @@ impl MetaGameUi {
                 w.add_child(Widget::push_button("MetaGameButtonStartBattleQuickBattle", false, "QuickBattle"));
                 w.add_child(Widget::push_button("MetaGameButtonStartBattleCancel", false, "Cancel"));
                 w.add_child(Widget::new(C::Label, "MetaGameContestedTerritoryLabel", false));
-                for (panel, label) in [("MetaGameAttackerPanel", "AttackerLabel"), ("MetaGameDefenderPanel", "DefenderLabel")] {
+                for (panel, label, list) in [("MetaGameAttackerPanel", "AttackerLabel", "AttackerArmyList"), ("MetaGameDefenderPanel", "DefenderLabel", "DefenderArmyList")] {
                     let mut p = Widget::new(C::Panel, panel, false);
                     p.add_child(Widget::new(C::Label, label, false));
+                    p.add_child(Widget::composite(C::Viewport, list, false));
                     w.add_child(p);
                 }
                 ui.load_widget(&mut w, None);
                 ui.connect(w);
                 self.fill_battle(ui, game);
             }
+            // 94AD40: the close button and the whole message log (5FD6D0 with
+            // UVar 0x43 MessageLogMaximumLines, no fading)
+            Dialog::History => {
+                let mut w = Widget::new(C::TopLevel, "MetaGame/UI/metagame_history.tgi:MetaGameHistoryDialog", true);
+                w.add_child(Widget::push_button("MetaGameButtonHistoryClose", false, "Close"));
+                w.add_child(aa_ui::message_log::message_log("MetaGameMessageLog", "MessageLogMaximumLines", false, false));
+                ui.load_widget(&mut w, None);
+                ui.connect(w);
+            }
+            // 94BFE0, Init 94CFB0's commands, the pages 94C7B0 / 94CAE0
+            Dialog::Purchase => {
+                let mut w = Widget::new(C::TopLevel, "MetaGame/UI/metagame_purchasing.tgi:MetaGamePurchasingDialog", true);
+                w.add_child(Widget::push_button("MetaGameButtonPurchaseClose", false, "Close"));
+                let mut armies = Widget::new(C::Panel, "MetaGamePurchasingArmyPage", false);
+                armies.add_child(Widget::composite(C::Viewport, "MetaGamePurchaseArmyList", false));
+                w.add_child(armies);
+                let mut technologies = Widget::new(C::Panel, "MetaGamePurchasingTechnologyPage", false);
+                technologies.add_child(Widget::composite(C::Viewport, "MetaGamePurchaseTechnologyList", false));
+                w.add_child(technologies);
+                let mut a = Widget::toggle_button("MetaGameButtonPurchaseArmy", false, "PurchaseArmyPage");
+                a.radio_group = 1;
+                w.add_child(a);
+                let mut t = Widget::toggle_button("MetaGameButtonPurchaseTechnology", false, "PurchaseTechnologyPage");
+                t.radio_group = 1;
+                w.add_child(t);
+                let mut tip = Widget::new(C::Panel, "MetaGamePurchasingToolTipPanel", false);
+                tip.add_child(Widget::new(C::Label, "Label", false));
+                w.add_child(tip);
+                ui.load_widget(&mut w, None);
+                ui.connect(w);
+                self.fill_purchase(ui, game);
+                self.purchase_page(ui, true);
+            }
         }
         ui.layout();
+    }
+
+    /// `0x94C7B0` / `0x94CAE0`: one row per shop entry of the local
+    /// kingdom (kingdom data +0xDC): `PurchaseArmy <ids>` / `PurchaseTechnology
+    /// <ids>`, the icon, the name and the cost (937350).
+    fn fill_purchase(&mut self, ui: &mut Ui, game: &Game) {
+        let Some(l) = game.campaign.local else { return };
+        let c = &game.campaign.data.campaigns[game.campaign.state.campaign];
+        let shop = c.kingdoms[game.campaign.state.kingdoms[l].data].shop.clone();
+        let glyph = money_glyph(ui);
+        let base = "MetaGamePurchasingDialog";
+        let file = "MetaGame/UI/metagame_purchasing.tgi:MetaGamePurchasingDialog";
+        let mut add = |ui: &mut Ui, page: &str, list: &str, command: String, name: String, cost: i32, tag: u64| {
+            let vp = format!("Root/{base}/{page}/{list}");
+            let mut row = Widget::new(C::Panel, "Client", false);
+            let mut push = Widget::new(C::PushButton, "PushItem", false);
+            push.command = Some(command);
+            row.add_child(push);
+            row.add_child(Widget::new(C::Decal, "Decal", false));
+            row.add_child(Widget::new(C::Label, "Column0", false));
+            row.add_child(Widget::new(C::Label, "Column1", false));
+            if let Ok(n) = ui.store.node(&format!("{file}/{page}/{list}")) {
+                let strings = ui.strings.clone();
+                let resolve = |v: &str| strings.resolve(v);
+                let root = std::sync::Arc::new(n.clone());
+                row.load(&mut ui.store, Some((&n, &root)), Some(10), &resolve);
+            }
+            row.tag = tag;
+            ui.viewport_add(&vp, row);
+            if let Some(path) = ui.find_tag(tag) {
+                let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
+                ui.set_label(&format!("{rel}/Column0"), &name);
+                let text = glyph.map(|g| format!("{g} {cost}")).unwrap_or_else(|| cost.to_string());
+                ui.set_label(&format!("{rel}/Column1"), &text);
+            }
+        };
+        for (i, r) in shop.actors.iter().enumerate() {
+            let Some(ids) = r.ids.clone() else { continue };
+            let name = game.data.thing_name(&ids).map(|k| ui.strings.resolve(k)).unwrap_or_else(|| ids.clone());
+            add(ui, "MetaGamePurchasingArmyPage", "MetaGamePurchaseArmyList", format!("PurchaseArmy {ids}"), name, r.cost, 9600 + i as u64);
+            // 94C7B0: the Thing's icon (+0xF0) on the Decal, the tooltip as the army rows'
+            if let Some(path) = ui.find_tag(9600 + i as u64) {
+                let icon = game.data.thing_icon(&ids).map(|t| format!("/{}", t.trim_start_matches('/')));
+                let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
+                ui.with_widget(&format!("{rel}/Decal"), |w| {
+                    for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+                        set_decal_texture(ve, &icon);
+                    }
+                });
+                if let Some(d) = game.campaign.data.armies.iter().position(|a| a.ids.eq_ignore_ascii_case(&ids)) {
+                    let (name, body) = army_tip(ui, game, d);
+                    self.tips.push((path, name, body));
+                }
+            }
+        }
+        for (i, r) in shop.technologies.iter().enumerate() {
+            let Some(ids) = r.ids.clone() else { continue };
+            let name = ui.strings.resolve(&format!("#{ids}_name"));
+            add(ui, "MetaGamePurchasingTechnologyPage", "MetaGamePurchaseTechnologyList", format!("PurchaseTechnology {ids}"), name, r.cost, 9700 + i as u64);
+        }
+        ui.viewport_refresh(&format!("Root/{base}/MetaGamePurchasingArmyPage/MetaGamePurchaseArmyList"));
+        ui.viewport_refresh(&format!("Root/{base}/MetaGamePurchasingTechnologyPage/MetaGamePurchaseTechnologyList"));
+    }
+
+    /// `0x94B780` / `0x94B800`: the pages' toggles and which page shows.
+    fn purchase_page(&mut self, ui: &mut Ui, armies: bool) {
+        self.purchase_armies = armies;
+        let base = "MetaGamePurchasingDialog";
+        ui.with_widget(&format!("{base}/MetaGamePurchasingArmyPage"), |w| w.set_visible(armies));
+        ui.with_widget(&format!("{base}/MetaGamePurchasingTechnologyPage"), |w| w.set_visible(!armies));
+        for (name, on) in [("MetaGameButtonPurchaseArmy", armies), ("MetaGameButtonPurchaseTechnology", !armies)] {
+            ui.with_widget(&format!("{base}/{name}"), |w| {
+                if on {
+                    w.flags |= aa_ui::state::widget_flag::SELECTED;
+                } else {
+                    w.flags &= !aa_ui::state::widget_flag::SELECTED;
+                }
+            });
+        }
+        ui.layout();
+    }
+
+    /// `0x94C410`: validated for the local player (951D70); 0x14 and 0x15
+    /// answer with their message boxes, another error by 952EC0; with the UVar
+    /// (`[B39940]+0x33C`, MetaGameUIPurchaseConfirm) the purchase waits on
+    /// `metagame_confirm_purchase|s`, otherwise it is sent and the dialog closes.
+    fn purchase_request(&mut self, ui: &mut Ui, game: &mut Game, cmd: Command, name: &str) {
+        use aa_metagame::commands::code::{INSUFFICIENT_RESOURCES, PURCHASE_UNOWNED_CAPITAL};
+        match game.campaign.validate_local(&cmd) {
+            Ok(0) => {
+                if ui.uvars.get_bool("MetaGameUIPurchaseConfirm") {
+                    self.purchase = Some(cmd);
+                    let text = ui.strings.format("metagame_confirm_purchase|s", &[name]);
+                    let ok = ui.strings.resolve("#button_ok");
+                    let cancel = ui.strings.resolve("#button_cancel");
+                    ui.show_message_box(aa_ui::message_box::GAME, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, "PurchaseConfirm".into()), (cancel, "PurchaseCancel".into())] });
+                } else {
+                    let _ = game.campaign.send_local(cmd);
+                    self.close(ui);
+                }
+            }
+            Ok(code) if code == INSUFFICIENT_RESOURCES || code == PURCHASE_UNOWNED_CAPITAL => {
+                let key = if code == INSUFFICIENT_RESOURCES { "#metagame_error_insufficient_resources" } else { "#metagame_error_purchase_unowned_capital" };
+                let text = ui.strings.resolve(key);
+                let ok = ui.strings.resolve("#button_ok");
+                ui.show_message_box(aa_ui::message_box::GAME, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+            }
+            Ok(code) => error_message(ui, game, code, &cmd),
+            Err(e) => bevy::log::warn!("purchase {cmd:?}: {e}"),
+        }
     }
 
     /// `0x94F2F0`, the Start Battle dialog's Activate: the contested
     /// territory, the first attacker's kingdom (955420) and the defending
     /// kingdom (955EB0) by name, Play for a battle the local player is part of
     /// (94D620) and Watch otherwise, Cancel on the local player's turn (94D5D0).
-    /// The army lists (94DFE0) and the odds tooltips are not built.
+    /// The army lists are 94DFE0; the tooltip of the Play button (94E920) is not built.
     fn fill_battle(&mut self, ui: &mut Ui, game: &Game) {
         let Some(t) = game.campaign.pending_battle().ok().flatten() else { return };
         let base = "MetaGameStartBattleDialog";
@@ -436,16 +801,79 @@ impl MetaGameUi {
         ui.set_label(&format!("{base}/MetaGameDefenderPanel/DefenderLabel"), &d);
         let involved = game.campaign.local_involved().unwrap_or(false);
         let local_turn = game.campaign.local_turn();
+        self.battle_dialog = Some(involved);
+        self.tips.clear();
+        if let Some((name, text)) = quick_tip(ui, game) {
+            self.tips.push((format!("Root/{base}/MetaGameButtonStartBattleQuickBattle"), name, text));
+        }
+        self.fill_army_list(ui, game, t, Side::Attacker, "MetaGameAttackerPanel", "AttackerArmyList", 9800);
+        self.fill_army_list(ui, game, t, Side::Defender, "MetaGameDefenderPanel", "DefenderArmyList", 9900);
         ui.with_widget(&format!("{base}/MetaGameButtonStartBattlePlay"), |w| w.set_visible(involved));
         ui.with_widget(&format!("{base}/MetaGameButtonStartBattleWatch"), |w| w.set_visible(!involved));
         ui.with_widget(&format!("{base}/MetaGameButtonStartBattleCancel"), |w| w.set_visible(local_turn));
     }
 
+    /// `0x94DFE0`: one row per army type of the side, its count kept by a hash
+    /// and the rows ordered by 93AFE0 (+0x5B8 +0x18, the damage with the divisions,
+    /// ascending; equal ones in the order they were met): the Thing's icon (+0xF0)
+    /// on the Decal and `metagame_battle_dialog_army_item_format` of the count in
+    /// Column0, and the row's tooltip ([`army_tip`]).
+    fn fill_army_list(&mut self, ui: &mut Ui, game: &Game, t: usize, side: Side, panel: &str, list: &str, first_tag: u64) {
+        let file = "MetaGame/UI/metagame_start_battle.tgi:MetaGameStartBattleDialog";
+        let vp = format!("Root/MetaGameStartBattleDialog/{panel}/{list}");
+        ui.viewport_clear(&vp);
+        let mut rows: Vec<(usize, i32)> = Vec::new();
+        for a in game.campaign.side_armies(t, side) {
+            let d = game.campaign.state.army(a).definition;
+            match rows.iter_mut().find(|r| r.0 == d) {
+                Some(r) => r.1 += 1,
+                None => rows.push((d, 1)),
+            }
+        }
+        let damage = |d: usize| f32::from_bits(game.campaign.data.armies[d].damage_with_divisions_bits);
+        rows.sort_by(|a, b| damage(a.0).total_cmp(&damage(b.0)));
+        let format = ui.strings.resolve("#metagame_battle_dialog_army_item_format");
+        for (i, (d, count)) in rows.into_iter().enumerate() {
+            let mut row = Widget::new(C::Panel, "Client", false);
+            row.add_child(Widget::new(C::Decal, "Decal", false));
+            row.add_child(Widget::new(C::Label, "Column0", false));
+            if let Ok(n) = ui.store.node(&format!("{file}/{panel}/{list}")) {
+                let strings = ui.strings.clone();
+                let resolve = |v: &str| strings.resolve(v);
+                let root = std::sync::Arc::new(n.clone());
+                row.load(&mut ui.store, Some((&n, &root)), Some(10), &resolve);
+            }
+            let tag = first_tag + i as u64;
+            row.tag = tag;
+            ui.viewport_add(&vp, row);
+            let Some(path) = ui.find_tag(tag) else { continue };
+            let (name, body) = army_tip(ui, game, d);
+            self.tips.push((path.clone(), name, body));
+            let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
+            ui.set_label(&format!("{rel}/Column0"), &format.replace("%d", &count.to_string()));
+            let icon = game.data.thing_icon(&game.campaign.data.armies[d].ids).map(|i| format!("/{}", i.trim_start_matches('/')));
+            ui.with_widget(&format!("{rel}/Decal"), |w| {
+                for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+                    set_decal_texture(ve, &icon);
+                }
+            });
+        }
+        ui.viewport_refresh(&vp);
+    }
+
+    /// The dynamic tooltip of a widget (the path up to the row).
+    pub fn tooltip(&self, path: &str) -> Option<(String, String)> {
+        self.tips.iter().find(|t| path == t.0 || path.strip_prefix(t.0.as_str()).is_some_and(|r| r.starts_with('/'))).map(|t| (t.1.clone(), t.2.clone()))
+    }
+
     fn close(&mut self, ui: &mut Ui) {
+        self.tips.clear();
         if let Some(d) = self.dialog.take() {
             let name = match d {
                 Dialog::Menu => "MetaGameMenuDialog",
                 Dialog::StartBattle => "MetaGameStartBattleDialog",
+                Dialog::Purchase => "MetaGamePurchasingDialog",
+                Dialog::History => "MetaGameHistoryDialog",
             };
             ui.disconnect(name);
             ui.layout();
@@ -470,7 +898,7 @@ impl MetaGameUi {
         let flags = cmd.data.map(|d| d.flags).unwrap_or(0);
         let index = cmd.data.map(|d| d.index).unwrap_or(u32::MAX);
         if flags & (0x1000 | 0x1_0000) != 0 && cmd.actor_definition.is_none() {
-            bevy::log::warn!("MetaGame command {index} refused: the purchasing dialog (94BFE0) is not built");
+            self.open(ui, game, Dialog::Purchase);
             return;
         }
         if flags & 0x10_0000 != 0 && cmd.divisions.is_none() {
@@ -521,6 +949,9 @@ impl MetaGameUi {
 
     /// The interface's commands (9375C0) and the dialogs' (94B100, 94D780).
     pub fn command(&mut self, ui: &mut Ui, game: &mut Game, command: &str) -> Option<Out> {
+        if self.help.command(ui, game, command) {
+            return Some(Out::None);
+        }
         let mut words = command.split_whitespace();
         let head = words.next()?.to_ascii_lowercase();
         match head.as_str() {
@@ -532,10 +963,6 @@ impl MetaGameUi {
                     bevy::log::warn!("No such metagame command: {name}");
                     return Some(Out::None);
                 };
-                if words.next().is_some() {
-                    bevy::log::warn!("MGCommand {name} refused: its arguments (9498E0 ..) are not ported");
-                    return Some(Out::None);
-                }
                 // hot commands (flags & 0x0F000000) only on the local turn
                 let flags = cmd.data.map(|d| d.flags).unwrap_or(0);
                 if flags & 0x0f00_0000 != 0 && !game.campaign.local_turn() {
@@ -543,6 +970,28 @@ impl MetaGameUi {
                 }
                 // 950EB0: the first selected thing
                 cmd.army = game.selected_army;
+                // the argument by what the command takes: a division (9498E0 ->
+                // 952530), a territory (949850 -> 939B60, 950CF0), a technology
+                // (9498B0 -> 463FA0, 950D20), an army type (949890 -> 427BD0, 950CD0)
+                if let Some(arg) = words.next() {
+                    let data = &game.campaign.data;
+                    if flags & 0xf0_0000 != 0 {
+                        if let Some(d) = data.divisions.iter().position(|d| d.ids.eq_ignore_ascii_case(arg)) {
+                            cmd.divisions = Some(vec![d]);
+                        }
+                    } else if flags & 0xf0 != 0 {
+                        let map = data.campaigns[game.campaign.state.campaign].map.unwrap_or(0);
+                        if let Some(t) = data.maps[map].territories.iter().position(|t| t.object_ids.eq_ignore_ascii_case(arg) || t.ids.eq_ignore_ascii_case(arg)) {
+                            cmd.set_territory(data, map, t);
+                        }
+                    } else if flags & 0xf_0000 != 0 {
+                        cmd.technology = Some(arg.to_string());
+                    } else if flags & 0xf000 != 0
+                        && let Some(a) = data.armies.iter().position(|a| a.ids.eq_ignore_ascii_case(arg))
+                    {
+                        cmd.actor_definition = Some(a);
+                    }
+                }
                 self.dispatch(ui, game, cmd);
                 Some(Out::None)
             }
@@ -604,12 +1053,13 @@ impl MetaGameUi {
                 }
                 Some(Out::None)
             }
-            // 9336E0: the playbattle order, then the RTS launch 932210. Refused
-            // until the launch (948EF0) is wired to the battle client; the
-            // dialog stays open with Quick Battle and Cancel.
+            // 9336E0: the playbattle order, then the RTS launch 932210 (campaign/battle.rs)
             "launchrtsgame" => {
-                bevy::log::warn!("LaunchRTSGame refused: the RTS battle launch (9336E0 -> 932210) is not wired to the battle client");
-                Some(Out::None)
+                self.close(ui);
+                if let Some(cmd) = Campaign::command("playbattle") {
+                    self.send_now(ui, game, cmd);
+                }
+                Some(Out::LaunchBattle)
             }
             // 933F20 (938BC0: the kingdom by its campaign IDS) -> 933680
             "centeroncapital" => {
@@ -650,14 +1100,72 @@ impl MetaGameUi {
                 game.speed = speed_step(game.speed, -1.0);
                 Some(Out::None)
             }
-            // 933550: on the local player's turn; refused until it is built
+            // 933550: on the local player's turn
             "purchase" => {
                 if game.campaign.local_turn() {
-                    bevy::log::warn!("Purchase refused: the purchasing dialog (94BFE0) is not built");
+                    self.open(ui, game, Dialog::Purchase);
                 }
                 Some(Out::None)
             }
-            "history" | "politicsdisplaytoggle" | "metagameloaddialog" | "metagamesavedialog" | "gamesave" | "cycleselection" => {
+            // 94CFB0: the purchasing dialog's commands
+            "close" => {
+                self.close(ui);
+                Some(Out::None)
+            }
+            "purchasearmypage" => {
+                self.purchase_page(ui, true);
+                Some(Out::None)
+            }
+            "purchasetechnologypage" => {
+                self.purchase_page(ui, false);
+                Some(Out::None)
+            }
+            // 94CD20: [army_ids] (950CD0 the army type, command 8)
+            "purchasearmy" => {
+                let ids = words.next()?;
+                let definition = game.campaign.data.armies.iter().position(|a| a.ids.eq_ignore_ascii_case(ids));
+                if let (Some(d), Some(mut cmd)) = (definition, Campaign::command("purchaseactor")) {
+                    cmd.actor_definition = Some(d);
+                    let name = army_name(ui, game, d);
+                    self.purchase_request(ui, game, cmd, &name);
+                }
+                Some(Out::None)
+            }
+            // 94CE70: [technology_ids] (command 7)
+            "purchasetechnology" => {
+                let ids = words.next()?;
+                if let Some(mut cmd) = Campaign::command("purchasetech") {
+                    cmd.technology = Some(ids.to_string());
+                    let name = ui.strings.resolve(&format!("#{ids}_name"));
+                    self.purchase_request(ui, game, cmd, &name);
+                }
+                Some(Out::None)
+            }
+            "purchaseconfirm" => {
+                if let Some(cmd) = self.purchase.take() {
+                    let _ = game.campaign.send_local(cmd);
+                }
+                self.close(ui);
+                Some(Out::None)
+            }
+            "purchasecancel" => {
+                self.purchase = None;
+                Some(Out::None)
+            }
+            // 9375C0: History -> 94AD40
+            "history" => {
+                self.open(ui, game, Dialog::History);
+                Some(Out::None)
+            }
+            "metagameloaddialog" => {
+                self.close(ui);
+                Some(Out::LoadDialog)
+            }
+            "metagamesavedialog" => {
+                self.close(ui);
+                Some(Out::SaveDialog)
+            }
+            "politicsdisplaytoggle" | "gamesave" | "cycleselection" => {
                 bevy::log::warn!("MetaGame command {command} refused: its screen is not built");
                 Some(Out::None)
             }
@@ -727,6 +1235,14 @@ impl MetaGameUi {
                         }
                     };
                     ui.messages.send(&uv, "METAGAME_BATTLE", &text, None);
+                    // 953A20: game events 0x3A territory_positive / 0x3B territory_negative
+                    // of the winner and the loser, their FXC_GameEventSFX
+                    let local = game.campaign.local;
+                    let good = if Some(*attacker) == local { Some(*attacker_won) } else if defender.is_some() && *defender == local { Some(!*attacker_won) } else { None };
+                    if let Some(good) = good {
+                        ui.events.push(aa_ui::ui::UiEvent::Sound { name: if good { "territory_captured" } else { "territory_lost" }.to_string() });
+                    }
+                    self.help.battle_result(ui, game, *defender, *attacker_won);
                 }
                 // 952790
                 Note::Engine(EngineCall::EndTurnMessage { kingdom }) => {
@@ -766,8 +1282,15 @@ impl MetaGameUi {
                         _ => {}
                     }
                 }
+                // 938E10 -> 50D370: the mission boxes, as a battle's end (0x50C600
+                // case 2 -> 0x440190): the local kingdom won or lost the campaign
                 Note::Engine(EngineCall::GameOver) => {
-                    bevy::log::info!("the campaign is over (938E10)");
+                    let won = game.campaign.local_actor().is_some_and(|l| game.campaign.won.contains(&l));
+                    bevy::log::info!("the campaign is over (938E10), local won: {won}");
+                    let key = if won { "#ui_mission_message_won" } else { "#ui_mission_message_lost" };
+                    let text = ui.strings.resolve(key);
+                    let end = ui.strings.resolve("#ui_mission_label_end_game");
+                    ui.show_message_box(aa_ui::message_box::GAME, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(end, "RequestFinished".into())] });
                 }
                 Note::AiFailed { kingdom, error } => {
                     bevy::log::error!("the computer player of kingdom {kingdom} stopped the campaign: {error}");
@@ -813,7 +1336,7 @@ fn speed_step(speed: f32, dir: f32) -> f32 {
 }
 
 /// `0x9335E0`'s point for the first selected thing: its position.
-fn selection_point(game: &Game) -> Option<[f32; 2]> {
+pub(super) fn selection_point(game: &Game) -> Option<[f32; 2]> {
     if let Some(a) = game.selected_army {
         return super::map::rest_position(game, a).map(|p| [p.x, p.y]);
     }

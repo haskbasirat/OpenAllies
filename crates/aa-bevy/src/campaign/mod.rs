@@ -13,10 +13,16 @@
 //! The front end (`ui::front`) owns the UI; it hands the campaign page's
 //! builds, commands and frames to [`CampaignUi`]. The 3D strategic map is
 //! drawn by [`map`] from the same state.
+pub mod battle;
 pub mod choose;
+pub mod cinematic;
 pub mod data;
+pub mod debriefing;
+pub mod help;
 pub mod interface;
 pub mod map;
+pub mod missions;
+pub mod saves;
 
 use aa_metagame::driver::{Campaign, Note, Options};
 use aa_metagame::state::ArmyId;
@@ -31,7 +37,10 @@ pub struct CampaignPlugin;
 impl Plugin for CampaignPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<map::MapScene>()
-            .add_systems(Update, (map::sync, map::camera, map::pick).chain().after(crate::ui::front::frame));
+            .add_systems(Update, (map::sync, map::camera, map::pick, map::minimap).chain().after(crate::ui::front::frame))
+            .add_systems(Update, cinematic::play.after(crate::ui::front::frame))
+            // after the film of the battle has read the launch orders
+            .add_systems(Update, battle::start.after(crate::film_record::start).before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)));
     }
 }
 
@@ -42,10 +51,19 @@ pub enum Screen {
     Choose,
     /// The MetaGame interface over the strategic map (935130).
     Map,
+    /// ChooseCampaign (642280): the scripted campaigns (RequestCampaign).
+    Missions,
+    /// DebriefingInterface (6014B0): after a scripted mission.
+    Debriefing,
+    /// The FullscreenVideoWidget alone: a cinematic mission (641D10).
+    Cinematic,
 }
 
+/// The end of a cinematic mission's movie (`0x641400`), posted by `cinematic::play`.
+pub const CINEMATIC_ENDED: &str = "CampaignCinematicEnded";
+
 /// What a campaign command asks the front end to do.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Action {
     None,
     /// Back to the Single Player menu (DynamicCampaignExit 941A40 -> 651990).
@@ -58,6 +76,42 @@ pub enum Action {
     QuitConfirm,
     /// Open the options dialog (OptionsDialog 935930).
     Options,
+    /// A battle for the loader (the front end hands it over, `front::start`).
+    Launch(Box<BattleLaunch>),
+    /// DebriefingScoring (600C70): the score screen of the mission (slot 5).
+    Scoring,
+    /// DebriefingSaveFilm: the film dialog of the score screen.
+    SaveFilm,
+}
+
+/// A battle the campaign pages launch: a mission (PlayMap 643CA0) or a metagame
+/// battle (LaunchRTSGame 9336E0).
+#[derive(Clone, Debug)]
+pub struct BattleLaunch {
+    pub setup: aa_play::SkirmishSetup,
+    pub random: Option<aa_play::mapgen::RandomMapParams>,
+    /// The DifficultyLevel world rule of the session (`ui/objectives.rs`).
+    pub difficulty: Option<String>,
+    /// The session's AI profile per player (index into `setup.players`).
+    pub profiles: Vec<(usize, String)>,
+    /// The kingdoms' display names (session records).
+    pub names: Vec<(String, String)>,
+    /// The general per player (index into `setup.players`), the StartingExperience
+    /// rule and the FogOfWar rule's value.
+    pub factions: Vec<(usize, Option<String>)>,
+    pub starting_experience: Option<f32>,
+    pub fog: Option<String>,
+    /// Who plays it.
+    pub origin: BattleOrigin,
+}
+
+/// Where the front end goes when the battle ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BattleOrigin {
+    /// Back to ChooseCampaign.
+    Mission,
+    /// Back to the strategic map, with the battle's result (93A990).
+    MetaGame,
 }
 
 /// A running campaign with what the interface keeps about it.
@@ -99,6 +153,20 @@ pub struct CampaignUi {
     pub choose: choose::Chooser,
     pub game: Option<Game>,
     pub iface: interface::MetaGameUi,
+    /// The scripted campaigns (RequestCampaign).
+    pub missions: missions::Chooser,
+    /// What the debriefing page shows.
+    pub debriefed: debriefing::Shown,
+    /// The movie of the FullscreenVideoWidget (`cinematic::play`).
+    pub movie: Option<String>,
+    /// The battle on the way (its end returns here).
+    pub battle: Option<BattleOrigin>,
+    /// What the metagame needs when its battle returns (93A990).
+    pub meta_battle: Option<battle::MetaBattle>,
+    /// The metagame battle's world side for the loader, taken by the front end.
+    pub pending_battle: Option<battle::PendingBattle>,
+    /// A saved-campaign dialog on the screen (68DB60 / 68DCE0 mode 3).
+    saves: Option<saves::Dialog>,
     data_error_shown: bool,
     last_ms: Option<u64>,
     hotkeys: Option<Vec<(String, String)>>,
@@ -154,6 +222,13 @@ impl CampaignUi {
             choose: choose::Chooser::default(),
             game: None,
             iface: interface::MetaGameUi::default(),
+            missions: missions::Chooser::default(),
+            debriefed: debriefing::Shown::default(),
+            movie: None,
+            battle: None,
+            meta_battle: None,
+            pending_battle: None,
+            saves: None,
             data_error_shown: false,
             last_ms: None,
             hotkeys: None,
@@ -168,15 +243,13 @@ impl CampaignUi {
     /// name, `metagame_campaign_name`) with Ok = "Uvar
     /// UICampaignConfirmDependentCampaign 0 ; RequestDynamicCampaign";
     /// otherwise RequestDynamicCampaign (64F060) at once. Returns true when
-    /// the campaign chooser should be shown now. The campaign progress
-    /// records are not kept by this client (the tutorial campaign is not
-    /// built): the confirmation is always asked, until the player turns it off.
+    /// the campaign chooser should be shown now.
     pub fn confirm_play(&mut self, ui: &mut Ui) -> bool {
         if !ui.uvars.get_bool("UICampaignConfirmDependentCampaign") {
             return true;
         }
         let dependent = ui.avars.get("MetaGameDependentCampaignIDS").map(aa_ui::node::unquote).unwrap_or_default();
-        if dependent.is_empty() {
+        if dependent.is_empty() || self.missions.unfinished(ui, &dependent) == Some(false) {
             return true;
         }
         // the dependent campaign's name (campaign data +0x10)
@@ -225,6 +298,143 @@ impl CampaignUi {
                     self.choose.show(ui, data.as_deref());
                 }
             },
+            Screen::Missions => self.missions.show(ui),
+            Screen::Debriefing => debriefing::show(ui, &self.debriefed),
+            Screen::Cinematic => ui.clear(),
+        }
+    }
+
+    /// The nation skin of the map screen: the local kingdom's `nation_ids`.
+    fn map_skin(&self) -> Option<String> {
+        if self.screen != Screen::Map {
+            return None;
+        }
+        let g = self.game.as_ref()?;
+        let c = g.campaign.data.campaigns.get(g.campaign.state.campaign)?;
+        let k = g.campaign.state.kingdoms.get(g.campaign.local?)?;
+        let ids = &c.kingdoms.get(k.data)?.nation_ids;
+        Some(ids.trim_start_matches("nation_").to_ascii_uppercase())
+    }
+
+    /// A click on the strategic map's minimap: the camera looks there.
+    pub fn minimap_jump(&mut self, u: f32, v: f32) {
+        let Some(g) = &self.game else { return };
+        let c = &g.campaign.data.campaigns[g.campaign.state.campaign];
+        let Some(m) = c.map.and_then(|m| g.campaign.data.maps.get(m)) else { return };
+        self.iface.look_at = Some([u * f32::from_bits(m.width_bits), (1.0 - v) * f32::from_bits(m.height_bits)]);
+    }
+
+    /// RequestCampaign: the scripted campaigns' chooser.
+    pub fn enter_missions(&mut self, ui: &mut Ui) {
+        self.screen = Screen::Missions;
+        self.missions.enter(ui);
+    }
+
+    /// LaunchRTSGame 9336E0 -> 932210: the pending battle's launch.
+    fn rts_launch(&mut self, ui: &mut Ui) -> Option<Action> {
+        let game_root = self.root.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(1);
+        let game = self.game.as_ref()?;
+        match battle::launch(game, &game_root, seed) {
+            Ok((launch, pending, meta)) => {
+                info!("campaign battle: {:?} on {}", launch.setup.players, launch.setup.map_id);
+                self.battle = Some(BattleOrigin::MetaGame);
+                self.meta_battle = Some(meta);
+                self.pending_battle = Some(pending);
+                Some(Action::Launch(Box::new(launch)))
+            }
+            Err(e) => {
+                error!("the campaign battle cannot start: {e}");
+                let ok = ui.strings.resolve("#button_ok");
+                ui.show_message_box(aa_ui::message_box::GAME, aa_ui::message_box::MessageBoxRequest { text: e, buttons: vec![(ok, String::new())] });
+                Some(Action::None)
+            }
+        }
+    }
+
+    /// The RTS battle came back: 93A990 with the winner (MGState+0x48: the
+    /// winning kingdom's RMC name; an empty one for a battle left unfinished).
+    fn rts_returned(&mut self, won: bool, winner_team: Option<u32>) {
+        let (Some(meta), Some(g)) = (self.meta_battle.take(), self.game.as_mut()) else { return };
+        let winner = match (meta.local_attacker, won, winner_team) {
+            (Some(true), true, _) | (Some(false), false, Some(_)) => meta.attacker.clone(),
+            (Some(false), true, _) | (Some(true), false, Some(_)) => meta.defender.clone(),
+            (None, _, Some(0)) => meta.attacker.clone(),
+            (None, _, Some(_)) => meta.defender.clone(),
+            _ => String::new(),
+        };
+        info!("the campaign battle returns: winner '{winner}'");
+        let resources = crate::preload::game_data(self.root.parent().unwrap_or(&self.root)).map(|d| d.resources.iter().map(|r| r.id.clone()).collect()).unwrap_or_default();
+        let env = battle::env(g, resources);
+        let moving = g.moving.clone();
+        let busy = move |a: ArmyId| moving.contains(&a);
+        if let Err(e) = g.campaign.rts_finished(&winner, &env, &busy) {
+            error!("the campaign battle's result: {e}");
+        }
+    }
+
+    /// A mission's battle (PlayMap 643CA0).
+    fn mission_launch(&mut self, ui: &mut Ui, map: &str, difficulty: &str) -> Option<Action> {
+        let game_root = self.root.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        let built = crate::preload::game_data(&game_root).and_then(|data| missions::mission_setup(&game_root, map, &data, "Player", ui));
+        match built {
+            Ok(session) => {
+                self.battle = Some(BattleOrigin::Mission);
+                Some(Action::Launch(Box::new(BattleLaunch {
+                    setup: session.setup,
+                    random: None,
+                    difficulty: Some(difficulty.to_string()),
+                    profiles: Vec::new(),
+                    names: Vec::new(),
+                    factions: session.factions,
+                    starting_experience: session.starting_experience,
+                    fog: session.fog,
+                    origin: BattleOrigin::Mission,
+                })))
+            }
+            Err(e) => {
+                // campaign_bad_map (643CF1)
+                error!("mission {map}: {e:#}");
+                let text = ui.strings.resolve("#campaign_bad_map");
+                let ok = ui.strings.resolve("#button_ok");
+                ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+                Some(Action::None)
+            }
+        }
+    }
+
+    /// Whether the battle that is ending is a scripted mission.
+    pub fn in_mission(&self) -> bool {
+        self.battle == Some(BattleOrigin::Mission)
+    }
+
+    /// A scripted mission ended (`0x60A140` -> `0x651BD0`): the debriefing (slot 4),
+    /// the chooser (slot 1) after the final mission won.
+    pub fn mission_ended(&mut self, ui: &Ui, result: debriefing::MissionResult) {
+        self.battle = None;
+        match self.missions.mission_ended(ui, result) {
+            Some(shown) => {
+                self.debriefed = shown;
+                self.screen = Screen::Debriefing;
+            }
+            None => self.screen = Screen::Missions,
+        }
+    }
+
+    /// The battle ended (the score screen's Exit): back to the campaign page it
+    /// came from, with what it decided. Returns whether a campaign page follows.
+    pub fn battle_ended(&mut self, won: bool, winner_team: Option<u32>) -> bool {
+        match self.battle.take() {
+            Some(BattleOrigin::Mission) => {
+                self.screen = Screen::Debriefing;
+                true
+            }
+            Some(BattleOrigin::MetaGame) => {
+                self.screen = Screen::Map;
+                self.rts_returned(won, winner_team);
+                true
+            }
+            None => false,
         }
     }
 
@@ -253,6 +463,11 @@ impl CampaignUi {
             self.enter(ui);
             return Some(Action::Rebuild);
         }
+        if let Some(d) = self.saves.as_mut()
+            && let Some(outcome) = d.command(ui, command)
+        {
+            return Some(self.saves_outcome(ui, outcome));
+        }
         match self.screen {
             Screen::Choose => {
                 let data = data::ready().and_then(Result::ok);
@@ -260,6 +475,11 @@ impl CampaignUi {
                 match out {
                     choose::Out::None => Some(Action::None),
                     choose::Out::Exit => Some(Action::Exit),
+                    // 932A00 -> 68DB60(3, flag 1)
+                    choose::Out::Load => {
+                        self.saves = saves::Dialog::open(ui, false, "");
+                        Some(Action::None)
+                    }
                     choose::Out::New { campaign, faction } => {
                         let data = data?;
                         match self.start(ui, data, campaign, faction) {
@@ -272,6 +492,58 @@ impl CampaignUi {
                             }
                         }
                     }
+                }
+            }
+            Screen::Missions => {
+                let out = self.missions.command(ui, command)?;
+                match out {
+                    missions::Out::None => Some(Action::None),
+                    missions::Out::Exit => Some(Action::Exit),
+                    missions::Out::Asked => Some(Action::None),
+                    missions::Out::Play { map, difficulty } => self.mission_launch(ui, &map, &difficulty),
+                    missions::Out::Cinematic(name) => {
+                        self.movie = Some(name);
+                        self.screen = Screen::Cinematic;
+                        Some(Action::Rebuild)
+                    }
+                }
+            }
+            // 0x641400 on the movie's end
+            Screen::Cinematic => {
+                if command != CINEMATIC_ENDED {
+                    return None;
+                }
+                self.screen = Screen::Missions;
+                match self.missions.cinematic_ended(ui) {
+                    missions::Out::Play { map, difficulty } => self.mission_launch(ui, &map, &difficulty),
+                    missions::Out::Cinematic(name) => {
+                        self.movie = Some(name);
+                        self.screen = Screen::Cinematic;
+                        Some(Action::Rebuild)
+                    }
+                    _ => Some(Action::Rebuild),
+                }
+            }
+            Screen::Debriefing => {
+                let out = match debriefing::command(command)? {
+                    debriefing::Out::Scoring => return Some(Action::Scoring),
+                    debriefing::Out::SaveFilm => return Some(Action::SaveFilm),
+                    debriefing::Out::Exit => {
+                        self.screen = Screen::Missions;
+                        return Some(Action::Rebuild);
+                    }
+                    debriefing::Out::Replay => self.missions.replay(ui),
+                    debriefing::Out::PlayNext => self.missions.play_next(ui),
+                };
+                self.screen = Screen::Missions;
+                match out {
+                    missions::Out::Play { map, difficulty } => self.mission_launch(ui, &map, &difficulty),
+                    missions::Out::Cinematic(name) => {
+                        self.movie = Some(name);
+                        self.screen = Screen::Cinematic;
+                        Some(Action::Rebuild)
+                    }
+                    _ => Some(Action::Rebuild),
                 }
             }
             Screen::Map => {
@@ -289,6 +561,22 @@ impl CampaignUi {
                     }
                     interface::Out::QuitConfirm => Some(Action::QuitConfirm),
                     interface::Out::Options => Some(Action::Options),
+                    interface::Out::LaunchBattle => self.rts_launch(ui),
+                    // 9375C0: MetaGameLoadDialog -> 68DB60(3, ..)
+                    interface::Out::LoadDialog => {
+                        self.saves = saves::Dialog::open(ui, false, "");
+                        Some(Action::None)
+                    }
+                    // 9375C0: MetaGameSaveDialog -> 68DCE0(3, ..)
+                    interface::Out::SaveDialog => {
+                        let name = self.game.as_ref().map(|g| {
+                            let round = interface::round_text(ui, g);
+                            let c = &g.campaign.data.campaigns[g.campaign.state.campaign];
+                            format!("{} {round}", ui.strings.resolve(&c.name))
+                        });
+                        self.saves = saves::Dialog::open(ui, true, &name.unwrap_or_default());
+                        Some(Action::None)
+                    }
                 }
             }
         }
@@ -315,6 +603,60 @@ impl CampaignUi {
         let mut campaign = Campaign::new(meta, campaign, None, faction, seed, options).map_err(|e| e.to_string())?;
         // InitCreate keeps the campaign kingdom order: MG kingdom k = campaign kingdom k
         campaign.local = campaign.state.kingdoms.iter().position(|k| k.data == local_data);
+        self.install(ui, data, campaign);
+        Ok(())
+    }
+
+    /// What a saved-campaign dialog's command came to.
+    fn saves_outcome(&mut self, ui: &mut Ui, outcome: saves::Outcome) -> Action {
+        let ok = ui.strings.resolve("#button_ok");
+        match outcome {
+            saves::Outcome::Open => Action::None,
+            saves::Outcome::Closed => {
+                self.saves = None;
+                Action::None
+            }
+            saves::Outcome::Save(target) => {
+                self.saves = None;
+                if let Some(g) = &self.game
+                    && let Err(e) = saves::save(g, &target)
+                {
+                    error!("the campaign's save {}: {e}", target.display());
+                    ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text: e, buttons: vec![(ok, String::new())] });
+                }
+                Action::None
+            }
+            saves::Outcome::Load(file) => {
+                self.saves = None;
+                let loaded = std::fs::read(&file)
+                    .map_err(|e| e.to_string())
+                    .and_then(|bytes| data::ready().ok_or_else(|| "the campaign data is not ready".to_string()).and_then(|d| d).map(|d| (bytes, d)))
+                    .and_then(|(bytes, d)| saves::decode(&bytes, &d).map(|l| (l, d)));
+                match loaded {
+                    Ok(((state, local), d)) => {
+                        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|t| t.as_millis() as u32).unwrap_or(0);
+                        let options = Options {
+                            computer_quick_battle: ui.uvars.get_bool("MetaGameUIComputerQuickBattle"),
+                            auto_quick_battle: false,
+                            budget: Some(std::time::Duration::from_secs_f32(ui.uvars.get_f32("SAITimePerThink").max(0.0))),
+                            fast_mgai: ui.uvars.get_bool("MetaGameUIFastMGAI"),
+                        };
+                        let campaign = Campaign::from_state(Arc::new(d.meta.clone()), state, local, seed, options);
+                        self.install(ui, d, campaign);
+                        Action::Rebuild
+                    }
+                    Err(e) => {
+                        error!("the saved campaign {}: {e}", file.display());
+                        ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text: e, buttons: vec![(ok, String::new())] });
+                        Action::None
+                    }
+                }
+            }
+        }
+    }
+
+    /// A campaign (new or loaded) under the MetaGame interface.
+    fn install(&mut self, ui: &mut Ui, data: Arc<data::CampaignData>, campaign: Campaign) {
         static RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         self.game = Some(Game {
             id: RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -332,7 +674,6 @@ impl CampaignUi {
         self.iface = interface::MetaGameUi::default();
         self.screen = Screen::Map;
         ui.messages.clear();
-        Ok(())
     }
 
     /// A key the front end's UI did not take: the MetaGame interface hotkeys
@@ -354,6 +695,7 @@ impl CampaignUi {
                 interface::Dialog::Menu => "ReturnToGame",
                 interface::Dialog::StartBattle if local_turn => "Cancel",
                 interface::Dialog::StartBattle => return None,
+                interface::Dialog::Purchase | interface::Dialog::History => "Close",
             };
             return self.command(ui, command, "");
         }
@@ -369,6 +711,12 @@ impl CampaignUi {
     /// One frame of the campaign pages: the chooser's data arrival, the
     /// world ticks of a running campaign and the interface's labels.
     pub fn update(&mut self, ui: &mut Ui, now_ms: u64) -> bool {
+        // the strategic map is drawn in the local kingdom's nation skin
+        // (`Skins/<NATION>/MetaGame/UI`), the choosers in none
+        let skin = self.map_skin();
+        if ui.store.root.skin() != skin.as_deref() {
+            ui.set_skin(skin.as_deref(), self.root.join("assets/original/Skins"));
+        }
         let dt = self.last_ms.map_or(0.0, |l| now_ms.saturating_sub(l) as f32 / 1000.0).min(0.25);
         self.last_ms = Some(now_ms);
         let mut rebuild = false;
@@ -386,6 +734,7 @@ impl CampaignUi {
                     }
                 }
             }
+            Screen::Missions | Screen::Debriefing | Screen::Cinematic => {}
             Screen::Map => {
                 if let Some(g) = &mut self.game {
                     if let Some(error) = run_ticks(g, dt) {

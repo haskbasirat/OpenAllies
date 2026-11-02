@@ -72,6 +72,34 @@ impl GeneralData {
         Ok(g)
     }
 
+    /// [`GeneralData::load`] on a loose folder: its own cache, its own catalog.
+    pub fn load_on(game_root: &std::path::Path, folder: &crate::data::DataFolder, data: &GameData) -> anyhow::Result<Self> {
+        let key = format!("{CACHE_VERSION}:{}", folder.key());
+        let path = folder.cache_path(game_root, "generals.json");
+        let use_cache = std::env::var("AA_PLAY_NO_CACHE").map_or(true, |v| v.is_empty() || v == "0");
+        if use_cache
+            && let Ok(bytes) = std::fs::read(&path)
+            && let Ok(g) = serde_json::from_slice::<GeneralData>(&bytes)
+            && g.key == key
+        {
+            return Ok(g);
+        }
+        let mut g = Self::from_catalog(folder.catalog(game_root)?, data)?;
+        g.key = key;
+        if use_cache {
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            if let Ok(bytes) = serde_json::to_vec(&g) {
+                let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+                if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+                    let _ = std::fs::remove_file(&tmp);
+                }
+            }
+        }
+        Ok(g)
+    }
+
     pub fn from_catalog(catalog: &ActorCatalog, data: &GameData) -> anyhow::Result<Self> {
         let mut out = GeneralData::default();
         let domain = catalog.native_target_domain(PC).map_err(|e| anyhow::anyhow!("target types: {e}"))?;

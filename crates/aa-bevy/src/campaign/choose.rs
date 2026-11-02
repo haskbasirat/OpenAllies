@@ -39,6 +39,8 @@ pub enum Out {
     None,
     Exit,
     New { campaign: usize, faction: Option<String> },
+    /// DynamicCampaignLoad 932A00: the saved campaigns' dialog.
+    Load,
 }
 
 #[derive(Default)]
@@ -246,10 +248,7 @@ impl Chooser {
                 Some(Out::New { campaign: self.campaign, faction })
             }
             // 932A00: the load dialog of type 3 (dynamic campaign saves, 68DB60)
-            "dynamiccampaignload" => {
-                bevy::log::warn!("DynamicCampaignLoad refused: the saved-campaign dialog is not built");
-                Some(Out::None)
-            }
+            "dynamiccampaignload" => Some(Out::Load),
             "dynamiccampaignexit" => Some(Out::Exit),
             "setdynamiccampaign" => {
                 let ids = words.next()?;

@@ -614,6 +614,20 @@ impl Campaign {
         Ok(())
     }
 
+    /// `0x93A990` when the RTS battle of the pending territory returns: the
+    /// orders sent before it left (the playbattle of 9336E0), the winner's RMC
+    /// name in `MGState+0x48` and [`crate::launch::process_rts_result`] with the
+    /// application in state 5. `Ok(None)` when its guards fail.
+    pub fn rts_finished<E: crate::launch::LaunchEnv>(&mut self, winner: &str, env: &E, busy: &dyn Fn(ArmyId) -> bool) -> Result<Option<bool>> {
+        for (issuer, command) in std::mem::take(&mut self.sent) {
+            self.execute(issuer, &command, busy)?;
+        }
+        self.state.rts_winner = winner.to_string();
+        let mut engine = NoteEngine { notes: &mut self.notes, busy, won: &mut self.won };
+        let mut ctx = MgContext { state: &mut self.state, data: &self.data, relations: &self.relations, engine: &mut engine, precision: GAME_PRECISION };
+        crate::launch::process_rts_result(&mut ctx, env, 5)
+    }
+
     /// 9505F0 for one order.
     fn execute(&mut self, issuer: KingdomActor, command: &Command, busy: &dyn Fn(ArmyId) -> bool) -> Result<()> {
         let owners: Vec<Option<KingdomActor>> = self.state.armies.iter().map(|a| a.as_ref().map(|a| a.owner)).collect();

@@ -365,9 +365,9 @@ impl AiState {
             // 79EFF0(id, ReactiveAI think_frequency, first think, 1).
             let first = self.players[i].rai_count == 0;
             self.players[i].rai_count += 1;
-            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated) {
+            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated && !crate::triggers::sai_disabled(world, world.kingdoms[me].id)) {
                 self.stats.rai_thinks += 1;
-                let view = View::build(world, &self.bound, me);
+                let view = sai_view(world, &self.bound, me);
                 let mut log = Vec::new();
                 rai::think(&view, &self.bound, &data, &regions, &self.influence, &mut self.players[i], &mut rng, &mut log);
                 let kingdom = self.players[i].kingdom;
@@ -392,9 +392,9 @@ impl AiState {
             // 7B4AD0: think count, the think while the kingdom stands, then
             // 79EFF0(id, ego think_frequency, first think, 0).
             let first = self.players[i].ge_count == 0;
-            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated) {
+            if let Some(me) = view::kingdom_index(world, self.players[i].kingdom).filter(|&me| !world.kingdoms[me].defeated && !crate::triggers::sai_disabled(world, world.kingdoms[me].id)) {
                 self.stats.ge_thinks += 1;
-                let view = View::build(world, &self.bound, me);
+                let view = sai_view(world, &self.bound, me);
                 let mut log = Vec::new();
                 self.reach.update(world);
                 goals::think(&view, &self.bound, &data, &regions, &self.influence, &self.reach, &mut self.players[i], &mut rng, &mut log, self.logging, self.air_orders);
@@ -591,6 +591,10 @@ impl AiState {
         // player's ego supplies the spread settings here.
         let ego = self.players.first().map(|p| &data.egos[p.ego]);
         let (travel, exponent, border) = ego.map_or((45.0, 1.5, 300.0), |e| (e.cv_influence_max_travel_time, e.cv_influence_exponent, e.border_influence_range));
+        // 4D0180 of standing actors: Performer +60, as the think's view reads them
+        // (`view::standing_values`); the definitions' table (bound.cv) is +1E4.
+        let standing = view::standing_values(world);
+        let standing = |d: crate::data::DefId| standing.get(d as usize).copied().unwrap_or(0.0);
         let mut sources = Vec::new();
         for org in world.orgs.iter().filter(|o| o.alive) {
             let Some(owner) = view::kingdom_index(world, org.kingdom) else { continue };
@@ -598,7 +602,7 @@ impl AiState {
             for &m in &org.members {
                 let Some(a) = world.actors.get(m as usize).filter(|a| a.alive && !a.removed) else { continue };
                 let d = world.data.def(a.def);
-                cv += self.bound.cv.get(a.def as usize).copied().unwrap_or(0.0) * (a.health / d.health.max(1e-3)).clamp(0.0, 1.0);
+                cv += standing(a.def) * (a.health / d.health.max(1e-3)).clamp(0.0, 1.0);
                 sum += a.pos.truncate();
                 n += 1;
                 if d.speed_max > 0.0 {
@@ -617,7 +621,7 @@ impl AiState {
                 continue;
             }
             let Some(owner) = a.kingdom.and_then(|k| view::kingdom_index(world, k)) else { continue };
-            let cv = self.bound.cv.get(a.def as usize).copied().unwrap_or(0.0) * (a.health / d.health.max(1e-3)).clamp(0.0, 1.0);
+            let cv = standing(a.def) * (a.health / d.health.max(1e-3)).clamp(0.0, 1.0);
             let range = d.weapons.iter().map(|w| w.range).fold(d.supply_range, f32::max);
             sources.push(Source { owner, pos: a.pos.truncate(), cv, range, mobile: false });
         }
@@ -653,11 +657,42 @@ pub(crate) fn enemy_of(world: &World, k: KingdomId, owner: Option<KingdomId>) ->
     owner.is_some() && world.books.relation(&world.kingdoms, Some(k), owner) == crate::books::ENEMY
 }
 
-/// `7AF220` skips actors that died or are being deleted since the think.
+/// 572E50's SAI side: a team command flare gives the kingdom's computer team
+/// mates the goal (attack or defend the point's region) at the priority for the
+/// duration, an internal flare (`[InternalFlares]`, the think reads them).
+pub fn team_flare(world: &mut World, kingdom: KingdomId, at: Vec2, attack: bool, priority: f32, duration: f32) {
+    let now = world.time;
+    let Some(team) = world.kingdoms.get(kingdom as usize).map(|k| k.team) else { return };
+    let Some(regions) = world.ai.regions.take() else { return };
+    let region = regions.region_at(at);
+    let mates: Vec<KingdomId> = world.kingdoms.iter().filter(|k| k.team == team && k.id != kingdom && !k.independent).map(|k| k.id).collect();
+    for p in world.ai.players.iter_mut().filter(|p| mates.contains(&p.kingdom)) {
+        let key = if attack { goals::Key::Attack(region) } else { goals::Key::Defend(region) };
+        p.flares.push((key, priority, now + duration));
+    }
+    world.ai.regions = Some(regions);
+}
+
+/// The think's view: what the SAI may order leaves out its own organizations
+/// and trucks a trigger took from it (Object+8 bit 0x20: 7A25F0 refuses to
+/// assign such an actor, 7B4FE0 / 7B5210 / 7B6800 skip its record). Other
+/// kingdoms' keep their place: a disabled enemy is still seen and valued.
+fn sai_view<'w>(world: &'w World, bound: &Bound, me: usize) -> View<'w> {
+    let mut v = View::build(world, bound, me);
+    v.orgs.retain(|o| o.owner != me || !crate::triggers::unit_sai_disabled(world, Unit::Org(o.id)));
+    v.trucks.retain(|t| t.owner != me || !crate::triggers::unit_sai_disabled(world, Unit::Actor(t.id)));
+    v
+}
+
+/// `7AF220` skips actors that died or are being deleted since the think, and
+/// those a trigger took from the SAI since then (Object+8 bits 0 and 5).
 fn still_valid(world: &World, command: Command) -> Option<Command> {
-    let live = |u: &Unit| match *u {
-        Unit::Org(o) => world.orgs.get(o as usize).is_some_and(|o| o.alive),
-        Unit::Actor(a) => world.actor(a).is_some_and(|a| a.alive),
+    let live = |u: &Unit| {
+        !crate::triggers::unit_sai_disabled(world, *u)
+            && match *u {
+                Unit::Org(o) => world.orgs.get(o as usize).is_some_and(|o| o.alive),
+                Unit::Actor(a) => world.actor(a).is_some_and(|a| a.alive),
+            }
     };
     match command {
         Command::Move { kingdom, units, to, attack_move } => {
@@ -675,10 +710,10 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
             let units: Vec<Unit> = units.into_iter().filter(live).collect();
             (!units.is_empty()).then_some(Command::Stop { kingdom, units })
         }
-        Command::Recruit { building, .. } | Command::Pack { building, .. } | Command::CancelRecruit { building, .. } => {
+        Command::Recruit { building, .. } | Command::RecruitWith { building, .. } | Command::Pack { building, .. } | Command::CancelRecruit { building, .. } => {
             world.actor(building).is_some_and(|a| a.alive).then_some(command)
         }
-        Command::Deploy { truck, .. } => world.actor(truck).is_some_and(|a| a.alive).then_some(command),
+        Command::Deploy { truck, .. } => (world.actor(truck).is_some_and(|a| a.alive) && !crate::triggers::unit_sai_disabled(world, Unit::Actor(truck))).then_some(command),
         Command::Research { building, .. } => world.actor(building).is_some_and(|a| a.alive).then_some(command),
         Command::Attach { org, hq, .. } => {
             (world.orgs.get(org as usize).is_some_and(|o| o.alive) && world.actor(hq).is_some_and(|a| a.alive)).then_some(command)
@@ -717,6 +752,8 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
         Command::AirRecon { building, .. } => world.actor(building).is_some_and(|a| a.alive).then_some(command),
         // the HUD orders (appended by the core owner; the AI sends none)
         Command::Repair { .. } | Command::Construct { .. } => Some(command),
+        // the actor orders of `crate::orders` (appended by the orders lane)
+        Command::Order { .. } => Some(command),
     }
 }
 

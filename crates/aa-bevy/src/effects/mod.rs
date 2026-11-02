@@ -204,6 +204,7 @@ fn take_point_vfx(marks: Option<ResMut<crate::ui::order_marks::PointVfx>>, state
         let z = battle.world.map.height_at(r.at) + r.z_offset;
         state.point_requests.push((r.vfx_ids.to_ascii_lowercase(), to_render(Vec3::new(r.at.x, r.at.y, z))));
     }
+    state.transport_requests.append(&mut marks.transports);
 }
 
 /// As soon as the preload job has built the effect texture array (in the
@@ -629,6 +630,8 @@ pub struct FxState {
     ops_prefetched: bool,
     /// Point VFX requested by the UI this frame: (VFX IDS, render point).
     pub point_requests: Vec<(String, Vec3)>,
+    /// The transports of the triggers' transported creations this frame.
+    transport_requests: Vec<crate::ui::order_marks::TransportRun>,
     /// The UI's waypoint markers this frame (VFX IDS, render point) and the
     /// VFX shown per slot.
     waypoint_marks: Vec<(String, Vec3)>,
@@ -756,6 +759,7 @@ fn poll_loading(
         cursor_shown: None,
         ops_prefetched: false,
         point_requests: Vec::new(),
+        transport_requests: Vec::new(),
         waypoint_marks: Vec::new(),
         waypoint_slots: Vec::new(),
         arrow_request: None,
@@ -1639,6 +1643,47 @@ impl FxState {
         self.planes.push(plane);
     }
 
+    /// A trigger's transported creation (543BA0): the transport from its spawn
+    /// point to the unload point in the time the sim takes, gone on arrival
+    /// (labelled rendition: aa-play has no transport actor, whose Mind the original
+    /// sends on with the unload command 4D9B60).
+    fn trigger_transport(&mut self, t: crate::ui::order_marks::TransportRun, frame: &Frame, spawn: &mut Spawn) {
+        let world = frame.world;
+        let (from, to) = (Vec2::new(t.from[0], t.from[1]), Vec2::new(t.to[0], t.to[1]));
+        let span = from.distance(to);
+        if t.seconds <= 0.0 || span <= 0.0 {
+            return;
+        }
+        let tables = self.tables.clone();
+        let fx = tables.actors.get(&t.ids.to_ascii_lowercase());
+        let team = world.kingdoms.get(t.kingdom as usize).filter(|k| !k.independent).map_or(crate::scene::NEUTRAL_TEAM, |k| k.color);
+        let Some(prefix) = fx.and_then(|f| f.resource_prefix.clone()) else {
+            if self.warned.insert(format!("transport:{}", t.ids)) {
+                warn!("effects: transport {} has no model", t.ids);
+            }
+            return;
+        };
+        let path = format!("{prefix}.nif");
+        self.request_model(&path, team, true);
+        self.next_object += 1;
+        let object = crate::audio::effect_object(self.next_object);
+        let dir = (to - from) / span;
+        let plane = Plane {
+            key: (model_key(&path, true), team),
+            from: to_render(Vec3::new(from.x, from.y, t.from[2])),
+            dir: Vec3::new(dir.x, 0.0, -dir.y),
+            speed: span / t.seconds,
+            start: self.time,
+            arrive: self.time + t.seconds,
+            end: self.time + t.seconds,
+            entity: None,
+            object,
+            shots: 0,
+        };
+        spawn.sfx.objects.insert(object, Vec3::new(from.x, from.y, t.from[2]));
+        self.planes.push(plane);
+    }
+
     /// Fly the transports: their model once decoded, their place by time.
     fn step_planes(&mut self, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
         let now = self.time;
@@ -2512,6 +2557,9 @@ fn run(
         let fxc = Fxc { kind: "CREATE_VFX".into(), ids, at: "SELF".into(), attached: false, frequency: 1, ..Default::default() };
         let ctx = Ctx { actor: None, target: None, at: Some(at), target_ground: None, shooter_ground: None, kingdom: None, hit: None };
         state.run_fxc(&fxc, ctx, &frame, &mut spawn, ListKind::Other, false);
+    }
+    for t in std::mem::take(&mut state.transport_requests) {
+        state.trigger_transport(t, &frame, &mut spawn);
     }
     state.update_waypoints(&mut spawn, &mut transforms);
     state.update_arrow(&frame);

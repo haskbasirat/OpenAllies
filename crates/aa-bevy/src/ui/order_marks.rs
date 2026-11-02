@@ -26,10 +26,23 @@ pub struct PointVfxRequest {
     pub z_offset: f32,
 }
 
+/// A transport of a trigger's transported creation (543BA0,
+/// `aa_play::triggers::Notice::Transport`): its model on the way to the unload point.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransportRun {
+    pub kingdom: u32,
+    pub ids: String,
+    /// Native point, with its height.
+    pub from: [f32; 3],
+    pub to: [f32; 2],
+    pub seconds: f32,
+}
+
 /// Requests of this frame (drained by the effects system).
 #[derive(Resource, Default, Debug)]
 pub struct PointVfx {
     pub requests: Vec<PointVfxRequest>,
+    pub transports: Vec<TransportRun>,
 }
 
 /// `0x43DB10`: the move command VFX (AVar VFXMoveCommand) at a ground point.

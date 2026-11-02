@@ -54,6 +54,13 @@ pub fn unescape(text: &str, glyphs: &HashMap<String, char>) -> String {
                     i += 2;
                     continue;
                 }
+                // the one-char escape takes the glyph of that name: backslash n is the
+                // glyph `n`, index 10 (special_glyphs.tgi)
+                if c == ONE && let Some(&g) = glyphs.get(&next.to_ascii_lowercase().to_string()) {
+                    out.push(g);
+                    i += 2;
+                    continue;
+                }
                 out.push(c);
                 i += 1;
                 continue;
@@ -284,5 +291,8 @@ mod tests {
         assert_eq!(unescape("Quit Axis && Allies?", &g), "Quit Axis & Allies?");
         assert_eq!(unescape("&ch_MONEY.100", &g), "\u{80}100");
         assert_eq!(unescape("a & b", &g), "a & b");
+        // special_glyphs.tgi: the one-char escape takes the glyph of that name
+        g.insert("n".to_string(), char::from(10u8));
+        assert_eq!(unescape(r"a\nb\qc", &g), "a\nb\\qc");
     }
 }

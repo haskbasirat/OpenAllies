@@ -69,8 +69,9 @@ pub struct SelectionArt {
     focused_square: Vec<Handle<StandardMaterial>>,
     focused_circle: Vec<Handle<StandardMaterial>>,
     pool: Vec<Entity>,
-    /// The focused decal: its entity and terrain-following mesh.
-    focus: Option<(Entity, Handle<Mesh>)>,
+    /// The focused decals (the hovered object's, a trigger's flashing ones): their
+    /// entity and terrain-following mesh.
+    focus: Vec<(Entity, Handle<Mesh>)>,
 }
 
 /// Vertices per side of the focused decal's ground grid.
@@ -210,6 +211,8 @@ pub fn update(
     front: Res<super::front::Front>,
     battle: Option<Res<Battle>>,
     sel: Res<Selecting>,
+    flash: Res<super::objectives::ViewFlash>,
+    time: Res<Time>,
     cameras: Query<&GlobalTransform, With<NativeCamera>>,
     views: Query<(&ActorView, &GlobalTransform, Option<&Children>)>,
     parts: Query<(&Aabb, &GlobalTransform)>,
@@ -277,9 +280,12 @@ pub fn update(
             Unit::Actor(a) => add_bars(a, &mut want),
         }
     }
-    // the hovered object's focused decal (on the ground, below)
-    let mut focus: Option<(Handle<StandardMaterial>, Transform)> = None;
-    if let Some(id) = sel.hover.filter(|_| !sel.hover_banner) {
+    // the hovered object's focused decal (on the ground, below), and those of the
+    // objects a trigger flashes (0x458ED0: the same VFX, blinking)
+    let mut focus: Vec<(Handle<StandardMaterial>, Transform)> = Vec::new();
+    let now = time.elapsed_secs();
+    let lit = flash.actors.iter().filter(|(_, s)| flash.lit(**s, now)).map(|(a, _)| *a);
+    for id in sel.hover.filter(|_| !sel.hover_banner).into_iter().chain(lit) {
         if let (Some(a), Some((pos, children))) = (w.actor(id), by_id.get(&id)) {
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
             let relation = aa_play::setup::relation(w, Some(b.local), a.kingdom) as usize;
@@ -291,7 +297,7 @@ pub fn update(
                 };
                 let _ = y;
                 let rot = Quat::from_rotation_y(crate::battle_view::render_yaw(a.facing)) * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                focus = Some((m, Transform::from_translation(Vec3::new(pos.x, 0.0, pos.z)).with_rotation(rot).with_scale(Vec3::splat(size))));
+                focus.push((m, Transform::from_translation(Vec3::new(pos.x, 0.0, pos.z)).with_rotation(rot).with_scale(Vec3::splat(size))));
             }
         }
     }
@@ -310,8 +316,8 @@ pub fn update(
             .id();
         art.pool.push(e);
     }
-    // the focused decal's own entity and mesh
-    if art.focus.is_none() {
+    // the focused decals' own entities and meshes
+    while art.focus.len() < focus.len() {
         let mesh = meshes.add(ground_decal(&|_, _| 0.0, &Transform::default()));
         let e = commands
             .spawn((
@@ -324,11 +330,11 @@ pub fn update(
                 FocusDecal,
             ))
             .id();
-        art.focus = Some((e, mesh));
+        art.focus.push((e, mesh));
     }
-    if let Some((e, mesh)) = art.focus.clone() {
+    for (i, (e, mesh)) in art.focus.clone().into_iter().enumerate() {
         if let Ok((mut mat, mut vis)) = focus_q.get_mut(e) {
-            match &focus {
+            match focus.get(i) {
                 Some((m, t)) => {
                     let height = |x: f32, z: f32| match &drawn_ground {
                         Some(g) => (g.0)(x, z),

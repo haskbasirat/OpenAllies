@@ -477,6 +477,16 @@ fn commander_mut(world: &mut World, kingdom: KingdomId) -> &mut Commander {
     &mut c[i]
 }
 
+/// A saved commander's words (0x4C8650): its balance (+0xC) and each ability's last
+/// use (+10; -FLT_MAX for never).
+pub fn restore_commander(world: &mut World, kingdom: KingdomId, experience: f32, last_use: Vec<f32>) {
+    let c = commander_mut(world, kingdom);
+    c.experience = experience;
+    for (slot, time) in c.last_use.iter_mut().zip(last_use) {
+        *slot = (time > -f32::MAX).then_some(time);
+    }
+}
+
 /// Give `kingdom` its general (Faction IDS); None picks one of the nation's
 /// public factions at random, as the setup does for "Random" (0x50E8B0).
 pub fn set_general(world: &mut World, kingdom: KingdomId, general: Option<&str>) -> Option<usize> {
@@ -496,7 +506,7 @@ pub fn set_general(world: &mut World, kingdom: KingdomId, general: Option<&str>)
             if factions.is_empty() {
                 None
             } else {
-                let r = world.random();
+                let r = world.random_at(crate::trace::sites::SPECIAL_OPS_FACTION);
                 Some(factions[((r * factions.len() as f32) as usize).min(factions.len() - 1)])
             }
         }
@@ -919,20 +929,18 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
     let Command::UseAbility { kingdom, ability, target } = command else {
         return Err(format!("{command:?} is not a special operation"));
     };
-    use_ability(world, *kingdom, *ability as usize, *target, true)
+    // A computer player's order has no HUD target choice; its film decree stays
+    // a computer's in a replay (`aa_parity::replay::plan`).
+    let hud = !world.kingdoms.iter().any(|k| k.id == *kingdom && matches!(k.controller, crate::world::Controller::Computer(_)));
+    use_ability(world, *kingdom, *ability as usize, *target, hud)
 }
 
-/// A computer player's order (the SAI's `61E270` / `61E2B0` order straight
-/// to `4CDE00`): no HUD target choice; a refusal is an event as for a
-/// command.
-pub(crate) fn use_from_sai(world: &mut World, kingdom: KingdomId, index: usize, target: AbilityTarget) -> bool {
-    match use_ability(world, kingdom, index, Some(target), false) {
-        Ok(()) => true,
-        Err(reason) => {
-            world.events.push(Event::Refused { kingdom, reason });
-            false
-        }
-    }
+/// A computer player's order (the SAI's `61E270` / `61E2B0` emit the request
+/// that runs `4CDE00` as a decree in the next admin tick, so a film holds it):
+/// `Command::UseAbility` of a computer's kingdom, which has no HUD target choice
+/// (`command`).
+pub(crate) fn use_from_sai(world: &mut World, kingdom: KingdomId, index: usize, target: AbilityTarget) {
+    world.sai_orders.push(Command::UseAbility { kingdom, ability: index as u32, target: Some(target) });
 }
 
 /// `4C8F20` for a faction ability (check_range true, phase 0), codes in
@@ -2080,4 +2088,60 @@ pub fn data(world: &World) -> Option<&GeneralData> {
 /// The public generals of a nation (for the setup screen).
 pub fn nation_generals<'a>(data: &'a GeneralData, game: &GameData, nation: &str) -> Vec<&'a General> {
     game.nation(nation).map(|n| n.factions.iter().filter_map(|f| data.general(f)).map(|i| &data.generals[i]).filter(|g| g.public).collect()).unwrap_or_default()
+}
+
+// ---- appended by the scenarios owner (crate::triggers) ----
+
+/// `554B30` along a given direction (554850, the search of
+/// [`open_position_within`] with the caller's direction): the free spot, or
+/// `None`.
+pub(crate) fn open_position_along(world: &World, def: DefId, point: Vec2, direction: Vec2, distance: f32) -> Option<Vec2> {
+    if spot_open(world, def, point) {
+        return Some(point);
+    }
+    let d = world.data.def(def);
+    let shape_radius = d.blocking_size.map_or(0.0, |s| s[0]);
+    let floor = world.map.cell_size * 0.25;
+    let radius = if shape_radius < floor { floor } else { shape_radius };
+    if radius.is_nan() || radius <= 0.0 {
+        return None;
+    }
+    let rings = ((f64::from(distance) / f64::from(radius)) as i32).clamp(1, 20);
+    let step = (f64::from(distance) / f64::from(rings)) as f32;
+    let (sin, cos) = (f64::from(f32::from_bits(ROTATION_SIN_BITS)), f64::from(f32::from_bits(ROTATION_COS_BITS)));
+    for ring in 1..=rings {
+        let distance = f64::from(ring) * f64::from(step);
+        let mut offset = [(distance * f64::from(direction.x)) as f32, (distance * f64::from(direction.y)) as f32];
+        for _ in 0..8 {
+            let candidate = Vec2::new((f64::from(offset[0]) + f64::from(point.x)) as f32, (f64::from(offset[1]) + f64::from(point.y)) as f32);
+            if spot_open(world, def, candidate) {
+                return Some(candidate);
+            }
+            let (ox, oy) = (f64::from(offset[0]), f64::from(offset[1]));
+            offset = [(ox * cos - oy * sin) as f32, (oy * cos + sin * ox) as f32];
+        }
+    }
+    None
+}
+
+/// KKC_Ability::TriggerUse `4C9F10` for an ability a general's data holds:
+/// `4C8F20` phase 1 is not a player's use (no cost, range or recharge asked of
+/// the kingdom); the area effect lands at the point at once, or after the
+/// projectile's life. False when no general has the ability.
+pub(crate) fn trigger_use(world: &mut World, kingdom: KingdomId, ability: &str, at: Vec2) -> bool {
+    let Some(data) = world.special_ops.data.clone() else { return false };
+    let Some((gi, index)) = data.generals.iter().enumerate().find_map(|(g, x)| x.abilities.iter().position(|o| o.id.eq_ignore_ascii_case(ability)).map(|i| (g, i))) else {
+        return false;
+    };
+    prepare(world);
+    let op = &data.generals[gi].abilities[index];
+    // FX event 1 (4C8500), as a player's use
+    world.events.push(Event::SpecialOperation { kingdom, ability: op.id.clone(), at, target: None });
+    if op.projectile.is_some() {
+        let now = native_now(world);
+        world.special_ops.pending.push(Pending::Impact { kingdom, general: gi, ability: index, at: now + op.projectile_life, center: at, target: None });
+    } else {
+        impact(world, kingdom, gi, index, at, None, 0);
+    }
+    true
 }

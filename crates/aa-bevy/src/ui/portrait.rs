@@ -171,7 +171,7 @@ pub fn update(
         aa_ui::draw::DrawKind::External { rect, model: Some(model), .. } if c.widget.ends_with("PortraitButton/Portrait") => Some((*rect, model.clone())),
         _ => None,
     });
-    let Some((rect, model)) = found.filter(|_| front.page == super::front::Page::Game) else {
+    let Some((rect, model)) = found.filter(|_| matches!(front.page, super::front::Page::Game | super::front::Page::Campaign)) else {
         if p.shown.is_some() {
             p.clear(&mut commands);
         }

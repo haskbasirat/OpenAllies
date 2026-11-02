@@ -10,6 +10,7 @@
 //! press / release there), `{"key": "Escape"}` (a KeyCode name),
 //! `{"text": "abc"}`,
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
+//! `{"until_box": seconds}` (wait for a message box, the end of a film),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
 //! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck",
@@ -270,6 +271,13 @@ pub fn run(
     // {"spawn_org": "<organization Thing IDS>", "offset": [dx, dy]}: a
     // verification aid that creates an own organization next to the own
     // HQ (metres), so the HUD's buttons for it can be checked
+    // verification aid: the local kingdom's mission result (4E9720)
+    if let (Some(r), Some(b)) = (s.step().and_then(|v| v.get("mission_result")).and_then(|v| v.as_u64()), battle.as_mut()) {
+        let local = b.local;
+        aa_play::triggers::set_mission_result(&mut b.world, local, r as u32);
+        s.next();
+        return;
+    }
     if let (Some(id), Some(b)) = (s.step().and_then(|v| v.get("spawn_org")).and_then(|v| v.as_str()).map(str::to_string), battle.as_mut()) {
         let off = s.step().and_then(|v| v.get("offset")).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32)).unwrap_or(Vec2::new(-10.0, -15.0));
         let local = b.local;
@@ -427,6 +435,15 @@ pub fn run(
         if now == want || s.timer > 120.0 {
             if s.timer > 120.0 {
                 warn!("script: state {want} not reached (still {now})");
+            }
+            s.next();
+        }
+    } else if let Some(limit) = step.get("until_box").and_then(|v| v.as_f64()) {
+        s.timer += dt;
+        let up = front.as_ref().is_some_and(|f| f.ui.message_box.is_some());
+        if up || s.timer > limit as f32 {
+            if !up {
+                warn!("script: no message box after {limit} s");
             }
             s.next();
         }

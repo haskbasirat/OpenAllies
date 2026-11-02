@@ -183,6 +183,10 @@ fn followup_flare_reaches_the_player_and_the_sai_stream_is_shared() {
     assert!(w.ai.rng.is_none());
     sai::think(&mut w);
     assert_eq!(w.special_ops.sai.uses, 1);
+    // the order runs as a decree of the next tick (0x752E60)
+    for c in std::mem::take(&mut w.sai_orders) {
+        w.apply(c);
+    }
     assert_eq!(w.special_ops.enchantments.iter().filter(|e| e.target == OpTarget::Actor(a)).count(), 2);
     let region = w.ai.regions.as_ref().unwrap().region_at(Vec2::new(20.0, 64.0));
     assert_eq!(w.ai.players[0].flares, vec![(crate::ai::goals::Key::Attack(region), 500.0, 60.0)]);

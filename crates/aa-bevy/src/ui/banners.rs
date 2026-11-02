@@ -361,6 +361,7 @@ pub fn update(
     battle: Option<Res<Battle>>,
     sel: Res<Selecting>,
     time: Res<Time>,
+    flash: Res<super::objectives::ViewFlash>,
     cameras: Query<&GlobalTransform, With<NativeCamera>>,
     views: Query<(&ActorView, &GlobalTransform)>,
     mut images: ResMut<Assets<Image>>,
@@ -399,6 +400,8 @@ pub fn update(
             Unit::Actor(a) => focused.extend(w.actor(*a).and_then(|x| x.org)),
         }
     }
+    // a trigger's flash (0x459600) shows the same VFX, blinking
+    focused.extend(flash.orgs.iter().filter(|(_, s)| flash.lit(**s, time.elapsed_secs())).map(|(o, _)| *o));
     let mut want: Vec<(Handle<StandardMaterial>, Transform)> = Vec::new();
     let mut placed = Vec::new();
     // the object display's banner: the first selected organization's, or

@@ -16,9 +16,10 @@
 //!   status 1);
 //! - when only one team has undefeated kingdoms left it has won (status 1,
 //!   event 0x35).
-//! Independent kingdoms (+0x190) never lose and never win. Not ported: the
-//! scripted mission victory triggers and the World+28 / mission-start /
-//! phase-6 guards (always open in a custom battle).
+//! Independent kingdoms (+0x190) never lose and never win. A script's mission
+//! results come through `crate::triggers` (4E9720 on the trigger path). Not
+//! ported: the World+28 / mission-start / phase-6 guards (always open in a
+//! custom battle).
 use crate::world::{Event, KingdomId, World};
 
 /// Native 0x4E1540 for a definition.
@@ -68,9 +69,11 @@ fn open(world: &World, k: KingdomId) -> bool {
     world.winner.is_none() && !kingdom.independent && !kingdom.defeated
 }
 
-/// 0x4E9960 for kingdom `k`.
+/// 0x4E9960 for kingdom `k`. Its first test is Kingdom+238, the default
+/// victory conditions (1 from the constructor 4E5370; a script turns them off
+/// with kingdom_enable_default_victory_condition 114).
 pub fn team_check(world: &mut World, k: KingdomId) {
-    if (k as usize) >= world.kingdoms.len() || !open(world, k) {
+    if (k as usize) >= world.kingdoms.len() || !open(world, k) || !crate::triggers::default_victory(world, k) {
         return;
     }
     let count = counted(world);
@@ -111,6 +114,38 @@ pub fn city_check(world: &mut World, k: KingdomId) {
         world.winner = Some(team);
         world.events.push(Event::Victory { team });
     }
+}
+
+/// The city objective the objectives display adds (0x633430 ->
+/// `objective_city_ratio|ddd`): cities needed, owned by the kingdom's team,
+/// and in the world; `complete` stands for Kingdom+314 (0x4E9A40 set it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CityObjective {
+    pub needed: i32,
+    pub owned: i32,
+    pub available: i32,
+    pub complete: bool,
+}
+
+/// 0x633430: while the CityVictoryRatio rule is on and the world has cities
+/// (0x4F1B50), ceil(ratio * 0.01 * cities) (the display's arithmetic, single
+/// precision on the UI thread).
+pub fn city_objective(world: &World, k: KingdomId) -> Option<CityObjective> {
+    let ratio = world.data.rule_ci("CityVictoryRatio").map_or(0, |v| v as i32);
+    let team = world.kingdoms.get(k as usize)?.team;
+    if ratio <= 0 {
+        return None;
+    }
+    let cities: Vec<Option<KingdomId>> = world.actors.iter().filter(|a| a.alive && !a.removed && world.data.def(a.def).city).map(|a| a.kingdom).collect();
+    let available = cities.len() as i32;
+    if available <= 0 {
+        return None;
+    }
+    let members = side(world, k);
+    let owned = cities.iter().filter(|c| c.is_some_and(|o| members.contains(&(o as usize)))).count() as i32;
+    let needed = (ratio as f32 * 0.01 * available as f32).ceil() as i32;
+    let complete = world.winner == Some(team) && f64::from(ratio) <= f64::from(owned) / f64::from(available) * 100.0;
+    Some(CityObjective { needed, owned, available, complete })
 }
 
 /// 0x4E9720's end of battle: one team left wins; nobody left ends it.

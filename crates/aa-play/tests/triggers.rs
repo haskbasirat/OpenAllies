@@ -221,3 +221,292 @@ fn shipped_maps_use_only_ported_elements() {
     }
     assert!(missing.is_empty(), "{missing:?}");
 }
+
+/// The text parameters of the given trigger elements on every shipped map
+/// (AA_TRIGGER_CENSUS: comma-separated element names, default the script
+/// listen / heard elements and the UI commands; AA_TRIGGER_CENSUS_OUT: a file).
+/// The mission maps' kingdom slots without a start location and the independent
+/// slots that hold organizations (`map.notes`, `map.placed`): what a mission's
+/// session has to create although no player starts there.
+#[test]
+#[ignore]
+fn mission_slot_census() {
+    let data = data();
+    fn rmps(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rmps(&p, out);
+            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("rmp")) {
+                out.push(p);
+            }
+        }
+    }
+    let base = root().join("reconstruction").join("assets").join("original").join("Data").join("Maps");
+    let mut files = Vec::new();
+    rmps(&base.join("Campaign"), &mut files);
+    files.sort();
+    for path in &files {
+        let id = format!("Campaign/{}", path.file_stem().unwrap().to_string_lossy());
+        let map = match aa_play::GameMap::load_with(&root(), &id, &data) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("{id}: {e}");
+                continue;
+            }
+        };
+        let missing: Vec<&str> = map.slots.iter().enumerate().filter(|(i, x)| !x.independent && !map.player_slots.contains(i)).map(|(_, x)| x.id.as_str()).collect();
+        let mut independent_units = std::collections::BTreeMap::<String, usize>::new();
+        for p in &map.placed {
+            let Some(d) = data.find(&p.thing_id) else { continue };
+            let d = data.def(d);
+            if !d.actor_data || !p.owner_slot.is_some_and(|s| map.slots.get(s as usize).is_some_and(|x| x.independent)) {
+                continue;
+            }
+            if matches!(d.class, Some(aa_play::data::DefClass::Organization | aa_play::data::DefClass::Member | aa_play::data::DefClass::Truck)) {
+                *independent_units.entry(p.thing_id.clone()).or_default() += 1;
+            }
+        }
+        eprintln!("{id}: slots {} players {} {missing:?} independent units {independent_units:?}", map.slots.len(), map.player_slots.len());
+    }
+}
+
+#[test]
+#[ignore]
+fn element_text_census() {
+    use aa_triggers::decode::{Localization, SavedManager, Value};
+    fn rmps(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rmps(&p, out);
+            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("rmp")) {
+                out.push(p);
+            }
+        }
+    }
+    let names = std::env::var("AA_TRIGGER_CENSUS").unwrap_or_else(|_| "effect_ui_script_listen,event_script_heard,effect_ui_script_stop_listen,effect_ui_flash_button".into());
+    let names: Vec<String> = names.split(',').map(|s| s.trim().to_ascii_lowercase()).collect();
+    let mut files = Vec::new();
+    rmps(&root().join("reconstruction").join("assets").join("original").join("Data").join("Maps"), &mut files);
+    files.sort();
+    let mut out = String::new();
+    for path in &files {
+        let Ok(archive) = aa_mapworld::MapArchive::from_bytes(std::fs::read(path).unwrap()) else { continue };
+        let Ok(chunk) = archive.decode_chunk("TRIGGERS", 1 << 28) else { continue };
+        let Ok(saved) = SavedManager::decode(&chunk.bytes, Localization::External, chunk.bytes.len().max(1 << 20)) else { continue };
+        let map = path.file_stem().unwrap().to_string_lossy().into_owned();
+        for t in &saved.triggers {
+            for e in t.events.iter().chain(&t.conditions).chain(&t.actions) {
+                if !names.iter().any(|n| n == "*" || e.name.eq_ignore_ascii_case(n)) {
+                    continue;
+                }
+                let params: Vec<String> = e
+                    .parameters
+                    .iter()
+                    .map(|p| match &p.value {
+                        Value::Text(t) => String::from_utf16_lossy(t),
+                        Value::Localized { key, .. } => format!("#{}", String::from_utf16_lossy(key)),
+                        Value::Word(w) => format!("{w:#x}"),
+                        Value::Position(p) => format!("{:?}", p.map(f32::from_bits)),
+                        Value::Empty => String::new(),
+                    })
+                    .collect();
+                out.push_str(&format!("{map}\t{}\t{}\t{}\n", String::from_utf16_lossy(&t.name), e.name, params.join("|")));
+            }
+        }
+    }
+    match std::env::var("AA_TRIGGER_CENSUS_OUT") {
+        Ok(p) => std::fs::write(p, out).unwrap(),
+        Err(_) => eprintln!("{out}"),
+    }
+}
+
+/// sai_disabled_for_kingdom 62: 7B4AD0 / 7B8AC0 skip the kingdom's thinks.
+/// allies03_stalingrad disables kingdom_2 in Map Init; the other computer
+/// kingdoms keep thinking and the disabled one sends nothing.
+#[test]
+#[ignore]
+fn a_kingdom_the_script_disabled_does_not_think() {
+    let mut w = world("Campaign/allies03_stalingrad");
+    aa_play::ai::attach(&mut w, Arc::new(aa_play::ai::AiData::load(&root()).expect("AiData::load")));
+    w.ai.logging = true;
+    for _ in 0..16 * 40 {
+        w.step(Vec::new());
+    }
+    let disabled: Vec<_> = w.kingdoms.iter().filter(|k| aa_play::triggers::sai_disabled(&w, k.id)).map(|k| k.id).collect();
+    assert!(!disabled.is_empty(), "Map Init disables kingdom_2 and independent_4");
+    let computers: Vec<_> = w.kingdoms.iter().filter(|k| matches!(k.controller, Controller::Computer(_))).map(|k| k.id).collect();
+    let thinking: Vec<_> = computers.iter().filter(|k| !disabled.contains(k)).collect();
+    assert!(!thinking.is_empty(), "another computer kingdom plays");
+    for l in &w.ai.log {
+        assert!(!disabled.contains(&l.kingdom), "a disabled kingdom thought: {} at {}", l.text, l.time);
+    }
+    // sai_enabled_for_kingdom 61 (542080 -> 79E2F0) gives it back: the flag
+    // is the only thing between the think and the kingdom.
+    assert!(w.ai.stats.ge_thinks > 0 || w.ai.stats.rai_thinks > 0, "{:?}", w.ai.stats);
+}
+
+/// 4E9960 tests Kingdom+238 first: a kingdom whose default victory the script
+/// turned off (kingdom_enable_default_victory_condition 114, value 0) is not
+/// defeated by the elimination check, whatever it has left. A kingdom without
+/// the script's word still is.
+#[test]
+#[ignore]
+fn default_victory_off_keeps_an_eliminated_kingdom_in_the_game() {
+    let mut w = world("Campaign/allies03_stalingrad");
+    w.step(Vec::new());
+    let off: Vec<_> = w.kingdoms.iter().filter(|k| !k.independent && !aa_play::triggers::default_victory(&w, k.id)).map(|k| k.id).collect();
+    assert!(!off.is_empty(), "Map Init turns the default victory off for kingdom_1 and kingdom_2");
+    let k = off[0];
+    // everything the kingdom counts leaves
+    let team = w.kingdoms[k as usize].team;
+    for i in 0..w.kingdoms.len() {
+        if w.kingdoms[i].team != team && !w.kingdoms[i].independent {
+            continue;
+        }
+    }
+    for o in &mut w.orgs {
+        if o.kingdom == k {
+            o.alive = false;
+        }
+    }
+    for a in &mut w.actors {
+        if a.kingdom == Some(k) {
+            a.alive = false;
+            a.removed = true;
+        }
+    }
+    aa_play::victory::team_check(&mut w, k);
+    assert!(!w.kingdoms[k as usize].defeated, "Kingdom+238 is off: 4E9960 does nothing");
+}
+
+/// The tutorial's first steps: 4F3FC0 answers once `effect_ui_script_listen` ran,
+/// and the command heard (54C170) makes `T 01.00 BASICS` give the objective the
+/// mission stalled before (`kingdom_gains_objective objective_11`). Objectives list
+/// the map's text for the local kingdom (0x633A50's Kingdom+300).
+#[test]
+#[ignore]
+fn the_tutorial_goes_on_when_the_script_hears_its_command() {
+    let mut w = world("Campaign/tutorial01");
+    let k = w.kingdoms[0].id;
+    for _ in 0..16 * 8 {
+        w.step(Vec::new());
+    }
+    assert!(aa_play::triggers::listening(&w, "MessageLogToggle"), "T 00.10 listens from 4 s on");
+    assert!(aa_play::triggers::objectives(&w, k).is_empty(), "no objective before the player answers");
+    for _ in 0..16 * 10 {
+        w.step(Vec::new());
+    }
+    assert!(aa_play::triggers::objectives(&w, k).is_empty(), "the stall: nothing happens without the command");
+    aa_play::triggers::script_heard(&mut w, "MessageLogToggle");
+    for _ in 0..16 * 3 {
+        w.step(Vec::new());
+    }
+    let list = aa_play::triggers::objectives(&w, k);
+    assert!(!list.is_empty(), "T 01.00 BASICS gives the objective");
+    assert!(!aa_play::triggers::listening(&w, "MessageLogToggle"), "T 01.00 stops listening");
+    assert!(list.iter().all(|o| o.primary), "{list:?}");
+}
+
+/// 4F1E10's last loop: every kingdom has its first snapshot at the start, the score
+/// graph's point 0; the 60 s timer (4E37D0) adds the next.
+#[test]
+#[ignore]
+fn the_score_starts_with_a_snapshot() {
+    let mut w = world("(2v2)Berlin");
+    let k = w.kingdoms[0].id;
+    let count = |w: &World| w.books.kingdom(k).map_or(0, |b| b.statistics.snapshots.len());
+    assert_eq!(count(&w), 1);
+    for _ in 0..16 * 61 {
+        w.step(Vec::new());
+    }
+    assert_eq!(count(&w), 2);
+}
+
+/// 543BA0: a transported creation is a flight; its cargo appears at the unload
+/// point on arrival, not at once. A map with transported elements reports the
+/// flights it started through Notice::Transport.
+#[test]
+#[ignore]
+fn transported_creations_fly_in() {
+    use aa_triggers::decode::{Localization, SavedManager};
+    let maps = root().join("reconstruction").join("assets").join("original").join("Data").join("Maps").join("Campaign");
+    let mut found = None;
+    for e in std::fs::read_dir(&maps).unwrap().flatten() {
+        let p = e.path();
+        if !p.extension().is_some_and(|x| x.eq_ignore_ascii_case("rmp")) {
+            continue;
+        }
+        let Ok(archive) = aa_mapworld::MapArchive::from_bytes(std::fs::read(&p).unwrap()) else { continue };
+        let Ok(chunk) = archive.decode_chunk("TRIGGERS", 1 << 28) else { continue };
+        let Ok(saved) = SavedManager::decode(&chunk.bytes, Localization::External, chunk.bytes.len().max(1 << 20)) else { continue };
+        if saved.triggers.iter().any(|t| t.actions.iter().any(|a| a.opcode == 30)) {
+            found = Some(format!("Campaign/{}", p.file_stem().unwrap().to_string_lossy()));
+            break;
+        }
+    }
+    let id = found.expect("a campaign map with a transported creation");
+    let mut w = world(&id);
+    let mut seen = 0;
+    for _ in 0..16 * 240 {
+        w.step(Vec::new());
+        let notices = aa_play::triggers::notices(&w);
+        if let Some(aa_play::triggers::Notice::Transport { ids, from, to, seconds, .. }) = notices[seen..].iter().find(|n| matches!(n, aa_play::triggers::Notice::Transport { .. })) {
+            eprintln!("{id}: {ids} from {from:?} to {to:?} in {seconds} s");
+            assert!(*seconds > 0.0, "a flight takes time");
+            return;
+        }
+        seen = notices.len();
+    }
+    eprintln!("{id}: no transported creation within 240 s of an idle game");
+}
+
+/// What a mission starts with (AA_TRIGGER_MAP, default the first tutorial):
+/// tools, not a check.
+#[test]
+#[ignore]
+fn mission_start_listing() {
+    let id = std::env::var("AA_TRIGGER_MAP").unwrap_or_else(|_| "Campaign/tutorial01".into());
+    let mut w = world(&id);
+    for s in &w.map.slots {
+        eprintln!("slot {} nation {:?} faction {:?} team {} independent {} color {:?}", s.id, s.nation, s.faction, s.team, s.independent, s.color_id);
+    }
+    let seconds: u32 = std::env::var("AA_TRIGGER_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(1);
+    for _ in 0..16 * seconds {
+        w.step(Vec::new());
+    }
+    for k in &w.kingdoms {
+        let b = w.books.kingdom(k.id);
+        eprintln!("kingdom {} {} team {} {:?} stock {:?}", k.id, k.name, k.team, k.controller, b.map(|b| b.stockpiled.clone()));
+    }
+    for o in w.orgs.iter().filter(|o| o.alive) {
+        eprintln!("org {} {} kingdom {} members {}", o.id, w.data.def(o.def).id, o.kingdom, o.members.len());
+    }
+    for s in &w.map.slots {
+        eprintln!("slot {} index {:?} to kingdoms {:?} to teams {:?}", s.id, s.kingdom_index, s.relations_to_kingdoms, s.relations_to_teams);
+    }
+    eprintln!("relations {:?}", w.books.relations);
+    let mut classes = std::collections::BTreeMap::<String, usize>::new();
+    for a in w.actors.iter().filter(|a| a.alive && !a.removed) {
+        let d = w.data.def(a.def);
+        if a.org.is_none() {
+            eprintln!("actor {} {} kingdom {:?} at {:?} class {:?}", a.id, d.id, a.kingdom, a.pos.truncate(), d.class);
+        }
+        *classes.entry(d.id.clone()).or_default() += 1;
+    }
+    eprintln!("{classes:?}");
+    let mut placed = std::collections::BTreeMap::<String, usize>::new();
+    for p in &w.map.placed {
+        *placed.entry(p.thing_id.clone()).or_default() += 1;
+    }
+    eprintln!("placed {placed:?}");
+    for p in w.map.placed.iter().filter(|p| p.thing_id.contains("regiment")) {
+        let d = w.data.find(&p.thing_id);
+        eprintln!("placed org {} owner {:?} at {:?} id {:#x} def {:?} class {:?} actor_data {:?}", p.thing_id, p.owner_slot, p.position, p.serialized_id, d, d.map(|d| w.data.def(d).class), d.map(|d| w.data.def(d).actor_data));
+    }
+    for n in aa_play::triggers::notices(&w) {
+        eprintln!("{n:?}");
+    }
+    eprintln!("notes {:?}", w.triggers.notes);
+}

@@ -43,6 +43,11 @@ pub fn start(battle: Option<ResMut<Battle>>, pending: Option<Res<PendingGenerals
     if !b.is_added() {
         return;
     }
+    // a film's generals are the film's (`aa_parity::replay::build_with`)
+    if b.in_film() {
+        commands.remove_resource::<PendingGenerals>();
+        return;
+    }
     let local = b.local;
     let w = &mut b.world;
     if special_ops::data(w).is_none() {

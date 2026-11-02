@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the cached layout changes.
-const CACHE_VERSION: &str = "aa-bevy-campaign-3";
+const CACHE_VERSION: &str = "aa-bevy-campaign-5";
 
 /// One `ChooseButtonVE` of a campaign (the chooser's campaign button decals).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -40,6 +40,14 @@ pub struct CampaignView {
     pub buttons: Vec<ChooseVe>,
     /// Campaign kingdom `icon` per kingdom (MetaGame-relative, `%s` kept).
     pub kingdom_icons: Vec<String>,
+}
+
+/// What the screens show of an MGDivision (941240): the `icon` of the object
+/// display's list and the `UpgradeButtonVE` textures of the upgrade button.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DivisionView {
+    pub icon: String,
+    pub buttons: Vec<ChooseVe>,
 }
 
 /// A prop of a map table (`MGMapTablePropTemplate`).
@@ -87,12 +95,17 @@ pub struct ViewData {
     pub death_models: BTreeMap<String, String>,
     /// Thing IDS (lower case) -> localized key of its `name`.
     pub names: BTreeMap<String, String>,
+    /// The Things' `View icon` (ActorData +0xF0), root-relative.
+    #[serde(default)]
+    pub icons: BTreeMap<String, String>,
     /// KingdomColor IDS (lower case) -> RGB (0..1).
     pub colors: BTreeMap<String, [f32; 3]>,
     pub campaigns: Vec<CampaignView>,
     pub tables: Vec<TableView>,
     /// Nation IDS (lower case) -> nation.
     pub nations: BTreeMap<String, NationView>,
+    /// MGDivision IDS (lower case) -> what the screens show of it.
+    pub divisions: BTreeMap<String, DivisionView>,
     pub notes: Vec<String>,
 }
 
@@ -109,6 +122,9 @@ impl CampaignData {
     }
     pub fn thing_name(&self, ids: &str) -> Option<&str> {
         self.view.names.get(&ids.to_ascii_lowercase()).map(String::as_str)
+    }
+    pub fn thing_icon(&self, ids: &str) -> Option<&str> {
+        self.view.icons.get(&ids.to_ascii_lowercase()).map(String::as_str)
     }
     pub fn color(&self, ids: &str) -> [f32; 3] {
         self.view.colors.get(&ids.to_ascii_lowercase()).copied().unwrap_or([1.0, 1.0, 1.0])
@@ -206,6 +222,18 @@ fn aspect_model(aspect: &ResolvedNode<'_>, prefix: Option<&str>) -> Option<Strin
         return Some(model.replacen("%s", &p, 1).trim_start_matches('/').to_owned());
     }
     Some(relative(&folder, &model))
+}
+
+/// The Thing's `View icon`: a `%s` takes the view's resource prefix.
+fn thing_icon(actor: &ResolvedNode<'_>) -> Option<String> {
+    let view = actor.child("View").ok().flatten()?;
+    let (icon, folder) = text_with_folder(&view, "icon")?;
+    let icon = icon.trim_matches('"');
+    if icon.contains("%s") {
+        let (prefix, prefix_folder) = text_with_folder(&view, "resource_prefix")?;
+        return Some(icon.replace("%s", &relative(&prefix_folder, prefix.trim_matches('"'))));
+    }
+    Some(relative(&folder, icon))
 }
 
 /// Normal and death models of a Thing's View: with `aspects_as_variations`
@@ -315,6 +343,9 @@ fn extract(catalog: &ActorCatalog, meta: &MetaGameData, map_table_file: Option<V
             if !name.is_empty() {
                 v.names.insert(ids.to_ascii_lowercase(), name);
             }
+            if let Some(icon) = thing_icon(&actor) {
+                v.icons.insert(ids.to_ascii_lowercase(), icon);
+            }
         }
     }
     // kingdom colours
@@ -338,6 +369,15 @@ fn extract(catalog: &ActorCatalog, meta: &MetaGameData, map_table_file: Option<V
             view.kingdom_icons.push(text(&k, "icon").unwrap_or_default());
         }
         v.campaigns.push(view);
+    }
+    // divisions (941240): icon and upgrade button
+    for d in catalog.resolved_definitions("MGDivision").unwrap_or_default() {
+        let Some(ids) = text(&d, "ids") else { continue };
+        let mut view = DivisionView { icon: text(&d, "icon").unwrap_or_default(), ..Default::default() };
+        for b in d.children("UpgradeButtonVE").unwrap_or_default() {
+            view.buttons.push(ChooseVe { when: text(&b, "when").unwrap_or_default(), texture: text(&b, "texture").unwrap_or_default() });
+        }
+        v.divisions.insert(ids.to_ascii_lowercase(), view);
     }
     // factions by IDS, then the nations' lists
     let mut factions: BTreeMap<String, FactionView> = BTreeMap::new();
