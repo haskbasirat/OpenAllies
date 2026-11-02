@@ -86,7 +86,10 @@ pub struct UdpNode {
 
 impl UdpNode {
     pub fn bind(addr: impl ToSocketAddrs, own_session: i32, precision: X87Precision) -> Result<Self> {
-        let socket = UdpSocket::bind(addr)?;
+        Self::from_socket(UdpSocket::bind(addr)?, own_session, precision)
+    }
+    /// A node on an already bound socket (the host's port search 0x7641E0).
+    pub fn from_socket(socket: UdpSocket, own_session: i32, precision: X87Precision) -> Result<Self> {
         socket.set_nonblocking(true)?;
         Ok(Self { socket, own_session, conns: Vec::new(), buffer: vec![0; MAX_DATAGRAM], precision, dropped: Vec::new() })
     }

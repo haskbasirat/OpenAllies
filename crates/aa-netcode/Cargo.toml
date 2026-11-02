@@ -16,3 +16,7 @@ aa-simulation = { path = "../aa-simulation" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# multiplayer owner: tests/lan_battle.rs plays an aa-play battle in two processes
+aa-play = { path = "../aa-play" }

@@ -55,3 +55,5 @@ pub enum NativeImage {
 pub mod local_order_host;
 pub mod command_sync;
 pub mod local_skirmish_startup;
+/// LAN multiplayer session over the ported admin layer.
+pub mod lan;
