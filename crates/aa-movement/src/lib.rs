@@ -12,7 +12,7 @@ pub mod formation;
 pub mod mover;
 pub mod target;
 
-use aa_numeric::{Binary, Precision};
+use aa_numeric::{Fast as Binary, Precision};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 

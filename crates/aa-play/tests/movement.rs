@@ -51,7 +51,7 @@ fn regiment(id: &str, members: [u32; 9]) -> Def {
         slots: members.iter().zip(INFANTRY_POSITIONS).map(|(&m, p)| (m, p)).collect(),
         slot_entries: INFANTRY_ENTRIES.to_vec(),
         leader_slot: Some(8),
-        formations: vec![Formation { id: "regiment_defensive".into(), positions: INFANTRY_POSITIONS.to_vec() }],
+        formations: vec![Formation { id: "regiment_defensive".into(), positions: INFANTRY_POSITIONS.to_vec(), ..Default::default() }],
         default_formation: Some(0),
         // Templates/template_organization_aa.tgi
         control_range: 18.0,
@@ -428,10 +428,10 @@ fn deploy_order_drives_there_without_pivoting() {
     w.actors[truck as usize].order = Order::Deploy { at, facing: -FRAC_PI_2 };
     assert!(run_until(&mut w, 120.0, |w| movement::deploy_ready(w, truck)), "truck at {:?} facing {}", pos(&w, truck), w.actors[truck as usize].facing);
     assert!((pos(&w, truck) - at).length() < 0.5);
-    // The truck keeps the facing of its last leg; the building takes the
-    // commanded facing.
-    let leg = (at - Vec2::new(40.0, 40.0)).normalize();
-    assert!((w.actors[truck as usize].facing - leg.y.atan2(leg.x)).abs() < 0.05, "facing {}", w.actors[truck as usize].facing);
+    // Nothing makes it pivot on the spot afterwards; the building takes the
+    // commanded facing. (Its last few centimetres can be a short node of their own,
+    // 0x5313F0, so its facing need not be that of the route's last leg: the Berlin
+    // film, ticks 1062 to 1066.)
     let f = w.actors[truck as usize].facing;
     advance(&mut w, 32);
     assert_eq!(w.actors[truck as usize].facing, f);
@@ -553,10 +553,10 @@ fn deploy_to_a_blocked_spot_is_refused() {
     let water = Vec2::new(180.0, 40.0);
     assert!(movement::deploy_spot_problem(&w, truck, water).is_some());
     assert!(movement::deploy_spot_problem(&w, truck, Vec2::new(60.0, 40.0)).is_none());
+    // Not refused at the order: the move fails or the unpack does (0x575C80).
     w.actors[truck as usize].order = Order::Deploy { at: water, facing: 0.0 };
-    advance(&mut w, 1);
-    assert_eq!(w.actors[truck as usize].order, Order::Idle);
-    assert!(w.events.iter().any(|e| matches!(e, aa_play::Event::Refused { kingdom: 0, reason } if reason.contains("blocked"))), "{:?}", w.events);
+    assert!(run_until(&mut w, 60.0, |w| w.actors[truck as usize].order == Order::Idle));
+    assert!(w.events.iter().any(|e| matches!(e, aa_play::Event::Refused { kingdom: 0, .. })), "{:?}", w.events);
     // A land spot across a river that spans the map: driven toward, then
     // refused once the move fails (3 tries, CAIMoveMinSecondsBeforeFail).
     let behind = Vec2::new(220.0, 40.0);

@@ -266,6 +266,7 @@ pub fn recover_turn<W: RecoveryGeometryWorld>(
         .ok_or_else(|| err("required Mover removed"))?
         .turn_radius;
     waypoint_offset(p, radius, precision, w.precision_exception_pending())?;
+    w.action_go_site(0x5330da);
     if !w.action_go(state, 0, p, a)? {
         w.recovery_diagnostic(
             owner(state, a)?,
@@ -332,6 +333,7 @@ pub fn get_back_to_path<W: TurnRecoveryWorld>(
             p.plan.movement.path.nodes.remove(0);
             p.plan.movement.path.dirty = true;
         }
+        w.action_go_site(0x5330da);
         w.action_go(state, 0, p, a)?;
         return Ok(true);
     }
@@ -350,6 +352,9 @@ pub fn get_back_to_path<W: TurnRecoveryWorld>(
 }
 
 pub trait World {
+    /// Names the native caller of the next [`World::action_go`] for a trace
+    /// (`0x5379F7` continuation, `0x537251` forward check, ...). No effect natively.
+    fn action_go_site(&mut self, _site: u32) {}
     fn actor(&self, actor: u32) -> Result<Actor>;
     fn resolve(&self, id: u32) -> Result<Option<u32>>;
     fn world_step_bits(&self) -> Result<u32>;
@@ -589,6 +594,7 @@ pub fn forward_check(
         [node.words[2], node.words[3]],
     )? || w.actor(owner(state, a)?)?.flags & (1 << 18) != 0
     {
+        w.action_go_site(0x537251);
         w.action_go(state, 0, p, a)?;
         return Ok(());
     }
@@ -621,6 +627,7 @@ pub fn forward_check(
         a,
     )?;
     if result[0] == 0 {
+        w.action_go_site(0x5372a3);
         w.action_go(state, 0, p, a)?;
         return Ok(());
     }
@@ -635,6 +642,7 @@ pub fn collision_result(
     precision: Precision,
     w: &mut impl World,
 ) -> Result<()> {
+    w.action_go_site(0x537005);
     let mut target = None;
     if p.collision[0] == 2 {
         target = w.resolve(p.collision[1])?;

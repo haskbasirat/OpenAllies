@@ -265,6 +265,16 @@ pub const GROUP_AGGRESSIVE: [[f32; 2]; 6] = [[0.0, 6.0], [-13.5, 6.0], [13.5, 6.
 /// `group_column` (formation `regiment_column`).
 pub const GROUP_COLUMN: [[f32; 2]; 6] = [[0.0, 8.0], [-9.0, 8.0], [9.0, 8.0], [0.0, -8.0], [-9.0, -8.0], [9.0, -8.0]];
 
+/// The positions of a `Data/Game/group_formations.tgi` entry by its IDS.
+pub fn group_positions(ids: &str) -> Vec<[f32; 2]> {
+    match ids.to_ascii_lowercase().as_str() {
+        "group_defensive" => GROUP_DEFENSIVE.to_vec(),
+        "group_aggressive" => GROUP_AGGRESSIVE.to_vec(),
+        "group_column" => GROUP_COLUMN.to_vec(),
+        _ => Vec::new(),
+    }
+}
+
 /// `0x4DE020`: a group member's offset from the group destination (the group
 /// formation position already turned by the group facing); when that point
 /// is on a blocked tile, the first open tile on the line back to the

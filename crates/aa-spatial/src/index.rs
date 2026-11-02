@@ -923,6 +923,28 @@ impl SpatialIndex {
         }
         Ok(())
     }
+    /// The Thing +8 words of a member its host keeps (its bit 26 stays the index's).
+    /// A host changing what the lists depend on takes the member out first.
+    pub fn set_thing_flags(&mut self, key: ActorKey, flags: u32) -> Result<()> {
+        let m = self.member_mut(key)?;
+        m.actor.flags = (flags & !(1 << 26)) | (m.actor.flags & (1 << 26));
+        Ok(())
+    }
+    /// `0x4EEBE0` for a facing already normalized by the mover, without its
+    /// presentation callbacks.
+    pub fn set_facing_fields(&mut self, key: ActorKey, facing: [u32; 2]) -> Result<()> {
+        let member = self.member(key)?;
+        let old_a = member.placement(true);
+        let old_b = member.placement(false);
+        let member = self.member_mut(key)?;
+        member.actor.facing = facing;
+        let new_a = member.placement(true);
+        let new_b = member.placement(false);
+        if member.actor.flags & (1 << 26) != 0 {
+            self.update_tiles(key, &old_b, &new_b, &old_a, &new_a)?;
+        }
+        Ok(())
+    }
     /// Original4EE930 for ordinary Actor: write request bit3, then refresh via
     /// its actual constant-true+B0. Unchanged requests perform no refresh.
     pub fn set_ordinary_membership_request(

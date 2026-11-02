@@ -92,7 +92,7 @@ fn data() -> (GameData, Ids) {
         leader_slot: Some(2),
         slots: vec![(soldier, [-3.0, 2.5]), (soldier, [3.0, 2.5]), (captain, [0.0, 0.0])],
         slot_entries: vec![0, 0, 1],
-        formations: vec![Formation { id: "defensive".into(), positions: vec![[-3.0, 2.5], [3.0, 2.5], [0.0, 0.0]] }],
+        formations: vec![Formation { id: "defensive".into(), positions: vec![[-3.0, 2.5], [3.0, 2.5], [0.0, 0.0]], aggressive: true, group_positions: Vec::new(), organized: true, herding: false }],
         default_formation: Some(0),
         ..Default::default()
     });
@@ -376,7 +376,8 @@ fn queue_waits_for_unit_limit_and_cancel_refunds() {
 fn truck_unpacks_at_its_spot_and_packs_back() {
     let (mut w, ids) = world(&[0]);
     let truck = spawn(&mut w, ids.truck, 0, Vec2::new(60.0, 60.0), 0.0);
-    core_step(&mut w, vec![Command::Deploy { kingdom: 0, truck, at: Vec2::new(60.0, 60.0), facing: 0.0 }]);
+    // The hosted Mind runs in the whole update (movement, then queue 4).
+    w.step(vec![Command::Deploy { kingdom: 0, truck, at: Vec2::new(60.0, 60.0), facing: 0.0 }]);
     let building = w.actors.iter().find(|a| a.def == ids.depot && !a.removed).map(|a| a.id).expect("depot");
     assert!(w.actors[truck as usize].removed);
     let d = w.books.actor(building).unwrap().deploy.clone().unwrap();
@@ -560,14 +561,16 @@ fn regiments_attach_to_an_hq_with_a_free_slot() {
 #[test]
 fn deploy_spot_snaps_and_must_be_clear() {
     let (mut w, ids) = world(&[0]);
-    let _hq = spawn(&mut w, ids.hq, 0, Vec2::new(100.0, 100.0), 0.0);
     let truck = spawn(&mut w, ids.truck, 0, Vec2::new(60.0, 60.0), 0.0);
-    // Onto the HQ footprint: refused.
-    core_step(&mut w, vec![Command::Deploy { kingdom: 0, truck, at: Vec2::new(103.0, 100.0), facing: 0.0 }]);
-    assert!(w.events.iter().any(|e| matches!(e, Event::Refused { .. })));
-    // tile_locked snaps to the half-cell grid, axis_locked faces native -Y.
-    core_step(&mut w, vec![Command::Deploy { kingdom: 0, truck, at: Vec2::new(60.3, 60.7), facing: 0.0 }]);
-    // The truck stood within a cell of the spot, so it unpacked at once.
+    // tile_locked snaps to the half-cell grid when the building is made,
+    // axis_locked faces native -Y. The truck drives to the order's own point first.
+    w.step(vec![Command::Deploy { kingdom: 0, truck, at: Vec2::new(60.3, 60.7), facing: 0.0 }]);
+    for _ in 0..200 {
+        if w.actors[truck as usize].removed {
+            break;
+        }
+        w.step(Vec::new());
+    }
     let depot = w.actors.iter().find(|a| a.def == ids.depot && !a.removed).expect("unpacked");
     assert_eq!(depot.pos.truncate(), Vec2::new(60.0, 61.0));
     assert!((depot.facing + std::f32::consts::FRAC_PI_2).abs() < 1e-6);

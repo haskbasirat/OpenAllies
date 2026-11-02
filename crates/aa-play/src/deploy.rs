@@ -34,13 +34,9 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
             if world.books.actor(truck).is_some_and(|b| b.deploy.is_some()) {
                 return Err("already deploying".into());
             }
-            let building = world.data.def(world.actors[truck as usize].def).unpacks_to.expect("checked");
-            let (at, facing) = placement(world, building, at, facing);
-            spot_clear(world, building, at, Some(truck))?;
-            // The truck must be able to stand there and reach it (movement's check).
-            if let Some(problem) = crate::movement::deploy_spot_problem(world, truck, at) {
-                return Err(problem);
-            }
+            // The order carries the given point: the truck drives to it and the
+            // building snaps only when it is made (0x575C80 -> 0x4F3640). The
+            // native refuses a spot then, not here (tai_error_unpack).
             let order = Order::Deploy { at, facing };
             world.actors[truck as usize].order = order.clone();
             if let Some(o) = world.actors[truck as usize].org {
@@ -167,11 +163,14 @@ fn replace(world: &mut World, old: ActorId, def: DefId, pos: Vec2, facing: f32) 
                 *m = new;
             }
         }
-        world.orgs[o as usize].order = Order::Idle;
         // 0x4D6174 -> 0x57D8A0 (movement owner): the new actor is the
         // organization's member (and leader) in the old one's place, and the
-        // goal follows it (0x57C800 -> 0x57C680).
+        // goal follows it (0x57C800 -> 0x57C680), the regiment's unpack state
+        // still current.
         crate::movement::member_replaced(world, o, old, new);
+        // (combat) 0x4F6760 destroys the old thing: 0x57CD70's morale loss.
+        let old_def = world.actors[old as usize].def;
+        crate::combat::member_replaced(world, o, old_def);
     }
     for r in world.orgs.iter_mut() {
         if r.hq == Some(old) {
@@ -204,14 +203,10 @@ pub fn tick(world: &mut World) {
                     world.books.actor_mut(a).deploy = None;
                     world.set_activity(a, Activity::Idle);
                     world.events.push(Event::Deployed { building: a });
-                    // The deferred end of the unpacking registers the Supply
-                    // component (0x576319 -> 0x4D3068 -> 0x563FD0: queue 1,
-                    // one draw) and runs its first 0x58AE10.
-                    if world.data.def(world.actors[a as usize].def).has_supply {
-                        let owner = crate::scheduler::Owner::Component(a, crate::scheduler::SUPPLY_SLOT);
-                        world.schedule_periodic(crate::scheduler::EVERY_SECOND, owner, 0);
-                        crate::supply::supplier_tick(world, a, 0.0);
-                    }
+                    // The deferred end of the unpacking makes the components left
+                    // out at creation (0x576319 -> 0x4D21A0(1)): queue 1 for each,
+                    // and the Supply's first 0x58AE10.
+                    crate::creation::unpack_end(world, a);
                 }
                 DeployKind::Packing => {
                     let b = &world.actors[a as usize];
@@ -229,20 +224,46 @@ pub fn tick(world: &mut World) {
             }
             continue;
         }
-        // Start unpacking a truck that reached its spot.
-        let actor = &world.actors[a as usize];
-        let Order::Deploy { at, facing } = actor.order else { continue };
-        let Some(building) = world.data.def(actor.def).unpacks_to else { continue };
-        if !arrived(world, a) {
-            continue;
+        // Start unpacking a truck that reached its spot (the earlier element
+        // code; the hosted Mind calls `unpack_now` from its Unpack Think).
+        if !crate::movement::element_mind_ports() && arrived(world, a) {
+            unpack_now(world, a);
         }
-        let length = world.data.def(building).unpacking_length;
-        // 0x575C80: the building is created in place of the truck; its
-        // Supply waits for the end of the unpacking (crate::creation).
-        world.ids.unpack_scope = true;
-        let b = replace(world, a, building, at, facing);
-        world.ids.unpack_scope = false;
-        world.books.actor_mut(b).deploy = Some(Deployment { kind: DeployKind::Unpacking, into: building, started: now, done_at: now + length });
-        world.set_activity(b, Activity::Unpacking);
     }
+}
+
+/// `0x575C80` from `KKC_UAIStateUnpack` 0x5372B0: the building is created in
+/// place of the truck, snapped there (0x4F3640, [`placement`]); its Supply waits
+/// for the end of the unpacking (crate::creation). A spot the building cannot
+/// stand on ends the order (`tai_error_unpack`).
+pub fn unpack_now(world: &mut World, a: ActorId) {
+    if !live(world, a) {
+        return;
+    }
+    let now = world.time;
+    let actor = &world.actors[a as usize];
+    let Order::Deploy { at, facing } = actor.order else { return };
+    let Some(building) = world.data.def(actor.def).unpacks_to else { return };
+    let kingdom = actor.kingdom;
+    let org = actor.org;
+    // 0x575C80 places the building where the truck stands (the Unpack state's Enter
+    // drove it to the order's point, as near as the map lets it).
+    let at = if crate::movement::element_mind_ports() { actor.pos.truncate() } else { at };
+    let (at, facing) = placement(world, building, at, facing);
+    if let Err(reason) = spot_clear(world, building, at, Some(a)) {
+        world.actors[a as usize].order = Order::Idle;
+        if let Some(o) = org {
+            world.orgs[o as usize].order = Order::Idle;
+        }
+        if let Some(kingdom) = kingdom {
+            world.events.push(Event::Refused { kingdom, reason });
+        }
+        return;
+    }
+    let length = world.data.def(building).unpacking_length;
+    world.ids.unpack_scope = true;
+    let b = replace(world, a, building, at, facing);
+    world.ids.unpack_scope = false;
+    world.books.actor_mut(b).deploy = Some(Deployment { kind: DeployKind::Unpacking, into: building, started: now, done_at: now + length });
+    world.set_activity(b, Activity::Unpacking);
 }

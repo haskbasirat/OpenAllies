@@ -10,9 +10,9 @@
 //! pending think, then adds one). Commands handed to a hosted Mind
 //! (0x4D9B60) are kept in `Minds::commands` with their reference counts.
 //!
-//! The aircraft Mind (AAI.cpp, `crate::combat::air`) is the first hosted
-//! kind. Element and regiment Minds are still aa-play's own (movement and
-//! combat).
+//! The aircraft Mind (AAI.cpp, `crate::combat::air`) and the element Mind
+//! (UAI.cpp, `crate::movement`) and the regiment Mind (CAI.cpp, `crate::movement`)
+//! are hosted; a regiment's kill, rout and engage are still aa-play's own (combat).
 use crate::world::ActorId;
 use aa_mind::{Arena, MindId, StateId};
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,12 @@ use std::collections::BTreeMap;
 pub enum HostedKind {
     /// Vtable 0xA32710 (AAI.cpp).
     Aircraft,
+    /// Vtable 0xA35810 (UAI.cpp): a ground element's Mind on update queue 4
+    /// (`crate::movement`'s element module).
+    Element,
+    /// Vtable 0xA335A0 (CAI.cpp): a regiment's Mind on update queue 4
+    /// (`crate::movement`'s regiment module). Keyed `ORGANIZATION_MIND | o`.
+    Regiment,
 }
 
 /// One hosted Mind's binding and native memory.
@@ -47,6 +53,11 @@ pub struct HostedCommand {
     /// +0x10 target GTID; +0x18 / +0x1C point (binary32).
     pub target: u32,
     pub point: [u32; 2],
+    /// +0x20 / +0x24 auxiliary point (flag 8), +0x28 speed (flag 0x10).
+    #[serde(default)]
+    pub auxiliary: [u32; 2],
+    #[serde(default)]
+    pub speed: u32,
     /// +0x3C trailing (queued) byte.
     pub trailing: bool,
     /// +4 reference count.
@@ -70,6 +81,9 @@ pub struct Minds {
     #[serde(default)]
     pub resetting: bool,
 }
+
+/// The key of organization `o`'s Mind among the actors' (bit 31 is never an actor).
+pub const ORGANIZATION_MIND: u32 = 0x8000_0000;
 
 /// The arena id of `a`'s Mind.
 pub fn mind_id(a: ActorId) -> MindId {
@@ -149,6 +163,92 @@ impl Minds {
         Ok(())
     }
 
+    /// `0x4CF480` case 4 followed by the Mind's Load (`0x536340`, `0x528C20`): the
+    /// saved stores, stack and commands over the constructed Mind. Nothing is
+    /// scheduled: the queue Load names the Mind's own Updatable.
+    pub fn install_saved(&mut self, a: ActorId, kind: HostedKind, built: aa_mind::construct::Constructed, saved: &aa_mind::saved_load::Saved) -> Result<aa_mind::saved_load::Applied, String> {
+        let mut bindings = BTreeMap::new();
+        for s in &built.states {
+            self.next_state += 1;
+            bindings.insert(s.offset, StateId(self.next_state));
+        }
+        let mut installed = built.install(mind_id(a), &bindings, &mut self.arena).map_err(|e| e.to_string())?;
+        let mut commands = aa_mind::saved_load::CommandBindings::default();
+        if let Some(base) = saved.base() {
+            for c in &base.commands {
+                let id = self.saved_command(c)?;
+                commands.pending.push(id);
+            }
+            if let Some(c) = &base.current_command {
+                commands.current = Some(self.saved_command(c)?);
+            }
+        }
+        let applied = match saved {
+            aa_mind::saved_load::Saved::Regiment(regiment) => aa_mind::regiment_load::apply_stores(regiment, &mut installed, &mut self.arena, &commands),
+            _ => aa_mind::saved_load::apply_with_commands(saved, &mut installed, &mut self.arena, &commands),
+        }
+        .map_err(|e| e.to_string())?;
+        for (&offset, &id) in &installed.state_bindings {
+            self.owners.insert(id, (a, offset));
+        }
+        self.hosted.insert(a, Hosted { kind, states: installed.state_bindings, words: installed.words, bytes: installed.bytes });
+        Ok(applied)
+    }
+
+    /// A restored Mind whose stack holds a state this host does not run (`hosted`, by
+    /// Mind offset) idles in `sleep` instead: a labelled rendition until those states
+    /// are hosted (the regiments' and elements' kill, engage and the like of a campaign
+    /// map, which `crate::combat` still holds). Returns whether it did.
+    pub fn sleep_unless_hosted(&mut self, a: ActorId, hosted: &[u32], sleep: u32) -> bool {
+        let Some(mind) = self.arena.minds.get(&mind_id(a)) else { return false };
+        let foreign = mind.stack.iter().flatten().any(|s| self.owners.get(s).is_none_or(|&(_, offset)| !hosted.contains(&offset)));
+        if !foreign {
+            return false;
+        }
+        let states: Vec<StateId> = self.hosted.get(&a).map_or_else(Vec::new, |h| h.states.values().copied().collect());
+        for s in states {
+            if let Some(state) = self.arena.states.get_mut(&s) {
+                state.status = 0;
+            }
+        }
+        let sleep = self.state(a, sleep);
+        if let Some(mind) = self.arena.minds.get_mut(&mind_id(a)) {
+            mind.stack.clear();
+            mind.stack.push_front(sleep);
+        }
+        if let Some(state) = sleep.and_then(|s| self.arena.states.get_mut(&s)) {
+            state.status = 2;
+        }
+        true
+    }
+
+    /// A live command for a saved one (`0x4D9C80`, `0x4DACE0`). The definition's IDS
+    /// names the predefined actor command.
+    fn saved_command(&mut self, c: &aa_mind::saved_command::Command) -> Result<u32, String> {
+        let name = c.definition.as_deref().map(String::from_utf16_lossy).unwrap_or_default();
+        let name = name.trim_end_matches('\0');
+        let command = aa_rules::native::actor_command::PREDEFINED_ACTOR_COMMANDS
+            .iter()
+            .position(|d| d.id.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("saved command {name:?} is no predefined actor command"))? as u32;
+        self.next_command += 1;
+        let id = self.next_command;
+        self.commands.insert(
+            id,
+            HostedCommand {
+                command,
+                flags: c.flags,
+                target: c.word10,
+                point: c.position_bits,
+                auxiliary: c.auxiliary_bits,
+                speed: c.scalar_bits,
+                trailing: c.trailing != 0,
+                refs: 1,
+            },
+        );
+        Ok(id)
+    }
+
     /// A command object for `command` (0x4D9E20 + the target / point).
     pub fn new_command(&mut self, command: u32, target: Option<u32>, point: Option<[u32; 2]>) -> u32 {
         self.next_command += 1;
@@ -160,7 +260,7 @@ impl Minds {
         if point.is_some() {
             flags |= 4;
         }
-        self.commands.insert(id, HostedCommand { command, flags, target: target.unwrap_or(0), point: point.unwrap_or([0; 2]), trailing: false, refs: 0 });
+        self.commands.insert(id, HostedCommand { command, flags, target: target.unwrap_or(0), point: point.unwrap_or([0; 2]), auxiliary: [0; 2], speed: 0, trailing: false, refs: 0 });
         id
     }
 }

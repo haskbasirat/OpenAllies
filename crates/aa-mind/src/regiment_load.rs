@@ -257,6 +257,87 @@ pub(crate) fn read(r: &mut Reader<'_>) -> Result<Regiment> {
     }
     Ok(result)
 }
+/// The stores of a regiment Load of any version over a constructed Mind: the Base
+/// 52C580, each status word onto its embedded state, the other words and bytes at their
+/// offsets. What the words name (references, the path, the tracked lists) stays in
+/// `saved` for the host that owns those things; nothing is dispatched or scheduled.
+pub fn apply_stores(
+    saved: &Regiment,
+    installed: &mut crate::construct::Installed,
+    arena: &mut crate::Arena,
+    commands: &crate::saved_load::CommandBindings,
+) -> Result<crate::saved_load::Applied> {
+    if installed.kind != crate::construct::Kind::Regiment {
+        return Err(crate::saved_load::Error::Mismatch(
+            "Regiment payload for a different constructed Mind".into(),
+        ));
+    }
+    let (count, current) = saved
+        .base
+        .as_ref()
+        .map(|b| (b.commands.len(), b.current_command.is_some()))
+        .unwrap_or((0, false));
+    if commands.pending.len() != count || commands.current.is_some() != current {
+        return Err(crate::saved_load::Error::Mismatch(
+            "saved command bindings do not match the Regiment payload".into(),
+        ));
+    }
+    let mut stack = Vec::new();
+    if let Some(states) = saved.base.as_ref().and_then(|b| b.stack.as_ref()) {
+        for offset in states {
+            let state = *installed.state_bindings.get(offset).ok_or_else(|| {
+                crate::saved_load::Error::Mismatch(format!("Regiment state {offset:#x} is not bound"))
+            })?;
+            stack.push(Some(state));
+        }
+    }
+    let mut serialized_id = None;
+    if let Some(base) = &saved.base {
+        installed.update_head = None;
+        serialized_id = base.updatable.serialized_id.filter(|id| *id >= 0);
+        let mind = arena
+            .mind_mut(installed.mind_id)
+            .map_err(|e| crate::saved_load::Error::Mismatch(e.to_string()))?;
+        mind.words_24_30[0] = base.word_24;
+        mind.words_24_30[1] = base.word_28;
+        mind.pending_commands
+            .extend(commands.pending.iter().copied());
+        mind.current_command = commands.current;
+        if let Some(word) = base.word_2c {
+            mind.words_24_30[2] = word;
+            mind.stack.clear();
+            mind.stack.extend(stack);
+        }
+    }
+    for store in &saved.stores {
+        match *store {
+            Store::Word { offset, value } => {
+                let state = offset
+                    .checked_sub(0x0c)
+                    .and_then(|state| installed.state_bindings.get(&state).copied());
+                match state {
+                    Some(state) => {
+                        arena
+                            .state_mut(state)
+                            .map_err(|e| crate::saved_load::Error::Mismatch(e.to_string()))?
+                            .status = value;
+                    }
+                    None => {
+                        installed.words.insert(offset, value);
+                    }
+                }
+            }
+            Store::Byte { offset, value } => {
+                installed.bytes.insert(offset, value);
+            }
+        }
+    }
+    Ok(crate::saved_load::Applied {
+        serialized_id,
+        element_path: None,
+    })
+}
+
 pub fn decode(bytes: &[u8]) -> Result<(Regiment, usize)> {
     let mut r = Reader { bytes, at: 0 };
     let saved = read(&mut r)?;
