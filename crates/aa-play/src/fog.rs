@@ -130,6 +130,25 @@ pub struct FogState {
     seen_changes: u64,
     /// Engine counters at the end of the last tick.
     seen_tile_changes: u64,
+    /// The Element Ticks of queue 1 run from the scheduler
+    /// ([`element_delivery`]), not from [`element_pass`].
+    pub element_leaf: bool,
+    /// The members' Elements by queue-1 bucket, delivery order, as of the last
+    /// membership change, for [`element_pass`].
+    elements: ElementTable,
+    /// The cities have taken their blocks (`0x4F6B50`, the world start).
+    blocks_attached: bool,
+}
+
+/// See [`FogState::elements`].
+#[derive(Debug, Default)]
+struct ElementTable {
+    buckets: Vec<Vec<ActorId>>,
+    /// Members without a queue-1 registration (worlds built without the
+    /// native creation): they tick every update.
+    unregistered: Vec<ActorId>,
+    /// The update the table was read in and the bucket that update delivered.
+    read_at: (u64, usize),
 }
 
 impl FogState {
@@ -187,9 +206,153 @@ pub fn detection_delivery(world: &mut World, key: crate::zones::Key) {
     put_engine(world, e);
 }
 
-/// Put the engine back after [`take_engine`].
+/// Element Tick `0x570B90` of member `a` (its Updatable +0x14, one second in
+/// its bucket, registered by `0x563FD0`): `0x5709D0`. Its other steps, the
+/// detached teleport and `0x4D6660`, are not bound here; `0x4D6660` is read
+/// where the state is ([`crate::supply`]).
+pub fn element_delivery(world: &mut World, a: ActorId) {
+    world.fog.element_leaf = true;
+    let Some(mut e) = take_engine(world) else { return };
+    e.observe_update(world);
+    e.observe_key(world, crate::zones::Key::Actor(a));
+    let before = e.attached(a);
+    e.element_update(world, a);
+    let after = e.attached(a);
+    put_engine(world, e);
+    // 0x578ED0 -> 0x522840: the regiment lists a member that joined.
+    if after == Some(true)
+        && before == Some(false)
+        && let Some(o) = world.actors[a as usize].org
+    {
+        crate::movement::member_attached(world, o, a);
+    }
+}
+
+/// `0x5709D0` from the Mind's Reattach (`0x534000`, `0x532735`): Element +0x1C before
+/// and after. The movement owner lists a member that joined.
+pub fn element_refresh(world: &mut World, a: ActorId) -> Option<(bool, bool)> {
+    let mut e = take_engine(world)?;
+    e.observe_update(world);
+    e.observe_key(world, crate::zones::Key::Actor(a));
+    let before = e.attached(a);
+    e.element_update(world, a);
+    let after = e.attached(a);
+    put_engine(world, e);
+    Some((before?, after?))
+}
+
+/// The Element Ticks of this update until the scheduler delivers them
+/// ([`element_delivery`]): the bucket queue 1 just delivered, as the
+/// Properties pass reads it (`crate::special_ops`), and every update for the
+/// members with no registration.
+pub fn element_pass(world: &mut World) {
+    if world.fog.element_leaf {
+        return;
+    }
+    let Some(mut e) = take_engine(world) else { return };
+    e.observe_update(world);
+    if e.parts.elements_changed {
+        e.parts.elements_changed = false;
+        let mut table = ElementTable::default();
+        let mut registered = std::collections::BTreeSet::new();
+        if let Some(q) = world.sched.queues.snapshot().into_iter().find(|q| q.id == crate::scheduler::EVERY_SECOND) {
+            let n = q.buckets.len();
+            table.read_at = (world.tick, (q.current + n.max(1) - 1) % n.max(1));
+            table.buckets = q
+                .buckets
+                .iter()
+                .map(|b| {
+                    b.iter()
+                        .filter_map(|&(key, _)| match crate::scheduler::Owner::from_key(key) {
+                            Some(crate::scheduler::Owner::Component(a, ELEMENT_SLOT)) if e.attached(a).is_some() => {
+                                registered.insert(a);
+                                Some(a)
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                })
+                .collect();
+        }
+        table.unregistered = (0..world.actors.len() as ActorId).filter(|&a| e.attached(a).is_some() && !registered.contains(&a)).collect();
+        world.fog.elements = table;
+    }
+    let table = &world.fog.elements;
+    if !table.buckets.is_empty() {
+        let n = table.buckets.len() as u64;
+        let bucket = ((table.read_at.1 as u64 + world.tick.wrapping_sub(table.read_at.0) % n) % n) as usize;
+        for &a in &table.buckets[bucket] {
+            e.element_update(world, a);
+        }
+    }
+    for &a in &table.unregistered {
+        e.element_update(world, a);
+    }
+    put_engine(world, e);
+}
+
+/// The component slot of the Element (actor +0x80).
+const ELEMENT_SLOT: u8 = 8;
+
+/// Put the engine back after [`take_engine`], and run what it asked of the
+/// world while it was out.
 pub fn put_engine(world: &mut World, engine: Engine) {
     world.fog.engine = Some(engine);
+    settle(world);
+}
+
+/// The world start's `0x4F6B50` once the zones stand, then what the zone engine
+/// asked and only the world can do: the deferred tick of
+/// a new member's Detection (`0x56EC90` -> `0x50ACC0(1e-4, 0)`, delivered
+/// through its `+0x18` `0x56E9F0`; a world built without the native creation
+/// ticks it every update instead) and the components' answers to a zone being
+/// entered: `0x564300` for a city, `0x57AB70` for an organization, `0x567840`
+/// for a Defender.
+fn settle(world: &mut World) {
+    if !world.fog.blocks_attached && world.fog.engine.as_ref().is_some_and(|e| e.parts.stats.tile_changes > 0) {
+        world.fog.blocks_attached = true;
+        crate::supply::attach_city_blocks(world);
+    }
+    let Some(e) = world.fog.engine.as_mut() else { return };
+    let ticks = e.take_pending_ticks();
+    let entries = e.take_entered();
+    for key in ticks {
+        let owner = match key {
+            crate::zones::Key::Actor(a) => crate::scheduler::Owner::Component(a, crate::zones::DETECTION_SLOT),
+            crate::zones::Key::Org(o) => crate::scheduler::Owner::OrgComponent(o, crate::zones::DETECTION_SLOT),
+        };
+        if world.is_scheduled(owner) {
+            world.schedule_after(crate::scheduler::DEFERRED, owner, 0, f32::from_bits(aa_zones::fpu::CLAMP_MARGIN_BITS));
+        }
+    }
+    if !entries.is_empty() {
+        // a thing standing in the zone when the map is made has its Performer
+        // +60 already (0x57E430 in its InitExisting)
+        let mut st = std::mem::take(&mut world.combat);
+        st.prepare(world);
+        world.combat = st;
+    }
+    for entry in entries {
+        match entry {
+            crate::zones::Entered::City(city, who) => crate::supply::city_entered(world, city, who),
+            crate::zones::Entered::Organization(o, who) => {
+                let mut st = std::mem::take(&mut world.combat);
+                crate::combat::zone_entered(world, &mut st, o, who);
+                world.combat = st;
+            }
+            crate::zones::Entered::Defender(owner, who) => crate::combat::defender::entered(world, owner, who),
+        }
+    }
+}
+
+/// [`Engine::observe`] now: for what runs after [`tick`] in an update (the
+/// deferred +208's Minds make things there, and a thing has its zones from its
+/// creation, `0x4D7230`).
+pub fn observe_now(world: &mut World) {
+    if let Some(mut e) = take_engine(world) {
+        e.observe(world);
+        put_engine(world, e);
+    }
 }
 
 /// The zone engine (read).
@@ -282,6 +445,7 @@ pub fn tick(world: &mut World) {
     st.stats.max_us = st.stats.max_us.max(us);
     st.stats.ticks += 1;
     world.fog = st;
+    settle(world);
     crate::supply::publish_zone_tiles(world);
 }
 

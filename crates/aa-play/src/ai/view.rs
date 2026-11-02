@@ -112,6 +112,10 @@ impl<'w> View<'w> {
             let a = &world.actors[id as usize];
             world.combat.actor(id).filter(|c| c.initialized && c.max_health > 0.0).map(|c| c.max_health).unwrap_or(data.def(a.def).health)
         };
+        // 4D0180 of standing actors: Performer +60 (57E430), Defender abilities
+        // included; the table of definitions (bound.cv) is +1E4.
+        let standing_table = standing_values(world);
+        let standing = |d: DefId| standing_table.get(d as usize).copied().unwrap_or(0.0);
         let mut orgs = Vec::new();
         for org in world.orgs.iter().filter(|o| o.alive) {
             let Some(owner) = kingdom_index(world, org.kingdom) else { continue };
@@ -130,7 +134,7 @@ impl<'w> View<'w> {
                 let md = data.def(a.def);
                 builder |= md.has_component("BuilderComponent");
                 let maxh = max_health(m).max(1e-3);
-                cv += bound.cv.get(a.def as usize).copied().unwrap_or(0.0) * (a.health / maxh).clamp(0.0, 1.0);
+                cv += standing(a.def) * (a.health / maxh).clamp(0.0, 1.0);
                 hp += a.health.max(0.0);
                 hp_max += maxh;
                 if md.speed_max > 0.0 {
@@ -198,7 +202,7 @@ impl<'w> View<'w> {
                         owner,
                         def: a.def,
                         pos: a.pos.truncate(),
-                        cv: bound.cv.get(a.def as usize).copied().unwrap_or(0.0) * (a.health / max_health(a.id).max(1e-3)).clamp(0.0, 1.0),
+                        cv: standing(a.def) * (a.health / max_health(a.id).max(1e-3)).clamp(0.0, 1.0),
                         health: (a.health / max_health(a.id).max(1e-3)).clamp(0.0, 1.0),
                         city,
                         recruits: !def.recruits.is_empty(),
@@ -306,6 +310,16 @@ pub(crate) fn truck_deploying(world: &World, truck: crate::world::ActorId) -> bo
     match a.org {
         Some(o) => matches!(world.orgs[o as usize].order, Order::Deploy { .. }),
         None => matches!(a.order, Order::Deploy { .. }),
+    }
+}
+
+/// The value of a standing actor per definition (`4D0180` reads Performer
+/// `+60`, `57E430`: [`combat::performer_values`]), from the combat state once
+/// that is prepared.
+pub fn standing_values(world: &World) -> Vec<f32> {
+    match world.combat.extras.as_ref() {
+        Some(e) => e.defs.iter().map(|d| d.performer_value).collect(),
+        None => combat::performer_values(&world.data, &combat::Rules::from_data(&world.data)),
     }
 }
 

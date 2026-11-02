@@ -245,7 +245,9 @@ fn an_attacker_is_revealed_to_its_target() {
     seconds(&mut w, 1);
     fog::tick(&mut w);
     assert!(fog::actor_visible(&w, shooter, Some(1)), "the target's side sees the shooter");
-    assert!(fog::actor_visible(&w, target, Some(0)), "the shooter's side sees the target");
+    // a weapon target is no engager (0x4D3990 is the organization's engage
+    // list and the Defender's), so the shooter's side does not see the target
+    assert!(!fog::actor_visible(&w, target, Some(0)));
     // the reveal mask drops at the next Detection Tick: visible, never explored
     w.actors[shooter as usize].combat.target = None;
     seconds(&mut w, 1);
@@ -306,4 +308,85 @@ fn a_city_is_besieged_unless_the_attack_is_below_the_allied_sum() {
     assert_eq!(w.actors[c as usize].kingdom, Some(0), "owned value defends it");
     assert!(w.books.actor(c).unwrap().city_siege, "an attack of four is not below three");
     assert!(!active(&w), "under siege it provides no supply");
+}
+
+/// 0x57CBA0 -> 0x5705A0 sets the byte +0x1C when a member joins, and 0x5709D0
+/// (the Element Tick) then asks the organization's zone 4 of the tile under
+/// it: inside, a member has no ZOD (0x56EA30); outside, the next Detection Tick
+/// gives it one; back inside it goes again.
+#[test]
+fn a_member_carries_no_zones_until_it_leaves_the_zoc() {
+    let (mut w, ids) = world(&[0, 1]);
+    let mut d = (*w.data).clone();
+    let s = &mut d.defs[ids.soldier as usize];
+    s.detection_range = 18.0;
+    s.remote_detection_range = 10.0;
+    s.components |= components(&["DetectionComponent"]);
+    let r = &mut d.defs[ids.regiment as usize];
+    r.control_range = 18.0;
+    w.data = Arc::new(d);
+    fog::set_mode(&mut w, FogMode::Full);
+    let leader = w.spawn_actor(ids.soldier, Some(0), Vec3::new(100.0, 100.0, 0.0), 0.0);
+    let other = w.spawn_actor(ids.soldier, Some(0), Vec3::new(104.0, 100.0, 0.0), 0.0);
+    let o = w.orgs.len() as u32;
+    w.actors[leader as usize].org = Some(o);
+    w.actors[other as usize].org = Some(o);
+    w.actors[leader as usize].slot = Some(0);
+    w.actors[other as usize].slot = Some(1);
+    w.orgs.push(aa_play::Organization { id: o, def: ids.regiment, kingdom: 0, members: vec![leader, other], hq: None, order: aa_play::Order::Idle, anchor: Vec2::new(100.0, 100.0), heading: 0.0, morale: 1.0, experience: 0.0, alive: true });
+    let zone = |w: &World, a: u32, t: u32| fog::engine(w).and_then(|e| e.parts.actors[a as usize].zone(t)).filter(|z| z.active());
+    seconds(&mut w, 2);
+    let e = fog::engine(&w).unwrap();
+    assert_eq!(e.parts.orgs[o as usize].zone(4).map(|z| f32::from_bits(z.radius_bits)), Some(18.0), "the organization's ZOC");
+    assert_eq!(e.attached(other), Some(true));
+    assert!(zone(&w, other, 6).is_none(), "attached: no ZOD of its own");
+    // out of the ZOC
+    w.actors[other as usize].pos = Vec3::new(160.0, 100.0, 0.0);
+    seconds(&mut w, 2);
+    let e = fog::engine(&w).unwrap();
+    assert_eq!(e.attached(other), Some(false));
+    assert_eq!(e.attached(leader), Some(true), "the leader stays attached wherever it stands");
+    assert!(zone(&w, other, 6).is_some(), "detached: its own ZOD");
+    // back in
+    w.actors[other as usize].pos = Vec3::new(104.0, 100.0, 0.0);
+    seconds(&mut w, 2);
+    assert_eq!(fog::engine(&w).unwrap().attached(other), Some(true));
+    assert!(zone(&w, other, 6).is_none());
+}
+
+/// 0x566DB0: a Defender's zone 4 takes its control range; 0x563FE0: a city's
+/// zone 8 its zone radius; both flood from the thing's tile. A candidate the
+/// zone 8 covers enters the city through 0x564300 and registers it on queue 1.
+#[test]
+fn defenders_and_cities_have_their_zones() {
+    let (mut w, ids) = world(&[0, 1]);
+    let mut d = (*w.data).clone();
+    let id = d.defs.len() as u32;
+    let mut city = d.defs[ids.soldier as usize].clone();
+    city.id = "city".into();
+    city.class = Some(DefClass::Building);
+    city.city = true;
+    city.city_zone_radius = 30.0;
+    city.speed_max = 0.0;
+    city.captureable = true;
+    city.components = components(&["CityComponent", "BodyComponent"]);
+    d.by_id.insert("city".into(), id);
+    d.defs.push(city);
+    let def = id + 1;
+    let mut corps = d.defs[ids.soldier as usize].clone();
+    corps.id = "corps".into();
+    corps.class = Some(DefClass::Building);
+    corps.control_range = 20.0;
+    corps.speed_max = 0.0;
+    corps.components = components(&["DefenderComponent", "BodyComponent"]);
+    d.by_id.insert("corps".into(), def);
+    d.defs.push(corps);
+    w.data = Arc::new(d);
+    let c = w.spawn_actor(id, Some(1), Vec3::new(100.0, 100.0, 0.0), 0.0);
+    let b = w.spawn_actor(def, Some(0), Vec3::new(300.0, 300.0, 0.0), 0.0);
+    fog::tick(&mut w);
+    let e = fog::engine(&w).unwrap();
+    assert_eq!(e.parts.actors[c as usize].zone(8).map(|z| (f32::from_bits(z.radius_bits), z.flags)), Some((30.0, 0x100)));
+    assert_eq!(e.parts.actors[b as usize].zone(4).map(|z| (f32::from_bits(z.radius_bits), z.flags)), Some((20.0, 0x10)));
+    assert!(e.in_city_zone(aa_play::zones::Key::Actor(b), c) == false);
 }

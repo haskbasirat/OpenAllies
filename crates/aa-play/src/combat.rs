@@ -16,7 +16,8 @@
 //!   `4C83E0`; aa_combat::admission), performer one-ability-at-a-time
 //!   (`57F290`, aa_combat::performer).
 //! - organization engage list `523DD0/524C10/523EA0/51FE60`
-//!   (aa_mind::cai_engage), zone entry `514E40 -> 57AB70 -> 57A500`, the
+//!   (aa_mind::cai_engage), zone entry `514E40 -> 57AB70 -> 57A500`
+//!   ([`zone_entered`], from the ZOC, `crate::zones`), the
 //!   damage-driven engage `579490` (aa_combat::engagement), engage Think
 //!   `526A70` (1.0 s, aa_mind::cai_engage_think), target priority `527240`
 //!   (aa_mind::cai_reactions::target_priority).
@@ -39,6 +40,8 @@
 pub mod tasks;
 /// The aircraft Mind (AAI.cpp) hosted on aa-mind (core owner).
 pub mod air;
+/// The DefenderComponent: its ZOC list and its queue-0 Tick.
+pub mod defender;
 
 use crate::data::{DefClass, DefId, GameData, Weapon};
 use crate::world::{Activity, ActorId, Event, KingdomId, Order, OrgId, World};
@@ -280,6 +283,9 @@ pub struct DefExtras {
     pub levels: Vec<ExperienceLevel>,
     /// Combat value (`4618B0` definition value), computed.
     pub combat_value: f32,
+    /// Performer `+60` of a standing actor of this definition (`57E430`, the
+    /// Defender abilities too), [`performer_values`].
+    pub performer_value: f32,
     /// The organization_entrenched state's properties this definition
     /// qualifies for (their required_properties): ADD DV, RESIST_DAMAGE per
     /// damage type, MULTIPLY MORALE_LOSS_RATE.
@@ -292,6 +298,8 @@ pub struct DefExtras {
 #[derive(Clone, Debug, Default)]
 pub struct Extras {
     pub defs: Vec<DefExtras>,
+    /// `4BBF90`, for the per-actor `57E430`.
+    means: Means,
     /// `GameData::target_types` bit indices used by the admission filter.
     pub bit_friend: Option<u32>,
     pub bit_enemy: Option<u32>,
@@ -310,6 +318,8 @@ pub struct Extras {
     pub damage_filters: Vec<i32>,
     /// Definitions using a fallback (count per field).
     pub fallbacks: Vec<(&'static str, usize)>,
+    /// The largest `Size` soft radius, for the area query's cell search.
+    pub max_soft_radius: f32,
 }
 
 /// Legacy per-definition rules keys, read when the typed field is empty:
@@ -370,6 +380,7 @@ impl Extras {
                 fake_cv_value,
                 levels,
                 combat_value: 0.0,
+                performer_value: 0.0,
                 entrench_dv: 0.0,
                 entrench_resist: vec![0.0; data.damage_types.len()],
                 entrench_morale_loss: 0.0,
@@ -394,6 +405,10 @@ impl Extras {
         for (d, v) in defs.iter_mut().zip(values) {
             d.combat_value = v;
         }
+        let values = performer_values(data, rules);
+        for (d, v) in defs.iter_mut().zip(values) {
+            d.performer_value = v;
+        }
         let damage_filters = data
             .damage_types
             .iter()
@@ -405,6 +420,7 @@ impl Extras {
             .collect();
         Extras {
             defs,
+            means: means(data, rules),
             bit_friend: bit("friend"),
             bit_enemy: bit("enemy"),
             bit_independent: bit("independent"),
@@ -418,6 +434,7 @@ impl Extras {
             bit_routing: bit("routing"),
             damage_filters,
             fallbacks: vec![("death_time", death_missing)],
+            max_soft_radius: data.defs.iter().map(|d| d.soft_radius).fold(0.0, f32::max),
         }
     }
     pub fn def(&self, id: DefId) -> &DefExtras {
@@ -426,6 +443,7 @@ impl Extras {
             fake_cv_value: -1.0,
             levels: Vec::new(),
             combat_value: 0.0,
+            performer_value: 0.0,
             entrench_dv: 0.0,
             entrench_resist: Vec::new(),
             entrench_morale_loss: 0.0,
@@ -625,6 +643,38 @@ pub fn combat_values(data: &GameData, rules: &Rules) -> Vec<f32> {
         .collect()
 }
 
+/// `57E430` Performer `+60` from Body `+18` / `+14` and Mover `+28`: with a
+/// PerformerComponent the best `45E090` value (a later equal value replaces,
+/// a smaller one keeps) over the Performer's abilities and then the
+/// DefenderComponent's (`+B0 +10`), so a corps or a bunker that shoots only
+/// through its Defender has a value. [`combat_values`] is the definition's
+/// `+1E4`, which leaves the Defender out; experience, the AI's definition
+/// values and the other `+1E4` readers stay on it.
+fn performer_value_of(def: &crate::data::Def, health: f32, speed: f32, m: &Means, rules: &Rules) -> f32 {
+    let c = Components::of(def);
+    if !c.performer {
+        return 0.0;
+    }
+    let (defense, health) = if c.body { (def.defense, health) } else { (0.0, 0.0) };
+    let speed = if c.mover { speed } else { 0.0 };
+    def.weapons
+        .iter()
+        .filter(|w| !w.defender)
+        .chain(def.weapons.iter().filter(|w| w.defender))
+        .map(|w| ability_value(w, defense, health, speed, m, rules))
+        .fold(0.0f32, |best, v| if !(best > v) { v } else { best })
+}
+
+/// [`performer_value_of`] of a thing of each definition with the definition's own
+/// values: what a slot not yet filled (`0x564C10`'s organization sum) and the AI's
+/// estimates read. A thing has its own, from its creation (`57E430` runs in
+/// `4D7230` and in the Defender's InitExisting `566DB0`, and not again):
+/// `ActorCombat::performer_value`.
+pub fn performer_values(data: &GameData, rules: &Rules) -> Vec<f32> {
+    let m = means(data, rules);
+    data.defs.iter().map(|def| performer_value_of(def, def.health, def.speed_max, &m, rules)).collect()
+}
+
 /// `571820` (aa_body::experience_amounts::ratio): `victim/source*0.5 + 0.5`
 /// left unstored (x87); a zero victim value becomes -1 when the victim's
 /// fake_cv_value (+4F4) is -1, else ExperienceDefaultValue; a nonpositive
@@ -732,6 +782,15 @@ pub enum TargetRef {
     Actor(ActorId),
 }
 
+/// One `+130` node (`4D6190`, a bombardment's hit): who shells this thing, when
+/// it last did and how long that counts (`4D37E0` drops it after).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttackedBy {
+    pub attacker: TargetRef,
+    pub at: f32,
+    pub timeout: f32,
+}
+
 /// One `{gtid, priority}` node of an organization's engage list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EngageTarget {
@@ -761,11 +820,23 @@ pub struct Reform {
 #[derive(Clone, Debug, Default)]
 pub struct OrgCombat {
     pub initialized: bool,
+    /// A saved game's organization: the living count its +60 was read at. The Load
+    /// reads +60 before the kingdom's properties reach the members, and it stands
+    /// until a change of modifiers (`saved_world`); the periodic refresh leaves it.
+    pub saved_morale_living: Option<i32>,
     pub destroyed: bool,
     /// Engage list, ascending priority (`51FE60`); the last entry is engaged.
     pub engage: Vec<EngageTarget>,
     /// Target of an explicit (player) attack order.
     pub explicit: Option<TargetRef>,
+    /// The Kill state came from a `move` command on the target (`0x527E30` ->
+    /// `0x51D920`): Mind +0x20's kind 5, so `0x51D8F0` reports mind_moving and the
+    /// regiment walks in its desired formation and behaviour.
+    pub kill_is_move: bool,
+    /// The city a Kill state walks to, and the point of the walk
+    /// (`movement::command`): the state ends when `0x57A500` no longer accepts the
+    /// city (`0x520730` -> Mind +0x140), its capture making it no enemy.
+    pub city_target: Option<(ActorId, Vec2)>,
     /// Order replaced while engaging on the organization's own initiative,
     /// restored when the engagement ends.
     pub saved_order: Option<Order>,
@@ -781,6 +852,22 @@ pub struct OrgCombat {
     pub slots: i32,
     /// Enemy organizations whose engage list holds this one (actor `+118`).
     pub engaged_by: Vec<OrgId>,
+    /// Defenders holding a member as an ability's target (`567140`, the same
+    /// `+118` list).
+    pub defended_by: Vec<ActorId>,
+    /// `+8D`: the current Mind state's behavior_required (`577F30`), kept to see
+    /// it turn aggressive.
+    pub behavior_8d: bool,
+    /// `+8E`: `+8D` has just turned on; the maintenance Tick `57C8E0` then walks
+    /// the ZOC's effects (`5147C0`).
+    pub rescan_8e: bool,
+    /// The order last seen, to tell a new command (`527E30` leaves the engage
+    /// state, `51F040`) from what combat itself restored.
+    pub seen_order: Option<Order>,
+    /// Who shells this organization (`+130`, its members' hits come here).
+    pub attacked_by: Vec<AttackedBy>,
+    /// What this organization shells (`+128`, `4D3A70`), head first.
+    pub bombarding: Vec<TargetRef>,
     /// `+60` maximum morale and the breakpoint `+B8` (with level modifiers).
     pub morale_max: f32,
     pub breakpoint: f32,
@@ -816,6 +903,11 @@ pub struct OrgCombat {
 }
 
 impl OrgCombat {
+    /// Actor `+118` is not empty: an organization's engage list or a Defender's
+    /// ability holds this one.
+    pub fn is_engaged(&self) -> bool {
+        !self.engaged_by.is_empty() || !self.defended_by.is_empty()
+    }
     pub fn current_target(&self) -> Option<TargetRef> {
         self.engage.last().map(|t| t.target)
     }
@@ -846,6 +938,17 @@ pub struct ActorCombat {
     pub death_clip: Option<usize>,
     /// Some enemy has this actor as its combat target (actor `+118`).
     pub targeted: bool,
+    /// Defenders holding it as an ability's target (`567140`, the same `+118`).
+    pub defended_by: Vec<ActorId>,
+    /// The thing's own DefenderComponent (`+B0`).
+    pub defender: defender::DefenderState,
+    /// Performer `+60` (`57E430` at its creation): Body `+14` and Mover `+28` with
+    /// the technologies its owner had then.
+    pub performer_value: f32,
+    /// Who shells this actor (`+130`).
+    pub attacked_by: Vec<AttackedBy>,
+    /// What this actor shells (`+128`, `4D3A70`), head first.
+    pub bombarding: Vec<TargetRef>,
     /// ROE primary damage history (`570F70`): (time, amount).
     pub history: Vec<(f32, f32)>,
     /// ROE back-off: no attack before this time (`5340C0` retry time).
@@ -889,6 +992,8 @@ pub struct Projectile {
     /// Target position at launch (impact point when the target is gone).
     pub point: Vec2,
     pub impact_at: f32,
+    /// Its native id (`crate::creation::projectile`), back at impact.
+    pub thing: Option<crate::ids::Gtid>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1012,9 +1117,8 @@ impl CombatState {
         self.relation(a, b) == Some(crate::books::ENEMY)
     }
 
-    /// Bring the per-battle tables up to date (data change, new actors and
-    /// organizations, kingdom teams, organization positions and engaged-by).
-    pub(crate) fn prepare(&mut self, world: &mut World) {
+    /// The per-definition tables, once per `GameData`.
+    pub(crate) fn definition_tables(&mut self, world: &World) {
         let key = Arc::as_ptr(&world.data) as usize;
         if self.rules.is_none() || self.data_key != key {
             let rules = Rules::from_data(&world.data);
@@ -1023,6 +1127,12 @@ impl CombatState {
             self.extras = Some(Arc::new(extras));
             self.data_key = key;
         }
+    }
+
+    /// Bring the per-battle tables up to date (data change, new actors and
+    /// organizations, kingdom teams, organization positions and engaged-by).
+    pub(crate) fn prepare(&mut self, world: &mut World) {
+        self.definition_tables(world);
         self.teams.clear();
         for k in &world.kingdoms {
             let i = k.id as usize;
@@ -1043,6 +1153,12 @@ impl CombatState {
                 s.initialized = true;
                 s.max_health = crate::production::max_health(world, a.kingdom, a.def);
                 s.next_think = now + (a.id % 16) as f32 * DT;
+                let def = world.data.def(a.def);
+                // Mover +0x28 as 576C70 sets it at creation: the definition's speed
+                // through the technologies (stance and formation come later).
+                let factor = a.kingdom.map_or(1.0, |k| crate::production::multiply_factor(world, k, &def.properties, "SPEED_MAX"));
+                let extras = self.extras.as_deref().expect("definition tables");
+                s.performer_value = performer_value_of(def, s.max_health, def.speed_max * factor, &extras.means, self.rules.as_deref().expect("definition tables"));
                 // 57F4D0: every turret starts at yaw_start - pi/2 (wrapped once).
                 s.turrets = world.data.def(a.def).turrets.iter().map(|t| {
                     let yaw = wrap_once(t.yaw_start - FRAC_PI_2);
@@ -1050,6 +1166,7 @@ impl CombatState {
                 }).collect();
             }
             s.targeted = false;
+            s.defended_by.clear();
         }
         for a in &world.actors {
             if a.alive
@@ -1067,6 +1184,7 @@ impl CombatState {
         for o in &world.orgs {
             let s = &mut self.orgs[o.id as usize];
             s.engaged_by.clear();
+            s.defended_by.clear();
             if !s.initialized {
                 s.initialized = true;
                 s.attack_efficiency = 1.0;
@@ -1087,7 +1205,16 @@ impl CombatState {
         }
         for o in &world.orgs {
             let leader = o.members.iter().find_map(|&m| world.actors.get(m as usize).filter(|a| a.alive && !a.removed));
-            self.orgs[o.id as usize].position = leader.map_or(o.anchor, |a| a.pos.truncate());
+            let s = &mut self.orgs[o.id as usize];
+            s.position = leader.map_or(o.anchor, |a| a.pos.truncate());
+            // +64: 57CBA0 and 57CD70 count the members of the layout's morale_line
+            // slots (a definition without a layout: every member).
+            let line = &world.data.def(o.def).slot_morale_line;
+            let counts = |m: ActorId| {
+                let a = world.actors.get(m as usize).filter(|a| a.alive && !a.removed);
+                a.is_some_and(|a| line.is_empty() || a.slot.is_some_and(|i| line.get(i as usize).copied().unwrap_or(false)))
+            };
+            s.living = o.members.iter().filter(|&&m| counts(m)).count() as i32;
         }
         for i in 0..self.orgs.len() {
             if !world.orgs.get(i).is_some_and(|o| o.alive) {
@@ -1099,6 +1226,26 @@ impl CombatState {
                     && !s.engaged_by.contains(&(i as OrgId))
                 {
                     s.engaged_by.push(i as OrgId);
+                }
+            }
+        }
+        // 567140 -> 4D3990: a Defender's ability on the target's +118.
+        for a in 0..self.actors.len() {
+            if self.actors[a].defender.targets.iter().all(|t| t.1.is_none()) {
+                continue;
+            }
+            for t in self.actors[a].defender.engaged_with(world) {
+                match t {
+                    TargetRef::Org(o) => {
+                        if let Some(s) = self.orgs.get_mut(o as usize) {
+                            s.defended_by.push(a as ActorId);
+                        }
+                    }
+                    TargetRef::Actor(x) => {
+                        if let Some(s) = self.actors.get_mut(x as usize) {
+                            s.defended_by.push(a as ActorId);
+                        }
+                    }
                 }
             }
         }
@@ -1129,6 +1276,11 @@ pub(crate) fn target_alive(world: &World, t: TargetRef) -> bool {
 }
 
 /// A live member (the leader first) standing for a target organization.
+/// (orders) `representative` for reports outside the crate.
+pub fn representative_public(world: &World, t: TargetRef) -> Option<ActorId> {
+    representative(world, t)
+}
+
 pub(crate) fn representative(world: &World, t: TargetRef) -> Option<ActorId> {
     match t {
         TargetRef::Org(o) => world.orgs.get(o as usize)?.members.iter().copied().find(|&m| alive(world, m)),
@@ -1248,6 +1400,14 @@ pub(crate) fn type_factor(world: &World, st: &CombatState, damage_type: u32, tar
     if let Some(m) = crate::special_ops::mods(world, target.id) {
         factor -= m.resist.get(damage_type as usize).copied().unwrap_or(0.0);
     }
+    // 501650 / 502440: the terrain's RESIST_DAMAGE and the technologies' too.
+    let resist = |m: &crate::data::Modifier| m.kind.eq_ignore_ascii_case("RESIST_DAMAGE") && m.damage_type == Some(damage_type);
+    for p in terrain_properties(world, target) {
+        factor -= p.modifiers.iter().filter(|m| resist(m)).map(|m| m.amount).sum::<f32>();
+    }
+    if let Some(k) = target.kingdom {
+        factor -= crate::production::technology_modifiers(world, k, &def.properties).filter(|m| resist(m)).map(|m| m.amount).sum::<f32>();
+    }
     factor.max(st.rules().clamp_multiply)
 }
 
@@ -1262,7 +1422,36 @@ fn target_defense(world: &World, st: &CombatState, target: &crate::world::Actor)
     if let Some(m) = crate::special_ops::mods(world, target.id) {
         dv += m.dv;
     }
+    // 501B10 is the thing's whole modifier state: its properties, its owner's
+    // technologies (4E3AD0 -> 4CEF10) and the terrain under it (4D4130).
+    dv += crate::zones::modifier_add(world, crate::zones::Key::Actor(target.id), "DV").unwrap_or(0.0);
+    for p in terrain_properties(world, target) {
+        dv += p.modifiers.iter().filter(|m| add_of(m, "DV")).map(|m| m.amount).sum::<f32>();
+    }
     modified_defense(def.defense, dv, st.rules().clamp_add)
+}
+
+fn add_of(m: &crate::data::Modifier, attribute: &str) -> bool {
+    m.kind.eq_ignore_ascii_case("ADD") && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(attribute))
+}
+
+/// `4D4130`: the properties of the terrain under a thing that may take them (gates:
+/// a Mover, not attached to a carrier), each applying when the thing has its
+/// required_properties (`4CEF10`). The original keeps them from tile change to tile
+/// change on the thing; this reads the tile at the time of asking.
+fn terrain_properties<'a>(world: &'a World, a: &'a crate::world::Actor) -> impl Iterator<Item = &'a crate::data::PropertyDef> {
+    let def = world.data.def(a.def);
+    let terrain = (def.speed_max > 0.0)
+        .then(|| world.map.cell_of(a.pos.truncate()))
+        .flatten()
+        .and_then(|(x, y)| world.map.cell_variation.get((y * world.map.width + x) as usize))
+        .and_then(|&v| world.map.variations.get(v as usize))
+        .and_then(|id| world.data.terrain.find(id));
+    terrain
+        .into_iter()
+        .flat_map(|t| t.properties.iter())
+        .filter_map(|p| world.data.property(p))
+        .filter(move |p| p.required_properties.iter().all(|r| def.properties.iter().any(|q| q.eq_ignore_ascii_case(r))))
 }
 
 fn shooter_power(world: &World, st: &CombatState, shooter: &crate::world::Actor, w: &Weapon) -> f32 {
@@ -1273,6 +1462,10 @@ fn shooter_power(world: &World, st: &CombatState, shooter: &crate::world::Actor,
         av += m.av;
         kind += if w.projectile.is_some() { m.av_ranged } else { m.av_melee };
     }
+    // 501A30 / 501AA0 read the thing's whole modifier state (see `target_defense`).
+    let key = crate::zones::Key::Actor(shooter.id);
+    av += crate::zones::modifier_add(world, key, "AV").unwrap_or(0.0);
+    kind += crate::zones::modifier_add(world, key, if w.projectile.is_some() { "AV_RANGED" } else { "AV_MELEE" }).unwrap_or(0.0);
     modified_power(w.damage, kind, av, st.rules().clamp_add)
 }
 
@@ -1287,6 +1480,46 @@ fn shooter_offense(st: &CombatState, shooter: &crate::world::Actor) -> f32 {
 /// Decision status per weapon: 0 ready, 1 waiting for recharge, 2 pursue
 /// (out of range), 3 unusable (target filter or minimum range: "actors will
 /// not back up to get into range").
+/// The shape of a thing for the range tests (actor virtual `+14`: ObjectData
+/// `+50`) with its transform.
+fn range_placement(world: &World, a: ActorId) -> aa_spatial::geometry::Placement {
+    let x = &world.actors[a as usize];
+    let w = world.data.def(x.def).soft_shape;
+    let dir = Vec2::from_angle(x.facing);
+    aa_spatial::geometry::Placement {
+        shape: aa_spatial::collision::Shape { kind: w[0], radius_bits: w[1], bounds: [w[2], w[3], w[4], w[5]] },
+        facing: [dir.x.to_bits(), dir.y.to_bits()],
+        position: [x.pos.x.to_bits(), x.pos.y.to_bits()],
+    }
+}
+
+/// `4EE800` (aa_spatial::range::actors_in_range) at PC53: the shapes of `source`
+/// and `target` within `range`; `inverted` is the minimum-range mode. Two points
+/// or circles take `46EB70` in the x87 helpers, for the cost of a shot's every
+/// update; a rectangle goes through the port (`46E2D0`).
+pub(crate) fn in_range(world: &World, source: ActorId, target: ActorId, range: f32, inverted: bool) -> bool {
+    let (a, b) = (range_placement(world, target), range_placement(world, source));
+    if a.shape.kind > 1 || b.shape.kind > 1 {
+        return aa_spatial::range::shapes_in_range(&b, &a, range.to_bits(), inverted, aa_numeric::Precision::Double53).unwrap_or(false);
+    }
+    // 46F100: the higher kind, then the larger radius, is the primary.
+    let (ra, rb) = (f32::from_bits(a.shape.radius_bits), f32::from_bits(b.shape.radius_bits));
+    let swap = b.shape.kind < a.shape.kind || (a.shape.kind == b.shape.kind && rb < ra);
+    let (primary, other, rp, ro) = if swap { (&a, &b, ra, rb) } else { (&b, &a, rb, ra) };
+    let v = |bits: u32| ld(f32::from_bits(bits));
+    let dy = fstp(x87::sub(v(other.position[1]), v(primary.position[1])));
+    let dx = fstp(x87::sub(v(other.position[0]), v(primary.position[0])));
+    let distance = x87::add(x87::mul(ld(dy), ld(dy)), x87::mul(ld(dx), ld(dx)));
+    let radius = match primary.shape.kind {
+        0 => ld(range),
+        _ if other.shape.kind == 0 => x87::add(ld(range), ld(rp)),
+        _ => x87::add(x87::add(ld(ro), ld(rp)), ld(range)),
+    };
+    let threshold = x87::mul(radius, radius);
+    if inverted { threshold <= distance } else { threshold >= distance }
+}
+
+/// [`status_on`] at a distance already known (a repair's reach, `tasks`).
 fn weapon_status(w: &Weapon, recharge_left: f32, distance: f32) -> u8 {
     if w.min_range > 0.0 && distance < w.min_range {
         3
@@ -1296,6 +1529,134 @@ fn weapon_status(w: &Weapon, recharge_left: f32, distance: f32) -> u8 {
         1
     } else {
         0
+    }
+}
+
+/// `530E50`'s value from the draw (aa_mind::construct): `u * 2 - 1`, written to
+/// every Performer ability's `+1C` (the element Mind's `+1B8`).
+pub(crate) fn mind_jitter(word: u32) -> f32 {
+    let mut number = f64::from(word as i32);
+    if word & 0x8000_0000 != 0 {
+        number = x87::add(number, f64::from_bits(0x41f0_0000_0000_0000));
+    }
+    let unit = x87::mul(number, f64::from_bits(0x3df0_0000_0010_0000));
+    fstp(x87::sub(x87::add(unit, unit), 1.0))
+}
+
+/// `4C8270` stored: the ability's range through its modifiers (`4BE910`: a
+/// projectile's PROJECTILE_ABILITY_RANGE `501D50`, flag bit 3 BOMBARD_ABILITY_RANGE
+/// `501DB0`, each floored as `501C30`) plus its local `+1C` fuzzy_range times the
+/// Mind's jitter (ability `+1C`).
+pub(crate) fn effective_range(world: &World, a: ActorId, w: &Weapon) -> f32 {
+    let clamp = world.data.rule_ci("ModifierAttributeClampAdd").unwrap_or(1.0);
+    let mut range = w.range;
+    if w.projectile.is_some()
+        && let Some(add) = crate::zones::modifier_add(world, crate::zones::Key::Actor(a), "PROJECTILE_ABILITY_RANGE")
+    {
+        range = crate::zones::clamp_add(range, add, clamp);
+    }
+    if w.flags & 8 != 0
+        && let Some(add) = crate::zones::modifier_add(world, crate::zones::Key::Actor(a), "BOMBARD_ABILITY_RANGE")
+    {
+        range = crate::zones::clamp_add(range, add, clamp);
+    }
+    let jitter = world.books.actor(a).map_or(0.0, |b| b.ability_jitter);
+    fstp(x87::add(x87::mul(ld(w.fuzzy_range), ld(jitter)), ld(range)))
+}
+
+/// What `4C8F20` answers for the distance and the recharge, in `5340C0`'s terms:
+/// 3 inside the minimum range, 2 out of range, 1 recharging, 0 ready.
+fn status_on(world: &World, shooter: ActorId, target: ActorId, w: &Weapon, recharge_left: f32) -> u8 {
+    if w.min_range > 0.0 && !in_range(world, shooter, target, w.min_range, true) {
+        3
+    } else if !in_range(world, shooter, target, effective_range(world, shooter, w), false) {
+        2
+    } else if recharge_left > 0.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// `4C8F20(context, 1)` for ability `weapon` of `source` on `target`, phase 0:
+/// 1 not eligible (`4C8740`), 2 inside the minimum range, 3 outside the turret's
+/// arc, 5 out of range, 7 no mana, 8 recharging, 0 usable. The payment (4) and
+/// the summon limits (9, 10) have no source on a weapon.
+pub(crate) fn admission(world: &World, st: &CombatState, source: ActorId, weapon: usize, target: ActorId) -> u32 {
+    let def = world.data.def(world.actors[source as usize].def);
+    let Some(w) = def.weapons.get(weapon) else { return 1 };
+    let Some(t) = world.actors.get(target as usize).filter(|t| t.alive && !t.removed) else { return 1 };
+    if !world.data.def(t.def).targetable || !admits(world, st, source, w, target) {
+        return 1;
+    }
+    if w.min_range > 0.0 && !in_range(world, source, target, w.min_range, true) {
+        return 2;
+    }
+    if !in_turret_arc(world, source, w, t.pos.truncate()) {
+        return 3;
+    }
+    if !in_range(world, source, target, effective_range(world, source, w), false) {
+        return 5;
+    }
+    if world.actors[source as usize].combat.recharge.get(weapon).is_some_and(|&r| r > 0.0) {
+        return 8;
+    }
+    0
+}
+
+/// `4C84B0`: the ability's turret, if it turns, can bear on `point`.
+pub(crate) fn in_turret_arc(world: &World, source: ActorId, w: &Weapon, point: Vec2) -> bool {
+    let x = &world.actors[source as usize];
+    let Some(t) = usize::try_from(w.turret).ok().and_then(|i| world.data.def(x.def).turrets.get(i)) else { return true };
+    !turret_can_turn(t) || turret_in_arc(t, x.pos.truncate(), x.facing, point)
+}
+
+/// `4C81D0` then `57E730`: a turret that turns is on `target`, one step a call.
+pub(crate) fn turret_ready(world: &World, st: &mut CombatState, id: usize, weapon: usize, target: ActorId) -> bool {
+    let data = world.data.clone();
+    let def = data.def(world.actors[id].def);
+    let Some(w) = def.weapons.get(weapon) else { return false };
+    let Some((i, td)) = usize::try_from(w.turret).ok().and_then(|i| def.turrets.get(i).map(|t| (i, t))) else { return true };
+    if !turret_can_turn(td) {
+        return true;
+    }
+    let point = world.actors[target as usize].pos.truncate();
+    turret_in_arc(td, world.actors[id].pos.truncate(), world.actors[id].facing, point) && turret_aim(world, st, id, i, td, point)
+}
+
+/// `4D1120`: can be taken by damage: not under construction, not a block that
+/// goes with a city (Structure `+34`), not a city, and the Body says captureable.
+pub(crate) fn capturable(world: &World, a: ActorId) -> bool {
+    let Some(x) = world.actors.get(a as usize) else { return false };
+    let d = world.data.def(x.def);
+    let b = world.books.actor(a);
+    d.captureable && !d.city && !b.is_some_and(|b| b.constructing || b.block_of.is_some())
+}
+
+/// The ability's use (`57E030` -> `4C9E90` -> `4C9550`): the recharge, the event,
+/// and a projectile or the hit.
+pub(crate) fn use_weapon(world: &mut World, st: &mut CombatState, id: ActorId, weapon: usize, target: ActorId) {
+    let now = world.time;
+    let data = world.data.clone();
+    let i = id as usize;
+    let w = &data.def(world.actors[i].def).weapons[weapon];
+    // 501560: the recharge divided by the RECHARGE_TIME multiplier.
+    let multiplier = crate::special_ops::mods(world, id).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
+    if let Some(r) = world.actors[i].combat.recharge.get_mut(weapon) {
+        *r = w.recharge / multiplier;
+    }
+    world.events.push(Event::Fired { shooter: id, target, weapon: weapon as u32 });
+    let point = world.actors[target as usize].pos.truncate();
+    // 0x4C9550 -> 0x4C8CB0: the projectile is a thing, with its id and its draws.
+    let thing = w.projectile.as_deref().and_then(|p| data.find(p)).and_then(|p| crate::creation::projectile(world, p));
+    if w.projectile_speed > 0.0 {
+        let flight = (point - world.actors[i].pos.truncate()).length() / w.projectile_speed;
+        st.projectiles.push(Projectile { shooter: id, weapon, target: Some(target), point, impact_at: now + flight, thing });
+    } else {
+        if let Some(t) = thing {
+            world.ids.removed_transient(t);
+        }
+        deliver(world, st, id, weapon, Some(target), point);
     }
 }
 
@@ -1317,15 +1678,15 @@ struct Decision {
 fn decide(world: &mut World, st: &CombatState, shooter: ActorId, target: ActorId) -> Option<Decision> {
     let data = world.data.clone();
     let def = data.def(world.actors[shooter as usize].def);
-    let distance = world.actors[shooter as usize].pos.truncate().distance(world.actors[target as usize].pos.truncate());
     let bonus = if attacks(world, target, shooter) { st.rules().attacker_bonus } else { 0.0 };
     let mut best: Option<Decision> = None;
     for (i, w) in def.weapons.iter().enumerate() {
-        if !admits(world, st, shooter, w, target) {
+        // The Performer's own list: the Defender's abilities act through its Tick.
+        if w.defender || !admits(world, st, shooter, w, target) {
             continue;
         }
         let left = world.actors[shooter as usize].combat.recharge.get(i).copied().unwrap_or(0.0);
-        let status = weapon_status(w, left, distance);
+        let status = status_on(world, shooter, target, w, left);
         if status == 3 {
             continue;
         }
@@ -1361,7 +1722,7 @@ fn decide(world: &mut World, st: &CombatState, shooter: ActorId, target: ActorId
                 } else if held.range != w.range {
                     held.range > w.range
                 } else {
-                    world.random_u32() & 1 != 0
+                    world.random_u32_at(crate::trace::sites::COMBAT_COIN) & 1 != 0
                 }
             }
         };
@@ -1585,6 +1946,84 @@ fn insert_sorted(list: &mut Vec<EngageTarget>, target: TargetRef, priority: i32)
     list.insert(i, EngageTarget { target, priority });
 }
 
+/// `57A500(target, 1, 1)`: `4D0380` (the target has a Body or an
+/// OrganizationComponent, is not invulnerable and is targetable for this kingdom,
+/// `+84`), its enemy relation to this organization's owner (`+16C` -> `+140`), an
+/// attached member within the operating radius (`578470`), and a member's ability
+/// that could be used on it (`4D4FF0(target, 1, 0)`).
+fn zone_accepts(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+    let kingdom = world.orgs[org as usize].kingdom;
+    let (def, owner) = match t {
+        TargetRef::Org(x) => (world.orgs[x as usize].def, Some(world.orgs[x as usize].kingdom)),
+        TargetRef::Actor(a) => (world.actors[a as usize].def, world.actors[a as usize].kingdom),
+    };
+    let d = world.data.def(def);
+    let org_target = matches!(t, TargetRef::Org(_));
+    if !org_target && !(d.health > 0.0 && !d.invulnerable && d.targetable) {
+        return false;
+    }
+    st.hostile(owner, Some(kingdom)) && within_operating(world, st, org, t) && any_member_ability(world, st, org, t)
+}
+
+/// `57A500(target, 0, 0)`, the kill state's test (0x51D920): as [`zone_accepts`]
+/// without the operating radius. When it refuses, the kill and move handlers
+/// (0x527FB0, 0x527E30) fall back to a Move at the thing (0x520320). (orders)
+pub(crate) fn kill_accepts(world: &mut World, org: OrgId, target: ActorId) -> bool {
+    let mut st = std::mem::take(&mut world.combat);
+    st.prepare(world);
+    let kingdom = world.orgs[org as usize].kingdom;
+    let t = &world.actors[target as usize];
+    let d = world.data.def(t.def);
+    let accepted = d.health > 0.0
+        && !d.invulnerable
+        && d.targetable
+        && st.hostile(t.kingdom, Some(kingdom))
+        && any_member_ability(world, &st, org, TargetRef::Actor(target));
+    world.combat = st;
+    accepted
+}
+
+/// `4D4FF0(target, 1, 0)` on the organization: some member's Performer ability is
+/// eligible (`4C8740`), bears (`4C84B0`) and is past its minimum range (`4C8460`)
+/// on the target or, for an organization, on a member of it. `57E920` has no
+/// maximum range here (its last argument is 0).
+fn any_member_ability(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+    let on = |m: ActorId, x: ActorId| {
+        let def = world.data.def(world.actors[m as usize].def);
+        let point = world.actors[x as usize].pos.truncate();
+        def.weapons.iter().any(|w| !w.defender && admits(world, st, m, w, x) && in_turret_arc(world, m, w, point) && (w.min_range <= 0.0 || in_range(world, m, x, w.min_range, true)))
+    };
+    world.orgs[org as usize].members.iter().any(|&m| {
+        alive(world, m)
+            && match t {
+                TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&y| alive(world, y) && on(m, y)),
+                TargetRef::Actor(x) => alive(world, x) && on(m, x),
+            }
+    })
+}
+
+/// `57AB70` (from `514E40`): an enemy, `who`, its organization when attached
+/// (`514DA0`), entered this organization's ZOC, or the ZOC moved over it.
+/// Accepted by `57A500`, it goes to the Mind (`524C10`) when the behaviour is
+/// aggressive (`+8D`) or when it is the Mind's current target (virtual `+4C`).
+pub(crate) fn zone_entered(world: &mut World, st: &mut CombatState, org: OrgId, who: crate::zones::Key) {
+    let i = org as usize;
+    if !world.orgs.get(i).is_some_and(|o| o.alive) || st.orgs.get(i).is_none_or(|s| s.destroyed || s.routing.is_some()) {
+        return;
+    }
+    let t = match who {
+        crate::zones::Key::Actor(a) => TargetRef::Actor(a),
+        crate::zones::Key::Org(o) => TargetRef::Org(o),
+    };
+    if !target_alive(world, t) || !zone_accepts(world, st, org, t) {
+        return;
+    }
+    if !behavior(world, st, org).0 && st.orgs[i].explicit != Some(t) {
+        return;
+    }
+    add_engage_target(world, st, org, t);
+}
+
 /// `57A500` with members (`578470`): some attached member of the target is
 /// within the operating radius of the organization position.
 fn within_operating(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
@@ -1599,25 +2038,32 @@ fn within_operating(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -
         let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
         alive(world, a) && x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= r2
     };
+    let attached = |m: ActorId| world.fog.engine.as_ref().and_then(|e| e.attached(m)) != Some(false);
     match t {
-        TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&m| near(m)),
+        TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&m| attached(m) && near(m)),
         TargetRef::Actor(a) => near(a),
     }
 }
 
-/// `57A500` relation: an enemy that some member weapon can target (`4D4FF0`).
+/// `521060`'s `522CC0` (Mind virtual `+A0`): not a city (`+D4`) nor a block that
+/// goes with one (`+94 +34`, `51D560`); the Mind's kill target is allowed (`+D0`);
+/// a harmless Body neither captureable nor destructible is refused.
+pub(crate) fn mind_can_target(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+    let TargetRef::Actor(a) = t else { return true };
+    let Some(x) = world.actors.get(a as usize) else { return false };
+    let d = world.data.def(x.def);
+    if d.city || world.books.actor(a).is_some_and(|b| b.block_of.is_some_and(|c| alive(world, c))) {
+        return false;
+    }
+    if st.orgs[org as usize].explicit == Some(t) {
+        return true;
+    }
+    !(harmless(world, a) && d.health > 0.0 && !d.destructible && !d.captureable)
+}
+
+/// `521060` after the list test: `522CC0` and `4D4FF0(target, 1, 0)`.
 fn engageable(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
-    let o = &world.orgs[org as usize];
-    if !target_alive(world, t) || !st.hostile(Some(o.kingdom), target_kingdom(world, t)) {
-        return false;
-    }
-    let Some(rep) = representative(world, t) else { return false };
-    if !targetable(world, rep) {
-        return false;
-    }
-    o.members.iter().any(|&m| {
-        alive(world, m) && world.data.def(world.actors[m as usize].def).weapons.iter().any(|w| admits(world, st, m, w, rep))
-    })
+    target_alive(world, t) && mind_can_target(world, st, org, t) && any_member_ability(world, st, org, t)
 }
 
 /// `524C10`/`523DD0`: add a target (element resolved to its organization).
@@ -1630,23 +2076,97 @@ pub(crate) fn add_engage_target(world: &World, st: &mut CombatState, org: OrgId,
     true
 }
 
+/// `+8C`: the desired formation's `aggressive` flag (`577F30`, FormationData
+/// `+1A`), set with the formation `57BFF0` and at `57C870`; no formation is 0.
+fn desired_aggressive(world: &World, org: OrgId) -> bool {
+    let def = world.data.def(world.orgs[org as usize].def);
+    match crate::player_orders::desired_formation(world, org).and_then(|f| def.formations.get(f)) {
+        Some(f) => f.aggressive,
+        // a definition with no layout formations: no +70
+        None => def.formations.is_empty(),
+    }
+}
+
 /// Whether the organization's current Mind behavior is aggressive (`+8D`,
-/// from the current Mind state: resting DESIRED, attack-move and attacking
-/// AGGRESSIVE, a plain move PASSIVE) and whether its Mind is free (`578E90`).
-fn behavior(world: &World, st: &CombatState, org: OrgId) -> (bool, bool) {
+/// `577F30`: the state's behavior_required, DESIRED reading `+8C`) and whether
+/// its Mind is free (`578E90`). actor_states.tgi: mind_moving, mind_resting,
+/// mind_exploring DESIRED; mind_attacking, mind_engaged, mind_guarding,
+/// mind_bombard, mind_reforming, mind_exhausted AGGRESSIVE; mind_routing,
+/// mind_retreating, mind_repairing, mind_building, mind_unpacking PASSIVE.
+pub(crate) fn behavior(world: &World, st: &CombatState, org: OrgId) -> (bool, bool) {
     let s = &st.orgs[org as usize];
     if s.routing.is_some() {
         return (false, false);
     }
-    if s.auto_order.is_some() {
+    if s.auto_order.is_some() || s.reform.is_some() || s.exhausted_state {
         return (true, true);
     }
+    match s.task {
+        Some(tasks::Task::Bombard(_)) => return (true, false),
+        Some(_) => return (false, false),
+        None => {}
+    }
+    if crate::orders::retreating(world, org) {
+        return (false, false);
+    }
+    if crate::orders::guarding(world, org) {
+        return (true, false);
+    }
+    let desired = desired_aggressive(world, org);
     match &world.orgs[org as usize].order {
-        Order::Idle => (true, true),
-        Order::Move { attack_move, .. } => (*attack_move, false),
+        Order::Idle => (desired, true),
+        // 51D8F0: a move command's Kill state is mind_moving, no behavior_required.
+        Order::Attack { .. } | Order::Move { .. } if s.kill_is_move => (desired, false),
+        Order::Move { attack_move, .. } => (*attack_move || desired, false),
         Order::Attack { .. } => (true, false),
         Order::Deploy { .. } => (false, false),
     }
+}
+
+/// `577FD0` Organization `+AC`: the ZOC's radius, ActorData `+2FC` through the
+/// CONTROL_RANGE multiply of its modifiers (`45D4C0` -> `501520`). In the shipped
+/// data those are the states': mind_guarding +25%, mind_exhausted -25%.
+pub(crate) fn control_radius(world: &World, st: &CombatState, org: OrgId) -> f32 {
+    let s = &st.orgs[org as usize];
+    let mut sum = 0.0f32;
+    let mut state = |id: &str| {
+        let Some(def) = world.data.actor_states.get(id) else { return };
+        for p in def.properties.iter().filter_map(|p| world.data.property(p)) {
+            for m in p.modifiers.iter().filter(|m| m.kind.eq_ignore_ascii_case("MULTIPLY") && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("CONTROL_RANGE"))) {
+                sum += m.amount;
+            }
+        }
+    };
+    if crate::orders::guarding(world, org) && s.auto_order.is_none() {
+        state("mind_guarding");
+    }
+    if s.exhausted {
+        state("mind_exhausted");
+    }
+    let clamp = world.data.rule_ci("ModifierAttributeClampMultiply").unwrap_or(0.05);
+    world.data.def(world.orgs[org as usize].def).control_range * (1.0 + sum).max(clamp)
+}
+
+/// `57CD70` for the member an unpack replaces (`4D5EA0` -> `4F6760` destroys the
+/// old thing): the MoraleDeathFactor loss of its `+2C0`, as for a death.
+pub(crate) fn member_replaced(world: &mut World, org: OrgId, old_def: DefId) {
+    let mut st = std::mem::take(&mut world.combat);
+    st.prepare(world);
+    let factor = st.rules().morale_death_factor;
+    crate::morale::lose(world, &mut st, org, world.data.def(old_def).morale_value * factor);
+    world.combat = st;
+}
+
+/// `577F30`'s tail: `+8E` is set when `+8D` turns on, cleared when it is off.
+fn track_behavior(world: &World, st: &mut CombatState, org: OrgId) {
+    let now = behavior(world, st, org).0;
+    let s = &mut st.orgs[org as usize];
+    if !now {
+        s.rescan_8e = false;
+    } else if !s.behavior_8d {
+        s.rescan_8e = true;
+    }
+    s.behavior_8d = now;
 }
 
 // ---------------------------------------------------------------------------
@@ -1655,11 +2175,13 @@ fn behavior(world: &World, st: &CombatState, org: OrgId) -> (bool, bool) {
 pub fn tick(world: &mut World) {
     let mut st = std::mem::take(&mut world.combat);
     st.prepare(world);
+    expire_attacked_by(world, &mut st);
     queue_other_deaths(world, &mut st);
     st.grid.build(world);
     for id in 0..world.orgs.len() as OrgId {
         org_think(world, &mut st, id);
     }
+    world.orders.move_onto.clear();
     lone_think(world, &mut st);
     fire(world, &mut st);
     process_deaths(world, &mut st);
@@ -1741,14 +2263,28 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     }
     let now = world.time;
     // A new player/opponent order replaces an engagement begun by the
-    // organization itself; a plain move is a retreat (579AB0, in morale.rs)
-    // and empties the engage list.
+    // organization itself; a plain move empties the engage list.
+    let command = st.orgs[i].seen_order.as_ref() != Some(&world.orgs[i].order) && st.orgs[i].auto_order.as_ref() != Some(&world.orgs[i].order);
     if let Some(auto) = st.orgs[i].auto_order.clone()
         && world.orgs[i].order != auto
     {
         st.orgs[i].auto_order = None;
         st.orgs[i].saved_order = None;
     }
+    if command {
+        st.orgs[i].kill_is_move = crate::orders::take_move_onto(world, id);
+    }
+    if let Some((city, to)) = st.orgs[i].city_target {
+        let walking = matches!(world.orgs[i].order, Order::Move { to: t, attack_move: true } if t.distance_squared(to) < 1.0);
+        if !walking {
+            st.orgs[i].city_target = None;
+        } else if !alive(world, city) || !st.hostile(Some(world.orgs[i].kingdom), world.actors[city as usize].kingdom) {
+            st.orgs[i].city_target = None;
+            world.orgs[i].order = Order::Idle;
+        }
+    }
+    st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
+    track_behavior(world, st, id);
     if st.orgs[i].routing.is_some() {
         return;
     }
@@ -1757,15 +2293,11 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     if tasks::org_think(world, st, id) {
         return;
     }
-    if st.orgs[i].auto_order.is_none()
-        && matches!(world.orgs[i].order, Order::Move { attack_move: false, .. } | Order::Deploy { .. })
-    {
-        let was_engaged = !st.orgs[i].engage.is_empty();
+    if command && matches!(world.orgs[i].order, Order::Move { attack_move: false, .. } | Order::Deploy { .. }) {
+        // (orders) only the retreat command pays the penalty (0x51D1E0, in
+        // `crate::orders`): the move handler 0x527E30 does not.
         st.orgs[i].engage.clear();
         st.orgs[i].explicit = None;
-        if was_engaged {
-            crate::morale::retreat_penalty(world, st, id);
-        }
     }
     // Explicit attack (cai_kill): the target, resolved to its organization,
     // is the current kill target (priority 6 with KillTargetIsHighestPriority).
@@ -1787,12 +2319,9 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
                 {
                     world.orgs[i].order = Order::Attack { target: rep };
                 }
-                if st.orgs[i].explicit != Some(t) {
-                    st.orgs[i].explicit = Some(t);
-                    st.orgs[i].engage.retain(|n| n.target != t);
-                    let p = regiment_priority(world, st, id, t);
-                    insert_sorted(&mut st.orgs[i].engage, t, p);
-                }
+                // 51D920: the kill state. It walks (520730 -> the Move state); the
+                // target joins the engage list when it enters the ZOC (57AB70).
+                st.orgs[i].explicit = Some(t);
             }
         }
         None => st.orgs[i].explicit = None,
@@ -1800,40 +2329,12 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     let think = now >= st.orgs[i].next_think;
     if think {
         st.orgs[i].next_think = now + ENGAGE_THINK_SECONDS;
-        let (aggressive, _) = behavior(world, st, id);
-        // Zone entry (514E40 -> 57AB70): enemies inside the control zone.
-        if aggressive {
-            let def = world.data.def(world.orgs[i].def);
-            let mut radius = def.control_range;
-            if st.orgs[i].exhausted {
-                radius *= 0.75; // actor_state_exhausted: control_range x(1 - .25)
-            }
-            let pos = st.orgs[i].position;
-            let mut found = std::mem::take(&mut st.scratch);
-            st.grid.query(pos, radius, &mut found);
-            let r2 = radius * radius;
-            for &a in &found {
-                let actor = &world.actors[a as usize];
-                if actor.pos.truncate().distance_squared(pos) > r2
-                    || !st.hostile(Some(world.orgs[i].kingdom), actor.kingdom)
-                    || !targetable(world, a)
-                {
-                    continue;
-                }
-                let t = target_ref(world, a);
-                if within_operating(world, st, id, t) {
-                    add_engage_target(world, st, id, t);
-                }
-            }
-            st.scratch = found;
-        }
         // 523EA0 refresh: drop lost targets and those outside the operating radius.
         let mut list = std::mem::take(&mut st.orgs[i].engage);
-        let explicit = st.orgs[i].explicit;
         list.retain(|n| {
             target_alive(world, n.target)
                 && st.hostile(Some(world.orgs[i].kingdom), target_kingdom(world, n.target))
-                && (Some(n.target) == explicit || within_operating(world, st, id, n.target))
+                && within_operating(world, st, id, n.target)
         });
         st.orgs[i].engage = list;
     }
@@ -1843,7 +2344,9 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
         Some(t) if st.orgs[i].explicit.is_none() => {
             if let Some(rep) = representative(world, t) {
                 let order = Order::Attack { target: rep };
-                let resting_or_attack_move = matches!(world.orgs[i].order, Order::Idle | Order::Move { attack_move: true, .. });
+                // 524A00: the engage state takes over from sleep and from a move
+                // (52A810(3): its priority), and the move goes on afterwards.
+                let resting_or_attack_move = matches!(world.orgs[i].order, Order::Idle | Order::Move { .. });
                 if st.orgs[i].auto_order.is_none() && resting_or_attack_move {
                     st.orgs[i].saved_order = Some(world.orgs[i].order.clone());
                 }
@@ -1900,13 +2403,8 @@ fn assign_members(world: &mut World, st: &mut CombatState, id: OrgId) {
     };
     let mut candidates = std::mem::take(&mut st.scratch);
     candidates.clear();
-    // Playability bridge: the movement system holds an attacking regiment
-    // at its weapon range (not the original CAI kill move, which walks on
-    // until the target enters the control zone), so the explicit target's
-    // members stay candidates beyond the operational range.
-    let explicit = st.orgs[i].explicit;
     for n in &st.orgs[i].engage {
-        let reach = |world: &World, a: ActorId| Some(n.target) == explicit || within(world, a);
+        let reach = |world: &World, a: ActorId| within(world, a);
         match n.target {
             TargetRef::Org(o) => {
                 for &m in &world.orgs[o as usize].members {
@@ -1947,7 +2445,7 @@ fn assign_members(world: &mut World, st: &mut CombatState, id: OrgId) {
         if chosen.is_some() && !kill_active {
             // 536E10 -> 52E830 engage reaction delay (the kill state was not
             // active): u * EngageReactionTimeRange.
-            let delay = (world.random() * st.rules().engage_reaction_range).max(EPSILON);
+            let delay = (world.random_at(crate::trace::sites::ENGAGE_REACTION) * st.rules().engage_reaction_range).max(EPSILON);
             st.actors[m as usize].ready_at = now + delay;
         }
         world.actors[m as usize].combat.target = chosen;
@@ -1971,7 +2469,8 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
         let data = world.data.clone();
         let a = &world.actors[id as usize];
         let def = data.def(a.def);
-        if def.weapons.is_empty() || matches!(def.class, Some(DefClass::Truck)) {
+        // The Defender's abilities have their own list and Tick (`defender`).
+        if !def.weapons.iter().any(|w| !w.defender) || matches!(def.class, Some(DefClass::Truck)) {
             continue;
         }
         let current_ok = a.combat.target.is_some_and(|t| valid_target(world, st, id, t));
@@ -1988,7 +2487,7 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
                 ordered = Some(target);
             }
             _ => {
-                let range = def.weapons.iter().map(|w| w.range).fold(0.0f32, f32::max);
+                let range = def.weapons.iter().filter(|w| !w.defender).map(|w| w.range).fold(0.0f32, f32::max);
                 let pos = a.pos.truncate();
                 st.grid.query(pos, range, &mut candidates);
                 candidates.retain(|&c| world.actors[c as usize].pos.truncate().distance_squared(pos) <= range * range);
@@ -2000,7 +2499,7 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
         st.scratch = candidates;
         let prev = world.actors[id as usize].combat.target;
         if chosen.is_some() && prev.is_none() {
-            let delay = (world.random() * st.rules().engage_reaction_range).max(EPSILON);
+            let delay = (world.random_at(crate::trace::sites::ENGAGE_REACTION) * st.rules().engage_reaction_range).max(EPSILON);
             st.actors[id as usize].ready_at = now + delay;
         }
         world.actors[id as usize].combat.target = chosen;
@@ -2067,35 +2566,16 @@ fn fire(world: &mut World, st: &mut CombatState) {
         // 57F290 -> 57EE40: an ability with a turret that can turn waits in
         // the aiming state until 57E730 has the turret on the target (one
         // yaw_rotation_per_sec step a tick); the use (57ED20) follows.
-        if let Some(t) = usize::try_from(w.turret).ok().and_then(|i| data.def(world.actors[id].def).turrets.get(i).map(|t| (i, t)))
-            && turret_can_turn(t.1)
-        {
-            let (i, td) = t;
-            let point = world.actors[target as usize].pos.truncate();
-            if !turret_in_arc(td, world.actors[id].pos.truncate(), world.actors[id].facing, point) {
-                continue;
-            }
-            if !turret_aim(world, st, id, i, td, point) {
-                continue;
-            }
+        if !turret_ready(world, st, id, d.weapon, target) {
+            continue;
         }
-        // 501560: the recharge divided by the RECHARGE_TIME multiplier.
-        let multiplier = crate::special_ops::mods(world, id as ActorId).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
-        world.actors[id].combat.recharge[d.weapon] = w.recharge / multiplier;
-        world.events.push(Event::Fired { shooter: id as ActorId, target, weapon: d.weapon as u32 });
         world.set_activity(id as ActorId, Activity::Attacking);
         // 57F290: face the target when not moving (turrets turn on their own).
         let delta = world.actors[target as usize].pos.truncate() - world.actors[id].pos.truncate();
         if w.turret < 0 && world.actors[id].motion.velocity.length_squared() < 1e-4 && delta.length_squared() > 0.01 {
             world.actors[id].facing = delta.y.atan2(delta.x);
         }
-        let point = world.actors[target as usize].pos.truncate();
-        if w.projectile_speed > 0.0 {
-            let flight = delta.length() / w.projectile_speed;
-            st.projectiles.push(Projectile { shooter: id as ActorId, weapon: d.weapon, target: Some(target), point, impact_at: now + flight });
-        } else {
-            deliver(world, st, id as ActorId, d.weapon, Some(target), point);
-        }
+        use_weapon(world, st, id as ActorId, d.weapon, target);
     }
     impacts(world, st);
 }
@@ -2212,6 +2692,9 @@ fn impacts(world: &mut World, st: &mut CombatState) {
             continue;
         }
         let p = st.projectiles.swap_remove(i);
+        if let Some(t) = p.thing {
+            world.ids.removed_transient(t);
+        }
         deliver(world, st, p.shooter, p.weapon, p.target, p.point);
     }
 }
@@ -2231,11 +2714,17 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
     }
     let center = present.map_or(point, |t| world.actors[t as usize].pos.truncate());
     let mut found = std::mem::take(&mut st.scratch);
-    st.grid.query(center, w.area, &mut found);
+    st.grid.query(center, w.area + st.extras().max_soft_radius, &mut found);
     // 4C9C90: every actor of the area query the ability admits (4C8740 with
-    // the ability's target filter, which decides friend or enemy).
+    // the ability's target filter, which decides friend or enemy). The query is
+    // 558040 mode 1 (aa_spatial::circle_actors): (soft radius + area)^2 >= dx^2 +
+    // dy^2 at PC53 with dx stored, so a building counts from its own radius.
     found.retain(|&c| {
-        targetable(world, c) && world.actors[c as usize].pos.truncate().distance(center) <= w.area && admits(world, st, shooter, w, c)
+        let x = &world.actors[c as usize];
+        let reach = x87::add(ld(world.data.def(x.def).soft_radius), ld(w.area));
+        let dx = ld(fstp(x87::sub(ld(x.pos.x), ld(center.x))));
+        let dy = x87::sub(ld(x.pos.y), ld(center.y));
+        targetable(world, c) && x87::mul(reach, reach) >= x87::add(x87::mul(dy, dy), x87::mul(dx, dx)) && admits(world, st, shooter, w, c)
     });
     if w.max_targets > 0 {
         found.sort_by(|&a, &b| {
@@ -2251,7 +2740,6 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
     // radius (DefaultRadius here), at least 0; past attenuation_range_min
     // the scale is fstp(1 - (1 - factor) * (distance - min) / (area - min)),
     // clamped to [factor, 1].
-    let radius = st.rules().default_radius;
     let attenuated = w.attenuation_range_min < w.area && w.attenuation_factor_max < f32::from_bits(0x3f7f_f972);
     for &c in &found {
         let mut scale = 1.0;
@@ -2259,7 +2747,7 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
             let p = world.actors[c as usize].pos;
             let (dx, dy) = (x87::sub(ld(center.x), ld(p.x)), x87::sub(ld(center.y), ld(p.y)));
             let length = fstp(x87::add(x87::mul(dx, dx), x87::mul(dy, dy)).sqrt());
-            let mut distance = x87::sub(ld(length), ld(radius));
+            let mut distance = x87::sub(ld(length), ld(world.data.def(world.actors[c as usize].def).soft_radius));
             if distance < 0.0 {
                 distance = 0.0;
             }
@@ -2279,6 +2767,91 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
         apply_hit(world, st, shooter, w, c, scale);
     }
     st.scratch = found;
+}
+
+/// The shooter fires under a Bombard Mind state: its hit is the event kind 3
+/// of `5625C0` (context mode 3, `4C8300`).
+fn bombarding(world: &World, st: &CombatState, shooter: ActorId) -> bool {
+    let of_org = world.actors[shooter as usize].org.and_then(|o| st.orgs.get(o as usize)).is_some_and(|o| matches!(o.task, Some(tasks::Task::Bombard(_))));
+    of_org || st.actors.get(shooter as usize).is_some_and(|a| matches!(a.task, Some(tasks::Task::Bombard(_))))
+}
+
+/// `4D6190(source, weapon)` on `target` (aa_combat::reactions::attacked_by):
+/// the victim is its organization when a member; the attacker its organization
+/// when attached (byte `+1C`), else itself. A new `+130` node lasts
+/// BombardTargetTimeout, plus the weapon's definition `+20` when the victim's
+/// Mind itself bombards (`+6C`), and `4D3A70` lists the victim in the
+/// attacker's `+128`; a known attacker has its time refreshed.
+fn attacked_by(world: &World, st: &mut CombatState, target: ActorId, shooter: ActorId, w: &Weapon) {
+    let victim = target_ref(world, target);
+    let attached = world.fog.engine.as_ref().and_then(|e| e.attached(shooter)).unwrap_or(false);
+    let attacker = match world.actors[shooter as usize].org {
+        Some(o) if attached => TargetRef::Org(o),
+        _ => TargetRef::Actor(shooter),
+    };
+    let now = world.time;
+    let bombards = match victim {
+        TargetRef::Org(o) => st.orgs.get(o as usize).is_some_and(|x| matches!(x.task, Some(tasks::Task::Bombard(_)))),
+        TargetRef::Actor(a) => st.actors.get(a as usize).is_some_and(|x| matches!(x.task, Some(tasks::Task::Bombard(_)))),
+    };
+    let list = match victim {
+        TargetRef::Org(o) => &mut st.orgs[o as usize].attacked_by,
+        TargetRef::Actor(a) => &mut st.actors[a as usize].attacked_by,
+    };
+    if let Some(e) = list.iter_mut().find(|e| e.attacker == attacker) {
+        e.at = now;
+        return;
+    }
+    let mut timeout = world.data.rule_ci("BombardTargetTimeout").unwrap_or(1.0);
+    if bombards {
+        timeout += w.recharge;
+    }
+    list.insert(0, AttackedBy { attacker, at: now, timeout });
+    match attacker {
+        TargetRef::Org(o) => st.orgs[o as usize].bombarding.insert(0, victim),
+        TargetRef::Actor(a) => st.actors[a as usize].bombarding.insert(0, victim),
+    }
+}
+
+/// `4D37E0`: a `+130` node goes when its owner is dead, its attacker gone or
+/// its time over (`at + timeout <= now`), and its attacker's `+128` forgets the
+/// victim (`4F1430`). The original runs it at each Mind update and at a death;
+/// here once per combat tick.
+fn expire_attacked_by(world: &World, st: &mut CombatState) {
+    let now = world.time;
+    let mut over: Vec<(TargetRef, TargetRef)> = Vec::new();
+    let mut sweep = |list: &mut Vec<AttackedBy>, owner: TargetRef, alive_owner: bool| {
+        list.retain(|e| {
+            let keep = alive_owner && target_alive(world, e.attacker) && e.at + e.timeout > now;
+            if !keep {
+                over.push((e.attacker, owner));
+            }
+            keep
+        });
+    };
+    for i in 0..st.actors.len() {
+        if !st.actors[i].attacked_by.is_empty() {
+            let owner = i as ActorId;
+            sweep(&mut st.actors[i].attacked_by, TargetRef::Actor(owner), alive(world, owner));
+        }
+    }
+    for i in 0..st.orgs.len() {
+        if !st.orgs[i].attacked_by.is_empty() {
+            let owner = TargetRef::Org(i as OrgId);
+            sweep(&mut st.orgs[i].attacked_by, owner, target_alive(world, owner));
+        }
+    }
+    for (attacker, victim) in over {
+        let list = match attacker {
+            TargetRef::Org(o) => st.orgs.get_mut(o as usize).map(|x| &mut x.bombarding),
+            TargetRef::Actor(a) => st.actors.get_mut(a as usize).map(|x| &mut x.bombarding),
+        };
+        if let Some(list) = list
+            && let Some(i) = list.iter().position(|v| *v == victim)
+        {
+            list.remove(i);
+        }
+    }
 }
 
 /// The hit (`004CA400` -> Body `5625C0`) and the damage-driven engage `579490`.
@@ -2307,6 +2880,9 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
     world.events.push(Event::Hit { target, damage: amount });
     st.actors[target as usize].last_hit = Some((shooter, now));
     st.actors[target as usize].last_damage = Some((amount, Some(w.damage_type)));
+    if bombarding(world, st, shooter) {
+        attacked_by(world, st, target, shooter, w);
+    }
     if is_primary(world, target) {
         // 570F70 / 570A70: the primary's damage history, pruned of records
         // older than fstp(now - ROEPrimaryDamageHistoryLength).
@@ -2359,7 +2935,7 @@ fn zero_health(world: &mut World, st: &mut CombatState, kingdom: Option<KingdomI
     let def = world.data.def(world.actors[target as usize].def);
     // (core) 4D1120: an actor with a CityComponent is never captured by
     // damage; cities change hands by presence (City tick 5647A0, supply.rs).
-    let (captureable, destructible) = (def.captureable && !def.city, def.destructible);
+    let (captureable, destructible) = (capturable(world, target), def.destructible);
     if captureable && st.hostile(kingdom, world.actors[target as usize].kingdom)
         && let Some(k) = kingdom
     {
@@ -2486,7 +3062,7 @@ fn process_deaths(world: &mut World, st: &mut CombatState) {
         } else {
             let (amount, kind) = st.actors[v as usize].last_damage.unwrap_or((0.0, None));
             let filter = kind.map(|t| extras.damage_filters.get(t as usize).copied().unwrap_or(DEATH_FILTER_ANY));
-            choose_death_clip(&def.death_clips, amount, filter, world.random())
+            choose_death_clip(&def.death_clips, amount, filter, world.random_at(crate::trace::sites::DEATH_CLIP))
         };
         let clip_time = clip.map_or(ex.death_time, |c| def.death_clips[c].length);
         {
@@ -2525,7 +3101,10 @@ fn process_deaths(world: &mut World, st: &mut CombatState) {
             world.orgs[oi].members.retain(|&m| m != v);
             world.actors[v as usize].org = None;
             world.actors[v as usize].slot = None;
-            st.orgs[oi].living -= 1;
+            st.orgs[oi].living = {
+                let line = &world.data.def(world.orgs[oi].def).slot_morale_line;
+                world.orgs[oi].members.iter().filter(|&&m| world.actors.get(m as usize).is_some_and(|a| a.alive && !a.removed && (line.is_empty() || a.slot.is_some_and(|i| line.get(i as usize).copied().unwrap_or(false))))).count() as i32
+            };
             let loss = def.morale_value * rules.morale_death_factor;
             if world.orgs[oi].members.iter().any(|&m| alive(world, m)) {
                 crate::morale::lose(world, st, o, loss);

@@ -9,8 +9,9 @@
 //! kingdoms and 6 ZOD detection (detection component at actor+0xB8,
 //! `0x56EB40`/`0x56EC10`/`0x56EFC0`), 2 discovery (`0x4D7230`,
 //! component vtable `0xA3EEA0` `0x585940`, radius `0x4BB000`), 3 (`0x58CF50`),
-//! 4 ZOC (component `0xA3BBD4` `0x566DB0`, Organization `0x579DD0`), 5 ZOG
-//! (`0x568040`), 7 (`0x4DCDA0`), 8 (`0x563E10`).
+//! 4 ZOC (Defender InitExisting `0x566DB0`, Organization AfterInit `0x579DD0`),
+//! 5 ZOG (`0x568040`), 7 (`0x4DCDA0`), 8 (City AfterInit `0x563FE0`, component
+//! slot 29, virtual `+0x14`; reachable only through the vtable).
 use crate::fpu;
 use crate::query::KINGDOM_BITS;
 use crate::set::ActorKey;

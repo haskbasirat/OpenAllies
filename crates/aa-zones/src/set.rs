@@ -121,6 +121,9 @@ pub struct ZonePool {
     free: Vec<u32>,
     by_pair: HashMap<(SetRef, Entry), NodeId, FxBuild>,
     leaves: HashMap<Entry, u32, FxBuild>,
+    /// The walked prefix of [`Self::add`] / [`Self::remove`], kept between
+    /// calls: a tile change makes dozens of them.
+    prefix: Vec<Entry>,
 }
 
 /// The entries of a set in native iteration order ([`ZonePool::iter`]).
@@ -336,7 +339,35 @@ impl ZonePool {
                 self.cons(set, l).map(Some)
             }
             SetRef::Node(start) => {
-                let mut prefix = Vec::new();
+                // a new actor, the usual case, needs no walked prefix
+                let mut node = start;
+                loop {
+                    let (head, tail) = self.head_tail(node)?;
+                    if head.actor == actor {
+                        break;
+                    }
+                    match tail {
+                        SetRef::Leaf(t) if t.actor == actor => break,
+                        SetRef::Node(next) => node = next,
+                        SetRef::Leaf(_) => {
+                            let leaf = self.leaf(actor, flags).ok_or(Error::NativeNullLeaf)?;
+                            let SetRef::Leaf(l) = leaf else { unreachable!() };
+                            return self.cons(set, l).map(Some);
+                        }
+                    }
+                }
+                let mut prefix = std::mem::take(&mut self.prefix);
+                prefix.clear();
+                let r = self.add_walking(set, start, actor, flags, &mut prefix);
+                self.prefix = prefix;
+                r
+            }
+        }
+    }
+
+    fn add_walking(&mut self, set: SetRef, start: NodeId, actor: ActorKey, flags: u16, prefix: &mut Vec<Entry>) -> Result<Option<SetRef>> {
+        {
+            {
                 let mut node = start;
                 loop {
                     let (head, tail) = self.head_tail(node)?;
@@ -344,13 +375,13 @@ impl ZonePool {
                         let leaf = self.leaf(actor, head.flags | flags).ok_or(Error::NativeNullLeaf)?;
                         let SetRef::Leaf(l) = leaf else { unreachable!() };
                         let new = self.cons(tail, l)?;
-                        return self.rebuild(&prefix, new).map(Some);
+                        return self.rebuild(prefix, new).map(Some);
                     }
                     match tail {
                         SetRef::Leaf(t) if t.actor == actor => {
                             let leaf = self.leaf(actor, t.flags | flags).ok_or(Error::NativeNullLeaf)?;
                             let new = self.cons(leaf, head)?;
-                            return self.rebuild(&prefix, new).map(Some);
+                            return self.rebuild(prefix, new).map(Some);
                         }
                         SetRef::Node(next) => {
                             prefix.push(head);
@@ -377,7 +408,18 @@ impl ZonePool {
         match set {
             SetRef::Leaf(e) => Ok(self.leaf(actor, e.flags ^ flags)),
             SetRef::Node(start) => {
-                let mut prefix = Vec::new();
+                let mut prefix = std::mem::take(&mut self.prefix);
+                prefix.clear();
+                let r = self.remove_walking(start, actor, flags, &mut prefix);
+                self.prefix = prefix;
+                r
+            }
+        }
+    }
+
+    fn remove_walking(&mut self, start: NodeId, actor: ActorKey, flags: u16, prefix: &mut Vec<Entry>) -> Result<Option<SetRef>> {
+        {
+            {
                 let mut node = start;
                 let (head0, _) = self.head_tail(node)?;
                 if head0.actor != actor {
@@ -393,7 +435,7 @@ impl ZonePool {
                                         .ok_or(Error::NativeNullLeaf)?;
                                     self.cons(leaf, head)?
                                 };
-                                return self.rebuild(&prefix, new).map(Some);
+                                return self.rebuild(prefix, new).map(Some);
                             }
                             SetRef::Node(next) => {
                                 prefix.push(head);
@@ -414,7 +456,7 @@ impl ZonePool {
                     let SetRef::Leaf(l) = leaf else { unreachable!() };
                     self.cons(tail, l)?
                 };
-                self.rebuild(&prefix, new).map(Some)
+                self.rebuild(prefix, new).map(Some)
             }
         }
     }

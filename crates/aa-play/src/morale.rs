@@ -60,26 +60,124 @@ pub struct Descriptor {
 }
 
 pub fn descriptor(world: &World, st: &CombatState, id: OrgId) -> Descriptor {
-    let o = &st.orgs[id as usize];
     let d = |morale_replenish, broken, entrenchable| Descriptor { morale_replenish, broken, entrenchable };
     // 4D49B0(4): the regiment's exclusive Mind state. Actor state 5
     // (mind_exhausted, set by the morale at zero) is outside group 4 (0x474270
     // gives it another group, 0x477FC0). The exhausted Mind state (Mind +270,
     // vtable 0xA32AEC) reports actor state 0xC at vtable +0x20 (0x7C5440):
     // mind_resting, so a regiment in it reads as resting below.
-    if o.routing.is_some() {
-        return d(false, true, false); // mind_routing
+    match state_in(world, st, id) {
+        RegimentState::Rout => d(false, true, false), // mind_routing
+        RegimentState::Engage => d(false, false, false), // mind_engaged
+        RegimentState::Reform => d(true, false, false), // mind_reforming (DESIRED formation)
+        RegimentState::Guard => d(true, false, false), // mind_guarding
+        RegimentState::Sleep | RegimentState::Exhausted => d(true, false, true), // mind_resting
+        // mind_unpacking, mind_moving, mind_attacking, mind_bombard, ...: none replenishes.
+        _ => d(false, false, false),
     }
-    if o.engaging() {
-        return d(false, false, false); // mind_engaged
+}
+
+/// The regiment Mind's current state, as far as aa-play holds it: the states the
+/// fight traces name by vtable (`ms=`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegimentState {
+    Sleep,
+    Move,
+    Kill,
+    Chasing,
+    Engage,
+    Guard,
+    Explore,
+    Rout,
+    Reform,
+    Exhausted,
+    Unpack,
+    Pack,
+    Bombard,
+    Repair,
+    Construct,
+    Siege,
+    Join,
+    Rampage,
+    Regroup,
+}
+
+impl RegimentState {
+    /// The state of a Mind state's vtable: `None` for one that is not a regiment's.
+    pub fn from_vtable(vtable: u32) -> Option<Self> {
+        Some(match vtable {
+            0xA329F0 => Self::Sleep,
+            0xA33804 => Self::Move,
+            0xA32B5C => Self::Kill,
+            0xA32B80 => Self::Chasing,
+            0xA33140 => Self::Engage,
+            0xA32BC8 => Self::Guard,
+            0xA32BEC => Self::Explore,
+            0xA32AC8 => Self::Rout,
+            0xA32A80 => Self::Reform,
+            0xA32AEC => Self::Exhausted,
+            0xA32B10 => Self::Unpack,
+            0xA32B34 => Self::Pack,
+            0xA3348C => Self::Bombard,
+            0xA32BA4 => Self::Repair,
+            0xA32A38 => Self::Construct,
+            0xA32CC8 => Self::Siege,
+            0xA32EC4 => Self::Join,
+            0xA32A14 => Self::Rampage,
+            0xA32A5C => Self::Regroup,
+            _ => return None,
+        })
+    }
+}
+
+/// The hosted Mind's Unpack state (Mind +0x280) is on top of the stack.
+fn unpack_current(world: &World, id: OrgId) -> bool {
+    world.books.minds.top_offset(crate::minds::ORGANIZATION_MIND | id) == Some(0x280)
+}
+
+/// The regiment's current Mind state, read from what holds it: `crate::combat`
+/// (rout, reform, exhausted, engage, tasks), `crate::orders`, the hosted Mind.
+pub fn regiment_state(world: &World, id: OrgId) -> RegimentState {
+    state_in(world, &world.combat, id)
+}
+
+/// [`regiment_state`] while the combat state is taken out of the world.
+fn state_in(world: &World, st: &CombatState, id: OrgId) -> RegimentState {
+    let Some(o) = st.org(id) else { return RegimentState::Sleep };
+    if o.routing.is_some() {
+        return RegimentState::Rout;
+    }
+    if o.exhausted_state {
+        return RegimentState::Exhausted;
     }
     if o.reform.is_some() {
-        return d(true, false, false); // mind_reforming (DESIRED formation)
+        return RegimentState::Reform;
+    }
+    if o.engaging() {
+        return RegimentState::Engage;
+    }
+    match o.task {
+        Some(combat::tasks::Task::Bombard(_)) => return RegimentState::Bombard,
+        Some(combat::tasks::Task::Repair(_)) => return RegimentState::Repair,
+        Some(combat::tasks::Task::Construct { .. }) => return RegimentState::Construct,
+        None => {}
+    }
+    if crate::orders::guarding(world, id) {
+        return RegimentState::Guard;
+    }
+    if crate::orders::exploring(world, id) {
+        return RegimentState::Explore;
+    }
+    if unpack_current(world, id) {
+        return RegimentState::Unpack;
     }
     match world.orgs[id as usize].order {
-        Order::Idle => d(true, false, true),           // mind_resting
-        Order::Attack { .. } => d(false, false, false), // mind_attacking
-        _ => d(false, false, false),                    // mind_moving
+        Order::Idle => RegimentState::Sleep,
+        Order::Attack { .. } | Order::Move { attack_move: true, .. } => RegimentState::Kill,
+        // A retreat is the Move state too: its command's kind 7 makes it report
+        // mind_retreating (0x520250).
+        Order::Move { .. } => RegimentState::Move,
+        Order::Deploy { .. } => RegimentState::Unpack,
     }
 }
 
@@ -99,25 +197,100 @@ fn level<'a>(world: &World, st: &'a CombatState, id: OrgId) -> Option<&'a combat
     st.extras().def(world.orgs[id as usize].def).levels.get(s.level)
 }
 
+/// `578300` +60: over the layout's slots with a definition, `45D580` of the
+/// slot's definition (+2C0), through the member's modifiers (`501C90`) when the slot
+/// holds one; then the sum through the organization's own (the level's MORALE add
+/// reaches both: a level 1 regiment of five members reads the plain sum plus six
+/// times the add). The morale keeps its ratio to the maximum.
+pub(crate) fn morale_maximum(world: &World, st: &CombatState, id: OrgId) -> f32 {
+    let i = id as usize;
+    let def = world.data.def(world.orgs[i].def);
+    let add = level(world, st, id).map_or(0.0, |l| l.morale);
+    let clamp = st.rules().clamp_add;
+    let through = |base: f32, extra: f32| crate::zones::clamp_add(base, add + extra, clamp);
+    let own: f32 = def
+        .properties
+        .iter()
+        .filter_map(|p| world.data.property(p))
+        .flat_map(|p| p.modifiers.iter())
+        .filter(|m| m.kind.eq_ignore_ascii_case("ADD") && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("MORALE")))
+        .map(|m| m.amount)
+        .sum();
+    let mut max = 0.0f32;
+    if def.slots.is_empty() {
+        for &m in &world.orgs[i].members {
+            max = fstp(x87::add(ld(through(world.data.def(world.actors[m as usize].def).morale_value, 0.0)), ld(max)));
+        }
+    } else {
+        for (slot, &(d, _)) in def.slots.iter().enumerate().filter(|(_, (d, _))| *d != u32::MAX) {
+            let member = world.orgs[i].members.iter().copied().find(|&m| world.actors.get(m as usize).is_some_and(|a| a.alive && !a.removed && a.slot == Some(slot as u16)));
+            let value = world.data.def(d).morale_value;
+            // The regiment's own properties are in its members' modifier state too:
+            // a recon regiment (MORALE +3) reads 25 + 3 + 3 per living member.
+            let v = match member {
+                Some(m) => through(value, crate::zones::modifier_add(world, crate::zones::Key::Actor(m), "MORALE").unwrap_or(0.0) + own),
+                None => value,
+            };
+            max = fstp(x87::add(ld(v), ld(max)));
+        }
+    }
+    through(max, crate::zones::modifier_add(world, crate::zones::Key::Org(id), "MORALE").unwrap_or(0.0))
+}
+
+/// [`morale_maximum`] applied: `578300`'s ratio. It runs where the modifiers change
+/// (`4D1350`: a member added or removed, a level).
+fn refresh_morale_maximum(world: &mut World, st: &mut CombatState, id: OrgId) {
+    let i = id as usize;
+    let new = morale_maximum(world, st, id);
+    let old = st.orgs[i].morale_max;
+    if new.to_bits() == old.to_bits() {
+        return;
+    }
+    let ratio = if old <= 0.0 { 0.0 } else { fstp(x87::div(ld(world.orgs[i].morale), ld(old))) };
+    st.orgs[i].morale_max = new;
+    world.orgs[i].morale = fstp(x87::mul(ld(ratio), ld(new)));
+}
+
+/// `578000` +88: `501530` of the organization's modifiers: a positive
+/// ATTACK_EFFICIENCY_ACTUAL (the states mind_resting, mind_reforming, mind_chasing:
+/// amount 0, so 1), else a positive ATTACK_EFFICIENCY_DESIRED (the current
+/// formation's: `formation_required` of the state, `57BF50`), else 1. A state with a
+/// BROKEN formation takes the layout's broken property.
+fn desired_efficiency(world: &World, st: &CombatState, id: OrgId) -> f32 {
+    let i = id as usize;
+    let def = world.data.def(world.orgs[i].def);
+    // What the state reports at its vtable +0x20 (`51D8F0`, `520250`, `51DC20`,
+    // `51E2C0`, `51D9E0`), by its formation_required.
+    let formation = match state_in(world, st, id) {
+        // mind_routing, mind_repairing, mind_building: BROKEN.
+        RegimentState::Rout | RegimentState::Repair | RegimentState::Construct => return 0.5,
+        // mind_resting, mind_reforming, mind_chasing: ATTACK_EFFICIENCY_ACTUAL.
+        RegimentState::Sleep | RegimentState::Exhausted | RegimentState::Reform | RegimentState::Chasing => return 1.0,
+        // COMBAT: mind_engaged, mind_bombard, mind_guarding and mind_attacking.
+        RegimentState::Engage | RegimentState::Bombard => def.combat_formation,
+        RegimentState::Guard if !crate::movement::org_move_active(world, id) => def.combat_formation,
+        RegimentState::Kill if !st.orgs[i].kill_is_move => def.combat_formation,
+        // 520250: the Move state's command kind 7 reports mind_retreating.
+        RegimentState::Move if crate::orders::retreating(world, id) => def.retreat_formation,
+        // DESIRED: mind_moving (a move command's Kill state, `51D8F0` kind 5;
+        // a Guard state walking), mind_exploring, mind_unpacking, mind_joining...
+        _ => crate::player_orders::desired_formation(world, id),
+    };
+    let Some(mods) = formation.and_then(|f| def.formations.get(f)).and_then(|f| world.data.formation_modifiers.get(&f.id.to_ascii_lowercase())) else { return 1.0 };
+    let sum: f32 = mods.iter().filter(|m| m.kind.eq_ignore_ascii_case("MULTIPLY") && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("ATTACK_EFFICIENCY_DESIRED"))).map(|m| m.amount).sum();
+    let value = 1.0 + sum;
+    if value > 0.0 { value } else { 1.0 }
+}
+
 /// Maximum morale (the elements' morale values with the level MORALE add),
 /// the breakpoint and the members' maximum health.
 fn refresh_level_values(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
     let data = world.data.clone();
     let def = data.def(world.orgs[i].def);
-    let (morale_add, breakpoint_add, health) =
+    let (_, breakpoint_add, health) =
         level(world, st, id).map_or((0.0, 0.0, 0.0), |l| (l.morale, l.morale_breakpoint, l.health));
-    let mut max = 0.0;
-    if def.slots.is_empty() {
-        for &m in &world.orgs[i].members {
-            max += data.def(world.actors[m as usize].def).morale_value + morale_add;
-        }
-    } else {
-        for &(d, _) in def.slots.iter().filter(|(d, _)| *d != u32::MAX) {
-            max += data.def(d).morale_value + morale_add;
-        }
-    }
-    st.orgs[i].morale_max = max;
+    st.orgs[i].morale_max = morale_maximum(world, st, id);
     st.orgs[i].breakpoint = def.morale_breakpoint - breakpoint_add;
     let _ = health;
     for m in world.orgs[i].members.clone() {
@@ -526,16 +699,16 @@ fn select_destination(world: &mut World, st: &CombatState, id: OrgId) -> Option<
         if nearest < f32::MAX {
             score -= nearest.sqrt().min(r.rout_factor_supply_dist_cap) * r.rout_factor_supply_dist;
         }
-        score += world.random() * r.rout_fuzziness;
+        score += world.random_at(crate::trace::sites::ROUT_FUZZ) * r.rout_fuzziness;
         if best.is_none_or(|(b, _)| score > b) {
             best = Some((score, cand));
         }
     };
     for _ in 0..r.rout_random_candidates {
-        let angle = world.random() * std::f32::consts::TAU;
+        let angle = world.random_at(crate::trace::sites::ROUT_POINT) * std::f32::consts::TAU;
         let dir = Vec2::new(angle.cos(), angle.sin());
         let allowed = reachable(world, origin, dir, min_distance, r.rout_max_distance_delta);
-        let distance = min_distance + world.random() * allowed;
+        let distance = min_distance + world.random_at(crate::trace::sites::ROUT_POINT) * allowed;
         let cand = origin + dir * distance;
         if cand != origin {
             offer(world, cand);
@@ -544,26 +717,36 @@ fn select_destination(world: &mut World, st: &CombatState, id: OrgId) -> Option<
     for &(s, _) in &sources {
         for _ in 0..r.rout_supply_candidates {
             let to = normalized(s - origin);
-            let spread = (world.random() * 2.0 * r.rout_supply_max_angle - r.rout_supply_max_angle).to_radians();
+            let spread = (world.random_at(crate::trace::sites::ROUT_POINT) * 2.0 * r.rout_supply_max_angle - r.rout_supply_max_angle).to_radians();
             let dir = Vec2::from_angle(spread).rotate(to);
             let allowed = reachable(world, origin, dir, min_distance, r.rout_max_distance_delta);
-            let distance = min_distance + world.random() * allowed;
+            let distance = min_distance + world.random_at(crate::trace::sites::ROUT_POINT) * allowed;
             offer(world, origin + dir * distance);
         }
     }
     best.map(|(_, p)| p)
 }
 
-/// One organization's morale tick (`57C8E0` order: morale `57A0A0`,
-/// engagement experience `579600`, attack efficiency `5785D0`, rout,
-/// entrenchment, the engage/sleep Think reactions).
-fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
+/// The first steps of TickMaintenance `57C8E0` (queue 1, once a second in its
+/// bucket), the scheduler's delivery: morale `57A0A0`, engagement experience
+/// `579600`, attack efficiency `5785D0`.
+pub(crate) fn maintenance_delivery(world: &mut World, id: OrgId, elapsed: f32) {
+    if !world.orgs.get(id as usize).is_some_and(|o| o.alive) {
+        return;
+    }
+    let mut st = std::mem::take(&mut world.combat);
+    st.prepare(world);
+    maintenance(world, &mut st, id, elapsed);
+    world.combat = st;
+}
+
+/// See [`maintenance_delivery`]; an organization of a world built without the
+/// native creation has no registration and runs it every update.
+fn maintenance(world: &mut World, st: &mut CombatState, id: OrgId, dt: f32) {
     let i = id as usize;
     if !world.orgs[i].alive || st.orgs[i].destroyed {
         return;
     }
-    let now = world.time;
-    let dt = DT;
     let rules = st.rules.clone().expect("prepared");
     let desc = descriptor(world, st, id);
     let lvl = level(world, st, id).cloned().unwrap_or_default();
@@ -583,7 +766,7 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
     // 57A0A0: engagement loss while targeted by an enemy (+118), from the
     // second consecutive tick: fstp(((FactorMax - 1) * (1 - living/slots)
     // + 1) * Loss * dt), then fstp(that / MORALE_LOSS_RATE (+48)).
-    let engaged = !st.orgs[i].engaged_by.is_empty();
+    let engaged = st.orgs[i].is_engaged();
     if st.orgs[i].engaged_latch && engaged {
         let slots = st.orgs[i].slots.max(1);
         let fraction = x87::div(f64::from(st.orgs[i].living), f64::from(slots));
@@ -617,9 +800,13 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
     // 578000 desired (the organization's 501530) and 5785D0 approach:
     // fstp(actual - dt * falling) not below the desired value, or
     // fstp(dt * climbing + actual) not above it.
-    let desc = descriptor(world, st, id);
+    if st.orgs[i].saved_morale_living != Some(st.orgs[i].living) {
+        st.orgs[i].saved_morale_living = None;
+        refresh_morale_maximum(world, st, id);
+    }
+    let desired = desired_efficiency(world, st, id);
     let o = &mut st.orgs[i];
-    o.attack_efficiency_desired = if desc.broken { 0.5 } else { 1.0 };
+    o.attack_efficiency_desired = desired;
     if o.attack_efficiency > o.attack_efficiency_desired {
         o.attack_efficiency = fstp(x87::sub(ld(o.attack_efficiency), x87::mul(ld(dt), ld(rules.attack_efficiency_falling))));
         if o.attack_efficiency_desired > o.attack_efficiency {
@@ -629,6 +816,22 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
         o.attack_efficiency = fstp(x87::add(x87::mul(ld(dt), ld(rules.attack_efficiency_climbing)), ld(o.attack_efficiency)));
         if o.attack_efficiency_desired < o.attack_efficiency {
             o.attack_efficiency = o.attack_efficiency_desired;
+        }
+    }
+}
+
+/// One organization's Mind reactions of an update: rout, entrenchment, the
+/// engage/sleep Think reactions (and [`maintenance`] without a registration).
+fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
+    let i = id as usize;
+    if !world.orgs[i].alive || st.orgs[i].destroyed {
+        return;
+    }
+    let now = world.time;
+    if !world.is_scheduled(crate::scheduler::Owner::OrgComponent(id, crate::scheduler::ORGANIZATION_SLOT)) {
+        maintenance(world, st, id, DT);
+        if !world.orgs[i].alive || st.orgs[i].destroyed {
+            return;
         }
     }
     // 521240 rout Think (RoutingTime, destination, arrival), then the
@@ -665,7 +868,7 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
         st.orgs[i].next_sleep_think = now + if engaging { ENGAGE_THINK_SECONDS } else { SLEEP_THINK_SECONDS };
         let s = state(&st.orgs[i], world.orgs[i].morale);
         if engaging {
-            if s == 1 && engaged {
+            if s == 1 && st.orgs[i].is_engaged() {
                 begin_rout(world, st, id);
             }
         } else if st.orgs[i].exhausted_state {

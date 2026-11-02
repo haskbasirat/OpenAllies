@@ -306,6 +306,11 @@ fn apply(world: &mut World, st: &mut CombatState, command: &Command) -> Result<(
     }
 }
 
+/// 0x527CE0(3, t): the guard state bombards a threat (orders lane).
+pub(crate) fn begin_guard_bombard(world: &mut World, st: &mut CombatState, o: OrgId, target: AbilityTarget) {
+    begin_org(world, st, o, Task::Bombard(target));
+}
+
 /// The unit as the organization or lone actor of `kingdom` the order goes to
 /// (a member's order goes to its organization).
 fn own_unit(world: &World, kingdom: crate::world::KingdomId, unit: Unit) -> Option<Unit> {
@@ -713,10 +718,15 @@ pub(super) fn fire_aim(world: &mut World, st: &mut CombatState, id: usize, aim: 
     if w.turret < 0 && world.actors[id].motion.velocity.length_squared() < 1e-4 && delta.length_squared() > 0.01 {
         world.actors[id].facing = delta.y.atan2(delta.x);
     }
+    // 0x4C9550 -> 0x4C8CB0: the projectile is a thing, with its id and its draws.
+    let thing = w.projectile.as_deref().and_then(|p| data.find(p)).and_then(|p| crate::creation::projectile(world, p));
     if w.projectile_speed > 0.0 {
         let flight = delta.length() / w.projectile_speed;
-        st.projectiles.push(Projectile { shooter: id as ActorId, weapon, target, point, impact_at: now + flight });
+        st.projectiles.push(Projectile { shooter: id as ActorId, weapon, target, point, impact_at: now + flight, thing });
     } else {
+        if let Some(t) = thing {
+            world.ids.removed_transient(t);
+        }
         deliver(world, st, id as ActorId, weapon, target, point);
     }
 }

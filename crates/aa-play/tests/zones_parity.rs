@@ -577,7 +577,7 @@ fn fog_tiles_equal_a_from_scratch_evaluation_of_the_zones() {
             }
         }
         for t in 0..n {
-            let got: BTreeSet<(u32, u16)> = e.map.pool.entries(e.map.tiles[t].set).unwrap().into_iter().map(|x| (x.actor, x.flags)).filter(|x| x.1 & 0x42 != 0).collect();
+            let got: BTreeSet<(u32, u16)> = e.map.pool.entries(e.map.tiles[t].set).unwrap().into_iter().map(|x| (x.actor, x.flags & 0x42)).filter(|x| x.1 != 0).collect();
             assert_eq!(got, want_sets[t], "tick {tick} tile {t} zone set");
             assert_eq!(e.tile_fog(t) >> 16, want_visible[t], "tick {tick} tile {t} visible half");
             // a ZOD explores for its owner (sticky)
@@ -844,4 +844,37 @@ fn generated_map_fog_and_supply_against_the_f32_paths() {
     let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, 3)).expect("generate");
     let seconds = std::env::var("AA_ZONES_SECONDS").ok().and_then(|v| v.parse().ok()).unwrap_or(240);
     run_comparison("generated rmc_southerneurope", two_computers(generated.map, "generated", ["usa", "rus"], [0, 1]), seconds);
+}
+
+/// The city zone of Berlin against the film's trace of the original: regiment
+/// 0x3468 walks up column 67 from tile (67, 198) and 0x564300 runs in the update
+/// (1767) it crosses to (67, 199), 34.8 m from the city at (50, 198) with a
+/// radius of 42: the flood stops at the water (tile +0x20 bit 8) east of the
+/// city and goes round it. So (67, 199) is in zone 8 and (67, 198) is not.
+#[test]
+#[ignore]
+fn berlin_city_zone_stops_where_the_film_enters_it() {
+    use aa_play::{PlayerSetup, SkirmishSetup};
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
+    let data = Arc::new(aa_play::GameData::load(&root).expect("data"));
+    let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
+    let setup = SkirmishSetup {
+        map_id: "(2v2)Berlin".into(),
+        players: vec![
+            PlayerSetup { name: "a".into(), nation: "rus".into(), team: 0, color: [255, 0, 0], controller: Controller::Human, start: 0 },
+            PlayerSetup { name: "b".into(), nation: "ger".into(), team: 1, color: [0, 0, 255], controller: Controller::Human, start: 1 },
+        ],
+        starting_resources: None,
+        seed: 1,
+    };
+    let mut w = World::new_skirmish(data.clone(), map, &setup).expect("new_skirmish");
+    w.step(Vec::new());
+    let e = fog::engine(&w).expect("engine");
+    // 0xF72 western_europe_city_center01_small, tile (50, 198), native radius 42
+    let city = w.actors.iter().find(|a| data.def(a.def).city_zone_radius == 42.0 && a.pos.truncate().distance(Vec2::new(100.06, 397.97)) < 1.0).expect("the city").id;
+    assert_eq!(e.parts.actors[city as usize].zone(8).map(|z| (z.x, z.y, z.flags)), Some((50, 198, 0x100)));
+    let width = e.parts.geometry.width;
+    let holds = |x: i32, y: i32| e.covers_zone(city, (y * width + x) as usize, 8);
+    assert!(holds(67, 199), "the tile the film enters on");
+    assert!(!holds(67, 198), "the tile it walks before");
 }

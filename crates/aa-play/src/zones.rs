@@ -28,6 +28,14 @@
 //!   (`0x501C30`: DETECTION_RANGE ADD modifiers, floored at
 //!   ModifierAttributeClampAdd) - [`Engine::detection_tick`] keeps the
 //!   per-update ticks for things without a queue-1 registration;
+//! * the ZOC (zone type 4): the Defender's InitExisting `0x566DB0` and the
+//!   Organization's AfterInit `0x579DD0` (radius `+0x218` / `+0x2FC`,
+//!   [`DefDetection::control`]), flooded by the ZoneSolver, stopped by a tile
+//!   blocker (`0x514CB0`);
+//! * the city zone (zone type 8, radius ActorData `+0x5B4`): the City's
+//!   AfterInit `0x563FE0`, the one creator of the type (component slot 29,
+//!   virtual `+0x14`); a thing it covers enters the city through `0x514E20` /
+//!   `0x515620` -> `0x564300` ([`Engine::take_city_entries`]);
 //! * the world start (`0x551F90` / `0x551FD0`) - [`Engine::start_fog`];
 //! * an ownership change (`0x4D8450` zone part, a captured city or
 //!   building): every active zone released under the old owner and put back
@@ -42,19 +50,29 @@
 //! the aa-zones trait docs):
 //! * keys: actor `i` -> `i + 1`, organization `o` -> `ORG | (o + 1)`,
 //!   kingdom `k` -> `KINGDOM + k` (index `+0x18C` = `k`, non-major `+0x190`
-//!   for an independent kingdom or one past the 16 fog bits);
+//!   for an independent kingdom or one past the 16 fog bits). A key is an
+//!   identity, as the native pointer is: the interned sets never order by it,
+//!   and the one place a GTID is kept across a swap, the relay link, follows
+//!   the unpack ([`crate::supply`]);
 //! * allied (`+0x138`) = relation self or friend, enemy (`+0x140`) = enemy
 //!   ([`crate::books::Books::relation`], the native 4E52D0 values);
 //! * actor `+8` bit 0 = dead; `+0x100` bit 21 (0x200000) = under
-//!   construction: a building still unpacking from its truck (its type-6
-//!   zone then takes ActorData `+0x1D0`, `0x56F140`);
+//!   construction, placed by BuildActor (its type-6 zone then takes ActorData
+//!   `+0x1D0`, `0x56F140`). An unpacking building is bit 26, not bit 21 (the
+//!   Berlin film: st 0x4001000, zone 6 of ActorData `+0x1CC`);
+//! * `+0x138` = the creation block's `+0x40` / `+0x44` while live
+//!   (`0x4D7230`): the organization of a member `0x57D950`, `0x4FBF40` or the
+//!   unpack `0x575C80` creates. Its Detection's AfterInit `0x56EC90` makes no
+//!   ZOD and asks for a deferred tick instead, so a new member never shows
+//!   one; a thing loaded with the map has 0 (`0x4FAE80`);
 //! * the `+0x80` component of an organization member points at its living
-//!   organization; its byte `+0x1C` (`0x5709D0`) is set for the
-//!   organization's leader and for members inside the organization's ZOC
-//!   (zone type 4 of ActorData `+0x2FC`, not bound: the control_range circle
-//!   around the organization stands for its tiles). Such a member carries
-//!   no zones of its own (`0x56EA30` / `0x56EC10`) and adds its engagers to
-//!   the organization's reveal mask (`0x56EFC0`);
+//!   organization; its byte `+0x1C` is set when it joins (`0x57CBA0` ->
+//!   `0x5705A0`) and then decided by `0x5709D0` (the Element's queue-1 Tick
+//!   `0x570B90`, the Organization's AfterInit): the organization's leader, or
+//!   a tile under the member holds the organization's zone 4
+//!   ([`Engine::element_update`]). Such a member carries no zones of its own
+//!   (`0x56EA30` / `0x56EC10`) and adds its engagers to the organization's
+//!   reveal mask (`0x56EFC0`);
 //! * ActorData `+0x1CC` / `+0x1D0` = the finalized detection / remote ranges
 //!   ([`def_detection`]); reveal sources (`0x56EDC0`) = the kingdoms in the
 //!   thing's `+0x118` engager list (the organizations whose engage list
@@ -69,14 +87,19 @@
 //! * memory (`+0x8C`) is kept by static actors; records are snapshots of
 //!   the actor when created (the record object `0x4EB9F0` is not ported).
 //!
+//! The ZOC's enemy-entered effects `0x514DA0` -> `0x514E40` -> `0x57AB70` /
+//! `0x567840` run from the tile changes and from a ZOC moving over a thing
+//! (`0x54F7F0`): actor `+8` bit 14 answers the Thing's `targetable` flag, and
+//! what they ask is run by its owner when the engine is back
+//! ([`Engine::take_entered`], `crate::combat::zone_entered`,
+//! `crate::combat::defender`).
+//!
 //! Not bound (no source in the battle world yet): zone types 2 (discovery
-//! markers), 3, 4 (ZOC), 5 (ZOG), 7, 8 and the actor-entered effects
-//! (`0x54EF10`), containers and carriers, first-sighting messages, the SAI
-//! region counters (the hooks keep the fog-word mirror only), the `+0x130`
-//! list, Defender `+0xB0 +0x24` and denizen threat (`0x569300`) reveal
-//! sources, and the structure footprint test of the shape iterator
-//! (`0x5534F0` / `0x5541F0`: tile centres inside the shape; the tiles here
-//! are the footprint's bounding rectangle).
+//! markers), 3, 5 (ZOG), 7; tile blockers (tile `+0x1C`, walls); containers and carriers, first-sighting messages, the SAI region
+//! counters (the hooks keep the fog-word mirror only), the Defender `+0xB0
+//! +0x24` and denizen threat (`0x569300`) reveal sources, and the soft shape
+//! (`+0x50`, not in [`crate::data::Def`]): the tile lists and the `0x4EA0F0`
+//! tiles take the blocking shape.
 use crate::books::{ENEMY, FRIEND, SELF};
 use crate::data::{DefClass, DefId};
 use crate::world::{ActorId, KingdomId, OrgId, World};
@@ -86,7 +109,7 @@ use aa_zones::detection::{self, ActorDetectionWorld};
 use aa_zones::flood::FloodWorld;
 use aa_zones::query::{Kingdom, VisitWorld, ZoneActors};
 use aa_zones::tile::{AllianceWorld, ComponentEffect, MapGeometry, SaiHook, ZoneMap, ZoneWorld};
-use aa_zones::zone::{self, Zone, ZoneObjectWorld};
+use aa_zones::zone::{self, EnterWorld, Zone, ZoneObjectWorld};
 use aa_zones::{ActorKey, Error, Result, SetRef};
 use glam::{Vec2, Vec3};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -102,6 +125,10 @@ pub const KINGDOM: u32 = 0x0001_0000;
 pub const KINGDOM_BITS: u32 = aa_zones::query::KINGDOM_BITS;
 /// Zone type 0 (ZOS supply).
 pub const ZOS: u32 = 0;
+/// Zone type 4 (ZOC).
+pub const ZOC: u32 = 4;
+/// Zone type 8 (the city zone).
+pub const CITY_ZONE: u32 = 8;
 const EXPLORED_ALL: u32 = 0xffff;
 const VISIBLE_ALL: u32 = 0xffff_0000;
 /// aa-rules COMPONENTS slots read here.
@@ -109,6 +136,10 @@ const MOVER_SLOT: u32 = 3;
 const PROJECTILE_SLOT: u32 = 1;
 const PROPERTIES_SLOT: u32 = 6;
 const ORGANIZATION_SLOT: u32 = 7;
+const ELEMENT_SLOT: u32 = 8;
+const DEFENDER_SLOT: u32 = 20;
+const AIRCRAFT_SLOT: u32 = 23;
+const CITY_SLOT: u32 = 29;
 /// The DetectionComponent slot (actor `+0xB8` = `+0x60 + 4 * 22`).
 pub const DETECTION_SLOT: u8 = 22;
 
@@ -140,8 +171,20 @@ pub struct DefDetection {
     pub half: Vec2,
     /// Actor virtual +0 (size radius, m).
     pub size: f32,
-    /// ActorData +0x2FC (control range, m): the organization ZOC radius.
+    /// The ZOC radius: ActorData +0x2FC for an organization, +0x218 (the
+    /// DefenderComponent's control_range) otherwise (`0x566DB0`, `0x579DD0`).
     pub control: f32,
+    /// A DefenderComponent (actor +0xB0, slot 20): zone 4 at InitExisting.
+    pub defender: bool,
+    /// An AircraftComponent (actor +0xBC): its zone 4 takes state bit 1.
+    pub aircraft: bool,
+    /// An ElementComponent (actor +0x80, slot 8).
+    pub element: bool,
+    /// A CityComponent's zone radius (ActorData +0x5B4, m), 0 without one.
+    pub city: f32,
+    /// The blocking shape's words (`aa_rules::objects::Shape`: kind, radius,
+    /// bounds), ObjectData +0x38.
+    pub shape: Option<[u32; 6]>,
     /// The PropertiesComponent (actor `+0x78`) holds the modifier context
     /// `0x45D790` / `0x45D550` read (none: the raw ranges).
     pub modifiers: bool,
@@ -151,6 +194,21 @@ pub struct DefDetection {
     /// against a quarter tile: the shape's tiles count, not only the actor's
     /// tile.
     pub large_shape: bool,
+    /// Thing flag `targetable`: actor `+8` bit 14 (0x4000), cleared at death.
+    pub targetable: bool,
+}
+
+/// What a zone asked of its component (`0x514E40`, `0x514E20`) while the engine
+/// held the world: run by the component's owner when it is back, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Entered {
+    /// `0x564300`: a thing entered the city's zone 8.
+    City(ActorId, Key),
+    /// `0x57AB70`: an enemy entered the organization's ZOC (already its
+    /// organization when attached, `0x514DA0`).
+    Organization(OrgId, Key),
+    /// `0x567840`: an enemy entered the Defender's ZOC.
+    Defender(Key, Key),
 }
 
 /// `0x468B16` / `0x46889E`: the finalized ranges of a definition.
@@ -181,6 +239,16 @@ pub fn def_detection(d: &crate::data::Def) -> DefDetection {
         0.0
     };
     let structure = matches!(d.class, Some(DefClass::Building)) || d.city || d.structure;
+    let shape_words = d.blocking_shape.as_deref().and_then(|s| {
+        let dims = d.blocking_size?;
+        let (selector, dims): (u32, Vec<u32>) = match s.to_ascii_uppercase().as_str() {
+            "CIRCLE" => (1, vec![dims[0].to_bits()]),
+            "SQUARE" => (2, vec![dims[0].to_bits()]),
+            "RECT" => (3, vec![dims[0].to_bits(), dims[1].to_bits()]),
+            _ => return None,
+        };
+        aa_rules::objects::shape(selector, &dims, PC).ok().map(|x| x.words)
+    });
     let keeps_memory = structure || (d.class == Some(DefClass::Other) && d.actor_data && d.speed_max <= 0.0 && !d.invisible);
     let half = if structure { d.blocking_size.map_or(Vec2::ZERO, |s| Vec2::new(s[0], s[1]) * 0.5) } else { Vec2::ZERO };
     let shape = d.blocking_shape.as_deref().map(str::to_ascii_uppercase);
@@ -199,8 +267,14 @@ pub fn def_detection(d: &crate::data::Def) -> DefDetection {
         half,
         size,
         control: d.control_range,
+        defender: slot(DEFENDER_SLOT),
+        aircraft: slot(AIRCRAFT_SLOT),
+        element: slot(ELEMENT_SLOT) || d.class == Some(DefClass::Member),
+        city: if slot(CITY_SLOT) && d.city_zone_radius > 0.0 { d.city_zone_radius } else { 0.0 },
+        shape: shape_words,
         modifiers: slot(PROPERTIES_SLOT),
         large_shape: fixed && d.blocking,
+        targetable: d.targetable,
     }
 }
 
@@ -214,6 +288,12 @@ pub fn clamp_add(base: f32, add: f32, clamp: f32) -> f32 {
         r = floor;
     }
     if r < 0.0 { 0.0 } else { r }
+}
+
+/// `0x4EE700` with the definition's blocking radius: the Thing flags and
+/// `(int)tile <= size * 4` (`0x9FD59C`).
+pub fn multi_tile(d: &DefDetection, tile: f32) -> bool {
+    d.large_shape && (tile as i32) as f32 <= d.size * 4.0
 }
 
 /// The modifier context's ADD sum for `attribute` of an actor or an
@@ -273,6 +353,11 @@ pub fn zod_radius(world: &World, key: Key, d: &DefDetection) -> f32 {
     }
 }
 
+/// The DETECTION_RANGE ADD sum of what decides it, unchanged between ticks:
+/// the definition, the kingdom and how many technologies it has. A thing with
+/// map properties of its own is not kept.
+type ZodKey = (DefId, Option<KingdomId>, usize);
+
 /// Zone state of one actor or organization.
 #[derive(Clone, Debug, Default)]
 pub struct Slot {
@@ -282,8 +367,13 @@ pub struct Slot {
     pub comp: Option<DetectionComponent>,
     /// Actor +0x54 detection word.
     pub word: u32,
-    /// The tiles the actor is listed on (row-major).
+    /// The tiles the actor is listed on (tile `+8`, row-major): the bounding
+    /// rectangle of its shape (`0x553xxx` full membership), its tile for a unit.
     pub tiles: Vec<usize>,
+    /// The tiles `0x554CC0` walks: its own tile, or with `0x4EE700` the
+    /// rectangle's tiles whose centre is inside the shape (`0x5534F0`,
+    /// `0x5541F0`), row-major.
+    pub shape: Vec<usize>,
     /// The tile under the actor (actor +0x44 / +0x48); None before placing.
     pub tile: Option<(i32, i32)>,
     /// Destroyed: zones released, off the tiles, never placed again.
@@ -292,6 +382,13 @@ pub struct Slot {
     pose: Option<[u32; 3]>,
     /// The owner the zones were placed for (`+0xE8`), None before placing.
     owner: Option<Option<KingdomId>>,
+    /// Actor +0x138 non-zero (`0x4D7230`): created as a member.
+    created_member: bool,
+    /// The components an unpacking building gets when it ends (`0x4D21A0(1)`)
+    /// are still to come.
+    reassembly: bool,
+    /// The Detection has a queue-1 registration: the scheduler ticks it.
+    registered: bool,
     /// Supply component +0x10 (radius bits; None before the constructor
     /// 0x58AA50 read it) and dirty byte +0x14 (0x58AA20).
     pub(crate) supply_radius: Option<u32>,
@@ -347,6 +444,14 @@ pub struct Parts {
     reveal_bytes: Vec<u8>,
     /// Organization membership per actor (+0x80 target, byte +0x1C).
     member: Vec<Option<(OrgId, bool)>>,
+    /// Membership changed: the Element table of [`crate::fog::element_pass`]
+    /// is to be read again.
+    pub(crate) elements_changed: bool,
+    /// `0x50ACC0(1e-4)` asked by a Detection's AfterInit (`0x56EC90`): the
+    /// deferred tick its owner schedules ([`Engine::take_pending_ticks`]).
+    pending_ticks: Vec<Key>,
+    /// What the zones' enter callbacks asked, in order.
+    entered: Vec<Entered>,
     /// The owner an actor answers while its zones are released for an
     /// ownership change (`0x4D8450` releases under the old owner).
     owner_override: Option<(ActorKey, Option<KingdomId>)>,
@@ -361,6 +466,12 @@ pub struct Parts {
     reveal_tick: Option<u64>,
     /// Reveal sources (0x56EDC0) of this update's organizations.
     org_engaged: Vec<u32>,
+    /// What the kingdom masks were computed from (the relations and teams).
+    masks_of: Vec<u8>,
+    reveal_masks_key: Vec<u8>,
+    /// ModifierAttributeClampAdd.
+    clamp_add: f32,
+    zod_adds: HashMap<ZodKey, f32, aa_zones::set::FxBuild>,
 }
 
 /// The zone engine of one battle.
@@ -442,6 +553,9 @@ impl Engine {
                 engaged: Vec::new(),
                 reveal_bytes: Vec::new(),
                 member: Vec::new(),
+                elements_changed: true,
+                pending_ticks: Vec::new(),
+                entered: Vec::new(),
                 owner_override: None,
                 next_zone_key: 0x4000_0000,
                 supply_changed: BTreeSet::new(),
@@ -450,6 +564,10 @@ impl Engine {
                 observed_tick: None,
                 reveal_tick: None,
                 org_engaged: Vec::new(),
+                masks_of: Vec::new(),
+                reveal_masks_key: Vec::new(),
+                clamp_add: world.data.rule_ci("ModifierAttributeClampAdd").unwrap_or(1.0),
+                zod_adds: HashMap::default(),
             },
             supply_tiles: BTreeMap::new(),
         })
@@ -503,8 +621,26 @@ impl Engine {
         }
     }
 
-    /// Kingdom fields and their vision / supply masks (`0x4E0F90`).
+    /// Kingdom fields and their vision / supply masks (`0x4E0F90`), when what
+    /// they are computed from changed.
     fn refresh_kingdoms(&mut self, world: &World) {
+        let mut of = std::mem::take(&mut self.parts.masks_of);
+        of.clear();
+        for k in &world.kingdoms {
+            of.extend_from_slice(&k.id.to_le_bytes());
+            of.extend_from_slice(&k.team.to_le_bytes());
+            of.push(u8::from(k.independent));
+        }
+        for row in &world.books.relations {
+            of.extend_from_slice(row);
+        }
+        let old = std::mem::take(&mut self.parts.reveal_masks_key);
+        let same = old == of;
+        self.parts.reveal_masks_key = of.clone();
+        self.parts.masks_of = of;
+        if same && self.parts.kingdoms.len() == world.kingdoms.len() {
+            return;
+        }
         let ks: Vec<Kingdom> = world
             .kingdoms
             .iter()
@@ -525,21 +661,243 @@ impl Engine {
         }
     }
 
-    /// `0x5709D0` for every member: the `+0x80` target and byte `+0x1C`.
+    /// The `+0x80` targets as the organizations list their members: a member
+    /// new to its organization has the byte set (`0x57CBA0` -> `0x5705A0`:
+    /// `+0x10`, `+0x18`, `+0x1C = 1`), and only `0x5709D0` changes it after
+    /// that. A thing out of its organization has no target; a dead member
+    /// answers as if unattached.
     fn refresh_membership(&mut self, world: &World) {
-        let mut member = vec![None; world.actors.len()];
-        for (o, g) in world.orgs.iter().enumerate() {
-            if !g.alive {
-                continue;
+        if self.parts.member.len() != world.actors.len() {
+            self.parts.member.resize(world.actors.len(), None);
+        }
+        let member = &mut self.parts.member;
+        for (i, a) in world.actors.iter().enumerate() {
+            let target = a
+                .org
+                .filter(|_| a.alive && !a.removed)
+                .filter(|&o| world.orgs.get(o as usize).is_some_and(|g| g.alive && g.members.contains(&(i as ActorId))));
+            let slot = &mut member[i];
+            if slot.map(|s| s.0) != target {
+                *slot = target.map(|o| (o, true));
+                self.parts.elements_changed = true;
             }
-            let leader = leader_of(world, o as OrgId);
-            for &m in &g.members {
-                if let Some(slot) = member.get_mut(m as usize) {
-                    *slot = membership_of(world, &self.parts.defs, o as OrgId, m, leader);
+        }
+    }
+
+    /// `0x5709D0`: the byte `+0x1C` of member `a`: the organization's leader
+    /// (`+0x7C +0x40`), or (actor `+0x100` bit 24 clear, not bound) its
+    /// organization has a zone 4 and virtual `+0x130(zone, 0)` -> `0x4EA2C0`
+    /// finds that zone on a tile under the member. On a change: `0x4D4130`
+    /// (the terrain, not kept here); `0x578ED0` -> `0x522840` when it joins
+    /// (the movement owner's `rejoin`), else `0x578EF0` (nothing) and
+    /// `0x54EF10` on the tile under it.
+    pub fn element_update(&mut self, world: &World, a: ActorId) {
+        let Some(Some((o, old))) = self.parts.member.get(a as usize).copied() else { return };
+        let key = org_key(o);
+        let byte = leader_of(world, o) == Some(a) || self.holds(actor_key(a), key, 1 << ZOC);
+        if byte == old {
+            return;
+        }
+        self.parts.member[a as usize] = Some((o, byte));
+        if !byte && let Some(&t) = self.parts.actors.get(a as usize).and_then(|s| s.shape.first()) {
+            self.entered(world, actor_key(a), t);
+        }
+    }
+
+    /// Member `a`'s byte `+0x1C` (`0x5709D0`), None outside an organization.
+    pub fn attached(&self, a: ActorId) -> Option<bool> {
+        self.parts.member.get(a as usize).copied().flatten().map(|m| m.1)
+    }
+
+    /// `0x4EA2C0(zone, 0)`: `thing`'s tiles (`0x554CC0`: its own tile, its
+    /// shape's when `0x4EE700` holds) hold the zone of `owner` with `flags`
+    /// (`0x54EF40` -> `0x514940`).
+    fn holds(&self, thing: ActorKey, owner: ActorKey, flags: u16) -> bool {
+        let slot = match decode(thing) {
+            Ok(Key::Actor(a)) => self.parts.actors.get(a as usize),
+            Ok(Key::Org(o)) => self.parts.orgs.get(o as usize),
+            Err(_) => None,
+        };
+        slot.is_some_and(|s| {
+            s.shape.iter().any(|&t| {
+                self.map.tiles.get(t).and_then(|x| x.set).is_some_and(|set| aa_zones::query::contains(&self.map.pool, set, owner, flags).unwrap_or(false))
+            })
+        })
+    }
+
+    /// `0x57C8E0` with `+0xB0` set: `0x515F40` of the ZOC at the thing's position with
+    /// the radius `+0xAC`, when it changed.
+    pub fn zoc_radius(&mut self, world: &World, key: Key, radius: f32) {
+        let k = match key {
+            Key::Actor(a) => actor_key(a),
+            Key::Org(o) => org_key(o),
+        };
+        let Some(z) = self.slot_mut(k).and_then(|s| s.zone(ZOC)) else { return };
+        if z.radius_bits == radius.to_bits() || !z.active() {
+            return;
+        }
+        self.with(world, |map, c| {
+            let mut z = c.zone_at(k, ZOC)?;
+            let pos = c.actor_position(k)?;
+            let r = zone::move_to_position(map, c, &mut z, pos, radius.to_bits(), PC);
+            c.set_zone(k, ZOC, z)?;
+            r
+        });
+    }
+
+    /// `0x567BF0`'s virtual `+0x130(zone 4, 1)`: `thing` stands in `owner`'s ZOC.
+    /// An organization (`0x4D4900`) answers through its members.
+    pub fn in_zoc(&self, world: &World, thing: Key, owner: ActorId) -> bool {
+        match thing {
+            Key::Actor(a) => self.holds(actor_key(a), actor_key(owner), 1 << ZOC),
+            Key::Org(o) => {
+                world.orgs.get(o as usize).is_some_and(|g| g.members.iter().any(|&m| self.holds(actor_key(m), actor_key(owner), 1 << ZOC)))
+                    || self.holds(org_key(o), actor_key(owner), 1 << ZOC)
+            }
+        }
+    }
+
+    /// The actors on the tiles of `city`'s zone 8 (the walk `0x4F4050` of
+    /// `0x4F6B50`), each once.
+    pub fn things_in_city_zone(&self, city: ActorId) -> Vec<ActorId> {
+        let Some(z) = self.parts.actors.get(city as usize).and_then(|s| s.zone(CITY_ZONE)).filter(|z| z.active()) else { return Vec::new() };
+        let g = self.parts.geometry;
+        let tile = f32::from_bits(g.tile_size_bits);
+        let reach = (f32::from_bits(z.radius_bits) / tile).ceil().max(0.0) as i32 + 1;
+        let mut out = Vec::new();
+        for y in (z.y - reach).max(0)..=(z.y + reach).min(g.height - 1) {
+            for x in (z.x - reach).max(0)..=(z.x + reach).min(g.width - 1) {
+                let t = (y * g.width + x) as usize;
+                if !self.covers_zone(city, t, CITY_ZONE) {
+                    continue;
+                }
+                for &k in self.parts.lists[t].iter().rev() {
+                    if let Ok(Key::Actor(a)) = decode(k)
+                        && !out.contains(&a)
+                    {
+                        out.push(a);
+                    }
                 }
             }
         }
-        self.parts.member = member;
+        out
+    }
+
+    /// `0x54EF40` on the tile under `xy`: it holds organization `o`'s zone 4 (ZOC).
+    pub fn tile_holds_org_zone(&self, world: &World, xy: glam::Vec2, o: OrgId) -> bool {
+        let Some((x, y)) = world.map.cell_of(xy) else { return false };
+        let t = (y * world.map.width + x) as usize;
+        self.map.tiles.get(t).and_then(|x| x.set).is_some_and(|set| aa_zones::query::contains(&self.map.pool, set, org_key(o), 1 << ZOC).unwrap_or(false))
+    }
+
+    /// The tile under `xy` lies in `city`'s zone 8.
+    pub fn city_zone_covers(&self, world: &World, xy: glam::Vec2, city: ActorId) -> bool {
+        let Some((x, y)) = world.map.cell_of(xy) else { return false };
+        self.covers_zone(city, (y * world.map.width + x) as usize, CITY_ZONE)
+    }
+
+    /// `0x564C10`'s virtual `+0x130(zone 8, 0)`: `thing` stands in `city`'s zone.
+    pub fn in_city_zone(&self, thing: Key, city: ActorId) -> bool {
+        let t = match thing {
+            Key::Actor(a) => actor_key(a),
+            Key::Org(o) => org_key(o),
+        };
+        self.holds(t, actor_key(city), 1 << CITY_ZONE)
+    }
+
+    /// The `0x50ACC0(1e-4)` a Detection's AfterInit asked since the last call.
+    pub fn take_pending_ticks(&mut self) -> Vec<Key> {
+        std::mem::take(&mut self.parts.pending_ticks)
+    }
+
+    /// What the zones' enter callbacks asked since the last call, in order.
+    pub fn take_entered(&mut self) -> Vec<Entered> {
+        std::mem::take(&mut self.parts.entered)
+    }
+
+    /// `0x5147C0` on the ZOC of `key` (`0x57C8E0` when the organization's
+    /// byte `+0x8E` is set: it has just turned aggressive): the effects walk
+    /// `0x540690`, `0x54F7F0` on every tile holding the zone.
+    pub fn zoc_effects(&mut self, world: &World, key: Key) {
+        let k = match key {
+            Key::Actor(a) => actor_key(a),
+            Key::Org(o) => org_key(o),
+        };
+        let Some(z) = self.slot_mut(k).and_then(|s| s.zone(ZOC)) else { return };
+        self.with(world, |map, c| aa_zones::solver::effects_pass(map, c, &z));
+    }
+
+    /// `0x54EF10` on tile `t` for `key`: the entered effects (`+0x54`,
+    /// `0x515620`) of the leaves that have one: types 2, 3, 4, 5, 8.
+    fn entered(&mut self, world: &World, key: ActorKey, t: usize) {
+        let Some(set) = self.map.tiles.get(t).and_then(|x| x.set) else { return };
+        let Ok(mut iter) = self.map.pool.iter(Some(set)) else { return };
+        if iter.any(|e| e.flags & ENTERED_FLAGS != 0) {
+            self.with(world, |map, c| zone::actor_entered_tile(map, c, t, key, PC));
+        }
+    }
+
+    /// `0x4CFEA0`: `0x54EF10` over the tiles of `0x554CC0`.
+    fn entered_all(&mut self, world: &World, key: ActorKey) {
+        let mut i = 0;
+        while let Some(&t) = self.slot_mut(key).and_then(|s| s.shape.get(i)) {
+            self.entered(world, key, t);
+            i += 1;
+        }
+    }
+
+    /// The ZOC of `key` (`0x566DB0` / `0x579DD0`): unless it has one,
+    /// `0x4D69A0(4)`, an aircraft's zone takes state bit 1 (`0x515940`), then
+    /// `0x515F40` at its position with the range.
+    fn zoc_init(&mut self, world: &World, key: ActorKey, d: &DefDetection) {
+        let aircraft = d.aircraft;
+        let radius = d.control.to_bits();
+        self.with(world, |map, c| {
+            if c.slot(key)?.zone(ZOC).is_some() {
+                return Ok(());
+            }
+            component::create_zone(c, key, ZOC)?;
+            let mut z = c.zone_at(key, ZOC)?;
+            if aircraft {
+                z.set_state_bit(1, true);
+            }
+            let pos = c.actor_position(key)?;
+            let r = zone::move_to_position(map, c, &mut z, pos, radius, PC);
+            c.set_zone(key, ZOC, z)?;
+            r
+        });
+    }
+
+    /// City AfterInit `0x563FE0`: `0x4D69A0(8)` and `0x515F40` at the position
+    /// with ActorData `+0x5B4`.
+    fn city_init(&mut self, world: &World, key: ActorKey, radius: f32) {
+        self.with(world, |map, c| {
+            component::create_zone(c, key, CITY_ZONE)?;
+            let mut z = c.zone_at(key, CITY_ZONE)?;
+            let pos = c.actor_position(key)?;
+            let r = zone::move_to_position(map, c, &mut z, pos, radius.to_bits(), PC);
+            c.set_zone(key, CITY_ZONE, z)?;
+            r
+        });
+    }
+
+    /// The zone part of `0x4D7230`'s InitExisting and AfterInit loops for an
+    /// actor (slot order: Supply `0x58B0E0` is [`crate::supply`]'s; Defender
+    /// `0x566DB0`; Detection `0x56EC90`; City `0x563FE0`), for the components
+    /// assembled: while unpacking or under construction (`0x4D21A0` with state
+    /// bit 26 or 21) only the Detection, the others come with `0x4D21A0(1)`.
+    fn after_init(&mut self, world: &World, id: ActorId, d: &DefDetection, waits: bool) {
+        let key = actor_key(id);
+        if d.defender && !waits {
+            self.zoc_init(world, key, d);
+        }
+        if d.component {
+            // AfterInit 0x56EC90 (component virtual +0x14) of the new thing
+            self.with(world, |map, c| component::activate(map, c, key, PC));
+        }
+        if d.city > 0.0 {
+            self.city_init(world, key, d.city);
+        }
     }
 
     /// The start of the battle (`0x551F90` EXPLORED: every tile explored and
@@ -620,16 +978,7 @@ impl Engine {
     pub fn observe_key(&mut self, world: &World, key: Key) {
         self.grow(world);
         match key {
-            Key::Actor(a) => {
-                if let (Some(x), Some(m)) = (world.actors.get(a as usize), self.parts.member.get_mut(a as usize)) {
-                    // 0x5709D0 for the ticking member
-                    *m = x
-                        .org
-                        .filter(|&o| world.orgs.get(o as usize).is_some_and(|g| g.members.contains(&a)))
-                        .and_then(|o| membership_of(world, &self.parts.defs, o, a, leader_of(world, o)));
-                }
-                self.observe_actor(world, a);
-            }
+            Key::Actor(a) => self.observe_actor(world, a),
             Key::Org(o) => self.observe_org(world, o),
         }
     }
@@ -651,6 +1000,16 @@ impl Engine {
             self.change_kingdom(world, key, old);
         }
         self.parts.actors[i].owner = Some(a.kingdom);
+        // 0x4D21A0(1) at the end of an unpacking: its InitExisting and
+        // AfterInit loops over the components it now creates (the Supply's is
+        // crate::supply's, 0x576319 -> 0x4D3068 -> 0x58B0E0)
+        if self.parts.actors[i].reassembly && !assembling(world, id) {
+            self.parts.actors[i].reassembly = false;
+            let d = self.def_of(world, Key::Actor(id));
+            if d.defender {
+                self.zoc_init(world, key, &d);
+            }
+        }
         // the tiles only depend on the pose: skip unmoved actors
         let pose = [a.pos.x.to_bits(), a.pos.y.to_bits(), a.facing.to_bits()];
         if self.parts.actors[i].pose == Some(pose) {
@@ -671,9 +1030,17 @@ impl Engine {
                 self.parts.actors[i].comp = Some(DetectionComponent { actor: key, reveal_mask: 0, zod_radius_bits: r.to_bits() });
             }
             self.tile_change(world, key, tile, tiles, fresh);
-            if fresh && d.component {
-                // AfterInit 0x56EC90 (component virtual +0x14) of the new thing
-                self.with(world, |map, c| component::activate(map, c, key, PC));
+            if fresh {
+                let waits = assembling(world, id);
+                let s = &mut self.parts.actors[i];
+                // 0x4D7230: +0x138 = the creation block's +0x40, the
+                // organization of a member (0x57D950, 0x4FBF40, 0x575C80)
+                s.created_member = a.org.is_some();
+                s.reassembly = waits;
+                s.registered = world.is_scheduled(crate::scheduler::Owner::Component(id, DETECTION_SLOT));
+                self.after_init(world, id, &d, waits);
+                // 0x4F9510 -> 0x4D62F0 -> 0x4CFEA0
+                self.entered_all(world, key);
             }
         }
     }
@@ -706,9 +1073,22 @@ impl Engine {
                 self.parts.orgs[o].comp = Some(DetectionComponent { actor: key, reveal_mask: 0, zod_radius_bits: r.to_bits() });
             }
             self.tile_change(world, key, tile, tiles, fresh);
-            if fresh && d.component {
-                // AfterInit 0x56EC90
-                self.with(world, |map, c| component::activate(map, c, key, PC));
+            if fresh {
+                // Defender InitExisting 0x566DB0 and Organization AfterInit
+                // 0x579DD0 (slot 7): the ZOC (one zone, the same range: both
+                // read +0x2FC for an organization), then 0x5709D0 for its
+                // members.
+                self.zoc_init(world, key, &d);
+                for &m in &world.orgs[o].members {
+                    self.element_update(world, m);
+                }
+                if d.component {
+                    // AfterInit 0x56EC90
+                    self.with(world, |map, c| component::activate(map, c, key, PC));
+                }
+                self.parts.orgs[o].registered = world.is_scheduled(crate::scheduler::Owner::OrgComponent(id, DETECTION_SLOT));
+                // 0x4F9510 -> 0x4D62F0 -> 0x4CFEA0
+                self.entered_all(world, key);
             }
         }
     }
@@ -730,6 +1110,27 @@ impl Engine {
             .collect();
     }
 
+    /// [`zod_radius`] with the sums kept (a Detection ticks each second, and
+    /// the sum walks the properties by name).
+    fn zod_of(&mut self, world: &World, key: Key, d: &DefDetection) -> f32 {
+        let (def, kingdom, own) = match key {
+            Key::Actor(a) => {
+                let x = &world.actors[a as usize];
+                (x.def, x.kingdom, world.books.actor(a).is_some_and(|b| !b.properties.is_empty()))
+            }
+            Key::Org(o) => {
+                let x = &world.orgs[o as usize];
+                (x.def, Some(x.kingdom), false)
+            }
+        };
+        if own {
+            return zod_radius(world, key, d);
+        }
+        let techs = kingdom.and_then(|k| world.books.kingdom(k)).map_or(0, |b| b.technologies.len() + usize::from(b.handicap.is_some()));
+        let add = *self.parts.zod_adds.entry((def, kingdom, techs)).or_insert_with(|| modifier_add(world, key, "DETECTION_RANGE").unwrap_or(f32::NAN));
+        if add.is_nan() { d.zod } else { clamp_add(d.zod, add, self.parts.clamp_add) }
+    }
+
     /// The Detection component's queue-1 Tick `0x56F140` of one thing (its
     /// Updatable +0x14, one second in its bucket): the ZOD radius `+0x14` as
     /// the modifier context gives it (`0x56EA10`), then the ZOD, the reveal
@@ -741,7 +1142,7 @@ impl Engine {
             Key::Actor(a) => actor_key(a),
             Key::Org(o) => org_key(o),
         };
-        let r = zod_radius(world, key, &d).to_bits();
+        let r = self.zod_of(world, key, &d).to_bits();
         let Some(s) = self.slot_mut(k) else { return };
         if s.gone || s.tile.is_none() {
             return;
@@ -764,19 +1165,18 @@ impl Engine {
     }
 
     fn detection_inner(&mut self, world: &World) {
-        use crate::scheduler::Owner;
         // after this update's combat: the engagements as they now stand
         self.parts.reveal_tick = None;
         for i in 0..world.actors.len().min(self.parts.actors.len()) {
             let s = &self.parts.actors[i];
-            if s.gone || s.comp.is_none() || s.tile.is_none() || world.is_scheduled(Owner::Component(i as ActorId, DETECTION_SLOT)) {
+            if s.gone || s.comp.is_none() || s.tile.is_none() || s.registered {
                 continue;
             }
             self.detection_key_tick(world, Key::Actor(i as ActorId));
         }
         for o in 0..world.orgs.len().min(self.parts.orgs.len()) {
             let s = &self.parts.orgs[o];
-            if s.gone || s.comp.is_none() || s.tile.is_none() || world.is_scheduled(Owner::OrgComponent(o as OrgId, DETECTION_SLOT)) {
+            if s.gone || s.comp.is_none() || s.tile.is_none() || s.registered {
                 continue;
             }
             self.detection_key_tick(world, Key::Org(o as OrgId));
@@ -808,8 +1208,18 @@ impl Engine {
                 l.push(key);
             }
         }
+        let g = self.parts.geometry;
+        let shape = match decode(key) {
+            Ok(Key::Actor(a)) => {
+                let x = &world.actors[a as usize];
+                let d = self.def_of(world, Key::Actor(a));
+                shape_tiles(&g, &d, x.pos.truncate(), x.facing, &tiles, tile)
+            }
+            _ => tiles.clone(),
+        };
         if let Some(s) = self.slot_mut(key) {
             s.tiles = tiles;
+            s.shape = shape;
             s.tile = Some(tile);
         }
         self.with(world, |map, c| detection::tile_changed(map, c, key));
@@ -818,6 +1228,7 @@ impl Engine {
                 self.parts.supply_changed.insert(a);
             }
             self.with(world, |map, c| component::move_actor_zones(map, c, key, PC));
+            self.entered_all(world, key);
         }
     }
 
@@ -856,6 +1267,8 @@ impl Engine {
                 res
             });
         }
+        // 0x4CFEA0 under the new owner
+        self.entered_all(world, key);
     }
 
     /// A destroyed actor: release every zone (`0x514CE0`), leave the tiles.
@@ -877,6 +1290,9 @@ impl Engine {
             self.with(world, |map, c| c.release(map, key, i));
         }
         let tiles = self.slot_mut(key).map(|s| std::mem::take(&mut s.tiles)).unwrap_or_default();
+        if let Some(s) = self.slot_mut(key) {
+            s.shape.clear();
+        }
         for t in tiles {
             if let Some(l) = self.parts.lists.get_mut(t) {
                 l.retain(|k| *k != key);
@@ -987,7 +1403,7 @@ impl Engine {
             Key::Actor(a) => self.parts.actors.get(a as usize)?,
             Key::Org(o) => self.parts.orgs.get(o as usize)?,
         };
-        Some((s.tile?, s.tiles.as_slice()))
+        Some((s.tile?, s.shape.as_slice()))
     }
 
     /// `0x54F8B0(kingdom, exclude)` on tile `t` with `exclude` != 0: the
@@ -1063,6 +1479,12 @@ impl Engine {
         }
     }
 
+    /// The tile holds zone type `index` of `actor`.
+    pub fn covers_zone(&self, actor: ActorId, t: usize, index: u32) -> bool {
+        let Some(set) = self.map.tiles.get(t).and_then(|x| x.set) else { return false };
+        aa_zones::query::contains(&self.map.pool, set, actor_key(actor), 1 << index).unwrap_or(false)
+    }
+
     /// The tile holds `provider`'s supply zone (its type-0 tile set entry).
     pub fn covers(&self, provider: ActorId, t: usize) -> bool {
         let Some(set) = self.map.tiles.get(t).and_then(|x| x.set) else { return false };
@@ -1106,23 +1528,28 @@ fn log_refusal(text: &str) {
     let _ = text;
 }
 
+/// The zone flags whose leaves have an entered effect (`0x515620`): types 2,
+/// 3, 4, 5, 8.
+const ENTERED_FLAGS: u16 = 0x13C;
+
 /// Actor `+0x100` bit 21 (0x200000, aa-production `construction.rs`): under
-/// construction. A building unpacking from its truck is built over its
-/// unpacking length.
+/// construction, placed by BuildActor until its body is whole. An unpacking
+/// building is state 26, not this ([`unpacking`]).
 fn under_construction(world: &World, a: ActorId) -> bool {
+    world.books.actor(a).is_some_and(|b| b.constructing)
+}
+
+/// Actor `+0x100` bit 26 (the Berlin film: st 0x4001000 from the update after
+/// the swap until the deferred end of the unpacking, then bit 27): 0x4D21A0
+/// leaves out what `StateBits::selection_special` excludes (Supply, Defender).
+pub(crate) fn unpacking(world: &World, a: ActorId) -> bool {
     world.books.actor(a).and_then(|b| b.deploy.as_ref()).is_some_and(|d| d.kind == crate::books::DeployKind::Unpacking)
 }
 
-/// `0x5709D0` for member `m` of organization `o`: the `+0x80` target and
-/// byte `+0x1C` (the leader, or inside the organization's ZOC: the
-/// control_range circle around its position stands for the type-4 zone).
-fn membership_of(world: &World, defs: &[DefDetection], o: OrgId, m: ActorId, leader: Option<ActorId>) -> Option<(OrgId, bool)> {
-    let g = world.orgs.get(o as usize).filter(|g| g.alive)?;
-    let a = world.actors.get(m as usize).filter(|a| a.alive && !a.removed)?;
-    let at = crate::supply::org_position(world, o);
-    let control = defs.get(g.def as usize).map_or(0.0, |d| d.control);
-    let inside = Some(m) == leader || a.pos.truncate().distance_squared(at) <= control * control;
-    Some((o, inside))
+/// `0x4D21A0` has not made the Defender yet (`assemble_initial`: neither
+/// construction nor selection_special): unpacking or under construction.
+fn assembling(world: &World, a: ActorId) -> bool {
+    unpacking(world, a) || under_construction(world, a)
 }
 
 /// The member whose position the organization takes (57C800: the leader
@@ -1144,8 +1571,24 @@ fn tile_of(g: &MapGeometry, pos: Vec2) -> (i32, i32) {
     ((pos.x / tile).floor() as i32, (pos.y / tile).floor() as i32)
 }
 
-/// The tile under an actor (actor +0x44 / +0x48) and the tiles it occupies
-/// (a structure's footprint rectangle, a unit's own tile), row-major.
+/// The native placement of a thing's blocking shape: its words, the direction
+/// from the facing angle (`Actor` keeps the angle, the original `+2C / +30`).
+fn placement_of(d: &DefDetection, pos: Vec2, facing: f32) -> Option<aa_spatial::geometry::Placement> {
+    let w = d.shape?;
+    let dir = Vec2::from_angle(facing);
+    Some(aa_spatial::geometry::Placement {
+        shape: aa_spatial::collision::Shape { kind: w[0], radius_bits: w[1], bounds: [w[2], w[3], w[4], w[5]] },
+        facing: [dir.x.to_bits(), dir.y.to_bits()],
+        position: [pos.x.to_bits(), pos.y.to_bits()],
+    })
+}
+
+fn grid_of(g: &MapGeometry) -> aa_spatial::collision::Grid {
+    aa_spatial::collision::Grid { dimensions: [g.width, g.height], coordinate_shift: g.shift, cell_size_bits: g.tile_size_bits }
+}
+
+/// The tile under an actor (actor +0x44 / +0x48) and the tiles it is listed on
+/// (a structure's shape rectangle `0x5534F0`, a unit's own tile), row-major.
 pub fn occupancy(g: &MapGeometry, d: &DefDetection, pos: Vec2, facing: f32) -> ((i32, i32), Vec<usize>) {
     let tile = f32::from_bits(g.tile_size_bits);
     let index = |x: i32, y: i32| (x >= 0 && y >= 0 && x < g.width && y < g.height).then(|| (y * g.width + x) as usize);
@@ -1153,6 +1596,14 @@ pub fn occupancy(g: &MapGeometry, d: &DefDetection, pos: Vec2, facing: f32) -> (
     let mut out = Vec::new();
     if d.half == Vec2::ZERO {
         out.extend(index(at.0, at.1));
+        return (at, out);
+    }
+    if let Some(rect) = placement_of(d, pos, facing).and_then(|p| aa_spatial::geometry::tile_rectangle(&grid_of(g), &p, PC).ok()) {
+        for y in rect.min[1]..=rect.max[1] {
+            for x in rect.min[0]..=rect.max[0] {
+                out.extend(index(x, y));
+            }
+        }
         return (at, out);
     }
     let (s, c) = facing.sin_cos();
@@ -1167,13 +1618,34 @@ pub fn occupancy(g: &MapGeometry, d: &DefDetection, pos: Vec2, facing: f32) -> (
     (at, out)
 }
 
+/// The tiles of `0x554CC0`: without `0x4EE700` the tile under the thing; with
+/// it the rectangle's tiles whose centre is inside the shape (`0x5541F0`, its
+/// point mode; the centre tile stays whatever the test says).
+fn shape_tiles(g: &MapGeometry, d: &DefDetection, pos: Vec2, facing: f32, listed: &[usize], at: (i32, i32)) -> Vec<usize> {
+    let own = (at.0 >= 0 && at.1 >= 0 && at.0 < g.width && at.1 < g.height).then(|| (at.1 * g.width + at.0) as usize);
+    if !multi_tile(d, f32::from_bits(g.tile_size_bits)) {
+        return own.into_iter().collect();
+    }
+    let point = aa_spatial::collision::Shape { kind: 0, radius_bits: 0, bounds: [0; 4] };
+    let cells = placement_of(d, pos, facing).and_then(|p| aa_spatial::creation_placement::occupancy_tiles(&grid_of(g), g.extent_bits, &point, &p, PC).ok());
+    match cells {
+        Some(cells) => cells.into_iter().map(|c| (c[1] * g.width + c[0]) as usize).collect(),
+        None => listed.to_vec(),
+    }
+}
+
 /// `0x56EDC0` per actor and per organization: the kingdom bits (`+0x18C`,
 /// major kingdoms only: `+0x190 == 0`) of the `+0x118` engagers (the
-/// organizations whose engage list holds the thing, `0x523DD0` /
-/// `0x524C10` -> `0x4D3990`; the actors whose target it is) and, with
-/// EngagementShowReverseRZOD (SVar cache `+0x1C8`), the owner of the thing's
-/// own Mind target (`+0x70` virtual `+0x90`): an engaged thing's RZOD shows
-/// to the kingdoms it attacks.
+/// organizations whose engage list holds the thing, `0x523DD0` / `0x523EA0` /
+/// `0x524C10` -> `0x4D3990`), of the `+0x130` nodes (who shells it, `0x4D6190`)
+/// and, with EngagementShowReverseRZOD (SVar cache `+0x1C8`), the owner of the
+/// thing's own Mind target (`+0x70` virtual `+0x90`: an organization's engage
+/// list head `0x5248B0`, an element's Mind `+0x13C` `0x535F10`; no Mind on a
+/// building or a city, and an aircraft Mind answers none `0x4C9FA0`): an
+/// engaged thing's RZOD shows to the kingdoms it attacks. A member's weapon
+/// target is not an engager: nothing but those three and the Defender
+/// (`0x567140`, not bound) writes `+0x118`. The Defender's `+0x24` list and
+/// a denizen's threats (`0x569300`) have no source yet.
 fn engagements(world: &World) -> (Vec<u32>, Vec<u32>) {
     let mut actors = vec![0u32; world.actors.len()];
     let mut orgs = vec![0u32; world.orgs.len()];
@@ -1188,18 +1660,45 @@ fn engagements(world: &World) -> (Vec<u32>, Vec<u32>) {
         crate::combat::TargetRef::Actor(a) => world.actors.get(a as usize).and_then(|x| x.kingdom),
         crate::combat::TargetRef::Org(o) => world.orgs.get(o as usize).map(|x| x.kingdom),
     };
-    for a in world.actors.iter().filter(|a| a.alive && !a.removed) {
-        let Some(t) = a.combat.target else { continue };
-        if let Some(m) = actors.get_mut(t as usize) {
-            *m |= bit(a.kingdom);
+    if reverse {
+        for a in world.actors.iter().filter(|a| a.alive && !a.removed) {
+            // the element's kill state (Mind +0x13C), as the engage state hands it
+            let handed = world.combat.actors.get(a.id as usize).is_some_and(|c| c.engage_target.is_some());
+            let Some(t) = a.combat.target.filter(|_| handed) else { continue };
+            let d = world.data.def(a.def);
+            // the element Mind (0x4CF480: organization bit 7, aircraft bit
+            // 23, element bit 8, in that order)
+            let element = d.components & (1 << ELEMENT_SLOT) != 0 || d.class == Some(DefClass::Member);
+            if !element || d.components & (1 << ORGANIZATION_SLOT) != 0 || d.components & (1 << AIRCRAFT_SLOT) != 0 {
+                continue;
+            }
+            if let Some(m) = actors.get_mut(a.id as usize) {
+                *m |= bit(world.actors.get(t as usize).and_then(|x| x.kingdom));
+            }
         }
-        if reverse && let Some(m) = actors.get_mut(a.id as usize) {
-            *m |= bit(world.actors.get(t as usize).and_then(|x| x.kingdom));
+    }
+    let attacker = |t: crate::combat::TargetRef| bit(owner(t));
+    for (a, c) in world.combat.actors.iter().enumerate() {
+        for e in &c.attacked_by {
+            if let Some(m) = actors.get_mut(a) {
+                *m |= attacker(e.attacker);
+            }
         }
     }
     for (o, s) in world.combat.orgs.iter().enumerate() {
+        for e in &s.attacked_by {
+            if let Some(m) = orgs.get_mut(o) {
+                *m |= attacker(e.attacker);
+            }
+        }
         let Some(g) = world.orgs.get(o).filter(|g| g.alive) else { continue };
         for e in &s.engage {
+            // a kill order's target (`KKC_CAIStateKill`) is in `engage` here,
+            // not natively: the state does not touch +0x1DC or +0x118 (the
+            // Berlin film: kill orders from 3297, no zone 1 anywhere)
+            if s.explicit == Some(e.target) {
+                continue;
+            }
             match e.target {
                 crate::combat::TargetRef::Actor(a) => {
                     if let Some(m) = actors.get_mut(a as usize) {
@@ -1214,7 +1713,7 @@ fn engagements(world: &World) -> (Vec<u32>, Vec<u32>) {
             }
         }
         if reverse
-            && let Some(t) = s.current_target()
+            && let Some(t) = s.current_target().filter(|t| s.explicit != Some(*t))
             && let Some(m) = orgs.get_mut(o)
         {
             *m |= bit(owner(t));
@@ -1407,31 +1906,80 @@ impl ZoneWorld for Ctx<'_> {
         Ok(!self.slot(actor)?.gone)
     }
     fn actor_multi_tile(&mut self, actor: ActorKey) -> Result<bool> {
-        Ok(self.slot(actor)?.tiles.len() > 1)
+        Ok(multi_tile(&self.def(actor)?, f32::from_bits(self.p.geometry.tile_size_bits)))
     }
     fn actor_tile(&mut self, actor: ActorKey) -> Result<i64> {
         let (x, y) = self.slot(actor)?.tile.unwrap_or((0, 0));
         Ok(i64::from(y) * i64::from(self.p.geometry.width) + i64::from(x))
     }
     fn actor_flags(&mut self, actor: ActorKey) -> Result<u32> {
-        Ok(u32::from(self.dead(actor)?))
+        let dead = self.dead(actor)?;
+        let targetable = !dead && self.def(actor)?.targetable;
+        Ok(u32::from(dead) | u32::from(targetable) << 14)
     }
     fn actor_redirect(&mut self, actor: ActorKey) -> Result<Option<ActorKey>> {
         Ok(self.membership(actor)?.filter(|m| m.1).map(|m| org_key(m.0)))
     }
     fn component(&mut self, actor: ActorKey, offset: u32) -> Result<u32> {
         Ok(match offset {
-            // actor +0x100 flags: bit 21 (0x200000) under construction, a
-            // building still unpacking from its truck
+            // actor +0x100 flags: bit 21 (0x200000) under construction
             0x100 => match decode(actor)? {
                 Key::Actor(a) if under_construction(self.w, a) => 0x20_0000,
                 _ => 0,
             },
+            // +0x138: the organization of a member it created (0x4D7230)
+            0x138 => u32::from(self.slot(actor)?.created_member),
+            // +0xD4: the CityComponent, named by its actor
+            0xd4 if self.def(actor)?.city > 0.0 => actor,
+            // +0x7C: the OrganizationComponent, named by its organization
+            0x7c if matches!(decode(actor)?, Key::Org(_)) => actor,
+            // +0xB0: the DefenderComponent, named by its thing
+            0xb0 if self.def(actor)?.defender => actor,
             _ => 0,
         })
     }
-    fn component_effect(&mut self, effect: ComponentEffect, _component: u32, _target: ActorKey) -> Result<()> {
-        Err(Error::World(format!("component effect {effect:?} is not bound")))
+    fn component_effect(&mut self, effect: ComponentEffect, component: u32, target: ActorKey) -> Result<()> {
+        // Run by their owners when the engine is back: 0x564300 and 0x567840
+        // draw, and all of them write what the engine does not hold.
+        let who = decode(target)?;
+        let entered = match (effect, decode(component)?) {
+            (ComponentEffect::Type8, Key::Actor(city)) => Entered::City(city, who),
+            (ComponentEffect::ControlOrganization, Key::Org(o)) => Entered::Organization(o, who),
+            (ComponentEffect::ControlB0, owner) => Entered::Defender(owner, who),
+            _ => return Err(Error::World(format!("component effect {effect:?} is not bound"))),
+        };
+        self.p.entered.push(entered);
+        Ok(())
+    }
+}
+
+impl EnterWorld for Ctx<'_> {
+    fn zone_object(&mut self, actor: ActorKey, index: u32) -> Result<Option<Zone>> {
+        Ok(self.slot(actor)?.zone(index))
+    }
+    fn has_detection_component(&mut self, actor: ActorKey) -> Result<bool> {
+        Ok(self.slot(actor)?.comp.is_some())
+    }
+    fn data_is_marker(&mut self, _actor: ActorKey) -> Result<bool> {
+        Err(Error::World("the discovery marker (zone 2, ActorData virtual +0x24) is not bound".into()))
+    }
+    fn virtual_explored(&mut self, actor: ActorKey, kingdom: u32, deep: bool) -> Result<bool> {
+        detection::explored_by(self, actor, kingdom, deep)
+    }
+    fn world_flag_48(&mut self) -> Result<bool> {
+        Err(Error::World("GWorld+0x48 is not bound".into()))
+    }
+    fn marker_reveal_padding_bits(&mut self) -> Result<u32> {
+        Err(Error::World("MarkerRevealPadding is not bound".into()))
+    }
+    fn actor_size(&mut self, actor: ActorKey) -> Result<u32> {
+        Ok(self.def(actor)?.size.to_bits())
+    }
+    fn discovery_tiles(&mut self, _actor: ActorKey, _radius_bits: u32) -> Result<Vec<usize>> {
+        Err(Error::World("the discovery tiles (0x432730) are not bound".into()))
+    }
+    fn set_actor_flags(&mut self, _actor: ActorKey, _flags: u32) -> Result<()> {
+        Err(Error::World("actor +8 is not written here".into()))
     }
 }
 
@@ -1500,7 +2048,7 @@ impl DetectionComponentWorld for Ctx<'_> {
     fn actor_80(&mut self, actor: ActorKey) -> Result<(u32, u32, u8)> {
         Ok(match self.membership(actor)? {
             Some((o, inside)) => (1, org_key(o), u8::from(inside)),
-            None => (0, 0, 0),
+            None => (u32::from(self.def(actor)?.element), 0, 0),
         })
     }
     fn data_word(&mut self, actor: ActorKey, offset: u32) -> Result<u32> {
@@ -1539,7 +2087,9 @@ impl DetectionComponentWorld for Ctx<'_> {
             }
         }))
     }
-    fn schedule_tick(&mut self, _actor: ActorKey, _delay_bits: u32) -> Result<()> {
+    fn schedule_tick(&mut self, actor: ActorKey, _delay_bits: u32) -> Result<()> {
+        let key = decode(actor)?;
+        self.p.pending_ticks.push(key);
         Ok(())
     }
 }
@@ -1559,13 +2109,13 @@ impl ActorDetectionWorld for Ctx<'_> {
         Ok(self.def(actor)?.size.to_bits())
     }
     fn shape_tiles(&mut self, actor: ActorKey) -> Result<Vec<usize>> {
-        Ok(self.slot(actor)?.tiles.clone())
+        Ok(self.slot(actor)?.shape.clone())
     }
     fn tile_fog(&mut self, tile: usize) -> Result<u32> {
         self.p.mirror.get(tile).copied().ok_or(Error::TileOutside(tile as i64))
     }
     fn occupancy_tiles(&mut self, actor: ActorKey) -> Result<Vec<usize>> {
-        Ok(self.slot(actor)?.tiles.clone())
+        Ok(self.slot(actor)?.shape.clone())
     }
     fn keeps_memory(&mut self, actor: ActorKey) -> Result<bool> {
         Ok(matches!(decode(actor)?, Key::Actor(_)) && self.def(actor)?.keeps_memory)

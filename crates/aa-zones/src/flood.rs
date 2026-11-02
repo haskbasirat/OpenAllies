@@ -48,7 +48,6 @@ use crate::zone::{Zone, tile_actor_effects};
 use crate::{Error, Result};
 use aa_numeric::{Binary, Precision};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Native open-list limit of the ZoneSolver queue (`0x53CDF0`: 0x1F9C).
 pub const NATIVE_QUEUE_LIMIT: usize = 0x1F9C;
@@ -101,11 +100,17 @@ pub struct SolverState {
     pub queue_limit: Option<usize>,
     /// Tile +0x24, per tile.
     pub scratch: Vec<Scratch>,
+    /// The arrival marks and the open list of the solves, kept between them:
+    /// a moving organization's ZOC solves on every tile change.
+    #[serde(skip)]
+    visits: Visits,
+    #[serde(skip)]
+    open: Vec<Entry>,
 }
 
 impl SolverState {
     pub fn new(tiles: usize, queue_limit: Option<usize>) -> Self {
-        Self { busy: false, stamp: 0, warned: false, queue_limit, scratch: vec![Scratch::default(); tiles] }
+        Self { busy: false, stamp: 0, warned: false, queue_limit, scratch: vec![Scratch::default(); tiles], visits: Visits::default(), open: Vec::new() }
     }
 
     /// `0x552440`: next stamp; at 0x7FFFFFFF every tile stamp is cleared and
@@ -310,9 +315,45 @@ struct Functor {
 }
 
 /// Per-solve tile state (stamp == current, +0x2D arrival direction).
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 struct Visits {
-    came: HashMap<usize, u32, crate::set::FxBuild>,
+    stamp: u32,
+    marks: Vec<(u32, u8)>,
+}
+
+impl Visits {
+    /// A new solve: no tile is marked.
+    fn begin(&mut self, tiles: usize) {
+        self.stamp = self.stamp.wrapping_add(1);
+        if self.stamp == 0 || self.marks.len() != tiles {
+            self.marks.clear();
+            self.marks.resize(tiles, (0, 0));
+            self.stamp = 1;
+        }
+    }
+    /// The arrival direction of tile `t` in this solve.
+    fn came(&self, t: usize) -> Option<u32> {
+        self.marks.get(t).filter(|m| m.0 == self.stamp).map(|m| u32::from(m.1))
+    }
+    fn insert(&mut self, t: usize, dir: u32) {
+        self.marks[t] = (self.stamp, dir as u8);
+    }
+}
+
+/// The valid directions from a tile, in order (at most eight).
+struct Dirs {
+    list: [u32; 8],
+    n: usize,
+}
+
+impl Dirs {
+    fn push(&mut self, dir: u32) {
+        self.list[self.n] = dir;
+        self.n += 1;
+    }
+    fn as_slice(&self) -> &[u32] {
+        &self.list[..self.n]
+    }
 }
 
 /// The blocked test (functor +0x1C) of each functor class.
@@ -387,10 +428,10 @@ fn neighbours<W: FloodWorld + ?Sized>(
     b: &Blocked<'_>,
     visits: &Visits,
     origin: [i32; 2],
-) -> Result<Vec<u32>> {
+) -> Result<Dirs> {
     let t = linear(map, origin)?;
-    let came = visits.came.get(&t).copied().unwrap_or(0);
-    let mut out = Vec::new();
+    let came = visits.came(t).unwrap_or(0);
+    let mut out = Dirs { list: [0; 8], n: 0 };
     if !fu.bounded && w.tile_flags(t)? & 1 != 0 {
         return Ok(out);
     }
@@ -477,14 +518,35 @@ fn run_dijkstra<W: FloodWorld + ?Sized>(
         return Ok(0);
     }
     reentry_guard(map, st)?;
-    let mut queue = Queue { entries: Vec::new(), limit: st.queue_limit };
+    let mut entries = std::mem::take(&mut st.open);
+    entries.clear();
+    let mut queue = Queue { entries, limit: st.queue_limit };
+    let mut visits = std::mem::take(&mut st.visits);
+    visits.begin(map.tiles.len());
+    let r = dijkstra(map, st, w, zone, skip_blocked, moved, p, &mut queue, &mut visits);
+    st.open = queue.entries;
+    st.visits = visits;
+    r
+}
+
+#[allow(clippy::too_many_arguments)]
+fn dijkstra<W: FloodWorld + ?Sized>(
+    map: &mut ZoneMap,
+    st: &mut SolverState,
+    w: &mut W,
+    zone: &mut Zone,
+    skip_blocked: bool,
+    moved: bool,
+    p: Precision,
+    queue: &mut Queue,
+    visits: &mut Visits,
+) -> Result<u32> {
     st.advance();
     st.busy = true;
     let fu = Functor { all_dirs: false, corners: true, three_ahead: false, bounded: false, skip_blocked };
     let start = [zone.x, zone.y];
     let ts = linear(map, start)?;
-    let mut visits = Visits::default();
-    visits.came.insert(ts, 0);
+    visits.insert(ts, 0);
     let zero = fpu::f32_store(&fpu::add(&f(0)?, &f(0)?, p)?)?;
     if !queue.push(Entry { cell: start, priority: zero, cost: 0 })? {
         st.busy = false;
@@ -495,11 +557,11 @@ fn run_dijkstra<W: FloodWorld + ?Sized>(
     let ops = Ops { p, tile_bits: map.geometry.tile_size_bits, half: fpu::mul(&tile, &f(fpu::HALF_BITS)?, p)? };
     while let Some(node) = queue.pop()? {
         let cur = node.cell;
-        let dirs = neighbours(map, w, fu, &Blocked::Impassable, &visits, cur)?;
-        for dir in dirs {
+        let dirs = neighbours(map, w, fu, &Blocked::Impassable, visits, cur)?;
+        for &dir in dirs.as_slice() {
             let n = offset(cur, dir);
             let nt = linear(map, n)?;
-            visit_dijkstra(map, st, w, zone, &mut queue, &mut visits, node, cur, n, nt, moved, &ops)?;
+            visit_dijkstra(map, st, w, zone, queue, visits, node, cur, n, nt, moved, &ops)?;
         }
     }
     st.busy = false;
@@ -535,8 +597,8 @@ fn visit_dijkstra<W: FloodWorld + ?Sized>(
     let mut had_zone = false; // [esp+0x12]
     let mut within_before = false; // [esp+0x13]
     let first_reach = direction(cur, n)?;
-    if let std::collections::hash_map::Entry::Vacant(v) = visits.came.entry(nt) {
-        v.insert(first_reach);
+    if visits.came(nt).is_none() {
+        visits.insert(nt, first_reach);
         if moved {
             had_zone = tile_has_zone_entry(map, nt, zone)?;
         }
@@ -673,13 +735,27 @@ pub fn walk<W: FloodWorld + ?Sized>(
         return Ok(0);
     }
     reentry_guard(map, st)?;
+    let mut visits = std::mem::take(&mut st.visits);
+    visits.begin(map.tiles.len());
+    let r = walk_tiles(map, st, w, zone, action, &mut visits);
+    st.visits = visits;
+    r
+}
+
+fn walk_tiles<W: FloodWorld + ?Sized>(
+    map: &mut ZoneMap,
+    st: &mut SolverState,
+    w: &mut W,
+    zone: &Zone,
+    action: FifoAction,
+    visits: &mut Visits,
+) -> Result<u32> {
     st.advance();
     st.busy = true;
     let fu = Functor { all_dirs: false, corners: false, three_ahead: true, bounded: true, skip_blocked: false };
     let start = [zone.x, zone.y];
     let ts = linear(map, start)?;
-    let mut visits = Visits::default();
-    visits.came.insert(ts, 0);
+    visits.insert(ts, 0);
     st.scratch[ts] = Scratch::Bits(0);
     let (mut head, mut tail): (Option<usize>, Option<usize>) = (None, None);
     let push = |st: &mut SolverState, head: &mut Option<usize>, tail: &mut Option<usize>, t: usize| {
@@ -708,15 +784,15 @@ pub fn walk<W: FloodWorld + ?Sized>(
         if cur == start {
             fifo_apply(map, w, zone, action, cur_t)?;
         }
-        let dirs = neighbours(map, w, fu, &blocked_rule, &visits, cur)?;
-        for dir in dirs {
+        let dirs = neighbours(map, w, fu, &blocked_rule, visits, cur)?;
+        for &dir in dirs.as_slice() {
             let n = offset(cur, dir);
             let nt = linear(map, n)?;
             // 0x53F8D0
-            if visits.came.contains_key(&nt) {
+            if visits.came(nt).is_some() {
                 continue;
             }
-            visits.came.insert(nt, direction(cur, n)?);
+            visits.insert(nt, direction(cur, n)?);
             st.scratch[nt] = Scratch::Bits(0);
             if blocked(map, w, &blocked_rule, nt)? {
                 continue;

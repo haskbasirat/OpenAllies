@@ -285,10 +285,11 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
                 }
             };
             set(STATE_OUT_OF_SUPPLY, b.is_some_and(|b| b.out_of_supply));
-            // 0x4D6660: a city held under siege (City +0x20)
-            set(STATE_UNDER_SIEGE, b.is_some_and(|b| b.city_siege));
-            // +0x100 bit 21: placed by BuildActor or still unpacking
-            set(STATE_CONSTRUCTION, b.is_some_and(|b| b.constructing || b.deploy.as_ref().is_some_and(|d| d.kind == crate::books::DeployKind::Unpacking)));
+            // 0x4D6660
+            set(STATE_UNDER_SIEGE, under_siege(world, a));
+            // +0x100 bit 21: placed by BuildActor (an unpacking building is
+            // bit 26, the film's st 0x4001000)
+            set(STATE_CONSTRUCTION, b.is_some_and(|b| b.constructing));
             // +0x104 bit 7: packing and unpacking disable the actor
             set(STATE_DISABLED, b.is_some_and(|b| b.deploy.is_some()));
             let slot = e.and_then(|e| e.parts.actors.get(a as usize));
@@ -298,7 +299,8 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
                 flags8: u32::from(!x.alive),
                 states,
                 definition: definition(d),
-                supply: d.has_supply.then(|| SupplyComponent {
+                // +0x8C: not assembled while unpacking (0x4D21A0)
+                supply: (d.has_supply && !crate::zones::unpacking(world, a)).then(|| SupplyComponent {
                     radius: F32Bits(slot.and_then(|s| s.supply_radius).unwrap_or(d.supply_range.to_bits())),
                     dirty: slot.is_some_and(|s| s.supply_dirty),
                     stockpile: F32Bits::from_f32(b.map_or(0.0, |b| b.supply_stock)),
@@ -311,8 +313,9 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
                 properties_flag20: has(d, PROPERTIES_SLOT).then(|| crate::special_ops::has_flag(world, a, "SUPPLIED")),
                 // City +0x20: held under siege
                 city_flag20: (has(d, CITY_SLOT) || d.city).then(|| b.is_some_and(|b| b.city_siege)),
+                // +0x118 is read for an organization only (0x4D0A80)
                 word_118: false,
-                word_128: false,
+                word_128: world.combat.actor(a).is_some_and(|c| !c.bombarding.is_empty()),
                 word_d8: has(d, HQ_SLOT),
                 gtid_d0: 0,
                 kingdom: x.kingdom,
@@ -330,7 +333,7 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
             }
             let tile = e.and_then(|e| e.placement(key)).map(|(t, _)| t).unwrap_or_else(|| tile_xy(&world.map, g.anchor));
             // +0x118: the organizations whose engage list holds it (0x4D3990)
-            let engaged = world.combat.orgs.get(o as usize).is_some_and(|c| !c.engaged_by.is_empty());
+            let engaged = world.combat.orgs.get(o as usize).is_some_and(|c| c.is_engaged());
             Some(SupplyActor {
                 gtid: raw(key),
                 flags8: 0,
@@ -339,11 +342,12 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
                 supply: None,
                 element: None,
                 // +0x7C and its +0xD4 transport: aa-play carries no organization
+                // on a transport (economy.rs: transport_vector)
                 organization_component: Some(false),
                 properties_flag20: (has(d, PROPERTIES_SLOT) || d.components == 0).then(|| crate::special_ops::org_has_flag(world, o, "SUPPLIED")),
                 city_flag20: None,
                 word_118: engaged,
-                word_128: false,
+                word_128: world.combat.org(o).is_some_and(|c| !c.bombarding.is_empty()),
                 // +0xD8: an HQ (its HQComponent)
                 word_d8: has(d, HQ_SLOT),
                 // +0xD0: the HQ it is attached to (0x44DEE0 resolves it)
@@ -360,11 +364,14 @@ fn snapshot(world: &World, e: Option<&Engine>, key: Key) -> Option<SupplyActor> 
 /// `0x4EE700`: Thing flags `0x20000400` (blocking, static) and `(int)tile <=
 /// virtual +4 * 4` (0x9FD59C; the shape's +4 is the circle radius or the
 /// rectangle's half diagonal, 0x46E0E0): its shape's tiles count.
-fn large(world: &World, raw: u32) -> bool {
-    let Some(Key::Actor(a)) = key_of(raw) else { return false };
+fn large(world: &World, engine: Option<&Engine>, raw: u32) -> bool {
+    let Some(key @ Key::Actor(a)) = key_of(raw) else { return false };
     let Some(x) = world.actors.get(a as usize) else { return false };
-    let d = crate::zones::def_detection(world.data.def(x.def));
-    d.large_shape && (world.map.cell_size as i32) as f32 <= d.size * 4.0
+    let d = match engine {
+        Some(e) => e.def_of(world, key),
+        None => crate::zones::def_detection(world.data.def(x.def)),
+    };
+    crate::zones::multi_tile(&d, world.map.cell_size)
 }
 
 /// The supply port's world (aa-economy `SupplyWorld`) over the battle: the
@@ -439,6 +446,8 @@ impl SupplyWorld for Binding<'_> {
         Ok(self.actor(actor)?.kingdom)
     }
     fn world_suspended(&mut self) -> Result<bool, EconomyError> {
+        // 0x4F0460: GWorld+0x28 +0xA8, the map mode (0x4F3640, 0x4EF6A0): a
+        // battle is mode 0, the others are the map editor's
         Ok(false)
     }
     fn provide_under_siege(&self) -> bool {
@@ -453,7 +462,7 @@ impl SupplyWorld for Binding<'_> {
         self.w.map.width
     }
     fn large_actor(&mut self, actor: u32) -> Result<bool, EconomyError> {
-        Ok(large(self.w, actor))
+        Ok(large(self.w, self.e.as_deref(), actor))
     }
     fn tile_supplied(&mut self, tile: u32, kingdom: Option<u32>, actor: u32) -> Result<bool, EconomyError> {
         let w = self.w;
@@ -466,7 +475,7 @@ impl SupplyWorld for Binding<'_> {
     }
     fn relay_candidates(&mut self, actor: u32, kingdom: Option<u32>) -> Result<Vec<u32>, EconomyError> {
         let w = self.w;
-        let large = large(w, actor);
+        let large = large(w, self.e.as_deref(), actor);
         let (Some(e), Some(Key::Actor(a))) = (self.e.as_deref_mut(), key_of(actor)) else { return Ok(Vec::new()) };
         let list = e.supply_candidates(w, a, kingdom, large);
         Ok(list.into_iter().map(|c| raw(Key::Actor(c))).filter(|c| self.store.contains_key(c)).collect())
@@ -481,12 +490,14 @@ impl SupplyWorld for Binding<'_> {
         Ok(())
     }
     fn refresh_actor(&mut self, _actor: u32) -> Result<(), EconomyError> {
-        // 0x4D1350: the components' modifier refresh (the economy reads the
-        // state at its next pass)
+        // 0x4D1350 recomputes the command mask +0xF0 / +0xF4 from the
+        // components: the order panel's, which crate::player_orders asks of
+        // the thing when it is shown
         Ok(())
     }
     fn refresh_economy(&mut self, _actor: u32) -> Result<(), EconomyError> {
-        // 0x4CF0F0
+        // 0x4CF0F0 -> 0x570020: crate::economy::refresh applies a changed
+        // contribution at its next pass
         Ok(())
     }
     fn stop_economy_ticks(&mut self, _actor: u32) -> Result<(), EconomyError> {
@@ -591,10 +602,16 @@ pub fn supplier_tick(world: &mut World, a: ActorId, elapsed: f32) {
     if x.removed || !world.data.def(x.def).has_supply {
         return;
     }
+    let first = !world.books.actor(a).is_some_and(|b| b.supply_started);
     let r = supply_radius(world, a).to_bits();
     if let Some(mut e) = crate::fog::take_engine(world) {
         e.observe_update(world);
         e.observe_key(world, Key::Actor(a));
+        // 0x58B0E0: CreateZone(0) when the zone vector has no zone 0 (inactive,
+        // radius -1, until it provides), then 0x58AE10(0)
+        if first {
+            e.supply_create(world, a);
+        }
         if let Some(s) = e.supply_component(a) {
             match s.supply_radius {
                 None => s.supply_radius = Some(r),
@@ -610,17 +627,6 @@ pub fn supplier_tick(world: &mut World, a: ActorId, elapsed: f32) {
     let seconds = F32Bits(elapsed.to_bits());
     run(world, Key::Actor(a), |b, k| native::supply_tick(b, k, seconds, PRECISION));
     world.books.actor_mut(a).supply_started = true;
-}
-
-/// Supply InitExisting 0x58B0E0: CreateZone(0) when the zone vector has no
-/// zone 0 (inactive, radius -1, until it provides), then 0x58AE10(0).
-fn init_existing(world: &mut World, a: ActorId) {
-    if let Some(mut e) = crate::fog::take_engine(world) {
-        e.observe_key(world, Key::Actor(a));
-        e.supply_create(world, a);
-        crate::fog::put_engine(world, e);
-    }
-    supplier_tick(world, a, 0.0);
 }
 
 /// EconomyComponent::Tick 0x56F2B0 (its queue-1 Updatable, registered at
@@ -648,10 +654,32 @@ fn update_state(world: &mut World, key: Key) {
     run(world, key, |b, k| native::update_supply_state(b, k).map(|_| ()));
 }
 
+/// 0x4D6660 as it stands now: state 20 (under siege) is `+0x128` not empty, or
+/// the last hit within UnderSiegeRecentlyDamagedSeconds (0x4D0440: the time of
+/// Body +0x28's record, organization +0x90), or City +0x20, for a living thing.
+/// The Denizen's guard zone part (0x569540, zone 5) is not bound. The original
+/// takes the state at its refresh points (a hit 0x5625C0, the Element Tick
+/// 0x570B90, the City Tick 0x5647A0, 0x566400, a death 0x4D7960) and keeps it
+/// between them; this answers at the time of asking.
+pub fn under_siege(world: &World, a: ActorId) -> bool {
+    if !world.actors.get(a as usize).is_some_and(|x| x.alive) {
+        return false;
+    }
+    let c = world.combat.actor(a);
+    if world.books.actor(a).is_some_and(|b| b.city_siege) || c.is_some_and(|c| !c.bombarding.is_empty()) {
+        return true;
+    }
+    c.and_then(|c| c.last_hit).is_some_and(|(_, t)| {
+        let seconds = world.data.rule_ci("UnderSiegeRecentlyDamagedSeconds").unwrap_or(0.0);
+        t != 0.0 && ((world.time as f64 - t as f64) as f32) < seconds
+    })
+}
+
 /// 0x561C60, the gate of the Body Updatable 0x562E10: UnitSupplyEnabled, not
 /// an organization, unit_shortfall_damage_rate (ActorData +0x2A8) above 0
-/// (0x561B40), not an organization member; the `+0x16C` GTID (not bound) is
-/// taken as unresolved.
+/// (0x561B40), not an organization member; the `+0x16C` GTID, the truck a
+/// trailer belongs to (0x4D6F10, 0x4D5EA0), is unresolved: aa-play keeps no
+/// trailer as an actor.
 pub fn body_supplies(world: &World, a: ActorId) -> bool {
     let Some(x) = world.actors.get(a as usize).filter(|x| !x.removed) else { return false };
     let d = world.data.def(x.def);
@@ -696,19 +724,21 @@ fn publish_zones(world: &mut World) {
 }
 
 /// The per-update supply pass: the tile changes of this update's moves, the
-/// InitExisting 0x58B0E0 of the suppliers new this update (creation order,
-/// each seeing the zones of those before it), the Body supply ticks of lone
-/// bleeding Bodies without a queue-1 registration (every update until their
-/// Body registers), `books.zones` and the city admissions.
+/// Element Ticks of this update, the InitExisting 0x58B0E0 of the suppliers
+/// new this update (creation order, each seeing the zones of those before it;
+/// an unpacking building has no Supply until the deferred end of the unpacking
+/// assembles it, 0x576319 -> 0x4D3068, `crate::deploy`), the Body supply ticks
+/// of lone bleeding Bodies without a queue-1 registration (every update until
+/// their Body registers) and `books.zones`. The city zones take candidates in
+/// as they are covered ([`city_entered`]).
 pub fn tick(world: &mut World) {
-    if let Some(mut e) = crate::fog::take_engine(world) {
-        e.observe(world);
-        crate::fog::put_engine(world, e);
-    }
+    crate::fog::observe_now(world);
+    crate::fog::element_pass(world);
+    relay_links_follow_the_swap(world);
     for a in 0..world.actors.len() as ActorId {
         let x = &world.actors[a as usize];
-        if !x.removed && world.data.def(x.def).has_supply && !world.books.actor(a).is_some_and(|b| b.supply_started) {
-            init_existing(world, a);
+        if !x.removed && world.data.def(x.def).has_supply && !world.books.actor(a).is_some_and(|b| b.supply_started) && !crate::zones::unpacking(world, a) {
+            supplier_tick(world, a, 0.0);
         }
     }
     for a in 0..world.actors.len() as ActorId {
@@ -717,40 +747,48 @@ pub fn tick(world: &mut World) {
         }
     }
     publish_zones(world);
-    city_admissions(world);
 }
 
-/// 0x564300 for every city: an admitted candidate (0x5640A0) that entered
-/// the city zone joins the head of City+18, and a City not on queue 1
-/// registers there (0x50AC60: one draw). Compare against the original: the
-/// zone-8 entries are found once per update after the moves, not inside
-/// each tile change.
-fn city_admissions(world: &mut World) {
-    let mut candidates: Option<Vec<CityCandidate>> = None;
-    for c in 0..world.actors.len() as ActorId {
-        let city = &world.actors[c as usize];
-        if !city.alive || city.removed {
-            continue;
-        }
-        let def = world.data.def(city.def);
-        if !def.city || def.city_zone_radius <= 0.0 || def.components & (1 << crate::scheduler::CITY_SLOT) == 0 {
-            continue;
-        }
-        let (centre, radius) = (city.pos.truncate(), def.city_zone_radius);
-        let all = candidates.get_or_insert_with(|| city_candidates(world));
-        let entering: Vec<crate::books::CityCandidateRef> = all
-            .iter()
-            .filter(|x| x.pos.distance_squared(centre) <= radius * radius)
-            .map(|x| x.who)
-            .filter(|who| !world.books.actor(c).is_some_and(|b| b.city_candidates.contains(who)))
-            .collect();
-        for who in entering {
-            world.books.actor_mut(c).city_candidates.insert(0, who);
-            let owner = crate::scheduler::Owner::Component(c, crate::scheduler::CITY_SLOT);
-            if !world.is_scheduled(owner) {
-                world.schedule_periodic(crate::scheduler::EVERY_SECOND, owner, 0);
+/// An unpack gives the building the truck's GTID (0x4EFB90): a relay's link
+/// Supply +0x1C to the truck goes on resolving, to the building. The links here
+/// name the actor, and the zone keys are identities only, so the swap has to
+/// reach them.
+fn relay_links_follow_the_swap(world: &mut World) {
+    let swaps: Vec<(ActorId, ActorId)> = world
+        .books
+        .notices
+        .iter()
+        .filter_map(|n| match n {
+            crate::books::Notice::Replaced { old, new } => Some((*old, *new)),
+            _ => None,
+        })
+        .collect();
+    for (old, new) in swaps {
+        for b in world.books.actors.iter_mut() {
+            if b.supply_relay == Some(old) {
+                b.supply_relay = Some(new);
             }
         }
+    }
+}
+
+/// 0x564300, reached from the city's zone 8 (0x514E20 when the zone covers a
+/// tile with the thing on it, 0x515620 when the thing's tile change enters
+/// one; the film: 0x4D6350 -> 0x4CFEA0 -> 0x515620): an admitted candidate
+/// (0x5640A0) not listed yet joins the head of City+18, and a City not on a
+/// queue registers on queue 1 (0x50AC60: one draw).
+pub(crate) fn city_entered(world: &mut World, city: ActorId, who: Key) {
+    let who = match who {
+        Key::Actor(a) => crate::books::CityCandidateRef::Actor(a),
+        Key::Org(o) => crate::books::CityCandidateRef::Org(o),
+    };
+    if !admitted(world, city, who) || world.books.actor(city).is_some_and(|b| b.city_candidates.contains(&who)) {
+        return;
+    }
+    world.books.actor_mut(city).city_candidates.insert(0, who);
+    let owner = crate::scheduler::Owner::Component(city, crate::scheduler::CITY_SLOT);
+    if !world.is_scheduled(owner) {
+        world.schedule_periodic_at(crate::trace::sites::CITY_ADMISSION, crate::scheduler::EVERY_SECOND, owner, 0);
     }
 }
 
@@ -766,6 +804,10 @@ pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
     if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
         return;
     }
+    crate::morale::maintenance_delivery(world, o, elapsed);
+    if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
+        return;
+    }
     crate::movement::org_follow_leader(world, o);
     if !world.orgs.get(o as usize).is_some_and(|x| x.alive) {
         return;
@@ -775,26 +817,50 @@ pub fn org_maintenance(world: &mut World, o: OrgId, elapsed: f32) {
     }
     crate::economy::shortfall(world, o, elapsed);
     regenerate(world, o, elapsed);
+    // +0xB0: the ZOC at the radius +0xAC its modifiers now give (0x577FD0).
+    if world.combat.org(o).is_some()
+        && let Some(mut e) = crate::fog::take_engine(world)
+    {
+        let radius = crate::combat::control_radius(world, &world.combat, o);
+        e.zoc_radius(world, Key::Org(o), radius);
+        crate::fog::put_engine(world, e);
+    }
+    // +0x8E: the behaviour has just turned aggressive: the effects of the ZOC
+    // over what already stands in it (0x5147C0).
+    if let Some(s) = world.combat.orgs.get_mut(o as usize)
+        && std::mem::take(&mut s.rescan_8e)
+        && let Some(mut e) = crate::fog::take_engine(world)
+    {
+        e.zoc_effects(world, Key::Org(o));
+        crate::fog::put_engine(world, e);
+    }
 }
 
 /// One city zone candidate: a lone actor or an organization (as the native
 /// organization actor at its own position).
 struct CityCandidate {
-    who: crate::books::CityCandidateRef,
     kingdom: KingdomId,
-    pos: Vec2,
     /// 4D0180: the current value the city tick weighs.
     current: f32,
 }
 
-/// Performer +60 (57E430): the combat value of a definition with a
-/// PerformerComponent, None without one.
+/// Performer +60 (57E430): the best 45E090 value over the Performer and the
+/// Defender abilities of a definition with a PerformerComponent
+/// ([`crate::combat::performer_values`]), None without one.
 pub(crate) fn performer_value(world: &World, def: crate::data::DefId) -> Option<f32> {
     let d = world.data.def(def);
     if !d.has_component("PerformerComponent") {
         return None;
     }
-    Some(world.combat.extras.as_ref().map_or(0.0, |e| e.def(def).combat_value))
+    Some(world.combat.extras.as_ref().map_or(0.0, |e| e.def(def).performer_value))
+}
+
+/// Performer +60 of actor `a` (57E430 at its creation), [`performer_value`] until
+/// combat has seen it.
+fn actor_performer_value(world: &World, a: ActorId) -> Option<f32> {
+    let def = world.actors[a as usize].def;
+    let value = performer_value(world, def)?;
+    Some(world.combat.actor(a).filter(|c| c.initialized).map_or(value, |c| c.performer_value))
 }
 
 /// 57DC40: the Body health ratio (Body +10 / +14), 1 without a Body.
@@ -819,80 +885,139 @@ fn major(world: &World, k: Option<KingdomId>) -> Option<KingdomId> {
     k.filter(|&k| world.kingdoms.get(k as usize).is_some_and(|x| !x.independent))
 }
 
-/// City candidate admission 0x5640A0 for every actor and organization:
-/// not dead, owned by a major kingdom, not an organization member (4549C0:
-/// the organization stands for it), thing flag bit 12 (flying, 0x1000)
-/// clear, actor value 4D01E0(0) > 0, and without a Body or captureable or
+/// One thing's standing against a city, when 0x5640A0 can admit it: not dead,
+/// owned by a major kingdom, not an organization member (4549C0: the
+/// organization stands for it), thing flag bit 12 (flying, 0x1000) clear,
+/// actor value 4D01E0(0) > 0, and without a Body or captureable or
 /// destructible. 4D01E0 is Organization +6C (5788B0 maximum: the members'
 /// Performer +60 plus the empty layout slots' ActorData +1E4) + Settlement
 /// +34 + Performer +60 + Denizen +14; 4D0180, the weight, uses Organization
 /// +68 (the members' Performer +60 times their health ratio), Settlement
 /// +30, 57DC40 (Performer +60 times the health ratio) and Denizen +10.
 /// aa-play has no Settlement occupants: that term is 0.
-fn city_candidates(world: &World) -> Vec<CityCandidate> {
-    let mut out = Vec::new();
-    for a in 0..world.actors.len() as ActorId {
-        let actor = &world.actors[a as usize];
-        if !actor.alive || actor.removed || actor.org.is_some() {
-            continue;
-        }
-        let Some(kingdom) = major(world, actor.kingdom) else { continue };
-        let d = world.data.def(actor.def);
-        if d.flying {
-            continue;
-        }
-        if d.has_component("BodyComponent") && !d.captureable && !d.destructible {
-            continue;
-        }
-        // Performer +60 and Denizen +14 (the value), 57DC40 and Denizen +10
-        // (the weight).
-        let performer = performer_value(world, actor.def);
-        let (dv, dmax) = world.books.actor(a).and_then(|b| b.denizen.as_ref()).map_or((0.0, 0.0), |d| (d.value, d.value_max));
-        let value = performer.unwrap_or(0.0) + dmax;
-        if !(value > 0.0) {
-            continue;
-        }
-        let current = performer.map_or(0.0, |v| v * health_ratio(world, a)) + dv;
-        out.push(CityCandidate { who: crate::books::CityCandidateRef::Actor(a), kingdom, pos: actor.pos.truncate(), current });
+fn candidate(world: &World, who: crate::books::CityCandidateRef) -> Option<CityCandidate> {
+    if let crate::books::CityCandidateRef::Actor(a) = who
+        && world.actors.get(a as usize)?.org.is_some()
+    {
+        return None;
     }
-    for o in 0..world.orgs.len() as OrgId {
-        let org = &world.orgs[o as usize];
-        if !org.alive || !org.members.iter().any(|&m| live(world, m)) {
-            continue;
+    candidate_of_load(world, who)
+}
+
+/// Whether `who` is a candidate during a saved game's record pass: a member's publish
+/// 4FB514 comes before its organization holds it (4549C0 reads no organization yet).
+pub(crate) fn admitted_at_load(world: &World, who: crate::books::CityCandidateRef) -> bool {
+    candidate_of_load(world, who).is_some()
+}
+
+fn candidate_of_load(world: &World, who: crate::books::CityCandidateRef) -> Option<CityCandidate> {
+    match who {
+        crate::books::CityCandidateRef::Actor(a) => {
+            let actor = world.actors.get(a as usize)?;
+            if !actor.alive || actor.removed {
+                return None;
+            }
+            let kingdom = major(world, actor.kingdom)?;
+            let d = world.data.def(actor.def);
+            if d.flying || (d.has_component("BodyComponent") && !d.captureable && !d.destructible) {
+                return None;
+            }
+            // Performer +60 and Denizen +14 (the value), 57DC40 and Denizen
+            // +10 (the weight).
+            let performer = actor_performer_value(world, a);
+            let (dv, dmax) = world.books.actor(a).and_then(|b| b.denizen.as_ref()).map_or((0.0, 0.0), |d| (d.value, d.value_max));
+            let value = performer.unwrap_or(0.0) + dmax;
+            if !(value > 0.0) {
+                return None;
+            }
+            let current = performer.map_or(0.0, |v| v * health_ratio(world, a)) + dv;
+            Some(CityCandidate { kingdom, current })
         }
-        let Some(kingdom) = major(world, Some(org.kingdom)) else { continue };
-        let d = world.data.def(org.def);
-        if d.flying {
-            continue;
-        }
-        if d.has_component("BodyComponent") && !d.captureable && !d.destructible {
-            continue;
-        }
-        let (mut maximum, mut current) = (0.0f32, 0.0f32);
-        for (slot, (slot_def, _)) in d.slots.iter().enumerate() {
-            let member = org.members.iter().copied().find(|&m| live(world, m) && world.actors[m as usize].slot == Some(slot as u16));
-            match member {
-                Some(m) => {
-                    if let Some(v) = performer_value(world, world.actors[m as usize].def) {
-                        current += health_ratio(world, m) * v;
-                        maximum += v;
+        crate::books::CityCandidateRef::Org(o) => {
+            let org = world.orgs.get(o as usize)?;
+            if !org.alive || !org.members.iter().any(|&m| live(world, m)) {
+                return None;
+            }
+            let kingdom = major(world, Some(org.kingdom))?;
+            let d = world.data.def(org.def);
+            if d.flying || (d.has_component("BodyComponent") && !d.captureable && !d.destructible) {
+                return None;
+            }
+            let (mut maximum, mut current) = (0.0f32, 0.0f32);
+            for (slot, (slot_def, _)) in d.slots.iter().enumerate() {
+                let member = org.members.iter().copied().find(|&m| live(world, m) && world.actors[m as usize].slot == Some(slot as u16));
+                match member {
+                    Some(m) => {
+                        if let Some(v) = actor_performer_value(world, m) {
+                            current += health_ratio(world, m) * v;
+                            maximum += v;
+                        }
                     }
-                }
-                None => {
-                    if *slot_def != crate::data::NO_DEF
-                        && let Some(v) = performer_value(world, *slot_def)
-                    {
-                        maximum += v;
+                    None => {
+                        if *slot_def != crate::data::NO_DEF
+                            && let Some(v) = performer_value(world, *slot_def)
+                        {
+                            maximum += v;
+                        }
                     }
                 }
             }
+            if maximum <= 0.0 {
+                return None;
+            }
+            Some(CityCandidate { kingdom, current })
         }
-        if maximum <= 0.0 {
-            continue;
-        }
-        out.push(CityCandidate { who: crate::books::CityCandidateRef::Org(o), kingdom, pos: org_position(world, o), current });
     }
-    out
+}
+
+/// 0x5640A0 for `who` against `city` (itself excluded): City+10, the blocks
+/// that go with it, also refuses.
+fn admitted(world: &World, city: ActorId, who: crate::books::CityCandidateRef) -> bool {
+    if let crate::books::CityCandidateRef::Actor(a) = who
+        && world.books.actor(city).is_some_and(|b| b.city_blocks.contains(&a))
+    {
+        return false;
+    }
+    who != crate::books::CityCandidateRef::Actor(city) && candidate(world, who).is_some()
+}
+
+/// The world start's 0x4F6B50 -> 0x4F6980 (from 0x4FB9E0, once the zones stand):
+/// every city (kingdom +0x30C, a thing with a zone 8) takes the things on its
+/// zone's tiles that are its own owner's, have a Body that can be neither
+/// destroyed (+0x291) nor taken (0x4D1120), and a Structure not yet attached,
+/// and that are no city themselves: 0x5642A0 lists the thing on City+10 and writes
+/// the city to its Structure +0x34 (0x588AB0). City+10 changes hands with the
+/// city (0x5643A0), and such a block is no target (0x522CC0).
+pub(crate) fn attach_city_blocks(world: &mut World) {
+    let Some(engine) = world.fog.engine.as_ref() else { return };
+    let cities: Vec<(ActorId, Vec<ActorId>)> = world
+        .actors
+        .iter()
+        .filter(|a| a.alive && !a.removed && world.data.def(a.def).city)
+        .map(|a| (a.id, engine.things_in_city_zone(a.id)))
+        .filter(|(_, l)| !l.is_empty())
+        .collect();
+    for (city, things) in cities {
+        let owner = world.actors[city as usize].kingdom;
+        for b in things {
+            let x = &world.actors[b as usize];
+            let d = world.data.def(x.def);
+            if !x.alive
+                || x.removed
+                || x.kingdom != owner
+                || d.city
+                || !d.structure
+                || d.health <= 0.0
+                || d.destructible
+                || crate::combat::capturable(world, b)
+                || world.books.actor(b).is_some_and(|k| k.block_of.is_some())
+            {
+                continue;
+            }
+            world.books.actor_mut(city).city_blocks.insert(0, b);
+            world.books.actor_mut(b).block_of = Some(city);
+        }
+    }
 }
 
 /// City tick 0x5647A0 (queue 1, the City component) for city `c`. Against
@@ -922,16 +1047,23 @@ pub fn city_tick(world: &mut World, c: ActorId) {
         }
     }
     // 0x564C10: the City+18 candidates still admitted (0x5640A0) and in the
-    // zone stay; an empty list leaves the queue (0x50B250) until the next
-    // admission (0x564300) registers the City again.
-    let candidates = city_candidates(world);
+    // zone (virtual +0x130(zone 8, 0)) stay; an empty list leaves the queue
+    // (0x50B250) until the next admission (0x564300) registers the City again.
     {
-        let city = &world.actors[c as usize];
-        let def = world.data.def(city.def);
-        let (centre, radius) = (city.pos.truncate(), def.city_zone_radius);
-        let inside = |who: crate::books::CityCandidateRef| candidates.iter().any(|x| x.who == who && x.pos.distance_squared(centre) <= radius * radius);
+        if let Some(mut e) = crate::fog::take_engine(world) {
+            e.observe_update(world);
+            crate::fog::put_engine(world, e);
+        }
         let mut list = std::mem::take(&mut world.books.actor_mut(c).city_candidates);
-        list.retain(|&who| inside(who));
+        let engine = world.fog.engine.as_ref();
+        let inside = |who: crate::books::CityCandidateRef| {
+            let key = match who {
+                crate::books::CityCandidateRef::Actor(a) => Key::Actor(a),
+                crate::books::CityCandidateRef::Org(o) => Key::Org(o),
+            };
+            engine.is_some_and(|e| e.in_city_zone(key, c))
+        };
+        list.retain(|&who| admitted(world, c, who) && inside(who));
         let empty = list.is_empty();
         world.books.actor_mut(c).city_candidates = list;
         if empty {
@@ -945,15 +1077,15 @@ pub fn city_tick(world: &mut World, c: ActorId) {
     world.books.actor_mut(c).city_siege = false;
     {
         let city = &world.actors[c as usize];
-        let def = world.data.def(city.def);
-        let (centre, radius, owner) = (city.pos.truncate(), def.city_zone_radius, city.kingdom);
+        let owner = city.kingdom;
         // 0x5647A0 over the City+18 candidates (the city itself never is one:
         // it has no Performer and belongs to its owner).
         let listed = world.books.actor(c).map(|b| b.city_candidates.clone()).unwrap_or_default();
+        let candidates: Vec<CityCandidate> = listed.iter().filter_map(|&who| candidate(world, who)).collect();
         let mut present = vec![0.0f32; n];
         let mut any = false;
-        for cand in candidates.iter().filter(|x| listed.contains(&x.who)) {
-            if cand.pos.distance_squared(centre) <= radius * radius && (cand.kingdom as usize) < n {
+        for cand in &candidates {
+            if (cand.kingdom as usize) < n {
                 present[cand.kingdom as usize] += cand.current;
                 any = true;
             }
@@ -968,8 +1100,7 @@ pub fn city_tick(world: &mut World, c: ActorId) {
                 // when owned (+0x134); an enemy (+0x140) adds to the attack
                 let o = o as usize;
                 let (mut defend, mut attack, mut ally) = (0.0f32, 0.0f32, 0.0f32);
-                for who in &listed {
-                    let Some(cand) = candidates.iter().find(|x| x.who == *who) else { continue };
+                for cand in &candidates {
                     let k = cand.kingdom as usize;
                     if k >= n {
                         continue;
@@ -1008,19 +1139,10 @@ pub fn city_tick(world: &mut World, c: ActorId) {
         }
         world.actors[c as usize].kingdom = Some(w);
         world.events.push(crate::world::Event::Captured { actor: c, kingdom: w });
-        // The city's neutral buildings (city blocks) go with it.
-        if let Some(o) = owner {
-            for b in 0..world.actors.len() {
-                let a = &world.actors[b];
-                if a.kingdom == Some(o)
-                    && !a.removed
-                    && b as ActorId != c
-                    && world.data.def(a.def).city_zone_radius <= 0.0
-                    && world.data.def(a.def).class == Some(crate::data::DefClass::Building)
-                    && a.pos.truncate().distance_squared(centre) <= radius * radius
-                {
-                    world.actors[b].kingdom = Some(w);
-                }
+        // 0x4D8450 -> 0x5643A0: City+10, the blocks, go with it.
+        for b in world.books.actor(c).map(|k| k.city_blocks.clone()).unwrap_or_default() {
+            if let Some(a) = world.actors.get_mut(b as usize).filter(|a| !a.removed) {
+                a.kingdom = Some(w);
             }
         }
     }
@@ -1040,7 +1162,7 @@ pub fn org_position(world: &World, o: OrgId) -> Vec2 {
 /// shooting counts too.
 fn engaged(world: &World, o: OrgId) -> bool {
     if crate::combat::org_state(world, o)
-        .is_some_and(|c| c.engaging() || c.routing.is_some() || !c.engaged_by.is_empty() || matches!(c.task, Some(crate::combat::tasks::Task::Bombard(_))))
+        .is_some_and(|c| c.engaging() || c.routing.is_some() || c.is_engaged() || matches!(c.task, Some(crate::combat::tasks::Task::Bombard(_))))
     {
         return true;
     }

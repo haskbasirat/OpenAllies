@@ -124,22 +124,45 @@ fn explored_start_remembers_static_actors_and_none_sees_all() {
 
 #[test]
 fn an_engaged_target_is_revealed_to_the_attacker() {
+    use aa_play::combat::{EngageTarget, TargetRef};
     let (mut w, ids) = world(128, FogMode::Full);
     let target = w.spawn_actor(ids.soldier, Some(1), Vec3::new(200.0, 200.0, 0.0), 0.0);
     let shooter = w.spawn_actor(ids.soldier, Some(0), Vec3::new(260.0, 200.0, 0.0), 0.0);
+    let o = org(&mut w, ids.regiment, 0, vec![shooter], Vec2::new(260.0, 200.0)) as usize;
     fog::tick(&mut w);
     assert!(!fog::actor_visible(&w, target, Some(0)));
-    w.actors[shooter as usize].combat.target = Some(target);
+    // 0x524C10 -> 0x4D3990: the target's +0x118 holds the organization
+    w.combat.orgs.resize_with(o + 1, Default::default);
+    w.combat.orgs[o].engage.push(EngageTarget { target: TargetRef::Actor(target), priority: 0 });
     fog::tick(&mut w);
     assert!(fog::actor_visible(&w, target, Some(0)));
     // the RZOD reveals without exploring
-    w.actors[shooter as usize].combat.target = None;
+    w.combat.orgs[o].engage.clear();
     fog::tick(&mut w);
     assert_eq!(fog::point_view(&w, Some(0), Vec2::new(200.0, 200.0)), TileView::Unexplored);
 }
 
 #[test]
 fn per_tick_cost_for_2000_moving_actors() {
+    let (mean, _) = fog_cost(12.0);
+    if !cfg!(debug_assertions) {
+        assert!(mean < 1000.0, "mean fog tick {mean} us is over 1 ms");
+    }
+}
+
+/// The same with every member far from its regiment: all of them detached, so each
+/// keeps its own ZOD and asks `0x5709D0` on its own. Measured and printed; the
+/// budget is the moving test's.
+#[test]
+#[ignore = "a measure"]
+fn per_tick_cost_for_2000_detached_members() {
+    let (mean, observe) = fog_cost(240.0);
+    println!("detached: mean {mean:.0} us, observe {observe:.0} us per tick");
+}
+
+/// One run of the 2000 moving actors, members within `spread` metres of the regiment.
+/// Mean fog tick and mean observe step, in microseconds.
+fn fog_cost(spread: f32) -> (f32, f32) {
     let (mut w, ids) = world(256, FogMode::Explored);
     let mut rng = 12345u64;
     let mut rand = move || {
@@ -154,7 +177,7 @@ fn per_tick_cost_for_2000_moving_actors() {
         let centre = Vec2::new(40.0 + rand() * 940.0, 40.0 + rand() * 940.0);
         let mut members = Vec::new();
         for _ in 0..8 {
-            let p = centre + Vec2::new(rand() * 12.0 - 6.0, rand() * 12.0 - 6.0);
+            let p = (centre + Vec2::new(rand() * spread - spread / 2.0, rand() * spread - spread / 2.0)).clamp(Vec2::splat(8.0), Vec2::splat(1016.0));
             members.push(w.spawn_actor(ids.soldier, Some(k), p.extend(0.0), 0.0));
         }
         let heading = rand() * std::f32::consts::TAU;
@@ -210,7 +233,5 @@ fn per_tick_cost_for_2000_moving_actors() {
         s.refusals
     );
     assert!(s.refusals.is_empty(), "{:?}", s.refusals);
-    if !cfg!(debug_assertions) {
-        assert!(mean < 1000.0, "mean fog tick {mean} us is over 1 ms");
-    }
+    (mean, observe / ticks as f32)
 }

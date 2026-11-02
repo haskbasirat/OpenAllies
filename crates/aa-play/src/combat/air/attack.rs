@@ -406,7 +406,7 @@ impl Host<'_> {
                     } else if rn > rb {
                         true
                     } else {
-                        self.world.random_u32() & 1 != 0
+                        self.world.random_u32_at(crate::trace::sites::AIRCRAFT_COIN) & 1 != 0
                     }
                 }
             };
