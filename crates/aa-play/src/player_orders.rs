@@ -568,7 +568,8 @@ pub mod native {
         #[default]
         Hud,
         /// A person's, in a film: a move on the ground is a default order (0x620760,
-        /// flags 0x14, the guess runs on every machine), the placement drag 0x6210B0
+        /// flags 0x1C, the guess runs on every machine; 0x14 without a direction is
+        /// only a building's rally point, 0x10 of move's +2C needs it), the placement drag 0x6210B0
         /// sends the direction and a scalar of -1 (unpack 0x5C, construct 0x5E,
         /// recruit_location 0x76), the orders aimed in the HUD a scalar of 0 (kill,
         /// move, guard, retreat, repair, bombard, air_attack: 0x51, 0x54).
@@ -654,7 +655,10 @@ pub mod native {
                 let w = if *attack_move {
                     Wire::new(command::KILL).at(*to).person(form, 0.0)
                 } else if form == OrderForm::Person {
-                    Wire { flags: SCALAR, ..Wire::default() }.at(*to)
+                    // 0x620760: a default order (no definition) that names the position
+                    // and a direction: 0x4DA570 guesses move only with both (+2C 0x130).
+                    // No facing drag here: the zero vector, the minimap's 0xB279C0.
+                    Wire { flags: SCALAR | AUXILIARY, ..Wire::default() }.at(*to)
                 } else {
                     Wire::new(command::MOVE).at(*to)
                 };

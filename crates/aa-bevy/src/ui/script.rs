@@ -26,7 +26,8 @@
 //! verification aid for the HUD's order buttons (`{"spawn_actor": ...}` the
 //! same for a single actor, a truck); `{"tint_actions": [r, g,
 //! b]}` (or null) draws every action button tinted, a verification aid for
-//! texture effect modes 2 and 3.
+//! texture effect modes 2 and 3; `{"stats": "label"}` logs each kingdom's
+//! counts and the selection's orders.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -282,6 +283,9 @@ pub fn run(
         let off = s.step().and_then(|v| v.get("offset")).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32)).unwrap_or(Vec2::new(-10.0, -15.0));
         let local = b.local;
         let world = &mut b.world;
+        // "$nation" in the IDS: the local kingdom's nation (a random one)
+        let nation = world.kingdoms.iter().find(|k| k.id == local).map(|k| k.nation.clone()).unwrap_or_default();
+        let id = id.replace("$nation", &nation);
         let hq = world.actors.iter().find(|a| a.alive && a.kingdom == Some(local) && world.data.def(a.def).class == Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate()).unwrap_or_default();
         match world.data.find(&id) {
             Some(def) => {
@@ -310,6 +314,40 @@ pub fn run(
         s.next();
         return;
     }
+    // {"stats": "label"}: a verification aid, a log line per kingdom and the
+    // selection's orders
+    if let Some(label) = s.step().and_then(|v| v.get("stats")).and_then(|v| v.as_str()).map(str::to_string) {
+        if let Some(b) = battle.as_ref() {
+            let w = &b.world;
+            info!("stats {label}: tick {} winner {:?}", w.tick, w.winner);
+            for k in w.kingdoms.iter().filter(|k| !k.independent) {
+                let alive = |a: &&aa_play::Actor| a.alive && a.kingdom == Some(k.id);
+                let buildings = w.actors.iter().filter(alive).filter(|a| w.data.def(a.def).class == Some(aa_play::DefClass::Building)).count();
+                let units = w.actors.iter().filter(alive).count() - buildings;
+                let dead = w.actors.iter().filter(|a| !a.alive && a.kingdom == Some(k.id)).count();
+                let orgs = w.orgs.iter().filter(|o| o.alive && o.kingdom == k.id).count();
+                info!("stats {label}: {} {} team {} orgs {orgs} units {units} buildings {buildings} dead {dead} money {:.0} defeated {}", k.name, k.nation, k.team, k.stockpile[aa_play::data::MONEY], k.defeated);
+            }
+            for u in &b.selection {
+                info!("stats {label}: command mask {:#x} guess at a point {:?}", aa_play::orders::guess::action_bits(w, *u), aa_play::orders::guess::guess(w, *u, aa_play::orders::guess::Fields { flags: 0x14, target: 0 }, b.selection.len() > 1));
+                match u {
+                    aa_play::Unit::Org(o) => {
+                        if let Some(g) = w.orgs.get(*o as usize) {
+                            let pos = g.members.iter().filter_map(|m| w.actor(*m)).find(|a| a.alive).map(|a| a.pos.truncate());
+                            info!("stats {label}: selected org {o} {} {:?} at {pos:?} members {}", w.data.def(g.def).id, g.order, g.members.len());
+                        }
+                    }
+                    aa_play::Unit::Actor(a) => {
+                        if let Some(x) = w.actor(*a) {
+                            info!("stats {label}: selected actor {a} {} {:?} at {:?} alive {}", w.data.def(x.def).id, x.order, x.pos.truncate(), x.alive);
+                        }
+                    }
+                }
+            }
+        }
+        s.next();
+        return;
+    }
     let mut logical = Vec2::ONE;
     if let Ok(w) = windows.single() {
         s.size = Vec2::new(w.physical_width() as f32, w.physical_height() as f32);
@@ -333,6 +371,8 @@ pub fn run(
                 "own_building" => a.kingdom == Some(b.local) && building,
                 // a mobile actor outside any organization (a truck)
                 "own_truck" => a.kingdom == Some(b.local) && !building && a.org.is_none() && w.data.def(a.def).health > 0.0,
+                // a member of a fighting regiment (not an HQ's organization)
+                "own_regiment" => a.kingdom == Some(b.local) && a.org.is_some() && !building && !w.data.def(a.def).weapons.is_empty(),
                 // a recruiting structure: a deployed division HQ (in its HQ
                 // organization) or a lone one (the Corps HQ)
                 "own_hq" => a.kingdom == Some(b.local) && building && a.org.is_some() && !w.data.def(a.def).recruits.is_empty(),

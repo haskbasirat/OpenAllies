@@ -43,7 +43,7 @@ fn identities(state: &MgState) -> EngineIdentities {
 
 /// The registries 93A3B0's readers search: the factions, technologies (the shops'
 /// and the divisions'), help popups and the armies' Things.
-fn registries(game_data: &super::data::CampaignData) -> SaveRegistries {
+fn registries(game_data: &super::data::CampaignData, help_popups: Vec<String>) -> SaveRegistries {
     let d = &game_data.meta;
     let mut shared_properties: Vec<String> = Vec::new();
     for c in &d.campaigns {
@@ -57,8 +57,7 @@ fn registries(game_data: &super::data::CampaignData) -> SaveRegistries {
     SaveRegistries {
         factions: game_data.view.nations.values().flat_map(|n| n.factions.iter().map(|f| f.ids.clone())).collect(),
         shared_properties,
-        // the help popups are not built, so no kingdom has seen one
-        help_popups: Vec::new(),
+        help_popups,
         things: d.armies.iter().map(|a| (a.ids.clone(), true)).collect(),
     }
 }
@@ -99,11 +98,11 @@ fn take_u32(b: &[u8], at: &mut usize) -> Result<u32, String> {
 }
 
 /// What a file holds: the state and the local kingdom.
-pub fn decode(bytes: &[u8], game_data: &super::data::CampaignData) -> Result<(MgState, Option<usize>), String> {
+pub fn decode(bytes: &[u8], game_data: &super::data::CampaignData, help_popups: Vec<String>) -> Result<(MgState, Option<usize>), String> {
     let data = &game_data.meta;
     let mut r = ChunkFileReader::open("campaign", bytes).map_err(|e| e.to_string())?;
     let payload = r.chunk(CHUNK_METAGAME).map_err(|e| e.to_string())?;
-    let parsed = parse_metagame(payload, data, &registries(game_data)).map_err(|e| e.to_string())?;
+    let parsed = parse_metagame(payload, data, &registries(game_data, help_popups)).map_err(|e| e.to_string())?;
     let territories = parsed.image.territories.len();
     let campaign = parsed.image.campaign.ok_or("a saved campaign without its campaign")?;
     let c = data.campaigns.get(campaign).ok_or("no such campaign")?;

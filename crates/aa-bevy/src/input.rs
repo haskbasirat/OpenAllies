@@ -754,13 +754,26 @@ pub fn battle_input(
                     TargetOrder::Attack => {
                         let units = own_movable(&b);
                         if !units.is_empty() {
+                            // 0x527FB0: bombard when the layout fires indirect
+                            // (0x578AC0, 0x57A5E0), at the thing or the location.
+                            let (bombard, attack): (Vec<Unit>, Vec<Unit>) = units.into_iter().partition(|u| matches!(u, Unit::Org(o) if aa_play::orders::guess::bombard_layout(&b.world, *o)));
                             if let Some(t) = target {
-                                b.pending.push(Command::Attack { kingdom: local, units, target: t });
+                                if !bombard.is_empty() {
+                                    b.pending.push(Command::Bombard { kingdom: local, units: bombard, target: aa_play::AbilityTarget::Actor(t) });
+                                }
+                                if !attack.is_empty() {
+                                    b.pending.push(Command::Attack { kingdom: local, units: attack, target: t });
+                                }
                             } else if let Some(g) = ground {
                                 // kill at a location (actor_commands.tgi kill)
                                 order_marks::move_command(&mut marks, g.truncate());
-                                issued.give(&units, g.truncate(), "waypoint_attack_actor");
-                                b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: true });
+                                if !bombard.is_empty() {
+                                    b.pending.push(Command::Bombard { kingdom: local, units: bombard, target: aa_play::AbilityTarget::Point(g.truncate()) });
+                                }
+                                if !attack.is_empty() {
+                                    issued.give(&attack, g.truncate(), "waypoint_attack_actor");
+                                    b.pending.push(Command::Move { kingdom: local, units: attack, to: g.truncate(), attack_move: true });
+                                }
                             }
                         }
                     }
@@ -998,6 +1011,10 @@ pub fn battle_input(
                             }
                             if !attack.is_empty() {
                                 debug!("order: kill {t} with {attack:?}");
+                                // The hot command on an actor is move (0x4DA570: repair,
+                                // construct, move), not kill: 0x527E30's Kill state has the
+                                // Mind's kind 5, mind_moving, the desired formation (0x51D8F0).
+                                b.pending.push(Command::Order { kingdom: local, units: attack.clone(), order: aa_play::orders::ActorOrder::MoveOnto });
                                 b.pending.push(Command::Attack { kingdom: local, units: attack, target: t });
                             }
                         } else {

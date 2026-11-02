@@ -1154,6 +1154,8 @@ pub struct Recorder {
     due: bool,
     /// The caller runs the admin clock with [`Recorder::admin_tick`].
     pub own_admin_clock: bool,
+    /// The HUD's MoveOnto waits for the kill it goes with.
+    move_onto: bool,
     file: Option<FilmFile>,
     opened: Option<FilmOpened>,
     stats: RecordingStats,
@@ -1188,6 +1190,7 @@ impl Recorder {
             counter: 0,
             due: false,
             own_admin_clock: false,
+            move_onto: false,
             file,
             opened,
             stats: RecordingStats::default(),
@@ -1229,6 +1232,17 @@ impl Recorder {
     /// `kingdom`'s command as requests: selection, then the order. The commands
     /// are returned on the decree that runs them.
     fn requests(&mut self, world: &World, command: Command, out: &mut Vec<Pending>) {
+        // A person's right click on an enemy: the HUD's MoveOnto and kill are one order,
+        // move at the thing (0x4DA570's hot command, 0x527E30). The mapper makes both of
+        // it, here and in the film.
+        if matches!(command, Command::Order { order: ActorOrder::MoveOnto, .. }) {
+            self.move_onto = true;
+            return;
+        }
+        let command = match (std::mem::take(&mut self.move_onto), command) {
+            (true, Command::Attack { kingdom, units, target }) => Command::Follow { kingdom, units, target },
+            (_, other) => other,
+        };
         let Some(kingdom) = command_kingdom(&command) else {
             self.unmapped("a command without a kingdom");
             return;

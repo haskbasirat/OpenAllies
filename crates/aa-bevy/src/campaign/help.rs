@@ -79,6 +79,12 @@ pub fn chosen(popups: &[Popup], kind: &str, actor: Option<&str>) -> Vec<usize> {
 }
 
 impl Help {
+    /// The IDS of `MetaGame/mg_help_popup.tgi` (the registry `[B4A074]` a saved
+    /// kingdom's seen popups are read through, `95AA00`).
+    pub fn all_ids(ui: &Ui) -> Vec<String> {
+        crate::ui::datafile::load(&ui.store.root, "MetaGame/mg_help_popup.tgi").iter().filter(|c| c.name.eq_ignore_ascii_case("MGHelpPopup")).map(|n| n.get("ids").unwrap_or_default().trim_matches('"').to_string()).collect()
+    }
+
     fn load(&mut self, ui: &Ui) {
         if self.loaded {
             return;

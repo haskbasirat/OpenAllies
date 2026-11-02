@@ -628,10 +628,11 @@ impl CampaignUi {
             }
             saves::Outcome::Load(file) => {
                 self.saves = None;
+                let help_popups = help::Help::all_ids(ui);
                 let loaded = std::fs::read(&file)
                     .map_err(|e| e.to_string())
                     .and_then(|bytes| data::ready().ok_or_else(|| "the campaign data is not ready".to_string()).and_then(|d| d).map(|d| (bytes, d)))
-                    .and_then(|(bytes, d)| saves::decode(&bytes, &d).map(|l| (l, d)));
+                    .and_then(|(bytes, d)| saves::decode(&bytes, &d, help_popups).map(|l| (l, d)));
                 match loaded {
                     Ok(((state, local), d)) => {
                         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|t| t.as_millis() as u32).unwrap_or(0);
