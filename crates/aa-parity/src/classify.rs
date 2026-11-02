@@ -5,48 +5,48 @@ use crate::decree::Decree;
 /// ActorCommand registry index (`[0xB3AA58]`, 0x475870 order) → the aa-play
 /// `Command` it maps to (`mapping::Mapper`), `None` for no equivalent.
 pub const ACTOR_COMMAND_MAPPING: [(&str, Option<&str>); 39] = [
-    ("kill", Some("Attack")),
-    ("bombard", None),
-    ("guard", None),
-    ("repair", None),
-    ("construct", None),
+    ("kill", Some("Attack (Bombard for an indirect layout, Follow when not hostile)")),
+    ("bombard", Some("Bombard")),
+    ("guard", Some("Order Guard")),
+    ("repair", Some("Repair")),
+    ("construct", Some("Construct")),
     (
         "move",
-        Some("Move (Follow when the command has a target word)"),
+        Some("Move (Follow when the command has a target word, Attack when it is hostile)"),
     ),
     ("stop", Some("Stop")),
-    ("retreat", None),
-    ("rout", None),
-    ("explore", None),
+    ("retreat", Some("Order Retreat")),
+    ("rout", Some("Order Rout")),
+    ("explore", Some("Order Explore")),
     ("disband", Some("Disband")),
     ("unpack", Some("Deploy (facing from auxiliary: inferred)")),
-    ("pack_organization", None),
-    ("build_structure", None),
-    ("commission", None),
+    ("pack_organization", Some("Order PackOrganization")),
+    ("build_structure", Some("Order BuildStructure (refused: no settlement host)")),
+    ("commission", Some("Order Commission (refused: no settlement host)")),
     ("recruit", Some("Recruit")),
     ("set_rally_point", Some("SetRallyPoint")),
-    ("recruit_location", None),
-    ("structure_cancel_queued", None),
-    ("construction_cancel", None),
+    ("recruit_location", Some("Order RecruitAt (lands at the point: no flight yet)")),
+    ("structure_cancel_queued", Some("Order CancelQueued")),
+    ("construction_cancel", Some("Order ConstructionCancel")),
     ("sell", Some("Sell")),
-    ("upgrade", None),
-    ("raze", None),
-    ("sally_forth", None),
-    ("recall", None),
-    ("air_attack", None),
-    ("air_recon", None),
-    ("escort_on", None),
-    ("escort_off", None),
-    ("attach", Some("Attach")),
-    ("detach", None),
-    ("hq_attach", None),
+    ("upgrade", Some("Order Upgrade (refused: no definition of the data lists one)")),
+    ("raze", Some("Order Raze")),
+    ("sally_forth", Some("Order Sally")),
+    ("recall", Some("Order Sally")),
+    ("air_attack", Some("AirAttack (refused until the aircraft fly)")),
+    ("air_recon", Some("AirRecon (refused until the aircraft fly)")),
+    ("escort_on", Some("Order Escort")),
+    ("escort_off", Some("Order Escort")),
+    ("attach", Some("Order InventoryAttach (refused: no inventory attachments)")),
+    ("detach", Some("Order DetachElement (refused: no inventory attachments)")),
+    ("hq_attach", Some("Order HqCycle")),
     ("hq_detach", Some("Detach")),
     ("set_formation", Some("SetFormation")),
     ("pack", Some("Pack")),
     ("research", Some("Research")),
-    ("cancel_flare", None),
-    ("group_behavior_enable", None),
-    ("group_behavior_disable", None),
+    ("cancel_flare", Some("Order CancelFlare (refused: no flares)")),
+    ("group_behavior_enable", Some("Order GroupBehavior")),
+    ("group_behavior_disable", Some("Order GroupBehavior")),
 ];
 
 /// Coarse class of a decree for reports: `state` (ordering player,
@@ -71,10 +71,10 @@ pub fn decree_class(decree: &Decree) -> &'static str {
         | Decree::TellActorCommand { .. }
         | Decree::TellActorAttack { .. }
         | Decree::TellActorMove { .. }
+        | Decree::TellActorAbility { .. }
         | Decree::FactionUseAbility { .. } => "command",
-        Decree::TellActorAbility { .. }
-        | Decree::GamePlayerKingdom { .. }
-        | Decree::Other { .. } => "other",
+        Decree::GamePlayerKingdom { .. } => "state",
+        Decree::Other { .. } => "other",
     }
 }
 
@@ -132,14 +132,15 @@ pub fn order_kind(descriptor: usize, decree: &Decree) -> Option<String> {
         Decree::TellSelectedCommand(_) | Decree::TellActorCommand { .. } => {
             match actor_command(decree) {
                 Some((index, name, to)) => mapped(&format!("command {index:02} {name}"), to),
-                None => mapped(&default_order(decree), None),
+                None => mapped(&default_order(decree), Some("the unit's guess (0x4DA570)")),
             }
         }
         Decree::TellActorAttack { .. } => mapped("65 TellActorAttack", Some("Attack")),
         Decree::TellActorMove { .. } => mapped("66 TellActorMove", Some("Move")),
-        Decree::TellActorAbility { .. } => mapped("67 TellActorAbility", None),
+        // Resolved by a name the id table does not answer: no film has it.
+        Decree::TellActorAbility { .. } => mapped("67 TellActorAbility", Some("unresolved selector")),
         Decree::FactionUseAbility { .. } => mapped("70 FactionUseAbility", Some("UseAbility")),
-        Decree::GamePlayerKingdom { .. } => mapped("68 GamePlayerKingdom", None),
+        Decree::GamePlayerKingdom { .. } => mapped("68 GamePlayerKingdom", Some("the mapper's player table")),
         Decree::Other { fields } if descriptor == crate::decree::id::TEAM_COMMAND => {
             let name = match fields.first() {
                 Some(aa_orders::payload::Field::Uint { value, .. }) => crate::registries::TEAM_COMMANDS
@@ -147,7 +148,13 @@ pub fn order_kind(descriptor: usize, decree: &Decree) -> Option<String> {
                     .map_or("unknown", |(name, _)| name),
                 _ => "unknown",
             };
-            mapped(&format!("23 TeamCommand {name}"), None)
+            let to = match name {
+                "team_give_resources" => "Order GiveResources",
+                "team_give_actor" => "Order GiveActor",
+                "team_request_resources" | "team_request_actor" | "team_chat" | "team_report" => "no effect (a message)",
+                _ => "no effect (a flare: no host)",
+            };
+            mapped(&format!("23 TeamCommand {name}"), Some(to))
         }
         _ => return None,
     })

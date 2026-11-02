@@ -147,14 +147,25 @@ Tick of each lane's first difference from the native trace. Berlin2v2_1 keeps th
 
 The combat lane's first difference is a truck's health (500 against 2000) on the tick the first truck and trailer appear, not a fight. Every lane first differs before any battle, so none of this says anything yet about aa-play's fighting.
 
-### What the mapping cannot carry yet
+### What the orders do against the traces (2026-11-02)
 
-These orders reach the replay as "no equivalent" or "unresolved", so aa-play's state must drift once they start:
+Every ActorCommand now maps, and the corpus report has no `NO EQUIVALENT` line. Still refused in aa-play, with zero orders in the corpus unless noted: `build_structure`, `commission`, `upgrade`, `attach`, `detach`, `cancel_flare`, and the four flare team commands (no host). `air_attack` and `air_recon` map and stay refused until the aircraft fly (2,344 orders in the corpus, none in these four films).
 
-- **No equivalent:** guard, retreat, rout, bombard, explore, repair, construct, recruit_location, group_behavior_enable, TeamCommand.
-- **Unresolved:** every 70 FactionUseAbility ("general ability definition"), and kill or move orders whose target id does not resolve.
+`order_fights.rs` reads the orders against the native traces. These runs are renditions compared with the original, and each film has drifted from native long before its fighting, so a difference here is not by itself a handler fault:
 
-Guard and retreat are the largest groups.
+| test | what it shows |
+|---|---|
+| `the_fight_films_fight` | deaths, routs, refusals, unresolved orders |
+| `mind_state_confusion` | every organization sample: native Mind state against ours |
+| `order_effects` | the state 16 ticks after each order, by order and by what the target is. `AA_EFFECTS_SHOW=order,native,ours;...` lists the cases |
+| `order_gone` | why an order's thing is missing: never made here, made later, or dead here |
+| `order_rows` | one film's orders in order. `AA_ORDER_ORG=org:from:to` follows one organization by tick |
+
+Read from `order_effects`: most remaining differences are knock-on. "Dead here" and "never made here" account for most missing selections, and retreat `sleep/move` cases are regiments standing somewhere else. A city's owner also differs here, which turns a native kill into a Move at a thing that is no longer hostile.
+
+Found and fixed through it: delivery checks the command mask (0x4ED360 vt+150, 0x4D9B60 vt+38), so a retreat from an engaged regiment too low in morale is not given; an unpack to a group gives the members without the command a Move (0x4DE7F0).
+
+Not proven: the mask is `guess::action_bits`, a rendition of 0x4D1350, and only commands 0..=12 are gated by it.
 
 ## Recording recipe
 

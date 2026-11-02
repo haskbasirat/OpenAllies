@@ -33,11 +33,22 @@ pub struct PlayerOrders {
     rally: BTreeMap<ActorId, Vec2>,
 }
 
+/// The organization's desired formation (Organization +0x70): the one chosen with
+/// the formation buttons, else the layout default.
+pub fn desired_formation(world: &World, org: OrgId) -> Option<usize> {
+    let def = world.data.def(world.orgs.get(org as usize)?.def);
+    world.player_orders.formations.get(&org).copied().filter(|&i| i < def.formations.len()).or(def.default_formation)
+}
+
 /// The organization's current formation (index into `Def::formations`):
 /// the one chosen with the formation buttons, else the layout default.
 pub fn formation(world: &World, org: OrgId) -> Option<usize> {
     let o = world.orgs.get(org as usize)?;
     let def = world.data.def(o.def);
+    // (orders) mind_retreating: formation_required RETREAT.
+    if crate::orders::retreating(world, org) && def.retreat_formation.is_some() {
+        return def.retreat_formation;
+    }
     world.player_orders.formations.get(&org).copied().filter(|&i| i < def.formations.len()).or(def.default_formation)
 }
 
@@ -53,10 +64,9 @@ pub fn sellable(world: &World, building: ActorId) -> bool {
     d.class == Some(DefClass::Building) && d.has_component("ConstructionComponent") && !d.city && !d.captureable
 }
 
-/// Under siege: an enemy attacks the structure now, or it is a city held
-/// under siege (the under_siege actor state; 0x4D6660 reads City +0x20).
+/// Under siege, the under_siege actor state (0x4D6660): `crate::supply::under_siege`.
 pub fn under_siege(world: &World, building: ActorId) -> bool {
-    world.combat.actor(building).is_some_and(|c| c.targeted) || world.books.actor(building).is_some_and(|b| b.city_siege)
+    crate::supply::under_siege(world, building)
 }
 
 /// The sell value per resource (`0x565500`): floor(SellFactor * cost + 0.5).
@@ -102,13 +112,15 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
                 if *formation >= def.formations.len() {
                     continue;
                 }
-                world.player_orders.formations.insert(o, *formation);
+                // 0x57BFF0 -> 0x57BF50: Organization +0x70, the old formation's
+                // property off, the new one's on, the slot table recomputed
+                // (0x57BEF0), and the members' Mover maximum refreshed. No order
+                // is issued: the members' idle state walks them to the new slots.
+                let chosen = *formation;
+                crate::movement::set_formation(world, o, |world| {
+                    world.player_orders.formations.insert(o, chosen);
+                });
                 any = true;
-                // a standing regiment turns into the new formation at once
-                if org.order == Order::Idle {
-                    let to = org.anchor;
-                    let _ = crate::movement::command(world, &Command::Move { kingdom: *kingdom, units: vec![Unit::Org(o)], to, attack_move: false });
-                }
             }
             if any { Ok(()) } else { Err("no organization takes this formation".into()) }
         }
@@ -233,8 +245,10 @@ pub fn tick(_world: &mut World) {}
 /// One order has no exact native form: `hq_attach` (31) carries no target in
 /// the original, its handler cycles to the next HQ (TellHQAttachCycle
 /// 0x57B0A0), while [`Command::Attach`] names the HQ (0x574C10). Here it is
-/// `hq_attach` with the HQ in the command word, which only this port's
-/// decoder reads. A session with the original would attach to another HQ.
+/// `hq_attach` with the HQ in the command word and the scalar flag set to tell
+/// it from a real film's hq_attach (whose word 0x57B0A0 ignores; no real film
+/// sets the flag, `aa_parity/tests/film_writer.rs`), which only this port's
+/// decoders read. A session with the original would attach to another HQ.
 pub mod native {
     use super::*;
     use crate::world::AbilityTarget;
@@ -251,6 +265,7 @@ pub mod native {
     /// Order descriptors (aa-orders native_registry.rs).
     pub const SELECTION_ADD_REQUEST: usize = 12;
     pub const SELECTION_CLEAR_REQUEST: usize = 14;
+    pub const TEAM_COMMAND_REQUEST: usize = 22;
     pub const SELECTION_ADD_DECREE: usize = 16;
     pub const SELECTION_REMOVE_DECREE: usize = 17;
     pub const SELECTION_CLEAR_DECREE: usize = 18;
@@ -272,23 +287,43 @@ pub mod native {
     pub mod command {
         pub const KILL: u32 = 0;
         pub const BOMBARD: u32 = 1;
+        pub const GUARD: u32 = 2;
         pub const REPAIR: u32 = 3;
         pub const CONSTRUCT: u32 = 4;
         pub const MOVE: u32 = 5;
         pub const STOP: u32 = 6;
+        pub const RETREAT: u32 = 7;
+        pub const ROUT: u32 = 8;
+        pub const EXPLORE: u32 = 9;
         pub const DISBAND: u32 = 10;
         pub const UNPACK: u32 = 11;
+        pub const PACK_ORGANIZATION: u32 = 12;
+        pub const BUILD_STRUCTURE: u32 = 13;
+        pub const COMMISSION: u32 = 14;
         pub const RECRUIT: u32 = 15;
         pub const SET_RALLY_POINT: u32 = 16;
+        pub const RECRUIT_LOCATION: u32 = 17;
         pub const STRUCTURE_CANCEL_QUEUED: u32 = 18;
+        pub const CONSTRUCTION_CANCEL: u32 = 19;
         pub const SELL: u32 = 20;
+        pub const UPGRADE: u32 = 21;
+        pub const RAZE: u32 = 22;
+        pub const SALLY_FORTH: u32 = 23;
+        pub const RECALL: u32 = 24;
         pub const AIR_ATTACK: u32 = 25;
         pub const AIR_RECON: u32 = 26;
+        pub const ESCORT_ON: u32 = 27;
+        pub const ESCORT_OFF: u32 = 28;
+        pub const ATTACH: u32 = 29;
+        pub const DETACH: u32 = 30;
         pub const HQ_ATTACH: u32 = 31;
         pub const HQ_DETACH: u32 = 32;
         pub const SET_FORMATION: u32 = 33;
         pub const PACK: u32 = 34;
         pub const RESEARCH: u32 = 35;
+        pub const CANCEL_FLARE: u32 = 36;
+        pub const GROUP_BEHAVIOR_ENABLE: u32 = 37;
+        pub const GROUP_BEHAVIOR_DISABLE: u32 = 38;
     }
 
     /// Mask bits of the generic command (0x61EBA0 field order).
@@ -317,6 +352,8 @@ pub mod native {
         pub abilities: Vec<String>,
         pub ability_count: usize,
         pub organization_layout_count: usize,
+        /// OrganizationLayout [0xB3AB00] slots, for a recruit's ParameterSet.
+        pub layouts: Vec<String>,
     }
     fn index_of(list: &[String], id: &str) -> Option<u32> {
         list.iter().position(|s| s.eq_ignore_ascii_case(id)).map(|i| i as u32)
@@ -345,6 +382,9 @@ pub mod native {
         pub auxiliary: [u32; 2],
         pub scalar: u32,
         pub parameter: Option<u32>,
+        /// ParameterSet 0x4C2C60 with flag 5 set: the layout's slot and each
+        /// element's; `None` is the null set.
+        pub parameters: Option<(Option<u32>, Vec<Option<u32>>)>,
         pub extra: Option<u32>,
         pub boolean: bool,
         pub trailing: bool,
@@ -367,7 +407,15 @@ pub mod native {
         /// placement drag 0x6210B0 sends flag 8 with the facing).
         fn facing(mut self, facing: f32) -> Self {
             self.flags |= AUXILIARY;
-            self.auxiliary = [facing.cos().to_bits(), facing.sin().to_bits()];
+            self.auxiliary = direction_words(facing);
+            self
+        }
+        /// A person's scalar ([`OrderForm::Person`]).
+        fn person(mut self, form: OrderForm, value: f32) -> Self {
+            if form == OrderForm::Person {
+                self.flags |= SCALAR;
+                self.scalar = value.to_bits();
+            }
             self
         }
         fn object(mut self, index: u32) -> Self {
@@ -402,8 +450,16 @@ pub mod native {
                 f.push(def(FORMATIONS, self.parameter));
             }
             if has(PARAMETERS) {
-                // the null parameter set (1 = null)
-                f.push(Field::Uint { width: 1, value: 1 });
+                match &self.parameters {
+                    // 1 = null
+                    None => f.push(Field::Uint { width: 1, value: 1 }),
+                    Some((layout, objects)) => {
+                        f.push(Field::Uint { width: 1, value: 0 });
+                        f.push(def(ORGANIZATION_LAYOUTS, *layout));
+                        f.push(Field::Uint { width: 32, value: objects.len() as u32 });
+                        f.extend(objects.iter().map(|o| def(OBJECT_DEFINITIONS, *o)));
+                    }
+                }
             }
             if has(EXTRA) {
                 f.push(def(SHARED_PROPERTIES, self.extra));
@@ -451,11 +507,13 @@ pub mod native {
                 w.parameter = def(&mut it, FORMATIONS)?;
             }
             if has(PARAMETERS) && uint(&mut it, "parameter set null bit")? == 0 {
-                def(&mut it, ORGANIZATION_LAYOUTS)?;
+                let layout = def(&mut it, ORGANIZATION_LAYOUTS)?;
                 let n = uint(&mut it, "parameter count")? as i32;
+                let mut objects = Vec::new();
                 for _ in 0..n.max(0) {
-                    def(&mut it, OBJECT_DEFINITIONS)?;
+                    objects.push(def(&mut it, OBJECT_DEFINITIONS)?);
                 }
+                w.parameters = Some((layout, objects));
             }
             if has(EXTRA) {
                 w.extra = def(&mut it, SHARED_PROPERTIES)?;
@@ -468,6 +526,30 @@ pub mod native {
         }
     }
 
+    /// The direction words of a facing whose binary32 `atan2` is that facing, as
+    /// the decode reads them, so an order survives the wire bit for bit. The
+    /// plain cosine and sine nearly always are; otherwise the nearest words that
+    /// are. A facing of 0 is the direction (1, 0).
+    pub fn direction_words(facing: f32) -> [u32; 2] {
+        let (s, c) = (f64::from(facing).sin() as f32, f64::from(facing).cos() as f32);
+        let exact = |x: f32, y: f32| y.atan2(x).to_bits() == facing.to_bits();
+        let step = |v: f32, n: i32| f32::from_bits(v.to_bits().wrapping_add_signed(n));
+        if exact(c, s) {
+            return [c.to_bits(), s.to_bits()];
+        }
+        for reach in 1..=16i32 {
+            for dy in -reach..=reach {
+                for dx in -reach..=reach {
+                    let (x, y) = (step(c, dx), step(s, dy));
+                    if exact(x, y) {
+                        return [x.to_bits(), y.to_bits()];
+                    }
+                }
+            }
+        }
+        [c.to_bits(), s.to_bits()]
+    }
+
     /// One order request: descriptor and payload fields.
     pub type Request = (usize, Vec<Field>);
 
@@ -475,6 +557,26 @@ pub mod native {
     #[derive(Clone, Debug, Default)]
     pub struct Outbox {
         pub selection: Vec<u16>,
+        pub form: OrderForm,
+    }
+
+    /// Whose requests these are, for the shapes a film of the original holds
+    /// (the census of `aa_parity/tests/film_round_trip.rs`, over every real film).
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum OrderForm {
+        /// This port's HUD over the LAN session: the commands the HUD decided.
+        #[default]
+        Hud,
+        /// A person's, in a film: a move on the ground is a default order (0x620760,
+        /// flags 0x14, the guess runs on every machine), the placement drag 0x6210B0
+        /// sends the direction and a scalar of -1 (unpack 0x5C, construct 0x5E,
+        /// recruit_location 0x76), the orders aimed in the HUD a scalar of 0 (kill,
+        /// move, guard, retreat, repair, bombard, air_attack: 0x51, 0x54).
+        Person,
+        /// The SAI's (0x7AF220): no scalar, its unpack and construct name no
+        /// direction (0x44, 0x46), its hq_attach names the HQ, which the handler
+        /// ignores (0x41), its repair has the boolean (0x241).
+        Computer,
     }
 
     /// The thing slot of a unit (thing+0x14 low16, the GTID slot).
@@ -486,6 +588,35 @@ pub mod native {
     }
     fn gtid_of(world: &World, actor: ActorId) -> Option<u32> {
         world.ids.actor(actor).map(|g| g.raw())
+    }
+
+    /// A recruit's ParameterSet as slots of the layout and object registries.
+    fn wire_parameters(world: &World, tables: &Tables, parameters: &crate::world::RecruitParameters) -> Result<(Option<u32>, Vec<Option<u32>>), String> {
+        let layout = match &parameters.layout {
+            Some(id) => Some(index_of(&tables.layouts, id).ok_or_else(|| format!("{id} is not in the OrganizationLayout registry"))?),
+            None => None,
+        };
+        let mut objects = Vec::with_capacity(parameters.elements.len());
+        for &element in &parameters.elements {
+            objects.push(if element == crate::data::NO_DEF {
+                None
+            } else {
+                Some(index_of(&tables.objects, &world.data.def(element).id).ok_or_else(|| format!("{} is not in the Thing registry", world.data.def(element).id))?)
+            });
+        }
+        Ok((layout, objects))
+    }
+
+    /// The head of a team command 22 (0x509090): its definition, the giver's
+    /// kingdom thing, the receiver's.
+    fn team_fields(world: &World, from: KingdomId, to: KingdomId, definition: u32) -> Result<Vec<Field>, String> {
+        let thing = |k: KingdomId| world.ids.kingdom(k).map(|g| g.slot()).ok_or_else(|| format!("kingdom {k} has no thing id"));
+        Ok(vec![
+            Field::Uint { width: 32, value: definition },
+            Field::Thing { check: ThingCheck::A8, slot: thing(from)? },
+            Field::Uint { width: 1, value: 1 },
+            Field::Thing { check: ThingCheck::A8, slot: thing(to)? },
+        ])
     }
 
     /// The requests of one battle command of the local player: the selection
@@ -516,29 +647,51 @@ pub mod native {
             Ok(())
         };
         let target = |t: ActorId| gtid_of(world, t).ok_or_else(|| format!("target {t} has no thing id"));
+        let form = outbox.form;
         match command {
             Command::Move { units, to, attack_move, .. } => {
                 // kill at a location (actor_commands.tgi kill) engages on the way
-                let c = if *attack_move { command::KILL } else { command::MOVE };
-                selected(&mut out, outbox, units, Wire::new(c).at(*to))?;
+                let w = if *attack_move {
+                    Wire::new(command::KILL).at(*to).person(form, 0.0)
+                } else if form == OrderForm::Person {
+                    Wire { flags: SCALAR, ..Wire::default() }.at(*to)
+                } else {
+                    Wire::new(command::MOVE).at(*to)
+                };
+                selected(&mut out, outbox, units, w)?;
             }
-            Command::Attack { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::KILL).target(target(*t)?))?,
-            Command::Follow { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::MOVE).target(target(*t)?))?,
+            Command::Attack { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::KILL).target(target(*t)?).person(form, 0.0))?,
+            Command::Follow { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::MOVE).target(target(*t)?).person(form, 0.0))?,
             Command::Stop { units, .. } => selected(&mut out, outbox, units, Wire::new(command::STOP))?,
             Command::Disband { units, .. } => selected(&mut out, outbox, units, Wire::new(command::DISBAND))?,
-            Command::Repair { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::REPAIR).target(target(*t)?))?,
+            Command::Repair { units, target: t, .. } => {
+                let mut w = Wire::new(command::REPAIR).target(target(*t)?).person(form, 0.0);
+                if form == OrderForm::Computer {
+                    w.flags |= BOOLEAN;
+                }
+                selected(&mut out, outbox, units, w)?;
+            }
             Command::Bombard { units, target: t, .. } => {
                 let w = match t {
-                    AbilityTarget::Actor(a) => Wire::new(command::BOMBARD).target(target(*a)?),
-                    AbilityTarget::Point(p) => Wire::new(command::BOMBARD).at(*p),
+                    AbilityTarget::Actor(a) => Wire::new(command::BOMBARD).target(target(*a)?).person(form, 0.0),
+                    AbilityTarget::Point(p) => Wire::new(command::BOMBARD).at(*p).person(form, 0.0),
                 };
                 selected(&mut out, outbox, units, w)?;
             }
             Command::Construct { units, def, at, facing, .. } => {
                 let index = index_of(&tables.objects, &world.data.def(*def).id).ok_or("structure is not in the Thing registry")?;
-                selected(&mut out, outbox, units, Wire::new(command::CONSTRUCT).object(index).at(*at).facing(*facing))?;
+                let w = Wire::new(command::CONSTRUCT).object(index).at(*at);
+                let w = if form == OrderForm::Computer { w } else { w.facing(*facing).person(form, -1.0) };
+                selected(&mut out, outbox, units, w)?;
             }
-            Command::Attach { org, hq, .. } => actor(&mut out, Unit::Org(*org), Wire::new(command::HQ_ATTACH).target(target(*hq)?))?,
+            Command::Attach { org, hq, .. } => {
+                let mut w = Wire::new(command::HQ_ATTACH).target(target(*hq)?);
+                if form != OrderForm::Computer {
+                    w.flags |= SCALAR;
+                    w.scalar = 1.0f32.to_bits();
+                }
+                actor(&mut out, Unit::Org(*org), w)?;
+            }
             Command::SetFormation { orgs, formation, .. } => {
                 let units: Vec<Unit> = orgs.iter().map(|o| Unit::Org(*o)).collect();
                 let def = orgs.first().and_then(|o| world.orgs.get(*o as usize)).map(|o| world.data.def(o.def)).ok_or("no organization")?;
@@ -553,13 +706,26 @@ pub mod native {
                 let index = index_of(&tables.objects, &world.data.def(*def).id).ok_or("recruit is not in the Thing registry")?;
                 actor(&mut out, Unit::Actor(*building), Wire::new(command::RECRUIT).object(index))?;
             }
-            Command::CancelRecruit { building, index, .. } => {
-                let mut w = Wire::new(command::STRUCTURE_CANCEL_QUEUED);
-                w.flags |= SCALAR;
-                w.scalar = *index as u32;
+            // A recruit with its ParameterSet (flag 5, 0x61EBA0).
+            Command::RecruitWith { building, def, parameters, .. } => {
+                let index = index_of(&tables.objects, &world.data.def(*def).id).ok_or("recruit is not in the Thing registry")?;
+                let mut w = Wire::new(command::RECRUIT).object(index);
+                w.flags |= PARAMETERS;
+                w.parameters = Some(wire_parameters(world, tables, parameters)?);
                 actor(&mut out, Unit::Actor(*building), w)?;
             }
-            Command::Deploy { truck, at, facing, .. } => actor(&mut out, Unit::Actor(*truck), Wire::new(command::UNPACK).at(*at).facing(*facing))?,
+            Command::CancelRecruit { building, index, .. } => {
+                // 0x589DC3: fld scalar, ftol: the id of the queue item.
+                let id = world.books.actor(*building).and_then(|b| b.queue.items.get(*index)).map(|i| i.id).ok_or("no such queue entry")?;
+                let mut w = Wire::new(command::STRUCTURE_CANCEL_QUEUED);
+                w.flags |= SCALAR;
+                w.scalar = (id as f32).to_bits();
+                actor(&mut out, Unit::Actor(*building), w)?;
+            }
+            Command::Deploy { truck, at, facing, .. } => {
+                let w = Wire::new(command::UNPACK).at(*at);
+                actor(&mut out, Unit::Actor(*truck), if form == OrderForm::Computer { w } else { w.facing(*facing).person(form, -1.0) })?;
+            }
             Command::Pack { building, .. } => actor(&mut out, Unit::Actor(*building), Wire::new(command::PACK))?,
             Command::Sell { building, .. } => actor(&mut out, Unit::Actor(*building), Wire::new(command::SELL))?,
             Command::SetRallyPoint { building, at, .. } => actor(&mut out, Unit::Actor(*building), Wire::new(command::SET_RALLY_POINT).at(*at))?,
@@ -577,7 +743,105 @@ pub mod native {
                     AbilityTarget::Actor(a) => Wire::new(c).target(target(*a)?),
                     AbilityTarget::Point(p) => Wire::new(c).at(*p),
                 };
+                let w = if c == command::AIR_ATTACK { w.person(form, 0.0) } else { w };
                 actor(&mut out, Unit::Actor(*building), w)?;
+            }
+            // (orders) `crate::orders`, as the original's commands.
+            Command::Order { kingdom, units, order } => {
+                use crate::orders::ActorOrder;
+                let object_of = |def: crate::data::DefId| index_of(&tables.objects, &world.data.def(def).id).ok_or_else(|| format!("{} is not in the Thing registry", world.data.def(def).id));
+                let unit_gtid = |u: Unit| match u {
+                    Unit::Org(o) => world.ids.org(o).map(|g| g.raw()),
+                    Unit::Actor(a) => world.ids.actor(a).map(|g| g.raw()),
+                };
+                let w = match order {
+                    ActorOrder::Guard { target: t, at, aux } => {
+                        let w = Wire::new(command::GUARD);
+                        let mut w = match t {
+                            Some(t) => w.target(unit_gtid(*t).ok_or("the guarded thing has no id")?),
+                            None => w.at(*at),
+                        }
+                        .person(form, 0.0);
+                        if let Some(a) = aux {
+                            w.flags |= AUXILIARY;
+                            w.auxiliary = [a.x.to_bits(), a.y.to_bits()];
+                        }
+                        Some(w)
+                    }
+                    ActorOrder::Retreat { target: t, at } => Some(match t {
+                        Some(t) => Wire::new(command::RETREAT).target(target(*t)?).person(form, 0.0),
+                        None => Wire::new(command::RETREAT).at(*at).person(form, 0.0),
+                    }),
+                    ActorOrder::Rout => Some(Wire::new(command::ROUT)),
+                    ActorOrder::Explore { at, scalar } => {
+                        let mut w = Wire::new(command::EXPLORE).at(*at);
+                        if let Some(v) = scalar {
+                            w.flags |= SCALAR;
+                            w.scalar = v.to_bits();
+                        }
+                        Some(w)
+                    }
+                    ActorOrder::PackOrganization => Some(Wire::new(command::PACK_ORGANIZATION)),
+                    ActorOrder::HqCycle => Some(Wire::new(command::HQ_ATTACH)),
+                    ActorOrder::Escort { on } => Some(Wire::new(if *on { command::ESCORT_ON } else { command::ESCORT_OFF })),
+                    ActorOrder::GroupBehavior { enable, boolean } => {
+                        let mut w = Wire::new(if *enable { command::GROUP_BEHAVIOR_ENABLE } else { command::GROUP_BEHAVIOR_DISABLE });
+                        if let Some(b) = boolean {
+                            w.flags |= BOOLEAN;
+                            w.boolean = *b;
+                        }
+                        Some(w)
+                    }
+                    ActorOrder::DetachElement => Some(Wire::new(command::DETACH)),
+                    ActorOrder::InventoryAttach { def } => Some(Wire::new(command::ATTACH).object(object_of(*def)?)),
+                    ActorOrder::RecruitAt { def, at, parameters } => {
+                        let mut w = Wire::new(command::RECRUIT_LOCATION).object(object_of(*def)?).at(*at).person(form, -1.0);
+                        if let Some(parameters) = parameters {
+                            w.flags |= PARAMETERS;
+                            w.parameters = Some(wire_parameters(world, tables, parameters)?);
+                        }
+                        Some(w)
+                    }
+                    ActorOrder::Commission { def } => Some(Wire::new(command::COMMISSION).object(object_of(*def)?)),
+                    ActorOrder::BuildStructure { def, at } => Some(Wire::new(command::BUILD_STRUCTURE).object(object_of(*def)?).at(*at)),
+                    ActorOrder::CancelQueued { id } => {
+                        // 0x589DC3: fld scalar, ftol.
+                        let mut w = Wire::new(command::STRUCTURE_CANCEL_QUEUED);
+                        w.flags |= SCALAR;
+                        w.scalar = (*id as f32).to_bits();
+                        Some(w)
+                    }
+                    ActorOrder::ConstructionCancel => Some(Wire::new(command::CONSTRUCTION_CANCEL)),
+                    ActorOrder::Upgrade { def } => Some(Wire::new(command::UPGRADE).object(object_of(*def)?)),
+                    ActorOrder::Raze => Some(Wire::new(command::RAZE)),
+                    ActorOrder::Sally { forth } => Some(Wire::new(if *forth { command::SALLY_FORTH } else { command::RECALL })),
+                    ActorOrder::CancelFlare => Some(Wire::new(command::CANCEL_FLARE)),
+                    // 22 KKC_TeamCommand (0x509090), the kingdom's own request with
+                    // no selection: definitions 3 and 4 of the ten (0x509840).
+                    ActorOrder::GiveResources { to, amount } => {
+                        let mut f = team_fields(world, *kingdom, *to, 3)?;
+                        f.push(Field::Uint { width: 32, value: amount.to_bits() });
+                        out.push((TEAM_COMMAND_REQUEST, f));
+                        return Ok(out);
+                    }
+                    ActorOrder::GiveActor { to, actor } => {
+                        let mut f = team_fields(world, *kingdom, *to, 4)?;
+                        f.push(Field::Uint { width: 32, value: unit_gtid(*actor).ok_or("the given thing has no id")? });
+                        out.push((TEAM_COMMAND_REQUEST, f));
+                        return Ok(out);
+                    }
+                    // 0x4ED360 forms the group as part of the order it runs (the
+                    // mapper's); there is no request of it.
+                    ActorOrder::GroupFormed => None,
+                    ActorOrder::Unpack { at, facing } => {
+                        let w = Wire::new(command::UNPACK).at(*at);
+                        Some(if form == OrderForm::Person { w.facing(*facing).person(form, -1.0) } else { w })
+                    }
+                    // (orders) the direction of the following command's own wire.
+                    ActorOrder::Facing { .. } | ActorOrder::MoveOnto => None,
+                };
+                let Some(w) = w else { return Err(format!("{order:?}: no request form")) };
+                selected(&mut out, outbox, units, w)?;
             }
             Command::UseAbility { kingdom, ability, target: t } => {
                 // 0x6109F0: definition, two words (the point), presence bit, actor.
@@ -722,7 +986,21 @@ pub mod native {
 
     fn decode_command(world: &World, tables: &Tables, kingdom: KingdomId, w: &Wire, units: Vec<Unit>) -> Result<Vec<Command>, String> {
         let has = |bit: u32| w.flags & bit != 0;
-        let Some(c) = w.command else { return Err("a command without ActorCommand (guessed commands are not decoded)".into()) };
+        // A default order: each unit guesses its own (0x4DA570, the excluded
+        // flag from 0x4ED360's distinct head and tail).
+        let Some(c) = w.command else {
+            let excluded = units.len() > 1;
+            let fields = crate::orders::guess::Fields { flags: w.flags, target: w.word };
+            let mut out = Vec::new();
+            for u in units {
+                if let Some(index) = crate::orders::guess::guess(world, u, fields, excluded) {
+                    let mut one = w.clone();
+                    one.command = Some(index);
+                    out.extend(decode_command(world, tables, kingdom, &one, vec![u])?);
+                }
+            }
+            return Ok(out);
+        };
         let actors = || -> Vec<ActorId> { units.iter().filter_map(|u| if let Unit::Actor(a) = u { Some(*a) } else { None }).collect() };
         let orgs = || -> Vec<OrgId> { units.iter().filter_map(|u| if let Unit::Org(o) = u { Some(*o) } else { None }).collect() };
         let target = || has(WORD).then(|| actor_at_gtid(world, w.word)).flatten();
@@ -740,6 +1018,34 @@ pub mod native {
                 Some(t) => vec![Command::Follow { kingdom, units, target: t }],
                 None => Vec::new(),
             },
+            command::GUARD => {
+                let guarded = if has(WORD) { world.ids.thing(w.word).and_then(crate::ids::unit) } else { None };
+                if has(WORD) && guarded.is_none() {
+                    return Ok(Vec::new());
+                }
+                let aux = has(AUXILIARY).then(|| point(w.auxiliary));
+                vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::Guard { target: guarded, at: point(w.position), aux } }]
+            }
+            command::RETREAT => {
+                let t = target();
+                if has(WORD) && t.is_none() {
+                    return Ok(Vec::new());
+                }
+                vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::Retreat { target: t, at: point(w.position) } }]
+            }
+            command::ROUT => vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::Rout }],
+            command::EXPLORE => {
+                let scalar = has(SCALAR).then(|| f32::from_bits(w.scalar));
+                vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::Explore { at: point(w.position), scalar } }]
+            }
+            command::PACK_ORGANIZATION => vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::PackOrganization }],
+            command::ESCORT_ON | command::ESCORT_OFF => {
+                vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::Escort { on: c == command::ESCORT_ON } }]
+            }
+            command::GROUP_BEHAVIOR_ENABLE | command::GROUP_BEHAVIOR_DISABLE => {
+                let boolean = has(BOOLEAN).then_some(w.boolean);
+                vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::GroupBehavior { enable: c == command::GROUP_BEHAVIOR_ENABLE, boolean } }]
+            }
             command::STOP => vec![Command::Stop { kingdom, units }],
             command::DISBAND => vec![Command::Disband { kingdom, units }],
             command::REPAIR => match target() {
@@ -754,10 +1060,13 @@ pub mod native {
                 Some(def) => vec![Command::Construct { kingdom, units, def, at: point(w.position), facing }],
                 None => Vec::new(),
             },
-            command::HQ_ATTACH => match target() {
+            // This port's HUD names the HQ in the word; the original's cycle
+            // 0x57B0A0 reads no field.
+            command::HQ_ATTACH if has(WORD) => match target() {
                 Some(hq) => orgs().into_iter().map(|org| Command::Attach { kingdom, org, hq }).collect(),
                 None => Vec::new(),
             },
+            command::HQ_ATTACH => vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::HqCycle }],
             command::SET_FORMATION => {
                 let id = w.parameter.and_then(|i| tables.formations.get(i as usize)).ok_or("formation slot")?;
                 orgs()
@@ -774,7 +1083,14 @@ pub mod native {
                 None => Vec::new(),
             },
             command::STRUCTURE_CANCEL_QUEUED => {
-                actors().into_iter().map(|building| Command::CancelRecruit { kingdom, building, index: w.scalar as usize }).collect()
+                let id = f32::from_bits(w.scalar) as i32 as u32;
+                actors()
+                    .into_iter()
+                    .filter_map(|building| {
+                        let index = world.books.actor(building)?.queue.items.iter().position(|i| i.id == id)?;
+                        Some(Command::CancelRecruit { kingdom, building, index })
+                    })
+                    .collect()
             }
             command::UNPACK => actors().into_iter().map(|truck| Command::Deploy { kingdom, truck, at: point(w.position), facing }).collect(),
             command::PACK => actors().into_iter().map(|building| Command::Pack { kingdom, building }).collect(),
