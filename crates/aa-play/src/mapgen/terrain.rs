@@ -8,16 +8,11 @@
 //! Arithmetic: the original evaluates on the x87 register at PC53, which is
 //! binary64 here; every binary32 store it makes is kept (`as f32`), and
 //! `_ftol` (0x96CC4C) truncates.
-//!
-//! Not exact yet: the blocking painter's heights (0x598600 / 0x598950 and
-//! the slope setter 0x558D40) and the streak heights (0x558CE0 / 0x5590F0 /
-//! 0x559470) use the behaviour-level setters of `grid.rs`; water areas
-//! (0x552C90, 0x539E30) are not tracked.
 use super::blob::{self, Shape, Solver, TilePainter, ftol, ftol_d};
 use super::data::{BiomeDef, BlobDef, BrushDef, BrushKind, RmcDef, RmgData, StreakDef};
-use super::grid::{Batch, Relax, Slope, World};
+use super::grid::{Batch, World};
+use super::height::{Map, Setter};
 use super::rng::Rng;
-use std::collections::HashMap;
 
 /// `0x9FC0BC`, binary32 0.0001.
 const EPS: f32 = f32::from_bits(0x38D1_B717);
@@ -181,7 +176,7 @@ fn pick_entry(entries: &[Entry], total: i32, start: usize, rng: &mut Rng) -> Opt
 trait Painter: TilePainter {
     /// Set by 0x598B00 around micro-blobs of a blocking brush (+0xD6).
     fn set_affect_height(&mut self, _on: bool) {}
-    /// After one blob's solve (0x599020: heights 0x598950).
+    /// After one blob's solve (0x599020: the water area, heights 0x598950).
     fn after_blob(&mut self, _world: &mut World) {}
     fn finish(&mut self, world: &mut World);
 }
@@ -212,55 +207,132 @@ impl Painter for LandPainter<'_> {
     }
 }
 
-/// 0x5980B0: the blocking (mountain / water) painter. Tiles as the land
-/// painter (0x598600 appends to +0x114); 0x5972F0 paints the list into a
-/// batch, once more when the first did not settle.
+/// The tile painter's height hash (+0x24: 32 buckets, growing): the native
+/// chained table, because the blob's heights are set in its bucket order
+/// (0x598950) and the relax passes depend on the row order. A node goes to
+/// the head of its chain (0x558960); growth (0x558820) walks the old buckets
+/// in order, chains from their heads. A chain is stored tail first.
+struct VertexHash {
+    buckets: Vec<Vec<(i32, i32, f32, f32)>>,
+    count: usize,
+}
+
+impl VertexHash {
+    fn new() -> Self {
+        Self { buckets: vec![Vec::new(); 0x20], count: 0 }
+    }
+    fn bucket(x: i32, y: i32, size: usize) -> usize {
+        (((y as u32 & 0xFFFF) | ((x as u32) << 16)) % size as u32) as usize
+    }
+    fn grow(&mut self) {
+        let doubled = self.buckets.len() * 2;
+        let mut size = doubled + 1;
+        if (size % 3 == 0 || size % 5 == 0) && {
+            size = doubled + 3;
+            size % 3 == 0 || size % 5 == 0
+        } {
+            size = doubled + 5;
+        }
+        let mut next = vec![Vec::new(); size];
+        for chain in &self.buckets {
+            for node in chain.iter().rev() {
+                let b: &mut Vec<_> = &mut next[Self::bucket(node.0, node.1, size)];
+                b.push(*node);
+            }
+        }
+        self.buckets = next;
+    }
+    /// Find or insert (x, y) with weight 0 (0x598600's lookup, 0x558960).
+    fn entry(&mut self, x: i32, y: i32) -> &mut (i32, i32, f32, f32) {
+        let b = Self::bucket(x, y, self.buckets.len());
+        if let Some(i) = self.buckets[b].iter().position(|n| n.0 == x && n.1 == y) {
+            return &mut self.buckets[b][i];
+        }
+        if self.buckets.len() * 2 <= self.count {
+            self.grow();
+        }
+        self.count += 1;
+        let b = Self::bucket(x, y, self.buckets.len());
+        self.buckets[b].push((x, y, 0.0, 0.0));
+        self.buckets[b].last_mut().unwrap()
+    }
+    /// 0x596750: the entries go, the bucket count stays.
+    fn clear(&mut self) {
+        self.buckets.iter_mut().for_each(Vec::clear);
+        self.count = 0;
+    }
+}
+
+/// 0x5980B0: the blocking (mountain / water) painter (+0xB8 the tile painter
+/// 0x596FB0, tile method 0x598600, +0x108 the water area floods, +0x114 the
+/// tile list, +0x124 the setter 0x558D40 on the overlay).
 struct BlockingPainter<'a> {
     data: &'a RmgData,
     biome: &'a BiomeDef,
-    terrain: usize,
+    /// +0xD4: the brush terrain is water.
     water: bool,
+    /// +0xD6, cleared around micro blobs that don't affect heights.
     affect_height: bool,
     list: Vec<(usize, u32)>,
-    /// Blob heights (approximate, see the module notes).
-    heights: HashMap<usize, (f32, f32)>,
-    height_order: Vec<usize>,
-    slope: Relax,
+    /// +0xDC.
+    hash: VertexHash,
+    setter: Setter,
+    /// The solve's radius and variation (+0xD8 -> context).
     radius: f32,
+    var: u32,
+    /// +0xC8 the area, +0xCC/+0xD0 the tile it was read from.
+    area: u8,
+    area_cell: [i32; 2],
+    floods: Vec<(u8, [i32; 2])>,
 }
 
 impl TilePainter for BlockingPainter<'_> {
-    fn begin(&mut self, _var: u32, _center: [f32; 2], radius: f32) {
+    fn begin(&mut self, var: u32, _center: [f32; 2], radius: f32) {
         self.radius = radius;
+        self.var = var;
+        self.area = 0;
     }
+    /// 0x598600.
     fn paint(&mut self, world: &mut World, t: usize, var: u32) -> bool {
         self.list.push((t, var));
+        let [tx, ty] = world.tile_xy(t);
         if self.affect_height {
             let data = self.data;
             let old_kind = data.terrains[data.variations[world.var[t] as usize].terrain].kind;
             let from_zero = if self.water { old_kind == 1 } else { old_kind == 2 };
-            let tdef = &data.terrains[self.terrain];
-            let offset = if self.water { -tdef.max_depth } else { tdef.max_slope * self.radius };
-            let [tx, ty] = world.tile_xy(t);
-            let scale = world.tile / world.spacing;
-            let (x0, y0) = ((tx as f32 * scale) as i32, (ty as f32 * scale) as i32);
-            let x1 = (((tx + 1) as f32 * scale) as i32).min(world.hw as i32 - 1);
-            let y1 = (((ty + 1) as f32 * scale) as i32).min(world.hh as i32 - 1);
+            let tdef = &data.terrains[data.variations[self.var as usize].terrain];
+            let offset = if self.water { -tdef.max_depth } else { (f64::from(tdef.max_slope) * f64::from(self.radius)) as f32 };
+            let half = f64::from(world.tile) * 0.5;
+            let cx = (f64::from(tx << world.tile_bits) + half) as f32;
+            let cy = f64::from(ty << world.tile_bits) + half;
+            let bias = 1 << (world.height_bits - 1);
+            let at = |v: f64| (ftol_d(v) + bias) >> world.height_bits;
+            let x0 = at(f64::from(cx) - half).clamp(0, world.hw as i32 - 1);
+            let x1 = at(f64::from(cx) + half).clamp(0, world.hw as i32 - 1);
+            let y0 = at(cy - half).clamp(0, world.hh as i32 - 1);
+            let y1 = at(cy + half).clamp(0, world.hh as i32 - 1);
             for vy in y0..=y1 {
                 for vx in x0..=x1 {
-                    let Some(v) = world.vertex(vx, vy) else { continue };
-                    let base = if from_zero { 0.0 } else { self.slope.get(&world.overlay, v) };
-                    let h = (base + offset).clamp(world.limits[0], world.limits[1]);
-                    let e = self.heights.entry(v).or_insert_with(|| {
-                        self.height_order.push(v);
-                        (0.0, 0.0)
-                    });
-                    if e.0 < 1.0 {
-                        e.0 += 0.25;
-                        e.1 = h;
+                    let level = if from_zero { 0.0 } else { self.setter.get(world, vx, vy) };
+                    let h = (f64::from(level) + f64::from(offset)) as f32;
+                    let h = if h < world.limits[0] {
+                        world.limits[0]
+                    } else if h > world.limits[1] {
+                        world.limits[1]
+                    } else {
+                        h
+                    };
+                    let e = self.hash.entry(vx, vy);
+                    if e.2 < 1.0 {
+                        e.2 = (f64::from(e.2) + 0.25) as f32;
+                        e.3 = h;
                     }
                 }
             }
+        }
+        if self.water && self.area == 0 {
+            self.area = world.area[t];
+            self.area_cell = [tx, ty];
         }
         true
     }
@@ -270,18 +342,33 @@ impl Painter for BlockingPainter<'_> {
     fn set_affect_height(&mut self, on: bool) {
         self.affect_height = on;
     }
-    fn after_blob(&mut self, _world: &mut World) {
-        for v in self.height_order.drain(..) {
-            let (w, h) = self.heights[&v];
-            if w != 0.0 {
-                self.slope.seed(v, h * w);
+    /// 0x599020 after the solve: a free area when no painted tile had one,
+    /// the heights 0x598950 in hash order, the flood record.
+    fn after_blob(&mut self, world: &mut World) {
+        if self.water && self.area == 0 {
+            self.area = world.free_area();
+            if self.area == 0 {
+                return;
             }
         }
-        self.heights.clear();
+        for chain in &self.hash.buckets {
+            for n in chain.iter().rev() {
+                if n.2 != 0.0 {
+                    self.setter.set_relax(n.0, n.1, (f64::from(n.3) * f64::from(n.2)) as f32);
+                }
+            }
+        }
+        self.hash.clear();
+        if self.water {
+            self.floods.push((self.area, self.area_cell));
+        }
     }
+    /// 0x5972F0: the tiles into a batch, once more when it did not settle;
+    /// the relax passes; the floods in order.
     fn finish(&mut self, world: &mut World) {
-        for _ in 0..2 {
+        for attempt in 0..2 {
             let mut batch = Batch::new(self.data, self.biome);
+            batch.again = attempt != 0;
             for &(t, v) in &self.list {
                 batch.paint(world, t, v);
             }
@@ -290,9 +377,13 @@ impl Painter for BlockingPainter<'_> {
             }
         }
         self.list.clear();
-        if !self.slope.is_empty() {
-            self.slope.finish(world);
+        self.setter.finish_relax(world);
+        if self.water {
+            for &(area, cell) in &self.floods {
+                world.flood_area(self.data, cell, area);
+            }
         }
+        self.floods.clear();
     }
 }
 
@@ -439,10 +530,10 @@ fn circle_meets_square(r: f32, d: [f32; 2], lo: f32, hi: f32) -> bool {
     }
 }
 
-/// 0x5559F0 without its water-area flood: a batch, the stamps along the
-/// segment (step = the brush size, at least binary32(trunc(tile) * 0.5);
-/// the cursor stores after each stamp; the end point stamped once), commit.
-fn stroke(world: &mut World, data: &RmgData, biome: &BiomeDef, from: [f32; 2], to: [f32; 2], size: f32, var: u32) {
+/// 0x5559F0: a batch, the stamps along the segment (step = the brush size,
+/// at least binary32(trunc(tile) * 0.5); the cursor stores after each stamp;
+/// the end point stamped once), commit, then the water area's flood.
+fn stroke(world: &mut World, data: &RmgData, biome: &BiomeDef, from: [f32; 2], to: [f32; 2], size: f32, var: u32, area: u8) {
     let mut batch = Batch::new(data, biome);
     let dy32 = (f64::from(to[1]) - f64::from(from[1])) as f32;
     let dx = f64::from(to[0]) - f64::from(from[0]);
@@ -476,6 +567,9 @@ fn stroke(world: &mut World, data: &RmgData, biome: &BiomeDef, from: [f32; 2], t
         }
     }
     batch.commit(world);
+    if area != 0 {
+        world.flood_area(data, [ftol(from[0]) >> world.tile_bits, ftol(from[1]) >> world.tile_bits], area);
+    }
 }
 
 /// DoStreaks (0x597530): continuous strokes of a circle brush.
@@ -484,6 +578,7 @@ fn paint_streaks(world: &mut World, data: &RmgData, biome: &BiomeDef, rng: &mut 
     let tile_area = (f64::from(tile_i) * f64::from(tile_i)) as f32;
     let first_kind = data.terrains[data.variations[entries[0].var as usize].terrain].kind;
     let land = first_kind == 0;
+    let water = first_kind == 2;
     while *total > 0 {
         let Some(index) = pick_entry(entries, *total, 0, rng) else { break };
         let var = entries[index].var;
@@ -508,7 +603,8 @@ fn paint_streaks(world: &mut World, data: &RmgData, biome: &BiomeDef, rng: &mut 
             [0.0, 0.0]
         };
         let first_dir = dir_v;
-        let mut slope = Slope::new(tdef.max_slope, None);
+        // 0x558CE0 on the overlay, no protect.
+        let mut slope = Setter::new(Map::Overlay, tdef.max_slope, false, 0);
         let mut carry = 0.0f32;
         let mut i = 0;
         while i < count {
@@ -529,26 +625,76 @@ fn paint_streaks(world: &mut World, data: &RmgData, biome: &BiomeDef, rng: &mut 
             let ddx = f64::from(start[0]) - f64::from(end[0]);
             let actual = (ddx * ddx + ddy * ddy).sqrt() as f32;
             let short = (f64::from(length) - f64::from(actual)) as f32;
-            stroke(world, data, biome, start, end, half_w, var);
+            // A water brush's stroke floods the area of its start tile, or a
+            // free one; with none free DoStreaks stops (0x552C90 -> return).
+            let mut area = 0u8;
+            if water {
+                let t = (ftol(start[1]) >> world.tile_bits) as usize * world.tw + (ftol(start[0]) >> world.tile_bits) as usize;
+                area = world.area[t];
+                if area == 0 {
+                    area = world.free_area();
+                    if area == 0 {
+                        return;
+                    }
+                }
+            }
+            stroke(world, data, biome, start, end, half_w, var, area);
             if !land {
-                // The stroke's heights (approximate, see the module notes).
-                let mut target = (f64::from(tdef.max_slope) * f64::from(width) * 0.5) as f32;
+                // The stroke's heights: every spacing along the segment a
+                // depth-0 row at max(target, overlay), towards the terrain's
+                // limits (0x597A52..0x597CA6).
+                let mut target = ((f64::from(tdef.max_slope) * f64::from(width)) * 0.5) as f32;
                 if tdef.kind == 2 {
                     target = -target;
                 }
-                let steps = (actual / world.spacing).ceil().max(1.0) as i32;
-                for s in 0..=steps {
-                    let f = s as f32 / steps as f32;
-                    let p = [start[0] + (end[0] - start[0]) * f, start[1] + (end[1] - start[1]) * f];
-                    let (vx, vy) = ((p[0] / world.spacing + 0.5) as i32, (p[1] / world.spacing + 0.5) as i32);
-                    let Some(v) = world.vertex(vx, vy) else { continue };
-                    let cur = slope.get(&world.overlay, v);
-                    let mut h = if target <= 0.0 { cur.min(target) } else { cur.max(target) };
-                    h = h.clamp(world.limits[0], world.limits[1]);
-                    if h < -tdef.max_depth {
-                        h = -tdef.max_depth;
+                let ey = (f64::from(end[1]) - f64::from(start[1])) as f32;
+                let ex = f64::from(end[0]) - f64::from(start[0]);
+                let mut left = (ex * ex + f64::from(ey) * f64::from(ey)).sqrt() as f32;
+                let (mut xdir, mut ydir) = (ex, f64::from(ey));
+                if left > 0.0 {
+                    let inv = 1.0 / f64::from(left);
+                    xdir *= inv;
+                    ydir = inv * f64::from(ey);
+                }
+                if !(left < 0.0) {
+                    let s = world.spacing;
+                    let sy = (ydir * f64::from(s)) as f32;
+                    let sx = (xdir * f64::from(s)) as f32;
+                    let bias = 1 << (world.height_bits - 1);
+                    let mut cursor = start;
+                    loop {
+                        let vx = ((ftol(cursor[0]) + bias) >> world.height_bits).clamp(0, world.hw as i32 - 1);
+                        let vy = ((ftol(cursor[1]) + bias) >> world.height_bits).clamp(0, world.hh as i32 - 1);
+                        let mut h = world.overlay[vy as usize * world.hw + vx as usize];
+                        if target <= 0.0 {
+                            if target < h {
+                                h = target;
+                            }
+                        } else if h < target {
+                            h = target;
+                        }
+                        h = if h < world.limits[0] {
+                            world.limits[0]
+                        } else if h > world.limits[1] {
+                            world.limits[1]
+                        } else {
+                            h
+                        };
+                        if -tdef.max_depth > h {
+                            h = -tdef.max_depth;
+                        }
+                        slope.set(vx, vy, h);
+                        cursor[0] = (f64::from(sx) + f64::from(cursor[0])) as f32;
+                        cursor[1] = (f64::from(sy) + f64::from(cursor[1])) as f32;
+                        if !(left > 0.0) {
+                            break;
+                        }
+                        left = (f64::from(left) - f64::from(s)) as f32;
+                        if left < 0.0 {
+                            left = 0.0;
+                            cursor = end;
+                        }
                     }
-                    slope.seed(v, h);
                 }
             }
             // Tiles covered: the round cap on the first stroke, then the
@@ -580,9 +726,8 @@ fn paint_streaks(world: &mut World, data: &RmgData, biome: &BiomeDef, rng: &mut 
             }
             i += 1;
         }
-        if !land && !slope.is_empty() {
-            slope.finish(world, data, true);
-            slope.commit(world, true);
+        if !land {
+            slope.finish(world, data);
         }
     }
 }
@@ -625,14 +770,16 @@ pub(super) fn run(world: &mut World, data: &RmgData, rmc: &RmcDef, biome: &Biome
                     let mut painter = BlockingPainter {
                         data,
                         biome,
-                        terrain: brush.terrain,
                         water: terrain.kind == 2,
                         affect_height: true,
                         list: Vec::new(),
-                        heights: HashMap::new(),
-                        height_order: Vec::new(),
-                        slope: Relax::new(terrain.max_slope),
+                        hash: VertexHash::new(),
+                        setter: Setter::relax(Map::Overlay, terrain.max_slope),
                         radius: 0.0,
+                        var: 0,
+                        area: 0,
+                        area_cell: [0, 0],
+                        floods: Vec::new(),
                     };
                     paint_blobs(world, &mut solver, &mut painter, rng, brush, blob, &mut entries, &mut total, false);
                 } else {

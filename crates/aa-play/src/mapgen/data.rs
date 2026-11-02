@@ -239,6 +239,8 @@ pub(super) struct RmcDef {
     pub brushes: Vec<BrushDef>,
     pub noise: Vec<NoiseDef>,
     pub kingdoms: Vec<KingdomDef>,
+    /// The `[Team]` IDS of the RMC (the world parameters' team list).
+    pub teams: Vec<String>,
     pub actor_groups: Vec<GroupDef>,
     pub doodad_groups: Vec<GroupDef>,
     pub heroes: [i32; 2],
@@ -271,6 +273,9 @@ pub(super) struct TerrainDef {
     /// Terrain+3C, the sum of the variation weights.
     pub total_weight: f32,
     pub water_doodad: Option<String>,
+    /// Terrain+0x8C water_doodad_offset_parallel, +0x90 ..._perpendicular.
+    pub water_doodad_parallel: f32,
+    pub water_doodad_perpendicular: f32,
 }
 #[allow(dead_code)]
 #[derive(Clone, Debug, Default)]
@@ -297,8 +302,6 @@ pub(super) struct BiomeDef {
     pub terrains: Vec<usize>,
     /// (terrain a, terrain b) -> variation, stored both ways.
     pub transitions: BTreeMap<(usize, usize), usize>,
-    /// Per terrain: doodads with weight > 0 on it.
-    pub doodads: BTreeMap<usize, DoodadLists>,
 }
 #[allow(dead_code)]
 #[derive(Clone, Debug, Default)]
@@ -350,6 +353,39 @@ pub(super) struct ThingDef {
     /// needs_space_for_settlement_zone, or a settlement / city actor
     /// (definition virtual +0x2C).
     pub needs_space: bool,
+    /// ObjectData +0x108 aspects_as_variations, the aspect weights and +0x128
+    /// their total (0x49B900).
+    pub variations: bool,
+    pub aspect_weights: Vec<f32>,
+    pub aspect_total: f32,
+    /// DynamicDoodadData: how many of its Disturbable and Breakable
+    /// components exist (+0x174 / +0x178).
+    pub doodad_components: u32,
+    /// The category registry index (0x18 +0xC: 0x1F placeholder, 0x22 random
+    /// object, 0x23 random actor) and class (0x18 +0x1C).
+    pub category_index: u32,
+    pub runtime_class: u32,
+    /// +0x1AC: how many names its NameList holds (0 none).
+    pub names: u32,
+    /// +0x270 TrailerHitch node_offset.
+    pub hitch: [f32; 3],
+    /// +0x5B4 CityComponent zone_radius.
+    pub zone_radius: f32,
+    /// +0x25C holds a CONTINUOUS TrackInfo (0x4D7450 keeps a countdown).
+    pub continuous_tracks: bool,
+    /// +0x218 DefenderComponent control_range, when it has the component.
+    pub control_range: Option<f32>,
+}
+/// One Nation (Data/Nations) in registry order: GameData +0x80.
+#[derive(Clone, Debug, Default)]
+pub(super) struct NationDef {
+    pub ids: String,
+    /// +0x68 playable.
+    pub playable: bool,
+    /// The placeholder substitutions (+0x1C): thing ids (lower case) -> thing.
+    pub placeholders: BTreeMap<String, usize>,
+    /// The factions with +0x18 set (0x474B40).
+    pub factions: Vec<String>,
 }
 #[derive(Clone, Debug)]
 pub(super) struct Svars {
@@ -357,6 +393,8 @@ pub(super) struct Svars {
     pub placement_retries: i32,
     pub max_percent_mountain: f32,
     pub max_percent_water: f32,
+    /// ElevationSlopeMax (`**(0xB39AB0+0x18)`).
+    pub elevation_slope_max: f32,
     pub balance_iterations: i32,
     pub balance_worse: i32,
     pub nudge_step: f32,
@@ -390,10 +428,18 @@ pub(super) struct RmgData {
     pub variations: Vec<VariationDef>,
     pub variation_by_id: BTreeMap<String, usize>,
     pub biomes: BTreeMap<String, BiomeDef>,
+    /// Biome ids in registry order (GameData +0x5E4).
+    pub biome_order: Vec<String>,
+    /// Per terrain (+0xA0, +0xA8): the doodads with a weight on it.
+    pub doodads: BTreeMap<usize, DoodadLists>,
     pub things: Vec<ThingDef>,
     pub thing_by_id: BTreeMap<String, usize>,
     /// RandomActor ids -> (thing, weight).
     pub random_actors: BTreeMap<String, Vec<(String, f32)>>,
+    pub nations: Vec<NationDef>,
+    /// 0xB39F58+0x74: the largest settlement zone of the settlement actors
+    /// (0x4BBF90 over 0x45E6D0; no definition has one on the shipped data).
+    pub settlement_radius: f32,
     /// KingdomColor ids in registry order.
     pub colors: Vec<String>,
     pub svars: Svars,
@@ -449,6 +495,29 @@ fn random_actor_definition(catalog: &ActorCatalog, id: &str, registry_index: u32
     }
 }
 
+impl KingdomDef {
+    /// In the RMC's major kingdom list (+0xF8).
+    pub(super) fn is_major(&self) -> bool {
+        !self.independent && self.playable
+    }
+}
+
+impl RmcDef {
+    /// The RMC's actor then doodad groups as 0x4A4600 expands them: a group of
+    /// all major kingdoms once per kingdom, `<group>_<kingdom>`.
+    pub(super) fn group_ids(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for g in self.actor_groups.iter().chain(&self.doodad_groups) {
+            if g.all_major_kingdoms {
+                out.extend(self.kingdoms.iter().filter(|k| k.is_major()).map(|k| format!("{}_{}", g.ids, k.ids)));
+            } else {
+                out.push(g.ids.clone());
+            }
+        }
+        out
+    }
+}
+
 impl RmgData {
     pub(super) fn open_catalog(data_root: &std::path::Path) -> anyhow::Result<ActorCatalog> {
         let mut files = aa_rules::sources::V14Sources::open(
@@ -468,15 +537,20 @@ impl RmgData {
             variations: Vec::new(),
             variation_by_id: BTreeMap::new(),
             biomes: BTreeMap::new(),
+            biome_order: Vec::new(),
+            doodads: BTreeMap::new(),
             things: Vec::new(),
             thing_by_id: BTreeMap::new(),
             random_actors: BTreeMap::new(),
+            nations: Vec::new(),
+            settlement_radius: 0.0,
             colors: Vec::new(),
             svars: Svars {
                 retries: 3,
                 placement_retries: 3,
                 max_percent_mountain: 0.15,
                 max_percent_water: 0.15,
+                elevation_slope_max: 0.5,
                 // The SVar constructors (0x5065D0) before the file values.
                 balance_iterations: 20,
                 balance_worse: 2,
@@ -538,6 +612,7 @@ impl RmgData {
                 // The SVar is registered as RMGBalanceMarkerNudgeDelta; the file's
                 // RMGBalanceMarkerNudgeStepDelta names nothing, so the default 4 stays.
                 if let Some(v) = fx(&node, "RMGBalanceMarkerNudgeDelta") { s.nudge_delta = v }
+                if let Some(v) = fx(&node, "ElevationSlopeMax") { s.elevation_slope_max = v }
                 if let Some(v) = fx(&node, "ElevationMin") { s.elevation[0] = v }
                 if let Some(v) = fx(&node, "ElevationMax") { s.elevation[1] = v }
                 if let Some(v) = fx(&node, "ElevationDefault") { s.elevation[2] = v }
@@ -596,6 +671,8 @@ impl RmgData {
                 primary_doodad_frequency: fx(&t, "primary_doodad_frequency").unwrap_or(0.0),
                 color: pt3(&t, "terrain_color").unwrap_or([0.5, 0.5, 0.5]),
                 water_doodad: st(&t, "water_doodad_IDS"),
+                water_doodad_parallel: fx(&t, "water_doodad_offset_parallel").unwrap_or(1.0),
+                water_doodad_perpendicular: fx(&t, "water_doodad_offset_perpendicular").unwrap_or(1.0),
                 ..Default::default()
             };
             if kind != 0 {
@@ -642,6 +719,15 @@ impl RmgData {
     }
 
     fn load_things(&mut self, catalog: &ActorCatalog) {
+        // The NameLists by IDS (+0x1C how many names).
+        let mut name_lists: BTreeMap<String, u32> = BTreeMap::new();
+        for node in catalog.resolved_definitions("NameList").unwrap_or_default() {
+            if let Some(TypedValue::String { value, .. }) = node.plain_string_field("IDS").ok().flatten() {
+                let ids = value.trim().to_owned();
+                let names = catalog.native_name_list_with_lookup(&ids, PC, &mut |_| Ok(Some(Vec::new()))).ok().flatten();
+                name_lists.insert(lower(&ids), names.map_or(0, |n| n.names.len() as u32));
+            }
+        }
         let ids: Vec<String> = catalog.actors.iter().map(|a| a.id.clone()).collect();
         for id in ids {
             if self.thing_by_id.contains_key(&lower(&id)) {
@@ -678,6 +764,23 @@ impl RmgData {
                     }
                 }
             }
+            // +0x1AC, +0x270 (0x4D6F10), +0x5B4 (0x45D6A0).
+            if let Some(list) = st(&node, "name_list_ids") {
+                def.names = name_lists.get(&lower(&list)).copied().unwrap_or(0);
+            }
+            if let Some(hitch) = child(&node, "MoverComponent").and_then(|m| child(&m, "TrailerHitch")) {
+                if let Some(aa_rules::native::TypedValue::Point { bits, .. }) = hitch.field("node_offset", PC).ok().flatten() {
+                    for (slot, b) in def.hitch.iter_mut().zip(bits.iter()) {
+                        *slot = f32::from_bits(*b);
+                    }
+                }
+            }
+            if let Some(city) = child(&node, "CityComponent") {
+                def.zone_radius = fx(&city, "zone_radius").unwrap_or(0.0);
+            }
+            if let Some(defender) = child(&node, "DefenderComponent") {
+                def.control_range = Some(fx(&defender, "control_range").unwrap_or(0.0));
+            }
             if let Ok(object) = catalog.native_object_definition(ThingRef::registered(&id), PC) {
                 def.shape = object.blocking.words;
                 def.shape_radius = f32::from_bits(object.blocking.words[1]);
@@ -696,29 +799,30 @@ impl RmgData {
             }
             if let Some(mover) = child(&node, "MoverComponent") {
                 def.trailer = st(&mover, "trailer_actor").filter(|s| !s.eq_ignore_ascii_case("null"));
+                def.continuous_tracks = children(&mover, "TrackInfo").iter().any(|t| st(t, "track_type").is_some_and(|v| v.eq_ignore_ascii_case("CONTINUOUS")));
             }
             if let Ok(flags) = catalog.native_final_flags(ThingRef::registered(&id), PC) {
                 def.flags = flags;
             }
+            if let Ok(creation) = catalog.native_creation_definition(ThingRef::registered(&id), PC) {
+                def.variations = creation.variations_enabled;
+                def.aspect_weights = creation.variation_weights_bits.iter().map(|b| f32::from_bits(*b)).collect();
+                def.aspect_total = f32::from_bits(creation.total_variation_weight_bits);
+            }
             if let Ok(category) = catalog.native_category(ThingRef::registered(&id)) {
                 def.native_kind = category.native_kind;
+                def.category_index = category.registry_index;
+                def.runtime_class = category.runtime_class;
+                if category.native_kind == 21 {
+                    if let Ok(dd) = catalog.native_dynamic_doodad(&id, PC) {
+                        def.doodad_components = dd.components.iter().filter(|c| c.is_some()).count() as u32;
+                    }
+                }
                 if category.native_kind == 19 {
                     // RandomActorData (a random village) loads as ActorData:
                     // the ActorData flag finalizer and the Size shapes.
                     random_actor_definition(catalog, &id, category.registry_index, &mut def);
                 }
-            }
-            if std::env::var("AA_RMG_DUMP_DEF").is_ok_and(|v| v.eq_ignore_ascii_case(&id)) {
-                // Debugging aid: the typed native fields of one definition.
-                eprintln!("{id}: source {source}");
-                for path in [
-                    "category", "Size.blocking_shape", "Size.square_size", "Size.rect_width", "Size.rect_height", "Size.blocking_radius",
-                    "Size.soft_shape", "Size.soft_radius", "Size.scale_min", "Size.scale_max", "Flags.blocking", "Flags.tile_locked",
-                    "Flags.ethereal", "Flags.random_orientation", "needs_space_for_settlement_zone",
-                ] {
-                    eprintln!("  {path}: {:?}", catalog.native_field(ThingRef::registered(&id), path, PC).map(|v| v.map(|v| format!("{v:?}"))));
-                }
-                eprintln!("  flags {:?} category {:?}", catalog.native_final_flags(ThingRef::registered(&id), PC), catalog.native_category(ThingRef::registered(&id)));
             }
             def.needs_space = matches!(
                 catalog.native_field(ThingRef::registered(&id), "needs_space_for_settlement_zone", PC),
@@ -800,13 +904,21 @@ impl RmgData {
                     def.transitions.insert((c, a), v);
                 }
             }
+            self.biome_order.push(lower(&ids));
             self.biomes.insert(lower(&ids), def);
         }
+        self.load_nations(catalog);
         // KKC_ObjectData::LoadBiomePlacementData (0x49D1C0): Placement weight,
-        // overridden per Biome, overridden per Terrain (with primary_doodad).
-        let biome_ids: Vec<String> = self.biomes.keys().cloned().collect();
-        let mut lists: BTreeMap<String, BTreeMap<usize, DoodadLists>> = BTreeMap::new();
+        // overridden per Biome, overridden per Terrain (with primary_doodad). The
+        // tables are the Terrain's (+0xA0, primary +0xA8), whichever biome gave the
+        // weight: a thing joins a terrain's table once per biome listing it with a
+        // positive weight, biomes in registry order; no actor joins (0x4B6BF0).
+        let biome_ids = self.biome_order.clone();
+        let mut lists: BTreeMap<usize, DoodadLists> = BTreeMap::new();
         for (thing_index, thing) in self.things.iter().enumerate() {
+            if matches!(thing.native_kind, 2 | 19) {
+                continue;
+            }
             let Ok(node) = catalog.resolved_actor(ThingRef::registered(&thing.ids)) else { continue };
             let Some(placement) = child(&node, "Placement") else { continue };
             let biomes = children(&placement, "Biome");
@@ -833,7 +945,7 @@ impl RmgData {
                 }
                 for (slot, &(w, primary)) in weights.iter().enumerate() {
                     if w > 0.0 {
-                        let entry = lists.entry(biome_id.clone()).or_default().entry(biome.terrains[slot]).or_default();
+                        let entry = lists.entry(biome.terrains[slot]).or_default();
                         if primary {
                             entry.primary.push((thing_index, w));
                         } else {
@@ -843,10 +955,26 @@ impl RmgData {
                 }
             }
         }
-        for (biome, doodads) in lists {
-            if let Some(b) = self.biomes.get_mut(&biome) {
-                b.doodads = doodads;
+        self.doodads = lists;
+    }
+
+    /// The nations in registry order (GameData +0x80, Data/Nations), their
+    /// placeholders (0x473370) and public factions (0x474B40).
+    fn load_nations(&mut self, catalog: &ActorCatalog) {
+        let Ok(nodes) = catalog.resolved_definitions("Nation") else { return };
+        for node in nodes {
+            let ids = st(&node, "ids").or_else(|| st(&node, "IDS")).unwrap_or_default();
+            let factions: Vec<String> = st(&node, "factions").map(|s| s.split(',').map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()).collect()).unwrap_or_default();
+            let factions = factions.into_iter().filter(|f| catalog.resolved_definition("Faction", f, PC).ok().is_some_and(|n| bl(&n, "public").unwrap_or(true))).collect();
+            let mut placeholders = BTreeMap::new();
+            for ph in children(&node, "Placeholder") {
+                let (Some(from), Some(to)) = (st(&ph, "placeholder_IDS"), st(&ph, "thing_IDS")) else { continue };
+                if let Some(&t) = self.thing_by_id.get(&lower(&to)) {
+                    placeholders.insert(lower(&from), t);
+                }
             }
+            let playable = bl(&node, "playable").unwrap_or(true);
+            self.nations.push(NationDef { ids, playable, placeholders, factions });
         }
     }
 
@@ -908,6 +1036,7 @@ impl RmgData {
             brushes: Vec::new(),
             noise: Vec::new(),
             kingdoms: Vec::new(),
+            teams: Vec::new(),
             actor_groups: Vec::new(),
             doodad_groups: Vec::new(),
             heroes: [0, 0],
@@ -997,6 +1126,13 @@ impl RmgData {
                 reference_size: fx(&n, "terrain_noise_reference_size").unwrap_or(128.0),
                 area_factor: fx(&n, "terrain_noise_area_factor").unwrap_or(0.5),
             });
+        }
+        for t in children(rmc, "Team") {
+            if let Some(ids) = st(&t, "IDS")
+                && !def.teams.iter().any(|x: &String| x.eq_ignore_ascii_case(&ids))
+            {
+                def.teams.push(ids);
+            }
         }
         for k in children(rmc, "Kingdom") {
             let Some(kids) = st(&k, "IDS") else { continue };

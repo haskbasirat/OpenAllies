@@ -62,6 +62,8 @@ pub(super) fn soft_shape(def: &ThingDef, clearance: f32) -> Shape {
 struct Member {
     flags: u32,
     blocking: Placement,
+    /// The tile rectangle it is listed in; cleared when the thing is deleted.
+    rect: Option<([i32; 2], [i32; 2])>,
 }
 
 pub(super) struct Space {
@@ -74,16 +76,22 @@ pub(super) struct Space {
     /// Per tile: the SAI rectangle's island, and the primary island.
     island: Vec<i32>,
     primary: Option<u32>,
+    seen: Vec<u32>,
+    stamp: u32,
 }
 
 /// The terrain part of a tile's flag word.
 pub(super) fn terrain_flags(data: &RmgData, var: u32, edge: bool) -> u32 {
     let t = &data.terrains[data.variations[var as usize].terrain];
-    let mut f = match t.kind {
-        1 => 0x310,
-        2 => 0x120,
-        _ => BLOCKS_WATER,
-    };
+    // 0x54FDC0: kind << 4, and 0x100 / 0x200 where the terrain does not let
+    // land / water units through (Terrain+0x4C bits 0 and 1).
+    let mut f = u32::from(t.kind) << 4;
+    if !t.land {
+        f |= 0x100;
+    }
+    if !t.water {
+        f |= BLOCKS_WATER;
+    }
     if edge {
         f |= 0x301;
     }
@@ -111,6 +119,8 @@ impl Space {
             cell_shape: Shape { kind: 2, radius_bits: radius.to_bits(), bounds: [neg, neg, pos, pos] },
             island: vec![-1; w * h],
             primary: None,
+            seen: Vec::new(),
+            stamp: 0,
         };
         s.analyse(data);
         s
@@ -172,9 +182,12 @@ impl Space {
     /// The index insert (0x553xxx full membership): every tile of the soft
     /// shape's rectangle lists the member; a static blocker marks 0x400 on the
     /// tiles whose probe its blocking shape overlaps.
-    pub(super) fn add(&mut self, flags: u32, blocking: Placement, soft: Placement) {
+    pub(super) fn add(&mut self, flags: u32, blocking: Placement, soft: Placement) -> u32 {
         let index = self.members.len() as u32;
-        let Ok(rect) = geometry::tile_rectangle(&self.grid, &soft, P) else { return };
+        let Ok(rect) = geometry::tile_rectangle(&self.grid, &soft, P) else {
+            self.members.push(Member { flags, blocking, rect: None });
+            return index;
+        };
         let marks = geometry::marks_blocker(flags, blocking.shape.radius_bits, self.grid.cell_size_bits, P).unwrap_or(false);
         let actor = collision::Actor { definition: 0, flags, position: blocking.position, facing: blocking.facing };
         for x in rect.min[0]..=rect.max[0] {
@@ -190,7 +203,86 @@ impl Space {
                 }
             }
         }
-        self.members.push(Member { flags, blocking });
+        self.members.push(Member { flags, blocking, rect: Some((rect.min, rect.max)) });
+        index
+    }
+
+    /// The tile walk of 0x4F1660 over the circle's rectangle: every tile lets
+    /// land units through (Terrain +0x4C bit 0), and `pass` accepts every member
+    /// overlapping the circle.
+    pub(super) fn zone_circle_free(&self, circle: &Placement, pass: impl Fn(u32, Option<usize>) -> bool, by_member: &std::collections::HashMap<u32, usize>) -> bool {
+        let Ok(rect) = geometry::tile_rectangle(&self.grid, circle, P) else { return false };
+        for y in rect.min[1]..=rect.max[1] {
+            for x in rect.min[0]..=rect.max[0] {
+                let t = (y * self.grid.dimensions[0] + x) as usize;
+                if self.flags[t] & 0x100 != 0 {
+                    return false;
+                }
+                for &m in &self.tiles[t] {
+                    let member = &self.members[m as usize];
+                    if aa_spatial::shape_overlap::overlaps(circle, &member.blocking, P).unwrap_or(false) && !pass(member.flags, by_member.get(&m).copied()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// 0x54FDC0: the terrain part of a tile's flag word after a terrain change.
+    pub(super) fn retile(&mut self, t: usize, data: &RmgData, var: u32) {
+        let w = self.grid.dimensions[0] as usize;
+        let h = self.grid.dimensions[1] as usize;
+        let (x, y) = (t % w, t / w);
+        let edge = x == 0 || y == 0 || x + 1 == w || y + 1 == h;
+        let keep = self.flags[t] & STATIC_BLOCKER;
+        self.flags[t] = terrain_flags(data, var, edge) | keep;
+    }
+
+    /// The thing leaves the index (0x4EE4C0 out of the tiles of 0x4F5490);
+    /// a static blocker's 0x400 tiles are recomputed from those left.
+    pub(super) fn remove(&mut self, member: u32) {
+        let Some((min, max)) = self.members[member as usize].rect.take() else { return };
+        let marked = {
+            let m = &self.members[member as usize];
+            geometry::marks_blocker(m.flags, m.blocking.shape.radius_bits, self.grid.cell_size_bits, P).unwrap_or(false)
+        };
+        for x in min[0]..=max[0] {
+            for y in min[1]..=max[1] {
+                let t = (y * self.grid.dimensions[0] + x) as usize;
+                self.tiles[t].retain(|&m| m != member);
+                if marked && !self.find_blocker([x, y]) {
+                    self.flags[t] &= !STATIC_BLOCKER;
+                }
+            }
+        }
+    }
+
+    /// 0x555620 for a placement: the members whose blocking shape overlaps
+    /// it, each once, in the order of the tiles it covers (rows inner).
+    pub(super) fn overlapping(&mut self, query: &Placement, skip: Option<u32>) -> Vec<u32> {
+        let Ok(rect) = geometry::tile_rectangle(&self.grid, query, P) else { return Vec::new() };
+        let mut out = Vec::new();
+        self.stamp += 1;
+        let stamp = self.stamp;
+        if self.seen.len() < self.members.len() {
+            self.seen.resize(self.members.len(), 0);
+        }
+        for x in rect.min[0]..=rect.max[0] {
+            for y in rect.min[1]..=rect.max[1] {
+                let t = (y * self.grid.dimensions[0] + x) as usize;
+                for &m in &self.tiles[t] {
+                    if self.seen[m as usize] == stamp || Some(m) == skip {
+                        continue;
+                    }
+                    self.seen[m as usize] = stamp;
+                    if aa_spatial::shape_overlap::overlaps(query, &self.members[m as usize].blocking, P).unwrap_or(false) {
+                        out.push(m);
+                    }
+                }
+            }
+        }
+        out
     }
 
     fn tile_placement(&self, cell: [i32; 2]) -> Placement {
@@ -214,6 +306,11 @@ impl Space {
     /// 0 clear, 1 a blocking tile, 2 an actor, 3 outside the world.
     /// `large_only`: the source definition is not blocking (0x553BE2).
     pub(super) fn first_hit(&self, query: &Placement, mask: u32, required: u32, large_only: bool) -> u32 {
+        self.first_hit_skipping(query, mask, required, large_only, None)
+    }
+
+    /// [`Self::first_hit`] that leaves one member out (the source thing).
+    pub(super) fn first_hit_skipping(&self, query: &Placement, mask: u32, required: u32, large_only: bool, skip: Option<u32>) -> u32 {
         let Ok(boundary) = aa_spatial::query::outside(query, self.extent_bits, P) else { return 3 };
         let Ok(rect) = geometry::tile_rectangle(&self.grid, query, P) else { return 3 };
         if boundary && mask != 0 {
@@ -227,9 +324,6 @@ impl Space {
                 let flags = self.flags[t];
                 if flags & tile_mask != 0 && aa_spatial::shape_overlap::overlaps(&self.tile_placement([x, y]), query, P).unwrap_or(false) {
                     if flags & STATIC_BLOCKER == 0 {
-                        if std::env::var_os("AA_RMG_HIT_DEBUG").is_some() {
-                            eprintln!("    tile hit at ({x}, {y}) flags {flags:x}");
-                        }
                         return 1;
                     }
                     if self.find_blocker([x, y]) {
@@ -241,7 +335,7 @@ impl Space {
                     if large_only && !geometry::marks_blocker(member.flags, member.blocking.shape.radius_bits, self.grid.cell_size_bits, P).unwrap_or(false) {
                         continue;
                     }
-                    if std::mem::replace(&mut seen[m as usize], true) {
+                    if std::mem::replace(&mut seen[m as usize], true) || Some(m) == skip {
                         continue;
                     }
                     if member.flags & required != required {

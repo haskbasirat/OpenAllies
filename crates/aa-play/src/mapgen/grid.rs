@@ -1,15 +1,24 @@
-//! The generator's working world: the GMap tile grid (tile variations), the
-//! two heightmaps (base HEIGHT_MAP at world+34, mountain/water overlay
-//! MOUNTAIN_HEIGHT_MAP at world+38; 0x4F27E0 creates them with the SVars
-//! Elevation limits, base default ElevationDefault, overlay default 0), the
-//! slope-limited height setter (0x558CE0/0x558D40 + 0x559470, the same
-//! algorithm aa-heightfield::brush ports byte-exactly) and the terrain change
-//! batch that enforces the biome Transition table (0x559980 / 0x5599F0 /
-//! 0x559FB0 / 0x559A70).
+//! The generator's working world: the GMap tile grid (tile variations and
+//! water areas), the two heightmaps (base HEIGHT_MAP at world+34, mountain/water
+//! overlay MOUNTAIN_HEIGHT_MAP at world+38; 0x4F27E0 creates them with the SVars
+//! Elevation limits, base default ElevationDefault, overlay default 0; the
+//! setters are in `height.rs`) and the terrain change batch that enforces the
+//! biome Transition table (0x559980 / 0x5599F0 / 0x559FB0 / 0x559A70).
 use super::data::{BiomeDef, RmgData};
 use std::collections::HashMap;
 
-pub(super) const NONE: u32 = u32::MAX;
+/// GMap+0x50: entry 0 is null, ids 1..=254 are records (ids are bytes in the
+/// saved tile and vertex data, 0xFF marks a shared vertex).
+const AREA_TABLE_LEN: usize = 255;
+const SHARED_VERTEX: u8 = 0xFF;
+/// 0xB322E0: (dx, dy) per direction; 0xAB7804 next, 0xAB7828 previous,
+/// 0xAB784C next-but-one, 0xAB7870 previous-but-one, 0xAB7894 opposite.
+const FLOOD_DELTA: [[i32; 2]; 9] = [[0, 0], [-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]];
+const FLOOD_NEXT: [usize; 9] = [0, 2, 3, 4, 5, 6, 7, 8, 1];
+const FLOOD_PREV: [usize; 9] = [0, 8, 1, 2, 3, 4, 5, 6, 7];
+const FLOOD_NEXT2: [usize; 9] = [0, 3, 4, 5, 6, 7, 8, 1, 2];
+const FLOOD_PREV2: [usize; 9] = [0, 7, 8, 1, 2, 3, 4, 5, 6];
+const FLOOD_OPPOSITE: [usize; 9] = [0, 5, 6, 7, 8, 1, 2, 3, 4];
 /// 8-neighbour order of the native tables (B322E0 / B3D610 / aa-heightfield).
 pub(super) const NEIGHBORS: [[i32; 2]; 8] = [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]];
 
@@ -21,14 +30,29 @@ pub(super) struct World {
     pub tw: usize,
     pub th: usize,
     pub var: Vec<u32>,
-    /// Variation painted by the current brush but not committed yet.
-    pub pending: Vec<u32>,
     pub hw: usize,
     pub hh: usize,
     pub spacing: f32,
     pub base: Vec<f32>,
     pub overlay: Vec<f32>,
     pub limits: [f32; 2],
+    pub height_bits: u32,
+    /// Tile +0x2C, the water area id (0 none).
+    pub area: Vec<u8>,
+    /// The flood's visit stamp (tile +0x28, GMap+0x48) and arrival direction
+    /// (tile +0x2D).
+    flood_visit: Vec<u32>,
+    flood_from: Vec<u8>,
+    flood_stamp: u32,
+    /// GMap+0x50: tiles per water area id (record +4).
+    area_count: Vec<i32>,
+    /// Base map +0x44, the per-vertex water-area bytes.
+    pub verts: Vec<u8>,
+    /// The overlay's +0x44 bytes: nothing writes them.
+    overlay_verts: Vec<u8>,
+    /// The tiles whose terrain changed since [`Self::take_changed`] (0x54FDC0
+    /// also deletes their doodads and refreshes their flag word).
+    changed: Vec<usize>,
 }
 
 impl World {
@@ -47,14 +71,231 @@ impl World {
             tw,
             th,
             var: vec![initial; tw * th],
-            pending: vec![NONE; tw * th],
             hw,
             hh,
             spacing: (1u32 << height_bits) as f32,
             base: vec![e[2]; hw * hh],
             overlay: vec![0.0; hw * hh],
             limits: [e[0], e[1]],
+            height_bits,
+            area: vec![0; tw * th],
+            flood_visit: vec![0; tw * th],
+            flood_from: vec![0; tw * th],
+            flood_stamp: 0,
+            area_count: vec![0; AREA_TABLE_LEN],
+            verts: vec![0; hw * hh],
+            overlay_verts: vec![0; hw * hh],
+            changed: Vec::new(),
         }
+    }
+    /// The parity probe's world dump (see the RmgProbe sampler): tile
+    /// variation ids, water areas, both heightmaps as bits, then the things.
+    pub(super) fn dump(&self, data: &RmgData, path: &std::path::Path, things: &[(String, [f32; 2])]) {
+        use std::fmt::Write;
+        let mut out = String::new();
+        let line = |o: &mut String, v: Vec<String>| {
+            o.push_str(&v.join(" "));
+            o.push('\n');
+        };
+        line(&mut out, self.var.iter().map(|&v| data.variations[v as usize].ids.to_ascii_lowercase()).collect());
+        line(&mut out, self.area.iter().map(|a| a.to_string()).collect());
+        line(&mut out, self.base.iter().map(|h| format!("{:x}", h.to_bits())).collect());
+        line(&mut out, self.overlay.iter().map(|h| format!("{:x}", h.to_bits())).collect());
+        for (id, p) in things {
+            let _ = writeln!(out, "{id} {:x} {:x}", p[0].to_bits(), p[1].to_bits());
+        }
+        let _ = std::fs::write(path, out);
+    }
+    /// One heightmap's +0x44 bytes.
+    pub(super) fn vertex_areas(&self, map: super::height::Map) -> &[u8] {
+        match map {
+            super::height::Map::Base => &self.verts,
+            super::height::Map::Overlay => &self.overlay_verts,
+        }
+    }
+    pub(super) fn height_at(&self, map: super::height::Map, x: i32, y: i32) -> f32 {
+        let at = y as usize * self.hw + x as usize;
+        match map {
+            super::height::Map::Base => self.base[at],
+            super::height::Map::Overlay => self.overlay[at],
+        }
+    }
+    /// 0x552C90: the first free water area id, 0 when none.
+    pub(super) fn free_area(&self) -> u8 {
+        (1..AREA_TABLE_LEN).find(|&i| self.area_count[i] == 0).map_or(0, |i| i as u8)
+    }
+    /// 0x550190 at a tile's centre: the nearest base sample.
+    fn level_at_tile(&self, cell: [i32; 2]) -> f32 {
+        let half = (1i32 << self.tile_bits) as f64 * 0.5;
+        let bias = 1 << (self.height_bits - 1);
+        let v = |c: i32, size: usize| ((((f64::from(c << self.tile_bits) + half) as f32) as i32 + bias) >> self.height_bits).clamp(0, size as i32 - 1);
+        self.base[v(cell[1], self.hh) as usize * self.hw + v(cell[0], self.hw) as usize]
+    }
+    /// 0x539C40 (IsIndexBlocked): the fill enters only water, and a tile of
+    /// another area only within 0.1 of the start level.
+    fn flood_blocked(&self, data: &RmgData, cell: [i32; 2], area: u8, level: f32) -> bool {
+        let t = cell[1] as usize * self.tw + cell[0] as usize;
+        if data.terrains[data.variations[self.var[t] as usize].terrain].kind != 2 {
+            return true;
+        }
+        let other = self.area[t];
+        if other == 0 || other == area {
+            return false;
+        }
+        let d = (f64::from(self.level_at_tile(cell)) - f64::from(level)).abs();
+        d > f64::from(f32::from_bits(0x3DCC_CCCD))
+    }
+    /// 0x539C00: move the tile into the area (0x552150 then 0x552110).
+    fn flood_paint(&mut self, cell: [i32; 2], area: u8) {
+        let t = cell[1] as usize * self.tw + cell[0] as usize;
+        let current = self.area[t];
+        if current == area {
+            return;
+        }
+        if current != 0 {
+            self.leave_area(t);
+        }
+        self.area[t] = area;
+        let scale = self.tile_bits as i32 - self.height_bits as i32;
+        let (vx, vy) = (cell[0] << scale, cell[1] << scale);
+        for [dx, dy] in [[0, 0], [1, 0], [1, 1], [0, 1]] {
+            if let Some(v) = self.vertex(vx + dx, vy + dy) {
+                let byte = &mut self.verts[v];
+                if *byte != area {
+                    *byte = if *byte == 0 { area } else { SHARED_VERTEX };
+                }
+            }
+        }
+        self.area_count[usize::from(area)] += 1;
+    }
+    /// 0x539E30 on the flood solver 0x4F4050, as aa_spatial::water_areas
+    /// proves it (aa-play does not link that crate's height type): breadth
+    /// first from `start`, which is reached and queued unconditionally and
+    /// painted when popped; a popped tile visits the directions around its
+    /// arrival (0x554ED0: all eight from the start, five after a diagonal,
+    /// three after an orthogonal step, never straight back).
+    pub(super) fn flood_area(&mut self, data: &RmgData, start: [i32; 2], area: u8) {
+        self.flood_stamp += 1;
+        let stamp = self.flood_stamp;
+        let level = self.level_at_tile(start);
+        let mut fifo = std::collections::VecDeque::new();
+        let s = start[1] as usize * self.tw + start[0] as usize;
+        self.flood_visit[s] = stamp;
+        self.flood_from[s] = 0;
+        fifo.push_back(s);
+        while let Some(current) = fifo.pop_front() {
+            let origin = self.tile_xy(current);
+            if origin == start {
+                self.flood_paint(origin, area);
+            }
+            let came = self.flood_from[current] as usize;
+            let (first, end) = match came {
+                0 => (1usize, 8usize),
+                1 | 3 | 5 | 7 => (FLOOD_PREV2[came], FLOOD_NEXT2[came]),
+                _ => (FLOOD_PREV[came], FLOOD_NEXT[came]),
+            };
+            let valid = |w: &Self, dir: usize| -> bool {
+                if FLOOD_OPPOSITE[came] == dir {
+                    return false;
+                }
+                let d = FLOOD_DELTA[dir];
+                let n = [origin[0] + d[0], origin[1] + d[1]];
+                if n[0] < 0 || n[1] < 0 || n[0] >= w.tw as i32 || n[1] >= w.th as i32 {
+                    return false;
+                }
+                !w.flood_blocked(data, n, area, level)
+            };
+            // 0x4F2760: step until valid, the last direction or a full turn.
+            let advance = |w: &Self, mut dir: usize, begin: usize| -> usize {
+                while dir != end {
+                    dir = FLOOD_NEXT[dir];
+                    if dir == begin {
+                        break;
+                    }
+                    if valid(w, dir) {
+                        return dir;
+                    }
+                }
+                0
+            };
+            let mut dir = first;
+            if !valid(self, dir) {
+                dir = advance(self, dir, dir);
+            }
+            while dir != 0 {
+                let d = FLOOD_DELTA[dir];
+                let n = [origin[0] + d[0], origin[1] + d[1]];
+                let t = n[1] as usize * self.tw + n[0] as usize;
+                if self.flood_visit[t] != stamp {
+                    self.flood_visit[t] = stamp;
+                    self.flood_from[t] = dir as u8;
+                    if !self.flood_blocked(data, n, area, level) {
+                        self.flood_paint(n, area);
+                        fifo.push_back(t);
+                    }
+                }
+                dir = advance(self, dir, dir);
+            }
+        }
+    }
+    /// 0x552150: tile `t` leaves its water area: +0x2C cleared, its four
+    /// vertices rebuilt (0x550F20 -> 0x5507C0), the record count decremented.
+    fn leave_area(&mut self, t: usize) {
+        let area = self.area[t];
+        self.area[t] = 0;
+        let [tx, ty] = self.tile_xy(t);
+        let scale = self.tile_bits as i32 - self.height_bits as i32;
+        let (vx, vy) = (tx << scale, ty << scale);
+        for [dx, dy] in [[0, 0], [1, 0], [1, 1], [0, 1]] {
+            let (x, y) = (vx + dx, vy + dy);
+            let Some(v) = self.vertex(x, y) else { continue };
+            self.verts[v] = 0;
+            let (cx, cy) = ((x << self.height_bits) >> self.tile_bits, (y << self.height_bits) >> self.tile_bits);
+            let mut done = false;
+            for ox in [-1, 0] {
+                for oy in [-1, 0] {
+                    if done {
+                        continue;
+                    }
+                    let Some(n) = self.tile_at(cx + ox, cy + oy) else { continue };
+                    let a = self.area[n];
+                    let byte = &mut self.verts[v];
+                    if a != 0 && *byte != a {
+                        if *byte != 0 {
+                            *byte = SHARED_VERTEX;
+                            done = true;
+                        } else {
+                            *byte = a;
+                        }
+                    }
+                }
+            }
+        }
+        self.area_count[usize::from(area)] -= 1;
+    }
+    /// The tile half of 0x54FDC0: the variation, and when a mountain or water
+    /// tile changes kind the overlay reset 0x54F040 run on the old variation
+    /// (with its water area left when it was water).
+    pub(super) fn set_variation(&mut self, data: &RmgData, t: usize, var: u32) {
+        let old = self.var[t];
+        if old == var {
+            return;
+        }
+        let old_terrain = &data.terrains[data.variations[old as usize].terrain];
+        let new_kind = data.terrains[data.variations[var as usize].terrain].kind;
+        if old_terrain.kind != new_kind && matches!(old_terrain.kind, 1 | 2) {
+            super::height::reset_tile_overlay(self, data, t, old_terrain.max_slope);
+            if old_terrain.kind == 2 && self.area[t] != 0 {
+                self.leave_area(t);
+            }
+        }
+        if data.variations[old as usize].terrain != data.variations[var as usize].terrain {
+            self.changed.push(t);
+        }
+        self.var[t] = var;
+    }
+    pub(super) fn take_changed(&mut self) -> Vec<usize> {
+        std::mem::take(&mut self.changed)
     }
     pub(super) fn tile_of(&self, p: [f32; 2]) -> Option<usize> {
         let (x, y) = ((p[0] as i32) >> self.tile_bits, (p[1] as i32) >> self.tile_bits);
@@ -71,195 +312,11 @@ impl World {
         let [x, y] = self.tile_xy(t);
         [x as f32 * self.tile + self.tile * 0.5, y as f32 * self.tile + self.tile * 0.5]
     }
-    pub(super) fn effective(&self, t: usize) -> u32 {
-        if self.pending[t] != NONE { self.pending[t] } else { self.var[t] }
-    }
     pub(super) fn vertex(&self, x: i32, y: i32) -> Option<usize> {
         (x >= 0 && y >= 0 && (x as usize) < self.hw && (y as usize) < self.hh).then(|| y as usize * self.hw + x as usize)
     }
     pub(super) fn vertex_xy(&self, v: usize) -> [f32; 2] {
         [(v % self.hw) as f32 * self.spacing, (v / self.hw) as f32 * self.spacing]
-    }
-    /// Terrain of the tile under a ground point (0x558A70 reads its +5C).
-    pub(super) fn terrain_at(&self, data: &RmgData, p: [f32; 2]) -> Option<usize> {
-        let t = self.tile_of(p)?;
-        Some(data.variations[self.effective(t) as usize].terrain)
-    }
-}
-
-/// Slope-limited height setter on one heightmap: pending rows are seeded,
-/// then 0x559190 pulls every 8-neighbour to within `slope` (or the cell
-/// terrain's max_slope beyond the seeds) of the row it is reached from,
-/// breadth first; 0x550A10 commits the rows clamped to the limits.
-pub(super) struct Slope {
-    pub slope: f32,
-    /// (centre, distance): the slope grows linearly from 0 at the centre to
-    /// full at `distance` (settings+1C); None = constant slope.
-    pub falloff: Option<([f32; 2], f32)>,
-    rows: Vec<(usize, f32, u32)>,
-    keys: HashMap<usize, usize>,
-}
-
-impl Slope {
-    pub(super) fn new(slope: f32, falloff: Option<([f32; 2], f32)>) -> Self {
-        Self { slope, falloff, rows: Vec::new(), keys: HashMap::new() }
-    }
-    pub(super) fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-    pub(super) fn rows(&self) -> &[(usize, f32, u32)] {
-        &self.rows
-    }
-    fn set(&mut self, v: usize, h: f32, depth: u32) {
-        if let Some(&i) = self.keys.get(&v) {
-            self.rows[i].1 = h;
-            return;
-        }
-        self.keys.insert(v, self.rows.len());
-        self.rows.push((v, h, depth));
-    }
-    pub(super) fn seed(&mut self, v: usize, h: f32) {
-        self.set(v, h, 0);
-    }
-    /// 0x558D90: the pending height, else the field's.
-    pub(super) fn get(&self, field: &[f32], v: usize) -> f32 {
-        self.keys.get(&v).map_or(field[v], |&i| self.rows[i].1)
-    }
-    pub(super) fn finish(&mut self, world: &World, data: &RmgData, overlay: bool) {
-        let diagonal = world.spacing * std::f32::consts::SQRT_2;
-        let mut cursor = 0;
-        while cursor < self.rows.len() {
-            let (v, h, depth) = self.rows[cursor];
-            cursor += 1;
-            let p = world.vertex_xy(v);
-            let mut limit = self.slope;
-            if depth > 0 {
-                if let Some(t) = world.terrain_at(data, p) {
-                    let s = data.terrains[t].max_slope;
-                    if s != 0.0 {
-                        limit = s;
-                    }
-                }
-            }
-            if let Some((c, d)) = self.falloff {
-                if d > 0.0 {
-                    let dist = ((c[0] - p[0]).powi(2) + (c[1] - p[1]).powi(2)).sqrt() / d;
-                    limit *= dist.clamp(0.0, 1.0);
-                }
-            }
-            let (vx, vy) = ((v % world.hw) as i32, (v / world.hw) as i32);
-            for d in NEIGHBORS {
-                let Some(n) = world.vertex(vx + d[0], vy + d[1]) else { continue };
-                let old = match self.keys.get(&n) {
-                    Some(&i) => {
-                        if self.rows[i].2 < depth {
-                            continue;
-                        }
-                        self.rows[i].1
-                    }
-                    None => {
-                        if overlay {
-                            world.overlay[n]
-                        } else {
-                            world.base[n]
-                        }
-                    }
-                };
-                let diff = old - h;
-                let dist = if d[0] == 0 || d[1] == 0 { world.spacing } else { diagonal };
-                if limit + 1e-4 < (diff / dist).abs() {
-                    let value = diff.signum() * dist * limit + h;
-                    self.set(n, value, depth + 1);
-                }
-            }
-        }
-    }
-    pub(super) fn commit(&mut self, world: &mut World, overlay: bool) {
-        let [lo, hi] = world.limits;
-        let field = if overlay { &mut world.overlay } else { &mut world.base };
-        for &(v, h, _) in &self.rows {
-            field[v] = h.clamp(lo, hi);
-        }
-        self.rows.clear();
-        self.keys.clear();
-    }
-}
-
-/// The blocking painter's overlay setter (0x558D40: sink 0x5593D0, finish
-/// 0x558FC0 / 0x558DE0): seeded vertices are relaxed from the outside in,
-/// ring by ring; each ring vertex is pulled to within `slope` of its outer
-/// neighbours (the average of the limited values) and committed, so painted
-/// mountains and lakes ramp from the surrounding ground at the terrain's
-/// max_slope.
-pub(super) struct Relax {
-    pub slope: f32,
-    rows: Vec<(usize, f32, i32)>,
-    keys: HashMap<usize, usize>,
-}
-
-impl Relax {
-    pub(super) fn new(slope: f32) -> Self {
-        Self { slope, rows: Vec::new(), keys: HashMap::new() }
-    }
-    pub(super) fn seed(&mut self, v: usize, h: f32) {
-        if let Some(&i) = self.keys.get(&v) {
-            self.rows[i].1 = h;
-            return;
-        }
-        self.keys.insert(v, self.rows.len());
-        self.rows.push((v, h, -1));
-    }
-    pub(super) fn get(&self, field: &[f32], v: usize) -> f32 {
-        self.keys.get(&v).map_or(field[v], |&i| self.rows[i].1)
-    }
-    pub(super) fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-    pub(super) fn finish(&mut self, world: &mut World) {
-        let diagonal = world.spacing * std::f32::consts::SQRT_2;
-        let [lo, hi] = world.limits;
-        let mut pass = 0i32;
-        loop {
-            let mut left = 0;
-            for i in 0..self.rows.len() {
-                if self.rows[i].2 != -1 {
-                    continue;
-                }
-                let (v, h, _) = self.rows[i];
-                let (vx, vy) = ((v % world.hw) as i32, (v / world.hw) as i32);
-                let (mut sum, mut count) = (0.0f32, 0);
-                for d in NEIGHBORS {
-                    let Some(n) = world.vertex(vx + d[0], vy + d[1]) else { continue };
-                    let nh = world.overlay[n];
-                    let level = self.keys.get(&n).map_or(0, |&j| self.rows[j].2);
-                    if level == pass {
-                        self.rows[i].2 = pass + 1;
-                    }
-                    if self.rows[i].2 == pass + 1 && level == pass {
-                        let diff = nh - h;
-                        let dist = if d[0] == 0 || d[1] == 0 { world.spacing } else { diagonal };
-                        if self.slope + 1e-4 < (diff / dist).abs() {
-                            let sign = if diff < 0.0 { -1.0 } else { 1.0 };
-                            sum += nh - sign * dist * self.slope;
-                            count += 1;
-                        }
-                    }
-                }
-                if count > 0 {
-                    self.rows[i].1 = sum / count as f32;
-                }
-                world.overlay[v] = self.rows[i].1.clamp(lo, hi);
-                if self.rows[i].2 == -1 {
-                    left += 1;
-                }
-            }
-            pass += 1;
-            if left == 0 || pass > (world.hw + world.hh) as i32 {
-                break;
-            }
-        }
-        self.rows.clear();
-        self.keys.clear();
     }
 }
 
@@ -289,6 +346,13 @@ pub(super) struct Batch<'a> {
     /// +0x1C: a painted variation is water (0x5596B0 allows water
     /// transitions only then).
     water: bool,
+    /// +0xA: land stays land: only land terrain is painted, only on land
+    /// (0x5599F0, 0x559760). Set by a thing's base terrain (0x4EB500's last
+    /// argument, the game mode is not the editor's).
+    protect: bool,
+    /// +9: the commit's queue keeps the records whose variation the tile already
+    /// has (0x5972F0 sets it when a batch did not settle and is run again).
+    pub again: bool,
     recs: Vec<Rec>,
     index: HashMap<usize, usize>,
     queue: std::collections::VecDeque<usize>,
@@ -296,7 +360,17 @@ pub(super) struct Batch<'a> {
 
 impl<'a> Batch<'a> {
     pub(super) fn new(data: &'a RmgData, biome: &'a BiomeDef) -> Self {
-        Self { biome, data, water: false, recs: Vec::new(), index: HashMap::new(), queue: std::collections::VecDeque::new() }
+        Self { biome, data, water: false, protect: false, again: false, recs: Vec::new(), index: HashMap::new(), queue: std::collections::VecDeque::new() }
+    }
+    /// A batch that keeps land on land.
+    pub(super) fn protecting(data: &'a RmgData, biome: &'a BiomeDef) -> Self {
+        Self { protect: true, ..Self::new(data, biome) }
+    }
+    /// 0x559760: the cell is on the map and, protecting, its terrain lets land
+    /// units through.
+    fn may_paint(&self, world: &World, x: i32, y: i32) -> bool {
+        let Some(t) = world.tile_at(x, y) else { return false };
+        !self.protect || self.data.terrains[self.terrain(world.var[t])].land
     }
     fn terrain(&self, var: u32) -> usize {
         self.data.variations[var as usize].terrain
@@ -316,9 +390,12 @@ impl<'a> Batch<'a> {
         self.index.insert(tile, r);
         Some(r)
     }
-    /// 0x5599F0 (the protect flag +0xA is clear for every RMG batch).
+    /// 0x5599F0.
     pub(super) fn paint(&mut self, world: &World, t: usize, var: u32) {
         let [x, y] = world.tile_xy(t);
+        if !(!self.protect || self.data.terrains[self.terrain(var)].land) || !self.may_paint(world, x, y) {
+            return;
+        }
         if self.data.terrains[self.terrain(var)].kind == 2 {
             self.water = true;
         }
@@ -349,24 +426,19 @@ impl<'a> Batch<'a> {
         }
         (prev != a).then_some(prev)
     }
-    /// 0x5597D0: qsort the eight candidates by pointer (null first; here the
-    /// variation index stands for its address), then the longest run, the
-    /// first one on ties.
+    /// 0x5597D0: the longest run of equal candidates, the first one on ties,
+    /// null candidates skipped. It calls qsort first, but its comparator
+    /// 0x559740 compares the element addresses it is handed, not the
+    /// elements, and the CRT's short sort (8 elements, up to the cutoff) then
+    /// leaves the array in place: the runs are in direction order.
     fn most_common(trans: &[Option<u32>; 8]) -> Option<u32> {
-        let mut p: [u64; 8] = [0; 8];
-        for (slot, t) in p.iter_mut().zip(trans) {
-            *slot = t.map_or(0, |v| u64::from(v) + 1);
-        }
-        p.sort_unstable();
-        let (mut cur, mut run, mut best, mut best_v) = (p[0], 1, 0, 0u64);
-        for &v in &p[1..] {
-            if v == 0 {
-                continue;
-            }
+        let (mut cur, mut run, mut best, mut best_v) = (trans[0], 1, 0, None);
+        for &v in &trans[1..] {
+            let Some(_) = v else { continue };
             if v == cur {
                 run += 1;
             } else {
-                if best < run && cur != 0 {
+                if best < run && cur.is_some() {
                     best = run;
                     best_v = cur;
                 }
@@ -374,8 +446,7 @@ impl<'a> Batch<'a> {
                 cur = v;
             }
         }
-        let r = if run <= best || cur == 0 { best_v } else { cur };
-        (r != 0).then(|| (r - 1) as u32)
+        if run <= best || cur.is_none() { best_v } else { cur }
     }
     /// 0x559A70 for one record.
     fn process(&mut self, world: &World, r: usize) {
@@ -401,6 +472,11 @@ impl<'a> Batch<'a> {
         if target.is_none() {
             mode = 0;
         }
+        // A transition that is no land keeps the record's own variation.
+        if self.protect && mode != 0 && target.is_some_and(|t| !self.data.terrains[self.terrain(t)].land) {
+            target = Some(pvar);
+            mode = 3;
+        }
         if let Some(t) = target {
             let pterrain = self.terrain(pvar);
             let mut i = 0usize;
@@ -411,7 +487,7 @@ impl<'a> Batch<'a> {
                     if self.recs[n].state == 0 {
                         if mode == 3 {
                             self.recs[n].var = cur;
-                        } else if self.terrain(cur) != pterrain {
+                        } else if self.terrain(cur) != pterrain && self.may_paint(world, x + d[0], y + d[1]) {
                             self.recs[n].var = t;
                         }
                     } else if mode != 0 && mode != 3 && self.recs[n].state != 3 && self.chain(self.recs[n].var, t).is_some() {
@@ -442,16 +518,66 @@ impl<'a> Batch<'a> {
             }
         }
     }
+    /// The parity probe (`AA_RMG_CM` names a file): at every commit the hash
+    /// of the batch's records and of all tile variations, as RmgProbe logs
+    /// the original's (CM lines).
+    fn probe(&self, world: &World) {
+        static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+        let Some(path) = PATH.get_or_init(|| std::env::var_os("AA_RMG_CM").map(Into::into)) else { return };
+        static INDEX: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(-1);
+        let index = INDEX.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let fnv = |s: &str| {
+            let mut h = 14695981039346656037u64;
+            for c in s.encode_utf16() {
+                h ^= u64::from(c);
+                h = h.wrapping_mul(1099511628211);
+            }
+            h
+        };
+        let hashes: Vec<u64> = self.data.variations.iter().map(|v| fnv(&v.ids.to_ascii_lowercase())).collect();
+        let mut hv = 14695981039346656037u64;
+        for &v in &world.var {
+            hv ^= hashes[v as usize];
+            hv = hv.wrapping_mul(1099511628211);
+        }
+        let mut hr = 14695981039346656037u64;
+        let detail = std::env::var("AA_RMG_CM_DETAIL").is_ok_and(|d| d.parse() == Ok(index));
+        let mut text = String::new();
+        for r in &self.recs {
+            hr ^= r.x as u32 as u64;
+            hr = hr.wrapping_mul(1099511628211);
+            hr ^= r.y as u32 as u64;
+            hr = hr.wrapping_mul(1099511628211);
+            hr ^= hashes[r.var as usize];
+            hr = hr.wrapping_mul(1099511628211);
+            if detail {
+                text += &format!(" {},{},{}", r.x, r.y, self.data.variations[r.var as usize].ids.to_ascii_lowercase());
+            }
+        }
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(f, "CM {index} n {} recs {hr:016x} vars {hv:016x}", self.recs.len());
+            if detail {
+                let _ = writeln!(f, "CMD {index}{text}");
+                for y in 0..world.th {
+                    let row: Vec<String> = (0..world.tw).map(|x| self.data.variations[world.var[y * world.tw + x] as usize].ids.to_ascii_lowercase()).collect();
+                    let _ = writeln!(f, "CMV {index} {y} {}", row.join(" "));
+                }
+            }
+        }
+    }
     /// 0x559FB0(0): up to 16 passes over the queue (records whose variation
     /// differs from the tile's), then every changed record is applied
     /// (0x54FDC0). Returns false when the queue was not empty at the end
     /// (the batch +8 "unsettled" byte).
     pub(super) fn commit(mut self, world: &mut World) -> bool {
+        self.probe(world);
         for _ in 0..16 {
             if self.queue.is_empty() {
                 break;
             }
-            let list: Vec<usize> = self.queue.drain(..).filter(|&r| self.recs[r].var != world.var[self.recs[r].tile]).collect();
+            let again = self.again;
+            let list: Vec<usize> = self.queue.drain(..).filter(|&r| again || self.recs[r].var != world.var[self.recs[r].tile]).collect();
             for &r in &list {
                 self.recs[r].state = 2;
             }
@@ -461,9 +587,7 @@ impl<'a> Batch<'a> {
         }
         let settled = self.queue.is_empty();
         for rec in &self.recs {
-            if world.var[rec.tile] != rec.var {
-                world.var[rec.tile] = rec.var;
-            }
+            world.set_variation(self.data, rec.tile, rec.var);
         }
         settled
     }

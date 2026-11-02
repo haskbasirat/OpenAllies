@@ -139,6 +139,7 @@ struct NativeWorld {
     width: usize,
     tiles: Vec<String>,
     flags: Vec<u32>,
+    areas: Vec<u8>,
     base: Vec<u32>,
     overlay: Vec<u32>,
     things: Vec<(String, [u32; 3])>,
@@ -147,7 +148,7 @@ struct NativeWorld {
 fn native_world(path: &Path) -> NativeWorld {
     let text = std::fs::read_to_string(path).unwrap();
     let mut vt: BTreeMap<usize, String> = BTreeMap::new();
-    let mut w = NativeWorld { width: 0, tiles: Vec::new(), flags: Vec::new(), base: Vec::new(), overlay: Vec::new(), things: Vec::new() };
+    let mut w = NativeWorld { width: 0, tiles: Vec::new(), flags: Vec::new(), areas: Vec::new(), base: Vec::new(), overlay: Vec::new(), things: Vec::new() };
     for line in text.lines() {
         let mut p = line.splitn(2, ' ');
         let (tag, rest) = (p.next().unwrap_or(""), p.next().unwrap_or(""));
@@ -164,6 +165,7 @@ fn native_world(path: &Path) -> NativeWorld {
                     let f: Vec<&str> = c.split(':').collect();
                     w.tiles.push(vt[&f[0].parse::<usize>().unwrap()].clone());
                     w.flags.push(u32::from_str_radix(f[1], 16).unwrap());
+                    w.areas.push(f[2].parse().unwrap_or(0));
                 }
             }
             "HB" | "HO" => {
@@ -209,6 +211,8 @@ fn film_2_world() {
     for &i in diff.iter().take(12) {
         eprintln!("  ({}, {}) native {} aa-play {} flags {:x}", i % w, i / w, native.tiles[i], ours[i], native.flags[i]);
     }
+    let area_diff = generated.water_areas.iter().zip(&native.areas).filter(|(a, b)| a != b).count();
+    eprintln!("water areas: {area_diff} of {} tiles differ; tiles in an area: native {} aa-play {}", native.areas.len(), native.areas.iter().filter(|a| **a != 0).count(), generated.water_areas.iter().filter(|a| **a != 0).count());
     if let Ok(region) = std::env::var("AA_RMG_TILES") {
         // "x0,y0,x1,y1": every tile of the region, native / aa-play.
         let r: Vec<usize> = region.split(',').filter_map(|s| s.parse().ok()).collect();
@@ -225,10 +229,20 @@ fn film_2_world() {
             eprintln!("{row}");
         }
     }
+    if let Some(dir) = std::env::var_os("AA_RMG_DUMP_HEIGHTS") {
+        let dir = PathBuf::from(dir);
+        let bytes = |v: &[f32]| v.iter().flat_map(|f| f.to_le_bytes()).collect::<Vec<u8>>();
+        std::fs::write(dir.join("ours_base.bin"), bytes(&t.heights)).unwrap();
+        std::fs::write(dir.join("ours_overlay.bin"), bytes(&t.mountain_heights)).unwrap();
+    }
     for (name, ours, theirs) in [("base", &t.heights, &native.base), ("overlay", &t.mountain_heights, &native.overlay)] {
         let n = ours.iter().zip(theirs.iter()).filter(|(a, b)| a.to_bits() != **b).count();
         let max = ours.iter().zip(theirs.iter()).map(|(a, b)| (a - f32::from_bits(*b)).abs()).fold(0.0f32, f32::max);
         eprintln!("{name} heights: {n} of {} differ, max |diff| {max}", theirs.len());
+        let hw = (theirs.len() as f64).sqrt() as usize;
+        for (i, (a, b)) in ours.iter().zip(theirs.iter()).enumerate().filter(|(_, (a, b))| a.to_bits() != **b).take(16) {
+            eprintln!("   ({}, {}) native {} aa-play {} diff {}", i % hw, i / hw, f32::from_bits(*b), a, a - f32::from_bits(*b));
+        }
     }
     // The first created things in creation (GTID) order: the start
     // locations, the required objects (their placeholders replaced by the

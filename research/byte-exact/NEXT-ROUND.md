@@ -85,22 +85,49 @@ Corpses now sink as in the original (0x459E10 -> 0x457DF0, 0x5617E0). The rest o
 
 ## Random maps (parity owner: aa-play mapgen*, aa-parity)
 
-Film 2 matches through terrain, noise, required objects and the village balanced group (250,128 draws in total; 57/57 log lines).
+The generator (`crates/aa-play/src/mapgen*`) is exact on the stock data. Gate: `crates/aa-parity/tests/rmg_gate.rs`, all tests ignored, all read the corpus in `target/film-corpus`.
 
-Next:
+```
+CARGO_TARGET_DIR=target/n-rmg AA_GAME_ROOT=<game root> AA_RMG_GATE_SETS=v14 cargo test -p aa-parity --features play --test rmg_gate --release --offline -- --ignored --nocapture <test>
+```
 
-- water doodads 0x555F20 (first mismatch at draw 193,874);
-- auto doodads 0x552BF0;
-- cleanup 0x592170;
-- heroes;
-- heights: 29,848 of 37,249 base heights differ, because brush and relax are approximate;
-- water areas;
-- the settlement-zone branch of 0x4F3640;
-- CreateExtraMarkers 0x594260;
-- plain groups 0x594590.
+| test | what it says |
+|---|---|
+| `every_random_film_generates_the_original_world` | Per film: generation runs, draws and end state, the first getter chain, the header's random picks, and against a native world dump (`traces/rmg-gate-<first 10 of the sha>.txt`) things by definition, position, height and facing, base and overlay heights, tiles |
+| `open_film_starts_on_the_generators_stream` | `open_film` on each film on its own data: the stream after the world's sync dump, then its checkpoints until the first mismatch |
+| `random_film_native_state` | One film against a FightSampler trace of the original (`traces/rmg-state-<first 10 of the sha>.txt`): every lane's causes, `AA_RMG_GATE_WATCH` prints things side by side |
+| `corpus_film_draws` | One film against the original's draw trace (`AA_RMG_GATE_TRACE`): the first draw that differs |
 
-Then continue film parity: the Berlin replay is at 28/266 checkpoints, and its first difference is at tick 493.
+Numbers of 2026-11-02, 43 random-map films of the corpus:
 
-Debug environment variables still in the code: AA_RMG_GROUPS, AA_RMG_DUMP_DEF, AA_RMG_BALANCE_DEBUG, AA_RMG_HIT_DEBUG, AA_RMG_TILES.
+| data set | films | generation runs | native dump equal (end state, things, heights, tiles) | header's random picks from the stream | `open_film` on the stream | first checkpoint passes | no mismatch (cap 4000 ticks) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v14 | 12 | 12 | 12 of 12 | 11 of 11 | 12 of 12 | 12 | 2 (`1d25a501b7` 15 of 15, `fd4649a138` 235 of 235 to the cap) |
+| mod `A&A gg` | 7 | 7 | no dump | 5 of 5 | 7 of 7 | 5 | 3 (`f3bd589503` 50 of 50, `d22932af71` 26 of 26, `47206c3262` 16 of 16) |
+| mod `player` | 4 | 4 | no dump | 4 of 4 | 4 of 4 | 4 | 0 (to 3 of 4) |
+| mod `A&A edit` | 4 | 4 | no dump | 3 of 3 | 4 of 4 | 1 | 0 |
+| mod `A&A Use` | 8 | 8 | no dump | 1 of 1 | 8 of 8 | 1 | 0 |
+| mod `A&A - Copy` | 5 | 5 | no dump | 4 of 4 | 5 of 5 | 0 | 0 |
+| `widths` | 3 | 3 | no dump | 3 of 3 | refused: the films do not decode without their data | - | - |
+
+The chain check on the end state (FIGHT-FILMS.md's first getter method): strong on 2 films, weak on 23, refused on 18. Most films cannot say either way: too many placements in the first interval. The checkpoints above are the better oracle. 13 films' settings do not fit today's RMC (0x505B00), 8 of them on v14: natively they take the defaults and go out of sync, `SyncMode::Report` plays them on the stored settings, and there all 8 pass their first checkpoints.
+
+Generation takes 0.6 to 4.6 s under load, `open_film` 1 to 5 s once the data set is read. The first film of a mod reads the mod: 12 to 66 s, and 590 s for `A&A - Copy` with nine lanes building.
+
+**What the world needed besides the generator's own stream**, all found by `random_film_native_state`:
+
+- A CityComponent exists only with a zone radius (0x45D6A0). A village's blocks have the node with radius 0 and no component, so `Def::city` is now the radius, and 0x4F6980 takes them.
+- A city's PostCreate 0x564BE0 runs the layout 0x5644F0 with its list: the Structure actors it makes go on City+10 (0x5642A0) and change hands with the city. `GeneratedWorld::blocks`.
+- A truck's trailer is a thing the generator makes (0x4D70F2), `Thing::Trailer` in aa-play and no actor. `GeneratedWorld::trailers`, `NativeIds::placed_trailer`.
+- GThing +0x28 stays what it was at creation: the ground the later things changed is not read again. `replay_generated` puts it on the actors, and a generated map has `native_terrain`, so `height_at` is 0x4F0E50 there too. A start location takes its height at the position it leaves (0x4EEB40).
+- ConfigureGWorld 0x50E8B0 destroys a kingdom with KingdomInfo +0x31 once the random settings are resolved, so a closed side draws its picks and keeps its GTID but the generator does not see it (`side05` and no `side03`).
+
+**What the first differences are now.** On `1104a3b0f9` the truck is bit exact to tick 39, then the original replans around a bunker two ticks before ours (M5, `collision` has no real avoidance). On `ba445000bb` everything is equal to tick 455, then a recruited truck stops short of the original (M7). Neither is the generator: their lane is movement. Provided resources change one sample late at a capture (`supply::city_tick`, native 0x4D5230 does it at once); the stock does not differ.
+
+**Left in the generator:**
+
+- AddHeroesToKingdom 0x592E00: not ported, a world asking for heroes says so in `load_notes`. No film of the corpus has one and A&A hides the slider.
+- Base terrain of mountain or water kind on a thing (0x551B40): not ported, says so in `load_notes`. No film reaches it.
+- The mods with a `RandomMap` folder of their own (`A&A Use` 7 films, `A&A - Copy` 5, `A&A edit` 3): the first checkpoint does not pass, while `A&A gg` and `player`, on the stock RMCs, pass. Their RMCs ask for things the stock data never does (required cities with layouts of their own such as `rome`). Not known yet whether it is a cause in the generator or data changed since the film. The way to tell: the original's world dump on the mod. The tools are `mkmod.sh` and `nat_mod.sh` in the QA copy's manner; the one try on `A&A Use` stopped at 968 s while loading its SAI (unhandled Breakpoint at 0x404F60, the log's error call, with no message written), so it needs that looked at first. Two films of `A&A gg` were recorded on another data set (version RWE5.5.5.0) and cannot pass.
 
 Note: SVars.tgi sets `RMGBalanceMarkerNudgeStepDelta`, but the game registers `RMGBalanceMarkerNudgeDelta`. The file value is ignored, so the object balancer's delta stays 4.0 and the kingdom balancer's is 2.
