@@ -107,7 +107,8 @@ Where this stands on 2 November 2026 (Development 22):
 |---|---|
 | A 2-against-2 Berlin film, matching checkpoints in order | **93 of 266**, about a third of the film, up from 32 at the start of November. This film has almost no fighting |
 | Real recorded films that open | **52 of 62**. The other 10 refuse with the original's own messages (9 made by another version of the game, 1 never finished) |
-| Real films with no mismatch | **5**, all short random-map films: 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data |
+| Real films with no mismatch | **5**, all random-map films, most of them short: 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data. Other short random-map films still drift early |
+| Films recorded by OpenAllies, replayed in OpenAllies | **Every checkpoint**: 204 of 204 and 240 of 240 in the runs checked, with real fighting |
 | Random map generator | **12 of 12** maps compared equal the original's world: every object, both height layers, tiles and the final random state |
 | Films we record, opened in the original | The original opens them and stays in sync for 28 checkpoints on Berlin and 24 on a random map, until the computer's orders differ |
 | Fighting, 4 films with real battles: units reaching zero health, ours against the original | 23 / 27, 126 / 107, 86 / 119, 116 / 133. Close in size, not yet the same battles, because the games have already drifted apart before the fighting starts |

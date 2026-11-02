@@ -22,12 +22,17 @@ NEW SINCE DEVELOPMENT 21
 - Your battles now record a film by themselves, like the original (LastFilm).
   Save Film on the score or debriefing screen keeps one under your own name.
   The original game has opened films recorded this way.
-- How exact a replay is: short random-map films now play to the end with every
-  checkpoint matching the original. Longer films drift partway through, and
-  the units then stop doing what really happened. When that happens the game
-  says so in the message log and shows Out of Sync at the end, and keeps
-  playing so you can still watch. Berlin stays exact for its first 93 of 266
-  checkpoints, about a third of the film.
+- How exact a replay is: films recorded by this build replayed exactly in testing
+  (240 of 240 checkpoints with real fighting). Films from the original are a
+  harder test. A few short random-map films play to the end with every
+  checkpoint matching, but most films drift, some of them early, and the units
+  then stop doing what really happened. When that happens the game says so in
+  the message log and shows Out of Sync at the end, and keeps playing so you can
+  still watch. Berlin stays exact for its first 93 of 266 checkpoints, about a
+  third of the film.
+- A film can open with the view on bare ground: click the minimap. A film from
+  another version of the game, or one that needs a mod's data it cannot find,
+  shows a message and returns to the list.
 - Films that need a mod's data play on that data. Their art has to be converted
   first, and until then only stock art is drawn. Films of a saved game start
   from the save's world but drift within moments.
@@ -36,10 +41,12 @@ NEW SINCE DEVELOPMENT 21
   for the standard data, not yet for mods with their own random map folder.
 - Campaign missions: the mission list works and your progress is saved. Scripts
   run, scripted cameras and letterbox work, and movies play. A mission ends at
-  the debriefing with Score, Replay and Next Mission. In Tutorial 1 the infantry
-  regiment has a white banner and is not yours at first, as in the map's script:
-  select it, wait about 24 seconds until it is handed to you, then move it. Not
-  every mission has been played through yet.
+  the debriefing with Score, Replay and Next Mission. In Tutorial 1, nothing
+  starts until you open the flashing Message Log (F3 or its button) and close it.
+  The infantry regiment has a white banner and is not yours at first, as in the
+  map's script: click the soldiers on the road, wait about 25 seconds until it is
+  handed to you, then right click open ground to move it. Not
+  every mission has been played through yet. The opening movies cannot be skipped.
 - World War II: a battle can now be fought rather than only Quick Resolved, and
   returns to the map. Also new: saving and loading a campaign, help popups,
   tooltips, upgrade buttons, a minimap and the army's portrait. To buy an army,
@@ -174,8 +181,7 @@ NEW SINCE DEVELOPMENT 15
 - The Custom button and the start of a battle no longer freeze.
 
 HOW TO PLAY
-1. Run Start.cmd. The first start of a new build can take a few minutes while
-   it reads your game's data.
+1. Run Start.cmd.
 2. Main menu -> Single Player -> Custom for a battle, Campaign for missions,
    World War II for the strategic game, or Film from the main menu to watch a
    recording.
@@ -186,7 +192,9 @@ HOW TO PLAY
    kind; right click moves, right click an enemy attacks. Select a building
    to recruit with the buttons on the right. Use your general's abilities
    with the buttons on the left. Arrow keys or the screen edges scroll,
-   the mouse wheel zooms.
+   the mouse wheel zooms. Click a regiment's banner if soldiers stand close to a
+   building, because a click there selects the building.
+6. To leave a battle: Esc, Abort Mission, Ok.
 
 STILL MISSING
 - Multiplayer, the editor, and saved games for battles. The Save button in a
@@ -199,7 +207,9 @@ STILL MISSING
 - World War II: the selected army's arrow ribbon does not appear, the purchase
   rows' icons are empty, and the politics display and a few tooltips are not
   built.
-- Scripted missions: weather and team flare markers are not shown.
+- Scripted missions: weather and team flare markers are not shown. The tutorial
+  shows the yellow text "This banner intentionally left blank." after the first
+  move order, and the World War II log can show "[Missing String]".
 - The ground's detail and macro textures, so ground looks smoother than the
   original on temperate maps.
 - Menus have no sound or music yet.
