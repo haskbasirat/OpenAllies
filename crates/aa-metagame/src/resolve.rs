@@ -311,6 +311,36 @@ impl<R: KingdomRelations, E: Engine> MgContext<'_, R, E> {
     pub fn pending_battle(&self) -> Result<Option<usize>> {
         self.validator().pending_battle()
     }
+    /// `0x955EB0` on an MG territory: the defending MG kingdom.
+    pub fn defending_kingdom(&self, t: usize) -> Result<Option<usize>> {
+        let kingdoms = self.battle_kingdoms()?;
+        let damage = self.damage_bits();
+        let ctx = BattleContext {
+            kingdoms: &kingdoms,
+            division_damage_bits: &damage,
+            relations: self.relations,
+            technology_bonus_bits: self.data.settings.technology_bonus_bits,
+            attack_win_probability_bits: self.data.settings.attack_win_probability_bits,
+            precision: self.precision,
+        };
+        Ok(ctx.defending_kingdom(&self.territory_battle(t))?.map(|k| k.0))
+    }
+    /// `0x95F370` on an MG territory at `precision`: the attack odds
+    /// stored as binary32 (the Start Battle dialog's tooltip 94E610 runs on
+    /// the main thread, PC24).
+    pub fn attack_odds_bits(&self, t: usize, precision: Precision) -> Result<u32> {
+        let kingdoms = self.battle_kingdoms()?;
+        let damage = self.damage_bits();
+        let ctx = BattleContext {
+            kingdoms: &kingdoms,
+            division_damage_bits: &damage,
+            relations: self.relations,
+            technology_bonus_bits: self.data.settings.technology_bonus_bits,
+            attack_win_probability_bits: self.data.settings.attack_win_probability_bits,
+            precision,
+        };
+        Ok(ctx.attack_odds(&self.territory_battle(t))?.store_f32()?)
+    }
     /// `0x939B60`: MG territory of a map territory.
     pub(crate) fn territory_of(&self, definition: usize) -> Option<usize> {
         self.state.territories.iter().position(|t| t.definition == definition)

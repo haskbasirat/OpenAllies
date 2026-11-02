@@ -17,6 +17,9 @@
 //! - [`launch`]: battle generation up to the RTS seam (948EF0) and the RTS
 //!   result decision (93A990).
 //! - [`mgai`]: the metagame AI player (963430, PlayTurn 964D30).
+//! - [`driver`]: the engine side of a single-player campaign (world
+//!   kingdoms and teams 9447E0, order execution 9505F0, mover 940020, the
+//!   MGAI fiber 945090, the interface battle answer).
 //!
 //! Independent of any UI. No fixed-size native tables are reproduced: all
 //! native arrays are growable `Vec`s.
@@ -37,6 +40,7 @@ pub mod launch;
 pub mod mgai;
 pub mod positions;
 pub mod rmc;
+pub mod driver;
 
 use thiserror::Error;
 
