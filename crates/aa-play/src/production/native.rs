@@ -5,7 +5,7 @@
 //! requirements 0x5842F0 / 0x4C5250) and the HQ attach 0x574C10. `Host` binds
 //! their callbacks to aa-play; the queue lives in `books` and is converted to
 //! the native layout (binary32 words) around each call.
-use super::{busy, can_afford, can_enroll, credit, fulfill as recruit_fulfill, hq_org, limited_part, recruit_cost, Vector};
+use super::{busy, can_afford, can_enroll, credit, fulfill as recruit_fulfill, hq_org, limited_part, recruit_cost_elements, Vector};
 use crate::books::{PauseReason, QueueItem};
 use crate::data::{DefClass, DefId};
 use crate::scheduler::Owner;
@@ -88,6 +88,10 @@ pub(super) struct Extra {
     pub def: DefId,
     pub attaches: bool,
     pub research: Option<String>,
+    /// The order's ParameterSet, per expanded slot.
+    pub elements: Option<Vec<DefId>>,
+    /// (orders) recruit_location's point.
+    pub location: Option<[f32; 2]>,
 }
 
 /// The callbacks of one building's queue.
@@ -142,6 +146,8 @@ impl<'a> Host<'a> {
             attaches: extra.is_some_and(|e| e.attaches),
             research: extra.and_then(|e| e.research.clone()),
             organization_slot: item.organization_slot,
+            elements: extra.and_then(|e| e.elements.clone()),
+            location: extra.and_then(|e| e.location),
         }
     }
     /// The building's research component (+0x10 completed list).
@@ -163,14 +169,14 @@ pub(super) fn load(world: &World, building: ActorId) -> (Queue, BTreeMap<u32, Ex
         .items
         .iter()
         .map(|it| {
-            extras.insert(it.id, Extra { def: it.def, attaches: it.attaches, research: it.research.clone() });
+            extras.insert(it.id, Extra { def: it.def, attaches: it.attaches, research: it.research.clone(), elements: it.elements.clone(), location: it.location });
             let research = it.research.as_ref().and_then(|p| world.data.def(bdef).research.iter().position(|r| r.property.eq_ignore_ascii_case(p)));
             aa_production::QueueItem {
                 id: it.id,
-                kind: if it.research.is_some() { 1 } else { 0 },
+                kind: if it.research.is_some() { 1 } else if it.location.is_some() { 2 } else { 0 },
                 actor_definition: if it.research.is_some() { 0 } else { def_handle(it.def) },
                 organization_layout: 0,
-                location_bits: [0; 2],
+                location_bits: it.location.map_or([0; 2], |p| [p[0].to_bits(), p[1].to_bits()]),
                 property: research.map_or(0, |i| record_handle(bdef, i)),
                 paid_cost: bits(&it.paid),
                 requested_upkeep: bits(&it.requested_upkeep),
@@ -211,6 +217,8 @@ pub(super) fn store(world: &mut World, building: ActorId, queue: &Queue, extras:
                 attaches: e.is_some_and(|e| e.attaches),
                 research: e.and_then(|e| e.research.clone()),
                 organization_slot: it.organization_slot,
+                elements: e.and_then(|e| e.elements.clone()),
+                location: e.and_then(|e| e.location),
             }
         })
         .collect();
@@ -270,7 +278,7 @@ impl aa_production::World for Host<'_> {
     /// one draw for the bucket, head insertion: the newest registration is
     /// delivered first).
     fn schedule_zero(&mut self, queue: &mut Queue) -> R<()> {
-        self.world.schedule_periodic(crate::scheduler::EVERY_TICK, Owner::Structure(self.building), 0);
+        self.world.schedule_periodic_at(crate::trace::sites::PRODUCTION_START, crate::scheduler::EVERY_TICK, Owner::Structure(self.building), 0);
         queue.scheduled = true;
         Ok(())
     }
@@ -390,11 +398,13 @@ impl aa_production::Recruitment for Host<'_> {
     /// 0x5827B0 -> 0x581F70.
     fn recruitability(&mut self, definition: u32, _layout: u32) -> R<i32> {
         let d = def_of(definition).ok_or(aa_production::Error::Invalid("definition"))?;
-        recruitability(self.world, self.building, d)
+        let elements = self.pending.as_ref().and_then(|p| p.elements.clone());
+        recruitability_elements(self.world, self.building, d, elements.as_deref())
     }
     fn quote_cost(&mut self, definition: u32, _layout: u32) -> R<Vec<u32>> {
         let d = def_of(definition).ok_or(aa_production::Error::Invalid("definition"))?;
-        let cost = recruit_cost(self.world, self.building, d);
+        let elements = self.pending.as_ref().and_then(|p| p.elements.clone());
+        let cost = recruit_cost_elements(self.world, self.building, d, elements.as_deref());
         let out = bits(&cost);
         self.quoted = Some((d, cost));
         Ok(out)
@@ -424,7 +434,8 @@ impl aa_production::Recruitment for Host<'_> {
     /// 56F580: the definition's upkeep quote.
     fn quote_upkeep(&mut self, definition: u32, _layout: u32) -> R<Vec<u32>> {
         let d = def_of(definition).ok_or(aa_production::Error::Invalid("definition"))?;
-        Ok(bits(&super::quote(self.world, d, Vector::Upkeep)))
+        let elements = self.pending.as_ref().and_then(|p| p.elements.clone());
+        Ok(bits(&super::quote_elements(self.world, d, elements.as_deref(), Vector::Upkeep)))
     }
     fn next_item_id(&mut self) -> R<u32> {
         self.world.books.next_item += 1;
@@ -451,10 +462,16 @@ impl aa_production::Recruitment for Host<'_> {
 /// No kingdom restriction profile (0x4E65E0) and no campaign gate apply in
 /// a custom battle.
 pub(super) fn recruitability(world: &World, building: ActorId, d: DefId) -> R<i32> {
+    recruitability_elements(world, building, d, None)
+}
+
+/// [`recruitability`] over the elements of an order's ParameterSet.
+pub(super) fn recruitability_elements(world: &World, building: ActorId, d: DefId, elements: Option<&[DefId]>) -> R<i32> {
     let def = world.data.def(d);
     if def.has_component("OrganizationComponent") {
         let mut code = 0;
-        for s in def.slots.iter().map(|s| s.0).filter(|&s| s != crate::data::NO_DEF) {
+        let list: Vec<DefId> = elements.map_or_else(|| def.slots.iter().map(|s| s.0).collect(), <[DefId]>::to_vec);
+        for s in list.into_iter().filter(|&s| s != crate::data::NO_DEF) {
             let c = recruitability(world, building, s)?;
             if c != 0 {
                 code = c;
@@ -650,8 +667,9 @@ impl research::Research for Host<'_> {
     fn next_research_item_id(&mut self) -> R<u32> {
         aa_production::Recruitment::next_item_id(self)
     }
-    fn statistics(&mut self, _kingdom: u32) -> R<Option<&mut aa_economy::tick::Statistics>> {
-        Ok(None)
+    fn statistics(&mut self, kingdom: u32) -> R<Option<&mut aa_economy::tick::Statistics>> {
+        let n = self.n();
+        Ok(self.world.books.kingdom_mut(kingdom, n).statistics.objects.active.as_mut())
     }
     /// 0x42D490(0xB): research_complete.
     fn research_complete_event(&mut self, kingdom: Option<u32>, item: &ResearchItem) -> R<()> {

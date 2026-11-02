@@ -22,9 +22,14 @@
 //!   keeps the saved id and the next-fit cursor stays at IDMGR's;
 //! - CreateOrganization 0x4FA150: the organization first, then its leader,
 //!   then every other slot (`production::spawn_organization` order);
-//! - every later creation (recruits, unpacked trucks...) takes the next-fit
-//!   id; a destroyed thing gives its id back when aa-play removes it
-//!   (`removed` actors, dead organizations), swept at the end of each tick.
+//! - every later creation (recruits...) takes the next-fit id; a destroyed
+//!   thing gives its id back when aa-play removes it (`removed` actors, dead
+//!   organizations), swept at the end of each tick;
+//! - a MobileDeployment unpack or pack (0x575C80): the new thing takes the
+//!   next-fit id like any creation (record +0x24 = 0), then TakeOverIdentity
+//!   0x4D5EA0 swaps the two GTIDs (0x4EFB90) and the old thing, holding the new
+//!   id, is destroyed (0x4F6760). The building keeps the truck's id, the cursor
+//!   has moved by one and the spare slot is free with its generation raised.
 //!
 //! aa-play objects the original also has but aa-play does not model (map
 //! scenery, unowned placeholders, replacement objects) keep their ids as
@@ -51,6 +56,11 @@ pub enum Thing {
     /// The trailer hitched to this actor (a GActor of its own natively,
     /// created by the truck's InitCreate 0x4D70F2; aa-play draws no trailer).
     Trailer(ActorId),
+    /// A GGroup (`KKC_GWorld::CreateGGroup` 0x4FBE10), by `crate::orders` id.
+    Group(u32),
+    /// A thing of this definition the original keeps and aa-play holds as no
+    /// thing of its own: a projectile in flight (0x4C8CB0 -> 0x4F9C10).
+    Transient(crate::data::DefId),
 }
 
 /// The GTID side table (`World::ids`).
@@ -67,6 +77,8 @@ pub struct NativeIds {
     kingdom_slots: Vec<Option<usize>>,
     /// The saved id the next creation takes (a kept map thing).
     requested: Option<Gtid>,
+    /// The next created actor takes over this actor's identity (0x4D5EA0).
+    taking_over: Option<ActorId>,
     /// Things spawned now are restored from the map (no creation draws), not
     /// created (setup sets it around a kept map thing and its members).
     pub restore_scope: bool,
@@ -91,6 +103,7 @@ impl Default for NativeIds {
             map_kingdoms: Vec::new(),
             kingdom_slots: Vec::new(),
             requested: None,
+            taking_over: None,
             restore_scope: false,
             unpack_scope: false,
             notes: Vec::new(),
@@ -141,6 +154,11 @@ impl NativeIds {
             let is_actor = data.find(&p.thing_id).is_some_and(|d| data.def(d).actor_data);
             let id = ids.register(p.serialized_id, is_actor, Thing::Placed(i));
             set(&mut ids.placed, i, id);
+            // The class constructor's registration precedes the Load 0x4FAE80 runs; a
+            // Load that fails destroys the thing and its id goes back.
+            if p.load_fails {
+                ids.destroy_placed(i);
+            }
         }
         ids
     }
@@ -278,7 +296,26 @@ impl NativeIds {
     pub fn created_actor(&mut self, actor: ActorId) -> bool {
         let id = self.take(true, Thing::Actor(actor));
         set(&mut self.actors, actor as usize, id);
+        if let Some(old) = self.taking_over.take() {
+            self.take_over_identity(old, actor);
+        }
         !self.restore_scope
+    }
+
+    /// 0x4D5EA0 -> 0x4EFB90: `new` and `old` exchange their GTIDs. `old` is
+    /// destroyed by its caller (0x4F6760) and so gives the spare id back when
+    /// it is swept. The swap runs at creation instead of after it, which
+    /// nothing can observe: the only thing taken from the registry between
+    /// the two is the new thing's own trailer, by next-fit.
+    fn take_over_identity(&mut self, old: ActorId, new: ActorId) {
+        let (Some(a), Some(b)) = (get(&self.actors, old as usize), get(&self.actors, new as usize)) else { return };
+        match self.registry.swap_identities(a, b) {
+            Ok(()) => {
+                self.actors[old as usize] = Some(b);
+                self.actors[new as usize] = Some(a);
+            }
+            Err(e) => self.notes.push(format!("identity take-over {:#x} <-> {:#x}: {e}", a.raw(), b.raw())),
+        }
     }
 
     /// The trailer `actor`'s InitCreate creates (next-fit, after the truck's
@@ -288,19 +325,42 @@ impl NativeIds {
         set(&mut self.trailers, actor as usize, id);
     }
 
-    /// An actor replaced in place (MobileDeployment unpack / pack): the old
-    /// actor is destroyed (its id removed, its trailer with it) and the next
-    /// creation registers the very same id (the requested GTID of 4EE460).
-    pub fn replace_actor(&mut self, actor: ActorId) {
-        if let Some(t) = get(&self.trailers, actor as usize) {
-            self.remove(t);
-            self.trailers[actor as usize] = None;
+    /// The trailer of a generated truck: the map holds it as a placed thing under
+    /// the id the generator gave it.
+    pub fn placed_trailer(&mut self, actor: ActorId, index: usize) {
+        let Some(id) = get(&self.placed, index) else { return };
+        if let Some(v) = self.registry.value_mut(id) {
+            *v = Thing::Trailer(actor);
         }
-        let Some(id) = get(&self.actors, actor as usize) else { return };
+        set(&mut self.placed, index, None);
+        set(&mut self.trailers, actor as usize, Some(id));
+    }
+
+    /// An actor replaced in place (MobileDeployment unpack / pack, 0x575C80):
+    /// the next created actor takes the next-fit id and then this actor's
+    /// identity (0x4D6130 -> 0x4D5EA0). The old actor, marked removed by the
+    /// caller, gives the spare id and its trailer's back when it is swept.
+    pub fn replace_actor(&mut self, actor: ActorId) {
+        self.taking_over = Some(actor);
+    }
+
+    /// A projectile takes the next-fit id (0x4C8CB0 -> 0x4F9C10). Native films name
+    /// slots after every shot, so each shot moves the cursor as it does there.
+    pub fn created_transient(&mut self, def: crate::data::DefId) -> Option<Gtid> {
+        self.allocate(true, Thing::Transient(def))
+    }
+    /// The thing is gone (0x4F6760): its id goes back.
+    pub fn removed_transient(&mut self, id: Gtid) {
         self.remove(id);
-        let _ = self.registry.seed_saved_generation(id);
-        self.actors[actor as usize] = None;
-        self.requested = Some(id);
+    }
+
+    /// A GGroup takes the next-fit id (0x4FBE10 -> 0x4F9C10).
+    pub fn created_group(&mut self, group: u32) -> Option<Gtid> {
+        self.allocate(true, Thing::Group(group))
+    }
+    /// 0x4DFF30 -> 0x4F6760: the last member left; the id goes back.
+    pub fn removed_group(&mut self, id: Gtid) {
+        self.remove(id);
     }
 
     /// A new organization actor (before its members). False for a restored

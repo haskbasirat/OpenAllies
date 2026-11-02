@@ -40,6 +40,32 @@ fn creations_take_next_fit_ids_and_removals_bump_the_generation() {
     assert_eq!(w.ids.live(), 2);
 }
 
+/// 0x575C80 -> 0x4D6130 -> 0x4D5EA0 -> 0x4EFB90: the new thing takes the next-fit id,
+/// the two swap, the old thing is destroyed holding the new id. The building keeps
+/// the truck's id, the cursor has moved one, the spare slot is free with its
+/// generation raised.
+#[test]
+fn an_unpack_takes_a_new_id_and_swaps_it() {
+    let mut w = world();
+    let truck = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+    let other = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+    assert_eq!(w.ids.next_slot(), 3);
+    w.ids.replace_actor(truck);
+    let building = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+    w.ids.drop_request();
+    w.actors[truck as usize].removed = true;
+    assert_eq!(w.ids.actor(building), Some(Gtid::from_raw(1)), "the building keeps the truck's id");
+    assert_eq!(w.ids.thing(1), Some(Thing::Actor(building)));
+    assert_eq!(w.ids.next_slot(), 4, "the cursor moved one");
+    w.step(vec![]);
+    assert_eq!(w.ids.actor(truck), None);
+    assert_eq!(w.ids.thing_at_slot(3), None, "the spare slot is free");
+    let next = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+    assert_eq!(w.ids.actor(next), Some(Gtid::from_raw(4)), "next-fit goes on past it");
+    assert_eq!(w.ids.thing_at_slot(2), Some(Thing::Actor(other)));
+    assert_eq!(w.ids.thing_at_slot(1), Some(Thing::Actor(building)));
+}
+
 #[test]
 fn an_organization_takes_its_id_before_its_members_leader_first() {
     let mut w = world();
@@ -75,6 +101,14 @@ fn saved_map_ids_are_kept_and_the_cursor_starts_at_idmgr() {
         variant: -1,
         serialized_id: raw,
         properties: Vec::new(),
+        class_code: 0,
+        breakable: None,
+        load_fails: false,
+        organization: None,
+        member_of: None,
+        components: Vec::new(),
+        current_component: None,
+        mind: None,
     };
     map.placed = vec![placed("soldier", 2 << 16 | 7), placed("tree", 2 << 16 | 9), placed("tree", 5 << 16 | 11)];
     let w = World::empty(Arc::new(data()), Arc::new(map), 1);

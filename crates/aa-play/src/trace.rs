@@ -33,8 +33,11 @@ use serde::Serialize;
 pub enum SKind {
     /// log_float_bits "g_gworld->GetGameTimeBeginTick()".
     Clock,
-    /// log_int "(int)m_rng.GetSeed()".
-    RngGetter,
+    /// log_int "(int)m_rng.GetSeed()". The label names the getter's site, as
+    /// `aa_parity::native_trace::getter_group` names the native ones ([`sites`]);
+    /// neither hashed nor stored natively. A getter without a label of its own
+    /// carries its source file (`World::random_u32`'s caller).
+    RngGetter(&'static str),
     /// log_int (0x77DA70) with its label.
     Int(&'static str),
     /// log_float_bits (0x77D930): the value is the binary32 bits.
@@ -57,7 +60,7 @@ impl SKind {
     pub fn label(self) -> &'static str {
         match self {
             SKind::Clock => "g_gworld->GetGameTimeBeginTick()",
-            SKind::RngGetter => "(int)m_rng.GetSeed()",
+            SKind::RngGetter(_) => "(int)m_rng.GetSeed()",
             SKind::Int(l) | SKind::Float(l) | SKind::Bool(l) | SKind::Marker(l) => l,
             SKind::DecreeName => "m_decree_type.m_name",
         }
@@ -191,6 +194,60 @@ impl Trace {
     }
 }
 
+/// The sites of aa-play's world-RNG getters, spelled as
+/// `aa_parity::native_trace::getter_group` names the native ones, so the census
+/// can set both side by side. Where one aa-play getter stands for several
+/// native chains it has the group of its usual chain.
+pub mod sites {
+    pub const RANDOM_SCALE: &str = "random scale InitCreate 4E9FC0";
+    pub const THING_FACING: &str = "thing facing 4EF3FF";
+    pub const THING_VARIANT: &str = "thing variant 4EA5E0";
+    pub const MIND_JITTER: &str = "element mind jitter 530E50";
+    pub const COMPONENT_INIT: &str = "component InitCreate 563FD0 -> queue 1";
+    pub const BODY_INIT: &str = "body InitCreate 562310 -> queue 1";
+    pub const BODY_SHORTFALL: &str = "body shortfall 562D10";
+    pub const ECONOMY_INIT: &str = "economy InitCreate 56F250 -> queue 1";
+    pub const HQ_NUMBER: &str = "HQ number 4E2640";
+    pub const MOVER_COUNTDOWN: &str = "mover countdown phase 50AB10";
+    pub const PRODUCTION_START: &str = "production start 589420 -> queue 0";
+    pub const UNPACK_END: &str = "unpack end 4D21A0 -> component 563FD0 -> queue 1";
+    /// The wait draw of the rampage Think 0x5267E0 and the getter of its wander point
+    /// 0x525100, as `getter_group` names a site it has no name for.
+    pub const RAMPAGE_WAIT: &str = "site 52691f";
+    pub const RAMPAGE_WANDER: &str = "site 525132";
+    pub const CITY_ADMISSION: &str = "564300 -> queue 1";
+    pub const DEFENDER_ENTERED: &str = "defender 567840 -> queue 0";
+    pub const DISTURBABLE: &str = "disturbable delay 5902C0";
+    pub const MOVER_ORDER: &str = "mover order 5773C0 -> queue 0";
+    pub const ACTION_GO: &str = "ActionGo from continuation 5379C0";
+    pub const ORGANIZATION_GOAL: &str = "organization goal 57C680 -> queue 0";
+    pub const PROJECTILE_LAUNCH: &str = "projectile launch 580BC0 -> queue 0";
+    pub const ORGANIZATION_SCATTER: &str = "organization scatter 5797E0";
+    pub const ORG_SHORTFALL: &str = "organization shortfall 578660 -> 562D10";
+    pub const COMBAT_COIN: &str = "combat coin";
+    pub const ENGAGE_REACTION: &str = "engage reaction delay";
+    pub const DEATH_CLIP: &str = "death clip";
+    pub const ROUT_FUZZ: &str = "rout score fuzz";
+    pub const ROUT_POINT: &str = "rout random point";
+    pub const SPECIAL_OPS_FACTION: &str = "special operations faction pick";
+    pub const EXPLORE: &str = "explore point";
+    pub const AIRCRAFT_COIN: &str = "aircraft coin";
+    pub const CHARACTER_CREATION: &str = "character 563BA0 at creation";
+    pub const CHARACTER_NODE: &str = "character 563BA0 from node reached 530AE0";
+    pub const CHARACTER_TICK_STANCE: &str = "character 563BA0 queue 1 tick 563E10";
+    pub const CHARACTER_TICK_FIDGET: &str = "character 563CA0 queue 1 tick 563E10";
+    pub const CHARACTER_OTHER: &str = "character 563BA0 from Mind states";
+    pub const INIT_EXISTING_DOODAD: &str = "doodad InitExisting 5904A0";
+    pub const INIT_EXISTING_SUPPLY: &str = "supply InitExisting 58B0E0 -> queue 1";
+    pub const INIT_EXISTING_AIRCRAFT: &str = "aircraft InitExisting 55E2F0 -> 576B20 -> queue 0";
+    pub const POST_LOAD: &str = "PostLoad 581260 -> queue 1";
+    pub const NATION_PICK: &str = "nation pick 50ECA6";
+    pub const FACTION_PICK: &str = "faction pick 474C14";
+    pub const SYNC_DUMP: &str = "sync dump 4F62B8";
+    pub const CREATE_GWORLD: &str = "CreateGWorld";
+    pub const MAP_CREATION: &str = "map creation";
+}
+
 /// World-RNG draws GWorld::Init 0x4F27E0 makes after CreateGWorld seeds the
 /// stream (before any map is generated or loaded). Not established; none is
 /// assumed.
@@ -236,6 +293,12 @@ pub fn digest(world: &crate::World) -> TickDigest {
         s_hash: world.trace.s_hash,
         world: h,
     }
+}
+
+/// The unit before its store: `fild`, plus 2^32 when negative, `fmul` the
+/// constant 0x3DF0000000100000 (0x5902C0 goes on with it at PC53).
+pub fn native_unit_f64(value: u32) -> f64 {
+    f64::from(value) * f64::from_bits(0x3df0_0000_0010_0000)
 }
 
 /// 0x45D400 / inline 0x4F62BB at PC53: the draw read as a signed integer

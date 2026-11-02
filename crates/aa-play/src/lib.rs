@@ -51,6 +51,8 @@ pub mod zones;
 pub mod fog_legacy;
 /// HUD player orders (appended by the UI owner).
 pub mod player_orders;
+/// The native actor commands with no battle system of their own (orders lane).
+pub mod orders;
 /// Generals' special operations (appended by the combat owner).
 pub mod special_ops;
 /// Parity trace: the S-log emulation and per-tick digests (core owner).
@@ -61,6 +63,12 @@ pub mod ids;
 pub mod creation;
 /// The native world queues of one update and their leaves (core owner).
 pub mod scheduler;
+/// DynamicDoodad deferred updates 0x5902C0 / 0x58FA30 (core owner).
+pub mod doodad;
+/// The Character component in the simulation (core owner).
+pub mod character;
+/// The kingdoms' statistics and snapshots, the score screen's data (core owner).
+pub mod statistics;
 /// BuilderComponent::BuildActor for the construct order (core owner).
 pub mod construct;
 /// The DenizenComponent of airfields and carriers (core owner).
@@ -69,3 +77,5 @@ pub mod denizen;
 pub mod minds;
 /// The map's scripted triggers on the aa-triggers port (scenarios owner).
 pub mod triggers;
+// film-sources: a saved game's world (`aa_mapworld::saved_world`).
+pub mod saved_world;

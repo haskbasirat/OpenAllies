@@ -1,0 +1,12 @@
+{
+  "area": "DynamicDoodad deferred updates",
+  "functions": {
+    "0x5902C0": {"what": "Disturbable Updatable +18", "port": "aa_play::doodad::disturbable_step", "fixture": "native-doodad.json", "cases": 240},
+    "0x58FA30": {"what": "Breakable Updatable +18", "port": "aa_play::doodad::breakable_step", "fixture": "native-doodad.json", "cases": 480},
+    "0x5901F0": {"what": "the circle scan", "port": "aa_spatial::circle_actors (own fixtures); aa_play::doodad::disturbed reproduces its test over aa-play's things", "proof": "census only"},
+    "0x5904A0": {"what": "InitExisting / InitCreate arm of a component", "port": "aa_play::creation::init_components", "proof": "the draw counts of the fight films' traces"},
+    "0x58F960": {"what": "the Breakable's: 0x5904A0, then 0x50B250 in state 0 or 1", "port": "aa_play::creation::init_components", "proof": "the draw counts of the fight films' traces"}
+  },
+  "not_bound": ["0x58FF70 Break (nothing starts state 2)", "0x590380 and the topple action list (presentation: Notice::DoodadDisturbed)"],
+  "open": ["whether a trailer thing, which aa-play does not keep, is what the scan sees for some of the 15 windows the forced-rng run still misses"]
+}

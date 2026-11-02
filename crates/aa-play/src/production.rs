@@ -12,7 +12,7 @@ mod native;
 
 use crate::books::{Queue, QueueItem};
 use crate::data::{DefClass, DefId, ResourceKind};
-use crate::world::{ActorId, Command, Event, KingdomId, Order, OrgId, Organization, World};
+use crate::world::{ActorId, Command, Event, KingdomId, Order, OrgId, Organization, RecruitParameters, World};
 use glam::Vec2;
 
 /// Native 0x4FAD28 / 0x578250 rotation of a local offset (X right, Y forward)
@@ -70,7 +70,7 @@ pub fn spawn_organization(world: &mut World, def: DefId, kingdom: KingdomId, anc
 }
 
 /// The organization actor alone (no members yet), standing at `anchor`.
-fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: Vec2, heading: f32, hq: Option<ActorId>) -> OrgId {
+pub(crate) fn new_organization(world: &mut World, def: DefId, kingdom: KingdomId, anchor: Vec2, heading: f32, hq: Option<ActorId>) -> OrgId {
     let id = world.orgs.len() as OrgId;
     world.orgs.push(Organization {
         id,
@@ -240,6 +240,14 @@ fn walk_out(world: &mut World, member: ActorId, to: Vec2) {
     crate::movement::walk_member(world, member, to);
 }
 
+/// The element of `slot` of organization `o`: its ParameterSet's, else the
+/// definition's own (`NO_DEF` for a null one, `None` outside the layout).
+pub fn slot_element(world: &World, o: OrgId, slot: usize) -> Option<DefId> {
+    let org = world.orgs.get(o as usize)?;
+    let own = world.data.def(org.def).slots.get(slot)?.0;
+    Some(world.books.org(o).and_then(|b| b.elements.as_ref()).and_then(|e| e.get(slot).copied()).unwrap_or(own))
+}
+
 /// Organization member creation 57AD30 -> 4FBF40 for an empty `slot`: at
 /// the door of the nearest structure that recruits it (DeploymentInfo
 /// creation_offset turned by the structure facing, facing its deployment
@@ -249,7 +257,8 @@ fn walk_out(world: &mut World, member: ActorId, to: Vec2) {
 pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId> {
     let org = world.orgs.get(o as usize).filter(|x| x.alive)?;
     let def = world.data.def(org.def);
-    let (member_def, offset) = *def.slots.get(slot)?;
+    let offset = def.slots.get(slot)?.1;
+    let member_def = slot_element(world, o, slot)?;
     if member_def == crate::data::NO_DEF || slot_member(world, o, slot).is_some() {
         return None;
     }
@@ -276,6 +285,8 @@ pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId>
     if let Some(to) = walk_to {
         walk_out(world, a, to);
     }
+    // 0x57CBA0's 0x524B80, after 4FACA0's Deploy.
+    crate::movement::member_added(world, o, a);
     Some(a)
 }
 
@@ -290,6 +301,12 @@ pub enum Vector {
 /// 56F850/56F580/56F660 for a definition: its own vector plus, for an
 /// organization, the vector of every expanded layout slot's definition.
 pub fn quote(world: &World, def: DefId, kind: Vector) -> Vec<f32> {
+    quote_elements(world, def, None, kind)
+}
+
+/// [`quote`] over the elements of an order's ParameterSet (0x56F850's loop over
+/// the layout's expanded slots reads the set, one per slot).
+pub fn quote_elements(world: &World, def: DefId, elements: Option<&[DefId]>, kind: Vector) -> Vec<f32> {
     let data = &world.data;
     let n = data.resources.len();
     let mut out = vec![0.0; n];
@@ -308,7 +325,8 @@ pub fn quote(world: &World, def: DefId, kind: Vector) -> Vec<f32> {
         }
     };
     add(&mut out, def);
-    for &(slot_def, _) in &data.def(def).slots {
+    for (slot, &(own, _)) in data.def(def).slots.iter().enumerate() {
+        let slot_def = elements.and_then(|e| e.get(slot).copied()).unwrap_or(own);
         if slot_def != u32::MAX {
             add(&mut out, slot_def);
         }
@@ -365,7 +383,12 @@ pub fn max_health(world: &World, kingdom: Option<KingdomId>, def: DefId) -> f32 
 /// Recruit price at `building` (501730): the definition quote, times the
 /// building's RECRUIT_COST factor for a recruitable definition.
 pub fn recruit_cost(world: &World, building: ActorId, def: DefId) -> Vec<f32> {
-    let mut cost = quote(world, def, Vector::Cost);
+    recruit_cost_elements(world, building, def, None)
+}
+
+/// [`recruit_cost`] over the elements of an order's ParameterSet.
+pub fn recruit_cost_elements(world: &World, building: ActorId, def: DefId, elements: Option<&[DefId]>) -> Vec<f32> {
+    let mut cost = quote_elements(world, def, elements, Vector::Cost);
     if let Some(a) = world.actor(building)
         && let Some(k) = a.kingdom
         && world.data.def(def).recruitable != 0
@@ -446,7 +469,8 @@ pub fn busy(world: &World, building: ActorId) -> bool {
 /// Apply a player or computer command; Err is the refusal reason.
 pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
     match *command {
-        Command::Recruit { kingdom, building, def } => recruit(world, kingdom, building, def),
+        Command::Recruit { kingdom, building, def } => recruit(world, kingdom, building, def, None, None),
+        Command::RecruitWith { kingdom, building, def, ref parameters } => recruit(world, kingdom, building, def, Some(parameters), None),
         Command::CancelRecruit { kingdom, building, index } => {
             let a = world.actor(building).ok_or("no such building")?;
             if a.kingdom != Some(kingdom) {
@@ -464,7 +488,13 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
 /// an organization), the affordability 0x582950, the debit 0x4E1690, the
 /// upkeep quote and the queue admission. The building checks before it
 /// (ownership, its recruit list, packing, recruitable) give the refusal.
-fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId) -> Result<(), String> {
+/// (orders) recruit_location 0x583A70 case 0x11: 0x5836E0 with the point, native
+/// queue kind 2. See `fulfill` for what is a rendition of its completion.
+pub fn recruit_at(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId, parameters: Option<&RecruitParameters>, at: Vec2) -> Result<(), String> {
+    recruit(world, kingdom, building, def, parameters, Some([at.x, at.y]))
+}
+
+fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId, parameters: Option<&RecruitParameters>, location: Option<[f32; 2]>) -> Result<(), String> {
     let a = world.actor(building).ok_or("no such building")?;
     if !a.alive || a.kingdom != Some(kingdom) {
         return Err("not your building".into());
@@ -479,9 +509,13 @@ fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId)
         return Err("not recruitable".into());
     }
     let attaches = world.data.def(def).class == Some(DefClass::Organization) && hq_org(world, building).is_some();
-    let request = aa_production::RecruitRequest { actor_definition: native::def_handle(def), organization_layout: 0, location_bits: None };
+    let elements = match parameters {
+        Some(p) => Some(expanded_elements(world, def, p)?),
+        None => None,
+    };
+    let request = aa_production::RecruitRequest { actor_definition: native::def_handle(def), organization_layout: 0, location_bits: location.map(|p| [p[0].to_bits(), p[1].to_bits()]) };
     let (result, unaffordable, _) = native::with_queue(world, building, |q, ctx, host| {
-        host.pending = Some(native::Extra { def, attaches, research: None });
+        host.pending = Some(native::Extra { def, attaches, research: None, elements, location });
         aa_production::request_recruit(q, request, ctx, host)
     });
     mirror(world, building);
@@ -492,6 +526,20 @@ fn recruit(world: &mut World, kingdom: KingdomId, building: ActorId, def: DefId)
         Ok(false) => Err("missing requirements".into()),
         Err(e) => Err(format!("production: {e}")),
     }
+}
+
+/// The ParameterSet as the element of each expanded slot of `def`
+/// (layout +0x28 gives each slot its entry). `Def` holds the expansion and the
+/// formations of the definition's own layout, so a set on another layout is
+/// refused: no film of the corpus orders one.
+fn expanded_elements(world: &World, def: DefId, p: &RecruitParameters) -> Result<Vec<DefId>, String> {
+    let d = world.data.def(def);
+    if let (Some(layout), Some(own)) = (&p.layout, &d.layout)
+        && !layout.eq_ignore_ascii_case(own)
+    {
+        return Err(format!("a recruit of {} on layout {layout} (its own is {own}) is not ported", d.id));
+    }
+    Ok(d.slots.iter().enumerate().map(|(s, &(own, _))| d.slot_entries.get(s).and_then(|&e| p.elements.get(e as usize).copied()).unwrap_or(own)).collect())
 }
 
 /// 0x5827B0 for a recruit of `def` at `building`: 0 when its requirements
@@ -563,7 +611,7 @@ pub fn research(world: &mut World, kingdom: KingdomId, building: ActorId, proper
     let name = world.data.def(bdef).research[index].property.clone();
     let component = aa_production::research::ResearchComponent { completed: world.books.actor(building).map(|b| b.research_completed.clone()).unwrap_or_default() };
     let (result, unaffordable, _) = native::with_queue(world, building, |q, ctx, host| {
-        host.pending = Some(native::Extra { def: bdef, attaches: false, research: Some(name) });
+        host.pending = Some(native::Extra { def: bdef, attaches: false, research: Some(name), elements: None, location: None });
         aa_production::research::request_research(&component, q, &record, ctx, host)
     });
     mirror(world, building);
@@ -674,6 +722,23 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
         world.books.notices.push(crate::books::Notice::Researched { kingdom, property: property.clone() });
         return true;
     }
+    // (orders) Kind 2, 0x589F90 -> 0x582190: a transport (ActorData +184) enters
+    // from the map edge, or an aircraft of the structure's Denizen (0x56DC50), and
+    // drops the cargo at the point. A rendition, until the aircraft fly: the cargo
+    // lands at the point when the item finishes, with the definition's elements.
+    if let Some(at) = item.location {
+        let at = Vec2::new(at[0], at[1]);
+        let facing = b.facing;
+        let def = item.def;
+        let (org, actor) = if world.data.def(def).class == Some(DefClass::Organization) {
+            (Some(spawn_organization(world, def, kingdom, at, facing, None)), None)
+        } else {
+            (None, Some(spawn_single(world, def, Some(kingdom), at, facing)))
+        };
+        crate::statistics::recruited(world, kingdom, def, org);
+        world.events.push(Event::Recruited { kingdom, org, actor });
+        return true;
+    }
     let bdef = world.data.def(b.def);
     let origin = b.pos.truncate();
     let facing = b.facing;
@@ -695,12 +760,15 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
         let hq = item.attaches.then_some(building);
         let d = world.data.def(def);
         let all = !d.supply_used || d.recruit_full;
-        let leader = d.leader_slot.map(usize::from).filter(|&l| l < d.slots.len());
+        let element = |s: usize| item.elements.as_ref().and_then(|e| e.get(s).copied()).unwrap_or(d.slots[s].0);
+        // 0x4C2BC0: the primary slot, or the first slot with an element when
+        // the primary one has none.
+        let leader = d.leader_slot.map(usize::from).filter(|&l| l < d.slots.len() && element(l) != crate::data::NO_DEF).or_else(|| (0..d.slots.len()).find(|&s| element(s) != crate::data::NO_DEF));
         // 554BF0 for the leader slot's shape: from the deployment point back
         // toward the structure to the first open spot, then rings around it
         // (radius: the structure's shape plus the organization's), so a new
         // organization does not stand on the ones already there.
-        let leader_def = leader.map(|l| d.slots[l].0).filter(|&x| x != crate::data::NO_DEF).or_else(|| d.slots.iter().map(|s| s.0).find(|&x| x != crate::data::NO_DEF));
+        let leader_def = leader.map(element);
         let anchor = match leader_def {
             Some(ld) => {
                 let radius = shape_radius(world.data.def(world.actors[building as usize].def)) + shape_radius(d);
@@ -709,10 +777,12 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
             None => end,
         };
         let o = new_organization(world, def, kingdom, anchor, facing, hq);
+        world.books.org_mut(o).elements = item.elements.clone();
         let d = world.data.def(def);
-        let slots: Vec<usize> = (0..d.slots.len()).filter(|&s| d.slots[s].0 != crate::data::NO_DEF && (all || Some(s) == leader)).collect();
+        let element = |s: usize| item.elements.as_ref().and_then(|e| e.get(s).copied()).unwrap_or(d.slots[s].0);
+        let slots: Vec<usize> = (0..d.slots.len()).filter(|&s| element(s) != crate::data::NO_DEF && (all || Some(s) == leader)).collect();
         // The layout's morale (as a full organization) from the start.
-        let morale: f32 = d.slots.iter().filter(|s| s.0 != crate::data::NO_DEF).map(|s| world.data.def(s.0).morale_value).sum();
+        let morale: f32 = (0..d.slots.len()).map(element).filter(|&e| e != crate::data::NO_DEF).map(|e| world.data.def(e).morale_value).sum();
         world.orgs[o as usize].morale = morale;
         for s in slots {
             spawn_member(world, o, s);
@@ -734,11 +804,16 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
         // 4FACA0: created at the creation point facing the deployment point,
         // the mind walks it there; then the rally point, if any.
         let a = spawn_single(world, def, Some(kingdom), start, heading);
-        if let Some(to) = rally.or((end != start).then_some(end)) {
+        // (movement owner) Mind vf+0x198 0x52F320: KKC_UAIStateDeploy walks it.
+        if end != start {
+            crate::movement::walk_member(world, a, end);
+        }
+        if let Some(to) = rally {
             let _ = crate::movement::command(world, &Command::Move { kingdom, units: vec![crate::world::Unit::Actor(a)], to, attack_move: false });
         }
         (None, Some(a))
     };
+    crate::statistics::recruited(world, kingdom, def, org);
     world.events.push(Event::Recruited { kingdom, org, actor });
     true
 }

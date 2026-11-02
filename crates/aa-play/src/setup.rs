@@ -49,9 +49,12 @@ pub struct SkirmishSetup {
 }
 
 /// Neutral placed things that matter to play (become actors without owner).
-fn neutral_actor(data: &GameData, def: crate::data::DefId) -> bool {
+pub(crate) fn neutral_actor(data: &GameData, def: crate::data::DefId) -> bool {
     let d = data.def(def);
-    d.actor_data && (d.category.eq_ignore_ascii_case("BUILDING") || d.city || d.has_component("CityComponent") || (d.has_economy && d.production_all.iter().any(|v| *v > 0.0)))
+    // An organization or unit an independent kingdom holds is one too: a mission's
+    // script gives it to the player (`TransferControl`, Actor virtual +160).
+    let unit = matches!(d.class, Some(crate::data::DefClass::Organization | crate::data::DefClass::Member | crate::data::DefClass::Truck));
+    d.actor_data && (unit || d.category.eq_ignore_ascii_case("BUILDING") || d.city || d.has_component("CityComponent") || (d.has_economy && d.production_all.iter().any(|v| *v > 0.0)))
 }
 
 impl World {
@@ -163,6 +166,10 @@ impl World {
         // placeholders of player kingdoms are resolved afterwards (4FDA70).
         let mut replacements: Vec<(bool, u16, usize, crate::data::DefId, u32)> = Vec::new();
         for (index, p) in map.placed.iter().enumerate() {
+            // A member stands with its organization's record.
+            if p.load_fails || p.member_of.is_some() || map.generated.as_ref().is_some_and(|g| g.trailers.iter().any(|t| t.1 == index)) {
+                continue;
+            }
             let owner = p.owner_slot.map(|s| s as usize).filter(|&s| s < map.slots.len());
             let thing = p.thing_id.to_ascii_lowercase();
             let placeholder = data.nations.iter().any(|n| n.placeholders.contains_key(&thing));
@@ -199,11 +206,19 @@ impl World {
         // Supply component registering on queue 1 (58B0E0). All saved things
         // are restored, also those of the kingdoms the battle leaves out.
         let mut restored: Vec<(u16, usize)> =
-            map.placed.iter().enumerate().filter(|(_, p)| p.serialized_id != 0).map(|(i, p)| (crate::ids::Gtid::from_raw(p.serialized_id).slot(), i)).collect();
+            map.placed.iter().enumerate().filter(|(_, p)| p.serialized_id != 0 && !p.load_fails).map(|(i, p)| (crate::ids::Gtid::from_raw(p.serialized_id).slot(), i)).collect();
         restored.sort_unstable();
-        for &(_, i) in &restored {
-            if let Some(def) = data.find(&map.placed[i].thing_id) {
-                crate::creation::restored(&mut world, def);
+        for &(_, i) in restored.iter().filter(|_| map.generated.is_none()) {
+            if map.placed[i].member_of.is_some() {
+                continue;
+            }
+            if let Some(def) = data.find(&map.placed[i].thing_id)
+                && !crate::creation::is_converted(&map.placed[i], data.def(def))
+            {
+                match &map.placed[i].organization {
+                    Some(organization) => crate::creation::restored_organization(&mut world, def, organization),
+                    None => crate::creation::restored(&mut world, def),
+                }
             }
         }
         // The queue Load 0x50B8B0 (crate::scheduler): the saved periodic
@@ -219,11 +234,44 @@ impl World {
                 _ => kept.entry(i).or_insert(crate::scheduler::Kept::Actor(a)),
             };
         }
+        // A placed organization with its members' own records: the organization is
+        // no actor's `placed`.
+        for (i, p) in map.placed.iter().enumerate() {
+            if let Some(o) = p.organization.as_ref().and_then(|o| o.members.first()).and_then(|&(_, m)| kept.get(&m)).and_then(|k| match k {
+                crate::scheduler::Kept::Actor(a) => world.actors[*a as usize].org,
+                crate::scheduler::Kept::Org(_) => None,
+            }) {
+                kept.insert(i, crate::scheduler::Kept::Org(o));
+            }
+        }
+        crate::movement::restore_saved_minds(&mut world, &kept);
         match &map.saved_queues {
+            _ if map.generated.is_some() => {}
             Some(saved) => crate::scheduler::restore_saved(&mut world, saved, &crate::scheduler::Restoring { things: &kept, slot_kingdom: &slot_kingdom }),
             None => {
                 let order: Vec<crate::scheduler::Kept> = restored.iter().filter_map(|&(_, i)| kept.get(&i).copied()).collect();
                 crate::scheduler::admit_restored(&mut world, &order);
+            }
+        }
+        if let Some(saved) = &map.saved_deferred {
+            crate::scheduler::restore_deferred(&mut world, saved, &crate::scheduler::Restoring { things: &kept, slot_kingdom: &slot_kingdom });
+        }
+        // The PostLoad pass 0x4FD3B3 over what the queue Load left out.
+        if map.saved_queues.is_some() {
+            let order: Vec<usize> = restored.iter().map(|&(_, i)| i).collect();
+            crate::scheduler::post_load(&mut world, &map, &order, &crate::scheduler::Restoring { things: &kept, slot_kingdom: &slot_kingdom });
+        }
+        // The last step of the map load 0x4FD47C: the records of a class that
+        // changed, created fresh in record order.
+        crate::scheduler::sync_clock(&mut world);
+        if let Some(generated) = &map.generated {
+            crate::scheduler::replay_generated(&mut world, generated, &crate::scheduler::Restoring { things: &kept, slot_kingdom: &slot_kingdom });
+        }
+        for (i, p) in map.placed.iter().enumerate().filter(|_| map.generated.is_none()) {
+            if let Some(def) = data.find(&p.thing_id)
+                && crate::creation::is_converted(p, data.def(def))
+            {
+                crate::creation::converted(&mut world, def, i as u32, p.variant);
             }
         }
         crate::scheduler::admit_kingdoms(&mut world);
@@ -248,12 +296,15 @@ impl World {
             // A replacement object (not modelled by aa-play) keeps the id as
             // the placed thing.
         }
+        // 0x4F1E10: the kingdoms' statistics.
+        crate::statistics::start_world(&mut world);
         // Supply zones and the economy as they stand at the start.
         crate::supply::tick(&mut world);
         crate::economy::refresh(&mut world);
         for k in 0..world.kingdoms.len() as u32 {
             crate::economy::publish(&mut world, k);
         }
+        crate::statistics::start_snapshots(&mut world);
         // World sync dump and session launch (one draw, S reset).
         world.begin_battle();
         Ok(world)
@@ -269,7 +320,7 @@ pub const INDEPENDENT_TEAM: u32 = 0x8000_0000;
 /// an independent kingdom is the map's saved one (its +0x1DC entry for the
 /// player's map team, else its +0x1D0 entry for the player's map kingdom),
 /// independents among themselves use their saved +0x1D0 entries.
-fn relations(world: &World, map: &GameMap, slot_kingdom: &[Option<u32>], players: usize) -> Vec<Vec<u8>> {
+pub(crate) fn relations(world: &World, map: &GameMap, slot_kingdom: &[Option<u32>], players: usize) -> Vec<Vec<u8>> {
     use crate::books::{ENEMY, FRIEND, NEUTRAL, SELF};
     let n = world.kingdoms.len();
     let slot_of: Vec<Option<usize>> = (0..n).map(|k| slot_kingdom.iter().position(|s| *s == Some(k as u32))).collect();
@@ -287,11 +338,37 @@ fn relations(world: &World, map: &GameMap, slot_kingdom: &[Option<u32>], players
             out[a][b] = if a == b {
                 SELF
             } else if a < players && b < players {
-                if world.kingdoms[a].team == world.kingdoms[b].team { FRIEND } else { ENEMY }
+                // (orders) 0x4E52D0: a kingdom on no team (+1EC null, a team
+                // name 0x4F4980 does not find) reads its own saved tables: +1DC
+                // for the other's team, +1D0 by the other's +188 otherwise.
+                let no_team = |k: usize| world.kingdoms[k].team as usize >= map.teams.len();
+                let own = slot_of[a].map(|s| &map.slots[s]);
+                let entry = if !no_team(a) {
+                    None
+                } else if no_team(b) {
+                    let index = slot_of[b].and_then(|s| map.slots[s].kingdom_index);
+                    own.zip(index).and_then(|(f, i)| f.relations_to_kingdoms.get(i as usize))
+                } else {
+                    own.and_then(|f| f.relations_to_teams.get(world.kingdoms[b].team as usize))
+                };
+                match entry {
+                    Some(v) => (*v).min(3) as u8,
+                    None if world.kingdoms[a].team == world.kingdoms[b].team => FRIEND,
+                    None => ENEMY,
+                }
             } else if a < players {
-                // The player regards the independent as the independent
-                // regards the player's team (the saved tables are symmetric).
-                saved(b, a).unwrap_or(ENEMY)
+                // (orders) 0x4E52D0 for a kingdom on no team: its own +1D0 by
+                // the independent's +188.
+                let no_team = world.kingdoms[a].team as usize >= map.teams.len();
+                let own = slot_of[a].map(|s| &map.slots[s]);
+                let index = slot_of[b].and_then(|s| map.slots[s].kingdom_index);
+                let entry = own.zip(index).filter(|_| no_team).and_then(|(f, i)| f.relations_to_kingdoms.get(i as usize));
+                match entry {
+                    Some(v) => (*v).min(3) as u8,
+                    // The player regards the independent as the independent
+                    // regards the player's team (the saved tables are symmetric).
+                    None => saved(b, a).unwrap_or(ENEMY),
+                }
             } else {
                 saved(a, b).unwrap_or(if b < players { ENEMY } else { NEUTRAL })
             };
@@ -316,10 +393,38 @@ fn keep_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>,
     world.ids.clear_request(index);
 }
 
+/// A placed organization and the members its record holds, each under its saved id
+/// (57D130 -> 4FC200 -> 4FAE80) where it was saved, no creation draws: those of the
+/// Load are `creation::restored_organization`, in the record pass.
+fn restore_organization(world: &mut World, def: crate::data::DefId, kingdom: u32, pos: glam::Vec2, facing: f32, saved: &crate::map::PlacedOrganization) {
+    let data = world.data.clone();
+    let o = crate::production::new_organization(world, def, kingdom, pos, facing, None);
+    let mut morale = 0.0f32;
+    for &(slot, m) in &saved.members {
+        let Some(member) = world.map.placed.get(m).cloned() else { continue };
+        let Some(member_def) = data.find(&member.thing_id) else { continue };
+        world.ids.request_placed(m);
+        let a = crate::production::spawn_single(world, member_def, Some(kingdom), glam::Vec2::new(member.position[0], member.position[1]), member.yaw);
+        world.ids.clear_request(m);
+        world.actors[a as usize].pos = glam::Vec3::from(member.position);
+        world.actors[a as usize].org = Some(o);
+        world.actors[a as usize].slot = Some(slot as u16);
+        world.orgs[o as usize].members.push(a);
+        world.books.actor_mut(a).placed = Some(m);
+        morale += data.def(member_def).morale_value;
+    }
+    world.orgs[o as usize].morale = morale * f32::from_bits(saved.morale_bits);
+    world.books.org_mut(o).progress = vec![0.0; data.def(def).slots.len()];
+}
+
 fn spawn_placed(world: &mut World, def: crate::data::DefId, kingdom: Option<u32>, pos: glam::Vec2, facing: f32, index: usize) {
     let data = world.data.clone();
     if data.def(def).class == Some(crate::data::DefClass::Organization) {
         if let Some(k) = kingdom {
+            if let Some(saved) = world.map.placed[index].organization.clone() {
+                restore_organization(world, def, k, pos, facing, &saved);
+                return;
+            }
             let o = crate::production::spawn_organization(world, def, k, pos, facing, None);
             let properties = world.map.placed[index].properties.clone();
             for m in world.orgs[o as usize].members.clone() {

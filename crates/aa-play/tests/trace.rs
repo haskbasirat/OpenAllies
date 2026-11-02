@@ -95,7 +95,7 @@ fn every_world_draw_logs_the_getter_state() {
     assert_eq!(lcg.state, mid);
     let entries: Vec<_> = w.trace.entries().collect();
     assert_eq!(entries.len(), 3);
-    assert!(entries.iter().all(|e| e.1 == SKind::RngGetter));
+    assert!(entries.iter().all(|e| matches!(e.1, SKind::RngGetter(_))));
     assert_eq!(entries[0].2, before);
     assert_eq!(entries[1].2, mid);
     let mut h = 0;
@@ -192,5 +192,5 @@ fn s_kinds_hash_as_the_native_loggers() {
     let r = Trace::new(10, 99);
     assert_eq!(r.checkpoint(), (10, 99));
     assert_eq!(SKind::Clock.label(), "g_gworld->GetGameTimeBeginTick()");
-    assert_eq!(SKind::RngGetter.label(), "(int)m_rng.GetSeed()");
+    assert_eq!(SKind::RngGetter("anywhere").label(), "(int)m_rng.GetSeed()");
 }

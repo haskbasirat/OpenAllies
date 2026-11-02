@@ -203,8 +203,10 @@ of the economy / production passes (queues 0, 1, 2 in step 6).
   regeneration 57B5A0 (1 s). Supply lane 1 → 715 (the unmapped in-place unpack). Fog lane
   402 → 489, now that `supply::org_position` is the org's own position (`Organization::anchor`).
   Its next step is 57C800 follow-leader, a movement-owner item.
-  Still passes: Detection (fog owner), Properties (combat owner), Construction, Economy
-  component (refresh stays per update).
+  Leaves since: Detection 0x56F140 and the Economy component 0x56F2B0 on queue 1 (supply and
+  fog lane), the Body 0x562E10 on queue 1, and on queue 3 the DynamicDoodads 0x5902C0 / 0x58FA30
+  (`crate::doodad`) and the Character 0x563E10 (`crate::character`). Still passes: Properties
+  (combat owner), Construction, and the economy refresh per update.
 * Non-queue creation draws: HQ InitCreate's 0x4E2640 is the kingdom's random free HQ number and
   0x50AB10 is a random countdown phase. Neither registers anything.
 

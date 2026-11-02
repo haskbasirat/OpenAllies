@@ -95,6 +95,13 @@ pub struct Weapon {
     /// unavailable, code 7).
     #[serde(default)]
     pub mana_cost: f32,
+    /// Ability idle_animation, as authored.
+    #[serde(default)]
+    pub idle_animation: Option<String>,
+    /// The length (Animation +0x10) of the Character animation idle_animation
+    /// names, in the base set; 0 without one. 0x563BA0 arms with it.
+    #[serde(default)]
+    pub idle_length: f32,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -117,6 +124,38 @@ pub struct Formation {
     /// Offset of every expanded slot (Def::slots order) in metres; [0] is
     /// to the right of the facing, [1] forward (native 4FAD28 rotation).
     pub positions: Vec<[f32; 2]>,
+    /// FormationData `aggressive` (+1A): the organization's +8C (0x577F30).
+    #[serde(default)]
+    pub aggressive: bool,
+    /// (orders) The positions of FormationData +20, `group_formation_ids`
+    /// (`crate::orders::group`, 0x4DEC30).
+    #[serde(default)]
+    pub group_positions: Vec<[f32; 2]>,
+    /// FormationData `organized` (+18, 1 from the constructor 4C2540). False: the
+    /// slots of a member-less position scatter (0x5797E0, two draws each).
+    #[serde(default)]
+    pub organized: bool,
+    /// FormationData `herding` (+19).
+    #[serde(default)]
+    pub herding: bool,
+}
+
+/// The organization definition's rampage config (+0x314, 464BD0): its words as the
+/// Think 0x5267E0 and the wander 0x525100 read them.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct RampageDef {
+    /// +0.
+    pub wait_chance_bits: u32,
+    /// +4.
+    pub points_to_try: i32,
+    /// +8, +C.
+    pub direction_bits: [u32; 2],
+    /// +10, +14.
+    pub distance_bits: [u32; 2],
+    /// +18.
+    pub max_detached_ratio_bits: u32,
+    /// +1C.
+    pub aggressive: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -153,6 +192,11 @@ pub struct Def {
     /// Member slots: (member def, slot offset in metres in the formation frame).
     pub slots: Vec<(DefId, [f32; 2])>,
     pub morale_breakpoint: f32,
+    /// OrganizationComponent +0x310 `rampages` and its config at +0x314.
+    #[serde(default)]
+    pub rampages: bool,
+    #[serde(default)]
+    pub rampage: RampageDef,
     pub control_range: f32,
     pub operational_range: f32,
     // Trucks and buildings
@@ -205,7 +249,14 @@ pub struct Def {
     /// Layout entry `required` flag of every expanded slot. A slot whose
     /// authored element is null has `NO_DEF` as its `slots` def id.
     pub slot_required: Vec<bool>,
+    /// (orders) Layout entry +D `locked` of each expanded slot (0x578A30(1)).
+    #[serde(default)]
+    pub slot_locked: Vec<bool>,
     pub formations: Vec<Formation>,
+    /// Layout entry byte +E of each slot (`morale_line`): it counts in the
+    /// organization's +64 (0x57CBA0, 0x57CD70).
+    #[serde(default)]
+    pub slot_morale_line: Vec<bool>,
     pub default_formation: Option<usize>,
     pub combat_formation: Option<usize>,
     pub retreat_formation: Option<usize>,
@@ -331,6 +382,41 @@ pub struct Def {
     /// DynamicDoodadData components (Disturbable, Breakable) present.
     #[serde(default)]
     pub doodad_components: u8,
+    /// DynamicDoodadData +170 / +174 / +178: the components' data.
+    #[serde(default)]
+    pub doodad: Option<DoodadDef>,
+    /// The Character component's timing (ActorData +1BC sets, View idle loops):
+    /// what decides the ticks of `crate::character`. None without one.
+    #[serde(default)]
+    pub character: Option<CharacterDef>,
+    /// Definition `[+18]+1C`, the class a Thing of this definition is at run time
+    /// (2 Object, 3 Actor, 9 DynamicDoodad...). A map record saved with class 2 of a
+    /// definition that is now another class is re-created at load (0x4FAFB9).
+    #[serde(default)]
+    pub runtime_class: u32,
+    /// Thing `[Flags]` random_orientation (flag 0x8000): 0x4EF2A0 draws a facing.
+    #[serde(default)]
+    pub random_orientation: bool,
+    /// ObjectData +108 aspects_as_variations with its +110 aspect count > 0:
+    /// a new thing without a variant draws one (0x4EA5E0 -> 0x49B900).
+    #[serde(default)]
+    pub variations_enabled: bool,
+    /// The soft shape's radius (ObjectData +50.. shape word 1), what Thing
+    /// vf+0 returns in the circle test of 0x558280.
+    #[serde(default)]
+    pub soft_radius: f32,
+    /// `Size.soft_shape` with its dimensions: the native shape words (kind, radius,
+    /// minima, maxima, 0x46E060), Actor virtual +0x10, what the descriptor 0x4EA0F0
+    /// and the tile lists read. All zero for a definition that has none.
+    #[serde(default)]
+    pub soft_shape: [u32; 6],
+    /// `Size.blocking_shape` as the same six words: Actor virtual +0xC, what the
+    /// collision queries (`aa_spatial::query`) read.
+    #[serde(default)]
+    pub blocking_words: [u32; 6],
+    /// A `[TrackInfo]` with track_type CONTINUOUS (ActorData +25C, 0x4D7450).
+    #[serde(default)]
+    pub continuous_tracks: bool,
     /// BuilderComponent `[BuildActor] actor_ids` in authored order
     /// (ActorData +0x504, 464BD0 / 4604C0; 0x4D4CF0 copies it to actor
     /// +0x108): the structures this actor can construct.
@@ -350,6 +436,77 @@ pub struct Def {
     /// The AircraftComponent (ActorData +0x408..+0x418); None without one.
     #[serde(default)]
     pub aircraft: Option<AircraftDef>,
+}
+
+/// The StatData registry as a snapshot reads it (aa-rules
+/// `native_statistics_catalog`: the 62 predefined rows, then production and rate
+/// rows per resource, then the scores).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StatisticsTable {
+    pub production_start: usize,
+    pub rate_start: usize,
+    pub derived_start: usize,
+    /// Each score's terms in the native list order 0x58F420 walks: (index, weight).
+    pub derived: Vec<Vec<(u32, f32)>>,
+}
+
+/// One Character's animation timing as the simulation needs it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CharacterDef {
+    /// ActorData +0x12C / +0x130, View idle_loops_min / idle_loops_max (0x49B4D0:
+    /// `draw % (max - min) + min`).
+    pub idle_loops: [i32; 2],
+    /// The final, base set (0x45E690 falls back to it).
+    pub base: AnimSet,
+    /// The set of each AspectAnimationSet, by lower-case aspect IDS.
+    pub aspects: BTreeMap<String, AnimSet>,
+}
+
+/// One animation set, what 0x563BA0 and 0x563CA0 read of it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AnimSet {
+    /// The first idle's length (set +0xC list head, Animation +0x10).
+    pub first_idle: f32,
+    /// Kind 1 in list order: (length, weight +0x20).
+    pub fidgets: Vec<(f32, f32)>,
+    /// Set +0x64: the fidgets' total weight.
+    pub fidget_weight: f32,
+}
+
+/// DynamicDoodadData components (aa-rules `native_dynamic_doodad`, oracle
+/// research/phase7-definitions/native-doodads.json).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DoodadDef {
+    /// Definition +170: bit 0 Disturbable, bit 1 Breakable.
+    pub component_mask: u32,
+    pub disturbable: Option<DisturbableDef>,
+    pub breakable: Option<BreakableDef>,
+}
+
+/// DisturbableData +10..+1C.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct DisturbableDef {
+    pub update_time: f32,
+    pub affect_radius: f32,
+    pub recharge_time_min: f32,
+    pub recharge_time_max: f32,
+    /// Authored `Action` entries of DisturbableData +8 (presentation, 0x42A590).
+    pub actions: u32,
+}
+
+/// BreakableData +10.. as 0x58FA30 reads them.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct BreakableDef {
+    pub update_time: f32,
+    /// +1C topple_duration, +20 bounce_duration.
+    pub topple_duration: f32,
+    pub bounce_duration: f32,
+    /// +30 regrow, +34 regrow_sink_duration, +38 regrow_dead_duration,
+    /// +3C regrow_grow_duration.
+    pub regrow: bool,
+    pub regrow_sink_duration: f32,
+    pub regrow_dead_duration: f32,
+    pub regrow_grow_duration: f32,
 }
 
 /// DenizenComponent data as the ActorData loader 0x464BD0 (0x4670xx..0x4677xx)
@@ -475,6 +632,9 @@ pub struct StanceDef {
     pub health: f32,
     /// actor_state ids, lower case (mind_engaged, under_siege, dead...).
     pub states: Vec<String>,
+    /// aspect_ids, lower case (ActorData +188 stance -> aspect, 0x45E5E0).
+    #[serde(default)]
+    pub aspect: Option<String>,
 }
 
 /// Movement domain of a definition. The original MoverComponent has no
@@ -626,6 +786,11 @@ pub struct NationDef {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GameData {
+    /// (movement owner) FormationData +24 `[Property]` modifiers by lower-case
+    /// IDS (ModifierPropertyData 0x4C42D0), which 0x57BF50 applies to the
+    /// organization and its members.
+    #[serde(default)]
+    pub formation_modifiers: BTreeMap<String, Vec<Modifier>>,
     pub defs: Vec<Def>,
     pub by_id: BTreeMap<String, DefId>,
     /// Damage type x armor type multipliers from the original tables.
@@ -647,6 +812,13 @@ pub struct GameData {
     pub source_key: String,
     /// Terrain/Variation/Biome definitions for binding map tiles.
     pub terrain: crate::map::TerrainTables,
+    /// The StatData registry (`crate::statistics`).
+    #[serde(default)]
+    pub statistics: StatisticsTable,
+    /// `node = Thing` of Data/translate.tgi: lower-case old IDS -> the definition
+    /// Find returns for it.
+    #[serde(default)]
+    pub translated: BTreeMap<String, DefId>,
     /// Game/kingdom_colors.tgi in registry order: (IDS, RGB 0..1).
     pub kingdom_colors: Vec<(String, [f32; 3])>,
     /// Every Property definition by lower-case IDS.
@@ -664,8 +836,12 @@ impl GameData {
     pub fn def(&self, id: DefId) -> &Def {
         &self.defs[id as usize]
     }
+    /// 0x427BD0 Find: the Thing translation first (Data/translate.tgi, a map names
+    /// `eastern_europe_village01` for what is now `western_europe_...`), then the
+    /// registry.
     pub fn find(&self, thing: &str) -> Option<DefId> {
-        self.by_id.get(&thing.to_ascii_lowercase()).copied()
+        let key = thing.to_ascii_lowercase();
+        self.translated.get(&key).or_else(|| self.by_id.get(&key)).copied()
     }
     pub fn rule(&self, name: &str) -> Option<f32> {
         self.rules.get(name).copied()
@@ -712,6 +888,103 @@ impl GameData {
     pub fn load(game_root: &std::path::Path) -> anyhow::Result<Self> {
         loader::load(game_root)
     }
+    /// The data of a profile: `folder`'s loose files over the archive, cached
+    /// under the folder's own key (the stock cache is not touched).
+    pub fn load_on(game_root: &std::path::Path, folder: &DataFolder) -> anyhow::Result<Self> {
+        loader::load_on(game_root, folder)
+    }
+}
+
+/// A loose data folder lying over the game's archive: a profile's `data`, which
+/// holds the mod a film was recorded on (0x85B040 scans `<profile>/data/`). What
+/// the data set's definitions come from when it is not the installed game's.
+///
+/// The catalog is read once per `DataFolder`, a large mod takes minutes, and is
+/// dropped with it; the results cache under `key`, computed like the film
+/// registries' from every file's path, size and time.
+pub struct DataFolder {
+    path: std::path::PathBuf,
+    key: String,
+    catalog: std::sync::OnceLock<aa_rules::actors::ActorCatalog>,
+    sources: std::sync::Mutex<Option<Sources>>,
+}
+impl DataFolder {
+    pub fn new(path: impl Into<std::path::PathBuf>) -> anyhow::Result<Self> {
+        let path = path.into();
+        fn walk(dir: &std::path::Path, prefix: &str, out: &mut BTreeMap<String, (u64, u64)>) -> anyhow::Result<()> {
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+                let logical = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
+                let meta = entry.metadata()?;
+                if meta.is_dir() {
+                    walk(&entry.path(), &logical, out)?;
+                } else {
+                    let time = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+                    out.insert(logical, (meta.len(), time));
+                }
+            }
+            Ok(())
+        }
+        // What the game writes in a profile while it plays is not a definition:
+        // a new film or save must not cost a reload of the mod.
+        let mut files = BTreeMap::new();
+        walk(&path, "", &mut files)?;
+        let mut listing = String::new();
+        for (name, (size, time)) in &files {
+            let written = ["films/", "save/", "screenshots/", "user/", "synclogs/", "campaignsave/"];
+            if written.iter().any(|w| name.starts_with(w)) {
+                continue;
+            }
+            listing.push_str(&format!("{name} {size} {time}\n"));
+        }
+        let key = aa_rules::sources::sha256(listing.as_bytes());
+        Ok(Self { path, key, catalog: std::sync::OnceLock::new(), sources: std::sync::Mutex::new(None) })
+    }
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+    /// The key of what the folder holds; two folders with equal files share it
+    /// only when their times are equal too.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+    pub(crate) fn cache_path(&self, game_root: &std::path::Path, name: &str) -> std::path::PathBuf {
+        game_root.join("rust-rebuild").join("assets-cache").join("aa-play").join("data-sets").join(&self.key[..16]).join(name)
+    }
+    /// The rules catalog of this data, read once (the original data load, on the
+    /// folder over the archive).
+    pub fn catalog(&self, game_root: &std::path::Path) -> anyhow::Result<&aa_rules::actors::ActorCatalog> {
+        if let Some(catalog) = self.catalog.get() {
+            return Ok(catalog);
+        }
+        let mut sources = self.sources.lock().map_err(|_| anyhow::anyhow!("data folder lock"))?;
+        let open = match sources.take() {
+            Some(s) => s,
+            None => Sources::open_on(game_root, &self.path)?,
+        };
+        let mut open = open;
+        let catalog = aa_rules::actors::ActorCatalog::load_v14(&mut open.files)
+            .map_err(|e| anyhow::anyhow!("loading the rules catalog of {}: {e}", self.path.display()))?;
+        *sources = Some(open);
+        Ok(self.catalog.get_or_init(|| catalog))
+    }
+    /// One file of this data.
+    pub fn read(&self, game_root: &std::path::Path, path: &str) -> anyhow::Result<Vec<u8>> {
+        let mut sources = self.sources.lock().map_err(|_| anyhow::anyhow!("data folder lock"))?;
+        if sources.is_none() {
+            *sources = Some(Sources::open_on(game_root, &self.path)?);
+        }
+        let open = sources.as_mut().ok_or_else(|| anyhow::anyhow!("data folder sources"))?;
+        Ok(open.files.read(path).map_err(|e| anyhow::anyhow!("{path}: {e}"))?.bytes)
+    }
+    pub(crate) fn with_sources<T>(&self, game_root: &std::path::Path, f: impl FnOnce(&mut Sources) -> anyhow::Result<T>) -> anyhow::Result<T> {
+        let mut sources = self.sources.lock().map_err(|_| anyhow::anyhow!("data folder lock"))?;
+        if sources.is_none() {
+            *sources = Some(Sources::open_on(game_root, &self.path)?);
+        }
+        f(sources.as_mut().ok_or_else(|| anyhow::anyhow!("data folder sources"))?)
+    }
 }
 
 /// The open original sources, shared by the data and map loaders.
@@ -719,6 +992,16 @@ pub struct Sources {
     pub files: aa_rules::sources::V14Sources,
 }
 impl Sources {
+    /// `folder`'s loose files over the archive (`V14Sources::open_over_folder`).
+    pub fn open_on(game_root: &std::path::Path, folder: &std::path::Path) -> anyhow::Result<Self> {
+        let files = aa_rules::sources::V14Sources::open_over_folder(
+            game_root.join("Data.rwd"),
+            folder,
+            aa_rules::sources::SourceLimits { max_member_bytes: 64 << 20 },
+        )
+        .map_err(|e| anyhow::anyhow!("opening the data of {} over {}: {e}", folder.display(), game_root.display()))?;
+        Ok(Self { files })
+    }
     pub fn open(game_root: &std::path::Path) -> anyhow::Result<Self> {
         let files = aa_rules::sources::V14Sources::open(
             game_root.join("Data.rwd"),
@@ -741,7 +1024,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v21";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v32";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -880,6 +1163,35 @@ pub(crate) mod loader {
                 let _ = std::fs::create_dir_all(dir);
             }
             // Write then rename, so a concurrent reader never sees half a file.
+            if let Ok(bytes) = serde_json::to_vec(&data) {
+                let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+                if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+                    let _ = std::fs::remove_file(&tmp);
+                }
+            }
+        }
+        Ok(data)
+    }
+
+    /// [`load`] on a loose folder: its own cache, its own catalog.
+    pub(crate) fn load_on(game_root: &std::path::Path, folder: &DataFolder) -> anyhow::Result<GameData> {
+        let key = format!("{CACHE_VERSION}:{}", folder.key());
+        let path = folder.cache_path(game_root, "gamedata.json");
+        let use_cache = std::env::var("AA_PLAY_NO_CACHE").map_or(true, |v| v.is_empty() || v == "0");
+        if use_cache
+            && let Ok(bytes) = std::fs::read(&path)
+            && let Ok(data) = serde_json::from_slice::<GameData>(&bytes)
+            && data.source_key == key
+        {
+            return Ok(data);
+        }
+        let catalog = folder.catalog(game_root)?;
+        let mut data = folder.with_sources(game_root, |sources| build(sources, catalog))?;
+        data.source_key = key;
+        if use_cache {
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
             if let Ok(bytes) = serde_json::to_vec(&data) {
                 let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
                 if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
@@ -1181,6 +1493,19 @@ pub(crate) mod loader {
         data.damage_factors = (0..data.damage_types.len())
             .map(|dt| profiles.iter().map(|(_, v)| v[dt]).collect())
             .collect();
+        // 0x427BD0's translation map, Thing nodes only.
+        if let Ok(nodes) = catalog.resolved_definitions("Translate") {
+            for t in nodes {
+                if !st(&t, "node").is_some_and(|n| n.eq_ignore_ascii_case("Thing")) {
+                    continue;
+                }
+                if let Some(old) = st(&t, "ids_old")
+                    && let Some(d) = catalog.find(&old).and_then(|a| data.by_id.get(&a.id.to_ascii_lowercase()).copied())
+                {
+                    data.translated.insert(old.to_ascii_lowercase(), d);
+                }
+            }
+        }
         // Nations and their placeholder mapping (Data/Nations/<nation>.tgi).
         if let Ok(nodes) = catalog.resolved_definitions("Nation") {
             for node in nodes {
@@ -1225,6 +1550,14 @@ pub(crate) mod loader {
                     id: id.clone(),
                 };
                 data.properties.entry(id.to_ascii_lowercase()).or_insert(def);
+            }
+        }
+        // (movement owner) The formations' embedded properties.
+        if let Ok(nodes) = catalog.resolved_definitions("Formation") {
+            for node in nodes {
+                let Some(id) = st(&node, "IDS").or_else(|| st(&node, "ids")) else { continue };
+                let list = node.child("Property").ok().flatten().map(|p| modifiers(&p, &data.damage_types, &resource_ids)).unwrap_or_default();
+                data.formation_modifiers.entry(id.to_ascii_lowercase()).or_insert(list);
             }
         }
         if let Ok(nodes) = catalog.resolved_definitions("ActorState") {
@@ -1288,6 +1621,17 @@ pub(crate) mod loader {
         }
         data.rules.extend(keys);
         data.terrain = crate::map::terrain_tables(catalog, &mut notes);
+        match catalog.native_statistics_catalog(PC) {
+            Ok(c) => {
+                data.statistics = StatisticsTable {
+                    production_start: c.production_start,
+                    rate_start: c.rate_start,
+                    derived_start: c.derived_start,
+                    derived: c.derived.iter().map(|d| d.terms.iter().map(|t| (t.stat_index, f(t.weight_bits))).collect()).collect(),
+                };
+            }
+            Err(e) => notes.push(format!("statistics: {e}")),
+        }
         if let Ok(nodes) = catalog.resolved_definitions("KingdomColor") {
             for node in nodes {
                 let Some(id) = st(&node, "IDS") else { continue };
@@ -1336,12 +1680,52 @@ pub(crate) mod loader {
             }
         };
         def.category = category.name.to_owned();
+        def.runtime_class = category.runtime_class;
+        // ObjectData +108 / +110 of a doodad (`creation_variant`).
+        if category.native_kind == 21
+            && let Ok(creation) = catalog.native_creation_definition(id, PC)
+        {
+            def.variations_enabled = creation.variations_enabled && !creation.aspects.is_empty();
+        }
         def.actor_data = category.native_kind == 2;
         // DynamicDoodadData (kind 21): its Disturbable / Breakable components.
         if category.native_kind == 21
             && let Ok(dd) = catalog.native_dynamic_doodad(id, PC)
         {
             def.doodad_components = dd.components.iter().filter(|c| c.is_some()).count() as u8;
+            let scalar = |c: &aa_rules::doodads::Component, name: &str| c.fields.get(name).and_then(|v| v.fixed_bits().ok()).map_or(0.0, f32::from_bits);
+            let boolean = |c: &aa_rules::doodads::Component, name: &str| c.fields.get(name).and_then(|v| v.boolean().ok()).unwrap_or(false);
+            def.doodad = Some(DoodadDef {
+                component_mask: dd.component_mask,
+                disturbable: dd.components[0].as_ref().map(|c| DisturbableDef {
+                    update_time: scalar(c, "update_time"),
+                    affect_radius: scalar(c, "affect_radius"),
+                    recharge_time_min: scalar(c, "recharge_time_min"),
+                    recharge_time_max: scalar(c, "recharge_time_max"),
+                    actions: c.action_sources.len() as u32,
+                }),
+                breakable: dd.components[1].as_ref().map(|c| BreakableDef {
+                    update_time: scalar(c, "update_time"),
+                    topple_duration: scalar(c, "topple_duration"),
+                    bounce_duration: scalar(c, "bounce_duration"),
+                    regrow: boolean(c, "regrow"),
+                    regrow_sink_duration: scalar(c, "regrow_sink_duration"),
+                    regrow_dead_duration: scalar(c, "regrow_dead_duration"),
+                    regrow_grow_duration: scalar(c, "regrow_grow_duration"),
+                }),
+            });
+        }
+        // The soft shape's radius (0x558280 reads it through Thing vf+0).
+        if matches!(category.native_kind, 1 | 2 | 20 | 21)
+            && let Ok(object) = catalog.native_object_definition(id, PC)
+        {
+            def.soft_radius = f32::from_bits(object.soft.words[1]);
+            def.soft_shape = object.soft.words;
+        }
+        // The shapes the tile lists and the collision queries read (0x5531F0).
+        if let Ok(object) = catalog.native_object_definition(id, PC) {
+            def.blocking_words = object.blocking.words;
+            def.soft_shape = object.soft.words;
         }
         let node = match catalog.resolved_actor(ThingRef::registered(id)) {
             Ok(n) => n,
@@ -1357,6 +1741,12 @@ pub(crate) mod loader {
             if node.child(name).ok().flatten().is_some() {
                 def.components |= 1 << bit;
             }
+        }
+        // ActorData 465055..465089: a Detection with neither range is dropped
+        // (minefields, beach mine poles); Defender +218 is still 0 here.
+        if def.components & (1 << 22) != 0 {
+            let remote = node.child("DetectionComponent").ok().flatten().and_then(|d| fx(&d, "remote_detection_range")).unwrap_or(0.0);
+            def.components = aa_rules::native::finalize_detection_component_mask(def.components, 0, remote.to_bits());
         }
         // View: model and icons.
         if let Ok(Some(view)) = node.child("View") {
@@ -1383,6 +1773,7 @@ pub(crate) mod loader {
             def.targetable = bl(&flags, "targetable").unwrap_or(false);
             def.flying = bl(&flags, "flying").unwrap_or(false);
             def.tile_locked = bl(&flags, "tile_locked").unwrap_or(false);
+            def.random_orientation = bl(&flags, "random_orientation").unwrap_or(false);
             def.water_based = bl(&flags, "water_based").unwrap_or(false);
             def.axis_locked = bl(&flags, "axis_locked").unwrap_or(false);
             def.conform_to_terrain = bl(&flags, "conform_to_terrain").unwrap_or(false);
@@ -1396,6 +1787,7 @@ pub(crate) mod loader {
                 states: st(&s, "actor_state")
                     .map(|v| v.split([',', ' ', '\t']).filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("null")).map(str::to_ascii_lowercase).collect())
                     .unwrap_or_default(),
+                aspect: st(&s, "aspect_ids").filter(|v| !null(v)).map(|v| v.to_ascii_lowercase()),
             });
         }
         def.fake_cv_value = -1.0;
@@ -1482,6 +1874,19 @@ pub(crate) mod loader {
                 def.death_clips.push(DeathClip { id: a.id.clone(), length: f(a.timing.length.0), weight: g("weight"), damage_filter: g("damage_filter"), damage_threshold: g("damage_threshold") });
             }
             def.death_time = def.death_clips.first().map(|c| c.length);
+            // ActorData +1BC with the merge 464BD0 / 463F10 has made, and View.
+            let set = |list: &[aa_animation::definitions::BoundAnimation]| -> AnimSet {
+                let fidgets: Vec<(f32, f32)> =
+                    list.iter().filter(|a| a.timing.kind == 1).map(|a| (f(a.timing.length.0), a.fields.get("weight").and_then(num).unwrap_or(0.0))).collect();
+                AnimSet { first_idle: list.iter().find(|a| a.timing.kind == 0).map_or(0.0, |a| f(a.timing.length.0)), fidget_weight: fidgets.iter().map(|x| x.1).sum(), fidgets }
+            };
+            let view = node.child("View").ok().flatten();
+            let loops = |k: &str| view.as_ref().and_then(|v| fx(v, k)).map(|v| v as i32);
+            def.character = Some(CharacterDef {
+                idle_loops: [loops("idle_loops_min").unwrap_or(0), loops("idle_loops_max").unwrap_or(0)],
+                base: set(c.for_aspect(None)),
+                aspects: c.aspects.iter().map(|(k, v)| (k.to_ascii_lowercase(), set(v))).collect(),
+            });
         }
         let resolver = character.as_ref().map(|c| c as &dyn AnimationResolver);
         match catalog.native_loaded_performer(id, PC, resolver) {
@@ -1493,6 +1898,14 @@ pub(crate) mod loader {
             Ok(Some(d)) => def.weapons.extend(d.abilities().iter().map(|a| weapon(a, true, damage_types))),
             Ok(None) => {}
             Err(e) => note("defender abilities", &e),
+        }
+        // Each ability's idle_animation, through the base set.
+        if let Some(c) = &character {
+            for w in def.weapons.iter_mut() {
+                if let Some(a) = w.idle_animation.as_deref().and_then(|name| c.find(None, name)) {
+                    w.idle_length = f(a.timing.length.0);
+                }
+            }
         }
         match catalog.native_turrets(id, PC) {
             Ok(list) => {
@@ -1668,6 +2081,11 @@ pub(crate) mod loader {
             }
             def.denizen = Some(dd);
         }
+        // (movement owner) ActorData +25C: 0x4D7450 keeps a track countdown (0x50AB10,
+        // one draw) when a TrackInfo is CONTINUOUS.
+        if let Ok(Some(mover)) = node.child("MoverComponent") {
+            def.continuous_tracks = mover.children("TrackInfo").unwrap_or_default().iter().any(|t| st(t, "track_type").is_some_and(|v| v.eq_ignore_ascii_case("CONTINUOUS")));
+        }
         if let Ok(Some(air)) = node.child("AircraftComponent") {
             def.aircraft = Some(AircraftDef {
                 taxi_scale: fx(&air, "taxi_scale").unwrap_or(0.0),
@@ -1681,7 +2099,9 @@ pub(crate) mod loader {
         if let Ok(Some(city)) = node.child("CityComponent") {
             def.city_zone_radius = fx(&city, "zone_radius").unwrap_or(0.0);
         }
-        def.city = node.child("CityComponent").ok().flatten().is_some();
+        // 0x45D6A0: a CityComponent only exists as a component with a zone radius;
+        // without one (a village's block) the actor just lays out (0x4CF32F on).
+        def.city = def.city_zone_radius > 0.0;
         // Recruit list (582C40 targets, authored order).
         match aa_rules::native::recruit_data::actor_recruit_targets(catalog, id) {
             Ok(t) => p.recruits = t.ids,
@@ -1698,6 +2118,15 @@ pub(crate) mod loader {
                     def.supply_used = o.supply_used;
                     def.shortfall_damage_rate = f(o.shortfall_damage_rate);
                     def.morale_breakpoint = f(o.morale_breakpoint);
+                    def.rampages = o.rampages;
+                    def.rampage = RampageDef {
+                        wait_chance_bits: o.rampage_wait_chance,
+                        points_to_try: o.rampage_points_to_try,
+                        direction_bits: o.rampage_direction,
+                        distance_bits: o.rampage_distance,
+                        max_detached_ratio_bits: o.rampage_max_detached_ratio,
+                        aggressive: o.rampage_aggressive,
+                    };
                     def.control_range = f(o.control_range);
                     def.operational_range = f(o.operational_range);
                     def.recruit_time = f(o.recruit_time);
@@ -1717,12 +2146,12 @@ pub(crate) mod loader {
                         def.leader_slot = (layout.primary_slot >= 0).then_some(layout.primary_slot as u16);
                         p.slots = layout.slot_groups.iter().map(|&e| parameters.get(e as usize).cloned().flatten()).collect();
                         def.slot_required = layout.slot_groups.iter().map(|&e| layout.entries.get(e as usize).is_some_and(|x| x.required)).collect();
+                        def.slot_locked = layout.slot_groups.iter().map(|&e| layout.entries.get(e as usize).is_some_and(|x| x.locked)).collect();
+                        def.slot_morale_line = layout.slot_groups.iter().map(|&e| layout.entries.get(e as usize).is_some_and(|x| x.morale_line)).collect();
                         for lf in &layout.formations {
-                            let fid = lf
-                                .formation
-                                .and_then(|i| layouts.formations.iter().find(|f| f.ordinal == i))
-                                .map(|f| f.ids.clone())
-                                .unwrap_or_default();
+                            let data = lf.formation.and_then(|i| layouts.formations.iter().find(|f| f.ordinal == i));
+                            let fid = data.map(|f| f.ids.clone()).unwrap_or_default();
+                            let aggressive = data.is_some_and(|f| f.aggressive);
                             let mut positions = Vec::with_capacity(layout.slot_groups.len());
                             for &entry in &layout.slot_groups {
                                 let property = layout.entries.get(entry as usize).and_then(|e| e.property);
@@ -1731,7 +2160,13 @@ pub(crate) mod loader {
                                 let pos = lf.positions.iter().filter(|p| p.property == property).nth(k).map(|p| [f(p.offset_bits[0]), f(p.offset_bits[1])]).unwrap_or([0.0, 0.0]);
                                 positions.push(pos);
                             }
-                            def.formations.push(Formation { id: fid, positions });
+                            let group_positions = data
+                                .and_then(|f| f.group_formation)
+                                .and_then(|g| layouts.group_formations.iter().find(|e| e.ordinal == g))
+                                .map_or(Vec::new(), |e| crate::formation::group_positions(&e.ids));
+                            let organized = data.is_none_or(|f| f.organized);
+                            let herding = data.is_some_and(|f| f.herding);
+                            def.formations.push(Formation { id: fid, positions, aggressive, group_positions, organized, herding });
                         }
                         let idx = |i: i32| (i >= 0 && (i as usize) < def.formations.len()).then_some(i as usize);
                         def.default_formation = idx(layout.default_formation).or(if def.formations.is_empty() { None } else { Some(0) });
@@ -1837,6 +2272,8 @@ pub(crate) mod loader {
             projectile_speed: 0.0,
             projectile_type: None,
             mana_cost: g(d, "mana_cost"),
+            idle_animation: s(af, "idle_animation"),
+            idle_length: 0.0,
         }
     }
 }

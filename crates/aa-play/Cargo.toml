@@ -9,6 +9,8 @@ description = "Playable Axis & Allies battle simulation that follows the origina
 
 [dependencies]
 aa-rules = { path = "../aa-rules" }
+# core owner: the quantized trigonometry of the rampage wander 0x525100
+aa-trig = { path = "../aa-trig" }
 aa-mapworld = { path = "../aa-mapworld" }
 aa-assets = { path = "../aa-assets" }
 aa-numeric = { path = "../aa-numeric" }
@@ -31,6 +33,8 @@ aa-body = { path = "../aa-body" }
 aa-production = { path = "../aa-production" }
 # movement owner: the native tile walk 0x4DD150 for the exact path solver
 aa-spatial = { path = "../aa-spatial" }
+# core owner: the map's height layers (GameMap::native_terrain)
+aa-heightfield = { path = "../aa-heightfield" }
 # core owner: the native world queues (0x50B330 / 0x50B020) for crate::scheduler
 aa-world = { path = "../aa-world" }
 # movement owner: the exact formation slot table (0x5797E0 / 0x57BEF0 / 0x57BA80)

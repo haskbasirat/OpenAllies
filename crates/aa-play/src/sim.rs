@@ -28,6 +28,9 @@ impl World {
     pub fn step(&mut self, commands: Vec<Command>) {
         self.events.clear();
         self.trace.tick = self.clock.tick.wrapping_add(1);
+        for command in std::mem::take(&mut self.sai_orders) {
+            self.apply(command);
+        }
         for command in commands {
             self.apply(command);
         }
@@ -40,6 +43,9 @@ impl World {
     pub fn step_decrees(&mut self, decrees: Vec<TracedDecree>) {
         self.events.clear();
         self.trace.tick = self.clock.tick.wrapping_add(1);
+        for command in std::mem::take(&mut self.sai_orders) {
+            self.apply(command);
+        }
         for decree in decrees {
             if let Some((id, name)) = &decree.sync {
                 self.trace.log_decree(*id, name);
@@ -58,10 +64,9 @@ impl World {
         self.tick = u64::from(self.clock.tick);
         self.time = f32::from_bits(self.clock.end.0);
         crate::scheduler::sync_clock(self);
+        // 0x7AF220 emits requests: the next admin tick runs them (`World::step`).
         let ai_commands = crate::ai::think(self);
-        for command in ai_commands {
-            self.apply(command);
-        }
+        self.sai_orders.extend(ai_commands);
         // (core) the periodic queues (GWorld+1AC/+1C0/+1D4, step 6 of
         // 0x4F9970): the production queues and the kingdom economy ticks
         // (victory inside) on queue 0, newest registration first
@@ -69,6 +74,8 @@ impl World {
         crate::scheduler::periodic(self);
         crate::scheduler::deferred(self);
         crate::deploy::tick(self);
+        // (orders) the Thinks of the guard and explore states
+        crate::orders::tick(self);
         crate::movement::tick(self);
         crate::combat::tick(self);
         crate::morale::tick(self);
@@ -90,6 +97,12 @@ impl World {
         // (core) step 8 of 0x4F9970: the deferred +208 (the minds' "schedule
         // in" re-thinks), after the passes that stand for phases 4 and 5.
         crate::scheduler::think(self);
+        // (supplyfog owner) what the queue-4 Minds created has its zones from its
+        // creation (0x4D7230), so the first Detection Tick finds them.
+        crate::fog::observe_now(self);
+        // (scenarios owner) what happened after the manager ran goes into its
+        // queue for the next update, as the native events do.
+        crate::triggers::late_events(self);
         // (core) ids of the things removed this tick go back.
         crate::ids::sweep(self);
         if self.trace.recording() {
@@ -100,9 +113,16 @@ impl World {
 
     /// Route a command to the system that owns it. Refusals become events.
     pub fn apply(&mut self, command: Command) {
+        // (orders) 0x4ED360: a command to a selection.
+        let Some(command) = crate::orders::group::selection(self, command) else {
+            self.orders.next_aux = None;
+            return;
+        };
+        let facing = matches!(command, Command::Order { order: crate::orders::ActorOrder::Facing { .. }, .. });
+        crate::orders::superseded(self, &command);
         let result = match &command {
             Command::Move { .. } | Command::Attack { .. } | Command::Stop { .. } => crate::movement::command(self, &command),
-            Command::Recruit { .. } | Command::CancelRecruit { .. } => crate::production::command(self, &command),
+            Command::Recruit { .. } | Command::RecruitWith { .. } | Command::CancelRecruit { .. } => crate::production::command(self, &command),
             Command::Deploy { .. } | Command::Pack { .. } => crate::deploy::command(self, &command),
             Command::Research { kingdom, building, property } => crate::production::research(self, *kingdom, *building, property),
             Command::Attach { kingdom, org, hq } => crate::production::attach(self, *kingdom, *org, *hq),
@@ -118,13 +138,19 @@ impl World {
             Command::Bombard { .. } | Command::Repair { .. } | Command::Construct { .. } | Command::AirAttack { .. } | Command::AirRecon { .. } => {
                 crate::combat::tasks::command(self, &command)
             }
+            // appended by the orders lane
+            Command::Order { .. } => crate::orders::command(self, &command),
         };
+        if !facing {
+            self.orders.next_aux = None;
+        }
         if let Err(reason) = result {
             let kingdom = match command {
                 Command::Move { kingdom, .. }
                 | Command::Attack { kingdom, .. }
                 | Command::Stop { kingdom, .. }
                 | Command::Recruit { kingdom, .. }
+                | Command::RecruitWith { kingdom, .. }
                 | Command::CancelRecruit { kingdom, .. }
                 | Command::Deploy { kingdom, .. }
                 | Command::Pack { kingdom, .. }
@@ -141,7 +167,8 @@ impl World {
                 | Command::Repair { kingdom, .. }
                 | Command::Construct { kingdom, .. }
                 | Command::AirAttack { kingdom, .. }
-                | Command::AirRecon { kingdom, .. } => kingdom,
+                | Command::AirRecon { kingdom, .. }
+                | Command::Order { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

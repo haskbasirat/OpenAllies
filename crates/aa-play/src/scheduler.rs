@@ -86,6 +86,11 @@ pub enum Owner {
     /// An organization's mind (the Regiment / Organization Mind, its
     /// Updatable +8 on the deferred +208).
     OrgMind(OrgId),
+    /// A DynamicDoodad component of `GameMap::placed[index]`: slot 0
+    /// Disturbable, slot 1 Breakable (`crate::doodad`).
+    Doodad(u32, u8),
+    /// A GGroup's Updatable +180, on the deferred +208 (`crate::orders::group`).
+    Group(u32),
 }
 
 impl Owner {
@@ -103,6 +108,8 @@ impl Owner {
             Owner::Placed(i, s) => (9, u64::from(s), i),
             Owner::Saved(id) => (10, 0, id),
             Owner::OrgMind(o) => (11, 0, o),
+            Owner::Doodad(i, s) => (12, u64::from(s), i),
+            Owner::Group(g) => (13, 0, g),
         };
         kind << 56 | slot << 48 | u64::from(id)
     }
@@ -121,6 +128,8 @@ impl Owner {
             9 => Owner::Placed(id, slot),
             10 => Owner::Saved(id),
             11 => Owner::OrgMind(id),
+            12 => Owner::Doodad(id, slot),
+            13 => Owner::Group(id),
             _ => return None,
         })
     }
@@ -171,9 +180,15 @@ impl Scheduler {
 
 impl World {
     /// 0x50AC00 (queue 0) / 0x50AC60 (queue 1) -> 0x50B2C0: the getter, one
-    /// world draw for the bucket, head insertion.
+    /// world draw for the bucket, head insertion. The getter's site is its
+    /// caller's source file; [`World::schedule_periodic_at`] names it.
+    #[track_caller]
     pub fn schedule_periodic(&mut self, queue: u8, owner: Owner, data: u32) {
-        self.trace.log(SKind::RngGetter, self.native_rng.state);
+        self.schedule_periodic_at(std::panic::Location::caller().file(), queue, owner, data);
+    }
+    /// [`World::schedule_periodic`] with the getter's site (`crate::trace::sites`).
+    pub fn schedule_periodic_at(&mut self, site: &'static str, queue: u8, owner: Owner, data: u32) {
+        self.trace.log(SKind::RngGetter(site), self.native_rng.state);
         if let Err(e) = self.sched.queues.add_periodic(queue, owner.key(), data, &mut self.native_rng) {
             self.sched.note("periodic registration", e);
         }
@@ -220,16 +235,80 @@ pub enum Kept {
 fn saved_owner(world: &World, owner: SavedOwner, r: &Restoring<'_>) -> Option<Owner> {
     match owner {
         SavedOwner::Placed { index, slot } => match r.things.get(&index) {
-            Some(Kept::Actor(a)) => Some(Owner::Component(*a, slot)),
-            Some(Kept::Org(o)) => Some(Owner::OrgComponent(*o, slot)),
+            Some(Kept::Actor(a)) => Some(match slot {
+                3 => Owner::Mover(*a),
+                4 => Owner::Mind(*a),
+                13 => Owner::Structure(*a),
+                _ => Owner::Component(*a, slot),
+            }),
+            Some(Kept::Org(o)) => Some(match slot {
+                4 => Owner::OrgMind(*o),
+                _ => Owner::OrgComponent(*o, slot),
+            }),
             // A thing aa-play keeps no actor for stays on the list; a
             // destroyed one (a kingdom left out of the battle) leaves it.
             None => world.ids.placed(index).is_some().then_some(Owner::Placed(index as u32, slot)),
         },
+        // A doodad of a destroyed kingdom leaves its entries as a placed thing does.
+        SavedOwner::Doodad { index, slot } => world.ids.placed(index).is_some().then_some(Owner::Doodad(index as u32, slot)),
         SavedOwner::Kingdom { slot } => r.slot_kingdom.get(slot).copied().flatten().map(Owner::Kingdom),
         SavedOwner::KingdomComponent { slot, component } => r.slot_kingdom.get(slot).copied().flatten().map(|k| Owner::KingdomComponent(k, component)),
         // 0x50B8B0 discards a null id.
         SavedOwner::Unknown(id) => u32::try_from(id).ok().map(Owner::Saved),
+    }
+}
+
+/// A generated world (`GameMap::generated`): its things were made by the
+/// generator on the world's stream. Each draw that left something on the queues
+/// runs again on the world's own queues from the state it had, so the buckets,
+/// delays and list orders are the ones it made; the stream then is where the
+/// generator left it.
+pub fn replay_generated(world: &mut World, generated: &crate::map::GeneratedWorld, r: &Restoring<'_>) {
+    use crate::map::GeneratedWhat;
+    let end = world.native_rng.state;
+    sync_clock(world);
+    if generated.events.iter().any(|e| matches!(e.what, GeneratedWhat::Defender { .. })) {
+        let mut st = std::mem::take(&mut world.combat);
+        st.prepare(world);
+        world.combat = st;
+    }
+    for e in &generated.events {
+        world.native_rng.state = e.state;
+        match e.what {
+            GeneratedWhat::Periodic { queue, owner } => {
+                let Some(owner) = saved_owner(world, owner, r) else { continue };
+                if let Owner::Kingdom(k) = owner {
+                    world.sched.kingdoms.insert(k);
+                }
+                world.schedule_periodic_at(crate::trace::sites::COMPONENT_INIT, queue, owner, 0);
+            }
+            GeneratedWhat::Doodad { index } => crate::creation::generated_doodad(world, index as u32),
+            GeneratedWhat::Defender { defender, intruder } => {
+                if let (Some(Kept::Actor(d)), Some(Kept::Actor(i))) = (r.things.get(&defender), r.things.get(&intruder)) {
+                    crate::combat::defender::entered(world, crate::zones::Key::Actor(*d), crate::zones::Key::Actor(*i));
+                }
+            }
+        }
+    }
+    world.native_rng.state = end;
+    // GThing +0x28 as it was made: the ground the thing went up on, not the ground
+    // the later things left.
+    for (&index, kept) in r.things {
+        if let (Kept::Actor(a), Some(p)) = (kept, world.map.placed.get(index)) {
+            let z = p.position[2];
+            world.actors[*a as usize].pos.z = z;
+        }
+    }
+    for &(city, block) in &generated.blocks {
+        if let (Some(Kept::Actor(c)), Some(Kept::Actor(b))) = (r.things.get(&city), r.things.get(&block)) {
+            world.books.actor_mut(*c).city_blocks.insert(0, *b);
+            world.books.actor_mut(*b).block_of = Some(*c);
+        }
+    }
+    for &(truck, trailer) in &generated.trailers {
+        if let Some(Kept::Actor(a)) = r.things.get(&truck) {
+            world.ids.placed_trailer(*a, trailer);
+        }
     }
 }
 
@@ -248,6 +327,83 @@ pub fn restore_saved(world: &mut World, saved: &[SavedPeriodic], r: &Restoring<'
             continue;
         }
         world.sched.kingdoms.extend(kingdoms);
+    }
+}
+
+/// One list of a saved game's queues as it was saved (`crate::saved_world`), and
+/// the kingdoms it holds.
+pub(crate) fn restore_saved_list(world: &mut World, queue: aa_world::queues::restoration::SavedQueue, kingdoms: Vec<KingdomId>) {
+    if let Err(e) = world.sched.queues.restore_saved(queue) {
+        world.sched.note("saved queue restore", e);
+        return;
+    }
+    world.sched.kingdoms.extend(kingdoms);
+}
+
+/// The queue Load 0x50BFF0 of the map's saved deferred queues 3 and 4 (GWorld
+/// +1E8 / +208, the file's order): each ring is replaced by its saved lists,
+/// its saved length and cursor, its last-end time zeroed, no draws. What
+/// InitExisting registered before (5904A0 / 58F960, the 0x50ACC0 of every
+/// doodad) is cancelled with the old ring: only the saved events survive.
+pub fn restore_deferred(world: &mut World, saved: &[SavedPeriodic], r: &Restoring<'_>) {
+    for (q, id) in saved.iter().zip([DEFERRED, THINK]) {
+        let buckets: Vec<Vec<(u64, u32)>> =
+            q.buckets.iter().map(|b| b.iter().filter_map(|&(o, data)| saved_owner(world, o, r).map(|o| (o.key(), data))).collect()).collect();
+        let queue = aa_world::queues::restoration::SavedQueue { id, kind: aa_world::queues::Kind::Deferred, current: q.current, buckets };
+        if let Err(e) = world.sched.queues.restore_saved(queue) {
+            world.sched.note("saved deferred queue restore", e);
+        }
+    }
+}
+
+/// What the PostLoad pass 0x4FD3B3 of the map load registers (`aa_actors::post_load`,
+/// ascending GTID slot through the iterator 0x4EFBE0): GActor 0x4D3560 runs each
+/// component's +30 in slot order, and 0x581260, the +30 of Properties and Supply, adds
+/// the component to queue 1 when no queue holds it (0x50AC60, one draw). A map saves
+/// most of these on queue 1; the developer maps do not: four on (2v2)Comrades, sixteen
+/// on (4FFA)Farmhouses (film traces, chain 4D3586 -> 50AC60). The pass runs before the
+/// kingdoms the battle leaves out are gone, so `order` holds all the restored things.
+/// The other +30 leaves draw nothing on a shipped map: Wall 58CB40 re-registers only
+/// below map version 26, and a Body's 561DF0 only removes.
+pub fn post_load_registrations(map: &crate::map::GameMap, data: &crate::data::GameData, order: &[usize]) -> Vec<(usize, u8)> {
+    const PROPERTIES: u8 = 6;
+    const SUPPLY: u8 = 11;
+    let queued: std::collections::BTreeSet<(usize, u8)> = map
+        .saved_queues
+        .iter()
+        .chain(map.saved_deferred.iter())
+        .flatten()
+        .flat_map(|q| q.buckets.iter().flatten())
+        .filter_map(|&(o, _)| if let SavedOwner::Placed { index, slot } = o { Some((index, slot)) } else { None })
+        .collect();
+    let mut out = Vec::new();
+    for &index in order {
+        let p = &map.placed[index];
+        let Some(def) = data.find(&p.thing_id) else { continue };
+        let d = data.def(def);
+        if crate::creation::is_converted(p, d) {
+            continue;
+        }
+        for slot in [PROPERTIES, SUPPLY] {
+            if d.components & (1 << slot) != 0 && !queued.contains(&(index, slot)) {
+                out.push((index, slot));
+            }
+        }
+    }
+    out
+}
+
+/// [`post_load_registrations`] run: one draw each, the entry only for a thing that
+/// stays in the battle.
+pub fn post_load(world: &mut World, map: &crate::map::GameMap, order: &[usize], r: &Restoring<'_>) {
+    let data = world.data.clone();
+    for (index, slot) in post_load_registrations(map, &data, order) {
+        match saved_owner(world, SavedOwner::Placed { index, slot }, r) {
+            Some(owner) => world.schedule_periodic_at(crate::trace::sites::POST_LOAD, EVERY_SECOND, owner, 0),
+            None => {
+                world.random_u32_at(crate::trace::sites::POST_LOAD);
+            }
+        }
     }
 }
 
@@ -376,12 +532,30 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::OrgComponent(o, crate::supply::ECONOMY_SLOT)) => crate::supply::economy_tick(world, crate::zones::Key::Org(o)),
         Some(Owner::Component(a, crate::zones::DETECTION_SLOT)) => crate::fog::detection_delivery(world, crate::zones::Key::Actor(a)),
         Some(Owner::OrgComponent(o, crate::zones::DETECTION_SLOT)) => crate::fog::detection_delivery(world, crate::zones::Key::Org(o)),
+        // (supplyfog owner) the Element's queue-1 Tick 0x570B90 (component slot 8).
+        Some(Owner::Component(a, 8)) => crate::fog::element_delivery(world, a),
+        // (combat owner) the Defender's deferred 0x567BF0 and its Tick 0x567960.
+        Some(Owner::Component(a, crate::combat::defender::SLOT)) if event.queue == DEFERRED => crate::combat::defender::deferred(world, a),
+        Some(Owner::Component(a, crate::combat::defender::SLOT)) => crate::combat::defender::tick(world, a),
+        // (core) the Body's queue-1 tick 0x562E10: the supply state, then the
+        // shortfall damage 0x562D10.
+        Some(Owner::Component(a, 0)) => crate::economy::body_tick(world, a, f32::from_bits(elapsed)),
+        // (core) the Character's deferred +18 0x563E10.
+        Some(Owner::Component(a, crate::character::SLOT)) => crate::character::deliver(world, a, event.data),
+        // (core) a DynamicDoodad's deferred +18: 0x5902C0 Disturbable,
+        // 0x58FA30 Breakable.
+        Some(Owner::Doodad(index, 0)) => crate::doodad::disturbable(world, index),
+        Some(Owner::Doodad(index, _)) => crate::doodad::breakable(world, index),
         // (movement owner) Mover Tick 0x577E50.
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
         // (core) the aircraft Mind's queue-4 update 0x51A1A0.
         Some(Owner::Mind(a)) if crate::combat::air::is_aircraft(world, a) => crate::combat::air::think(world, a),
         // (movement owner) the element Mind's queue-4 Update 0x531D30.
         Some(Owner::Mind(a)) => crate::movement::mind_tick(world, a),
+        // (movement owner) the regiment Mind's queue-4 Update 0x524910.
+        Some(Owner::OrgMind(o)) => crate::movement::org_mind_tick(world, o),
+        // (orders) the group's 0x4E0880.
+        Some(Owner::Group(g)) => crate::orders::group::update(world, g),
         // Not yet leaves: their systems still run as passes.
         _ => {}
     }
@@ -431,6 +605,7 @@ mod tests {
             Owner::Placed(6000, 22),
             Owner::Saved(523),
             Owner::OrgMind(9),
+            Owner::Doodad(5000, 1),
         ];
         let keys: Vec<u64> = owners.iter().map(|o| o.key()).collect();
         for (o, k) in owners.iter().zip(&keys) {

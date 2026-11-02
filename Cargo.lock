@@ -245,6 +245,7 @@ name = "aa-parity"
 version = "0.1.0"
 dependencies = [
  "aa-mapworld",
+ "aa-metagame",
  "aa-numeric",
  "aa-orders",
  "aa-play",
@@ -267,6 +268,7 @@ dependencies = [
  "aa-assets",
  "aa-body",
  "aa-economy",
+ "aa-heightfield",
  "aa-mapworld",
  "aa-mind",
  "aa-movement",
@@ -277,6 +279,7 @@ dependencies = [
  "aa-rules",
  "aa-simulation",
  "aa-spatial",
+ "aa-trig",
  "aa-triggers",
  "aa-world",
  "aa-zones",

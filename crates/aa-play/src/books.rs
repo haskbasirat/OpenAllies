@@ -43,6 +43,13 @@ pub struct Books {
     /// The hosted native Minds (`crate::minds`).
     #[serde(default)]
     pub minds: crate::minds::Minds,
+    /// A Disturbable's component +0x18, its next action time, by placed index
+    /// (not in the saved Load: it starts at 0).
+    #[serde(default)]
+    pub doodad_next: std::collections::BTreeMap<u32, f32>,
+    /// A Breakable's words once it has been delivered, by placed index.
+    #[serde(skip)]
+    pub doodad_breakable: std::collections::BTreeMap<u32, crate::doodad::BreakableWords>,
 }
 
 /// Native relation values (4E52D0).
@@ -79,6 +86,9 @@ pub struct KingdomBooks {
     /// Kingdom +0x324: kingdom-level research in progress (0x4E2310).
     #[serde(default)]
     pub research: aa_production::research::KingdomResearch,
+    /// GKingdom +0x32C, +0x340 and the +0x338 snapshots (`crate::statistics`).
+    #[serde(default)]
+    pub statistics: crate::statistics::KingdomStats,
     /// The general WorldParameters 0x50E8B0 picked at random for this kingdom
     /// (Faction IDS), used by `special_ops::set_general(.., None)`.
     #[serde(default)]
@@ -110,14 +120,31 @@ pub struct ActorBooks {
     /// the city zone (head first), pruned by the City Tick 0x564C10.
     #[serde(default)]
     pub city_candidates: Vec<CityCandidateRef>,
+    /// (combat) The element Mind's +0x1B8 and every Performer ability's +0x1C: the
+    /// creation draw of 0x530E50 as `u * 2 - 1`.
+    #[serde(default)]
+    pub ability_jitter: f32,
+    /// (supplyfog) CityComponent +0x10: the blocks that go with this city, head
+    /// first (0x5642A0, the world start 0x4F6980).
+    #[serde(default)]
+    pub city_blocks: Vec<ActorId>,
+    /// (supplyfog) StructureComponent +0x34: the city this block goes with (0x588AB0).
+    #[serde(default)]
+    pub block_of: Option<ActorId>,
     /// (supplyfog) CityComponent +0x20: under siege, set by the City Tick
     /// 0x5647A0 (an attack that neither takes the city nor falls below the
     /// last allied candidate's value), cleared at each tick and when the
     /// zone empties (0x564C10); such a city provides no supply (0x58ACE0).
     #[serde(default)]
     pub city_siege: bool,
+    /// The Character component's state (`crate::character`).
+    #[serde(default)]
+    pub character: crate::character::CharacterState,
     pub queue: Queue,
     pub deploy: Option<Deployment>,
+    /// (orders) Actor +100 bit 30, structure_razing (0x564DC0, 0x565400).
+    #[serde(default)]
+    pub razed: bool,
     /// Battle time this actor was created (construction/unpack start).
     pub created_at: f32,
     /// Properties added to this actor beyond its definition's (from the map:
@@ -307,6 +334,13 @@ pub struct QueueItem {
     /// Item +0x4C: the HQ attachment slot released at removal.
     #[serde(default)]
     pub organization_slot: u32,
+    /// Item +0xC: the order's ParameterSet, as the element of each expanded
+    /// slot (`None`: the definition's own).
+    #[serde(default)]
+    pub elements: Option<Vec<DefId>>,
+    /// (orders) Item +0x10 / +0x14: recruit_location's point (native kind 2).
+    #[serde(default)]
+    pub location: Option<[f32; 2]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,6 +371,10 @@ pub struct OrgBooks {
     /// The organization actor's Economy component (570020).
     #[serde(default)]
     pub economy: EconomyCache,
+    /// The element of each slot its ParameterSet chose (`None`: the
+    /// definition's own; `production::slot_element`).
+    #[serde(default)]
+    pub elements: Option<Vec<DefId>>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -401,6 +439,9 @@ pub enum Notice {
     /// attack or air recon of `building` could not be afforded. `what` is
     /// the subject string id (denizen_air_attack / denizen_air_recon).
     DenizenUnaffordable { kingdom: KingdomId, building: ActorId, what: String, cost: Vec<f32> },
+    /// A Disturbable's action list runs (vf+0xC 0x590380 -> 0x42A590 at the
+    /// doodad): presentation, for the view.
+    DoodadDisturbed { placed: usize },
 }
 
 impl Books {

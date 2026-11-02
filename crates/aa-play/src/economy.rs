@@ -356,7 +356,7 @@ impl values::World for Values<'_> {
     }
     fn layout_slot_definition(&self, organization: u32, index: usize) -> Result<Option<DefId>, values::Error> {
         let o = self.org_of(organization)?;
-        Ok(self.world.data.def(self.world.orgs[o as usize].def).slots.get(index).map(|s| s.0).filter(|&d| d != crate::data::NO_DEF))
+        Ok(crate::production::slot_element(self.world, o, index).filter(|&d| d != crate::data::NO_DEF))
     }
     /// Organization +28: one member pointer per layout slot (null holes).
     fn member_count(&self, organization: u32) -> Result<usize, values::Error> {
@@ -622,7 +622,13 @@ impl aa_economy::tick::TickWorld for Leaves<'_> {
         Ok(())
     }
     fn statistics_snapshot(&mut self) -> Result<(), aa_economy::EconomyError> {
-        // No statistics object is kept (TickParts::statistics is None).
+        // Reached without the statistics object only: the tick takes the
+        // `statistics_snapshot_of` path while it holds it.
+        Ok(())
+    }
+    /// 0x58F530 + 0x45F240 on GKingdom +0x338.
+    fn statistics_snapshot_of(&mut self, statistics: &aa_economy::statistics::Statistics) -> Result<(), aa_economy::EconomyError> {
+        crate::statistics::take_snapshot(self.world, self.kingdom, statistics);
         Ok(())
     }
 }
@@ -654,8 +660,11 @@ pub fn kingdom_tick(world: &mut World, k: KingdomId, elapsed_bits: u32) {
             suppress_overdrawn: world.kingdoms[k as usize].independent,
             shortage_ratio: F32Bits(kb.shortage_ratio.to_bits()),
             announced_ratio: F32Bits(kb.announced_ratio.to_bits()),
-            snapshot_timer: F32Bits::ZERO,
+            snapshot_timer: F32Bits(kb.statistics.timer),
         };
+        // GKingdom +0x32C leaves the books for the tick: the leaves read the
+        // books, and a snapshot is handed the object.
+        let mut statistics = world.books.kingdom_mut(k, n).statistics.objects.active.take();
         let mut singles = aa_economy::tick::RecruitSingles { charging: -1, items: Vec::new() };
         // Kingdom +0x230: the Commander of a kingdom with a general.
         let mut commander = world
@@ -667,14 +676,19 @@ pub fn kingdom_tick(world: &mut World, k: KingdomId, elapsed_bits: u32) {
         let parts = aa_economy::tick::TickParts {
             state: &mut tick_state,
             singles: &mut singles,
-            commander: commander.as_mut().map(|experience| aa_economy::tick::CommanderParts { experience, owner_statistics: aa_economy::tick::OwnerStatistics::Absent }),
-            statistics: None,
+            commander: commander.as_mut().map(|experience| aa_economy::tick::CommanderParts {
+                experience,
+                owner_statistics: if statistics.is_some() { aa_economy::tick::OwnerStatistics::Kingdom } else { aa_economy::tick::OwnerStatistics::Absent },
+            }),
+            statistics: statistics.as_mut(),
         };
         let input = aa_economy::tick::TickInput { seconds, world_time, commander_experience_rate: rate };
         let mut leaves = Leaves { world, kingdom: k };
         let _ = economy.tick(input, parts, &mut leaves);
         let s = economy.state();
         let kb = world.books.kingdom_mut(k, n);
+        kb.statistics.objects.active = statistics;
+        kb.statistics.timer = tick_state.snapshot_timer.0;
         for (dst, src) in [
             (&mut kb.raw_provided, &s.raw_provided),
             (&mut kb.provided, &s.effective_provided),
@@ -691,6 +705,39 @@ pub fn kingdom_tick(world: &mut World, k: KingdomId, elapsed_bits: u32) {
             c.experience = f32::from_bits(e.balance.0);
         }
     }
+}
+
+/// Body Updatable 0x562E10 on queue 1: the gate 0x561C60 and supply state 0x4D7CE0,
+/// then, out of supply (state 19) while the kingdom's shortage ratio (+0x1F0) is
+/// above 0, the shortfall damage 0x562D10 at unit_shortfall_damage_rate (+0x2A8).
+pub fn body_tick(world: &mut World, a: ActorId, seconds: f32) {
+    if !crate::supply::body_supplies(world, a) {
+        return;
+    }
+    crate::supply::body_supply_tick(world, a);
+    if !world.books.out_of_supply(a) {
+        return;
+    }
+    let actor = &world.actors[a as usize];
+    let (def, kingdom) = (actor.def, actor.kingdom);
+    let ratio = kingdom.and_then(|k| world.books.kingdom(k)).map_or(0.0, |k| k.shortage_ratio);
+    if ratio <= 0.0 {
+        return;
+    }
+    let rate = world.data.def(def).unit_shortfall_damage_rate;
+    body_shortfall(world, a, rate, seconds);
+}
+
+/// 0x562D10(rate, seconds): `base = rate * maximum health * seconds`, one draw, the
+/// damage `(u - 0.25) * base + base`, through 0x5625C0.
+fn body_shortfall(world: &mut World, a: ActorId, rate: f32, seconds: f32) {
+    let max = crate::production::max_health(world, world.actors[a as usize].kingdom, world.actors[a as usize].def);
+    let base = rate * max * seconds;
+    let u = world.random_at(crate::trace::sites::BODY_SHORTFALL);
+    let amount = (u - 0.25) * base + base;
+    let x = &mut world.actors[a as usize];
+    x.health = (x.health - amount).max(0.0);
+    world.events.push(Event::Hit { target: a, damage: amount });
 }
 
 /// 578660 shortfall attrition of organization `o` in its maintenance tick
@@ -719,7 +766,7 @@ pub fn shortfall(world: &mut World, o: OrgId, seconds: f32) {
         }
         let max = world.data.def(a.def).health;
         let base = seconds * max * rate;
-        let u = world.random();
+        let u = world.random_at(crate::trace::sites::ORG_SHORTFALL);
         let amount = (u - 0.25) * base + base;
         let a = &mut world.actors[m as usize];
         a.health = (a.health - amount).max(0.0);

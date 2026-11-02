@@ -183,6 +183,29 @@ pub enum Command {
     /// of an airfield or carrier, paid with its AirAttackCost / AirReconCost.
     AirAttack { kingdom: KingdomId, building: ActorId, target: AbilityTarget },
     AirRecon { kingdom: KingdomId, building: ActorId, target: AbilityTarget },
+    // ---- appended by the orders lane ----
+    /// An ActorCommand or team command with no battle command of its own
+    /// (`crate::orders`).
+    Order { kingdom: KingdomId, units: Vec<Unit>, order: crate::orders::ActorOrder },
+    // ---- appended by the core owner ----
+    /// A recruit order that carries its ParameterSet; `Recruit` is 0x582AE0's
+    /// "Using default layout" with the definition's own elements.
+    RecruitWith { kingdom: KingdomId, building: ActorId, def: DefId, parameters: RecruitParameters },
+}
+
+/// The ParameterSet of a recruit order (0x61EBA0 flag 5, command +0x34; 0x583A70
+/// -> 0x5836E0 -> 0x589E00 keeps it on the queue item, 0x582E80 / 0x4FBF40 spawn
+/// by it). The film orders all name the definition's own layout and elements,
+/// but it is the order's that counts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RecruitParameters {
+    /// OrganizationLayout IDS (`[0xB3AB00]`); `None` when the caller does not
+    /// know the layout table. The definition's own layout is what `Def`
+    /// expands: another one is refused (not ported).
+    pub layout: Option<String>,
+    /// ParameterSet +0xC: the element of each layout entry (`NO_DEF` for a
+    /// null one). An expanded slot reads its entry through `Def::slot_entries`.
+    pub elements: Vec<DefId>,
 }
 
 /// Where a faction ability is aimed: a map point, or a clicked actor.
@@ -291,6 +314,16 @@ pub struct World {
     // ---- appended by the scenarios owner ----
     /// The World+0x13C trigger manager of the map (`crate::triggers`).
     pub triggers: crate::triggers::TriggerState,
+    // ---- appended by the orders lane ----
+    /// The Mind states of the orders in `crate::orders` (guard, retreat, explore).
+    pub orders: crate::orders::OrderState,
+    // ---- appended by the film recording owner ----
+    /// What the computer players requested in the last update, in order
+    /// (KKC_SAICommandData::Send 0x7AF220 emits a request; the next admin tick
+    /// 0x752E60 runs it as a decree, so a film holds it). `World::step` applies
+    /// them before its own commands; `aa_parity::recording` takes them first
+    /// and writes them down.
+    pub sai_orders: Vec<Command>,
 }
 
 impl World {
@@ -319,6 +352,8 @@ impl World {
             ids,
             sched: crate::scheduler::Scheduler::new(),
             triggers: Default::default(),
+            orders: Default::default(),
+            sai_orders: Vec::new(),
         };
         world.create_rng(seed as u32);
         world
@@ -330,7 +365,7 @@ impl World {
     /// by 0x4FC600), getter entries included, which replaces this.
     pub fn create_rng(&mut self, seed: u32) {
         self.native_rng = aa_simulation::NativeRng::default();
-        self.trace.log(crate::trace::SKind::RngGetter, self.native_rng.state);
+        self.trace.log(crate::trace::SKind::RngGetter(crate::trace::sites::CREATE_GWORLD), self.native_rng.state);
         self.native_rng = aa_simulation::NativeRng::from_native_seed(seed);
         for _ in 0..crate::trace::GWORLD_INIT_DRAWS {
             self.random_u32();
@@ -338,17 +373,24 @@ impl World {
         if let Some(state) = self.map.rng_state {
             self.trace = crate::trace::Trace::default();
             for &s in &self.map.rng_log {
-                self.trace.log(crate::trace::SKind::RngGetter, s);
+                self.trace.log(crate::trace::SKind::RngGetter(crate::trace::sites::MAP_CREATION), s);
             }
             self.native_rng = aa_simulation::NativeRng { state };
         }
     }
-    /// GetRNG 0x4F02B0 then one 0x85D840 draw: the raw u32.
+    /// GetRNG 0x4F02B0 then one 0x85D840 draw: the raw u32. The getter's site
+    /// is its caller's source file; [`World::random_u32_at`] names it.
+    #[track_caller]
     pub fn random_u32(&mut self) -> u32 {
-        self.trace.log(crate::trace::SKind::RngGetter, self.native_rng.state);
+        self.random_u32_at(std::panic::Location::caller().file())
+    }
+    /// [`World::random_u32`] with the getter's site (`crate::trace::sites`).
+    pub fn random_u32_at(&mut self, site: &'static str) -> u32 {
+        self.trace.log(crate::trace::SKind::RngGetter(site), self.native_rng.state);
         self.native_rng.next_u32()
     }
     /// 0x40C8A0 after the getter: one draw `% n`, no rejection (0 for n = 0).
+    #[track_caller]
     pub fn random_below(&mut self, n: u32) -> u32 {
         let v = self.random_u32();
         if n == 0 { 0 } else { v % n }
@@ -399,15 +441,20 @@ impl World {
     }
     /// GetRNG 0x4F02B0 then the unit float 0x45D400 of one 0x85D840 draw
     /// (PC53 product, stored binary32; can equal 1.0).
+    #[track_caller]
     pub fn random(&mut self) -> f32 {
         crate::trace::native_unit(self.random_u32())
+    }
+    /// [`World::random`] with the getter's site (`crate::trace::sites`).
+    pub fn random_at(&mut self, site: &'static str) -> f32 {
+        crate::trace::native_unit(self.random_u32_at(site))
     }
     /// The battle starts after the world is built: the world sync dump
     /// 0x4F8AE0 -> 0x4F6280 uses one world-RNG draw, then session launch
     /// 0x775D3F resets S (0x77D900 index 0, hash 0), wiping what world
     /// creation logged. The next S entry is tick 1's clock with index 1.
     pub fn begin_battle(&mut self) {
-        self.random_u32();
+        self.random_u32_at(crate::trace::sites::SYNC_DUMP);
         self.trace.reset(0, 0);
     }
     pub fn ground(&self, p: Vec2) -> Vec3 {
