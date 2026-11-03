@@ -16,7 +16,7 @@
 The goal is a game so close to the original that a player can barely tell the difference. Every system follows the original game's own code (`AA.exe`) and every number comes from the original rules data. Menus, HUD, maps, models, animations and texts are read from the **original game files on your own installed copy**. No art, sound, video, maps or game data from the original are included in this repository.
 
 > [!IMPORTANT]
-> OpenAllies is a **work in progress**. You can play custom battles against the computer, try the campaign missions and the World War II strategic game, watch films recorded by the original game, and record your own. Multiplayer, the editor and saved battles are still missing, and most recorded games do not yet replay exactly as they happened. See [Project status](#project-status) and [Matching the original](#matching-the-original).
+> OpenAllies is a **work in progress**. You can play custom battles against the computer, try the campaign missions and the World War II strategic game, watch films recorded by the original game, and record your own. LAN multiplayer works between copies of OpenAllies. The editor and saved battles are still missing, and most recorded games do not yet replay exactly as they happened. See [Project status](#project-status) and [Matching the original](#matching-the-original).
 
 ## Screenshots
 
@@ -51,7 +51,7 @@ The goal is a game so close to the original that a player can barely tell the di
 | **Faithful** | The same rules, numbers and behaviour as the original: combat, movement, AI, economy, maps and the interface work as `AA.exe` does. |
 | **Original assets** | Art, audio, video, maps and rules data are read from your installed game. |
 | **Every platform** | The finished game is planned for **Windows (x64 and ARM64), macOS (Apple Silicon and Intel) and Linux**. Bevy and the rest of the code are cross-platform; today's test builds are Windows x64 only. |
-| **64-bit and fast** | No 32-bit address-space ceiling; a full battle simulation tick costs well under a millisecond. |
+| **64-bit and fast** | No 32-bit address-space ceiling. The exact ports cost more than the earlier approximations: 150 real regiments take about 5 ms a tick and 2,000 moving men 23 to 45 ms, against the game's 62.5 ms tick. |
 | **No engine limits** | Fixed-size engine arrays, pools and caps become growable. Gameplay rules, like configured unit caps, keep their original defaults. |
 | **Byte for byte** | The target is a game that matches the original exactly. Systems move onto exact ports of the original code one by one, staying playable throughout, and recorded games of the original prove how far each has come. |
 
@@ -75,23 +75,23 @@ Legend: ✅ working, 🚧 in progress, ⏳ not started.
 | Original menus, setup screen, loading screen | ✅ | Main menu with the original video, Single Player, the Custom staging screen, Random Map and scenario dialogs |
 | Random map generator | ✅ | Exact on the standard data: all 12 maps compared equal the original's world. Mods with their own random map folder are not exact yet |
 | Original maps | ✅ | All 80 original maps load |
-| In-game HUD | ✅ | Economy bar, unit panel, action buttons, minimap, message log, game menu, tooltips. Selecting several units shows only the first in the unit panel |
-| Camera, selection, orders | ✅ | The original camera; click, box and double-click selection; right-click move and attack; guard, retreat, explore and group orders. Right-drag to set a move's facing is not built |
+| In-game HUD | ✅ | Economy bar, unit panel, action buttons, minimap, message log, game menu, tooltips, the panel for a group of units |
+| Camera, selection, orders | ✅ | The original camera; click, box and double-click selection; right-click move and attack; guard, retreat, explore and group orders; right-drag to set a move's facing |
 | Economy, recruiting, research, supply | ✅ | Income and upkeep, recruit queues, truck deployment, supply zones, city capture |
 | Fog of war | ✅ | The original's zones on every building, regiment and city, on the map and the minimap |
-| Movement and pathfinding | 🚧 | Units and regiments run on exact ports: the ground step, the unit and regiment Minds, the original route solver. Collisions and some regiment orders are still being matched |
-| Combat and morale | 🚧 | The original damage rules, projectiles, zones of control, morale, routing, entrenchment and experience. Results are close to the original's, not yet the same |
-| Computer opponent | 🚧 | The original AI generals, goal engine and recruit planner. It does not yet give every order the original's AI gives, and its early army is a little smaller |
+| Movement and pathfinding | 🚧 | Units and regiments run on exact ports: the ground step and the unit and regiment Minds, with regiments on the original route solver. Lone units still use a simpler route, and collisions are still being matched |
+| Combat and morale | 🚧 | Fights run on the unit and regiment Minds and the exact Performer: damage rules, zones of control, morale, routing, entrenchment and experience. Results are close to the original's, not yet the same |
+| Computer opponent | 🚧 | The original AI generals, goal engine and recruit planner, giving the original's kinds of orders. Its decisions are not yet the original's, and its early army is a little smaller |
 | Unit banners and selection marks | ✅ | The original banner model and decals, health bars |
-| Rendering | ✅ | Bevy: original models, animations, terrain transitions, the original's lighting and shadows. The ground's detail textures are still missing |
+| Rendering | ✅ | Bevy: original models, animations, terrain transitions, the original's lighting and shadows, the ground's detail textures, and buildings flattening the ground under them |
 | Effects | 🚧 | Building ground patches, waving flags and many weapon effects |
-| Sound and music | 🚧 | Sounds in battle; menus are still silent |
+| Sound and music | 🚧 | Sounds in battle, menu music and button sounds. Not all building sounds yet |
 | Films: watching | 🚧 | The full film screens: list, viewing any side, speed, end of film, scoring and replay. Most films drift from what really happened partway through: see [Matching the original](#matching-the-original) |
 | Films: recording | ✅ | Battles record films in the original's format, and the original game can open them |
-| Campaign missions | 🚧 | Mission list, saved progress, scripts, scripted cameras, movies, debriefing. Not all missions have been played through |
-| World War II | 🚧 | The strategic map, buying armies, fighting battles and returning to the map, saves. Some displays and tooltips are not built |
-| Multiplayer | 🚧 | The LAN session layer exists and has been tested only against itself; it cannot be reached from the game yet |
-| Saved games | 🚧 | Saved worlds load well enough to start films of saved games, partly. Saving and loading a battle is not built |
+| Campaign missions | 🚧 | Mission list, saved progress, scripts, scripted cameras, movies, debriefing. Tutorial 1 runs through its first fight. Not all missions have been played through |
+| World War II | 🚧 | The strategic map, buying armies, fighting battles and returning to the map, saves, politics. Some tooltips are not built |
+| Multiplayer | 🚧 | LAN from the game's menus, tested between two copies of OpenAllies on one PC, in sync for a short battle. The original can join our host's staging screen but cannot launch with us yet |
+| Saved games | 🚧 | Saved worlds load well enough to start films of saved games, partly. Saving and loading a battle is not built, and those buttons are grey |
 | Editor | ⏳ | |
 | Windows ARM64, macOS, Linux | ⏳ | Planned for the finished game; today Windows x64 only |
 
@@ -105,13 +105,14 @@ Where this stands on 2 November 2026 (Development 22):
 
 | Test | Result |
 |---|---|
-| A 2-against-2 Berlin film, matching checkpoints in order | **93 of 266**, about a third of the film, up from 32 at the start of November. This film has almost no fighting |
+| A 2-against-2 Berlin film, matching checkpoints in order | **103 of 266**, about 39% of the film, up from 32 at the start of November. This film has almost no fighting |
 | Real recorded films that open | **52 of 62**. The other 10 refuse with the original's own messages (9 made by another version of the game, 1 never finished) |
-| Real films with no mismatch | **5**, all random-map films, most of them short: 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data. Other short random-map films still drift early |
+| Real films with no mismatch | **At least 6**: a short Market Garden game played by a person, and 5 random-map films, 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data. Other short random-map films still drift early |
+| A longer Berlin game played by a person | **94 of 271**, exact for its first 3,380 ticks, about 3.5 minutes |
 | Films recorded by OpenAllies, replayed in OpenAllies | **Every checkpoint**: 204 of 204 and 240 of 240 in the runs checked, with real fighting |
 | Random map generator | **12 of 12** maps compared equal the original's world: every object, both height layers, tiles and the final random state |
-| Films we record, opened in the original | The original opens them and stays in sync for 28 checkpoints on Berlin and 24 on a random map, until the computer's orders differ |
-| Fighting, 4 films with real battles: units reaching zero health, ours against the original | 23 / 27, 126 / 107, 86 / 119, 116 / 133. Close in size, not yet the same battles, because the games have already drifted apart before the fighting starts |
+| Films we record, opened in the original | The original opens them. A Berlin game between computers stays in sync for 77 of its 88 checkpoints |
+| Fighting, 4 films with real battles: units reaching zero health, ours against the original | 8 / 27, 82 / 107, 94 / 119, 129 / 133. These numbers move a lot with small fixes, because the games have already drifted apart before the fighting starts. The first film is far off |
 
 Next: the remaining movement differences, which decide most of the Berlin film, then the computer's orders and exact fights. Details and the ordered list of causes are in [`research/byte-exact/PARITY-CENSUS.md`](research/byte-exact/PARITY-CENSUS.md) and [`research/byte-exact/FILM-PLAYBACK.md`](research/byte-exact/FILM-PLAYBACK.md).
 
