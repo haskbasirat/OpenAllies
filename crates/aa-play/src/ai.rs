@@ -270,14 +270,19 @@ pub fn set_seed(world: &mut World, seed: u32) {
 
 /// Choose the SAI profile of a kingdom by IDS (e.g. `zhukov_sai`), as the
 /// custom-battle setup does when a general is picked.
+///
+/// A running player keeps its goals, records and think times (79F5D0 -> 744EA0 writes
+/// only the player's +18); 7AD180 chooses the ego from the new profile at its next think.
 pub fn set_profile(world: &mut World, kingdom: KingdomId, profile: &str) {
-    world.ai.profiles.insert(kingdom, profile.to_ascii_lowercase());
+    let ids = profile.to_ascii_lowercase();
     let st = &mut world.ai;
-    for p in st.players.iter().filter(|p| p.kingdom == kingdom) {
-        st.ge_queue.remove(p.index as i32);
-        st.rai_queue.remove(p.index as i32);
+    let index = st.data.as_ref().and_then(|d| d.profile(&ids));
+    st.profiles.insert(kingdom, ids);
+    if let Some(index) = index {
+        for p in st.players.iter_mut().filter(|p| p.kingdom == kingdom) {
+            p.profile = index;
+        }
     }
-    st.players.retain(|p| p.kingdom != kingdom);
 }
 
 /// The handicap multiply modifiers for an original difficulty index
@@ -425,7 +430,15 @@ impl AiState {
                     if self.logging && self.log.len() < 20_000 {
                         self.log.push(LogEntry { time: now, kingdom: p.kingdom, text: format!("send {c:?}") });
                     }
-                    out.push(c);
+                    // move at a hostile thing (4DDE60): as the film's mapping has it,
+                    // the move's Kill state (0x527E30, 0x51D920).
+                    match c {
+                        Command::Follow { kingdom, units, target } if crate::orders::hostile_to(world, kingdom, target) => {
+                            out.push(Command::Order { kingdom, units: units.clone(), order: crate::orders::ActorOrder::MoveOnto });
+                            out.push(Command::Attack { kingdom, units, target });
+                        }
+                        c => out.push(c),
+                    }
                 }
             }
         }
@@ -719,7 +732,11 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
             (world.orgs.get(org as usize).is_some_and(|o| o.alive) && world.actor(hq).is_some_and(|a| a.alive)).then_some(command)
         }
         // HUD player orders (appended by the UI owner; the AI sends none)
-        Command::SetFormation { .. } | Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => Some(command),
+        Command::SetFormation { kingdom, orgs, formation } => {
+            let orgs: Vec<_> = orgs.into_iter().filter(|o| live(&Unit::Org(*o))).collect();
+            (!orgs.is_empty()).then_some(Command::SetFormation { kingdom, orgs, formation })
+        }
+        Command::SetRallyPoint { .. } | Command::Sell { .. } | Command::Detach { .. } | Command::Disband { .. } => Some(command),
         // special operations (appended by the combat owner; the SAI general
         // powers apply them directly from `special_ops::sai`)
         Command::UseAbility { .. } => Some(command),
@@ -752,8 +769,18 @@ fn still_valid(world: &World, command: Command) -> Option<Command> {
         Command::AirRecon { building, .. } => world.actor(building).is_some_and(|a| a.alive).then_some(command),
         // the HUD orders (appended by the core owner; the AI sends none)
         Command::Repair { .. } | Command::Construct { .. } => Some(command),
-        // the actor orders of `crate::orders` (appended by the orders lane)
-        Command::Order { .. } => Some(command),
+        // the actor orders of `crate::orders`: the live actors of the list, and a
+        // guarded thing that still stands (7AF220, command flag 1).
+        Command::Order { kingdom, units, order } => {
+            let units: Vec<Unit> = units.into_iter().filter(live).collect();
+            let stale = match &order {
+                crate::orders::ActorOrder::Guard { target: Some(t), .. } => crate::ids::target_actor(world, *t).is_none_or(|a| !world.actors[a as usize].alive),
+                _ => false,
+            };
+            (!units.is_empty() && !stale).then_some(Command::Order { kingdom, units, order })
+        }
+        // a person's selection and hot command (the SAI sends none)
+        Command::Select { .. } | Command::Hot { .. } => Some(command),
     }
 }
 
@@ -768,11 +795,11 @@ pub(crate) fn enqueue(player: &mut Player, data: &AiData, now: f32, reaction: f3
     player.pending.retain(|_, t| *t > now);
     for (i, c) in commands.into_iter().take(n).enumerate() {
         let due = now + reaction + spacing * i as f32;
-        if let Command::Move { units, .. } | Command::Attack { units, .. } | Command::Stop { units, .. } | Command::Bombard { units, .. } = &c {
+        // 7B4C50: the record's +20 until 7AF220 has sent the order.
+        if let Command::Move { units, .. } | Command::Attack { units, .. } | Command::Stop { units, .. } | Command::Bombard { units, .. } | Command::Follow { units, .. } | Command::Order { units, .. } = &c {
             for u in units {
                 if let Unit::Org(o) = u {
-                    // The order shows on the organization a tick after it is sent.
-                    player.pending.insert(*o, due + 0.5);
+                    player.pending.insert(*o, due);
                 }
             }
         }

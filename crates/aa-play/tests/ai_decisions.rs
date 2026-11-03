@@ -8,6 +8,7 @@ use aa_play::ai::data::{
 use aa_play::ai::{self, goals::cv_curve};
 use aa_play::data::{Def, DefClass, GameData, Weapon};
 use aa_play::map::GameMap;
+use aa_play::orders::ActorOrder;
 use aa_play::world::{Command, Controller, Kingdom, Order, Organization, Unit, World};
 use glam::{Vec2, Vec3};
 use std::sync::Arc;
@@ -487,12 +488,14 @@ fn damaged_regiment_recovers_in_supply() {
         w.actors[m as usize].health = 25.0;
     }
     let cmds = run(&mut w, 1.0);
+    // 7C8AF0: retreat (7C57C0, 0x44) to a place inside the supply radius (52BB40: 0.9 of it).
     let mv = cmds.iter().find_map(|c| match c {
-        Command::Move { units, to, attack_move: false, .. } if units == &vec![Unit::Org(o)] => Some(*to),
+        Command::Order { units, order: ActorOrder::Retreat { at, .. }, .. } if units == &vec![Unit::Org(o)] => Some(*at),
         _ => None,
     });
-    let to = mv.unwrap_or_else(|| panic!("no recover move: {:#?}", w.ai.log));
-    assert!(to.distance(corps_pos) <= 8.0 + 80.0, "{to}");
+    let to = mv.unwrap_or_else(|| panic!("no recover retreat: {:#?}", w.ai.log));
+    let radius = w.data.def(defs.corps).supply_range;
+    assert!(radius > 0.0 && to.distance(corps_pos) <= radius, "{to}");
 }
 
 fn attackers_of(cmds: &[Command], target: Vec2, actor: u32) -> Vec<u32> {
@@ -503,6 +506,7 @@ fn attackers_of(cmds: &[Command], target: Vec2, actor: u32) -> Vec<u32> {
                 Unit::Org(o) => Some(o),
                 _ => None,
             },
+            // 4DDE60, move at the thing (ATTACK_REGION +5C): as 7ADB80 a group, its MoveOnto and Attack.
             Command::Attack { units, target: t, .. } if *t == actor => match units[0] {
                 Unit::Org(o) => Some(o),
                 _ => None,
@@ -566,7 +570,13 @@ fn threatened_base_is_defended() {
     // region next to the corps (both draw the regiments home).
     let home = w.ai.players[0].memory.assigned.values().filter(|a| a.combat && a.target.distance(corps_pos) < 80.0).count();
     assert!(home > 0, "{:#?}", w.ai.log);
-    assert!(cmds.iter().any(|c| matches!(c, Command::Move { to, attack_move: true, .. } if to.distance(corps_pos) < 80.0)), "{:#?}", w.ai.log);
+    // 7C5C60: guard the goal's target thing (the corps, 7BD360), or 7C9710: move at the intruder.
+    let answered = cmds.iter().any(|c| match c {
+        Command::Order { order: ActorOrder::Guard { .. }, .. } => true,
+        Command::Attack { target, .. } => w.actors[*target as usize].kingdom == Some(0),
+        _ => false,
+    });
+    assert!(answered, "{:#?}", w.ai.log);
 }
 
 #[test]
@@ -590,9 +600,9 @@ fn engaged_weak_regiment_retreats() {
         w.actors[m as usize].combat.target = Some(first);
     }
     // No combat state prepared: engagement comes from the member targets;
-    // the immediate fight is the two regiments (ratio 0.2 < 0.9).
+    // the immediate fight is the two regiments (ratio 0.2 < 0.9). 7B5210 -> 7C8AF0.
     let cmds = run(&mut w, 2.5);
-    let retreated = cmds.iter().any(|c| matches!(c, Command::Move { units, attack_move: false, .. } if units == &vec![Unit::Org(mine)]));
+    let retreated = cmds.iter().any(|c| matches!(c, Command::Order { units, order: ActorOrder::Retreat { .. }, .. } if units == &vec![Unit::Org(mine)]));
     assert!(retreated, "{:#?}", w.ai.log);
 }
 
@@ -630,7 +640,8 @@ fn recon_regiment_explores_toward_unknown_buildings() {
     run_fogged(&mut w, 0.2);
     building(&mut w, defs.hq, Some(0), Vec2::new(150.0, 700.0));
     let cmds = run_fogged(&mut w, 31.0);
-    let explore = cmds.iter().any(|c| matches!(c, Command::Move { units, attack_move: false, .. } if units == &vec![Unit::Org(scout)]));
+    // 7C3440: explore (7C29C0, 0x44).
+    let explore = cmds.iter().any(|c| matches!(c, Command::Order { units, order: ActorOrder::Explore { .. }, .. } if units == &vec![Unit::Org(scout)]));
     assert!(explore, "{:#?}", w.ai.log);
     assert!(w.ai.log.iter().any(|l| l.text.contains("explore with regiment_rus_infantry_recon")), "{:#?}", w.ai.log);
 }
@@ -743,10 +754,13 @@ fn city_of_an_enemy_independent_is_taken_by_presence_and_neutral_blocks_are_igno
         org(&mut w, defs.infantry, defs.rifle, 6, 1, base + Vec2::new(-20.0 + i as f32 * 10.0, 30.0));
     }
     let cmds = run(&mut w, 1.0);
-    let moves: Vec<Vec2> = cmds.iter().filter_map(|c| if let Command::Move { to, attack_move: true, .. } = c { Some(*to) } else { None }).collect();
-    assert!(moves.iter().any(|to| to.distance(city_pos) <= 30.0), "into the city zone: {moves:?} {:#?}", w.ai.log);
-    assert!(moves.iter().all(|to| to.distance(block_pos) > 40.0), "neutral block targeted: {moves:?}");
-    assert!(!cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == city)), "a city is taken by presence, not attacked");
+    // 7C9710: move at the city (4DDE60, 0x59: the mapping's MoveOnto then Attack, 0x527E30),
+    // which walks into its zone and stops; a neutral block is no goal.
+    let onto = cmds.iter().position(|c| matches!(c, Command::Order { order: ActorOrder::MoveOnto, .. }));
+    let at_city = cmds.iter().position(|c| matches!(c, Command::Attack { target, .. } if *target == city));
+    assert!(onto.is_some() && at_city == onto.map(|i| i + 1), "move at the city: {cmds:?} {:#?}", w.ai.log);
+    let block = w.actors.iter().find(|a| a.pos.truncate().distance(block_pos) < 1.0).map(|a| a.id).expect("the block stands");
+    assert!(!cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == block)), "neutral block targeted: {cmds:?}");
 }
 
 /// The opponent with the fog running (the battle's order: the SAI, then the
@@ -789,7 +803,7 @@ fn neutral_cities_are_known_from_the_start_and_a_base_only_once_seen() {
         id
     };
     let human = Vec2::new(60.0, 60.0);
-    building(&mut w, defs.corps, Some(0), human);
+    let human_base = building(&mut w, defs.corps, Some(0), human);
     let base = Vec2::new(650.0, 650.0);
     building(&mut w, defs.corps, Some(1), base);
     let mut enemy = kingdom(2, 0x8000_0005, Controller::Independent, 0.0);
@@ -797,17 +811,17 @@ fn neutral_cities_are_known_from_the_start_and_a_base_only_once_seen() {
     w.kingdoms.push(enemy);
     w.books.relations = vec![vec![0, 3, 3], vec![3, 0, 3], vec![3, 3, 0]];
     let city_pos = Vec2::new(500.0, 650.0);
-    building(&mut w, city_def, Some(2), city_pos);
+    let city = building(&mut w, city_def, Some(2), city_pos);
     for i in 0..2 {
         org(&mut w, defs.infantry, defs.rifle, 6, 1, base + Vec2::new(-20.0 + i as f32 * 10.0, 30.0));
     }
     let cmds = run_fogged(&mut w, 1.0);
-    let moves: Vec<Vec2> = cmds.iter().filter_map(|c| if let Command::Move { to, attack_move: true, .. } = c { Some(*to) } else { None }).collect();
-    assert!(moves.iter().any(|to| to.distance(city_pos) <= 30.0), "into the city zone: {moves:?} {:#?}", w.ai.log);
+    // 7C9710: move at the known city (4DDE60), as the mapping has it a MoveOnto and an Attack.
+    assert!(cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == city)), "move at the city: {cmds:?} {:#?}", w.ai.log);
     let regions = w.ai.regions.as_ref().expect("regions");
     let home = regions.region_at(human);
     assert!(!w.ai.log.iter().any(|l| l.text.contains(&format!("goal Attack({home})"))), "the unseen base is a target: {:#?}", w.ai.log);
-    assert!(moves.iter().all(|to| to.distance(human) > 60.0), "{moves:?}");
+    assert!(!cmds.iter().any(|c| matches!(c, Command::Attack { target, .. } if *target == human_base)), "{cmds:?}");
 }
 
 #[test]

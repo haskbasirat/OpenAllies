@@ -447,6 +447,12 @@ pub struct Ego {
     /// balancing_constant (+458).
     pub bombard_unengaged_target_multiplier: f32,
     pub bombard_balancing_constant: f32,
+    /// `[ReactiveAI]` stopped_formation (+91C): null is none.
+    pub stopped_formation: Option<String>,
+    /// `[ReactiveAI/DefaultFormation]` (+920): unthreatened, threatened, combat.
+    pub default_formation: [Option<String>; 3],
+    /// `[ReactiveAI/GoalFormation]` (`4AF0C0`, read by `4A9A60`), by goal type.
+    pub goal_formations: std::collections::BTreeMap<usize, [Option<String>; 3]>,
 }
 
 impl Ego {
@@ -998,6 +1004,14 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
     ego.attach_when_engaged = attach.b("attach_when_engaged")?;
     ego.attach_cv_multiplier = attach.f("cv_multiplier")?;
     let rai = n.child("ReactiveAI")?;
+    let formation = |n: &N<'_>| -> Result<[Option<String>; 3]> { Ok([n.s("unthreatened_formation")?, n.s("threatened_formation")?, n.s("combat_formation")?]) };
+    ego.stopped_formation = rai.s("stopped_formation")?;
+    ego.default_formation = formation(&rai.child("DefaultFormation")?)?;
+    for g in rai.children("GoalFormation")? {
+        if let Some(kind) = g.s("goal_IDS")?.and_then(|ids| GOAL_TYPES.iter().position(|n| n.eq_ignore_ascii_case(&ids))) {
+            ego.goal_formations.insert(kind, formation(&g)?);
+        }
+    }
     ego.reactive = Reactive {
         think_frequency: rai.f("think_frequency")?,
         reaction_time: rai.f("reaction_time")?,

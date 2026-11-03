@@ -90,6 +90,8 @@ pub struct Regions {
     /// Hop counts between regions over the neighbour graph (`u16::MAX` =
     /// not connected).
     hops: Vec<u16>,
+    /// `7AA180`: the largest rectangle's width, in tiles.
+    pub max_rectangle_width: i32,
 }
 
 impl Regions {
@@ -190,6 +192,7 @@ impl Regions {
             height: h,
             cell,
             hops: Vec::new(),
+            max_rectangle_width: width,
         };
         regions.fill_tiles();
         regions.hop_table();
@@ -271,6 +274,7 @@ impl Regions {
             height: h,
             cell,
             hops: Vec::new(),
+            max_rectangle_width: tiles as i32,
         };
         regions.flood_islands();
         regions.hop_table();

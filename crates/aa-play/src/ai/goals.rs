@@ -55,10 +55,14 @@ pub struct Assignment {
     pub key: Key,
     pub target: Vec2,
     pub target_actor: Option<ActorId>,
+    /// Goal +4C: the thing the goal aims at (an organization or a structure).
+    pub thing: Option<Unit>,
     pub region: u32,
     pub since: f32,
     /// Attack or defend goal (combat), recover, explore.
     pub combat: bool,
+    /// What the actor was worth to the goal at the last think ([+2C], `7C5870`).
+    pub hold: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -89,6 +93,12 @@ pub struct Memory {
     /// AIR_ATTACK goal `+40`: the battle time each target was last air
     /// attacked.
     pub air_attacked: BTreeMap<ActorId, f32>,
+    /// The base priority (+38, `7C6640`) of each organization's RECOVER goal
+    /// (record +3C) at the last think: none is 0.
+    pub recover_base: BTreeMap<OrgId, f32>,
+    /// The target (+4C, `7C5F80`) of each region's DEFEND_REGION goal (region
+    /// entry +30) at the last think.
+    pub defend_things: BTreeMap<u32, Option<Unit>>,
 }
 
 pub(crate) struct Ctx<'a, 'w> {
@@ -241,6 +251,8 @@ pub struct Goal {
     pub region: u32,
     pub target: Vec2,
     pub target_actor: Option<ActorId>,
+    /// Goal +4C: the thing itself (`target_actor` is a structure or a member).
+    pub thing: Option<Unit>,
     pub attack: bool,
     pub target_cv: f32,
     pub max_cv: f32,
@@ -277,6 +289,7 @@ impl Goal {
             region,
             target,
             target_actor: None,
+            thing: None,
             attack: false,
             target_cv: 0.0,
             max_cv: 0.0,
@@ -327,7 +340,7 @@ pub fn think(
     let val = Val::new(&c, &census);
     let mut goals = Vec::new();
     unpack_goals(&c, player, rng, reach, &mut goals);
-    recover_goals(&c, &mut goals);
+    recover_goals(&c, player, &mut goals);
     defend_goals(&c, &val, &mut goals);
     attack_goals(&c, &val, &mut goals);
     bombard_goals(&c, &val, player, &mut goals);
@@ -372,6 +385,7 @@ pub fn think(
             ));
         }
     }
+    player.memory.defend_things = goals.iter().filter(|g| g.kind == data::DEFEND_REGION).map(|g| (g.region, g.thing)).collect();
     execute(&c, data, player, rng, &goals, log);
     player.memory.selected = goals.iter().filter(|g| g.selected).map(|g| (g.key, g.fuzzy)).collect();
 }
@@ -531,47 +545,54 @@ fn spread_offset(i: usize) -> Vec2 {
     Vec2::new(a.cos(), a.sin()) * (12.0 + 8.0 * (i as f32).sqrt())
 }
 
-/// A free, land-passable spot in `region` for a building of `def` that the
-/// truck can drive to (`reach`).
-fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, from: Vec2, reach: &super::reach::Reach, reserved: &[(Vec2, f32)]) -> Option<Vec2> {
+/// `557010` -> `556940`: a place for a building of `def` in `region`. The search
+/// starts at the region's centre and walks rings of the definition's larger side
+/// (at least a tile): as many rings as `0.75 * 7AA180 / spacing` (rounded up),
+/// from a random ring on, `6 * ring` places each, from a direction of the
+/// `[B39AF8]` table (2048 entries), rotating by -2pi / places. The SAI's RNG gives
+/// the direction and the first ring; a second try draws both again. A place must
+/// lie on the map, out of hostile zones (`556480`, here the hostile supply radii),
+/// and fit (`5553E0`, here `deploy::spot_clear` and the movement owner's test); the
+/// truck must be able to drive there (`reach`, not the original's: its goal has no
+/// such test and a refused unpack would otherwise repeat).
+fn find_site(c: &Ctx<'_, '_>, def: DefId, region: u32, truck: ActorId, from: Vec2, reach: &super::reach::Reach, rng: &mut SaiRng) -> Option<Vec2> {
+    let w = c.view.world;
     let d = c.def(def);
-    let radius = d.blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
-    let pad = c.view.world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0);
+    let tile = w.map.cell_size;
+    let spacing = d.blocking_size.map_or(0.0, |s| s[0].max(s[1])).max(tile);
+    if spacing <= 0.0 {
+        return None;
+    }
+    let rings = (c.regions.max_rectangle_width as f32 * 0.75 / spacing).ceil() as i32;
     let center = c.regions.centers[region as usize];
-    // The region's extent: its rectangles' tile bounds.
-    let cell = c.regions.cell();
-    let span = c.regions.rects[region as usize]
-        .iter()
-        .map(|b| (Vec2::new(b[0] as f32 * cell, b[1] as f32 * cell).distance(center)).max(Vec2::new((b[2] + 1) as f32 * cell, (b[3] + 1) as f32 * cell).distance(center)))
-        .fold(c.regions.size * 0.5, f32::max);
-    let step = (radius * 2.0 + pad).max(4.0);
-    let rings = (span / step).ceil() as i32 + 1;
-    for ring in 0..=rings {
-        let count = if ring == 0 { 1 } else { 8 * ring };
-        for k in 0..count {
-            let a = k as f32 / count as f32 * std::f32::consts::TAU;
-            let p = center + Vec2::new(a.cos(), a.sin()) * step * ring as f32;
-            if c.region_of(p) != region {
-                continue;
-            }
-            let corners = [Vec2::new(-radius, -radius), Vec2::new(radius, -radius), Vec2::new(-radius, radius), Vec2::new(radius, radius), Vec2::ZERO];
-            if !corners.iter().all(|o| c.land(p + *o)) {
-                continue;
-            }
-            let clear_b = c.view.buildings.iter().all(|b| b.pos.distance(p) >= b.radius + radius + pad);
-            let clear_t = c.view.trucks.iter().filter(|t| t.deploying).all(|t| {
-                if let Order::Deploy { at, .. } = c.view.world.actors[t.id as usize].order { at.distance(p) >= 2.0 * radius + pad } else { true }
-            });
-            let clear_r = reserved.iter().all(|(q, r)| q.distance(p) >= r + radius + pad);
-            if clear_b && clear_t && clear_r {
-                // The deploy owner's own placement and footprint rules.
-                let (at, _) = crate::deploy::placement(c.view.world, def, p, 0.0);
-                if crate::deploy::spot_clear(c.view.world, def, at, Some(truck)).is_ok()
-                    && crate::movement::deploy_spot_problem(c.view.world, truck, at).is_none()
-                    && reach.reachable(from, at)
-                {
+    let pad = w.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0);
+    let radius = d.blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
+    let fits = |p: Vec2| -> Option<Vec2> {
+        if c.view.buildings.iter().any(|b| b.supply_range > 0.0 && b.owner.is_some_and(|o| c.view.hostile[o]) && b.pos.distance_squared(p) < b.supply_range * b.supply_range) {
+            return None;
+        }
+        if !c.view.buildings.iter().all(|b| b.pos.distance(p) >= b.radius + radius + pad) {
+            return None;
+        }
+        // The order names the place itself; the unpack snaps it (0x4F3640).
+        let (at, _) = crate::deploy::placement(w, def, p, 0.0);
+        (crate::deploy::spot_clear(w, def, at, Some(truck)).is_ok() && crate::movement::deploy_spot_problem(w, truck, at).is_none() && reach.reachable(from, at)).then_some(p)
+    };
+    for _ in 0..2 {
+        let index = rng.next_u32() % 0x800;
+        let angle = (f64::from(index) * std::f64::consts::TAU / 2048.0) as f32;
+        let dir = Vec2::new(angle.cos(), angle.sin()) * spacing;
+        let start = if rings >= 1 { (rng.next_u32() % rings as u32) as i32 } else { 0 };
+        for step in 0..rings {
+            let ring = (start + step) % rings;
+            let places = (ring * 6).max(1);
+            let mut offset = dir * ring as f32;
+            let (sin, cos) = (-std::f32::consts::TAU / places as f32).sin_cos();
+            for _ in 0..places {
+                if let Some(at) = fits(center + offset) {
                     return Some(at);
                 }
+                offset = Vec2::new(offset.x * cos - offset.y * sin, sin * offset.x + offset.y * cos);
             }
         }
     }
@@ -583,7 +604,6 @@ fn find_site(c: &Ctx<'_, '_>, region: u32, def: DefId, truck: ActorId, from: Vec
 fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, reach: &super::reach::Reach, goals: &mut Vec<Goal>) {
     let u = &c.ego.unpacking;
     let mine: Vec<_> = c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).collect();
-    let mut reserved: Vec<(Vec2, f32)> = Vec::new();
     let island_regions: Vec<u32> = (0..c.regions.len() as u32).filter(|&r| c.regions.passable[r as usize]).collect();
     for t in c.view.trucks.iter().filter(|t| t.owner == c.view.me) {
         let memo = player.memory.unpack.entry(t.id).or_default();
@@ -615,15 +635,19 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, reach: &
         if memo.region != 0 && !candidates.contains(&memo.region) {
             candidates.insert(0, memo.region);
         }
-        let mut valued: Vec<(f32, u32)> = Vec::new();
+        // 7CBC40: each candidate has its place (557010) and that place its value (4A9AE0);
+        // the best above the others wins.
+        let mut best: Option<(f32, u32, Vec2)> = None;
+        let mut seen: Vec<u32> = Vec::new();
         for r in candidates {
-            if memo.bad.contains(&r) || !c.regions.same_island(r, home) {
+            if memo.bad.contains(&r) || !c.regions.same_island(r, home) || seen.contains(&r) {
                 continue;
             }
-            let center = c.regions.centers[r as usize];
+            seen.push(r);
+            let Some(site) = find_site(c, t.unpacks_to, r, t.id, t.pos, reach, rng) else { continue };
             let mut bonus = 0.0;
             for b in &mine {
-                let d = c.regions.centers[c.region_of(b.pos) as usize].distance(center);
+                let d = b.pos.distance(site);
                 if d < u.max_distance && u.max_distance > 0.0 {
                     bonus += u.max_friendly_building_bonus_per_building * ((u.max_distance - d) / u.max_distance).powf(u.distance_exponent);
                 }
@@ -635,15 +659,11 @@ fn unpack_goals(c: &Ctx<'_, '_>, player: &mut Player, rng: &mut SaiRng, reach: &
             if r == memo.region {
                 v += u.inertia;
             }
-            if !valued.iter().any(|&(_, q)| q == r) {
-                valued.push((v, r));
+            if best.is_none_or(|(b, _, _)| v > b) {
+                best = Some((v, r, site));
             }
         }
-        valued.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        let best = valued.into_iter().find_map(|(v, r)| find_site(c, r, t.unpacks_to, t.id, t.pos, reach, &reserved).map(|site| (v, r, site)));
         let Some((value, region, site)) = best else { continue };
-        let radius = c.def(t.unpacks_to).blocking_size.map_or(4.0, |s| s[0].max(s[1]) * 0.5);
-        reserved.push((site, radius));
         let facing = facing_toward_enemy(c, site);
         let mut g = Goal::new(Key::Unpack(t.id), data::UNPACK, if value < 0.0 { 0.001 } else { value }, region, site);
         g.site = Some((site, facing, region));
@@ -669,8 +689,9 @@ fn facing_toward_enemy(c: &Ctx<'_, '_>, from: Vec2) -> f32 {
 }
 
 /// RECOVER goals (`7C6640`).
-fn recover_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
+fn recover_goals(c: &Ctx<'_, '_>, player: &mut Player, goals: &mut Vec<Goal>) {
     let r = &c.ego.recover;
+    player.memory.recover_base.clear();
     for (i, o) in c.view.orgs.iter().enumerate() {
         if o.owner != c.view.me || !o.military || o.routing {
             continue;
@@ -685,6 +706,7 @@ fn recover_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
         if need <= 0.0 {
             continue;
         }
+        player.memory.recover_base.insert(o.id, need);
         let Some(dest) = supply_point(c, o.pos) else { continue };
         let mut g = Goal::new(Key::Recover(o.id), data::RECOVER, need, c.region_of(dest), dest);
         g.required = Some(i);
@@ -707,7 +729,7 @@ pub(crate) fn supply_point(c: &Ctx<'_, '_>, from: Vec2) -> Option<Vec2> {
 /// DEFEND_REGION goals (`7C5F80` -> `7BD360`).
 fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
     let dp = &c.ego.defend;
-    let mut regions: BTreeMap<u32, (f32, Vec2, f32)> = BTreeMap::new();
+    let mut regions: BTreeMap<u32, (f32, Vec2, f32, Option<ActorId>)> = BTreeMap::new();
     for b in &c.view.buildings {
         let Some(owner) = b.owner else { continue };
         if !c.view.allied[owner] {
@@ -722,17 +744,19 @@ fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
             threat *= c.ego.defend_friendly_kingdom_actor_multiplier;
         }
         let r = c.region_of(b.pos);
-        let e = regions.entry(r).or_insert((0.0, b.pos, 0.0));
+        let e = regions.entry(r).or_insert((0.0, b.pos, 0.0, None));
         if threat > e.0 {
             e.0 = threat;
             e.1 = b.pos;
+            // 7BD360: the most valuable of the region's is the goal's +4C (7C5F80).
+            e.3 = Some(b.id);
         }
         if owner == c.view.me {
             e.2 += b.cv;
         }
     }
     let hostile_orgs: Vec<_> = c.view.orgs.iter().filter(|o| c.view.hostile[o.owner] && o.military).collect();
-    for (r, (value, pos, static_cv)) in regions {
+    for (r, (value, pos, static_cv, thing)) in regions {
         if value <= 0.0 {
             continue;
         }
@@ -750,6 +774,8 @@ fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
             v *= dp.capture_risk_bonus;
         }
         let mut g = Goal::new(Key::Defend(r), data::DEFEND_REGION, v, r, pos);
+        g.target_actor = thing;
+        g.thing = thing.map(Unit::Actor);
         let d = &c.ego.defensive;
         g.target_cv = (c.hostile(r, true) * d.cv_advantage_target).max(d.min_cv_to_assign);
         g.max_cv = g.target_cv * d.cv_advantage_max;
@@ -762,15 +788,15 @@ fn defend_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
 /// ATTACK_REGION goals (`7C5AE0`, value `7BCCB0`: the juiciest visible
 /// hostile static or mobile actor of the region, `7AD9E0`).
 fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
-    let mut best: BTreeMap<u32, (f32, Vec2, Option<ActorId>)> = BTreeMap::new();
+    let mut best: BTreeMap<u32, (f32, Vec2, Option<ActorId>, Option<Unit>)> = BTreeMap::new();
     let mut home_islands: Vec<u32> = c.view.orgs.iter().filter(|o| o.owner == c.view.me).map(|o| c.regions.island[c.region_of(o.pos) as usize]).collect();
     home_islands.extend(c.view.buildings.iter().filter(|b| b.owner == Some(c.view.me)).map(|b| c.regions.island[c.region_of(b.pos) as usize]));
     let reachable = |r: u32| home_islands.contains(&c.regions.island[r as usize]);
-    let mut consider = |r: u32, v: f32, p: Vec2, a: Option<ActorId>| {
+    let mut consider = |r: u32, v: f32, p: Vec2, a: Option<ActorId>, t: Option<Unit>| {
         let v = v.max(0.001);
-        let e = best.entry(r).or_insert((0.0, p, a));
+        let e = best.entry(r).or_insert((0.0, p, a, t));
         if v > e.0 {
-            *e = (v, p, a);
+            *e = (v, p, a, t);
         }
     };
     // 7BB5E0 over the region's static lists: the view holds exactly the
@@ -787,7 +813,7 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
         // 7AD2D0: the actor value (with the distance multiplier) plus its
         // ActorPriority (one fewer counted, no one-time bonus).
         let owner = b.owner.map(|o| c.view.world.kingdoms[o].id);
-        consider(r, val.actor_value(b.def, owner, b.cv, false, b.pos, true) + val.actor_priority(b.def, false), b.pos, Some(b.id));
+        consider(r, val.actor_value(b.def, owner, b.cv, false, b.pos, true) + val.actor_priority(b.def, false), b.pos, Some(b.id), Some(Unit::Actor(b.id)));
     }
     // 7BA1F0: the kingdom's records of hostile actors gone since (7AD2D0
     // without an actor) keep the region a target without a target actor.
@@ -800,7 +826,7 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
             continue;
         }
         let owner = g.owner.map(|o| c.view.world.kingdoms[o].id);
-        consider(r, val.actor_value(g.def, owner, 0.0, false, g.pos, true) + val.actor_priority(g.def, false), g.pos, None);
+        consider(r, val.actor_value(g.def, owner, 0.0, false, g.pos, true) + val.actor_priority(g.def, false), g.pos, None, None);
     }
     // 7BB5E0 over the mobile lists (79E380: visibility only; the view holds
     // the visible hostile organizations; without fog everything is visible,
@@ -809,14 +835,15 @@ fn attack_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
         let r = c.region_of(o.pos);
         if reachable(r) {
             let owner = Some(c.view.world.kingdoms[o.owner].id);
-            consider(r, val.actor_value(o.def, owner, o.cv, true, o.pos, true) + val.actor_priority(o.def, false), o.pos, None);
+            consider(r, val.actor_value(o.def, owner, o.cv, true, o.pos, true) + val.actor_priority(o.def, false), o.pos, None, Some(Unit::Org(o.id)));
         }
     }
     let oc = &c.ego.offensive;
-    for (r, (value, pos, actor)) in best {
+    for (r, (value, pos, actor, thing)) in best {
         let mut g = Goal::new(Key::Attack(r), data::ATTACK_REGION, value, r, pos);
         g.attack = true;
         g.target_actor = actor;
+        g.thing = thing;
         g.target_cv = (c.hostile(r, false) * oc.cv_advantage_target).max(oc.min_cv_to_assign);
         g.max_cv = g.target_cv * oc.cv_advantage_max;
         g.allied_cv = (c.allied(r, true) - c.inf.at(&c.inf.mobile, r, c.view.me)).max(0.0) * c.ego.attack_allied_influence_cv_multiplier;
@@ -973,7 +1000,7 @@ fn airfields(c: &Ctx<'_, '_>, recon: bool) -> Vec<ActorId> {
 /// An organization with a member that has a bombard ability (SAI actor
 /// category bit 12, `7A1150`: an ability of the +1EC or +21C lists with
 /// flag +54 bit 3).
-fn bombards(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> bool {
+pub(crate) fn bombards(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> bool {
     let w = c.view.world;
     w.orgs[o.id as usize].members.iter().any(|&m| w.actor(m).is_some_and(|a| a.alive) && crate::combat::tasks::can_bombard(w, m))
 }
@@ -982,7 +1009,7 @@ fn bombards(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> bool {
 /// Performer list of the organization's first member that has one (0 without
 /// one). A record takes a BOMBARD goal only with the target inside it
 /// (`7A25F0` case 0x14, the distance `7C82D0`).
-fn bombard_range(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> f32 {
+pub(crate) fn bombard_range(c: &Ctx<'_, '_>, o: &super::view::OrgView) -> f32 {
     let w = c.view.world;
     w.orgs[o.id as usize]
         .members
@@ -1600,7 +1627,9 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
     let ego = c.ego;
     let mut available = c.view.stockpile;
     let rate = ego.saving_time_limit / 60.0;
-    let pool_ok = |o: &super::view::OrgView| o.owner == c.view.me && o.military && !o.routing && !player.rai.retreating.contains_key(&o.id);
+    // 7A25F0 reads no order state: a RECOVER goal keeps its actor by its selection and by
+    // 7C9CE0 (the state ends when the actor is worth more elsewhere).
+    let pool_ok = |o: &super::view::OrgView| o.owner == c.view.me && o.military && !o.routing;
     // Goal +8 pool category: BOMBARD takes its actors from category 12
     // (a bombard ability, 7A1150) and only with its target in range (7A25F0).
     let reach: Vec<f32> = c.view.orgs.iter().map(|o| if bombards(c, o) { bombard_range(c, o) } else { 0.0 }).collect();
@@ -1686,7 +1715,16 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
                 let key = goals[gi].key;
                 let kind = goals[gi].kind;
                 let target = goals[gi].target;
-                let in_pool = |o: usize| pool_ok(&c.view.orgs[o]) && (kind != data::BOMBARD || (reach[o] > 0.0 && c.view.orgs[o].pos.distance(target) <= reach[o]));
+                // 7A25F0: an actor another goal holds and counts on (its +40, 7C5290: in
+                // the attack state within attack_commit_distance of that goal's region)
+                // is not taken.
+                let committed = |o: usize| {
+                    let ov = &c.view.orgs[o];
+                    player.memory.assigned.get(&ov.id).is_some_and(|a| {
+                        a.key != key && a.combat && player.rai.states.get(&ov.id).is_some_and(|s| s.kind == super::rai::StateKind::Attack) && c.regions.hops(c.region_of(ov.pos), a.region) as i32 <= ego.attack_commit_distance
+                    })
+                };
+                let in_pool = |o: usize| pool_ok(&c.view.orgs[o]) && !committed(o) && (kind != data::BOMBARD || (reach[o] > 0.0 && c.view.orgs[o].pos.distance(target) <= reach[o]));
                 let previous: Vec<usize> =
                     (0..c.view.orgs.len()).filter(|&o| in_pool(o) && !holder.contains_key(&o) && player.memory.assigned.get(&c.view.orgs[o].id).is_some_and(|x| x.key == key)).collect();
                 for o in previous {
@@ -1746,13 +1784,6 @@ fn select(c: &Ctx<'_, '_>, player: &Player, _rng: &mut SaiRng, goals: &mut [Goal
 // ---------------------------------------------------------------------------
 // Execution
 
-fn ordered_to(order: &Order, to: Vec2, tolerance: f32) -> bool {
-    match order {
-        Order::Move { to: t, .. } => t.distance(to) <= tolerance,
-        _ => false,
-    }
-}
-
 fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng, goals: &[Goal], log: &mut Vec<String>) {
     let w = c.view.world;
     let me = c.view.kingdom;
@@ -1760,15 +1791,14 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
     let mut stock = c.view.stockpile;
     let mut used_buildings: Vec<ActorId> = Vec::new();
     let mut assigned = BTreeMap::new();
-    let tol = c.regions.size * 0.5;
     // 7A59C0: the selected goals run in order of their current priority
     // (comparator 7A3070, goal +0x34). 7A39C0 pays each from the running
     // stockpile (7A3860 without income: the purchase resources, money);
     // a goal it cannot pay now but could within saving_time_limit
     // (7A3860 with income) starts saving, and no later goal with a purchase
     // cost runs this think (7A3980). Goals without a cost always run.
-    let mut order: Vec<&Goal> = goals.iter().filter(|g| g.selected).collect();
-    order.sort_by(|a, b| b.current.partial_cmp(&a.current).unwrap_or(std::cmp::Ordering::Equal));
+    let mut order: Vec<usize> = (0..goals.len()).filter(|&i| goals[i].selected).collect();
+    order.sort_by(|&a, &b| goals[b].current.partial_cmp(&goals[a].current).unwrap_or(std::cmp::Ordering::Equal));
     let saving_rate = c.ego.saving_time_limit / 60.0;
     let mut saving = false;
     let mut pay = |cost: [f32; 3], stock: &mut [f32; 3]| -> bool {
@@ -1788,7 +1818,8 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
         }
         false
     };
-    for g in order {
+    for gi in order {
+        let g = &goals[gi];
         match g.kind {
             data::RECRUIT => {
                 let Some((d, b)) = g.recruit else { continue };
@@ -1832,11 +1863,18 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                 log.push(format!("deploy {} at ({:.0},{:.0}) (priority {:.0})", c.def(w.actors[truck as usize].def).id, at.x, at.y, g.base));
             }
             data::RECOVER => {
+                // 7A6770 selects it and the actor is its (7A6930). 7C5740 is not in the
+                // export: the order goes with the state, as 7B64F0 sends it on the
+                // reactive AI's first think of this goal (7C9E20 -> 7C8AF0).
                 for &o in &g.actors {
                     let ov = &c.view.orgs[o];
-                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: None, region: g.region, since: c.now, combat: false });
-                    if !ordered_to(&ov.order, g.target, tol) && ov.pos.distance(g.target) > tol {
-                        commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(ov.id)], to: g.target, attack_move: false });
+                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: None, thing: None, region: g.region, since: c.now, combat: false, hold: 0.0 });
+                    if !player.rai.recovering(ov.id) {
+                        let order = super::rai::retreat_order(c, player, o, None, rng);
+                        if let Some(s) = player.rai.states.get_mut(&ov.id) {
+                            s.kind = super::rai::StateKind::Recover;
+                        }
+                        commands.push(order);
                         log.push(format!("recover {} (health {:.2}, morale {:.2})", c.def(ov.def).id, ov.health, ov.morale));
                     }
                 }
@@ -1851,7 +1889,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                 let target = if crate::fog::actor_visible(w, t, Some(me)) { AbilityTarget::Actor(t) } else { AbilityTarget::Point(g.target) };
                 for &o in &g.actors {
                     let ov = &c.view.orgs[o];
-                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: Some(t), region: g.region, since: c.now, combat: false });
+                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: Some(t), thing: Some(Unit::Actor(t)), region: g.region, since: c.now, combat: false, hold: 0.0 });
                     let busy = w.combat.org(ov.id).and_then(|s| s.task.as_ref()).is_some_and(|task| *task == crate::combat::tasks::Task::Bombard(target));
                     if busy || player.pending(ov.id, c.now) {
                         continue;
@@ -1892,63 +1930,80 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
             data::EXPLORE => {
                 let Some(&o) = g.actors.first() else { continue };
                 let ov = &c.view.orgs[o];
-                // 7C3440: no candidate region -> the actor's own region.
+                // 7C3440: no candidate region -> the actor's own region; none at all:
+                // stop (0x40).
                 let region = explore_region(c, player, g, ov.pos, rng).unwrap_or_else(|| c.region_of(ov.pos));
                 let target = c.regions.centers[region as usize];
+                let same = player.memory.explore_region.get(&g.key) == Some(&region) && player.memory.explore_actor.get(&g.key) == Some(&ov.id);
                 player.memory.explore_region.insert(g.key, region);
                 player.memory.explore_actor.insert(g.key, ov.id);
-                assigned.insert(ov.id, Assignment { key: g.key, target, target_actor: None, region, since: c.now, combat: false });
-                if !ordered_to(&ov.order, target, tol) {
-                    commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(ov.id)], to: target, attack_move: false });
+                assigned.insert(ov.id, Assignment { key: g.key, target, target_actor: None, thing: None, region, since: c.now, combat: false, hold: 0.0 });
+                if !(same && matches!(ov.order, Order::Move { .. })) {
+                    // explore (9) at the region's centre, 7C29C0: 0x44.
+                    commands.push(Command::Order { kingdom: me, units: vec![Unit::Org(ov.id)], order: crate::orders::ActorOrder::Explore { at: target, scalar: None } });
                     log.push(format!("explore with {} to region {region} ({:.0},{:.0})", c.def(ov.def).id, target.x, target.y));
                 }
             }
-            _ => {
-                let mut sent = 0;
+            kind => {
+                // The combat goals. What each actor is worth to the goal ([+2C]).
+                let mut a = Assign { c, prefs: HashMap::new() };
+                let whole = a.priority(goals, gi, None, None);
+                let mut hold = HashMap::new();
+                for &o in &g.actors {
+                    hold.insert(o, whole - a.priority(goals, gi, None, Some(o)));
+                }
                 for &o in &g.actors {
                     let ov = &c.view.orgs[o];
-                    // A stable slot per organization keeps re-sent orders identical.
-                    let target = goal_point(c, g.target, g.target_actor, ov.id as usize % 8);
                     let previous = player.memory.assigned.get(&ov.id);
                     let since = previous.filter(|p| p.key == g.key).map_or(c.now, |p| p.since);
-                    assigned.insert(ov.id, Assignment { key: g.key, target, target_actor: g.target_actor, region: g.region, since, combat: true });
-                    if ov.engaged || ordered_to(&ov.order, target, tol) || player.pending(ov.id, c.now) {
-                        continue;
-                    }
-                    if !g.attack {
-                        let hops = c.regions.hops(c.region_of(ov.pos), g.region);
-                        if hops <= 1 && matches!(ov.order, Order::Idle) {
+                    assigned.insert(ov.id, Assignment { key: g.key, target: g.target, target_actor: g.target_actor, thing: g.thing, region: g.region, since, combat: true, hold: hold[&o] });
+                }
+                if kind == data::DEFEND_REGION {
+                    // 7CA1D0: an actor its RECOVER goal wants is sent there (7C9CE0), the
+                    // others hold the region (7A1070(1)); every actor holding one has
+                    // the goal's +5C, guard (7C5C60).
+                    for &o in &g.actors {
+                        let ov = &c.view.orgs[o];
+                        if super::rai::recover_wanted(c, player, o, hold[&o]) {
+                            let order = super::rai::retreat_order(c, player, o, Some(g.region), rng);
+                            commands.push(order);
                             continue;
                         }
+                        player.rai.states.entry(ov.id).or_insert_with(|| super::rai::OrderState { region: Some(g.region), ..super::rai::OrderState::new(super::rai::StateKind::Defend) });
                     }
-                    // A static target is attacked directly once close; until then
-                    // (and for mobile targets) an attack-move to the region. A
-                    // city is taken by standing in its zone, never attacked.
-                    let near = g.target_actor.is_some() && !city_target(c, g.target_actor) && ov.pos.distance(g.target) <= c.regions.size;
-                    if near && let Some(t) = g.target_actor {
-                        if !matches!(ov.order, Order::Attack { target } if target == t) {
-                            commands.push(Command::Attack { kingdom: me, units: vec![Unit::Org(ov.id)], target: t });
-                            player.rai.record(ov.id, c.view.world.actors[t as usize].pos.truncate(), Some(t), ov.pos, c.now);
+                    let mut sent = 0;
+                    for &o in &g.actors {
+                        let ov = &c.view.orgs[o];
+                        if player.rai.states.get(&ov.id).is_some_and(|s| s.kind == super::rai::StateKind::Defend) {
+                            commands.push(super::rai::guard_order(c, ov.id, g.thing, g.region));
+                            sent += 1;
                         }
-                    } else {
-                        commands.push(Command::Move { kingdom: me, units: vec![Unit::Org(ov.id)], to: target, attack_move: true });
-                        player.rai.record(ov.id, target, None, ov.pos, c.now);
                     }
-                    sent += 1;
-                }
-                if sent > 0 {
-                    if g.attack {
-                        player.memory.attacks.push((c.now, g.region, sent));
+                    if sent > 0 {
+                        log.push(format!("defend region {} with {} orgs (cv {:.0}/{:.0}, priority {:.0})", g.region, g.actors.len(), g.sum_cv, g.target_cv, g.current));
                     }
-                    log.push(format!(
-                        "{} region {} with {} orgs (cv {:.0}/{:.0}, priority {:.0})",
-                        if g.attack { "attack" } else { "defend" },
-                        g.region,
-                        g.actors.len(),
-                        g.sum_cv,
-                        g.target_cv,
-                        g.current
-                    ));
+                } else {
+                    // 7C9710 (ATTACK_REGION), 7C6FC0 (ATTACK_ACTOR): 7A5E10 sends off
+                    // those going to recover; the rest come out of any state
+                    // (7A1070(0)) and go as one group (7ADB80, 7AF220) at the target
+                    // thing (4DDE60, move 0x59), or the region's centre (0x5C).
+                    let list = super::rai::retreat_check(c, player, g.region, |o| hold[&o], g.actors.clone(), rng, &mut commands);
+                    if list.is_empty() {
+                        continue;
+                    }
+                    let mut units = Vec::with_capacity(list.len());
+                    for &o in &list {
+                        let ov = &c.view.orgs[o];
+                        player.rai.states.insert(ov.id, super::rai::OrderState::new(super::rai::StateKind::Attack));
+                        units.push(Unit::Org(ov.id));
+                    }
+                    let target = g.thing.and_then(|t| crate::ids::target_actor(w, t));
+                    commands.push(match target {
+                        Some(target) => Command::Follow { kingdom: me, units, target },
+                        None => Command::Move { kingdom: me, units, to: c.regions.centers[g.region as usize], attack_move: false },
+                    });
+                    player.memory.attacks.push((c.now, g.region, list.len()));
+                    log.push(format!("attack region {} with {} orgs (cv {:.0}/{:.0}, priority {:.0})", g.region, g.actors.len(), g.sum_cv, g.target_cv, g.current));
                 }
             }
         }

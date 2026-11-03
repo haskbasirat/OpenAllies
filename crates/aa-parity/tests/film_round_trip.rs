@@ -292,6 +292,8 @@ fn kind(c: &Command) -> &'static str {
         Command::Construct { .. } => "Construct",
         Command::AirAttack { .. } => "AirAttack",
         Command::AirRecon { .. } => "AirRecon",
+        Command::Select { .. } => "Select",
+        Command::Hot { .. } => "Hot",
         Command::Order { order, .. } => match order {
             ActorOrder::Guard { .. } => "Guard",
             ActorOrder::Retreat { .. } => "Retreat",
