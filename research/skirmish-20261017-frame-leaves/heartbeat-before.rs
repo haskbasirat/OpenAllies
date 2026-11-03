@@ -734,7 +734,7 @@ fn packet_at(history: &History, index: i32) -> Result<Packet> {
 }
 
 fn reader(packet: &Packet) -> Result<Cursor<'_>> {
-    // Readers start at byte 0 bit 3 (a local = 0, a local = 3).
+    // Readers start at byte 0 bit 3 (byte index 0, bit index 3).
     Ok(Cursor::for_packet(packet.bytes(), None)?)
 }
 

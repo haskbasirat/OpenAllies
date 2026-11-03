@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn original_int_constructors_raw_setters_and_metric_read_prefixes() {
         let fixture: Value = serde_json::from_str(include_str!(
-            "<game root>/rust-rebuild/research/skirmish-20261017-view-grid/native-grid-variables.json"
+            "../../research/skirmish-20261017-view-grid/native-grid-variables.json"
         ))
         .unwrap();
         let rows = fixture["cases"].as_array().unwrap();

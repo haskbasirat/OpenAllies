@@ -2,14 +2,14 @@
 //The runtime source/manager adapter is not copied or stubbed by this host.
 #![allow(dead_code)]
 mod data_pre_request {
-    #[path="<game root>/rust-rebuild/crates/aa-runtime/src/data_pre_request_path.rs"]
+    #[path="../../crates/aa-runtime/src/data_pre_request_path.rs"]
     pub mod path;
 }
 mod audio_data_pre_request {
     use std::collections::BTreeMap;
     type Result<T>=std::result::Result<T,String>;
-    #[path="<game root>/rust-rebuild/crates/aa-runtime/src/audio_data_request_core.rs"]
+    #[path="../../crates/aa-runtime/src/audio_data_request_core.rs"]
     mod core;
-    #[path="<game root>/rust-rebuild/crates/aa-runtime/src/audio_data_pre_request_tests.rs"]
+    #[path="../../crates/aa-runtime/src/audio_data_pre_request_tests.rs"]
     mod tests;
 }

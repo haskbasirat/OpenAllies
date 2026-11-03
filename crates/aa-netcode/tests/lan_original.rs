@@ -67,7 +67,7 @@ impl LanData for Data {
 #[test]
 #[ignore = "needs the original AA.exe joining on loopback"]
 fn original_joins_on_loopback() {
-    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let cache = std::env::temp_dir().join("aa-netcode-lan-registries.json");
     let reg = NativeRegistries::load_v14(&root, Some(&cache)).expect("registries");
     let name = "Rust host";

@@ -2,5 +2,5 @@
 //!existing aa_actors archive; no runtime ActorStore/source adapter included.
 #![allow(dead_code)]
 mod actor_creation {pub use aa_actors::actor_creation::{Error,Result};}
-#[path="<game root>/rust-rebuild/crates/aa-actors/src/defender_init.rs"]
+#[path="../../crates/aa-actors/src/defender_init.rs"]
 mod defender;

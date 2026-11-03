@@ -90,7 +90,7 @@ pub struct Context {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Candidate {
     pub position: [u32; 2],
-    /// Optional object (native `arg5`) whose +54/+58 position measures the
+    /// Optional object (native `argument 5`) whose +54/+58 position measures the
     /// moved distance; absent means distance from the organization.
     pub moved_from: Option<[u32; 2]>,
     pub recover: bool,
@@ -114,7 +114,7 @@ pub trait RoutWorld {
     fn friendly_zone(&mut self, tile: i32, owner: u32, organization: bool) -> Result<bool>;
     /// Kingdom virtual `+138(owner)` for sparse slot `slot`.
     fn kingdom_allied(&mut self, slot: usize, owner: u32) -> Result<bool>;
-    /// One `85D840` draw on the caller's RNG word (native `arg2`).
+    /// One `85D840` draw on the caller's RNG word (native `argument 2`).
     fn random(&mut self) -> Result<u32>;
 }
 

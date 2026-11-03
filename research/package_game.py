@@ -51,7 +51,7 @@ def main():
 
 Double-click "Play Axis & Allies.cmd" (or AxisAlliesRust.exe).
 
-This folder must stay inside the game root installation (it reads the original
+This folder must stay inside the Axis & Allies installation (it reads the original
 game assets from ..\\..\\..\\reconstruction and the original Data.rwd-derived files).
 Keep assets-cache beside the executable.
 

@@ -22,7 +22,7 @@ instead of from the original code. The user rejected it. It is archived in
 | What | Where |
 |---|---|
 | Original executable (never modify) | `<game root>\AA.exe` (image base 0x400000) |
-| Decompiled pseudocode, one file per function | `reconstruction/research/native-aa/pseudocode/<addr>.c` (42,171 files, auto names `an automatic label`) |
+| Decompiled pseudocode, one file per function | `reconstruction/research/native-aa/pseudocode/<addr>.c` (42,171 files) |
 | Inventories | `reconstruction/research/native-aa/{functions,calls,symbols,strings,string-references}.tsv`, `findings.json`, `object-serialization.json` |
 | Unicorn/Capstone/Keystone for Python | `PYTHONPATH="<game root>\reconstruction\tools\python-packages"` |
 | Native oracle harness pattern | `research/phase6-kingdoms/native_teams.py` (`Machine`), `research/phase7-restoration/native_*.py` |
@@ -117,3 +117,17 @@ precision of every later renderer call. See
   `release/`; this folder is not a git repository.
 - Report honestly: what is proven by oracles, what is only compiled, what is
   untested.
+
+## Public repository
+
+The repository is public. `python research/check_public.py` scans every tracked
+file for what must stay out of it and fails the push when it finds any:
+
+- No instruction listings, raw code bytes, decompiled code or automatic decompiler
+  labels. Keep the conclusions, addresses and field meanings; write an address as
+  `0x4F3C40`. An idiom of a few instructions in a comment is fine. A pin of a code
+  window is an address, a size and a digest.
+- No original files, text from them, recordings of the original, or logs that dump
+  its rules data. They stay on disk, git-ignored.
+- No names of decompiler tools, no player names from films, no personal paths or
+  email. Docs say `<game root>`; code, tests and scripts read `AA_GAME_ROOT`.

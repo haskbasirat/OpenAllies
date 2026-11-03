@@ -1,5 +1,5 @@
-#[path=r"<game root>\rust-rebuild\research\development10\view-init-completion\independent-settlement\world_revision-production.rs"]mod world_revision;
-#[path=r"<game root>\rust-rebuild\crates\aa-runtime\src\view_init_prefix.rs"]mod view_init_prefix;
+#[path=r"../../../../research/development10/view-init-completion/independent-settlement/world_revision-production.rs"]mod world_revision;
+#[path=r"../../../../crates/aa-runtime/src/view_init_prefix.rs"]mod view_init_prefix;
 
 #[test]
 fn private_store_guard_preserves_ac_and_resource_callback_is_separate(){

@@ -540,7 +540,7 @@ impl ObjectEffects for Ground {
 #[test]
 fn native_nonnull_gacd_ground_orchestration_all_precisions_and_required_prefixes() {
     let f: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/skirmish-20261017-object-ground/native-ground-nonnull.json"
+        "../../research/skirmish-20261017-object-ground/native-ground-nonnull.json"
     ))
     .unwrap();
     assert_eq!(f["rows"].as_array().unwrap().len(), 192);

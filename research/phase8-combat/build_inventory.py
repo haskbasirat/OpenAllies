@@ -638,12 +638,12 @@ def main():
         a = e['address']
         extra = {}
         if a in sizes:
-            extra = {'decompiled_name': names[a], 'body_bytes': sizes[a]}
+            extra = {'body_bytes': sizes[a]}
         else:
             value = int(a, 16)
             container = max((k for k in sizes if int(k, 16) <= value), key=lambda k: int(k, 16))
             inside = value < int(container, 16) + sizes[container]
-            extra = {'decompiled_name': None, 'decompiled_container': container if inside else None,
+            extra = {'decompiled_container': container if inside else None,
                      'note_entry': ('entry inside a decompiler-merged function' if inside else
                                     'not in the function inventory (virtual-table-only entry)') +
                                    '; its instructions are pinned by the cited oracle'}

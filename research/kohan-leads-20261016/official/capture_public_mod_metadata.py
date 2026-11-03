@@ -2,10 +2,11 @@
 import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 import urllib.request
 
-ROOT = Path(r"<game root>\reconstruction\references\kohan-leads-20261016\official")
+ROOT = Path(os.environ["AA_GAME_ROOT"]) / "reconstruction" / "references" / "kohan-leads-20261016" / "official"
 COMMIT = "7fd8ebe9a838e634c9886c4778fb22c1178570ab"
 
 for name, relative in (

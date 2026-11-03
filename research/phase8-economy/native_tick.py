@@ -64,7 +64,7 @@ class TickMachine(Machine):
         self.put(CACHE + 0x1B4, LIMITS); self.put(LIMITS, case['limits']['provided_maximum'])
         self.put(CACHE + 0x1B8, LIMITS + 4); self.put(LIMITS + 4, case['limits']['stockpiled_maximum'])
         self.put(CACHE + 0x180, LIMITS + 8); self.put(LIMITS + 8, case['settings']['commander_experience_rate'])
-        self.put(CACHE + 0x17C, LIMITS + 12); self.put(LIMITS + 12, 0x7FC00000)  # unused by arg3=0 path
+        self.put(CACHE + 0x17C, LIMITS + 12); self.put(LIMITS + 12, 0x7FC00000)  # unused by argument 3=0 path
         self.put(0xB36534, WORLD)
         self.put(0xB39D8C, MANAGER)
         self.put(0xB364C0, GTID)

@@ -1,6 +1,6 @@
 """Read-only headless smoke checks for the copied Development06 executable."""
 from pathlib import Path
-import hashlib, json, subprocess
+import hashlib, json, os, subprocess
 
 root=Path(__file__).resolve().parents[1]
 release=root/'release/Development-06'
@@ -20,7 +20,7 @@ for name,arguments in [
                '--map','Campaign/axis01_crete','--render-check',str(out/'crete.png')]),
 ]:
     cmd=[str(exe),*arguments]
-    proc=subprocess.run(cmd,cwd='<games folder>',capture_output=True,text=True,timeout=120)
+    proc=subprocess.run(cmd,cwd=Path(os.environ['AA_GAME_ROOT']).parent,capture_output=True,text=True,timeout=120)
     row={'name':name,'command':cmd,'exit_code':proc.returncode,'stderr':proc.stderr}
     assert proc.returncode==0,(name,proc.stdout,proc.stderr)
     result=json.loads(proc.stdout)
@@ -32,7 +32,7 @@ for name,arguments in [
     rows.append(row)
 manifest=read(release/'manifest.json')
 for row in manifest['files']:assert sha(release/row['path'])==row['sha256']
-report={'passed':True,'exe_sha256':sha(exe),'cwd':'<games folder>','checks':rows,
+report={'passed':True,'exe_sha256':sha(exe),'cwd':'the folder above <game root>','checks':rows,
         'copied_map_png_identical_to_final_candidate':True,
         'manifest_payload_hashes_verified':len(manifest['files']),
         'scope':'Copied executable and shipped cache headless smoke; original assets still required, no full match/GUI/multiplayer claim'}

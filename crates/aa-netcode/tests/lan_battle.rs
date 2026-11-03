@@ -18,7 +18,7 @@
 //! A only sees the state when something draws, and this opening draws once in
 //! 340 ticks, before tick 120.
 //!
-//! Needs the original data (AA_GAME_ROOT, default <game root>);
+//! Needs the original data (AA_GAME_ROOT);
 //! skipped without it.
 use aa_netcode::lan::registries::{self, NativeRegistries};
 use aa_netcode::lan::{descriptor, HostOptions, LanConfig, LanData, LanEvent, LanGame, LanNode};
@@ -40,7 +40,7 @@ const MAP: &str = "(2v2)Berlin";
 const SEED: u32 = 20_261_025;
 
 fn root() -> PathBuf {
-    PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()))
+    PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_default())
 }
 fn units(s: &str) -> Vec<u16> {
     s.encode_utf16().collect()

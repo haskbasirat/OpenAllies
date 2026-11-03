@@ -5,7 +5,7 @@ use aa_numeric::{Binary,Precision};
 use aa_spatial::{collision::{Grid,Shape},geometry::{Placement,TileRect}};
 use aa_zones::set::Entry;
 fn error(e:impl std::fmt::Display)->Error{Error::World(e.to_string())}
-#[path=r"<game root>\rust-rebuild\crates\aa-actors\src\actor_registration.rs"]pub mod actor_registration;
+#[path=r"../../crates/aa-actors/src/actor_registration.rs"]pub mod actor_registration;
 pub mod load_zone_entry {use super::*;
 pub(crate) fn visit_indices(
     grid: &Grid,
@@ -113,7 +113,7 @@ pub(crate) fn entered_fields(entry:Entry,fields:&mut impl EnteredFields)->Result
     }
     Ok(())
 }
-#[path=r"<game root>\rust-rebuild\crates\aa-runtime\src\load_zone_entry_tests.rs"]mod iterator_tests;
+#[path=r"../../crates/aa-runtime/src/load_zone_entry_tests.rs"]mod iterator_tests;
 }
 mod original_registration_tests{use super::*;
 #[test]
@@ -161,7 +161,7 @@ fn native_state_count_order_and_lazy_rereads_match() {
         }
     }
     let proof: Value = serde_json::from_str(include_str!(
-        r"<game root>\rust-rebuild\research\skirmish-20261016-load-actor-registration\native-registration.json"
+        r"../../research/skirmish-20261016-load-actor-registration/native-registration.json"
     ))
     .unwrap();
     for table in proof["table_runs"].as_array().unwrap() {
@@ -208,4 +208,4 @@ fn native_state_count_order_and_lazy_rereads_match() {
     }
 }
 }
-#[path=r"<game root>\rust-rebuild\crates\aa-runtime\src\stored_actor_registration_tests.rs"]mod new_entry_tests;
+#[path=r"../../crates/aa-runtime/src/stored_actor_registration_tests.rs"]mod new_entry_tests;

@@ -74,25 +74,29 @@
       "table": "0xa273f0",
       "offset": "0xa8",
       "function": "0x6a71f0",
-      "bytes": ""
+      "sha256": "01cb47d078b4841b8408ec4fe278efa83115c6f6e101972987507d2b2b57dcf0",
+      "size": 3
     },
     {
       "table": "0xa273f0",
       "offset": "0xb4",
       "function": "0x6a71d0",
-      "bytes": ""
+      "sha256": "e18aacce29affcdddaa5f641ac1ec12552e0fe9d066e6408941b1792818b8619",
+      "size": 3
     },
     {
       "table": "0xa299d8",
       "offset": "0xa8",
       "function": "0x6a71d0",
-      "bytes": ""
+      "sha256": "e18aacce29affcdddaa5f641ac1ec12552e0fe9d066e6408941b1792818b8619",
+      "size": 3
     },
     {
       "table": "0xa299d8",
       "offset": "0xb4",
       "function": "0x6a71d0",
-      "bytes": ""
+      "sha256": "e18aacce29affcdddaa5f641ac1ec12552e0fe9d066e6408941b1792818b8619",
+      "size": 3
     }
   ],
   "commands": [

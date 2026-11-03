@@ -84,7 +84,7 @@ pub(crate) fn propagate(world: &mut impl World, member: ActorId) -> Result<()> {
 use super::*;
 use std::{cell::RefCell,path::PathBuf};
 use serde_json::{Value,json};
-fn evidence(name:&str)->PathBuf { PathBuf::from("<game root>\\rust-rebuild\\research\\skirmish-20261016-member-properties").join(name) }
+fn evidence(name:&str)->PathBuf { PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game")).join("rust-rebuild/research/skirmish-20261016-member-properties").join(name) }
 struct Probe {
     input: Value,
     entries: Vec<Value>,

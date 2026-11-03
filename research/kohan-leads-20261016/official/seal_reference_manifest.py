@@ -2,10 +2,11 @@
 import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 
 LOCAL = Path(__file__).resolve().parent
-RAW = Path(r"<game root>\reconstruction\references\kohan-leads-20261016\official")
+RAW = Path(os.environ["AA_GAME_ROOT"]) / "reconstruction" / "references" / "kohan-leads-20261016" / "official"
 
 
 def digest(path):

@@ -41,7 +41,7 @@ Intel i7-11700KF / NVIDIA GeForce RTX 3080, local Windows host.
 - {count} Rust workspace release tests passed, zero failed or ignored, including
   original source corpora and actual GPU tests. Strict all-target workspace
   Clippy passed. Cargo.lock and the Windows MSVC target were used.
-- 85 final executable diagnostic invocations passed from <games folder>, outside the
+- 85 final executable diagnostic invocations passed from the folder above <game root>, outside the
   project: 24 embedded world samples,53 mechanics comparisons, catalog/actor/
   economy checks, and all80 original map inputs. The embedded and raw-map
   checks passed with a deliberately nonexistent recovered-asset argument.

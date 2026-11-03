@@ -220,7 +220,7 @@ fn dds(width:u32,height:u32,mips:u32,fourcc:&[u8;4],data:&[u8])->Vec<u8>{
 fn hex(s:&str)->Vec<u8>{s.as_bytes().chunks_exact(2).map(|v|u8::from_str_radix(std::str::from_utf8(v).unwrap(),16).unwrap()).collect()}
 #[test]
 fn defined_native_reader_pixels_match_actual_decoder(){
-    let data:serde_json::Value=serde_json::from_str(include_str!("<game root>\\rust-rebuild\\research\\skirmish-20261017-texture-reader\\native-reader-pixels.json")).unwrap();
+    let data:serde_json::Value=serde_json::from_str(include_str!("../../../research/skirmish-20261017-texture-reader/native-reader-pixels.json")).unwrap();
     let mut count=0;
     for row in data["rows"].as_array().unwrap(){
         let bytes=hex(row["input"]["bytes"].as_str().unwrap());

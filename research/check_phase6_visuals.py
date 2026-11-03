@@ -1,6 +1,6 @@
 """Final executable render/cache probes; these are not FPS or native screenshot parity."""
 from pathlib import Path
-import hashlib, json, subprocess
+import hashlib, json, os, subprocess
 
 root=Path(__file__).resolve().parents[1]
 exe=root/'target/x86_64-pc-windows-msvc/release/AxisAlliesRust.exe'
@@ -16,7 +16,7 @@ for name,backend,selection,frames in [
 ]:
     cmd=[str(exe),'--assets',str(root.parent/'reconstruction'),'--workers','4','--backend',backend,
          *selection,'--render-check',str(out/(name+'.png')),'--render-frames',str(frames)]
-    proc=subprocess.run(cmd,cwd='<games folder>',capture_output=True,text=True,timeout=180)
+    proc=subprocess.run(cmd,cwd=Path(os.environ['AA_GAME_ROOT']).parent,capture_output=True,text=True,timeout=180)
     row={'name':name,'command':cmd,'exit_code':proc.returncode,'stderr':proc.stderr}
     if proc.returncode==0:
         row['result']=json.loads(proc.stdout)

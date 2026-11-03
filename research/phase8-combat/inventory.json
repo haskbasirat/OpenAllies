@@ -17,7 +17,6 @@
    "rust": "aa-combat::combat_value::ability_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": "Both CRT pow calls run natively in the oracle; the port uses aa-numeric::crt_pow.",
-   "decompiled_name": "0x45e090",
    "body_bytes": 1251,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -32,7 +31,6 @@
    "rust": "aa-combat::combat_value::Extent::value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45e6d0",
    "body_bytes": 44,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs"
@@ -46,7 +44,6 @@
    "rust": "aa-combat::combat_value::definition_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4618b0",
    "body_bytes": 985,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -61,7 +58,6 @@
    "rust": "aa-combat::combat_value::actor_data_values",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": "CSV open/header/close are DefinitionWorld seams (diagnostic file output).",
-   "decompiled_name": "0x4bb590",
    "body_bytes": 401,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -76,7 +72,6 @@
    "rust": "aa-combat::combat_value (insert)",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4bb850",
    "body_bytes": 165,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs"
@@ -90,7 +85,6 @@
    "rust": "aa-combat::combat_value::mean_values",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": "Empty trimmed ranges (native NaN means) are rejected explicitly.",
-   "decompiled_name": "0x4bbf90",
    "body_bytes": 1598,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -105,7 +99,6 @@
    "rust": "aa-combat::combat_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be3f0",
    "body_bytes": 47,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -123,7 +116,6 @@
    "rust": "aa-combat::combat_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be4b0",
    "body_bytes": 28,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs"
@@ -137,7 +129,6 @@
    "rust": "aa-combat::combat_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be680",
    "body_bytes": 41,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs"
@@ -151,7 +142,6 @@
    "rust": "aa-body::properties::ModifierState::power",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501a30",
    "body_bytes": 104,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -168,7 +158,6 @@
    "rust": "aa-body::properties::ModifierState::power",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501aa0",
    "body_bytes": 104,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -185,7 +174,6 @@
    "rust": "aa-combat::combat_value::performer_value",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57e430",
    "body_bytes": 562,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs"
@@ -199,7 +187,6 @@
    "rust": "aa-combat::combat_value (insert)",
    "oracle": "research/phase8-combat/native-combat-value-fixtures.json",
    "note": null,
-   "decompiled_name": "0x869d30",
    "body_bytes": 129,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -214,7 +201,6 @@
    "rust": "aa-numeric::crt_pow::select_path / ci_pow",
    "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
    "note": null,
-   "decompiled_name": "0x96d890",
    "body_bytes": 84,
    "cited_in": [
     "crates/aa-combat/src/combat_value.rs",
@@ -234,7 +220,6 @@
    "rust": "aa-numeric::crt_pow::CrtPowError::X87PathUnsupported",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x96d8ed",
    "body_bytes": 453,
    "cited_in": [
     "crates/aa-numeric/src/crt_pow.rs",
@@ -249,7 +234,6 @@
    "rust": "aa-numeric::crt_pow::libm_error_support",
    "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
    "note": null,
-   "decompiled_name": "___libm_error_support",
    "body_bytes": 654,
    "cited_in": [
     "crates/aa-numeric/src/crt_pow.rs"
@@ -263,7 +247,6 @@
    "rust": "aa-numeric::crt_pow::ci_pow",
    "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
    "note": null,
-   "decompiled_name": "0x977a10",
    "body_bytes": 25,
    "cited_in": [
     "crates/aa-numeric/src/crt_pow.rs",
@@ -278,7 +261,6 @@
    "rust": "aa-numeric::crt_pow::pow_sse2 (generated by lift_crt_pow.py)",
    "oracle": "research/phase8-combat/native-crt-pow-fixtures.json",
    "note": null,
-   "decompiled_name": "0x977a29",
    "body_bytes": 2861,
    "cited_in": [
     "crates/aa-numeric/src/crt_pow.rs"
@@ -292,7 +274,6 @@
    "rust": "aa-rules::abilities::permanent_vfx_present",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x428a30",
    "body_bytes": 72,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -306,7 +287,6 @@
    "rust": "aa-rules::abilities::FxcFacts",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x42c5e0",
    "body_bytes": 787,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -320,7 +300,6 @@
    "rust": "aa-rules::abilities::FxcFacts",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x494f30",
    "body_bytes": 396,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -334,7 +313,6 @@
    "rust": "aa-rules::abilities::FXC_TYPES",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x497a40",
    "body_bytes": 163,
    "cited_in": []
   },
@@ -346,7 +324,6 @@
    "rust": "aa-rules::abilities::effect_kind",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x497af0",
    "body_bytes": 163,
    "cited_in": []
   },
@@ -358,7 +335,6 @@
    "rust": "aa-rules::abilities (native_definition_effects)",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4bee20",
    "body_bytes": 114,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -372,7 +348,6 @@
    "rust": "aa-rules::abilities::native_ability_effects",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4bef80",
    "body_bytes": 210,
    "cited_in": [
     "crates/aa-rules/src/abilities.rs",
@@ -387,7 +362,6 @@
    "rust": "aa-rules::abilities::required_property_tokens / native_required_properties",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": "Its required_properties block 4C00AB..4C023D executed natively (ability_required section).",
-   "decompiled_name": "0x4bf990",
    "body_bytes": 2401,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -405,7 +379,6 @@
    "rust": "aa-rules::abilities::MODIFIER_TYPES",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c1060",
    "body_bytes": 163,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -419,7 +392,6 @@
    "rust": "aa-rules::terrain_speed::ATTRIBUTES",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c11e0",
    "body_bytes": 403,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs",
@@ -434,7 +406,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c4030",
    "body_bytes": 351,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -450,7 +421,6 @@
    "rust": "aa-rules::abilities::EnchantmentProperty",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c4f90",
    "body_bytes": 230,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -464,7 +434,6 @@
    "rust": "aa-rules::abilities::EffectData::Plain",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -480,7 +449,6 @@
    "rust": "aa-rules::abilities::EffectData::Morale",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -496,7 +464,6 @@
    "rust": "aa-rules::abilities::EffectData::StealResources",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -512,7 +479,6 @@
    "rust": "aa-rules::abilities::LoadedEffect",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca880",
    "body_bytes": 334,
    "cited_in": [
     "crates/aa-rules/src/abilities.rs",
@@ -527,7 +493,6 @@
    "rust": "aa-rules::abilities::EffectData::Heal",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cab50",
    "body_bytes": 229,
    "cited_in": [
     "crates/aa-rules/src/abilities.rs",
@@ -542,7 +507,6 @@
    "rust": "aa-rules::abilities::EffectData::Enchantment",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -558,7 +522,6 @@
    "rust": "aa-rules::abilities::heal_type",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cc1d0",
    "body_bytes": 233,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -572,7 +535,6 @@
    "rust": "aa-rules::abilities::EffectData::Damage",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -588,7 +550,6 @@
    "rust": "aa-rules::abilities::add_modifier",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4fec70",
    "body_bytes": 249,
    "cited_in": [
     "crates/aa-body/src/modifier_load.rs",
@@ -603,7 +564,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier::PeriodicDamage",
    "oracle": "research/phase8-combat/native-ability-effect-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -619,7 +579,6 @@
    "rust": "aa-combat::execution::use_area",
    "oracle": "research/phase7-ability/native-execution-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c9c90",
    "body_bytes": 500,
    "cited_in": [
     "crates/aa-combat/src/execution.rs",
@@ -634,7 +593,6 @@
    "rust": "performer::TrackWorld::turret_tracks_target",
    "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45dd30",
    "body_bytes": 19,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -648,7 +606,6 @@
    "rust": "aa-combat::performer::rank_allows",
    "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be4d0",
    "body_bytes": 24,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -662,7 +619,6 @@
    "rust": "aa-combat::performer::rank_allows",
    "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be4f0",
    "body_bytes": 38,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -676,7 +632,6 @@
    "rust": "performer::TrackWorld::ability_turret",
    "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c81e0",
    "body_bytes": 7,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -690,7 +645,6 @@
    "rust": "aa-combat::admission::recharge_remaining",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c83e0",
    "body_bytes": 115,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -706,7 +660,6 @@
    "rust": "aa-combat::ability::Ability::new",
    "oracle": "research/phase7-performer/native-constructor-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8650",
    "body_bytes": 114,
    "cited_in": [
     "crates/aa-actors/src/defender_state.rs",
@@ -724,7 +677,6 @@
    "rust": "aa-combat::commander",
    "oracle": "research/phase7-commander/native-commander-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8b40",
    "body_bytes": 220,
    "cited_in": [
     "crates/aa-combat/src/commander.rs",
@@ -739,7 +691,6 @@
    "rust": "aa-combat::payment::pay",
    "oracle": "research/phase7-payment/native-payment-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cdd90",
    "body_bytes": 105,
    "cited_in": [
     "crates/aa-combat/src/commander.rs",
@@ -755,7 +706,6 @@
    "rust": "aa-economy::tick::add_commander_experience",
    "oracle": "research/phase8-economy/native-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cdfd0",
    "body_bytes": 163,
    "cited_in": [
     "crates/aa-combat/src/commander.rs",
@@ -771,7 +721,6 @@
    "rust": "aa-combat::commander",
    "oracle": "research/phase7-commander/native-commander-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -786,7 +735,6 @@
    "rust": "aa-combat::commander",
    "oracle": "research/phase7-commander/native-commander-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ce1d0",
    "body_bytes": 305,
    "cited_in": [
     "crates/aa-combat/src/commander.rs"
@@ -800,7 +748,6 @@
    "rust": "aa-combat::commander",
    "oracle": "research/phase7-commander/native-commander-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4e0f00",
    "body_bytes": 133,
    "cited_in": [
     "crates/aa-combat/src/commander.rs",
@@ -816,7 +763,6 @@
    "rust": "aa-combat::payment::pay",
    "oracle": "research/phase7-payment/native-payment-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4e1690",
    "body_bytes": 53,
    "cited_in": [
     "crates/aa-combat/src/payment.rs",
@@ -831,7 +777,6 @@
    "rust": "aa-economy::transfers::can_afford_commander_ability",
    "oracle": "research/phase8-economy/native-transfer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4e24b0",
    "body_bytes": 211,
    "cited_in": [
     "crates/aa-combat/src/commander.rs",
@@ -848,7 +793,6 @@
    "rust": "aa-combat::payment::pay",
    "oracle": "research/phase7-payment/native-payment-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4e2590",
    "body_bytes": 161,
    "cited_in": [
     "crates/aa-combat/src/payment.rs"
@@ -862,7 +806,6 @@
    "rust": "aa-combat::constructors::init_create",
    "oracle": "research/phase7-performer/native-constructor-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -878,7 +821,6 @@
    "rust": "aa-combat::performer::finish",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57dc90",
    "body_bytes": 26,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -892,7 +834,6 @@
    "rust": "aa-combat::performer::gate_by_rank",
    "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57dcf0",
    "body_bytes": 151,
    "cited_in": [
     "crates/aa-actors/src/organization_callees.rs",
@@ -910,7 +851,6 @@
    "rust": "aa-combat::performer::track_target",
    "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
    "note": "aa-mind uai_kill/element_move seams may bind this too.",
-   "decompiled_name": "0x57dd90",
    "body_bytes": 265,
    "cited_in": [
     "crates/aa-combat/src/performer.rs",
@@ -928,7 +868,6 @@
    "rust": "aa-combat::performer::clear_turret_intentions",
    "oracle": "research/phase8-combat/native-turret-intention-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57dea0",
    "body_bytes": 50,
    "cited_in": [
     "crates/aa-combat/src/performer.rs",
@@ -945,7 +884,6 @@
    "rust": "aa-combat::performer::fill_context",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57e360",
    "body_bytes": 197,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -959,7 +897,6 @@
    "rust": "aa-combat::performer::use_frame",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57e8c0",
    "body_bytes": 86,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -973,7 +910,6 @@
    "rust": "aa-combat::performer::begin",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57ed20",
    "body_bytes": 283,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -987,7 +923,6 @@
    "rust": "aa-combat::performer::timed_event",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57f040",
    "body_bytes": 386,
    "cited_in": [
     "crates/aa-combat/src/performer.rs"
@@ -1001,7 +936,6 @@
    "rust": "aa-combat::performer::start",
    "oracle": "research/phase7-performer/native-performer-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57f290",
    "body_bytes": 556,
    "cited_in": [
     "crates/aa-combat/src/performer.rs",
@@ -1017,7 +951,6 @@
    "rust": "aa-combat::constructors::create",
    "oracle": "research/phase7-performer/native-constructor-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57f4d0",
    "body_bytes": 690,
    "cited_in": [
     "crates/aa-combat/src/constructors.rs",
@@ -1035,7 +968,6 @@
    "rust": "aa-combat::capture::World::resolve",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4579d0",
    "body_bytes": 38,
    "cited_in": [
     "crates/aa-combat/src/capture.rs"
@@ -1049,7 +981,6 @@
    "rust": "aa-combat::morale::capture_reward",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cebe0",
    "body_bytes": 97,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1065,7 +996,6 @@
    "rust": "executed inside 4D1120 oracle",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ceda0",
    "body_bytes": 53,
    "cited_in": [
     "crates/aa-actors/src/construction_actions.rs",
@@ -1085,7 +1015,6 @@
    "rust": "aa-combat::capture::eligible",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d1120",
    "body_bytes": 117,
    "cited_in": [
     "crates/aa-body/src/damage.rs",
@@ -1101,7 +1030,6 @@
    "rust": "aa-combat::capture::attempt",
    "oracle": "research/phase8-combat/native-capture-attempt-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d5230",
    "body_bytes": 881,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1120,7 +1048,6 @@
    "rust": "aa-combat::ownership::change_kingdom",
    "oracle": "research/phase8-combat/native-change-kingdom-fixtures.json",
    "note": "Kingdom add/remove actor and recruit singles bind to aa-economy::kingdom_registry.",
-   "decompiled_name": "0x4d8450",
    "body_bytes": 1620,
    "cited_in": [
     "crates/aa-combat/src/ownership.rs",
@@ -1137,7 +1064,6 @@
    "rust": "aa-economy::kingdom_registry::RecruitItemTable::find_single",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4e2a60",
    "body_bytes": 83,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -1156,7 +1082,6 @@
    "rust": "aa-economy::kingdom_registry::RecruitItemTable::remove_single",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4e2cb0",
    "body_bytes": 328,
    "cited_in": [
     "crates/aa-combat/src/ownership.rs",
@@ -1172,7 +1097,6 @@
    "rust": "aa-economy::kingdom_registry::remove_actor",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4e44e0",
    "body_bytes": 955,
    "cited_in": [
     "crates/aa-combat/src/ownership.rs",
@@ -1187,7 +1111,6 @@
    "rust": "aa-economy::kingdom_registry::RecruitItemTable::add_single",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4e4c30",
    "body_bytes": 400,
    "cited_in": [
     "crates/aa-combat/src/ownership.rs",
@@ -1203,7 +1126,6 @@
    "rust": "aa-economy::kingdom_registry::add_actor",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4e6180",
    "body_bytes": 811,
    "cited_in": [
     "crates/aa-actors/src/world_publication.rs",
@@ -1220,7 +1142,6 @@
    "rust": "aa-triggers::predicates::queue_captured",
    "oracle": null,
    "note": "Owner aa-triggers: trigger manager B36520 +50 queue prepend of a 54B820 Captured payload (+4 captured +14, +8 source +14, +C source if virtual +A8 else virtual +108, its +14). Not combat.",
-   "decompiled_name": "0x54bea0",
    "body_bytes": 135,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1236,7 +1157,6 @@
    "rust": "aa-combat::walls::transfer_component_88",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x56acb0",
    "body_bytes": 230,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1251,7 +1171,6 @@
    "rust": "aa-combat::walls::transfer_wall",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x585a20",
    "body_bytes": 30,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1266,7 +1185,6 @@
    "rust": "aa-combat::statistics_tracking",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58e890",
    "body_bytes": 30,
    "cited_in": [
     "crates/aa-combat/src/statistics_tracking.rs"
@@ -1280,7 +1198,6 @@
    "rust": "aa-combat::statistics_tracking",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58e8b0",
    "body_bytes": 291,
    "cited_in": [
     "crates/aa-combat/src/statistics_tracking.rs"
@@ -1294,7 +1211,6 @@
    "rust": "aa-combat::statistics_tracking::classified",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58ea80",
    "body_bytes": 43,
    "cited_in": [
     "crates/aa-combat/src/statistics_tracking.rs",
@@ -1310,7 +1226,6 @@
    "rust": "aa-combat::statistics_tracking",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58eba0",
    "body_bytes": 304,
    "cited_in": [
     "crates/aa-combat/src/statistics_tracking.rs"
@@ -1324,7 +1239,6 @@
    "rust": "aa-economy::statistics::structure_class",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": "Executed natively inside the 58F010 oracle.",
-   "decompiled_name": "0x58ee00",
    "body_bytes": 120,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1341,7 +1255,6 @@
    "rust": "aa-combat::statistics_tracking::untrack",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58efe0",
    "body_bytes": 48,
    "cited_in": [
     "crates/aa-combat/src/statistics_tracking.rs",
@@ -1357,7 +1270,6 @@
    "rust": "aa-combat::statistics_tracking::track",
    "oracle": "research/phase8-combat/native-statistics-tracking-fixtures.json",
    "note": "On aa-economy Statistics (add_score); class word actor+13C.",
-   "decompiled_name": "0x58f010",
    "body_bytes": 585,
    "cited_in": [
     "crates/aa-combat/src/capture.rs",
@@ -1376,7 +1288,6 @@
    "rust": "aa-body",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x409230",
    "body_bytes": 77,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -1401,7 +1312,6 @@
    "rust": "aa-combat::types::load",
    "oracle": "research/phase6-weapon/native-damage-type-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c0a80",
    "body_bytes": 287,
    "cited_in": [
     "crates/aa-combat/src/types.rs"
@@ -1415,7 +1325,6 @@
    "rust": "aa-body::property_api::apply_property (property_admission::add)",
    "oracle": "research/phase7-properties/native-admission.json",
    "note": null,
-   "decompiled_name": "0x4cef10",
    "body_bytes": 94,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -1437,7 +1346,6 @@
    "rust": "aa-combat::siege::recently_damaged",
    "oracle": "research/phase8-combat/native-siege-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d0440",
    "body_bytes": 106,
    "cited_in": [
     "crates/aa-combat/src/siege.rs",
@@ -1453,7 +1361,6 @@
    "rust": "aa-combat::siege::refresh_under_siege",
    "oracle": "research/phase8-combat/native-siege-fixtures.json",
    "note": "Sets state 20 under_siege.",
-   "decompiled_name": "0x4d6660",
    "body_bytes": 391,
    "cited_in": [
     "crates/aa-combat/src/begin_death.rs",
@@ -1470,7 +1377,6 @@
    "rust": "aa-combat::periodic::remove_property",
    "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5032d0",
    "body_bytes": 122,
    "cited_in": [
     "crates/aa-actors/src/state_effects.rs",
@@ -1489,7 +1395,6 @@
    "rust": "aa-combat::periodic::remove_property",
    "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5034f0",
    "body_bytes": 236,
    "cited_in": [
     "crates/aa-body/src/property_effects.rs",
@@ -1505,7 +1410,6 @@
    "rust": "aa-body::Body::from_resolved",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x561960",
    "body_bytes": 161,
    "cited_in": [
     "crates/aa-actors/src/ground_states.rs",
@@ -1520,7 +1424,6 @@
    "rust": "aa-body::damage",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x561be0",
    "body_bytes": 49,
    "cited_in": [
     "crates/aa-body/src/damage.rs"
@@ -1534,7 +1437,6 @@
    "rust": "aa-body::Body::update_resolved_maximum",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x561d40",
    "body_bytes": 173,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -1550,7 +1452,6 @@
    "rust": "aa-body::Body::set_health_from_source",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x561e50",
    "body_bytes": 928,
    "cited_in": [
     "crates/aa-actors/src/leaf_init.rs",
@@ -1567,7 +1468,6 @@
    "rust": "aa-body::Body::set_health_and_maximum",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x562200",
    "body_bytes": 135,
    "cited_in": [
     "crates/aa-actors/src/init_create.rs",
@@ -1583,7 +1483,6 @@
    "rust": "aa-body::damage::deal_damage",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x5625c0",
    "body_bytes": 1500,
    "cited_in": [
     "crates/aa-body/src/damage.rs",
@@ -1602,7 +1501,6 @@
    "rust": "aa-body::Body::heal_plain",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x562ba0",
    "body_bytes": 367,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -1618,7 +1516,6 @@
    "rust": "aa-combat::shortfall::damage",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x562d10",
    "body_bytes": 242,
    "cited_in": [
     "crates/aa-combat/src/shortfall.rs",
@@ -1633,7 +1530,6 @@
    "rust": "aa-combat::denizen::on_intruder",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x568d80",
    "body_bytes": 195,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs",
@@ -1650,7 +1546,6 @@
    "rust": "aa-combat::walls::intruder_near_wall",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x569300",
    "body_bytes": 97,
    "cited_in": [
     "crates/aa-combat/src/walls.rs",
@@ -1668,7 +1563,6 @@
    "rust": "aa-combat::walls::intruder_near_wall",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": "585280 within-wall geometry on the wall actor +98 is an IntruderWorld seam (wall/geometry owner).",
-   "decompiled_name": "0x569540",
    "body_bytes": 99,
    "cited_in": [
     "crates/aa-combat/src/siege.rs",
@@ -1683,7 +1577,6 @@
    "rust": "aa-combat::denizen::intruder_in_range",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x569a80",
    "body_bytes": 269,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs",
@@ -1698,7 +1591,6 @@
    "rust": "aa-combat::denizen::on_damaged",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": "aa-body Action::Component88Damaged remains a required world action.",
-   "decompiled_name": "0x56ae70",
    "body_bytes": 70,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs",
@@ -1713,7 +1605,6 @@
    "rust": "aa-combat::shortfall::tick",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578660",
    "body_bytes": 103,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -1729,7 +1620,6 @@
    "rust": "aa-combat::periodic::tick",
    "oracle": "research/phase6-weapon/native-periodic-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5818d0",
    "body_bytes": 521,
    "cited_in": [
     "crates/aa-combat/src/periodic.rs",
@@ -1744,7 +1634,6 @@
    "rust": "aa-combat::death::outer_damaged",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x584cd0",
    "body_bytes": 21,
    "cited_in": [
     "crates/aa-body/src/damage.rs",
@@ -1760,7 +1649,6 @@
    "rust": "aa-combat::walls::wall_complete",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x585160",
    "body_bytes": 49,
    "cited_in": [
     "crates/aa-combat/src/siege.rs",
@@ -1780,7 +1668,6 @@
    "rust": "aa-combat::walls::point_within_wall",
    "oracle": "research/phase8-combat/native-wall-geometry-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5851a0",
    "body_bytes": 218,
    "cited_in": [
     "crates/aa-combat/src/walls.rs"
@@ -1794,7 +1681,6 @@
    "rust": "aa-combat::walls::intruder_within_wall",
    "oracle": "research/phase8-combat/native-wall-geometry-fixtures.json",
    "note": null,
-   "decompiled_name": "0x585280",
    "body_bytes": 183,
    "cited_in": [
     "crates/aa-combat/src/walls.rs",
@@ -1811,7 +1697,6 @@
    "rust": "aa-combat::walls::refresh_flag13",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x585ae0",
    "body_bytes": 130,
    "cited_in": [
     "crates/aa-combat/src/walls.rs"
@@ -1825,7 +1710,6 @@
    "rust": "aa-combat::walls::propagate_under_siege",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x586370",
    "body_bytes": 244,
    "cited_in": [
     "crates/aa-combat/src/siege.rs",
@@ -1840,7 +1724,6 @@
    "rust": "aa-combat::begin_death::begin_death",
    "oracle": "research/phase8-combat/native-begin-death-fixtures.json",
    "note": "Orchestration ported; credit, zone release, announcements, component deaths, wall member, StartDying and removal stay begin_death::World services.",
-   "decompiled_name": "0x4d7960",
    "body_bytes": 886,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -1877,7 +1760,6 @@
    "rust": "aa-combat::death::DeathQueue::push",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4f1a90",
    "body_bytes": 56,
    "cited_in": [
     "crates/aa-combat/src/death.rs",
@@ -1892,7 +1774,6 @@
    "rust": "aa-world (removal path)",
    "oracle": "research/phase8-tick/native-removal-request.json",
    "note": null,
-   "decompiled_name": "0x4f4c40",
    "body_bytes": 340,
    "cited_in": [
     "crates/aa-mapworld/src/fresh_creation.rs",
@@ -1907,7 +1788,6 @@
    "rust": "aa-world::World::transition",
    "oracle": "research/phase8-tick/native-removal-request.json",
    "note": "One drain: aa-world owns 4F65B0; phase8-combat drain fixtures are cross-evidence.",
-   "decompiled_name": "0x4f65b0",
    "body_bytes": 427,
    "cited_in": [
     "crates/aa-combat/src/death.rs",
@@ -1924,7 +1804,6 @@
    "rust": "aa-world::World::request_removal",
    "oracle": "research/phase8-tick/native-removal-request.json",
    "note": null,
-   "decompiled_name": "0x4f6760",
    "body_bytes": 146,
    "cited_in": [
     "crates/aa-combat/src/begin_death.rs",
@@ -1949,7 +1828,6 @@
    "rust": "aa-body::Body::sink_fraction_f32",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x5617e0",
    "body_bytes": 102,
    "cited_in": [
     "crates/aa-body/src/lib.rs"
@@ -1963,7 +1841,6 @@
    "rust": "aa-body::Body::check_death",
    "oracle": "research/phase4-body/body-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x561c20",
    "body_bytes": 49,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -1978,7 +1855,6 @@
    "rust": "aa-body::dying::start_dying",
    "oracle": "research/phase6-combat/dying-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x562380",
    "body_bytes": 565,
    "cited_in": [
     "crates/aa-body/src/dying.rs",
@@ -1994,7 +1870,6 @@
    "rust": "aa-combat::death::wall_member_killed",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x584e70",
    "body_bytes": 77,
    "cited_in": [
     "crates/aa-combat/src/death.rs",
@@ -2009,7 +1884,6 @@
    "rust": "aa-body::experience::award",
    "oracle": "research/phase6-experience",
    "note": null,
-   "decompiled_name": "0x4ce770",
    "body_bytes": 177,
    "cited_in": [
     "crates/aa-body/src/experience.rs",
@@ -2025,7 +1899,6 @@
    "rust": "aa-body::experience::actor_value",
    "oracle": "research/phase6-experience",
    "note": null,
-   "decompiled_name": "0x4d01e0",
    "body_bytes": 68,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2042,7 +1915,6 @@
    "rust": "aa-body::credit::credit_kill",
    "oracle": "research/phase6-credit",
    "note": null,
-   "decompiled_name": "0x4d57c0",
    "body_bytes": 1562,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2058,7 +1930,6 @@
    "rust": "aa-body::experience_amounts::ratio",
    "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
    "note": null,
-   "decompiled_name": "0x571820",
    "body_bytes": 137,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2074,7 +1945,6 @@
    "rust": "aa-body::experience_amounts::engagement",
    "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5718b0",
    "body_bytes": 41,
    "cited_in": [
     "crates/aa-body/src/experience_amounts.rs",
@@ -2090,7 +1960,6 @@
    "rust": "aa-body::experience_amounts::clamped(Rout)",
    "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5718e0",
    "body_bytes": 114,
    "cited_in": [
     "crates/aa-body/src/experience_amounts.rs",
@@ -2106,7 +1975,6 @@
    "rust": "aa-body::experience_amounts::clamped(Kill); credit.rs",
    "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
    "note": null,
-   "decompiled_name": "0x571960",
    "body_bytes": 114,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2122,7 +1990,6 @@
    "rust": "aa-body::experience_amounts::clamped(Capture)",
    "oracle": "research/phase8-combat/native-experience-amount-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5719e0",
    "body_bytes": 114,
    "cited_in": [
     "crates/aa-body/src/experience_amounts.rs",
@@ -2137,7 +2004,6 @@
    "rust": "aa-body::promotion",
    "oracle": "research/phase7-promotion",
    "note": null,
-   "decompiled_name": "0x571a60",
    "body_bytes": 483,
    "cited_in": [
     "crates/aa-body/src/experience.rs",
@@ -2152,7 +2018,6 @@
    "rust": "aa-body::experience::award",
    "oracle": "research/phase6-experience",
    "note": null,
-   "decompiled_name": "0x578710",
    "body_bytes": 52,
    "cited_in": [
     "crates/aa-body/src/experience.rs"
@@ -2166,7 +2031,6 @@
    "rust": "aa-body::experience",
    "oracle": "research/phase6-experience",
    "note": null,
-   "decompiled_name": "0x578c00",
    "body_bytes": 247,
    "cited_in": [
     "crates/aa-body/src/experience.rs"
@@ -2180,7 +2044,6 @@
    "rust": "aa-combat::morale::engagement_experience",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579600",
    "body_bytes": 96,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -2195,7 +2058,6 @@
    "rust": "aa-economy::statistics::RelationStatistics::add",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x58d950",
    "body_bytes": 119,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2212,7 +2074,6 @@
    "rust": "aa-body::credit::increment_stat",
    "oracle": "research/phase6-credit",
    "note": null,
-   "decompiled_name": "0x58e870",
    "body_bytes": 19,
    "cited_in": [
     "crates/aa-body/src/credit.rs",
@@ -2234,7 +2095,6 @@
    "rust": "aa-combat::performer::Context::new",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8300",
    "body_bytes": 46,
    "cited_in": [
     "crates/aa-combat/src/performer.rs",
@@ -2253,7 +2113,6 @@
    "rust": "aa-combat::World::resolve_target / morale::effect_organization",
    "oracle": "research/phase6-weapon + research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8330",
    "body_bytes": 33,
    "cited_in": [
     "crates/aa-combat/src/lib.rs",
@@ -2269,7 +2128,6 @@
    "rust": "aa-combat::execution::use_ability",
    "oracle": "research/phase7-ability/native-execution-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c9550",
    "body_bytes": 1856,
    "cited_in": [
     "crates/aa-combat/src/execution.rs",
@@ -2286,7 +2144,6 @@
    "rust": "aa-combat::reactions::try_use",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c9eb0",
    "body_bytes": 58,
    "cited_in": [
     "crates/aa-combat/src/reactions.rs",
@@ -2301,7 +2158,6 @@
    "rust": "world service; executed in phase6 oracles",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x4cf110",
    "body_bytes": 14,
    "cited_in": [
     "crates/aa-actors/src/construction_actions.rs",
@@ -2333,7 +2189,6 @@
    "rust": "aa-combat::offensive_modifier; aa-body::properties",
    "oracle": "research/phase6-weapon/native-weapon-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501530",
    "body_bytes": 43,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -2348,7 +2203,6 @@
    "rust": "aa-body::damage::first_damage_factor",
    "oracle": "research/phase6-combat/damage-native-oracle.json",
    "note": null,
-   "decompiled_name": "0x501650",
    "body_bytes": 51,
    "cited_in": [
     "crates/aa-body/src/damage.rs",
@@ -2363,7 +2217,6 @@
    "rust": "aa-combat::reactions::defender_abilities",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501770",
    "body_bytes": 86,
    "cited_in": [
     "crates/aa-combat/src/reactions.rs",
@@ -2378,7 +2231,6 @@
    "rust": "aa-combat::World::offensive_factor",
    "oracle": "research/phase6-weapon/native-weapon-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57dbf0",
    "body_bytes": 76,
    "cited_in": [
     "crates/aa-combat/src/lib.rs"
@@ -2392,7 +2244,6 @@
    "rust": "aa-combat::execution::dispatch_from_performer",
    "oracle": "research/phase7-ability/native-dispatch-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57e030",
    "body_bytes": 395,
    "cited_in": [
     "crates/aa-combat/src/execution.rs",
@@ -2408,7 +2259,6 @@
    "rust": "executed in denizen/removal oracles",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4364c0",
    "body_bytes": 73,
    "cited_in": [
     "crates/aa-actors/src/organization_callees.rs",
@@ -2437,7 +2287,6 @@
    "rust": "aa-combat::organization::follow_leader",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4515f0",
    "body_bytes": 45,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2452,7 +2301,6 @@
    "rust": "aa-combat::organization::entrench_delay",
    "oracle": "research/phase8-combat/native-entrench-delay-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45d520",
    "body_bytes": 34,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2467,7 +2315,6 @@
    "rust": "organization::RemovalWorld::morale_value",
    "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45d580",
    "body_bytes": 34,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2484,7 +2331,6 @@
    "rust": "aa-combat::regeneration",
    "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45d5b0",
    "body_bytes": 34,
    "cited_in": [
     "crates/aa-combat/src/regeneration.rs",
@@ -2499,7 +2345,6 @@
    "rust": "organization::RemovalWorld",
    "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
    "note": null,
-   "decompiled_name": "0x45ec60",
    "body_bytes": 20,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2515,7 +2360,6 @@
    "rust": "aa-combat::morale::organization_actor",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ce6c0",
    "body_bytes": 29,
    "cited_in": [
     "crates/aa-actors/src/post_load.rs",
@@ -2533,7 +2377,6 @@
    "rust": "aa-combat::morale::slayer_organization",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ceb40",
    "body_bytes": 46,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -2547,7 +2390,6 @@
    "rust": "aa-body::property_api::remove_property",
    "oracle": "research/phase8-combat/native-property-wrappers-fixtures.json",
    "note": "0x581810 body is aa-body property_effects::remove (phase7 fixtures).",
-   "decompiled_name": "0x4cef70",
    "body_bytes": 15,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2568,7 +2410,6 @@
    "rust": "morale::Actor::engaged",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cfe90",
    "body_bytes": 14,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -2582,7 +2423,6 @@
    "rust": "aa-economy::supply::in_supply",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4d0a80",
    "body_bytes": 524,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2597,7 +2437,6 @@
    "rust": "aa-combat::organization::remove_member",
    "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d1050",
    "body_bytes": 41,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2614,7 +2453,6 @@
    "rust": "morale::Actor::flags104",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d1080",
    "body_bytes": 24,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2639,7 +2477,6 @@
    "rust": "aa-combat::morale::rout",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d3fa0",
    "body_bytes": 238,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -2655,7 +2492,6 @@
    "rust": "aa-actors::state::group",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4d49b0",
    "body_bytes": 85,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2673,7 +2509,6 @@
    "rust": "aa-actors::state",
    "oracle": null,
    "note": "Seam here; aa-actors owns it.",
-   "decompiled_name": "0x4d64f0",
    "body_bytes": 357,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2703,7 +2538,6 @@
    "rust": "aa-combat::organization::supply_state",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d7ce0",
    "body_bytes": 69,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2719,7 +2553,6 @@
    "rust": "aa-combat::organization::targeted_state",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d7da0",
    "body_bytes": 51,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2734,7 +2567,6 @@
    "rust": "aa-body::properties::ModifierState::multiply",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501500",
    "body_bytes": 10,
    "cited_in": [
     "crates/aa-body/src/properties.rs"
@@ -2748,7 +2580,6 @@
    "rust": "aa-body::properties::ModifierState::divide",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501510",
    "body_bytes": 10,
    "cited_in": [
     "crates/aa-body/src/properties.rs"
@@ -2762,7 +2593,6 @@
    "rust": "aa-combat::organization::tick_maintenance",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5147c0",
    "body_bytes": 27,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -2782,7 +2612,6 @@
    "rust": "aa-mind::cai_reactions (wavering)",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x51f920",
    "body_bytes": 200,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -2799,7 +2628,6 @@
    "rust": "aa-mind::cai_reactions (exhausted)",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x51f9f0",
    "body_bytes": 230,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -2816,7 +2644,6 @@
    "rust": "aa-mind::cai_rout",
    "oracle": null,
    "note": "Its rout score 52A930 is proven in aa-mind::rout_score.",
-   "decompiled_name": "0x521240",
    "body_bytes": 342,
    "cited_in": [
     "crates/aa-mind/src/cai_rout.rs",
@@ -2833,7 +2660,6 @@
    "rust": "aa-mind::action_mask::regiment",
    "oracle": null,
    "note": "aa-mind identifies 521E10 as the regiment command mask (MoraleRetreatPenalty context).",
-   "decompiled_name": "0x521e10",
    "body_bytes": 376,
    "cited_in": [
     "crates/aa-mind/src/action_mask.rs"
@@ -2847,7 +2673,6 @@
    "rust": null,
    "oracle": null,
    "note": "Owned by aa-triggers.",
-   "decompiled_name": "0x543800",
    "body_bytes": 211,
    "cited_in": [
     "crates/aa-triggers/src/extended.rs"
@@ -2861,7 +2686,6 @@
    "rust": "aa-combat::regeneration::BodyHealth::full",
    "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5617c0",
    "body_bytes": 22,
    "cited_in": [
     "crates/aa-combat/src/regeneration.rs",
@@ -2878,7 +2702,6 @@
    "rust": "aa-combat::organization::attach_membership",
    "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5705a0",
    "body_bytes": 60,
    "cited_in": [
     "crates/aa-actors/src/organization_callees.rs",
@@ -2898,7 +2721,6 @@
    "rust": "aa-combat::organization::detach_membership",
    "oracle": "research/phase8-combat/native-wall-fixtures.json",
    "note": null,
-   "decompiled_name": "0x570670",
    "body_bytes": 76,
    "cited_in": [
     "crates/aa-combat/src/organization.rs"
@@ -2912,7 +2734,6 @@
    "rust": "aa-combat::morale::state",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578140",
    "body_bytes": 100,
    "cited_in": [
     "crates/aa-actors/src/ability_flags.rs",
@@ -2934,7 +2755,6 @@
    "rust": "aa-combat::organization::propagate_properties",
    "oracle": "research/phase8-combat/native-member-extras-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5784c0",
    "body_bytes": 113,
    "cited_in": [
     "crates/aa-actors/src/organization_callees.rs",
@@ -2953,7 +2773,6 @@
    "rust": "aa-combat::organization::remove_member",
    "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578540",
    "body_bytes": 102,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -2968,7 +2787,6 @@
    "rust": "aa-combat::morale::attack_efficiency",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5785d0",
    "body_bytes": 141,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -2983,7 +2801,6 @@
    "rust": "aa-combat::morale::gain",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5786d0",
    "body_bytes": 60,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -2997,7 +2814,6 @@
    "rust": "aa-combat::organization::combat_value",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5788b0",
    "body_bytes": 129,
    "cited_in": [
     "crates/aa-actors/src/organization_state.rs",
@@ -3016,7 +2832,6 @@
    "rust": "aa-combat::morale::slayer",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578f10",
    "body_bytes": 243,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -3030,7 +2845,6 @@
    "rust": "aa-combat::morale::breaker",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579010",
    "body_bytes": 197,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -3044,7 +2858,6 @@
    "rust": "aa-combat::organization::regeneration_gate",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579110",
    "body_bytes": 95,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3059,7 +2872,6 @@
    "rust": "aa-combat::morale::lose",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579660",
    "body_bytes": 236,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -3074,7 +2886,6 @@
    "rust": "aa-combat::morale::modify",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579750",
    "body_bytes": 99,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -3089,7 +2900,6 @@
    "rust": "aa-movement::formation (ComputeSlotPosition)",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x5797e0",
    "body_bytes": 404,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3105,7 +2915,6 @@
    "rust": "aa-combat::morale::retreat_penalty",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579ab0",
    "body_bytes": 238,
    "cited_in": [
     "crates/aa-combat/src/morale.rs"
@@ -3119,7 +2928,6 @@
    "rust": "aa-combat::morale::tick",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57a0a0",
    "body_bytes": 530,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -3134,7 +2942,6 @@
    "rust": "aa-combat::organization::recompute_speed",
    "oracle": "research/phase8-combat/native-org-speed-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57a640",
    "body_bytes": 225,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3149,7 +2956,6 @@
    "rust": "aa-combat::regeneration::spawn_member",
    "oracle": "research/phase8-combat/native-member-spawn-fixtures.json",
    "note": "Actor creation 4FBF40 is the SpawnWorld::create_actor seam (actor-creation owner).",
-   "decompiled_name": "0x57ad30",
    "body_bytes": 375,
    "cited_in": [
     "crates/aa-combat/src/regeneration.rs",
@@ -3166,7 +2972,6 @@
    "rust": "aa-combat::regeneration::regroup",
    "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57aeb0",
    "body_bytes": 334,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3182,7 +2987,6 @@
    "rust": "aa-combat::regeneration::regenerate",
    "oracle": "research/phase8-combat/native-regeneration-fixtures.json",
    "note": "Member spawn 57AD30, heal 562BA0 and presentation 50C380 are world services.",
-   "decompiled_name": "0x57b5a0",
    "body_bytes": 515,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3198,7 +3002,6 @@
    "rust": "aa-actors::element_position::set_position",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x57c680",
    "body_bytes": 213,
    "cited_in": [
     "crates/aa-actors/src/element_position.rs",
@@ -3213,7 +3016,6 @@
    "rust": "aa-combat::organization::follow_leader",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57c800",
    "body_bytes": 112,
    "cited_in": [
     "crates/aa-actors/src/element_position.rs",
@@ -3234,7 +3036,6 @@
    "rust": "aa-combat::organization::tick_maintenance",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": "Calls the proven 57A0A0, 579600, 5785D0, 578660.",
-   "decompiled_name": "0x57c8e0",
    "body_bytes": 699,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3250,7 +3051,6 @@
    "rust": "aa-combat::organization::remove_member",
    "oracle": "research/phase8-combat/native-member-removal-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57cd70",
    "body_bytes": 922,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -3266,7 +3066,6 @@
    "rust": "aa-combat::organization::combat_value",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57dc40",
    "body_bytes": 30,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3281,7 +3080,6 @@
    "rust": "organization::World::watched_target",
    "oracle": "research/phase8-combat/native-org-tick-fixtures.json",
    "note": null,
-   "decompiled_name": "0x58b150",
    "body_bytes": 12,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -3296,7 +3094,6 @@
    "rust": "aa-combat::fx::emit",
    "oracle": "research/phase7-fx/native-fx-fixtures.json",
    "note": null,
-   "decompiled_name": "0x428570",
    "body_bytes": 176,
    "cited_in": [
     "crates/aa-combat/src/fx.rs"
@@ -3310,7 +3107,6 @@
    "rust": "aa-combat::fx::emit",
    "oracle": "research/phase7-fx/native-fx-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4294e0",
    "body_bytes": 454,
    "cited_in": [
     "crates/aa-combat/src/fx.rs"
@@ -3324,7 +3120,6 @@
    "rust": "aa-combat::fx::emit",
    "oracle": "research/phase7-fx/native-fx-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8500",
    "body_bytes": 96,
    "cited_in": [
     "crates/aa-combat/src/fx.rs",
@@ -3339,7 +3134,6 @@
    "rust": "regeneration::World::present_regeneration",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x50c380",
    "body_bytes": 29,
    "cited_in": [
     "crates/aa-body/src/lib.rs",
@@ -3354,7 +3148,6 @@
    "rust": "aa-combat::presentation",
    "oracle": "research/phase8-combat/native-damage-number-fixtures.json",
    "note": null,
-   "decompiled_name": "0x50d070",
    "body_bytes": 56,
    "cited_in": [
     "crates/aa-combat/src/presentation.rs"
@@ -3368,7 +3161,6 @@
    "rust": "aa-combat::presentation::queue_damage_number",
    "oracle": "research/phase8-combat/native-damage-number-fixtures.json",
    "note": null,
-   "decompiled_name": "0x50d0b0",
    "body_bytes": 106,
    "cited_in": [
     "crates/aa-combat/src/presentation.rs",
@@ -3383,7 +3175,6 @@
    "rust": "organization::World::flare",
    "oracle": null,
    "note": "Owner zone/detection solver (Sim/Zones.cpp; phase8-movement cluster Solver/ZoneSolver.cpp): KKC_Zone::Move by world position (552640 clamp, cell shift [B36534]+30 +4, 515970). Not combat.",
-   "decompiled_name": "0x515f40",
    "body_bytes": 90,
    "cited_in": [
     "crates/aa-actors/src/post_load.rs",
@@ -3401,7 +3192,6 @@
    "rust": "aa-combat::surface::shape_projection",
    "oracle": "research/phase7-surface/native-surface-fixtures.json",
    "note": null,
-   "decompiled_name": "0x46e150",
    "body_bytes": 291,
    "cited_in": [
     "crates/aa-combat/src/surface.rs",
@@ -3417,7 +3207,6 @@
    "rust": "aa-combat::surface::placed_projection",
    "oracle": "research/phase7-surface/native-surface-fixtures.json",
    "note": null,
-   "decompiled_name": "0x46e4f0",
    "body_bytes": 79,
    "cited_in": [
     "crates/aa-combat/src/surface.rs",
@@ -3433,7 +3222,6 @@
    "rust": "aa-combat::launch::spawn_position",
    "oracle": "research/phase7-ability/native-launch-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be780",
    "body_bytes": 343,
    "cited_in": [
     "crates/aa-combat/src/launch.rs"
@@ -3447,7 +3235,6 @@
    "rust": "aa-combat::projectile::start",
    "oracle": "research/phase7-ability/native-projectile-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8140",
    "body_bytes": 26,
    "cited_in": [
     "crates/aa-combat/src/projectile.rs"
@@ -3461,7 +3248,6 @@
    "rust": "aa-combat::launch::launch",
    "oracle": "research/phase7-ability/native-launch-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8cb0",
    "body_bytes": 622,
    "cited_in": [
     "crates/aa-combat/src/launch.rs"
@@ -3475,7 +3261,6 @@
    "rust": "aa-combat::surface::ground_position",
    "oracle": "research/phase7-surface/native-surface-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4eee60",
    "body_bytes": 128,
    "cited_in": [
     "crates/aa-combat/src/surface.rs"
@@ -3489,7 +3274,6 @@
    "rust": "aa-combat::surface::hit_position",
    "oracle": "research/phase7-surface/native-surface-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4eeee0",
    "body_bytes": 132,
    "cited_in": [
     "crates/aa-combat/src/projectile.rs",
@@ -3504,7 +3288,6 @@
    "rust": "aa-combat::projectile::impact",
    "oracle": "research/phase7-ability/native-projectile-fixtures.json",
    "note": null,
-   "decompiled_name": "0x580660",
    "body_bytes": 241,
    "cited_in": [
     "crates/aa-combat/src/projectile.rs"
@@ -3518,7 +3301,6 @@
    "rust": "aa-combat::projectile::advance",
    "oracle": "research/phase7-ability/native-projectile-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -3533,7 +3315,6 @@
    "rust": "aa-combat::projectile::start",
    "oracle": "research/phase7-ability/native-projectile-fixtures.json",
    "note": null,
-   "decompiled_name": "0x580bc0",
    "body_bytes": 782,
    "cited_in": [
     "crates/aa-combat/src/projectile.rs"
@@ -3547,7 +3328,6 @@
    "rust": "aa-combat::projectile::Projectile::new",
    "oracle": "research/phase7-performer/native-constructor-fixtures.json",
    "note": null,
-   "decompiled_name": "0x580ed0",
    "body_bytes": 151,
    "cited_in": [
     "crates/aa-combat/src/projectile.rs"
@@ -3561,7 +3341,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x46e2d0",
    "body_bytes": 298,
    "cited_in": [
     "crates/aa-spatial/src/range.rs"
@@ -3575,7 +3354,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x46eb70",
    "body_bytes": 225,
    "cited_in": [
     "crates/aa-spatial/src/range.rs"
@@ -3589,7 +3367,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x46f100",
    "body_bytes": 290,
    "cited_in": [
     "crates/aa-mind/src/element_move.rs",
@@ -3607,7 +3384,6 @@
    "rust": "aa-combat::admission (range_value)",
    "oracle": "research/phase7-ability-motion/native-range-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be910",
    "body_bytes": 82,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -3622,7 +3398,6 @@
    "rust": "aa-combat::admission::effective_range",
    "oracle": "research/phase7-ability-motion/native-range-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8270",
    "body_bytes": 35,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -3639,7 +3414,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": []
@@ -3652,7 +3426,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x4ee400",
    "body_bytes": 83,
    "cited_in": []
   },
@@ -3664,7 +3437,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x4ee7c0",
    "body_bytes": 54,
    "cited_in": [
     "crates/aa-runtime/src/spatial_world.rs",
@@ -3679,7 +3451,6 @@
    "rust": "aa-spatial::range",
    "oracle": "research/phase7-range/native-range.json",
    "note": null,
-   "decompiled_name": "0x4ee800",
    "body_bytes": 57,
    "cited_in": [
     "crates/aa-runtime/src/spatial_world.rs",
@@ -3695,7 +3466,6 @@
    "rust": "aa-combat::admission::maximum_range",
    "oracle": "research/phase7-moving-target/native-maximum-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57ec80",
    "body_bytes": 146,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -3710,7 +3480,6 @@
    "rust": "aa-spatial::soft_range",
    "oracle": "research/phase7-soft-range/native-soft-range.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -3726,7 +3495,6 @@
    "rust": "aa-spatial::soft_range",
    "oracle": "research/phase7-soft-range/native-soft-range.json",
    "note": null,
-   "decompiled_name": "0x4ea0f0",
    "body_bytes": 83,
    "cited_in": [
     "crates/aa-mapworld/src/fresh_creation.rs",
@@ -3745,7 +3513,6 @@
    "rust": "aa-spatial::soft_range::source_first_in_range",
    "oracle": "research/phase7-soft-range/native-soft-range.json",
    "note": null,
-   "decompiled_name": "0x52fe60",
    "body_bytes": 149,
    "cited_in": [
     "crates/aa-spatial/src/soft_range.rs"
@@ -3759,7 +3526,6 @@
    "rust": "aa-spatial::soft_range::source_receiver_in_range",
    "oracle": "research/phase7-soft-range/native-mover-range.json",
    "note": null,
-   "decompiled_name": "0x5774a0",
    "body_bytes": 1484,
    "cited_in": [
     "crates/aa-movement/src/lib.rs",
@@ -3776,7 +3542,6 @@
    "rust": null,
    "oracle": null,
    "note": "UI/message owner.",
-   "decompiled_name": "0x40bf70",
    "body_bytes": 337,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs",
@@ -3791,7 +3556,6 @@
    "rust": "aa-rules::abilities::required_property_tokens",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x412480",
    "body_bytes": 811,
    "cited_in": [
     "crates/aa-metagame/src/rmc.rs",
@@ -3807,7 +3571,6 @@
    "rust": "aa-rules::abilities::required_property_tokens",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x424fa0",
    "body_bytes": 157,
    "cited_in": [
     "crates/aa-metagame/src/rmc.rs",
@@ -3823,7 +3586,6 @@
    "rust": "aa-rules::abilities::native_faction_ability_effects",
    "oracle": "aa-rules lib test original_special_operations_resolve (24 Factions, 88 abilities)",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -3839,7 +3601,6 @@
    "rust": "aa-rules::abilities::EnchantmentProperty::required_properties",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": "Only the required_properties deferral (473AD0, vtable A23C38) is in scope.",
-   "decompiled_name": "0x4c42d0",
    "body_bytes": 1040,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs",
@@ -3854,7 +3615,6 @@
    "rust": "aa-rules::abilities::native_required_properties",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c4e10",
    "body_bytes": 374,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -3868,7 +3628,6 @@
    "rust": "aa-combat::ability::Ability::new (bind property_flags::Effects::create_reverse_ability)",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c86d0",
    "body_bytes": 112,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -3887,7 +3646,6 @@
    "rust": "aa-combat::summon (add_summoned)",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c89a0",
    "body_bytes": 70,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -3901,7 +3659,6 @@
    "rust": "aa-combat::special_ops::use_ability (FactionWorld::use_ability at world time)",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c9ef0",
    "body_bytes": 29,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -3915,7 +3672,6 @@
    "rust": "aa-combat::morale::effect_organization + apply_effect",
    "oracle": "research/phase8-combat/native-morale-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca050",
    "body_bytes": 83,
    "cited_in": [
     "crates/aa-combat/src/morale.rs",
@@ -3930,7 +3686,6 @@
    "rust": "aa-combat::special_ops::apply_heal",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca0b0",
    "body_bytes": 115,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -3944,7 +3699,6 @@
    "rust": "aa-combat::special_ops::apply_enchantment",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca130",
    "body_bytes": 87,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -3958,7 +3712,6 @@
    "rust": "aa-combat::special_ops::apply_capture (CAPTURE_EFFECT_RECORD)",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": "4D5230 itself is capture::attempt (round 2).",
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -3973,7 +3726,6 @@
    "rust": "aa-combat::execution (crate::hit)",
    "oracle": "research/phase7-ability/native-execution-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca400",
    "body_bytes": 479,
    "cited_in": [
     "crates/aa-combat/src/lib.rs",
@@ -3988,7 +3740,6 @@
    "rust": "aa-economy::transfers::steal_resources",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4ca680",
    "body_bytes": 217,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs",
@@ -4003,7 +3754,6 @@
    "rust": "aa-combat::summon (summoned_fx)",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ca7b0",
    "body_bytes": 161,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -4017,7 +3767,6 @@
    "rust": "aa-rules::abilities (deferred object, executed in the oracle)",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4caa00",
    "body_bytes": 104,
    "cited_in": []
   },
@@ -4029,7 +3778,6 @@
    "rust": "aa-combat::summon (summon_transported, transport_entry)",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": "Transport payload 58BA90/4C2290 and the move command are SummonWorld seams (transport/orders owners).",
-   "decompiled_name": "0x4cb110",
    "body_bytes": 1170,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -4043,7 +3791,6 @@
    "rust": "summon::SummonWorld::summon_failed",
    "oracle": null,
    "note": "UI message 0x11 (ability_effect_summon_failed).",
-   "decompiled_name": "0x4cb5b0",
    "body_bytes": 210,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -4057,7 +3804,6 @@
    "rust": "aa-combat::special_ops::apply_describe_economy",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": "Text/localisation/post 4E7200/4B9F40/40BF70 stay the DescribeWorld seam (UI/economy owners).",
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4072,7 +3818,6 @@
    "rust": "aa-combat::summon (summon_object)",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": "Creation 4F9C10 is a SummonWorld seam.",
-   "decompiled_name": "0x4cc2c0",
    "body_bytes": 420,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -4086,7 +3831,6 @@
    "rust": "aa-combat::summon (summon_actor)",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": "Creation 4FA030/4FA150 and the attack command 4CA330/4D9B60 are SummonWorld seams.",
-   "decompiled_name": "0x4cc470",
    "body_bytes": 695,
    "cited_in": [
     "crates/aa-combat/src/summon.rs"
@@ -4100,7 +3844,6 @@
    "rust": "aa-rules::abilities::summon_resolution_checks",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": "A recruit actor with a non-flying transport depends on the deferred-list order: explicit Unsupported.",
-   "decompiled_name": "0x4cc730",
    "body_bytes": 338,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -4114,7 +3857,6 @@
    "rust": "aa-rules::abilities::SummonEffectData (native_summon_effect)",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cc890",
    "body_bytes": 477,
    "cited_in": [
     "crates/aa-rules/src/abilities.rs",
@@ -4129,7 +3871,6 @@
    "rust": "aa-combat::summon::apply",
    "oracle": "research/phase8-combat/native-summon-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cca70",
    "body_bytes": 498,
    "cited_in": [
     "crates/aa-actors/src/transport_state.rs",
@@ -4146,7 +3887,6 @@
    "rust": "aa-combat::special_ops::use_ability",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cde00",
    "body_bytes": 257,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -4160,7 +3900,6 @@
    "rust": "aa-body::property_api::find_actor_property",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cef80",
    "body_bytes": 17,
    "cited_in": [
     "crates/aa-actors/src/organization_callees.rs",
@@ -4178,7 +3917,6 @@
    "rust": "summon::SummonWorld::order_attack / order_move",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4d9b60",
    "body_bytes": 142,
    "cited_in": [
     "crates/aa-combat/src/summon.rs",
@@ -4201,7 +3939,6 @@
    "rust": null,
    "oracle": null,
    "note": "Economy/UI owner.",
-   "decompiled_name": "0x4e7200",
    "body_bytes": 640,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -4215,7 +3952,6 @@
    "rust": "aa-movement::formation::random_direction with the GWorld+0xD4 draw (aa-runtime simulation)",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4f02b0",
    "body_bytes": 57,
    "cited_in": [
     "crates/aa-actors/src/post_load.rs",
@@ -4240,7 +3976,6 @@
    "rust": "summon::SummonWorld::create",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4f9c10",
    "body_bytes": 1008,
    "cited_in": [
     "crates/aa-actors/src/post_load.rs",
@@ -4265,7 +4000,6 @@
    "rust": "summon::SummonWorld::create",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4fa030",
    "body_bytes": 117,
    "cited_in": [
     "crates/aa-combat/src/summon.rs",
@@ -4286,7 +4020,6 @@
    "rust": "summon::SummonWorld::create",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x4fa150",
    "body_bytes": 259,
    "cited_in": [
     "crates/aa-combat/src/summon.rs",
@@ -4303,7 +4036,6 @@
    "rust": "aa-body::modifier_tables::purge_hostile_enchantments",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4fe6f0",
    "body_bytes": 156,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4318,7 +4050,6 @@
    "rust": "aa-rules::abilities (modifier type at +8)",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4feaf0",
    "body_bytes": 180,
    "cited_in": [
     "crates/aa-rules/src/ability_load.rs"
@@ -4332,7 +4063,6 @@
    "rust": "aa-rules::abilities::multiply_modifier",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4fed70",
    "body_bytes": 287,
    "cited_in": [
     "crates/aa-body/src/modifier_load.rs",
@@ -4347,7 +4077,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier::PeriodicHeal",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4363,7 +4092,6 @@
    "rust": "aa-rules::abilities::resource_production",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4379,7 +4107,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier::EnchantmentImmunity",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4395,7 +4122,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier::AbilityEffect (ability_effect_kind)",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501150",
    "body_bytes": 305,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4411,7 +4137,6 @@
    "rust": "aa-rules::abilities::EnchantmentModifier::ReverseAbility",
    "oracle": "research/phase8-combat/native-special-ops-loading-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4427,7 +4152,6 @@
    "rust": "aa-body::modifier_tables::add_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5015c0",
    "body_bytes": 67,
    "cited_in": [
     "crates/aa-body/src/properties.rs"
@@ -4441,7 +4165,6 @@
    "rust": "aa-combat::periodic::periodic_from_tables",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501690",
    "body_bytes": 21,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -4456,7 +4179,6 @@
    "rust": "aa-combat::periodic::periodic_from_tables",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5016b0",
    "body_bytes": 21,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -4471,7 +4193,6 @@
    "rust": "aa-combat::periodic::periodic_from_tables",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5016d0",
    "body_bytes": 25,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -4486,7 +4207,6 @@
    "rust": "aa-combat::periodic::periodic_from_tables",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5016f0",
    "body_bytes": 25,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -4501,7 +4221,6 @@
    "rust": "aa-combat::periodic::periodic_from_tables",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501710",
    "body_bytes": 19,
    "cited_in": [
     "crates/aa-body/src/properties.rs",
@@ -4516,7 +4235,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5017d0",
    "body_bytes": 76,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs"
@@ -4530,7 +4248,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501820",
    "body_bytes": 139,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs"
@@ -4544,7 +4261,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5018c0",
    "body_bytes": 95,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs"
@@ -4558,7 +4274,6 @@
    "rust": "aa-combat::special_ops::heal_modifier",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501b70",
    "body_bytes": 95,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -4572,7 +4287,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501ef0",
    "body_bytes": 112,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4587,7 +4301,6 @@
    "rust": "aa-body::modifier_tables (production)",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x501f60",
    "body_bytes": 311,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4603,7 +4316,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5023b0",
    "body_bytes": 144,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4618,7 +4330,6 @@
    "rust": "aa-body::modifier_tables::add_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502560",
    "body_bytes": 220,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4633,7 +4344,6 @@
    "rust": "aa-body::modifier_tables::add_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502640",
    "body_bytes": 120,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4649,7 +4359,6 @@
    "rust": "aa-body::modifier_tables::add_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502700",
    "body_bytes": 75,
    "cited_in": []
   },
@@ -4661,7 +4370,6 @@
    "rust": "aa-body::modifier_tables::add_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502ad0",
    "body_bytes": 85,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4676,7 +4384,6 @@
    "rust": "aa-body::modifier_tables::add_modifier (property_flags dispatch)",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502b30",
    "body_bytes": 254,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4693,7 +4400,6 @@
    "rust": "aa-body::modifier_tables::remove_modifier",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x502c60",
    "body_bytes": 136,
    "cited_in": [
     "crates/aa-body/src/modifier_tables.rs",
@@ -4710,7 +4416,6 @@
    "rust": "special_ops::EnchantmentWorld::insert_enchantment (fields)",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x503140",
    "body_bytes": 105,
    "cited_in": [
     "crates/aa-body/src/property_effects.rs",
@@ -4725,7 +4430,6 @@
    "rust": "aa-combat::special_ops::enchantment_expired",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": null,
    "decompiled_container": null,
    "note_entry": "not in the function inventory (virtual-table-only entry); its instructions are pinned by the cited oracle",
    "cited_in": [
@@ -4740,7 +4444,6 @@
    "rust": "property_flags (InstanceIdentity / ActorInstance)",
    "oracle": "research/phase8-combat/native-modifier-tables-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5033e0",
    "body_bytes": 38,
    "cited_in": []
   },
@@ -4752,7 +4455,6 @@
    "rust": "aa-movement::falling::clamp_to_interior",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x552640",
    "body_bytes": 118,
    "cited_in": [
     "crates/aa-combat/src/organization.rs",
@@ -4773,7 +4475,6 @@
    "rust": "aa-spatial::placement::find_placement_within",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x554b30",
    "body_bytes": 180,
    "cited_in": [
     "crates/aa-combat/src/summon.rs",
@@ -4790,7 +4491,6 @@
    "rust": "aa-body::property_api::find_instance (via find_actor_property)",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": null,
-   "decompiled_name": "0x581280",
    "body_bytes": 27,
    "cited_in": [
     "crates/aa-actors/src/state_effects.rs",
@@ -4807,7 +4507,6 @@
    "rust": "aa-combat::special_ops::add_enchantment",
    "oracle": "research/phase8-combat/native-special-ops-effects-fixtures.json",
    "note": "581630 insertion is aa-body property_effects::insert_with (proven).",
-   "decompiled_name": "0x581700",
    "body_bytes": 146,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs"
@@ -4821,7 +4520,6 @@
    "rust": "summon::SummonWorld::load_transport",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x58ba90",
    "body_bytes": 266,
    "cited_in": [
     "crates/aa-actors/src/transport_state.rs",
@@ -4838,7 +4536,6 @@
    "rust": null,
    "oracle": null,
    "note": "UI owner.",
-   "decompiled_name": "0x6073c0",
    "body_bytes": 379,
    "cited_in": []
   },
@@ -4850,7 +4547,6 @@
    "rust": "commander::use_ability caller",
    "oracle": null,
    "note": "Owner: orders/net agent (Orders.h decree path).",
-   "decompiled_name": "0x61e190",
    "body_bytes": 74,
    "cited_in": [
     "crates/aa-combat/src/special_ops.rs",
@@ -4865,7 +4561,6 @@
    "rust": "engagement",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x432ed0",
    "body_bytes": 24,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs"
@@ -4879,7 +4574,6 @@
    "rust": "engagement::World::element_attached",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4ce640",
    "body_bytes": 26,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs"
@@ -4893,7 +4587,6 @@
    "rust": "executed in denizen/presentation oracles",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4cf1b0",
    "body_bytes": 43,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs",
@@ -4911,7 +4604,6 @@
    "rust": "aa-combat::denizen::on_intruder",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d0380",
    "body_bytes": 50,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs"
@@ -4925,7 +4617,6 @@
    "rust": "aa-combat::denizen::on_intruder",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d1970",
    "body_bytes": 34,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs"
@@ -4939,7 +4630,6 @@
    "rust": "reactions::AttackedBy",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d1b40",
    "body_bytes": 62,
    "cited_in": [
     "crates/aa-combat/tests/native_reactions.rs"
@@ -4953,7 +4643,6 @@
    "rust": "aa-combat::reactions::record_engagement",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d3a70",
    "body_bytes": 262,
    "cited_in": [
     "crates/aa-combat/src/reactions.rs",
@@ -4968,7 +4657,6 @@
    "rust": "aa-combat::reactions::attacked_by",
    "oracle": "research/phase8-combat/native-combat-reaction-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4d6190",
    "body_bytes": 339,
    "cited_in": [
     "crates/aa-combat/src/reactions.rs",
@@ -4983,7 +4671,6 @@
    "rust": "aa-combat::denizen::on_intruder",
    "oracle": "research/phase8-combat/native-denizen-fixtures.json",
    "note": null,
-   "decompiled_name": "0x517f30",
    "body_bytes": 37,
    "cited_in": [
     "crates/aa-combat/src/denizen.rs",
@@ -5000,7 +4687,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x51efb0",
    "body_bytes": 132,
    "cited_in": [
     "crates/aa-mind/src/cai_engage.rs",
@@ -5016,7 +4702,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x51f040",
    "body_bytes": 185,
    "cited_in": [
     "crates/aa-mind/src/cai_engage.rs",
@@ -5034,7 +4719,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x5206a0",
    "body_bytes": 136,
    "cited_in": [
     "crates/aa-mind/src/cai_reactions.rs",
@@ -5050,7 +4734,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x523dd0",
    "body_bytes": 193,
    "cited_in": [
     "crates/aa-mind/src/cai_engage.rs",
@@ -5066,7 +4749,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x523ea0",
    "body_bytes": 599,
    "cited_in": [
     "crates/aa-mind/src/cai_engage.rs",
@@ -5082,7 +4764,6 @@
    "oracle": null,
    "note": "CAI state machine is Mind (aa-mind) territory.",
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x524c10",
    "body_bytes": 349,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs",
@@ -5101,7 +4782,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x527240",
    "body_bytes": 392,
    "cited_in": [
     "crates/aa-mind/src/cai_reactions.rs",
@@ -5117,7 +4797,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x52e830",
    "body_bytes": 197,
    "cited_in": [
     "crates/aa-mind/src/cai_reactions.rs",
@@ -5134,7 +4813,6 @@
    "rust": "aa-mind::moving_target",
    "oracle": "research/phase7-moving-target",
    "note": null,
-   "decompiled_name": "0x533c30",
    "body_bytes": 351,
    "cited_in": [
     "crates/aa-mind/src/element_move.rs",
@@ -5150,7 +4828,6 @@
    "oracle": null,
    "note": "Consumer of the proven 570E30.",
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x5340c0",
    "body_bytes": 1590,
    "cited_in": [
     "crates/aa-combat/src/roe.rs",
@@ -5169,7 +4846,6 @@
    "oracle": null,
    "note": null,
    "owner": "AI agent (aa-mind), per lead routing; combat-side services exposed here",
-   "decompiled_name": "0x535240",
    "body_bytes": 404,
    "cited_in": [
     "crates/aa-mind/src/uai_kill.rs",
@@ -5184,7 +4860,6 @@
    "rust": "aa-mind::element_move_continuation",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x536840",
    "body_bytes": 649,
    "cited_in": [
     "crates/aa-mind/src/element_move_continuation.rs",
@@ -5199,7 +4874,6 @@
    "rust": "Vec growth (capacity not semantic)",
    "oracle": "research/phase8-combat/native-roe-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5707e0",
    "body_bytes": 326,
    "cited_in": [
     "crates/aa-combat/src/roe.rs"
@@ -5213,7 +4887,6 @@
    "rust": "aa-combat::roe::prune",
    "oracle": "research/phase8-combat/native-roe-fixtures.json",
    "note": null,
-   "decompiled_name": "0x570a70",
    "body_bytes": 139,
    "cited_in": [
     "crates/aa-combat/src/roe.rs",
@@ -5228,7 +4901,6 @@
    "rust": "aa-combat::roe::rate",
    "oracle": "research/phase8-combat/native-roe-fixtures.json",
    "note": null,
-   "decompiled_name": "0x570e30",
    "body_bytes": 109,
    "cited_in": [
     "crates/aa-combat/src/roe.rs",
@@ -5244,7 +4916,6 @@
    "rust": "aa-combat::roe::record",
    "oracle": "research/phase8-combat/native-roe-fixtures.json",
    "note": null,
-   "decompiled_name": "0x570ea0",
    "body_bytes": 198,
    "cited_in": [
     "crates/aa-combat/src/roe.rs",
@@ -5259,7 +4930,6 @@
    "rust": "aa-combat::roe::record",
    "oracle": "research/phase8-combat/native-roe-fixtures.json",
    "note": null,
-   "decompiled_name": "0x570f70",
    "body_bytes": 45,
    "cited_in": [
     "crates/aa-combat/src/roe.rs",
@@ -5274,7 +4944,6 @@
    "rust": "aa-combat::engagement::within_operating_radius",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578470",
    "body_bytes": 70,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs",
@@ -5289,7 +4958,6 @@
    "rust": "aa-combat::engagement",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x578e90",
    "body_bytes": 52,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs",
@@ -5306,7 +4974,6 @@
    "rust": "engagement",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x5790f0",
    "body_bytes": 26,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs"
@@ -5320,7 +4987,6 @@
    "rust": "aa-combat::engagement::element_damaged",
    "oracle": "research/phase8-combat/native-damage-response-fixtures.json",
    "note": null,
-   "decompiled_name": "0x579490",
    "body_bytes": 239,
    "cited_in": [
     "crates/aa-combat/src/engagement.rs",
@@ -5337,7 +5003,6 @@
    "rust": "aa-combat::weights::maximum",
    "oracle": "research/phase7-performer/native-weight-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4be6c0",
    "body_bytes": 95,
    "cited_in": [
     "crates/aa-combat/src/weights.rs",
@@ -5352,7 +5017,6 @@
    "rust": "aa-combat::admission::target_flags",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c5840",
    "body_bytes": 468,
    "cited_in": [
     "crates/aa-combat/src/admission.rs"
@@ -5366,7 +5030,6 @@
    "rust": "aa-combat::admission::target_matches",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c5a20",
    "body_bytes": 82,
    "cited_in": [
     "crates/aa-combat/src/admission.rs"
@@ -5380,7 +5043,6 @@
    "rust": "aa-combat::admission::eligible",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8740",
    "body_bytes": 251,
    "cited_in": [
     "crates/aa-combat/src/admission.rs"
@@ -5394,7 +5056,6 @@
    "rust": "aa-combat::admission::available",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c89f0",
    "body_bytes": 80,
    "cited_in": [
     "crates/aa-combat/src/admission.rs"
@@ -5408,7 +5069,6 @@
    "rust": "aa-combat::admission::available",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8a40",
    "body_bytes": 252,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -5423,7 +5083,6 @@
    "rust": "aa-combat::admission::can_use",
    "oracle": "research/phase7-ability/native-admission-fixtures.json",
    "note": null,
-   "decompiled_name": "0x4c8f20",
    "body_bytes": 1381,
    "cited_in": [
     "crates/aa-combat/src/admission.rs",
@@ -5442,7 +5101,6 @@
    "rust": "aa-mind::ability_motion",
    "oracle": "research/phase7-ability-motion",
    "note": null,
-   "decompiled_name": "0x52d820",
    "body_bytes": 225,
    "cited_in": [
     "crates/aa-mind/src/ability_motion.rs"
@@ -5456,7 +5114,6 @@
    "rust": "aa-mind::decision_score",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x52ed30",
    "body_bytes": 526,
    "cited_in": [
     "crates/aa-mind/src/ability_decision.rs",
@@ -5472,7 +5129,6 @@
    "rust": "aa-mind::ability_motion",
    "oracle": "research/phase7-ability-motion",
    "note": null,
-   "decompiled_name": "0x52ef40",
    "body_bytes": 201,
    "cited_in": [
     "crates/aa-mind/src/ability_motion.rs"
@@ -5486,7 +5142,6 @@
    "rust": "aa-mind::ability_decision",
    "oracle": null,
    "note": null,
-   "decompiled_name": "0x5307a0",
    "body_bytes": 260,
    "cited_in": [
     "crates/aa-mind/src/ability_decision.rs",
@@ -5502,7 +5157,6 @@
    "rust": "aa-combat::weights::maximum_other",
    "oracle": "research/phase7-performer/native-weight-fixtures.json",
    "note": null,
-   "decompiled_name": "0x57e670",
    "body_bytes": 178,
    "cited_in": [
     "crates/aa-combat/src/weights.rs",

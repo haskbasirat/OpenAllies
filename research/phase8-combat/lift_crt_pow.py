@@ -238,7 +238,6 @@ for i in insns:
         current = [i.address, []]
         blocks.append(current)
     m = i.mnemonic
-    current[1].append(f'// {i.address:08x} {i.mnemonic} {i.op_str}')
     if m == 'jmp':
         current[1].append(f'pc = {i.operands[0].imm:#x}; continue;')
         current = None

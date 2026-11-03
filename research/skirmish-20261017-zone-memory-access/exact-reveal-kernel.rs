@@ -126,7 +126,7 @@ impl World for Probe<'_> {
 #[test]
 fn exact_actor64_calls_and_partial_word_stores_match_original_v14_all_pc() {
     let f: Value = serde_json::from_slice(include_bytes!(
-        "<game root>/rust-rebuild/research/skirmish-20261016-load-actor-reveal/native-actor-reveal.json"
+        "../../research/skirmish-20261016-load-actor-reveal/native-actor-reveal.json"
     ))
     .unwrap();
     let rows = f["rows"].as_array().unwrap();

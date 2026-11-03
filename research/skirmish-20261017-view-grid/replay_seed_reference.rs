@@ -3,13 +3,13 @@ use aa_rules::sources::sha256;
 use serde_json::Value;
 type Result<T>=std::result::Result<T,String>;
 const REFERENCE: &[u8] = include_bytes!(
-    "<game root>/rust-rebuild/research/skirmish-20261017-view-grid/hardware-grid-seed-reference.json"
+    "../../research/skirmish-20261017-view-grid/hardware-grid-seed-reference.json"
 );
 pub const REFERENCE_SHA256: &str =
     "64039c63149ed59c3698fa7b6fdabd40f901c5ae861d12ff1054cdb60e7f671b";
 const CAPTURES: [&[u8]; 2] = [
-    include_bytes!("<game root>/rust-rebuild/research/skirmish-20261017-view-grid/capture-02/capture.json"),
-    include_bytes!("<game root>/rust-rebuild/research/skirmish-20261017-view-grid/capture-03/capture.json"),
+    include_bytes!("../../research/skirmish-20261017-view-grid/capture-02/capture.json"),
+    include_bytes!("../../research/skirmish-20261017-view-grid/capture-03/capture.json"),
 ];
 const ADDRESSES: [u32; 5] = [0xb43cf8, 0xb43cfc, 0xb43d00, 0xb43dbc, 0xb43dc0];
 

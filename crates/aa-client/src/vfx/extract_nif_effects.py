@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else r"<game root>/reconstruction")
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(os.environ["AA_GAME_ROOT"]) / "reconstruction"
 sys.path.insert(0, str(ROOT / 'tools'))
 import convert_models as cm  # noqa: E402  (patches PyFFI for legacy NIFs)
 

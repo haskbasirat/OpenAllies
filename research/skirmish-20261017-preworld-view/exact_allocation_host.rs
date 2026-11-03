@@ -73,7 +73,7 @@ impl ConstructedWorldRevision {
 }
 
 }
-#[path=r"<game root>\rust-rebuild\crates\aa-runtime\src\view_init_prefix.rs"]pub mod view_init_prefix;
+#[path=r"../../crates/aa-runtime/src/view_init_prefix.rs"]pub mod view_init_prefix;
 //The generic move boundary never inspects, clones or reconstructs native N.
 //Production N is the complete same view_init_world::State above.
 struct FreshVWorld<N>{allocation:Arc<Allocation>,native:N}

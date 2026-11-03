@@ -1192,7 +1192,7 @@ impl<'a> Inputs for Bound<'a> {
 }
 
 
-#[path="<game root>/rust-rebuild/crates/aa-runtime/src/fx_graph_subtypes.rs"] mod subtypes;
+#[path="../../crates/aa-runtime/src/fx_graph_subtypes.rs"] mod subtypes;
 mod regression{
 use super::*;
 use serde_json::{Value, json};
@@ -1359,7 +1359,7 @@ fn original_v14_create_vfx_graph_full_state_order_and_partial_stores_match() {
 #[test]
 fn native_separate_lists_share_one_node_and_reference_context() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/development10/native-fx-prior-lists.json"
+        "../../research/development10/native-fx-prior-lists.json"
     ))
     .unwrap();
     assert_eq!(fixture["rows"].as_array().unwrap().len(), 18);
@@ -1405,12 +1405,12 @@ fn native_separate_lists_share_one_node_and_reference_context() {
 #[test]
 fn request_only_native_factory_common_prefix_and_unbound_fields() {
     let doc: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/skirmish-20261017-data-pre-request/native-request-only-fxc.json"
+        "../../research/skirmish-20261017-data-pre-request/native-request-only-fxc.json"
     ))
     .unwrap();
     assert_eq!(doc["rows"].as_array().unwrap().len(), 90);
     let fixture: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/skirmish-20261016-fx-graph/native-fx-graph.json"
+        "../../research/skirmish-20261016-fx-graph/native-fx-graph.json"
     ))
     .unwrap();
     let ordinary = &fixture["rows"]
@@ -1460,7 +1460,7 @@ fn request_only_native_factory_common_prefix_and_unbound_fields() {
 #[test]
 fn full_play_object_animation_loader_matches_native_order_and_failure_prefix() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/skirmish-20261017-fx-object-animation/native-fx-object-animation.json"
+        "../../research/skirmish-20261017-fx-object-animation/native-fx-object-animation.json"
     ))
     .unwrap();
     assert_eq!(fixture["rows"].as_array().unwrap().len(), 90);

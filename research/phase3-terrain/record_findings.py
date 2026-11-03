@@ -31,7 +31,7 @@ for name, start, end in [
 ]:
     data = original.at(start, end - start)
     assert data == accepted.at(start, end - start), name
-    windows[name] = dict(start=hex(start), end_exclusive=hex(end), sha256=uv.sha(data), bytes=data.hex())
+    windows[name] = dict(start=hex(start), end_exclusive=hex(end), sha256=uv.sha(data))
 
 report = dict(
     schema=1,

@@ -161,3 +161,18 @@ __pycache__/
 /research/**/runtime/
 /research/**/Data/
 /research/**/Profile/
+
+# Text of the original's maps and files, listings and test logs that dump its rules data,
+# found by research/check_public.py. Run that script before every push.
+/research/phase8-triggers/chunks/
+/research/development10/resource-work-depot/native-autoexec-source.txt
+/research/phase8-sai/disasm/
+/research/phase6-spatial/independent-terrain-output/clear_region.txt
+/research/phase7-definitions/*-verification.txt
+/research/phase7-runtime/kingdom-economy-independent-final-tests.txt
+/research/development10/view-object-init/model-graph-fields-inspection.txt
+/research/skirmish-20261017-load-nonfinite/source-16669.txt
+/research/skirmish-20261017-load-nonfinite/serialized-16669.txt
+
+# Third-party packages.
+*.whl

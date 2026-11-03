@@ -299,7 +299,7 @@ class TraceMachine(OrdersMachine):
             self.events.append({'kind': 'mg_element', 'name': name}); self.ret(4, o); return
         if pc == 0x41eec0:
             # Named-definition lookup seam. The native first statement returns null
-            # for an empty name (*arg2 == 0); otherwise the wide-string map
+            # for an empty name (*argument 2 == 0); otherwise the wide-string map
             # lookup (0x4154D0) is replaced by a synthetic object whose +8 is the
             # NUL-terminated name (C-string key semantics).
             if self.u.mem_read(self.arg(0), 2) == bytes(2):

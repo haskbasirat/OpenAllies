@@ -21,7 +21,7 @@ COMPLETED CHECKS
   precision and error boundary. These counts do not certify complete Init.
 * Client diagnostic6 tests passed, including actual Firefight/Kursk sources.
   Independent client/source reviews and native replays are indexed in evidence.
-* Final EXE passed85/85 command-line checks from <games folder>: bounded world24 and
+* Final EXE passed85/85 command-line checks from the folder above <game root>: bounded world24 and
   mechanics53 cases, asset catalog, actor/economy inputs and all80 map inputs.
   Totals:225851 placements,11701 owner refs,7512 resolved nonnull,4189 null,
   328 Kingdoms and21 Teams. This is input decoding, not completed world loading.
@@ -41,7 +41,7 @@ COMPLETED CHECKS
   separate Kursk script executed the actual diagnostic. Both records retained.
 * The copied release EXE passed Firefight/tutorial02 JSON diagnostic checks,
   with explicit mode1/PC53/InspectPartial context and battle_ready=false.
-  From unrelated <games folder>, implicit asset discovery also passed without
+  From unrelated the folder above <game root>, implicit asset discovery also passed without
   --assets. Writing a new report succeeded; reusing its path was refused and
   preserved the previous report byte-for-byte. Candidate/copied EXE hashes match.
 * Ten synthetic packaging integrity tests passed. Staging verifies all1853

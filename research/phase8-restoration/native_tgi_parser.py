@@ -9,7 +9,7 @@ native layout: node name CString +0, children vector +34/+38, field hash map
 +40/+44 (entries {field, next}, field name at field+4).
 """
 from pathlib import Path
-import sys, json, struct
+import os, sys, json, struct
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / 'research/phase7-definitions'))
@@ -170,7 +170,7 @@ def lines_of(data: bytes):
 
 
 def snippet_cases():
-    D = Path('<game root>/reconstruction/assets/original/Data')
+    D = Path(os.environ['AA_GAME_ROOT']) / 'reconstruction/assets/original/Data'
     carrier = (D / 'Units/USA/usa_carrier.tgi').read_bytes()
     a = carrier.index(b'\t[RecruitComponent]')
     b = carrier.index(b'\t[View]')

@@ -321,7 +321,7 @@ class TextMachine:
         m.w32(0xb396d4, screen[1])
         m.w32(0xb3653c, m.alloc(0x100))
         m.w32(0xb36544, m.alloc(0x100))
-        # font system (0xb39bc0)
+        # font system (0xB39BC0)
         fs = m.alloc(0x100)
         m.u.mem_write(fs + 0x1c, struct.pack('<5H', ord('<'), ord('>'), 149, ord('#'), ord('t')))
         m.w32(0xb39bc0, fs)
@@ -332,7 +332,7 @@ class TextMachine:
         m.w32(0xb405f8, m.cstring('<>'))
         m.w32(0xb405fc, m.cstring('<>"\\&'))
         m.w32(0xb40600, m.cstring('\x11\x12\x13\x14\x15'))
-        # character sets (0xb36530 + 0x3c0): base 32..383 undisplayable
+        # character sets (0xB36530 + 0x3c0): base 32..383 undisplayable
         # 149, spacing_standin 't'; han 0x4e00..0x9fff undisplayable 152
         app = m.alloc(0x400)
         lst = m.alloc(0x40)

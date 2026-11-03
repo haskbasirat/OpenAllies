@@ -38,7 +38,7 @@ parity. Remaining animation, lighting, water, shadows and renderer parity gaps
 also remain under development.
 
 ASSET REQUIREMENTS
-Keep this release folder inside the existing game root installation and
+Keep this release folder inside the existing Axis & Allies installation and
 keep assets-cache beside the executable. The application discovers the external
 reconstruction folder by looking through its executable/current-directory
 ancestors. You can specify its absolute location with --assets.

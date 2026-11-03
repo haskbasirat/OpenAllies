@@ -630,7 +630,7 @@ def thing_cases():
     def add(name, **o):
         o.setdefault('other', True)
         case = uai_template(rng, name, 'thing', **o)
-        # The moving thing is arg2; place it ahead of the mover.
+        # The moving thing is argument 2; place it ahead of the mover.
         rows.append(case)
 
     for i in range(8):

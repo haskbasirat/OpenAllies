@@ -1352,7 +1352,8 @@ mod tests {
     fn root() -> Option<std::path::PathBuf> {
         let candidates = [
             std::env::var("AA_RECONSTRUCTION").ok().map(std::path::PathBuf::from),
-            Some(std::path::PathBuf::from("<game root>/reconstruction")),
+            std::env::var("AA_GAME_ROOT").ok().map(|p| std::path::PathBuf::from(p).join("reconstruction")),
+            Some(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../reconstruction")),
         ];
         candidates
             .into_iter()

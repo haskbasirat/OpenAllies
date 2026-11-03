@@ -8,7 +8,7 @@ doc=json.loads((HERE/'native-after-fields.json').read_text());md=Cs(CS_ARCH_X86,
 for at,code in doc['executed_pins'].items():
  at=int(at,16);code=bytes.fromhex(code);assert n.h.P.range(at,len(code))==n.h.V.range(at,len(code))==code
  decoded=list(md.disasm(code,at));assert len(decoded)==1 and decoded[0].size==len(code)
- i=decoded[0];pins.append(dict(address=hex(at),bytes=code.hex(),instruction=i.mnemonic+' '+i.op_str))
+ pins.append(dict(address=hex(at),sha256=hashlib.sha256(code).hexdigest(),size=len(code)))
 assert len(pins)==54
 assert '1 passed; 0 failed' in (HERE/'core-tests.log').read_text()
 assert 'Finished `release`' in (HERE/'check-01.log').read_text()

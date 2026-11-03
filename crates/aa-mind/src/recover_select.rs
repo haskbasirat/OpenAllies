@@ -62,7 +62,7 @@ pub struct Context {
     pub candidates: i32,
     /// Global direction table `[B39AF8]`.
     pub directions: Vec<[u32; 2]>,
-    /// Native `arg5`, forwarded to `52A930` as its moved-from object.
+    /// Native `argument 5`, forwarded to `52A930` as its moved-from object.
     pub moved_from: Option<[u32; 2]>,
 }
 

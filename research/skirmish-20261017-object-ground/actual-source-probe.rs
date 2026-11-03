@@ -1,5 +1,5 @@
 pub use aa_runtime::{catalog,definitions,live_object_init};
-#[path="<game root>/rust-rebuild/crates/aa-runtime/src/object_ground_source.rs"] mod ground;
+#[path="../../crates/aa-runtime/src/object_ground_source.rs"] mod ground;
 use aa_rules::{sources::{V14Sources,SourceLimits},tgi::Limits};
 fn main(){
  let game=std::path::PathBuf::from(std::env::var_os("AA_GAME_ROOT").unwrap());

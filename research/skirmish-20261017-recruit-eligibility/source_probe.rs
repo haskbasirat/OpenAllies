@@ -1,7 +1,7 @@
 use aa_rules::{actors::ActorCatalog,sources::{SourceLimits,V14Sources},native::{layout_data::NativeLayoutData,recruit_data}};
 use aa_numeric::Precision;
 fn main(){
- let game=std::path::Path::new(r"<game root>");
+ let game=std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
  let mut files=V14Sources::open(game.join("Data.rwd"),game.join("reconstruction/native-game/runtime-expanded-v14"),SourceLimits{max_member_bytes:u64::MAX}).unwrap();
  let source=ActorCatalog::load_v14(&mut files).unwrap();
  let pc=Precision::Double53;let layouts=NativeLayoutData::load(&source,pc).unwrap();

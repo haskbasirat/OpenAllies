@@ -10,7 +10,7 @@ fn main() {
             println!("serialized_input={row:#?}");
         }
     }
-    let game = std::path::PathBuf::from("<game root>");
+    let game = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let mut files = aa_rules::sources::V14Sources::open(game.join("Data.rwd"),
         game.join("reconstruction/native-game/runtime-expanded-v14"),
         aa_rules::sources::SourceLimits { max_member_bytes: 64*1024*1024 }).unwrap();

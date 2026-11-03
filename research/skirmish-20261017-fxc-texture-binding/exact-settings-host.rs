@@ -122,7 +122,7 @@ impl World for NativeInput<'_>{
 }
 #[test]
 fn original_v14_texture_settings_order_flags_capacity_and_error_prefix_all_pc(){
-    let fixture:Value=serde_json::from_str(include_str!("<game root>/rust-rebuild/research/skirmish-20261017-fxc-texture-binding/native-texture-settings.json")).unwrap();
+    let fixture:Value=serde_json::from_str(include_str!("../../research/skirmish-20261017-fxc-texture-binding/native-texture-settings.json")).unwrap();
     assert_eq!(fixture["rows"].as_array().unwrap().len(),570);
     for row in fixture["rows"].as_array().unwrap(){
         let c=&row["input"];let expected=&row["output"];

@@ -1520,14 +1520,14 @@ fn original_v14_existing_event_and_source_predicate_order_match() {
 fn completed_view_arena_selects_prior_created_head_without_cloning_or_constructed_fallback(){
     //The same native constructor-input transport as the existing event replay.
     //No World/resource/readiness is synthesized by this controlled fixture.
-    let graph_fixture:Value=serde_json::from_str(include_str!("<game root>/rust-rebuild/research/skirmish-20261016-fx-graph/native-fx-graph.json")).unwrap();
+    let graph_fixture:Value=serde_json::from_str(include_str!("../../research/skirmish-20261016-fx-graph/native-fx-graph.json")).unwrap();
     let ordinary=graph_fixture["rows"].as_array().unwrap().iter().find(|r|r["input"]["name"]=="ordinary").unwrap()["input"].clone();
     let mut source=Fixture{case:ordinary,events:vec![]};
     let mut draft=compile_inputs(&mut source,vec![0]).unwrap();
     let created=std::mem::take(&mut draft.roots);
     let mut prior=vec![vec![];5];prior[0]=created.clone();
     let graph=std::sync::Arc::new(Graph{draft,prior_roots:prior,owner:"native event transport".into(),source:Provenance{path:"native event transport".into(),sha256:String::new(),span:aa_rules::tgi::Span{start:0,end:0}},precision:Precision::Double53,sources:vec![],kind:GraphKind::View(ListKind::Constructed),request_only:false});
-    let events:Value=serde_json::from_str(include_str!("<game root>/rust-rebuild/research/skirmish-20261016-fx-graph/native-fx-command.json")).unwrap();
+    let events:Value=serde_json::from_str(include_str!("../../research/skirmish-20261016-fx-graph/native-fx-command.json")).unwrap();
     let case=events["rows"].as_array().unwrap().iter().find(|r|r["input"]["kind"]=="Actor"&&r["input"]["nonempty"]==true&&r["input"]["muted"]==false).unwrap()["input"].clone();
     let mut input=CreatedInput{case:case.clone(),events:vec![],positions:0,things:0,clock_reads:vec![]};
     let command=construct_created_list(graph.clone(),ListKind::Created,&mut input).unwrap().unwrap();

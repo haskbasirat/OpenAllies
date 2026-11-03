@@ -8,7 +8,7 @@ sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 
 
 def main():
-    cargo = Path(os.environ.get('USERPROFILE', '<user profile>')) / '.cargo/bin/cargo.exe'
+    cargo = Path.home() / '.cargo/bin/cargo.exe'
     commands = [([str(cargo), 'test', '-p', 'aa-movement', '--', '--nocapture'], 'rust-tests.log'),
                 ([str(cargo), 'clippy', '-p', 'aa-movement', '--all-targets', '--', '-D', 'warnings'], 'clippy.log')]
     results = []

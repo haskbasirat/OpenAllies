@@ -39,7 +39,7 @@ use crate::lobby::{LaunchState, NodeView, PeerDirectory, PeerLink, Session};
 use crate::session::wcs_eq;
 use crate::{Error, Result};
 
-#[path="<game root>/rust-rebuild/crates/aa-netcode/src/staging/launch_owner.rs"] pub mod launch_owner;
+#[path="../../crates/aa-netcode/src/staging/launch_owner.rs"] pub mod launch_owner;
 
 /// TGC_LaunchCountdownProgressOrderRequest (descriptor object 0xB40B2C).
 pub const LAUNCH_COUNTDOWN_PROGRESS_REQUEST: usize = 326;
@@ -596,7 +596,7 @@ fn countdown_uses_full_crt358_descriptor_and_native_wire_bytes(){
     assert_eq!(descriptors.len(),358);
     assert_eq!(descriptors[LAUNCH_COUNTDOWN_PROGRESS_REQUEST].name,"TGC_LaunchCountdownProgressOrderRequest");
     assert_eq!(descriptors[LAUNCH_COUNTDOWN_PROGRESS_REQUEST].handler_va,0x773070);
-    let native:Value=serde_json::from_str(include_str!("<game root>/rust-rebuild/research/skirmish-20261017-order-id-audit/native-countdown-wire358.json")).unwrap();
+    let native:Value=serde_json::from_str(include_str!("../../research/skirmish-20261017-order-id-audit/native-countdown-wire358.json")).unwrap();
     assert_eq!(native["registry_count"],358);assert_eq!(native["rows"].as_array().unwrap().len(),15);
     for row in native["rows"].as_array().unwrap(){
         let mut writer=WireWriter::new(Position::PACKET_START).unwrap();

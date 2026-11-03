@@ -2,7 +2,7 @@
 
 Prepare/build the candidate first, then explicitly run:
   python research/check_development_06_exe.py --exe <candidate.exe> --output <new directory>
-Every candidate invocation uses <games folder>, independently of this script's CWD.
+Every candidate invocation uses the folder above <game root>, independently of this script's CWD.
 The output directory must not exist. This checks bounded diagnostics and source
 map input decoding, not a completed playable game or network interoperability.
 """
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GAME = ROOT.parent
 ASSETS = GAME / 'reconstruction'
 MAPS = ASSETS / 'assets/original/Data/Maps'
-UNRELATED_CWD = GAME.parent  #<games folder>, outside both the game and reconstruction.
+UNRELATED_CWD = GAME.parent  #Outside both the game and reconstruction.
 EXPECTED = {
     'maps': 80,
     'placements': 225851,

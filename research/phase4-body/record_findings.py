@@ -15,7 +15,7 @@ def pin(relative):
 windows={}
 for name,start,end in [('body_data_load',0x4662b8,0x466380),('full_unported_damage',0x5625c0,0x562b9c),('start_dying_unported',0x562380,0x5625b5)]:
  data=b.IMAGE.at(start,end-start);assert data==b.ACCEPTED.at(start,end-start)
- windows[name]=dict(start=hex(start),end_exclusive=hex(end),sha256=sha(data),bytes=data.hex())
+ windows[name]=dict(start=hex(start),end_exclusive=hex(end),sha256=sha(data))
  (HERE/(name+'.asm.txt')).write_text('\n'.join(f'{i.address:08x}: {i.mnemonic} {i.op_str}' for i in b.Cs(b.CS_ARCH_X86,b.CS_MODE_32).disasm(data,start))+'\n')
 report=dict(schema=1,status='bounded body operations implemented and native-oracle matched; not a completed damage/death system',
  original_sha256=b.pe.ORIGINAL_SHA,accepted_sha256=b.pe.ACCEPTED_SHA,

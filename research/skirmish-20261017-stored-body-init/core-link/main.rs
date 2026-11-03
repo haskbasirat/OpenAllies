@@ -1,9 +1,9 @@
-#[path="<game root>/rust-rebuild/crates/aa-runtime/src/body_init_fields.rs"] mod kernel;
+#[path="../../../crates/aa-runtime/src/body_init_fields.rs"] mod kernel;
 use aa_actors::actor_creation::{Error,Result};
 use kernel::Fields;
 #[test]
 fn exact_current_shared_kernel_matches_original_v14_finite_prefix_fixture() {
- let fixture:serde_json::Value=serde_json::from_str(include_str!("<game root>/rust-rebuild/research/skirmish-20261016-load-component-init/native-body-prefix.json")).unwrap();
+ let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../research/skirmish-20261016-load-component-init/native-body-prefix.json")).unwrap();
  struct Raw{state:u32,health:u32,maximum:u32,construction:Option<bool>,writes:Vec<(u32,u32)>}
  impl Fields for Raw {
   fn state_low(&self)->Result<u32>{Ok(self.state)}

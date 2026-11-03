@@ -35,5 +35,5 @@ fn refresh_inner(w: &mut impl World) -> Result<()> {
     Ok(())
 }
 
-#[path="<game root>/rust-rebuild/crates/aa-runtime/src/load_store_memory_refresh_tests.rs"]
+#[path="../../crates/aa-runtime/src/load_store_memory_refresh_tests.rs"]
 mod tests;

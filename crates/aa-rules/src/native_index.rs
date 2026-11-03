@@ -101,7 +101,7 @@ pub fn native_resource_matches(pattern: &[u16], path: &[u16]) -> bool {
         let pat_tail = pat.len() - ps - 1;
         let rest_tail = rest.len() - rs - 1;
         // 5AF3E2..5AF3FA: an empty remainder on either side jumps to the
-        // successful copy-out (0x5af592 -> 0x5af621).
+        // successful copy-out (0x5AF592 -> 0x5AF621).
         if pat_tail < 1 || rest_tail < 1 {
             return true;
         }

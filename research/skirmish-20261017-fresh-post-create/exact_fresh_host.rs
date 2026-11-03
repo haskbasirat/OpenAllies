@@ -1,5 +1,5 @@
 pub use aa_actors::{ActorId,components};
-#[path="<game root>/rust-rebuild/crates/aa-actors/src/world_publication.rs"] pub mod world_publication;
+#[path="../../crates/aa-actors/src/world_publication.rs"] pub mod world_publication;
 mod tests{
 //Caller oracle only: these effect seams do not certify the Staged bindings.
 use crate::{
@@ -88,7 +88,7 @@ impl CreateWorld for Probe {
 #[test]
 fn native_fresh_nonnull_params_full_flag_and_partial_effects_all_precision() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "<game root>/rust-rebuild/research/skirmish-20261017-fresh-post-create/native-fresh-post-create.json"
+        "../../research/skirmish-20261017-fresh-post-create/native-fresh-post-create.json"
     ))
     .unwrap();
     let rows = fixture["cases"].as_array().unwrap();

@@ -14,7 +14,7 @@ class_pins=[]
 for table in [0xa273f0,0xa299d8]:
  for offset in [0xa8,0xb4]:
   raw=native.IMAGE.at(table+offset,4);assert raw==native.ACCEPTED.at(table+offset,4);address=struct.unpack('<I',raw)[0];code=native.IMAGE.at(address,3);assert code==native.ACCEPTED.at(address,3)
-  class_pins.append({'table':hex(table),'offset':hex(offset),'function':hex(address),'bytes':code.hex()})
+  class_pins.append({'table':hex(table),'offset':hex(offset),'function':hex(address),'sha256':hashlib.sha256(code).hexdigest(),'size':len(code)})
 commands=[];env={**os.environ,'AA_GAME_ROOT':str(ROOT.parent)}
 for log,args in [('tests.log',['cargo','test','-p','aa-runtime','--test','names_native','--test','trigger_world','--','--include-ignored']),('clippy.log',['cargo','clippy','-p','aa-runtime','--test','names_native','--test','trigger_world','--','-D','warnings'])]:
  run=subprocess.run(args,cwd=ROOT,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(HERE/log).write_bytes(run.stdout);assert run.returncode==0,run.stdout.decode(errors='replace');commands.append({'command':args,'exit_code':run.returncode,'log':log,'sha256':sha(HERE/log)})

@@ -50,9 +50,9 @@ for start in[0x5c3000,0x43f0a0,0x700e30,0x7010d0,0x6ff130,0x723e00]:
  selected=[s for s in sites if int(s['function'],16)in seen]
  assert not {0x96f7aa,0x96f778,0x891890}&seen
  closures.append(dict(root=hex(start),direct_reachable_functions=len(seen),create_device_891890_reachable=False,controlfp_control87_reachable=False,
-  control_state_sites=[dict(site=s['site'],function=s['function'],instruction=s['instruction'])for s in selected],
+  control_state_sites=[dict(site=s['site'],function=s['function'],operation=s['instruction'].split()[0])for s in selected],
   qualification='Direct-call lower bound only; virtual calls and external DLL FP behavior are not proven absent. Reached control-state sites are CRT helpers, not game-level mode setters.'))
-md=Cs(CS_ARCH_X86,CS_MODE_32);windows=[]
+md=Cs(CS_ARCH_X86,CS_MODE_32);windows=[];decoded={}
 for start,length,label in [(0x410e70,functions[0x410e70],'main-frame consumes NetEvents before UIUpdate/render'),(0x40fbe0,functions[0x40fbe0],'queue Pop followed by current AppState virtual1C'),
  (0x682fd0,0x9e,'Loading derived notification then base414620'),(0x414620,functions[0x414620],'base OnNetEvent switch; case1 direct40CF00'),
  (0x40cf00,functions[0x40cf00],'synchronous5C3000 then current screen virtualE8'),(0x5c3000,functions[0x5c3000],'reset700E30 then43F0A0; resource task scheduled AFTER world-view Init'),
@@ -60,10 +60,11 @@ for start,length,label in [(0x410e70,functions[0x410e70],'main-frame consumes Ne
  raw=n.P.range(start,length);assert raw==n.V.range(start,length)
  instructions=[dict(address=hex(i.address),bytes=i.bytes.hex(),instruction=i.mnemonic+' '+i.op_str)for i in md.disasm(raw,start)]
  assert not any(i['instruction'].split()[0]in('fldcw','fldenv','frstor','fxrstor','fninit','finit','ldmxcsr')for i in instructions)
- windows.append(dict(address=hex(start),length=length,label=label,sha256=hashlib.sha256(raw).hexdigest(),instructions=instructions))
+ decoded[hex(start)]=instructions
+ windows.append(dict(address=hex(start),length=length,label=label,sha256=hashlib.sha256(raw).hexdigest(),instruction_count=len(instructions)))
 required_edges={0x410e70:[0x40fbe0],0x40fbe0:[0x785060],0x682fd0:[0x414620],0x414620:[0x40cf00],0x40cf00:[0x5c3000],0x5c3000:[0x700e30,0x43f0a0,0x5b17f0,0x5aed10],0x43f0a0:[0x430290]}
 for window in windows:
- calls={i['instruction']for i in window['instructions']}
+ calls={i['instruction']for i in decoded[window['address']]}
  for child in required_edges.get(int(window['address'],16),[]):assert f'call {hex(child)}'in calls
 for address,target in[(0xa6e6c0,0x682fd0)]:assert n.P.range(address,4)==n.V.range(address,4)==target.to_bytes(4,'little')
 out=dict(schema=1,scope=__doc__,observations=observations,direct_closures=closures,pinned_equal_code_windows=windows,

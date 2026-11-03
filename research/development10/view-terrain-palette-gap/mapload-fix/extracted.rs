@@ -118,7 +118,7 @@ fn material_grid<'a>(map:&mut aa_assets::TerrainMap,
         assert_eq!(terrain.bound.cells,bound_cells);
         assert_eq!(store.load_map("DeveloperMaps/(3v3)Firefight").unwrap().terrain,original);
         let metadata:serde_json::Value=serde_json::from_str(include_str!(
-            "<game root>/rust-rebuild/research/phase6-terrain/terrain-render-metadata.json")).unwrap();
+            "../../../../research/phase6-terrain/terrain-render-metadata.json")).unwrap();
         let mut priorities=BTreeMap::new();
         for (&id,material) in &map.palette{
             let v=&metadata["variants"][&material.id];

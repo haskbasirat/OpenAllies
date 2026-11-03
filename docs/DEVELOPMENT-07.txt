@@ -21,7 +21,7 @@ inspection only. Existing WASD/arrows, mouse-wheel zoom, Home/End zoom endpoints
 Q/E model rotation, UI scaling, and F11 fullscreen remain available as applicable.
 
 ASSET REQUIREMENTS
-Run this folder within the existing game root installation. Keep its
+Run this folder within the existing Axis & Allies installation. Keep its
 assets-cache beside the executable. The application also needs the original
 Data.rwd and the existing reconstruction directory, including recovered models,
 maps, textures, original animation sources and runtime-expanded-v14 rule files.

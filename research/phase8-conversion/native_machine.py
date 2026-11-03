@@ -223,7 +223,7 @@ class Machine:
 
     # ---------------------------------------------------------------- stream
     def _stream(self):
-        """ctx (4FAE80 arg1 / 4FC340 arg1): stream object at +3C whose
+        """ctx (4FAE80 argument 1 / 4FC340 argument 1): stream object at +3C whose
         +3C (= ctx+78) is the current chunk descriptor: +58 size, +68 position
         (858F50 compares/sets these; 4FC340 reads +68 before each record)."""
         self.ctx = self.alloc(0x100)

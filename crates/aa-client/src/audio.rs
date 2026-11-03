@@ -2386,7 +2386,9 @@ mod tests {
             candidates.push(PathBuf::from(p));
         }
         candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../reconstruction"));
-        candidates.push(PathBuf::from(r"<game root>\reconstruction"));
+        if let Some(p) = std::env::var_os("AA_GAME_ROOT") {
+            candidates.push(PathBuf::from(p).join("reconstruction"));
+        }
         candidates.into_iter().find(|p| original_dir(p).is_some())
     }
 

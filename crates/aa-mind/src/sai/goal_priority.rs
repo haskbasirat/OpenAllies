@@ -86,7 +86,7 @@ pub struct ResourceSlot {
     pub economy_1a0: u32,
     /// Player economy +1B8 array element (binary32 bits).
     pub economy_1b8: u32,
-    /// Caller's available-resource array element (`*arg2`).
+    /// Caller's available-resource array element (`*argument 2`).
     pub available: u32,
 }
 
