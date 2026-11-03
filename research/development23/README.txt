@@ -10,15 +10,21 @@ and more of it becomes byte-for-byte identical with each build.
 NEW SINCE DEVELOPMENT 22
 - Buildings sit on the ground like the original. When a truck unpacks, the ground
   under the building is flattened and blends out to the slope around it, and the
-  trees, rocks and grass under it go. Buildings no longer sink or float on hills.
+  trees, rocks and grass under it go. Buildings sit on the ground on gentle slopes.
+  On a steep hillside one side of a building can still sink into the slope; whether
+  the original does the same has not been compared yet.
 - Right-drag a move to set which way the units face when they arrive.
 - A right click is now the original's order, and each unit works out what it means.
   A left click on a soldier in front of a building's box selects the soldier.
 - Selecting several units shows the original's group panel.
+  These three are new and the last test could not reach them by clicking, so please
+  say if they misbehave.
 - Temperate ground has its detail textures, and menus have music and button sounds.
-- Multiplayer: LAN is in the menus (Multiplayer, LAN, then Create or Join Direct).
-  It has been tested between two copies of this game on one PC. It is new: expect
-  rough edges. Finding games by broadcast is not built, so join by address.
+- Multiplayer: LAN is in the menus. One copy: Multiplayer, LAN, Create, Create. The
+  other: Multiplayer, LAN, Join Direct, type the host's address (127.0.0.1 on the
+  same PC), keep port 7290, Join, Ready. Then the host presses Launch. It has been
+  tested only between two copies on one PC and only for short battles, so expect
+  rough edges. Finding games by broadcast is not built.
 - The computer gives orders like the original's: it guards, retreats, explores, moves
   in groups and changes formation. Its decisions are still not the original's.
 - Fights run on the original's own unit logic. Results are close but not the same,
@@ -28,8 +34,9 @@ NEW SINCE DEVELOPMENT 22
   politics display.
 - Tutorial 1 goes on through its first fight, and its hint text is right.
 - Real films stay exact for longer. One of your Market Garden games matches to its
-  end, and a Berlin game stays exact for about 3.5 minutes. Most long games still
-  drift. Berlin 2v2 is now exact for its first 103 of 266 checkpoints.
+  end, and one Berlin game stays exact for about 3.5 minutes. Most long games still
+  drift. The Berlin 2v2 film is exact for its first 103 of 266 checkpoints, just
+  under 2 minutes.
 
 NEW SINCE DEVELOPMENT 21
 - Films. Main menu -> Film, or the Film button in staging. The list shows the
@@ -216,8 +223,9 @@ HOW TO PLAY
    kind; right click moves, right click an enemy attacks. Select a building
    to recruit with the buttons on the right. Use your general's abilities
    with the buttons on the left. Arrow keys or the screen edges scroll,
-   the mouse wheel zooms. Click a regiment's banner if soldiers stand close to a
-   building, because a click there selects the building.
+   the mouse wheel zooms. If a click near a building selects the building, click
+   the regiment's banner instead. To place a truck's building, click the ground: if
+   nothing happens the spot is not allowed, even if the preview is not red.
 6. To leave a battle: Esc, Abort Mission, Ok.
 
 STILL MISSING
@@ -229,6 +237,9 @@ STILL MISSING
 - Scripted missions: weather and team flare markers are not shown.
 - Unpack dust runs at the wrong time, and building shadows on the ground are softer
   than the original's hard-edged ones.
+- A refused building spot gives no message, and a truck ordered onto a building's
+  footprint can stop and keep showing Moving. Normandy Breakout shows a grey stepped
+  strip along a ridge.
 - Animations snap from one to the next instead of blending; the landing
   and hit animations are not played.
 - Some ability visuals (glows of enchantments, contrails).
