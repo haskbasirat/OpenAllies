@@ -31,26 +31,30 @@
 //! The datagrams come from the ported codecs of this crate (transport header,
 //! admin packet types 2/4/5/8/10/11, channels, order payloads), each proven on
 //! its own by its oracle (research/phase8-net/README.txt). This composition has
-//! only ever talked to itself, on loopback: tests/lan_session.rs (two nodes,
-//! one process, a stand-in world) and tests/lan_battle.rs (two processes, an
-//! aa-play battle). No session with the original AA.exe has been run and no
-//! front end reaches this module yet.
+//! been tested on loopback: tests/lan_session.rs (two nodes, one process, a
+//! stand-in world), tests/lan_battle.rs (two processes, an aa-play battle), and
+//! with the original itself as a joining client as far as its staging screen
+//! (tests/lan_original.rs, research/phase8-net/README.txt section 13). The
+//! client's front end is crates/aa-bevy/src/net.
 //!
 //! Not ported, and what happens instead:
-//! * heartbeat 0x75B820, AdminConn::Update 0x75BD70, lag votes
-//!   (`crate::heartbeat` has them proven, nothing here calls it): a silent
-//!   peer is only reported ([`LanEvent::PeerTimedOut`]), nobody is dropped and
-//!   no backup server takes over; a disconnecting connection keeps being told
-//!   so; there is no call to leave a session;
+//! * heartbeat 0x75B820 and the lag votes (`crate::heartbeat` has them proven,
+//!   nothing here calls it). [`LanNode::frame`] runs the rule of 0x75BD70 in
+//!   short: a silent connection is no longer connected and its datagrams
+//!   restore it (the original's network thread does not stall with a frame,
+//!   ours can), and after the 15 s of patience the host drops its player
+//!   (reason 4, without the dialog that asks for a vote); no backup server
+//!   takes over: a client that lost its host has lost the session;
 //! * the end-of-session check 0x76F600 and the session timing 0x41C180;
-//! * MidgameCreateImplicitAIs 0x76EE10: an in-game leave is refused;
 //! * the connect checksums and the map check: [`LanConfig`] carries what the
 //!   caller computed, a client reports it has the map without looking
 //!   (`SnapshotEffects`), a file transfer (status 2) is refused;
 //! * of FinalizeLaunchSettings 0x776B20 everything but the seed, of 0x7791F0
-//!   everything but 0x778D10 for the host's player;
-//! * GameSpy, films, backup servers, the session info lists (a non-empty one
-//!   is refused), every order without a process (`orders`, refused by name).
+//!   everything but 0x778D10 and the removal of the AIs;
+//! * GameSpy, backup servers, a film recorder inside the node (the client
+//!   records through `aa_parity::recording`), every order without a process
+//!   (`orders`, refused by name). The team format ([session+0x14]) is its text
+//!   alone: the records it seats come from [`LanData::kingdom_open`].
 //!
 //! Synchronizer A here holds the clock and timeline entries, the order streams
 //! and the world-RNG getter values. The original's other A writers (785 int
@@ -106,6 +110,10 @@ pub const MAX_DRIVER_STEPS: usize = 64;
 /// every other connection (seconds since NetConn+0x2C).
 pub const SERVER_TIMEOUT: f32 = 3.0;
 pub const PEER_TIMEOUT: f32 = 2.0;
+/// [0xA874AC]: a leaving node shuts down after 2.5 s.
+pub const LEAVE_DELAY: f32 = 2.5;
+/// AdminConn +0x44 starts at 15 s of patience (0x75BD70 takes 1/s while lagging).
+pub const LOST_PATIENCE: f32 = 15.0;
 
 /// The local player and build identity a node connects or hosts with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,6 +179,13 @@ pub enum LanEvent {
     SyncFailure { player: u32 },
     /// The session's player list changed (join, leave, kingdom, ready).
     PlayersChanged,
+    /// 0x754880: the game was paused or resumed by this player's order.
+    Paused { paused: bool, player: Option<u32> },
+    /// The node left the session (the leave delay 0xA874AC ran out).
+    Left,
+    /// Host: 0x75BF90 refused a connect (the reason index of
+    /// `packets::REASON_KEYS`, what it said of itself).
+    ConnectRefused { reason: u32, info: ConnectInfo },
     /// No datagram from a connection for [`PEER_TIMEOUT`] /
     /// [`SERVER_TIMEOUT`] (0x75BD70).
     PeerTimedOut { address: PeerAddress },
@@ -194,6 +209,16 @@ pub trait LanData {
     /// SVars GameSpeedMin/Max, GameSpeedFilmMin/Max, AdminTicksPerSecond
     /// (0x76F370 reads them).
     fn speed_settings(&self) -> sim::SpeedSettings;
+    /// 0x77E430: the entry of a kingdom record in the session's team format
+    /// (+0x14, 0x781250): `Some(open)`, `None` when the lists are empty.
+    fn kingdom_open(&self, _session: &lobby::Session, _record: usize) -> Option<bool> {
+        None
+    }
+    /// The kingdom records of a random-map configuration (0x41EEC0, its
+    /// kingdoms in file order), `None` for an unknown name.
+    fn rmc_header(&self, _rmc: &[u16]) -> Option<lobby::MapHeader> {
+        None
+    }
 }
 
 /// The world side of a session (aa-play in the client, a fake in tests).
@@ -212,6 +237,11 @@ pub trait LanGame {
     /// world-RNG getter values GWorld::GetRNG 0x4F02B0 logged to
     /// synchronizer A ("(int)m_rng.GetSeed()"), in draw order.
     fn world_update(&mut self) -> Result<(NativeClock, Vec<u32>)>;
+    /// 0x76EE10 MidgameCreateImplicitAIs: `player` left in the game; its
+    /// kingdom goes on under an implicit computer player.
+    fn implicit_ai(&mut self, _player: u32) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// A session without a world (the lobby and staging).
@@ -246,6 +276,8 @@ pub(crate) struct Conn {
     pub task: u32,
     /// The liveness timeout was reported.
     pub timed_out: bool,
+    /// When it was (the patience of [`LOST_PATIENCE`] runs from there).
+    pub lost_at: Option<f32>,
 }
 
 /// The backup histories of the node (AdminNode +0x1C / +0x224 / +0x234):
@@ -327,6 +359,17 @@ pub(crate) struct State {
     /// "o.GetBitSize()" last logged to A (decree-stream bits).
     pub stream_bits: u32,
     pub events: Vec<LanEvent>,
+    /// AdminNode+0x2A0 the client who paused, +0x2A4 the last one, +0x2A8 when
+    /// it ended, the clients' votes (+0x56) and last pauses (+0x58): 0x754880.
+    pub pause_holder: Option<PeerLink>,
+    pub pause_last: Option<PeerLink>,
+    pub pause_ended: f32,
+    pub pause_votes: Vec<PeerLink>,
+    pub pause_last_paused: Vec<(PeerLink, f32)>,
+    /// AdminNode+0x2CD: when the node started to leave.
+    pub leaving: Option<f32>,
+    /// The leave delay ran out: the node sends nothing more.
+    pub left: bool,
 }
 
 /// One session node (host or client).
@@ -465,6 +508,13 @@ impl State {
             deferred: Deferred::default(),
             stream_bits: 0,
             events: Vec::new(),
+            pause_holder: None,
+            pause_last: None,
+            pause_ended: -10000.0,
+            pause_votes: Vec::new(),
+            pause_last_paused: Vec::new(),
+            leaving: None,
+            left: false,
         })
     }
 
@@ -483,7 +533,7 @@ impl State {
             return Ok(i);
         }
         self.udp.conn_for(socket_of(addr));
-        self.conns.push(Conn { addr, admin: AdminConn::new()?, file: NoFileTransfer::new(&self.avars), task: 0, timed_out: false });
+        self.conns.push(Conn { addr, admin: AdminConn::new()?, file: NoFileTransfer::new(&self.avars), task: 0, timed_out: false, lost_at: None });
         Ok(self.conns.len() - 1)
     }
     pub(crate) fn we_are_host(&self) -> bool {
@@ -744,6 +794,18 @@ impl LanNode {
     pub fn local_player(&self) -> Option<u32> {
         self.st.local_player
     }
+    /// True while the session runs (the driver's node).
+    pub fn running(&self) -> bool {
+        self.driver.node.running && !self.st.left
+    }
+    /// Leave the session: every connection is told (type 8 from the host,
+    /// type 10 from a client, 0x74BDE0 with AdminNode+0x2CD) until the delay
+    /// 0xA874AC of 2.5 s ends; then [`LanEvent::Left`].
+    pub fn leave(&mut self) {
+        if self.st.leaving.is_none() {
+            self.st.leaving = Some(self.st.now);
+        }
+    }
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.st.udp.local_addr()
     }
@@ -807,15 +869,26 @@ impl LanNode {
     /// driver frames, the host's countdown, send.
     pub fn frame(&mut self, game: &mut dyn LanGame) -> Result<Vec<LanEvent>> {
         self.tick_time()?;
+        if self.st.left {
+            return Ok(std::mem::take(&mut self.st.events));
+        }
         self.receive()?;
         self.private_messages()?;
         self.flush_deferred()?;
-        self.run_driver(game)?;
-        if self.st.role == Role::Host {
-            self.update_countdown()?;
+        if self.st.leaving.is_none() {
+            self.run_driver(game)?;
+            if self.st.role == Role::Host {
+                self.update_countdown()?;
+            }
+            self.liveness()?;
         }
-        self.liveness();
         self.send()?;
+        if let Some(at) = self.st.leaving
+            && self.st.now - at > LEAVE_DELAY
+        {
+            self.st.left = true;
+            self.st.event(LanEvent::Left);
+        }
         Ok(std::mem::take(&mut self.st.events))
     }
 
@@ -837,10 +910,54 @@ impl LanNode {
         }
     }
 
+    /// The reply to a GameSpy QR2 query on the game socket (qr2 of the SDK in
+    /// the original, the keys of KKC_GameSpyQR2 0x79A000's session): the type
+    /// and request key, server keys as name and value strings ended by an empty
+    /// string, then empty player and team lists (a 16-bit count and an empty
+    /// key list each). Only a host answers.
+    fn answer_queries(&mut self) -> Result<()> {
+        let queries = std::mem::take(&mut self.st.udp.queries);
+        if self.st.role != Role::Host {
+            return Ok(());
+        }
+        for (to, key) in queries {
+            let s = &self.st.session;
+            let humans = s.players.iter().filter(|p| !p.ai && !p.film).count();
+            let string = |u: &[u16]| String::from_utf16_lossy(u);
+            let map = s.launch.random_map.as_deref().map_or_else(|| string(&s.launch.file), string);
+            let port = self.st.udp.local_addr()?.port();
+            let keys = [
+                ("hostname", string(&s.options.name)),
+                ("gamever", string(&self.st.host_connect.as_ref().map(|h| h.version.clone()).unwrap_or_default())),
+                ("hostport", port.to_string()),
+                ("mapname", map),
+                ("gametype", String::new()),
+                ("numplayers", humans.to_string()),
+                ("maxplayers", s.options.max_players.to_string()),
+                ("gamemode", if s.state == 1 { "openstaging".to_string() } else { "closedplaying".to_string() }),
+                ("password", u8::from(!s.options.password.is_empty()).to_string()),
+            ];
+            let mut out = vec![0u8];
+            out.extend_from_slice(&key);
+            for (k, v) in keys {
+                out.extend_from_slice(k.as_bytes());
+                out.push(0);
+                out.extend_from_slice(v.as_bytes());
+                out.push(0);
+            }
+            out.push(0);
+            // players, then teams: count 0, empty key list
+            out.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+            self.st.udp.send_raw(to, &out)?;
+        }
+        Ok(())
+    }
+
     fn receive(&mut self) -> Result<()> {
         let now = self.st.now;
         let incoming = self.st.udp.receive_all(now)?;
         self.st.udp.dropped.clear();
+        self.answer_queries()?;
         for inc in incoming {
             let addr = peer_address(self.st.udp.conns[inc.conn].addr)?;
             // A client talks to its session's peers only.
@@ -851,6 +968,13 @@ impl LanNode {
                     None => continue,
                 },
             };
+            // A datagram ends a reported silence: the original's network thread
+            // does not stall with a frame, ours does (module documentation).
+            if self.st.conns[index].timed_out {
+                self.st.conns[index].timed_out = false;
+                self.st.conns[index].lost_at = None;
+                self.st.conns[index].admin.connected = true;
+            }
             let roles = self.roles(&self.st.conns[index]);
             let st = &mut self.st;
             let admin = &mut self.admin;
@@ -874,11 +998,15 @@ impl LanNode {
                     hc.session_mode = st.session.state as i32;
                     hc.launch_countdown = st.session.launch_countdown;
                     let verdict = read_and_validate_connect(conn, &mut r, &hc, addr, now.to_bits(), &mut |_| false)?;
-                    if let ConnectVerdict::Accepted { request, .. } = verdict {
-                        // 0x74C9C0 with the local player (0x76AC60).
-                        let player = st.local_player.ok_or_else(|| Error::Protocol("host without a player".into()))?;
-                        let ctx = orders::DataView { data: &*self.data };
-                        admin.emit_request(true, crate::session::PLAYER_JOIN_REQUEST, &request, player, &ctx)?;
+                    match verdict {
+                        ConnectVerdict::Accepted { request, .. } => {
+                            // 0x74C9C0 with the local player (0x76AC60).
+                            let player = st.local_player.ok_or_else(|| Error::Protocol("host without a player".into()))?;
+                            let ctx = orders::DataView { data: &*self.data };
+                            admin.emit_request(true, crate::session::PLAYER_JOIN_REQUEST, &request, player, &ctx)?;
+                        }
+                        ConnectVerdict::Rejected { info, reason, .. } => st.events.push(LanEvent::ConnectRefused { reason, info }),
+                        ConnectVerdict::Ignored(_) => {}
                     }
                 }
                 (Role::Host, packets::TYPE_CLIENT_TO_SERVER) => {
@@ -1034,9 +1162,10 @@ impl LanNode {
             A::Request { descriptor, fields } => {
                 self.request(descriptor, &fields)?;
             }
-            // [+0x14] stays constructor-empty on every node of this port.
-            A::ResetSessionInfo => {}
-            A::ApplySessionInfo { .. } => return Err(Error::Unsupported("0x77DCF0 session info text from the host")),
+            // The format text is what [+0x14] holds on this port: the reader
+            // stored it, the records it seats come from `LanData::kingdom_open`.
+            A::ResetSessionInfo => self.st.session.info_text.clear(),
+            A::ApplySessionInfo { text } => self.st.session.info_text = text,
         }
         Ok(())
     }
@@ -1178,26 +1307,51 @@ impl LanNode {
         Ok(())
     }
 
-    /// The liveness test of AdminConn::Update 0x75BD70, reported only: the
-    /// timeout / fail-over 0x75A250 and the lag vote are not run here (module
-    /// documentation).
-    fn liveness(&mut self) {
+    /// AdminConn::Update 0x75BD70: a connection silent past its limit is no
+    /// longer connected (0x75A250). The host then drops its player when the
+    /// patience of 15 s (+0x44) ran out (0x75A2C0 with reason 4; the vote
+    /// dialog that asks for it first is not built); a client whose host stays
+    /// silent that long has lost the session (no backup server takes over).
+    fn liveness(&mut self) -> Result<()> {
         let now = self.st.now;
         let host_addr = self.st.host_addr;
         let mut timed = Vec::new();
+        let mut lost = Vec::new();
         for c in &mut self.st.conns {
-            if !c.admin.connected || c.timed_out || c.admin.net.highest < 0 {
+            if c.admin.net.highest < 0 {
+                continue;
+            }
+            if c.timed_out {
+                if c.lost_at.is_some_and(|at| now - at > LOST_PATIENCE) {
+                    c.lost_at = None;
+                    lost.push((c.addr, c.admin.base.player));
+                }
+                continue;
+            }
+            if !c.admin.connected {
                 continue;
             }
             let limit = if Some(c.addr) == host_addr { SERVER_TIMEOUT } else { PEER_TIMEOUT };
             if now - c.admin.net.last_advance > limit {
                 c.timed_out = true;
+                c.lost_at = Some(now);
+                c.admin.connected = false;
                 timed.push(c.addr);
             }
         }
         for address in timed {
             self.st.event(LanEvent::PeerTimedOut { address });
         }
+        for (address, player) in lost {
+            if self.st.role == Role::Client {
+                if Some(address) == host_addr {
+                    self.st.event(LanEvent::Disconnected { reason: None });
+                }
+            } else if let Some(player) = player {
+                self.request(descriptor::PLAYER_LEAVE_REQUEST, &[Field::Player(player), Field::Bounded { n: 13, value: 4 }])?;
+            }
+        }
+        Ok(())
     }
 
     /// SendPackets 0x764FA0: ask the gate 0x74BDE0 of every connection until
@@ -1217,7 +1371,7 @@ impl LanNode {
                     connecting: st.connecting,
                     we_are_host: st.role == Role::Host,
                     we_are_server: st.role == Role::Host,
-                    leaving: false,
+                    leaving: st.leaving.is_some(),
                     leave_now: false,
                     rank: st.own_identity.join_order as i32,
                     admin_clock: if st.role == Role::Host { true } else { st.client.clock_selected },
@@ -1292,6 +1446,36 @@ impl LanNode {
         }
         Ok(())
     }
+}
+
+use aa_orders::commands::WireWriter;
+
+/// The fields of TGC_SetSessionLoadMapOrder (91 / 93) from a file, its header
+/// (0x5A1E90, the codec of [`lobby::GameSettings`]) and the crc: the payload
+/// written by that codec and read back by the order's schema.
+pub fn load_map_fields(file: &[u16], game: &lobby::GameSettings, crc: u32, data: &dyn LanData) -> Result<Vec<Field>> {
+    let view = orders::DataView { data };
+    let mut w = WireWriter::new(aa_orders::Position::PACKET_START)?;
+    crate::session::write_text(&mut w, file)?;
+    game.write(&mut w, &view)?;
+    w.write_uint(crc, 32)?;
+    let bytes = aa_orders::net::transport::finalize(&w)?;
+    let mut r = aa_orders::Cursor::for_packet(&bytes, None)?;
+    Ok(aa_orders::payload::decode(descriptor::SET_SESSION_LOAD_MAP_REQUEST, &mut r, &view)?)
+}
+
+/// The reverse of [`load_map_fields`] for the decree's process.
+pub(crate) fn read_load_map_fields(fields: &[Field], data: &dyn LanData, previous: &lobby::GameSettings) -> Result<(Vec<u16>, lobby::GameSettings, u32)> {
+    let mut view = orders::DataView { data };
+    let mut w = WireWriter::new(aa_orders::Position::PACKET_START)?;
+    aa_orders::payload::encode(descriptor::SET_SESSION_LOAD_MAP_DECREE, fields, &mut w, &view)?;
+    let bytes = aa_orders::net::transport::finalize(&w)?;
+    let mut r = aa_orders::Cursor::for_packet(&bytes, None)?;
+    let file = crate::session::read_text(&mut r)?;
+    let mut game = previous.clone();
+    game.read(&mut r, &mut view)?;
+    let crc = r.read_uint(32)?;
+    Ok((file, game, crc))
 }
 
 /// The world seams of the driver (0x4F9970 through [`LanGame`]).

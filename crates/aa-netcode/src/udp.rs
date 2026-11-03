@@ -82,6 +82,10 @@ pub struct UdpNode {
     /// x87 precision of the network thread (PC53 by the lead's policy).
     pub precision: X87Precision,
     pub dropped: Vec<Dropped>,
+    /// GameSpy QR2 queries that reached the game socket (FE FD 00, then the
+    /// request key): who asked and the key. LobbyJoinDirectExecute 0x648030 ->
+    /// 0x787750 asks before it joins; the game's protocol never starts so.
+    pub queries: Vec<(SocketAddr, [u8; 4])>,
 }
 
 impl UdpNode {
@@ -91,7 +95,7 @@ impl UdpNode {
     /// A node on an already bound socket (the host's port search 0x7641E0).
     pub fn from_socket(socket: UdpSocket, own_session: i32, precision: X87Precision) -> Result<Self> {
         socket.set_nonblocking(true)?;
-        Ok(Self { socket, own_session, conns: Vec::new(), buffer: vec![0; MAX_DATAGRAM], precision, dropped: Vec::new() })
+        Ok(Self { socket, own_session, conns: Vec::new(), buffer: vec![0; MAX_DATAGRAM], precision, dropped: Vec::new(), queries: Vec::new() })
     }
     pub fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.socket.local_addr()?)
@@ -147,6 +151,10 @@ impl UdpNode {
                 Err(e) => return Err(e.into()),
             };
             let data = self.buffer[..len].to_vec();
+            if len >= 7 && data[..3] == [0xFE, 0xFD, 0x00] {
+                self.queries.push((addr, [data[3], data[4], data[5], data[6]]));
+                continue;
+            }
             let conn = self.conn_for(addr);
             match self.accept(conn, data, now) {
                 Ok(Some(incoming)) => out.push(incoming),
@@ -155,6 +163,11 @@ impl UdpNode {
             }
         }
         Ok(out)
+    }
+    /// One datagram outside the game's protocol (a QR2 reply).
+    pub fn send_raw(&mut self, to: SocketAddr, bytes: &[u8]) -> Result<()> {
+        self.socket.send_to(bytes, to)?;
+        Ok(())
     }
     fn accept(&mut self, conn: usize, data: Vec<u8>, now: f32) -> Result<Option<Incoming>> {
         let own = self.own_session;

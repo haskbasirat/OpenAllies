@@ -356,9 +356,10 @@ fn lan_session_staging_orders_on_both_nodes() {
     assert_eq!(client.session().players[1].text_30, units("nation_b"));
 
     // Orders without a process are refused by name, before the stream.
-    for (d, fields) in [(descriptor::TOGGLE_PAUSED_REQUEST, Vec::new()), (descriptor::SET_PAUSED_REQUEST, vec![Field::Uint { width: 1, value: 1 }])] {
-        match client.request(d, &fields) {
-            Err(aa_netcode::Error::Unsupported(name)) => assert!(name.contains("Paused"), "{name}"),
+    // (the pause has one since 0x754880 was ported: lan_session_pause_vote)
+    for d in [59usize, 60] {
+        match client.request(d, &[Field::Uint { width: 32, value: 0 }, Field::Uint { width: 32, value: 0 }, Field::Text(Vec::new())]) {
+            Err(aa_netcode::Error::Unsupported(name)) => assert!(name.contains("Chat"), "{name}"),
             other => panic!("descriptor {d}: {other:?}"),
         }
     }
@@ -411,4 +412,89 @@ fn lan_session_launch_seed_is_the_same_on_both_nodes() {
             None => assert_ne!(h, 0),
         }
     }
+}
+
+/// TGC_SetSessionLoadMapOrder 0x779780 and the staging setters: the same stage
+/// on both nodes, the people seated again on the new records.
+#[test]
+fn lan_session_map_order_on_both_nodes() {
+    let mut host = LanNode::host(&config("Host"), &options(), launch(), data()).unwrap();
+    let port = host.local_addr().unwrap().port();
+    let mut client = LanNode::join(&config("Client"), format!("127.0.0.1:{port}").parse().unwrap(), data()).unwrap();
+    let (mut hs, mut cs) = (Seen::default(), Seen::default());
+    joined(&mut host, &mut client, &mut hs, &mut cs);
+
+    let mut game = aa_netcode::lobby::GameSettings::default();
+    for k in ["north", "south"] {
+        game.header.kingdoms.push(KingdomSetup { name: units(k), flag_28: true, ..Default::default() });
+    }
+    let fields = aa_netcode::lan::load_map_fields(&units("(2v2)Somewhere"), &game, 77, host.data()).unwrap();
+    host.request(descriptor::SET_SESSION_LOAD_MAP_REQUEST, &fields).unwrap();
+    host.request(descriptor::SET_MAP_SIZE_REQUEST, &[Field::Uint { width: 32, value: 320 }, Field::Uint { width: 32, value: 256 }]).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the map order", |h, c, _, _| {
+        [h, c].iter().all(|n| n.session().launch.mode == 2 && n.session().launch.active_map().size_x == 320)
+    });
+    for n in [&host, &client] {
+        let s = n.session();
+        assert_eq!(s.launch.file, units("(2v2)Somewhere"));
+        assert_eq!(s.map_crc, 77);
+        assert_eq!(s.launch.active_map().size_y, 256);
+        assert_eq!(s.launch.active_map().header.kingdoms.len(), 2);
+        assert_eq!(kingdoms(n), vec![units("north"), units("south")], "the people sit down on the new records");
+    }
+    // a client may not order it: 0x779780 rejects, nothing changes
+    let fields = aa_netcode::lan::load_map_fields(&units("(2v2)Elsewhere"), &game, 78, client.data()).unwrap();
+    client.request(descriptor::SET_SESSION_LOAD_MAP_REQUEST, &fields).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the rejection", |_, _, _, cs| cs.messages.iter().any(|m| m == "session_order_rejected"));
+    assert_eq!(host.session().launch.file, units("(2v2)Somewhere"));
+
+    // the format text travels and reseats (0x75E2D0)
+    host.request(descriptor::SET_TEAMS_REQUEST, &[Field::Text(units("1v1"))]).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the format", |h, c, _, _| h.session().info_text == units("1v1") && c.session().info_text == units("1v1"));
+}
+
+/// 0x754880: whoever paused unpauses, with two humans the other cannot, and the
+/// next pause of the same client waits for the delay.
+#[test]
+fn lan_session_pause_vote() {
+    let mut host = LanNode::host(&config("Host"), &options(), launch(), data()).unwrap();
+    let port = host.local_addr().unwrap().port();
+    let mut client = LanNode::join(&config("Client"), format!("127.0.0.1:{port}").parse().unwrap(), data()).unwrap();
+    let (mut hs, mut cs) = (Seen::default(), Seen::default());
+    joined(&mut host, &mut client, &mut hs, &mut cs);
+    let set = |v: u32| [Field::Uint { width: 1, value: v }];
+
+    client.request(descriptor::SET_PAUSED_REQUEST, &set(1)).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the pause", |h, c, _, _| h.timeline().paused && c.timeline().paused);
+    assert!(hs.messages.iter().any(|m| m == "networking_vote_to_pause_player_game_paused|s"));
+
+    // the host is not who paused, and there are only two humans
+    host.request(descriptor::SET_PAUSED_REQUEST, &set(0)).unwrap();
+    client.request(descriptor::SET_READY_REQUEST, &[Field::Player(client.local_player().unwrap()), Field::Uint { width: 32, value: 1 }]).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the order of the host passed", |h, _, _, _| h.session().players.iter().all(|p| p.status != 0));
+    assert!(host.timeline().paused, "only the client who paused unpauses");
+
+    client.request(descriptor::SET_PAUSED_REQUEST, &set(0)).unwrap();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the end of the pause", |h, c, _, _| !h.timeline().paused && !c.timeline().paused);
+    assert!(cs.messages.iter().any(|m| m == "networking_vote_to_pause_player_game_unpaused|s"));
+}
+
+/// Leaving: the type 10 of a client makes the PlayerLeave of the host with
+/// reason 5, the type 8 of a host ends the session of its clients.
+#[test]
+fn lan_session_leaving_tells_the_others() {
+    let mut host = LanNode::host(&config("Host"), &options(), launch(), data()).unwrap();
+    let port = host.local_addr().unwrap().port();
+    let mut client = LanNode::join(&config("Client"), format!("127.0.0.1:{port}").parse().unwrap(), data()).unwrap();
+    let (mut hs, mut cs) = (Seen::default(), Seen::default());
+    joined(&mut host, &mut client, &mut hs, &mut cs);
+    client.leave();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the client leaves", |h, _, _, _| h.session().players.len() == 1);
+    assert!(hs.messages.iter().any(|m| m == "networking_player_quit|s"));
+
+    let mut client = LanNode::join(&config("Second"), format!("127.0.0.1:{port}").parse().unwrap(), data()).unwrap();
+    let (mut hs, mut cs) = (Seen::default(), Seen::default());
+    joined(&mut host, &mut client, &mut hs, &mut cs);
+    host.leave();
+    pump(&mut host, &mut client, &mut hs, &mut cs, "the host leaves", |_, _, _, cs| cs.disconnected == Some(None));
 }

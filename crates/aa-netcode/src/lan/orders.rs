@@ -49,6 +49,9 @@ use aa_orders::payload::{self, Field, NameKind, Registry, Resolver, SchemaContex
 use aa_orders::{History, Position};
 use std::cell::RefCell;
 
+/// [0xA8C088]: seconds between a client's pauses (0x74B080, 0x754880).
+const PAUSE_DELAY: f32 = 300.0;
+
 /// Native descriptor ordinals (crates/aa-orders/src/native_registry.rs).
 pub mod descriptor {
     pub const LAUNCH_REQUEST: usize = 0;
@@ -81,6 +84,34 @@ pub mod descriptor {
     pub const TELL_ACTOR_REQUEST: usize = 85;
     pub const TELL_SELECTED_DECREE: usize = 86;
     pub const TELL_ACTOR_DECREE: usize = 87;
+    pub const SET_PLAYER_NAME_REQUEST: usize = 10;
+    pub const SET_PLAYER_NAME_DECREE: usize = 11;
+    pub const TOGGLE_PAUSED_DECREE: usize = 75;
+    pub const SET_PAUSED_DECREE: usize = 76;
+    pub const SPEED_UP_REQUEST: usize = 61;
+    pub const SPEED_DOWN_REQUEST: usize = 62;
+    pub const SPEED_UP_DECREE: usize = 80;
+    pub const SPEED_DOWN_DECREE: usize = 81;
+    pub const SET_SESSION_LOAD_MAP_REQUEST: usize = 91;
+    pub const SET_SESSION_LOAD_MAP_DECREE: usize = 93;
+    pub const SET_TEAMS_REQUEST: usize = 100;
+    pub const SET_TEAMS_DECREE: usize = 104;
+    pub const SET_MAX_PLAYERS_REQUEST: usize = 106;
+    pub const SET_GAME_NAME_REQUEST: usize = 107;
+    pub const SET_GAME_PASSWORD_REQUEST: usize = 108;
+    pub const SET_ALLOW_OBSERVERS_REQUEST: usize = 109;
+    pub const SET_MAX_PLAYERS_DECREE: usize = 110;
+    pub const SET_GAME_NAME_DECREE: usize = 111;
+    pub const SET_GAME_PASSWORD_DECREE: usize = 112;
+    pub const SET_ALLOW_OBSERVERS_DECREE: usize = 113;
+    pub const SET_MAP_SIZE_REQUEST: usize = 114;
+    pub const SET_RMC_REQUEST: usize = 115;
+    pub const SET_RMC_SETTINGS_REQUEST: usize = 118;
+    pub const SET_MAP_SIZE_DECREE: usize = 119;
+    pub const SET_RMC_DECREE: usize = 120;
+    pub const SET_RMC_SETTINGS_DECREE: usize = 123;
+    pub const KICK_PLAYER_REQUEST: usize = 133;
+    pub const KICK_PLAYER_DECREE: usize = 144;
     pub const SET_MAP_SEED_REQUEST: usize = 90;
     pub const SET_MAP_SEED_DECREE: usize = 92;
     pub const START_COUNTDOWN_REQUEST: usize = 96;
@@ -177,6 +208,21 @@ fn has_process(decree: usize) -> bool {
                 | d::UPDATE_MAP_STATUS_DECREE
                 | d::TASK_STATUS_DECREE
                 | d::SET_GAME_SPEED_DECREE
+                | d::SET_PLAYER_NAME_DECREE
+                | d::TOGGLE_PAUSED_DECREE
+                | d::SET_PAUSED_DECREE
+                | d::SPEED_UP_DECREE
+                | d::SPEED_DOWN_DECREE
+                | d::SET_SESSION_LOAD_MAP_DECREE
+                | d::SET_TEAMS_DECREE
+                | d::SET_MAX_PLAYERS_DECREE
+                | d::SET_GAME_NAME_DECREE
+                | d::SET_GAME_PASSWORD_DECREE
+                | d::SET_ALLOW_OBSERVERS_DECREE
+                | d::SET_MAP_SIZE_DECREE
+                | d::SET_RMC_DECREE
+                | d::SET_RMC_SETTINGS_DECREE
+                | d::KICK_PLAYER_DECREE
         )
 }
 
@@ -196,6 +242,34 @@ pub(crate) fn check_request(descriptor: usize) -> Result<()> {
 
 fn units(s: &str) -> Vec<u16> {
     s.encode_utf16().collect()
+}
+/// 0x506560 random-map settings as a process reads them: word, two lists of
+/// (name, word), word.
+fn rmc_settings_of(fields: &[Field]) -> Result<lobby::RmcSettings> {
+    let mut i = 0;
+    let word = |i: &mut usize| -> Result<u32> {
+        let v = uint(fields, *i)?;
+        *i += 1;
+        Ok(v)
+    };
+    let mut out = lobby::RmcSettings { field_0: word(&mut i)?, ..Default::default() };
+    for list in 0..2 {
+        let n = word(&mut i)? as usize;
+        let mut rows = Vec::with_capacity(n.min(fields.len()));
+        for _ in 0..n {
+            let name = text_field(fields, i)?;
+            i += 1;
+            let value = word(&mut i)?;
+            rows.push(lobby::NamedWord { name, value });
+        }
+        if list == 0 {
+            out.list_4 = rows;
+        } else {
+            out.list_10 = rows;
+        }
+    }
+    out.field_1c = word(&mut i)?;
+    Ok(out)
 }
 fn nonnull(raw: u32) -> Option<u32> {
     (raw != 0).then_some(raw)
@@ -254,8 +328,10 @@ impl SchemaContext for DataView<'_> {
         }
         Err(aa_orders::Error::SchemaContext("definition kinds of this registry are not loaded"))
     }
+    /// The kingdom list of a header (0x5104A0) has no width of its own in the
+    /// schema: more records than any map has is the explicit limit.
     fn zero_width_list_budget(&self) -> usize {
-        0
+        1024
     }
 }
 impl lobby::LobbyData for DataView<'_> {
@@ -639,10 +715,11 @@ pub(crate) struct KingdomAssign<'a> {
     pub now: u32,
 }
 impl staging::KingdomHost for KingdomAssign<'_> {
-    fn kingdom_record_info(&mut self, _session: &Session, _record: usize) -> Result<Option<bool>> {
-        // 0x77E430 walks the session info's lists, constructor-empty in a LAN
-        // session (`LanNode::lobby_action` refuses a non-empty one): null.
-        Ok(None)
+    fn kingdom_record_info(&mut self, session: &Session, record: usize) -> Result<Option<bool>> {
+        // 0x77E430 walks the session info's lists: the team format
+        // ([session+0x14]+0x28) seats the records (0x781250), which only the
+        // game data can say; without a format the lists are empty: null.
+        Ok(self.data.kingdom_open(session, record))
     }
     fn assign_kingdom(&mut self, session: &mut Session, player: u32, record: usize) -> Result<()> {
         let name = session.launch.active_map().header.kingdoms[record].name.clone();
@@ -650,10 +727,10 @@ impl staging::KingdomHost for KingdomAssign<'_> {
         let slot = host.player_slot(player).ok_or_else(|| Error::Protocol(format!("no player {player}")))?;
         let mut fx = RequestMessages::default();
         // 0x778EB2: notify 0.
-        set_player_kingdom_777f00(&mut host, slot, &name, false, &mut fx)?;
+        requests::set_player_kingdom_777f00(&mut host, slot, &name, false, &mut fx)?;
         let (nation, faction) = (host.session.players[slot].text_30.clone(), host.session.players[slot].text_34.clone());
-        check_nation_777cd0(&mut host, &name, &nation, &mut fx)?;
-        check_faction_777610(&mut host, &name, &faction, &mut fx)
+        requests::check_nation_777cd0(&mut host, &name, &nation, &mut fx)?;
+        requests::check_faction_777610(&mut host, &name, &faction, &mut fx)
     }
 }
 
@@ -704,7 +781,7 @@ impl RequestHost for SessionHost<'_> {
     fn ordering_284(&self) -> Option<u32> {
         self.ordering
     }
-    fn a local(&self) -> Option<u32> {
+    fn local_8(&self) -> Option<u32> {
         self.local
     }
     fn admin_is_host_2c4(&self) -> bool {
@@ -715,6 +792,9 @@ impl RequestHost for SessionHost<'_> {
     }
     fn kingdom_player_76b920(&self, kingdom: &[u16]) -> Option<usize> {
         self.session.players.iter().position(|p| crate::session::wcs_eq(&p.kingdom, kingdom))
+    }
+    fn other_player_holds(&self, slot: usize, kingdom: &[u16]) -> bool {
+        self.session.players.iter().enumerate().any(|(i, p)| i != slot && crate::session::wcs_eq(&p.kingdom, kingdom))
     }
     fn player_id(&self, slot: usize) -> u32 {
         self.session.players[slot].id
@@ -861,111 +941,6 @@ impl RequestEffects for RequestMessages {
 
 fn c_string(s: &[u16]) -> &[u16] {
     &s[..s.iter().position(|&u| u == 0).unwrap_or(s.len())]
-}
-
-/// 0x777610(kingdom, faction IDS), as `staging_requests` reads it (its copy
-/// is private to the local host).
-fn check_faction_777610(h: &mut SessionHost<'_>, kingdom: &[u16], faction: &[u16], effects: &mut impl RequestEffects) -> Result<()> {
-    effects.check_faction(kingdom, faction)?;
-    if c_string(kingdom).is_empty() {
-        return Ok(());
-    }
-    let Some(base) = h.base_row(kingdom)? else { return Ok(()) };
-    let Some(index) = h.row_index(kingdom)? else { return Ok(()) };
-    let nation = h.row(index)?.nation_18;
-    if c_string(&nation).is_empty() {
-        return h.store_faction(index, &[], false);
-    }
-    if !c_string(&base.faction_1c).is_empty() {
-        return Ok(());
-    }
-    let Some(found) = h.find_definition("Faction", faction)? else {
-        return h.store_faction(index, &[], true);
-    };
-    if h.nation_factions(&nation)?.iter().any(|f| c_string(f) == c_string(&found)) {
-        h.store_faction(index, &found, true)
-    } else {
-        h.store_faction(index, &base.faction_1c, false)
-    }
-}
-
-/// 0x777CD0(kingdom, nation IDS), as `staging_requests` reads it.
-fn check_nation_777cd0(h: &mut SessionHost<'_>, kingdom: &[u16], nation: &[u16], effects: &mut impl RequestEffects) -> Result<()> {
-    effects.check_nation(kingdom, nation)?;
-    if c_string(kingdom).is_empty() {
-        return Ok(());
-    }
-    let Some(base) = h.base_row(kingdom)? else { return Ok(()) };
-    let Some(index) = h.row_index(kingdom)? else { return Ok(()) };
-    if !c_string(&base.nation_18).is_empty() {
-        return Ok(());
-    }
-    let found = h.find_definition("Nation", nation)?.unwrap_or_default();
-    h.store_nation(index, &found)?;
-    let faction = h.row(index)?.faction_1c;
-    check_faction_777610(h, kingdom, &faction, effects)?;
-    h.mark_modified(index)
-}
-
-/// KKC_Session::SetPlayerKingdom 0x777F00(player, kingdom, notify), with the
-/// branch that releases the player's old kingdom when no other player holds
-/// it (0x777CD0 / 0x777610 with the empty string, handicap cleared). The
-/// local host's `staging_requests` copy refuses that branch.
-fn set_player_kingdom_777f00(h: &mut SessionHost<'_>, slot: usize, kingdom: &[u16], notify: bool, effects: &mut impl RequestEffects) -> Result<bool> {
-    let ai = h.player_ai(slot);
-    let target = h.row_index(kingdom)?;
-    if let Some(index) = target {
-        if h.row(index)?.playable_28 {
-            if !ai {
-                h.store_handicap(index, &[], false)?;
-            }
-        } else if !ai {
-            if notify {
-                let shown = h.a local() == h.ordering_284();
-                effects.session_message_76da60(requests::PLAYER_KINGDOM_FAILED_KEY, shown)?;
-            }
-            return Ok(false);
-        }
-    }
-    let old = h.player_kingdom(slot);
-    let old_row = h.row_index(&old)?;
-    let saved = match old_row {
-        Some(i) if ai => h.row(i)?.handicap_24,
-        _ => Vec::new(),
-    };
-    if !c_string(&old).is_empty() {
-        let held = h.session.players.iter().enumerate().any(|(i, p)| i != slot && crate::session::wcs_eq(&p.kingdom, &old));
-        if !held {
-            check_nation_777cd0(h, &old, &[], effects)?;
-            check_faction_777610(h, &old, &[], effects)?;
-            if let Some(i) = old_row {
-                h.store_handicap(i, &[], false)?;
-            }
-        }
-    }
-    h.set_kingdom_7664d0(slot, kingdom)?;
-    let located = h.position_77e1f0(kingdom)?;
-    let (team, position) = located.unwrap_or((u32::MAX, u32::MAX));
-    h.set_position(slot, located.is_none(), team, position)?;
-    if let Some(index) = target {
-        h.store_handicap(index, &saved, false)?;
-    }
-    h.changed_c8();
-    Ok(true)
-}
-
-/// 0x76C560(kingdom): may the ordering player change this kingdom?
-fn may_change_76c560(h: &SessionHost<'_>, kingdom: &[u16]) -> Result<bool> {
-    let Some(ordering) = h.ordering_284() else { return Ok(false) };
-    let ord = h.player_slot(ordering).ok_or_else(|| Error::Protocol("0x76C560 Admin+284 player is absent".into()))?;
-    let Some(owner) = h.kingdom_player_76b920(kingdom) else { return Ok(false) };
-    if h.a local() == Some(ordering) && h.admin_is_host_2c4() {
-        return Ok(true);
-    }
-    if h.player_ai(owner) && h.player_link(owner) == h.player_link(ord) {
-        return Ok(true);
-    }
-    Ok(owner == ord)
 }
 
 /// 0x7744C0: destroys the AI players left without a kingdom (0x7737E0 and the
@@ -1332,13 +1307,13 @@ impl Orders<'_, '_, '_, '_> {
                         let mut host = self.session_host(st, ordering);
                         let slot = host.player_slot(player).ok_or_else(|| Error::Protocol(format!("0x778170 on absent player {player}")))?;
                         // 0x7782BF: notify 1; the checks run whatever it returned.
-                        set_player_kingdom_777f00(&mut host, slot, &kingdom, true, &mut fx)?;
+                        requests::set_player_kingdom_777f00(&mut host, slot, &kingdom, true, &mut fx)?;
                         let (name, nation, faction) = {
                             let p = &host.session.players[slot];
                             (p.kingdom.clone(), p.text_30.clone(), p.text_34.clone())
                         };
-                        check_nation_777cd0(&mut host, &name, &nation, &mut fx)?;
-                        check_faction_777610(&mut host, &name, &faction, &mut fx)?;
+                        requests::check_nation_777cd0(&mut host, &name, &nation, &mut fx)?;
+                        requests::check_faction_777610(&mut host, &name, &faction, &mut fx)?;
                         destroy_kingdomless_ais_7744c0(&mut host)?;
                         st.events.extend(fx.messages);
                         st.events.push(LanEvent::PlayersChanged);
@@ -1384,7 +1359,7 @@ impl Orders<'_, '_, '_, '_> {
                 let def = def_field(fields, 1, count)?;
                 let local = st.local_player;
                 let host = self.session_host(st, ordering);
-                if may_change_76c560(&host, &kingdom)? {
+                if requests::may_change_76c560(&host, &kingdom)? {
                     let index = host.row_index(&kingdom)?.ok_or_else(|| Error::Protocol("0x771C70 NULL kingdom record (native NULL write)".into()))?;
                     st.session.launch.active_map_mut().header.kingdoms[index].color = def;
                     st.events.push(LanEvent::PlayersChanged);
@@ -1469,9 +1444,282 @@ impl Orders<'_, '_, '_, '_> {
                     self.set_game_speed(st, speed.0)?;
                 }
             }
+            d::SET_SESSION_LOAD_MAP_DECREE => self.set_session_load_map(st, fields, ordering)?,
+            d::SET_TEAMS_DECREE => self.set_teams(st, fields, ordering)?,
+            d::SET_MAP_SIZE_DECREE => {
+                // 0x75D960: the active creator's size, unless a countdown runs.
+                if self.counting_down(st, ordering) {
+                    return Ok(());
+                }
+                let (x, y) = (uint(fields, 0)?, uint(fields, 1)?);
+                let map = st.session.launch.active_map_mut();
+                map.size_x = x;
+                map.size_y = y;
+                st.session.changed = true;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_RMC_DECREE => self.set_rmc(st, fields, ordering)?,
+            d::SET_RMC_SETTINGS_DECREE => {
+                // 0x75D8C0 -> 0x5065C0: the settings of the random-map creator.
+                if self.counting_down(st, ordering) {
+                    return Ok(());
+                }
+                st.session.launch.rmc_settings = rmc_settings_of(fields)?;
+                st.session.changed = true;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_MAX_PLAYERS_DECREE => {
+                st.session.options.max_players = uint(fields, 0)? as i32;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_GAME_NAME_DECREE => {
+                st.session.options.name = text_field(fields, 0)?;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_GAME_PASSWORD_DECREE => {
+                st.session.options.password = text_field(fields, 0)?;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_ALLOW_OBSERVERS_DECREE => {
+                st.session.options.allow_observers = uint(fields, 0)? != 0;
+                st.events.push(LanEvent::PlayersChanged);
+            }
+            d::SET_PLAYER_NAME_DECREE => {
+                // 0x75E180: the player's name, made unique (0x766560).
+                let player = uint(fields, 0)?;
+                let name = text_field(fields, 1)?;
+                if let Some(index) = st.session.players.iter().position(|p| p.id == player) {
+                    let mut names = NameFormat { data: self.data };
+                    lobby::set_player_name(&mut st.session, index, &name, &mut names)?;
+                    st.events.push(LanEvent::PlayersChanged);
+                }
+            }
+            d::KICK_PLAYER_DECREE => {
+                // 0x75DAE0: the host only; PlayerLeave with reason 4 (kicked).
+                let player = uint(fields, 0)?;
+                let host_orders = ordering.and_then(|p| st.player_link(p)).is_some_and(|l| view.is_host(&l));
+                if host_orders && st.role == Role::Host && player != 0 {
+                    let req = (d::PLAYER_LEAVE_REQUEST, vec![Field::Player(player), Field::Bounded { n: 13, value: 4 }]);
+                    match emission.as_deref_mut() {
+                        Some(e) => {
+                            let local = st.local_player.unwrap_or(0);
+                            e.emit_request(true, req.0, &req.1, local, &DataView { data: self.data })?;
+                        }
+                        None => st.deferred.requests.push(req),
+                    }
+                }
+            }
+            d::TOGGLE_PAUSED_DECREE => self.vote_paused(st, ordering, None)?,
+            d::SET_PAUSED_DECREE => {
+                let v = uint(fields, 0)? != 0;
+                self.vote_paused(st, ordering, Some(v))?;
+            }
+            d::SPEED_UP_DECREE | d::SPEED_DOWN_DECREE => {
+                // 0x75DAC0 / 0x75DAD0 -> 0x76F530: the host's step of the
+                // exponent (refused for a non-host and while GWorld+0x275).
+                let host_orders = ordering.and_then(|p| st.player_link(p)).is_some_and(|l| view.is_host(&l));
+                if host_orders {
+                    let dir = if decree == d::SPEED_UP_DECREE { 0.5f32 } else { -0.5 };
+                    let current = {
+                        let t = self.timeline.try_borrow().map_err(super::err)?;
+                        f32::from_bits(t.speed.0)
+                    };
+                    // (0x76F530) floor(v / 0.5 + 0.5) * 0.5 + 0.5 * dir, 0x76F370 clamps.
+                    let v = (current / 0.5 + 0.5).floor() * 0.5 + dir;
+                    self.set_game_speed(st, v.to_bits())?;
+                }
+            }
             // No process here (`has_process`): refused by name, never a no-op.
             _ => return Err(refused(decree)),
         }
+        Ok(())
+    }
+
+    /// The rejection shared by the staging setters: `session+0x118 >= 1`.
+    fn counting_down(&self, st: &mut State, ordering: Option<u32>) -> bool {
+        if st.session.launch_countdown < 1 {
+            return false;
+        }
+        if st.local_player == ordering {
+            st.events.push(LanEvent::Message { kind: 0x11, key: requests::COUNTING_DOWN_KEY.into(), args: Vec::new(), number: None });
+        }
+        true
+    }
+
+    /// 0x7791F0 after a change of map or format: the AIs go (their kingdoms
+    /// are of the old map, 0x7744C0) and the people sit down again in list
+    /// order (0x778D10).
+    fn reseat(&self, st: &mut State) -> Result<()> {
+        let view = st.view();
+        let local = st.local_player;
+        let now = st.now.to_bits();
+        st.session.players.retain(|p| !p.ai);
+        let ids: Vec<u32> = st.session.players.iter().filter(|p| !p.film).map(|p| p.id).collect();
+        for p in &mut st.session.players {
+            p.kingdom.clear();
+            p.flag_2c = true;
+        }
+        let mut assign = KingdomAssign { data: self.data, view, local, now };
+        for id in ids {
+            staging::auto_assign_kingdom(&mut st.session, id, &mut assign)?;
+        }
+        st.session.changed = true;
+        st.session.changed_c9 = true;
+        st.events.push(LanEvent::PlayersChanged);
+        Ok(())
+    }
+
+    /// TGC_SetSessionLoadMapOrder 0x75D860 -> KKC_Session::SetSessionLoadMap
+    /// 0x779780(file, header, crc, 0): ordered by the host alone, refused
+    /// during a countdown. +0x154 += 1, launch +0 and +4 = 2, the file, the
+    /// header ([+0x14]: 0x5A46D0), +0xC = 2, +0xC9, +0xC8, +0xFC = crc; a client
+    /// reports its map status (0x770B70); the creator from the header
+    /// (0x5144A0), the format reset (0x781DD0) and the seats (0x7791F0).
+    fn set_session_load_map(&self, st: &mut State, fields: &[Field], ordering: Option<u32>) -> Result<()> {
+        let view = st.view();
+        let host_orders = ordering.and_then(|p| st.player_link(p)).is_some_and(|l| view.is_host(&l));
+        if !host_orders {
+            if st.local_player == ordering {
+                st.events.push(LanEvent::Message { kind: 0x11, key: "session_order_rejected".into(), args: Vec::new(), number: None });
+            }
+            return Ok(());
+        }
+        if self.counting_down(st, ordering) {
+            return Ok(());
+        }
+        let (file, game, crc) = super::read_load_map_fields(fields, self.data, &st.session.launch.game)?;
+        let session = &mut st.session;
+        session.field_154 = session.field_154.wrapping_add(1);
+        session.launch.game_type = 2;
+        session.launch.mode = 2;
+        session.launch.file = file.clone();
+        session.launch.field_0c = 2;
+        session.map_crc = crc;
+        // 0x5144A0: the scenario creator takes the header.
+        session.launch.map_scenario.header = game.header.clone();
+        session.launch.map_scenario.conditions = game.conditions.clone();
+        session.launch.scenario = Some(file.clone());
+        session.launch.game = game;
+        // 0x781DD0.
+        session.info_text.clear();
+        if st.role != Role::Host {
+            let word = st.session.field_154;
+            st.deferred.requests.push((d::SET_MAP_TRANSFER_STATUS_REQUEST, vec![Field::Bounded { n: 4, value: 1 }, Field::Text(file), Field::Uint { width: 32, value: word }]));
+        }
+        self.reseat(st)
+    }
+
+    /// TGC_SetRMCOrder 0x75D970: the random-map configuration, mode 0, its
+    /// kingdom records from the local data (the wire carries the name alone).
+    fn set_rmc(&self, st: &mut State, fields: &[Field], ordering: Option<u32>) -> Result<()> {
+        if self.counting_down(st, ordering) {
+            return Ok(());
+        }
+        let name = text_field(fields, 0)?;
+        let header = self.data.rmc_header(&name).ok_or_else(|| Error::Protocol(format!("no random map configuration {}", String::from_utf16_lossy(&name))))?;
+        let session = &mut st.session;
+        session.field_154 = session.field_154.wrapping_add(1);
+        session.launch.game_type = 2;
+        session.launch.mode = 0;
+        session.launch.field_0c = 1;
+        session.launch.file.clear();
+        session.launch.random_map = Some(name);
+        session.launch.map_random.header = header;
+        session.info_text.clear();
+        self.reseat(st)
+    }
+
+    /// TGC_SetTeamManagementTeamsOrder 0x75E2D0: the format text and the seats
+    /// (0x781250, 0x7791F0).
+    fn set_teams(&self, st: &mut State, fields: &[Field], ordering: Option<u32>) -> Result<()> {
+        if self.counting_down(st, ordering) {
+            return Ok(());
+        }
+        st.session.info_text = text_field(fields, 0)?;
+        self.reseat(st)
+    }
+
+    /// 0x75D930 (toggle, 0x754EC0) / 0x75D940 -> 0x754880 the pause vote:
+    /// AdminNode+0x2A0 is the client who paused, +0x2A4 the last one, +0x2A8
+    /// when it ended; a client's +0x56 is its vote to unpause, +0x58 when it
+    /// last paused. Only a player with a kingdom pauses. Whoever paused
+    /// unpauses at once; with three humans or more the others vote, and half
+    /// of the kingdoms plus one unpause (0x74D2A0, 0x74D270).
+    fn vote_paused(&self, st: &mut State, ordering: Option<u32>, value: Option<bool>) -> Result<()> {
+        let paused = self.timeline.try_borrow().map_err(super::err)?.paused;
+        let want = value.unwrap_or(!paused);
+        if want == paused {
+            return Ok(());
+        }
+        let Some(id) = ordering else { return Ok(()) };
+        let Some(client) = st.player_link(id) else { return Ok(()) };
+        let holds_kingdom = |st: &State, l: &PeerLink| st.session.players.iter().any(|p| p.link == *l && !p.ai && !p.kingdom.is_empty());
+        if !holds_kingdom(st, &client) {
+            return Ok(());
+        }
+        let name = st.session.players.iter().find(|p| p.id == id).map(|p| p.name.clone()).unwrap_or_default();
+        let humans = st.session.players.iter().filter(|p| !p.ai && !p.film).count();
+        let message = |st: &mut State, key: &str, args: Vec<Vec<u16>>| st.events.push(LanEvent::Message { kind: 0xF, key: key.into(), args, number: None });
+        let count = |st: &State| -> (usize, usize) {
+            let voters: Vec<PeerLink> = st.peers.iter().filter(|l| holds_kingdom(st, l)).copied().collect();
+            let votes = voters.iter().filter(|l| st.pause_votes.iter().any(|v| v == *l)).count();
+            (votes, voters.len() / 2 + 1)
+        };
+        let number = |n: usize| units(&n.to_string());
+        let now = st.ms as f32 * 0.001;
+        if !want {
+            if st.pause_holder != Some(client) {
+                if humans < 3 && st.pause_holder.is_some() {
+                    return Ok(());
+                }
+                let was = st.pause_votes.iter().position(|v| *v == client);
+                match was {
+                    Some(i) => {
+                        st.pause_votes.remove(i);
+                    }
+                    None => st.pause_votes.push(client),
+                }
+                let (votes, needed) = count(st);
+                let key = if was.is_some() { "networking_vote_to_pause_player_retracts_vote|sdd" } else { "networking_vote_to_pause_player_votes_to_unpause|sdd" };
+                message(st, key, vec![name, number(votes), number(needed)]);
+                if votes < needed {
+                    return Ok(());
+                }
+                self.timeline.try_borrow_mut().map_err(super::err)?.paused = false;
+                if let Some(h) = st.pause_holder {
+                    st.pause_last_paused.retain(|(l, _)| *l != h);
+                    st.pause_last_paused.push((h, now));
+                }
+                st.pause_last = st.pause_holder.take();
+                st.pause_votes.clear();
+                st.pause_ended = -10000.0;
+                message(st, "networking_vote_to_pause_game_unpaused", Vec::new());
+            } else {
+                self.timeline.try_borrow_mut().map_err(super::err)?.paused = false;
+                st.pause_last = st.pause_holder.take();
+                st.pause_ended = now;
+                message(st, "networking_vote_to_pause_player_game_unpaused|s", vec![name]);
+            }
+        } else {
+            // 0x74D2D0: the votes go, except for the last holder within the delay.
+            if st.pause_last != Some(client) || st.pause_ended + PAUSE_DELAY < now {
+                st.pause_votes.clear();
+            }
+            // 0x74B080: a client's next pause only after the delay.
+            let last = st.pause_last_paused.iter().find(|(l, _)| *l == client).map(|(_, t)| *t);
+            if last.is_some_and(|t| !(t + PAUSE_DELAY < now)) {
+                message(st, "networking_vote_to_pause_pause_rejected|s", vec![name]);
+                return Ok(());
+            }
+            self.timeline.try_borrow_mut().map_err(super::err)?.paused = true;
+            st.pause_holder = Some(client);
+            message(st, "networking_vote_to_pause_player_game_paused|s", vec![name]);
+            if humans >= 3 {
+                let (votes, needed) = count(st);
+                message(st, "networking_vote_to_pause_needed_votes|dd", vec![number(needed), number(votes)]);
+            }
+        }
+        st.events.push(LanEvent::Paused { paused: want, player: ordering });
         Ok(())
     }
 
@@ -1657,9 +1905,10 @@ impl Orders<'_, '_, '_, '_> {
         if st.conns[index].admin.base.player != Some(player) {
             return Ok(());
         }
-        if st.session.state == 2 {
-            return Err(Error::Unsupported("0x76EE10 MidgameCreateImplicitAIs after an in-game leave"));
-        }
+        // 0x76EE10 MidgameCreateImplicitAIs: in the game, a kingdom left without a
+        // session player gets an implicit computer player on every node; the
+        // world's side is the game's. (The player's record goes below.)
+        let in_game = st.session.state == 2;
         // 0x7667D0 display name of the leaving player.
         let key = match reason {
             4 => crate::heartbeat::LEAVE_KICKED_KEY,
@@ -1686,6 +1935,10 @@ impl Orders<'_, '_, '_, '_> {
             c.disconnect_reason = reason;
         }
         st.events.push(LanEvent::PlayersChanged);
+        if in_game {
+            self.game.try_borrow_mut().map_err(super::err)?.implicit_ai(player)?;
+            st.session.changed = true;
+        }
         self.check_tasks(st)
     }
 }

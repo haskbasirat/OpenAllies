@@ -67,11 +67,14 @@ pub trait Host {
     fn countdown_118(&self) -> i32;
     /// Admin+0x284 and Admin+8 (player ids), and 0x74B900(Admin).
     fn ordering_284(&self) -> Option<u32>;
-    fn a local(&self) -> Option<u32>;
+    fn local_8(&self) -> Option<u32>;
     fn admin_is_host_2c4(&self) -> bool;
     fn player_slot(&self, id: u32) -> Option<usize>;
     /// 0x76B920: the first player whose +24 equals the kingdom.
     fn kingdom_player_76b920(&self, kingdom: &[u16]) -> Option<usize>;
+    /// A player other than `slot` holds the kingdom (0x777F00 before it
+    /// releases the record).
+    fn other_player_holds(&self, slot: usize, kingdom: &[u16]) -> bool;
     fn player_id(&self, slot: usize) -> u32;
     fn player_link(&self, slot: usize) -> PeerLink;
     fn player_ai(&self, slot: usize) -> bool;
@@ -116,7 +119,7 @@ fn same(a: &[u16], b: &[u16]) -> bool {
 
 fn message(h: &impl Host, key: &str, effects: &mut impl Effects) -> Result<()> {
     // 0x76DA87..0x76DA9A: Admin+8 == Admin+0x284 (both may be NULL)
-    effects.session_message_76da60(key, h.a local() == h.ordering_284())
+    effects.session_message_76da60(key, h.local_8() == h.ordering_284())
 }
 
 /// One staging order (its decree process).
@@ -130,11 +133,11 @@ pub fn process(h: &mut impl Host, request: &StagingRequest, effects: &mut impl E
 }
 
 /// 0x76C560(kingdom).
-fn may_change_76c560(h: &impl Host, kingdom: &[u16]) -> Result<bool> {
+pub fn may_change_76c560(h: &impl Host, kingdom: &[u16]) -> Result<bool> {
     let Some(ordering) = h.ordering_284() else { return Ok(false) };
     let ord = h.player_slot(ordering).ok_or_else(|| missing("76C560 Admin+284 player allocation is absent"))?;
     let Some(owner) = h.kingdom_player_76b920(kingdom) else { return Ok(false) };
-    if h.a local() == Some(ordering) && h.admin_is_host_2c4() {
+    if h.local_8() == Some(ordering) && h.admin_is_host_2c4() {
         return Ok(true);
     }
     if h.player_ai(owner) && h.player_link(owner) == h.player_link(ord) {
@@ -187,12 +190,19 @@ pub fn set_player_kingdom_777f00(h: &mut impl Host, slot: usize, kingdom: &[u16]
         }
     }
     let old_kingdom = h.player_kingdom(slot);
-    let saved = match h.row_index(&old_kingdom)? {
+    let old_row = h.row_index(&old_kingdom)?;
+    let saved = match old_row {
         Some(i) if ai => h.row(i)?.handicap_24,
         _ => Vec::new(),
     };
-    if !prefix(&old_kingdom).is_empty() {
-        return Err(Error::Unsupported("777F00 reassignment of a player that already owns a kingdom (777CD0/777610 release)"));
+    // The old kingdom, when no other player holds it, is released: 0x777CD0 and
+    // 0x777610 with the empty string, its handicap cleared.
+    if !prefix(&old_kingdom).is_empty() && !h.other_player_holds(slot, &old_kingdom) {
+        check_nation_777cd0(h, &old_kingdom, &[], effects)?;
+        check_faction_777610(h, &old_kingdom, &[], effects)?;
+        if let Some(i) = old_row {
+            h.store_handicap(i, &[], false)?;
+        }
     }
     h.set_kingdom_7664d0(slot, kingdom)?;
     let located = h.position_77e1f0(kingdom)?;
@@ -218,7 +228,7 @@ pub fn set_ai_handicap_771880(h: &mut impl Host, kingdom: &[u16], handicap: Opti
 }
 
 /// 0x777610(kingdom, faction IDS).
-fn check_faction_777610(h: &mut impl Host, kingdom: &[u16], faction: &[u16], effects: &mut impl Effects) -> Result<()> {
+pub fn check_faction_777610(h: &mut impl Host, kingdom: &[u16], faction: &[u16], effects: &mut impl Effects) -> Result<()> {
     effects.check_faction(kingdom, faction)?;
     if prefix(kingdom).is_empty() {
         return Ok(());
@@ -243,7 +253,7 @@ fn check_faction_777610(h: &mut impl Host, kingdom: &[u16], faction: &[u16], eff
 }
 
 /// 0x777CD0(kingdom, nation IDS).
-fn check_nation_777cd0(h: &mut impl Host, kingdom: &[u16], nation: &[u16], effects: &mut impl Effects) -> Result<()> {
+pub fn check_nation_777cd0(h: &mut impl Host, kingdom: &[u16], nation: &[u16], effects: &mut impl Effects) -> Result<()> {
     effects.check_nation(kingdom, nation)?;
     if prefix(kingdom).is_empty() {
         return Ok(());
@@ -356,7 +366,7 @@ impl Host for Live<'_, '_, '_> {
     fn ordering_284(&self) -> Option<u32> {
         self.owner.ordering_player
     }
-    fn a local(&self) -> Option<u32> {
+    fn local_8(&self) -> Option<u32> {
         self.owner.local_player
     }
     fn admin_is_host_2c4(&self) -> bool {
@@ -367,6 +377,9 @@ impl Host for Live<'_, '_, '_> {
     }
     fn kingdom_player_76b920(&self, kingdom: &[u16]) -> Option<usize> {
         self.owner.session.players.iter().position(|p| crate::session::wcs_eq(&p.core.kingdom, kingdom))
+    }
+    fn other_player_holds(&self, slot: usize, kingdom: &[u16]) -> bool {
+        self.owner.session.players.iter().enumerate().any(|(i, p)| i != slot && crate::session::wcs_eq(&p.core.kingdom, kingdom))
     }
     fn player_id(&self, slot: usize) -> u32 {
         self.core(slot).id
@@ -535,7 +548,7 @@ impl LocalBootstrap {
 pub struct Laboratory {
     pub countdown_118: i32,
     pub ordering_284: Option<u32>,
-    pub a local: Option<u32>,
+    pub local_8: Option<u32>,
     pub last_player_id_e8: u32,
     pub created_c4: Option<u32>,
     pub changed_c8: bool,
@@ -580,8 +593,8 @@ impl Host for Laboratory {
     fn ordering_284(&self) -> Option<u32> {
         self.ordering_284
     }
-    fn a local(&self) -> Option<u32> {
-        self.a local
+    fn local_8(&self) -> Option<u32> {
+        self.local_8
     }
     fn admin_is_host_2c4(&self) -> bool {
         true
@@ -591,6 +604,9 @@ impl Host for Laboratory {
     }
     fn kingdom_player_76b920(&self, kingdom: &[u16]) -> Option<usize> {
         self.players.iter().position(|p| crate::session::wcs_eq(&p.kingdom, kingdom))
+    }
+    fn other_player_holds(&self, slot: usize, kingdom: &[u16]) -> bool {
+        self.players.iter().enumerate().any(|(i, p)| i != slot && crate::session::wcs_eq(&p.kingdom, kingdom))
     }
     fn player_id(&self, slot: usize) -> u32 {
         self.players[slot].id

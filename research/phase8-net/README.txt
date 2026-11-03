@@ -494,3 +494,107 @@ session task handlers 0x775BF0 / 0x773AE0 / 0x76EE10 (traits / effects).
 x87: network/simulation threads at PC53 (lead policy); every float
 statement ported here takes the precision explicitly.
 Untested: any real two-machine session. No claim of working multiplayer.
+
+-----------------------------------------------------------------------
+13. LAN SESSIONS IN THE CLIENT (crates/aa-netcode/src/lan.rs, lan/orders.rs;
+    crates/aa-bevy/src/net)
+-----------------------------------------------------------------------
+Route, the original's screens and commands:
+  MainMenu RequestMultiplayer -> MultiplayerMenu 0x653780 (RequestLobbyLAN,
+  RequestLobbyInternet, RequestMainMenu) -> LobbyMenu 0x64AB20 in LAN mode
+  (LobbyHost, LobbyJoinDirect, OpenOptionsMenu, LobbyConfirmExit 0x64A6E0)
+  -> CreateGameDialog 0x6EBC50 (CreateGameCreate 0x6EBAB0 -> Host 0x75AEE0) or
+  JoinDirectDialog 0x6EC6D0 (JoinDirectJoin 0x6EC460 -> LobbyJoinDirectExecute
+  "ip port" 0x648030) -> StagingMenu with session+0xF4 set -> the launch ->
+  the battle, whose ticks LanNode::frame (0x75CA70) gives.
+
+How the client holds it:
+  * crates/aa-bevy/src/net/mod.rs: `Lan`, the front end's side. ui/custom.rs
+    stays the staging screen's view (`Custom::net_*`): on every node it is
+    rebuilt from aa_netcode::lobby::Session, so what a person sees and what a
+    launch builds are the replicated session's.
+  * net/game.rs: `Battle` as the session's world. session::step_battle hands a
+    LAN battle to it. A person's commands leave as requests, only decrees reach
+    the world, Recorder::step applies them: a film records as in a local game.
+  * net/data.rs: aa_netcode::lan::LanData from the staging's parsed data.
+  * AA_LAN_BIND keeps a host on an address (a test binds 127.0.0.1; the native
+    0.0.0.0 otherwise). AA_LAN_DIGEST writes every world tick's digest to a
+    file, the check of two clients.
+
+What has processes in lan/orders.rs since this round (no oracle of their own):
+  93 SetSessionLoadMap 0x779780 (with 0x5144A0, 0x781DD0, 0x7791F0 in short),
+  104 SetTeamManagementTeams 0x75E2D0 (the format as text, its seats through
+  LanData::kingdom_open), 119 SetMapSize, 120 SetRMC, 123 SetRMCSettings,
+  110..113 max players, name, password, observers, 11 SetPlayerName, 144 Kick,
+  75 / 76 the pause vote 0x754880 (with its messages and the delay [0xA8C088] =
+  300 s), 80 / 81 SpeedUp / SpeedDown 0x76F530. PlayerLeave in the game gives
+  LanGame::implicit_ai (0x76EE10 in short). LanNode::leave: type 8 / type 10
+  until the delay [0xA874AC] = 2.5 s, then LanEvent::Left.
+  local_staging_requests.rs now has the release branch of 0x777F00, and
+  lan/orders.rs calls it (its copies are gone).
+
+A session with the original (the QA copy, loopback, posted keys):
+  LobbyJoinDirectExecute "ip port" 0x648030 does not connect at once. It hands
+  the address to GameSpy (0x787750, task 0x785EE0), which sends a QR2 query to
+  it: FE FD 00, a 4-byte request key, FF FF FF. No answer within seconds gives
+  gamespy_login_connect_failed, "Failed to connect to the game". LanNode answers
+  on the game socket (lan.rs `answer_queries`, udp.rs `queries`): the type and
+  key, the server keys, empty player and team lists. The keys are the SDK's
+  names with the session's values; that the original's lobby reads them all is
+  not checked, it only needs the reply to go on (0x649C90 -> 0x6523C0).
+  Then, on a host of tests/lan_original.rs:
+  * the original's Connect (type 2) decodes with our reader. It says: version
+    1.0.5.0, build A&A, data checksum 170871826, depot string "Data.rwd e1e2d0c9
+    data/ 0 Music.rwd 2e37de23", no mods. The depot string is "%s %x" of each
+    depot (0x5AF810), the word at +26 of the archive header, 0 for the folder.
+  * refused (wrong version): our type 11 reaches it, the original shows
+    "Incorrect Version".
+  * accepted: our PlayerJoin decree, the session snapshot (0x74C270) and the
+    admin state (0x74C130) are read by the original, which shows its staging
+    screen with the game's name, "2/8 Players", both players' names. No crash,
+    no out-of-sync report in the 70 s it stayed. When it was closed, our host
+    timed it out and dropped it after the 15 s of patience.
+  That is the transport, the channels, the private history, the join and the
+  snapshot, proven against the original itself in one direction: original
+  client, our host. A chat line ordered on our host
+  (TGC_PublicChatOrderRequest, decree 77) shows in the original's chat log, so
+  its client replay of our decree history runs too. Its Ready key on a player
+  without a kingdom changed nothing on our side (status stayed 0); the records of
+  that test were a stand-in, the original seated its player as an observer.
+  Not tried: the original as host (it binds 0.0.0.0; a test here opens nothing
+  beyond the local machine). The launch with the original: the stage of that
+  test is a stand-in without a real header (Observer row only), a real one needs
+  the header of the map as 0x5A1E90 reads it and the map CRC (0x770B70 asks for a
+  transfer when it differs), and after a launch Synchronizer A would part at once
+  (NEXT-ROUND.md "Multiplayer" items 3 and 4).
+  The tools: tests/lan_original.rs (ignored, hosts and prints), and in the QA
+  profile's hotkeys `map f3 MainMenuButtonMultiplayer`, `map f4
+  MultiplayerMenuButtonLAN`, `map f2 LobbyMenu "LobbyJoinDirectExecute 127.0.0.1
+  7290"`. The lobby asks for a nickname first (Enter accepts).
+
+Two of our clients: two copies on their own hidden desktops, loopback, scratch
+  profiles. The host: MainMenu -> Multiplayer -> LAN -> Create -> Create, staging
+  the default random map (Southern Europe 384x384, format from the AVars). The
+  client: Join Direct, 127.0.0.1, Ready. Launch, both load, the battle runs. A
+  person's order (select the truck, right click) reached the world through request
+  and decree: the HUD shows it Moving. AA_LAN_DIGEST: 835 world ticks with the same
+  digest and RNG state on both nodes (cmp of the two files). Both left through the
+  game menu and got their score screens; each profile has its film.
+  Not a battle to the end yet: no computer player was in that run and nobody won,
+  and the map-dialog and AddAI routes of the staging were not clicked in a run.
+  The film of that run played in Strict to END_OF_FILM with out_of_sync=false, but
+  with 0 checkpoints: the recorder waited for an admin clock nobody ran. game.rs
+  now sets own_admin_clock = false (one checkpoint per 17 world ticks); a film of
+  that build has not been run yet.
+
+Not built, on purpose or for lack of time (research/byte-exact/NEXT-ROUND.md
+"Multiplayer" has the order of the next steps):
+  * the LAN game list: GameSpy's browse by UDP broadcast; a person joins by
+    address. The first-time nickname prompt ui_lobby_prompt_lan_nickname: the
+    Options page's nickname is used. The Internet lobby (GameSpy).
+  * heartbeat 0x75B820 with crate::heartbeat: lan.rs runs the rule of 0x75BD70 in
+    short (module documentation), no lag dialog, no backup server.
+  * the function behind the data checksum (a measured constant for the stock
+    data), the map check and transfer, FinalizeLaunchSettings beyond the seed,
+    most Synchronizer A writers, the session timing 0x41C180, the orders named
+    in `has_process`.
