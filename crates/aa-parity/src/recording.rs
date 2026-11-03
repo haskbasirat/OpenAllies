@@ -38,16 +38,15 @@
 //! and S are the same with recording on and off: a test launch (0x7757F0, launch
 //! type 7 or 0xE) has a [`Recorder`] with no [`FilmFile`].
 //!
-//! Selection forms: a human's selection is 18 SelectionClear and 16 SelectionAdd
-//! and is sent only when it changes (the films' humans); a computer's is 333
+//! Selection forms: a human's selection is 18 SelectionClear, 17 SelectionRemove and
+//! 16 SelectionAdd and is sent only when it changes (the films' humans); a computer's is 333
 //! SelectionSet before every order, 16 for further units, and with more than one
 //! unit 86 group_behavior_enable first (0x7AF220). The commands go to the world
 //! on the 86, so a replay applies them at the same place in the stream.
 //!
-//! What is not native here: the client's commands are the battle commands, so a
-//! player's plain click is written with the ActorCommand the client already
-//! guessed (flag bit 6 set), where the original sends the default order and lets
-//! 0x4DA570 guess on every machine. The world gets the same command either way.
+//! A person's right click is `Command::Hot`, the default order of 0x620760 with no
+//! ActorCommand named: 0x4DA570 guesses on every machine. Their selection comes as
+//! `Command::Select` when it changes. The HUD's aimed orders name theirs, as natively.
 use crate::decree::{Decree, id};
 use crate::film::{FilmDecree, SessionPlayer};
 use crate::film_writer::{self, FilmFile, OrdersWriter, WireDecree};
@@ -1282,6 +1281,17 @@ impl Recorder {
             }
             other => other,
         };
+        // A person's selection as it changes: the decrees, nothing for the world.
+        if matches!(command, Command::Select { .. }) {
+            if let Ok(requests) = wire::requests(world, &self.tables, outbox, &command) {
+                for (request, fields) in requests {
+                    for decree in film_decrees(request, fields, computer, 0, self.outboxes.entry(player).or_default()) {
+                        out.push(Pending { player, decree, commands: Vec::new() });
+                    }
+                }
+            }
+            return;
+        }
         match wire::requests(world, &self.tables, outbox, &command) {
             Ok(requests) => {
                 let last = requests.len();
@@ -1561,7 +1571,8 @@ fn command_units(command: &Command) -> Vec<Unit> {
         | Command::Bombard { units, .. }
         | Command::Repair { units, .. }
         | Command::Construct { units, .. }
-        | Command::Order { units, .. } => units.clone(),
+        | Command::Order { units, .. }
+        | Command::Hot { units, .. } => units.clone(),
         Command::SetFormation { orgs, .. } => orgs.iter().map(|o| Unit::Org(*o)).collect(),
         _ => Vec::new(),
     }
@@ -1592,7 +1603,9 @@ fn command_kingdom(command: &Command) -> Option<KingdomId> {
         | Command::Construct { kingdom, .. }
         | Command::AirAttack { kingdom, .. }
         | Command::AirRecon { kingdom, .. }
-        | Command::Order { kingdom, .. } => Some(*kingdom),
+        | Command::Order { kingdom, .. }
+        | Command::Select { kingdom, .. }
+        | Command::Hot { kingdom, .. } => Some(*kingdom),
     }
 }
 

@@ -29,6 +29,8 @@ aa-actors = { path = "../aa-actors" }
 # and the native resource value types
 aa-economy = { path = "../aa-economy" }
 aa-body = { path = "../aa-body" }
+# combat owner: the Performer lifecycle (crate::combat::performer)
+aa-combat = { path = "../aa-combat" }
 # core owner: the exact structure production queue, research and HQ attach
 aa-production = { path = "../aa-production" }
 # movement owner: the native tile walk 0x4DD150 for the exact path solver

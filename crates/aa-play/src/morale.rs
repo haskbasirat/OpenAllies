@@ -155,6 +155,14 @@ fn state_in(world: &World, st: &CombatState, id: OrgId) -> RegimentState {
     if o.reform.is_some() {
         return RegimentState::Reform;
     }
+    // The regiment Mind's fighting states.
+    match crate::movement::fight_state(world, id) {
+        Some(crate::movement::FightState::Engage) => return RegimentState::Engage,
+        Some(crate::movement::FightState::Chasing) => return RegimentState::Chasing,
+        Some(crate::movement::FightState::Reform) => return RegimentState::Reform,
+        Some(crate::movement::FightState::Kill) => return RegimentState::Kill,
+        None => {}
+    }
     if o.engaging() {
         return RegimentState::Engage;
     }
@@ -667,12 +675,13 @@ fn select_destination(world: &mut World, st: &CombatState, id: OrgId) -> Option<
         .map(|&e| st.orgs[e as usize].position)
         .collect();
     // Kingdom +264 supply sources of allied kingdoms (supply.rs zones).
-    let team = world.kingdoms.iter().find(|k| k.id == world.orgs[i].kingdom).map(|k| k.team);
+    // (Kingdom vt+138: two kingdoms on no team are not one side, whatever their team word.)
+    let me = world.orgs[i].kingdom;
     let sources: Vec<(Vec2, f32)> = world
         .books
         .zones
         .iter()
-        .filter(|z| team.is_some() && world.kingdoms.iter().find(|k| k.id == z.kingdom).map(|k| k.team) == team)
+        .filter(|z| matches!(crate::setup::relation(world, Some(me), Some(z.kingdom)), crate::books::SELF | crate::books::FRIEND))
         .map(|z| (z.centre, z.radius))
         .collect();
     let mut best: Option<(f32, Vec2)> = None;
@@ -852,7 +861,7 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
         if !st.orgs[i].entrenched && delay > 0.0 && x87::add(ld(delay), ld(since)) <= ld(now) {
             st.orgs[i].entrenched = true;
         }
-    } else if !(st.orgs[i].engaging() && st.orgs[i].auto_order.is_some()) {
+    } else if !st.orgs[i].engaging() {
         st.orgs[i].rest_since = None;
         st.orgs[i].entrenched = false;
     }
@@ -869,10 +878,8 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
         let engaging = st.orgs[i].engaging();
         st.orgs[i].next_sleep_think = now + if engaging { ENGAGE_THINK_SECONDS } else { SLEEP_THINK_SECONDS };
         let s = state(&st.orgs[i], world.orgs[i].morale);
+        // Engaged: 526A70 step 1, in the Mind's Engage Think.
         if engaging {
-            if s == 1 && st.orgs[i].is_engaged() {
-                begin_rout(world, st, id);
-            }
         } else if st.orgs[i].exhausted_state {
             if s == 2 {
                 st.orgs[i].exhausted_state = false;

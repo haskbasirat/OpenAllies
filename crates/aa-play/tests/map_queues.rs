@@ -99,3 +99,23 @@ fn kursk_keeps_its_herds_and_their_minds() {
         assert_eq!(m.current_component, Some(2), "{}: the Character is active", m.thing_id);
     }
 }
+
+/// A thing on its own that saved a Mind is an actor, whatever its definition says: the
+/// eight cows of (2v2)Market_Garden, whose Characters tick from the first second and
+/// whose Minds construct at the Load (0x4D833E -> 0x530E50, measured: eight draws).
+#[test]
+#[ignore = "reads the original data; set AA_GAME_ROOT"]
+fn market_garden_keeps_its_cows() {
+    use aa_mind::construct::Kind;
+    let root = root();
+    let data = GameData::load(&root).unwrap();
+    let map = GameMap::load_with(&root, "(2v2)Market_Garden", &data).unwrap();
+    let cows: Vec<_> = map.placed.iter().filter(|p| p.mind.is_some() && p.organization.is_none() && p.member_of.is_none()).collect();
+    assert_eq!(cows.len(), 8);
+    for cow in cows {
+        assert_eq!(cow.thing_id, "cow");
+        let (saved, _) = aa_mind::saved_load::decode(Kind::Element, cow.mind.as_ref().unwrap()).unwrap();
+        assert_eq!(saved.base().unwrap().stack.as_ref().unwrap()[0], 0x68, "the Sleep state");
+        assert_eq!(cow.current_component, Some(2), "the Character is active");
+    }
+}

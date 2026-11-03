@@ -3,9 +3,10 @@
 //! `cai_sleep`, `aa_navigation::company_move` (`KKC_CAIStateMove`), `cai_thinks::unpack`
 //! and `cai_member_command` over [`MovementState`]. Census cause M7.
 //!
-//! Hosted states: Sleep (Mind+34), Rampage (+54, [`rampage`]), Move (+68), Unpack (+280). The kill order of a
-//! regiment is still `order_think` (census X1) and its rout and engage live in
-//! `crate::combat`: those reach this Mind as plain moves, or not at all.
+//! Hosted states: Sleep (Mind+34), Rampage (+54, [`rampage`]), Move (+68), Unpack (+280), and
+//! the fighting states Kill (+C0), Chasing (+120), Reform (+1B8), Engage (+1CC) ([`fight`]). The
+//! rout and exhausted states are still `crate::morale`, guard and explore `crate::orders`: those
+//! reach this Mind as plain moves, or not at all.
 //!
 //! The Move state's fields stay in [`OrderMove`], which the rest of the module and
 //! the element Mind read; [`company`] and [`store`] carry them across a port call.
@@ -20,6 +21,7 @@ use aa_navigation::company_move as cm;
 use aa_navigation::{OwnedPath, PathNode};
 use aa_numeric::Binary;
 
+pub(super) mod fight;
 mod rampage;
 
 const PC: aa_numeric::Precision = PC53;
@@ -111,9 +113,16 @@ pub(super) fn ensure(ms: &mut MovementState, world: &mut World, o: OrgId) {
 pub(super) fn restore(ms: &mut MovementState, world: &mut World, o: OrgId, saved: &aa_mind::saved_load::Saved, placed: &crate::map::PlacedThing) -> Result<(), String> {
     let built = aa_mind::construct::construct(aa_mind::construct::Kind::Regiment, key(o), &mut NoDraws, PC).map_err(|e| e.to_string())?;
     world.books.minds.install_saved(key(o), HostedKind::Regiment, built, saved)?;
-    if world.books.minds.sleep_unless_hosted(key(o), &[SLEEP, MOVE, UNPACK, rampage::RAMPAGE], SLEEP) {
+    if world.books.minds.sleep_unless_hosted(key(o), &[SLEEP, MOVE, UNPACK, rampage::RAMPAGE, fight::KILL, fight::CHASING, fight::REFORM, fight::ENGAGE], SLEEP) {
         ms.note(format!("regiment {o}: the saved Mind state is not hosted, it sleeps"));
     }
+    // What the hosted states and commands name is this world's thing + 1 (`fight`).
+    for offset in [fight::KILL + 0x10, fight::CHASING + 0x10, fight::ENGAGE + 0x20] {
+        let g = world.books.minds.word(key(o), offset);
+        let thing = super::saved_thing(world, g);
+        world.books.minds.set_word(key(o), offset, thing);
+    }
+    super::saved_command_targets(world, key(o));
     let om = &mut ms.orgs[o as usize];
     om.facing = Vec2::new(placed.facing[0], placed.facing[1]);
     if let Some(p) = placed.organization.as_ref() {
@@ -296,6 +305,9 @@ impl Regiment<'_> {
     /// Mind +0x144 `0x5222E0` for the hosted states.
     fn finished(&mut self, a: &mut Arena) -> aa_mind::Result<()> {
         let mind = MindId(key(self.o));
+        if fight::reached(self, a)? {
+            return Ok(());
+        }
         if self.is_current(a, MOVE)? {
             // 0x52FD00: a live target that is not the regiment itself holds the
             // state: think again in 1 s.
@@ -388,7 +400,11 @@ impl aa_mind::World for Regiment<'_> {
         Ok(true)
     }
     fn enter(&mut self, state: StateId, a: &mut Arena) -> aa_mind::Result<()> {
-        match self.offset_of(state) {
+        let offset = self.offset_of(state);
+        if fight::enter(self, state, offset, a)? {
+            return Ok(());
+        }
+        match offset {
             SLEEP => {
                 // 0x51D0F0.
                 a.state_mut(state)?.status = 2;
@@ -424,7 +440,11 @@ impl aa_mind::World for Regiment<'_> {
         }
     }
     fn leave(&mut self, state: StateId, a: &mut Arena) -> aa_mind::Result<()> {
-        match self.offset_of(state) {
+        let offset = self.offset_of(state);
+        if fight::leave(self, state, offset, a)? {
+            return Ok(());
+        }
+        match offset {
             MOVE => {
                 // 0x51D7B0.
                 a.state_mut(state)?.status = 0;
@@ -475,8 +495,9 @@ impl aa_mind::World for Regiment<'_> {
         }
         Ok(())
     }
-    /// Mind +0x1A4: the view's state.
-    fn state_changed(&mut self, _: MindId, _: &mut Arena) -> aa_mind::Result<()> {
+    /// Mind +0x1A4: the view's state, and what the rest of the game reads of it.
+    fn state_changed(&mut self, _: MindId, a: &mut Arena) -> aa_mind::Result<()> {
+        fight::reflect_order(self, a);
         Ok(())
     }
 }
@@ -570,12 +591,9 @@ impl cm::CompanyThinkWorld for Regiment<'_> {
         };
         Ok(Some(cm::Target { position_bits: bits(t.pos.truncate()), is_self: false }))
     }
-    /// Mind +0x140 `0x521F90` with the Move current: the state ends.
-    fn target_lost(&mut self, _: u32) -> aa_navigation::Result<()> {
-        let mind = MindId(key(self.o));
-        self.with_arena(|host, a| aa_mind::pop(mind, a, host)).map_err(nav)?;
-        set_order(self.world, self.ms, Owner::Org(self.o), Order::Idle);
-        Ok(())
+    /// Mind +0x140 `0x521F90`.
+    fn target_lost(&mut self, id: u32) -> aa_navigation::Result<()> {
+        self.with_arena(|host, a| fight::target_gone(host, id, a)).map_err(nav)
     }
     fn finished(&mut self) -> aa_navigation::Result<()> {
         self.with_arena(|host, a| host.finished(a)).map_err(nav)
@@ -774,13 +792,8 @@ impl Regiment<'_> {
         if !alive(self.world, id) {
             return;
         }
-        if element::enabled() {
-            let rules = self.rules;
-            element::give_owned_path(self.ms, self.world, rules, id, path, mode, speed);
-            return;
-        }
-        let nodes = path.nodes.iter().map(|n| Node { pos: vec2([n.words[0], n.words[1]]), dir: vec2([n.words[2], n.words[3]]), kind: n.words[4] as u8 }).collect();
-        start_element(self.ms, self.world, id, nodes, mode, f32::from_bits(speed));
+        let rules = self.rules;
+        element::give_owned_path(self.ms, self.world, rules, id, path, mode, speed);
     }
 }
 
@@ -992,12 +1005,26 @@ impl cai_sleep::SleepThinkWorld for Regiment<'_> {
             }
             self.member_command(m, flag, a)?;
         }
+        // 0x522FE9.
+        self.world.books.minds.set_byte(key(self.o), SLEEP_BYTE10, 1);
         Ok(())
     }
-    /// `0x523000`: `0x5200B0` and `0x520190` hold; below two rounds `0x522F60`, else
-    /// the byte +0x10 clears.
+    /// `0x523000`: while a member moves (`0x5200B0`) nothing; every member within 0.5 m
+    /// of its place (`0x520190`, which the (2v2)Kursk herds' next round reads), or two
+    /// rounds done: the byte +0x10 clears; else `0x522F60` again.
     fn sleep_523000(&mut self, state: StateId, a: &mut Arena) -> aa_mind::Result<()> {
-        if self.word(SLEEP_COUNT14) < 2 {
+        let o = self.o;
+        if alive_members(self.world, o).any(|m| self.ms.actors[m as usize].mover.active) {
+            return Ok(());
+        }
+        let anchor = self.world.orgs[o as usize].anchor;
+        let origin = self.ms.orgs[o as usize].goal.unwrap_or(anchor);
+        let placed = alive_members(self.world, o).all(|m| {
+            let offset = self.ms.orgs[o as usize].slots.get(member_slot(self.world, o, m)).copied().unwrap_or(Vec2::ZERO);
+            let place = [(origin.x + offset.x).to_bits(), (origin.y + offset.y).to_bits()];
+            cai_member_command::close(bits(pos2(self.world, m)), place, PC).unwrap_or(false)
+        });
+        if !placed && self.word(SLEEP_COUNT14) < 2 {
             return self.sleep_522f60(state, a);
         }
         self.world.books.minds.set_byte(key(self.o), SLEEP_BYTE10, 0);
@@ -1007,7 +1034,7 @@ impl cai_sleep::SleepThinkWorld for Regiment<'_> {
 
 impl cai_thinks::RegimentWorld for Regiment<'_> {
     fn resolve(&mut self, gtid: u32) -> aa_mind::Result<Option<u32>> {
-        cai_sleep::SleepThinkWorld::resolve(self, gtid)
+        fight::resolve(self, gtid)
     }
     fn object_gtid(&mut self, object: u32) -> aa_mind::Result<u32> {
         Ok(object + 1)
@@ -1018,8 +1045,8 @@ impl cai_thinks::RegimentWorld for Regiment<'_> {
     fn embedded_think(&mut self, _: MindId, offset: u32, a: &mut Arena) -> aa_mind::Result<()> {
         think_state(self, offset, a)
     }
-    fn mind_virtual_140(&mut self, _: MindId, _: u32, _: &mut Arena) -> aa_mind::Result<()> {
-        Ok(())
+    fn mind_virtual_140(&mut self, _: MindId, gtid: u32, a: &mut Arena) -> aa_mind::Result<()> {
+        fight::target_gone(self, gtid, a)
     }
     fn mind_virtual_b8(&mut self, _: MindId, _: &mut Arena) -> aa_mind::Result<()> {
         Ok(())
@@ -1115,7 +1142,7 @@ fn think_state(host: &mut Regiment<'_>, offset: u32, a: &mut Arena) -> aa_mind::
         }
         UNPACK => cai_thinks::unpack::think(state, a, host).map(|_| ()),
         rampage::RAMPAGE => rampage::think(host, state, a),
-        other => Err(err(format!("Mind+{other:X} state Think is not hosted"))),
+        other => fight::think(host, other, a).unwrap_or_else(|| Err(err(format!("Mind+{other:X} state Think is not hosted")))),
     }
 }
 
@@ -1182,9 +1209,9 @@ impl regiment_update::World for Update<'_, '_> {
     fn member_count_57a730(&mut self, o: OrgId) -> aa_mind::Result<u32> {
         Ok(alive_members(self.host.world, o).count() as u32)
     }
-    /// `0x523EA0`: the engage list is `crate::combat`'s.
+    /// `0x523EA0`.
     fn refresh_engage(&mut self, _: MindId) -> aa_mind::Result<()> {
-        Ok(())
+        fight::refresh(self.host, self.a)
     }
     fn current_state(&mut self, mind: MindId) -> aa_mind::Result<u32> {
         let state = self.a.mind(mind)?.stack.front().copied().flatten().ok_or_else(|| err("the Mind has no current state"))?;
@@ -1330,7 +1357,7 @@ fn ms_note(host: &mut Regiment<'_>, what: String) {
 /// at the last, inside the arrival radius, Mind +0x144.
 fn node_reached(host: &mut Regiment<'_>, leader: ActorId, leader_nodes: usize, a: &mut Arena) -> aa_mind::Result<()> {
     let o = host.o;
-    if !host.is_current(a, MOVE)? && !host.is_current(a, UNPACK)? && !host.is_current(a, rampage::RAMPAGE)? {
+    if host.is_current(a, fight::ENGAGE)? || host.is_current(a, SLEEP)? {
         return Ok(());
     }
     if host.ms.orgs[o as usize].leader != Some(leader) || host.ms.orgs[o as usize].order.path.is_empty() {

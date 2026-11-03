@@ -666,7 +666,7 @@ pub fn under_siege(world: &World, a: ActorId) -> bool {
         return false;
     }
     let c = world.combat.actor(a);
-    if world.books.actor(a).is_some_and(|b| b.city_siege) || c.is_some_and(|c| !c.bombarding.is_empty()) {
+    if world.books.actor(a).is_some_and(|b| b.city_siege || b.saved_siege) || c.is_some_and(|c| !c.bombarding.is_empty()) {
         return true;
     }
     c.and_then(|c| c.last_hit).is_some_and(|(_, t)| {
@@ -1145,6 +1145,8 @@ pub fn city_tick(world: &mut World, c: ActorId) {
                 a.kingdom = Some(w);
             }
         }
+        // 0x4D5230 -> 0x4CF0F0: the contribution moves to the new owner at once.
+        crate::economy::refresh(world);
     }
 }
 /// The organization's own position (its GActor +20/+24): set at its
@@ -1156,17 +1158,14 @@ pub fn org_position(world: &World, o: OrgId) -> Vec2 {
     world.orgs[o as usize].anchor
 }
 
-/// 0x579110 gate inputs owned by combat: somebody engages the organization
-/// (actor +0x118, its engagers' list), or its mind state has resupply =
-/// false: engaged (an engage target), routing, bombarding; a member
-/// shooting counts too.
+/// 0x579110 gate inputs owned by combat: somebody engages the organization (actor
+/// +0x118, its engagers' list), or the ActorStateMind it reports (0x4D49B0(4)) has
+/// `resupply = false` (+0x1C, Game/actor_states.tgi): chasing, engaged, routing, bombard,
+/// regrouping, rampaging, unpacking, packing. What its members shoot at is no input.
 fn engaged(world: &World, o: OrgId) -> bool {
-    if crate::combat::org_state(world, o)
-        .is_some_and(|c| c.engaging() || c.routing.is_some() || c.is_engaged() || matches!(c.task, Some(crate::combat::tasks::Task::Bombard(_))))
-    {
-        return true;
-    }
-    world.orgs[o as usize].members.iter().any(|&m| live(world, m) && world.actors[m as usize].combat.target.is_some())
+    use crate::morale::RegimentState as S;
+    crate::combat::org_state(world, o).is_some_and(|c| c.is_engaged())
+        || matches!(crate::morale::regiment_state(world, o), S::Chasing | S::Engage | S::Rout | S::Bombard | S::Regroup | S::Rampage | S::Unpack | S::Pack)
 }
 
 /// 0x57B5A0 behind the 0x579110 gate for organization `o`, `dt` = the
@@ -1193,7 +1192,8 @@ fn regenerate(world: &mut World, o: OrgId, dt: f32) {
         let leader = def.leader_slot.map(usize::from).filter(|&l| l < slots);
         let choice = leader
             .filter(|&l| member_at(l).is_some_and(damaged))
-            .or_else(|| (0..slots).find(|&s| member_at(s).is_some_and(damaged)))
+            // 0x57B5A0's loop: a damaged member only while it is attached (Element +1C).
+            .or_else(|| (0..slots).find(|&s| member_at(s).is_some_and(|m| damaged(m) && crate::movement::element_is_attached(world, m))))
             .or_else(|| leader.filter(|&l| member_at(l).is_none() && def.slots[l].0 != u32::MAX))
             .or_else(|| (0..slots).find(|&s| member_at(s).is_none() && def.slots[s].0 != u32::MAX && world.data.def(def.slots[s].0).has_component("BodyComponent")));
         let Some(slot) = choice else { return };

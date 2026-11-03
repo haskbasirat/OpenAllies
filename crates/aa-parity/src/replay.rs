@@ -77,6 +77,9 @@ pub struct ReplayPlan {
     pub starting_experience: Option<f32>,
     /// Where the film's battle could not be taken over as it is.
     pub notes: Vec<String>,
+    /// The creator's sides without a player, whose picks draw all the same.
+    #[serde(skip)]
+    pub closed: Vec<aa_play::creation::ClosedSide>,
 }
 
 fn utf16(v: &[u16]) -> String {
@@ -298,7 +301,22 @@ pub fn plan(film: &Film, data: &GameData, map: &GameMap) -> anyhow::Result<Repla
         ));
     }
     let starting_resources = rule_value(film, "ResourceStockpileDefault");
+    // 0x50E8B0 resolves every kingdom of the creator, with a player or not.
+    let closed = creator
+        .iter()
+        .filter(|k| !k.independent)
+        .filter_map(|k| {
+            let slot = map.slots.iter().position(|s| s.id.eq_ignore_ascii_case(&k.id))?;
+            let taken = players.iter().any(|p| p.slot == slot);
+            (!taken).then(|| aa_play::creation::ClosedSide {
+                slot,
+                nation: nation_id(&k.nation),
+                pick: aa_play::creation::StartPick { random_nation: k.nation.is_empty(), random_general: k.faction.is_empty() },
+            })
+        })
+        .collect();
     Ok(ReplayPlan {
+        closed,
         players,
         setup: SkirmishSetup {
             map_id: map.id.clone(),
@@ -341,7 +359,7 @@ pub fn build_with(
             random_general: p.random_general,
         })
         .collect();
-    let mut world = World::new_skirmish_with(data.clone(), map, &plan.setup, &picks)?;
+    let mut world = World::new_skirmish_closed(data.clone(), map, &plan.setup, &picks, &plan.closed)?;
     aa_play::special_ops::attach(&mut world, generals);
     if let Some(x) = plan.starting_experience {
         aa_play::special_ops::set_starting_experience(&mut world, x);

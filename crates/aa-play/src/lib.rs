@@ -23,6 +23,7 @@ pub mod data;
 pub mod deploy;
 pub mod economy;
 pub mod formation;
+pub mod ground;
 pub mod map;
 pub mod morale;
 pub mod movement;

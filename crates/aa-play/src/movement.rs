@@ -29,14 +29,10 @@
 //!   ignored, `0x4D67F0`) and the 2 s ignore entry of `0x534A40`.
 //!
 //! The Mover (`0x577E50`, `0x5774A0`) runs on `aa_movement`, the element Mind on
-//! the `aa_mind` and `aa_navigation` ports in the [`element`] module; the f32
-//! element code below stays selectable with `AA_ELEMENT_MIND=old` until the new
-//! path is complete. The regiment layer (`company_move`, `cai_sleep`, unpack)
-//! lives in the [`regiment`] module, except for a kill order (`order_think`, X1).
-//!
-//! With `AA_ELEMENT_MIND=old` obstacle avoidance after a blocked step is a sidestep
-//! node around the blocking actor, or a tile re-route with the tile solver. The ports
-//! of `0x53E1F0`, `0x53C170` and `0x534A40` are in [`route`] and [`uai`].
+//! the `aa_mind` and `aa_navigation` ports in the [`element`] module. The regiment
+//! layer (`company_move`, `cai_sleep`, unpack) lives in the [`regiment`] module,
+//! except for a kill order (`order_think`, X1). The ports of `0x53E1F0`, `0x53C170`
+//! and `0x534A40` are in [`route`] and [`uai`].
 use crate::data::{Def, GameData};
 use crate::formation::{self, facing_angle, facing_vector};
 use crate::path::{Grid, MoverClass, PathRules, Pathfinder, Request, Status, Waypoint};
@@ -64,36 +60,8 @@ const EPSILON: f32 = f32::from_bits(0x38d1_b717);
 const ARRIVAL_RADIUS_SQUARED: f32 = 0.25;
 /// 0x5276B0 target re-path ratio (0x3E15F96D).
 const REPATH_RATIO: f32 = f32::from_bits(0x3e15_f96d);
-/// 0x52FF00 minimum formation speed 0.2 (0x3E4CCCCD).
-const MINIMUM_FORMATION_SPEED: f32 = f32::from_bits(0x3e4c_cccd);
-/// 0x52FF00 kind-0 blend scale -0.25.
-const PATH_DIFFERENCE_SCALE: f32 = -0.25;
-/// 0x52E400 corner taper: 36.0, 6.0, 1/6.
-const CORNER_RADIUS_SQUARED: f32 = 36.0;
-const CORNER_RADIUS: f32 = 6.0;
-const CORNER_SCALE: f32 = f32::from_bits(0x3e2a_aaab);
 /// 0x525740 / 0x5276B0 schedule(1.0).
 const THINK_SECONDS: f32 = 1.0;
-/// 0x5300A0 re-think delays: 0.3 (kind 0) or 1.0 (kind 1) plus 0.3 * random.
-const ACTION_DELAY_INSTANT: f32 = f32::from_bits(0x3e99_999a);
-const ACTION_DELAY_PATH: f32 = 1.0;
-const ACTION_JITTER: f32 = f32::from_bits(0x3e99_999a);
-/// 0x536AD0: speed margin 0.25 (0xA033BC) and the 0.3 s stop delay.
-const QUEUE_SPEED_MARGIN: f32 = 0.25;
-const QUEUE_WAIT: f32 = f32::from_bits(0x3e99_999a);
-/// 0x534A40 ignore entry: 2.0 s.
-const IGNORE_SECONDS: f32 = 2.0;
-/// 0x532B50: perpendicular distance squared that starts a turn recovery.
-const RECOVERY_SQUARED: f32 = 1.0;
-/// 0x532CAA default recovery angle pi/4 (0x3F490FDB).
-const RECOVERY_ANGLE: f32 = f32::from_bits(0x3f49_0fdb);
-/// 0x537B90 near destination: squared distance below 0.25 (0x3E800000).
-const NEAR_POINT_SQUARED: f32 = 0.25;
-/// 0x537B90 arrival of a mode 1 move: squared distance below 0.01
-/// (0x3C23D70A).
-const ARRIVED_SQUARED: f32 = f32::from_bits(0x3c23_d70a);
-/// 0x532B50 / 0x5379C0 lead: 1.5 * movement radius (0x3FC00000).
-const LEAD_SCALE: f32 = 1.5;
 
 /// 0x52DE40 passes 4.0 (0x40800000) to FindOpenPositionLineThenRadius.
 const DEPLOY_SEARCH_RADIUS: f32 = 4.0;
@@ -278,24 +246,22 @@ struct ActorMove {
     /// Orders of an actor outside any organization.
     order: OrderMove,
     seen: Option<Order>,
-    /// Re-entry guard for node reached -> think -> ActionGo chains.
-    depth: u8,
     /// Individual pursuit of the member's combat target during an attack
     /// hold: (target, weapon range, target position when planned).
     pursue: Option<(ActorId, f32, Vec2)>,
+    /// Mover +0x44 / +0x48 (`0x576AD0`), from the Kill state's pursuit `0x52EF40`: it
+    /// stops within this range of the thing, and the Mind thinks.
+    chase: Option<(ActorId, f32)>,
+    /// Element +0x24: when a detached element asleep teleports (`0x570B90`).
+    teleport_at: f32,
+    /// Mind +0x1B0: what its Move could not reach, and when (`0x532840`, `0x530E00`).
+    bad_targets: Vec<(ActorId, f32)>,
     /// Effective speed of the last step (for `Motion`).
     step_speed: f32,
     /// Walking out of a recruiting structure (`walk_member`).
     walk: Option<MemberWalk>,
     /// Mind +0x184 is 2: the Reattach (+0x178) is current.
     reattaching: bool,
-    /// A move activated with a destination (the walk out, `0x52DF60`) whose
-    /// first think is ResultPlan `0x5336B0`, not the continuation.
-    plan: bool,
-    /// What the Mover told the Mind during its queue-0 step (its arrival
-    /// `0x5774A0`, or a blocked step), handled by the Mind's think in the
-    /// same update (scheduled with delay 0), not inside the Mover's delivery.
-    event: Option<MoverEvent>,
     /// GActor +0xF8 as the Mover reads it: the terrain speed cap and the
     /// tile (+0x44/+0x48) it was taken at (`0x4D4130`, see [`terrain_cap`]).
     terrain: Option<([i32; 2], f32)>,
@@ -310,11 +276,6 @@ struct ActorMove {
     /// KKC_UAIStateDeploy +10/+14 and KKC_UAIStateUnpack +10/+14.
     walk_to: Vec2,
     unpack_at: Vec2,
-}
-#[derive(Clone, Copy, Debug)]
-enum MoverEvent {
-    Reached,
-    Blocked(Blocker),
 }
 /// `KKC_UAIStateDeploy` (Mind +0x48): Activate `0x52DE40`, Enter `0x52F560`,
 /// Exit `0x52F660`, EventReachedDestination `0x52F7A0`. While it is current
@@ -823,7 +784,7 @@ fn solve_job(pathfinder: &mut Pathfinder, occupancy: &Occupancy, map: &crate::ma
     // The hosted element Mind ignores a structure only while it walks out of it
     // (KKC_UAIStateDeploy +1C, `solve_walking`). The Berlin film: a regiment standing
     // on the row of its HQ's tile rectangle first goes to the tile beside it.
-    solve_job_ignoring(pathfinder, occupancy, map, rules, request, !element::enabled())
+    solve_job_ignoring(pathfinder, occupancy, map, rules, request, false)
 }
 /// [`solve_job`], a mover standing inside a structure's footprint ignoring it when
 /// `ignore_start` (a recruit and the building that created it).
@@ -986,12 +947,6 @@ fn flush(ms: &mut MovementState, world: &mut World) {
     flush_movers(ms, world);
     flush_minds(ms, world);
 }
-/// The element Mind thinks again `delay` seconds after this update's begin
-/// (`0x52DC10`; a positive delay under one update becomes the next update,
-/// zero this update's queue-4 pass).
-fn think_in(ms: &mut MovementState, id: ActorId, delay: f32) {
-    ms.thinks.push((id, delay));
-}
 /// A Mind's schedule for minds outside the movement code (the aircraft
 /// minds): `0x52DC10` -> `0x50AD80` cancels its pending think (`0x529CD0`:
 /// `0x50B250`), then adds one on queue 4 `delay` after this update's begin
@@ -1044,9 +999,6 @@ fn blocking_radius(def: &Def) -> f32 {
         Some(_) => 0.5 * size[0].min(size[1]).max(0.0),
         None => 0.0,
     }
-}
-fn signed_angle(from: Vec2, to: Vec2) -> f32 {
-    (from.x * to.y - from.y * to.x).atan2(from.dot(to))
 }
 fn rotate(v: Vec2, angle: f32) -> Vec2 {
     let (s, c) = angle.sin_cos();
@@ -1246,6 +1198,12 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
             }
             let to = pos2(world, *target);
             for &owner in &owners {
+                // (combat, X1) 0x51D920 on the regiment's Mind: the Kill state, in mode 2.
+                if let Owner::Org(o) = owner {
+                    if regiment::fight::kill_command(ms, world, *rules, o, *target) {
+                        continue;
+                    }
+                }
                 // (orders) 0x51D920: the kill state already on this target only
                 // reschedules its Think.
                 let same = match owner {
@@ -1265,24 +1223,6 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
                     ms.order(owner).follow = true;
                     regiment_move_to_actor(ms, world, owner, *target, rules);
                     set_order(world, ms, owner, Order::Move { to: clamp_extent(world, to + offset), attack_move: false });
-                    continue;
-                }
-                // (orders) 0x522CC0 refuses a target with a CityComponent (+D4):
-                // the regiment's kill state only walks to it, and on arrival
-                // "could not engage" (0x5222E0 -> 0x521F90) pops it to sleep.
-                // Rendition: an aggressive move to the target's position.
-                if let Owner::Org(o) = owner
-                    && world.data.def(world.actors[*target as usize].def).city
-                {
-                    let walk = clamp_extent(world, to);
-                    let order = Order::Move { to: walk, attack_move: true };
-                    if let Some(s) = world.combat.orgs.get_mut(o as usize) {
-                        s.city_target = Some((*target, walk));
-                    }
-                    if world.orgs[o as usize].order != order {
-                        start(ms, world, owner, to, Vec2::ZERO, None, true, None, None);
-                        set_order(world, ms, owner, order);
-                    }
                     continue;
                 }
                 let offset = crate::orders::group::member_offset(world, owner_unit(owner), to);
@@ -1343,12 +1283,74 @@ fn apply_command(ms: &mut MovementState, world: &mut World, command: &Command, r
     }
 }
 
+/// `0x524C10` on the regiment's Mind, from the ZOC and from damage, with the combat
+/// state out of the world. Inside the Mind's own world it waits for the next update.
+pub(crate) fn mind_add_target(world: &mut World, st: &mut crate::combat::CombatState, o: OrgId, t: crate::combat::TargetRef) -> bool {
+    let mut ms = std::mem::take(&mut world.movement);
+    if ms.orgs.len() <= o as usize {
+        world.movement = ms;
+        st.orgs[o as usize].pending_targets.push(t);
+        return false;
+    }
+    let rules = ms.prepare(world);
+    std::mem::swap(&mut world.combat, st);
+    let r = regiment::fight::add_target(&mut ms, world, rules, o, t);
+    std::mem::swap(&mut world.combat, st);
+    world.movement = ms;
+    r
+}
+
+/// The fighting states leave for a Mind state held elsewhere (a task), with the combat
+/// state out of the world.
+pub(crate) fn fight_stand_down(world: &mut World, st: &mut crate::combat::CombatState, o: OrgId) {
+    if regiment::fight::top_state(world, o).is_none() {
+        return;
+    }
+    let mut ms = std::mem::take(&mut world.movement);
+    if ms.orgs.len() > o as usize {
+        let rules = ms.prepare(world);
+        std::mem::swap(&mut world.combat, st);
+        regiment::fight::stand_down(&mut ms, world, rules, o);
+        std::mem::swap(&mut world.combat, st);
+    }
+    world.movement = ms;
+}
+
+/// The tail of the Element Tick `0x570B90`: the detached teleport.
+pub(crate) fn element_tick_tail(world: &mut World, a: ActorId) {
+    let mut ms = std::mem::take(&mut world.movement);
+    if ms.actors.len() > a as usize {
+        let rules = ms.prepare(world);
+        element::fight::detached_tick(&mut ms, world, rules, a);
+    }
+    world.movement = ms;
+}
+
+/// The regiment Mind's fighting state on top of its stack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FightState {
+    Kill,
+    Chasing,
+    Engage,
+    Reform,
+}
+pub(crate) fn fight_state(world: &World, o: OrgId) -> Option<FightState> {
+    Some(match regiment::fight::top_state(world, o)? {
+        regiment::fight::KILL => FightState::Kill,
+        regiment::fight::CHASING => FightState::Chasing,
+        regiment::fight::ENGAGE => FightState::Engage,
+        _ => FightState::Reform,
+    })
+}
+/// `0x4CEDE0` of a lone actor: its Mover is its active component.
+pub(crate) fn actor_mover_active(world: &World, a: ActorId) -> bool {
+    world.movement.actors.get(a as usize).is_some_and(|m| m.mover.active)
+}
+
 /// A regiment's Move command at an actor: `0x520320` on its Mind, which then thinks it
 /// (`0x5276B0`). A lone actor's move to an actor stays with [`order_think`].
 fn regiment_move_to_actor(ms: &mut MovementState, world: &mut World, owner: Owner, target: ActorId, rules: &MoveRules) {
-    if let Owner::Org(o) = owner
-        && element::enabled()
-    {
+    if let Owner::Org(o) = owner {
         regiment::activate_to_actor(ms, world, *rules, o, target);
     }
 }
@@ -1486,7 +1488,6 @@ fn start(ms: &mut MovementState, world: &mut World, owner: Owner, to: Vec2, offs
     if let Owner::Org(org) = owner
         && target.is_none()
         && deploy_facing.is_none()
-        && element::enabled()
     {
         let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
         regiment::activate_move(ms, world, rules, org);
@@ -1504,22 +1505,13 @@ fn stop(ms: &mut MovementState, world: &mut World, owner: Owner) {
     o.path.clear();
     match owner {
         Owner::Org(org) => {
-            if element::enabled() {
-                if held_kill {
-                    for m in alive_members(world, org).collect::<Vec<_>>() {
-                        complete_element(ms, world, m);
-                    }
-                }
-                let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
-                regiment::stop(ms, world, rules, org);
-                return;
-            }
-            let members: Vec<ActorId> = world.orgs[org as usize].members.clone();
-            for m in members {
-                if (m as usize) < ms.actors.len() {
+            if held_kill {
+                for m in alive_members(world, org).collect::<Vec<_>>() {
                     complete_element(ms, world, m);
                 }
             }
+            let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+            regiment::stop(ms, world, rules, org);
         }
         Owner::Actor(a) => complete_element(ms, world, a),
     }
@@ -1544,11 +1536,11 @@ pub fn tick(world: &mut World) {
     sync_orders(&mut ms, world);
     let now = world.time;
     for o in 0..world.orgs.len() {
-        if element::enabled() && world.orgs[o].alive {
+        if world.orgs[o].alive {
             regiment::ensure(&mut ms, world, o as OrgId);
         }
         let om = &ms.orgs[o].order;
-        let hosted = element::enabled() && (om.target.is_none() || om.follow);
+        let hosted = om.target.is_none() || om.follow;
         if !hosted && om.active && om.job.is_none() && om.next_think <= now && world.orgs[o].alive {
             order_think(&mut ms, world, Owner::Org(o as OrgId), &rules);
         }
@@ -1627,8 +1619,6 @@ pub fn following_path(_world: &World, _aircraft: ActorId) -> bool {
     false
 }
 
-/// The 2.0 s re-think of a Mind with nothing scheduled (`0x531D30` step 6).
-const IDLE_RETHINK: f32 = 2.0;
 
 /// The regiment Mind's queue-4 Update `0x524910`.
 pub fn org_mind_tick(world: &mut World, o: OrgId) {
@@ -1673,12 +1663,44 @@ pub fn restore_saved_minds(world: &mut World, things: &std::collections::BTreeMa
     world.movement = ms;
 }
 
+/// A saved word naming a thing by its GTID, as a hosted Mind names it: this world's actor
+/// or `regiment::ORG | o`, plus one; 0 for none.
+fn saved_thing(world: &World, gtid: u32) -> u32 {
+    match world.ids.thing(gtid) {
+        Some(crate::ids::Thing::Actor(a)) => a + 1,
+        Some(crate::ids::Thing::Org(o)) => (crate::minds::ORGANIZATION_MIND | o) + 1,
+        _ => 0,
+    }
+}
+
+/// The targets of a restored Mind's pending and current commands, as [`saved_thing`].
+fn saved_command_targets(world: &mut World, mind: u32) {
+    let ids: Vec<u32> = world.books.minds.arena.minds.get(&crate::minds::mind_id(mind)).map_or_else(Vec::new, |m| m.pending_commands.iter().copied().chain(m.current_command).collect());
+    for id in ids {
+        let Some(c) = world.books.minds.commands.get(&id).filter(|c| c.flags & 1 != 0).cloned() else { continue };
+        let thing = saved_thing(world, c.target);
+        if let Some(c) = world.books.minds.commands.get_mut(&id) {
+            c.target = thing;
+        }
+    }
+}
+
+/// The order a restored Mind stands on, as the layers above the Mind read it: nothing
+/// is commanded, the Move state is the save's.
+pub(crate) fn restored_order(world: &mut World, unit: Unit, order: Order) {
+    let mut ms = std::mem::take(&mut world.movement);
+    ms.ensure(world);
+    let owner = match unit {
+        Unit::Org(o) => Owner::Org(o),
+        Unit::Actor(a) => Owner::Actor(a),
+    };
+    set_order(world, &mut ms, owner, order);
+    world.movement = ms;
+}
+
 /// `0x57CBA0`'s `0x524B80` for a member that joined `o` (after `walk_member` when it
 /// walks out of a structure).
 pub fn member_added(world: &mut World, o: OrgId, member: ActorId) {
-    if !element::enabled() {
-        return;
-    }
     let mut ms = std::mem::take(&mut world.movement);
     let rules = ms.prepare(world);
     ms.ensure(world);
@@ -1730,9 +1752,6 @@ fn org_cap_changed(ms: &mut MovementState, world: &World, o: OrgId, old: f32, ne
 
 /// `0x5709D0` found a member attached that was not (`0x578ED0` -> `0x522840`).
 pub fn member_attached(world: &mut World, o: OrgId, member: ActorId) {
-    if !element::enabled() {
-        return;
-    }
     let mut ms = std::mem::take(&mut world.movement);
     ms.ensure(world);
     regiment::list_member(&mut ms, o, member);
@@ -1749,33 +1768,16 @@ pub fn mind_tick(world: &mut World, id: ActorId) {
     if ms.actors.len() < world.actors.len() {
         ms.ensure(world);
     }
-    if element::enabled() {
-        if (id as usize) < ms.actors.len() && alive(world, id) {
-            element::update(&mut ms, world, id, rules);
-        }
-        flush(&mut ms, world);
-        publish_state(&ms, world, id);
-        let unpacks = std::mem::take(&mut ms.unpacks);
-        world.movement = ms;
-        for truck in unpacks {
-            crate::deploy::unpack_now(world, truck);
-        }
-        return;
-    }
     if (id as usize) < ms.actors.len() && alive(world, id) {
-        ms.actors[id as usize].depth = 0;
-        if ms.actors[id as usize].active {
-            element_think(&mut ms, world, id, &rules);
-        }
-        flush(&mut ms, world);
-        publish_state(&ms, world, id);
-        let mover_linked = ms.actors[id as usize].mover.active && world.is_scheduled(Sched::Mover(id));
-        if alive(world, id) && !world.is_scheduled(Sched::Mind(id)) && !mover_linked {
-            world.schedule_after(crate::scheduler::THINK, Sched::Mind(id), 0, IDLE_RETHINK);
-        }
+        element::update(&mut ms, world, id, rules);
     }
     flush(&mut ms, world);
+    publish_state(&ms, world, id);
+    let unpacks = std::mem::take(&mut ms.unpacks);
     world.movement = ms;
+    for truck in unpacks {
+        crate::deploy::unpack_now(world, truck);
+    }
 }
 
 /// Orders set outside `command` (the core's `Order::Deploy` for trucks,
@@ -1791,6 +1793,11 @@ fn sync_orders(ms: &mut MovementState, world: &mut World) {
             && world.orgs[o].order != Order::Idle
         {
             world.orgs[o].order = rout;
+        }
+        // (combat) 0x52A810(rout, 2): the Mind's fighting states leave.
+        if crate::combat::org_state(world, o as OrgId).is_some_and(|c| c.routing.is_some()) {
+            let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+            regiment::fight::stand_down(ms, world, rules, o as OrgId);
         }
         let order = &world.orgs[o].order;
         if ms.orgs[o].seen.as_ref() != Some(order) {
@@ -1828,7 +1835,18 @@ fn apply_order(ms: &mut MovementState, world: &mut World, owner: Owner, order: O
         Order::Idle => stop(ms, world, owner),
         Order::Move { to, attack_move } => start(ms, world, owner, *to, Vec2::ZERO, None, *attack_move, None, None),
         Order::Attack { target } => {
-            if alive(world, *target) {
+            // (combat, X1) An attack written as an order (a guard's Think): the Mind's Kill.
+            if let Owner::Org(o) = owner
+                && alive(world, *target)
+            {
+                let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+                if !regiment::fight::kill_command(ms, world, rules, o, *target) {
+                    stop(ms, world, owner);
+                    world.orgs[o as usize].order = Order::Idle;
+                    ms.orgs[o as usize].seen = Some(Order::Idle);
+                    return;
+                }
+            } else if alive(world, *target) {
                 let to = pos2(world, *target);
                 start(ms, world, owner, to, Vec2::ZERO, Some(*target), false, None, None);
             }
@@ -1842,34 +1860,26 @@ fn apply_order(ms: &mut MovementState, world: &mut World, owner: Owner, order: O
             // first: the order's point, the path, the leader (below), then it
             // delivers the unpack action (`element::completed`). A refused spot
             // is native only when the building is made (`deploy::unpack_now`).
-            if element::enabled() {
-                let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
-                match (owner, truck) {
-                    (Owner::Org(o), t) => {
-                        ms.orgs[o as usize].leader = t;
-                        start(ms, world, owner, *at, Vec2::ZERO, None, false, None, Some(*facing));
-                        ms.orgs[o as usize].order.active = false;
-                        regiment::activate_unpack(ms, world, rules, o, *at, *facing);
-                        ms.orgs[o as usize].seen = Some(order);
-                    }
-                    (Owner::Actor(a), _) => {
-                        element::begin_unpack(ms, world, rules, a, *at);
-                        ms.actors[a as usize].seen = Some(order);
-                    }
+            let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+            match (owner, truck) {
+                (Owner::Org(o), t) => {
+                    ms.orgs[o as usize].leader = t;
+                    start(ms, world, owner, *at, Vec2::ZERO, None, false, None, Some(*facing));
+                    ms.orgs[o as usize].order.active = false;
+                    regiment::activate_unpack(ms, world, rules, o, *at, *facing);
+                    ms.orgs[o as usize].seen = Some(order);
                 }
-                return;
+                (Owner::Actor(a), _) => {
+                    element::begin_unpack(ms, world, rules, a, *at);
+                    ms.actors[a as usize].seen = Some(order);
+                }
             }
-            if let Some(reason) = truck.and_then(|t| spot_problem(&ms.occupancy, world, t, *at)) {
-                refuse(world, owner, reason);
-                stop(ms, world, owner);
-                set_order(world, ms, owner, Order::Idle);
-                return;
-            }
-            start(ms, world, owner, *at, Vec2::ZERO, None, false, None, Some(*facing))
+            return;
         }
     }
     match owner {
-        Owner::Org(o) => ms.orgs[o as usize].seen = Some(order),
+        // (combat) What the state that left put back (`reflect_order`) yields to the order.
+        Owner::Org(o) => set_order(world, ms, Owner::Org(o), order),
         Owner::Actor(a) => ms.actors[a as usize].seen = Some(order),
     }
 }
@@ -2366,11 +2376,14 @@ fn set_org_facing(ms: &mut MovementState, world: &mut World, org: OrgId, facing:
     let center = world.orgs[org as usize].anchor;
     let leader = leader.map(|l| (l, member_slot(world, org, l)));
     let slots = formation::organization_slots(&offsets, facing, center, &members, leader, primary_slot(def), &slot_groups(def), true);
+    let standing: Vec<_> = members.iter().map(|m| m.map(|m| (m.actor, m.pos, element::element_attached(world, m.actor)))).collect();
     let om = &mut ms.orgs[org as usize];
     om.facing = facing;
-    om.slots = slots;
+    let previous = std::mem::replace(&mut om.slots, slots);
     world.orgs[org as usize].heading = facing_angle(facing);
-    crate::creation::organization_scatter(world, org);
+    if let Some(table) = crate::creation::organization_scatter(world, org, facing, &standing, leader, &previous) {
+        ms.orgs[org as usize].slots = table;
+    }
 }
 
 /// `0x532170`: give an element a path in mode 0 or 3.
@@ -2378,475 +2391,37 @@ fn start_element(ms: &mut MovementState, world: &mut World, id: ActorId, nodes: 
     if !alive(world, id) {
         return;
     }
-    if element::enabled() {
-        let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
-        ms.actors[id as usize].pursue = None;
-        ms.actors[id as usize].task = None;
-        element::give_path(ms, world, rules, id, nodes, mode, speed);
-        return;
-    }
-    let am = &mut ms.actors[id as usize];
-    am.active = true;
-    am.mode = mode;
-    am.nodes = nodes;
-    am.requested = speed;
-    am.pursue = None;
-    // Any other path (the regiment's EventMoveFormationPath `0x532310`
-    // activates the move with mode 2, clearing the state stack) ends a walk
-    // out of the structure (Exit `0x52F660`).
-    am.walk = None;
-    // A path event (`0x532170` / `0x532310`) thinks with the continuation.
-    am.plan = false;
-    am.event = None;
-    am.task = None;
-    // The new state thinks in this update's queue-4 pass.
-    think_in(ms, id, 0.0);
+    let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+    ms.actors[id as usize].pursue = None;
+    ms.actors[id as usize].task = None;
+    element::give_path(ms, world, rules, id, nodes, mode, speed);
 }
 /// Element move complete: stop the Mover where it is (`0x52D660`; the Mover
 /// keeps its speed value, `0x5767C0(0, 0)`).
 fn complete_element(ms: &mut MovementState, world: &mut World, id: ActorId) {
-    if element::enabled() {
-        let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
-        element::clear(ms, world, rules, id);
-        let am = &mut ms.actors[id as usize];
-        am.pursue = None;
-        am.task = None;
-        return;
-    }
-    let am = ms.halt(id);
-    am.active = false;
-    am.nodes.clear();
-    am.mover.turning = false;
-    am.mover.last_step = 0.0;
+    let rules = ms.rules.unwrap_or_else(|| MoveRules::from_data(&world.data));
+    element::clear(ms, world, rules, id);
+    let am = &mut ms.actors[id as usize];
     am.pursue = None;
-    am.walk = None;
-    am.plan = false;
-    am.event = None;
     am.task = None;
 }
 
 // ---------------------------------------------------------------------------
 // Element (member / single actor) mind.
 
-fn element_think(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) {
-    let now = world.time;
-    let pos = pos2(world, id);
-    let am = &mut ms.actors[id as usize];
-    if am.depth > 16 {
-        // A node chain that keeps resolving itself: continue next tick.
-        think_in(ms, id, EPSILON);
-        return;
-    }
-    am.depth += 1;
-    // The Mover's event of this update's queue-0 step.
-    if let Some(event) = am.event.take() {
-        match event {
-            MoverEvent::Reached => node_reached(ms, world, id, rules),
-            MoverEvent::Blocked(blocker) => blocked(ms, world, id, blocker, rules),
-        }
-        return;
-    }
-    let am = &mut ms.actors[id as usize];
-    let near = if am.mode == 1 { ARRIVED_SQUARED } else { NEAR_POINT_SQUARED };
-    let done = am.nodes.last().is_none_or(|last| (last.pos - pos).length_squared() < near);
-    if done {
-        let walk = am.walk;
-        complete_element(ms, world, id);
-        if let Some(walk) = walk {
-            walk_arrived(ms, world, id, walk, rules);
-            return;
-        }
-        // A single actor's order checks its arrival on the next tick.
-        if world.actors[id as usize].org.is_none() && ms.actors[id as usize].order.active {
-            ms.actors[id as usize].order.next_think = now;
-        }
-        return;
-    }
-    // ResultPlan 0x5336B0 for a move activated with a destination: the
-    // route, the 52FD90 offset and ActionGo(0), whose delay is the next think
-    // (the film: a walking truck's ActionGo in 403, the next one in 421).
-    if am.plan {
-        am.plan = false;
-        let radius = turn_radius(def_of(world, id));
-        update_waypoint_offset(am, radius);
-        action_go(ms, world, id, 0.0, rules);
-        return;
-    }
-    // 0x5379C0 continuation.
-    if !am.mover.active {
-        let radius = turn_radius(def_of(world, id));
-        update_waypoint_offset(am, radius);
-        let speed = am.requested;
-        action_go(ms, world, id, speed, rules);
-        if let Some(first) = ms.actors[id as usize].nodes.first() {
-            let delay = if first.kind == 0 { 1.0 } else { EPSILON };
-            think_in(ms, id, delay);
-        }
-        return;
-    }
-    let head = am.nodes[0];
-    if am.mover.desired != head.dir {
-        if action_go(ms, world, id, 0.0, rules) {
-            think_in(ms, id, EPSILON);
-        }
-        return;
-    }
-    if get_back_to_path(ms, world, id, rules) {
-        return;
-    }
-    // 0x537150 forward check (the forward probe itself is the step collision).
-    let am = &ms.actors[id as usize];
-    if am.mover.facing == head.dir && (head.pos - pos).dot(head.dir) < EPSILON {
-        node_reached(ms, world, id, rules);
-    } else {
-        action_go(ms, world, id, 0.0, rules);
-    }
-}
 
-/// `0x52FD90`: start turning `r * tan(angle/2)` before a corner.
-fn update_waypoint_offset(am: &mut ActorMove, radius: f32) {
-    am.waypoint_offset = 0.0;
-    if radius == 0.0 || am.nodes.len() < 2 || am.nodes[0].kind == 0 {
-        return;
-    }
-    let first = am.nodes[0];
-    let mut next = am.nodes[1];
-    if (next.pos - first.pos).abs().element_sum() < f32::from_bits(0x3951_b717) {
-        if am.nodes.len() == 2 {
-            return;
-        }
-        next = am.nodes[2];
-    }
-    let angle = signed_angle(first.dir, next.dir).abs();
-    am.waypoint_offset = (angle * 0.5).tan() * radius;
-}
 
-/// `0x5300A0` ActionGo: order the Mover toward the head node.
-fn action_go(ms: &mut MovementState, world: &mut World, id: ActorId, speed_arg: f32, rules: &MoveRules) -> bool {
-    let pos = pos2(world, id);
-    if ms.actors[id as usize].nodes.is_empty() {
-        // 0x52D660 stop, think again in 1 s.
-        let am = ms.halt(id);
-        am.mover.last_step = 0.0;
-        think_in(ms, id, 1.0);
-        return false;
-    }
-    let am = &mut ms.actors[id as usize];
-    let head = am.nodes[0];
-    am.mover.instant = head.kind == 0;
-    let d = head.pos - pos;
-    if d.length() <= EPSILON || d.dot(head.dir) <= 0.0 {
-        node_reached(ms, world, id, rules);
-        return false;
-    }
-    let mut speed = speed_arg;
-    if speed < EPSILON {
-        speed = if am.mover.active { am.mover.requested } else { am.requested };
-    }
-    let mut factor = 1.0;
-    if am.mode == 3 {
-        if !formation_speed(ms, world, id, rules) {
-            return false;
-        }
-        factor = ms.actors[id as usize].mover.factor;
-    }
-    let am = &mut ms.actors[id as usize];
-    let dest = head.pos - head.dir * am.waypoint_offset;
-    begin_mover(&mut am.mover, pos, head.dir, dest, speed, factor, rules.reached_threshold);
-    // 0x5773C0: the Mover becomes the actor's active component (vtbl+38 ->
-    // 0x4CFC10: its deactivate 0x576B60 and activate 0x576790 each cancel
-    // its queue entry, 0x50B250), then it registers on update queue 0
-    // (0x50AC00 -> 0x50B2C0: the getter, one draw for its bucket and a head
-    // insertion), so it is on the queue once, delivered first from the next
-    // queue-0 pass. The early out of other mover modes ([mover+0x56]) is not
-    // modelled.
-    flush_movers(ms, world);
-    if world.is_scheduled(Sched::Mover(id)) {
-        world.unschedule(Sched::Mover(id));
-    }
-    crate::character::mover_started(world, id);
-    world.schedule_periodic_at(crate::trace::sites::MOVER_ORDER, crate::scheduler::EVERY_TICK, Sched::Mover(id), 0);
-    let base = if head.kind == 0 { ACTION_DELAY_INSTANT } else { ACTION_DELAY_PATH };
-    // The world stream (getter 0x4F02B0 + unit float 0x45D400, one draw),
-    // then f32(base + u * 0.3) at PC53: binary64 arithmetic rounds the same
-    // for these magnitudes before the binary32 store.
-    let u = world.random_at(crate::trace::sites::ACTION_GO);
-    let delay = (f64::from(base) + f64::from(u) * f64::from(ACTION_JITTER)) as f32;
-    think_in(ms, id, delay);
-    true
-}
 
-/// `0x5773C0` ground order.
-fn begin_mover(m: &mut Mover, pos: Vec2, direction: Vec2, dest: Vec2, requested: f32, factor: f32, radius: f32) {
-    m.dest = dest;
-    m.desired = direction;
-    if (dest - pos).length_squared() < radius * radius {
-        m.speed = 0.0;
-    } else {
-        m.factor = factor;
-        m.requested = requested;
-    }
-    m.active = true;
-}
 
-/// `0x52FF00`: formation speed from the slot lag (mode 3).
-fn formation_speed(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) -> bool {
-    let max = max_speed(&mut ms.speeds, world, id);
-    let org = world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive));
-    let Some(org) = org else {
-        let am = &mut ms.actors[id as usize];
-        am.mode = 0;
-        am.requested = max;
-        finish_speed(am, max, max, max);
-        return true;
-    };
-    let requested = ms.actors[id as usize].requested;
-    let head = ms.actors[id as usize].nodes[0];
-    let catchup = rules.catchup * max;
-    let speed = if head.kind != 0 {
-        let mut speed = slot_lag(ms, world, id, org) * 0.5 + requested;
-        let too_slow = if speed < MINIMUM_FORMATION_SPEED {
-            true
-        } else {
-            if speed > catchup {
-                speed = catchup;
-            }
-            speed <= MINIMUM_FORMATION_SPEED
-        };
-        if too_slow {
-            let leader_moving = ms.orgs[org as usize].leader.is_some_and(|l| element_moving(ms, l));
-            if leader_moving {
-                // 0x52D660 stop, think again in 1 s.
-                let am = ms.halt(id);
-                am.mover.turning = false;
-                am.mover.last_step = 0.0;
-                think_in(ms, id, 1.0);
-            } else {
-                // 0x52A3C0 finish; the regiment re-sends its path (+0x2BC).
-                complete_element(ms, world, id);
-                let om = &mut ms.orgs[org as usize];
-                if om.order.active && !om.pending.contains(&id) {
-                    om.pending.push(id);
-                }
-            }
-            return false;
-        }
-        speed
-    } else {
-        let blend = path_length_difference(ms, world, id, org) * PATH_DIFFERENCE_SCALE;
-        let weight = if blend < 0.0 { 0.0 } else { blend.min(1.0) };
-        catchup * weight + (1.0 - weight) * requested
-    };
-    finish_speed(&mut ms.actors[id as usize], speed, requested, max);
-    true
-}
-/// `0x576D20` with the factor of `0x52FF00`.
-fn finish_speed(am: &mut ActorMove, speed: f32, requested: f32, max: f32) {
-    am.mover.requested = speed.min(max);
-    am.mover.factor = if requested != 0.0 { speed / requested } else { 1.0 };
-}
-fn path_length(nodes: &[Node], from: Vec2) -> f32 {
-    let mut total = 0.0;
-    let mut previous = from;
-    for n in nodes {
-        total += (n.pos - previous).length();
-        previous = n.pos;
-    }
-    total
-}
-/// `0x52E300`: regiment remaining path length minus the member's.
-fn path_length_difference(ms: &MovementState, world: &World, id: ActorId, org: OrgId) -> f32 {
-    let am = &ms.actors[id as usize];
-    let member = path_length(&am.nodes, pos2(world, id));
-    let mut organization = 0.0;
-    let mut previous = world.orgs[org as usize].anchor;
-    for w in &ms.orgs[org as usize].order.path {
-        organization += (w.pos - previous).length();
-        previous = w.pos;
-    }
-    organization - member
-}
-/// `0x52E400`: how far the member trails its slot along the path.
-fn slot_lag(ms: &MovementState, world: &World, id: ActorId, org: OrgId) -> f32 {
-    let am = &ms.actors[id as usize];
-    let om = &ms.orgs[org as usize];
-    let pos = pos2(world, id);
-    let member_count = am.kind1_count();
-    if member_count != om.order.path.len() as i32 {
-        let Some(leader) = om.leader.filter(|&l| alive(world, l)) else {
-            return 0.0;
-        };
-        let la = &ms.actors[leader as usize];
-        let leader_length = path_length(&la.nodes, pos2(world, leader));
-        let difference = path_length(&am.nodes, pos) - leader_length;
-        let count = (member_count - la.kind1_count()) as f32;
-        if difference * count < 0.0 {
-            return count * 0.5;
-        }
-        return difference;
-    }
-    let slot = om.slots.get(member_slot(world, org, id)).copied().unwrap_or(Vec2::ZERO);
-    let f = om.facing;
-    let lateral = f.y * slot.x - f.x * slot.y;
-    let forward = f.y * slot.y + f.x * slot.x;
-    let head = am.nodes[0];
-    let ahead = world.orgs[org as usize].anchor - pos;
-    let value = ahead.dot(head.dir) + forward;
-    if am.nodes.len() <= 1 {
-        return value;
-    }
-    let second = am.nodes[1];
-    if second.kind == 0 || head.dir == second.dir {
-        return value;
-    }
-    let distance = (pos - head.pos).length_squared();
-    if CORNER_RADIUS_SQUARED <= distance {
-        return value;
-    }
-    let cross = head.dir.y * second.dir.x - second.dir.y * head.dir.x;
-    let side = if cross >= 0.0 { -lateral } else { lateral };
-    side * (CORNER_RADIUS - distance.sqrt()) * CORNER_SCALE + value
-}
 
-/// `0x532B50` / `0x532C64`: when the element has finished turning onto the
-/// leg but stands 1 m or more beside it, insert nodes that turn back onto
-/// the leg (two arcs of the turn radius, at most pi/4).
-fn get_back_to_path(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) -> bool {
-    let pos = pos2(world, id);
-    let radius = turn_radius(def_of(world, id));
-    // Actor virtual +0x18: the current speed (0x536AD0 compares it as one).
-    let actor_speed = ms.actors[id as usize].mover.speed;
-    let am = &mut ms.actors[id as usize];
-    let head = am.nodes[0];
-    let facing = am.mover.facing;
-    let request = am.mover.desired;
-    if facing != head.dir {
-        return false;
-    }
-    let v = head.pos - pos;
-    let along = request.dot(v);
-    let perpendicular = v - request * along;
-    let squared = perpendicular.length_squared();
-    if squared < RECOVERY_SQUARED {
-        return false;
-    }
-    if head.kind == 0 {
-        while am.nodes.first().is_some_and(|n| n.kind == 0) {
-            am.nodes.remove(0);
-        }
-        action_go(ms, world, id, 0.0, rules);
-        return true;
-    }
-    let left = v.x * request.y - v.y * request.x < 0.0;
-    // 0x532CAA: pi/4 unless the offset is small enough for two arcs.
-    let mut angle = RECOVERY_ANGLE;
-    let limit = 2.0 * radius * (1.0 - RECOVERY_ANGLE.cos());
-    if squared < limit * limit && radius != 0.0 {
-        angle = (1.0 - squared.sqrt() / (2.0 * radius)).clamp(-1.0, 1.0).acos();
-    }
-    let (sin, cos) = angle.sin_cos();
-    let base = pos + facing * (radius * sin);
-    let side = if left { Vec2::new(-facing.y, facing.x) } else { Vec2::new(facing.y, -facing.x) };
-    let mut arc = base + side * (radius * (1.0 - cos));
-    let mut direction = rotate(facing, if left { angle } else { -angle });
-    let denominator = request.y * direction.x - direction.y * request.x;
-    let mut t = angle;
-    if denominator != 0.0 {
-        let n = head.pos - arc;
-        t = (n.x * direction.y - n.y * direction.x) / denominator;
-    }
-    let straight = t > 0.0;
-    let endpoint;
-    let distance;
-    if straight {
-        arc = pos;
-        endpoint = head.pos;
-        distance = (endpoint - pos).length();
-        direction = normalize(endpoint - pos);
-    } else {
-        endpoint = head.pos + request * t;
-        distance = (endpoint - arc).length();
-    }
-    let lead = distance.min(actor_speed * LEAD_SCALE);
-    let mut add_kind1 = true;
-    let mut inserted = Vec::new();
-    if straight {
-        inserted.push(Node { pos: arc + direction * lead, dir: direction, kind: 0 });
-        add_kind1 = lead + EPSILON < distance;
-    }
-    if add_kind1 {
-        inserted.insert(0, Node { pos: endpoint, dir: direction, kind: 1 });
-    }
-    // Prepend: the last pushed ends up first (kind 0 lead, then endpoint).
-    for n in inserted {
-        am.nodes.insert(0, n);
-    }
-    update_waypoint_offset(am, radius);
-    action_go(ms, world, id, 0.0, rules);
-    true
-}
 
-/// `0x530AE0`: drop the reached node (and nodes already passed), tell the
-/// regiment when the leader reached one, and continue.
-fn node_reached(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) {
-    let pos = pos2(world, id);
-    let radius = turn_radius(def_of(world, id));
-    let step = crate::DT * ms.actors[id as usize].requested;
-    let initial_zero = ms.actors[id as usize].nodes.first().is_some_and(|n| n.kind == 0);
-    while let Some(&head) = ms.actors[id as usize].nodes.first() {
-        if head.kind != 0 {
-            leader_node_reached(ms, world, id);
-        }
-        let am = &mut ms.actors[id as usize];
-        am.nodes.remove(0);
-        update_waypoint_offset(am, radius);
-        let Some(&next) = am.nodes.first() else {
-            break;
-        };
-        if initial_zero && (pos - next.pos).length_squared() < step * step {
-            continue;
-        }
-        if (next.pos - pos).dot(next.dir) > 0.0 {
-            break;
-        }
-    }
-    element_think(ms, world, id, rules);
-}
 
-/// `0x51F7A0`: the regiment consumes its path with the leader and turns the
-/// formation onto the next leg; the move finishes when the path is used up
-/// at the destination.
-fn leader_node_reached(ms: &mut MovementState, world: &mut World, id: ActorId) {
-    let Some(org) = world.actors[id as usize].org else {
-        return;
-    };
-    let om = &ms.orgs[org as usize];
-    if !om.order.active || om.leader != Some(id) || om.order.path.is_empty() {
-        return;
-    }
-    if (om.order.path.len() as i32) < ms.actors[id as usize].nodes.len() as i32 {
-        return;
-    }
-    ms.orgs[org as usize].order.path.remove(0);
-    if let Some(head) = ms.orgs[org as usize].order.path.first() {
-        let dir = head.dir;
-        if dir != Vec2::ZERO {
-            set_org_facing(ms, world, org, dir);
-        }
-    }
-    let om = &ms.orgs[org as usize].order;
-    if om.path.is_empty() && !om.capped && (om.path_dest - world.orgs[org as usize].anchor).length_squared() < ARRIVAL_RADIUS_SQUARED {
-        finish(ms, world, Owner::Org(org));
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Mover.
 
 #[derive(Clone, Copy, Debug)]
 enum Blocker {
-    Actor(ActorId, Vec2, f32),
-    Tile,
     /// The words of `0x553BA0`'s result.
     Hit([u32; 4]),
 }
@@ -2876,6 +2451,15 @@ fn step_mover(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &Mo
         && (!alive(world, t) || (pos2(world, t) - pos2(world, id)).length() <= range)
     {
         complete_element(ms, world, id);
+        return;
+    }
+    // (combat) 0x576AD0's target: within its range the Mover stops, the Mind thinks.
+    if let Some((t, range)) = ms.actors[a].chase
+        && (!alive(world, t) || crate::combat::in_range(world, id, t, range, false))
+    {
+        ms.actors[a].chase = None;
+        ms.halt(id);
+        think_mind_in(world, id, 0.0);
         return;
     }
     run_mover_tick(ms, world, id, rules);
@@ -2968,11 +2552,7 @@ impl aa_movement::GroundWorld for MoverHost<'_> {
         Ok(false)
     }
     fn collision_at(&mut self, actor: &aa_movement::ActorMotion, xy: [f32; 2]) -> aa_movement::Result<Option<Blocker>> {
-        if element::enabled() {
-            return Ok(element::ground_hit(self.ms, self.world, self.id, [xy[0].to_bits(), xy[1].to_bits()]).map(Blocker::Hit));
-        }
-        let pos = Vec2::new(actor.position[0], actor.position[1]);
-        Ok(collision(self.ms, self.world, self.id, pos, Vec2::from(xy)))
+        Ok(element::ground_hit(self.ms, self.world, self.id, [xy[0].to_bits(), xy[1].to_bits()]).map(Blocker::Hit))
     }
     fn set_facing(&mut self, _: &mut aa_movement::MoverState, actor: &mut aa_movement::ActorMotion, xy: [f32; 2]) -> aa_movement::Result<()> {
         actor.facing = [xy[0], xy[1], 0.0];
@@ -3002,36 +2582,21 @@ impl aa_movement::GroundWorld for MoverHost<'_> {
     }
     fn notify(&mut self, event: aa_movement::Event, mover: &mut aa_movement::MoverState, actor: &mut aa_movement::ActorMotion) -> aa_movement::Result<bool> {
         use aa_movement::Event as E;
-        if element::enabled() {
-            match event {
-                // 0x50B250 inside the Mover's own delivery.
-                E::CancelScheduled => {
-                    if self.world.is_scheduled(Sched::Mover(self.id)) {
-                        self.world.unschedule(Sched::Mover(self.id));
-                    }
-                }
-                E::DestinationReached => self.call_mind(element::MoverCall::Reached, mover, actor),
-                E::TurnCompleted => self.call_mind(element::MoverCall::TurnCompleted, mover, actor),
-                E::DeactivateMover | E::ScheduleImmediate | E::TargetInRange | E::SpeedChanged | E::CharacterStop | E::CharacterResume => {}
-            }
-            return Ok(true);
-        }
         match event {
-            E::CancelScheduled | E::DeactivateMover => {
-                self.ms.halt(self.id);
+            // 0x50B250 inside the Mover's own delivery.
+            E::CancelScheduled => {
+                if self.world.is_scheduled(Sched::Mover(self.id)) {
+                    self.world.unschedule(Sched::Mover(self.id));
+                }
             }
-            // Mind +0x12C: the element thinks this update, after queue 0.
-            E::DestinationReached => tell_mind(self.ms, self.id, MoverEvent::Reached),
-            E::ScheduleImmediate | E::TargetInRange | E::TurnCompleted | E::SpeedChanged | E::CharacterStop | E::CharacterResume => {}
+            E::DestinationReached => self.call_mind(element::MoverCall::Reached, mover, actor),
+            E::TurnCompleted => self.call_mind(element::MoverCall::TurnCompleted, mover, actor),
+            E::DeactivateMover | E::ScheduleImmediate | E::TargetInRange | E::SpeedChanged | E::CharacterStop | E::CharacterResume => {}
         }
         Ok(true)
     }
     fn blocked(&mut self, collision: &Blocker, facing: [f32; 2], mover: &mut aa_movement::MoverState, actor: &mut aa_movement::ActorMotion) -> aa_movement::Result<()> {
-        if element::enabled() {
-            self.call_mind(element::MoverCall::Blocked(collision, facing), mover, actor);
-            return Ok(());
-        }
-        tell_mind(self.ms, self.id, MoverEvent::Blocked(*collision));
+        self.call_mind(element::MoverCall::Blocked(collision, facing), mover, actor);
         Ok(())
     }
 }
@@ -3082,12 +2647,7 @@ impl aa_movement::mover::TickWorld for MoverHost<'_> {
         aa_movement::ground_step_original(mover, actor, context, true, self)
     }
     fn movement_failed(&mut self, mover: &mut aa_movement::MoverState, actor: &mut aa_movement::ActorMotion) -> aa_movement::Result<()> {
-        if element::enabled() {
-            self.call_mind(element::MoverCall::Failed, mover, actor);
-            return Ok(());
-        }
-        // Mind +0x128: the element thinks again this update.
-        think_in(self.ms, self.id, 0.0);
+        self.call_mind(element::MoverCall::Failed, mover, actor);
         Ok(())
     }
 }
@@ -3126,12 +2686,6 @@ fn terrain_cap(ms: &mut MovementState, world: &World, id: ActorId) -> f32 {
     cap
 }
 
-/// The Mover's event for its Mind (arrival `0x5774A0` -> Mind, scheduled
-/// with delay 0): the element thinks this update, after queue 0.
-fn tell_mind(ms: &mut MovementState, id: ActorId, event: MoverEvent) {
-    ms.actors[id as usize].event = Some(event);
-    think_in(ms, id, 0.0);
-}
 fn write_facing(ms: &mut MovementState, world: &mut World, id: ActorId) {
     let angle = facing_angle(ms.actors[id as usize].mover.facing);
     world.actors[id as usize].facing = angle;
@@ -3143,76 +2697,6 @@ fn write_facing(ms: &mut MovementState, world: &mut World, id: ActorId) {
 }
 
 
-/// Tile and actor blocking at a step's end point, with the original
-/// exclusions.
-fn collision(ms: &MovementState, world: &World, id: ActorId, pos: Vec2, candidate: Vec2) -> Option<Blocker> {
-    let actor = &world.actors[id as usize];
-    let def = world.data.def(actor.def);
-    let radius = ms.blocking_radius.get(actor.def as usize).copied().unwrap_or(0.0);
-    if element::enabled() {
-        // 0x553BA0 (rendition, M5): the terrain flags of the tile, then the placed
-        // shapes of the structures; a tile holding a structure blocks only where
-        // the shapes meet (the tile's bit 10 goes to the thing's own test).
-        let class = mover_class(def);
-        let from = world.map.cell_of(pos);
-        let to = world.map.cell_of(candidate);
-        if from != to && terrain_blocked(world, class, candidate) && !terrain_blocked(world, class, pos) {
-            return Some(Blocker::Tile);
-        }
-        if structure_hit(ms, world, id, pos, candidate, radius) {
-            return Some(Blocker::Tile);
-        }
-    } else {
-        let grid = ms.occupancy.grid(&world.map, mover_class(def));
-        let from = grid.cell_of(pos);
-        let to = grid.cell_of(candidate);
-        if from != to && grid.blocked(to) && !grid.blocked(from) {
-            return Some(Blocker::Tile);
-        }
-    }
-    if radius <= 0.0 || ms.hash.items.is_empty() {
-        return None;
-    }
-    let am = &ms.actors[id as usize];
-    // Ethereal while walking out of its structure (0x52F560, flag 0x40000).
-    if am.walk.is_some() {
-        return None;
-    }
-    let now = world.time;
-    let my_team = kingdom_team(world, actor.kingdom);
-    let my_org_moving = actor.org.is_some_and(|o| ms.orgs.get(o as usize).is_some_and(|x| x.order.active));
-    // An attack target does not block the approach; an actor being
-    // followed does.
-    let target = match actor.org {
-        Some(o) => ms.orgs.get(o as usize).filter(|x| !x.order.follow).and_then(|x| x.order.target),
-        None => Some(&am.order).filter(|x| !x.follow).and_then(|x| x.target),
-    };
-    let mut found = None;
-    ms.hash.for_each_near(candidate, radius + ms.hash.max_radius, |other, q, r| {
-        if other == id || Some(other) == target {
-            return false;
-        }
-        let reach = radius + r;
-        if (candidate - q).length_squared() >= reach * reach {
-            return false;
-        }
-        // 0x4D67F0: things already overlapped are ignored.
-        if (pos - q).length_squared() < reach * reach {
-            return false;
-        }
-        if am.ignore.iter().any(|&(x, until)| x == other && until > now) {
-            return false;
-        }
-        let o = &world.actors[other as usize];
-        // 0x4D5600: friendly elements of two moving organizations pass.
-        if my_org_moving && kingdom_team(world, o.kingdom) == my_team && o.org.is_some_and(|x| ms.orgs.get(x as usize).is_some_and(|y| y.order.active)) {
-            return false;
-        }
-        found = Some(Blocker::Actor(other, q, r));
-        true
-    });
-    found
-}
 
 /// The tile's own flags as `0x54F370` reads them for this mover, without bit 10:
 /// a tile that holds objects blocks only through their shapes (`0x553BA0`). Outside
@@ -3259,155 +2743,7 @@ fn structures_near<'m>(ms: &'m MovementState, world: &World, p: Vec2, radius: f3
 fn structure_overlap(ms: &MovementState, world: &World, id: ActorId, p: Vec2, radius: f32) -> bool {
     structures_near(ms, world, p, radius).any(|b| b != id && shape_meets(world, &world.actors[b as usize], p, radius))
 }
-/// The mover's circle at `candidate` meets a structure's placed blocking shape
-/// it did not meet at `pos` (`0x4D67F0`: things already overlapped are ignored).
-fn structure_hit(ms: &MovementState, world: &World, id: ActorId, pos: Vec2, candidate: Vec2, radius: f32) -> bool {
-    structures_near(ms, world, candidate, radius).any(|b| {
-        let a = &world.actors[b as usize];
-        b != id && shape_meets(world, a, candidate, radius) && !shape_meets(world, a, pos, radius)
-    })
-}
 
-/// Mind +0x154 after a blocked step: ignore the blocking actor for 2 s
-/// (`0x534A40`) and go around it; around blocked tiles, re-route to the
-/// head node with the tile solver.
-fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Blocker, rules: &MoveRules) {
-    let now = world.time;
-    let pos = pos2(world, id);
-    let radius = ms.blocking_radius.get(world.actors[id as usize].def as usize).copied().unwrap_or(0.0);
-    match blocker {
-        Blocker::Hit(_) => {}
-        Blocker::Actor(other, q, r) => {
-            // 0x536AD0 with a moving thing heading the same way: proceed
-            // while it pulls away; queue behind it (stop, think again in
-            // 0.3 s) unless clearly faster (by more than 0.25 m/s); a faster
-            // mover, or one met head-on, goes around it.
-            if is_moving(ms, other) {
-                let own = &ms.actors[id as usize].mover;
-                let them = &ms.actors[other as usize].mover;
-                let heading = own.facing.dot(them.facing);
-                if heading > 0.0 {
-                    let own_speed = own.speed;
-                    let other_speed = them.speed;
-                    if own_speed <= other_speed * heading {
-                        return;
-                    }
-                    if own_speed - QUEUE_SPEED_MARGIN <= other_speed {
-                        let am = ms.halt(id);
-                        am.mover.last_step = 0.0;
-                        think_in(ms, id, QUEUE_WAIT);
-                        return;
-                    }
-                }
-            }
-            let am = &mut ms.actors[id as usize];
-            am.ignore.push((other, now + IGNORE_SECONDS));
-            if let Some(&head) = am.nodes.first() {
-                // Step aside by both radii, pass the obstacle, rejoin the path.
-                // Avoidance nodes are kind 0 (instant turn), like the
-                // original low-level pather's nodes.
-                let dir = am.mover.facing;
-                let left = Vec2::new(-dir.y, dir.x);
-                let side = if (head.pos - q).dot(left) >= 0.0 { 1.0 } else { -1.0 };
-                let reach = radius + r;
-                let lateral = left * side * reach;
-                let aside = pos + lateral;
-                let past = q + dir * reach + lateral;
-                let (d1, d2, d3) = (normalize(aside - pos), normalize(past - aside), normalize(head.pos - past));
-                if d1 != Vec2::ZERO && d2 != Vec2::ZERO {
-                    // Rejoin at the head itself, so it is reached, not skipped.
-                    if d3 != Vec2::ZERO {
-                        am.nodes.insert(0, Node { pos: head.pos, dir: d3, kind: 0 });
-                    }
-                    am.nodes.insert(0, Node { pos: past, dir: d2, kind: 0 });
-                    am.nodes.insert(0, Node { pos: aside, dir: d1, kind: 0 });
-                }
-            }
-        }
-        Blocker::Tile => {
-            let def = def_of(world, id);
-            let request_head = ms.actors[id as usize].nodes.first().copied();
-            let Some(head) = request_head else {
-                complete_element(ms, world, id);
-                return;
-            };
-            // A node standing on a blocked tile (a slot offset point inside a
-            // building) cannot be reached: drop it and go for the next one,
-            // as the low-level pather clips its goal (0x53A990).
-            let grid = ms.occupancy.grid(&world.map, mover_class(def));
-            if grid.blocked_at(head.pos) {
-                // Keep the node (formation paths stay comparable with the
-                // regiment's): move it to the nearest open tile centre.
-                match nearest_open(&grid, head.pos, NODE_SHIFT_CELLS) {
-                    Some(p) => ms.actors[id as usize].nodes[0].pos = p,
-                    None if ms.actors[id as usize].nodes.len() > 1 => {
-                        ms.actors[id as usize].nodes.remove(0);
-                    }
-                    None => {}
-                }
-                ms.halt(id);
-                let radius = turn_radius(def_of(world, id));
-                update_waypoint_offset(&mut ms.actors[id as usize], radius);
-                let speed = ms.actors[id as usize].requested;
-                action_go(ms, world, id, speed, rules);
-                return;
-            }
-            let am = &ms.actors[id as usize];
-            if am.last_reroute > 0.0 && now - am.last_reroute < rules.low_path_wait {
-                // LowPathingWaitMinimum: stand and try again after the wait.
-                let am = ms.halt(id);
-                am.mover.last_step = 0.0;
-                // Think again once the wait since the last re-route is over.
-                let begin = f32::from_bits(world.clock.begin.0);
-                let delay = am.last_reroute + rules.low_path_wait - begin;
-                think_in(ms, id, delay);
-                return;
-            }
-            let request = Request { from: pos, to: head.pos, class: mover_class(def), max_speed: max_speed(&mut ms.speeds, world, id) };
-            let route = ms.solve(&world.map, &rules.path, &request);
-            let am = &mut ms.actors[id as usize];
-            am.last_reroute = now.max(EPSILON);
-            if route.status == Status::Failed || route.waypoints.is_empty() {
-                am.nodes.remove(0);
-            } else {
-                // The goal had to move off a blocked head: the route's end
-                // replaces the head.
-                if (route.goal - head.pos).length_squared() > EPSILON && am.nodes.len() > 1 {
-                    am.nodes.remove(0);
-                }
-                // The route ends at the head (or as near as it gets); a
-                // duplicate head is dropped on arrival by ActionGo.
-                // Avoidance nodes are kind 0 (instant turn), like the original
-                // low-level pather's, so a vehicle turns away from the
-                // obstacle instead of arcing into it.
-                for w in route.waypoints.iter().rev() {
-                    am.nodes.insert(0, Node { pos: w.pos, dir: w.dir, kind: 0 });
-                }
-                // Routes are smoothed from tile centres: when the first leg
-                // from an off-centre position clips a blocked tile, step to
-                // the own tile's centre first.
-                let grid = ms.occupancy.grid(&world.map, mover_class(def));
-                let first = ms.actors[id as usize].nodes[0].pos;
-                if !grid.line_clear(pos, first) {
-                    let center = grid.center(grid.cell_of(pos));
-                    let dir = normalize(center - pos);
-                    if dir != Vec2::ZERO {
-                        ms.actors[id as usize].nodes.insert(0, Node { pos: center, dir, kind: 0 });
-                    }
-                }
-            }
-        }
-    }
-    ms.halt(id);
-    let radius = turn_radius(def_of(world, id));
-    update_waypoint_offset(&mut ms.actors[id as usize], radius);
-    if ms.actors[id as usize].nodes.is_empty() {
-        element_failed(ms, world, id, rules);
-        return;
-    }
-    let speed = ms.actors[id as usize].requested;
-    action_go(ms, world, id, speed, rules);
-}
 
 /// The mover's blocking circle fits at `p`: no blocked tile under its
 /// bounding square (tiles under the shape, like 0x553BA0) and, with
@@ -3420,34 +2756,21 @@ fn blocked(ms: &mut MovementState, world: &mut World, id: ActorId, blocker: Bloc
 fn spot_free(ms: &MovementState, world: &World, mover: ActorId, p: Vec2, movers: bool) -> bool {
     let def = def_of(world, mover);
     let r = ms.blocking_radius.get(world.actors[mover as usize].def as usize).copied().unwrap_or(0.0);
-    if element::enabled() {
-        // 0x553BA0 (rendition, M5): the tiles' terrain flags, the structures' placed
-        // shapes (a tile holding a structure blocks only where the shapes meet).
-        let class = mover_class(def);
-        let cell = world.map.cell_size;
-        let lo = (p - Vec2::splat(r)).max(Vec2::ZERO) / cell;
-        let hi = (p + Vec2::splat((r - EPSILON).max(0.0))).max(Vec2::ZERO) / cell;
-        for y in (lo.y as i32)..=(hi.y as i32) {
-            for x in (lo.x as i32)..=(hi.x as i32) {
-                if terrain_blocked(world, class, Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * cell) {
-                    return false;
-                }
+    // 0x553BA0 (rendition, M5): the tiles' terrain flags, the structures' placed
+    // shapes (a tile holding a structure blocks only where the shapes meet).
+    let class = mover_class(def);
+    let cell = world.map.cell_size;
+    let lo = (p - Vec2::splat(r)).max(Vec2::ZERO) / cell;
+    let hi = (p + Vec2::splat((r - EPSILON).max(0.0))).max(Vec2::ZERO) / cell;
+    for y in (lo.y as i32)..=(hi.y as i32) {
+        for x in (lo.x as i32)..=(hi.x as i32) {
+            if terrain_blocked(world, class, Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * cell) {
+                return false;
             }
         }
-        if structure_overlap(ms, world, mover, p, r) {
-            return false;
-        }
-    } else {
-        let grid = ms.occupancy.grid(&world.map, mover_class(def));
-        let lo = grid.cell_of(p - Vec2::splat(r));
-        let hi = grid.cell_of(p + Vec2::splat((r - EPSILON).max(0.0)));
-        for y in lo[1]..=hi[1] {
-            for x in lo[0]..=hi[0] {
-                if grid.blocked([x, y]) {
-                    return false;
-                }
-            }
-        }
+    }
+    if structure_overlap(ms, world, mover, p, r) {
+        return false;
     }
     !movers || ms.hash.for_each_near(p, r + ms.hash.max_radius, |o, q, rq| o != mover && (q - p).length_squared() < (r + rq) * (r + rq)).is_none()
 }
@@ -3519,53 +2842,7 @@ fn open_position_near(ms: &MovementState, world: &World, mover: ActorId, base: V
     None
 }
 
-/// Rings searched around a blocked node for an open tile (engineering bound).
-const NODE_SHIFT_CELLS: i32 = 4;
-/// Centre of the open tile nearest to `p` within `rings` tiles.
-fn nearest_open(grid: &Grid, p: Vec2, rings: i32) -> Option<Vec2> {
-    let c = grid.cell_of(p);
-    for ring in 1..=rings {
-        let mut best: Option<(f32, Vec2)> = None;
-        for dy in -ring..=ring {
-            for dx in -ring..=ring {
-                if dx.abs() != ring && dy.abs() != ring {
-                    continue;
-                }
-                let cell = [c[0] + dx, c[1] + dy];
-                if !grid.blocked(cell) {
-                    let q = grid.center(cell);
-                    let d = (q - p).length_squared();
-                    if best.is_none_or(|b| d < b.0) {
-                        best = Some((d, q));
-                    }
-                }
-            }
-        }
-        if let Some((_, q)) = best {
-            return Some(q);
-        }
-    }
-    None
-}
 
-/// An element gave up its path: a regiment member waits for the regiment to
-/// send it a path again (+0x2BC), or to call it back to its slot.
-fn element_failed(ms: &mut MovementState, world: &mut World, id: ActorId, rules: &MoveRules) {
-    let walk = ms.actors[id as usize].walk;
-    complete_element(ms, world, id);
-    // A walk out of the structure that cannot go on ends where it stands:
-    // the arrival check takes over (0x52F7A0).
-    if let Some(walk) = walk {
-        walk_arrived(ms, world, id, walk, rules);
-        return;
-    }
-    if let Some(org) = world.actors[id as usize].org {
-        let om = &mut ms.orgs[org as usize];
-        if om.order.active && !om.pending.contains(&id) {
-            om.pending.push(id);
-        }
-    }
-}
 
 /// A new regiment member walks out of its recruiting structure: member
 /// creation `4FACA0` -> Mind vf198 `0x52F320` -> `KKC_UAIStateDeploy`.
@@ -3595,68 +2872,13 @@ pub fn walk_member(world: &mut World, member: ActorId, to: Vec2) {
         // 1002 starts in 1002); a member's join delivers a command the Deploy defers
         // (`member_added`), whose 1e-4 puts the first think in the next update (trucks
         // created in 402 start in 403).
-        if !element::enabled() && ms.actors[member as usize].active && world.actors[member as usize].org.is_some() {
-            think_in(&mut ms, member, EPSILON);
-        }
     }
     flush(&mut ms, world);
     world.movement = ms;
 }
 /// Enter `0x52F560`: the move to `at` (mode 0, own top speed, no facing).
 fn begin_walk(ms: &mut MovementState, world: &mut World, member: ActorId, at: Vec2, tries: u8, rules: &MoveRules) {
-    if element::enabled() {
-        element::begin_deploy(ms, world, *rules, member, at, tries);
-        return;
-    }
-    let speed = max_speed(&mut ms.speeds, world, member);
-    let request = Request { from: pos2(world, member), to: at, class: mover_class(def_of(world, member)), max_speed: speed };
-    let route = ms.solve(&world.map, &rules.path, &request);
-    let walk = MemberWalk { tries };
-    if route.status == Status::Failed || route.waypoints.is_empty() {
-        // Already there, or nowhere to go: the arrival check decides.
-        complete_element(ms, world, member);
-        walk_arrived(ms, world, member, walk, rules);
-        return;
-    }
-    // Mode 1 (+0x30 = 1 from 0x52F560): done only at the point itself.
-    start_element(ms, world, member, route.waypoints.into_iter().map(Node::from).collect(), 1, speed);
-    let am = &mut ms.actors[member as usize];
-    am.walk = Some(walk);
-    // Activated with a destination, not given a path: its first think is
-    // ResultPlan (the route here is solved at activation).
-    am.plan = true;
-}
-/// `0x52F7A0` EventReachedDestination: the actor's shape must be clear where
-/// it stands (`0x553BA0`), else it redeploys.
-fn walk_arrived(ms: &mut MovementState, world: &mut World, id: ActorId, walk: MemberWalk, rules: &MoveRules) {
-    let p = pos2(world, id);
-    // 0x553BA0 with 0x552210(1, ..): static blocking things only.
-    if spot_free(ms, world, id, p, false) {
-        rejoin(ms, world, id);
-        return;
-    }
-    let tries = walk.tries + 1;
-    // FindOpenPositionNear(.., 8, 1, 0): static blocking things only.
-    let next = if tries > REDEPLOY_TRIES { None } else { open_position_near(ms, world, id, p, REDEPLOY_SEARCH_RADIUS, false) };
-    match next {
-        Some(q) => begin_walk(ms, world, id, q, tries, rules),
-        // "redeploy failed %d times - dying" / "FindOpenPositionNear failed
-        // for redeploy - dying" (0x4D7960): zero health, combat's death path.
-        None => world.actors[id as usize].health = 0.0,
-    }
-}
-/// `0x5324A0` after a clear arrival: the reattach state ends for a member
-/// inside its regiment's zone and the regiment lists it (+0x2BC via
-/// `0x5709D0` -> `0x522840`). A moving regiment sends it its formation path
-/// at its next think; an idle one calls it back to its slot (`reform`).
-fn rejoin(ms: &mut MovementState, world: &World, id: ActorId) {
-    let Some(org) = world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive)) else {
-        return;
-    };
-    let om = &mut ms.orgs[org as usize];
-    if om.order.active && !om.pending.contains(&id) {
-        om.pending.push(id);
-    }
+    element::begin_deploy(ms, world, *rules, member, at, tries);
 }
 
 /// A member's own approach to its organization's task (the element states
@@ -3701,63 +2923,12 @@ fn reform(ms: &mut MovementState, world: &mut World, org: OrgId, rules: &MoveRul
     if om.order.active || now < om.next_reform {
         return;
     }
-    if element::enabled() {
-        // The Mind's Sleep sends the members to their slots (`0x522F60`); what stays
-        // here is the approach of `crate::combat::tasks`.
-        ms.orgs[org as usize].next_reform = now + THINK_SECONDS;
-        for m in alive_members(world, org).collect::<Vec<_>>() {
-            if crate::combat::tasks::busy(world, m) || ms.actors[m as usize].task.is_some() {
-                approach_task(ms, world, m, rules);
-            }
-        }
-        return;
-    }
-    if om.slots.is_empty() {
-        // A regiment that has not moved yet: its slot table (+0x78) for its
-        // heading, as its members were placed (no reassignment).
-        let Some(leader) = pick_leader(world, org) else {
-            return;
-        };
-        let def = world.data.def(world.orgs[org as usize].def);
-        let facing = facing_vector(world.orgs[org as usize].heading);
-        let offsets = formation_offsets(def, crate::player_orders::formation(world, org));
-        let members = slot_members(world, org, offsets.len());
-        let center = world.orgs[org as usize].anchor;
-        let slots = formation::organization_slots(&offsets, facing, center, &members, Some((leader, member_slot(world, org, leader))), primary_slot(def), &slot_groups(def), false);
-        let om = &mut ms.orgs[org as usize];
-        om.leader = Some(leader);
-        om.facing = facing;
-        om.slots = slots;
-    }
-    let center = world.orgs[org as usize].anchor;
-    let leader = ms.orgs[org as usize].leader;
+    // The Mind's Sleep sends the members to their slots (`0x522F60`); what stays
+    // here is the approach of `crate::combat::tasks`.
     ms.orgs[org as usize].next_reform = now + THINK_SECONDS;
-    let members: Vec<ActorId> = alive_members(world, org).collect();
-    for m in members {
-        // A member busy with its organization's task walks to its own goal
-        // and is not called back to its slot.
+    for m in alive_members(world, org).collect::<Vec<_>>() {
         if crate::combat::tasks::busy(world, m) || ms.actors[m as usize].task.is_some() {
             approach_task(ms, world, m, rules);
-            continue;
-        }
-        if Some(m) == leader || ms.actors[m as usize].active || world.actors[m as usize].combat.target.is_some() {
-            continue;
-        }
-        let speed = max_speed(&mut ms.speeds, world, m);
-        if speed <= 0.0 {
-            continue;
-        }
-        let slot = member_slot(world, org, m);
-        let goal = center + ms.orgs[org as usize].slots.get(slot).copied().unwrap_or(Vec2::ZERO);
-        let p = pos2(world, m);
-        if (goal - p).length_squared() < ARRIVAL_RADIUS_SQUARED {
-            continue;
-        }
-        let def = def_of(world, m);
-        let request = Request { from: p, to: goal, class: mover_class(def), max_speed: max_speed(&mut ms.speeds, world, m) };
-        let route = ms.solve(&world.map, &rules.path, &request);
-        if route.status != Status::Failed && !route.waypoints.is_empty() {
-            start_element(ms, world, m, route.waypoints.into_iter().map(Node::from).collect(), 0, speed);
         }
     }
 }
@@ -3956,6 +3127,11 @@ pub fn member_replaced(world: &mut World, o: OrgId, old: ActorId, new: ActorId) 
     }
     flush(&mut ms, world);
     world.movement = ms;
+}
+
+/// Element +1C of a member.
+pub(crate) fn element_is_attached(world: &World, id: ActorId) -> bool {
+    element::element_attached(world, id)
 }
 
 /// `0x57BFF0` chose another formation (`change` writes it): the members' Mover
@@ -4187,9 +3363,28 @@ pub fn orientation(world: &World, id: ActorId) -> Option<Orientation> {
 }
 
 /// The hosted element Mind is in use (see the element module's switch).
-pub fn element_mind_ports() -> bool {
-    element::enabled()
+/// `0x552EE0` -> `0x558040` mode 0 -> `0x558580` (`aa_spatial::rectangle_actors`): the
+/// actors listed in the tile rectangle of a circle, in the original's order. There is
+/// no test against the circle itself.
+pub(crate) fn actors_in_tile_rectangle(world: &mut World, at: Vec2, radius: f32) -> Vec<ActorId> {
+    let mut ms = std::mem::take(&mut world.movement);
+    if ms.space.is_none() {
+        ms.prepare(world);
+    }
+    let mut found = Vec::new();
+    if let Some(mut s) = ms.space.take() {
+        s.add_new(&ms, world);
+        let mut policy = space::Policy { ms: &ms, world };
+        let space::Space { index, geometry, .. } = &mut *s;
+        if let Ok(references) = aa_spatial::rectangle_actors::collect(index, geometry, [at.x.to_bits(), at.y.to_bits()], radius.to_bits(), [0, 0], &mut policy) {
+            found = references.into_iter().map(space::key_actor).collect();
+        }
+        ms.space = Some(s);
+    }
+    world.movement = ms;
+    found
 }
+
 
 /// Number of path requests waiting for a later tick.
 pub fn queued_requests(world: &World) -> usize {

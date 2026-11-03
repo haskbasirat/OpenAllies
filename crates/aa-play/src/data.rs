@@ -102,6 +102,10 @@ pub struct Weapon {
     /// names, in the base set; 0 without one. 0x563BA0 arms with it.
     #[serde(default)]
     pub idle_length: f32,
+    /// The attack animations of the first set (ability `+3C` table): each one's
+    /// length (`+10`) and use fraction (`+14`), which `0x57ED20` schedules by.
+    #[serde(default)]
+    pub attack_clips: Vec<[f32; 2]>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -424,9 +428,17 @@ pub struct Def {
     /// collision queries (`aa_spatial::query`) read.
     #[serde(default)]
     pub blocking_words: [u32; 6],
+    /// The definition's Thing flag word (Thing +8 after 0x4BB310 and the finals of a
+    /// static or moving actor), what 0x4EB500 tests.
+    #[serde(default)]
+    pub thing_flags: u32,
     /// A `[TrackInfo]` with track_type CONTINUOUS (ActorData +25C, 0x4D7450).
     #[serde(default)]
     pub continuous_tracks: bool,
+    /// ActorData +184 `transport_actor`: what carries this thing in when it is recruited
+    /// at a location (0x589F90 -> 0x582190).
+    #[serde(default)]
+    pub transport_actor: Option<String>,
     /// BuilderComponent `[BuildActor] actor_ids` in authored order
     /// (ActorData +0x504, 464BD0 / 4604C0; 0x4D4CF0 copies it to actor
     /// +0x108): the structures this actor can construct.
@@ -1034,7 +1046,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v32";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v34";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1737,6 +1749,9 @@ pub(crate) mod loader {
             def.blocking_words = object.blocking.words;
             def.soft_shape = object.soft.words;
         }
+        if let Ok(flags) = catalog.native_final_flags(ThingRef::registered(id), PC) {
+            def.thing_flags = flags;
+        }
         let node = match catalog.resolved_actor(ThingRef::registered(id)) {
             Ok(n) => n,
             Err(e) => {
@@ -2096,6 +2111,7 @@ pub(crate) mod loader {
         if let Ok(Some(mover)) = node.child("MoverComponent") {
             def.continuous_tracks = mover.children("TrackInfo").unwrap_or_default().iter().any(|t| st(t, "track_type").is_some_and(|v| v.eq_ignore_ascii_case("CONTINUOUS")));
         }
+        def.transport_actor = st(&node, "transport_actor").filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("null")).map(|t| t.to_ascii_lowercase());
         if let Ok(Some(air)) = node.child("AircraftComponent") {
             def.aircraft = Some(AircraftDef {
                 taxi_scale: fx(&air, "taxi_scale").unwrap_or(0.0),
@@ -2284,6 +2300,7 @@ pub(crate) mod loader {
             mana_cost: g(d, "mana_cost"),
             idle_animation: s(af, "idle_animation"),
             idle_length: 0.0,
+            attack_clips: a.animations.first().map(|s| s.attacks.iter().map(|b| [f(b.length_bits), f(b.use_fraction_bits)]).collect()).unwrap_or_default(),
         }
     }
 }

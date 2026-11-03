@@ -104,6 +104,7 @@ fn saved_map_ids_are_kept_and_the_cursor_starts_at_idmgr() {
         class_code: 0,
         breakable: None,
         load_fails: false,
+        saved_city: false,
         organization: None,
         member_of: None,
         components: Vec::new(),

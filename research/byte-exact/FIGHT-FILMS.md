@@ -167,6 +167,19 @@ Found and fixed through it: delivery checks the command mask (0x4ED360 vt+150, 0
 
 Not proven: the mask is `guess::action_bits`, a rendition of 0x4D1350, and only commands 0..=12 are gated by it.
 
+### The fight against the traces, by the numbers
+
+Measured by `tests/order_fights.rs` (`the_fight_films_fight`) against counts read from the native traces: deaths are actors reaching zero health, routs are organizations entering `cai_rout` (the earlier "far fewer routs" compared events with samples, which is no comparison), shots are the original's `0x4C8190` draws (one per ability started) against ours. Free replay: each film has left the original long before its fighting, so a number close to the original's is not parity.
+
+| film | deaths ours / native | first death ours / native | routs ours / native | shots ours / native |
+|---|---:|---:|---:|---:|
+| `Comrades2v2_0` | 8 / 27 | 7341 / 6712 | 0 / 4 | 6890 / 349 |
+| `Farmhouses4FFA_0` | 82 / 107 | 3026 / 3032 | 32 / 15 | 1510 / 2666 |
+| `Kursk2v2_0` | 94 / 119 | 4841 / 4584 | 28 / 15 | 1808 / 3541 |
+| `Berlin2v2_1` | 129 / 133 | 4949 / 5760 | 41 / 25 | 2147 / 2929 |
+
+Before the hosting: deaths 26, 137, 75, 88; first death 9096, 3039, 4794, 4957; routs 7, 20, 15, 46; shots 1538, 3274, 2150, 2349. The shots were about four times the original's on Comrades, because an ability's animation and the rule that the Mind waits for it were not there.
+
 ## Recording recipe
 
 Everything is in `reconstruction/qa-runs/compare-20261022/tools`, on hidden desktops `AAFIGHT<tag>`, with posted keys only:

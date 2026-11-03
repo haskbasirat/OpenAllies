@@ -191,6 +191,16 @@ pub enum Command {
     /// A recruit order that carries its ParameterSet; `Recruit` is 0x582AE0's
     /// "Using default layout" with the definition's own elements.
     RecruitWith { kingdom: KingdomId, building: ActorId, def: DefId, parameters: RecruitParameters },
+    // ---- appended by the client lane ----
+    /// A person's selection as it changed, oldest first (the requests 0x436AD0
+    /// SelectionAdd, 0x436B90 SelectionRemove, 0x436C50 SelectionClear): it does
+    /// nothing to the world, a film holds it as decrees 16, 17 and 18.
+    Select { kingdom: KingdomId, units: Vec<Unit> },
+    /// A person's order as the game interface builds it (0x620760, the facing drag's
+    /// end 0x6210B0): the target under the cursor or the ground point, with the drag's
+    /// direction. Without a `command` (an ActorCommand index) each unit guesses its own
+    /// on every machine (0x4DA570); an action button's names one.
+    Hot { kingdom: KingdomId, units: Vec<Unit>, command: Option<u32>, target: Option<Unit>, at: Option<Vec2>, aux: Option<Vec2>, alt: bool, queue: bool },
 }
 
 /// The ParameterSet of a recruit order (0x61EBA0 flag 5, command +0x34; 0x583A70
@@ -263,6 +273,8 @@ pub enum Event {
 pub struct World {
     pub data: Arc<GameData>,
     pub map: Arc<GameMap>,
+    /// GWorld+0x48: the session has started (`begin_battle`).
+    pub session_started: bool,
     pub tick: u64,
     /// Battle time in seconds (tick * DT).
     pub time: f32,
@@ -332,6 +344,7 @@ impl World {
         let mut world = Self {
             data,
             map,
+            session_started: false,
             tick: 0,
             time: 0.0,
             kingdoms: Vec::new(),
@@ -421,6 +434,7 @@ impl World {
         // a created (not restored) thing draws as 0x4F9C10 does.
         if self.ids.created_actor(id) {
             crate::creation::created(self, def, crate::creation::Made::Actor(id));
+            crate::ground::post_create(self, id);
         }
         id
     }
@@ -454,6 +468,7 @@ impl World {
     /// 0x775D3F resets S (0x77D900 index 0, hash 0), wiping what world
     /// creation logged. The next S entry is tick 1's clock with index 1.
     pub fn begin_battle(&mut self) {
+        self.session_started = true;
         self.random_u32_at(crate::trace::sites::SYNC_DUMP);
         self.trace.reset(0, 0);
     }

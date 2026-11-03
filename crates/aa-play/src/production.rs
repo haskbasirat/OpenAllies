@@ -106,26 +106,27 @@ fn slot_member(world: &World, o: OrgId, slot: usize) -> Option<ActorId> {
 
 /// 4FBF40 structure search: the nearest friendly structure with a
 /// DeploymentInfo (ActorData +3EC) whose definition is in the member
-/// definition's +17C list, within the organization's control_range
-/// (Organization +AC = ActorData +2FC) of the organization.
-fn member_structure(world: &World, o: OrgId, member_def: DefId) -> Option<ActorId> {
-    let org = &world.orgs[o as usize];
-    let range = world.data.def(org.def).control_range;
+/// definition's +17C list. The scan is 552EE0 -> 558040 mode 0 -> 558580 with the
+/// radius of Organization +AC (ActorData +2FC): every actor listed in the tile
+/// rectangle of that circle, with no test of the circle itself, the first of equal
+/// distances kept.
+fn member_structure(world: &mut World, o: OrgId, member_def: DefId) -> Option<ActorId> {
+    let (org_def, kingdom) = (world.orgs[o as usize].def, world.orgs[o as usize].kingdom);
+    let range = world.data.def(org_def).control_range;
     let at = crate::supply::org_position(world, o);
+    let candidates = crate::movement::actors_in_tile_rectangle(world, at, range);
     let md = world.data.def(member_def);
     let mut best: Option<(f32, ActorId)> = None;
-    for a in &world.actors {
+    for id in candidates {
+        let a = &world.actors[id as usize];
         if !a.alive || a.removed || world.data.def(a.def).creation_offset.is_none() || !md.recruited_at.contains(&a.def) {
             continue;
         }
-        let rel = world.books.relation(&world.kingdoms, a.kingdom, Some(org.kingdom));
+        let rel = world.books.relation(&world.kingdoms, a.kingdom, Some(kingdom));
         if rel != crate::books::SELF && rel != crate::books::FRIEND {
             continue;
         }
         let d = a.pos.truncate().distance_squared(at);
-        if d > range * range {
-            continue;
-        }
         if best.is_none_or(|(bd, _)| d < bd) {
             best = Some((d, a.id));
         }
@@ -256,13 +257,13 @@ pub fn slot_element(world: &World, o: OrgId, slot: usize) -> Option<DefId> {
 /// the slot is occupied or has no definition.
 pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId> {
     let org = world.orgs.get(o as usize).filter(|x| x.alive)?;
-    let def = world.data.def(org.def);
-    let offset = def.slots.get(slot)?.1;
+    let org_def = org.def;
+    let offset = world.data.def(org_def).slots.get(slot)?.1;
     let member_def = slot_element(world, o, slot)?;
     if member_def == crate::data::NO_DEF || slot_member(world, o, slot).is_some() {
         return None;
     }
-    let (kingdom, heading) = (org.kingdom, org.heading);
+    let (kingdom, heading) = (world.orgs[o as usize].kingdom, world.orgs[o as usize].heading);
     let (pos, facing, walk_to) = match member_structure(world, o, member_def) {
         Some(b) => {
             let s = &world.actors[b as usize];
@@ -272,6 +273,7 @@ pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId>
             (door, angle_of(to - door).unwrap_or(s.facing), (to != door).then_some(to))
         }
         None => {
+            let def = world.data.def(org_def);
             let leader = def.leader_slot.map(usize::from).filter(|&l| l < def.slots.len());
             let leader_offset = leader.map_or([0.0, 0.0], |l| def.slots[l].1);
             let local = [offset[0] - leader_offset[0], offset[1] - leader_offset[1]];
@@ -707,6 +709,25 @@ pub fn cancel_all(world: &mut World, building: ActorId) {
         }
     }
 }
+/// A recruit at a location reaches the ground with the definition's elements: the
+/// organization (0x58BF1E) and its members (0x57DADC), each falling (0x5770A0), or one
+/// thing (0x58C0CF).
+pub(crate) fn land_recruit(world: &mut World, kingdom: KingdomId, def: DefId, at: Vec2, facing: f32) {
+    let (org, actor) = if world.data.def(def).class == Some(DefClass::Organization) {
+        let o = spawn_organization(world, def, kingdom, at, facing, None);
+        for _ in 0..world.orgs[o as usize].members.len() {
+            crate::creation::cargo_fall(world);
+        }
+        (Some(o), None)
+    } else {
+        let a = spawn_single(world, def, Some(kingdom), at, facing);
+        crate::creation::cargo_fall(world);
+        (None, Some(a))
+    };
+    crate::statistics::recruited(world, kingdom, def, org);
+    world.events.push(Event::Recruited { kingdom, org, actor });
+}
+
 /// Recruit completion: spawn at the DeploymentInfo creation point turned by
 /// the building facing and walk to the deployment point (0x4FACA0).
 /// Research completion (0x584120): the kingdom gains the technology.
@@ -723,20 +744,16 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
         return true;
     }
     // (orders) Kind 2, 0x589F90 -> 0x582190: a transport (ActorData +184) enters
-    // from the map edge, or an aircraft of the structure's Denizen (0x56DC50), and
-    // drops the cargo at the point. A rendition, until the aircraft fly: the cargo
-    // lands at the point when the item finishes, with the definition's elements.
+    // from the map edge and drops the cargo at the point (`special_ops::recruit_by_air`).
+    // A thing without a transport lands at the point when the item finishes.
     if let Some(at) = item.location {
         let at = Vec2::new(at[0], at[1]);
         let facing = b.facing;
+        let origin = b.pos.truncate();
         let def = item.def;
-        let (org, actor) = if world.data.def(def).class == Some(DefClass::Organization) {
-            (Some(spawn_organization(world, def, kingdom, at, facing, None)), None)
-        } else {
-            (None, Some(spawn_single(world, def, Some(kingdom), at, facing)))
-        };
-        crate::statistics::recruited(world, kingdom, def, org);
-        world.events.push(Event::Recruited { kingdom, org, actor });
+        if !crate::special_ops::recruit_by_air(world, kingdom, def, origin, at, facing) {
+            land_recruit(world, kingdom, def, at, facing);
+        }
         return true;
     }
     let bdef = world.data.def(b.def);

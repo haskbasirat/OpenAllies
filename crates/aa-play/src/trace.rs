@@ -223,8 +223,10 @@ pub mod sites {
     pub const ORGANIZATION_GOAL: &str = "organization goal 57C680 -> queue 0";
     pub const PROJECTILE_LAUNCH: &str = "projectile launch 580BC0 -> queue 0";
     pub const ORGANIZATION_SCATTER: &str = "organization scatter 5797E0";
+    pub const CARGO_FALL: &str = "queue 0 from 5770e9";
     pub const ORG_SHORTFALL: &str = "organization shortfall 578660 -> 562D10";
     pub const COMBAT_COIN: &str = "combat coin";
+    pub const ABILITY_ANIMATION: &str = "ability animation 4C8170";
     pub const ENGAGE_REACTION: &str = "engage reaction delay";
     pub const DEATH_CLIP: &str = "death clip";
     pub const ROUT_FUZZ: &str = "rout score fuzz";

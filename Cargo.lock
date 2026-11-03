@@ -267,6 +267,7 @@ dependencies = [
  "aa-animation",
  "aa-assets",
  "aa-body",
+ "aa-combat",
  "aa-economy",
  "aa-heightfield",
  "aa-mapworld",

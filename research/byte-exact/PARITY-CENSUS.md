@@ -119,6 +119,30 @@ Files: `ids.rs`, `deploy.rs`, `creation.rs`, `production*.rs`, `setup.rs`, `map.
 
 Open: see `open_items` of the lane's report; the Kursk row above is where the herds' own movement differences begin.
 
+**State after the third 2026-11-02 round.** The human films of the placed maps now read on the original's stream, and the herds walk. Native traces of the three films the corpus census named were taken this round (`fight-play.ps1`, 3000 ticks; F38 to its end). Numbers are that tree's, with the other lanes' work in it:
+
+| film | at the start of the round | now | what moved it |
+|---|---|---|---|
+| F38, (2v2)Market_Garden, 259 ticks, a human film | 0 of 15, first 17 | 15 of 15, to its end | the cows |
+| F18, (2v2)Berlin with one player, a human film, 13859 ticks | 8 of 271, first 153 | 94 of 271, first 3380; its native trace ends at 3000 | the closed sides |
+| F43, (2v2)Market_Garden, 7107 ticks, a human film | 0 of 176, first 17 (trace of 3000 ticks) | 110 of 176, first 1887 | the cows; then a low path, the movement lane's |
+| Kursk2v2_0 | 9 of 1317, first 170 | 110 of 1317, first 1887 | the slot table, the overlap, the Sleep rounds |
+| Berlin2v2_0 | 93 of 266, first 1598 | 103 of 266, first 1768 | the movement lane's; no core cause first |
+
+The corpus slot census on the Load films of v14, to 40000 ticks: every slot the human and QA films of the placed maps name is live on Berlin (F05, F18), Market Garden (F38) and Mountain Pass (F33, 176 of 732, first 3009); Farmhouses still has its shift, 2257 of 13509 orders named a slot that is empty here, after the fighting begins early. The films of saved games (F06, F14, F15, F36) fail in their first ticks, a saved world's matter.
+
+What this round closed:
+
+* **The sides no player took.** WorldParameters 0x50E8B0 resolves every kingdom of the creator, with a player or not, then destroys the closed ones: F18, (2v2)Berlin with one player, was six draws short at its first getter. `creation::ClosedSide`, `World::new_skirmish_closed`, `ReplayPlan::closed`; a random map's picks stay on the generator's stream, so `playback` clears them there.
+* **The cows of (2v2)Market_Garden.** A record on its own that saved a Mind is an actor, whatever its definition says, and its Mind constructs at the Load (0x4D8290 -> 0x4D833E -> 0x530E50, eight draws). They were scenery, so their queue 3 and 4 entries had no owner: the first checkpoint failed at 17 on both Market Garden films. `setup.rs`, `creation::restored_thing`.
+* **The slot table of a formation that is not organized.** `0x57BEF0` over `aa_movement::formation::compute_slot_position`: an attached member's offset is where it stands from the leader. The code drew for the empty slots and kept the layout's places. `creation::organization_scatter`.
+* **The element's Sleep overlap.** Sleep's Think with Actor +0x110: `0x4D1820`, `0x4D04D0`, the first clear place at the other's blocking radius plus its own soft radius, and the Move in mode 2. `space::overlap_point`. Proof: the horse `0x3bb6` at 237.
+* **The regiment's Sleep rounds.** `0x522F60` ends by setting +0x10, and the next Think's `0x523000` waits while a member moves (`0x5200B0`), clears when each stands within 0.5 m of its place (`0x520190`) or after two rounds, else runs it again. The host never set the byte. Proof: Kursk's first difference from 289 to 1887, and Berlin's did not fall.
+* **The regeneration gate.** `0x579110` reads the reported Mind state's `resupply` (Game/actor_states.tgi) and the engagers' list; what a member shoots at is no input. `0x57B5A0`'s loop passes over a damaged member that is detached. Read from the code; the order_gone rows have not been re-read against it.
+* **Transports.** A summon's (0x4CB376) and a recruit at a location's (0x582426, `special_ops::recruit_by_air`) take their id and draws (`creation::transport`), and a dropped thing's fall draws one getter (`creation::cargo_fall`). A rendition still: no actor flies, and a regiment lands whole at its arrival where natively a member drops at each of the transport's thinks, 9 or 10 ticks apart. The engineers' bunkers 0x5634D6 were never missing: `construct.rs`, reached only when the task is.
+
+What the first differences are now: Berlin, F43 and Kursk read as movement and, on Kursk and the two developer maps, the Kill state of a `move` on a hostile thing (attack efficiency desired from 1840 on Kursk, member speed from 1448 on Comrades, the parity-fights lane's). On Comrades ours fires its first shot at 2282, the original at 6625, which is what makes most of its slot shift there: 496 projectile ids against 79.
+
 #### K1. An unpack takes a new id and swaps it (S, do first)
 
 * **Shows as:** 60 things sit on another slot from tick 1002. First: native `ger_truck_artillery` 0x3462, ours 0x3460. The native slots never named are 0x3460, 0x3461, 0x3464, 0x346B, 0x346F, 0x3479: one per unpack.
@@ -193,13 +217,15 @@ Three more things decide those branches, and with them the first battle getter s
 * **Native / port:** 0x4F0E50, `aa_spatial` (crates/aa-spatial/src/lib.rs:162), `research/phase5-heightfield` fixtures, `aa_mapworld::terrain`. ROADMAP lists this gap.
 * **Takes:** heights from the RMP terrain through the port. No getter depends on it directly as far as the film shows (height does not enter a Mover step), so it can go any time. The renderer shares `heights`: check it still lines up.
 
+**The ground under a created thing (2026-11-02).** The base map was never written in a running battle; the original writes it at every unpack. `crate::ground`: GThing PostCreate 0x4EBA40 -> 0x4EB500, the brush 0x551140 on HEIGHT_MAP (one code path with the generator through `mapgen::height::HeightGrid`), ClearDoodads 0x4F5560. Settings +0x1C is an unwritten stack word: the thing's Z before the session starts, 0 on an unpack (sampled on four films). `tests/ground_native.rs` holds the whole base map's hash and the cleared GTIDs equal to the original after every brush of a Kursk film. The drawn terrain follows (`scene.rs follow_ground`); no tile changes its variation and no static thing changes its Z. Notes in `research/phase8-ground/README.txt`.
+
 ### Movement lane
 
 Files: `movement.rs`, `path.rs`, `formation.rs`, `minds.rs`, `aa-movement`, `aa-navigation`. Today `movement.rs` is a plain f32 reimplementation that follows the ports but calls none of them except the solver and `formation`. This lane owns **6200 of the 6986 getters** (the Mover registration and ActionGo pairs).
 
 The order is M1, then M2 and M3, then M4, then the rest. In forced-rng every window up to tick 551 is equal (76 getters), so the structure holds that far and geometry is what breaks it first.
 
-**Status 2026-11-02 (parity-movement lane), first round; the next round's is below the table.** M1, M2, M3, M4 and M6 are in; M5 and M7 are not. The element Mind runs on the exact ports (`crates/aa-play/src/movement/element.rs`, `HostedKind::Element`, queue 4), and `AA_ELEMENT_MIND=old` selects the earlier f32 code. In the free run the trucks now match the original bit for bit, position and direction, up to the first collision query that goes wrong. What each step gave, read from this census:
+**Status 2026-11-02 (parity-movement lane), first round; the next round's is below the table.** M1, M2, M3, M4 and M6 are in; M5 and M7 are not. The element Mind runs on the exact ports (`crates/aa-play/src/movement/element.rs`, `HostedKind::Element`, queue 4). In the free run the trucks now match the original bit for bit, position and direction, up to the first collision query that goes wrong. What each step gave, read from this census:
 
 | step | gate | first difference | what it showed |
 |---|---|---:|---|
@@ -223,14 +249,17 @@ Read against the original while doing this, and not as M2 first described it: th
 | `0x57D8A0` -> `0x57A640`: a member joining reaches the others through Mind +0x118, so the Mover's request is factor * speed | 86 | 1479 | 1472 bit-exact for all members |
 | Mind +0x44 of the leader's Mind (`0x535E00`) in `0x534A40`; a refused Move keeps its fields (`0x52DF60`) | 93 | 1598 | 1480, 1488 bit-exact for what walks; ours has 6945 getters of 6986 |
 | Mind +0xA4 `0x52D780` (Reattach current) gates the catch-up speed of `0x5300A0` | 93 | 1598 | the recruit that left its place at 1590 is bit-exact at 1592, 1600 |
+| `0x537750` (Mind +0x124) ends with the next Think in 3 s with a Reattach on the stack, else in 1 s; ours had no schedule, so a recruit's refused Move put its Sleep on the wrong phase | 96 | 1649 | the second recruit's Sleep at 1502 + 32k as native, plan at 1598 |
+| `0x4FBF40`'s scan is `0x558040` mode 0: every actor in the tile rectangle of the control range, with no circle test (`production::member_structure`, `movement::actors_in_tile_rectangle`, `aa_spatial::rectangle_actors`) | 97 | 1666 | a recruit of a regiment that has walked away still comes out of the building |
+| `[0xB3D300]` is the SVar `MoverDetachedSecondsUntilReattach`, 2; ours read another name and took 5. Organization +0x148[4] and `0x54EF40` are bound in the Move Think `0x537B90` | 103 | 1768 | members detached while the regiment moves reattach at 1651 and 1659 as native |
 
 What these rested on: the sampler trace of the original, side by side (`AA_PARITY_WATCH`), and the pseudocode. Nothing here has an oracle of its own beyond the ports' fixtures.
 
-**The next cause, 1598.** Second recruit (native 0x346E, ours actor 54): native's Sleep thinks at 1502 + 32k, so it detaches at its Think of 1598 and plans; ours at 1487 + 32k, so it plans at 1615. It got to its place at the same moment (position equal at 1592). So the first Sleep Think after a Deploy's arrival is 16 ticks later in native than ours: read `0x5324A0`, Reattach `0x534000`, the pop `0x52A340` and the first schedule of Sleep `0x52FC20`. The third recruit (0x3470) is on the right phase, so look for what differs: the second one's move was refused a formation path at 1475.
+**The next causes, read 2026-11-02.** First position difference: a Reattach's destination at 1605. `0x5317A0`'s tail under Mind +0xA4 puts the point through `0x556070`, from the member's facing with ActorData +0x2FC and the organization's zone 4: native 0x3470 at 1590 heads for the organization's position + 0.9 x its facing (0, -1), ring 1 of 20 of radius 18, and 0x3471 at 1651 likewise. `Host::reattach_point` runs those rings, but its first test passes at the organization's own position where the original's fails, so ours keeps the point: find what `0x4F3640` sees there (its descriptor has no source thing; the leader stands on that point). After that: the first tick difference, a continuation one tick early at 1752 (native 1753), and `member speed +20` from 1536 (0x346A, native 1.162904, ours 1.1629192), which is `0x52FF00`'s formation speed.
 
-**Renditions left, each marked at its place:** walls (`0x4F2220`, `0x53CA30`, `0x53CB70`'s wall cost, Mind +0x88): no wall thing is hosted; a map's scenery objects that are no actors and the trailers are not in the tile lists (`Space`); `0x554AD0` of a scatter formation keeps the point; a regiment's formation counts as oriented; the kill order of a regiment is still `order_think` (X1); `0x536840` stands aside for the combat states. `AA_ELEMENT_MIND=old` and the f32 element code in `movement.rs` are still there, for no reason but the size of removing them.
+**Renditions left, each marked at its place:** walls (`0x4F2220`, `0x53CA30`, `0x53CB70`'s wall cost, Mind +0x88): no wall thing is hosted; a map's scenery objects that are no actors and the trailers are not in the tile lists (`Space`); `0x554AD0` of a scatter formation keeps the point; a regiment's formation counts as oriented; the kill order of a regiment is still `order_think` (X1); `0x536840` stands aside for the combat states.
 
-**Not done:** `0x52EC20` (M2's placement for the other members). A thing's 564300 draw still lands at the first queue-1 delivery: `observe_key` right after the Mover's position write, tried at the end of `mover_tick`, fell to 28 of 266 with the first tick difference at 483, so a tile change there does more than the draw (read `0x4D6350`'s order against `Engine::observe_actor` before trying again). Berlin2v2_1's tick 458 is not re-measured.
+**Not done:** `0x52EC20` (M2's placement for the other members). A thing's 564300 draw still lands at the first queue-1 delivery. `observe_key` right after the Mover's position write was tried at the end of `mover_tick`, and the gate read 28 of 266 at the same time, but that drop came from another lane's passing edit of `organization_scatter` and stayed after the call was removed: the call's own effect is not known and it has not been retried. Berlin2v2_1's tick 458 is not re-measured.
 
 #### M1. The Mover ground step on the exact port (S to M): done
 
@@ -296,12 +325,12 @@ Files: `zones.rs`, `fog.rs`, `supply.rs`. These lanes move getters only through 
 
 Status of 2026-11-02, third round, free run on `Berlin2v2_0`: fog first difference 1600, and the one cause first on anything is a member's zone 6 tile, which follows its position; supply first difference 1784, a position too; combat none. The zone 1 row on a city is gone: `combat.rs` no longer scans the control range, the ZOC's effects `0x514DA0` -> `0x514E40` -> `0x57AB70` / `0x567840` run from tile changes and a ZOC moving (`Engine::take_entered`, `combat::zone_entered`, `combat::defender`). The numbers in section 6 are from before this and are no longer current for this table.
 
-Still not bound, measured as absent from all five fight and Berlin traces: zone types 2, 3, 5, 7 and walls (tile `+0x1C`). The detached teleport of the Element Tick and actor `+0x100` bit 24 are not bound either.
+Still not bound, measured as absent from all five fight and Berlin traces: zone types 2, 3, 5, 7 and walls (tile `+0x1C`). The Element Tick's detached teleport is bound (`element/fight.rs`, its free spot a rendition); actor `+0x100` bit 24 (falling) is not.
 
 | id | size | shows as | native | port | aa-play | takes |
 |---|---|---|---|---|---|---|
 | **F1** ZOC zones | closed | zone 4 on buildings and organizations: gone from the table | Defender InitExisting 0x566DB0 (+0x218, +0x2FC for an organization), Organization AfterInit 0x579DD0 | aa-zones `component::create_zone`, `zone::move_to_position` | `zones.rs` `zoc_init`, at creation and, for a building, at the end of its unpacking (`0x4D21A0(1)`) | radius, tile and flags equal wherever the thing stands where the original's does. The enemy-entered effects 0x514DA0 -> 0x57AB70 / 0x567840 are not bound (bit 14 of actor +8 answers clear): `combat.rs` still scans the control range |
-| **F2** membership | closed | zone 6 on trucks, members and leaders: first-on causes gone, what remains follows positions | 0x57CBA0 -> 0x5705A0 sets byte +0x1C when a member joins (why the truck has no zone at creation). 0x4D7230 +0x138 = the creation block's +0x40, the organization: 0x56EC90 makes no ZOD and asks for a deferred tick (0x50ACC0, 1e-4). 0x5709D0: leader, or a tile under it holds the organization's zone 4 (0x4EA2C0) | aa-zones `component::activate`, `query::contains` | `zones.rs` `element_update`; 0x5709D0 runs in the Element's queue-1 Tick 0x570B90 (`fog::element_pass` reads the bucket until the scheduler delivers it: `fog::element_delivery`) and in 0x579DD0 | the Element Tick's teleport (10 s detached, sleeping) and actor +0x100 bit 24 are not bound |
+| **F2** membership | closed | zone 6 on trucks, members and leaders: first-on causes gone, what remains follows positions | 0x57CBA0 -> 0x5705A0 sets byte +0x1C when a member joins (why the truck has no zone at creation). 0x4D7230 +0x138 = the creation block's +0x40, the organization: 0x56EC90 makes no ZOD and asks for a deferred tick (0x50ACC0, 1e-4). 0x5709D0: leader, or a tile under it holds the organization's zone 4 (0x4EA2C0) | aa-zones `component::activate`, `query::contains` | `zones.rs` `element_update`; 0x5709D0 runs in the Element's queue-1 Tick 0x570B90 (`fog::element_pass` reads the bucket until the scheduler delivers it: `fog::element_delivery`) and in 0x579DD0 | the Element Tick's teleport is bound (`element/fight.rs`); actor +0x100 bit 24 is not |
 | **F3** city zone and capture | zone done, tick waits for movement | zone 8 equal from tick 1. **Creator found: City AfterInit 0x563FE0** (slot 29, virtual +0x14, reached only through the vtable): 0x4D69A0(8), 0x515F40 with ActorData +0x5B4. 0x563E10 was wrong: that is the Character's | Entered through 0x4D6350 -> 0x4CFEA0 -> 0x515620 -> 0x564300 (the film's three getters carry this chain) | `zones.rs` `city_init`, `entered`; `supply.rs` `city_entered`, the City Tick's 0x564C10 now asks the zone (0x4EA2C0) | proof of the tiles: the film enters on tile (67, 199) at 1767, having walked (67, 198) from about 1745 and passed under the radius well before. Water stops the flood there; ours has (67, 199) in and (67, 198) out (`zones_parity::berlin_city_zone_stops_where_the_film_enters_it`). The capture now follows the regiment. In the forced-all run, where the positions are put on the native ones every 8th tick from 1200, ours makes the same 3 entries from 1769 against native 3 from 1767, and the provided money differs only at samples 587, 888, 1063..1065 and 3600, so the native steps at 1784, 3600 and 4288 are met to within a sample. City +0x10, the blocks that go with a city (0x5643A0), is still a radius scan |
 | **F4** supply at unpack | closed | zone 0 absent until the end of the unpacking | `assemble_initial`: selection_special (state 25, 26) leaves Supply and Defender out; 0x576319 -> 0x4D21A0(1) -> 0x4D3068 -> 0x563FD0, 0x58B0E0 | aa-economy `supply` | `supply.rs` `tick` skips an unpacking thing, `supplier_tick` makes the slot on its first run | what remains in the supply table is the unpack tick (M2) and the bucket phase |
 | **F5** ZOD of a built thing | closed | zone 6 radius 16 natively, 12 here | The unpacking building is state 26 (st 0x4001000), not state 21: `0x56F140` takes the normal branch, ActorData +0x1CC. The old `under_construction` took it for 21 and gave +0x1D0 | aa-zones `component::tick` | `zones.rs` `under_construction` reads `constructing` only; `supply.rs` state 21 likewise | |
@@ -312,6 +341,33 @@ Not causes: "zone 6 tile (position differs too)" and "supply stock +18" (a one-s
 ### Combat lane
 
 Files: `combat.rs`, `morale.rs`. `Berlin2v2_0` has no health or death difference and no combat row at all in the free, forced-rng and forced-all runs. The fighting is measured on `Berlin2v2_1` through the census, with the fight trace's morale and Mind state: `AA_PARITY_BERLIN_FILM=<film> AA_PARITY_BERLIN_NATIVE=<trace> AA_PARITY_CENSUS_RUNS=forced-all`. Forced-all puts health and position back on the native values at every sample, so a health row there is the damage of one 8-tick window: it says who fired and for how much, but one shot a tick off shows as two rows.
+
+**Status 2026-11-02, fourth round: the fight is hosted on the Minds.** The states the combat code stood in for are now the original's, on the stack of the hosted Mind, through the ports:
+
+| what | where | port |
+|---|---|---|
+| regiment Kill (+0xC0), Chasing (+0x120), Reform (+0x1B8), Engage (+0x1CC), `0x524C10`, `0x524A00`, `0x524AE0`, `EventTargetGone` `0x521F90`, the Kill arm of `0x5222E0` | `movement/regiment/fight.rs` | `aa_mind::cai_thinks::kill`, `cai_thinks::reform`, `cai_engage_think`, `cai_engage` |
+| element Engage (+0x12C), Kill (+0xF8), `0x532070`, `0x5351C0`, `0x533D90`, `0x5307A0`, `0x52D820`, `0x52EF40`, the Element Tick's teleport | `movement/element/fight.rs` | `aa_mind::uai_thinks::uai_engage`, `uai_kill` (its Think's steps, by hand) |
+| the Performer: start, animation draw, use frame, end, reload, `0x57DC90` | `combat/performer.rs` | `aa_combat::performer` |
+
+What this changes that the old pass could not do: the kill walk to a city is the Kill state and ends as the original's does (`0x520730` -> Mind +0x140); a new Attack replaces the Engage state and empties its list (`0x51D920` -> `0x52A810(2)`); a fight that ends with no chase goes through the Reform state; a target leaving the ZOC is dropped unless it or the regiment is shooting (`0x523EA0`); a chase runs when the only target flees (`0x520D90`); every shot takes its animation's length and its reload, and draws (`0x4C8170`).
+
+`Order` is now what the Mind shows (`fight::reflect_order`, at Mind +0x1A4): the rest of the game still reads it, and `OrgCombat::auto_order` / `saved_order` hold what the Engage, Chasing and Reform states stand over.
+
+**The next cause, Comrades.** Block `e81` holds the film down (8 deaths of 27, 6890 shots, nearly all at it): the film's `move` onto it at 1443 is a Kill state, the arrival makes an Engage state, and it never ends, because a body at zero health stays a target (`0x4C8740` has no health test). The original refuses it at `0x522CC0`: the trace has a zone 8 of radius 0 on that block and on no other block of the five films, so it has `+0xD4`. What gives it that is not found: `PlacedThing::saved_city` (the record's slot 29) and a converted record with the node both left the numbers unchanged. Print `map.placed` for that record first.
+
+**Renditions left, each marked at its place:** `combat::decide` and `combat::choose` are `0x5340C0` and `0x534700` in f32 with the original's stores, not the ports' traits; the Siege state has no site (no wall thing is hosted); `0x57DD90` (other turrets aiming) is not bound; a model's animation set is the first; the rout and exhausted states are still `crate::morale`; guard and explore are `crate::orders` and enter the Kill state by writing `Order::Attack`; a lone actor still fires from `combat::fire` at once; the teleport's free spot is `0x554AD0` for `0x556070`.
+
+Measured by `tests/order_fights.rs` (`the_fight_films_fight`) against counts read from the native traces: deaths are actors reaching zero health, routs are organizations entering `cai_rout` (the earlier "far fewer routs" compared events with samples, which is no comparison), shots are the original's `0x4C8190` draws (one per ability started) against ours. Free replay: each film has left the original long before its fighting, so a number close to the original's is not parity.
+
+| film | deaths ours / native | first death ours / native | routs ours / native | shots ours / native |
+|---|---:|---:|---:|---:|
+| `Comrades2v2_0` | 8 / 27 | 7341 / 6712 | 0 / 4 | 6890 / 349 |
+| `Farmhouses4FFA_0` | 82 / 107 | 3026 / 3032 | 32 / 15 | 1510 / 2666 |
+| `Kursk2v2_0` | 94 / 119 | 4841 / 4584 | 28 / 15 | 1808 / 3541 |
+| `Berlin2v2_1` | 129 / 133 | 4949 / 5760 | 41 / 25 | 2147 / 2929 |
+
+Before the hosting: deaths 26, 137, 75, 88; first death 9096, 3039, 4794, 4957; routs 7, 20, 15, 46; shots 1538, 3274, 2150, 2349. The shots were about four times the original's on Comrades, because an ability's animation and the rule that the Mind waits for it were not there.
 
 **Status 2026-11-02, third round (`Berlin2v2_1`, forced-all).** The census has a new row, `regiment Mind state`, the fight trace's `ms=` against `morale::regiment_state`. What each cause was, and what proved it:
 
@@ -329,11 +385,11 @@ Files: `combat.rs`, `morale.rs`. `Berlin2v2_0` has no health or death difference
 
 **Not closed from this round's list.** The Chuikov comparison: the original's log (`sai_goals_run1.csv`) has Research at x1.75 from its second think at 30.31 s, so it is in the main-game ego by then; ours changes at 60.1 s, income 25 until 50, and takes the home village at 115 s where the earlier radius scan took it at 1.1 s. Whether the corps enters that zone at the start is not established. Fog cost in the official profile, under load: 807 us a tick (budget 1000), and with all 2000 members detached 4801 us, of which observe 3971 us.
 
-**What is left there, first on anything:** `organization living +64` is a member arriving one sample off in single ticks every 64 (the regeneration's drawn bucket); attack efficiency and desired, read in the same Mind-state column as everything after it; building and truck health, which are shot timing. All Mind-state rows but one are knock-on. No exact port of `0x520730` hosts the Kill state yet: `order_think` still stands in, with `Order::Attack`.
+**What was left there, first on anything, before the fourth round:** `organization living +64` is a member arriving one sample off in single ticks every 64 (the regeneration's drawn bucket); attack efficiency and desired, read in the same Mind-state column as everything after it; building and truck health, which are shot timing.
 
 #### X1. Kill orders (M)
 
-**In part 2026-11-02:** the kill walk holds at the ZOC, members take no targets at the command, the target joins the engage list on zone entry. The Kill state itself is not hosted on `aa_mind::cai_thinks::kill`.
+**Done 2026-11-02, fourth round:** the Kill state is hosted on `aa_mind::cai_thinks::kill` (`movement/regiment/fight.rs`); `order_think` no longer runs for a regiment. It walks by its embedded Move, and at the target the arrival `0x5222E0` starts the Engage state or, where `0x521060` refuses (a city, a block that goes with one), ends through `0x521F90`. The text below is what the first census saw.
 
 * **Shows as:** five `kill` orders (3297, 3393, 3929, 4217, 4281). 3393 and 4281 are refused here "cannot attack an own unit" (`movement.rs:1119`). With positions forced to native the 3393 refusal goes, so that one is a knock-on: ours is 23 m ahead by then and takes the city first (M7, F3). 4281 stays. The target block is at full health natively at 3296 and 3392. Whether native refuses such a target at all is not established: that check is aa-play's.
 * **Native:** `KKC_CAIStateKill` and the element's approach; the kill decision 0x5340C0 does not draw in this film.

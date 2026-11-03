@@ -15,19 +15,19 @@
 //! - weapon admission `4C8F20` (range, min range, target filter, recharge
 //!   `4C83E0`; aa_combat::admission), performer one-ability-at-a-time
 //!   (`57F290`, aa_combat::performer).
-//! - organization engage list `523DD0/524C10/523EA0/51FE60`
-//!   (aa_mind::cai_engage), zone entry `514E40 -> 57AB70 -> 57A500`
-//!   ([`zone_entered`], from the ZOC, `crate::zones`), the
-//!   damage-driven engage `579490` (aa_combat::engagement), engage Think
-//!   `526A70` (1.0 s, aa_mind::cai_engage_think), target priority `527240`
-//!   (aa_mind::cai_reactions::target_priority).
-//! - member target choice `536E10 -> 535910 -> 534700` over the actors
-//!   within the operational range (`558150`, def `+300`/`+304`) that the
-//!   regiment's engage list holds (`52DCA0 -> 5210D0`), with the element
-//!   priority `537530`, ranked by `52F010` (priority, then score, then
-//!   distance), the per-ability decision `5340C0` (aa_mind::uai_kill) with
-//!   the `52ED30` score (aa_mind::decision_score), the engage reaction
-//!   delay `52E830`; a kill target is kept while valid and engaged.
+//! - organization engage list `523DD0/524C10/523EA0/51FE60`: `OrgCombat::engage`, which
+//!   the regiment Mind's Engage state keeps (`crate::movement`'s `regiment/fight.rs`, on
+//!   aa_mind::cai_engage and aa_mind::cai_engage_think); zone entry `514E40 -> 57AB70 ->
+//!   57A500` ([`zone_entered`], from the ZOC, `crate::zones`), the damage-driven engage
+//!   `579490`, target priority `527240`.
+//! - member target choice `535910 -> 534700` ([`member_choice`]) over the actors within the
+//!   operational range (`558150`, def `+300`/`+304`) that the regiment's engage list holds
+//!   (`52DCA0 -> 5210D0`), with the element priority `537530`, ranked by `52F010` (priority,
+//!   then score, then distance), the per-ability decision `5340C0` ([`member_decision`]) with
+//!   the `52ED30` score. The element's Engage `536E10` and Kill `535240` states that ask them
+//!   are its Mind's (`element/fight.rs`), and the ability runs on the Performer's lifecycle
+//!   ([`performer`], aa_combat::performer).
+//! - an actor outside an organization: `lone_think`, and `fire` uses its ability at once.
 //! - death: kill credit `4D57C0` (aa_body::credit) with experience
 //!   `571820/571960` (aa_body::experience_amounts), slayer morale `578F10`,
 //!   member removal `57CD70` (aa_combat::organization::remove_member),
@@ -42,6 +42,8 @@ pub mod tasks;
 pub mod air;
 /// The DefenderComponent: its ZOC list and its queue-0 Tick.
 pub mod defender;
+/// The PerformerComponent's ability lifecycle (`0x57F290` and its timed events).
+pub mod performer;
 
 use crate::data::{DefClass, DefId, GameData, Weapon};
 use crate::world::{Activity, ActorId, Event, KingdomId, Order, OrgId, World};
@@ -827,21 +829,22 @@ pub struct OrgCombat {
     pub destroyed: bool,
     /// Engage list, ascending priority (`51FE60`); the last entry is engaged.
     pub engage: Vec<EngageTarget>,
-    /// Target of an explicit (player) attack order.
+    /// The Kill state's target while the state is on the regiment Mind's stack
+    /// (Mind +0x4C `0x522700`).
     pub explicit: Option<TargetRef>,
     /// The Kill state came from a `move` command on the target (`0x527E30` ->
     /// `0x51D920`): Mind +0x20's kind 5, so `0x51D8F0` reports mind_moving and the
     /// regiment walks in its desired formation and behaviour.
     pub kill_is_move: bool,
-    /// The city a Kill state walks to, and the point of the walk
-    /// (`movement::command`): the state ends when `0x57A500` no longer accepts the
-    /// city (`0x520730` -> Mind +0x140), its capture making it no enemy.
-    pub city_target: Option<(ActorId, Vec2)>,
-    /// Order replaced while engaging on the organization's own initiative,
-    /// restored when the engagement ends.
+    /// The order standing under the regiment Mind's Engage, Chasing or Reform state
+    /// (`movement`'s `reflect_order`), restored when the stack comes back to it.
     pub saved_order: Option<Order>,
-    /// The order combat wrote (to tell it apart from a new player order).
+    /// The order those states show (the rest of the game reads `Order`).
     pub auto_order: Option<Order>,
+    /// `0x524C10`s that arrived while the Mind's world was out (none in a plain update).
+    pub pending_targets: Vec<TargetRef>,
+    /// (saved games) The order a restored Mind stands on.
+    pub seen_order: Option<Order>,
     pub previous_order: Order,
     pub next_think: f32,
     pub next_sleep_think: f32,
@@ -861,9 +864,6 @@ pub struct OrgCombat {
     /// `+8E`: `+8D` has just turned on; the maintenance Tick `57C8E0` then walks
     /// the ZOC's effects (`5147C0`).
     pub rescan_8e: bool,
-    /// The order last seen, to tell a new command (`527E30` leaves the engage
-    /// state, `51F040`) from what combat itself restored.
-    pub seen_order: Option<Order>,
     /// Who shells this organization (`+130`, its members' hits come here).
     pub attacked_by: Vec<AttackedBy>,
     /// What this organization shells (`+128`, `4D3A70`), head first.
@@ -955,8 +955,10 @@ pub struct ActorCombat {
     pub roe_retry_at: f32,
     /// Performer turret states (`+4C`, one per `Def::turrets`).
     pub turrets: Vec<TurretState>,
-    /// The regiment target last handed to this member (UAI engage state
-    /// `+10`, written by `532070`).
+    /// `+74`: the Performer's ability lifecycle (`combat::performer`).
+    pub performer: performer::Run,
+    /// The regiment's target last handed to this member (its Engage state's `+10`,
+    /// written by `532070`).
     pub engage_target: Option<TargetRef>,
     // ---- appended by the core owner (HUD orders, `tasks`) ----
     /// The task of an actor outside an organization.
@@ -1288,17 +1290,11 @@ pub(crate) fn representative(world: &World, t: TargetRef) -> Option<ActorId> {
     }
 }
 
-fn target_kingdom(world: &World, t: TargetRef) -> Option<KingdomId> {
-    match t {
-        TargetRef::Org(o) => world.orgs.get(o as usize).map(|x| x.kingdom),
-        TargetRef::Actor(a) => world.actors.get(a as usize).and_then(|x| x.kingdom),
-    }
-}
-
 /// Can be targeted at all: alive, owned, with a body, not scenery/city.
 fn targetable(world: &World, id: ActorId) -> bool {
     let Some(a) = world.actors.get(id as usize) else { return false };
-    if !a.alive || a.removed || a.kingdom.is_none() || a.health <= 0.0 {
+    // 4C8740 has no health test: a body the original holds at zero stays a target.
+    if !a.alive || a.removed || a.kingdom.is_none() {
         return false;
     }
     let def = world.data.def(a.def);
@@ -1567,10 +1563,14 @@ pub(crate) fn effective_range(world: &World, a: ActorId, w: &Weapon) -> f32 {
 /// What `4C8F20` answers for the distance and the recharge, in `5340C0`'s terms:
 /// 3 inside the minimum range, 2 out of range, 1 recharging, 0 ready.
 fn status_on(world: &World, shooter: ActorId, target: ActorId, w: &Weapon, recharge_left: f32) -> u8 {
+    // 52ECC0 of 4C8F20's kinds: 2 (minimum range) and 3 (turret arc) are out; 5 (range)
+    // is a pursuit for a thing that can walk.
     if w.min_range > 0.0 && !in_range(world, shooter, target, w.min_range, true) {
         3
+    } else if !in_turret_arc(world, shooter, w, world.actors[target as usize].pos.truncate()) {
+        3
     } else if !in_range(world, shooter, target, effective_range(world, shooter, w), false) {
-        2
+        if world.data.def(world.actors[shooter as usize].def).speed_max > 0.0 { 2 } else { 3 }
     } else if recharge_left > 0.0 {
         1
     } else {
@@ -1583,11 +1583,20 @@ fn status_on(world: &World, shooter: ActorId, target: ActorId, w: &Weapon, recha
 /// arc, 5 out of range, 7 no mana, 8 recharging, 0 usable. The payment (4) and
 /// the summon limits (9, 10) have no source on a weapon.
 pub(crate) fn admission(world: &World, st: &CombatState, source: ActorId, weapon: usize, target: ActorId) -> u32 {
+    admission_with(world, st, source, weapon, target, true)
+}
+
+/// [`admission`] with `4C8F20`'s second argument: the use frame `0x57E8C0` does not
+/// ask about the range, and the recharge comes with it.
+pub(crate) fn admission_with(world: &World, st: &CombatState, source: ActorId, weapon: usize, target: ActorId, check_range: bool) -> u32 {
     let def = world.data.def(world.actors[source as usize].def);
     let Some(w) = def.weapons.get(weapon) else { return 1 };
     let Some(t) = world.actors.get(target as usize).filter(|t| t.alive && !t.removed) else { return 1 };
     if !world.data.def(t.def).targetable || !admits(world, st, source, w, target) {
         return 1;
+    }
+    if !check_range {
+        return 0;
     }
     if w.min_range > 0.0 && !in_range(world, source, target, w.min_range, true) {
         return 2;
@@ -1636,7 +1645,6 @@ pub(crate) fn capturable(world: &World, a: ActorId) -> bool {
 /// The ability's use (`57E030` -> `4C9E90` -> `4C9550`): the recharge, the event,
 /// and a projectile or the hit.
 pub(crate) fn use_weapon(world: &mut World, st: &mut CombatState, id: ActorId, weapon: usize, target: ActorId) {
-    let now = world.time;
     let data = world.data.clone();
     let i = id as usize;
     let w = &data.def(world.actors[i].def).weapons[weapon];
@@ -1645,6 +1653,30 @@ pub(crate) fn use_weapon(world: &mut World, st: &mut CombatState, id: ActorId, w
     if let Some(r) = world.actors[i].combat.recharge.get_mut(weapon) {
         *r = w.recharge / multiplier;
     }
+    weapon_effects(world, st, id, weapon, target);
+}
+
+/// The use frame of the Performer (`0x57E030`): the ability's `+10` is the animation's
+/// start (`+3C`), so `0x4C83E0` counts its recharge time from there.
+pub(crate) fn use_performed(world: &mut World, st: &mut CombatState, id: ActorId, weapon: usize, target: ActorId, started_at: f32) {
+    let data = world.data.clone();
+    let i = id as usize;
+    let w = &data.def(world.actors[i].def).weapons[weapon];
+    let multiplier = crate::special_ops::mods(world, id).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
+    let left = fstp(x87::sub(ld(w.recharge_time / multiplier), x87::sub(ld(world.time), ld(started_at))));
+    if let Some(r) = world.actors[i].combat.recharge.get_mut(weapon) {
+        *r = left.max(0.0);
+    }
+    world.set_activity(id, Activity::Attacking);
+    weapon_effects(world, st, id, weapon, target);
+}
+
+/// What the use does: the event, and a projectile or the hit (`0x4C9550`).
+fn weapon_effects(world: &mut World, st: &mut CombatState, id: ActorId, weapon: usize, target: ActorId) {
+    let now = world.time;
+    let data = world.data.clone();
+    let i = id as usize;
+    let w = &data.def(world.actors[i].def).weapons[weapon];
     world.events.push(Event::Fired { shooter: id, target, weapon: weapon as u32 });
     let point = world.actors[target as usize].pos.truncate();
     // 0x4C9550 -> 0x4C8CB0: the projectile is a thing, with its id and its draws.
@@ -1917,7 +1949,7 @@ fn choose(world: &mut World, st: &CombatState, shooter: ActorId, candidates: &[A
 /// `527240` for the regiment Mind: its current target is the explicit
 /// attack (CAI `+4C`); an organization target is never harmless (`4D03F0`
 /// is false with an OrganizationComponent).
-fn regiment_priority(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> i32 {
+pub(crate) fn regiment_priority(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> i32 {
     let current = st.orgs[org as usize].explicit == Some(t);
     if current && st.rules().kill_target_highest {
         return 6;
@@ -1946,12 +1978,17 @@ fn insert_sorted(list: &mut Vec<EngageTarget>, target: TargetRef, priority: i32)
     list.insert(i, EngageTarget { target, priority });
 }
 
+/// A saved engage record back on an organization's list (the Load 528C20 -> `51FE60`).
+pub(crate) fn insert_engage(st: &mut CombatState, org: OrgId, target: TargetRef, priority: i32) {
+    insert_sorted(&mut st.orgs[org as usize].engage, target, priority);
+}
+
 /// `57A500(target, 1, 1)`: `4D0380` (the target has a Body or an
 /// OrganizationComponent, is not invulnerable and is targetable for this kingdom,
 /// `+84`), its enemy relation to this organization's owner (`+16C` -> `+140`), an
 /// attached member within the operating radius (`578470`), and a member's ability
 /// that could be used on it (`4D4FF0(target, 1, 0)`).
-fn zone_accepts(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+pub(crate) fn zone_accepts(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
     let kingdom = world.orgs[org as usize].kingdom;
     let (def, owner) = match t {
         TargetRef::Org(x) => (world.orgs[x as usize].def, Some(world.orgs[x as usize].kingdom)),
@@ -1968,6 +2005,20 @@ fn zone_accepts(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bo
 /// `57A500(target, 0, 0)`, the kill state's test (0x51D920): as [`zone_accepts`]
 /// without the operating radius. When it refuses, the kill and move handlers
 /// (0x527FB0, 0x527E30) fall back to a Move at the thing (0x520320). (orders)
+pub(crate) fn kill_accepts_thing(world: &World, org: OrgId, t: TargetRef) -> bool {
+    let st = &world.combat;
+    if st.orgs.get(org as usize).is_none() || !target_alive(world, t) {
+        return false;
+    }
+    let kingdom = world.orgs[org as usize].kingdom;
+    let (def, owner, body) = match t {
+        TargetRef::Org(x) => (world.orgs[x as usize].def, Some(world.orgs[x as usize].kingdom), false),
+        TargetRef::Actor(a) => (world.actors[a as usize].def, world.actors[a as usize].kingdom, true),
+    };
+    let d = world.data.def(def);
+    (!body || (d.health > 0.0 && !d.invulnerable && d.targetable)) && st.hostile(owner, Some(kingdom)) && any_member_ability(world, st, org, t)
+}
+
 pub(crate) fn kill_accepts(world: &mut World, org: OrgId, target: ActorId) -> bool {
     let mut st = std::mem::take(&mut world.combat);
     st.prepare(world);
@@ -1987,19 +2038,158 @@ pub(crate) fn kill_accepts(world: &mut World, org: OrgId, target: ActorId) -> bo
 /// eligible (`4C8740`), bears (`4C84B0`) and is past its minimum range (`4C8460`)
 /// on the target or, for an organization, on a member of it. `57E920` has no
 /// maximum range here (its last argument is 0).
-fn any_member_ability(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
-    let on = |m: ActorId, x: ActorId| {
-        let def = world.data.def(world.actors[m as usize].def);
-        let point = world.actors[x as usize].pos.truncate();
-        def.weapons.iter().any(|w| !w.defender && admits(world, st, m, w, x) && in_turret_arc(world, m, w, point) && (w.min_range <= 0.0 || in_range(world, m, x, w.min_range, true)))
-    };
+pub(crate) fn any_member_ability(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
     world.orgs[org as usize].members.iter().any(|&m| {
         alive(world, m)
             && match t {
-                TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&y| alive(world, y) && on(m, y)),
-                TargetRef::Actor(x) => alive(world, x) && on(m, x),
+                TargetRef::Org(x) => world.orgs[x as usize].members.iter().any(|&y| alive(world, y) && element_can_use(world, st, m, y)),
+                TargetRef::Actor(x) => alive(world, x) && element_can_use(world, st, m, x),
             }
     })
+}
+
+/// `4D4FF0(target, 1, 0)` on one element: an ability of its Performer is eligible
+/// (`4C8740`), bears (`4C84B0`) and is past its minimum range (`4C8460`).
+pub(crate) fn element_can_use(world: &World, st: &CombatState, m: ActorId, x: ActorId) -> bool {
+    let def = world.data.def(world.actors[m as usize].def);
+    let point = world.actors[x as usize].pos.truncate();
+    def.weapons.iter().any(|w| !w.defender && admits(world, st, m, w, x) && in_turret_arc(world, m, w, point) && (w.min_range <= 0.0 || in_range(world, m, x, w.min_range, true)))
+}
+
+/// `0x520D90`'s test of the target's state word: `mind_retreating`, `mind_routing`,
+/// or `0x432E90(8)` `mind_moving`.
+pub(crate) fn thing_is_fleeing(world: &World, t: TargetRef) -> bool {
+    let org = match t {
+        TargetRef::Org(o) => Some(o),
+        TargetRef::Actor(a) => world.actors.get(a as usize).and_then(|x| x.org),
+    };
+    match org {
+        // What the Mind state reports (`0x520250`, `0x51D8F0`): the Move state, and a move
+        // command's Kill state. A Kill state of its own is mind_attacking.
+        Some(o) => {
+            let c = world.combat.org(o);
+            c.is_some_and(|c| c.routing.is_some())
+                || crate::orders::retreating(world, o)
+                || match crate::morale::regiment_state(world, o) {
+                    crate::morale::RegimentState::Move => true,
+                    crate::morale::RegimentState::Kill => c.is_some_and(|c| c.kill_is_move),
+                    _ => false,
+                }
+        }
+        None => matches!(t, TargetRef::Actor(a) if crate::movement::actor_mover_active(world, a)),
+    }
+}
+
+/// Target virtual `+0x130(organization's zone 4, 1)` -> `0x4EA2C0`: the thing stands in
+/// the regiment's ZOC. Without the zones engine it answers true (nothing to leave).
+pub(crate) fn thing_in_zoc(world: &World, org: OrgId, t: TargetRef) -> bool {
+    let key = match t {
+        TargetRef::Org(o) => crate::zones::Key::Org(o),
+        TargetRef::Actor(a) => crate::zones::Key::Actor(a),
+    };
+    world.fog.engine.as_ref().is_none_or(|e| e.holds_zoc_of(key, org))
+}
+
+/// `0x4D4420(b)` on `a`: `a`'s Mind has `b`, or `b`'s organization, as its target, or
+/// (an organization) a member of it does.
+pub(crate) fn thing_attacks(world: &World, st: &CombatState, a: TargetRef, b: TargetRef) -> bool {
+    let org_of = |t: TargetRef| match t {
+        TargetRef::Org(o) => Some(o),
+        TargetRef::Actor(x) => world.actors.get(x as usize).and_then(|x| x.org),
+    };
+    let wanted = org_of(b);
+    let aims = |x: Option<TargetRef>| x.is_some_and(|x| x == b || (wanted.is_some() && org_of(x) == wanted));
+    match a {
+        TargetRef::Org(o) => {
+            aims(st.org(o).and_then(|s| s.explicit))
+                || world.orgs.get(o as usize).is_some_and(|g| g.members.iter().any(|&m| aims(world.actors.get(m as usize).and_then(|x| x.combat.target).map(TargetRef::Actor))))
+        }
+        TargetRef::Actor(x) => aims(world.actors.get(x as usize).and_then(|x| x.combat.target).map(TargetRef::Actor)),
+    }
+}
+
+/// `0x5210D0(thing)` on the regiment's engage list, for an element's Think.
+pub(crate) fn engage_keeps_thing(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+    match t {
+        TargetRef::Actor(a) => st.orgs.get(org as usize).is_some() && engage_keeps(world, st, org, a),
+        TargetRef::Org(_) => st.orgs.get(org as usize).is_some_and(|s| s.engage.iter().any(|n| n.target == t)),
+    }
+}
+
+/// `0x535910(target, 0)` for an element of a regiment: `0x534700` over the actors within
+/// the operational range of the organization (`558150` -> `578470`) that the regiment's
+/// engage list holds (`52DCA0` -> `5210D0`), with minimum priority 2.
+pub(crate) fn member_choice(world: &mut World, st: &mut CombatState, m: ActorId, handed: Option<TargetRef>, bad: &[ActorId]) -> Option<ActorId> {
+    let id = attached_org(world, &world.actors[m as usize])?;
+    let i = id as usize;
+    if world.time < st.actors[m as usize].roe_retry_at {
+        return None;
+    }
+    let pos = st.orgs[i].position;
+    let range = world.data.def(world.orgs[i].def).operational_range;
+    // 466D3D: +304 = fstp(operational_range * operational_range).
+    let r2 = fstp(x87::mul(ld(range), ld(range)));
+    let within = |world: &World, a: ActorId| {
+        let p = world.actors[a as usize].pos;
+        let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
+        x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= ld(r2)
+    };
+    let mut candidates = std::mem::take(&mut st.scratch);
+    candidates.clear();
+    for n in &st.orgs[i].engage {
+        match n.target {
+            TargetRef::Org(o) => {
+                for &x in &world.orgs[o as usize].members {
+                    if alive(world, x) && within(world, x) && !candidates.contains(&x) {
+                        candidates.push(x);
+                    }
+                }
+            }
+            TargetRef::Actor(a) => {
+                if alive(world, a) && within(world, a) && !candidates.contains(&a) {
+                    candidates.push(a);
+                }
+            }
+        }
+    }
+    // 530E00: what its Move could not reach is out for a while.
+    candidates.retain(|c| !bad.contains(c));
+    let engage_object = match handed {
+        Some(TargetRef::Actor(a)) => Some(a),
+        _ => None,
+    };
+    let chosen = choose(world, st, m, &candidates, engage_object, 2);
+    st.scratch = candidates;
+    chosen
+}
+
+/// `0x5340C0(target, null, &record, 0)` of an element: its ROE and the best ability,
+/// with the record's status (0 use, 1 wait, 2 pursue). `None` is status 3.
+pub(crate) fn member_decision(world: &mut World, st: &mut CombatState, m: ActorId, target: ActorId) -> Option<(usize, u32)> {
+    if roe_backoff(world, st, m) {
+        return None;
+    }
+    decide(world, st, m, target).map(|d| (d.weapon, u32::from(d.status)))
+}
+
+/// `0x57E670` above `0x4BE6C0` of the ability: another ability of the Performer
+/// weighs more (aa_combat::weights::maximum).
+pub(crate) fn better_ability(world: &World, id: ActorId, weapon: usize) -> bool {
+    let def = world.data.def(world.actors[id as usize].def);
+    let bonus = [def.performer_move_bonus, def.performer_use_bonus, def.performer_wait_bonus].map(|v| aa_body::F32(v.to_bits()));
+    let value = |w: &Weapon| -> Option<f32> {
+        let f = |v: f32| aa_body::F32(v.to_bits());
+        let weights = aa_combat::weights::Weights { priority: f(w.priority), factors: [f(w.move_weight), f(w.use_weight), f(w.wait_weight)], bonuses: [f(w.move_bonus), f(w.use_bonus), f(w.wait_bonus)] };
+        let v = aa_combat::weights::maximum(weights, bonus, aa_numeric::Precision::Double53).ok()?;
+        Some(f32::from_bits(v.store_f32().ok()?))
+    };
+    let Some(mine) = def.weapons.get(weapon).and_then(value) else { return false };
+    def.weapons.iter().filter(|w| !w.defender).filter_map(value).any(|v| v > mine)
+}
+
+/// Element Mind virtual `+0x1AC` `0x537530`.
+pub(crate) fn member_priority(world: &World, id: ActorId, target: ActorId) -> i32 {
+    element_priority(world, &world.combat, id, target)
 }
 
 /// `57AB70` (from `514E40`): an enemy, `who`, its organization when attached
@@ -2021,12 +2211,12 @@ pub(crate) fn zone_entered(world: &mut World, st: &mut CombatState, org: OrgId, 
     if !behavior(world, st, org).0 && st.orgs[i].explicit != Some(t) {
         return;
     }
-    add_engage_target(world, st, org, t);
+    crate::movement::mind_add_target(world, st, org, t);
 }
 
 /// `57A500` with members (`578470`): some attached member of the target is
 /// within the operating radius of the organization position.
-fn within_operating(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+pub(crate) fn within_operating(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
     let o = &world.orgs[org as usize];
     let radius = world.data.def(o.def).operational_range;
     // 466D3D: +304 = fstp(operational_range^2); 578470 (aa_combat::
@@ -2052,7 +2242,11 @@ pub(crate) fn mind_can_target(world: &World, st: &CombatState, org: OrgId, t: Ta
     let TargetRef::Actor(a) = t else { return true };
     let Some(x) = world.actors.get(a as usize) else { return false };
     let d = world.data.def(x.def);
-    if d.city || world.books.actor(a).is_some_and(|b| b.block_of.is_some_and(|c| alive(world, c))) {
+    // +0xD4 of a thing whose definition has the node with no zone radius: the record
+    // saved one, or it is re-created at the end of the map load past the gate of 0x45D6A0
+    // (on (2v2)Comrades, a block with a zone 8 of radius 0).
+    let saved_city = world.books.actor(a).and_then(|b| b.placed).and_then(|p| world.map.placed.get(p)).is_some_and(|p| p.saved_city || (d.has_component("CityComponent") && crate::creation::is_converted(p, d)));
+    if d.city || saved_city || world.books.actor(a).is_some_and(|b| b.block_of.is_some_and(|c| alive(world, c))) {
         return false;
     }
     if st.orgs[org as usize].explicit == Some(t) {
@@ -2067,8 +2261,13 @@ fn engageable(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool
 }
 
 /// `524C10`/`523DD0`: add a target (element resolved to its organization).
+pub(crate) fn can_engage(world: &World, st: &CombatState, org: OrgId, t: TargetRef) -> bool {
+    !st.orgs[org as usize].engage.iter().any(|n| n.target == t) && engageable(world, st, org, t)
+}
+
+/// `0x523DD0(target, 1)`.
 pub(crate) fn add_engage_target(world: &World, st: &mut CombatState, org: OrgId, t: TargetRef) -> bool {
-    if st.orgs[org as usize].engage.iter().any(|n| n.target == t) || !engageable(world, st, org, t) {
+    if !can_engage(world, st, org, t) {
         return false;
     }
     let priority = regiment_priority(world, st, org, t);
@@ -2185,7 +2384,6 @@ pub fn tick(world: &mut World) {
     lone_think(world, &mut st);
     fire(world, &mut st);
     process_deaths(world, &mut st);
-    refresh_orders(world, &mut st);
     corpses(world, &mut st);
     world.combat = st;
 }
@@ -2223,241 +2421,33 @@ fn queue_other_deaths(world: &mut World, st: &mut CombatState) {
     }
 }
 
-/// After deaths: an attack order whose target actor died follows the
-/// target's organization (`524C10` resolves an element to its organization),
-/// before the movement system would drop the order as "target lost".
-fn refresh_orders(world: &mut World, st: &mut CombatState) {
-    for i in 0..world.orgs.len() {
-        if !world.orgs[i].alive || st.orgs[i].routing.is_some() {
-            continue;
-        }
-        let Order::Attack { target } = world.orgs[i].order else { continue };
-        if alive(world, target) {
-            continue;
-        }
-        let auto = st.orgs[i].auto_order.is_some();
-        let next = if auto {
-            st.orgs[i].current_target().and_then(|t| representative(world, t))
-        } else {
-            st.orgs[i].explicit.and_then(|t| representative(world, t))
-        };
-        match next {
-            Some(rep) => {
-                world.orgs[i].order = Order::Attack { target: rep };
-                if auto {
-                    st.orgs[i].auto_order = Some(Order::Attack { target: rep });
-                }
-            }
-            None if auto => {
-                st.orgs[i].auto_order = None;
-                world.orgs[i].order = st.orgs[i].saved_order.take().unwrap_or(Order::Idle);
-                st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
-            }
-            None => {}
-        }
-    }
-}
-
-/// Player override detection, explicit attack, and the `526A70` engage Think.
+/// What is left of a regiment's update here: its Mind states are in
+/// `crate::movement`'s regiment Mind. The behaviour byte `+8D` (`577F30`), the targets
+/// that could not reach the Mind, and a HUD order's Mind state (`tasks`), which replaces
+/// the fighting states.
 fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
     if !world.orgs[i].alive || st.orgs[i].destroyed {
         return;
     }
-    let now = world.time;
-    // A new player/opponent order replaces an engagement begun by the
-    // organization itself; a plain move empties the engage list.
-    let command = st.orgs[i].seen_order.as_ref() != Some(&world.orgs[i].order) && st.orgs[i].auto_order.as_ref() != Some(&world.orgs[i].order);
-    if let Some(auto) = st.orgs[i].auto_order.clone()
-        && world.orgs[i].order != auto
-    {
-        st.orgs[i].auto_order = None;
-        st.orgs[i].saved_order = None;
-    }
-    if command {
-        st.orgs[i].kill_is_move = crate::orders::take_move_onto(world, id);
-    }
-    if let Some((city, to)) = st.orgs[i].city_target {
-        let walking = matches!(world.orgs[i].order, Order::Move { to: t, attack_move: true } if t.distance_squared(to) < 1.0);
-        if !walking {
-            st.orgs[i].city_target = None;
-        } else if !alive(world, city) || !st.hostile(Some(world.orgs[i].kingdom), world.actors[city as usize].kingdom) {
-            st.orgs[i].city_target = None;
-            world.orgs[i].order = Order::Idle;
-        }
-    }
-    st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
     track_behavior(world, st, id);
     if st.orgs[i].routing.is_some() {
+        st.orgs[i].pending_targets.clear();
         return;
     }
-    // (core) a HUD order's Mind state (bombard, repair, construct) replaces
-    // the engage Think while it lasts.
     if tasks::org_think(world, st, id) {
+        crate::movement::fight_stand_down(world, st, id);
         return;
     }
-    if command && matches!(world.orgs[i].order, Order::Move { .. } | Order::Deploy { .. }) {
-        // 0x52A420 replaces the engage state, whose exit 0x520FE0 empties the list
-        // (0x51F040): a move and a kill at a location alike (0x520440).
-        // (orders) only the retreat command pays the penalty (0x51D1E0, in
-        // `crate::orders`): the move handler 0x527E30 does not.
-        st.orgs[i].engage.clear();
-        st.orgs[i].explicit = None;
+    // A list with no Engage state on the Mind (a saved game's, which `0x4FAE80` restores
+    // on its own): the state comes with its first target.
+    if !st.orgs[i].engage.is_empty() && crate::movement::fight_state(world, id).is_none() {
+        let list = std::mem::take(&mut st.orgs[i].engage);
+        st.orgs[i].pending_targets.extend(list.iter().map(|n| n.target));
     }
-    // Explicit attack (cai_kill): the target, resolved to its organization,
-    // is the current kill target (priority 6 with KillTargetIsHighestPriority).
-    let explicit = match (&world.orgs[i].order, &st.orgs[i].auto_order) {
-        (Order::Attack { target }, None) => Some(*target),
-        _ => None,
-    };
-    match explicit {
-        Some(target) => {
-            let t = target_ref(world, target);
-            if !target_alive(world, t) || !st.hostile(Some(world.orgs[i].kingdom), target_kingdom(world, t)) {
-                // Target lost (Mind +140): back to rest.
-                st.orgs[i].explicit = None;
-                st.orgs[i].engage.retain(|n| n.target != t);
-                world.orgs[i].order = Order::Idle;
-            } else {
-                if !alive(world, target)
-                    && let Some(rep) = representative(world, t)
-                {
-                    world.orgs[i].order = Order::Attack { target: rep };
-                }
-                // 51D920: the kill state. It walks (520730 -> the Move state); the
-                // target joins the engage list when it enters the ZOC (57AB70).
-                st.orgs[i].explicit = Some(t);
-            }
-        }
-        None => st.orgs[i].explicit = None,
+    for t in std::mem::take(&mut st.orgs[i].pending_targets) {
+        crate::movement::mind_add_target(world, st, id, t);
     }
-    let think = now >= st.orgs[i].next_think;
-    if think {
-        st.orgs[i].next_think = now + ENGAGE_THINK_SECONDS;
-        // 523EA0 refresh: drop lost targets and those outside the operating radius.
-        let mut list = std::mem::take(&mut st.orgs[i].engage);
-        list.retain(|n| {
-            target_alive(world, n.target)
-                && st.hostile(Some(world.orgs[i].kingdom), target_kingdom(world, n.target))
-                && within_operating(world, st, id, n.target)
-        });
-        st.orgs[i].engage = list;
-    }
-    // Begin / end the engagement on the organization's own initiative.
-    let tail = st.orgs[i].current_target();
-    match tail {
-        Some(t) if st.orgs[i].explicit.is_none() => {
-            if let Some(rep) = representative(world, t) {
-                let order = Order::Attack { target: rep };
-                // 524A00: the engage state takes over from sleep and from a move
-                // (52A810(3): its priority), and the move goes on afterwards.
-                let resting_or_attack_move = matches!(world.orgs[i].order, Order::Idle | Order::Move { .. });
-                if st.orgs[i].auto_order.is_none() && resting_or_attack_move {
-                    st.orgs[i].saved_order = Some(world.orgs[i].order.clone());
-                }
-                if st.orgs[i].auto_order.is_some() || resting_or_attack_move {
-                    world.orgs[i].order = order.clone();
-                    st.orgs[i].auto_order = Some(order);
-                }
-            }
-        }
-        None if st.orgs[i].auto_order.is_some() => {
-            st.orgs[i].auto_order = None;
-            world.orgs[i].order = st.orgs[i].saved_order.take().unwrap_or(Order::Idle);
-            // the move goes on: no new command
-            st.orgs[i].seen_order = Some(world.orgs[i].order.clone());
-        }
-        _ => {}
-    }
-    assign_members(world, st, id);
-}
-
-/// The regiment's members against its engaged target. `526A70` step 5 hands
-/// every member the tail target (UAI `+F0`, `532070`); `536E10` keeps a
-/// member's kill target while its kill state is active (the target valid)
-/// and the regiment's engage list still holds the handed target (`5210D0`;
-/// the tail always is on it here); otherwise `535910` picks one: `534700`
-/// over the eligible actors within the operational range of the organization
-/// position (`558150` -> `578470`: `dx*dx + dy*dy <= +304`, the squared
-/// range) that the regiment's engage list holds, itself or through its
-/// organization (UAI `+A0`, `52DCA0` -> `5210D0`), with minimum priority 2.
-/// `52DCA0` also admits allies (actor virtual `+164`: `+138` on the
-/// candidate's owner), which `537530` then answers with priority 0.
-fn assign_members(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let i = id as usize;
-    let now = world.time;
-    let tail = st.orgs[i].current_target();
-    let members = world.orgs[i].members.clone();
-    let Some(t) = tail.filter(|_| st.orgs[i].routing.is_none()) else {
-        for m in members {
-            if let Some(a) = world.actors.get_mut(m as usize) {
-                a.combat.target = None;
-            }
-            if let Some(s) = st.actors.get_mut(m as usize) {
-                s.engage_target = None;
-            }
-        }
-        return;
-    };
-    let pos = st.orgs[i].position;
-    let range = world.data.def(world.orgs[i].def).operational_range;
-    // 466D3D: +304 = fstp(operational_range * operational_range).
-    let r2 = fstp(x87::mul(ld(range), ld(range)));
-    let within = |world: &World, a: ActorId| {
-        let p = world.actors[a as usize].pos;
-        let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
-        x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= ld(r2)
-    };
-    let mut candidates = std::mem::take(&mut st.scratch);
-    candidates.clear();
-    for n in &st.orgs[i].engage {
-        let reach = |world: &World, a: ActorId| within(world, a);
-        match n.target {
-            TargetRef::Org(o) => {
-                for &m in &world.orgs[o as usize].members {
-                    if alive(world, m) && reach(world, m) && !candidates.contains(&m) {
-                        candidates.push(m);
-                    }
-                }
-            }
-            TargetRef::Actor(a) => {
-                if alive(world, a) && reach(world, a) && !candidates.contains(&a) {
-                    candidates.push(a);
-                }
-            }
-        }
-    }
-    // 535910's object: the engage target, an organization actor (never a
-    // member candidate) or the actor itself.
-    let engage_object = match t {
-        TargetRef::Actor(a) => Some(a),
-        TargetRef::Org(_) => None,
-    };
-    for m in members {
-        if !alive(world, m) || st.actors[m as usize].queued_death {
-            continue;
-        }
-        let current = world.actors[m as usize].combat.target;
-        let kill_active = current.is_some_and(|c| valid_target(world, st, m, c));
-        // 532070: a new engage target re-enters the engage state (reselect).
-        let handed = st.actors[m as usize].engage_target.replace(t);
-        // Playability bridge: `536E10` asks `5210D0` about the handed target
-        // only, and the kill state walks after its target. Members here do
-        // not chase, so a kill target that left the engage list is dropped
-        // rather than kept out of reach.
-        if handed == Some(t) && kill_active && current.is_some_and(|c| engage_keeps(world, st, id, c)) {
-            continue;
-        }
-        let chosen = if now < st.actors[m as usize].roe_retry_at { None } else { choose(world, st, m, &candidates, engage_object, 2) };
-        if chosen.is_some() && !kill_active {
-            // 536E10 -> 52E830 engage reaction delay (the kill state was not
-            // active): u * EngageReactionTimeRange.
-            let delay = (world.random_at(crate::trace::sites::ENGAGE_REACTION) * st.rules().engage_reaction_range).max(EPSILON);
-            st.actors[m as usize].ready_at = now + delay;
-        }
-        world.actors[m as usize].combat.target = chosen;
-    }
-    st.scratch = candidates;
 }
 
 /// Actors with weapons outside an organization (bunkers, defended
@@ -2530,6 +2520,27 @@ fn fire(world: &mut World, st: &mut CombatState) {
         }
         // 57EF00: idle turrets turn back to rest after reset_time.
         turret_reset_tick(world, st, id);
+        // An element of a regiment fights through its Mind and its Performer.
+        let a = &world.actors[id];
+        if a.org.is_some() && data.def(a.def).speed_max > 0.0 {
+            performer::pump(world, st, id as ActorId);
+            let a = &world.actors[id];
+            if let Some(aim) = st.actors[id].aim
+                && !a.org.is_some_and(|o| st.orgs[o as usize].routing.is_some())
+            {
+                tasks::fire_aim(world, st, id, aim);
+            } else if a.activity == Activity::Attacking && a.combat.target.is_none() && !st.actors[id].performer.running() {
+                world.set_activity(id as ActorId, Activity::Idle);
+            }
+            continue;
+        }
+        // A thing that cannot walk has no Think to hand a target to: it takes the
+        // regiment's as the Engage state's Think would (`0x526A70`).
+        if a.org.is_some() && a.combat.target.is_none() && a.org.is_some_and(|o| !st.orgs[o as usize].engage.is_empty()) {
+            let handed = a.org.and_then(|o| st.orgs[o as usize].current_target());
+            let chosen = member_choice(world, st, id as ActorId, handed, &[]);
+            world.actors[id].combat.target = chosen;
+        }
         let a = &world.actors[id];
         let Some(target) = a.combat.target else {
             // (core) a task's ability use (tasks::fire_aim).
@@ -2886,6 +2897,7 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
     let victim_org = t.org;
     world.events.push(Event::Hit { target, damage: amount });
     st.actors[target as usize].last_hit = Some((shooter, now));
+    world.books.actor_mut(target).saved_siege = false;
     st.actors[target as usize].last_damage = Some((amount, Some(w.damage_type)));
     if bombarding(world, st, shooter) {
         attacked_by(world, st, target, shooter, w);
@@ -2929,7 +2941,7 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
         let (aggressive, free) = behavior(world, st, o);
         if (aggressive || free) && st.orgs[o as usize].routing.is_none() && within_operating(world, st, o, TargetRef::Actor(shooter)) {
             let t = target_ref(world, shooter);
-            add_engage_target(world, st, o, t);
+            crate::movement::mind_add_target(world, st, o, t);
         }
     }
 }
@@ -3062,6 +3074,7 @@ fn process_deaths(world: &mut World, st: &mut CombatState) {
             a.health = 0.0;
             a.combat.target = None;
         }
+        performer::cancel(st, v);
         world.set_activity(v, Activity::Dying);
         world.events.push(Event::Died { actor: v });
         // (core) 0x4D7960 -> 0x568B10: a deployed denizen frees its slot.

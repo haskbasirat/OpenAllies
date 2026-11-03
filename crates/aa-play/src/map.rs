@@ -66,6 +66,10 @@ pub struct PlacedThing {
     /// destroys it. On (2v2)Comrades the village blocks saved with a Supply component.
     #[serde(default)]
     pub load_fails: bool,
+    /// (combat) The saved record holds a City (slot 29): the thing has its +0xD4 whatever
+    /// the definition's zone radius (a block saved with it has a zone 8 of radius 0).
+    #[serde(default)]
+    pub saved_city: bool,
     /// A placed organization's saved state (57D130): its members are records of their
     /// own inside it, with saved ids (a herd of ambient animals on (2v2)Kursk).
     #[serde(default)]
@@ -262,6 +266,19 @@ pub struct NativeTerrain {
     pub overlay_kind: Vec<u8>,
     /// Tile terrain +68 / +6C noise of a mountain tile.
     pub noise: Vec<[f32; 2]>,
+    /// Tile terrain +5C max_slope, what a height spread reads (0x558A70).
+    #[serde(default)]
+    pub max_slope: Vec<f32>,
+    /// HEIGHT_MAP +0x44: the per-vertex water area bytes (0x550010).
+    #[serde(default)]
+    pub areas: Vec<u8>,
+    /// HEIGHT_MAP +0x48 / +0x4C: the limits a stored height is clamped to (0x550A10).
+    #[serde(default)]
+    pub limits: [f32; 2],
+    /// The base samples a created thing changed (`crate::ground`), one rectangle
+    /// `[x0, y0, x1, y1]` of samples per brush, oldest first, for whoever draws them.
+    #[serde(skip)]
+    pub changes: Vec<[i32; 4]>,
 }
 
 impl NativeTerrain {
@@ -522,6 +539,9 @@ pub struct TerrainVariationDef {
     /// TerrainData +68 / +6C noise_min, noise_max of a mountain terrain.
     #[serde(default)]
     pub noise: [f32; 2],
+    /// TerrainData +5C max_slope of a mountain or water terrain.
+    #[serde(default)]
+    pub max_slope: f32,
     /// The terrain's `[Property]` ids: what `0x4D4130` adds to a thing on the tile.
     #[serde(default)]
     pub properties: Vec<String>,
@@ -569,6 +589,7 @@ pub(crate) fn terrain_tables(catalog: &aa_rules::actors::ActorCatalog, notes: &m
                     speed_limit: speed,
                     properties: properties.clone(),
                     noise: if native_type == 1 { [fx(&terrain, "noise_min").unwrap_or(0.0), fx(&terrain, "noise_max").unwrap_or(0.0)] } else { [0.0, 0.0] },
+                    max_slope: if native_type != 0 { fx(&terrain, "max_slope").unwrap_or(0.0) } else { 0.0 },
                 });
             }
         }
@@ -757,6 +778,7 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
         // The saved components' Updatable ids (component Load order, the
         // actor tail of 0x4D6F10's restore; aa-mapworld component codecs).
         let mut load_fails = false;
+        let mut saved_city = false;
         let components = data.find(&utf16(&p.thing_id_utf16)).map(|d| data.def(d).components);
         if let Some(actor) = p.actor.as_ref().filter(|_| saved_things.is_none()) {
             let walked = aa_mapworld::actor_payload::ActorTail::decode_prefix_with_stages(&p.opaque_tail, actor.version, 0, |slot, saved, _, _, bytes| {
@@ -768,6 +790,7 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
                     load_fails = true;
                 }
                 let (payload, consumed) = aa_mapworld::saved_components::SavedComponent::decode_prefix(slot, bytes)?;
+                saved_city |= matches!(payload, aa_mapworld::saved_components::SavedComponent::City { .. });
                 if let Some(id) = payload.updatable().and_then(|u| u.serialized_id).filter(|&id| id >= 0) {
                     updatable_owners.insert(id, SavedOwner::Placed { index, slot });
                 }
@@ -823,6 +846,7 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
             class_code: p.class_code,
             breakable,
             load_fails,
+            saved_city,
             organization: None,
             member_of: None,
             mind: None,
@@ -886,6 +910,7 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
             if let Some(handle) = entry.thing.record.actor.as_ref().map(|a| a.owner_handle).filter(|h| *h != 0) {
                 placed[index].owner_slot = slots.iter().position(|s| s.serialized_id == Some(handle)).map(|s| s as u32);
             }
+            crate::saved_world::saved_mind_parts(&mut placed[index], index, things);
         }
     }
     // Start locations of the player (non-independent) slots, in slot order.
@@ -956,6 +981,7 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
     let mut cell_variation = Vec::with_capacity(chunk.tiles.len());
     let mut overlay_kind = Vec::with_capacity(chunk.tiles.len());
     let mut noise = Vec::with_capacity(chunk.tiles.len());
+    let mut max_slope = Vec::with_capacity(chunk.tiles.len());
     let mut previous = initial;
     for (i, tile) in chunk.tiles.iter().enumerate() {
         let def = palette.get(tile.variation_index() as usize).copied().flatten().or(previous);
@@ -972,8 +998,9 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
         cell_variation.push(def.map_or(u16::MAX, |d| variation_index(&d.id)));
         overlay_kind.push(def.map_or(0, |d| d.native_type as u8));
         noise.push(def.map_or([0.0, 0.0], |d| d.noise));
+        max_slope.push(def.map_or(0.0, |d| d.max_slope));
     }
-    let native_terrain = native_terrain(&archive, header.creator.world_extents_bits, layout.coordinate_shift, overlay_kind, noise, (tw as i32, th as i32), &mut notes);
+    let native_terrain = native_terrain(&archive, header.creator.world_extents_bits, layout.coordinate_shift, overlay_kind, noise, max_slope, (tw as i32, th as i32), &mut notes);
     // The saved periodic queues (UPDATABLES, read by 0x50B8B0).
     if component_errors > 0 {
         notes.push(format!("{component_errors} placed things' saved components could not be walked for their Updatable ids"));
@@ -1074,6 +1101,7 @@ fn native_terrain(
     tile_shift: u32,
     overlay_kind: Vec<u8>,
     noise: Vec<[f32; 2]>,
+    max_slope: Vec<f32>,
     tiles: (i32, i32),
     notes: &mut Vec<String>,
 ) -> Option<Box<NativeTerrain>> {
@@ -1108,6 +1136,10 @@ fn native_terrain(
         tile_shift,
         overlay_kind,
         noise,
+        max_slope,
+        areas: base.state.sample_flags.clone(),
+        limits: [f32::from_bits(base.state.minimum_bits), f32::from_bits(base.state.maximum_bits)],
+        changes: Vec::new(),
     }))
 }
 

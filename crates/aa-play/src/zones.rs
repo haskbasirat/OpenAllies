@@ -318,7 +318,8 @@ pub fn modifier_add(world: &World, key: Key, attribute: &str) -> Option<f32> {
     if d.components & (1 << PROPERTIES_SLOT) == 0 && d.components != 0 {
         return None;
     }
-    let kingdom_props = kingdom.and_then(|k| world.books.kingdom(k)).is_some_and(|b| !b.technologies.is_empty() || b.handicap.is_some());
+    let stale = matches!(attribute, "DETECTION_RANGE" | "SUPPLY_RANGE") && stale_radii(world, key);
+    let kingdom_props = !stale && kingdom.and_then(|k| world.books.kingdom(k)).is_some_and(|b| !b.technologies.is_empty() || b.handicap.is_some());
     if d.properties.is_empty() && extra.is_empty() && !kingdom_props {
         return Some(0.0);
     }
@@ -336,12 +337,22 @@ pub fn modifier_add(world: &World, key: Key, attribute: &str) -> Option<f32> {
             sum += m.amount;
         }
     }
-    if let Some(k) = kingdom {
+    if let Some(k) = kingdom.filter(|_| !stale) {
         for m in crate::production::technology_modifiers(world, k, &props).filter(matches) {
             sum += m.amount;
         }
     }
     Some(sum)
+}
+
+/// A saved game's thing whose radii still stand as its Load read them, without the
+/// kingdom's technologies (`ActorBooks::saved_techs`).
+pub(crate) fn stale_radii(world: &World, key: Key) -> bool {
+    let (saved, kingdom) = match key {
+        Key::Actor(a) => (world.books.actor(a).and_then(|b| b.saved_techs), world.actors.get(a as usize).and_then(|x| x.kingdom)),
+        Key::Org(o) => (world.books.org(o).and_then(|b| b.saved_techs), world.orgs.get(o as usize).map(|x| x.kingdom)),
+    };
+    saved.is_some_and(|n| kingdom.and_then(|k| world.books.kingdom(k)).is_some_and(|b| b.technologies.len() == n))
 }
 
 /// The detection component's ZOD radius `+0x14` (`0x56EA10`: `0x45D790` of
@@ -723,6 +734,20 @@ impl Engine {
                 self.map.tiles.get(t).and_then(|x| x.set).is_some_and(|set| aa_zones::query::contains(&self.map.pool, set, owner, flags).unwrap_or(false))
             })
         })
+    }
+
+    /// Organization `+0x148[4]`: it has its ZOC.
+    pub fn has_zoc(&self, o: OrgId) -> bool {
+        self.parts.orgs.get(o as usize).is_some_and(|s| s.zones.slots.get(ZOC as usize).is_some_and(Option::is_some))
+    }
+
+    /// Target virtual `+0x130(zone 4 of o, 1)`: `thing`'s tiles hold `o`'s ZOC.
+    pub fn holds_zoc_of(&self, thing: Key, o: OrgId) -> bool {
+        let key = match thing {
+            Key::Actor(a) => actor_key(a),
+            Key::Org(x) => org_key(x),
+        };
+        self.holds(key, org_key(o), 1 << ZOC)
     }
 
     /// `0x57C8E0` with `+0xB0` set: `0x515F40` of the ZOC at the thing's position with
@@ -1123,7 +1148,7 @@ impl Engine {
                 (x.def, Some(x.kingdom), false)
             }
         };
-        if own {
+        if own || stale_radii(world, key) {
             return zod_radius(world, key, d);
         }
         let techs = kingdom.and_then(|k| world.books.kingdom(k)).map_or(0, |b| b.technologies.len() + usize::from(b.handicap.is_some()));

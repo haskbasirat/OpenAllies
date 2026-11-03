@@ -283,15 +283,12 @@ fn spawn_org(w: &mut World, def: u32, kingdom: u32, center: Vec2, facing: f32) -
     id
 }
 
-/// One tick of the combat owner's systems.
+/// One update. The fight is on the Minds (`0x524910`, `0x531D30` on queue 4), so it takes
+/// the whole of it, not the combat pass alone.
 fn step(w: &mut World) -> Vec<Event> {
-    w.events.clear();
-    combat::tick(w);
-    aa_play::morale::tick(w);
+    w.step(Vec::new());
     // The zones after the things: their tile changes and what the ZOCs ask.
     aa_play::fog::observe_now(w);
-    w.tick += 1;
-    w.time = w.tick as f32 * DT;
     std::mem::take(&mut w.events)
 }
 
@@ -633,6 +630,37 @@ fn stop_ends_an_attack_on_a_thing_that_does_not_shoot() {
     assert!(w.orgs[a as usize].members.iter().all(|&m| w.actors[m as usize].combat.target.is_none()));
 }
 
+/// `0x51D920` -> `0x52A810(2)`: a new kill order replaces the Engage state, whose exit
+/// `0x520FE0` empties the list; the regiment is in the Kill state on the new target.
+#[test]
+fn a_new_attack_empties_the_engage_list() {
+    let mut w = world_with(data());
+    let a = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let near = spawn_org(&mut w, 4, 1, o(9.0, 0.0), 0.0);
+    let far = spawn_org(&mut w, 4, 1, o(0.0, 60.0), 0.0);
+    assert!(run_until(&mut w, 5.0, |w, _| combat::org_state(w, a).is_some_and(|c| c.engaging())).is_some(), "it engages what is in its ZOC");
+    assert!(matches!(aa_play::morale::regiment_state(&w, a), aa_play::morale::RegimentState::Engage));
+    let target = w.orgs[far as usize].members[0];
+    w.apply(Command::Attack { kingdom: 0, units: vec![Unit::Org(a)], target });
+    let c = combat::org_state(&w, a).unwrap();
+    assert!(c.engage.is_empty(), "the list went with the state: {:?}", c.engage);
+    assert_eq!(c.explicit, Some(combat::TargetRef::Org(far)));
+    assert!(matches!(aa_play::morale::regiment_state(&w, a), aa_play::morale::RegimentState::Kill));
+    let _ = near;
+}
+
+/// `0x521F90` with no Kill state under the Engage state: when the list has emptied, the
+/// fight goes through the Reform state (`0x523D50`).
+#[test]
+fn a_fight_that_ends_reforms() {
+    let mut w = world_with(data());
+    let a = spawn_org(&mut w, 4, 0, o(0.0, 0.0), 0.0);
+    let b = spawn_org(&mut w, 4, 1, o(9.0, 0.0), 0.0);
+    assert!(run_until(&mut w, 8.0, |w, _| combat::org_state(w, a).is_some_and(|c| c.engaging())).is_some());
+    let reformed = |w: &World, o: OrgId| matches!(aa_play::morale::regiment_state(w, o), aa_play::morale::RegimentState::Reform);
+    assert!(run_until(&mut w, 180.0, |w, _| reformed(w, a) || reformed(w, b)).is_some(), "one side reforms when its targets are gone");
+}
+
 /// Entrenchment: a resting regiment entrenches after entrenchment_time (30 s);
 /// infantry_entrench gives DV +4 and armor_piercing resist 0.4.
 #[test]
@@ -655,11 +683,13 @@ fn entrenchment_after_rest() {
         hit.is_some()
     });
     assert_eq!(hit, Some(26.0));
-    let _ = tank;
-    // A move order leaves the trenches.
+    // A move order leaves the trenches when the Move dispatches (0x525740 -> 0x579A90).
+    // With the tank still shooting, the damage (0x579490) would put the Engage state back
+    // over the Move first, and the trench stays: the tank goes.
+    w.actors[tank as usize].alive = false;
+    w.actors[tank as usize].removed = true;
     w.orgs[inf as usize].order = Order::Move { to: o(-50.0, 0.0), attack_move: false };
-    step(&mut w);
-    assert!(!combat::org_state(&w, inf).unwrap().entrenched);
+    assert!(run_until(&mut w, 2.0, |w, _| !combat::org_state(w, inf).unwrap().entrenched).is_some());
 }
 
 /// A capturable city at zero health changes owner with CaptureHealthFactor.
@@ -1492,10 +1522,22 @@ fn real_map_move_goes_on_after_the_fight() {
     });
     eprintln!("--- move through a weak enemy, stopped for it: {stopped_for_it}");
     show(&w, &f, &[a, b]);
-    let at = combat::org_state(&w, a).unwrap().position;
-    eprintln!("ended at {at}, wanted {to}");
+    // The order's point is taken on this map, so a walk ends short of it wherever the path
+    // ends: the fight's regiment ends where the same regiment does with nobody in the way.
+    let at = w.orgs[a as usize].anchor;
+    let (mut alone, _) = berlin_scene(30.0);
+    let lone = aa_play::production::spawn_organization(&mut alone, id("regiment_rus_tank_medium"), 0, c - Vec2::new(50.0, 0.0), 0.0, None);
+    alone.step(vec![aa_play::Command::Move { kingdom: 0, units: vec![aa_play::Unit::Org(lone)], to, attack_move: false }]);
+    for _ in 0..(200.0 / DT) as u32 {
+        alone.step(Vec::new());
+        if alone.orgs[lone as usize].order == Order::Idle {
+            break;
+        }
+    }
+    let end = alone.orgs[lone as usize].anchor;
+    eprintln!("ended at {at}, the walk alone at {end}, wanted {to}");
     assert!(stopped_for_it, "the regiment turns on what enters its ZOC");
-    assert!(w.orgs[a as usize].order == Order::Idle && at.distance(to) < 12.0, "the move goes on afterwards: {at}");
+    assert!(w.orgs[a as usize].order == Order::Idle && at.distance(end) < 1.0, "the move goes on afterwards: {at}");
 }
 
 /// A plain Move ordered in the middle of a fight leaves the engage state

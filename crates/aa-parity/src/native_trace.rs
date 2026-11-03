@@ -182,6 +182,9 @@ pub fn getter_group(site: u32, chain: &[u32]) -> String {
             0x537005 | 0x537106 | 0x53713A | 0x537142 | 0x5370A4 => "ActionGo from 536F40".into(),
             0x531766 => "ActionGo from 531520".into(),
             0x536DBA | 0x536BEE => "ActionGo from queue wait 536AD0".into(),
+            // The stack scan's first words are stale leaves of 0x4EAB.. and 0x6F77..: the
+            // return address of the first ActionGo of 0x537150 stands behind them.
+            0x4EABEE | 0x6F77EF if chain.get(..3).is_some_and(|c| c.contains(&0x5372A3)) => "ActionGo from 537150".into(),
             o => format!("ActionGo from {o:x}"),
         },
         0x4E9FF8 => "random scale InitCreate 4E9FC0".into(),

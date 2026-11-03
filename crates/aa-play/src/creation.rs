@@ -219,6 +219,27 @@ pub fn projectile(world: &mut World, def: DefId) -> Option<crate::ids::Gtid> {
     id
 }
 
+/// 0x4F9C10 of a transport (0x582426 for a recruit at a location, 0x4CB376 for a summon):
+/// the next-fit id, the draws of its creation, then its InitExisting's Mover 0x55E632 ->
+/// 0x576B20, one getter on queue 0. Measured on the fight films, every transport of
+/// every nation (`rus_transport_air`, Berlin2v2_1 3841 and 13681). aa-play keeps no actor
+/// for it: the flight is the time to the drop. The caller gives the id back at the drop;
+/// natively it flies on and leaves the map, and a next-fit id is not taken again by then.
+pub fn transport(world: &mut World, def: DefId) -> Option<crate::ids::Gtid> {
+    let id = world.ids.created_transient(def);
+    created(world, def, Made::Other);
+    if has(world.data.def(def), AIRCRAFT) {
+        world.random_u32_at(sites::INIT_EXISTING_AIRCRAFT);
+    }
+    id
+}
+
+/// What a transport drops starts to fall (end of 0x58BCB0: 0x5770A0 -> 0x50AC00, one
+/// getter on queue 0, after the thing's creation draws). aa-play places it on the ground.
+pub fn cargo_fall(world: &mut World) {
+    world.random_u32_at(sites::CARGO_FALL);
+}
+
 /// 0x561B40: UnitSupplyEnabled, no OrganizationComponent, ActorData +0x2A8 above 0.
 fn body_registers(world: &World, d: &Def) -> bool {
     world.data.rule_ci("UnitSupplyEnabled").is_some_and(|v| v != 0.0) && !has(d, ORGANIZATION) && d.unit_shortfall_damage_rate > 0.0
@@ -234,6 +255,18 @@ pub fn restored(world: &mut World, def: DefId) {
     if has(d, SUPPLY) {
         world.random_u32_at(sites::INIT_EXISTING_SUPPLY);
     }
+}
+
+/// A map record on its own in the record pass: the Load of a saved Mind constructs it
+/// (0x4D8290 -> 0x4D833E -> 0x4CF480, the element's jitter 0x530E50; the eight cows of
+/// (2v2)Market_Garden), then its InitExisting ([`restored`]).
+pub fn restored_thing(world: &mut World, def: DefId, placed: &crate::map::PlacedThing) {
+    let data = world.data.clone();
+    let d = data.def(def);
+    if placed.mind.is_some() && has(d, ELEMENT) && !has(d, ORGANIZATION) && !has(d, AIRCRAFT) {
+        world.random_u32_at(sites::MIND_JITTER);
+    }
+    restored(world, def);
 }
 
 /// The draws a saved game's record makes in the world load's record pass (4FAE80 on a
@@ -297,27 +330,56 @@ pub fn restored_organization(world: &mut World, def: DefId, org: &crate::map::Pl
     restored(world, def);
 }
 
-/// `0x57BEF0` on a formation that is not `organized`: `0x5797E0` draws for each
-/// slot without a member, two getters (`0x444A90`, `0x45D400`). The leader's and the
-/// primary slot are the origin; a member's offset is where it stands. The Kursk film:
-/// a seven-slot herd of four, three pairs at each turn of the organization (0x57BF30).
-pub fn organization_scatter(world: &mut World, org: OrgId) {
-    let data = world.data.clone();
-    let o = &world.orgs[org as usize];
-    let d = data.def(o.def);
-    let Some(formation) = crate::player_orders::formation(world, org).and_then(|f| d.formations.get(f)) else { return };
-    // 0x579888: no leader and no primary slot: every empty slot is the origin.
-    if formation.organized || (o.members.is_empty() && d.leader_slot.is_none()) {
-        return;
-    }
-    let held: Vec<usize> = o.members.iter().filter_map(|&m| world.actors[m as usize].slot.map(usize::from)).collect();
-    for slot in 0..d.slots.len() {
-        if held.contains(&slot) || Some(slot as u16) == d.leader_slot {
-            continue;
+/// `0x57BEF0` on a formation that is not `organized`: ComputeSlotPosition `0x5797E0`
+/// for every slot (`aa_movement::formation::compute_slot_position`). The leader's and
+/// the primary slot are the origin; an attached member's offset is where it stands from
+/// the leader; a detached one keeps its offset; an empty slot takes a table direction
+/// and `4 * unit + 0.5`, two getters (`0x444A90`, `0x45D400`). The Kursk film: a
+/// seven-slot herd of four, three pairs at each turn of the organization (0x57BF30),
+/// and each member's next goal is the wander point plus where it stood. `None` for an
+/// `organized` formation, which draws nothing: its table is
+/// `crate::formation::organization_slots`.
+pub(crate) fn organization_scatter(world: &mut World, org: OrgId, facing: glam::Vec2, standing: &[Option<(ActorId, glam::Vec2, bool)>], leader: Option<(ActorId, usize)>, previous: &[glam::Vec2]) -> Option<Vec<glam::Vec2>> {
+    use aa_movement::formation as native;
+    struct Draws<'a>(&'a mut World);
+    impl native::FormationWorld for Draws<'_> {
+        fn next_random_u32(&mut self) -> aa_movement::Result<u32> {
+            Ok(self.0.random_u32_at(sites::ORGANIZATION_SCATTER))
         }
-        world.random_u32_at(sites::ORGANIZATION_SCATTER);
-        world.random_u32_at(sites::ORGANIZATION_SCATTER);
+        fn mind_leader_changed(&mut self) -> aa_movement::Result<()> {
+            Ok(())
+        }
+        fn detached_member(&mut self, _: u32, _: u32, _: [f32; 2]) -> aa_movement::Result<()> {
+            Ok(())
+        }
     }
+    let data = world.data.clone();
+    let d = data.def(world.orgs[org as usize].def);
+    let formation = crate::player_orders::formation(world, org).and_then(|f| d.formations.get(f))?;
+    if formation.organized {
+        return None;
+    }
+    let slots = standing.len();
+    let member = |slot: usize, id: ActorId, pos: glam::Vec2, attached: bool| native::Member { id, position: [pos.x, pos.y], slot: slot as i32, attached };
+    let mut organization = native::Organization {
+        owner_id: 0,
+        facing: [facing.x, facing.y],
+        owner_has_mind: false,
+        center: [0.0, 0.0],
+        primary_slot: d.leader_slot.map_or(-1, i32::from),
+        group_sizes: Vec::new(),
+        slot_count: slots as i32,
+        members: standing.iter().enumerate().map(|(s, m)| m.map(|(id, pos, attached)| member(s, id, pos, attached))).collect(),
+        leader: leader.and_then(|(id, s)| standing.get(s).copied().flatten().map(|(_, pos, attached)| member(s, id, pos, attached))),
+        formation: Some(native::FormationShape { oriented: false, offsets: Vec::new() }),
+        slot_positions: (0..slots).map(|s| previous.get(s).map_or([0.0; 2], |v| [v.x, v.y])).collect(),
+    };
+    let mut draws = Draws(world);
+    for slot in 0..slots as i32 {
+        // Only an attached member without a leader errs: a native null read.
+        let _ = native::compute_slot_position(&mut organization, slot, aa_numeric::Precision::Double53, &mut draws);
+    }
+    Some(organization.slot_positions.iter().map(|p| glam::Vec2::new(p[0], p[1])).collect())
 }
 
 /// Whether placed thing `p` of `def` is re-created at the end of the map load
@@ -390,6 +452,18 @@ pub struct StartPick {
     pub random_general: bool,
 }
 
+/// A side of the map no player took: WorldParameters 0x50E8B0 resolves it in its turn
+/// all the same, then destroys it (`crate::ids::NativeIds::destroy_map_kingdom`). Measured
+/// on a film of (2v2)Berlin with one player: four kingdoms' picks in the trace.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ClosedSide {
+    /// Its map slot, for the turn.
+    pub slot: usize,
+    /// The nation the creator holds; empty for random.
+    pub nation: String,
+    pub pick: StartPick,
+}
+
 /// The nation 0x50E8B0 picks at random.
 pub fn random_nation(world: &mut World) -> Option<String> {
     let mut nations: Vec<String> = world.data.nations.iter().map(|n| n.id.clone()).collect();
@@ -402,32 +476,6 @@ pub fn random_nation(world: &mut World) -> Option<String> {
 }
 
 /// The general 0x474B40 picks at random for `nation`.
-/// The picks of a random map's kingdoms, whose creator draws them on the world
-/// stream before the generator runs (50ECA6, 474C14), not at a map's restore: one
-/// draw per player in creator order on a stream from the same seed, the general
-/// (0x50E8B0's rule). `None` for a player staging chose for (`chosen`). The
-/// generator does not yet resume from these draws (`RandomMapData::generate_from`
-/// with the map's own stream start is the rmg work), so they stay apart from it.
-pub fn random_map_generals(data: &crate::data::GameData, setup: &crate::setup::SkirmishSetup, chosen: &[usize]) -> Vec<Option<String>> {
-    let mut rng = aa_simulation::NativeRng::from_native_seed(setup.seed as u32);
-    setup
-        .players
-        .iter()
-        .enumerate()
-        .map(|(i, p)| {
-            if chosen.contains(&i) {
-                return None;
-            }
-            let eligible = &data.nation(&p.nation)?.eligible_factions;
-            match eligible.len() {
-                0 => None,
-                1 => Some(eligible[0].clone()),
-                n => Some(eligible[(rng.next_u32() % n as u32) as usize].clone()),
-            }
-        })
-        .collect()
-}
-
 pub fn random_general(world: &mut World, nation: &str) -> Option<String> {
     let eligible = world.data.nation(nation)?.eligible_factions.clone();
     match eligible.len() {

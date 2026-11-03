@@ -101,6 +101,19 @@ pub fn sell_refused(world: &World, building: ActorId) -> Option<&'static str> {
     None
 }
 
+/// A person's default order that has no decree stream to run on (a battle whose
+/// registries did not load): what the decree comes to.
+pub fn hot(world: &mut World, command: &Command) -> Result<(), String> {
+    let Command::Hot { kingdom, units, command, target, at, aux, alt, queue } = command else {
+        return Err("not a default order".into());
+    };
+    let wire = native::hot_wire(world, *command, *target, *at, *aux, *alt, *queue)?;
+    for c in native::hot_commands(world, *kingdom, units, &wire)? {
+        world.apply(c);
+    }
+    Ok(())
+}
+
 /// Apply one of this module's commands; Err is the refusal reason.
 pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
     match command {
@@ -264,6 +277,7 @@ pub mod native {
 
     /// Order descriptors (aa-orders native_registry.rs).
     pub const SELECTION_ADD_REQUEST: usize = 12;
+    pub const SELECTION_REMOVE_REQUEST: usize = 13;
     pub const SELECTION_CLEAR_REQUEST: usize = 14;
     pub const TEAM_COMMAND_REQUEST: usize = 22;
     pub const SELECTION_ADD_DECREE: usize = 16;
@@ -620,11 +634,52 @@ pub mod native {
         ])
     }
 
+    /// The GTID a person's order names for a thing (0x4D9BF0: thing +0x14).
+    pub fn gtid_of_unit(world: &World, unit: Unit) -> Option<u32> {
+        match unit {
+            Unit::Org(o) => world.ids.org(o).map(|g| g.raw()),
+            Unit::Actor(a) => world.ids.actor(a).map(|g| g.raw()),
+        }
+    }
+
+    /// The command 0x620760 builds, 0x6210B0 finishes: flag 0x10 and scalar 0,
+    /// +0x3C for Shift or Ctrl, 0x4D9B30 flag 0x400 for Alt, the target (flag 1,
+    /// 0x4D9BF0) or the location (flag 4), the direction (flag 8; zero from the
+    /// minimap and without a drag).
+    pub fn hot_wire(world: &World, command: Option<u32>, target: Option<Unit>, at: Option<Vec2>, aux: Option<Vec2>, alt: bool, queue: bool) -> Result<Wire, String> {
+        let mut w = Wire { flags: SCALAR, trailing: queue, ..Wire::default() };
+        if let Some(c) = command {
+            w.flags |= DEFINITION;
+            w.command = Some(c);
+        }
+        if alt {
+            w.flags |= 0x400;
+        }
+        if let Some(t) = target {
+            w = w.target(gtid_of_unit(world, t).ok_or("the target has no thing id")?);
+        }
+        if let Some(p) = at {
+            w = w.at(p);
+        }
+        if let Some(a) = aux {
+            w.flags |= AUXILIARY;
+            w.auxiliary = [a.x.to_bits(), a.y.to_bits()];
+        }
+        Ok(w)
+    }
+
+    /// `Command::Hot` without a decree stream: each unit's guess, as the decree's
+    /// reader makes of it.
+    pub fn hot_commands(world: &World, kingdom: KingdomId, units: &[Unit], w: &Wire) -> Result<Vec<Command>, String> {
+        decode_command(world, &Tables::default(), kingdom, w, units.to_vec())
+    }
+
     /// The requests of one battle command of the local player: the selection
     /// orders that make the replicated selection the command's units, then
     /// the command itself.
     pub fn requests(world: &World, tables: &Tables, outbox: &mut Outbox, command: &Command) -> Result<Vec<Request>, String> {
         let mut out = Vec::new();
+        let outbox_form = outbox.form;
         let selected = |out: &mut Vec<Request>, outbox: &mut Outbox, units: &[Unit], wire: Wire| -> Result<(), String> {
             let slots: Vec<u16> = units.iter().filter_map(|u| slot_of(world, *u)).collect();
             if slots.is_empty() {
@@ -641,6 +696,13 @@ pub mod native {
             Ok(())
         };
         let actor = |out: &mut Vec<Request>, unit: Unit, wire: Wire| -> Result<(), String> {
+            // The SAI's records are the organizations': a member of one is ordered through
+            // it (a real film's unpack selects the truck's organization, then its recruits
+            // the building's, 0x7AF220 with the record's thing).
+            let unit = match unit {
+                Unit::Actor(a) if outbox_form == OrderForm::Computer => world.actor(a).and_then(|a| a.org).map_or(unit, Unit::Org),
+                other => other,
+            };
             let slot = slot_of(world, unit).ok_or("the structure has no thing id")?;
             let mut f = wire.fields(tables);
             f.push(Field::Thing { check: ThingCheck::B4, slot });
@@ -659,13 +721,54 @@ pub mod native {
                     // and a direction: 0x4DA570 guesses move only with both (+2C 0x130).
                     // No facing drag here: the zero vector, the minimap's 0xB279C0.
                     Wire { flags: SCALAR | AUXILIARY, ..Wire::default() }.at(*to)
+                } else if form == OrderForm::Computer {
+                    // A goal's move on the ground (0x4CA760, 0x7C9BD2): flags 0x5C.
+                    let mut w = Wire::new(command::MOVE).at(*to);
+                    w.flags |= AUXILIARY | SCALAR;
+                    w.scalar = 0.0f32.to_bits();
+                    w
                 } else {
                     Wire::new(command::MOVE).at(*to)
                 };
                 selected(&mut out, outbox, units, w)?;
             }
             Command::Attack { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::KILL).target(target(*t)?).person(form, 0.0))?,
-            Command::Follow { units, target: t, .. } => selected(&mut out, outbox, units, Wire::new(command::MOVE).target(target(*t)?).person(form, 0.0))?,
+            Command::Follow { units, target: t, .. } => {
+                let mut w = Wire::new(command::MOVE).target(target(*t)?).person(form, 0.0);
+                // The SAI's move at a thing (0x4DDE60): the zero direction of 0xB279C0
+                // and a scalar of 0, flags 0x59.
+                if form == OrderForm::Computer {
+                    w.flags |= AUXILIARY | SCALAR;
+                    w.scalar = 0.0f32.to_bits();
+                }
+                selected(&mut out, outbox, units, w)?;
+            }
+            // 0x620760 / 0x6210B0: no definition, the guess runs on every machine.
+            Command::Hot { units, command, target: aim, at, aux, alt, queue, .. } => {
+                let w = hot_wire(world, *command, *aim, *at, *aux, *alt, *queue)?;
+                selected(&mut out, outbox, units, w)?;
+            }
+            // 0x436C50, 0x436B90, 0x436AD0: the replicated selection follows the
+            // person's, by the operations that change it.
+            Command::Select { units, .. } => {
+                let slots: Vec<u16> = units.iter().filter_map(|u| slot_of(world, *u)).collect();
+                let thing = |slot: u16| vec![Field::Thing { check: ThingCheck::B0, slot }];
+                if slots.iter().all(|s| outbox.selection.contains(s)) && !slots.is_empty() {
+                    for s in outbox.selection.iter().filter(|s| !slots.contains(s)) {
+                        out.push((SELECTION_REMOVE_REQUEST, thing(*s)));
+                    }
+                } else if outbox.selection.iter().all(|s| slots.contains(s)) && !outbox.selection.is_empty() {
+                    for s in slots.iter().filter(|s| !outbox.selection.contains(s)) {
+                        out.push((SELECTION_ADD_REQUEST, thing(*s)));
+                    }
+                } else {
+                    out.push((SELECTION_CLEAR_REQUEST, Vec::new()));
+                    for s in &slots {
+                        out.push((SELECTION_ADD_REQUEST, thing(*s)));
+                    }
+                }
+                outbox.selection = slots;
+            }
             Command::Stop { units, .. } => selected(&mut out, outbox, units, Wire::new(command::STOP))?,
             Command::Disband { units, .. } => selected(&mut out, outbox, units, Wire::new(command::DISBAND))?,
             Command::Repair { units, target: t, .. } => {

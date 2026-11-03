@@ -207,10 +207,10 @@ pub fn detection_delivery(world: &mut World, key: crate::zones::Key) {
 }
 
 /// Element Tick `0x570B90` of member `a` (its Updatable +0x14, one second in
-/// its bucket, registered by `0x563FD0`): `0x5709D0`. Its other steps, the
-/// detached teleport and `0x4D6660`, are not bound here; `0x4D6660` is read
-/// where the state is ([`crate::supply`]).
+/// its bucket, registered by `0x563FD0`): `0x5709D0`, then the detached teleport
+/// (`crate::movement`). `0x4D6660` is read where the state is ([`crate::supply`]).
 pub fn element_delivery(world: &mut World, a: ActorId) {
+    world.books.actor_mut(a).saved_siege = false;
     world.fog.element_leaf = true;
     let Some(mut e) = take_engine(world) else { return };
     e.observe_update(world);
@@ -226,6 +226,7 @@ pub fn element_delivery(world: &mut World, a: ActorId) {
     {
         crate::movement::member_attached(world, o, a);
     }
+    crate::movement::element_tick_tail(world, a);
 }
 
 /// `0x5709D0` from the Mind's Reattach (`0x534000`, `0x532735`): Element +0x1C before

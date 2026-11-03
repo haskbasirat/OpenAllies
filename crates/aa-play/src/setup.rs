@@ -69,6 +69,12 @@ impl World {
     /// RNG: a random nation replaces the player's, a random general is kept
     /// for `special_ops::set_general(world, kingdom, None)`.
     pub fn new_skirmish_with(data: Arc<GameData>, map: Arc<GameMap>, setup: &SkirmishSetup, picks: &[crate::creation::StartPick]) -> anyhow::Result<World> {
+        Self::new_skirmish_closed(data, map, setup, picks, &[])
+    }
+
+    /// [`World::new_skirmish_with`] with the sides no player took, whose picks draw in
+    /// their turn.
+    pub fn new_skirmish_closed(data: Arc<GameData>, map: Arc<GameMap>, setup: &SkirmishSetup, picks: &[crate::creation::StartPick], closed: &[crate::creation::ClosedSide]) -> anyhow::Result<World> {
         let mut world = World::empty(data.clone(), map.clone(), setup.seed);
         if setup.players.is_empty() {
             anyhow::bail!("a custom battle needs at least one player");
@@ -85,7 +91,25 @@ impl World {
         order.sort_by_key(|&i| map.player_slots.get(setup.players[i].start).copied().unwrap_or(usize::MAX));
         let mut nations: Vec<String> = setup.players.iter().map(|p| p.nation.clone()).collect();
         let mut generals: Vec<Option<String>> = vec![None; setup.players.len()];
+        let mut closed: Vec<&crate::creation::ClosedSide> = closed.iter().collect();
+        closed.sort_by_key(|c| c.slot);
+        let mut closed = closed.into_iter().peekable();
+        let closed_turn = |world: &mut World, side: &crate::creation::ClosedSide| {
+            let mut nation = side.nation.clone();
+            if side.pick.random_nation
+                && let Some(n) = crate::creation::random_nation(world)
+            {
+                nation = n;
+            }
+            if side.pick.random_general {
+                crate::creation::random_general(world, &nation);
+            }
+        };
         for &i in &order {
+            let slot = map.player_slots.get(setup.players[i].start).copied().unwrap_or(usize::MAX);
+            while let Some(side) = closed.next_if(|c| c.slot < slot) {
+                closed_turn(&mut world, side);
+            }
             let pick = picks.get(i).copied().unwrap_or_default();
             if pick.random_nation
                 && let Some(n) = crate::creation::random_nation(&mut world)
@@ -95,6 +119,9 @@ impl World {
             if pick.random_general {
                 generals[i] = crate::creation::random_general(&mut world, &nations[i]);
             }
+        }
+        for side in closed {
+            closed_turn(&mut world, side);
         }
         let mut slot_kingdom: Vec<Option<u32>> = vec![None; map.slots.len()];
         for (i, p) in setup.players.iter().enumerate() {
@@ -192,13 +219,18 @@ impl World {
                         None => world.books.scenery.push(index),
                     }
                 }
-                Some(s) => match data.find(&thing).filter(|&d| neutral_actor(&data, d)) {
+                // A record that saved a Mind is an actor whatever its definition: the
+                // cows of (2v2)Market_Garden, whose Characters tick from the first second.
+                Some(s) => match data.find(&thing).filter(|&d| neutral_actor(&data, d) || (p.mind.is_some() && data.def(d).actor_data)) {
                     Some(def) => keep_placed(&mut world, def, slot_kingdom[s], pos, p.yaw, index),
                     None if placeholder => {}
                     None => world.books.scenery.push(index),
                 },
                 None if placeholder => {}
-                None => world.books.scenery.push(index),
+                None => match data.find(&thing).filter(|&d| p.mind.is_some() && data.def(d).actor_data) {
+                    Some(def) => keep_placed(&mut world, def, None, pos, p.yaw, index),
+                    None => world.books.scenery.push(index),
+                },
             }
         }
         // The restored things' InitExisting draws (4FC600), in ascending GTID
@@ -217,7 +249,7 @@ impl World {
             {
                 match &map.placed[i].organization {
                     Some(organization) => crate::creation::restored_organization(&mut world, def, organization),
-                    None => crate::creation::restored(&mut world, def),
+                    None => crate::creation::restored_thing(&mut world, def, &map.placed[i]),
                 }
             }
         }

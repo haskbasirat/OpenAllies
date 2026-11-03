@@ -792,58 +792,26 @@ fn equal_rows_name_their_files_and_a_locked_film_is_skipped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A random-map film's nation and general picks: natively the creator's kingdoms
-/// draw them between the seeding and the generator (50ECA6, 474C14, FIGHT-FILMS.md).
-/// Do aa-play's draws from the film's seed give the header's picks?
+/// Two real human films on placed maps stay on the original's stream: F38 (the cows of
+/// (2v2)Market_Garden at the load) to its end, F18 ((2v2)Berlin with one player, whose
+/// closed sides still draw their picks) over the 3000 ticks of its native trace.
 #[test]
 #[ignore = "reads the corpus's films and the original data; set AA_GAME_ROOT"]
-fn random_film_picks_from_the_seed() {
-    use aa_play::creation::{random_general, random_nation};
+fn human_films_stay_on_the_stream() {
     let root = game_root();
-    let data = Arc::new(aa_play::GameData::load(&root).unwrap());
-    let registries = Registries::load_v14(&root, true).unwrap();
-    let corpus: Value = serde_json::from_slice(&std::fs::read(corpus_dir().join("corpus.json")).unwrap()).unwrap();
-    let (mut same, mut different) = (0, 0);
-    for row in corpus["films"].as_array().unwrap() {
-        if row["data_set"] != "v14" || row["creator_class"] != "KKC_WorldCreatorRandom" {
-            continue;
+    let dir = corpus_dir();
+    let corpus: Value = serde_json::from_slice(&std::fs::read(dir.join("corpus.json")).unwrap()).unwrap();
+    for (prefix, ticks, at_least) in [("aaabe8e6ec", u64::MAX, 15), ("404dbb1f76", 3000, 87)] {
+        let film = corpus["films"].as_array().unwrap().iter().find(|f| f["sha256"].as_str().unwrap().starts_with(prefix)).unwrap();
+        let path = dir.join("films").join(format!("{}.RFM", film["sha256"].as_str().unwrap()));
+        let data = FilmData::new(&root);
+        let (mut world, mut player) = open_film(&path, &data, SyncMode::Report).unwrap();
+        let total = player.film_ticks() as u64;
+        for _ in 0..ticks.min(total + 1) {
+            player.step(&mut world);
         }
-        let path = corpus_dir().join("films").join(format!("{}.RFM", row["sha256"].as_str().unwrap()));
-        let film = Film::read(&path, &registries).unwrap();
-        let mut world = aa_play::World::empty(
-            data.clone(),
-            Arc::new(aa_play::GameMap::default()),
-            u64::from(film.header.seed),
-        );
-        let mut picks = Vec::new();
-        for k in &film.header.creator_kingdoms {
-            if k.independent {
-                continue;
-            }
-            let Some(h) = film.header.header_kingdoms.iter().find(|h| h.id == k.id) else {
-                continue;
-            };
-            let nation = if k.nation.is_empty() {
-                random_nation(&mut world).unwrap_or_default()
-            } else {
-                k.nation.trim_start_matches("nation_").to_ascii_lowercase()
-            };
-            let general = if k.faction.is_empty() {
-                random_general(&mut world, &nation).unwrap_or_default()
-            } else {
-                k.faction.clone()
-            };
-            picks.push((h.nation.clone(), h.faction.clone(), nation, general));
-        }
-        let ok = picks.iter().all(|(n, f, nation, general)| {
-            n.trim_start_matches("nation_").eq_ignore_ascii_case(nation) && f.eq_ignore_ascii_case(general)
-        });
-        eprintln!("{}: {} {picks:?}", &row["sha256"].as_str().unwrap()[..8], if ok { "same" } else { "DIFFERENT" });
-        if ok {
-            same += 1;
-        } else {
-            different += 1;
-        }
+        let stats = player.stats();
+        assert!(stats.checkpoints_matched >= at_least, "{prefix}: {} of {}, first {:?}", stats.checkpoints_matched, stats.checkpoints_checked, stats.first_mismatch);
+        assert_eq!(stats.first_mismatch, None, "{prefix}");
     }
-    eprintln!("{same} films' picks come from the seed, {different} do not");
 }

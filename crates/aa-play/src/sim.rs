@@ -140,6 +140,10 @@ impl World {
             }
             // appended by the orders lane
             Command::Order { .. } => crate::orders::command(self, &command),
+            // appended by the client lane: the replicated selection does nothing here;
+            // a default order runs here only without a decree stream
+            Command::Select { .. } => Ok(()),
+            Command::Hot { .. } => crate::player_orders::hot(self, &command),
         };
         if !facing {
             self.orders.next_aux = None;
@@ -168,7 +172,9 @@ impl World {
                 | Command::Construct { kingdom, .. }
                 | Command::AirAttack { kingdom, .. }
                 | Command::AirRecon { kingdom, .. }
-                | Command::Order { kingdom, .. } => kingdom,
+                | Command::Order { kingdom, .. }
+                | Command::Select { kingdom, .. }
+                | Command::Hot { kingdom, .. } => kingdom,
             };
             self.events.push(crate::world::Event::Refused { kingdom, reason });
         }

@@ -224,11 +224,6 @@ pub fn tick(world: &mut World) {
             }
             continue;
         }
-        // Start unpacking a truck that reached its spot (the earlier element
-        // code; the hosted Mind calls `unpack_now` from its Unpack Think).
-        if !crate::movement::element_mind_ports() && arrived(world, a) {
-            unpack_now(world, a);
-        }
     }
 }
 
@@ -248,7 +243,7 @@ pub fn unpack_now(world: &mut World, a: ActorId) {
     let org = actor.org;
     // 0x575C80 places the building where the truck stands (the Unpack state's Enter
     // drove it to the order's point, as near as the map lets it).
-    let at = if crate::movement::element_mind_ports() { actor.pos.truncate() } else { at };
+    let at = actor.pos.truncate();
     let (at, facing) = placement(world, building, at, facing);
     if let Err(reason) = spot_clear(world, building, at, Some(a)) {
         world.actors[a as usize].order = Order::Idle;

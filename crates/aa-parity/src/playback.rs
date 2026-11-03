@@ -1467,6 +1467,7 @@ fn create_film_world(
             p.random_nation = false;
             p.random_general = false;
         }
+        plan.closed.clear();
     }
     let map = Arc::new(map);
     let mut world = replay::build_with(&plan, set.generals.clone(), set.game.clone(), map)

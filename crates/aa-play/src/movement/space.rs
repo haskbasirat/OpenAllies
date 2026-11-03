@@ -512,6 +512,57 @@ pub(super) fn query_for(space: &Space, policy: &Policy<'_>, id: ActorId, strict:
     aa_spatial::actor_context::prepare(&space.index, actor_key(id), strict, policy).ok()
 }
 
+/// `0x4D1820`: entries of things that no longer resolve leave the head of the list; for
+/// the first that does, `0x4D04D0`: from the other thing's position, along the direction
+/// from it to this one ((1, 0) when they coincide) turned by up to seven eighths of a
+/// turn, at its blocking radius plus this one's soft radius, the first place this
+/// one's query finds clear. The turn's `fsin` and `fcos` are binary64 here: a difference
+/// could only show in a last bit, and only after the first direction is blocked.
+pub(super) fn overlap_point(ms: &mut MovementState, world: &World, id: ActorId) -> Option<[u32; 2]> {
+    let mut s = ms.space.take()?;
+    let other = loop {
+        let Some(first) = ms.actors[id as usize].overlaps.first().map(|e| e.reference) else { break None };
+        match s.index.resolve_reference(first) {
+            Some(key) => break Some(key_actor(key)),
+            None => {
+                ms.actors[id as usize].overlaps.remove(0);
+            }
+        }
+    };
+    let result = other.and_then(|other| {
+        let (me, it) = (pos2(world, id), pos2(world, other));
+        let (dx, dy) = (me.x - it.x, me.y - it.y);
+        let (x, y) = if dx != 0.0 || dy != 0.0 {
+            let (fx, fy) = (f64::from(dx), f64::from(dy));
+            let inverse = 1.0 / (fx * fx + fy * fy).sqrt();
+            (f64::from((inverse * fx) as f32), f64::from((inverse * fy) as f32))
+        } else {
+            (1.0, 0.0)
+        };
+        let radius = f32::from_bits(world.data.def(world.actors[other as usize].def).blocking_words[1]) + f32::from_bits(world.data.def(world.actors[id as usize].def).soft_shape[1]);
+        let radius = f64::from(radius);
+        let mut policy = Policy { ms: &*ms, world };
+        let mut query = query_for(&s, &policy, id, false)?;
+        for turn in 0..8 {
+            let (tx, ty) = if turn == 0 {
+                (x, y)
+            } else {
+                let angle = f64::from(turn) * f64::from(0.785_398_2f32);
+                let (sin, cos) = angle.sin_cos();
+                (f64::from((cos * x - sin * y) as f32), f64::from((cos * y + sin * x) as f32))
+            };
+            let point = [((tx * radius + f64::from(it.x)) as f32).to_bits(), ((f64::from(it.y) + radius * ty) as f32).to_bits()];
+            query.set_position(&s.index, point, &policy).ok()?;
+            if !first_hit(&mut s, &mut policy, &query).blocked() {
+                return Some(point);
+            }
+        }
+        None
+    });
+    ms.space = Some(s);
+    result
+}
+
 /// `0x4D67F0` over [`ActorMove::overlaps`].
 pub(super) fn refresh_overlaps(space: &mut Space, ms: &mut MovementState, world: &World, id: ActorId) {
     // The list is empty and no thing's shape comes near: the query finds nothing and
@@ -539,8 +590,4 @@ pub(super) fn words(hit: &Hit) -> [u32; 4] {
     [hit.kind, hit.reference, hit.cell[0] as u32, hit.cell[1] as u32]
 }
 
-/// `low_path::Error` of a spatial failure.
-pub(super) fn low(what: impl std::fmt::Display) -> low_path::Error {
-    low_path::Error::World(what.to_string())
-}
 

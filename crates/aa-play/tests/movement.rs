@@ -437,10 +437,12 @@ fn attack_moves_into_weapon_range_and_holds() {
     w.step(vec![Command::Attack { kingdom: 0, units: vec![Unit::Org(o)], target: enemy }]);
     assert!(step_until(&mut w, 120.0, |w| w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(w, m)) && w.time > 5.0));
     // 0x520730 walks on until the target is in the regiment's ZOC, the engage state
-    // 0x524A00 holds it. The zone's radius is the longest of control_range (18) and
-    // the weapons (0x579DD0): the rifles' 30 m here.
+    // 0x524A00 (mode 3) takes over and its Move leaves (0x51D7B0). The zone's radius is
+    // the longest of control_range (18) and the weapons (0x579DD0): the rifles' 30 m here,
+    // and a zone covers whole tiles (0x4EA2C0), so the regiment stands up to a tile's
+    // diagonal and more beyond it.
     let d = (w.orgs[o as usize].anchor - pos(&w, enemy)).length();
-    assert!(d <= 30.5 && d > 25.0, "holds at rifle range: {d}");
+    assert!(d <= 37.0 && d > 25.0, "holds at rifle range: {d}");
     assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
     assert!(aa_play::combat::org_state(&w, o).is_some_and(|c| c.engaging()));
     assert!(w.orgs[o as usize].members.iter().all(|&m| w.actors[m as usize].combat.target == Some(enemy)));
@@ -711,9 +713,11 @@ fn members_pursue_their_own_targets_while_the_regiment_holds() {
     let at_engage = (w.orgs[o as usize].anchor - pos(&w, enemy)).length();
     assert!(at_engage <= 18.5 && at_engage > 12.0, "engaged at {at_engage}");
     assert!(step_until(&mut w, 30.0, |w| w.orgs[o as usize].members.iter().all(|&m| !movement::actor_moving(w, m))));
+    // 0x576AD0's range is between the two shapes (0x4C8F20 -> 0x4EE800), not their centres:
+    // the tank's own radius is on top of the 12 m.
     for &m in &w.orgs[o as usize].members {
         let d = (pos(&w, m) - pos(&w, enemy)).length();
-        assert!(d <= 12.5 && w.actors[m as usize].combat.target == Some(enemy), "member {m} at {d} with {:?}", w.actors[m as usize].combat.target);
+        assert!(d <= 15.0 && w.actors[m as usize].combat.target == Some(enemy), "member {m} at {d} with {:?}", w.actors[m as usize].combat.target);
     }
     assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
 }

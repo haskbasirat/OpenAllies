@@ -5,11 +5,10 @@
 //! `result_plan` over [`MovementState`]. Census cause M4 (and M2, M3).
 //!
 //! Hosted states: Move (Mind+7C), Sleep (+68, `uai_sleep`), Deploy (+48), Unpack
-//! (+188), Reattach (+178, `uai_reattach`), and the commands Move and Stop through
-//! `0x52C320` (`aa_mind::command`, `element_command`), which a state of a higher
-//! priority defers. The element states of other systems (Kill, Engage, Bombard,
-//! Repair, Join, Unload) still live in `crate::combat` and reach the Mind as plain
-//! moves.
+//! (+188), Reattach (+178, `uai_reattach`), Engage (+12C) and Kill (+F8) ([`fight`]), and the
+//! commands Move and Stop through `0x52C320` (`aa_mind::command`, `element_command`), which a
+//! state of a higher priority defers. The element states of other systems (Bombard, Repair,
+//! Join, Unload) still live in `crate::combat` and reach the Mind as plain moves.
 //!
 //! **Renditions, each marked at its place.** `0x536840` (a thing met is taken as a
 //! target) stands aside for the combat states; `0x5709D0`'s Element +1C byte is read
@@ -26,6 +25,8 @@ use aa_mind::{
 };
 use aa_navigation::{ActorState, MoveState, MoverRequest, OwnedPath, PathNode, formation_follow as follow, result_plan};
 use aa_numeric::Binary;
+
+pub(super) mod fight;
 
 const PC: aa_numeric::Precision = PC53;
 /// binary32 1e-4 ("immediately").
@@ -46,12 +47,6 @@ const GO_SITE_WAIT: &str = "ActionGo from queue wait 536AD0";
 const GO_SITE_LOW: &str = "ActionGo from 531520";
 const ORDER_SITE: &str = "mover order 5773C0 -> queue 0";
 
-/// The switch: the ports unless `AA_ELEMENT_MIND=old` asks for the earlier f32
-/// reimplementation of `movement.rs`.
-pub(super) fn enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("AA_ELEMENT_MIND").map_or(true, |v| v != "old"))
-}
 
 fn err(what: impl std::fmt::Display) -> aa_mind::Error {
     aa_mind::Error::World(format!("element mind: {what}"))
@@ -122,7 +117,19 @@ fn priority(offset: u32) -> i32 {
 pub(super) fn restore(ms: &mut MovementState, world: &mut World, id: ActorId, saved: &aa_mind::saved_load::Saved, placed: &crate::map::PlacedThing) -> Result<(), String> {
     let built = aa_mind::construct::construct(aa_mind::construct::Kind::Element, id, &mut NoDraws, PC).map_err(|e| e.to_string())?;
     let applied = world.books.minds.install_saved(id, HostedKind::Element, built, saved)?;
-    if world.books.minds.sleep_unless_hosted(id, &[offsets::MOVE, offsets::SLEEP, offsets::DEPLOY, offsets::UNPACK, offsets::REATTACH], offsets::SLEEP) {
+    // An element outside an organization still fights through `crate::combat`.
+    let hosted: &[u32] = if world.actors[id as usize].org.is_some() {
+        &[offsets::MOVE, offsets::SLEEP, offsets::DEPLOY, offsets::UNPACK, offsets::REATTACH, offsets::ENGAGE, offsets::KILL]
+    } else {
+        &[offsets::MOVE, offsets::SLEEP, offsets::DEPLOY, offsets::UNPACK, offsets::REATTACH]
+    };
+    for offset in [offsets::ENGAGE + 0x10, offsets::KILL + 0x10] {
+        let g = world.books.minds.word(id, offset);
+        let thing = super::saved_thing(world, g);
+        world.books.minds.set_word(id, offset, thing);
+    }
+    super::saved_command_targets(world, id);
+    if world.books.minds.sleep_unless_hosted(id, hosted, offsets::SLEEP) {
         ms.note(format!("element {id}: the saved Mind state is not hosted, it sleeps"));
     }
     let minds = &world.books.minds;
@@ -341,6 +348,10 @@ impl aa_mind::World for Stack<'_, '_> {
                 self.host.deactivate();
                 Ok(())
             }
+            offsets::ENGAGE | offsets::KILL => {
+                let offset = self.host.offset_of(state);
+                fight::enter(self, state, offset, a).map(|_| ())
+            }
             other => {
                 a.state_mut(state)?.status = 2;
                 if other == offsets::REATTACH {
@@ -371,6 +382,10 @@ impl aa_mind::World for Stack<'_, '_> {
                     self.host.deploy_flags();
                 }
                 Ok(())
+            }
+            offsets::ENGAGE | offsets::KILL => {
+                let offset = self.host.offset_of(state);
+                fight::leave(self, state, offset, a).map(|_| ())
             }
             _ => {
                 a.state_mut(state)?.status = 0;
@@ -836,14 +851,77 @@ impl Host<'_> {
         if mode > 1 && !aa_mind::World::can_activate(&mut Stack { host: self, p }, state, a)? {
             return Ok(false);
         }
+        let mut destination = self.thing_position(target.wrapping_sub(1));
+        // 0x5317A0's tail under Mind +0xA4 (0x52D780, Reattach current).
+        if self.am().reattaching
+            && target.wrapping_sub(1) & ORG != 0
+        {
+            destination = self.reattach_point(destination, target.wrapping_sub(1) & !ORG);
+        }
         let m = &mut p.plan.movement;
         m.target_id = target;
-        m.destination_bits = bits(self.thing_position(target.wrapping_sub(1)));
+        m.destination_bits = bits(destination);
         m.mode = movement_mode;
         m.requested_speed_bits = speed;
         m.auxiliary_bits = auxiliary;
         m.phase = 0;
         aa_mind::activate(state, mode, a, &mut Stack { host: self, p })
+    }
+    /// `0x556070(point, the actor's facing, its definition, its owner, ActorData +0x2FC,
+    /// the organization's zone 4, 0)`: the point itself when its tile holds the zone and
+    /// nothing stands there, else eight places on each of up to 20 rings from the facing.
+    /// Rendition of `0x4F3640` here: its collision part (`0x553BA0` with movers), which is
+    /// all it does for a thing without Structure or Wall.
+    fn reattach_point(&mut self, point: Vec2, o: OrgId) -> Vec2 {
+        let id = self.id;
+        let def = def_of(self.world, id);
+        let radius = def.control_range;
+        let tile = self.world.map.cell_size;
+        let r0 = f32::from_bits(def.blocking_words[1]);
+        let quarter = (f64::from(tile) * 0.25) as f32;
+        let step = if r0 < quarter {
+            f64::from(quarter)
+        } else if r0 <= tile {
+            f64::from(r0)
+        } else {
+            f64::from(r0) * 0.5
+        };
+        let rings = ((f64::from(radius) / step) as i32).clamp(1, 20);
+        let ring_step = (f64::from(radius) / f64::from(rings)) as f32;
+        let holds = |host: &Self, at: Vec2| host.world.map.cell_of(at).is_some() && host.world.fog.engine.as_ref().is_none_or(|e| !e.has_zoc(o) || e.tile_holds_org_zone(host.world, at, o));
+        // No source in the descriptor (0x4F3640 builds it from the definition), so the
+        // thing's organization counts as anything else.
+        let clear = |host: &mut Self, at: Vec2| {
+            with_space_of(host.ms, host.world, |s, policy| {
+                let mut q = space::query_for(s, policy, id, false)?;
+                q.descriptor.source_actor = None;
+                q.set_position(&s.index, bits(at), policy).ok()?;
+                Some(!space::first_hit(s, policy, &q).blocked())
+            })
+            .flatten()
+            .unwrap_or(true)
+        };
+        if holds(self, point) && clear(self, point) {
+            return point;
+        }
+        let facing = self.am().mover.facing;
+        let sin = f64::from(f32::from_bits(aa_spatial::placement::ROTATION_SIN_BITS));
+        let cos = f64::from(f32::from_bits(aa_spatial::placement::ROTATION_COS_BITS));
+        for k in 1..=rings {
+            let d = f64::from(k) * f64::from(ring_step);
+            let mut dx = (d * f64::from(facing.x)) as f32;
+            let mut dy = (d * f64::from(facing.y)) as f32;
+            for _ in 0..8 {
+                let at = Vec2::new((f64::from(dx) + f64::from(point.x)) as f32, (f64::from(dy) + f64::from(point.y)) as f32);
+                if holds(self, at) && clear(self, at) {
+                    return at;
+                }
+                let (x, y) = (f64::from(dx), f64::from(dy));
+                dx = (x * cos - y * sin) as f32;
+                dy = (y * cos + sin * x) as f32;
+            }
+        }
+        point
     }
     /// An actor's position, or an organization's (`ORG | o`).
     fn thing_position(&self, thing: u32) -> Vec2 {
@@ -1014,6 +1092,15 @@ impl Host<'_> {
         }
         let mind = MindId(self.id);
         let id = self.id;
+        // (combat) 0x5377AA: a Move at a thing failed: 0x532840 lists it as a bad target.
+        let mv = self.state(offsets::MOVE)?;
+        if a.state(mv)?.status == 2
+            && let Some(t) = p.plan.movement.target_id.checked_sub(1).filter(|t| t & ORG == 0 && alive(self.world, *t))
+            && !self.am().bad_targets.iter().any(|b| b.0 == t)
+        {
+            let now = self.world.time;
+            self.am().bad_targets.push((t, now));
+        }
         // The Unpack state cannot reach its point: tai_error_unpack, the order ends.
         if self.is_current(a, offsets::UNPACK)? {
             let actor = &mut self.world.actors[id as usize];
@@ -1027,6 +1114,9 @@ impl Host<'_> {
             }
         }
         aa_mind::pop(mind, a, &mut Stack { host: self, p })?;
+        // 0x53796D: the next Think in 3 s with a Reattach still on the stack, else in 1 s.
+        let reattach = self.state(offsets::REATTACH)?;
+        self.schedule_mind(if a.state(reattach)?.status == 2 { 0x4040_0000 } else { ONE_BITS });
         self.lone_order_over();
         Ok(true)
     }
@@ -1067,6 +1157,12 @@ impl Host<'_> {
     fn completed(&mut self, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<bool> {
         self.deactivate();
         let mind = MindId(self.id);
+        // (combat) 0x532559: the embedded Move of an active Kill: the next update thinks.
+        let kill = self.state(offsets::KILL)?;
+        if a.state(kill)?.status == 2 {
+            self.schedule_mind(IMMEDIATE_BITS);
+            return Ok(false);
+        }
         if self.is_current(a, offsets::DEPLOY)? {
             if !self.deploy_arrived(p, a)? {
                 return Ok(true);
@@ -1134,122 +1230,6 @@ impl Host<'_> {
         }
         let reattach = self.state(offsets::REATTACH)?;
         aa_mind::activate(reattach, 2, a, &mut Stack { host: self, p })
-    }
-    #[allow(dead_code)]
-    fn collision_rendition_unused(&mut self, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<()> {
-        let id = self.id;
-        let now = self.world.time;
-        let pos = self.position();
-        let path = &mut p.plan.movement.path;
-        let Some(head) = path.nodes.first().copied() else {
-            self.stop();
-            self.schedule_mind(ONE_BITS);
-            return Ok(());
-        };
-        let head_pos = vec2([head.words[0], head.words[1]]);
-        let radius = self.ms.blocking_radius.get(self.world.actors[id as usize].def as usize).copied().unwrap_or(0.0);
-        if p.collision[0] == 2 {
-            let other = p.collision[1].wrapping_sub(1);
-            if !alive(self.world, other) {
-                self.action_go(self.state(offsets::MOVE)?, 0, p, a)?;
-                return Ok(());
-            }
-            let q = pos2(self.world, other);
-            let r = self.ms.blocking_radius.get(self.world.actors[other as usize].def as usize).copied().unwrap_or(0.0);
-            if is_moving(self.ms, other) {
-                let own = &self.ms.actors[id as usize].mover;
-                let them = &self.ms.actors[other as usize].mover;
-                let heading = own.facing.dot(them.facing);
-                let (own_speed, other_speed) = (own.speed, them.speed);
-                if heading > 0.0 {
-                    if own_speed <= other_speed * heading {
-                        self.action_go(self.state(offsets::MOVE)?, 0, p, a)?;
-                        return Ok(());
-                    }
-                    if own_speed - QUEUE_SPEED_MARGIN <= other_speed {
-                        self.stop();
-                        self.schedule_mind(QUEUE_WAIT.to_bits());
-                        return Ok(());
-                    }
-                }
-            }
-            self.am().ignore.push((other, now + IGNORE_SECONDS));
-            let dir = self.am().mover.facing;
-            let left = Vec2::new(-dir.y, dir.x);
-            let side = if (head_pos - q).dot(left) >= 0.0 { 1.0 } else { -1.0 };
-            let reach = radius + r;
-            let lateral = left * side * reach;
-            let aside = pos + lateral;
-            let past = q + dir * reach + lateral;
-            let (d1, d2, d3) = (normalize(aside - pos), normalize(past - aside), normalize(head_pos - past));
-            if d1 != Vec2::ZERO && d2 != Vec2::ZERO {
-                let path = &mut p.plan.movement.path;
-                if d3 != Vec2::ZERO {
-                    path.nodes.insert(0, node_words(head_pos, d3, 0));
-                }
-                path.nodes.insert(0, node_words(past, d2, 0));
-                path.nodes.insert(0, node_words(aside, d1, 0));
-                path.dirty = true;
-            }
-        } else {
-            let def = def_of(self.world, id);
-            let class = mover_class(def);
-            let grid = self.ms.occupancy.grid(&self.world.map, class);
-            if grid.blocked_at(head_pos) {
-                match nearest_open(&grid, head_pos, NODE_SHIFT_CELLS) {
-                    Some(q) => {
-                        let bits = bits(q);
-                        let node = &mut p.plan.movement.path.nodes[0];
-                        node.words[0] = bits[0];
-                        node.words[1] = bits[1];
-                    }
-                    None if p.plan.movement.path.nodes.len() > 1 => {
-                        node_reached::remove_head(p)?;
-                    }
-                    None => {}
-                }
-            } else {
-                let begin = f32::from_bits(self.world.clock.begin.0);
-                let last = self.am().last_reroute;
-                if last > 0.0 && now - last < self.rules.low_path_wait {
-                    self.stop();
-                    self.schedule_mind((last + self.rules.low_path_wait - begin).to_bits());
-                    return Ok(());
-                }
-                // Three re-routes that end in another block fail the move, as the
-                // native's ResultPlan attempts do (`0x5336B0`, +0x28).
-                p.plan.attempts += 1;
-                if p.plan.attempts > 3 {
-                    return self.failed(p, a).map(|_| ());
-                }
-                let request = Request { from: pos, to: head_pos, class, max_speed: self.max() };
-                let rules = self.rules.path;
-                let map = self.world.map.clone();
-                let route = self.ms.solve(&map, &rules, &request);
-                self.am().last_reroute = now.max(EPSILON);
-                if route.status == Status::Failed || route.waypoints.is_empty() {
-                    node_reached::remove_head(p)?;
-                } else {
-                    if (route.goal - head_pos).length_squared() > EPSILON && p.plan.movement.path.nodes.len() > 1 {
-                        node_reached::remove_head(p)?;
-                    }
-                    let path = &mut p.plan.movement.path;
-                    for w in route.waypoints.iter().rev() {
-                        path.nodes.insert(0, node_words(w.pos, w.dir, 0));
-                    }
-                    path.dirty = true;
-                }
-            }
-        }
-        if p.plan.movement.path.nodes.is_empty() {
-            return self.failed(p, a).map(|_| ());
-        }
-        let radius = turn_radius(def_of(self.world, id)).to_bits();
-        cont::waypoint_offset(p, radius, PC, true)?;
-        p.plan.movement.phase = p.plan.movement.phase.min(1);
-        let speed = p.plan.movement.requested_speed_bits;
-        self.action_go(self.state(offsets::MOVE)?, speed, p, a)?;
-        Ok(())
     }
 }
 
@@ -1411,7 +1391,9 @@ impl element_move::World for Host<'_> {
         if actor & ORG != 0 {
             let o = actor & !ORG;
             let org = self.world.orgs.get(o as usize).ok_or_else(|| err("organization absent"))?;
-            return Ok(element_move::Actor { flags: 0, position: bits(org.anchor), mover: None, mind: None, component74: None, organization: Some(actor), element: None, component88: None, component_d0: false, kingdom_slots: Vec::new() });
+            // Organization +0x148[4]: its zone 4, read only with more than four slots.
+            let zone_slots = if self.world.fog.engine.as_ref().is_some_and(|e| e.has_zoc(o)) { vec![None, None, None, None, Some(actor)] } else { Vec::new() };
+            return Ok(element_move::Actor { flags: 0, position: bits(org.anchor), mover: None, mind: None, component74: None, organization: Some(actor), element: None, component88: None, component_d0: false, kingdom_slots: zone_slots });
         }
         let a = self.world.actors.get(actor as usize).ok_or_else(|| err("actor absent"))?;
         let flags = u32::from(!a.alive || a.removed);
@@ -1464,8 +1446,9 @@ impl element_move::World for Host<'_> {
     fn ensure_detached_setting(&mut self) -> aa_mind::Result<()> {
         Ok(())
     }
+    /// `[0xB3D300]`, the SVar of `0x537BB3` (fixed 2 in the original's data).
     fn detached_seconds_bits(&self) -> aa_mind::Result<u32> {
-        Ok(self.world.data.rule("MoverDetachedSeconds").unwrap_or(5.0).to_bits())
+        Ok(self.world.data.rule_ci("MoverDetachedSecondsUntilReattach").unwrap_or(2.0).to_bits())
     }
     fn diagnostic_already_emitted(&self) -> bool {
         true
@@ -1477,8 +1460,9 @@ impl element_move::World for Host<'_> {
     fn organization_ready(&mut self, organization: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
         Ok(!org_active(self.ms, self.world, organization & !ORG))
     }
-    fn destination_has_kingdom_object(&mut self, _: [u32; 2], _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
-        Ok(true)
+    /// `0x54EF40` on the tile at the point, with the organization's zone 4.
+    fn destination_has_kingdom_object(&mut self, point: [u32; 2], zone: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
+        Ok(self.world.fog.engine.as_ref().is_none_or(|e| e.tile_holds_org_zone(self.world, vec2(point), zone & !ORG)))
     }
     fn component88_blocks(&mut self, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
         Ok(false)
@@ -1492,6 +1476,13 @@ impl element_move::World for Host<'_> {
             // 0x52F160: a detached element reattaches.
             E::DetachedFc => self.event_reattach(p, a),
             E::Failed124 => self.failed(p, a),
+            // (combat) 0x52D9C0 with the Engage current: choose again in 0.6 s.
+            E::TargetLost140(_) if self.is_current(a, offsets::ENGAGE)? => {
+                let id = self.id;
+                self.world.books.minds.set_byte(id, offsets::ENGAGE + 0x18, 1);
+                self.schedule_mind(0x3f19_999a);
+                Ok(false)
+            }
             // 0x52D9C0, and +0xF4: the state ends.
             E::TargetLost140(_) | E::TargetReachedF4(_) | E::Completed144 => self.completed(p, a),
         }
@@ -1889,8 +1880,6 @@ impl cont::RecoveryGeometryWorld for Host<'_> {
 fn collision_words(blocker: Option<Blocker>) -> [u32; 4] {
     match blocker {
         None => [0; 4],
-        Some(Blocker::Actor(other, _, _)) => [2, other + 1, 0, 0],
-        Some(Blocker::Tile) => [1, 0, 0, 0],
         Some(Blocker::Hit(words)) => words,
     }
 }
@@ -2235,13 +2224,6 @@ pub(super) fn begin_unpack(ms: &mut MovementState, world: &mut World, rules: Mov
     }
 }
 
-/// [`begin_unpack`] unless the Unpack state is current already.
-pub(super) fn begin_unpack_once(ms: &mut MovementState, world: &mut World, rules: MoveRules, id: ActorId, at: Vec2) {
-    ensure_mind(ms, world, id);
-    if world.books.minds.top_offset(id) != Some(offsets::UNPACK) {
-        begin_unpack(ms, world, rules, id, at);
-    }
-}
 
 /// What the Mover tells its Mind inside its queue-0 delivery.
 pub(super) enum MoverCall<'c> {
@@ -2325,7 +2307,15 @@ impl aa_mind::element_update::World for Update<'_, '_> {
     fn actor_state_high(&mut self, _: ActorId) -> aa_mind::Result<u32> {
         Ok(0)
     }
+    /// Step 3: `UAIBadTargetExpirationSeconds` (the original also drops an entry whose
+    /// thing moved, `0x52F370`: not kept here).
     fn expire_bad_targets(&mut self, _: MindId) -> aa_mind::Result<()> {
+        let id = self.host.id as usize;
+        if !self.host.ms.actors[id].bad_targets.is_empty() {
+            let seconds = self.host.world.data.rule_ci("UAIBadTargetExpirationSeconds").unwrap_or(5.0);
+            let now = self.host.world.time;
+            self.host.ms.actors[id].bad_targets.retain(|b| now - b.1 < seconds);
+        }
         Ok(())
     }
     fn current_state(&mut self, mind: MindId) -> aa_mind::Result<StateId> {
@@ -2343,7 +2333,7 @@ impl aa_mind::element_update::World for Update<'_, '_> {
             offsets::UNPACK => self.unpack_think(state),
             offsets::REATTACH => uai_reattach::think(state, self.a, &mut Stack { host: self.host, p: self.p }).map(|_| ()),
             offsets::SLEEP => uai_sleep::think(state, self.a, &mut Stack { host: self.host, p: self.p }, PC).map(|_| ()),
-            other => Err(err(format!("Mind+{other:X} state Think is not hosted"))),
+            other => fight::think(&mut Stack { host: self.host, p: self.p }, other, self.a).unwrap_or_else(|| Err(err(format!("Mind+{other:X} state Think is not hosted")))),
         }
     }
     fn mover_active_unlinked(&mut self, actor: ActorId) -> aa_mind::Result<bool> {
@@ -2362,6 +2352,10 @@ impl aa_mind::element_update::World for Update<'_, '_> {
         Ok(self.host.world.is_scheduled(Sched::Mind(self.host.id)))
     }
     fn active_component_linked(&mut self, actor: ActorId) -> aa_mind::Result<bool> {
+        // (combat) The Performer is the active component while its ability runs.
+        if self.host.world.combat.actor(actor).is_some_and(|c| c.performer.running()) {
+            return Ok(true);
+        }
         Ok(self.host.ms.actors[actor as usize].mover.active && self.host.world.is_scheduled(Sched::Mover(actor)))
     }
     fn transport_blocks(&mut self, _: MindId, _: ActorId) -> aa_mind::Result<bool> {
@@ -2392,7 +2386,7 @@ impl ThinkWorld for Stack<'_, '_> {
                 let mv = self.host.state(offsets::MOVE)?;
                 element_move::think(mv, self.p, a, PC, self.host)
             }
-            other => Err(err(format!("Mind+{other:X} state Think is not hosted"))),
+            other => fight::think(self, other, a).unwrap_or_else(|| Err(err(format!("Mind+{other:X} state Think is not hosted")))),
         }
     }
     fn resolve(&mut self, gtid: u32) -> aa_mind::Result<Option<u32>> {
@@ -2446,15 +2440,18 @@ impl uai_reattach::ReattachThinkWorld for Stack<'_, '_> {
     }
 }
 impl uai_sleep::SleepThinkWorld for Stack<'_, '_> {
-    /// Actor +110, the overlaps `0x4D67F0`, stays empty until M5.
+    /// Actor +110, the overlaps `0x4D67F0`.
     fn actor_word110(&mut self, _: MindId) -> aa_mind::Result<u32> {
-        Ok(0)
+        Ok(u32::from(!self.host.ms.actors[self.host.id as usize].overlaps.is_empty()))
     }
     fn actor_flags100(&mut self, _: MindId) -> aa_mind::Result<u32> {
         Ok(0)
     }
+    /// `0x4D1820`: a place off the first thing it stands on. A (2v2)Kursk horse that
+    /// stopped on another walks off at its next Think.
     fn actor_pending_point(&mut self, _: MindId) -> aa_mind::Result<Option<[u32; 2]>> {
-        Ok(None)
+        let id = self.host.id;
+        Ok(space::overlap_point(self.host.ms, self.host.world, id))
     }
     fn move_activate(&mut self, _: MindId, request: aa_navigation::Activation, a: &mut Arena) -> aa_mind::Result<bool> {
         let Stack { host, p } = self;
