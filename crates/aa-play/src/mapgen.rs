@@ -204,7 +204,7 @@ pub struct LogLine {
 mod blob;
 mod data;
 mod grid;
-mod height;
+pub(crate) mod height;
 mod output;
 mod place;
 mod rng;

@@ -15,6 +15,10 @@ pub struct Books {
     pub kingdoms: Vec<KingdomBooks>,
     pub actors: Vec<ActorBooks>,
     pub orgs: Vec<OrgBooks>,
+    /// The doodads ClearDoodads 0x4F5560 removed, oldest first (`crate::ground`), for
+    /// whoever draws them.
+    #[serde(default)]
+    pub cleared_doodads: Vec<usize>,
     /// Indices into `map.placed` that stayed scenery (not turned into actors
     /// and not removed with an unused player slot). The renderer draws these.
     pub scenery: Vec<usize>,
@@ -99,6 +103,15 @@ pub struct KingdomBooks {
 pub struct ActorBooks {
     /// `map.placed` index this actor was created from.
     pub placed: Option<usize>,
+    /// A saved game's thing: the kingdom's technology count at the load. The Load reads
+    /// the Detection and Supply radii before the kingdom's properties reach the thing
+    /// (0x4D7230 -> 0x4D1350), and they stand until the technologies change.
+    #[serde(default)]
+    pub saved_techs: Option<usize>,
+    /// A saved game's thing: the state 20 (under siege) the save holds, which stands until
+    /// the state's next refresh (the hit 0x5625C0, the Element Tick 0x570B90).
+    #[serde(default)]
+    pub saved_siege: bool,
     /// Actor state 19 (out_of_supply).
     pub out_of_supply: bool,
     /// SupplyComponent +18 relay stockpile (seconds of supply left when cut off).
@@ -364,6 +377,9 @@ pub struct Deployment {
 pub struct OrgBooks {
     /// Organization +50[slot]: health rebuilt so far for an empty slot.
     pub progress: Vec<f32>,
+    /// As `ActorBooks::saved_techs`.
+    #[serde(default)]
+    pub saved_techs: Option<usize>,
     /// The organization actor's supply state (state 19).
     pub out_of_supply: bool,
     /// HQ attachment slots reserved by queued recruits (HQ organizations).

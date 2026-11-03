@@ -8,6 +8,9 @@
 //!   mountain or water tile runs when it changes kind;
 //! - the render height (query 0x122).
 //!
+//! The brush runs on any [`HeightGrid`]: the generator's world, and the terrain of a
+//! running battle (`crate::ground`, a thing's 0x4EB500), one code path.
+//!
 //! Arithmetic is the x87 register at PC53 (binary64 here; every value stays
 //! far inside the normal range) with the original's binary32 stores
 //! (`as f32`), as `aa_heightfield::brush` proves on its fixtures. That crate
@@ -24,23 +27,78 @@ const SQRT2: f32 = f32::from_bits(0x3FB5_04F3);
 
 /// GWorld+0x34 (HEIGHT_MAP) or GWorld+0x38 (MOUNTAIN_HEIGHT_MAP).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Map {
+pub(crate) enum Map {
     Base,
     Overlay,
 }
 
-impl Map {
-    fn field(self, world: &World) -> &[f32] {
-        match self {
-            Map::Base => &world.base,
-            Map::Overlay => &world.overlay,
+/// What a height operation reads and writes besides its own rows.
+pub(crate) trait HeightGrid {
+    /// Samples per row and rows.
+    fn samples(&self) -> [usize; 2];
+    /// Heightmap +0x18, one cell in metres.
+    fn spacing(&self) -> f32;
+    /// Heightmap +0x14, the coordinate shift.
+    fn height_bits(&self) -> u32;
+    /// The map's limits (0x401290 in 0x550A10).
+    fn limits(&self) -> [f32; 2];
+    fn field(&self, map: Map) -> &[f32];
+    fn field_mut(&mut self, map: Map) -> &mut [f32];
+    /// Heightmap +0x44, the per-vertex water area byte.
+    fn vertex_area(&self, map: Map, at: usize) -> u8;
+    /// 0x558A70: TerrainData +0x5C of the tile under the vertex, `None` outside the map.
+    fn max_slope_at(&self, x: i32, y: i32) -> Option<f32>;
+    /// 0x550A10 stored this sample.
+    fn committed(&mut self, _x: i32, _y: i32) {}
+}
+
+/// The generator's world as a [`HeightGrid`].
+struct Generating<'a> {
+    world: &'a mut World,
+    data: &'a RmgData,
+}
+
+impl HeightGrid for Generating<'_> {
+    fn samples(&self) -> [usize; 2] {
+        [self.world.hw, self.world.hh]
+    }
+    fn spacing(&self) -> f32 {
+        self.world.spacing
+    }
+    fn height_bits(&self) -> u32 {
+        self.world.height_bits
+    }
+    fn limits(&self) -> [f32; 2] {
+        self.world.limits
+    }
+    fn field(&self, map: Map) -> &[f32] {
+        match map {
+            Map::Base => &self.world.base,
+            Map::Overlay => &self.world.overlay,
         }
     }
-    fn field_mut(self, world: &mut World) -> &mut [f32] {
-        match self {
-            Map::Base => &mut world.base,
-            Map::Overlay => &mut world.overlay,
+    fn field_mut(&mut self, map: Map) -> &mut [f32] {
+        match map {
+            Map::Base => &mut self.world.base,
+            Map::Overlay => &mut self.world.overlay,
         }
+    }
+    fn vertex_area(&self, map: Map, at: usize) -> u8 {
+        self.world.vertex_areas(map)[at]
+    }
+    fn max_slope_at(&self, x: i32, y: i32) -> Option<f32> {
+        let world = &*self.world;
+        let px = (x << world.height_bits) as f32;
+        let py = (y << world.height_bits) as f32;
+        // 0x4282A0: 0 <= v < extent, then the tile.
+        if px >= 0.0 && px < world.width && py >= 0.0 && py < world.height {
+            let (tx, ty) = ((px as i32) >> world.tile_bits, (py as i32) >> world.tile_bits);
+            if tx >= 0 && ty >= 0 && (tx as usize) < world.tw && (ty as usize) < world.th {
+                let v = world.var[ty as usize * world.tw + tx as usize];
+                return Some(self.data.terrains[self.data.variations[v as usize].terrain].max_slope);
+            }
+        }
+        None
     }
 }
 
@@ -57,7 +115,7 @@ struct Row {
 /// map, +8 the rows, +0x14 their hash, +0x28/+0x2C the falloff centre, +0x30
 /// its distance, +0x34 the slope, +0x38 / +0x3C spacing and diagonal, +0x40
 /// the protect byte or the relax pass, +0x41 blocked, +0x42 the area).
-pub(super) struct Setter {
+pub(crate) struct Setter {
     map: Map,
     slope: f32,
     falloff: Option<([f32; 2], f32)>,
@@ -102,28 +160,18 @@ impl Setter {
     }
     /// 0x558D90: the pending height, else the map's.
     pub(super) fn get(&self, world: &World, x: i32, y: i32) -> f32 {
-        self.keys.get(&(x, y)).map_or_else(|| self.map.field(world)[y as usize * world.hw + x as usize], |&i| self.rows[i].h)
+        self.keys.get(&(x, y)).map_or_else(|| world.height_at(self.map, x, y), |&i| self.rows[i].h)
     }
 
     /// 0x558A70: +0x34, or the terrain's max_slope (+0x5C) under the vertex
     /// when asked and not zero, then scaled by the falloff.
-    fn limit(&self, world: &World, data: &RmgData, x: i32, y: i32, use_terrain: bool) -> f64 {
+    fn limit<G: HeightGrid>(&self, grid: &G, x: i32, y: i32, use_terrain: bool) -> f64 {
         let mut value = f64::from(self.slope);
-        if use_terrain {
-            let px = (x << world.height_bits) as f32;
-            let py = (y << world.height_bits) as f32;
-            // 0x4282A0: 0 <= v < extent, then the tile.
-            if px >= 0.0 && px < world.width && py >= 0.0 && py < world.height {
-                let (tx, ty) = ((px as i32) >> world.tile_bits, (py as i32) >> world.tile_bits);
-                if tx >= 0 && ty >= 0 && (tx as usize) < world.tw && (ty as usize) < world.th {
-                    let v = world.var[ty as usize * world.tw + tx as usize];
-                    let s = data.terrains[data.variations[v as usize].terrain].max_slope;
-                    value = if s == 0.0 { f64::from(self.slope) } else { f64::from(s) };
-                }
-            }
+        if use_terrain && let Some(s) = grid.max_slope_at(x, y) {
+            value = if s == 0.0 { f64::from(self.slope) } else { f64::from(s) };
         }
         if let Some((c, d)) = self.falloff {
-            let s = f64::from(world.spacing);
+            let s = f64::from(grid.spacing());
             let dx = (f64::from(c[0]) - f64::from(x) * s) as f32;
             let dy = f64::from(c[1]) - f64::from(y) * s;
             let r = (f64::from(dx) * f64::from(dx) + dy * dy).sqrt() / f64::from(d);
@@ -136,13 +184,15 @@ impl Setter {
     }
 
     /// 0x559190: pull the eight neighbours of a row towards it.
-    fn spread(&mut self, world: &World, data: &RmgData, row: Row) {
-        let limit = self.limit(world, data, row.x, row.y, row.depth > 0) as f32;
-        let field = self.map.field(world);
-        let diagonal = (f64::from(world.spacing) * f64::from(SQRT2)) as f32;
+    fn spread<G: HeightGrid>(&mut self, grid: &G, row: Row) {
+        let limit = self.limit(grid, row.x, row.y, row.depth > 0) as f32;
+        let field = grid.field(self.map);
+        let [hw, hh] = grid.samples();
+        let spacing = grid.spacing();
+        let diagonal = (f64::from(spacing) * f64::from(SQRT2)) as f32;
         for d in NEIGHBORS {
             let (nx, ny) = (row.x + d[0], row.y + d[1]);
-            if nx < 0 || ny < 0 || nx as usize >= world.hw || ny as usize >= world.hh {
+            if nx < 0 || ny < 0 || nx as usize >= hw || ny as usize >= hh {
                 continue;
             }
             let existing = self.keys.get(&(nx, ny)).copied();
@@ -153,17 +203,17 @@ impl Setter {
                     }
                     self.rows[i].h
                 }
-                None => field[ny as usize * world.hw + nx as usize],
+                None => field[ny as usize * hw + nx as usize],
             };
             let diff = (f64::from(old) - f64::from(row.h)) as f32;
-            let dist = if d[0] == 0 || d[1] == 0 { world.spacing } else { diagonal };
+            let dist = if d[0] == 0 || d[1] == 0 { spacing } else { diagonal };
             let ratio = (f64::from(diff) / f64::from(dist)).abs();
             if !(f64::from(limit) + f64::from(EPS) < ratio) {
                 continue;
             }
             if self.protect {
                 // 0x550010: the vertex carries another water area.
-                let a = world.vertex_areas(self.map)[ny as usize * world.hw + nx as usize];
+                let a = grid.vertex_area(self.map, ny as usize * hw + nx as usize);
                 if a != 0 && a != self.area {
                     self.blocked = true;
                     return;
@@ -184,6 +234,11 @@ impl Setter {
     /// 0x559470: spread every row in list order (the list grows), then
     /// commit them; nothing commits once a protected vertex was met.
     pub(super) fn finish(&mut self, world: &mut World, data: &RmgData) -> bool {
+        self.finish_on(&mut Generating { world, data })
+    }
+
+    /// [`Setter::finish`] on any grid.
+    fn finish_on<G: HeightGrid>(&mut self, grid: &mut G) -> bool {
         self.blocked = false;
         let mut cursor = 0;
         while cursor < self.rows.len() {
@@ -192,14 +247,14 @@ impl Setter {
             }
             let row = self.rows[cursor];
             cursor += 1;
-            self.spread(world, data, row);
+            self.spread(grid, row);
         }
         if self.blocked {
             return false;
         }
         let map = self.map;
         for r in &self.rows {
-            commit(world, map, r.x, r.y, r.h);
+            commit(grid, map, r.x, r.y, r.h);
         }
         true
     }
@@ -217,7 +272,7 @@ impl Setter {
             if nx < 0 || ny < 0 || nx as usize >= world.hw || ny as usize >= world.hh {
                 continue;
             }
-            let field = self.map.field(world)[ny as usize * world.hw + nx as usize];
+            let field = world.height_at(self.map, nx, ny);
             let level = self.keys.get(&(nx, ny)).map_or(0, |&i| self.rows[i].depth);
             if level == pass {
                 self.rows[index].depth = pass + 1;
@@ -237,7 +292,14 @@ impl Setter {
             self.rows[index].h = (sum / f64::from(count)) as f32;
         }
         let map = self.map;
-        commit(world, map, x, y, self.rows[index].h);
+        let h = self.rows[index].h;
+        let [lo, hi] = world.limits;
+        let v = clamp_commit(h, lo, hi);
+        let at = y as usize * world.hw + x as usize;
+        match map {
+            Map::Base => world.base[at] = v,
+            Map::Overlay => world.overlay[at] = v,
+        }
     }
 
     /// 0x558FC0: passes over the rows still at depth -1, from the outside
@@ -266,23 +328,29 @@ impl Setter {
     }
 }
 
-/// 0x550A10: the height clamped to the map's limits (0x401290).
-fn commit(world: &mut World, map: Map, x: i32, y: i32, h: f32) {
-    let [lo, hi] = world.limits;
-    let v = if h < lo {
+/// 0x401290 in 0x550A10.
+fn clamp_commit(h: f32, lo: f32, hi: f32) -> f32 {
+    if h < lo {
         lo
     } else if h > hi {
         hi
     } else {
         h
-    };
-    let at = y as usize * world.hw + x as usize;
-    map.field_mut(world)[at] = v;
+    }
+}
+
+/// 0x550A10: the height clamped to the map's limits (0x401290).
+fn commit<G: HeightGrid>(grid: &mut G, map: Map, x: i32, y: i32, h: f32) {
+    let [lo, hi] = grid.limits();
+    let v = clamp_commit(h, lo, hi);
+    let at = y as usize * grid.samples()[0] + x as usize;
+    grid.field_mut(map)[at] = v;
+    grid.committed(x, y);
 }
 
 /// The settings block (0x4EB500 layout) of one brush.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Brush {
+pub(crate) struct Brush {
     /// +0: 0 sets `height`, 1 adds it.
     pub mode: u32,
     pub height: f32,
@@ -333,35 +401,38 @@ fn probe_brush(world: &World, data: &RmgData, map: Map, radius: f32, pos: [f32; 
 
 /// One bound of 0x550B00: floor or ceil of (p -+ r) / spacing (the CRT on a
 /// double), times the spacing, truncated, biased, shifted, clamped.
-fn raster_bound(world: &World, p: f64, limit: usize, upper: bool) -> i32 {
-    let s = f64::from(world.spacing);
+fn raster_bound<G: HeightGrid>(grid: &G, p: f64, limit: usize, upper: bool) -> i32 {
+    let s = f64::from(grid.spacing());
     let q = p / s;
     let rounded = if upper { q.ceil() } else { q.floor() };
     let v = (rounded * s).trunc() as i32;
-    let bias = 1 << (world.height_bits - 1);
-    ((v + bias) >> world.height_bits).clamp(0, limit as i32 - 1)
+    let bits = grid.height_bits();
+    let bias = 1 << (bits - 1);
+    ((v + bias) >> bits).clamp(0, limit as i32 - 1)
 }
 
 /// 0x551140 with equal end points, a circle of `radius` at `pos`: 0x550B00
 /// (the functor 0x550660) then 0x559470. `round` is map +0x20, set only by
 /// AddTerrainNoise. Returns false when a protected vertex stopped it.
 pub(super) fn brush(world: &mut World, data: &RmgData, map: Map, round: bool, radius: f32, pos: [f32; 2], b: &Brush) -> bool {
-    brush_region(world, data, map, round, radius, pos, b, &|x, y| contains_circle(radius, pos, x, y), &|x, y| distance_circle(radius, pos, x, y))
+    probe_brush(world, data, map, radius, pos, b);
+    brush_region(&mut Generating { world, data }, map, round, radius, pos, b, &|x, y| contains_circle(radius, pos, x, y), &|x, y| distance_circle(radius, pos, x, y))
 }
 
 #[allow(clippy::too_many_arguments)]
-fn brush_region(world: &mut World, data: &RmgData, map: Map, round: bool, radius: f32, pos: [f32; 2], b: &Brush, contains: &dyn Fn(f32, f32) -> bool, distance: &dyn Fn(f32, f32) -> f64) -> bool {
-    probe_brush(world, data, map, radius, pos, b);
+fn brush_region<G: HeightGrid>(grid: &mut G, map: Map, round: bool, radius: f32, pos: [f32; 2], b: &Brush, contains: &dyn Fn(f32, f32) -> bool, distance: &dyn Fn(f32, f32) -> f64) -> bool {
     let mut setter = Setter::new(map, b.slope, b.protect, b.area);
     let (px, py, r) = (f64::from(pos[0]), f64::from(pos[1]), f64::from(radius));
-    let x0 = raster_bound(world, px - r, world.hw, false);
-    let y0 = raster_bound(world, py - r, world.hh, false);
-    let x1 = raster_bound(world, px + r, world.hw, true);
-    let y1 = raster_bound(world, py + r, world.hh, true);
+    let [hw, hh] = grid.samples();
+    let (bits, spacing) = (grid.height_bits(), grid.spacing());
+    let x0 = raster_bound(grid, px - r, hw, false);
+    let y0 = raster_bound(grid, py - r, hh, false);
+    let x1 = raster_bound(grid, px + r, hw, true);
+    let y1 = raster_bound(grid, py + r, hh, true);
     for y in y0..=y1 {
         for x in x0..=x1 {
-            let vx = (x << world.height_bits) as f32;
-            let vy = (y << world.height_bits) as f32;
+            let vx = (x << bits) as f32;
+            let vy = (y << bits) as f32;
             let strength = if round {
                 let dx = (px - f64::from(vx)) as f32;
                 let dy = py - f64::from(vy);
@@ -384,7 +455,7 @@ fn brush_region(world: &mut World, data: &RmgData, map: Map, round: bool, radius
                     continue;
                 }
                 let d = distance(vx, vy);
-                let reach = f64::from(world.spacing) * f64::from(SQRT2);
+                let reach = f64::from(spacing) * f64::from(SQRT2);
                 if !(d <= reach) {
                     continue;
                 }
@@ -395,7 +466,8 @@ fn brush_region(world: &mut World, data: &RmgData, map: Map, round: bool, radius
                 s
             };
             // 0x550660.
-            let old = world.height_at(map, x, y);
+            let at = y as usize * hw + x as usize;
+            let old = grid.field(map)[at];
             let target = match b.mode {
                 0 => b.height,
                 _ => (f64::from(old) + f64::from(b.height)) as f32,
@@ -412,7 +484,7 @@ fn brush_region(world: &mut World, data: &RmgData, map: Map, round: bool, radius
                 continue;
             }
             if b.protect {
-                let a = world.vertex_areas(map)[y as usize * world.hw + x as usize];
+                let a = grid.vertex_area(map, at);
                 if a != 0 && a != b.area {
                     return false;
                 }
@@ -421,7 +493,7 @@ fn brush_region(world: &mut World, data: &RmgData, map: Map, round: bool, radius
         }
     }
     setter.set_falloff(pos, b.falloff);
-    setter.finish(world, data)
+    setter.finish_on(grid)
 }
 
 /// 0x46E150 + 0x46F280 for a box at its facing: the distance from a vertex to
@@ -464,10 +536,18 @@ fn distance_box(place: &aa_spatial::geometry::Placement, x: f32, y: f32) -> f64 
 /// 0x551140 with equal end points, any placed shape: 0x550B00 (the functor
 /// 0x550660) then 0x559470. A point stops there; a circle is [`brush`].
 pub(super) fn brush_shape(world: &mut World, data: &RmgData, map: Map, place: &aa_spatial::geometry::Placement, b: &Brush) -> bool {
+    if matches!(place.shape.kind, 1..=3) {
+        probe_brush(world, data, map, f32::from_bits(place.shape.radius_bits), place.position.map(f32::from_bits), b);
+    }
+    brush_placed(&mut Generating { world, data }, map, place, b)
+}
+
+/// [`brush_shape`] on any grid.
+pub(crate) fn brush_placed<G: HeightGrid>(grid: &mut G, map: Map, place: &aa_spatial::geometry::Placement, b: &Brush) -> bool {
     let pos = place.position.map(f32::from_bits);
     let radius = f32::from_bits(place.shape.radius_bits);
     match place.shape.kind {
-        1 => brush(world, data, map, false, radius, pos, b),
+        1 => brush_region(grid, map, false, radius, pos, b, &|x, y| contains_circle(radius, pos, x, y), &|x, y| distance_circle(radius, pos, x, y)),
         2 | 3 => {
             let point = aa_spatial::geometry::Placement { shape: aa_spatial::collision::Shape { kind: 0, radius_bits: 0, bounds: [0; 4] }, facing: [0, 0xbf80_0000], position: [0, 0] };
             let contains = |x: f32, y: f32| {
@@ -475,7 +555,7 @@ pub(super) fn brush_shape(world: &mut World, data: &RmgData, map: Map, place: &a
                 aa_spatial::shape_overlap::overlaps(&vertex, place, aa_numeric::Precision::Double53).unwrap_or(false)
             };
             let distance = |x: f32, y: f32| distance_box(place, x, y);
-            brush_region(world, data, map, false, radius, pos, b, &contains, &distance)
+            brush_region(grid, map, false, radius, pos, b, &contains, &distance)
         }
         _ => true,
     }

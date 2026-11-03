@@ -233,6 +233,10 @@ pub(super) fn build(data: &RmgData, params: &RandomMapParams, world: &World, pla
         tile_shift: world.tile_bits,
         overlay_kind: world.var.iter().map(|&v| terrain_of(v).kind).collect(),
         noise: world.var.iter().map(|&v| terrain_of(v).noise).collect(),
+        max_slope: world.var.iter().map(|&v| terrain_of(v).max_slope).collect(),
+        areas: world.verts.clone(),
+        limits: world.limits,
+        changes: Vec::new(),
     }));
     Ok(Output { terrain, placed: placed_things, scenery, map })
 }

@@ -44,19 +44,24 @@ pub fn build(center: Vec3, size: f32, angle: f32, cell: f32, height: &dyn Fn(f32
                 let ny = (gy + (i >> 1)) as f32 * cell;
                 Vec3::new(nx, height(nx, -ny), -ny)
             };
-            let q = [corner(0), corner(1), corner(2), corner(3)];
+            // The terrain mesh's own vertex normal at a corner (aa_assets' terrain
+            // preparation), so a lit decal shades as the ground under it does: a normal
+            // per triangle shows every cell's diagonal on a slope.
+            let smooth = |i: i32| -> Vec3 {
+                let (x, y) = (gx + (i & 1), gy + (i >> 1));
+                let (xa, ya) = ((x - 1).max(0), (y - 1).max(0));
+                let h = |cx: i32, cy: i32| height(cx as f32 * cell, -(cy as f32) * cell);
+                Vec3::new(-(h(x + 1, y) - h(xa, y)) / ((x + 1 - xa) as f32 * cell), 1.0, (h(x, y + 1) - h(x, ya)) / ((y + 1 - ya) as f32 * cell)).normalize_or_zero()
+            };
+            let q = [(corner(0), smooth(0)), (corner(1), smooth(1)), (corner(2), smooth(2)), (corner(3), smooth(3))];
             for tri in [[q[0], q[1], q[2]], [q[1], q[3], q[2]]] {
-                let mut normal = (tri[1] - tri[0]).cross(tri[2] - tri[0]).normalize_or_zero();
-                if normal.y < 0.0 {
-                    normal = -normal;
-                }
                 // Clip in the square's local frame (Sutherland-Hodgman).
-                let mut poly: Vec<(Vec2, f32)> = tri.iter().map(|p| (local(Vec2::new(p.x, p.z)), p.y)).collect();
+                let mut poly: Vec<(Vec2, f32, Vec3)> = tri.iter().map(|(p, n)| (local(Vec2::new(p.x, p.z)), p.y, *n)).collect();
                 for (axis, sign) in [(0usize, 1.0f32), (0, -1.0), (1, 1.0), (1, -1.0)] {
                     if poly.is_empty() {
                         break;
                     }
-                    let inside = |p: &(Vec2, f32)| sign * p.0[axis] <= half;
+                    let inside = |p: &(Vec2, f32, Vec3)| sign * p.0[axis] <= half;
                     let mut next = Vec::with_capacity(poly.len() + 2);
                     for i in 0..poly.len() {
                         let a = poly[i];
@@ -69,7 +74,7 @@ pub fn build(center: Vec3, size: f32, angle: f32, cell: f32, height: &dyn Fn(f32
                             let da = sign * a.0[axis] - half;
                             let db = sign * b.0[axis] - half;
                             let t = da / (da - db);
-                            next.push((a.0.lerp(b.0, t), a.1 + (b.1 - a.1) * t));
+                            next.push((a.0.lerp(b.0, t), a.1 + (b.1 - a.1) * t, a.2.lerp(b.2, t)));
                         }
                     }
                     poly = next;
@@ -77,12 +82,12 @@ pub fn build(center: Vec3, size: f32, angle: f32, cell: f32, height: &dyn Fn(f32
                 if poly.len() < 3 {
                     continue;
                 }
-                let vert = |p: &(Vec2, f32)| -> Vert {
+                let vert = |p: &(Vec2, f32, Vec3)| -> Vert {
                     let world = center2 + ax * p.0.x + az * p.0.y;
                     Vert {
                         pos: Vec3::new(world.x, p.1 + LIFT, world.y),
                         uv: [p.0.x / size + 0.5, p.0.y / size + 0.5],
-                        normal,
+                        normal: p.2.normalize_or_zero(),
                     }
                 };
                 let first = vert(&poly[0]);
