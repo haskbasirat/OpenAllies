@@ -19,7 +19,7 @@
 //! * hq_detach (0x20): the organization leaves its HQ.
 //! * disband (10): own organizations and single actors leave the battle at
 //!   once ("Permanently disbands selection"), without a refund.
-use crate::data::{DefClass, DefId};
+use crate::data::DefId;
 use crate::world::{ActorId, Command, KingdomId, Order, OrgId, Unit, World};
 use glam::Vec2;
 use std::collections::BTreeMap;
@@ -31,6 +31,9 @@ pub struct PlayerOrders {
     formations: BTreeMap<OrgId, usize>,
     /// Rally point per recruiting building.
     rally: BTreeMap<ActorId, Vec2>,
+    /// Organization +0x74 once the Mind state has asked for it (`0x57BFF0`): `None` is
+    /// no formation, a broken one.
+    pub(crate) current_formation: BTreeMap<OrgId, Option<usize>>,
 }
 
 /// The organization's desired formation (Organization +0x70): the one chosen with
@@ -40,16 +43,15 @@ pub fn desired_formation(world: &World, org: OrgId) -> Option<usize> {
     world.player_orders.formations.get(&org).copied().filter(|&i| i < def.formations.len()).or(def.default_formation)
 }
 
-/// The organization's current formation (index into `Def::formations`):
-/// the one chosen with the formation buttons, else the layout default.
+/// The organization's current formation, +0x74 (index into `Def::formations`, `None` for
+/// no formation, a broken one): what the Mind state last asked (`0x57BFF0`), and the desired
+/// one (+0x70) before it has asked.
 pub fn formation(world: &World, org: OrgId) -> Option<usize> {
-    let o = world.orgs.get(org as usize)?;
-    let def = world.data.def(o.def);
-    // (orders) mind_retreating: formation_required RETREAT.
-    if crate::orders::retreating(world, org) && def.retreat_formation.is_some() {
-        return def.retreat_formation;
+    world.orgs.get(org as usize)?;
+    match world.player_orders.current_formation.get(&org) {
+        Some(current) => *current,
+        None => desired_formation(world, org),
     }
-    world.player_orders.formations.get(&org).copied().filter(|&i| i < def.formations.len()).or(def.default_formation)
 }
 
 /// The rally point of a building, if one is set.
@@ -57,11 +59,11 @@ pub fn rally_point(world: &World, building: ActorId) -> Option<Vec2> {
     world.player_orders.rally.get(&building).copied()
 }
 
-/// A structure that can be sold (ConstructionComponent, not a city).
+/// A structure that can be sold: ActorData +4E4 `can_sell` (0x565140).
 pub fn sellable(world: &World, building: ActorId) -> bool {
     let Some(a) = world.actor(building) else { return false };
     let d = world.data.def(a.def);
-    d.class == Some(DefClass::Building) && d.has_component("ConstructionComponent") && !d.city && !d.captureable
+    d.has_component("ConstructionComponent") && d.can_sell
 }
 
 /// Under siege, the under_siege actor state (0x4D6660): `crate::supply::under_siege`.
@@ -132,6 +134,9 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
                 let chosen = *formation;
                 crate::movement::set_formation(world, o, |world| {
                     world.player_orders.formations.insert(o, chosen);
+                    // 0x57BFF0: DESIRED takes it at once, the others keep their own.
+                    let required = crate::movement::required_formation(world, o);
+                    world.player_orders.current_formation.insert(o, required);
                 });
                 any = true;
             }
@@ -685,7 +690,14 @@ pub mod native {
             if slots.is_empty() {
                 return Err("none of the units has a thing id".into());
             }
-            if slots != outbox.selection {
+            // A person's order goes to the selection as it stands, whatever order the HUD
+            // lists it in: 0x4ED360 walks the list 0x4ECFF0 built.
+            let same = if outbox.form == OrderForm::Person {
+                slots.len() == outbox.selection.len() && slots.iter().all(|s| outbox.selection.contains(s))
+            } else {
+                slots == outbox.selection
+            };
+            if !same {
                 out.push((SELECTION_SET_REQUEST, vec![Field::Thing { check: ThingCheck::B0, slot: slots[0] }]));
                 for s in &slots[1..] {
                     out.push((SELECTION_ADD_REQUEST, vec![Field::Thing { check: ThingCheck::B0, slot: *s }]));
@@ -945,7 +957,13 @@ pub mod native {
                         Some(if form == OrderForm::Person { w.facing(*facing).person(form, -1.0) } else { w })
                     }
                     // (orders) the direction of the following command's own wire.
-                    ActorOrder::Facing { .. } | ActorOrder::MoveOnto => None,
+                    ActorOrder::Facing { .. } | ActorOrder::MoveOnto | ActorOrder::SelectionSpread { .. } => None,
+                    ActorOrder::RepairKept { target: t } => {
+                        let mut w = Wire::new(command::REPAIR).target(target(*t)?).person(form, 0.0);
+                        w.flags |= BOOLEAN;
+                        w.boolean = true;
+                        Some(w)
+                    }
                 };
                 let Some(w) = w else { return Err(format!("{order:?}: no request form")) };
                 selected(&mut out, outbox, units, w)?;
@@ -1156,6 +1174,7 @@ pub mod native {
             command::STOP => vec![Command::Stop { kingdom, units }],
             command::DISBAND => vec![Command::Disband { kingdom, units }],
             command::REPAIR => match target() {
+                Some(t) if has(BOOLEAN) && w.boolean => vec![Command::Order { kingdom, units, order: crate::orders::ActorOrder::RepairKept { target: t } }],
                 Some(t) => vec![Command::Repair { kingdom, units, target: t }],
                 None => Vec::new(),
             },

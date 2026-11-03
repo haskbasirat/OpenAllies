@@ -741,13 +741,15 @@ impl Engine {
         self.parts.orgs.get(o as usize).is_some_and(|s| s.zones.slots.get(ZOC as usize).is_some_and(Option::is_some))
     }
 
-    /// Target virtual `+0x130(zone 4 of o, 1)`: `thing`'s tiles hold `o`'s ZOC.
-    pub fn holds_zoc_of(&self, thing: Key, o: OrgId) -> bool {
-        let key = match thing {
-            Key::Actor(a) => actor_key(a),
-            Key::Org(x) => org_key(x),
-        };
-        self.holds(key, org_key(o), 1 << ZOC)
+    /// Target virtual `+0x130(zone 4 of o, members)`, `0x4D4900`: an organization asked
+    /// with `members` answers by its attached members' tiles alone, anything else by its
+    /// own (`0x4EA2C0`).
+    pub fn holds_zoc_of(&self, world: &World, thing: Key, o: OrgId, members: bool) -> bool {
+        match thing {
+            Key::Org(x) if members => world.orgs.get(x as usize).is_some_and(|g| g.members.iter().any(|&m| self.attached(m) == Some(true) && self.holds(actor_key(m), org_key(o), 1 << ZOC))),
+            Key::Org(x) => self.holds(org_key(x), org_key(o), 1 << ZOC),
+            Key::Actor(a) => self.holds(actor_key(a), org_key(o), 1 << ZOC),
+        }
     }
 
     /// `0x57C8E0` with `+0xB0` set: `0x515F40` of the ZOC at the thing's position with
@@ -771,14 +773,11 @@ impl Engine {
     }
 
     /// `0x567BF0`'s virtual `+0x130(zone 4, 1)`: `thing` stands in `owner`'s ZOC.
-    /// An organization (`0x4D4900`) answers through its members.
+    /// An organization (`0x4D4900`) answers through its attached members.
     pub fn in_zoc(&self, world: &World, thing: Key, owner: ActorId) -> bool {
         match thing {
             Key::Actor(a) => self.holds(actor_key(a), actor_key(owner), 1 << ZOC),
-            Key::Org(o) => {
-                world.orgs.get(o as usize).is_some_and(|g| g.members.iter().any(|&m| self.holds(actor_key(m), actor_key(owner), 1 << ZOC)))
-                    || self.holds(org_key(o), actor_key(owner), 1 << ZOC)
-            }
+            Key::Org(o) => world.orgs.get(o as usize).is_some_and(|g| g.members.iter().any(|&m| self.attached(m) == Some(true) && self.holds(actor_key(m), actor_key(owner), 1 << ZOC))),
         }
     }
 
@@ -920,7 +919,9 @@ impl Engine {
             // AfterInit 0x56EC90 (component virtual +0x14) of the new thing
             self.with(world, |map, c| component::activate(map, c, key, PC));
         }
-        if d.city > 0.0 {
+        // A City the record's Load made has its zone 8 at the definition's radius, 0 on
+        // (2v2)Comrades' block (`PlacedThing::saved_city`).
+        if d.city > 0.0 || world.books.actor(id).and_then(|b| b.placed).and_then(|p| world.map.placed.get(p)).is_some_and(|p| p.saved_city) {
             self.city_init(world, key, d.city);
         }
     }
@@ -1280,7 +1281,7 @@ impl Engine {
         }
         self.parts.owner_override = None;
         for (i, &r) in kept.iter().enumerate() {
-            // 0x9f32dc (0.0) <= kept radius
+            // 0x9F32DC (0.0) <= kept radius
             if !(f32::from_bits(r) >= 0.0) {
                 continue;
             }
@@ -1443,6 +1444,14 @@ impl Engine {
             Key::Org(o) => org_key(o),
         };
         self.with(world, |map, c| aa_zones::query::tile_friendly_supply(&map.pool, set, word, c, k.as_ref(), ex)).unwrap_or(false)
+    }
+
+    /// `0x54EFC0(owner, kind)` on tile `t`: the first enemy zone of the type there, 0 for
+    /// none.
+    pub fn enemy_zone(&mut self, world: &World, t: usize, owner: KingdomId, kind: u32) -> u32 {
+        let Some(set) = self.map.tiles.get(t).map(|x| x.set) else { return 0 };
+        let owner = kingdom_key(owner);
+        self.with(world, |map, c| aa_zones::query::tile_enemy_zone(&map.pool, set, c, owner, kind)).unwrap_or(0)
     }
 
     /// The relay search of `0x58AE10`: over the tiles of `0x554CC0` (the

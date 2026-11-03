@@ -698,8 +698,8 @@ fn saved_component_values(world: &mut World, things: &SavedThings, kept: &BTreeM
     // applies the kingdom's properties to its members (0x4D1350), and +60 stands until
     // a change of modifiers refreshes it: on the traces the technologies' MORALE is in
     // it once, from the properties the organization itself holds, not its members',
-    // unless a level above the first has refreshed them (the Experience's Load):
-    // 45 + 1 at level 0, 45 + 10 * 1.5 at level 2.
+    // unless a level with a MORALE add has refreshed them (the Experience's Load):
+    // 45 + 1 at levels 0 and 1, whose add is 0, 45 + 10 * 1.5 at level 2.
     let techs: Vec<Vec<String>> = (0..world.kingdoms.len() as u32).map(|k| world.books.kingdom(k).map_or_else(Vec::new, |b| b.technologies.clone())).collect();
     let resources = world.data.resources.len();
     for k in 0..world.kingdoms.len() as u32 {
@@ -718,7 +718,8 @@ fn saved_component_values(world: &mut World, things: &SavedThings, kept: &BTreeM
             .filter(|m| m.kind.eq_ignore_ascii_case("ADD") && m.attribute.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("MORALE")))
             .map(|m| m.amount)
             .sum();
-        let sum = if st.orgs[o as usize].level == 0 { crate::morale::morale_maximum(world, &st, o) } else { st.orgs[o as usize].morale_max };
+        let refreshed = crate::morale::level(world, &st, o).is_some_and(|l| l.morale != 0.0);
+        let sum = if refreshed { st.orgs[o as usize].morale_max } else { crate::morale::morale_maximum(world, &st, o) };
         st.orgs[o as usize].morale_max = crate::zones::clamp_add(sum, own, clamp);
         st.orgs[o as usize].saved_morale_living = Some(st.orgs[o as usize].living);
     }

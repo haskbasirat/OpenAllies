@@ -722,23 +722,24 @@ fn members_pursue_their_own_targets_while_the_regiment_holds() {
     assert_eq!(w.orgs[o as usize].order, Order::Attack { target: enemy });
 }
 
+/// The rout is a state of the regiment's Mind (0x52A810(rout, 2), 0x521240): it chooses its
+/// point and walks there, and a person's order does not reach it (0x4D9B60).
 #[test]
 fn routing_regiment_keeps_its_rout_order() {
     let (data, ids) = data();
     let mut w = world(open_map(128, 128, 4.0), data);
     let o = spawn_regiment(&mut w, ids.regiment, 0, Vec2::new(100.0, 100.0), 0.0);
-    let rout = Vec2::new(100.0, 400.0);
-    w.combat.orgs.resize_with(1, Default::default);
-    w.combat.orgs[0].routing = Some(aa_play::combat::Rout { since: 0.0, destination: Some(rout), next_think: 0.0 });
-    w.orgs[o as usize].order = Order::Move { to: rout, attack_move: false };
+    advance(&mut w, 2);
+    w.step(vec![Command::Order { kingdom: 0, units: vec![Unit::Org(o)], order: aa_play::orders::ActorOrder::Rout }]);
     advance(&mut w, 16);
-    // The player cannot order it, and another order is replaced again.
-    assert!(movement::command(&mut w, &Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to: Vec2::new(400.0, 100.0), attack_move: false }).is_err());
-    w.orgs[o as usize].order = Order::Move { to: Vec2::new(400.0, 100.0), attack_move: false };
-    advance(&mut w, 1);
+    let rout = aa_play::combat::org_state(&w, o).unwrap().routing.as_ref().and_then(|r| r.destination).expect("a rout point");
     assert_eq!(w.orgs[o as usize].order, Order::Move { to: rout, attack_move: false });
+    // The player cannot order it.
+    assert!(movement::command(&mut w, &Command::Move { kingdom: 0, units: vec![Unit::Org(o)], to: Vec2::new(400.0, 100.0), attack_move: false }).is_err());
+    assert_eq!(w.orgs[o as usize].order, Order::Move { to: rout, attack_move: false });
+    let before = (w.orgs[o as usize].anchor - rout).length();
     advance(&mut w, 16 * 5);
-    assert!(w.orgs[o as usize].anchor.y > 105.0 && (w.orgs[o as usize].anchor.x - 100.0).abs() < 1.0, "{:?}", w.orgs[o as usize].anchor);
+    assert!((w.orgs[o as usize].anchor - rout).length() < before - 1.0, "{:?} to {rout:?}", w.orgs[o as usize].anchor);
 }
 
 #[test]
@@ -746,6 +747,10 @@ fn building_footprints_block_cells() {
     let (mut data, ids) = data();
     let mut hq = Def { id: "rus_corps".into(), class: Some(DefClass::Building), health: 1000.0, blocking_shape: Some("SQUARE".into()), blocking_size: Some([20.0, 20.0]), ..Default::default() };
     hq.speed_max = 0.0;
+    // What `0x553BA0` reads of a thing: its flag and the definition's shape (+0x38). A lone
+    // actor's Move now plans through those (`0x5336B0`), not through the tile footprint.
+    hq.blocking = true;
+    hq.blocking_words = soft_box(10.0, 10.0);
     data.by_id.insert(hq.id.clone(), data.defs.len() as u32);
     data.defs.push(hq);
     let hq_def = data.defs.len() as u32 - 1;
@@ -1166,7 +1171,7 @@ fn real_orders(mut w: World) {
 #[test]
 #[ignore]
 fn real_berlin_orders_as_a_person_gives_them() {
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let data = Arc::new(GameData::load(&root).expect("GameData::load"));
     let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
     let w = World::new_skirmish(data, map, &two_humans("(2v2)Berlin", [0, 2])).expect("new_skirmish");
@@ -1177,7 +1182,7 @@ fn real_berlin_orders_as_a_person_gives_them() {
 #[ignore]
 fn real_random_map_orders_as_a_person_gives_them() {
     use aa_play::mapgen::{RandomMapData, RandomMapParams};
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let data = Arc::new(GameData::load(&root).expect("GameData::load"));
     let rmg = RandomMapData::load(&root).expect("random map data");
     let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
@@ -1204,7 +1209,7 @@ fn two_humans(map_id: &str, starts: [usize; 2]) -> aa_play::SkirmishSetup {
 #[test]
 #[ignore]
 fn real_berlin_routes_and_a_regiment_marches() {
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let data = GameData::load(&root).expect("GameData::load");
     let map = GameMap::load(&root, "(2v2)Berlin").expect("GameMap::load");
     eprintln!("Berlin {}x{} cell {} starts {:?}", map.width, map.height, map.cell_size, map.start_locations);
@@ -1263,7 +1268,7 @@ fn real_berlin_routes_and_a_regiment_marches() {
 #[test]
 #[ignore]
 fn real_maps_exact_solver_against_the_f32_reference() {
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let data = GameData::load(&root).expect("GameData::load");
     let rules = PathRules::from_data(&data);
     let cases: usize = std::env::var("AA_ROUTE_CASES").ok().and_then(|v| v.parse().ok()).unwrap_or(300);

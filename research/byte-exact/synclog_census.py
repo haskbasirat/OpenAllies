@@ -13,14 +13,15 @@ Output: JSON to argv[1] (or stdout).
 import bisect
 import collections
 import json
+import os
 import re
 import struct
 import sys
 
-sys.path.insert(0, r"<game root>\reconstruction\tools\python-packages")
+sys.path.insert(0, os.path.join(os.environ["AA_GAME_ROOT"], "reconstruction", "tools", "python-packages"))
 import capstone  # noqa: E402
 
-NATIVE = r"<game root>\reconstruction\research\native-aa"
+NATIVE = os.path.join(os.environ["AA_GAME_ROOT"], "reconstruction", "research", "native-aa")
 LOGGERS = {
     0x77DA70: "int",
     0x77D930: "float",

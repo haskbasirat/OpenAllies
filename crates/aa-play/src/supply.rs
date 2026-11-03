@@ -654,19 +654,32 @@ fn update_state(world: &mut World, key: Key) {
     run(world, key, |b, k| native::update_supply_state(b, k).map(|_| ()));
 }
 
-/// 0x4D6660 as it stands now: state 20 (under siege) is `+0x128` not empty, or
-/// the last hit within UnderSiegeRecentlyDamagedSeconds (0x4D0440: the time of
-/// Body +0x28's record, organization +0x90), or City +0x20, for a living thing.
-/// The Denizen's guard zone part (0x569540, zone 5) is not bound. The original
-/// takes the state at its refresh points (a hit 0x5625C0, the Element Tick
-/// 0x570B90, the City Tick 0x5647A0, 0x566400, a death 0x4D7960) and keeps it
-/// between them; this answers at the time of asking.
+/// State 20 (under siege). The original takes it at its refresh points and keeps it
+/// between them: a hit (0x5625C0, before the hit's own record, so the first hit of a
+/// quiet thing does not set it), a death 0x4D7960 and a once-a-second tick: on Berlin2v2_1
+/// it falls 7 to 8 s after the last hit (UnderSiegeRecentlyDamagedSeconds = 7), on members
+/// and on blocks. A member's is taken at the Element Tick 0x570B90 (`Books::saved_siege`).
+/// **Rendition:** a thing with no Element Tick answers at the time of asking.
 pub fn under_siege(world: &World, a: ActorId) -> bool {
     if !world.actors.get(a as usize).is_some_and(|x| x.alive) {
         return false;
     }
-    let c = world.combat.actor(a);
-    if world.books.actor(a).is_some_and(|b| b.city_siege || b.saved_siege) || c.is_some_and(|c| !c.bombarding.is_empty()) {
+    if world.actors[a as usize].org.is_some() {
+        return world.books.actor(a).is_some_and(|b| b.saved_siege);
+    }
+    world.books.actor(a).is_some_and(|b| b.saved_siege) || siege_now(world, &world.combat, a)
+}
+
+/// 0x4D6660 as it stands now: `+0x128` not empty, or the last hit within
+/// UnderSiegeRecentlyDamagedSeconds (0x4D0440: the time of Body +0x28's record), or
+/// City +0x20, for a living thing. The Denizen's guard zone part (0x569540, zone 5) is
+/// not bound.
+pub(crate) fn siege_now(world: &World, st: &crate::combat::CombatState, a: ActorId) -> bool {
+    if !world.actors.get(a as usize).is_some_and(|x| x.alive) {
+        return false;
+    }
+    let c = st.actor(a);
+    if world.books.actor(a).is_some_and(|b| b.city_siege) || c.is_some_and(|c| !c.bombarding.is_empty()) {
         return true;
     }
     c.and_then(|c| c.last_hit).is_some_and(|(_, t)| {
@@ -1177,7 +1190,7 @@ fn regenerate(world: &mut World, o: OrgId, dt: f32) {
             return;
         }
         let def = world.data.def(org.def);
-        if !def.supply_used || world.books.org(o).is_none_or(|b| b.out_of_supply) || engaged(world, o) {
+        if !def.supply_used || world.books.org(o).is_none_or(|b| b.out_of_supply) || engaged(world, o) || crate::transport::dropping_into(world, o) {
             return;
         }
         let shortage = world.books.kingdom(org.kingdom).map_or(0.0, |k| k.shortage_ratio);

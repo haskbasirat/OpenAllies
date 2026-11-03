@@ -50,11 +50,11 @@
 //! 0x578AC0 and 0x57A5E0) and fall back to a move at the actor when the kill
 //! state refuses a target that is not hostile (0x51D920, 0x57A500, 0x520320).
 //!
-//! Delivery checks the thing's command mask twice (0x4ED360 vt+150, 0x4D9B60 vt+38), so
-//! a regiment Mind command the thing does not hold is not given: a retreat from an
-//! engaged regiment too low in morale, anything to a routing one. Those are counted in
-//! [`Mapper::dropped`] as `<command>: not in the command mask`. They are decided by
-//! `aa_play::orders::guess::action_bits`, a rendition of 0x4D1350.
+//! Delivery checks the thing's owner and command mask twice (0x4ED360 vt+150, 0x4D9B60
+//! vt+38), so a command the thing does not hold is not given: a retreat from an engaged
+//! regiment too low in morale, anything to a routing one, a recruit at a building with
+//! nothing to recruit. Those are counted in [`Mapper::dropped`] as `<command>: not in the
+//! command mask`. They are decided by `aa_play::orders::mask` (0x4D1350).
 use crate::decree::Decree;
 use crate::film::FilmDecree;
 use aa_orders::commands::CommandWire;
@@ -73,6 +73,10 @@ pub trait NativeIds {
     fn thing(&self, slot: u16) -> Option<Unit>;
     /// Full 32-bit GTID → the live unit, `None` when the generation is stale.
     fn gtid(&self, gtid: u32) -> Option<Unit>;
+    /// 0x4ECFF0's gate: the thing in this slot may be selected.
+    fn selectable(&self, _slot: u16) -> bool {
+        true
+    }
     /// The actor an aa-play `Attack`/`Follow` should aim at for a unit
     /// (for an organization: the actor aa-play targets for it).
     fn target_actor(&self, unit: Unit) -> Option<ActorId>;
@@ -96,9 +100,9 @@ pub trait NativeIds {
     fn guess(&self, _unit: Unit, _flags: u16, _word: u32, _non_group_excluded: bool) -> Option<u32> {
         None
     }
-    /// vt+150 (0x4ED360) / vt+38 (0x4D9B60): the ActorCommand is in this unit's
-    /// command mask now (Actor +F0, rebuilt by 0x4D1350).
-    fn accepts(&self, _unit: Unit, _index: u32) -> bool {
+    /// vt+150 (0x4ED360) / vt+38 (0x4D9B60): the unit is `kingdom`'s and the ActorCommand
+    /// is in its command mask now (Actor +F0, rebuilt by 0x4D1350).
+    fn accepts(&self, _kingdom: KingdomId, _unit: Unit, _index: u32) -> bool {
         true
     }
     /// 0x578AC0 and 0x57A5E0: a kill of this unit is a bombard.
@@ -152,6 +156,8 @@ pub struct Mapper {
     /// The command being mapped goes to a group, which runs each member's Mind
     /// handler itself.
     grouped: bool,
+    /// What each selected slot held when it was selected.
+    selected_things: BTreeMap<u16, Unit>,
 }
 
 impl Mapper {
@@ -167,18 +173,15 @@ impl Mapper {
                 self.player = (*player != 0).then_some(*player);
                 Mapped::State
             }
+            // 0x5F4450: 0x4ED0D0, then 0x4ECFF0.
             Decree::SelectionSet { slot } => {
                 self.selection().clear();
-                if *slot != 0 {
-                    self.selection().push(*slot);
-                }
+                self.select(*slot, ids);
                 Mapped::State
             }
+            // 0x5F4490: 0x4ECFF0.
             Decree::SelectionAdd { slot } => {
-                let s = self.selection();
-                if !s.contains(slot) {
-                    s.push(*slot);
-                }
+                self.select(*slot, ids);
                 Mapped::State
             }
             Decree::SelectionRemove { slot } => {
@@ -201,6 +204,7 @@ impl Mapper {
             }
             Decree::UpdateKingdomName { .. } => Mapped::NoEffect("kingdom display name"),
             Decree::TellSelectedCommand(wire) => {
+                self.prune(ids);
                 let slots = self.selection().clone();
                 self.selected(wire, &slots, ids)
             }
@@ -281,6 +285,30 @@ impl Mapper {
 
     fn selection(&mut self) -> &mut Vec<u16> {
         self.selections.entry(self.player.unwrap_or(0)).or_default()
+    }
+    /// 0x4ECFF0: a thing goes in at the head of the list, which 0x4ED360 and 0x4E0940
+    /// walk from the head, so the last one added gets the order first. An actor
+    /// attached to an organization (vt+B4, Actor +80 +10) is refused unless
+    /// [B36550]+E4 is 3, which it never is in a game (2) or a film (4).
+    fn select(&mut self, slot: u16, ids: &dyn NativeIds) {
+        if slot == 0 || self.selection().contains(&slot) || !ids.selectable(slot) {
+            return;
+        }
+        if let Some(unit) = ids.thing(slot) {
+            self.selected_things.insert(slot, unit);
+        }
+        self.selection().insert(0, slot);
+    }
+    /// 0x4EA6F0 -> 0x76C790: a thing that goes leaves every selection at once, so a list of
+    /// two with one gone is no selection of many (0x4ECF00). Here it goes when next looked
+    /// at, also when its slot holds another thing by now.
+    fn prune(&mut self, ids: &dyn NativeIds) {
+        let things = std::mem::take(&mut self.selected_things);
+        self.selection().retain(|s| {
+            let now = ids.thing(*s);
+            now.is_some() && things.get(s).is_none_or(|was| now == Some(*was))
+        });
+        self.selected_things = things;
     }
     fn kingdom(&self, ids: &dyn NativeIds) -> Option<KingdomId> {
         let player = self.player?;
@@ -415,7 +443,13 @@ impl Mapper {
             && index != Some(38)
             && self.group_on.get(&player).copied().unwrap_or(false);
         if !grouped {
-            return self.command(wire, slots, ids);
+            let mapped = self.command(wire, slots, ids);
+            // 0x4ED280 (position, no bit 1): the centre is the whole selection's. A
+            // command that holds all of it finds that itself.
+            if multi && wire.flags >> 2 & 1 != 0 && wire.flags >> 1 & 1 == 0 {
+                return self.spread(mapped, slots, ids);
+            }
+            return mapped;
         }
         let Some(kingdom) = self.kingdom(ids) else {
             return unresolved("ordering player kingdom");
@@ -445,6 +479,23 @@ impl Mapper {
         }
     }
 
+    /// `mapped`, whose commands go through the lower path of 0x4ED360, with the
+    /// selection's centre when they do not hold the whole selection in one command.
+    fn spread(&self, mapped: Mapped, slots: &[u16], ids: &dyn NativeIds) -> Mapped {
+        let Mapped::Commands(commands) = mapped else { return mapped };
+        let Some(kingdom) = self.kingdom(ids) else { return Mapped::Commands(commands) };
+        let units: Vec<Unit> = slots.iter().filter_map(|s| ids.thing(*s)).collect();
+        let whole = commands.len() == 1 && aa_play::orders::group::Request::of(&commands[0]).is_none_or(|r| r.units() == units);
+        if whole || commands.is_empty() {
+            return Mapped::Commands(commands);
+        }
+        let mark = |on: bool| Command::Order { kingdom, units: units.clone(), order: ActorOrder::SelectionSpread { on } };
+        let mut out = vec![mark(true)];
+        out.extend(commands);
+        out.push(mark(false));
+        Mapped::Commands(out)
+    }
+
     /// 0x61EBA0 command on `slots` (86: the selection, 87: one actor). The
     /// selection's thing that is gone is skipped, as 0x4ED360's vt+B4 skips it.
     fn command(&mut self, wire: &CommandWire, slots: &[u16], ids: &dyn NativeIds) -> Mapped {
@@ -466,17 +517,19 @@ impl Mapper {
             return Mapped::Unresolved(format!("ActorCommand {name} with an empty selection"));
         }
         let Some(index) = wire.command else {
-            // 0x4ED360 / 0x4CF430: each unit guesses its own command.
-            let excluded = units.len() > 1;
+            // 0x4ED360 / 0x4CF430: each unit guesses its own command, in the selection's
+            // order, so only neighbours with one guess go as one command. 0x4ED551: the
+            // list's head and tail, not who still lives.
+            let excluded = slots.first() != slots.last();
             let mut groups: Vec<(u32, Vec<Unit>)> = Vec::new();
             for u in units {
                 let Some(index) = ids.guess(u, wire.flags, wire.word, excluded) else {
                     *self.dropped.entry("default order: unit guessed nothing").or_default() += 1;
                     continue;
                 };
-                match groups.iter_mut().find(|g| g.0 == index) {
-                    Some(g) => g.1.push(u),
-                    None => groups.push((index, vec![u])),
+                match groups.last_mut() {
+                    Some(g) if g.0 == index => g.1.push(u),
+                    _ => groups.push((index, vec![u])),
                 }
             }
             let mut out = Vec::new();
@@ -509,13 +562,13 @@ impl Mapper {
         }
         // 0x4ED360: vt+150 then 0x4D9B60: vt+38. A thing without the command in its
         // mask does not get it: an engaged regiment too low in morale to retreat
-        // (0x521E10), a routing one. A group asks each member itself (0x4DE7F0). Only
-        // the slot 4 commands: the mask of the other slots is not rendered.
-        let units = if !self.grouped && (index as usize) < MASKED.len() {
+        // (0x521E10), a routing one. A group asks each member itself (0x4DE7F0). The
+        // group behaviour commands 37 and 38 never reach a thing (0x4ED3F5).
+        let units = if !self.grouped && !matches!(index, 37 | 38) {
             let before = units.len();
-            let units: Vec<Unit> = units.into_iter().filter(|u| ids.accepts(*u, index)).collect();
+            let units: Vec<Unit> = units.into_iter().filter(|u| ids.accepts(kingdom, *u, index)).collect();
             if units.len() != before {
-                *self.dropped.entry(MASKED[index as usize]).or_default() += (before - units.len()) as u32;
+                *self.dropped.entry(masked_name(name)).or_default() += (before - units.len()) as u32;
             }
             if units.is_empty() {
                 return Mapped::Commands(Vec::new());
@@ -649,11 +702,13 @@ impl Mapper {
                 let Some(target) = target_of(wire.word) else {
                     return unresolved("repair target GTID");
                 };
-                if has(9) {
-                    // The 0x51ECF0 argument: how long the repair state stays.
-                    *self.dropped.entry("repair boolean").or_default() += 1;
+                // 0x51F5A0: flag bit 9 gives 0x51ECF0 the command's +30, the state's +18:
+                // it stays on a target that is whole.
+                if has(9) && wire.boolean {
+                    vec![order(units, ActorOrder::RepairKept { target })]
+                } else {
+                    vec![Command::Repair { kingdom, units, target }]
                 }
-                vec![Command::Repair { kingdom, units, target }]
             }
             "construct" => {
                 let Some(def) = wire.object.and_then(|o| ids.definition(o)) else {
@@ -909,23 +964,49 @@ impl Mapper {
     }
 }
 
-/// [`Mapper::dropped`]'s names of the commands the mask gate takes away, by index:
-/// the regiment Mind's commands 0..=12 (0x521E10).
-const MASKED: [&str; 13] = [
-    "kill: not in the command mask",
-    "bombard: not in the command mask",
-    "guard: not in the command mask",
-    "repair: not in the command mask",
-    "construct: not in the command mask",
-    "move: not in the command mask",
-    "stop: not in the command mask",
-    "retreat: not in the command mask",
-    "rout: not in the command mask",
-    "explore: not in the command mask",
-    "disband: not in the command mask",
-    "unpack: not in the command mask",
-    "pack_organization: not in the command mask",
-];
+/// [`Mapper::dropped`]'s name of a command the mask gate takes away.
+fn masked_name(name: &str) -> &'static str {
+    const NAMES: [(&str, &str); 37] = [
+        ("kill", "kill: not in the command mask"),
+        ("bombard", "bombard: not in the command mask"),
+        ("guard", "guard: not in the command mask"),
+        ("repair", "repair: not in the command mask"),
+        ("construct", "construct: not in the command mask"),
+        ("move", "move: not in the command mask"),
+        ("stop", "stop: not in the command mask"),
+        ("retreat", "retreat: not in the command mask"),
+        ("rout", "rout: not in the command mask"),
+        ("explore", "explore: not in the command mask"),
+        ("disband", "disband: not in the command mask"),
+        ("unpack", "unpack: not in the command mask"),
+        ("pack_organization", "pack_organization: not in the command mask"),
+        ("build_structure", "build_structure: not in the command mask"),
+        ("commission", "commission: not in the command mask"),
+        ("recruit", "recruit: not in the command mask"),
+        ("set_rally_point", "set_rally_point: not in the command mask"),
+        ("recruit_location", "recruit_location: not in the command mask"),
+        ("structure_cancel_queued", "structure_cancel_queued: not in the command mask"),
+        ("construction_cancel", "construction_cancel: not in the command mask"),
+        ("sell", "sell: not in the command mask"),
+        ("upgrade", "upgrade: not in the command mask"),
+        ("raze", "raze: not in the command mask"),
+        ("sally_forth", "sally_forth: not in the command mask"),
+        ("recall", "recall: not in the command mask"),
+        ("air_attack", "air_attack: not in the command mask"),
+        ("air_recon", "air_recon: not in the command mask"),
+        ("escort_on", "escort_on: not in the command mask"),
+        ("escort_off", "escort_off: not in the command mask"),
+        ("attach", "attach: not in the command mask"),
+        ("detach", "detach: not in the command mask"),
+        ("hq_attach", "hq_attach: not in the command mask"),
+        ("hq_detach", "hq_detach: not in the command mask"),
+        ("set_formation", "set_formation: not in the command mask"),
+        ("pack", "pack: not in the command mask"),
+        ("research", "research: not in the command mask"),
+        ("cancel_flare", "cancel_flare: not in the command mask"),
+    ];
+    NAMES.iter().find(|n| n.0 == name).map_or("another command: not in the command mask", |n| n.1)
+}
 
 fn unresolved(what: &str) -> Mapped {
     Mapped::Unresolved(what.to_owned())
@@ -988,6 +1069,9 @@ impl NativeIds for PlayIds<'_> {
     fn thing(&self, slot: u16) -> Option<Unit> {
         aa_play::ids::unit(self.world.ids.thing_at_slot(slot)?)
     }
+    fn selectable(&self, slot: u16) -> bool {
+        !matches!(self.thing(slot), Some(Unit::Actor(a)) if self.world.actors.get(a as usize).is_some_and(|x| x.org.is_some()))
+    }
     fn gtid(&self, gtid: u32) -> Option<Unit> {
         aa_play::ids::unit(self.world.ids.thing(gtid)?)
     }
@@ -1039,8 +1123,8 @@ impl NativeIds for PlayIds<'_> {
         let fields = aa_play::orders::guess::Fields { flags: u32::from(flags), target: word };
         aa_play::orders::guess::guess(self.world, unit, fields, non_group_excluded)
     }
-    fn accepts(&self, unit: Unit, index: u32) -> bool {
-        aa_play::orders::guess::action_bits(self.world, unit) >> index & 1 != 0
+    fn accepts(&self, kingdom: KingdomId, unit: Unit, index: u32) -> bool {
+        aa_play::orders::mask::takes(self.world, kingdom, unit, index)
     }
     fn bombards(&self, unit: Unit) -> bool {
         match unit {
@@ -1130,6 +1214,81 @@ mod tests {
         }
     }
 
+    /// 0x4ECFF0 inserts at the head and 0x4ED360 walks from the head: the thing added last
+    /// takes the command first. An add of what is there changes nothing.
+    #[test]
+    fn a_selection_is_built_at_its_head() {
+        let mut m = Mapper::new();
+        m.map(&decree(Decree::SelectionSet { slot: 13399 }), &Ids);
+        m.map(&decree(Decree::SelectionAdd { slot: 13410 }), &Ids);
+        m.map(&decree(Decree::SelectionAdd { slot: 13399 }), &Ids);
+        assert_eq!(m.selections[&2], [13410, 13399]);
+        let stop = CommandWire { flags: 0x40, command: Some(6), ..Default::default() };
+        assert_eq!(
+            m.map(&decree(Decree::TellSelectedCommand(stop)), &Ids),
+            Mapped::Commands(vec![Command::Stop { kingdom: 1, units: vec![Unit::Actor(30), Unit::Org(7)] }])
+        );
+    }
+
+    /// 0x76C790: what has gone is out of the selection when the next order comes.
+    #[test]
+    fn what_has_gone_leaves_the_selection() {
+        let mut m = Mapper::new();
+        m.map(&decree(Decree::SelectionSet { slot: 13399 }), &Ids);
+        m.map(&decree(Decree::SelectionAdd { slot: 13411 }), &Ids);
+        assert_eq!(m.selections[&2], [13411, 13399]);
+        let stop = CommandWire { flags: 0x40, command: Some(6), ..Default::default() };
+        assert_eq!(
+            m.map(&decree(Decree::TellSelectedCommand(stop)), &Ids),
+            Mapped::Commands(vec![Command::Stop { kingdom: 1, units: vec![Unit::Org(7)] }])
+        );
+        assert_eq!(m.selections[&2], [13399]);
+    }
+
+    /// 0x4ECFF0: an actor attached to an organization is not selected, by a set either.
+    #[test]
+    fn an_attached_member_is_not_selected() {
+        struct Attached;
+        impl NativeIds for Attached {
+            fn kingdom(&self, player: u32) -> Option<KingdomId> {
+                Ids.kingdom(player)
+            }
+            fn thing(&self, slot: u16) -> Option<Unit> {
+                Ids.thing(slot)
+            }
+            fn selectable(&self, slot: u16) -> bool {
+                slot != 13410
+            }
+            fn gtid(&self, gtid: u32) -> Option<Unit> {
+                Ids.gtid(gtid)
+            }
+            fn target_actor(&self, unit: Unit) -> Option<ActorId> {
+                Ids.target_actor(unit)
+            }
+            fn definition(&self, object: u32) -> Option<DefId> {
+                Ids.definition(object)
+            }
+            fn formation(&self, _org: OrgId, _formation: u32) -> Option<usize> {
+                None
+            }
+            fn property(&self, _property: u32) -> Option<String> {
+                None
+            }
+            fn general_ability(&self, _kingdom: KingdomId, _ability: u32) -> Option<u32> {
+                None
+            }
+            fn named(&self, _selector: &[u16]) -> Option<Unit> {
+                None
+            }
+        }
+        let mut m = Mapper::new();
+        m.map(&decree(Decree::SelectionSet { slot: 13399 }), &Attached);
+        m.map(&decree(Decree::SelectionAdd { slot: 13410 }), &Attached);
+        assert_eq!(m.selections[&2], [13399]);
+        m.map(&decree(Decree::SelectionSet { slot: 13410 }), &Attached);
+        assert!(m.selections[&2].is_empty());
+    }
+
     /// 0x4ED360 vt+150: a Mind command a thing does not hold is not given (0x521E10
     /// takes retreat from an engaged regiment too low in morale); other slots pass.
     #[test]
@@ -1163,7 +1322,7 @@ mod tests {
             fn named(&self, _selector: &[u16]) -> Option<Unit> {
                 None
             }
-            fn accepts(&self, _unit: Unit, _index: u32) -> bool {
+            fn accepts(&self, _kingdom: KingdomId, _unit: Unit, _index: u32) -> bool {
                 false
             }
         }

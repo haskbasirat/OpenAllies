@@ -25,16 +25,17 @@
 //! Settlement 0x5882B0, Construction 0x5667F0, Recruit 0x583A70,
 //! MobileDeployment 0x576650, Research 0x584980, Flare 0x571CF0.
 //!
-//! **These are renditions.** aa-play's regiment Mind is not the hosted arena
-//! Mind (`crate::minds` hosts only the aircraft), so a state here is the
-//! native Think's decisions over aa-play's `Order`, movement and combat, with
-//! the native addresses cited. They follow the exact ports (`aa_mind::cai_guard`,
-//! `aa_mind::cai_thinks::explore`) branch by branch but are not fixture-proven.
-//! What is exact is said where it is.
+//! **What is a rendition.** The regiment Mind's Move, Kill and fighting states are hosted
+//! on the arena (`crate::movement`, `crate::minds`). The states that stay here (`explore`,
+//! the retreat's bookkeeping) are the native Think's decisions over aa-play's `Order`, with the
+//! native addresses cited: they follow the exact ports (`aa_mind::cai_thinks::explore`) branch
+//! by branch but are not fixture-proven. What is exact is said where it is: the command mask
+//! `mask` hosts the exact contributors, and the arithmetic of `group` is fixture-proven.
 pub mod explore;
 pub mod group;
 pub mod guard;
 pub mod guess;
+pub mod mask;
 
 use crate::data::DefId;
 use crate::world::{ActorId, Command, KingdomId, Order, OrgId, Unit, World};
@@ -108,6 +109,13 @@ pub enum ActorOrder {
     /// command +20 into the Move state's +24, which Enter 0x523080 writes to Mind
     /// +2B4). A move reads it through `next_aux`; a guard has its own.
     Facing { aux: Vec2 },
+    /// 0x4ED360's lower path over a selection whose things do not all take one command
+    /// (each guessed its own, or one holds no such command): 0x4ED280's centre is the
+    /// whole selection's, `units`, for the commands up to the `on: false`.
+    SelectionSpread { on: bool },
+    /// repair (3) with flag bit 9 and +30 set (0x51F5A0 -> 0x51ECF0): the repair state's
+    /// +18, which stays on a target that is whole (0x5239A0 step 5, 0x5359D0).
+    RepairKept { target: ActorId },
     /// team_give_resources (23 TeamCommand 3), 0x509840: `amount` of the team
     /// resource goes from one kingdom to another.
     GiveResources { to: KingdomId, amount: f32 },
@@ -118,11 +126,13 @@ pub enum ActorOrder {
 /// Which Mind state an order put an organization in.
 #[derive(Clone, Debug)]
 pub(crate) enum MindState {
-    Guard(guard::Guard),
+    /// The Guard state is on the regiment Mind's stack (`crate::movement`'s fight).
+    Guard,
     /// The move of a retreat (actor state 13 `mind_retreating`, 0x5202DD): the
     /// order it wrote; a different order ended it.
     Retreat { order: Order },
-    Explore(explore::Explore),
+    /// The Explore state is on the regiment Mind's stack (`crate::movement`'s fight).
+    Explore,
 }
 
 /// Order side state (`World::orders`).
@@ -131,6 +141,10 @@ pub struct OrderState {
     pub(crate) orgs: BTreeMap<OrgId, MindState>,
     /// The GGroups and the selection settings (`group`).
     pub groups: group::Groups,
+    /// The selection's centre of a command its things take apart (`ActorOrder::SelectionSpread`).
+    pub(crate) selection_center: Option<Vec2>,
+    /// The things whose repair state has +18 (`ActorOrder::RepairKept`).
+    pub(crate) repair_kept: Vec<Unit>,
     /// `ActorOrder::Facing`, for the command being applied.
     pub next_aux: Option<Vec2>,
     /// `ActorOrder::MoveOnto`: the organizations whose next kill order came from a
@@ -147,7 +161,9 @@ pub(crate) fn guard_position(world: &World, unit: Unit) -> Option<Vec2> {
 /// retreat formation (`mind_retreating` formation_required RETREAT) and it
 /// fights nothing on the way (behavior_required PASSIVE).
 pub fn retreating(world: &World, org: OrgId) -> bool {
-    matches!(world.orders.orgs.get(&org), Some(MindState::Retreat { .. }))
+    // The Move state's leave ends it (0x520250 reports for the current Move only), before
+    // the Sleep that follows in the same update takes its formation.
+    matches!(world.orders.orgs.get(&org), Some(MindState::Retreat { order }) if world.orgs.get(org as usize).is_some_and(|o| o.order == *order))
 }
 /// The organization's order comes from a `move` command on a target
 /// ([`ActorOrder::MoveOnto`]); read once.
@@ -158,17 +174,18 @@ pub(crate) fn take_move_onto(world: &mut World, org: OrgId) -> bool {
 }
 /// Whether organization `org` is in the guard state (`mind_guarding`).
 pub fn guarding(world: &World, org: OrgId) -> bool {
-    matches!(world.orders.orgs.get(&org), Some(MindState::Guard(_)))
+    matches!(world.orders.orgs.get(&org), Some(MindState::Guard))
 }
 /// Whether organization `org` is in the explore state (`mind_exploring`).
 pub fn exploring(world: &World, org: OrgId) -> bool {
-    matches!(world.orders.orgs.get(&org), Some(MindState::Explore(_)))
+    matches!(world.orders.orgs.get(&org), Some(MindState::Explore))
 }
 
 /// A new Mind command replaces the state an order put the organization in
 /// (0x52A420 leaves the old state). `World::apply` calls this first.
 pub(crate) fn superseded(world: &mut World, command: &Command) {
     let clear = |world: &mut World, unit: Unit| {
+        world.orders.repair_kept.retain(|u| *u != unit);
         let org = match unit {
             Unit::Org(o) => Some(o),
             Unit::Actor(a) => world.actors.get(a as usize).and_then(|x| x.org),
@@ -190,7 +207,7 @@ pub(crate) fn superseded(world: &mut World, command: &Command) {
                 clear(world, u);
             }
         }
-        Command::Order { units, order: ActorOrder::PackOrganization | ActorOrder::Unpack { .. }, .. } => {
+        Command::Order { units, order: ActorOrder::PackOrganization | ActorOrder::Unpack { .. } | ActorOrder::RepairKept { .. }, .. } => {
             for &u in units {
                 clear(world, u);
             }
@@ -315,6 +332,18 @@ pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
             if let Some(b) = boolean {
                 settings.together = *b;
             }
+            Ok(())
+        }
+        ActorOrder::RepairKept { target } => {
+            world.orders.repair_kept.extend(units.iter().copied());
+            let result = crate::combat::tasks::command(world, &Command::Repair { kingdom, units: units.clone(), target: *target });
+            if result.is_err() {
+                world.orders.repair_kept.retain(|u| !units.contains(u));
+            }
+            result
+        }
+        ActorOrder::SelectionSpread { on } => {
+            world.orders.selection_center = on.then(|| group::center_of(world, units)).flatten();
             Ok(())
         }
         ActorOrder::GroupFormed => {
@@ -568,21 +597,7 @@ pub(crate) fn tick(world: &mut World) {
                     world.orders.orgs.remove(&o);
                 }
             }
-            MindState::Guard(_) | MindState::Explore(_) => {
-                if st.orgs[i].routing.is_some() {
-                    // 51F190 releases the pending commands; the state ends.
-                    world.orders.orgs.remove(&o);
-                    continue;
-                }
-                if st.orgs[i].auto_order.is_some() || st.orgs[i].reform.is_some() || st.orgs[i].exhausted_state || st.orgs[i].task.is_some() {
-                    continue;
-                }
-                match state {
-                    MindState::Guard(_) => guard::think(world, &mut st, o),
-                    MindState::Explore(_) => explore::think(world, &mut st, o),
-                    MindState::Retreat { .. } => {}
-                }
-            }
+            MindState::Guard | MindState::Explore => {}
         }
     }
     world.combat = st;

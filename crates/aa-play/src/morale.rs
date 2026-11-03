@@ -14,17 +14,11 @@
 //! - aa_combat::organization: member removal `57CD70` (MoraleDeathFactor *
 //!   member morale_value, called from combat.rs), the entrenchment check of
 //!   `57C8E0` (entrenchment_time / ENTRENCHMENT_RATE in an entrenchable state).
-//! - aa_mind::cai_rout: rout enter `51F190` (halt, engage list cleared,
-//!   pending commands released), Think `521240` (RoutingTime, destination
-//!   `52B530`/`52A930` from aa_mind::rout_select / rout_score). The rout
-//!   ends through the CAI Mind: RoutingTime runs out (`+178`, `522B90`) or
-//!   the destination is reached (`+144`, `5222E0`); a regiment still
-//!   exhausted (`578140` state 0) takes the exhausted state (`51FAE0`,
-//!   Think `51E260`: rest until the morale is steady), otherwise the
-//!   time-out returns it to rest and the arrival to the reform state
-//!   (aa_mind::cai_thinks::reform `51DE70`).
-//! - aa_mind::cai_engage_think step 1 (wavering while engaged -> rout) and
-//!   aa_mind::cai_sleep step 2 (exhausted while resting -> rout).
+//! - The rout (`51F190`, `521240`, `52B530`) and the exhausted state (`521AF0`, `51E260`)
+//!   are on the regiment Mind (`crate::movement`'s fight, `aa_mind::cai_rout`,
+//!   `aa_mind::rout_select`); here are the reactions that begin them, through
+//!   `crate::movement::mind_morale_reaction` (`51F920`, `51F9F0`), and the rout handler
+//!   `4D3FA0` its Enter calls ([`rout_handler`]).
 //! - aa_body::experience_amounts (`571820/5718B0/5718E0`), aa_body::experience
 //!   award routing `4CE770` and aa_body::promotion `571A60` (every crossed
 //!   level in list order).
@@ -32,13 +26,11 @@
 //! The arithmetic follows the ports' x87 chains at PC53 with the original
 //! binary32 stores (`combat::x87`).
 use crate::combat::{
-    self, CombatState, EPSILON, Reform, Rout, SLEEP_THINK_SECONDS, ENGAGE_THINK_SECONDS, TargetRef,
+    self, CombatState, EPSILON, TargetRef,
     x87::{self, load as ld, store as fstp},
 };
-use crate::map::{BLOCKED, NOT_LAND_PASSABLE};
 use crate::world::{Event, Order, OrgId, World};
 use crate::DT;
-use glam::Vec2;
 
 pub fn tick(world: &mut World) {
     let mut st = std::mem::take(&mut world.combat);
@@ -47,6 +39,12 @@ pub fn tick(world: &mut World) {
         org_tick(world, &mut st, id);
     }
     world.combat = st;
+    // 57C400 for the Mind states not on the hosted stack.
+    for id in 0..world.orgs.len() as OrgId {
+        if world.orgs[id as usize].alive {
+            crate::movement::formation_follow(world, id);
+        }
+    }
 }
 
 /// The Mind state descriptor of actor state group 4 (actor_states.tgi /
@@ -191,18 +189,19 @@ fn state_in(world: &World, st: &CombatState, id: OrgId) -> RegimentState {
     }
 }
 
-/// `578140` (a busy Mind and the `+5C` decline are not modelled).
+/// `578140`: at or below the breakpoint, 0 at no morale or with the Exhausted state on
+/// the stack (Mind `+5C` `51D450`), else 1. (A busy Mind, +28 and +2C, is not modelled.)
 pub fn state(o: &combat::OrgCombat, morale: f32) -> u8 {
     if o.morale_max <= 0.0 || morale > o.breakpoint {
         2
-    } else if morale == 0.0 {
+    } else if morale == 0.0 || o.exhausted_state {
         0
     } else {
         1
     }
 }
 
-fn level<'a>(world: &World, st: &'a CombatState, id: OrgId) -> Option<&'a combat::ExperienceLevel> {
+pub(crate) fn level<'a>(world: &World, st: &'a CombatState, id: OrgId) -> Option<&'a combat::ExperienceLevel> {
     let s = &st.orgs[id as usize];
     st.extras().def(world.orgs[id as usize].def).levels.get(s.level)
 }
@@ -364,20 +363,15 @@ pub(crate) fn lose(world: &mut World, st: &mut CombatState, id: OrgId, amount: f
     }
     if after != before {
         match after {
-            0 => exhausted_reaction(world, st, id),
-            1 => begin_rout(world, st, id), // 51F920 wavering
+            0 => {
+                crate::movement::mind_morale_reaction(world, st, id, true);
+            }
+            1 => {
+                crate::movement::mind_morale_reaction(world, st, id, false);
+            }
             _ => {}
         }
     }
-}
-
-/// `51F9F0`: no rout while engaging or already routing.
-fn exhausted_reaction(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let o = &st.orgs[id as usize];
-    if o.engaging() || o.routing.is_some() {
-        return;
-    }
-    begin_rout(world, st, id);
 }
 
 /// `579AB0` on a retreat order out of an engagement (MoraleRetreatPenalty).
@@ -456,27 +450,20 @@ fn target_value(world: &World, st: &CombatState, t: TargetRef) -> (f32, f32) {
     }
 }
 
-/// `52A810(rout, 2)` from a morale reaction: the rout state replaces the
-/// Mind's states (`52A420`) unless the regiment is routing already.
+/// `52A810(rout, 2)`, a rout command: the rout state replaces the Mind's states unless
+/// the regiment is routing already.
 pub(crate) fn begin_rout(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
     if st.orgs[i].routing.is_some() || !world.orgs[i].alive || st.orgs[i].destroyed {
         return;
     }
-    enter_rout(world, st, id);
+    crate::movement::mind_morale_reaction(world, st, id, false);
 }
 
-/// `52A420` + `51F190` KKC_CAIStateRout::OnEnter with the `4D3FA0` rout
-/// handler: the states are cleared (a running rout move stops, `51E130`),
-/// the entry time is now and the destination is chosen anew.
-fn enter_rout(world: &mut World, st: &mut CombatState, id: OrgId) {
+/// `4D3FA0` in the rout's Enter `51F190`: every live engaged-by attacker gets breaker
+/// morale and the rout experience.
+pub(crate) fn rout_handler(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
-    let now = world.time;
-    st.orgs[i].routing = Some(Rout { since: now, destination: None, next_think: now });
-    st.orgs[i].reform = None;
-    st.orgs[i].exhausted_state = false;
-    world.events.push(Event::Routed { org: id });
-    // 4D3FA0: every live engaged-by attacker gets breaker morale and the rout experience.
     let attackers = st.orgs[i].engaged_by.clone();
     let rules = st.rules.clone().expect("prepared");
     for a in attackers {
@@ -489,253 +476,6 @@ fn enter_rout(world: &mut World, st: &mut CombatState, id: OrgId) {
         let amount = combat::experience_clamped(combat::experience_ratio(victim, fake, source, &rules), rules.experience_rout, &rules);
         award(world, st, a, amount);
     }
-    // 51F040 engage list cleared, 52C0D0 pending commands released.
-    let o = &mut st.orgs[i];
-    o.engage.clear();
-    o.explicit = None;
-    o.saved_order = None;
-    o.auto_order = None;
-    o.entrenched = false;
-    o.rest_since = None;
-    for m in world.orgs[i].members.clone() {
-        world.actors[m as usize].combat.target = None;
-    }
-    // The first Think: no move is active, so a destination is chosen.
-    rout_destination(world, st, id);
-}
-
-/// binary32 0.5: `52A1F0` arrival distance of the rout move.
-const ARRIVAL: f32 = 0.5;
-
-/// `521240` while routing: RoutingTime after the entry ends the rout
-/// (`+178`); otherwise a destination (`52B530`, a retry in 2.0 s when none
-/// is found) carried out by the movement system through the organization's
-/// order, until the regiment is within 0.5 of it (`52A1F0` -> `+144`). A
-/// move the movement system ended elsewhere is a finished move state: a new
-/// destination is chosen. The routing regiment takes no other order.
-fn rout_think(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let i = id as usize;
-    let now = world.time;
-    let Some(rout) = st.orgs[i].routing.clone() else { return };
-    let routing_time = st.rules().routing_time;
-    // `fcomp; test ah,1; jne`: the time-out unless (now - entry) < RoutingTime.
-    if !(x87::sub(ld(now), ld(rout.since)) < ld(routing_time)) {
-        rout_over(world, st, id, false);
-        return;
-    }
-    if let Some(to) = rout.destination {
-        let wanted = Order::Move { to, attack_move: false };
-        // 52A1F0: dx stored, dy*dy + dx*dx below 0.25 ([A033BC]).
-        let near = |p: Vec2| {
-            let dx = ld(fstp(x87::sub(ld(to.x), ld(p.x))));
-            let dy = x87::sub(ld(to.y), ld(p.y));
-            x87::add(x87::mul(dy, dy), x87::mul(dx, dx)) < ld(ARRIVAL * ARRIVAL)
-        };
-        if near(st.orgs[i].position) || (world.orgs[i].order == Order::Idle && near(world.orgs[i].anchor)) {
-            rout_over(world, st, id, true);
-            return;
-        }
-        if world.orgs[i].order == wanted {
-            return;
-        }
-        if world.orgs[i].order != Order::Idle {
-            world.orgs[i].order = wanted;
-            return;
-        }
-        // The move ended short of the destination: choose another.
-        if let Some(r) = st.orgs[i].routing.as_mut() {
-            r.destination = None;
-            r.next_think = now;
-        }
-    }
-    rout_destination(world, st, id);
-}
-
-/// `521240` with the move state inactive: `52B530` chooses a destination
-/// and the move starts (`520440`), or the Think retries in 2.0 s.
-fn rout_destination(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let i = id as usize;
-    let now = world.time;
-    let next = st.orgs[i].routing.as_ref().map_or(now, |r| r.next_think);
-    if now < next {
-        return;
-    }
-    match select_destination(world, st, id) {
-        Some(to) => {
-            world.orgs[i].order = Order::Move { to, attack_move: false };
-            if let Some(r) = st.orgs[i].routing.as_mut() {
-                r.destination = Some(to);
-            }
-        }
-        None => {
-            if let Some(r) = st.orgs[i].routing.as_mut() {
-                r.next_think = now + SLEEP_THINK_SECONDS;
-            }
-        }
-    }
-}
-
-/// The rout's end through the CAI Mind: RoutingTime (`+178`, `522B90`) or
-/// the destination reached (`+144`, `5222E0`). Still exhausted (`578140`
-/// state 0): `51FAE0` puts the exhausted state (Mind `+270`) in place of the
-/// rout (`52A810(2)`). Otherwise the time-out pops the rout (`52A340`, back
-/// to rest) and the arrival enters the reform state (`52A810(reform, 1)`).
-fn rout_over(world: &mut World, st: &mut CombatState, id: OrgId, arrived: bool) {
-    let i = id as usize;
-    let now = world.time;
-    st.orgs[i].routing = None;
-    st.orgs[i].next_sleep_think = now + SLEEP_THINK_SECONDS;
-    world.orgs[i].order = Order::Idle;
-    if state(&st.orgs[i], world.orgs[i].morale) == 0 {
-        st.orgs[i].exhausted_state = true;
-    } else if arrived {
-        st.orgs[i].reform = Some(Reform { since: now, next_think: now });
-    }
-}
-
-/// `51DE70` KKC_CAIStateReform::Think (aa_mind::cai_thinks::reform): while
-/// current, ReformTime after the start ends it (`+178` -> `+11C`, rest);
-/// otherwise the next Think in 2.0 s, or in 1.0 s while the leader is still
-/// moving (`4CEDE0`: its current action is its mover), else it ends (`+11C`).
-fn reform_think(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let i = id as usize;
-    let now = world.time;
-    let Some(r) = st.orgs[i].reform.clone() else { return };
-    if st.orgs[i].engaging() || st.orgs[i].routing.is_some() || world.orgs[i].order != Order::Idle {
-        // Another Mind state took over (an engagement or a new order).
-        st.orgs[i].reform = None;
-        return;
-    }
-    if now < r.next_think {
-        return;
-    }
-    let reform_time = st.rules().reform_time;
-    if !(x87::sub(ld(now), ld(r.since)) < ld(reform_time)) {
-        st.orgs[i].reform = None;
-        return;
-    }
-    let leader = world.orgs[i].members.iter().copied().find(|&m| combat::alive(world, m));
-    let moving = leader.is_some_and(|l| world.actors[l as usize].motion.velocity.length_squared() > EPSILON);
-    if moving {
-        if let Some(r) = st.orgs[i].reform.as_mut() {
-            r.next_think = now + 1.0;
-        }
-    } else {
-        st.orgs[i].reform = None;
-    }
-}
-
-/// `52A690`: how much of `delta` fits along `dir` beyond `base` inside the map.
-fn reachable(world: &World, origin: Vec2, dir: Vec2, base: f32, delta: f32) -> f32 {
-    let map = &world.map;
-    if map.width == 0 || map.height == 0 {
-        return delta;
-    }
-    let size = Vec2::new(map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
-    let mut t_max = f32::MAX;
-    for k in 0..2 {
-        let (o, d, s) = (origin[k], dir[k], size[k]);
-        if d > 1e-6 {
-            t_max = t_max.min((s - o) / d);
-        } else if d < -1e-6 {
-            t_max = t_max.min(-o / d);
-        }
-    }
-    (t_max - base).clamp(0.0, delta)
-}
-
-/// `4F46E0` reduced to the passability of the candidate cell.
-fn open(world: &World, p: Vec2) -> bool {
-    let map = &world.map;
-    if map.width == 0 || map.height == 0 {
-        return true;
-    }
-    map.cell_flags(p) & (BLOCKED | NOT_LAND_PASSABLE) == 0
-}
-
-fn normalized(v: Vec2) -> Vec2 {
-    let l = v.length();
-    if l > EPSILON { v / l } else { Vec2::new(0.0, -1.0) }
-}
-
-/// `52B530` with the `52A930` score (enemy distance and angle, moved
-/// distance, allied supply sources, fuzziness). The enemy ZOC/ZOG penalties
-/// and the friendly ZOS bonus need the zone solver and are not applied.
-fn select_destination(world: &mut World, st: &CombatState, id: OrgId) -> Option<Vec2> {
-    let i = id as usize;
-    let r = st.rules.clone().expect("prepared");
-    let o = &st.orgs[i];
-    let origin = o.position;
-    let def = world.data.def(world.orgs[i].def);
-    let min_distance = def.control_range * if o.exhausted { 0.75 } else { 1.0 };
-    let enemies: Vec<Vec2> = o
-        .engaged_by
-        .iter()
-        .filter(|&&e| world.orgs.get(e as usize).is_some_and(|x| x.alive))
-        .map(|&e| st.orgs[e as usize].position)
-        .collect();
-    // Kingdom +264 supply sources of allied kingdoms (supply.rs zones).
-    // (Kingdom vt+138: two kingdoms on no team are not one side, whatever their team word.)
-    let me = world.orgs[i].kingdom;
-    let sources: Vec<(Vec2, f32)> = world
-        .books
-        .zones
-        .iter()
-        .filter(|z| matches!(crate::setup::relation(world, Some(me), Some(z.kingdom)), crate::books::SELF | crate::books::FRIEND))
-        .map(|z| (z.centre, z.radius))
-        .collect();
-    let mut best: Option<(f32, Vec2)> = None;
-    let mut offer = |world: &mut World, cand: Vec2| {
-        if !open(world, cand) {
-            return;
-        }
-        let cand_dir = normalized(cand - origin);
-        let mut score = r.rout_base_value;
-        let n = enemies.len() as f32;
-        for &e in &enemies {
-            let enemy_dir = normalized(e - origin);
-            let distance = e.distance(cand);
-            let angle = enemy_dir.angle_to(cand_dir).abs().to_degrees();
-            score += distance.min(r.rout_factor_enemy_dist_cap) * r.rout_factor_enemy_dist / n + angle * r.rout_factor_enemy_angle / n;
-        }
-        score -= cand.distance(origin).min(r.rout_factor_moved_dist_cap) * r.rout_factor_moved_dist;
-        let mut nearest = f32::MAX;
-        for &(s, radius) in &sources {
-            let d2 = cand.distance_squared(s);
-            nearest = nearest.min(d2);
-            if d2 < radius * radius {
-                score += r.rout_bonus_supply_in_range;
-            }
-        }
-        if nearest < f32::MAX {
-            score -= nearest.sqrt().min(r.rout_factor_supply_dist_cap) * r.rout_factor_supply_dist;
-        }
-        score += world.random_at(crate::trace::sites::ROUT_FUZZ) * r.rout_fuzziness;
-        if best.is_none_or(|(b, _)| score > b) {
-            best = Some((score, cand));
-        }
-    };
-    for _ in 0..r.rout_random_candidates {
-        let angle = world.random_at(crate::trace::sites::ROUT_POINT) * std::f32::consts::TAU;
-        let dir = Vec2::new(angle.cos(), angle.sin());
-        let allowed = reachable(world, origin, dir, min_distance, r.rout_max_distance_delta);
-        let distance = min_distance + world.random_at(crate::trace::sites::ROUT_POINT) * allowed;
-        let cand = origin + dir * distance;
-        if cand != origin {
-            offer(world, cand);
-        }
-    }
-    for &(s, _) in &sources {
-        for _ in 0..r.rout_supply_candidates {
-            let to = normalized(s - origin);
-            let spread = (world.random_at(crate::trace::sites::ROUT_POINT) * 2.0 * r.rout_supply_max_angle - r.rout_supply_max_angle).to_radians();
-            let dir = Vec2::from_angle(spread).rotate(to);
-            let allowed = reachable(world, origin, dir, min_distance, r.rout_max_distance_delta);
-            let distance = min_distance + world.random_at(crate::trace::sites::ROUT_POINT) * allowed;
-            offer(world, origin + dir * distance);
-        }
-    }
-    best.map(|(_, p)| p)
 }
 
 /// The first steps of TickMaintenance `57C8E0` (queue 1, once a second in its
@@ -845,12 +585,6 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
             return;
         }
     }
-    // 521240 rout Think (RoutingTime, destination, arrival), then the
-    // reform Think 51DE70 after an arrival.
-    if st.orgs[i].routing.is_some() {
-        rout_think(world, st, id);
-    }
-    reform_think(world, st, id);
     // 57C8E0 entrenchment: the unstored 45D520 delay plus the +B4 start not
     // after now, once in an entrenchable state (resting); left when the
     // regiment moves.
@@ -865,28 +599,10 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
         st.orgs[i].rest_since = None;
         st.orgs[i].entrenched = false;
     }
-    // Think reactions: engage (1.0 s, 526A70 step 1) wavering while
-    // targeted; the exhausted state (51E260) ends once the morale is steady
-    // (state 2), its embedded sleep Think not being current; otherwise the
-    // sleep Think (2.0 s, 524D70 step 2) routs an exhausted regiment.
-    // A new order replaces the exhausted Mind state (52A420), as it does the
-    // reform state above.
+    // A new order replaces the exhausted Mind state (52A420). The rout, the exhausted
+    // state and the Thinks that begin them are the regiment Mind's.
     if st.orgs[i].exhausted_state && world.orgs[i].order != Order::Idle {
         st.orgs[i].exhausted_state = false;
-    }
-    if st.orgs[i].routing.is_none() && now >= st.orgs[i].next_sleep_think {
-        let engaging = st.orgs[i].engaging();
-        st.orgs[i].next_sleep_think = now + if engaging { ENGAGE_THINK_SECONDS } else { SLEEP_THINK_SECONDS };
-        let s = state(&st.orgs[i], world.orgs[i].morale);
-        // Engaged: 526A70 step 1, in the Mind's Engage Think.
-        if engaging {
-        } else if st.orgs[i].exhausted_state {
-            if s == 2 {
-                st.orgs[i].exhausted_state = false;
-            }
-        } else if s == 0 {
-            begin_rout(world, st, id);
-        }
     }
     st.orgs[i].previous_order = world.orgs[i].order.clone();
 }

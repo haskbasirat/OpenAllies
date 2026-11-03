@@ -367,9 +367,6 @@ pub struct KingdomEnchanted {
 #[derive(Clone, Debug)]
 pub enum Pending {
     Impact { kingdom: KingdomId, general: usize, ability: usize, at: f32, center: Vec2, target: Option<OpTarget> },
-    Drop { kingdom: KingdomId, general: usize, ability: usize, effect: usize, at: f32, point: Vec2, target: Option<OpTarget>, transport: Option<crate::ids::Gtid> },
-    /// A recruit at a location on its way (`recruit_by_air`).
-    Recruit { kingdom: KingdomId, def: DefId, at: f32, point: Vec2, facing: f32, transport: Option<crate::ids::Gtid> },
 }
 
 /// Aggregated enchantment modifiers of one actor or organization.
@@ -1388,7 +1385,7 @@ fn apply_effect(world: &mut World, kingdom: KingdomId, gi: usize, index: usize, 
         }
         SUMMON => {
             if let Some(s) = &e.summon {
-                summon(world, kingdom, gi, index, ei, s, point, target);
+                summon(world, kingdom, index, s, point, target);
             }
         }
         // 4CA680: the target's kingdom (virtual +108); none logs only.
@@ -1482,60 +1479,21 @@ fn enchant(world: &mut World, kingdom: KingdomId, gi: usize, index: usize, ei: u
 /// transport (`4CB110`), the others are created at once (`4CC470` /
 /// `4CC2C0`).
 #[allow(clippy::too_many_arguments)]
-fn summon(world: &mut World, kingdom: KingdomId, gi: usize, index: usize, ei: usize, s: &Summon, point: Vec2, target: Option<OpTarget>) {
+fn summon(world: &mut World, kingdom: KingdomId, index: usize, s: &Summon, point: Vec2, target: Option<OpTarget>) {
     let Some(def) = world.data.find(&s.object) else { return };
     let mut at = point;
     if !s.ethereal && !open_position(world, def, &mut at) {
         world.events.push(Event::Refused { kingdom, reason: "ability_effect_summon_failed".into() });
         return;
     }
-    if let Some(t) = s.transport.as_ref().and_then(|t| world.data.find(t)) {
-        // 4CB110: the transport enters from the farther map edge
-        // (aa_combat::summon::transport_entry) and is ordered to the drop
-        // point at its speed; the object drops on arrival.
-        let speed = world.data.def(t).speed_max;
-        if speed > 0.0 && world.map.width > 0 {
-            let [width, height] = map_extent(world);
-            let right = f64::from(width) - f64::from(at.x);
-            let ex = if right < f64::from(at.x) { f64::from(at.x) } else { f64::from(right as f32) };
-            let top = f64::from(height) - f64::from(at.y);
-            let ey = if top < f64::from(at.y) { f64::from(at.y) } else { top };
-            let flight = (if ex > ey { ex } else { ey }) / f64::from(speed);
-            let due = native_now(world) + flight as f32;
-            let transport = crate::creation::transport(world, t);
-            world.special_ops.pending.push(Pending::Drop { kingdom, general: gi, ability: index, effect: ei, at: due, point: at, target, transport });
-            return;
-        }
+    // 4CB110: the transport enters from the farther map edge
+    // (aa_combat::summon::transport_entry) and flies to the point (`crate::transport`).
+    if let Some(t) = s.transport.as_ref().and_then(|t| world.data.find(t))
+        && crate::transport::summon(world, kingdom, t, def, at, s.controllable, s.property.clone())
+    {
+        return;
     }
-    create_summon(world, kingdom, index, s, at, target, false);
-}
-
-/// `0x589F90` -> `0x582190`: a recruit at a location comes in a transport (ActorData
-/// +184). It enters where the line from the point through the structure leaves the map
-/// (`0x53A820` over the map's rectangle) and is ordered to the point; the cargo drops on
-/// its arrival. Berlin2v2_1: the transport at 3841, the regiment at 4577, 320 m at 7 m/s.
-/// Renditions, each labelled: the flight is that time, with no actor (the structure's own
-/// aircraft, `0x56DC50`, is not taken first); the whole regiment lands at once, at its
-/// formation places, where natively a member drops at each of the transport's thinks,
-/// 9 or 10 ticks apart, along its way. `false` for a thing with no transport.
-pub(crate) fn recruit_by_air(world: &mut World, kingdom: KingdomId, def: DefId, structure: Vec2, point: Vec2, facing: f32) -> bool {
-    let Some(t) = world.data.def(def).transport_actor.clone().and_then(|t| world.data.find(&t)) else { return false };
-    let speed = world.data.def(t).speed_max;
-    if speed <= 0.0 || world.map.width == 0 {
-        return false;
-    }
-    let [width, height] = map_extent(world);
-    let d = structure - point;
-    let mut distance = 0.0f32;
-    if d != Vec2::ZERO {
-        let along = |p: f32, v: f32, end: f32| if v > 0.0 { (end - p) / v } else if v < 0.0 { p / -v } else { f32::INFINITY };
-        let t_edge = along(point.x, d.x, width).min(along(point.y, d.y, height));
-        distance = d.length() * t_edge;
-    }
-    let due = native_now(world) + distance / speed;
-    let transport = crate::creation::transport(world, t);
-    world.special_ops.pending.push(Pending::Recruit { kingdom, def, at: due, point, facing, transport });
-    true
+    create_summon(world, kingdom, index, s, at, target);
 }
 
 /// The occupancy test of `554B30`'s query (`553BA0`, mask 0x500, blocking
@@ -1630,7 +1588,7 @@ fn open_position_within(world: &World, def: DefId, point: &mut Vec2, distance: f
 /// (`4CEF10` kind 3); FX event 4; then, with a target, the order to attack
 /// it when it is an enemy of the summoned (virtual `+16C` = `4D1F40`), else
 /// whoever last damaged its body (`432E40`).
-fn create_summon(world: &mut World, kingdom: KingdomId, index: usize, s: &Summon, point: Vec2, target: Option<OpTarget>, transported: bool) {
+fn create_summon(world: &mut World, kingdom: KingdomId, index: usize, s: &Summon, point: Vec2, target: Option<OpTarget>) {
     let Some(def) = world.data.find(&s.object) else { return };
     // target_location: facing (0, -1)
     let facing = -std::f32::consts::FRAC_PI_2;
@@ -1644,14 +1602,12 @@ fn create_summon(world: &mut World, kingdom: KingdomId, index: usize, s: &Summon
     if !s.controllable {
         world.special_ops.uncontrollable.extend(created.iter().copied());
     }
-    if !transported {
-        let id = match org {
-            Some(o) => Summoned::Org(o),
-            None => Summoned::Actor(created[0]),
-        };
-        if let Some(list) = commander_mut(world, kingdom).summoned.get_mut(index) {
-            list.insert(0, id);
-        }
+    let id = match org {
+        Some(o) => Summoned::Org(o),
+        None => Summoned::Actor(created[0]),
+    };
+    if let Some(list) = commander_mut(world, kingdom).summoned.get_mut(index) {
+        list.insert(0, id);
     }
     if let Some(p) = &s.property {
         for &a in &created {
@@ -1660,12 +1616,6 @@ fn create_summon(world: &mut World, kingdom: KingdomId, index: usize, s: &Summon
                 b.properties.push(p.clone());
             }
         }
-    }
-    if transported {
-        for _ in &created {
-            crate::creation::cargo_fall(world);
-        }
-        return;
     }
     let Some(t) = target.filter(|&t| alive(world, t)) else { return };
     let victim = if enemy(world, owner(world, t), Some(kingdom)) {
@@ -1804,7 +1754,6 @@ pub fn tick(world: &mut World) {
         // transport drops on its arrival.
         let ready = match p {
             Pending::Impact { at, .. } => *at < now,
-            Pending::Drop { at, .. } | Pending::Recruit { at, .. } => *at <= now,
         };
         if ready {
             due.push(p.clone());
@@ -1814,21 +1763,6 @@ pub fn tick(world: &mut World) {
     for p in due {
         match p {
             Pending::Impact { kingdom, general, ability, center, target, .. } => impact(world, kingdom, general, ability, center, target, 2),
-            Pending::Recruit { kingdom, def, point, facing, transport, .. } => {
-                if let Some(id) = transport {
-                    world.ids.removed_transient(id);
-                }
-                crate::production::land_recruit(world, kingdom, def, point, facing);
-            }
-            Pending::Drop { kingdom, general, ability, effect, point, target, transport, .. } => {
-                if let Some(id) = transport {
-                    world.ids.removed_transient(id);
-                }
-                let data = world.special_ops.data.clone().expect("attached");
-                if let Some(s) = data.generals[general].abilities[ability].effects[effect].summon.as_ref() {
-                    create_summon(world, kingdom, ability, s, point, target, true);
-                }
-            }
         }
     }
     properties_pass(world);

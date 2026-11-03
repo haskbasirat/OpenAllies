@@ -66,8 +66,12 @@ pub struct PlacedThing {
     /// destroys it. On (2v2)Comrades the village blocks saved with a Supply component.
     #[serde(default)]
     pub load_fails: bool,
-    /// (combat) The saved record holds a City (slot 29): the thing has its +0xD4 whatever
-    /// the definition's zone radius (a block saved with it has a zone 8 of radius 0).
+    /// (combat) The record's Load makes a City (slot 29), so the thing has its +0xD4 and a
+    /// zone 8 whatever the definition's zone radius. `0x4D8290`: the record saved one, or
+    /// the definition has the node and the record's default mask does not ("loading actor
+    /// %d creating missing component %d"). (2v2)Comrades' block `eastern_europe_city02` is
+    /// the second, with a zone 8 of radius 0; the blocks of (2v2)Berlin saved their mask
+    /// with the bit and no City, so they have none.
     #[serde(default)]
     pub saved_city: bool,
     /// A placed organization's saved state (57D130): its members are records of their
@@ -781,8 +785,9 @@ fn assemble(map_id: &str, bytes: Vec<u8>, data: &crate::data::GameData, drawn: O
         let mut saved_city = false;
         let components = data.find(&utf16(&p.thing_id_utf16)).map(|d| data.def(d).components);
         if let Some(actor) = p.actor.as_ref().filter(|_| saved_things.is_none()) {
-            let walked = aa_mapworld::actor_payload::ActorTail::decode_prefix_with_stages(&p.opaque_tail, actor.version, 0, |slot, saved, _, _, bytes| {
+            let walked = aa_mapworld::actor_payload::ActorTail::decode_prefix_with_stages(&p.opaque_tail, actor.version, 0, |slot, saved, default_mask, _, bytes| {
                 if !saved {
+                    saved_city |= slot == 29 && components.is_some_and(|c| c & (1 << slot) != 0) && default_mask & (1 << slot) == 0;
                     return Ok((0, None));
                 }
                 // 0x4D8290's test, slot by slot.

@@ -19,21 +19,24 @@
 //! position moved by where it stands in the selection (0x4ED360 lower path, 0x4ED280,
 //! 0x4DD860), for a command with `apply_group_offset`.
 //!
-//! **What is exact and what is a rendition.** The state machine, the formation
-//! placement 0x4DF600, the membership and the arithmetic are the native order. Not
-//! fixture-proven: there is no oracle yet, and the checks against the original are
-//! the film's group things and the mind-state comparison of `order_fights`. These
-//! read aa-play's state in place of the native fields, and are marked where used:
-//! the zone of slot 7 (0x515F40, `KKC_Zone` of radius +1B4) is a circle over open
-//! tiles, not a flood; the actor state bits come from `resting`, `reforming`,
-//! `under_attack`; the command mask is `guess::action_bits`, itself a rendition of
-//! 0x4D1350.
+//! **What is exact and what is a rendition.** Proven against the original's code under
+//! Unicorn (`research/phase8-orders-input/group`, the unit tests below): the robust centre
+//! 0x4DD590, an offset 0x4DD860, the placement 0x4DF600, a place at a point with its tile walk
+//! 0x4DE020, the list order 0x869D30 / 0x4DDF30 / 0x4D0780 / 0x579980 and the speed loop of
+//! 0x4E0330. The state machine, the membership and the delivery follow the instructions and
+//! are compared with the film's group things and the mind-state comparison of `order_fights`.
+//! These read aa-play's state in place of the native fields, and are marked where used: the
+//! zone of slot 7 (0x515F40, `KKC_Zone` of radius +1B4) is a circle over open tiles, not a
+//! flood; the actor state bits come from `resting`, `reforming`, `under_attack`; the command
+//! mask is `super::mask` (0x4D1350); a lone actor's Mind does not answer the speed loop.
 use super::guess;
 use crate::combat::TargetRef;
 use crate::ids::Gtid;
 use crate::scheduler::Owner;
 use crate::world::{AbilityTarget, Command, KingdomId, Order, Unit, World};
+use aa_numeric::Precision;
 use aa_rules::native::actor_command::PREDEFINED_ACTOR_COMMANDS as COMMANDS;
+use aa_spatial::tile_walk::{TileGrid, TileWalk};
 use glam::Vec2;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -167,6 +170,10 @@ impl Request {
         Some(Self { kind, kingdom, units: units.clone(), target, position, aux, command: command.clone() })
     }
 
+    /// The things named.
+    pub fn units(&self) -> &[Unit] {
+        &self.units
+    }
     /// The same command to one thing, its position moved by `offset`.
     fn to_one(&self, unit: Unit, offset: Vec2) -> Command {
         let mut c = self.command.clone();
@@ -223,13 +230,9 @@ fn alive(world: &World, unit: Unit) -> bool {
 fn position(world: &World, unit: Unit) -> Option<Vec2> {
     super::guard::position(world, unit)
 }
-/// vt+150(kingdom, command, 1) through vt+154: the owner, then the command mask.
+/// vt+150(kingdom, command, 1) through vt+154.
 fn accepts(world: &World, kingdom: KingdomId, unit: Unit, kind: u32) -> bool {
-    let owner = match unit {
-        Unit::Org(o) => world.orgs.get(o as usize).filter(|x| x.alive).map(|x| x.kingdom),
-        Unit::Actor(a) => world.actors.get(a as usize).filter(|x| x.alive && !x.removed).and_then(|x| x.kingdom),
-    };
-    owner == Some(kingdom) && has_command(world, unit, kind)
+    super::mask::takes(world, kingdom, unit, kind)
 }
 /// vt+38 -> vt+34: the command mask alone.
 fn has_command(world: &World, unit: Unit, kind: u32) -> bool {
@@ -253,7 +256,7 @@ fn reforming(world: &World, unit: Unit) -> bool {
 /// Actor state 4 mind_engaged or 20 under_siege, for 0x4DED00.
 fn under_attack(world: &World, unit: Unit) -> bool {
     match unit {
-        Unit::Org(o) => world.combat.org(o).is_some_and(|c| c.auto_order.is_some()),
+        Unit::Org(o) => crate::morale::regiment_state(world, o) == crate::morale::RegimentState::Engage,
         Unit::Actor(a) => crate::supply::under_siege(world, a),
     }
 }
@@ -304,8 +307,12 @@ impl Group {
         let mut r = range_min(world);
         for m in &self.members {
             let Unit::Org(o) = m.unit else { continue };
-            if let Some(org) = world.orgs.get(o as usize).filter(|x| x.alive) {
-                let v = world.data.def(org.def).control_range;
+            if world.orgs.get(o as usize).is_some_and(|x| x.alive) {
+                // Organization +AC: the control range through its modifiers.
+                let v = match world.combat.org(o) {
+                    Some(_) => crate::combat::control_radius(world, &world.combat, o),
+                    None => world.data.def(world.orgs[o as usize].def).control_range,
+                };
                 if r < v {
                     r = v;
                 }
@@ -315,70 +322,34 @@ impl Group {
     }
     /// 0x4DF290: `near` of each member (`within` false: all near).
     fn set_near(&mut self, world: &World, center: Vec2, within: bool) {
-        let r2 = self.radius * self.radius;
+        // The square of the radius is stored, the distance's is compared unstored at PC53.
+        let r2 = (self.radius as f64 * self.radius as f64) as f32 as f64;
         for m in &mut self.members {
             if let Some(p) = position(world, m.unit) {
-                let d = p - center;
-                m.near = d.y * d.y + d.x * d.x <= r2 || !within;
+                let (dx, dy) = (p.x as f64 - center.x as f64, p.y as f64 - center.y as f64);
+                m.near = dy * dy + dx * dx <= r2 || !within;
             }
         }
     }
     /// 0x4DF600: the places: the formation's own for as many as it has, the
     /// others where they stand (turned out of `facing`), less their mean.
     fn place(&mut self, world: &World, center: Vec2, facing: Vec2) {
-        let count = self.members.len();
-        let r = range_min(world);
-        let positions = self.formation.as_ref().map_or(&[][..], |f| f.1.as_slice());
-        let mut sum = Vec2::ZERO;
-        for (i, m) in self.members.iter_mut().enumerate() {
-            let Some(p) = position(world, m.unit) else { continue };
-            let o = if i < positions.len() {
-                Vec2::from(positions[i])
-            } else {
-                let mut l = p - center;
-                if !m.near {
-                    l = normalize(l) * r;
-                }
-                Vec2::new(l.x * facing.y - l.y * facing.x, l.x * facing.x + l.y * facing.y)
-            };
+        let range = range_min(world);
+        let positions = self.formation.as_ref().map_or(&[][..], |f| f.1.as_slice()).to_vec();
+        let at: Vec<Option<(Vec2, bool)>> = self.members.iter().map(|m| position(world, m.unit).map(|p| (p, m.near))).collect();
+        let mut offsets: Vec<Vec2> = self.members.iter().map(|m| m.offset).collect();
+        place_kernel(&at, &mut offsets, &positions, center, facing, range);
+        for (m, o) in self.members.iter_mut().zip(offsets) {
             m.offset = o;
-            sum += o;
-        }
-        let k = 1.0 / count as f32;
-        let mean = sum * k;
-        for m in &mut self.members {
-            m.offset -= mean;
         }
     }
     /// 0x4DE020: the member's place at `point`: its offset turned by the facing,
     /// and back along the line to the point to the first tile in the zone.
     fn offset_at(&self, world: &World, entry: &Entry, point: Vec2) -> Vec2 {
-        let (o, f) = (entry.offset, self.facing);
-        let turned = Vec2::new(f.y * o.x + f.x * o.y, o.y * f.y - f.x * o.x);
-        let Some(zone) = self.zone else { return turned };
-        let at = clamp_525d0(world, point + turned);
-        if in_zone(world, zone, at) {
-            return turned;
-        }
-        // 0x4DD030 / 0x4DDDE0: the tile walk to the point.
-        let cell = world.map.cell_size;
-        let tile = |v: Vec2| ((v.x / cell).floor() as i32, (v.y / cell).floor() as i32);
-        let (mut x, mut y) = tile(at);
-        let (ex, ey) = tile(point);
-        let mut last = at;
-        while (x, y) != (ex, ey) {
-            if x != ex {
-                x += (ex - x).signum();
-            }
-            if y != ey {
-                y += (ey - y).signum();
-            }
-            last = Vec2::new(x as f32 * cell + cell * 0.5, y as f32 * cell + cell * 0.5);
-            if in_zone(world, zone, last) {
-                break;
-            }
-        }
-        last - point
+        let extent = [world.map.width as f32 * world.map.cell_size, world.map.height as f32 * world.map.cell_size];
+        let grid = TileGrid { width: world.map.width as i32, height: world.map.height as i32, coordinate_shift: world.map.cell_size.log2() as u32, cell_size_bits: world.map.cell_size.to_bits() };
+        let zone = self.zone;
+        offset_kernel(entry.offset, self.facing, point, extent, grid, zone.is_some(), |p| zone.is_some_and(|z| in_zone(world, z, p)))
     }
     fn entry(&self, unit: Unit) -> Option<&Entry> {
         self.members.iter().find(|m| m.unit == unit)
@@ -441,31 +412,123 @@ fn clamp_552640(world: &World, p: Vec2) -> Vec2 {
     let one = |v: f32, far: f32| if v < cell { cell } else if far < v { far } else { v };
     Vec2::new(one(p.x, far(world.map.width as i32)), one(p.y, far(world.map.height as i32)))
 }
-/// 0x4DD590.
-fn robust_center(mut points: Vec<Vec2>, range: f32) -> Vec2 {
+/// 0x4DD590 at PC53: the mean, then the farthest thrown out while it is more than
+/// `range` from the mean. What is stored as binary32 and what stays on the x87 stack
+/// is the instructions' (0x4DD5D0 on): the sum of x is stored after its second and
+/// third of each four, and y after its third and fourth; 1/n is stored in the first
+/// pass only; the centre's y is never stored until the end; the largest distance is
+/// compared unstored and kept stored.
+pub(super) fn robust_center(mut points: Vec<Vec2>, range: f32) -> Vec2 {
     let n = points.len();
-    let mut c = points.iter().copied().fold(Vec2::ZERO, |a, b| a + b) * (1.0 / n as f32);
-    let r2 = range * range;
+    let (mut x, mut y) = (0.0f64, 0.0f32);
+    let fours = n / 4 * 4;
+    for four in points[..fours].chunks_exact(4) {
+        x += four[0].x as f64;
+        let mut long_y = y as f64 + four[0].y as f64;
+        x += four[1].x as f64;
+        let stored = x as f32;
+        long_y += four[1].y as f64;
+        let stored = (stored as f64 + four[2].x as f64) as f32;
+        long_y += four[2].y as f64;
+        y = long_y as f32;
+        x = stored as f64 + four[3].x as f64;
+        y = (y as f64 + four[3].y as f64) as f32;
+    }
+    for p in &points[fours..] {
+        x += p.x as f64;
+        y = (y as f64 + p.y as f64) as f32;
+    }
+    let inverse = (1.0 / n as f64) as f32 as f64;
+    let mut cx = (x * inverse) as f32;
+    let mut cy = y as f64 * inverse;
+    let r2 = (range as f64 * range as f64) as f32 as f64;
     loop {
-        let (mut far, mut at) = (0.0f32, None);
+        let (mut far, mut at) = (0.0f64, None);
         for (i, p) in points.iter().enumerate() {
-            let d = *p - c;
-            let v = d.x * d.x + d.y * d.y;
-            if far <= v {
-                far = v;
+            let dx = p.x as f64 - cx as f64;
+            let dy = p.y as f64 - cy;
+            let v = dy * dy + dx * dx;
+            // 0x4DD6C9: `test ah, 1`: not below (an unordered compare is C0 set).
+            if v >= far {
+                far = v as f32 as f64;
                 at = Some(i);
             }
         }
         if far <= r2 {
-            return c;
+            return Vec2::new(cx, cy as f32);
         }
-        let Some(i) = at else { return c };
-        let k = points.len() as f32;
+        let Some(i) = at else { return Vec2::new(cx, cy as f32) };
+        let k = points.len() as f64;
+        let sum_x = (cx as f64 * k) as f32;
+        let sum_y = cy * k;
         let p = points.remove(i);
-        let inverse = 1.0 / points.len() as f32;
-        c = Vec2::new((c.x * k - p.x) * inverse, inverse * (k * c.y - p.y));
+        let sum_x = (sum_x as f64 - p.x as f64) as f32;
+        let sum_y = sum_y - p.y as f64;
+        let inverse = 1.0 / points.len() as f64;
+        cx = (sum_x as f64 * inverse) as f32;
+        cy = sum_y * inverse;
     }
 }
+/// 0x4DF600 at PC53. `at` is each member's position and +D near flag, None where 0x4DE1F0
+/// finds no thing (its place stays as it is, and counts in the mean's divisor); `places`
+/// its +4, +8. The products and sums run unstored into the sum of the places: only the
+/// place itself is stored as binary32.
+fn place_kernel(at: &[Option<(Vec2, bool)>], places: &mut [Vec2], positions: &[[f32; 2]], center: Vec2, facing: Vec2, range: f32) {
+    let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
+    let (fx, fy) = (facing.x as f64, facing.y as f64);
+    for (i, member) in at.iter().enumerate() {
+        let Some((p, near)) = *member else { continue };
+        let (x, y) = match positions.get(i) {
+            Some(q) => (q[0] as f64, q[1] as f64),
+            None => {
+                let mut l = p - center;
+                if !near {
+                    l = normalize(l) * range;
+                }
+                let (lx, ly) = (l.x as f64, l.y as f64);
+                (lx * fy - ly * fx, ly * fy + lx * fx)
+            }
+        };
+        places[i] = Vec2::new(x as f32, y as f32);
+        sum_x = (sum_x as f64 + x) as f32;
+        sum_y = (y + sum_y as f64) as f32;
+    }
+    let inverse = 1.0 / at.len() as f64;
+    let mean = Vec2::new((sum_x as f64 * inverse) as f32, (sum_y as f64 * inverse) as f32);
+    for place in places.iter_mut() {
+        *place -= mean;
+    }
+}
+
+/// 0x4DE020 at PC53, `zone`: the group has a zone in slot 7 (radius not -1). `extent` is the
+/// map's size for 0x5525D0.
+fn offset_kernel(offset: Vec2, facing: Vec2, point: Vec2, extent: [f32; 2], grid: TileGrid, zone: bool, mut inside: impl FnMut(Vec2) -> bool) -> Vec2 {
+    let (ox, oy, fx, fy) = (offset.x as f64, offset.y as f64, facing.x as f64, facing.y as f64);
+    let turned = Vec2::new((fx * oy + fy * ox) as f32, (oy * fy - fx * ox) as f32);
+    let far = |e: f32| e - f32::from_bits(0x38d1_b717);
+    let clamp = |v: f32, e: f32| if v < 0.0 { 0.0 } else if far(e) < v { far(e) } else { v };
+    let at = turned + point;
+    let at = Vec2::new(clamp(at.x, extent[0]), clamp(at.y, extent[1]));
+    if !zone || inside(at) {
+        return turned;
+    }
+    // 0x4DD030 / 0x4DDDE0: the tile walk from there to the point, every tile from the first
+    // on, until one centre (0x9FBDB8: half a tile) is in the zone.
+    let cell = f32::from_bits(grid.cell_size_bits);
+    let half = cell * 0.5;
+    let mut last = at;
+    if let Ok(mut walk) = TileWalk::new(grid, [at.x.to_bits(), at.y.to_bits()], [point.x.to_bits(), point.y.to_bits()], Precision::Double53) {
+        let mut budget = walk.remaining_candidates();
+        while let Ok(Some([x, y])) = walk.next_cell_with_budget(&mut budget) {
+            last = Vec2::new((x << grid.coordinate_shift) as f32 + half, (y << grid.coordinate_shift) as f32 + half);
+            if inside(last) {
+                break;
+            }
+        }
+    }
+    last - point
+}
+
 /// 0x4F2420 on the group's zone, as a circle over open tiles (a rendition of the
 /// flood 0x540860).
 fn in_zone(world: &World, zone: (Vec2, f32), p: Vec2) -> bool {
@@ -519,6 +582,67 @@ fn destroy(world: &mut World, key: u32) {
     }
 }
 
+/// 0x4D0780: what orders a group. An organization's `company_group_priority` (+320)
+/// when positive, else its element's `group_priority` (+2C4, 0x579A60); an element's
+/// own; anything else 0.
+fn group_value(world: &World, unit: Unit) -> i32 {
+    match unit {
+        Unit::Org(o) => {
+            let Some(org) = world.orgs.get(o as usize) else { return 0 };
+            let def = world.data.def(org.def);
+            if def.company_group_priority > 0 {
+                return def.company_group_priority;
+            }
+            first_element(world, o).map_or(0, |e| world.data.def(e).group_priority)
+        }
+        Unit::Actor(a) => {
+            let Some(x) = world.actors.get(a as usize) else { return 0 };
+            let def = world.data.def(x.def);
+            if def.has_component("ElementComponent") { def.group_priority } else { 0 }
+        }
+    }
+}
+/// 0x579980: the first locked slot's element in slot order; else the layout's primary
+/// slot's (+18); else the first slot's that has one.
+fn first_element(world: &World, o: u32) -> Option<crate::data::DefId> {
+    let org = world.orgs.get(o as usize)?;
+    let def = world.data.def(org.def);
+    let elements = world.books.org(o).and_then(|b| b.elements.as_ref());
+    let slots: Vec<Option<crate::data::DefId>> = (0..def.slots.len())
+        .map(|i| elements.and_then(|e| e.get(i).copied()).or_else(|| def.slots.get(i).map(|s| s.0)).filter(|e| *e != crate::data::NO_DEF))
+        .collect();
+    first_of(&slots, &def.slot_locked, def.leader_slot.map(usize::from))
+}
+/// 0x579980 over the slots in layout order (`+28`): the first with an element whose entry is
+/// locked, else the primary slot's (`+18`, in range), else the first with one.
+fn first_of<E: Copy>(slots: &[Option<E>], locked: &[bool], primary: Option<usize>) -> Option<E> {
+    let mut first = None;
+    for (i, e) in slots.iter().enumerate() {
+        if let Some(e) = e {
+            first = first.or(Some(*e));
+            if locked.get(i).copied().unwrap_or(false) {
+                return Some(*e);
+            }
+        }
+    }
+    primary.and_then(|l| slots.get(l).copied().flatten()).or(first)
+}
+/// 0x869D30 with the comparator 0x4DDF30, which never answers 0: where a thing of `value`
+/// goes in a list of `values`: after those of its value or more (`setle`), so the list
+/// runs from the highest down and equal ones keep the selection's order.
+fn insertion_index(values: impl Fn(usize) -> i32, count: usize, value: i32) -> usize {
+    let (mut low, mut high) = (0, count);
+    while low < high {
+        let middle = (low + high) / 2;
+        if value <= values(middle) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    low
+}
+
 /// 0x4FBE10, 0x4E0940 and 0x4E2940: the selection becomes a new group; the
 /// facing of the group it had goes to the new one. The id and its scale draw
 /// (0x49B440); no other draw shows in the Berlin film.
@@ -529,11 +653,12 @@ fn form(world: &mut World, kingdom: KingdomId, units: &[Unit]) -> Option<u32> {
     let id = world.ids.created_group(key)?;
     world.random_u32_at(crate::trace::sites::RANDOM_SCALE);
     let facing = settings.group.and_then(|k| world.orders.groups.live.get(&k)).map_or(Vec2::new(0.0, -1.0), |g| g.facing);
-    let mut members = Vec::with_capacity(units.len());
+    let mut members: Vec<Entry> = Vec::with_capacity(units.len());
     for &u in units {
         if alive(world, u) {
             leave(world, u);
-            members.push(Entry { unit: u, offset: Vec2::ZERO, in_formation: false, near: true });
+            let at = insertion_index(|i| group_value(world, members[i].unit), members.len(), group_value(world, u));
+            members.insert(at, Entry { unit: u, offset: Vec2::ZERO, in_formation: false, near: true });
         }
     }
     let mut g = Group {
@@ -757,7 +882,7 @@ fn attacked(world: &World, g: &Group) -> bool {
         match m.unit {
             Unit::Org(o) => {
                 let Some(c) = world.combat.org(o) else { continue };
-                if c.auto_order.is_some() || c.engaging() {
+                if crate::morale::regiment_state(world, o) == crate::morale::RegimentState::Engage {
                     // A kill target on the engage list is what it was told.
                     let told = match c.explicit {
                         Some(TargetRef::Org(t)) => c.engage.iter().any(|e| e.target == TargetRef::Org(t)),
@@ -918,13 +1043,17 @@ fn update_commanded(world: &mut World, key: u32) {
 
 /// The loop of 0x4E0330 from 0x4E0610: each moving member's time to its place; the
 /// slowest sets the others' speed (Mind vt+88 = 0x5205E0). A member whose flag
-/// changed plans again (Mind vt+48 = 0x524870).
+/// changed plans again (Mind vt+48 = 0x524870), and its time stays 0. What a lone actor's
+/// Mind answers here has no host yet: a group of actors keeps its own pace.
 fn even_speeds(world: &mut World, key: u32, command: &Request, buffer: f32) {
     let units: Vec<Unit> = world.orders.groups.live[&key].members.iter().map(|m| m.unit).collect();
-    let mut times: Vec<(Unit, f32)> = Vec::new();
+    let mut times = vec![0.0f32; units.len()];
     let mut longest = 0.0f32;
-    for u in units {
+    for (i, &u) in units.iter().enumerate() {
         let Unit::Org(o) = u else { continue };
+        if !alive(world, u) {
+            continue;
+        }
         let (flag, same, counted, offset, facing, aux) = {
             let g = &world.orders.groups.live[&key];
             let Some(e) = g.entry(u) else { continue };
@@ -941,31 +1070,47 @@ fn even_speeds(world: &mut World, key: u32, command: &Request, buffer: f32) {
         if !counted || !crate::movement::org_move_active(world, o) {
             continue;
         }
-        let mut left = crate::movement::org_path_left(world, o);
-        if buffer > 0.0 {
-            let forward = match aux {
-                Some(a) if a != Vec2::ZERO => offset.y * facing.y - offset.x * facing.x,
-                _ => offset.y,
-            };
-            left -= forward + buffer;
-            if left < 0.0 {
-                left = 0.0;
-            }
-        }
-        let time = left / top_speed(world, u);
-        times.push((u, time));
-        if longest < time {
-            longest = time;
+        let left = crate::movement::org_path_left(world, o);
+        // Organization +D8, or Mover +24.
+        let time = member_time(left, top_speed(world, u), offset, facing, aux, buffer);
+        times[i] = time as f32;
+        if (longest as f64) < time {
+            longest = time as f32;
         }
     }
     if longest > 0.0 {
-        for (u, time) in times {
-            if let Unit::Org(o) = u {
-                let speed = top_speed(world, u) * (time / longest);
-                crate::movement::org_set_speed(world, o, speed);
+        for (i, &u) in units.iter().enumerate() {
+            let Unit::Org(o) = u else { continue };
+            if !alive(world, u) || !crate::movement::org_move_active(world, o) {
+                continue;
+            }
+            let counted = world.orders.groups.live.get(&key).is_some_and(|g| g.together || g.entry(u).is_some_and(|e| e.near));
+            if counted {
+                let top = top_speed(world, u);
+                crate::movement::org_set_speed(world, o, member_speed(top, times[i], longest));
             }
         }
     }
+}
+
+/// 0x4E06A0..0x4E0753 at PC53: the seconds a member has left, unstored. With a buffer the
+/// place forward of the target comes off the way (0x46DA80's y, with a direction of its
+/// own), and what is left is never below 0 (the unstored value is what is compared).
+fn member_time(left: f32, top: f32, offset: Vec2, facing: Vec2, aux: Option<Vec2>, buffer: f32) -> f64 {
+    let mut left = left;
+    if buffer > 0.0 {
+        let forward = match aux {
+            Some(a) if a != Vec2::ZERO => (offset.y as f64 * facing.y as f64 - offset.x as f64 * facing.x as f64) as f32,
+            _ => offset.y,
+        };
+        let v = left as f64 - (forward as f64 + buffer as f64);
+        left = if v < 0.0 { 0.0 } else { v as f32 };
+    }
+    left as f64 / top as f64
+}
+/// 0x4E07F6..0x4E0816 at PC53: what vt+88 is told.
+fn member_speed(top: f32, time: f32, longest: f32) -> f32 {
+    (top as f64 * (time as f64 / longest as f64)) as f32
 }
 
 /// 0x4E00A0.
@@ -974,6 +1119,12 @@ fn update_attacked(world: &mut World, key: u32) {
     let mut helping = true;
     for u in units {
         if !alive(world, u) || under_attack(world, u) {
+            continue;
+        }
+        // +7C or +74: an organization, or a thing with a Performer.
+        if let Unit::Actor(a) = u
+            && !world.data.def(world.actors[a as usize].def).has_component("PerformerComponent")
+        {
             continue;
         }
         let kingdom = world.orders.groups.live[&key].kingdom;
@@ -1030,7 +1181,8 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
         request.aux = world.orders.next_aux;
     }
     let selected: Vec<Unit> = request.units.iter().copied().filter(|&u| alive(world, u)).collect();
-    if selected.len() < 2 {
+    let spread = world.orders.selection_center;
+    if selected.len() < 2 && spread.is_none() {
         if !world.orders.groups.live.is_empty() {
             for &u in &request.units {
                 if accepts(world, request.kingdom, u, request.kind) {
@@ -1041,7 +1193,7 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
         return Some(command);
     }
     let settings = world.orders.groups.settings.get(&request.kingdom).copied().unwrap_or_default();
-    if settings.on {
+    if settings.on && spread.is_none() {
         if let Some(key) = form(world, request.kingdom, &selected) {
             run(world, key, request);
         }
@@ -1049,14 +1201,18 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
     }
     // The lower path: the centre of the selection, each thing's position moved
     // by where it stands (0x4DD860: within the range as it is, else on its edge).
-    let center = robust_center(selected.iter().filter_map(|&u| position(world, u)).collect(), range_min(world));
+    let center = spread.unwrap_or_else(|| robust_center(selected.iter().filter_map(|&u| position(world, u)).collect(), range_min(world)));
     let range = range_min(world);
     let offsets = request.position.is_some() && request.applies_offset();
+    // Each thing's own command comes back through here as a command to one thing.
+    world.orders.selection_center = None;
     for u in selected {
         let offset = match position(world, u).filter(|_| offsets) {
             Some(p) => {
-                let d = center - p;
-                let near = d.x * d.x + d.y * d.y <= range * range;
+                // 0x4ED59A: the compare is of the unstored square, `fcompp` at PC53.
+                let (dx, dy) = (center.x as f64 - p.x as f64, center.y as f64 - p.y as f64);
+                let near = !(range as f64 * range as f64) .lt(&(dy * dy + dx * dx));
+                // 0x4DD860.
                 let l = p - center;
                 if near { l } else { normalize(l) * range }
             }
@@ -1068,7 +1224,14 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
         world.orders.next_aux = request.aux;
         world.apply(request.to_one(u, offset));
     }
+    world.orders.selection_center = spread;
     None
+}
+
+/// 0x4ED280: the centre of the things of a selection that live; None for none.
+pub(super) fn center_of(world: &World, units: &[Unit]) -> Option<Vec2> {
+    let points: Vec<Vec2> = units.iter().filter(|&&u| alive(world, u)).filter_map(|&u| position(world, u)).collect();
+    (!points.is_empty()).then(|| robust_center(points, range_min(world)))
 }
 
 /// 0x51D840: a member's offset at `point` while its group holds it in formation
@@ -1124,6 +1287,169 @@ pub(super) fn tick(world: &mut World) {
 mod tests {
     use super::*;
 
+    use serde_json::Value;
+
+    /// The original's code under Unicorn at PC53 (research/phase8-orders-input/group).
+    fn fixture() -> Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-orders-input/group/native-group.json");
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    }
+    fn word(v: &Value) -> f32 {
+        f32::from_bits(v.as_u64().unwrap() as u32)
+    }
+    fn point(v: &Value) -> Vec2 {
+        Vec2::new(word(&v[0]), word(&v[1]))
+    }
+    fn same(ours: Vec2, native: &Value, what: &str) {
+        let n = point(native);
+        assert!(ours.x.to_bits() == n.x.to_bits() || (ours.x == 0.0 && n.x == 0.0), "{what}: x {} {}", ours.x, n.x);
+        assert!(ours.y.to_bits() == n.y.to_bits() || (ours.y == 0.0 && n.y == 0.0), "{what}: y {} {}", ours.y, n.y);
+    }
+
+    #[test]
+    fn the_center_is_the_original_s() {
+        let f = fixture();
+        let rows = f["cases"]["center"].as_array().unwrap();
+        assert!(rows.len() > 300);
+        for r in rows {
+            let points: Vec<Vec2> = r["points"].as_array().unwrap().iter().map(point).collect();
+            same(robust_center(points, word(&r["range"])), &r["center"], "0x4DD590");
+        }
+    }
+    #[test]
+    fn a_thing_s_offset_is_the_original_s() {
+        let f = fixture();
+        for r in f["cases"]["offset"].as_array().unwrap() {
+            let (p, c) = (point(&r["p"]), point(&r["c"]));
+            let mut l = p - c;
+            if r["near"].as_u64() == Some(0) {
+                l = normalize(l) * word(&r["range"]);
+            }
+            same(l, &r["out"], "0x4DD860");
+        }
+    }
+    #[test]
+    fn the_places_are_the_original_s() {
+        let f = fixture();
+        for r in f["cases"]["place"].as_array().unwrap() {
+            let members = r["members"].as_array().unwrap();
+            let at: Vec<Option<(Vec2, bool)>> = members.iter().map(|m| m["live"].as_bool().unwrap().then(|| (point(&m["p"]), m["near"].as_u64() != Some(0)))).collect();
+            let mut places: Vec<Vec2> = members.iter().map(|m| point(&m["old"])).collect();
+            let positions: Vec<[f32; 2]> = r["positions"].as_array().unwrap().iter().map(|q| point(q).to_array()).collect();
+            place_kernel(&at, &mut places, &positions, point(&r["center"]), point(&r["facing"]), word(&r["range"]));
+            for (ours, native) in places.iter().zip(r["out"].as_array().unwrap()) {
+                same(*ours, native, "0x4DF600");
+            }
+        }
+    }
+    #[test]
+    fn a_place_at_a_point_is_the_original_s() {
+        let f = fixture();
+        for r in f["cases"]["offset_at"].as_array().unwrap() {
+            let shift = r["shift"].as_u64().unwrap() as u32;
+            let cell = (1u32 << shift) as f32;
+            let (w, h) = (r["width"].as_u64().unwrap() as i32, r["height"].as_u64().unwrap() as i32);
+            let grid = TileGrid { width: w, height: h, coordinate_shift: shift, cell_size_bits: cell.to_bits() };
+            let radius = word(&r["zone_radius"]);
+            let center = point(&r["zone_center"]);
+            let mut tested = Vec::new();
+            let ours = offset_kernel(point(&r["offset"]), point(&r["facing"]), point(&r["point"]), [w as f32 * cell, h as f32 * cell], grid, radius != -1.0, |p| {
+                tested.push(p);
+                let (dx, dy) = ((p.x as f64 - center.x as f64) as f32, (p.y as f64 - center.y as f64) as f32);
+                let _ = (dx, dy);
+                // The case's answer is the producer's circle, in binary64 as it computed it.
+                (p.x as f64 - center.x as f64).powi(2) + (p.y as f64 - center.y as f64).powi(2) <= (radius as f64).powi(2)
+            });
+            let native_tested = r["tested"].as_array().unwrap();
+            // The producer's circle centre is unrounded, so a case decided by that rounding
+            // can end its walk elsewhere; the walk itself is what is compared.
+            let n = tested.len().min(native_tested.len());
+            for (ours, native) in tested[..n].iter().zip(native_tested) {
+                same(*ours, native, "0x4DE020 tile");
+            }
+            if tested.len() == native_tested.len() {
+                same(ours, &r["out"], "0x4DE020");
+            }
+        }
+    }
+    /// The commanded Update's speed loop: what the original tells each Mind.
+    #[test]
+    fn the_evened_speeds_are_the_original_s() {
+        let f = fixture();
+        let rows = f["cases"]["speed"].as_array().unwrap();
+        let mut told = 0;
+        for r in rows {
+            let members = r["members"].as_array().unwrap();
+            let facing = point(&r["facing"]);
+            let aux = r["aux"].as_array().map(|_| point(&r["aux"]));
+            let together = r["together"].as_u64() != Some(0);
+            let buffer = match r["target_zone"].as_u64() {
+                Some(z) if r["hostile"].as_u64() != Some(0) && f32::from_bits(z as u32) != -1.0 => f32::from_bits(z as u32) + word(&r["buffer_rule"]),
+                _ => 0.0,
+            };
+            let mut times = vec![0.0f32; members.len()];
+            let mut longest = 0.0f32;
+            for (i, m) in members.iter().enumerate() {
+                let counted = together || m["near"].as_u64() != Some(0);
+                if !m["same"].as_bool().unwrap() || !counted || !m["active"].as_bool().unwrap() {
+                    continue;
+                }
+                let time = member_time(word(&m["left"]), word(&m["top"]), point(&m["offset"]), facing, aux, buffer);
+                times[i] = time as f32;
+                if (longest as f64) < time {
+                    longest = time as f32;
+                }
+            }
+            let mut ours: Vec<(u64, u32)> = Vec::new();
+            if longest > 0.0 {
+                for (i, m) in members.iter().enumerate() {
+                    let counted = together || m["near"].as_u64() != Some(0);
+                    if m["active"].as_bool().unwrap() && counted {
+                        ours.push((i as u64, member_speed(word(&m["top"]), times[i], longest).to_bits()));
+                    }
+                }
+            }
+            let native: Vec<(u64, u32)> = r["calls"].as_array().unwrap().iter().filter(|c| c[0] == "speed").map(|c| (c[1].as_u64().unwrap(), c[2].as_u64().unwrap() as u32)).collect();
+            assert_eq!(ours, native, "{r}");
+            told += native.len();
+            assert_eq!(r["calls"].as_array().unwrap().last().unwrap()[1].as_u64(), Some(0x3f80_0000), "a second on");
+        }
+        assert!(told > 100, "{told}");
+    }
+    #[test]
+    fn a_group_runs_as_the_original_s_list() {
+        let f = fixture();
+        for r in f["cases"]["order"].as_array().unwrap() {
+            let values: Vec<i32> = r["things"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| match t["kind"].as_str().unwrap() {
+                    "element" => t["value"].as_i64().unwrap() as i32,
+                    "other" => 0,
+                    _ => {
+                        let priority = t["priority"].as_i64().unwrap() as i32;
+                        if priority > 0 {
+                            return priority;
+                        }
+                        let order: Vec<usize> = t["order"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+                        let all: Vec<Option<i32>> = t["values"].as_array().unwrap().iter().map(|v| v.as_i64().map(|x| x as i32)).collect();
+                        let locks: Vec<bool> = t["locked"].as_array().unwrap().iter().map(|v| v.as_bool().unwrap()).collect();
+                        let slots: Vec<Option<i32>> = order.iter().map(|&e| all[e]).collect();
+                        let locked: Vec<bool> = order.iter().map(|&e| locks[e]).collect();
+                        let primary = t["primary"].as_i64().unwrap();
+                        first_of(&slots, &locked, (primary >= 0).then_some(primary as usize)).unwrap()
+                    }
+                })
+                .collect();
+            let mut list: Vec<i32> = Vec::new();
+            for (value, native) in values.iter().zip(r["indices"].as_array().unwrap()) {
+                let at = insertion_index(|i| list[i], list.len(), *value);
+                assert_eq!(at as u64, native.as_u64().unwrap(), "{values:?}");
+                list.insert(at, *value);
+            }
+        }
+    }
     #[test]
     fn the_center_throws_out_the_farthest() {
         let c = robust_center(vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(100.0, 0.0)], 18.0);

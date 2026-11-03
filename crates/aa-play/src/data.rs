@@ -90,6 +90,13 @@ pub struct Weapon {
     /// `projectile`; 0 / None without a projectile.
     pub projectile_speed: f32,
     pub projectile_type: Option<String>,
+    /// ProjectileComponent `projectile_life`, its seconds when above 0.
+    #[serde(default)]
+    pub projectile_life: f32,
+    /// Ability `spawn_position` (local definition +0x70): where its projectile appears,
+    /// to the right, ahead and up of the actor (`0x4BE780`).
+    #[serde(default)]
+    pub spawn_position: [f32; 3],
     // ---- appended by the core owner (aircraft abilities) ----
     /// AbilityDefinition mana_cost (4C8A40: below it the ability is
     /// unavailable, code 7).
@@ -308,6 +315,12 @@ pub struct Def {
     pub placement_category: Option<String>,
     pub minimap_icon: Option<String>,
     pub structure: bool,
+    /// ConstructionComponent `can_sell` (+4E4) and `can_raze` (+4E5, 467C52: cleared when
+    /// `can_sell` is set).
+    #[serde(default)]
+    pub can_sell: bool,
+    #[serde(default)]
+    pub can_raze: bool,
     pub city: bool,
     /// Thing `[Flags]`: not drawn (start locations, placeholders, markers).
     pub invisible: bool,
@@ -435,6 +448,16 @@ pub struct Def {
     /// A `[TrackInfo]` with track_type CONTINUOUS (ActorData +25C, 0x4D7450).
     #[serde(default)]
     pub continuous_tracks: bool,
+    /// ThingData +0x24 `[Size] height`: what a transport drops hangs this far under it
+    /// (`0x58BCB0`).
+    #[serde(default)]
+    pub height: f32,
+    /// ActorData +0x1A4 `fall_drag`.
+    #[serde(default)]
+    pub fall_drag: f32,
+    /// ActorData +0x41C `[TransportComponent] deployment_delay`.
+    #[serde(default)]
+    pub transport_delay: f32,
     /// ActorData +184 `transport_actor`: what carries this thing in when it is recruited
     /// at a location (0x589F90 -> 0x582190).
     #[serde(default)]
@@ -493,6 +516,9 @@ pub struct AnimSet {
     pub fidgets: Vec<(f32, f32)>,
     /// Set +0x64: the fidgets' total weight.
     pub fidget_weight: f32,
+    /// Kind 5, what `0x563D50` plays at a landing: (length, weight +0x20).
+    #[serde(default)]
+    pub lands: Vec<(f32, f32)>,
 }
 
 /// DynamicDoodadData components (aa-rules `native_dynamic_doodad`, oracle
@@ -759,6 +785,12 @@ pub struct ResearchItem {
     /// required_structures / required_properties (record +4).
     #[serde(default)]
     pub requirements: Requirements,
+}
+
+/// The key in `GameData::formation_modifiers` of a layout's BrokenProperty (`+50`), what an
+/// organization has with no formation (`0x57BF50` with +0x74 null).
+pub fn broken_key(layout: &str) -> String {
+    format!("broken property of {}", layout.to_ascii_lowercase())
 }
 
 impl Def {
@@ -1046,7 +1078,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v34";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v38";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1582,6 +1614,14 @@ pub(crate) mod loader {
                 data.formation_modifiers.entry(id.to_ascii_lowercase()).or_insert(list);
             }
         }
+        // The layouts' BrokenProperty (`+50`), by [`broken_key`].
+        if let Ok(nodes) = catalog.resolved_definitions("OrganizationLayout") {
+            for node in nodes {
+                let Some(id) = st(&node, "IDS").or_else(|| st(&node, "ids")) else { continue };
+                let list = node.child("BrokenProperty").ok().flatten().map(|p| modifiers(&p, &data.damage_types, &resource_ids)).unwrap_or_default();
+                data.formation_modifiers.entry(broken_key(&id)).or_insert(list);
+            }
+        }
         if let Ok(nodes) = catalog.resolved_definitions("ActorState") {
             for node in nodes {
                 let Some(id) = st(&node, "IDS") else { continue };
@@ -1610,14 +1650,15 @@ pub(crate) mod loader {
             }
         }
         // Projectile speeds onto the weapons that fire them.
-        let projectile = |data: &GameData, id: &str| resolve(data, id).map(|d| (data.def(d).projectile_speed, data.def(d).projectile_type.clone()));
+        let projectile = |data: &GameData, id: &str| resolve(data, id).map(|d| (data.def(d).projectile_speed, (data.def(d).projectile_type.clone(), data.def(d).projectile_life)));
         for i in 0..data.defs.len() {
             for w in 0..data.defs[i].weapons.len() {
                 if let Some(pid) = data.defs[i].weapons[w].projectile.clone()
-                    && let Some((speed, kind)) = projectile(&data, &pid)
+                    && let Some((speed, (kind, life))) = projectile(&data, &pid)
                 {
                     data.defs[i].weapons[w].projectile_speed = speed;
                     data.defs[i].weapons[w].projectile_type = kind;
+                    data.defs[i].weapons[w].projectile_life = life;
                 }
             }
         }
@@ -1903,7 +1944,8 @@ pub(crate) mod loader {
             let set = |list: &[aa_animation::definitions::BoundAnimation]| -> AnimSet {
                 let fidgets: Vec<(f32, f32)> =
                     list.iter().filter(|a| a.timing.kind == 1).map(|a| (f(a.timing.length.0), a.fields.get("weight").and_then(num).unwrap_or(0.0))).collect();
-                AnimSet { first_idle: list.iter().find(|a| a.timing.kind == 0).map_or(0.0, |a| f(a.timing.length.0)), fidget_weight: fidgets.iter().map(|x| x.1).sum(), fidgets }
+                let lands = list.iter().filter(|a| a.timing.kind == 5).map(|a| (f(a.timing.length.0), a.fields.get("weight").and_then(num).unwrap_or(0.0))).collect();
+                AnimSet { first_idle: list.iter().find(|a| a.timing.kind == 0).map_or(0.0, |a| f(a.timing.length.0)), fidget_weight: fidgets.iter().map(|x| x.1).sum(), fidgets, lands }
             };
             let view = node.child("View").ok().flatten();
             let loops = |k: &str| view.as_ref().and_then(|v| fx(v, k)).map(|v| v as i32);
@@ -2111,6 +2153,9 @@ pub(crate) mod loader {
         if let Ok(Some(mover)) = node.child("MoverComponent") {
             def.continuous_tracks = mover.children("TrackInfo").unwrap_or_default().iter().any(|t| st(t, "track_type").is_some_and(|v| v.eq_ignore_ascii_case("CONTINUOUS")));
         }
+        def.fall_drag = fx(&node, "fall_drag").unwrap_or(0.0);
+        def.height = node.child("Size").ok().flatten().and_then(|s| fx(&s, "height")).unwrap_or(0.0);
+        def.transport_delay = node.child("TransportComponent").ok().flatten().and_then(|t| fx(&t, "deployment_delay")).unwrap_or(0.0);
         def.transport_actor = st(&node, "transport_actor").filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("null")).map(|t| t.to_ascii_lowercase());
         if let Ok(Some(air)) = node.child("AircraftComponent") {
             def.aircraft = Some(AircraftDef {
@@ -2122,6 +2167,10 @@ pub(crate) mod loader {
             });
         }
         def.structure = node.child("StructureComponent").ok().flatten().is_some();
+        if let Ok(Some(c)) = catalog.native_construction_flags(id, PC) {
+            def.can_sell = c.can_sell;
+            def.can_raze = c.can_raze;
+        }
         if let Ok(Some(city)) = node.child("CityComponent") {
             def.city_zone_radius = fx(&city, "zone_radius").unwrap_or(0.0);
         }
@@ -2297,6 +2346,11 @@ pub(crate) mod loader {
             move_bonus: g(af, "move_bonus"),
             projectile_speed: 0.0,
             projectile_type: None,
+            projectile_life: 0.0,
+            spawn_position: match af.get("spawn_position") {
+                Some(TypedValue::Point { bits, .. }) if bits.len() == 3 => [f(bits[0]), f(bits[1]), f(bits[2])],
+                _ => [0.0; 3],
+            },
             mana_cost: g(d, "mana_cost"),
             idle_animation: s(af, "idle_animation"),
             idle_length: 0.0,

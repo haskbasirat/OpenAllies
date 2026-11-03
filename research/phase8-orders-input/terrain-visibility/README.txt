@@ -153,7 +153,7 @@ COVERAGE (executed / instructions, all precisions)
   unreachable +14E/+14D branches), 721180 28/39, 7212D0 18/30, 7211F0 55/77 (dependency loops and
   the mesh RTTI walk), 7208D0 60/138 (fade/texture branches), 43B2F0 35/35, 430290 47/47,
   71AFD0 380/380, 96D5E0 44/58. 6646 executed pins, identical in both images.
-  430710 misses: negative widths, CArray growth branches and the null arg4 path (430E50
+  430710 misses: negative widths, CArray growth branches and the null argument 4 path (430E50
   passes 0).
 
 REPLAY

@@ -14,14 +14,14 @@ use aa_parity::slog::{Outcome, SEntryKind, SLog};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-const FILM: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Profile\data\Films\archive-qa-20261022\LastFilm_2.RFM";
+const FILM: &str = "reconstruction/qa-runs/compare-20261022/game/Profile/data/Films/archive-qa-20261022/LastFilm_2.RFM";
 
 #[test]
 #[ignore = "reads QA film 2 and the original data; set AA_GAME_ROOT"]
 fn film_2_checkpoints_against_aa_play_trace() {
-    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
+    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let film_path =
-        std::env::var_os("AA_PARITY_FILM").map_or_else(|| PathBuf::from(FILM), PathBuf::from);
+        std::env::var_os("AA_PARITY_FILM").map_or_else(|| root.join(FILM), PathBuf::from);
     let film = Film::read(&film_path, &Registries::builtin()).unwrap();
     assert_eq!(film.header.seed, 972_257_557);
 

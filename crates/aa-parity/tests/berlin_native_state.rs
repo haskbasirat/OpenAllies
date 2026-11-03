@@ -28,8 +28,8 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-const FILM: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Profile\data\Films\archive-qa-20261025\Berlin2v2_0.RFM";
-const NATIVE: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\traces\berlin2v2_0-native.txt";
+const FILM: &str = "reconstruction/qa-runs/compare-20261022/game/Profile/data/Films/archive-qa-20261025/Berlin2v2_0.RFM";
+const NATIVE: &str = "reconstruction/qa-runs/compare-20261022/traces/berlin2v2_0-native.txt";
 const MAP: &str = "(2v2)Berlin";
 
 /// `AA_PARITY_BERLIN_MAP` with `AA_PARITY_BERLIN_FILM` and `AA_PARITY_BERLIN_NATIVE` runs
@@ -38,8 +38,8 @@ fn map_id() -> String {
     std::env::var("AA_PARITY_BERLIN_MAP").unwrap_or_else(|_| MAP.to_owned())
 }
 
-fn env_path(var: &str, default: &str) -> PathBuf {
-    std::env::var_os(var).map_or_else(|| PathBuf::from(default), PathBuf::from)
+fn env_path(var: &str, default: &Path) -> PathBuf {
+    std::env::var_os(var).map_or_else(|| default.to_path_buf(), PathBuf::from)
 }
 
 fn install_id_tables(registries: &Registries) {
@@ -418,10 +418,10 @@ fn saved_deferred(root: &Path) -> Option<[(i32, i32, usize); 2]> {
 #[test]
 #[ignore = "reads the QA Berlin film, its native trace and the original data; set AA_GAME_ROOT"]
 fn berlin_native_state_census() {
-    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
+    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let registries = Registries::load_v14(&root, true).unwrap();
-    let film = Film::read(&env_path("AA_PARITY_BERLIN_FILM", FILM), &registries).unwrap();
-    let trace = NativeTrace::read(&env_path("AA_PARITY_BERLIN_NATIVE", NATIVE)).unwrap();
+    let film = Film::read(&env_path("AA_PARITY_BERLIN_FILM", &root.join(FILM)), &registries).unwrap();
+    let trace = NativeTrace::read(&env_path("AA_PARITY_BERLIN_NATIVE", &root.join(NATIVE))).unwrap();
     eprintln!(
         "native trace: {} sampled ticks ({:?}..{:?}), {} named things, {} getters, {} creations",
         trace.ticks.len(),

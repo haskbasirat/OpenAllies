@@ -64,6 +64,7 @@ impl World {
         self.tick = u64::from(self.clock.tick);
         self.time = f32::from_bits(self.clock.end.0);
         crate::scheduler::sync_clock(self);
+        crate::combat::zoc_rescans(self);
         // 0x7AF220 emits requests: the next admin tick runs them (`World::step`).
         let ai_commands = crate::ai::think(self);
         self.sai_orders.extend(ai_commands);

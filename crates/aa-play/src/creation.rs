@@ -219,23 +219,9 @@ pub fn projectile(world: &mut World, def: DefId) -> Option<crate::ids::Gtid> {
     id
 }
 
-/// 0x4F9C10 of a transport (0x582426 for a recruit at a location, 0x4CB376 for a summon):
-/// the next-fit id, the draws of its creation, then its InitExisting's Mover 0x55E632 ->
-/// 0x576B20, one getter on queue 0. Measured on the fight films, every transport of
-/// every nation (`rus_transport_air`, Berlin2v2_1 3841 and 13681). aa-play keeps no actor
-/// for it: the flight is the time to the drop. The caller gives the id back at the drop;
-/// natively it flies on and leaves the map, and a next-fit id is not taken again by then.
-pub fn transport(world: &mut World, def: DefId) -> Option<crate::ids::Gtid> {
-    let id = world.ids.created_transient(def);
-    created(world, def, Made::Other);
-    if has(world.data.def(def), AIRCRAFT) {
-        world.random_u32_at(sites::INIT_EXISTING_AIRCRAFT);
-    }
-    id
-}
-
-/// What a transport drops starts to fall (end of 0x58BCB0: 0x5770A0 -> 0x50AC00, one
-/// getter on queue 0, after the thing's creation draws). aa-play places it on the ground.
+/// What lands from a recruit at a location with no transport starts to fall (0x5770A0 ->
+/// 0x50AC00, one getter on queue 0, after the thing's creation draws). aa-play places it on
+/// the ground. What a transport drops falls in `crate::transport`.
 pub fn cargo_fall(world: &mut World) {
     world.random_u32_at(sites::CARGO_FALL);
 }
@@ -355,8 +341,9 @@ pub(crate) fn organization_scatter(world: &mut World, org: OrgId, facing: glam::
     }
     let data = world.data.clone();
     let d = data.def(world.orgs[org as usize].def);
-    let formation = crate::player_orders::formation(world, org).and_then(|f| d.formations.get(f))?;
-    if formation.organized {
+    // +0x74 null scatters too (`0x5797E0` reads the byte only of a formation).
+    let formation = crate::player_orders::formation(world, org).and_then(|f| d.formations.get(f));
+    if formation.is_some_and(|f| f.organized) {
         return None;
     }
     let slots = standing.len();

@@ -42,6 +42,7 @@ pub mod goals;
 pub mod rai;
 pub mod reach;
 pub mod regions;
+mod selection;
 pub mod value;
 pub mod view;
 

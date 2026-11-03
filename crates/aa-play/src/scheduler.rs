@@ -91,6 +91,8 @@ pub enum Owner {
     Doodad(u32, u8),
     /// A GGroup's Updatable +180, on the deferred +208 (`crate::orders::group`).
     Group(u32),
+    /// An actor's Mover falling (`crate::transport`): the Mind's stops do not touch it.
+    Fall(ActorId),
 }
 
 impl Owner {
@@ -110,6 +112,7 @@ impl Owner {
             Owner::OrgMind(o) => (11, 0, o),
             Owner::Doodad(i, s) => (12, u64::from(s), i),
             Owner::Group(g) => (13, 0, g),
+            Owner::Fall(a) => (14, 0, a),
         };
         kind << 56 | slot << 48 | u64::from(id)
     }
@@ -130,6 +133,7 @@ impl Owner {
             11 => Owner::OrgMind(id),
             12 => Owner::Doodad(id, slot),
             13 => Owner::Group(id),
+            14 => Owner::Fall(id),
             _ => return None,
         })
     }
@@ -435,7 +439,7 @@ pub fn admit_restored(world: &mut World, order: &[Kept]) {
 /// A destroyed thing's Updatables leave the queues (its components'
 /// destructors, 0x50B250 each).
 pub fn release_actor(world: &mut World, a: ActorId) {
-    for owner in [Owner::Structure(a), Owner::Mover(a), Owner::Mind(a)] {
+    for owner in [Owner::Structure(a), Owner::Mover(a), Owner::Mind(a), Owner::Fall(a)] {
         world.unschedule(owner);
     }
     for slot in 0..SLOTS {
@@ -547,6 +551,8 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::Doodad(index, 0)) => crate::doodad::disturbable(world, index),
         Some(Owner::Doodad(index, _)) => crate::doodad::breakable(world, index),
         // (movement owner) Mover Tick 0x577E50.
+        Some(Owner::Mover(a)) if crate::transport::flying(world, a) => crate::transport::flight_tick(world, a),
+        Some(Owner::Fall(a)) => crate::transport::fall_tick(world, a),
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
         // (core) the aircraft Mind's queue-4 update 0x51A1A0.
         Some(Owner::Mind(a)) if crate::combat::air::is_aircraft(world, a) => crate::combat::air::think(world, a),

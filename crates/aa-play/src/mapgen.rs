@@ -52,6 +52,11 @@ pub struct RandomMapParams {
     pub heroes: u32,
     /// Same params + same seed = same map.
     pub seed: u64,
+    /// The world creator's `_ki.additional_actors` (KingdomInfo +0x5C, the order
+    /// AddKingdomAdditionalActor 945840 of a campaign battle, a film's kingdom rows):
+    /// (RMC kingdom IDS, actor IDS).
+    #[serde(default)]
+    pub additional_actors: Vec<(String, String)>,
 }
 
 /// What the random map dialog shows for every RMC (read from the original
@@ -127,6 +132,7 @@ impl RandomMapParams {
             object_counts: info.object_sliders.iter().map(|s| (s.ids.clone(), s.default)).collect(),
             heroes: (info.heroes_range[1].saturating_sub(info.heroes_range[0])) / 2 + info.heroes_range[0],
             seed,
+            additional_actors: Vec::new(),
         }
     }
 }
@@ -304,6 +310,7 @@ impl RandomMapData {
                 object_counts: BTreeMap::new(),
                 heroes: 0,
                 seed: 0,
+                additional_actors: Vec::new(),
             },
             terrain,
             placed: map.placed.clone(),
@@ -784,6 +791,7 @@ fn generate_world_once(
             placement.create_start_locations(&mut world, rng);
             placement.setup_groups();
             placement.place_required_exact(&mut world, rng)?;
+            placement.place_world_actors(&mut world, &params.additional_actors, rng);
             placement.place_groups_exact(&mut world, &value, rng)?;
             Ok(())
         };

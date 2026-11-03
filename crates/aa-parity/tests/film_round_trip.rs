@@ -491,7 +491,11 @@ fn stock_map_computers_round_trip() {
     for d in film.ticks.iter().flat_map(|t| &t.decrees) {
         let aa_parity::Decree::TellSelectedCommand(w) = &d.decree else { continue };
         let name = aa_parity::classify::actor_command(&d.decree).map_or("default", |(_, n, _)| n);
-        assert_eq!(w.flags & 0x10, 0, "{name} {:#x}: a computer's order has no scalar", w.flags);
+        // 0x4DDE60, a move at a thing (the attack goals' order, 0x59 in the real films), writes
+        // its scalar of 0; no other order of the SAI has one.
+        if w.flags != 0x59 {
+            assert_eq!(w.flags & 0x10, 0, "{name} {:#x}: a computer's order has no scalar", w.flags);
+        }
         match name {
             "recruit" => {
                 let id = &registries().object_ids[w.object.unwrap() as usize];

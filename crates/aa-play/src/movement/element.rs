@@ -608,8 +608,8 @@ impl Host<'_> {
         Ok(())
     }
     /// `0x52F260`: the Mover stops, the leading kind-0 nodes go; no path left fails the
-    /// Move; a head within reach goes on at once (`0x52E130`, as `0x5313F0`'s straight
-    /// line), `fail` fails it, else the head counts a try and the Mind waits 1 s.
+    /// Move; a head within 3 m is `0x52E130`; `fail` fails the Move, else the head counts
+    /// a try and the Mind waits 1 s.
     fn path_failed_52f260(&mut self, fail: bool, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<()> {
         self.stop();
         aa_navigation::low_path::pop_front_kind0(&mut p.plan.movement.path);
@@ -618,12 +618,9 @@ impl Host<'_> {
             return Ok(());
         };
         let pos = self.position();
-        let d = vec2([head.words[0], head.words[1]]) - pos;
-        if f64::from(d.x) * f64::from(d.x) + f64::from(d.y) * f64::from(d.y) <= 1.0 {
-            let state = self.state(offsets::MOVE)?;
-            element_move::clear_path(p);
-            self.continue_turn(state, false, p, a)?;
-            return Ok(());
+        let (dx, dy) = (f64::from(pos.x) - f64::from(f32::from_bits(head.words[0])), f64::from(pos.y) - f64::from(f32::from_bits(head.words[1])));
+        if (dy * dy + dx * dx) as f32 <= 9.0 {
+            return self.node_or_failed_52e130(p, a);
         }
         if fail {
             self.failed(p, a)?;
@@ -632,6 +629,25 @@ impl Host<'_> {
         let node = &mut p.plan.movement.path.nodes[0];
         node.words[5] = node.words[5].wrapping_add(1);
         self.schedule_mind(ONE_BITS);
+        Ok(())
+    }
+    /// `0x52E130`: a single node still 0.5 m away or more fails the Move (Mind +0x124);
+    /// any other node counts as reached (Mind +0x160 `0x530AE0`); no node fails it.
+    fn node_or_failed_52e130(&mut self, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<()> {
+        if let [only] = p.plan.movement.path.nodes[..] {
+            let pos = self.position();
+            let (dx, dy) = (f32::from_bits(only.words[0]) - pos.x, f32::from_bits(only.words[1]) - pos.y);
+            if (f64::from(dy) * f64::from(dy) + f64::from(dx) * f64::from(dx)) as f32 >= 0.25 {
+                self.failed(p, a)?;
+                return Ok(());
+            }
+        }
+        if p.plan.movement.path.nodes.is_empty() {
+            self.failed(p, a)?;
+            return Ok(());
+        }
+        let state = self.state(offsets::MOVE)?;
+        node_reached::apply(state, p, a, PC, self)?;
         Ok(())
     }
     /// Run `f` with the tile lists out of `MovementState` and the descriptor policy.
@@ -826,7 +842,8 @@ impl element_command::World for MoveCommand<'_, '_, '_> {
     /// `0x532930`: a move to a thing, mode 2 follows it.
     fn activate_follow(&mut self, state: StateId, mode: u32, target: u32, movement_mode: u32, speed: u32, auxiliary: [u32; 2]) -> aa_mind::Result<bool> {
         let Stack { host, p } = &mut *self.stack;
-        host.activate_to_object(state, mode, target, movement_mode, speed, auxiliary, p, self.a)
+        // `target` is what `resolve` gave: the thing; state +0x10 holds its id.
+        host.activate_to_object(state, mode, target + 1, movement_mode, speed, auxiliary, p, self.a)
     }
 }
 
@@ -851,13 +868,7 @@ impl Host<'_> {
         if mode > 1 && !aa_mind::World::can_activate(&mut Stack { host: self, p }, state, a)? {
             return Ok(false);
         }
-        let mut destination = self.thing_position(target.wrapping_sub(1));
-        // 0x5317A0's tail under Mind +0xA4 (0x52D780, Reattach current).
-        if self.am().reattaching
-            && target.wrapping_sub(1) & ORG != 0
-        {
-            destination = self.reattach_point(destination, target.wrapping_sub(1) & !ORG);
-        }
+        let (destination, _) = self.project_5317a0(target.wrapping_sub(1), None);
         let m = &mut p.plan.movement;
         m.target_id = target;
         m.destination_bits = bits(destination);
@@ -867,15 +878,16 @@ impl Host<'_> {
         m.phase = 0;
         aa_mind::activate(state, mode, a, &mut Stack { host: self, p })
     }
-    /// `0x556070(point, the actor's facing, its definition, its owner, ActorData +0x2FC,
-    /// the organization's zone 4, 0)`: the point itself when its tile holds the zone and
-    /// nothing stands there, else eight places on each of up to 20 rings from the facing.
-    /// Rendition of `0x4F3640` here: its collision part (`0x553BA0` with movers), which is
-    /// all it does for a thing without Structure or Wall.
+    /// `0x556070(point, the actor's facing, its definition, its owner, the organization
+    /// definition's +0x2FC, the organization's zone 4, 0)`: the point itself when its tile
+    /// holds the zone and nothing stands there, else eight places on each of up to 20 rings
+    /// from the facing. The test is `0x4F3640` with no source thing ([`space::creation_clear`]):
+    /// its leader, who stands on the organization's position, blocks the point itself. No place
+    /// found (`0x556070` returns 0): the point stays.
     fn reattach_point(&mut self, point: Vec2, o: OrgId) -> Vec2 {
         let id = self.id;
         let def = def_of(self.world, id);
-        let radius = def.control_range;
+        let radius = self.world.data.def(self.world.orgs[o as usize].def).control_range;
         let tile = self.world.map.cell_size;
         let r0 = f32::from_bits(def.blocking_words[1]);
         let quarter = (f64::from(tile) * 0.25) as f32;
@@ -889,22 +901,11 @@ impl Host<'_> {
         let rings = ((f64::from(radius) / step) as i32).clamp(1, 20);
         let ring_step = (f64::from(radius) / f64::from(rings)) as f32;
         let holds = |host: &Self, at: Vec2| host.world.map.cell_of(at).is_some() && host.world.fog.engine.as_ref().is_none_or(|e| !e.has_zoc(o) || e.tile_holds_org_zone(host.world, at, o));
-        // No source in the descriptor (0x4F3640 builds it from the definition), so the
-        // thing's organization counts as anything else.
-        let clear = |host: &mut Self, at: Vec2| {
-            with_space_of(host.ms, host.world, |s, policy| {
-                let mut q = space::query_for(s, policy, id, false)?;
-                q.descriptor.source_actor = None;
-                q.set_position(&s.index, bits(at), policy).ok()?;
-                Some(!space::first_hit(s, policy, &q).blocked())
-            })
-            .flatten()
-            .unwrap_or(true)
-        };
+        let facing = self.am().mover.facing;
+        let clear = |host: &mut Self, at: Vec2| with_space_of(host.ms, host.world, |s, policy| space::creation_clear(s, policy, id, bits(at), bits(facing))).flatten().unwrap_or(true);
         if holds(self, point) && clear(self, point) {
             return point;
         }
-        let facing = self.am().mover.facing;
         let sin = f64::from(f32::from_bits(aa_spatial::placement::ROTATION_SIN_BITS));
         let cos = f64::from(f32::from_bits(aa_spatial::placement::ROTATION_COS_BITS));
         for k in 1..=rings {
@@ -922,6 +923,60 @@ impl Host<'_> {
             }
         }
         point
+    }
+    /// `0x5317A0(thing, radius out)`: where a Move at `thing` goes, and the radius of its
+    /// soft shape (virtual +0x10). A circle: its position. A box: the point of the box
+    /// nearest the actor (`0x46E4F0`) while that lies inside the radius; with the radius
+    /// asked for (a Some of the thing to ignore), that point takes radius 0 if nothing stands
+    /// there (`0x554350`, moving things ignored, the thing itself too, `0x553BA0`) and else
+    /// is the position again. Last, with the Reattach current (Mind +0xA4 `0x52D780`), the
+    /// rings of `0x556070` around it.
+    fn project_5317a0(&mut self, thing: u32, query_ignoring: Option<u32>) -> (Vec2, f32) {
+        let position = self.thing_position(thing);
+        let (shape, facing) = if thing & ORG != 0 {
+            let o = thing & !ORG;
+            (self.world.orgs.get(o as usize).map_or([0; 6], |x| self.world.data.def(x.def).soft_shape), self.ms.orgs.get(o as usize).map_or(Vec2::ZERO, |x| x.facing))
+        } else {
+            (self.world.actors.get(thing as usize).map_or([0; 6], |x| self.world.data.def(x.def).soft_shape), self.ms.actors.get(thing as usize).map_or(Vec2::ZERO, |x| x.mover.facing))
+        };
+        let mut radius = f32::from_bits(shape[1]);
+        let mut point = position;
+        if shape[0] >= 2 {
+            let placement = aa_spatial::geometry::Placement {
+                shape: aa_spatial::collision::Shape { kind: shape[0], radius_bits: shape[1], bounds: [shape[2], shape[3], shape[4], shape[5]] },
+                facing: bits(facing),
+                position: bits(position),
+            };
+            if let Ok(near) = aa_combat::surface::placed_projection(&placement, bits(self.position()), [0, 0], PC) {
+                point = vec2(near);
+            }
+            let (dx, dy) = (f64::from(position.x) - f64::from(point.x), f64::from(position.y) - f64::from(point.y));
+            let inner = f64::from(radius) - f64::from(EPSILON);
+            // The Join (+0x164), which takes the point in any case, is not hosted.
+            if !(((dy * dy + dx * dx) as f32 as f64) < inner * inner) {
+                point = position;
+            } else if let Some(ignored) = query_ignoring {
+                let id = self.id;
+                let hit = self.with_space(|s, policy| {
+                    let mut q = space::query_for(s, policy, id, false)?;
+                    q.descriptor.ignore_moving = true;
+                    q.descriptor.ignore_actor = Some(ignored);
+                    q.set_position(&s.index, bits(point), policy).ok()?;
+                    Some(space::first_hit(s, policy, &q).kind)
+                });
+                if hit.flatten().unwrap_or(0) != 0 {
+                    point = position;
+                } else {
+                    radius = 0.0;
+                }
+            }
+        }
+        if self.am().reattaching
+            && let Some(o) = self.org()
+        {
+            point = self.reattach_point(point, o);
+        }
+        (point, radius)
     }
     /// An actor's position, or an organization's (`ORG | o`).
     fn thing_position(&self, thing: u32) -> Vec2 {
@@ -1101,14 +1156,12 @@ impl Host<'_> {
             let now = self.world.time;
             self.am().bad_targets.push((t, now));
         }
-        // The Unpack state cannot reach its point: tai_error_unpack, the order ends.
-        if self.is_current(a, offsets::UNPACK)? {
+        // 0x537839: a truck with no organization cannot reach its Unpack's point:
+        // tai_error_unpack, the order ends. A member's goes through its regiment.
+        if self.is_current(a, offsets::UNPACK)? && self.org().is_none() {
             let actor = &mut self.world.actors[id as usize];
             actor.order = Order::Idle;
-            let (org, kingdom) = (actor.org, actor.kingdom);
-            if let Some(o) = org {
-                self.world.orgs[o as usize].order = Order::Idle;
-            }
+            let kingdom = actor.kingdom;
             if let Some(kingdom) = kingdom {
                 self.world.events.push(crate::world::Event::Refused { kingdom, reason: "the deploy spot cannot be reached".into() });
             }
@@ -1140,7 +1193,9 @@ impl Host<'_> {
         }
         let tries = self.am().walk.map_or(0, |w| w.tries) + 1;
         self.am().walk = Some(MemberWalk { tries });
-        let next = if tries > REDEPLOY_TRIES { None } else { open_position_near(self.ms, self.world, id, at, REDEPLOY_SEARCH_RADIUS, false) };
+        // 0x554B30(position, facing, definition, 8, strict 1, 0).
+        let facing = bits(self.am().mover.facing);
+        let next = if tries > REDEPLOY_TRIES { None } else { with_space_of(self.ms, self.world, |s, policy| space::open_radius(s, policy, id, bits(at), facing, REDEPLOY_SEARCH_RADIUS.to_bits(), true)).flatten().map(vec2) };
         let Some(q) = next else {
             self.died = true;
             return Ok(false);
@@ -1193,9 +1248,31 @@ impl Host<'_> {
             return Ok(true);
         }
         if self.is_current(a, offsets::MOVE)? {
-            // 0x52DA60 (+0x148, the target is not a live other actor): a member
-            // takes its organization's facing (0x4EEBE0 at +0x2C), then the state
-            // ends and Sleep thinks in 1 s.
+            // 0x52FD00: the target is a live other thing with a Mover. The Mind thinks
+            // in 1 s and, while the path holds a node and the target moves, this actor
+            // goes along at its speed (0x5773C0), else it stands (0x4DB090).
+            if let Some(target) = self.followed_target(p) {
+                self.schedule_mind(ONE_BITS);
+                let speed = self.ms.actors[target as usize].mover.speed;
+                if !p.plan.movement.path.nodes.is_empty() && self.ms.actors[target as usize].mover.active && speed != 0.0 {
+                    let (f, at) = (self.ms.actors[target as usize].mover.facing, pos2(self.world, target));
+                    let request = MoverRequest {
+                        direction_bits: bits(f),
+                        destination_bits: bits(Vec2::new((f64::from((f64::from(f.x) * f64::from(speed)) as f32) + f64::from(at.x)) as f32, (f64::from((f64::from(speed) * f64::from(f.y)) as f32) + f64::from(at.y)) as f32)),
+                        requested_speed_bits: speed.to_bits(),
+                        speed_factor_bits: ONE_BITS,
+                    };
+                    let mut actor = self.action_actor();
+                    let mut go = GoHost { host: self, after: After::None };
+                    aa_navigation::TryActionWorld::begin_mover(&mut go, request, &mut p.plan.movement, &mut actor).map_err(err)?;
+                    return Ok(false);
+                }
+                self.deactivate();
+                return Ok(false);
+            }
+            // 0x52DA60 (+0x148): a member takes its organization's facing (0x4EEBE0 at
+            // +0x2C), the state ends, and with Sleep current (nothing pending was
+            // resumed) the Mind thinks in 1 s.
             if let Some(o) = self.org() {
                 let f = self.ms.orgs[o as usize].facing;
                 if f != Vec2::ZERO {
@@ -1206,12 +1283,43 @@ impl Host<'_> {
                 }
             }
             aa_mind::pop(mind, a, &mut Stack { host: self, p })?;
-            self.schedule_mind(ONE_BITS);
+            if self.is_current(a, offsets::SLEEP)? {
+                self.schedule_mind(ONE_BITS);
+            }
             self.lone_order_over();
             return Ok(true);
         }
         self.schedule_mind(IMMEDIATE_BITS);
         Ok(false)
+    }
+    /// `0x52FD00`: the Move's target resolves to a thing other than this actor, not
+    /// removed, with a Mover (bit 29 of its flags clear). Organizations have no Mover
+    /// here: [`Host::thing_position`] names them apart.
+    fn followed_target(&self, p: &Payload) -> Option<ActorId> {
+        let thing = p.plan.movement.target_id.checked_sub(1)?;
+        if thing & ORG != 0 || thing == self.id || !alive(self.world, thing) {
+            return None;
+        }
+        let flags = space::thing_flags(self.ms, self.world, thing);
+        (flags & (0x2000_0000 | 1) == 0).then_some(thing)
+    }
+    /// Mind +0x140 `0x52D9C0`, the target is gone. Move, Kill, Bombard, Repair and Join
+    /// end; Engage chooses again (+0x144 = 1); either way, and with any other state on
+    /// top, the Mind thinks in 0.6 s.
+    fn target_lost_52d9c0(&mut self, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<bool> {
+        let top = a.mind(MindId(self.id))?.stack.front().copied().flatten().map(|s| self.offset_of(s));
+        let ends = matches!(top, Some(offsets::MOVE | offsets::KILL | offsets::BOMBARD | offsets::REPAIR | offsets::JOIN));
+        if ends {
+            aa_mind::pop(MindId(self.id), a, &mut Stack { host: self, p })?;
+        } else if top == Some(offsets::ENGAGE) {
+            let id = self.id;
+            self.world.books.minds.set_byte(id, offsets::ENGAGE + 0x18, 1);
+        }
+        self.schedule_mind(0x3f19_999a);
+        if ends {
+            self.lone_order_over();
+        }
+        Ok(ends)
     }
     /// `0x52F160` EventReattach (Mind +0xFC): with its Reattach current, a wake in
     /// 0.6 s when none is due; else that state in mode 2.
@@ -1315,6 +1423,8 @@ impl aa_navigation::TryActionWorld for GoHost<'_, '_> {
             self.host.world.unschedule(Sched::Mover(id));
         }
         crate::character::mover_started(self.host.world, id);
+        // 0x5773D5 -> 0x4DB0E0 -> 0x4CFC10: the Performer stops being the active component.
+        crate::combat::performer::left_current(self.host.world, id);
         self.host.world.schedule_periodic_at(ORDER_SITE, crate::scheduler::EVERY_TICK, Sched::Mover(id), 0);
         Ok(true)
     }
@@ -1423,7 +1533,7 @@ impl element_move::World for Host<'_> {
             maximum_speed: max_speed(&mut speeds, self.world, mover).to_bits(),
             locked: false,
             turning: m.turning,
-            falling: false,
+            falling: crate::transport::is_falling(self.world, mover),
         })
     }
     fn resolve(&self, id: u32) -> aa_mind::Result<Option<u32>> {
@@ -1433,6 +1543,10 @@ impl element_move::World for Host<'_> {
         let thing = id - 1;
         if thing & ORG != 0 {
             return Ok(self.world.orgs.get((thing & !ORG) as usize).filter(|o| o.alive).map(|_| thing));
+        }
+        // An object of the map: no Mind or Mover, what the collision results read is below.
+        if space::is_scenery(thing) {
+            return Ok(Some(thing));
         }
         Ok(Some(thing).filter(|&a| alive(self.world, a)))
     }
@@ -1476,27 +1590,48 @@ impl element_move::World for Host<'_> {
             // 0x52F160: a detached element reattaches.
             E::DetachedFc => self.event_reattach(p, a),
             E::Failed124 => self.failed(p, a),
-            // (combat) 0x52D9C0 with the Engage current: choose again in 0.6 s.
-            E::TargetLost140(_) if self.is_current(a, offsets::ENGAGE)? => {
-                let id = self.id;
-                self.world.books.minds.set_byte(id, offsets::ENGAGE + 0x18, 1);
-                self.schedule_mind(0x3f19_999a);
-                Ok(false)
-            }
-            // 0x52D9C0, and +0xF4: the state ends.
-            E::TargetLost140(_) | E::TargetReachedF4(_) | E::Completed144 => self.completed(p, a),
+            E::TargetLost140(_) => self.target_lost_52d9c0(p, a),
+            // +0xF4: `component_d0` (Actor +0xD0) is no thing's here, so it does not arise.
+            E::TargetReachedF4(_) | E::Completed144 => self.completed(p, a),
         }
     }
-    fn update_target(&mut self, _: StateId, p: &mut Payload, _: &mut Arena) -> aa_mind::Result<Option<u32>> {
-        element_move::World::resolve(self, p.plan.movement.target_id)
+    /// `0x533C30`: the target's point now, and a new route (path reset, tries 0, +0x78 0)
+    /// when it moved at least 0.3827 of the gap from where the last route went (1e-4 for a
+    /// thing with no Mover). The gap takes off both soft radii and, with the Kill current,
+    /// the longest reach `0x57EC80`.
+    fn update_target(&mut self, _: StateId, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<Option<u32>> {
+        let Some(target) = element_move::World::resolve(self, p.plan.movement.target_id)? else { return Ok(None) };
+        let ignored = self.ignored(p.plan.movement.target_id).unwrap_or(0);
+        let (point, target_radius) = self.project_5317a0(target, Some(ignored));
+        let pos = self.position();
+        let (dy, dx) = (f64::from(pos.y) - f64::from(point.y), f64::from(pos.x) - f64::from(point.x));
+        let root = (dx * dx + dy * dy).sqrt() as f32;
+        let own = f32::from_bits(def_of(self.world, self.id).soft_shape[1]);
+        let mut gap = (f64::from(root) - f64::from(own) - f64::from(target_radius)) as f32;
+        if self.is_current(a, offsets::KILL)? {
+            gap = (f64::from(gap) - f64::from(longest_range(def_of(self.world, self.id)))) as f32;
+        }
+        let previous = vec2(p.plan.previous_destination_bits);
+        let (my, mx) = (f64::from(previous.y) - f64::from(point.y), f64::from(previous.x) - f64::from(point.x));
+        let moved = mx * mx + my * my;
+        let no_mover = target & ORG == 0 && space::thing_flags(self.ms, self.world, target) & 0x2000_0000 != 0;
+        let threshold = if no_mover { f64::from(EPSILON) } else { f64::from(gap) * f64::from(f32::from_bits(0x3ec3_f141)) };
+        if threshold * threshold <= moved {
+            element_move::clear_path(p);
+            p.plan.movement.destination_bits = bits(point);
+            p.plan.attempts = 0;
+            p.word78 = 0;
+        }
+        Ok(Some(target))
     }
+    /// Thing virtual 0 `0x4D1E30`: its soft shape's radius (definition +0x54).
     fn radius(&mut self, actor: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<Binary> {
         let def = match actor & ORG {
             0 => self.world.actors.get(actor as usize).map(|a| a.def),
             _ => self.world.orgs.get((actor & !ORG) as usize).map(|o| o.def),
         };
-        let r = def.and_then(|d| self.ms.blocking_radius.get(d as usize)).copied().unwrap_or(0.0);
-        Binary::from_f32_bits(r.to_bits()).map_err(err)
+        let r = def.map_or(0, |d| self.world.data.def(d).soft_shape[1]);
+        Binary::from_f32_bits(r).map_err(err)
     }
     fn property(&mut self, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<u32> {
         Ok(0)
@@ -1754,6 +1889,10 @@ impl cont::World for Host<'_> {
         };
     }
     fn actor(&self, actor: u32) -> aa_mind::Result<cont::Actor> {
+        if space::is_scenery(actor) {
+            let m = self.ms.space.as_ref().and_then(|s| s.index.member(actor + 1).ok()).ok_or_else(|| err("object absent"))?;
+            return Ok(cont::Actor { flags: m.actor.flags, position: m.actor.position, facing: m.actor.facing, mover: None });
+        }
         let a = self.world.actors.get(actor as usize).ok_or_else(|| err("actor absent"))?;
         let am = &self.ms.actors[actor as usize];
         Ok(cont::Actor {
@@ -1774,7 +1913,7 @@ impl cont::World for Host<'_> {
         true
     }
     fn actor_is_moving(&mut self, actor: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
-        Ok(self.ms.actors[actor as usize].mover.active)
+        Ok(self.ms.actors.get(actor as usize).is_some_and(|m| m.mover.active))
     }
     fn action_go(&mut self, state: StateId, speed: u32, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<bool> {
         let r = Host::action_go(self, state, speed, p, a);
@@ -1790,7 +1929,7 @@ impl cont::World for Host<'_> {
     }
     /// Actor virtual +0x18: the Mover's current speed.
     fn movement_radius(&mut self, actor: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<Binary> {
-        Binary::from_f32_bits(self.ms.actors[actor as usize].mover.speed.to_bits()).map_err(err)
+        Binary::from_f32_bits(self.ms.actors.get(actor as usize).map_or(0, |m| m.mover.speed.to_bits())).map_err(err)
     }
     /// `0x531170`.
     fn forward_probe(&mut self, _: StateId, direction: [u32; 2], distance: u32, result: &mut [u32; 4], p: &mut Payload, _: &mut Arena) -> aa_mind::Result<()> {
@@ -2106,15 +2245,25 @@ pub(super) fn move_active(ms: &MovementState, world: &World, id: ActorId) -> boo
     ms.actors.get(id as usize).is_some_and(|a| a.active)
 }
 
-/// Mind +0x88 `0x52E610`: the state's speed, and the Mover's at factor 1 (`0x576D20`).
-pub(super) fn set_speed(ms: &mut MovementState, id: ActorId, speed: u32) {
+/// Mind +0x88 `0x52E610`: the state's speed. At 0.1 or more, the Mover's at factor 1
+/// (`0x576D20`, up to its maximum); else the Mover stops (`0x52D660`). In a group (Actor
+/// +0x164 of `0x4CE6C0`) the floor is `[B39AB0+0x190]`: no element of aa-play keeps that
+/// handle (census X2; `aa_navigation` is told the same in `actor_or_leader_handle_valid`).
+pub(super) fn set_speed(ms: &mut MovementState, world: &mut World, rules: MoveRules, id: ActorId, speed: u32) {
     let am = &mut ms.actors[id as usize];
     if let Some(p) = am.payload.as_mut() {
         p.plan.movement.requested_speed_bits = speed;
     }
-    am.requested = f32::from_bits(speed);
-    am.mover.requested = f32::from_bits(speed);
-    am.mover.factor = 1.0;
+    let v = f32::from_bits(speed);
+    am.requested = v;
+    if v >= 0.1 {
+        let max = max_speed(&mut ms.speeds, world, id);
+        let m = &mut ms.actors[id as usize].mover;
+        m.requested = if max < v { max } else { v };
+        m.factor = 1.0;
+        return;
+    }
+    with_mind(ms, world, rules, id, |host, _, _| host.stop());
 }
 
 /// Mind +0x80 `0x535EE0`: where the Move goes while it is current.
@@ -2190,6 +2339,26 @@ pub(super) fn deliver_move(ms: &mut MovementState, world: &mut World, rules: Mov
     process_command(ms, world, rules, id, c, arena);
 }
 
+/// A person's or a script's Move command on a lone actor: `0x4CA760(point or thing, speed)`,
+/// the speed only when a group evens its members' (`0x4DE*`); else `0x52DF60` gets 0 and the
+/// Enter takes the Mover's maximum.
+pub(super) fn deliver_lone_move(ms: &mut MovementState, world: &mut World, rules: MoveRules, id: ActorId, destination: [u32; 2], target: Option<ActorId>, speed: Option<u32>) {
+    let minds = &mut world.books.minds;
+    let c = minds.new_command(MOVE_COMMAND, target.map(|t| t + 1), Some(destination));
+    if let Some(x) = minds.commands.get_mut(&c) {
+        if target.is_some() {
+            x.flags |= 1;
+        }
+        if let Some(speed) = speed {
+            x.flags |= 0x10;
+            x.speed = speed;
+        }
+    }
+    let mut arena = std::mem::take(&mut world.books.minds.arena);
+    process_command(ms, world, rules, id, c, &mut arena);
+    world.books.minds.arena = arena;
+}
+
 /// `0x4D9E20(6)` delivered to an element.
 pub(super) fn deliver_stop(ms: &mut MovementState, world: &mut World, rules: MoveRules, id: ActorId, arena: &mut Arena) {
     let c = world.books.minds.new_command(STOP_COMMAND, None, None);
@@ -2235,6 +2404,8 @@ pub(super) enum MoverCall<'c> {
     Blocked(&'c Blocker, [f32; 2]),
     /// Mind +0x128 -> `0x52F260(0)`.
     Failed,
+    /// `0x5768F0`'s `0x4DB090` before it: `0x4CFC80`, the Character's default stance.
+    Deactivate,
 }
 
 /// `Mover` fields must already be published; the caller refreshes after.
@@ -2256,6 +2427,7 @@ pub(super) fn mover_call(ms: &mut MovementState, world: &mut World, rules: MoveR
             MoverCall::Failed => {
                 host.path_failed_52f260(false, p, a)?;
             }
+            MoverCall::Deactivate => host.deactivate(),
         }
         Ok(())
     });

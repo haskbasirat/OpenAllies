@@ -15,12 +15,12 @@ use aa_parity::registries::Registries;
 use aa_parity::slog::{self, SEntryKind, SLog};
 use std::path::PathBuf;
 
-const FILMS: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Profile\data\Films\archive-qa-20261022";
+const FILMS: &str = "reconstruction/qa-runs/compare-20261022/game/Profile/data/Films/archive-qa-20261022";
 
 fn film(name: &str) -> Film {
-    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
+    let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let dir =
-        std::env::var_os("AA_PARITY_FILMS").map_or_else(|| PathBuf::from(FILMS), PathBuf::from);
+        std::env::var_os("AA_PARITY_FILMS").map_or_else(|| root.join(FILMS), PathBuf::from);
     Film::read(&dir.join(name), &Registries::load_v14(&root, true).unwrap()).unwrap()
 }
 

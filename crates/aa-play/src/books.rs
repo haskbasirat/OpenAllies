@@ -103,6 +103,12 @@ pub struct KingdomBooks {
 pub struct ActorBooks {
     /// `map.placed` index this actor was created from.
     pub placed: Option<usize>,
+    /// The TransportComponent of a plane that flies a cargo in (`crate::transport`).
+    #[serde(default)]
+    pub transport: Option<crate::transport::Transport>,
+    /// A thing dropped from it, falling (Mover +0x56, actor state 24).
+    #[serde(default)]
+    pub fall: Option<crate::transport::Fall>,
     /// A saved game's thing: the kingdom's technology count at the load. The Load reads
     /// the Detection and Supply radii before the kingdom's properties reach the thing
     /// (0x4D7230 -> 0x4D1350), and they stand until the technologies change.

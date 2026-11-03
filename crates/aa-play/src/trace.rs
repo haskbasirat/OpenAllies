@@ -224,13 +224,14 @@ pub mod sites {
     pub const PROJECTILE_LAUNCH: &str = "projectile launch 580BC0 -> queue 0";
     pub const ORGANIZATION_SCATTER: &str = "organization scatter 5797E0";
     pub const CARGO_FALL: &str = "queue 0 from 5770e9";
+    pub const CHARACTER_LAND: &str = "site 563d6a";
     pub const ORG_SHORTFALL: &str = "organization shortfall 578660 -> 562D10";
     pub const COMBAT_COIN: &str = "combat coin";
     pub const ABILITY_ANIMATION: &str = "ability animation 4C8170";
     pub const ENGAGE_REACTION: &str = "engage reaction delay";
     pub const DEATH_CLIP: &str = "death clip";
-    pub const ROUT_FUZZ: &str = "rout score fuzz";
-    pub const ROUT_POINT: &str = "rout random point";
+    /// `0x4F02B0` in the rout Think `0x521240`; `0x52B530` draws from what it gives.
+    pub const ROUT_GETTER: &str = "site 5212cc";
     pub const SPECIAL_OPS_FACTION: &str = "special operations faction pick";
     pub const EXPLORE: &str = "explore point";
     pub const AIRCRAFT_COIN: &str = "aircraft coin";

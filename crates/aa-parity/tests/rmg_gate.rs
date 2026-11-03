@@ -9,7 +9,7 @@
 //! `CARGO_TARGET_DIR=target/n-rmg AA_GAME_ROOT='<game root>' cargo test -p aa-parity --features play --test rmg_gate --release --offline -- --ignored --nocapture`
 //!
 //! `AA_RMG_GATE_ONLY=<prefix>` runs the films whose name starts with it,
-//! `AA_RMG_GATE_SETS=v14,player` the films of those data sets.
+//! `AA_RMG_GATE_SETS=v14,<folder>` the films of those data sets.
 #![cfg(feature = "play")]
 use aa_parity::registries::Registries;
 use aa_parity::{Film, playback};

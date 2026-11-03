@@ -84,6 +84,7 @@ pub const ATTACK_REGION: usize = 0;
 pub const DEFEND_REGION: usize = 2;
 pub const AIR_ATTACK: usize = 4;
 pub const RECOVER: usize = 5;
+pub const REPAIR: usize = 6;
 pub const EXPLORE: usize = 7;
 pub const UNPACK: usize = 11;
 pub const RECRUIT: usize = 12;
@@ -422,6 +423,8 @@ pub struct Ego {
     pub congruency_min_multiplier: f32,
     pub congruency_power: f32,
     pub penalty_to_builder_cv: f32,
+    /// `[Construction]` construct_max_multiplier (ego +6B0).
+    pub construct_max_multiplier: f32,
     /// Close, deep, air recon.
     pub exploration: [Exploration; 3],
     pub kingdom_center_min_time_owned: f32,
@@ -889,6 +892,7 @@ fn load_ego(n: &N<'_>) -> Result<Ego> {
     ego.congruency_min_multiplier = combat.f("congruency_min_multiplier")?;
     ego.congruency_power = combat.f("congruency_power")?;
     ego.penalty_to_builder_cv = combat.f("penalty_to_builder_cv")?;
+    ego.construct_max_multiplier = ge.child("Construction")?.f("construct_max_multiplier")?;
     let aa = combat.child("AirAttacks")?;
     ego.air = AirAttacks {
         engaged_bonus: aa.f("engaged_bonus")?,

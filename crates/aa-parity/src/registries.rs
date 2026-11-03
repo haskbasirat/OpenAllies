@@ -18,7 +18,7 @@
 //!   the native-order load.
 //! * SharedProperty `[0xB3AA2C]`: slot 0 is the predefined `mobile` (0x47E9B0).
 //!   `[Property]` roots go through a DataManager in mode 1 (constructor
-//!   0x47EFD0, `0x47efd0(0x40, 1)` in 0x48A8E0; vf1C 0x48B580, create
+//!   0x47EFD0, `0x47EFD0(0x40, 1)` in 0x48A8E0; vf1C 0x48B580, create
 //!   0x48B640): an IDS seen before re-loads its definition, a new one takes the
 //!   next slot. Every ENCHANTMENT effect of an AbilityDefinition adds its
 //!   `EnchantmentProperty` when the definition loads (0x4CBBF0 -> 0x4B4E60).

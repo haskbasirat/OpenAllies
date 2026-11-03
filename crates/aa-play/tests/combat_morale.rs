@@ -902,7 +902,7 @@ fn performance_150_regiments() {
 // Real data
 
 fn real() -> Option<Arc<GameData>> {
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_default());
     match GameData::load(&root) {
         Ok(d) => Some(Arc::new(d)),
         Err(e) => {
@@ -1067,7 +1067,7 @@ fn real_data_battle_with_movement() {
 /// armed thing within 120 m.
 fn berlin_scene(clear: f32) -> (World, Vec2) {
     let data = real().expect("original data");
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
     let player = |name: &str, nation: &str, team, start| aa_play::PlayerSetup { name: name.into(), nation: nation.into(), team, color: [0, 76, 255], controller: Controller::Human, start };
     let setup = aa_play::SkirmishSetup {
@@ -1326,7 +1326,9 @@ fn real_map_rout_and_regroup() {
     let target = w.orgs[b as usize].members[0];
     let before = combat::org_state(&w, a).unwrap().position;
     w.step(vec![aa_play::Command::Attack { kingdom: 0, units: vec![aa_play::Unit::Org(a)], target }]);
-    watch(&mut w, &mut f, 90.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
+    // The Kill state walks in the combat formation (0x57BFF0, regiment_aggressive SPEED_MAX
+    // -0.25), a quarter slower: the 200 m the enemy has retreated take longer than 90 s.
+    watch(&mut w, &mut f, 150.0, |w| !w.orgs[a as usize].alive || !w.orgs[b as usize].alive);
     eprintln!("--- attacks again, walked {}", combat::org_state(&w, a).unwrap().position.distance(before));
     show(&w, &f, &[a, b]);
     assert!(f.shots.keys().any(|k| k.starts_with("k0")), "it shoots again");

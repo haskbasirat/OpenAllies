@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[test]
 #[ignore]
 fn dump_recruit_inputs() {
-    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let data = GameData::load(&root).unwrap();
     let rules = aa_play::combat::Rules::from_data(&data);
     let cv = aa_play::combat::combat_values(&data, &rules);
@@ -30,7 +30,7 @@ fn dump_recruit_inputs() {
 #[test]
 #[ignore]
 fn dump_ego_component_values() {
-    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     let sai = aa_play::ai::AiData::load(&root).unwrap();
     for e in sai.egos.iter().filter(|e| e.ids.starts_with("chuikov") || e.ids.starts_with("rommel")) {
         let named: Vec<(String, f32, bool)> = e

@@ -30,6 +30,25 @@ fn census(map: &GameMap, queues: &[aa_play::map::SavedPeriodic]) -> BTreeMap<Str
     out
 }
 
+/// `0x4D8290`: a component the record neither saved nor had in its default mask, that the
+/// definition has now, is made at the Load. The trace of the original has a zone 8 of
+/// radius 0 on (2v2)Comrades' old `eastern_europe_city02` and on no block of (2v2)Berlin,
+/// whose records have the bit in their default mask.
+#[test]
+#[ignore = "reads the original data; set AA_GAME_ROOT"]
+fn a_record_older_than_the_city_node_gets_the_component_at_load() {
+    let root = root();
+    let data = GameData::load(&root).unwrap();
+    let comrades = GameMap::load_with(&root, "DeveloperMaps/(2v2)Comrades", &data).unwrap();
+    let block = comrades.placed.iter().find(|p| p.serialized_id == 0xe81).unwrap();
+    assert_eq!(block.thing_id, "eastern_europe_city02");
+    assert!(block.saved_city);
+    let berlin = GameMap::load_with(&root, "(2v2)Berlin", &data).unwrap();
+    let blocks: Vec<_> = berlin.placed.iter().filter(|p| data.find(&p.thing_id).is_some_and(|d| data.def(d).has_component("CityComponent") && data.def(d).city_zone_radius == 0.0)).collect();
+    assert_eq!(blocks.len(), 24);
+    assert!(blocks.iter().all(|p| !p.saved_city));
+}
+
 #[test]
 #[ignore = "reads the original data; set AA_GAME_ROOT"]
 fn the_stock_maps_save_their_doodads_on_queue_3() {

@@ -121,7 +121,7 @@ impl<'w> View<'w> {
             let Some(owner) = kingdom_index(world, org.kingdom) else { continue };
             let def = data.def(org.def);
             let mut cv = 0.0;
-            let (mut hp, mut hp_max) = (0.0f32, 0.0f32);
+            let mut hp = 0.0f32;
             let mut speed = f32::MAX;
             let mut sight = 0.0f32;
             let mut sum = Vec2::ZERO;
@@ -135,8 +135,7 @@ impl<'w> View<'w> {
                 builder |= md.has_component("BuilderComponent");
                 let maxh = max_health(m).max(1e-3);
                 cv += standing(a.def) * (a.health / maxh).clamp(0.0, 1.0);
-                hp += a.health.max(0.0);
-                hp_max += maxh;
+                hp += (a.health / maxh).clamp(0.0, 1.0);
                 if md.speed_max > 0.0 {
                     speed = speed.min(md.speed_max);
                 }
@@ -173,7 +172,10 @@ impl<'w> View<'w> {
                 def: org.def,
                 pos,
                 cv,
-                health: if hp_max > 0.0 { hp / hp_max } else { 0.0 },
+                // 4D0230(1): the members' health fractions over the layout's slots, so a
+                // regiment still filling up (4 of 9 when it is recruited) counts as hurt: the
+                // goal log's Recover 456.1 = (1 - (4/9)^3) * 500 on every fresh regiment.
+                health: hp / def.slots.iter().filter(|(s, _)| *s != u32::MAX).count().max(members) as f32,
                 morale,
                 speed: if speed == f32::MAX { 0.0 } else { speed },
                 sight,

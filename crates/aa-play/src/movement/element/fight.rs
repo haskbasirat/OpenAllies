@@ -291,7 +291,8 @@ impl uai_kill::KillThinkWorld for KillWorld<'_, '_, '_> {
         match record.status {
             3 => uai_kill::KillThinkWorld::target_lost(self, thing_gtid(target)),
             1 => {
-                // 0x52D820: the recharge left below 0.6 s, else 0.6 s.
+                // 0x52D820: the recharge left below 0.6 s, else 0.6 s (0x52D8A0 -> 0x4CFC80).
+                crate::combat::performer::left_current(self.stack.host.world, id);
                 let left = self.stack.host.world.actors[id as usize].combat.recharge.get(weapon).copied().unwrap_or(0.0);
                 let delay = if left > 0.0 && left < f32::from_bits(POINT_SIX_BITS) { left.to_bits() } else { POINT_SIX_BITS };
                 self.stack.host.stop();
@@ -310,8 +311,14 @@ impl uai_kill::KillThinkWorld for KillWorld<'_, '_, '_> {
     fn approach(&mut self, _: u32) -> aa_mind::Result<()> {
         Ok(())
     }
-    /// `0x57DEA0`: turret intentions, not bound (see `crate::combat::performer`).
+    /// `0x57DEA0`: the turrets' other targets go.
     fn stop(&mut self) -> aa_mind::Result<()> {
+        let id = self.stack.host.id as usize;
+        if let Some(c) = self.stack.host.world.combat.actors.get_mut(id) {
+            for s in &mut c.turrets {
+                s.aim = None;
+            }
+        }
         Ok(())
     }
     /// Mind +0x140 `0x52D9C0` with the Engage current: choose again in 0.6 s.

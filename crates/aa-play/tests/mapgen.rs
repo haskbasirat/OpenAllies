@@ -1,5 +1,5 @@
 //! Random map generator tests (owner: mapgen). They need the original install
-//! (AA_GAME_ROOT, default <game root>) and skip without it.
+//! (AA_GAME_ROOT) and skip without it.
 //! `cargo test -p aa-play --test mapgen -- --nocapture` prints timings.
 use aa_play::map::{NOT_LAND_PASSABLE, NOT_WATER_PASSABLE};
 use aa_play::mapgen::{GeneratedMap, RandomMapData, RandomMapParams, RmcInfo};
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 fn root() -> PathBuf {
-    PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()))
+    PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_default())
 }
 
 fn data() -> Option<&'static RandomMapData> {
@@ -80,6 +80,29 @@ fn write_outputs(name: &str, m: &GeneratedMap) {
     w("scenery", serde_json::to_value(&m.scenery).unwrap());
     w("gamemap", serde_json::to_value(&m.map).unwrap());
     w("params", serde_json::to_value(&m.params).unwrap());
+}
+
+/// KKC_RMCPlaceWorldParametersActorsStage 0x594930: a kingdom's additional actors stand on the
+/// map, owned by it, from the generator's own draws.
+#[test]
+fn additional_actors_are_placed_by_the_generator() {
+    let Some(d) = data() else { return };
+    let rmc = "rmc_southerneurope";
+    let plain = params(rmc, 384.0, 2, 7);
+    let kingdom = d.creator_parts(&plain).unwrap().kingdoms.iter().find(|k| !k.independent).map(|k| k.ids.clone()).unwrap();
+    let thing = "regiment_usa_infantry".to_string();
+    let mut with = plain.clone();
+    with.additional_actors = vec![(kingdom.clone(), thing.clone()), (kingdom, thing.clone())];
+    let count = |m: &GeneratedMap| m.map.placed.iter().filter(|p| p.thing_id.eq_ignore_ascii_case(&thing)).count();
+    let a = generate(&plain);
+    let b = generate(&with);
+    assert_eq!(count(&b), count(&a) + 2);
+    let added: Vec<_> = b.map.placed.iter().filter(|p| p.thing_id.eq_ignore_ascii_case(&thing)).collect();
+    assert!(added.iter().all(|p| p.owner_slot.is_some()));
+    // starting_location_weight 100 keeps them closer to the start than the map's half
+    let start = b.map.start_locations.first().copied().unwrap();
+    let near = added.iter().filter(|p| ((p.position[0] - start.x).powi(2) + (p.position[1] - start.y).powi(2)).sqrt() < 192.0).count();
+    assert!(near >= 1);
 }
 
 #[test]

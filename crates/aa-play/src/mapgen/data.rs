@@ -346,7 +346,7 @@ pub(super) struct ThingDef {
     /// Component presence bits (aa_rules::native::COMPONENTS), as
     /// crate::data::Def::components.
     pub components: u32,
-    /// EconomyComponent [Resources] supply_required.
+    /// EconomyComponent supply_required (0x464BD0, def +0x348): 0x56F250 registers on queue 1.
     pub supply_required: bool,
     /// 0x568750 registers the DenizenComponent on queue 1: a non-empty inventory (the
     /// guard range is 0 without one, 0x4676DC). A mod's city can have one.
@@ -796,9 +796,7 @@ impl RmgData {
                 }
             }
             if let Some(economy) = child(&node, "EconomyComponent") {
-                if let Some(resources) = child(&economy, "Resources") {
-                    def.supply_required = bl(&resources, "supply_required").unwrap_or(false);
-                }
+                def.supply_required = bl(&economy, "supply_required").unwrap_or(false);
             }
             if let Some(denizen) = child(&node, "DenizenComponent") {
                 def.denizen_registers = !children(&denizen, "Inventory").is_empty();

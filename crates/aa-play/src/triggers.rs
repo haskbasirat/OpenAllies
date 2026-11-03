@@ -42,8 +42,9 @@
 //! - the actor states of `actor_has_state` (word +0x100 and on, names 0x477FC0): the
 //!   ones aa-play can answer are read from its orders, combat and supply state
 //!   ([`Host::state_bits`]), the others stay off;
-//! - 4D7960 (object_destroyed) brings the body to zero health; the death,
-//!   and its Destroyed event, follow in the next tick's combat pass;
+//! - 4D7960 (object_destroyed) brings the body to zero health with its damage record
+//!   standing (`combat::script_kill`); the death, and its Destroyed event with the
+//!   record's attacker, follow in the next tick's combat pass;
 //! - 554B30 placement is the ring search of 554850 with the occupancy test of
 //!   `special_ops::spot_open` (553BA0's query, not the spatial index port);
 //! - transported creation (543BA0): the transport (ActorData+184
@@ -917,11 +918,11 @@ fn queue_engine_events(world: &World, sc: &mut Scenario, from: usize) {
             // 4D57C0 -> 54BE10 / 54B7B0: victim, then the body's (or the
             // organization's +90) last damage record (attacker GTID).
             Event::Died { actor } => {
-                let killer = world.combat.actor(*actor).and_then(|c| c.last_hit).map_or(0, |(k, _)| gtid_actor(k));
+                let killer = crate::combat::credited(world, world.combat.actor(*actor).and_then(|c| c.last_hit)).map_or(0, gtid_actor);
                 out.push(Payload::Destroyed { victim_id: gtid_actor(*actor), killer_id: killer, word_c: 0 });
             }
             Event::OrgDestroyed { org } => {
-                let killer = world.combat.org(*org).and_then(|c| c.last_hit).map_or(0, |(k, _)| gtid_actor(k));
+                let killer = crate::combat::credited(world, world.combat.org(*org).and_then(|c| c.last_hit)).map_or(0, gtid_actor);
                 out.push(Payload::Destroyed { victim_id: gtid_org(*org), killer_id: killer, word_c: 0 });
             }
             // 4D5230 -> 54BEA0 / 54B820: the captured actor, the capturing
@@ -939,6 +940,18 @@ fn queue_engine_events(world: &World, sc: &mut Scenario, from: usize) {
                     definition: def.map_or(0, |d| obj(tag::DATA, u64::from(d)).0),
                     flag_10: u8::from(matches!(e, Event::ConstructionStarted { .. })),
                 });
+            }
+            // The end of the unpacking (0x57634D, 54C050 with the kingdom and the definition,
+            // not by 565B00): the "finishes construction" of the tutorials' trucks.
+            Event::Deployed { building } => {
+                let a = world.actors.get(*building as usize);
+                if let Some(kingdom) = a.and_then(|a| a.kingdom) {
+                    out.push(Payload::Construction {
+                        kingdom_id: gtid_kingdom(kingdom),
+                        definition: a.map_or(0, |a| obj(tag::DATA, u64::from(a.def)).0),
+                        flag_10: 0,
+                    });
+                }
             }
             // 582190 / 582E80 -> 54C0E0 (flag 0): the recruited definition.
             Event::Recruited { kingdom, org, actor } => {
@@ -1300,6 +1313,81 @@ pub fn trigger_states(world: &World) -> Vec<(u32, String, bool)> {
     let Some(sc) = &world.triggers.scenario else { return Vec::new() };
     let snap = sc.manager.snapshot();
     sc.manager.definitions().iter().zip(&snap.triggers).map(|(d, s)| (d.id, text(&d.name), s.enabled != 0)).collect()
+}
+
+/// A verification aid (the mission census): the actor changes hands, with the capture event
+/// of the manager's queue (54BEA0).
+pub fn aid_capture(world: &mut World, actor: ActorId, kingdom: KingdomId) {
+    if let Some(a) = world.actors.get_mut(actor as usize) {
+        a.kingdom = Some(kingdom);
+    }
+    let raw_actor = world.ids.actor(actor).map_or(0, |g| g.raw());
+    let raw_kingdom = world.ids.kingdom(kingdom).map_or(0, |g| g.raw());
+    if let Some(sc) = world.triggers.scenario.as_deref_mut() {
+        push(sc, Payload::Captured { actor_id: raw_actor, capturer_id: raw_kingdom, kingdom_id: raw_kingdom });
+    }
+}
+
+/// One element a trigger waits on, as the map's data holds it.
+#[derive(Clone, Debug)]
+pub struct ArmedElement {
+    pub name: String,
+    pub parameters: Vec<String>,
+}
+
+/// An enabled trigger and what it waits on (its events and conditions), for following a
+/// mission from a test or a tool: the parameters read as in the map's data (a word in
+/// hexadecimal, a name as text).
+#[derive(Clone, Debug)]
+pub struct ArmedTrigger {
+    pub name: String,
+    pub waits: Vec<ArmedElement>,
+}
+
+pub fn armed(world: &World) -> Vec<ArmedTrigger> {
+    use aa_triggers::decode::Value;
+    let Some(sc) = &world.triggers.scenario else { return Vec::new() };
+    let snap = sc.manager.snapshot();
+    let parameter = |v: &Value| match v {
+        Value::Text(t) => String::from_utf16_lossy(t),
+        Value::Localized { key, .. } => format!("#{}", String::from_utf16_lossy(key)),
+        Value::Word(w) => format!("{w:#x}"),
+        Value::Position(p) => format!("{:?}", p.map(f32::from_bits)),
+        Value::Empty => String::new(),
+    };
+    sc.manager
+        .definitions()
+        .iter()
+        .zip(&snap.triggers)
+        .filter(|(_, s)| s.enabled != 0)
+        .map(|(d, _)| ArmedTrigger {
+            name: text(&d.name),
+            waits: d.events.iter().chain(&d.conditions).map(|e| ArmedElement { name: e.name.clone(), parameters: e.parameters.iter().map(|p| parameter(&p.value)).collect() }).collect(),
+        })
+        .collect()
+}
+
+/// What a script's parameter names (0xB364C0 for a word, the World+F0 name table for a text).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ScriptThing {
+    Thing(crate::ids::Thing),
+    /// An Area of the map (map thing class 6), at its position.
+    Area(Vec2),
+}
+
+pub fn script_thing(world: &World, parameter: &str) -> Option<ScriptThing> {
+    let sc = world.triggers.scenario.as_deref()?;
+    let raw = match parameter.strip_prefix("0x") {
+        Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+        None => *sc.env.names.get(&name_key(&utf16(parameter))?)?.first()?,
+    };
+    let thing = world.ids.thing(raw)?;
+    if let crate::ids::Thing::Placed(i) = thing
+        && let Some(a) = sc.env.areas.iter().find(|a| a.placed == i)
+    {
+        return Some(ScriptThing::Area(a.position));
+    }
+    Some(ScriptThing::Thing(thing))
 }
 
 // ---------------------------------------------------------------------------
@@ -1780,8 +1868,8 @@ impl aa_triggers::elements::Services for Host<'_> {
             None => Vec::new(),
         };
         for a in targets {
-            if let Some(x) = self.world.actors.get_mut(a as usize).filter(|x| x.alive) {
-                x.health = 0.0;
+            if self.world.actors.get(a as usize).is_some_and(|x| x.alive) {
+                crate::combat::script_kill(self.world, a);
             }
         }
         Ok(())

@@ -1207,6 +1207,15 @@ fn random_params_by(
             object_counts,
             heroes,
             seed: u64::from(film.header.seed),
+            additional_actors: film
+                .header
+                .map_header
+                .creator
+                .parameters
+                .kingdoms
+                .iter()
+                .flat_map(|row| row.definitions.iter().map(move |a| (String::from_utf16_lossy(&row.id), String::from_utf16_lossy(a))))
+                .collect(),
         },
         fits,
     ))

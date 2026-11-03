@@ -2,7 +2,7 @@
 #[test]
 #[ignore]
 fn probe_relations() {
-    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()));
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
     for map in ["(2v2)Berlin", "DeveloperMaps/(3v3)Firefight"] {
         let bytes = std::fs::read(root.join(format!(r"reconstruction\assets\original\Data\Maps\{map}.RMP"))).unwrap();
         let archive = aa_mapworld::MapArchive::from_bytes(bytes).unwrap();

@@ -62,6 +62,8 @@ pub mod trace;
 pub mod ids;
 /// The world-RNG draws of creating and restoring things (core owner).
 pub mod creation;
+/// (core) a transport that flies in, its flight and the fall of its cargo.
+pub mod transport;
 /// The native world queues of one update and their leaves (core owner).
 pub mod scheduler;
 /// DynamicDoodad deferred updates 0x5902C0 / 0x58FA30 (core owner).

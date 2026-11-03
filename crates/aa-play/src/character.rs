@@ -194,7 +194,15 @@ pub fn deliver(world: &mut World, a: ActorId, data: u32) {
             // The Performer test of 0x563E10: an active Performer skips the fidget.
             fidget(world, a)
         }
-        1 | 2 | 5 => default_stance_at(world, a, sites::CHARACTER_TICK_STANCE),
+        1 | 5 => default_stance_at(world, a, sites::CHARACTER_TICK_STANCE),
+        // A landing's end (0x4D64F0(33, 0)), and the Mind's think of 0x529CE0 finds its
+        // place in the organization.
+        2 => {
+            default_stance_at(world, a, sites::CHARACTER_TICK_STANCE);
+            if let Some(o) = world.actors[a as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive)) {
+                crate::movement::member_added(world, o, a);
+            }
+        }
         _ => {}
     }
 }
@@ -230,6 +238,27 @@ pub fn mover_started(world: &mut World, a: ActorId) {
     }
     world.unschedule(Owner::Component(a, SLOT));
     world.books.actor_mut(a).character.active = false;
+}
+
+/// 0x563D50 from the landing 0x4D64A0: the Character activates, the getter, the kind 5
+/// animation (0x45EB70, no weights), mode 2 with its event, and the Mind thinks at its
+/// end (0x529CE0). State 33 is not kept.
+pub fn landed(world: &mut World, a: ActorId) {
+    let Some(def) = def_of(world, a).cloned() else { return };
+    if !activate(world, a) {
+        return;
+    }
+    let draw = world.random_u32_at(sites::CHARACTER_LAND);
+    let set = current_set(world, a, &def);
+    let list = set.lands.clone();
+    let length = match list.len() {
+        0 => set.first_idle,
+        1 => list[0].0,
+        n => list[(draw % n as u32) as usize].0,
+    };
+    world.books.actor_mut(a).character.mode = 2;
+    world.schedule_after(DEFERRED, Owner::Component(a, SLOT), 2, length);
+    crate::movement::think_mind_in(world, a, length);
 }
 
 /// Whether `a` plays its Character: `actor+0xE4` is the Character.

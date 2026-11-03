@@ -3,9 +3,8 @@
 //! (`aa_navigation::uai_collision`, `low_path`), over the tile lists of [`space`] and
 //! the element Mind's [`Host`]. Census cause M5.
 //!
-//! **Renditions:** `0x4F3C40`'s region and structure-crossing steps (no SAI regions
-//! here, no walls) answer clear; `0x53CA30` (a destination moved around a blocking
-//! object) answers no.
+//! **Renditions:** `0x4F3C40`'s region and structure-crossing steps (no walls hosted)
+//! answer clear; `0x53CA30` (a destination moved around a blocking object) answers no.
 use super::element::Host;
 use super::*;
 use aa_navigation::low_path::{self, ActorPose, ActorShape, ContinuationWorld, LowPathSettings, LowPathWorld, Options, SpatialHit};
@@ -136,11 +135,10 @@ impl Uai<'_, '_> {
     fn id(&self, object: Object) -> ActorId {
         space::key_actor(object.0)
     }
-    fn radius(&self, id: ActorId, soft: bool) -> Binary {
-        let (ms, world) = self.host.parts_ref();
-        let _ = ms;
-        let def = world.data.def(world.actors[id as usize].def);
-        let bits = if soft { def.soft_shape[1] } else { def.blocking_words[1] };
+    /// The radius of a thing's shape, from what the lists hold (an object of the map is
+    /// no actor).
+    fn radius(&self, actor: Object, soft: bool) -> Binary {
+        let bits = self.index.member(actor.0).map_or(0, |m| if soft { m.soft.radius_bits } else { m.blocking.radius_bits });
         Binary::from_f32_bits(bits).unwrap_or(Binary::from_u32(0))
     }
     fn placement(d: &uc::Descriptor) -> low_path::Result<Placement> {
@@ -304,7 +302,7 @@ impl UaiCollisionWorld for Uai<'_, '_> {
     fn organization_thing(&mut self, actor: Object) -> low_path::Result<Option<Object>> {
         let id = self.id(actor);
         let (_, world) = self.host.parts_ref();
-        Ok(world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive)).map(|o| Object(ORG_OBJECT | o)))
+        Ok(world.actors.get(id as usize).and_then(|a| a.org).filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive)).map(|o| Object(ORG_OBJECT | o)))
     }
     fn organization_component(&mut self, thing: Object) -> low_path::Result<Option<Object>> {
         Ok((thing.0 & ORG_OBJECT != 0).then_some(thing))
@@ -342,13 +340,13 @@ impl UaiCollisionWorld for Uai<'_, '_> {
     fn actor_moving(&mut self, actor: Object) -> low_path::Result<bool> {
         let id = self.id(actor);
         let (ms, _) = self.host.parts_ref();
-        Ok(ms.actors[id as usize].mover.active)
+        Ok(ms.actors.get(id as usize).is_some_and(|m| m.mover.active))
     }
     fn actor_virtual_0(&mut self, actor: Object) -> low_path::Result<Binary> {
-        Ok(self.radius(self.id(actor), true))
+        Ok(self.radius(actor, true))
     }
     fn actor_virtual_4(&mut self, actor: Object) -> low_path::Result<Binary> {
-        Ok(self.radius(self.id(actor), false))
+        Ok(self.radius(actor, false))
     }
     fn actor_collision_shape(&mut self, actor: Object) -> low_path::Result<Option<uc::Shape>> {
         let s = &self.index.member(actor.0).map_err(low)?.blocking;
@@ -362,7 +360,7 @@ impl UaiCollisionWorld for Uai<'_, '_> {
     fn actor_virtual_18(&mut self, actor: Object) -> low_path::Result<Binary> {
         let id = self.id(actor);
         let (ms, _) = self.host.parts_ref();
-        Binary::from_f32_bits(ms.actors[id as usize].mover.speed.to_bits()).map_err(low)
+        Binary::from_f32_bits(ms.actors.get(id as usize).map_or(0, |m| m.mover.speed.to_bits())).map_err(low)
     }
     /// Actor virtual +0x20(1): a thing that takes others along (none is hosted).
     fn actor_virtual_20(&mut self, _: Object, _: u32) -> low_path::Result<bool> {
@@ -372,7 +370,8 @@ impl UaiCollisionWorld for Uai<'_, '_> {
     fn actor_virtual_16c(&mut self, actor: Object, other: Object) -> low_path::Result<bool> {
         let (a, b) = (self.id(actor), self.id(other));
         let (_, world) = self.host.parts_ref();
-        Ok(kingdom_team(world, world.actors[a as usize].kingdom) != kingdom_team(world, world.actors[b as usize].kingdom))
+        let kingdom = |t: ActorId| world.actors.get(t as usize).and_then(|x| x.kingdom);
+        Ok(kingdom_team(world, kingdom(a)) != kingdom_team(world, kingdom(b)))
     }
     /// `0x4D6940`: at the tail of the list.
     fn ignore_thing(&mut self, actor: Object, entry: uc::IgnoredThing) -> low_path::Result<()> {

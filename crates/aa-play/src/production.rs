@@ -197,7 +197,12 @@ fn spot_open(world: &World, def: DefId, p: Vec2, movers: bool) -> bool {
 /// (0x554B30): that spot, else rings of eight directions within `radius`,
 /// starting along `facing` and turning by -pi/4 (0x554850). Keeps the line
 /// result when the rings find nothing.
-fn open_position(world: &World, def: DefId, point: Vec2, from: Vec2, facing: Vec2, radius: f32) -> Vec2 {
+pub(crate) fn open_position(world: &mut World, def: DefId, point: Vec2, from: Vec2, facing: Vec2, radius: f32) -> Vec2 {
+    // (movement) On the tile lists, exactly: `movement::open_position_for`. Below, a map
+    // whose tile grid has no lists (a test map).
+    if let Some(at) = crate::movement::open_position_for(world, def, point, from, facing, radius) {
+        return at;
+    }
     let step = shape_radius(world.data.def(def)).max(world.map.cell_size * 0.25).max(0.05);
     let delta = from - point;
     let length = delta.length();
@@ -744,14 +749,14 @@ fn fulfill(world: &mut World, building: ActorId, item: &QueueItem) -> bool {
         return true;
     }
     // (orders) Kind 2, 0x589F90 -> 0x582190: a transport (ActorData +184) enters
-    // from the map edge and drops the cargo at the point (`special_ops::recruit_by_air`).
+    // from the map edge and drops the cargo at the point (`crate::transport`).
     // A thing without a transport lands at the point when the item finishes.
     if let Some(at) = item.location {
         let at = Vec2::new(at[0], at[1]);
         let facing = b.facing;
         let origin = b.pos.truncate();
         let def = item.def;
-        if !crate::special_ops::recruit_by_air(world, kingdom, def, origin, at, facing) {
+        if !crate::transport::recruit(world, kingdom, def, origin, at) {
             land_recruit(world, kingdom, def, at, facing);
         }
         return true;

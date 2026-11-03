@@ -31,7 +31,7 @@ use crate::minds::{Hosted, HostedCommand, HostedKind, core_word, mind_id};
 use crate::scheduler::{Owner, THINK};
 use crate::world::{ActorId, World};
 use aa_mind::command::{self, Context, Definition};
-use aa_mind::uai_thinks::{AircraftWorld, ThinkWorld, aai_join, aai_landing, aai_queued, aai_recon, aai_takeoff, aircraft as off};
+use aa_mind::uai_thinks::{AircraftWorld, ThinkWorld, aai_join, aai_landing, aai_queued, aai_recon, aai_takeoff, aai_transport, aircraft as off};
 use aa_mind::{Arena, Error, MindId, Result, StateId};
 use aa_numeric::{Binary, Precision};
 use glam::{Vec2, Vec3};
@@ -91,6 +91,10 @@ enum After {
     Enter { aircraft: ActorId, base: ActorId },
     /// 0x4D7960 on the aircraft.
     Destroy(ActorId),
+    /// 0x58BCB0 from 0x517B60: creating things needs the Minds' world back.
+    DropOne(ActorId),
+    /// 0x58B130.
+    LeaveMap(ActorId),
 }
 
 struct Host<'a> {
@@ -131,6 +135,8 @@ fn with_host<R>(world: &mut World, f: impl FnOnce(&mut Arena, &mut Host<'_>) -> 
         match a {
             After::Enter { aircraft, base } => enter_base(world, aircraft, base),
             After::Destroy(aircraft) => destroy(world, aircraft),
+            After::DropOne(aircraft) => crate::transport::drop_one(world, aircraft),
+            After::LeaveMap(aircraft) => crate::transport::leave(world, aircraft),
         }
     }
     out
@@ -469,6 +475,7 @@ impl Host<'_> {
             off::RECON => aai_recon::think(state, arena, self).map(|_| ()),
             off::JOIN => aai_join::think(state, arena, self, PC).map(|_| ()),
             off::LANDING => aai_landing::think(state, arena, self, PC).map(|_| ()),
+            off::TRANSPORT => aai_transport::think(state, arena, self).map(|_| ()),
             #[cfg(feature = "air-b2")]
             off::ATTACK => aa_mind::uai_thinks::aai_attack::think(state, arena, self, PC).map(|_| ()),
             _ => Err(fail(format!("aircraft state {offset:#x} Think is not hosted yet"))),
@@ -483,8 +490,16 @@ impl Host<'_> {
             // 0x516D10: the move state's +0x10 clears and the flight path
             // with it (the transport unload branch is not reached).
             off::MOVE => {
+                if self.world.books.actor(a).is_some_and(|x| x.transport.is_some()) && crate::transport::at_way_out(self.world, a) {
+                    self.after.push(After::LeaveMap(a));
+                }
                 self.set_byte(a, off::MOVE + 0x10, 0);
                 self.clear_path(a)?;
+            }
+            // 0x5179C0: the drop's next point is reached, think now.
+            off::TRANSPORT => {
+                self.set_byte(a, off::TRANSPORT + 0x11, 1);
+                aa_mind::World::schedule(self, mind, 0, 0, arena)?;
             }
             // 0x517850: done (+0x10), think now.
             off::TAKEOFF | off::RECON => {
@@ -542,8 +557,11 @@ impl Host<'_> {
                 if x.removed || !has_mover || cmd.flags & 4 == 0 {
                     return Ok(false);
                 }
-                // actor+0xC0 Transport with +0x39 set: 0x518550 (not
-                // reached: no transport drops in aa-play); else recon.
+                // actor+0xC0 Transport with +0x39 set: 0x518550; else recon.
+                if self.world.books.actor(a).is_some_and(|x| x.transport.is_some()) {
+                    aai_queued::QueuedThinkWorld::transport_activate(self, mind_id(a), 2, cmd.point, arena)?;
+                    return Ok(true);
+                }
                 self.recon_activate(arena, a, 2, cmd.point, false)
             }
             HANDLER_GUARD => Err(fail("0x518850 (aircraft guard) is not ported")),
@@ -848,15 +866,90 @@ impl aai_queued::QueuedThinkWorld for Host<'_> {
     fn base(&mut self, mind: MindId) -> Result<Option<u32>> {
         Ok(self.def(mind.0).has_component("TransportComponent").then_some(mind.0))
     }
-    /// Transport +0x4C: aa-play drops no paratroopers from aircraft.
-    fn base_released(&mut self, _base: u32) -> Result<bool> {
+    /// Transport +0x4C: set when it holds a cargo (`0x58BA90`).
+    fn base_released(&mut self, base: u32) -> Result<bool> {
+        Ok(self.world.books.actor(base).is_some_and(|x| x.transport.is_some()))
+    }
+    fn base_point(&mut self, base: u32) -> Result<[u32; 2]> {
+        self.world.books.actor(base).and_then(|x| x.transport.as_ref()).map(|t| t.point).ok_or_else(|| fail("no transport"))
+    }
+    /// 0x518550(mode, point): state +0x14/+0x18 the point, +0x11 clear, the formation
+    /// left when the Mind has none, 0x5179E0, then 0x52A810(mode).
+    fn transport_activate(&mut self, mind: MindId, mode: u32, point: [u32; 2], arena: &mut Arena) -> Result<()> {
+        let a = mind.0;
+        self.set_word(arena, a, off::TRANSPORT + 0x14, point[0]);
+        self.set_word(arena, a, off::TRANSPORT + 0x18, point[1]);
+        self.set_byte(a, off::TRANSPORT + 0x11, 0);
+        self.move_formation(arena, a, true)?;
+        // 0x5179E0: the point less the lead.
+        let (first, direction) = crate::transport::aim(self.world, a, point).ok_or_else(|| fail("no transport"))?;
+        self.drop_goal(arena, a, first, direction)?;
+        self.activate(arena, a, off::TRANSPORT, mode)?;
+        Ok(())
+    }
+}
+
+impl Host<'_> {
+    /// 0x516C60(x, y, 0, direction, 0, null) on the move state: activated in place unless
+    /// running; +0x14 = 0, the goal, the flight path cleared, +0x10 and +0x30 set.
+    fn drop_goal(&mut self, arena: &mut Arena, a: ActorId, point: [u32; 2], direction: [u32; 2]) -> Result<bool> {
+        let state = self.state_at(a, off::MOVE)?;
+        if arena.state(state)?.status != 2 && !aa_mind::activate(state, 0, arena, self)? {
+            return Ok(false);
+        }
+        self.set_word(arena, a, off::MOVE + 0x14, 0);
+        self.set_word(arena, a, off::MOVE + 0x18, point[0]);
+        self.set_word(arena, a, off::MOVE + 0x1c, point[1]);
+        self.set_word(arena, a, off::MOVE + 0x20, 0);
+        self.clear_path(a)?;
+        self.set_byte(a, off::MOVE + 0x10, 1);
+        self.set_byte(a, off::MOVE + 0x30, 1);
+        self.set_word(arena, a, off::MOVE + 0x24, direction[0]);
+        self.set_word(arena, a, off::MOVE + 0x28, direction[1]);
+        self.set_word(arena, a, off::MOVE + 0x2c, 0);
+        Ok(true)
+    }
+}
+
+impl aai_transport::TransportThinkWorld for Host<'_> {
+    fn pending(&mut self, state: StateId) -> Result<bool> {
+        let (a, o) = self.owner(state)?;
+        Ok(self.byte(a, o + 0x11) != 0)
+    }
+    fn set_pending(&mut self, state: StateId, value: bool) -> Result<()> {
+        let (a, o) = self.owner(state)?;
+        self.set_byte(a, o + 0x11, u8::from(value));
+        Ok(())
+    }
+    /// 0x517B60: half speed (0x55D990) to the move state +0x34 and the flight +0x14 and
+    /// +0x84, 0x58BCB0, and while the hold is not empty the next point.
+    fn transport_step(&mut self, state: StateId, arena: &mut Arena) -> Result<bool> {
+        let (a, _) = self.owner(state)?;
+        let half = (f64::from(self.def(a).speed_max) * 0.5) as f32;
+        self.set_word(arena, a, off::MOVE + 0x34, b(half));
+        let flight = self.flight_mut(a)?;
+        flight.set_word(0x14, b(half));
+        flight.set_word(0x84, b(half));
+        self.after.push(After::DropOne(a));
+        if let Some((point, direction)) = crate::transport::next_point(self.world, a) {
+            self.drop_goal(arena, a, point, direction)?;
+            return Ok(true);
+        }
         Ok(false)
     }
-    fn base_point(&mut self, _base: u32) -> Result<[u32; 2]> {
-        Err(fail("transport +0x30 point is not ported"))
+    fn base(&mut self, mind: MindId) -> Result<Option<u32>> {
+        Ok(self.world.books.actor(mind.0).and_then(|x| x.transport.as_ref()).map(|_| mind.0))
     }
-    fn transport_activate(&mut self, _mind: MindId, _mode: u32, _point: [u32; 2], _arena: &mut Arena) -> Result<()> {
-        Err(fail("0x518550 (aircraft transport) is not ported"))
+    fn base_released(&mut self, base: u32) -> Result<bool> {
+        Ok(self.world.books.actor(base).is_some_and(|x| x.transport.is_some()))
+    }
+    /// Transport +0x50/+0x54, the way out.
+    fn base_landing_point(&mut self, base: u32) -> Result<[u32; 2]> {
+        self.world.books.actor(base).and_then(|x| x.transport.as_ref()).map(|t| t.out).ok_or_else(|| fail("no transport"))
+    }
+    fn actor_vector(&mut self, mind: MindId) -> Result<[u32; 3]> {
+        let t = self.world.books.actor(mind.0).and_then(|x| x.transport.as_ref()).ok_or_else(|| fail("no transport"))?;
+        Ok([b(t.facing[0]), b(t.facing[1]), b(t.facing[2])])
     }
 }
 

@@ -9,9 +9,8 @@
 //! The timed events (`0x50ACC0`, `0x50AD20`, no draw) are kept here and run by
 //! [`pump`] in `combat::tick`. Natively they are on the deferred queue, which comes
 //! before queue 4 in the update as this does. **Renditions:** the actor is taken to
-//! have no animator (the view reads the events, not the cues), `0x57DD90`'s aiming of
-//! the other abilities' turrets is not bound, and the set of a model variant is the
-//! first one.
+//! have no animator (the view reads the events, not the cues), and the set of a model
+//! variant is the first one.
 use super::{CombatState, alive, x87};
 use crate::world::{ActorId, World};
 use aa_body::F32;
@@ -27,6 +26,9 @@ pub const DONE: i32 = 4;
 pub struct Run {
     pub state: Option<port::Performer>,
     pub events: Vec<(f32, i32)>,
+    /// The Performer is the actor's active component (`+E4`): from its start until the
+    /// Mover or the Character takes over, past the end of the ability.
+    pub current: bool,
 }
 
 impl Run {
@@ -68,6 +70,7 @@ struct Host<'a> {
     st: &'a mut CombatState,
     id: ActorId,
     events: Vec<(f32, i32)>,
+    current: bool,
 }
 
 impl Host<'_> {
@@ -103,10 +106,18 @@ impl port::World for Host<'_> {
         let Some(target) = context.target else { return Ok(1) };
         Ok(super::admission_with(self.world, self.st, self.id, ability as usize, target, check_range))
     }
+    /// `0x4DB0E0` -> `0x4CFC70` -> `0x57DC60`: with `+5C` on, its update registers again.
     fn activate(&mut self, _: &mut port::Performer) -> aa_combat::Result<bool> {
+        let i = self.id as usize;
+        if !std::mem::replace(&mut self.current, true) && super::turrets_pending(&self.st.actors[i]) {
+            self.world.random_u32_at("queue 0 from 57dc7e");
+        }
         Ok(true)
     }
-    fn track_target(&mut self, _: &mut port::Performer, _: Start, _: [F32; 2]) -> aa_combat::Result<()> {
+    /// `0x57DD90`.
+    fn track_target(&mut self, _: &mut port::Performer, start: Start, point: [F32; 2]) -> aa_combat::Result<()> {
+        let at = glam::Vec2::new(f32::from_bits(point[0].0), f32::from_bits(point[1].0));
+        super::other_turrets_aim(self.world, self.st, self.id, Some(start.ability as usize), start.target, at);
         Ok(())
     }
     fn ability_turret(&self, ability: u32) -> aa_combat::Result<i32> {
@@ -203,8 +214,10 @@ impl port::World for Host<'_> {
         crate::movement::think_mind_in(self.world, state.owner, 0.0);
         Ok(())
     }
-    /// Stage 0 waits for the turret: [`pump`] steps it each update.
+    /// `0x50AC00(0)` at `0x57F43E`, one getter. Stage 0 waits for the turret: [`pump`]
+    /// steps it each update.
     fn schedule_immediate(&mut self, _: &mut port::Performer, _: i32) -> aa_combat::Result<()> {
+        self.world.random_u32_at("queue 0 from 57f443");
         Ok(())
     }
     fn schedule_after(&mut self, _: &mut port::Performer, delay: F32, event: i32) -> aa_combat::Result<()> {
@@ -227,9 +240,10 @@ pub(crate) fn start(world: &mut World, st: &mut CombatState, id: ActorId, weapon
     let i = id as usize;
     let mut run = std::mem::take(&mut st.actors[i].performer);
     let mut state = run.state.take().unwrap_or_else(|| fresh(world, id));
-    let mut host = Host { world, st, id, events: Vec::new() };
+    let mut host = Host { world, st, id, events: Vec::new(), current: run.current };
     let result = port::start(&mut state, Start { ability: weapon as u32, event_kind: 1, target: Some(target), point: None }, &mut host, PC);
     let events = std::mem::take(&mut host.events);
+    run.current = host.current;
     run.state = Some(state);
     if matches!(result, Ok(true)) {
         run.events = events;
@@ -241,6 +255,16 @@ pub(crate) fn start(world: &mut World, st: &mut CombatState, id: ActorId, weapon
             world.books.minds.note(format!("performer {id}: {e}"));
             false
         }
+    }
+}
+
+/// Virtual +0x40 `0x57DCB0` from `0x4CFC80` or a Mover's activation `0x4CFC10`: the
+/// Performer is no longer the active component; with `+5C` on, its update registers again.
+pub(crate) fn left_current(world: &mut World, id: ActorId) {
+    let i = id as usize;
+    let Some(c) = world.combat.actors.get_mut(i) else { return };
+    if std::mem::take(&mut c.performer.current) && super::turrets_pending(c) {
+        world.random_u32_at("queue 0 from 57dce2");
     }
 }
 
@@ -271,8 +295,9 @@ pub(crate) fn pump(world: &mut World, st: &mut CombatState, id: ActorId) {
             (Some(t), Some(ability)) => super::turret_ready(world, st, i, ability as usize, t),
             _ => true,
         };
+        super::turret_draws(world, st, i);
         if on_target {
-            let mut host = Host { world, st, id, events: std::mem::take(&mut events) };
+            let mut host = Host { world, st, id, events: std::mem::take(&mut events), current: run.current };
             let r = port::timed_event(&mut state, 0, &mut host, PC);
             events = std::mem::take(&mut host.events);
             if let Err(e) = r {
@@ -284,7 +309,7 @@ pub(crate) fn pump(world: &mut World, st: &mut CombatState, id: ActorId) {
         let due = events.iter().enumerate().filter(|(_, e)| e.0 <= now).min_by(|a, b| a.1.0.total_cmp(&b.1.0)).map(|(k, _)| k);
         let Some(k) = due else { break };
         let (_, event) = events.remove(k);
-        let mut host = Host { world, st, id, events: std::mem::take(&mut events) };
+        let mut host = Host { world, st, id, events: std::mem::take(&mut events), current: run.current };
         let r = port::timed_event(&mut state, event, &mut host, PC);
         events = std::mem::take(&mut host.events);
         if let Err(e) = r {

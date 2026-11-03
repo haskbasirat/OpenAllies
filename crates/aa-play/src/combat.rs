@@ -864,6 +864,12 @@ pub struct OrgCombat {
     /// `+8E`: `+8D` has just turned on; the maintenance Tick `57C8E0` then walks
     /// the ZOC's effects (`5147C0`).
     pub rescan_8e: bool,
+    /// The zone is on GWorld `+1A4` (`4F3D90`, at the end of a rout): its effects walk at
+    /// the start of the next update (`4F9970`, [`zoc_rescans`]).
+    pub zoc_rescan: bool,
+    /// A morale reaction that came with the movement pass holding the Mind: true for
+    /// `51F9F0`, false for `51F920`.
+    pub pending_rout: Option<bool>,
     /// Who shells this organization (`+130`, its members' hits come here).
     pub attacked_by: Vec<AttackedBy>,
     /// What this organization shells (`+128`, `4D3A70`), head first.
@@ -968,6 +974,8 @@ pub struct ActorCombat {
     /// What this actor uses its task ability on (bombard point or actor,
     /// repair target), set by its own or its organization's task Think.
     pub aim: Option<tasks::Aim>,
+    /// Getters of the Performer's `+5C` going on, drawn as soon as the world is held.
+    pub turret_draws: Vec<&'static str>,
 }
 
 /// One turret of a Performer (`57F4D0` allocates 0x1C bytes per turret).
@@ -982,6 +990,8 @@ pub struct TurretState {
     pub last_used: f32,
     /// The Performer's per-tick turret update is on (`+5C`, `57EF00`).
     pub active: bool,
+    /// `+C` and `+10`: another ability's target to turn to (`57DD90`).
+    pub aim: Option<Vec2>,
 }
 
 /// A projectile in flight (`Weapon::projectile_speed`).
@@ -991,9 +1001,10 @@ pub struct Projectile {
     pub weapon: usize,
     /// None: fired at a ground point (a bombard).
     pub target: Option<ActorId>,
-    /// Target position at launch (impact point when the target is gone).
+    /// Where it goes: the target while it lives (`0x580920`), then its last place.
     pub point: Vec2,
-    pub impact_at: f32,
+    /// `+0x4C`-ish `remaining`: the flight's seconds (`0x580BC0`), less each update.
+    pub remaining: f32,
     /// Its native id (`crate::creation::projectile`), back at impact.
     pub thing: Option<crate::ids::Gtid>,
 }
@@ -1164,7 +1175,7 @@ impl CombatState {
                 // 57F4D0: every turret starts at yaw_start - pi/2 (wrapped once).
                 s.turrets = world.data.def(a.def).turrets.iter().map(|t| {
                     let yaw = wrap_once(t.yaw_start - FRAC_PI_2);
-                    TurretState { yaw, prev: yaw, last_used: 0.0, active: false }
+                    TurretState { yaw, prev: yaw, last_used: 0.0, active: false, aim: None }
                 }).collect();
             }
             s.targeted = false;
@@ -1633,13 +1644,20 @@ pub(crate) fn turret_ready(world: &World, st: &mut CombatState, id: usize, weapo
     turret_in_arc(td, world.actors[id].pos.truncate(), world.actors[id].facing, point) && turret_aim(world, st, id, i, td, point)
 }
 
+/// Actor `+D4`, a City component: the definition's zone radius (`45D6A0`), or what the
+/// record's Load made (`PlacedThing::saved_city`), whatever the radius.
+pub(crate) fn has_city(world: &World, a: ActorId) -> bool {
+    let Some(x) = world.actors.get(a as usize) else { return false };
+    world.data.def(x.def).city || world.books.actor(a).and_then(|b| b.placed).and_then(|p| world.map.placed.get(p)).is_some_and(|p| p.saved_city)
+}
+
 /// `4D1120`: can be taken by damage: not under construction, not a block that
 /// goes with a city (Structure `+34`), not a city, and the Body says captureable.
 pub(crate) fn capturable(world: &World, a: ActorId) -> bool {
     let Some(x) = world.actors.get(a as usize) else { return false };
     let d = world.data.def(x.def);
     let b = world.books.actor(a);
-    d.captureable && !d.city && !b.is_some_and(|b| b.constructing || b.block_of.is_some())
+    d.captureable && !has_city(world, a) && !b.is_some_and(|b| b.constructing || b.block_of.is_some())
 }
 
 /// The ability's use (`57E030` -> `4C9E90` -> `4C9550`): the recharge, the event,
@@ -1671,9 +1689,67 @@ pub(crate) fn use_performed(world: &mut World, st: &mut CombatState, id: ActorId
     weapon_effects(world, st, id, weapon, target);
 }
 
+/// `0x4C8CB0` and `0x580BC0`: how long the projectile flies. From its spawn point
+/// (`0x4BE780`) to the target's hit position (`0x4EEEE0`: the shape's side towards it, at
+/// ProjectileTargetHeightRatio of its height) raised again by the height at the ratio of
+/// its kind (`ProjectileArcingTargetHeightRatio` for all but kind 0): `projectile_life` when
+/// above 0; else kinds 0 and 1 the distance over its speed; kind 2 (a bomb) the distance
+/// on the ground from its source over the source's speed. A point has no height of its own
+/// beyond the spawn's.
+pub(crate) fn flight_seconds(world: &World, shooter: ActorId, w: &Weapon, target: Option<ActorId>, point: Vec2) -> f32 {
+    if w.projectile_life > 0.0 {
+        return w.projectile_life;
+    }
+    let kind = match w.projectile_type.as_deref().map(str::to_ascii_uppercase).as_deref() {
+        Some("BOMB") => 2,
+        Some("LOB") => 1,
+        _ => 0,
+    };
+    let p = aa_numeric::Precision::Double53;
+    let s = &world.actors[shooter as usize];
+    let (fx, fy) = (f64::from(s.facing.cos() as f32), f64::from(s.facing.sin() as f32));
+    let [v0, v1, v2] = w.spawn_position.map(f64::from);
+    let from = [
+        (v0 * fy + v1 * fx + f64::from(s.pos.x)) as f32,
+        (v1 * fy - v0 * fx + f64::from(s.pos.y)) as f32,
+        (v2 + f64::from(s.pos.z)) as f32,
+    ];
+    let rule = |name: &str, shipped: f32| f64::from(world.data.rule_ci(name).unwrap_or(shipped));
+    let mut to = match target.and_then(|t| world.actors.get(t as usize)) {
+        Some(t) => {
+            let d = world.data.def(t.def);
+            let (dx, dy) = (f64::from(t.pos.x) - f64::from(from[0]), f64::from(t.pos.y) - f64::from(from[1]));
+            let length = (dx * dx + dy * dy).sqrt();
+            let direction = if length > f64::from(f32::from_bits(0x38d1_b717)) { [(dx / length) as f32, (dy / length) as f32] } else { [0.0, 0.0] };
+            let radius = f64::from(d.soft_radius);
+            let input = [(-f64::from(direction[0]) * radius) as f32, (-f64::from(direction[1]) * radius) as f32];
+            let shape = aa_spatial::collision::Shape { kind: d.soft_shape[0], radius_bits: d.soft_shape[1], bounds: [d.soft_shape[2], d.soft_shape[3], d.soft_shape[4], d.soft_shape[5]] };
+            let f = |v: f32| aa_body::F32(v.to_bits());
+            let facing = [f(t.facing.cos()), f(t.facing.sin())];
+            let offset = aa_combat::surface::shape_projection(&shape, facing, [f(input[0]), f(input[1])], [f(0.0), f(0.0)], p).map_or([0.0, 0.0], |o| [f32::from_bits(o[0].0), f32::from_bits(o[1].0)]);
+            let height = f64::from(d.height);
+            let z = (height * rule("ProjectileTargetHeightRatio", 0.65) + f64::from(t.pos.z)) as f32;
+            [(f64::from(offset[0]) + f64::from(t.pos.x)) as f32, (f64::from(offset[1]) + f64::from(t.pos.y)) as f32, z]
+        }
+        None => [point.x, point.y, (f64::from(world.map.height_at(point)) + v2) as f32],
+    };
+    if let Some(t) = target.and_then(|t| world.actors.get(t as usize)) {
+        let ratio = rule(if kind != 0 { "ProjectileArcingTargetHeightRatio" } else { "ProjectileTargetHeightRatio" }, if kind != 0 { 0.35 } else { 0.65 });
+        to[2] = (f64::from(world.data.def(t.def).height) * ratio + f64::from(to[2])) as f32;
+    }
+    if kind == 2 {
+        let (dx, dy) = ((f64::from(to[0]) - f64::from(s.pos.x)) as f32, (f64::from(to[1]) - f64::from(s.pos.y)) as f32);
+        let length = ((f64::from(dx) * f64::from(dx) + f64::from(dy) * f64::from(dy)).sqrt()) as f32;
+        let speed = f64::from(s.motion.velocity.length());
+        return if speed > 0.0 { (f64::from(length) / speed) as f32 } else { 0.0 };
+    }
+    let [dx, dy, dz] = [0, 1, 2].map(|k| f64::from(to[k]) - f64::from(from[k]));
+    // 0x580DF5 adds Z squared before Y squared.
+    ((dx * dx + dz * dz + dy * dy).sqrt() / f64::from(w.projectile_speed)) as f32
+}
+
 /// What the use does: the event, and a projectile or the hit (`0x4C9550`).
 fn weapon_effects(world: &mut World, st: &mut CombatState, id: ActorId, weapon: usize, target: ActorId) {
-    let now = world.time;
     let data = world.data.clone();
     let i = id as usize;
     let w = &data.def(world.actors[i].def).weapons[weapon];
@@ -1681,9 +1757,9 @@ fn weapon_effects(world: &mut World, st: &mut CombatState, id: ActorId, weapon: 
     let point = world.actors[target as usize].pos.truncate();
     // 0x4C9550 -> 0x4C8CB0: the projectile is a thing, with its id and its draws.
     let thing = w.projectile.as_deref().and_then(|p| data.find(p)).and_then(|p| crate::creation::projectile(world, p));
-    if w.projectile_speed > 0.0 {
-        let flight = (point - world.actors[i].pos.truncate()).length() / w.projectile_speed;
-        st.projectiles.push(Projectile { shooter: id, weapon, target: Some(target), point, impact_at: now + flight, thing });
+    if w.projectile_speed > 0.0 || w.projectile_life > 0.0 {
+        let remaining = flight_seconds(world, id, w, Some(target), point);
+        st.projectiles.push(Projectile { shooter: id, weapon, target: Some(target), point, remaining, thing });
     } else {
         if let Some(t) = thing {
             world.ids.removed_transient(t);
@@ -2082,12 +2158,12 @@ pub(crate) fn thing_is_fleeing(world: &World, t: TargetRef) -> bool {
 
 /// Target virtual `+0x130(organization's zone 4, 1)` -> `0x4EA2C0`: the thing stands in
 /// the regiment's ZOC. Without the zones engine it answers true (nothing to leave).
-pub(crate) fn thing_in_zoc(world: &World, org: OrgId, t: TargetRef) -> bool {
+pub(crate) fn thing_in_zoc(world: &World, org: OrgId, t: TargetRef, members: bool) -> bool {
     let key = match t {
         TargetRef::Org(o) => crate::zones::Key::Org(o),
         TargetRef::Actor(a) => crate::zones::Key::Actor(a),
     };
-    world.fog.engine.as_ref().is_none_or(|e| e.holds_zoc_of(key, org))
+    world.fog.engine.as_ref().is_none_or(|e| e.holds_zoc_of(world, key, org, members))
 }
 
 /// `0x4D4420(b)` on `a`: `a`'s Mind has `b`, or `b`'s organization, as its target, or
@@ -2242,11 +2318,7 @@ pub(crate) fn mind_can_target(world: &World, st: &CombatState, org: OrgId, t: Ta
     let TargetRef::Actor(a) = t else { return true };
     let Some(x) = world.actors.get(a as usize) else { return false };
     let d = world.data.def(x.def);
-    // +0xD4 of a thing whose definition has the node with no zone radius: the record
-    // saved one, or it is re-created at the end of the map load past the gate of 0x45D6A0
-    // (on (2v2)Comrades, a block with a zone 8 of radius 0).
-    let saved_city = world.books.actor(a).and_then(|b| b.placed).and_then(|p| world.map.placed.get(p)).is_some_and(|p| p.saved_city || (d.has_component("CityComponent") && crate::creation::is_converted(p, d)));
-    if d.city || saved_city || world.books.actor(a).is_some_and(|b| b.block_of.is_some_and(|c| alive(world, c))) {
+    if has_city(world, a) || world.books.actor(a).is_some_and(|b| b.block_of.is_some_and(|c| alive(world, c))) {
         return false;
     }
     if st.orgs[org as usize].explicit == Some(t) {
@@ -2388,6 +2460,47 @@ pub fn tick(world: &mut World) {
     world.combat = st;
 }
 
+/// `4D7960` from a trigger's object_destroyed: the actor dies, whatever its body says of
+/// zero health, and its damage record stands, so the kill credit `4D57C0` and the Destroyed
+/// event of the trigger manager (`54BE10`) still name who hit it last. The death itself comes
+/// with the next pass (see the triggers' module documentation).
+pub(crate) fn script_kill(world: &mut World, actor: ActorId) {
+    let i = actor as usize;
+    world.actors[i].health = 0.0;
+    let st = &mut world.combat;
+    if st.actors.len() <= i {
+        st.actors.resize_with(i + 1, ActorCombat::default);
+    }
+    if !st.actors[i].queued_death {
+        st.actors[i].queued_death = true;
+        st.deaths.push(actor);
+    }
+}
+
+/// A verification aid (the mission census): `actor` dies as if `by` had just hit it.
+pub fn aid_kill(world: &mut World, actor: ActorId, by: ActorId) {
+    let now = world.time;
+    let i = actor as usize;
+    if world.combat.actors.len() <= i {
+        world.combat.actors.resize_with(i + 1, ActorCombat::default);
+    }
+    world.combat.actors[i].last_hit = Some((by, now));
+    if let Some(o) = world.actors[i].org
+        && let Some(org) = world.combat.orgs.get_mut(o as usize)
+    {
+        org.last_hit = Some((by, now));
+    }
+    script_kill(world, actor);
+}
+
+/// `4D57C0`'s attacker of a damage record: within KillCreditTimeout (older is "stale damage
+/// info"), still in the world.
+pub(crate) fn credited(world: &World, record: Option<(ActorId, f32)>) -> Option<ActorId> {
+    let (who, at) = record?;
+    let timeout = world.combat.rules().kill_credit_timeout;
+    (world.time - at <= timeout && world.actors.get(who as usize).is_some_and(|a| !a.removed)).then_some(who)
+}
+
 /// Bodies brought to zero health by something other than a weapon (the
 /// upkeep shortfall `578660`, periodic damage) take the same `5625C0` zero
 /// health path: a capturable body is restored to 1, another non-destructible
@@ -2421,6 +2534,19 @@ fn queue_other_deaths(world: &mut World, st: &mut CombatState) {
     }
 }
 
+/// The start of `4F9970`: `5147C0` on each zone of GWorld `+1A4`.
+pub fn zoc_rescans(world: &mut World) {
+    for o in 0..world.combat.orgs.len() {
+        if !std::mem::take(&mut world.combat.orgs[o].zoc_rescan) {
+            continue;
+        }
+        if let Some(mut e) = crate::fog::take_engine(world) {
+            e.zoc_effects(world, crate::zones::Key::Org(o as OrgId));
+            crate::fog::put_engine(world, e);
+        }
+    }
+}
+
 /// What is left of a regiment's update here: its Mind states are in
 /// `crate::movement`'s regiment Mind. The behaviour byte `+8D` (`577F30`), the targets
 /// that could not reach the Mind, and a HUD order's Mind state (`tasks`), which replaces
@@ -2429,6 +2555,9 @@ fn org_think(world: &mut World, st: &mut CombatState, id: OrgId) {
     let i = id as usize;
     if !world.orgs[i].alive || st.orgs[i].destroyed {
         return;
+    }
+    if let Some(exhausted) = st.orgs[i].pending_rout.take() {
+        crate::movement::mind_morale_reaction(world, st, id, exhausted);
     }
     track_behavior(world, st, id);
     if st.orgs[i].routing.is_some() {
@@ -2503,10 +2632,12 @@ fn lone_think(world: &mut World, st: &mut CombatState) {
     }
 }
 
-/// Weapon recharge, the performer start (one ability at a time) and hits.
+/// Weapon recharge, the performer start (one ability at a time) and hits. The projectiles
+/// first: they are on queue 0, the Performer's events on the deferred queue 3.
 fn fire(world: &mut World, st: &mut CombatState) {
     let now = world.time;
     let data = world.data.clone();
+    impacts(world, st);
     for id in 0..world.actors.len() {
         {
             let a = &mut world.actors[id];
@@ -2520,6 +2651,7 @@ fn fire(world: &mut World, st: &mut CombatState) {
         }
         // 57EF00: idle turrets turn back to rest after reset_time.
         turret_reset_tick(world, st, id);
+        turret_draws(world, st, id);
         // An element of a regiment fights through its Mind and its Performer.
         let a = &world.actors[id];
         if a.org.is_some() && data.def(a.def).speed_max > 0.0 {
@@ -2595,7 +2727,6 @@ fn fire(world: &mut World, st: &mut CombatState) {
         }
         use_weapon(world, st, id as ActorId, d.weapon, target);
     }
-    impacts(world, st);
 }
 
 // ---------------------------------------------------------------------------
@@ -2669,7 +2800,12 @@ fn turret_aim(world: &World, st: &mut CombatState, id: usize, i: usize, t: &crat
     let angle = |v: Vec2| wrap_once(v.y.atan2(v.x));
     let yaw = wrap_once(angle(dir) - angle(f) - FRAC_PI_2);
     let now = world.time;
-    let Some(s) = st.actors.get_mut(id).and_then(|c| c.turrets.get_mut(i)) else { return true };
+    let Some(c) = st.actors.get_mut(id) else { return true };
+    // 0x57E8A3: +0x5C goes on, 0x50AC00(1): one getter when the world is back.
+    if t.can_reset && !turrets_pending(c) {
+        c.turret_draws.push("queue 0 from 57e8a3");
+    }
+    let Some(s) = c.turrets.get_mut(i) else { return true };
     s.last_used = now;
     if t.can_reset {
         s.active = true;
@@ -2677,13 +2813,70 @@ fn turret_aim(world: &World, st: &mut CombatState, id: usize, i: usize, t: &crat
     turret_step(s, t.yaw_rate, yaw)
 }
 
-/// `57EF00`: a turret that may reset turns back to `yaw_start - pi/2` once
-/// it has not aimed for `reset_time`; the update stops when all are home.
+/// Performer `+5C`: a turret has its update on.
+pub(crate) fn turrets_pending(c: &ActorCombat) -> bool {
+    c.turrets.iter().any(|s| s.active)
+}
+
+/// The getters `turret_aim` could not draw, holding the world immutably.
+pub(crate) fn turret_draws(world: &mut World, st: &mut CombatState, id: usize) {
+    if let Some(c) = st.actors.get_mut(id)
+        && !c.turret_draws.is_empty()
+    {
+        for site in std::mem::take(&mut c.turret_draws) {
+            world.random_u32_at(site);
+        }
+    }
+}
+
+/// `57DD90`: the turrets of the other abilities that could be used on the target turn to it
+/// (`+C`, `+10`), their update on. **Rendition:** the admission's context has no ground point
+/// (a Bombard's other turrets stay).
+pub(crate) fn other_turrets_aim(world: &mut World, st: &mut CombatState, id: ActorId, active: Option<usize>, target: Option<ActorId>, point: Vec2) {
+    let data = world.data.clone();
+    let i = id as usize;
+    let def = data.def(world.actors[i].def);
+    if def.turrets.is_empty() {
+        return;
+    }
+    for (k, w) in def.weapons.iter().enumerate() {
+        let Some((ti, t)) = usize::try_from(w.turret).ok().and_then(|ti| def.turrets.get(ti).map(|t| (ti, t))) else { continue };
+        if w.defender || Some(k) == active || !turret_can_turn(t) {
+            continue;
+        }
+        let Some(target) = target else { continue };
+        if admission_with(world, st, id, k, target, false) != 0 {
+            continue;
+        }
+        let pending = turrets_pending(&st.actors[i]);
+        if let Some(s) = st.actors[i].turrets.get_mut(ti) {
+            s.aim = Some(point);
+            s.active = true;
+        }
+        if !pending {
+            world.random_u32_at("queue 0 from 57de7b");
+        }
+    }
+}
+
+/// `57EF00`: a turret with another ability's target turns to it while it is in its arc
+/// (`4C76E0`, `57E730`); a turret that may reset turns back to `yaw_start - pi/2` once it has
+/// not aimed for `reset_time`; the update stops when all are home.
 fn turret_reset_tick(world: &World, st: &mut CombatState, id: usize) {
     let now = world.time;
     let def = world.data.def(world.actors[id].def);
+    let (pos, facing) = (world.actors[id].pos.truncate(), world.actors[id].facing);
+    for (i, t) in def.turrets.iter().enumerate() {
+        let Some(point) = st.actors.get(id).and_then(|c| c.turrets.get(i)).and_then(|s| s.aim) else { continue };
+        if !turret_in_arc(t, pos, facing, point) || turret_aim(world, st, id, i, t, point) {
+            st.actors[id].turrets[i].aim = None;
+        }
+    }
     let Some(c) = st.actors.get_mut(id) else { return };
     for (s, t) in c.turrets.iter_mut().zip(&def.turrets) {
+        if s.aim.is_some() {
+            continue;
+        }
         if !s.active || !t.can_reset {
             s.prev = s.yaw;
             continue;
@@ -2699,17 +2892,22 @@ fn turret_reset_tick(world: &World, st: &mut CombatState, id: usize) {
     }
 }
 
-/// Projectiles reaching their target: the target if it is still there,
-/// otherwise the launch point (area weapons only).
+/// `0x580920` of each projectile on queue 0, newest first: its point follows a living target
+/// and its time runs down; strictly below zero it lands (`0x580660`), on the target if it
+/// is still there, else at the point (area weapons only). Exactly zero waits an update.
 fn impacts(world: &mut World, st: &mut CombatState) {
-    let now = world.time;
-    let mut i = 0;
-    while i < st.projectiles.len() {
-        if st.projectiles[i].impact_at > now {
-            i += 1;
+    let mut i = st.projectiles.len();
+    while i > 0 {
+        i -= 1;
+        if let Some(t) = st.projectiles[i].target.filter(|&t| alive(world, t)) {
+            st.projectiles[i].point = world.actors[t as usize].pos.truncate();
+        }
+        let left = x87::sub(ld(st.projectiles[i].remaining), ld(DT));
+        st.projectiles[i].remaining = fstp(left);
+        if left >= 0.0 {
             continue;
         }
-        let p = st.projectiles.swap_remove(i);
+        let p = st.projectiles.remove(i);
         if let Some(t) = p.thing {
             world.ids.removed_transient(t);
         }
@@ -2896,8 +3094,9 @@ fn apply_hit(world: &mut World, st: &mut CombatState, shooter: ActorId, w: &Weap
     let dead = t.health <= 0.0;
     let victim_org = t.org;
     world.events.push(Event::Hit { target, damage: amount });
+    // 0x5625C0 -> 0x4D6660, before this hit's record (a member; see `supply::under_siege`).
+    world.books.actor_mut(target).saved_siege = world.actors[target as usize].org.is_some() && crate::supply::siege_now(world, st, target);
     st.actors[target as usize].last_hit = Some((shooter, now));
-    world.books.actor_mut(target).saved_siege = false;
     st.actors[target as usize].last_damage = Some((amount, Some(w.damage_type)));
     if bombarding(world, st, shooter) {
         attacked_by(world, st, target, shooter, w);
@@ -3257,7 +3456,7 @@ mod turret_tests {
     fn turret_turns_the_short_way_at_its_rate() {
         let rate = 37f32.to_radians();
         let rest = wrap_once(-FRAC_PI_2);
-        let mut s = TurretState { yaw: rest, prev: rest, last_used: 0.0, active: false };
+        let mut s = TurretState { yaw: rest, prev: rest, last_used: 0.0, active: false, aim: None };
         // A target 30 degrees to the left of forward: rest + 30 deg.
         let target = rest + 30f32.to_radians();
         let mut ticks = 0;

@@ -17,7 +17,7 @@ use aa_parity::registries::Registries;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const QA: &str = r"<game root>\reconstruction\qa-runs\compare-20261022";
+const QA: &str = "reconstruction/qa-runs/compare-20261022";
 const FILM_2: &str = r"game\Profile\data\Films\archive-qa-20261022\LastFilm_2.RFM";
 const FILM_2_TRACE: &str = r"traces\film2-rmg.txt";
 /// The second capture of film 2, with the generator's log lines and the world
@@ -27,7 +27,7 @@ const FILM_2_LOG: &str = r"traces\film2-rmg-L.txt";
 const RMG_MAIN: std::ops::Range<u32> = 0x5925E0..0x592B20;
 
 fn game_root() -> PathBuf {
-    PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"))
+    PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"))
 }
 
 /// One native draw: the state before it, its call site and the stack chain.
@@ -191,7 +191,7 @@ fn native_world(path: &Path) -> NativeWorld {
 #[test]
 #[ignore = "reads QA film 2, its native world dump and the original data; set AA_GAME_ROOT"]
 fn film_2_world() {
-    let qa = Path::new(QA);
+    let qa = game_root().join(QA);
     let native = native_world(&qa.join(FILM_2_LOG));
     let film = Film::read(&qa.join(FILM_2), &Registries::builtin()).unwrap();
     let draws = native_draws(&qa.join(FILM_2_TRACE));
@@ -294,7 +294,7 @@ fn seed_3_starts_and_villages() {
 #[ignore = "reads QA film 2, its native trace and the original data; set AA_GAME_ROOT"]
 fn film_2_draw_sites() {
     let root = game_root();
-    let qa = Path::new(QA);
+    let qa = game_root().join(QA);
     let film = Film::read(&qa.join(FILM_2), &Registries::builtin()).unwrap();
     let native = native_draws(&qa.join(FILM_2_TRACE));
     let stage = stages(&native);

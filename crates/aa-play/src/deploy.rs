@@ -129,18 +129,6 @@ pub fn spot_clear(world: &World, building: DefId, at: Vec2, ignore: Option<Actor
     Ok(())
 }
 
-/// The truck stands at its deploy spot: the movement owner's arrival test
-/// (0.5 m, facing reached) or, for an HQ organization's truck, stopped within
-/// one map cell of the spot.
-fn arrived(world: &World, truck: ActorId) -> bool {
-    let a = &world.actors[truck as usize];
-    let Order::Deploy { at, .. } = a.order else { return false };
-    if crate::movement::deploy_ready(world, truck) {
-        return true;
-    }
-    let near = (a.pos.truncate() - at).length() <= world.map.cell_size.max(1.0);
-    near && a.motion.path.is_empty() && !crate::movement::actor_moving(world, truck)
-}
 
 /// Replace `old` by a new actor of `def` at `pos`/`facing`, keeping its
 /// kingdom, organization slot, HQ links and queue owner identity.
@@ -237,7 +225,7 @@ pub fn unpack_now(world: &mut World, a: ActorId) {
     }
     let now = world.time;
     let actor = &world.actors[a as usize];
-    let Order::Deploy { at, facing } = actor.order else { return };
+    let Order::Deploy { at: _, facing } = actor.order else { return };
     let Some(building) = world.data.def(actor.def).unpacks_to else { return };
     let kingdom = actor.kingdom;
     let org = actor.org;

@@ -208,9 +208,9 @@ pub fn detection_delivery(world: &mut World, key: crate::zones::Key) {
 
 /// Element Tick `0x570B90` of member `a` (its Updatable +0x14, one second in
 /// its bucket, registered by `0x563FD0`): `0x5709D0`, then the detached teleport
-/// (`crate::movement`). `0x4D6660` is read where the state is ([`crate::supply`]).
+/// (`crate::movement`). `0x4D6660` takes state 20 here ([`crate::supply`]).
 pub fn element_delivery(world: &mut World, a: ActorId) {
-    world.books.actor_mut(a).saved_siege = false;
+    world.books.actor_mut(a).saved_siege = crate::supply::siege_now(world, &world.combat, a);
     world.fog.element_leaf = true;
     let Some(mut e) = take_engine(world) else { return };
     e.observe_update(world);

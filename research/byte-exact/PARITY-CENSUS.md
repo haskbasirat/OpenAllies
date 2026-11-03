@@ -143,6 +143,33 @@ What this round closed:
 
 What the first differences are now: Berlin, F43 and Kursk read as movement and, on Kursk and the two developer maps, the Kill state of a `move` on a hostile thing (attack efficiency desired from 1840 on Kursk, member speed from 1448 on Comrades, the parity-fights lane's). On Comrades ours fires its first shot at 2282, the original at 6625, which is what makes most of its slot shift there: 496 projectile ids against 79.
 
+**State after the fourth 2026-11-02 round.** Full native traces of F18 (13859 ticks) and F33 (12445) were taken this round (`fight-play.ps1`; a film for it has to lie at the top of `Films/`: the dialog does not open a subfolder). The all-films slot census ran first, with the tree before these fixes, to 20000 ticks a film: every slot the human and QA films of the placed maps name is live on Berlin, Mountain Pass, Market Garden; the empty slots are Farmhouses (675 of 6264), Kursk (549 of 1854), the saved games and the random maps past their first difference. Numbers are that tree's, with the other lanes' work in it:
+
+| film | at the start of the round | now | what moved it |
+|---|---|---|---|
+| Berlin2v2_0 | 103 of 266, first 1768 | 140 of 266, first 2397 | the movement lane's |
+| Comrades2v2_0 | 85 of 951, first 1462 | 128 of 951, first 2193 | the Move at a thing |
+| Kursk2v2_0 | 110 of 1317, first 1887 | 126 of 1317, first 2159 | with the movement lane's |
+| Farmhouses4FFA_0 | 86 of 1818, first 1479 | 97 of 1818, first 1666 | the Move at a thing |
+| Berlin2v2_1 | 169 of 1187, first 2108 (the second round's) | 138 of 1187, first 2363 | |
+| F33, (1v1)MountianPass | 176 of 732, first 3009 | 177 of 731, first 3026 (full trace) | the retreat |
+| F18, (2v2)Berlin with one player | 94 of 271, first 3380 | 94 of 271, first 3380 (full trace) | |
+| F43, (2v2)Market_Garden | 110 of 176, first 1887 | 146 of 176, first 2499 (its 3000-tick trace) | with the movement lane's |
+| F38, (2v2)Market_Garden | 15 of 15 | 15 of 15 | |
+
+What this round closed:
+
+* **The Move of a regiment at a thing ignored the wrong actor.** `0x51EA20` hands Solve the target as the descriptor's ignored actor. State +0x10 already is the key (id + 1), and the host added one again, so the building a regiment was sent at blocked its own goal and `0x53D340` walked the goal back along the line: on Comrades the leader went for (130.93, 137.19), the edge, by way of (67, 205), where the original goes (65, 207), (122, 133), then the centre (136, 131). `regiment.rs` `solve`. This was the "member speed from 1448" of the last round: Comrades' first difference goes from 1462 to 2193.
+* **A retreat to where the regiment stands.** The Move ends in its first Think; the Sleep that follows in the same update took the RETREAT formation, because `orders::retreating` held until the next `orders::tick`, and walked every member to the column's places (F33's 3011). `0x520250` reports for the Move state only: `required_formation` asks `Some(MOVE)`, `retreating` compares the order.
+* **Transports.** `crate::transport`. A recruit at a location (`0x582190`) and a summon (`0x4CB110`) make a real plane now: a thing with its GTID, its Mind in `aai_queued`, released at once by the Transport's +0x4C (`0x519F70`, `0x518550`), `aai_transport` hosted in `combat::air` (`aa_mind::uai_thinks::aai_transport`, `0x517B60`, `0x5179C0`, `0x5179E0`, `0x516D10`), its flight on `aa_movement::aircraft` (`move_tick`, `fly_to`). The regiment appears at the first think, `0x554BF0` from the plane (Berlin2v2_1's anchor (147.27492, 91.36623), native (147.27493, 91.36622)). Each think (0.6 s) drops one member under the plane at `[Size] height` below it (`0x58BCB0`), aimed along the plane's way by `0x577380` (`fall_drag`, ActorData +0x1A4), falling on `aa_movement::falling` (`Owner::Fall`: the Mind's stops do not touch it). The landing is `0x4D64A0` -> `0x563D50`: the Character's kind 5, one getter, the Mind thinks at its end; the first member lands at (149.36240, 92.30676), native (149.36134, 92.30629). The plane flies its way out and leaves (`0x58B130`). `special_ops::recruit_by_air`, `Pending::Recruit`, `Pending::Drop` and `creation::transport` are gone. **Renditions, labelled in the module:** the structure's own aircraft (`0x56DC50`) is not taken first, `0x554850`'s search around a taken landing point is not ported, a member's place after its landing goes through `movement::member_added`.
+
+Named from the traces, not fixed:
+
+* **F18's 3344, F43's, Berlin's:** member-level avoidance. On F18 a member takes a new node at `0x537005` -> `0x52FD80` (a late Reattach of a moving regiment) one window before ours. Movement lane.
+* **Comrades' 2192:** `character 563BA0 from 52fc45`, an element's stop as its regiment reaches the building's zone: ours holds the Kill's walk a few ticks longer; ours fired first at 2282 because it stood at the wrong goal, and with the goal right that moved past this window. The fights lane's.
+* **Farmhouses' `gbr_hq_mechanized` at (289, 34):** not the snap. 23 of the 24 native unpacks on that film round the Move's destination as `deploy::placement` does (`0x46EE00`). At 2116 the original's truck stops 0.19 m short of (288.927, 34.530), at about the anchor's (288.933, 34.340), against something in its way, and rounds to 34; ours arrives 58 ticks later on a clear road and rounds to 35. So: movement, a knock-on of the earlier first difference.
+* **Efficiency desired +88:** reads the state one update late at a formation change (first-on, no getter behind it). Not fixed.
+
 #### K1. An unpack takes a new id and swaps it (S, do first)
 
 * **Shows as:** 60 things sit on another slot from tick 1002. First: native `ger_truck_artillery` 0x3462, ours 0x3460. The native slots never named are 0x3460, 0x3461, 0x3464, 0x346B, 0x346F, 0x3479: one per unpack.
@@ -255,11 +282,29 @@ Read against the original while doing this, and not as M2 first described it: th
 
 What these rested on: the sampler trace of the original, side by side (`AA_PARITY_WATCH`), and the pseudocode. Nothing here has an oracle of its own beyond the ports' fixtures.
 
-**The next causes, read 2026-11-02.** First position difference: a Reattach's destination at 1605. `0x5317A0`'s tail under Mind +0xA4 puts the point through `0x556070`, from the member's facing with ActorData +0x2FC and the organization's zone 4: native 0x3470 at 1590 heads for the organization's position + 0.9 x its facing (0, -1), ring 1 of 20 of radius 18, and 0x3471 at 1651 likewise. `Host::reattach_point` runs those rings, but its first test passes at the organization's own position where the original's fails, so ours keeps the point: find what `0x4F3640` sees there (its descriptor has no source thing; the leader stands on that point). After that: the first tick difference, a continuation one tick early at 1752 (native 1753), and `member speed +20` from 1536 (0x346A, native 1.162904, ours 1.1629192), which is `0x52FF00`'s formation speed.
+**Status of the fifth round, 2026-11-03 (parity-movement lane).** Measured on the census's free run, fast profile, the other lanes' work in the tree:
+
+| step | gate | first difference | what it showed |
+|---|---|---:|---|
+| the review's F2, F3, F4, F5, F7, F9, F10 (below); `0x556070`'s radius is the *organization* definition's +0x2FC, so the rings of a Reattach are 0.9 m apart, not 0 | 106 of 266 | 1819 | 0x3470 and 0x3471 head for the organization's position + 0.9 x facing as native (`0x4F3640` with no source: the leader stands on the point itself) |
+| `0x533C30` (F16), `0x5317A0` with its box branch, thing virtual 0 is the soft radius | 106 | 1819 | 0x3472 bit exact to 1775, replanning with the target as native; `member speed +20` at 1536 is gone with it |
+| `0x570560` tests Element +0x1C: a detached member takes its own tile's speed cap, not its organization's | 106 | 1819 | 0x3472 bit exact to 1804 |
+| `0x522F60`, `0x5200B0`, `0x520190` walk the attached members only (`0x4364C0` with its third word 1) | 140 | 2397 | a member still reattaching got a slot's Move from the Sleep at 1805; ours has 6977 getters of 6986 now, the first tick difference at getter 1668 (native 2384, ours 2382) |
+| FindOpenPositionLineThenRadius `0x554BF0` exact (`space::open_line_then_radius`, `0x553FA0`, `0x554B30`), for a member walking out and a recruit's organization (`0x582E80`) | 106 before the row above | 1819 | **`ba445000bb`, a random-map film, 32 of 32 checkpoints to the end of its trace, no movement row left** (before: 28 of 32, first 493); the organization stood one step short of a bunker because the old test was a box |
+
+The other QA films on the same build (free run): Kursk2v2_0 126 of 1317, first 2159 (was 110, first 1887); Comrades2v2_0 128 of 951, first 2193 (was 85, first 1462); Farmhouses4FFA_0 97 of 1818, first 1666 (was 85, first 1462); Berlin2v2_1 138 of 1187, first 2363.
+
+**What the review's defects became.** F2: `0x52F260` compares with 9.0, `0x52E130` is ported (`node_or_failed_52e130`). F3: `0x52DA60` schedules 1 s only with Sleep current, and `0x5324A0`'s Move arm has `0x52FD00` (a live target with a Mover: think in 1 s, follow at its speed). F4: `0x52D9C0` is its own function. F5: `set_speed` has the 0.1 floor and the clamp of `0x576D20`; the group's floor is not bound because no element keeps Actor +0x164 (X2). F7: the unpack error only for an actor with no organization; the text is still ours, not `tai_error_unpack|s`. F9: `E::DeactivateMover` runs `0x4CFC80`. F10: `0x5273D0` has no member loop, the Engage (priority 4) stays and thinks at once. F15, F16: above. F8: `sleep_523000` is right against `cai_sleep_fields` once it walks the attached members.
+
+**A map's objects are in the tile lists now** (`Space::add_scenery`): the records of `Books::scenery` whose definition blocks, with Thing +8 from `native_final_flags`, not of the actor category. Keys above `0x40008000` name them; `cont::Actor` and `Uai` read them from the lists. No gate number moved by it on Berlin.
+
+**A lone actor's Move and Follow are the Move command on its Mind** (`element::deliver_lone_move`: `0x4CA760`, `0x52C320`, `0x538340`), so its route is `0x5336B0` with the region hops. A lone actor's kill order is still `order_think`, labelled.
+
+Next causes, read 2026-11-03: Berlin's first position difference is now 0x346A at 2336, `member speed +20` (native 2.1181774, ours 2.6477218), then the first tick difference at 2382 (native 2384). On `1104a3b0f9` the truck is bit exact to 39, where the original's Think takes `0x532B50`'s turn recovery; ours thinks this truck at 21 and then 41 where the original's window has 21, 22, 39, 41 (the stream stays equal to 53, so one of those is another truck's): read the Mind's schedule of a lone truck first.
 
 **Renditions left, each marked at its place:** walls (`0x4F2220`, `0x53CA30`, `0x53CB70`'s wall cost, Mind +0x88): no wall thing is hosted; a map's scenery objects that are no actors and the trailers are not in the tile lists (`Space`); `0x554AD0` of a scatter formation keeps the point; a regiment's formation counts as oriented; the kill order of a regiment is still `order_think` (X1); `0x536840` stands aside for the combat states.
 
-**Not done:** `0x52EC20` (M2's placement for the other members). A thing's 564300 draw still lands at the first queue-1 delivery. `observe_key` right after the Mover's position write was tried at the end of `mover_tick`, and the gate read 28 of 266 at the same time, but that drop came from another lane's passing edit of `organization_scatter` and stayed after the call was removed: the call's own effect is not known and it has not been retried. Berlin2v2_1's tick 458 is not re-measured.
+**Not done:** `0x52EC20` and `0x52EBF0` in `0x530440` (M2's placement for the other members). A thing's 564300 draw still lands at the first queue-1 delivery; `observe_key` right after the Mover's position write has not been retried. Trailers are not in the tile lists: they have a Mover natively and aa-play keeps no trailer thing. Regiment state virtual +4 is `Ok(true)`: `0x51D730`, `0x51D650`, `0x51D610`, `0x51DF80` are read (priorities: Sleep and Rampage 0, Regroup 3, Engage 4, Rout 6, Exhausted 7, the others 2; Organization +0x8C is FormationData `aggressive`) and not bound: a Move to a regiment engaged in an aggressive formation should be refused. Multithreaded movers: not started. Open in `tests/movement.rs` since this round: `building_footprints_block_cells` (a lone truck on a test map, whose tile grid goes to `crate::path`, enters the building's box) and the ignored `real_random_map_orders_as_a_person_gives_them` ("still following" after a regiment reached its target on a generated map); neither is explained yet.
 
 #### M1. The Mover ground step on the exact port (S to M): done
 
@@ -342,6 +387,39 @@ Not causes: "zone 6 tile (position differs too)" and "supply stock +18" (a one-s
 
 Files: `combat.rs`, `morale.rs`. `Berlin2v2_0` has no health or death difference and no combat row at all in the free, forced-rng and forced-all runs. The fighting is measured on `Berlin2v2_1` through the census, with the fight trace's morale and Mind state: `AA_PARITY_BERLIN_FILM=<film> AA_PARITY_BERLIN_NATIVE=<trace> AA_PARITY_CENSUS_RUNS=forced-all`. Forced-all puts health and position back on the native values at every sample, so a health row there is the damage of one 8-tick window: it says who fired and for how much, but one shot a tick off shows as two rows.
 
+**Status 2026-11-03, fifth round: every order state of a regiment is on its Mind.** What stood between the fights and the original, found by reading the original's getter sites against ours in `Berlin2v2_1` (the census's getter table, forced-all) and the first fights of `Comrades2v2_0`:
+
+| cause | what it was | proof |
+|---|---|---|
+| block `e81` on Comrades | `0x4D8290`: a component the record neither saved nor had in its default mask, that the definition has now, is made at the Load. The record is the old `eastern_europe_city02`, masks `0x40A241` against the definition's `0x2040A241`: it has a City, so `+0xD4` and the refusal `0x522CC0`, and a zone 8 of radius 0. Berlin's blocks saved the bit in the default mask: none. `PlacedThing::saved_city`, `combat::has_city` | the masks read from the map; `map_queues::a_record_older_than_the_city_node_gets_the_component_at_load`; the zone row. Shots on Comrades 6890 to about 130 |
+| the rout's draws | `0x52B530` takes one getter (`0x5212CC`) and draws from the object it returned (`0x52B4E4`, `0x52B629`, `0x52B699`, `0x52B8E8`, `0x52B9F5`): 25 getters and 2132 draws in `Berlin2v2_1`. Ours took one getter per draw | the trace's `D` lines against its `G` lines |
+| rout and exhausted | now the Mind's: `aa_mind::cai_rout`, `rout_select`, `rout_score`, Mind +0x20C and +0x270 (`0x521AF0`, `0x51E260`, `0x51DDF0`, `0x51FAE0`), the arrival arm `0x522567`, the time arm of `0x522B90`, the failure arm `0x527658`, `0x578140` with Mind +0x5C, the Sleep's `0x51F9F0`. The rout's end asks the ZOC's effects at the next update (`0x51E130` -> `0x4F3D90`, `combat::zoc_rescans`). The ZOC and ZOG terms of the score now count | with this alone `Berlin2v2_1` had 25 routs against 25 |
+| the current formation | Organization +0x74 follows the Mind state: `0x57C400` -> `0x57BFF0` with the state's `formation_required`: DESIRED +0x70, BROKEN none, COMBAT the layout's +0x44, RETREAT its +0x48. `0x57BF50` swaps the property (the layout's BrokenProperty: SPEED_MAX +25%), recomputes the slots, and with no formation or a loose one `0x5797E0` draws two for each empty slot: 760 getters in `Berlin2v2_1` that ours did not have. `player_orders::formation` is now +0x74, `desired_formation` +0x70. `FormationKind::None` and `Plain` are told apart (`0x525740`) | getter sites `0x5798BB`, `0x5798CD`: native 760, ours 506 in forced-all |
+| guard | now the Mind's: `aa_mind::cai_guard`, Mind +0x17C, with the embedded Kill, Move and Sleep (`0x529420`, `0x529490`, `0x527CE0`, `0x51EE20`, `0x51DC80`, `0x51DD30`, the arms of `0x521F90`, `0x52243C`, `0x527440`). Its Bombard stands for a task of `combat::tasks` | code; `tests/orders.rs` |
+| explore | now the Mind's: `aa_mind::cai_thinks::explore`, Mind +0x220, `0x524100`, `0x5249A0`, `0x5213A0`, `0x51E180`, `0x51E1B0`, `0x524170`, `0x5213E0`. **Rendition:** `0x5242C0`'s walk is its bisection; `ExploreFinishAreaBonus` is not added | getter sites `0x5241B3`, `0x5241E7`, `0x52430B`, `0x5216D7` by name |
+| a target held by its members | `0x4D4900`: an organization asked `+0x130(zone, 1)` answers by its attached members' tiles alone. Ours asked the banner's tile, so a regiment an enemy's members had walked into emptied its Engage list (`0x523EA0`) at once and went back to Sleep: on Comrades no fight began until the banners stood close. `0x51FBC0` asks with 0 | the order 6694 (zone entered, Engage, Sleep two ticks later) of the Comrades window |
+| `0x51FBC0` | the thing's own position, an organization's and not a member's, and its zone test | code |
+| state 20 | taken at a hit before that hit's record (a first hit does not set it, `Berlin2v2_1` `0x3478` at 5680 and 5688), at a death and at the Element Tick: it falls 7 to 8 s after the last hit (208 falls measured). A thing with no Element Tick still answers when asked | the trace |
+| projectile flight | `0x4C8CB0` -> `0x580BC0`: from the ability's spawn position to the target's hit position with both height ratios, `projectile_life`, the kinds; `0x580920` on queue 0, newest first, before the Performer's events, strictly below zero. The target's place follows it. `combat::flight_seconds`, `combat::impacts`. **Rendition:** no actor flies; kind 2 takes the source's speed as it stands | compiled; shots of `0x580BE1` are counted, no landing tick has been compared |
+| turrets | Performer +0x5C: `0x57DD90`, the aim of `0x57EF00`, and its registrations `0x57E8A3`, `0x57DE7B`, `0x57DC7E`, `0x57DCE2`, `0x57F443`: 615, 615 and 540 getters on Farmhouses that ours did not have | getter sites by name; no window compared yet |
+
+**The home village, established.** The original on a v14 random-map film (`ba445000bb`, `rmc_southerneurope`, under the sampler to 2400 ticks): the village 37.5 m from the Corps HQ of kingdom 1 has owner 1 at tick 1, with no `0x564300` before tick 2150. The others are owner 4 until one is taken at 2160. So it comes with the world's start, not through a later City Tick. The replay of that film in aa-play now gives the same: owner 1 at step 1, and the second village at 2162 against 2160, so the 115 s of the Chuikov comparison was another build's.
+
+Measured by `tests/order_fights.rs` (`the_fight_films_fight`) on the tree of 2026-11-03, with the other lanes' work in it (the Berlin gate there: 140 of 266, first 2397). Free replay: each film has left the original before its fighting, so a number close to the original's is not parity. Native shots are the `0x4C8190` draws; 901 of Kursk's are the engineers' Repair (`0x5359D0`), so 2640 fight there.
+
+| film | deaths ours / native | first death ours / native | routs ours / native | shots ours / native | checkpoints, first difference |
+|---|---:|---:|---:|---:|---:|
+| `Comrades2v2_0` | 21 / 27 | 6820 / 6712 | 3 / 4 | 222 / 349 | 128 of 951, 2193 |
+| `Farmhouses4FFA_0` | 108 / 107 | 3034 / 3032 | 12 / 15 | 1810 / 2666 | 97 of 1818, 1666 |
+| `Kursk2v2_0` | 75 / 119 | 4856 / 4584 | 32 / 15 | 1731 / 3541 | 126 of 1318, 2159 |
+| `Berlin2v2_1` | 125 / 133 | 6092 / 5760 | 31 / 25 | 2487 / 2929 | 138 of 1187, 2363 |
+
+Before this round: deaths 8, 82, 94, 129; first death 7341, 3026, 4841, 4949; routs 0, 32, 28, 41; shots 6890, 1510, 1808, 2147.
+
+The first-death column counts anything that reaches zero health, so two of its native figures are no fight: Farmhouses' 3032 (and ours 3034) is a `smoke_grenade` running out, its first hit on a soldier is at 4864 and its first soldier dies at 5000; Kursk's 4584 is the city block `eeurope_cityblock12x20_02`, its first soldier dies at 4856. In the client, `Farmhouses4FFA_0` at tick 5710 has one thing dead beyond that grenade where the original has lost nine soldiers by 5456: the totals agree (108 against 107) while the fight does not come at the same time.
+
+**Renditions left:** `combat::decide` and `combat::choose` are `0x5340C0` and `0x534700` in f32 with the original's stores, not the ports' traits, and the candidates are the engage list, not the cached list of `0x57A780`; a Bombard, Repair and Construct are `combat::tasks`, on no Mind state; the Siege state has no site (no wall thing is hosted); a lone actor fires from `combat::fire`; the denizen's threat list is read as who stands in its range; a model's animation set is the first; group following (Organization +0x164) in Explore has no host.
+
 **Status 2026-11-02, fourth round: the fight is hosted on the Minds.** The states the combat code stood in for are now the original's, on the stack of the hosted Mind, through the ports:
 
 | what | where | port |
@@ -399,7 +477,7 @@ Before the hosting: deaths 26, 137, 75, 88; first death 9096, 3039, 4794, 4957; 
 
 #### X2. Group behaviour (M)
 
-**Written, 2026-11-02, not fixture-proven:** `aa_play::orders::group` (the GGroup thing, the selection path 0x4ED360, delivery 0x4DF840 -> 0x4DE7F0, the three Update states, the formation placement 0x4DF600). There is no oracle: the checks are the film's `group` things and `order_fights`. What stays a rendition is listed at the head of that file.
+**The arithmetic is fixture-proven since the fifth round** (`research/phase8-orders-input/group`: the centre, the places, a place at a point, the list order, the speed loop of the commanded Update). A selection is a list built at its head (0x4ECFF0) and a group sorts it by 0x4D0780: the mapper and `group::form` now do both. **Written, 2026-11-02:** `aa_play::orders::group` (the GGroup thing, the selection path 0x4ED360, delivery 0x4DF840 -> 0x4DE7F0, the three Update states, the formation placement 0x4DF600). There is no oracle: the checks are the film's `group` things and `order_fights`. What stays a rendition is listed at the head of that file.
 
 * **Shows as:** order 4201 `group_behavior_enable` then a `move` on two regiments. Native creates a `group` thing at 4201 (one id, one scale draw) and moves them as a group. No equivalent here.
 * **Native:** selection command 0x4ED360: cases 0x25 / 0x26 set selection group +0x18, then `KKC_GWorld::CreateGGroup` 0x4FBE10, 0x4E0940, 0x4E2940, 0x4DE740, 0x4DFE20. `group_formations.tgi`.

@@ -163,9 +163,11 @@ Every ActorCommand now maps, and the corpus report has no `NO EQUIVALENT` line. 
 
 Read from `order_effects`: most remaining differences are knock-on. "Dead here" and "never made here" account for most missing selections, and retreat `sleep/move` cases are regiments standing somewhere else. A city's owner also differs here, which turns a native kill into a Move at a thing that is no longer hostile.
 
+**Refusals against the original's own log.** 0x4CDE00 logs `Faction '%s' unable to use ability '%s'` when 0x4C8F20 refuses, and the logs of two of these recordings were kept: Comrades holds 4 such lines (Field Marshal Montgomery, Corps Reorganization), Berlin2v2_1 holds 10 (Marshal Zhukov 2, Marshal Konev 8, Corps Reorganization). Our replay refuses 4 on Comrades (`special_operation_unique`) and 10 on Berlin2v2_1 (`special_operation_unique` 7, `special_operation_not_enough_experience` 3). The counts agree; the log gives no reason, so the reasons are not checked, and a replay that has left the original can agree by chance on the later ones. Farmhouses and Kursk have no log. On Farmhouses all 8 `special_operation_invalid_target` are `resupply` orders whose target in the film is a member of a regiment, not the regiment: `admit_with` gives the member's organization only on the HUD path. Whether the original refuses them too needs a log of that recording.
+
 Found and fixed through it: delivery checks the command mask (0x4ED360 vt+150, 0x4D9B60 vt+38), so a retreat from an engaged regiment too low in morale is not given; an unpack to a group gives the members without the command a Move (0x4DE7F0).
 
-Not proven: the mask is `guess::action_bits`, a rendition of 0x4D1350, and only commands 0..=12 are gated by it.
+The mask is `orders::mask`: the exact contributors of `aa_actors` (0x571640, 0x57B390, 0x582C40, 0x583FC0, 0x589A60, 0x569C70, 0x565140, 0x575FB0) in the order of 0x4D1350, and the Mind's 0x521E10, 0x530510, 0x518720. Every command is gated by it, with the owner and 0x4CF120 (vt+150), except 37 and 38, which never reach a thing. Not proven: the actor states it reads are derived from aa-play's state, not stored (`orders::mask::state_bits`), and it is rebuilt when asked where the original keeps a word rebuilt at each state change. Against the traces of the four fight films, an organization's states 4, 6, 8, 12 and 19 mostly agree (the rest follows the replay's own differences), state 22 is never set here, and a lone actor's Mind states (4, 8, 9, 12 in the trace) are not derived at all.
 
 ### The fight against the traces, by the numbers
 
@@ -179,6 +181,25 @@ Measured by `tests/order_fights.rs` (`the_fight_films_fight`) against counts rea
 | `Berlin2v2_1` | 129 / 133 | 4949 / 5760 | 41 / 25 | 2147 / 2929 |
 
 Before the hosting: deaths 26, 137, 75, 88; first death 9096, 3039, 4794, 4957; routs 7, 20, 15, 46; shots 1538, 3274, 2150, 2349. The shots were about four times the original's on Comrades, because an ability's animation and the rule that the Mind waits for it were not there.
+
+### The fifth round (2026-11-03)
+
+Every order state of a regiment is on its Mind now; `PARITY-CENSUS.md` has each cause and its proof. Same measure as above:
+
+Measured by `tests/order_fights.rs` (`the_fight_films_fight`) on the tree of 2026-11-03, with the other lanes' work in it (the Berlin gate there: 140 of 266, first 2397). Free replay: each film has left the original before its fighting, so a number close to the original's is not parity. Native shots are the `0x4C8190` draws; 901 of Kursk's are the engineers' Repair (`0x5359D0`), so 2640 fight there.
+
+| film | deaths ours / native | first death ours / native | routs ours / native | shots ours / native | checkpoints, first difference |
+|---|---:|---:|---:|---:|---:|
+| `Comrades2v2_0` | 21 / 27 | 6820 / 6712 | 3 / 4 | 222 / 349 | 128 of 951, 2193 |
+| `Farmhouses4FFA_0` | 108 / 107 | 3034 / 3032 | 12 / 15 | 1810 / 2666 | 97 of 1818, 1666 |
+| `Kursk2v2_0` | 75 / 119 | 4856 / 4584 | 32 / 15 | 1731 / 3541 | 126 of 1318, 2159 |
+| `Berlin2v2_1` | 125 / 133 | 6092 / 5760 | 31 / 25 | 2487 / 2929 | 138 of 1187, 2363 |
+
+Before this round: deaths 8, 82, 94, 129; first death 7341, 3026, 4841, 4949; routs 0, 32, 28, 41; shots 6890, 1510, 1808, 2147.
+
+The first-death column counts anything that reaches zero health, so two of its native figures are no fight: Farmhouses' 3032 (and ours 3034) is a `smoke_grenade` running out, its first hit on a soldier is at 4864 and its first soldier dies at 5000; Kursk's 4584 is the city block `eeurope_cityblock12x20_02`, its first soldier dies at 4856. In the client, `Farmhouses4FFA_0` at tick 5710 has one thing dead beyond that grenade where the original has lost nine soldiers by 5456: the totals agree (108 against 107) while the fight does not come at the same time.
+
+The same round's trace of the original on a random map: `traces/film-rmg-ba44-native.txt` (film `ba445000bb`, 2400 ticks).
 
 ## Recording recipe
 

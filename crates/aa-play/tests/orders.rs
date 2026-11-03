@@ -70,6 +70,8 @@ fn data() -> (GameData, Ids) {
         turret: -1,
         use_weight: 1.0,
         priority: 1.0,
+        // 0x4BE970: what makes it a repair ability is required target bit 7 and an effect of kind 3.
+        targets_required: 1 << 7,
         effects: vec![WeaponEffect { kind: 3, kind_name: "HEAL".into(), amount: 5.0, ..Default::default() }],
         ..Default::default()
     };
@@ -427,6 +429,49 @@ fn a_selection_without_the_group_behaviour_keeps_its_shape() {
     };
     assert_eq!(dest(&w, a), Vec2::new(55.0, 60.0));
     assert_eq!(dest(&w, b), Vec2::new(65.0, 60.0));
+}
+
+/// A person's second order: a regiment that has arrived walks again.
+#[test]
+fn a_regiment_walks_again_after_it_has_arrived() {
+    let (mut w, ids) = world();
+    let a = org(&mut w, ids.regiment, 0, Vec2::new(20.0, 20.0));
+    w.step(vec![]);
+    let order = |to: Vec2| Command::Move { kingdom: 0, units: vec![Unit::Org(a)], to, attack_move: false };
+    w.step(vec![order(Vec2::new(30.0, 20.0))]);
+    for _ in 0..600 {
+        w.step(vec![]);
+    }
+    assert_eq!(w.orgs[a as usize].order, Order::Idle, "the first walk ends");
+    let first = w.orgs[a as usize].anchor;
+    w.step(vec![order(Vec2::new(30.0, 32.0))]);
+    for _ in 0..600 {
+        w.step(vec![]);
+    }
+    let second = w.orgs[a as usize].anchor;
+    assert!(second.distance(first) > 5.0, "{first} {second}");
+    assert_eq!(w.orgs[a as usize].order, Order::Idle, "the second walk ends");
+}
+
+/// 0x4ED280 takes the centre of the whole selection, so a thing whose guess differs from
+/// the others' still moves by where it stands in all of it.
+#[test]
+fn a_command_to_part_of_a_selection_keeps_the_selection_s_centre() {
+    let (mut data, ids) = data();
+    data.rules.insert("GroupZoneRangeMin".into(), 18.0);
+    let mut w = World::empty(Arc::new(data), Arc::new(map()), 1);
+    w.kingdoms.push(kingdom(0, 0));
+    w.kingdoms.push(kingdom(1, 1));
+    let a = org(&mut w, ids.regiment, 0, Vec2::new(20.0, 20.0));
+    let b = org(&mut w, ids.regiment, 0, Vec2::new(30.0, 20.0));
+    w.step(vec![]);
+    let units = vec![Unit::Org(a), Unit::Org(b)];
+    let spread = |on: bool| Command::Order { kingdom: 0, units: units.clone(), order: ActorOrder::SelectionSpread { on } };
+    let to = Vec2::new(60.0, 60.0);
+    w.step(vec![spread(true), Command::Move { kingdom: 0, units: vec![Unit::Org(b)], to, attack_move: false }, spread(false)]);
+    let Order::Move { to: dest, .. } = w.orgs[b as usize].order else { panic!("{:?}", w.orgs[b as usize].order) };
+    assert_eq!(dest, Vec2::new(65.0, 60.0));
+    assert_eq!(w.orgs[a as usize].order, Order::Idle);
 }
 
 /// The behaviour on: 0x4ED360 makes a group; 0x4DF840 gives each member its place

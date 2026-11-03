@@ -211,6 +211,11 @@ pub fn point_relation(world: &World, a: ActorId, point: Vec2) -> u8 {
 }
 
 /// Whether actor `a` has a bombard ability (the command mask 0x530510).
+/// The actor has an ability that heals: the SAI's pool 3 (`7A1150`).
+pub fn heals_something(world: &World, a: ActorId) -> bool {
+    world.actors.get(a as usize).is_some_and(|x| world.data.def(x.def).weapons.iter().any(heals))
+}
+
 pub fn can_bombard(world: &World, a: ActorId) -> bool {
     world.actors.get(a as usize).is_some_and(|x| world.data.def(x.def).weapons.iter().any(bombards))
 }
@@ -268,6 +273,14 @@ fn apply(world: &mut World, st: &mut CombatState, command: &Command) -> Result<(
             let t = *target;
             if !world.actor(t).is_some_and(|a| a.alive) {
                 return Err("nothing to repair there".into());
+            }
+            // 0x51ECF0: a kingdom short of upkeep (0x44DD70: Kingdom +1F0 above 0) repairs
+            // only what is under construction (bit 21), unless the state's +18 is given.
+            let short = world.books.kingdom(*kingdom).is_some_and(|k| k.shortage_ratio > 0.0);
+            let constructing = world.books.actor(t).is_some_and(|b| b.constructing);
+            let kept = units.iter().all(|u| world.orders.repair_kept.contains(u));
+            if short && !constructing && !kept {
+                return Err("nothing selected can repair that".into());
             }
             let mut any = false;
             for unit in units {
@@ -353,6 +366,11 @@ fn begin_actor(world: &mut World, st: &mut CombatState, a: ActorId, task: Task) 
     s.task_order = Some(Order::Idle);
 }
 
+/// The Guard's Bombard leaves (`0x527CE0`).
+pub(crate) fn end_guard_bombard(world: &mut World, st: &mut CombatState, o: OrgId) {
+    end_org(world, st, o, None);
+}
+
 fn end_org(world: &mut World, st: &mut CombatState, o: OrgId, order: Option<Order>) {
     st.orgs[o as usize].task = None;
     st.orgs[o as usize].task_order = None;
@@ -405,7 +423,9 @@ pub(super) fn org_think(world: &mut World, st: &mut CombatState, o: OrgId) -> bo
 fn org_repair(world: &mut World, st: &mut CombatState, o: OrgId, t: ActorId) {
     let i = o as usize;
     let now = world.time;
-    if !alive(world, t) || world.actors[t as usize].health >= max_health(world, st, t) {
+    // Mind +168 without the state's +18 (`ActorOrder::RepairKept`).
+    let kept = world.orders.repair_kept.contains(&Unit::Org(o));
+    if !alive(world, t) || (!kept && world.actors[t as usize].health >= max_health(world, st, t)) {
         end_org(world, st, o, Some(Order::Idle));
         return;
     }
@@ -620,7 +640,8 @@ pub(super) fn lone_think(world: &mut World, st: &mut CombatState, a: ActorId) ->
             }
         }
         Task::Repair(t) => {
-            if !alive(world, t) || world.actors[t as usize].health >= max_health(world, st, t) {
+            let kept = world.orders.repair_kept.contains(&Unit::Actor(a));
+            if !alive(world, t) || (!kept && world.actors[t as usize].health >= max_health(world, st, t)) {
                 end(world, st);
                 return true;
             }
@@ -670,7 +691,6 @@ fn repair_fire(world: &mut World, st: &mut CombatState, id: usize, t: ActorId) {
 /// Use the actor's task ability on its aim (a bombard: 0x5340C0 with the
 /// point, 0x5307A0). Called by `fire` for an actor without a combat target.
 pub(super) fn fire_aim(world: &mut World, st: &mut CombatState, id: usize, aim: Aim) {
-    let now = world.time;
     let data = world.data.clone();
     let (point, target) = match aim {
         Aim::Repair(t) => {
@@ -720,9 +740,9 @@ pub(super) fn fire_aim(world: &mut World, st: &mut CombatState, id: usize, aim: 
     }
     // 0x4C9550 -> 0x4C8CB0: the projectile is a thing, with its id and its draws.
     let thing = w.projectile.as_deref().and_then(|p| data.find(p)).and_then(|p| crate::creation::projectile(world, p));
-    if w.projectile_speed > 0.0 {
-        let flight = delta.length() / w.projectile_speed;
-        st.projectiles.push(Projectile { shooter: id as ActorId, weapon, target, point, impact_at: now + flight, thing });
+    if w.projectile_speed > 0.0 || w.projectile_life > 0.0 {
+        let remaining = crate::combat::flight_seconds(world, id as ActorId, w, target, point);
+        st.projectiles.push(Projectile { shooter: id as ActorId, weapon, target, point, remaining, thing });
     } else {
         if let Some(t) = thing {
             world.ids.removed_transient(t);

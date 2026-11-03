@@ -12,14 +12,14 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-const FILM: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Profile\data\Films\archive-qa-20261025\Berlin2v2_0.RFM";
+const FILM: &str = "reconstruction/qa-runs/compare-20261022/game/Profile/data/Films/archive-qa-20261025/Berlin2v2_0.RFM";
 const MAP: &str = "(2v2)Berlin";
 
 fn game_root() -> PathBuf {
-    PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"))
+    PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"))
 }
 fn film_path() -> PathBuf {
-    std::env::var_os("AA_PARITY_BERLIN_FILM").map_or_else(|| PathBuf::from(FILM), PathBuf::from)
+    std::env::var_os("AA_PARITY_BERLIN_FILM").map_or_else(|| game_root().join(FILM), PathBuf::from)
 }
 fn fixture() -> Value {
     // The fixtures are local (crates/**/tests/fixtures/ is git-ignored), so

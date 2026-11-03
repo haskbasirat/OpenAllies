@@ -19,7 +19,7 @@ Then:
 
 ## Aircraft (core: combat/air*, minds.rs; movement: aa-movement aircraft*)
 
-Air orders are still refused. B1 (the hosted aircraft Mind) is done. B2 (attack) is written behind the temporary `air-b2` feature in crates/aa-play/Cargo.toml.
+A transport flies since 2026-11-02 (`crate::transport`: its host of `aa_movement::aircraft` is the place to grow the others from; it refuses formations and abilities). The other aircraft do not: only a transport's Mover is on the queue, and `movement::fly_to` is a no-op for them. Air orders are still refused. B1 (the hosted aircraft Mind) is done. B2 (attack) is written behind the temporary `air-b2` feature in crates/aa-play/Cargo.toml.
 
 1. **Wire the flight ports into aa-play** (movement owner). The ports in aa-movement are exact and fixture-proven: fly_to 0x560DB0, replace_path 0x560ED0, fly_formation 0x560F10, join/leave_formation 0x55EB30 / 0x55EDC0. aa-play still has no-op stubs. Use an adapter over `books.actor(a).aircraft.flight` and `books.groups`. Then:
    - put MoveTick 0x5612F0 on the queue-0 Mover;
@@ -83,16 +83,16 @@ Numbers of 2026-11-02, 43 random-map films of the corpus:
 | data set | films | generation runs | native dump equal (end state, things, heights, tiles) | header's random picks from the stream | `open_film` on the stream | first checkpoint passes | no mismatch (cap 4000 ticks) |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | v14 | 12 | 12 | 12 of 12 | 11 of 11 | 12 of 12 | 12 | 2 (`1d25a501b7` 15 of 15, `fd4649a138` 235 of 235 to the cap) |
-| mod `A&A gg` | 7 | 7 | no dump | 5 of 5 | 7 of 7 | 5 | 3 (`f3bd589503` 50 of 50, `d22932af71` 26 of 26, `47206c3262` 16 of 16) |
-| mod `player` | 4 | 4 | no dump | 4 of 4 | 4 of 4 | 4 | 0 (to 3 of 4) |
-| mod `A&A edit` | 4 | 4 | no dump | 3 of 3 | 4 of 4 | 1 | 0 |
-| mod `A&A Use` | 8 | 8 | no dump | 1 of 1 | 8 of 8 | 1 | 0 |
-| mod `A&A - Copy` | 5 | 5 | no dump | 4 of 4 | 5 of 5 | 0 | 0 |
+| mod 4 | 7 | 7 | no dump | 5 of 5 | 7 of 7 | 5 | 3 (`f3bd589503` 50 of 50, `d22932af71` 26 of 26, `47206c3262` 16 of 16) |
+| mod 6 | 4 | 4 | no dump | 4 of 4 | 4 of 4 | 4 | 0 (to 3 of 4) |
+| mod 3 | 4 | 4 | no dump | 3 of 3 | 4 of 4 | 1 | 0 |
+| mod 2 | 8 | 8 | no dump | 1 of 1 | 8 of 8 | 1 | 0 |
+| mod 1 | 5 | 5 | no dump | 4 of 4 | 5 of 5 | 0 | 0 |
 | `widths` | 3 | 3 | no dump | 3 of 3 | refused: the films do not decode without their data | - | - |
 
 The chain check on the end state (FIGHT-FILMS.md's first getter method): strong on 2 films, weak on 23, refused on 18. Most films cannot say either way: too many placements in the first interval. The checkpoints above are the better oracle. 13 films' settings do not fit today's RMC (0x505B00), 8 of them on v14: natively they take the defaults and go out of sync, `SyncMode::Report` plays them on the stored settings, and there all 8 pass their first checkpoints.
 
-Generation takes 0.6 to 4.6 s under load, `open_film` 1 to 5 s once the data set is read. The first film of a mod reads the mod: 12 to 66 s, and 590 s for `A&A - Copy` with nine lanes building.
+Generation takes 0.6 to 4.6 s under load, `open_film` 1 to 5 s once the data set is read. The first film of a mod reads the mod: 12 to 66 s, and 590 s for mod 1 with nine lanes building.
 
 **What the world needed besides the generator's own stream**, all found by `random_film_native_state`:
 
@@ -102,13 +102,13 @@ Generation takes 0.6 to 4.6 s under load, `open_film` 1 to 5 s once the data set
 - GThing +0x28 stays what it was at creation: the ground the later things changed is not read again. `replay_generated` puts it on the actors, and a generated map has `native_terrain`, so `height_at` is 0x4F0E50 there too. A start location takes its height at the position it leaves (0x4EEB40).
 - ConfigureGWorld 0x50E8B0 destroys a kingdom with KingdomInfo +0x31 once the random settings are resolved, so a closed side draws its picks and keeps its GTID but the generator does not see it (`side05` and no `side03`).
 
-**What the first differences are now.** On `1104a3b0f9` the truck is bit exact to tick 39, then the original replans around a bunker two ticks before ours (M5, `collision` has no real avoidance). On `ba445000bb` everything is equal to tick 455, then a recruited truck stops short of the original (M7). Neither is the generator: their lane is movement. Provided resources change one sample late at a capture (`supply::city_tick`, native 0x4D5230 does it at once); the stock does not differ.
+**What the first differences are now.** On `1104a3b0f9` the truck is bit exact to tick 39, then the original's Think takes a turn recovery (`0x532B50`) that ours reaches at 41 (PARITY-CENSUS, fifth round). `ba445000bb` passes 32 of 32 checkpoints to the end of its trace since FindOpenPositionLineThenRadius `0x554BF0` is exact: it was the recruited organization's place. Neither is the generator: their lane is movement. Provided resources change one sample late at a capture (`supply::city_tick`, native 0x4D5230 does it at once); the stock does not differ.
 
 **Left in the generator:**
 
 - AddHeroesToKingdom 0x592E00: not ported, a world asking for heroes says so in `load_notes`. No film of the corpus has one and A&A hides the slider.
 - Base terrain of mountain or water kind on a thing (0x551B40): not ported, says so in `load_notes`. No film reaches it.
-- The mods with a `RandomMap` folder of their own (`A&A Use` 7 films, `A&A - Copy` 5, `A&A edit` 3): the first checkpoint does not pass, while `A&A gg` and `player`, on the stock RMCs, pass. It is the generator, not the data: the original's trace on the `A&A Use` QA copy (film `2e04b717ec`: 643 things, 183775 draws) agrees with ours for 150792 draws and differs at `rome`, a required city of that RMC, which has a DenizenComponent with an inventory: 0x568750 registers it on queue 1, which the generator did not count. See the mods-and-saves report for how far the fix got. The tools: `nat_mod.sh` of the lane, with `corpus_film_draws` (`AA_RMG_GATE_SETS`, `AA_RMG_GATE_TRACE`). The earlier "Breakpoint at 0x404F60" was the probe's own breakpoint on the log call, left behind when its 900 s timeout killed it during the mod's 16 minutes of loading. `(init time) main menu` is logged before the menu takes keys: wait for `connect end MainMenuInterface`. Two films of `A&A gg` were recorded on another data set (version RWE5.5.5.0) and cannot pass.
+- The mods with a `RandomMap` folder of their own (mod 2 7 films, mod 1 5, mod 3 3): the original's trace on mod 2's QA copy (film `2e04b717ec`: 183775 draws) now agrees with ours on every common draw, and the end state is the original's (`21db463a`). Two reads were missing: a required city's DenizenComponent with an inventory registers on queue 1 (0x568750), and `supply_required` lies on the EconomyComponent itself (0x464BD0, def +0x348; 0x56F250 registers on it), where the generator looked under a `[Resources]` child that no generated stock thing needed. The tools: `nat_mod.sh` of the lane, with `corpus_film_draws` (`AA_RMG_GATE_SETS`, `AA_RMG_GATE_TRACE`). The earlier "Breakpoint at 0x404F60" was the probe's own breakpoint on the log call, left behind when its 900 s timeout killed it during the mod's 16 minutes of loading. `(init time) main menu` is logged before the menu takes keys: wait for `connect end MainMenuInterface`. Two films of mod 4 were recorded on another data set (version RWE5.5.5.0) and cannot pass.
 
 Note: SVars.tgi sets `RMGBalanceMarkerNudgeStepDelta`, but the game registers `RMGBalanceMarkerNudgeDelta`. The file value is ignored, so the object balancer's delta stays 4.0 and the kingdom balancer's is 2.
 
@@ -135,3 +135,16 @@ What exists and how it is proven: research/phase8-net/README.txt section 13. The
 - **Random generals.** `Custom::launch_setup` draws a computer player's nation and general on every node from the map seed. The original draws them on the host (0x50E8B0, 0x79FAF0) and they travel.
 - **MidgameCreateImplicitAIs 0x76EE10.** `Game::implicit_ai` hands the kingdom of a player who left to a computer player of the middle difficulty, with the profile the SAI picks by itself. The native path makes a new session player through 0x76EB30 and 0x76CB30, on the host only, so the name and profile follow from there.
 - **Implicit AIs at launch 0x776580.** `Custom::net_fill_implicit` fills required kingdoms without a player. The record bytes +0x31, +0x32 and the phase 7 rule (every eligible kingdom) are not read.
+
+## Water, clouds and what stands on the ground (2026-11-03; aa-bevy water.rs, look.rs, effects/)
+
+Compared with the original on registered shots (same film, tick and camera), QA copy on a hidden desktop:
+
+- **Water** was not drawn at all. `research/phase6-water/FINDINGS.txt` has the rules and what is open.
+- **Cloud shadows** (Biome CloudInfo, the effect at Terrain +0x34, 0x723E00, 0x71E020): the original's ground shows them moving. The speed here is the middle of cloud_min_velocity and cloud_max_velocity; the original's wanders on the view's own random numbers.
+- **Unpack dust**: `building_pack` loops and no data stops it. It ended with nothing in the client. What a state's WhenEnter attached now stops when the state ends and its particles fade, which reads as the original's frames do; the native call that ends it is not traced.
+- **The building on a slope**: `research/phase8-ground/README.txt`, last section.
+- **Shadows** use the shadow map's least filtering, for the stencil's hard edge. They are still a shadow map.
+- **Refused spot**: the first ghost of a battle now takes its red tint. The original gives no message for a plain building: 0x6887C0 fires `building_invalid_placement` only for a thing with `required_object_ids`. That event is not fired yet, and no shipped building that a truck unpacks has the field.
+
+Still open here: a truck or regiment ordered onto a building's footprint stops at its edge and stays Moving (right click on an own building gives a Move to its centre; the original's order there was not compared). Settings +0x1C on a construction order's flatten is still not measured: no QA film has one. Night lamp glow, the brown ground patch on some random seeds, animation blending, landing and hit animations, enchantment glows and contrails were not reached this round.

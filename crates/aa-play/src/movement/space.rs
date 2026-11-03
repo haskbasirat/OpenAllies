@@ -11,10 +11,13 @@
 //! placement, all in f64) answers without the x87 arithmetic of the port, whose exact
 //! test decides everything closer; see [`Space::surely_clear`].
 //!
-//! **Renditions:** a map's scenery objects that are no actors and the trailers (aa-play
-//! keeps no trailer things) are not in the lists.
+//! A map's objects that are no actors stand in the lists by their records in
+//! `Books::scenery`, when their definition blocks: `Space::add_scenery`. A tile a large one
+//! covers carries the blocker bit (`aa_spatial::geometry::marks_blocker`).
+//!
+//! **Rendition:** the trailers (aa-play keeps no trailer things) are not in the lists.
 use super::*;
-use aa_navigation::low_path::{self, LowPathSolver, WindowConfig};
+use aa_navigation::low_path::{LowPathSolver, WindowConfig};
 use aa_navigation::search::{SearchCell, SearchGrid};
 use aa_numeric::Precision;
 use aa_spatial::collision::{self, Descriptor, Shape};
@@ -58,6 +61,13 @@ pub(super) fn actor_key(id: ActorId) -> u32 {
 pub(super) fn key_actor(key: u32) -> ActorId {
     key - 1
 }
+/// Keys of a map's objects that are no actors, the low half of a key above `0x8000` so
+/// they name no actor's GTID slot (`SpatialIndex::register`). `thing` here is a key - 1,
+/// as [`key_actor`] names an actor's.
+const SCENERY_KEY: u32 = 0x4000_8000;
+pub(super) fn is_scenery(thing: u32) -> bool {
+    thing & 0x8000_0000 == 0 && thing >= SCENERY_KEY - 1
+}
 fn err(what: impl std::fmt::Display) -> collision::Error {
     collision::Error::World(what.to_string())
 }
@@ -86,6 +96,8 @@ pub(super) struct Space {
     tracked: Vec<Tracked>,
     /// Largest blocking reach of any registered thing, for [`Space::surely_clear`].
     largest: f64,
+    /// `map.placed` indices of the objects in the lists, by key - [`SCENERY_KEY`].
+    scenery: Vec<usize>,
     cell: f64,
     dims: [i32; 2],
 }
@@ -147,15 +159,57 @@ impl Space {
             map: std::sync::Arc::as_ptr(&world.map) as usize,
             tracked: Vec::new(),
             largest: 0.0,
+            scenery: Vec::new(),
             cell: f64::from(map.cell_size),
             dims: [map.width as i32, map.height as i32],
         }))
+    }
+
+    /// [`Space::new`] with the map's objects in the lists.
+    pub(super) fn with_scenery(world: &World) -> Option<Box<Space>> {
+        let mut s = Space::new(world)?;
+        s.add_scenery(world);
+        Some(s)
     }
 
     pub(super) fn fits(&self, world: &World) -> bool {
         self.map == std::sync::Arc::as_ptr(&world.map) as usize
     }
 
+    /// The objects of `Books::scenery` that block, in the lists as the map's Load leaves
+    /// them: Thing +8 from the definition (`native_final_flags`), the blocking shape, not of
+    /// the actor category (virtual +0xB4, +0xB0: `0x4EE4C0` holds them by their flags).
+    /// A doodad a building clears (`ground::doodads_under`) does not block, so none goes.
+    fn add_scenery(&mut self, world: &World) {
+        for &index in &world.books.scenery {
+            let Some(p) = world.map.placed.get(index) else { continue };
+            let Some(d) = world.data.find(&p.thing_id) else { continue };
+            let def = world.data.def(d);
+            if def.thing_flags & BLOCKING == 0 || self.scenery.len() >= 0x7fff {
+                continue;
+            }
+            let key = SCENERY_KEY + self.scenery.len() as u32;
+            let blocking = shape(def.blocking_words);
+            let soft = shape(def.soft_shape);
+            let member = Member {
+                key,
+                reference: key,
+                actor: collision::Actor { definition: d, flags: def.thing_flags & !(1 << 26), position: [p.position[0].to_bits(), p.position[1].to_bits()], facing: [p.facing[0].to_bits(), p.facing[1].to_bits()] },
+                height_bits: p.position[2].to_bits(),
+                facing_z_bits: 0,
+                cached_tile: [0, 0],
+                blocking,
+                soft: soft.clone(),
+                target: soft,
+                actor_category: false,
+                wall_present: false,
+            };
+            if self.index.register(member).is_err() || self.index.refresh_membership(key, false).is_err() {
+                continue;
+            }
+            self.scenery.push(index);
+        }
+    }
     /// Actors created since the last look (in the middle of an update, for a query
     /// that may come before the next [`Space::sync`]).
     pub(super) fn add_new(&mut self, ms: &MovementState, world: &World) {
@@ -336,10 +390,6 @@ pub(super) struct Policy<'a> {
     pub ms: &'a MovementState,
     pub world: &'a World,
 }
-impl collision_policy::Sealed for Policy<'_> {}
-mod collision_policy {
-    pub trait Sealed {}
-}
 
 impl aa_spatial::index_world::CollisionPolicy for Policy<'_> {
     /// The definition's bit 10 (`blocking`) and bit 29 as the flags above.
@@ -395,7 +445,7 @@ impl se::World for Exclusion<'_> {
     type Owner = Option<u32>;
     fn actor(&self, actor: u32) -> collision::Result<se::Actor> {
         let m = self.index.member(actor).map_err(err)?;
-        let a = &self.world.actors[key_actor(actor) as usize];
+        let has_element = self.world.actors.get(key_actor(actor) as usize).is_some_and(|a| a.org.is_some());
         Ok(se::Actor {
             definition: m.actor.definition,
             reference: m.reference,
@@ -403,7 +453,7 @@ impl se::World for Exclusion<'_> {
             position: m.actor.position,
             linked_50: 0,
             linked_168: 0,
-            has_element: a.org.is_some(),
+            has_element,
             has_wall: false,
         })
     }
@@ -423,23 +473,23 @@ impl se::World for Exclusion<'_> {
         let entry = list.get(at as usize).ok_or_else(|| err("exclusion node"))?;
         Ok(se::ExclusionNode { reference: entry.reference, next: (at as usize + 1 < list.len()).then_some(node + 1) })
     }
-    fn actor_category(&mut self, _: u32) -> collision::Result<bool> {
-        Ok(true)
+    fn actor_category(&mut self, actor: u32) -> collision::Result<bool> {
+        Ok(self.index.member(actor).map_err(err)?.actor_category)
     }
     fn acceptance_dispatch(&self, _: u32) -> collision::Result<()> {
         Ok(())
     }
     fn owner(&mut self, actor: u32) -> collision::Result<Option<u32>> {
-        Ok(self.world.actors[key_actor(actor) as usize].kingdom)
+        Ok(self.world.actors.get(key_actor(actor) as usize).and_then(|a| a.kingdom))
     }
     /// `0x4D1EB0`: the same owner, or virtual +0x144 says ally (1).
     fn accepts_owner(&mut self, _: (), actor: u32, owner: Option<u32>) -> collision::Result<bool> {
-        let own = self.world.actors[key_actor(actor) as usize].kingdom;
+        let own = self.world.actors.get(key_actor(actor) as usize).and_then(|a| a.kingdom);
         se::ordinary_accepts_owner(own, owner, || Ok(u32::from(kingdom_team(self.world, own) == kingdom_team(self.world, owner))))
     }
     /// Element +0x10.
     fn organization(&self, actor: u32) -> collision::Result<Option<u32>> {
-        Ok(self.world.actors[key_actor(actor) as usize].org.filter(|&o| self.world.orgs.get(o as usize).is_some_and(|x| x.alive)))
+        Ok(self.world.actors.get(key_actor(actor) as usize).and_then(|a| a.org).filter(|&o| self.world.orgs.get(o as usize).is_some_and(|x| x.alive)))
     }
     fn mind(&self, organization: u32) -> collision::Result<Option<OrgId>> {
         Ok(Some(organization))
@@ -507,6 +557,102 @@ pub(super) fn sweep_to(space: &mut Space, policy: &mut Policy<'_>, query: &mut P
     }
 }
 
+/// FindOpenPositionLineThenRadius `0x554BF0(point, facing, definition, from, radius)`: the
+/// line `0x553FA0` back from the point to `from`, static things only, then `0x554B30` around
+/// what it found, every blocking thing. No clear place on the rings keeps the line's.
+pub(super) fn open_line_then_radius(space: &mut Space, policy: &mut Policy<'_>, def: u32, point: [u32; 2], facing: [u32; 2], from: [u32; 2], radius_bits: u32) -> [u32; 2] {
+    let d = policy.world.data.def(def);
+    let (shape_of, radius_word, water) = (shape(d.blocking_words), d.blocking_words[1], d.thing_flags & WATER != 0);
+    let mut at = open_line_553fa0(space, policy, shape_of.clone(), radius_word, water, point, facing, from);
+    let line = at;
+    let mut direction = facing;
+    let Space { index, geometry, .. } = space;
+    match aa_spatial::placement::find_placement_within(index, geometry, &mut at, &mut direction, shape_of, radius_word, radius_bits, false, water, policy) {
+        Ok(true) => at,
+        _ => line,
+    }
+}
+
+/// `0x554B30(point, facing, definition of `id`, radius, strict, 0)`: the point, or the first
+/// clear place on the rings of radius / step around it from the facing.
+pub(super) fn open_radius(space: &mut Space, policy: &mut Policy<'_>, id: ActorId, point: [u32; 2], facing: [u32; 2], radius_bits: u32, strict: bool) -> Option<[u32; 2]> {
+    let d = policy.world.data.def(policy.world.actors[id as usize].def);
+    let (shape_of, radius_word, water) = (shape(d.blocking_words), d.blocking_words[1], d.thing_flags & WATER != 0);
+    let (mut at, mut direction) = (point, facing);
+    let Space { index, geometry, .. } = space;
+    matches!(aa_spatial::placement::find_placement_within(index, geometry, &mut at, &mut direction, shape_of, radius_word, radius_bits, strict, water, policy), Ok(true)).then_some(at)
+}
+
+/// `0x553FA0(point, facing, definition, from, strict 1)`: from the point back to `from` in
+/// steps of the definition's radius (at least a quarter tile), each place clamped into the
+/// map (`0x552640`); the first that no static thing and no terrain takes. On none the walk
+/// has ended at `from`. Away from `from`, the clamped place is the answer.
+#[allow(clippy::too_many_arguments)]
+fn open_line_553fa0(space: &mut Space, policy: &mut Policy<'_>, shape_of: Shape, radius_word: u32, water: bool, point: [u32; 2], facing: [u32; 2], from: [u32; 2]) -> [u32; 2] {
+    let f = f32::from_bits;
+    let cell = f(space.index.grid().cell_size_bits);
+    let quarter = (f64::from(cell) * 0.25) as f32;
+    let step = if f(radius_word) < quarter { quarter } else { f(radius_word) };
+    let (mut px, mut py) = (f(point[0]), f(point[1]));
+    let (fx, fy) = (f(from[0]), f(from[1]));
+    let (mut dx, mut dy) = ((f64::from(px) - f64::from(fx)) as f32, (f64::from(py) - f64::from(fy)) as f32);
+    let mut left = (f64::from(dx) * f64::from(dx) + f64::from(dy) * f64::from(dy)).sqrt() as f32;
+    if left > 0.0 {
+        let scale = f64::from(step) / f64::from(left);
+        dx = (f64::from(dx) * scale) as f32;
+        dy = (f64::from(dy) * scale) as f32;
+    }
+    let mut descriptor = Descriptor::default();
+    descriptor.mask = if water { 0x600 } else { 0x500 };
+    let mut query = PreparedQuery { placement: Placement { shape: shape_of, facing, position: [0, 0] }, descriptor, required_actor_flags: 0x400 | 0x2000_0000 };
+    let bounds = aa_navigation::endpoint::Bounds { cell_size_bits: cell.to_bits(), extent_bits: space.geometry.extent_bits };
+    let mut found = true;
+    let clamped = loop {
+        let mut place = [px.to_bits(), py.to_bits()];
+        let _ = aa_navigation::endpoint::clamp_to_interior(bounds, &mut place, PC);
+        query.placement.position = place;
+        if !first_hit(space, policy, &query).blocked() {
+            break place;
+        }
+        if left <= 0.0 {
+            found = false;
+            break place;
+        }
+        px = (f64::from(px) - f64::from(dx)) as f32;
+        py = (f64::from(py) - f64::from(dy)) as f32;
+        left = (f64::from(left) - f64::from(step)) as f32;
+        if left <= 0.0 {
+            px = fx;
+            py = fy;
+            left = 0.0;
+        }
+    };
+    let away = (f64::from(px) - f64::from(fx)).abs() + (f64::from(py) - f64::from(fy)).abs();
+    if found && away >= f64::from(f32::from_bits(0x3951_b717)) {
+        return clamped;
+    }
+    [px.to_bits(), py.to_bits()]
+}
+
+/// `0x4F3640(descriptor, no source, no other thing, ...)` for a definition with a Mover
+/// (`0x556070`, `id`'s definition at `at` and `facing`). Bit 29 of a Mover's definition
+/// is clear, so the zone blocks (`0x4F1660`, the walls of `0x4F2220`) and the required
+/// object stand aside: what is left is outside the map (3) and `0x4F0A70` -> `0x553BA0`
+/// with no source: every blocking thing counts, the actor's own regiment and itself too.
+pub(super) fn creation_clear(space: &mut Space, policy: &mut Policy<'_>, id: ActorId, at: [u32; 2], facing: [u32; 2]) -> Option<bool> {
+    let def = policy.world.data.def(policy.world.actors[id as usize].def);
+    let mut q = query_for(space, policy, id, false)?;
+    q.descriptor.source_actor = None;
+    q.required_actor_flags = 0x400 | if def.blocking { 0 } else { 0x2000_0000 };
+    q.descriptor.mask = if mover_class(def) == MoverClass::Water { 0x600 } else { 0x500 };
+    q.set_position(&space.index, at, policy).ok()?;
+    q.placement.facing = facing;
+    if aa_spatial::query::outside(&q.placement, space.geometry.extent_bits, PC).unwrap_or(true) {
+        return Some(false);
+    }
+    Some(!first_hit(space, policy, &q).blocked())
+}
+
 /// `0x554350(actor, strict)`.
 pub(super) fn query_for(space: &Space, policy: &Policy<'_>, id: ActorId, strict: bool) -> Option<PreparedQuery> {
     aa_spatial::actor_context::prepare(&space.index, actor_key(id), strict, policy).ok()
@@ -529,6 +675,8 @@ pub(super) fn overlap_point(ms: &mut MovementState, world: &World, id: ActorId) 
             }
         }
     };
+    // The list holds things a moving actor passed; an object of the map does not get up.
+    let other = other.filter(|&t| !is_scenery(t));
     let result = other.and_then(|other| {
         let (me, it) = (pos2(world, id), pos2(world, other));
         let (dx, dy) = (me.x - it.x, me.y - it.y);

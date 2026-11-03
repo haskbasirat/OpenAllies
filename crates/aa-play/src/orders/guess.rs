@@ -8,11 +8,8 @@
 //! fixtures are `research/phase8-orders-input/guess-4da570/`). aa-play cannot
 //! depend on aa-runtime, so it is restated here over `World`.
 //!
-//! **What is exact and what is a rendition.** The loop, the requirement mask
-//! and the definition fields are native. The command mask is a rendition of
-//! 0x4D1350's contributors, limited to the state aa-play holds: the regiment
-//! 0x521E10 and organization 0x57B390 bits, the element 0x530510 bits and the
-//! recruit 0x582C40 bits, without the actor-state table behind them.
+//! The loop, the requirement mask and the definition fields are native; the command
+//! mask is `super::mask`.
 //!
 //! The controls (`non_group_command` +3C, `can_hot_command_actor` +3F,
 //! `can_hot_command_location` +40) are the v14 values of
@@ -23,7 +20,7 @@
 //! retreat): 0x4DA570 reads them from each node's own profile, so a film played
 //! with other settings would already diverge in the original.
 use crate::data::Weapon;
-use crate::world::{ActorId, OrgId, Unit, World};
+use crate::world::{ActorId, Unit, World};
 use aa_rules::native::actor_command::PREDEFINED_ACTOR_COMMANDS as COMMANDS;
 
 /// `cmp ebx, 0x27`: the ActorCommand definitions.
@@ -271,144 +268,19 @@ pub fn guess(world: &World, unit: Unit, fields: Fields, non_group_excluded: bool
     kernel(&mut Live { world, kingdom, bits }, mask, target_kingdom, hot, non_group_excluded)
 }
 
-fn set(bits: &mut u64, index: u32, value: bool) {
-    if value {
-        *bits |= 1 << index;
-    } else {
-        *bits &= !(1 << index);
-    }
-}
-
 fn enabled(w: &Weapon) -> bool {
     !w.defender
-}
-fn repairs(w: &Weapon) -> bool {
-    enabled(w) && w.effects.iter().any(|e| e.kind_name == "HEAL")
 }
 /// Ability flag bit 3 (0x57E280).
 fn indirect(w: &Weapon) -> bool {
     enabled(w) && w.flags & 8 != 0
 }
 
-/// The unit's command mask: the rendition of 0x4D1350 (see the module docs).
+/// The unit's command mask, 0x4D1350 (`super::mask`).
 pub fn action_bits(world: &World, unit: Unit) -> u64 {
-    match unit {
-        Unit::Org(o) => org_bits(world, o),
-        Unit::Actor(a) => actor_bits(world, a),
-    }
+    super::mask::action_bits(world, unit)
 }
 
-/// 0x4D1350 for an actor: the gates on Actor +8 bit 0, +100 bits 26 and 25,
-/// +104 bit 4 and a Wall component clear the mask; then the contributors.
-fn actor_bits(world: &World, a: ActorId) -> u64 {
-    let Some(x) = world.actors.get(a as usize).filter(|x| x.alive && !x.removed) else { return 0 };
-    let def = world.data.def(x.def);
-    if def.has_component("WallComponent") || crate::production::busy(world, a) {
-        return 0;
-    }
-    let mut bits = 0;
-    // 0x582C40: commission 14 needs a Settlement link; recruit 15, location 17
-    // and the rally point 16. `recruits` holds the definition's list; the
-    // eligibility pass 0x5827B0 is left to the recruit itself.
-    if def.has_component("RecruitComponent") && !under_construction(world, a) {
-        set(&mut bits, 15, !def.recruits.is_empty());
-        set(&mut bits, 16, !def.recruits.is_empty());
-    }
-    // 0x583FC0.
-    if def.has_component("ResearchComponent") && !under_construction(world, a) {
-        set(&mut bits, 35, !def.research.is_empty());
-    }
-    // 0x565140 sell, and the cancel of a structure under construction or razed.
-    if crate::player_orders::sellable(world, a) {
-        set(&mut bits, 20, true);
-    }
-    if def.has_component("ConstructionComponent") {
-        let book = world.books.actor(a);
-        let constructing = book.is_some_and(|b| b.constructing);
-        set(&mut bits, 19, constructing || book.is_some_and(|b| b.razed));
-        if constructing {
-            set(&mut bits, 20, false);
-        }
-    }
-    // The Mind: 0x4CF480 case 4 gives one to an actor with Actor flag 8, which
-    // follows the ElementComponent; 0x530510.
-    if def.has_component("ElementComponent") {
-        let mover = def.has_component("MoverComponent");
-        let attached = x.org.is_some();
-        // Thing flag 29, read here as no MoverComponent: in the Comrades trace
-        // it is set on the corps and refineries, clear on trucks and soldiers.
-        set(&mut bits, 5, mover);
-        set(&mut bits, 2, mover && attached);
-        // Bit 9 also reads a rule var (0xB39AB0 +108), on in every film's data:
-        // natively explored by the computer players.
-        set(&mut bits, 9, mover && attached);
-        set(&mut bits, 4, attached && !def.builds.is_empty());
-        set(&mut bits, 3, def.weapons.iter().any(repairs));
-        let has_indirect = def.weapons.iter().any(indirect);
-        set(&mut bits, 1, has_indirect);
-        let any = def.weapons.iter().any(enabled);
-        let direct = def.weapons.iter().any(|w| enabled(w) && w.flags & 8 == 0);
-        set(&mut bits, 0, mover && any && (!has_indirect || direct));
-        set(&mut bits, 6, mover || any);
-        set(&mut bits, 10, !construction_9c(world, a));
-        set(&mut bits, 11, def.unpacks_to.is_some());
-        set(&mut bits, 12, def.packs_to.is_some());
-    }
-    bits
-}
-
-/// 0x4D1350 for an organization: 0x57B390 (the members' bits by 0x57ABE0) then
-/// the regiment Mind's 0x521E10.
-fn org_bits(world: &World, o: OrgId) -> u64 {
-    let Some(org) = world.orgs.get(o as usize).filter(|x| x.alive) else { return 0 };
-    let members: Vec<ActorId> = org.members.iter().copied().filter(|&m| world.actors.get(m as usize).is_some_and(|x| x.alive && !x.removed)).collect();
-    let mut any = 0u64;
-    for &m in &members {
-        any |= actor_bits(world, m);
-    }
-    let mut bits = 0u64;
-    // 0x57ABE0 over 0..=12, 29..=33, 14..=17, 35, 18 and 20.
-    const COPIED: u64 = 0x1fff | (0x1f << 29) | (0xf << 14) | (1 << 35) | (1 << 18) | (1 << 20);
-    bits |= any & COPIED;
-    set(&mut bits, 33, true);
-    // 11 and 12 from the leader (+44) only.
-    let leader = crate::ids::target_actor(world, Unit::Org(o));
-    let leader_bits = leader.map_or(0, |l| actor_bits(world, l));
-    if leader_bits >> 12 & 1 == 0 {
-        set(&mut bits, 12, false);
-    }
-    if leader_bits >> 11 & 1 == 0 {
-        set(&mut bits, 11, false);
-    }
-    // Bit 1: not when the layout's elements fire indirect while the organization
-    // also has bit 0 (0x578A30(1)): then kill does the bombarding.
-    let bombards = bombard_layout(world, o);
-    let bit0 = bits & 1 != 0;
-    let member_bombard = any >> 1 & 1 != 0;
-    set(&mut bits, 1, (!bombards || !bit0) && member_bombard);
-    // 31 hq_attach (0x579580(1)) and 32 hq_detach.
-    set(&mut bits, 32, org.hq.is_some());
-    set(&mut bits, 31, !crate::orders::hq_cycle_list(world, o).is_empty());
-    // 0x521E10: rout and organization status 0 clear bits 0..12.
-    let Some(c) = world.combat.org(o) else { return bits };
-    let routing = c.routing.is_some();
-    let status = crate::morale::state(c, org.morale);
-    if routing || status == 0 {
-        bits &= !0x1fff;
-        return bits;
-    }
-    let engaged = c.engaging();
-    set(&mut bits, 7, true);
-    set(&mut bits, 8, engaged);
-    // Below breakpoint + penalty + 1 an engaged regiment cannot retreat.
-    if engaged {
-        let penalty = world.data.rule_ci("MoraleRetreatPenalty").unwrap_or(0.0);
-        if penalty + c.breakpoint + 1.0 > org.morale {
-            set(&mut bits, 7, false);
-        }
-    }
-    bits
-}
 /// 0x578AC0 (0x578A30(1)): a locked layout entry whose element has an ability
 /// with flag bit 3, and 0x57A5E0: a member with the bombard bit. Such a regiment's
 /// kill goes through the bombard state (0x527FB0).

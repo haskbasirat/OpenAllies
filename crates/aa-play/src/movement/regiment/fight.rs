@@ -11,24 +11,55 @@
 //! **Renditions, each at its place:** the Siege state (Mind +0xF8) has no site here
 //! (`0x4D11D0`: no wall thing is hosted); a pending kill command does not count as the
 //! current target in `0x522700`; `Organization +0x164` of step 6 of `0x526A70` answers
-//! false, so the all-engaged byte stays clear (nothing here reads it). The rout, exhausted
-//! and guard states are still `crate::morale` and `crate::orders`: what they do to the
-//! stack is `stand_down`.
+//! false, so the all-engaged byte stays clear (nothing here reads it).
+//!
+//! The Guard state (+0x17C) is `aa_mind::cai_guard` over the embedded Kill, Move and Sleep;
+//! its Bombard (+0xD4) stands for a task of `crate::combat::tasks`, which is not on the port.
+//! `MindState::Guard` in `crate::orders` says it is on the stack.
+//!
+//! The Explore state (+0x220) is `aa_mind::cai_thinks::explore`; its waypoint candidate
+//! `0x5242C0` is a rendition (`crate::orders::explore`).
+//!
+//! The Rout state (+0x20C, `aa_mind::cai_rout`, its destination `aa_mind::rout_select`) and
+//! the Exhausted state (+0x270) are hosted too. `OrgCombat::routing` and `exhausted_state`
+//! hold nothing of their own: they say to the rest of the game that the state is on the
+//! stack.
 use super::*;
 use crate::combat::{self, TargetRef};
+use crate::world::Event;
 use aa_mind::cai_engage::{self, EngageWorld, TargetNode, Targets};
 use aa_mind::cai_engage_think;
-use aa_mind::cai_thinks::{kill as kill_port, reform as reform_port, siege_target};
+use aa_mind::cai_thinks::{explore as explore_port, kill as kill_port, reform as reform_port, siege_target};
+use aa_mind::{cai_guard, cai_rout, rout_score, rout_select};
 
 pub(in crate::movement) const KILL: u32 = cai_thinks::KILL_OFFSET;
 pub(in crate::movement) const CHASING: u32 = 0x120;
 pub(in crate::movement) const REFORM: u32 = 0x1b8;
 pub(in crate::movement) const ENGAGE: u32 = 0x1cc;
+pub(in crate::movement) const GUARD: u32 = 0x17c;
+/// The Bombard state as the Guard state sees it (the task of `crate::combat::tasks`).
+const BOMBARD: u32 = 0xd4;
+pub(in crate::movement) const ROUT: u32 = 0x20c;
+pub(in crate::movement) const EXPLORE: u32 = 0x220;
+pub(in crate::movement) const EXHAUSTED: u32 = 0x270;
 /// Kill +0x10, Chasing +0x10 and Reform +0x10 as Mind offsets; Engage +0x20.
 const KILL_TARGET: u32 = KILL + 0x10;
 const CHASING_TARGET: u32 = CHASING + 0x10;
 const REFORM_START: u32 = REFORM + 0x10;
 const LAST_ATTACKER: u32 = ENGAGE + 0x20;
+/// Guard +0x10 the action, +0x14 the byte "placed", +0x18 the guarded GTID, +0x1C the
+/// point, +0x24 the direction, as Mind offsets.
+const GUARD_ACTION: u32 = GUARD + 0x10;
+const GUARD_PLACED: u32 = GUARD + 0x14;
+const GUARDED: u32 = GUARD + 0x18;
+const GUARD_POINT: u32 = GUARD + 0x1c;
+const GUARD_AUX: u32 = GUARD + 0x24;
+/// Explore +0x10 the waypoint, +0x18 the target and its score, count and kind, as Mind
+/// offsets.
+const EXPLORE_POINT: u32 = EXPLORE + 0x10;
+const EXPLORE_TARGET: u32 = EXPLORE + 0x18;
+/// Rout +0x10: the game time at its Enter.
+const ROUT_ENTERED: u32 = ROUT + 0x10;
 
 fn handle(t: TargetRef) -> u32 {
     match t {
@@ -95,16 +126,36 @@ impl Regiment<'_> {
             org => org,
         }
     }
-    /// `0x51FBC0`: within `CAITargetInRangeZOCMultiplier` times the zone radius.
-    fn thing_in_range(&self, t: TargetRef) -> bool {
-        let Some(rep) = combat::representative(self.world, t) else { return false };
+    /// `0x51FBC0`: the thing's own position (an organization's, not a member's) within
+    /// `CAITargetInRangeZOCMultiplier` times the zone's radius, and it holds the zone
+    /// (virtual +0x130(zone 4, 0)).
+    pub(super) fn thing_in_range(&self, t: TargetRef) -> bool {
+        let p = match t {
+            TargetRef::Org(g) => self.world.orgs[g as usize].anchor,
+            TargetRef::Actor(a) => self.world.actors[a as usize].pos.truncate(),
+        };
         let o = self.o as usize;
         let mut zone = self.world.data.def(self.world.orgs[o].def).control_range;
         if self.world.combat.org(self.o).is_some_and(|c| c.exhausted) {
             zone *= 0.75;
         }
-        let p = self.world.actors[rep as usize].pos.truncate();
-        (self.world.orgs[o].anchor - p).length() <= self.rules.target_in_range_zoc * zone
+        let d = self.world.orgs[o].anchor - p;
+        let distance = (f64::from(d.y) * f64::from(d.y) + f64::from(d.x) * f64::from(d.x)).sqrt() as f32;
+        distance <= self.rules.target_in_range_zoc * zone && combat::thing_in_zoc(self.world, self.o, t, false)
+    }
+    /// The thing a Move's target id stands for: a Kill or a Chasing that names an
+    /// organization walks at one of its members ([`Self::walk_to`]).
+    pub(super) fn walked_thing(&self, member: ActorId) -> TargetRef {
+        let org = self.world.actor(member).and_then(|x| x.org);
+        for word in [KILL_TARGET, CHASING_TARGET] {
+            let w = self.word(word);
+            if let Some(TargetRef::Org(g)) = w.checked_sub(1).map(thing)
+                && org == Some(g)
+            {
+                return TargetRef::Org(g);
+            }
+        }
+        TargetRef::Actor(member)
     }
     /// The embedded Move at a thing (`0x520320(mode, thing, 0, null)`): the path's target
     /// is the live member that stands for it, renewed before each Think.
@@ -178,6 +229,59 @@ pub(super) fn enter(host: &mut Regiment<'_>, state: StateId, offset: u32, a: &mu
                 }
             }
         }
+        // 0x529420: status 2, the embedded states leave, Mind +0x2B4 the direction, 0x51EE20.
+        GUARD => {
+            a.state_mut(state)?.status = 2;
+            leave_embedded(host, a)?;
+            let o = host.o;
+            host.world.books.minds.set_byte(key(o), GUARD_PLACED, 0);
+            host.set_word(GUARD_ACTION, 0);
+            let aux = [host.word(GUARD_AUX), host.word(GUARD_AUX + 4)];
+            host.set_word(SLEEP_POINT, aux[0]);
+            host.set_word(SLEEP_POINT + 4, aux[1]);
+            guard_stand_point(host);
+            host.world.orders.orgs.insert(o, crate::orders::MindState::Guard);
+        }
+        // 0x5213A0: status 2, the Move to the target (0x520440(0, target, 0, null)).
+        EXPLORE => {
+            a.state_mut(state)?.status = 2;
+            let o = host.o;
+            host.world.orders.orgs.insert(o, crate::orders::MindState::Explore);
+            let to = vec2([host.word(EXPLORE_TARGET), host.word(EXPLORE_TARGET + 4)]);
+            walk_point(host, to, [0, 0], a)?;
+        }
+        // 0x51F190.
+        ROUT => {
+            let mut targets = host.list();
+            cai_rout::enter(state, &mut targets, a, host)?;
+            host.store_list(&targets);
+            let now = host.world.time;
+            let o = host.o;
+            if let Some(s) = host.combat_org() {
+                s.routing = Some(combat::Rout { since: now, destination: None, next_think: now });
+                s.reform = None;
+                s.explicit = None;
+                s.saved_order = None;
+                s.auto_order = None;
+                s.entrenched = false;
+                s.rest_since = None;
+            }
+            host.world.events.push(Event::Routed { org: o });
+        }
+        // 0x521AF0: status 2, each member a Stop, the Sleep in mode 0.
+        EXHAUSTED => {
+            a.state_mut(state)?.status = 2;
+            if let Some(s) = host.combat_org() {
+                s.exhausted_state = true;
+            }
+            let rules = host.rules;
+            let members: Vec<ActorId> = alive_members(host.world, host.o).collect();
+            for m in members {
+                element::clear_in(host.ms, host.world, rules, m, a);
+            }
+            let sleep = host.state(SLEEP)?;
+            aa_mind::activate(sleep, 0, a, host)?;
+        }
         _ => return Ok(false),
     }
     Ok(true)
@@ -207,6 +311,65 @@ pub(super) fn leave(host: &mut Regiment<'_>, state: StateId, offset: u32, a: &mu
                 element::fight::regiment_left_engage(host.ms, host.world, rules, m, a);
             }
         }
+        // 0x51E180: the Sleep and the Move leave.
+        EXPLORE => {
+            let (sleep, mv) = (host.state(SLEEP)?, host.state(MOVE)?);
+            if a.state(sleep)?.status == 2 {
+                aa_mind::World::leave(host, sleep, a)?;
+            }
+            if a.state(mv)?.status == 2 {
+                aa_mind::World::leave(host, mv, a)?;
+            }
+            a.state_mut(state)?.status = 0;
+            let o = host.o;
+            host.world.orders.orgs.remove(&o);
+        }
+        // 0x529490.
+        GUARD => {
+            leave_embedded(host, a)?;
+            let o = host.o;
+            host.world.books.minds.set_byte(key(o), GUARD_PLACED, 0);
+            host.set_word(GUARD_ACTION, 0);
+            a.state_mut(state)?.status = 0;
+            host.world.orders.orgs.remove(&o);
+        }
+        // The Guard's Bombard: its task ends.
+        BOMBARD => {
+            a.state_mut(state)?.status = 0;
+            let o = host.o;
+            let bombarding = host.combat_org().is_some_and(|s| matches!(s.task, Some(combat::tasks::Task::Bombard(_))));
+            if bombarding {
+                let mut st = std::mem::take(&mut host.world.combat);
+                combat::tasks::end_guard_bombard(host.world, &mut st, o);
+                host.world.combat = st;
+            }
+        }
+        // 0x51E130: the ZOC's effects at the next update's start (0x4F3D90), the embedded
+        // Move leaves. Nothing of the rout stands under it (52A810(2)): what is shown is rest.
+        ROUT => {
+            if let Some(s) = host.combat_org() {
+                s.routing = None;
+                s.zoc_rescan = true;
+            }
+            let mv = host.state(MOVE)?;
+            if a.state(mv)?.status == 2 {
+                aa_mind::World::leave(host, mv, a)?;
+            }
+            a.state_mut(state)?.status = 0;
+            let o = host.o;
+            set_order(host.world, host.ms, Owner::Org(o), Order::Idle);
+        }
+        // 0x51DDF0: the Sleep leaves.
+        EXHAUSTED => {
+            if let Some(s) = host.combat_org() {
+                s.exhausted_state = false;
+            }
+            let sleep = host.state(SLEEP)?;
+            if a.state(sleep)?.status != 0 {
+                aa_mind::World::leave(host, sleep, a)?;
+            }
+            a.state_mut(state)?.status = 0;
+        }
         _ => return Ok(false),
     }
     Ok(true)
@@ -218,10 +381,6 @@ pub(super) fn think(host: &mut Regiment<'_>, offset: u32, a: &mut Arena) -> Opti
         Ok(s) => s,
         Err(e) => return Some(Err(e)),
     };
-    // A rout has begun in this update (`crate::morale`): 0x52A810(rout, 2).
-    if matches!(offset, KILL | CHASING | REFORM | ENGAGE) && host.world.combat.org(host.o).is_some_and(|c| c.routing.is_some()) {
-        return Some(host.state(SLEEP).and_then(|sleep| aa_mind::activate(sleep, 2, a, host).map(|_| ())));
-    }
     Some(match offset {
         KILL => {
             if let Some(t) = resolve_gtid(host.world, host.word(KILL_TARGET)) {
@@ -232,8 +391,394 @@ pub(super) fn think(host: &mut Regiment<'_>, offset: u32, a: &mut Arena) -> Opti
         CHASING => chasing_think(host, state, a),
         REFORM => reform_port::think(state, a, host, PC).map(|_| ()),
         ENGAGE => engage_think(host, state, a),
+        GUARD => cai_guard::think(state, a, host, PC).map(|_| ()),
+        EXPLORE => explore_port::think(state, a, host, PC).map(|_| ()),
+        // The task thinks for itself; an ended task ends the state.
+        BOMBARD => bombard_think(host, state, a),
+        ROUT => cai_rout::think(state, a, host, PC).map(|_| ()),
+        EXHAUSTED => exhausted_think(host, state, a),
         _ => return None,
     })
+}
+
+/// The Guard's Bombard: the task thinks for itself; an ended task ends the state.
+fn bombard_think(host: &mut Regiment<'_>, state: StateId, a: &mut Arena) -> aa_mind::Result<()> {
+    let bombarding = host.combat_org().is_some_and(|s| matches!(s.task, Some(combat::tasks::Task::Bombard(_))));
+    if !bombarding && a.state(state)?.status != 0 {
+        aa_mind::World::leave(host, state, a)?;
+    }
+    Ok(())
+}
+
+/// `0x51E260`: not steady, the Sleep's Think; steady and current, the state ends; else a
+/// Think in 1 s.
+fn exhausted_think(host: &mut Regiment<'_>, state: StateId, a: &mut Arena) -> aa_mind::Result<()> {
+    aa_mind::think_base(state, a)?;
+    if morale_state(host) != 2 {
+        return think_state(host, SLEEP, a);
+    }
+    if host.is_top(a, EXHAUSTED) {
+        aa_mind::pop(MindId(key(host.o)), a, host)?;
+        return Ok(());
+    }
+    think_in(host.world, host.o, f32::from_bits(ONE_BITS));
+    Ok(())
+}
+
+/// `0x578140`.
+pub(super) fn morale_state(host: &Regiment<'_>) -> u8 {
+    let i = host.o as usize;
+    host.world.combat.org(host.o).map_or(2, |s| crate::morale::state(s, host.world.orgs[i].morale))
+}
+
+/// `0x51FAE0`: the Exhausted state in mode 2.
+fn exhausted_begin(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result<()> {
+    let exhausted = host.state(EXHAUSTED)?;
+    aa_mind::activate(exhausted, 2, a, host)?;
+    Ok(())
+}
+
+/// Mind +0x178 `0x522B90`: the time of the current state is over. Reform: +0x11C. Rout:
+/// still exhausted the Exhausted state, else the stack goes on. Another state: a Think in
+/// 1 s. (The Retreat's arm, which walks on to its point, is `crate::orders`'.)
+fn time_over(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result<()> {
+    if host.is_top(a, REFORM) {
+        aa_mind::pop(MindId(key(host.o)), a, host)?;
+        return Ok(());
+    }
+    if host.is_top(a, ROUT) {
+        if morale_state(host) == 0 {
+            return exhausted_begin(host, a);
+        }
+        aa_mind::pop(MindId(key(host.o)), a, host)?;
+        return Ok(());
+    }
+    think_in(host.world, host.o, f32::from_bits(ONE_BITS));
+    Ok(())
+}
+
+/// The Guard arm of Mind +0x124 `0x5273D0` (`0x527440`): what is walking leaves, a Think
+/// in 0.6 s. The Rout arm (`0x527658`): as the time being over, and the next Think in
+/// 0.6 s. False: neither.
+pub(super) fn rout_move_failed(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result<bool> {
+    // 0x5273FD: the Explore's Move leaves, a Think in 0.6 s.
+    if host.is_top(a, EXPLORE) {
+        let mv = host.state(MOVE)?;
+        if a.state(mv)?.status == 2 {
+            aa_mind::World::leave(host, mv, a)?;
+        }
+        think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+        return Ok(true);
+    }
+    if host.is_top(a, GUARD) {
+        let (kill, bombard, mv) = (host.state(KILL)?, host.state(BOMBARD)?, host.state(MOVE)?);
+        if a.state(kill)?.status != 2 && a.state(bombard)?.status != 2 && a.state(mv)?.status == 2 {
+            aa_mind::World::leave(host, mv, a)?;
+        }
+        if a.state(kill)?.status == 2 {
+            aa_mind::World::leave(host, kill, a)?;
+        }
+        if a.state(bombard)?.status == 2 {
+            aa_mind::World::leave(host, bombard, a)?;
+        }
+        think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+        return Ok(true);
+    }
+    if !host.is_top(a, ROUT) {
+        return Ok(false);
+    }
+    if morale_state(host) == 0 {
+        exhausted_begin(host, a)?;
+        return Ok(true);
+    }
+    aa_mind::pop(MindId(key(host.o)), a, host)?;
+    think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+    Ok(true)
+}
+
+/// `0x51F920` and `0x51F9F0` from the morale (`0x579660`). `exhausted`: not with the
+/// Engage or the Rout current. `0x4D1080` is false for a regiment.
+pub(in crate::movement) fn morale_reaction(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, exhausted: bool) -> bool {
+    let result = with_regiment(ms, world, rules, o, |host, a| -> aa_mind::Result<bool> {
+        if host.is_top(a, ROUT) || (exhausted && host.is_top(a, ENGAGE)) {
+            return Ok(false);
+        }
+        // 0x52A810(rout, 2): the Exhausted state outranks it.
+        if in_stack(a, MindId(key(host.o)), host.state(EXHAUSTED)?) {
+            return Ok(false);
+        }
+        let rout = host.state(ROUT)?;
+        aa_mind::activate(rout, 2, a, host)
+    });
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            ms.note(format!("regiment {o} rout: {e}"));
+            false
+        }
+    }
+}
+
+/// `0x52A690`: how much of `delta` fits along `direction` past `base` inside the map.
+fn reachable(world: &World, origin: [u32; 2], direction: [u32; 2], base: u32, delta: u32) -> u32 {
+    let map = &world.map;
+    let (w, h) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
+    let [x, y] = origin.map(|v| f64::from(f32::from_bits(v)));
+    let [dx, dy] = direction.map(|v| f64::from(f32::from_bits(v)));
+    let (b, d) = (f64::from(f32::from_bits(base)), f64::from(f32::from_bits(delta)));
+    let far = b + d;
+    let (end_x, end_y) = ((dx * far + x) as f32, (y + dy * far) as f32);
+    let inside = |px: f32, py: f32| (0.0..w).contains(&px) && (0.0..h).contains(&py);
+    if inside(end_x, end_y) {
+        return delta;
+    }
+    // 0x4282A0: the near point.
+    if !inside((dx * b + x) as f32, (dy * b + y) as f32) {
+        return 0;
+    }
+    // 0x46EB30 -> 0x46E150, a box of the map's size about its middle: the far point kept
+    // in it.
+    let half_h = (f64::from(h) * 0.5) as f32;
+    let half_w = (f64::from(w) * 0.5) as f32;
+    let kept_x = (end_x - half_w).clamp(-half_w, half_w);
+    let kept_y = (end_y - half_h).clamp(-half_h, half_h);
+    let rx = (x - (f64::from(half_w) + f64::from(kept_x))) as f32;
+    let ry = y - (f64::from(half_h) + f64::from(kept_y));
+    let length = (f64::from(rx) * f64::from(rx) + ry * ry).sqrt();
+    ((length - b) as f32).to_bits()
+}
+
+/// `0x52B530` on the world's stream. The getter `0x4F02B0` logs once; the candidates draw
+/// from the object it gave (`0x52B4E4`, `0x52B629`, `0x52B699`, `0x52B8E8`, `0x52B9F5`).
+fn rout_destination(host: &mut Regiment<'_>) -> aa_mind::Result<Option<[u32; 2]>> {
+    let world = &mut *host.world;
+    world.trace.log(crate::trace::SKind::RngGetter(crate::trace::sites::ROUT_GETTER), world.native_rng.state);
+    let rule = |name: &str, shipped: f32| world.data.rule_ci(name).unwrap_or(shipped).to_bits();
+    let weights = rout_score::Weights {
+        base_value: rule("RoutBaseValue", 0.0),
+        factor_enemy_dist: rule("RoutFactorEnemyDist", 10.0),
+        factor_enemy_dist_cap: rule("RoutFactorEnemyDistCap", 2000.0),
+        factor_enemy_angle: rule("RoutFactorEnemyAngle", 0.25),
+        factor_moved_dist: rule("RoutFactorMovedDist", 8.0),
+        factor_moved_dist_cap: rule("RoutFactorMovedDistCap", 2000.0),
+        factor_supply_dist: rule("RoutFactorSupplyDist", 1.0),
+        factor_supply_dist_cap: rule("RoutFactorSupplyDistCap", 2000.0),
+        penalty_enemy_zoc: rule("RoutPenaltyEnemyZOC", 50.0),
+        penalty_enemy_zog: rule("RoutPenaltyEnemyZOG", 75.0),
+        bonus_friendly_zos: rule("RoutBonusFriendlyZOS", 50.0),
+        bonus_supply_in_range: rule("RoutBonusSupplyInRange", 50.0),
+        fuzziness: rule("RoutFuzziness", 20.0),
+    };
+    let i = host.o as usize;
+    let s = world.combat.org(host.o);
+    let engaged = s.map_or_else(Vec::new, |s| s.engaged_by.iter().map(|&e| gtid(TargetRef::Org(e))).collect());
+    let mut kingdoms = vec![Some(Vec::new()); world.kingdoms.len()];
+    for z in &world.books.zones {
+        if let Some(Some(list)) = kingdoms.get_mut(z.kingdom as usize) {
+            list.push(rout_score::SupplySource { position: bits(z.centre), radius: Some(z.radius.to_bits()) });
+        }
+    }
+    let min_distance = world.combat.org(host.o).map_or(world.data.def(world.orgs[i].def).control_range, |_| combat::control_radius(world, &world.combat, host.o));
+    let context = rout_select::Context {
+        score: rout_score::Context {
+            settings: rout_score::Settings { rout: weights, recover: weights },
+            map: rout_score::MapGeometry { shift: world.map.cell_size.log2() as u32, width: world.map.width as i32 },
+            organization: bits(world.orgs[i].anchor),
+            engaged,
+            kingdoms,
+        },
+        min_distance: min_distance.to_bits(),
+        random_candidates: world.data.rule_ci("RoutRandomCandidates").unwrap_or(20.0) as i32,
+        max_distance_delta: rule("RoutMaxDistanceDelta", 24.0),
+        supply_candidates: world.data.rule_ci("RoutSupplyZoneCandidates").unwrap_or(2.0) as i32,
+        supply_max_angle_delta: rule("RoutSupplyZoneMaxAngleDelta", 50.0),
+        directions: (0..2048u32).map(|d| aa_movement::formation::random_direction(d).map(f32::to_bits)).collect(),
+    };
+    rout_select::select(&context, host, PC)
+}
+
+impl rout_score::RoutWorld for Regiment<'_> {
+    fn actor_position(&mut self, g: u32) -> aa_mind::Result<Option<[u32; 2]>> {
+        Ok(resolve_gtid(self.world, g).map(|t| match t {
+            TargetRef::Org(o) => bits(self.world.orgs[o as usize].anchor),
+            TargetRef::Actor(a) => bits(pos2(self.world, a)),
+        }))
+    }
+    fn angle(&mut self, from: [u32; 2], to: [u32; 2], p: aa_numeric::Precision) -> aa_mind::Result<Binary> {
+        rout_score::native_angle(from, to, p)
+    }
+    fn owner(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.orgs[self.o as usize].kingdom)
+    }
+    /// `0x54EFC0`.
+    fn zone(&mut self, tile: i32, owner: u32, kind: u32) -> aa_mind::Result<u32> {
+        let Ok(tile) = usize::try_from(tile) else { return Ok(0) };
+        let Some(mut e) = self.world.fog.engine.take() else { return Ok(0) };
+        let found = e.enemy_zone(self.world, tile, owner, kind);
+        self.world.fog.engine = Some(e);
+        Ok(found)
+    }
+    /// `0x54F8B0(tile, owner, organization)`.
+    fn friendly_zone(&mut self, tile: i32, owner: u32, _: bool) -> aa_mind::Result<bool> {
+        let Ok(tile) = usize::try_from(tile) else { return Ok(false) };
+        let Some(mut e) = self.world.fog.engine.take() else { return Ok(false) };
+        let found = e.friendly_supply(self.world, tile, Some(owner), crate::zones::Key::Org(self.o));
+        self.world.fog.engine = Some(e);
+        Ok(found)
+    }
+    /// Kingdom virtual +0x138.
+    fn kingdom_allied(&mut self, slot: usize, owner: u32) -> aa_mind::Result<bool> {
+        Ok(matches!(crate::setup::relation(self.world, Some(owner), Some(slot as KingdomId)), crate::books::SELF | crate::books::FRIEND))
+    }
+    /// A draw from the object of the one getter: no S entry.
+    fn random(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.native_rng.next_u32())
+    }
+}
+
+impl rout_select::SelectWorld for Regiment<'_> {
+    fn organization_virtual_4(&mut self) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    fn reachable_delta(&mut self, origin: [u32; 2], direction: [u32; 2], base: u32, delta: u32) -> aa_mind::Result<u32> {
+        Ok(reachable(self.world, origin, direction, base, delta))
+    }
+    /// `0x4F46E0(organization, &position, 4.0)`. **Rendition:** the descriptor is the
+    /// leader's (no thing is hosted for the banner).
+    fn find_open_position(&mut self, position: &mut [u32; 2], radius: u32) -> aa_mind::Result<bool> {
+        let Some(leader) = self.leader() else { return Ok(false) };
+        Ok(route::nearest_placement(self.ms, self.world, leader, position, radius).unwrap_or(false))
+    }
+}
+
+impl cai_rout::RoutEnterWorld for Regiment<'_> {
+    fn world_time(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.clock.begin.0)
+    }
+    fn set_entered_time(&mut self, _: StateId, time: u32) -> aa_mind::Result<()> {
+        self.set_word(ROUT_ENTERED, time);
+        Ok(())
+    }
+    /// `0x4D3FA0`: the attackers' breaker morale and rout experience.
+    fn organization_halt(&mut self, _: &mut Arena) -> aa_mind::Result<()> {
+        let o = self.o;
+        let mut st = std::mem::take(&mut self.world.combat);
+        crate::morale::rout_handler(self.world, &mut st, o);
+        self.world.combat = st;
+        Ok(())
+    }
+    fn release_command(&mut self, _: u32) -> aa_mind::Result<()> {
+        Ok(())
+    }
+}
+
+impl cai_rout::RoutThinkWorld for Regiment<'_> {
+    fn world_time(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.clock.begin.0)
+    }
+    fn routing_time(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.combat.rules.as_deref().map_or(25.0f32, |r| r.routing_time).to_bits())
+    }
+    fn entered_time(&mut self, _: StateId) -> aa_mind::Result<u32> {
+        Ok(self.word(ROUT_ENTERED))
+    }
+    fn end_rout(&mut self, a: &mut Arena) -> aa_mind::Result<()> {
+        time_over(self, a)
+    }
+    fn move_status(&mut self, a: &Arena) -> aa_mind::Result<u32> {
+        Ok(a.state(self.state(MOVE)?)?.status)
+    }
+    fn select_destination(&mut self, _: &mut Arena) -> aa_mind::Result<Option<[u32; 2]>> {
+        rout_destination(self)
+    }
+    /// `0x520440(0, destination, 0, null)`.
+    fn activate_move(&mut self, destination: [u32; 2], a: &mut Arena) -> aa_mind::Result<()> {
+        let to = vec2(destination);
+        let o = self.o;
+        // The fields a new Move starts from; a target here keeps `start` from activating.
+        let any = alive_members(self.world, o).next();
+        if let Some(any) = any {
+            start(self.ms, self.world, Owner::Org(o), to, Vec2::ZERO, Some(any), false, None, None);
+            self.order().target = None;
+        }
+        let speed = self.order().speed.to_bits();
+        self.activate_move_fields(to, 0, speed, [0, 0], a)?;
+        if let Some(s) = self.combat_org()
+            && let Some(r) = s.routing.as_mut()
+        {
+            r.destination = Some(to);
+        }
+        set_order(self.world, self.ms, Owner::Org(o), Order::Move { to, attack_move: false });
+        Ok(())
+    }
+    fn schedule(&mut self, delay_bits: u32, _: &mut Arena) -> aa_mind::Result<()> {
+        think_in(self.world, self.o, f32::from_bits(delay_bits));
+        Ok(())
+    }
+    fn has_current_command(&mut self, _: &Arena) -> aa_mind::Result<bool> {
+        Ok(false)
+    }
+    fn mark_command_destination(&mut self, _: &mut Arena) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    fn move_destination(&mut self, _: &Arena) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(self.order().destination))
+    }
+    fn actor_position(&mut self, _: &Arena) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(self.world.orgs[self.o as usize].anchor))
+    }
+    fn reached(&mut self, a: &mut Arena) -> aa_mind::Result<()> {
+        self.finished(a)
+    }
+    fn move_think(&mut self, a: &mut Arena) -> aa_mind::Result<()> {
+        think_state(self, MOVE, a)
+    }
+}
+
+/// Organization +0x74 as `0x57BFF0` chooses it from the current state's
+/// formation_required (`0x4D49B0(4)`, its +0x20): DESIRED +0x70, BROKEN none, COMBAT the
+/// layout's +0x44, RETREAT the layout's +0x48. `top` is the Mind's current state.
+pub(in crate::movement) fn required_formation(world: &World, o: OrgId, a: &Arena) -> Option<usize> {
+    let def = world.data.def(world.orgs[o as usize].def);
+    let desired = crate::player_orders::desired_formation(world, o);
+    let combat = || def.combat_formation.or(desired);
+    let s = world.combat.org(o);
+    let status = |offset: u32| world.books.minds.state(key(o), offset).and_then(|st| a.state(st).ok()).map_or(0, |x| x.status);
+    let top = a.mind(MindId(key(o))).ok().and_then(|m| m.stack.front().copied().flatten()).and_then(|st| world.books.minds.owner(st)).map(|x| x.1);
+    match s.and_then(|s| s.task.as_ref()) {
+        // mind_bombard COMBAT; mind_repairing, mind_building BROKEN.
+        Some(combat::tasks::Task::Bombard(_)) => return combat(),
+        Some(_) => return None,
+        None => {}
+    }
+    match top {
+        Some(ROUT | CHASING) => None,
+        Some(ENGAGE) => combat(),
+        // 0x51D8F0: a move command's Kill state is mind_moving.
+        Some(KILL) if s.is_some_and(|s| s.kill_is_move) => desired,
+        Some(KILL) => combat(),
+        // 0x51DC20: what the Guard does is what it reports: its Kill, mind_attacking; its
+        // Move, mind_moving; standing, mind_guarding.
+        Some(GUARD) if status(KILL) == 2 => combat(),
+        Some(GUARD) if status(MOVE) == 2 => desired,
+        Some(GUARD) => combat(),
+        // 0x520250: the Move state's command kind 7 reports mind_retreating.
+        Some(MOVE) if crate::orders::retreating(world, o) => def.retreat_formation.or(desired),
+        _ => desired,
+    }
+}
+
+/// `0x57C400` -> `0x57BFF0` when the state changes: `0x57BF50` takes the old formation's
+/// property off and puts the new one's on, the slot table is recomputed (`0x57BEF0`), and
+/// the members' Mover maximum follows. The same formation does nothing.
+pub(super) fn formation_follow(host: &mut Regiment<'_>, a: &Arena) {
+    let o = host.o;
+    let required = required_formation(host.world, o, a);
+    if crate::player_orders::formation(host.world, o) != required {
+        set_formation_in(host.ms, host.world, o, |world| {
+            world.player_orders.current_formation.insert(o, required);
+        });
+    }
 }
 
 /// `0x523930`.
@@ -293,7 +838,7 @@ fn chase_continues(host: &mut Regiment<'_>, g: u32, a: &Arena) -> bool {
             return false;
         }
     }
-    !combat::thing_in_zoc(host.world, host.o, t)
+    !combat::thing_in_zoc(host.world, host.o, t, true)
 }
 
 /// Mind virtual +0x4C `0x522700`: the Kill state's target while it is on the stack.
@@ -343,9 +888,25 @@ fn fstp_len2(a: Vec2, b: Vec2) -> f32 {
 }
 
 /// Mind virtual +0x140 `EventTargetGone` `0x521F90`.
-pub(super) fn target_gone(host: &mut Regiment<'_>, _g: u32, a: &mut Arena) -> aa_mind::Result<()> {
+pub(super) fn target_gone(host: &mut Regiment<'_>, g: u32, a: &mut Arena) -> aa_mind::Result<()> {
     let mind = MindId(key(host.o));
     let immediate = f32::from_bits(IMMEDIATE_BITS);
+    // The Guard: its guarded thing ends it; a threat that goes leaves its Kill or Bombard.
+    if host.is_top(a, GUARD) {
+        if g == host.word(GUARDED) {
+            return aa_mind::pop(mind, a, host);
+        }
+        let (kill, bombard) = (host.state(KILL)?, host.state(BOMBARD)?);
+        if a.state(kill)?.status == 2 && g == host.word(KILL_TARGET) {
+            aa_mind::World::leave(host, kill, a)?;
+        }
+        if a.state(bombard)?.status == 2 && g == host.word(BOMBARD + 0x10) {
+            aa_mind::World::leave(host, bombard, a)?;
+        }
+        think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+        guard_reflect(host, a);
+        return Ok(());
+    }
     if host.is_top(a, ENGAGE) {
         let k = host.word(KILL_TARGET);
         if chase_continues(host, k, a) && chase_begin(host, resolve_gtid(host.world, k), a)? {
@@ -372,7 +933,7 @@ pub(super) fn target_gone(host: &mut Regiment<'_>, _g: u32, a: &mut Arena) -> aa
     }
     if host.is_top(a, CHASING) {
         // 0x51F100: the list keeps only what its ZOC holds.
-        let keep: Vec<_> = host.list().nodes.into_iter().filter(|n| resolve_gtid(host.world, n.gtid).is_some_and(|t| combat::thing_in_zoc(host.world, host.o, t))).collect();
+        let keep: Vec<_> = host.list().nodes.into_iter().filter(|n| resolve_gtid(host.world, n.gtid).is_some_and(|t| combat::thing_in_zoc(host.world, host.o, t, true))).collect();
         host.store_list(&Targets { nodes: keep.clone() });
         if !keep.is_empty() {
             let engage = host.state(ENGAGE)?;
@@ -511,6 +1072,16 @@ pub(super) fn refresh(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result
 /// what cannot be engaged is gone (Mind +0x140); short of it the Move has failed
 /// (Mind +0x124). Chasing and the other states think again in 1e-4. False: not these.
 pub(super) fn reached(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result<bool> {
+    // 0x522567: at the rout's point. Still exhausted the Exhausted state, else the Reform.
+    if host.is_top(a, ROUT) {
+        if morale_state(host) == 0 {
+            exhausted_begin(host, a)?;
+        } else {
+            let reform = host.state(REFORM)?;
+            aa_mind::activate(reform, 1, a, host)?;
+        }
+        return Ok(true);
+    }
     let kill = host.state(KILL)?;
     if a.state(kill)?.status == 2 {
         let g = host.word(KILL_TARGET);
@@ -528,7 +1099,561 @@ pub(super) fn reached(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result
         think_in(host.world, host.o, f32::from_bits(IMMEDIATE_BITS));
         return Ok(true);
     }
+    // 0x51E1B0: the Move leaves, then the next update (0x52245F) in 0.6 s.
+    if host.is_top(a, EXPLORE) {
+        let mv = host.state(MOVE)?;
+        if a.state(mv)?.status == 2 {
+            aa_mind::World::leave(host, mv, a)?;
+        }
+        think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+        return Ok(true);
+    }
+    // 0x52243C: at the stand point the Move leaves, a Think in 0.6 s.
+    if host.is_top(a, GUARD) {
+        let (bombard, mv) = (host.state(BOMBARD)?, host.state(MOVE)?);
+        if a.state(bombard)?.status != 2 && a.state(mv)?.status == 2 {
+            aa_mind::World::leave(host, mv, a)?;
+        }
+        think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+        guard_reflect(host, a);
+        return Ok(true);
+    }
     Ok(false)
+}
+
+/// `0x520440(0, point, 0, auxiliary)`: the embedded Move at a point, from a new Move's
+/// fields (a target given keeps `start` from activating it).
+fn walk_point(host: &mut Regiment<'_>, to: Vec2, auxiliary: [u32; 2], a: &mut Arena) -> aa_mind::Result<()> {
+    let o = host.o;
+    let any = alive_members(host.world, o).next();
+    if let Some(any) = any {
+        start(host.ms, host.world, Owner::Org(o), to, Vec2::ZERO, Some(any), false, None, None);
+        host.order().target = None;
+    }
+    let speed = host.order().speed.to_bits();
+    host.activate_move_fields(to, 0, speed, auxiliary, a)?;
+    Ok(())
+}
+
+/// `0x5249A0`: with flag bit 4 and a scalar of 1.0 and the state active, a new waypoint;
+/// else `0x524100`: a coordinate below 1 is 1, the waypoint and the target there, kind 1,
+/// the target scored (`0x5213E0`), the state in mode 2.
+pub(in crate::movement) fn explore_command(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, at: Vec2, scalar: Option<f32>) -> bool {
+    let result = with_regiment(ms, world, rules, o, |host, a| -> aa_mind::Result<bool> {
+        let explore = host.state(EXPLORE)?;
+        let at = Vec2::new(if at.x < 1.0 { 1.0 } else { at.x }, if at.y < 1.0 { 1.0 } else { at.y });
+        let [x, y] = bits(at);
+        if scalar == Some(1.0) && a.state(explore)?.status == 2 {
+            host.set_word(EXPLORE_POINT, x);
+            host.set_word(EXPLORE_POINT + 4, y);
+            return Ok(true);
+        }
+        host.set_word(EXPLORE_POINT, x);
+        host.set_word(EXPLORE_POINT + 4, y);
+        let mut target = explore_port::Candidate { x, y, score: 0, count: 0, word: 1 };
+        explore_score(host, &mut target, 0, a)?;
+        for (k, w) in target.words().into_iter().enumerate() {
+            host.set_word(EXPLORE_TARGET + 4 * k as u32, w);
+        }
+        if let Some(s) = host.combat_org() {
+            s.task = None;
+            s.task_order = None;
+        }
+        aa_mind::activate(explore, 2, a, host)
+    });
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            ms.note(format!("regiment {o} explore: {e}"));
+            false
+        }
+    }
+}
+
+/// `0x5213E0`: the candidate's fog count (2 unexplored, 1 grey, 0 seen) and its score. It
+/// moves to the first open place (`0x4F46E0`, radius 2); no place, or a count below the
+/// best's, refuses it. **Rendition:** `ExploreFinishAreaBonus` (the regions of `0x7AA3D0`)
+/// is not added.
+fn explore_score(host: &mut Regiment<'_>, c: &mut explore_port::Candidate, best_count: u32, _: &mut Arena) -> aa_mind::Result<()> {
+    let refuse = |c: &mut explore_port::Candidate| {
+        c.x = 0xbf80_0000;
+        c.y = 0xbf80_0000;
+        c.count = 0;
+    };
+    let mut point = [c.x, c.y];
+    let placed = host.leader().is_some_and(|l| route::nearest_placement(host.ms, host.world, l, &mut point, 0x4000_0000).unwrap_or(false));
+    if !placed {
+        refuse(c);
+        return Ok(());
+    }
+    [c.x, c.y] = point;
+    let p = vec2(point);
+    let o = host.o;
+    let count = crate::orders::explore::fog_count(host.world, host.world.orgs[o as usize].kingdom, p) as u32;
+    c.count = count;
+    if (count as i32) < best_count as i32 {
+        refuse(c);
+        return Ok(());
+    }
+    let rule = |host: &Regiment<'_>, name: &str, shipped: f32| f64::from(host.world.data.rule_ci(name).unwrap_or(shipped));
+    let mut score = match c.word {
+        0 => rule(host, "ExploreActorBaseValue", 40.0),
+        1 => rule(host, "ExploreWaypointBaseValue", 0.0),
+        _ => f64::from(f32::from_bits(c.score)),
+    } as f32;
+    let way = vec2([host.word(EXPLORE_POINT), host.word(EXPLORE_POINT + 4)]);
+    let (dx, dy) = (f64::from(p.x) - f64::from(way.x), f64::from(p.y) - f64::from(way.y));
+    score = ((dx * dx + dy * dy).sqrt() * rule(host, "ExploreDistanceMultiplier", -1.0) + f64::from(score)) as f32;
+    let target = vec2([host.word(EXPLORE_TARGET), host.word(EXPLORE_TARGET + 4)]);
+    let map = &host.world.map;
+    let (w, h) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
+    if (0.0..w).contains(&target.x) && (0.0..h).contains(&target.y) {
+        let own = host.world.orgs[o as usize].anchor;
+        let unit = |v: Vec2| {
+            let l = v.length();
+            if l > 0.0001 { v / l } else { Vec2::ZERO }
+        };
+        let (u, v) = (unit(target - own), unit(p - own));
+        let dot = f64::from(u.x) * f64::from(v.x) + f64::from(v.y) * f64::from(u.y);
+        score = (dot * rule(host, "ExploreDotProductMultiplier", 20.0) + f64::from(score)) as f32;
+    }
+    // 0x5216D7: the getter and its draw.
+    let fuzz = rule(host, "ExploreFuzzyFactor", 20.0);
+    let u = crate::trace::native_unit(host.world.random_u32_at("site 5216d7"));
+    c.score = ((f64::from(u) * fuzz + f64::from(score)) as f32).to_bits();
+    Ok(())
+}
+
+impl explore_port::ExploreThinkWorld for Regiment<'_> {
+    /// Organization +0x164. **Rendition:** a group's following has no host here.
+    fn organization_word164(&mut self, _: MindId) -> aa_mind::Result<u32> {
+        Ok(0)
+    }
+    fn group_4dce60(&mut self, _: u32, _: MindId, _: &mut Arena) -> aa_mind::Result<bool> {
+        Ok(true)
+    }
+    fn group_4dcf00(&mut self, _: u32, _: StateId, _: &mut Arena) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    fn group_word194(&mut self, _: u32) -> aa_mind::Result<u32> {
+        Ok(0)
+    }
+    fn object_mind(&mut self, _: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(None)
+    }
+    fn mind_explore_target(&mut self, _: u32) -> aa_mind::Result<[u32; 5]> {
+        Ok([0; 5])
+    }
+    fn explore_target(&mut self, _: StateId) -> aa_mind::Result<[u32; 5]> {
+        Ok(std::array::from_fn(|k| self.word(EXPLORE_TARGET + 4 * k as u32)))
+    }
+    fn set_explore_target(&mut self, _: StateId, target: [u32; 5]) -> aa_mind::Result<()> {
+        for (k, w) in target.into_iter().enumerate() {
+            self.set_word(EXPLORE_TARGET + 4 * k as u32, w);
+        }
+        Ok(())
+    }
+    fn explore_point(&mut self, _: StateId) -> aa_mind::Result<[u32; 2]> {
+        Ok([self.word(EXPLORE_POINT), self.word(EXPLORE_POINT + 4)])
+    }
+    /// `0x4282A0`.
+    fn region_contains(&mut self, point: [u32; 2], _: &mut Arena) -> aa_mind::Result<bool> {
+        let [w, h] = self.extents().extent_bits;
+        let p = vec2(point);
+        Ok((0.0..f32::from_bits(w)).contains(&p.x) && (0.0..f32::from_bits(h)).contains(&p.y))
+    }
+    /// `0x552640`.
+    fn region_clamp(&mut self, _: StateId, _: &mut Arena) -> aa_mind::Result<()> {
+        let p = vec2([self.word(EXPLORE_POINT), self.word(EXPLORE_POINT + 4)]);
+        let [x, y] = bits(clamp_extent(self.world, p));
+        self.set_word(EXPLORE_POINT, x);
+        self.set_word(EXPLORE_POINT + 4, y);
+        Ok(())
+    }
+    fn region_size(&mut self) -> aa_mind::Result<[u32; 2]> {
+        Ok(self.extents().extent_bits)
+    }
+    fn organization_position(&mut self, _: MindId) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(self.world.orgs[self.o as usize].anchor))
+    }
+    fn explore_radius(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.data.rule_ci("ExploreInertiaCloseEnough").unwrap_or(3.0).to_bits())
+    }
+    fn candidate_counts(&mut self) -> aa_mind::Result<[u32; 2]> {
+        Ok([self.world.data.rule_ci("ExploreNumActorLocations").unwrap_or(20.0) as u32, self.world.data.rule_ci("ExploreNumWaypointLocations").unwrap_or(20.0) as u32])
+    }
+    /// `0x524170`: the table direction (`0x5241B3`) and the radius (`0x5241E7`) from the
+    /// organization, scored when it is on the map.
+    fn candidate_524170(&mut self, _: StateId, best_count: u32, c: &mut explore_port::Candidate, a: &mut Arena) -> aa_mind::Result<()> {
+        let min = self.world.data.rule_ci("ExploreActorRadiusMin").unwrap_or(20.0);
+        let max = self.world.data.rule_ci("ExploreActorRadiusMax").unwrap_or(30.0);
+        let draw = self.world.random_u32_at("site 5241b3");
+        let direction = aa_movement::formation::random_direction(draw);
+        let u = crate::trace::native_unit(self.world.random_u32_at("site 5241e7"));
+        let radius = (f64::from(u) * f64::from(max - min) + f64::from(min)) as f32;
+        let own = self.world.orgs[self.o as usize].anchor;
+        let x = (f64::from(direction[0]) * f64::from(radius) + f64::from(own.x)) as f32;
+        let y = (f64::from(direction[1]) * f64::from(radius) + f64::from(own.y)) as f32;
+        c.word = 0;
+        c.x = x.to_bits();
+        c.y = y.to_bits();
+        let map = &self.world.map;
+        let (w, h) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
+        if (0.0..w).contains(&x) && (0.0..h).contains(&y) {
+            explore_score(self, c, best_count, a)?;
+        }
+        Ok(())
+    }
+    /// `0x5242C0`: the table direction (`0x52430B`) and a walk along the ray into the fog.
+    /// **Rendition:** the walk is its bisection (`crate::orders::explore`).
+    fn candidate_5242c0(&mut self, _: StateId, best_count: u32, c: &mut explore_port::Candidate, a: &mut Arena) -> aa_mind::Result<()> {
+        let draw = self.world.random_u32_at("site 52430b");
+        let direction = Vec2::from(aa_movement::formation::random_direction(draw));
+        let way = vec2([self.word(EXPLORE_POINT), self.word(EXPLORE_POINT + 4)]);
+        let o = self.o;
+        let Some(p) = crate::orders::explore::ray_into_fog(self.world, o, way, direction) else {
+            c.x = 0xbf80_0000;
+            c.y = 0xbf80_0000;
+            c.count = 0;
+            return Ok(());
+        };
+        [c.x, c.y] = bits(p);
+        c.word = 1;
+        explore_score(self, c, best_count, a)
+    }
+    /// `0x4F46E0(organization, &candidate, 4.0)`. **Rendition:** the descriptor is the
+    /// leader's.
+    fn world_4f46e0(&mut self, _: MindId, c: &explore_port::Candidate, radius: u32, _: &mut Arena) -> aa_mind::Result<bool> {
+        let mut point = [c.x, c.y];
+        let Some(leader) = self.leader() else { return Ok(false) };
+        Ok(route::nearest_placement(self.ms, self.world, leader, &mut point, radius).unwrap_or(false))
+    }
+    fn null_point(&mut self) -> aa_mind::Result<[u32; 2]> {
+        Ok([0, 0])
+    }
+    fn move_order(&mut self, _: MindId, args: [u32; 6], a: &mut Arena) -> aa_mind::Result<()> {
+        let to = vec2([args[1], args[2]]);
+        walk_point(self, to, [args[4], args[5]], a)?;
+        let o = self.o;
+        set_order(self.world, self.ms, Owner::Org(o), Order::Move { to, attack_move: false });
+        Ok(())
+    }
+    /// `0x51E9B0(x, y)` on the running Move.
+    fn move_retarget(&mut self, _: MindId, point: [u32; 2], _: &mut Arena) -> aa_mind::Result<()> {
+        let extents = self.extents();
+        self.run_on_fields(|fields, host| cm::set_destination(fields, point, extents, PC, host).map_err(err))?;
+        let o = self.o;
+        set_order(self.world, self.ms, Owner::Org(o), Order::Move { to: vec2(point), attack_move: false });
+        Ok(())
+    }
+}
+
+/// The embedded states of the Guard, as `0x529420` leaves them.
+fn leave_embedded(host: &mut Regiment<'_>, a: &mut Arena) -> aa_mind::Result<()> {
+    for offset in [KILL, BOMBARD, MOVE, SLEEP] {
+        let s = host.state(offset)?;
+        if a.state(s)?.status != 0 {
+            aa_mind::World::leave(host, s, a)?;
+        }
+    }
+    Ok(())
+}
+
+/// `0x51EE20`: the point of a guarded thing, from it along the direction (+0x24, else from
+/// the thing to the regiment, else the regiment's facing) by its radius and half the
+/// regiment's. True when the point moved (`0x51D510`: more than 0.0002 in `|dx| + |dy|`).
+fn guard_stand_point(host: &mut Regiment<'_>) -> bool {
+    let Some(t) = resolve_gtid(host.world, host.word(GUARDED)) else { return false };
+    let o = host.o;
+    let at = match t {
+        TargetRef::Org(g) => host.world.orgs[g as usize].anchor,
+        TargetRef::Actor(x) => pos2(host.world, x),
+    };
+    let aux = vec2([host.word(GUARD_AUX), host.word(GUARD_AUX + 4)]);
+    let direction = if f64::from(aux.y) * f64::from(aux.y) + f64::from(aux.x) * f64::from(aux.x) <= f64::from(f32::from_bits(0x38d1_b717)) {
+        let d = host.world.orgs[o as usize].anchor - at;
+        let length = d.length();
+        if length == 0.0 {
+            let facing = host.ms.orgs[o as usize].facing;
+            if facing != Vec2::ZERO { facing } else { facing_vector(host.world.orgs[o as usize].heading) }
+        } else if length > 0.0001 {
+            d / length
+        } else {
+            Vec2::ZERO
+        }
+    } else {
+        aux
+    };
+    let own = host.world.data.def(host.world.orgs[o as usize].def).control_range;
+    let radius = match t {
+        TargetRef::Actor(x) => crate::orders::guard::shape_radius(def_of(host.world, x)),
+        TargetRef::Org(g) => crate::orders::guard::shape_radius(host.world.data.def(host.world.orgs[g as usize].def)),
+    };
+    let reach = f64::from(own) * 0.5 + f64::from(radius);
+    let p = Vec2::new((f64::from(direction.x) * reach + f64::from(at.x)) as f32, (f64::from(at.y) + f64::from(direction.y) * reach) as f32);
+    let old = vec2([host.word(GUARD_POINT), host.word(GUARD_POINT + 4)]);
+    if (p.x - old.x).abs() + (p.y - old.y).abs() <= 0.0002 {
+        return false;
+    }
+    let [x, y] = bits(p);
+    host.set_word(GUARD_POINT, x);
+    host.set_word(GUARD_POINT + 4, y);
+    let [dx, dy] = bits(direction);
+    host.set_word(SLEEP_POINT, dx);
+    host.set_word(SLEEP_POINT + 4, dy);
+    true
+}
+
+/// What the rest of the game reads of the Guard's action: the walk, the kill or rest.
+fn guard_reflect(host: &mut Regiment<'_>, a: &Arena) {
+    let o = host.o;
+    let (Ok(kill), Ok(mv)) = (host.state(KILL), host.state(MOVE)) else { return };
+    let order = if a.state(kill).is_ok_and(|s| s.status == 2) {
+        resolve_gtid(host.world, host.word(KILL_TARGET)).and_then(|t| combat::representative(host.world, t)).map_or(Order::Idle, |t| Order::Attack { target: t })
+    } else if a.state(mv).is_ok_and(|s| s.status == 2) {
+        Order::Move { to: host.order().destination, attack_move: false }
+    } else {
+        Order::Idle
+    };
+    if host.world.orgs[o as usize].order != order {
+        set_order(host.world, host.ms, Owner::Org(o), order);
+    }
+}
+
+/// `0x51F360`: `0x51DC80` on a thing, `0x51DD30` on a point. The same guard again only
+/// wakes a Mind with no Think to come, in 0.6 s. False when refused.
+pub(in crate::movement) fn guard_command(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, target: Option<TargetRef>, at: Vec2, aux: Vec2) -> bool {
+    let result = with_regiment(ms, world, rules, o, |host, a| -> aa_mind::Result<bool> {
+        let guarded = target.map_or(0, gtid);
+        let [ax, ay] = bits(aux);
+        let current = host.is_top(a, GUARD) && host.word(GUARDED) == guarded;
+        if current {
+            // A saved Guard comes back through its command.
+            let o = host.o;
+            host.world.orders.orgs.insert(o, crate::orders::MindState::Guard);
+        }
+        if let Some(t) = target {
+            if current {
+                if !host.world.is_scheduled(Sched::OrgMind(host.o)) {
+                    think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+                }
+                return Ok(true);
+            }
+            if t == TargetRef::Org(host.o) {
+                return Ok(false);
+            }
+        } else {
+            host.world.books.minds.set_byte(key(host.o), GUARD_PLACED, 0);
+            host.set_word(GUARD_AUX, ax);
+            host.set_word(GUARD_AUX + 4, ay);
+            if current && vec2([host.word(GUARD_POINT), host.word(GUARD_POINT + 4)]) == at {
+                if !host.world.is_scheduled(Sched::OrgMind(host.o)) {
+                    think_in(host.world, host.o, f32::from_bits(POINT_SIX_BITS));
+                }
+                return Ok(true);
+            }
+        }
+        // 0x529C00: the Rout and Exhausted states outrank it.
+        if host.is_top(a, ROUT) || host.is_top(a, EXHAUSTED) {
+            return Ok(false);
+        }
+        let point = match target {
+            Some(TargetRef::Org(g)) => host.world.orgs[g as usize].anchor,
+            Some(TargetRef::Actor(x)) => pos2(host.world, x),
+            None => at,
+        };
+        let o = host.o;
+        host.world.books.minds.set_byte(key(o), GUARD_PLACED, 0);
+        host.set_word(GUARD_AUX, ax);
+        host.set_word(GUARD_AUX + 4, ay);
+        host.set_word(GUARDED, guarded);
+        let [x, y] = bits(point);
+        host.set_word(GUARD_POINT, x);
+        host.set_word(GUARD_POINT + 4, y);
+        if let Some(s) = host.combat_org() {
+            s.task = None;
+            s.task_order = None;
+        }
+        let guard = host.state(GUARD)?;
+        aa_mind::activate(guard, 2, a, host)
+    });
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            ms.note(format!("regiment {o} guard: {e}"));
+            false
+        }
+    }
+}
+
+impl cai_guard::GuardThinkWorld for Regiment<'_> {
+    fn guarded(&mut self, _: StateId) -> aa_mind::Result<u32> {
+        Ok(self.word(GUARDED))
+    }
+    fn resolve(&mut self, g: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(resolve_gtid(self.world, g).map(handle))
+    }
+    fn object_removed(&mut self, object: u32) -> aa_mind::Result<bool> {
+        Ok(!combat::target_alive(self.world, thing(object)))
+    }
+    fn object_gtid(&mut self, object: u32) -> aa_mind::Result<u32> {
+        Ok(object.wrapping_add(1))
+    }
+    fn mind_virtual_140(&mut self, _: MindId, g: u32, a: &mut Arena) -> aa_mind::Result<()> {
+        target_gone(self, g, a)
+    }
+    /// The settled test (`0x585160`) reads false here, as the home has no host.
+    fn object_virtual_158(&mut self, _: u32) -> aa_mind::Result<bool> {
+        Ok(false)
+    }
+    fn object_virtual_15c(&mut self, _: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(None)
+    }
+    fn denizen_component(&mut self, object: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(match thing(object) {
+            TargetRef::Actor(x) if def_of(self.world, x).denizen.is_some() => Some(object),
+            _ => None,
+        })
+    }
+    fn component_byte20(&mut self, _: u32) -> aa_mind::Result<bool> {
+        Ok(false)
+    }
+    fn object_word98(&mut self, _: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(None)
+    }
+    fn check_585160(&mut self, _: u32) -> aa_mind::Result<bool> {
+        Ok(false)
+    }
+    /// `0x569300`. **Rendition:** the denizen's intruders are read as the hostile
+    /// organizations in its guard range now (`crate::orders::guard`).
+    fn component_threats(&mut self, component: u32) -> aa_mind::Result<Vec<u32>> {
+        let TargetRef::Actor(x) = thing(component) else { return Ok(Vec::new()) };
+        let list = crate::orders::guard::intruders(self.world, &self.world.combat, Unit::Actor(x)).unwrap_or_default();
+        Ok(list.into_iter().map(|e| gtid(TargetRef::Org(e))).collect())
+    }
+    /// Object +0x118: who has it on an engage list.
+    fn object_threats(&mut self, object: u32) -> aa_mind::Result<Vec<u32>> {
+        let unit = match thing(object) {
+            TargetRef::Org(g) => Unit::Org(g),
+            TargetRef::Actor(x) => Unit::Actor(x),
+        };
+        let list = crate::orders::guard::attackers(self.world, &self.world.combat, unit);
+        Ok(list.into_iter().map(|e| gtid(TargetRef::Org(e))).collect())
+    }
+    fn object_mind(&mut self, object: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(Some(object))
+    }
+    /// Mind +0x90: what the guarded thing is fighting.
+    fn object_mind_virtual_90(&mut self, object: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(match thing(object) {
+            TargetRef::Org(g) => self.world.combat.org(g).and_then(|s| s.current_target()).map(handle),
+            TargetRef::Actor(x) => self.world.actors[x as usize].combat.target.filter(|&t| alive(self.world, t)),
+        })
+    }
+    fn state_target(&mut self, _: MindId, offset: u32) -> aa_mind::Result<u32> {
+        Ok(self.word(offset + 0x10))
+    }
+    fn embedded_state(&mut self, _: MindId, offset: u32) -> aa_mind::Result<StateId> {
+        self.state(offset)
+    }
+    fn object_position(&mut self, object: u32) -> aa_mind::Result<[u32; 2]> {
+        Ok(match thing(object) {
+            TargetRef::Org(g) => bits(self.world.orgs[g as usize].anchor),
+            TargetRef::Actor(x) => bits(pos2(self.world, x)),
+        })
+    }
+    fn organization_position(&mut self, _: MindId) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(self.world.orgs[self.o as usize].anchor))
+    }
+    fn guard_old_target_bias(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.world.data.rule_ci("GuardOldTargetBias").unwrap_or(0.0).to_bits())
+    }
+    fn embedded_think(&mut self, _: MindId, offset: u32, a: &mut Arena) -> aa_mind::Result<()> {
+        think_state(self, offset, a)
+    }
+    /// `0x4D4FF0(object, 3, 0)`. **Rendition:** a layout that fires indirect with a member
+    /// that reaches the point (`crate::combat::tasks::point_relation`).
+    fn relation(&mut self, _: MindId, object: u32) -> aa_mind::Result<i32> {
+        let Some(rep) = combat::representative(self.world, thing(object)) else { return Ok(1) };
+        let at = pos2(self.world, rep);
+        let o = self.o;
+        let reaches = crate::orders::guess::bombard_layout(self.world, o) && self.world.orgs[o as usize].members.iter().any(|&m| alive(self.world, m) && combat::tasks::point_relation(self.world, m, at) == 0);
+        Ok(i32::from(!reaches))
+    }
+    /// `0x527CE0(mode, object)`.
+    fn guard_527ce0(&mut self, _: StateId, mode: u32, object: u32, a: &mut Arena) -> aa_mind::Result<()> {
+        leave_embedded(self, a)?;
+        let o = self.o;
+        match mode {
+            1 => {
+                let sleep = self.state(SLEEP)?;
+                aa_mind::activate(sleep, 0, a, self)?;
+            }
+            2 => {
+                let to = vec2([self.word(GUARD_POINT), self.word(GUARD_POINT + 4)]);
+                let aux = [self.word(GUARD_AUX), self.word(GUARD_AUX + 4)];
+                walk_point(self, to, aux, a)?;
+            }
+            3 => {
+                let t = thing(object);
+                let Some(rep) = combat::representative(self.world, t) else { return Ok(()) };
+                let mut st = std::mem::take(&mut self.world.combat);
+                combat::tasks::begin_guard_bombard(self.world, &mut st, o, crate::world::AbilityTarget::Actor(rep));
+                self.world.combat = st;
+                self.set_word(BOMBARD + 0x10, gtid(t));
+                let bombard = self.state(BOMBARD)?;
+                aa_mind::activate(bombard, 0, a, self)?;
+            }
+            4 => {
+                if !cai_guard::GuardThinkWorld::follow_activate(self, MindId(key(o)), 0, object, a)? {
+                    return Ok(());
+                }
+            }
+            _ => {}
+        }
+        if mode != 1 {
+            self.world.books.minds.set_byte(key(o), GUARD_PLACED, 0);
+        }
+        self.set_word(GUARD_ACTION, mode);
+        formation_follow(self, a);
+        guard_reflect(self, a);
+        Ok(())
+    }
+    /// `0x51D920(mode, object)`.
+    fn follow_activate(&mut self, _: MindId, mode: u32, object: u32, a: &mut Arena) -> aa_mind::Result<bool> {
+        let t = thing(object);
+        if !combat::kill_accepts_thing(self.world, self.o, t) {
+            return Ok(false);
+        }
+        self.set_word(KILL_TARGET, gtid(t));
+        let kill = self.state(KILL)?;
+        aa_mind::activate(kill, mode, a, self)
+    }
+    /// Mind +0xB8 `0x51E6C0`: the state is reported again.
+    fn mind_virtual_b8(&mut self, _: MindId, a: &mut Arena) -> aa_mind::Result<()> {
+        formation_follow(self, a);
+        guard_reflect(self, a);
+        Ok(())
+    }
+    fn set_guard_word10(&mut self, _: StateId, value: u32) -> aa_mind::Result<()> {
+        self.set_word(GUARD_ACTION, value);
+        Ok(())
+    }
+    fn guard_byte14(&mut self, _: StateId) -> aa_mind::Result<bool> {
+        Ok(self.world.books.minds.byte(key(self.o), GUARD_PLACED) != 0)
+    }
+    fn set_guard_byte14(&mut self, _: StateId, value: bool) -> aa_mind::Result<()> {
+        let o = self.o;
+        self.world.books.minds.set_byte(key(o), GUARD_PLACED, u8::from(value));
+        Ok(())
+    }
+    /// The home's settling: no home has a host.
+    fn home_settle(&mut self, _: Option<u32>, _: u32, _: u32) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    fn guard_51ee20(&mut self, _: StateId, _: &mut Arena) -> aa_mind::Result<bool> {
+        Ok(guard_stand_point(self))
+    }
 }
 
 /// The fighting state on top of the Mind, for `crate::morale`'s state table.
@@ -656,7 +1781,7 @@ impl EngageWorld for Regiment<'_> {
     }
     /// Target virtual +0x130(zone, 1): `0x4EA2C0`.
     fn target_check130(&mut self, target: u32, _: u32) -> aa_mind::Result<bool> {
-        Ok(combat::thing_in_zoc(self.world, self.o, thing(target)))
+        Ok(combat::thing_in_zoc(self.world, self.o, thing(target), true))
     }
     fn target_word90(&mut self, _: u32) -> aa_mind::Result<bool> {
         Ok(false)
@@ -682,13 +1807,9 @@ impl cai_engage_think::EngageThinkWorld for Regiment<'_> {
     }
     /// `0x51F920`: the rout state in mode 2.
     fn wavering_reaction(&mut self, _: MindId, _: &mut Arena) -> aa_mind::Result<()> {
-        let o = self.o;
-        let mut st = std::mem::take(&mut self.world.combat);
-        crate::morale::begin_rout(self.world, &mut st, o);
-        self.world.combat = st;
         self.with_arena(|host, a| {
-            let sleep = host.state(SLEEP)?;
-            aa_mind::activate(sleep, 2, a, host).map(|_| ())
+            let rout = host.state(ROUT)?;
+            aa_mind::activate(rout, 2, a, host).map(|_| ())
         })
     }
     fn mind_virtual_140(&mut self, _: MindId, g: u32, _: &mut Arena) -> aa_mind::Result<()> {

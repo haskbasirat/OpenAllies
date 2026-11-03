@@ -746,8 +746,11 @@ impl crate::mapping::NativeIds for Aliased<'_> {
         };
         self.ids.guess(unit, flags, word, non_group_excluded)
     }
-    fn accepts(&self, unit: aa_play::Unit, index: u32) -> bool {
-        self.ids.accepts(unit, index)
+    fn accepts(&self, kingdom: aa_play::KingdomId, unit: aa_play::Unit, index: u32) -> bool {
+        self.ids.accepts(kingdom, unit, index)
+    }
+    fn selectable(&self, slot: u16) -> bool {
+        !matches!(self.thing(slot), Some(aa_play::Unit::Actor(a)) if self.ids.world.actors.get(a as usize).is_some_and(|x| x.org.is_some()))
     }
     fn bombards(&self, unit: aa_play::Unit) -> bool {
         self.ids.bombards(unit)

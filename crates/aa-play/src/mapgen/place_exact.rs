@@ -121,7 +121,7 @@ impl Placement<'_> {
     /// 0x4F1660 for a thing that needs space for a settlement zone: a circle of
     /// the zone radius (0xB39F58+0x74) must be inside the world, on land, and
     /// free of blocking things that are not of its own definition. The zone
-    /// query 0x54EF80 finds nothing: the generator has no zones yet. `arg8`
+    /// query 0x54EF80 finds nothing: the generator has no zones yet. `argument 8`
     /// is 1 from 0x4F3640: hostility does not count.
     fn zone_space_free(&self, thing: usize, pos: [f32; 2]) -> bool {
         let radius = self.data.settlement_radius;
@@ -907,6 +907,57 @@ impl Placement<'_> {
             }
         }
         Ok(())
+    }
+
+    /// KKC_RMCPlaceWorldParametersActorsStage::Run 0x594930, after the required objects:
+    /// each kingdom with additional actors has a group of its own (0x593800,
+    /// `<kingdom>_runtime_actor_group`: objects_min 10, intraproximity 8, starting location
+    /// weight 100, no search radius), and each actor goes where FindRandomPosition 0x591A30
+    /// finds, without conforming, in 90 tries; one with no place is left out.
+    pub(in crate::mapgen) fn place_world_actors(&mut self, world: &mut World, actors: &[(String, String)], rng: &mut Rng) {
+        for k in 0..self.kingdoms.len() {
+            let ids = self.rmc.kingdoms[self.kingdoms[k].def].ids.clone();
+            let list: Vec<&str> = actors.iter().filter(|a| a.0.eq_ignore_ascii_case(&ids)).map(|a| a.1.as_str()).collect();
+            if list.is_empty() {
+                continue;
+            }
+            let name = format!("{ids}_runtime_actor_group");
+            let def = GroupDef {
+                ids: name.clone(),
+                name: String::new(),
+                slider: super::super::data::Slider { range: [0.0, 0.0], area_factor: 0.0, show_ui: false, locked: false },
+                objects_min: 10,
+                required: Vec::new(),
+                objects: Vec::new(),
+                balanced: false,
+                search_radius: 0.0,
+                search_relative_group: None,
+                search_relative_kingdom: None,
+                intra_min: 8.0,
+                intra_desired: 8.0,
+                start_weight: 100.0,
+                restrictions: Vec::new(),
+                kingdom_ids: None,
+                all_major_kingdoms: false,
+                properties: None,
+            };
+            let gi = self.groups.len();
+            self.groups.push(super::GroupInst { def, ids: name, kingdom: Some(k), objects: Vec::new(), bbox: [0.0; 4], centre: [0.0; 2], radius: 0.0, restr: Vec::new(), search_kingdom: None, search_group: None });
+            for actor in list {
+                let Some(thing) = self.data.thing_by_id.get(&actor.to_ascii_lowercase()).copied() else {
+                    self.notes.push(format!("additional actor {actor} is not a known thing"));
+                    continue;
+                };
+                let _ = self.required_facing(thing, rng);
+                let Some((pos, facing)) = self.find_random_position(rng, gi, thing, false, 0x5A) else {
+                    self.notes.push(format!("additional actor {actor}: no position in 90 tries"));
+                    continue;
+                };
+                if let Some(index) = self.create_object(world, rng, thing, Some(gi), Some(k), pos, facing) {
+                    self.group_add(gi, index);
+                }
+            }
+        }
     }
 
     /// 0x5910D0's PrepareMapFixStartLocations 0x4FB640 for an actor with a

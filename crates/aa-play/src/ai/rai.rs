@@ -603,7 +603,9 @@ fn formations(c: &Ctx<'_, '_>, player: &Player, commands: &mut Vec<Command>) {
             c.ego.stopped_formation.as_deref()
         };
         let Some(wanted) = wanted.and_then(|id| def.formations.iter().position(|f| f.id.eq_ignore_ascii_case(id))) else { continue };
-        if crate::player_orders::formation(w, ov.id) != Some(wanted) {
+        // 7B4FE0 compares with the organization's +70, what was last ordered, not with +74, what
+        // its Mind state asks now (a column on the way, the ordered one when it fights).
+        if crate::player_orders::desired_formation(w, ov.id) != Some(wanted) {
             commands.push(Command::SetFormation { kingdom: c.view.kingdom, orgs: vec![ov.id], formation: wanted });
         }
     }

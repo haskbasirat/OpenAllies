@@ -316,9 +316,8 @@ pub fn film_extras(header: &MapHeader, slots: &[String]) -> BattleExtras {
 
 /// Battle start of a metagame battle (4E6DB0: the start technologies 4E3AD0 and the
 /// bonus stockpile 4E39D0: the sum at least 0, at most EconomyStockpileResourceMax).
-/// The additional actors stand in rings around the start location on free ground: a
-/// labelled rendition, `KKC_WorldCreatorRandom`'s `_ki.additional_actors` is not
-/// ported.
+/// The additional actors are on the map already (`RandomMapParams::additional_actors`,
+/// 0x594930); they stay in the extras for the film's kingdom rows.
 pub fn apply_battle_extras(world: &mut World, extras: &BattleExtras) {
     let resources = world.data.resources.len();
     for (k, property) in &extras.properties {
@@ -341,51 +340,6 @@ pub fn apply_battle_extras(world: &mut World, extras: &BattleExtras) {
             }
         }
     }
-    let mut placed = BTreeMap::<usize, u32>::new();
-    let map = world.map.clone();
-    for (k, thing) in &extras.actors {
-        let Some(id) = world.kingdoms.get(*k).map(|x| x.id) else { continue };
-        let Some(def) = world.data.find(thing) else {
-            eprintln!("the additional actor {thing} is not in the data");
-            continue;
-        };
-        let start = world.ids.kingdom_slot(id).and_then(|slot| map.player_slots.iter().position(|&s| s == slot)).and_then(|i| map.start_locations.get(i).copied());
-        let Some(at) = start else { continue };
-        let n = placed.entry(*k).or_insert(0);
-        let spot = ring_spot(&map, at, *n);
-        *n += 1;
-        let d = world.data.def(def);
-        if d.class == Some(aa_play::DefClass::Organization) || !d.slots.is_empty() {
-            aa_play::production::spawn_organization(world, def, id, spot, -std::f32::consts::FRAC_PI_2, None);
-        } else {
-            aa_play::production::spawn_single(world, def, Some(id), spot, -std::f32::consts::FRAC_PI_2);
-        }
-    }
-}
-
-/// The `n`th free spot of the rings of 16 m around the point.
-fn ring_spot(map: &aa_play::GameMap, at: glam::Vec2, n: u32) -> glam::Vec2 {
-    const SPACING: f32 = 16.0;
-    let free = |q: glam::Vec2| {
-        let f = map.cell_flags(q);
-        f & aa_play::map::BLOCKED == 0 && f & aa_play::map::NOT_LAND_PASSABLE == 0
-    };
-    let mut left = n;
-    for ring in 1..64u32 {
-        let steps = 8 * ring;
-        for i in 0..steps {
-            let a = i as f32 / steps as f32 * std::f32::consts::TAU;
-            let q = at + glam::Vec2::new(a.cos(), a.sin()) * (ring as f32 * SPACING);
-            if !free(q) {
-                continue;
-            }
-            if left == 0 {
-                return q;
-            }
-            left -= 1;
-        }
-    }
-    at
 }
 
 /// The current local time as a FILETIME, the way 6FB1F0 reads it:

@@ -12,14 +12,14 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-const DEFAULT_FILMS: &str = r"<game root>\reconstruction\qa-runs\compare-20261022\game\Profile\data\Films\archive-qa-20261022";
+const DEFAULT_FILMS: &str = "reconstruction/qa-runs/compare-20261022/game/Profile/data/Films/archive-qa-20261022";
 
 fn films_dir() -> PathBuf {
-    std::env::var_os("AA_PARITY_FILMS").map_or_else(|| PathBuf::from(DEFAULT_FILMS), PathBuf::from)
+    std::env::var_os("AA_PARITY_FILMS").map_or_else(|| game_root().join(DEFAULT_FILMS), PathBuf::from)
 }
 fn game_root() -> PathBuf {
     PathBuf::from(
-        std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT (the v14 data for registry counts)"),
+        std::env::var_os("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game (the v14 data for registry counts)"),
     )
 }
 fn fixture() -> Value {

@@ -223,82 +223,82 @@ Orders with no aa-play equivalent: 109602 (60.6%) of all, 15676 (53.5%) of the h
 
 | order | aa-play | count | running share | films | human | human rank |
 |---|---|---:|---:|---:|---:|---:|
-| command 02 guard | NO EQUIVALENT | 46070 | 25.46% | 36 | 97 | 20 |
-| command 07 retreat | NO EQUIVALENT | 41870 | 48.59% | 38 | 335 | 13 |
+| command 02 guard | Order Guard | 46070 | 25.46% | 36 | 97 | 20 |
+| command 07 retreat | Order Retreat | 41870 | 48.59% | 38 | 335 | 13 |
 | command 00 kill | Attack | 25010 | 62.41% | 40 | 512 | 8 |
 | command 33 set_formation | SetFormation | 20435 | 73.70% | 46 | 345 | 12 |
-| default order (position, auxiliary, scalar) | NO EQUIVALENT | 9053 | 78.71% | 37 | 9053 | 1 |
+| default order (position, auxiliary, scalar) | the unit's guess (0x4DA570) | 9053 | 78.71% | 37 | 9053 | 1 |
 | command 15 recruit | Recruit | 9029 | 83.70% | 59 | 7291 | 2 |
 | command 05 move | Move (Follow when the command has a target word) | 5794 | 86.90% | 30 | 1 | 36 |
 | command 11 unpack | Deploy (facing from auxiliary: inferred) | 5257 | 89.80% | 55 | 3944 | 3 |
 | 70 FactionUseAbility | UseAbility | 3062 | 91.49% | 27 | 382 | 11 |
-| default order (target, scalar) | NO EQUIVALENT | 2806 | 93.04% | 30 | 2806 | 4 |
-| command 37 group_behavior_enable | NO EQUIVALENT | 2488 | 94.42% | 42 | 41 | 24 |
-| command 25 air_attack | NO EQUIVALENT | 1544 | 95.27% | 15 | 922 | 5 |
-| command 01 bombard | NO EQUIVALENT | 1523 | 96.11% | 18 | 3 | 32 |
+| default order (target, scalar) | the unit's guess (0x4DA570) | 2806 | 93.04% | 30 | 2806 | 4 |
+| command 37 group_behavior_enable | Order GroupBehavior | 2488 | 94.42% | 42 | 41 | 24 |
+| command 25 air_attack | AirAttack (refused until the aircraft fly) | 1544 | 95.27% | 15 | 922 | 5 |
+| command 01 bombard | Bombard | 1523 | 96.11% | 18 | 3 | 32 |
 | command 06 stop | Stop | 1197 | 96.78% | 11 | 9 | 28 |
 | command 35 research | Research | 1083 | 97.37% | 41 | 677 | 6 |
-| command 26 air_recon | NO EQUIVALENT | 800 | 97.82% | 12 | 630 | 7 |
-| command 04 construct | NO EQUIVALENT | 714 | 98.21% | 16 | 451 | 10 |
-| command 03 repair | NO EQUIVALENT | 589 | 98.54% | 11 | 22 | 26 |
-| default order (position, scalar) | NO EQUIVALENT | 462 | 98.79% | 25 | 462 | 9 |
-| 23 TeamCommand team_give_resources | NO EQUIVALENT | 301 | 98.96% | 7 | 3 | 31 |
-| command 09 explore | NO EQUIVALENT | 294 | 99.12% | 13 | 24 | 25 |
-| command 12 pack_organization | NO EQUIVALENT | 271 | 99.27% | 15 | 268 | 14 |
-| command 31 hq_attach | NO EQUIVALENT | 262 | 99.41% | 17 | 129 | 18 |
+| command 26 air_recon | AirRecon (refused until the aircraft fly) | 800 | 97.82% | 12 | 630 | 7 |
+| command 04 construct | Construct | 714 | 98.21% | 16 | 451 | 10 |
+| command 03 repair | Repair | 589 | 98.54% | 11 | 22 | 26 |
+| default order (position, scalar) | the unit's guess (0x4DA570) | 462 | 98.79% | 25 | 462 | 9 |
+| 23 TeamCommand team_give_resources | Order GiveResources | 301 | 98.96% | 7 | 3 | 31 |
+| command 09 explore | Order Explore | 294 | 99.12% | 13 | 24 | 25 |
+| command 12 pack_organization | Order PackOrganization | 271 | 99.27% | 15 | 268 | 14 |
+| command 31 hq_attach | Order HqCycle | 262 | 99.41% | 17 | 129 | 18 |
 | command 20 sell | Sell | 220 | 99.54% | 19 | 203 | 15 |
-| command 17 recruit_location | NO EQUIVALENT | 213 | 99.65% | 21 | 148 | 17 |
-| command 18 structure_cancel_queued | NO EQUIVALENT | 174 | 99.75% | 24 | 174 | 16 |
+| command 17 recruit_location | Order RecruitAt | 213 | 99.65% | 21 | 148 | 17 |
+| command 18 structure_cancel_queued | Order CancelQueued | 174 | 99.75% | 24 | 174 | 16 |
 | command 10 disband | Disband | 144 | 99.83% | 12 | 116 | 19 |
-| command 08 rout | NO EQUIVALENT | 115 | 99.89% | 20 | 77 | 22 |
+| command 08 rout | Order Rout | 115 | 99.89% | 20 | 77 | 22 |
 | command 32 hq_detach | Detach | 93 | 99.94% | 9 | 93 | 21 |
 | command 16 set_rally_point | SetRallyPoint | 48 | 99.97% | 10 | 48 | 23 |
-| command 27 escort_on | NO EQUIVALENT | 30 | 99.99% | 9 | 8 | 29 |
-| 23 TeamCommand team_request_actor | NO EQUIVALENT | 11 | 99.99% | 1 | 11 | 27 |
-| command 38 group_behavior_disable | NO EQUIVALENT | 8 | 100.00% | 2 | 8 | 30 |
-| command 28 escort_off | NO EQUIVALENT | 2 | 100.00% | 1 | 2 | 33 |
-| 23 TeamCommand team_give_actor | NO EQUIVALENT | 1 | 100.00% | 1 | 1 | 34 |
-| 23 TeamCommand team_request_resources | NO EQUIVALENT | 1 | 100.00% | 1 | 1 | 35 |
+| command 27 escort_on | Order Escort | 30 | 99.99% | 9 | 8 | 29 |
+| 23 TeamCommand team_request_actor | no effect (a message) | 11 | 99.99% | 1 | 11 | 27 |
+| command 38 group_behavior_disable | Order GroupBehavior | 8 | 100.00% | 2 | 8 | 30 |
+| command 28 escort_off | Order Escort | 2 | 100.00% | 1 | 2 | 33 |
+| 23 TeamCommand team_give_actor | Order GiveActor | 1 | 100.00% | 1 | 1 | 34 |
+| 23 TeamCommand team_request_resources | no effect (a message) | 1 | 100.00% | 1 | 1 | 35 |
 
 ## The human players' orders
 
 | order | aa-play | human count | running share of human orders | films |
 |---|---|---:|---:|---:|
-| default order (position, auxiliary, scalar) | NO EQUIVALENT | 9053 | 30.90% | 37 |
+| default order (position, auxiliary, scalar) | the unit's guess (0x4DA570) | 9053 | 30.90% | 37 |
 | command 15 recruit | Recruit | 7291 | 55.79% | 59 |
 | command 11 unpack | Deploy (facing from auxiliary: inferred) | 3944 | 69.25% | 55 |
-| default order (target, scalar) | NO EQUIVALENT | 2806 | 78.83% | 30 |
-| command 25 air_attack | NO EQUIVALENT | 922 | 81.97% | 15 |
+| default order (target, scalar) | the unit's guess (0x4DA570) | 2806 | 78.83% | 30 |
+| command 25 air_attack | AirAttack (refused until the aircraft fly) | 922 | 81.97% | 15 |
 | command 35 research | Research | 677 | 84.29% | 41 |
-| command 26 air_recon | NO EQUIVALENT | 630 | 86.44% | 12 |
+| command 26 air_recon | AirRecon (refused until the aircraft fly) | 630 | 86.44% | 12 |
 | command 00 kill | Attack | 512 | 88.18% | 40 |
-| default order (position, scalar) | NO EQUIVALENT | 462 | 89.76% | 25 |
-| command 04 construct | NO EQUIVALENT | 451 | 91.30% | 16 |
+| default order (position, scalar) | the unit's guess (0x4DA570) | 462 | 89.76% | 25 |
+| command 04 construct | Construct | 451 | 91.30% | 16 |
 | 70 FactionUseAbility | UseAbility | 382 | 92.60% | 27 |
 | command 33 set_formation | SetFormation | 345 | 93.78% | 46 |
-| command 07 retreat | NO EQUIVALENT | 335 | 94.92% | 38 |
-| command 12 pack_organization | NO EQUIVALENT | 268 | 95.84% | 15 |
+| command 07 retreat | Order Retreat | 335 | 94.92% | 38 |
+| command 12 pack_organization | Order PackOrganization | 268 | 95.84% | 15 |
 | command 20 sell | Sell | 203 | 96.53% | 19 |
-| command 18 structure_cancel_queued | NO EQUIVALENT | 174 | 97.13% | 24 |
-| command 17 recruit_location | NO EQUIVALENT | 148 | 97.63% | 21 |
-| command 31 hq_attach | NO EQUIVALENT | 129 | 98.07% | 17 |
+| command 18 structure_cancel_queued | Order CancelQueued | 174 | 97.13% | 24 |
+| command 17 recruit_location | Order RecruitAt | 148 | 97.63% | 21 |
+| command 31 hq_attach | Order HqCycle | 129 | 98.07% | 17 |
 | command 10 disband | Disband | 116 | 98.47% | 12 |
-| command 02 guard | NO EQUIVALENT | 97 | 98.80% | 36 |
+| command 02 guard | Order Guard | 97 | 98.80% | 36 |
 | command 32 hq_detach | Detach | 93 | 99.12% | 9 |
-| command 08 rout | NO EQUIVALENT | 77 | 99.38% | 20 |
+| command 08 rout | Order Rout | 77 | 99.38% | 20 |
 | command 16 set_rally_point | SetRallyPoint | 48 | 99.54% | 10 |
-| command 37 group_behavior_enable | NO EQUIVALENT | 41 | 99.68% | 42 |
-| command 09 explore | NO EQUIVALENT | 24 | 99.76% | 13 |
-| command 03 repair | NO EQUIVALENT | 22 | 99.84% | 11 |
-| 23 TeamCommand team_request_actor | NO EQUIVALENT | 11 | 99.88% | 1 |
+| command 37 group_behavior_enable | Order GroupBehavior | 41 | 99.68% | 42 |
+| command 09 explore | Order Explore | 24 | 99.76% | 13 |
+| command 03 repair | Repair | 22 | 99.84% | 11 |
+| 23 TeamCommand team_request_actor | no effect (a message) | 11 | 99.88% | 1 |
 | command 06 stop | Stop | 9 | 99.91% | 11 |
-| command 27 escort_on | NO EQUIVALENT | 8 | 99.94% | 9 |
-| command 38 group_behavior_disable | NO EQUIVALENT | 8 | 99.96% | 2 |
-| 23 TeamCommand team_give_resources | NO EQUIVALENT | 3 | 99.97% | 7 |
-| command 01 bombard | NO EQUIVALENT | 3 | 99.98% | 18 |
-| command 28 escort_off | NO EQUIVALENT | 2 | 99.99% | 1 |
-| 23 TeamCommand team_give_actor | NO EQUIVALENT | 1 | 99.99% | 1 |
-| 23 TeamCommand team_request_resources | NO EQUIVALENT | 1 | 100.00% | 1 |
+| command 27 escort_on | Order Escort | 8 | 99.94% | 9 |
+| command 38 group_behavior_disable | Order GroupBehavior | 8 | 99.96% | 2 |
+| 23 TeamCommand team_give_resources | Order GiveResources | 3 | 99.97% | 7 |
+| command 01 bombard | Bombard | 3 | 99.98% | 18 |
+| command 28 escort_off | Order Escort | 2 | 99.99% | 1 |
+| 23 TeamCommand team_give_actor | Order GiveActor | 1 | 99.99% | 1 |
+| 23 TeamCommand team_request_resources | no effect (a message) | 1 | 100.00% | 1 |
 | command 05 move | Move (Follow when the command has a target word) | 1 | 100.00% | 30 |
 
 ## Which decrees carry a human player
@@ -536,7 +536,12 @@ A film holds no map. What it needs lies beside it, in the data folder of the pro
 
 - `V14Sources::open_over_folder` reads the loose folder over the archive, by lowercase path, without the v14 overlay. `GameData`, `GeneralData`, `RandomMapData` and `Registries` load on it through `DataFolder`, and the results are cached by a key made from every file's path, size and time, leaving out what the game writes while it plays (films, saves, screenshots).
 - `GameMap::load_file` reads an RMP the way the original does, without the extracted JSON. A map the folder holds also brings its own triggers (`triggers::attach_bytes`) and its SUN chunk.
-- `AssetStore::set_art_overlay` lays the folder's converted art over the stock art for the length of the battle. `research/film-sources/convert_overlay.py` converts a folder with the same exporter as the stock art, into `<own profile>/art/<key>`. The client does not run it by itself: a film on a folder not converted logs the command and draws only what the stock art holds.
+- `AssetStore::set_art_overlay` lays the folder's art over the stock art for the length of the battle. A mod holds about 9,000 NIFs and 20,000 textures and a battle draws a few hundred, so `aa_assets::convert::FolderArt` converts a model or a texture when it is first asked for and keeps the result in `<own profile>/art/<key>` for the next battle. A file the folder holds byte for byte like the stock data stays the stock conversion. No Python is involved, so a release draws a mod's art on its first film. `aa_assets::convert` is the project's own exporter (the one that made the stock `assets/converted`) on the ported NiStream reader. `tests/convert_stock.rs` holds it against the whole stock art: see Art below.
+- The same battle's effects, sounds and interface text come from the folder too (Art below).
+
+**Art.** The Rust exporter against the stock conversion, `tests/convert_stock.rs`: of the 1,900 stock NIFs, the same 53 fail with the same reason and the other 1,847 convert value for value (the three later notes on the stock files aside: `baseTextureState`, `alphaPropertyState`, `textureAlias`). The 11,035 meshes of the material audit get the same tags, alpha and depth state and sphere centre, so a folder's model is corrected at its conversion and needs no audit. The stock audit stays for the stock art. The 5,825 stock DDS and TGA textures that made a PNG of their own equal it pixel by pixel (a 16 bit TGA may differ by one step: its five bit channels widen by another rounding). On a real mod, every third file: 2,848 of 2,980 NIFs are its own, 27 do not convert (19 hold no drawn geometry, the rest are damaged), a texture takes about 27 ms.
+
+A battle on a folder also reads, from the folder first: the effect tables of its catalog and the effect NIFs and their textures (`effects::preload_on`, cached per folder by what it holds), every NIF the client reads for bones and clips (`effects::bones::find_file`), the sounds (`audio::Files`), the ground maps, and the interface text (`StringTable::add_folder`, for the length of the battle). Not yet: the banners, namelists and shadow types (read once for the stock data) and a mod's own rigs (`assets-cache/animation`, made by the project's exporter for the stock models): a model of the folder without a rig draws in its bind pose.
 
 **Closed sides of a random map.** Some creators list more sides than the session plays: a film with `side01`, `side02`, `side03`, `side05`. A kingdom's +0x188 is its place in the RMC's list, so the header's order is wrong for these films. The generator now takes the session's sides by name (`WorldSpec::present`) and the film's players give the indices. The creator's other sides still make their world-start draws. Whether the original also generates them and then leaves them out is not known yet.
 
@@ -581,19 +586,19 @@ Held by a save, with no place in aa-play yet:
   - combat and movement: the Minds, Movers and leftovers above; the thing's height at the same x, y and `under_siege` state bit 20 are not explained yet
   - the world stream, which diverges during the first update because of these
 
-**Natively a loaded world keeps stale modifiers.** The organization's Load reads its morale before the InitExisting applies the kingdom's properties to its members, and +60 stands until something refreshes it. At level 0 a technology's MORALE counts once, for the organization (45 + 1). At a higher level it counts for every member, because the level refreshed them (45 + 10 * 1.5). The restore copies this. The same staleness shows in the Detection and Supply radii: a technology's DETECTION_RANGE add is not in them after a load (18, not 23). `ActorBooks::saved_techs` keeps them so until the kingdom's technologies change. The state bit 20 (under siege) also stands as saved until its next refresh (`ActorBooks::saved_siege`: a hit, the Element Tick).
+**Natively a loaded world keeps stale modifiers.** The organization's Load reads its morale before the InitExisting applies the kingdom's properties to its members, and +60 stands until something refreshes it. At a level with no MORALE add (0 and 1) a technology's MORALE counts once, for the organization (45 + 1). At a level with one it counts for every member, because the level refreshed them (45 + 10 * 1.5). The restore copies this. The same staleness shows in the Detection and Supply radii: a technology's DETECTION_RANGE add is not in them after a load (18, not 23). `ActorBooks::saved_techs` keeps them so until the kingdom's technologies change. The state bit 20 (under siege) also stands as saved until its next refresh (`ActorBooks::saved_siege`: a hit, the Element Tick).
 
-**Where the saved films still differ.** On the first film the original's first update after the load makes no draw at all (its first sample's stream is the load's end) and ours makes 27; on the second film the original's first update draws too. Not read yet: which delivery draws in ours there. Also still different: 35 aircraft and 4 projectiles in flight on the first film, and on the second, as read last round, a morale maximum of 46 where ours reads 50 on 9 organizations.
+**Where the saved films still differ.** The first update after a load, first film, against the trace's getters (`Trace::log` beside the G lines): the stream is exact for 28 draws and ours makes one more. The native labels hold a getter with no draw at 0x4C8170 (`GetRandomAnimation`, from 0x57ED20, a Performer's ability going on from the save), which ours does not log, because the Performer's ability state is not restored, and three queue 0 entries (0x57F443, 0x57DC7E, 0x57F443) where ours has four from 0x57F443, in a different place in the order of the Thinks. The earlier reading here (no draw at all in the native first update) was wrong: a trace's `T n` line is the state after the update labelled n. Also still different: 35 aircraft and 4 projectiles in flight on the first film. The morale maximum of the second film (46 where ours read 50 or 52 on the regiments of level 1 of kingdoms with a MORALE technology) is closed: only a level with a MORALE add refreshes the members at the Load.
 
 **The never-closed film (F24).** The original on a copy: the file is not in the dialog's list (the log says `RESOURCE: exception loading header`), and its name typed into the dialog gives the box `File missing: '<name>'`. The refusal here is the same text.
 
 ## Played through the client's library
 
-Every film of this census run through `aa_parity::playback` in `Report` mode, on the working tree of 2026-11-02 (`tests/playback.rs`, `sweep_every_film_of_the_corpus`; `AA_FILM_SWEEP_OUT` writes this text). `aa-parity corpus` does not write this section, so it needs putting back after a regeneration.
+Every film of this census run through `aa_parity::playback` in `Report` mode, uncapped (`tests/playback.rs`, `sweep_every_film_of_the_corpus`; `AA_FILM_SWEEP_ONLY` shards it). `aa-parity corpus` does not write this section, so it needs putting back after a regeneration. This run is on the working tree of round 5, built mid-round, in four shards over about 75 minutes while other builds ran, and 4 films (F10, F16, F23, F24) keep their row from an earlier run.
 
-The whole corpus to its natural ends takes hours while other builds run, so the run below stops each film at 2000 ticks (`AA_FILM_SWEEP_CAP`). An earlier build of the same round played F01, F04, F06, F09 and F12 to their natural ends with no panic; the rest of the films that used to refuse have not been played past the cap. Run it uncapped on a quiet machine. A run without the cap on the next round's tree did not finish in its time: F06, a film of a saved game with its Minds applied, and F18 got to their natural ends with no panic (21924 and 13859 ticks), F06 still out of step at its first checkpoint, F18 at tick 3380.
+The refusals are the original's own: `failed_film_wrong_version|s` (the version check 0x5A3980 stays native) and `load_error_missing_map|s` for the film that was never closed.
 
-Before these sources, 25 films refused with `unknown CreateGWorld failure`: 8 saved games, 15 on a profile's nation, 2 on a profile's campaign map. In the rows below none does. The refusals left are the original's own: `failed_film_wrong_version|s` (the version check 0x5A3980 stays native) and `load_error_missing_map|s` for the film that was never closed.
+**3 films panicked** (F01, F06, F14): an index one past the actors in `crate::combat`, on the mid-round tree. Their rows stop there.
 
 Reading the numbers: `matched` counts checkpoints by the native rule 0x77D050. A film is out of step from its first mismatch on: the native stop is at that tick. Most `unresolved` orders name a selection whose things are gone, because film thing slots are the original's GTIDs and diverge from aa-play's as soon as the two create different things (`PARITY-CENSUS.md`, K1).
 
@@ -601,72 +606,74 @@ Reading the numbers: `matched` counts checkpoints by the native rule 0x77D050. A
 |---|---:|
 | failed_film_wrong_version|s | 9 |
 | load_error_missing_map|s | 1 |
-| played to its natural end | 8 |
-| stopped at the sweep's cap | 44 |
+| panicked in play | 3 |
+| played to its natural end | 49 |
 
-91585 world ticks stepped in 377 s of simulation: 243 ticks per second. 3324 checkpoints checked, 732 matched. 2364 commands reached the world, 798 orders unresolved, 0 without an aa-play command, 438 commands refused.
+1675902 world ticks stepped in 9065 s of simulation. 48935 checkpoints checked, 3047 matched. 19127 commands reached the world, 143327 orders unresolved, 3217 commands refused.
+
+Films that reach their natural end with no mismatch: F22, F38, F46, F48, F10.
 
 | film | result | ticks | ticks/s | checkpoints | matched | first mismatch tick | commands | unresolved | refused | load s |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| F01 | stopped at the sweep's cap | 2000 | 304 | 61 | 0 | 1 | 9 | 0 | 47 | 17.7 |
-| F02 | stopped at the sweep's cap | 2000 | 484 | 117 | 0 | 17 | 0 | 63 | 0 | 45.4 |
-| F03 | stopped at the sweep's cap | 2000 | 305 | 41 | 3 | 68 | 62 | 1 | 1 | 15.0 |
-| F04 | stopped at the sweep's cap | 2000 | 334 | 63 | 1 | 34 | 71 | 0 | 0 | 2.2 |
-| F05 | stopped at the sweep's cap | 2000 | 1793 | 117 | 93 | 1598 | 19 | 0 | 0 | 0.4 |
-| F06 | stopped at the sweep's cap | 2000 | 118 | 62 | 0 | 16 | 78 | 2 | 10 | 2.3 |
-| F07 | stopped at the sweep's cap | 2000 | 217 | 55 | 23 | 505 | 45 | 0 | 0 | 14.8 |
-| F08 | played to its natural end | 275 | 60 | 16 | 3 | 68 | 7 | 0 | 0 | 1.2 |
-| F09 | stopped at the sweep's cap | 2000 | 422 | 50 | 0 | 2 | 10 | 15 | 8 | 803.9 |
+| F01 | panicked in play | 1560 | 247 | 52 | 0 | 1 | 9 | 0 | 47 | 1039.4 |
+| F02 | played to its natural end | 3630 | 2113 | 160 | 0 | 17 | 0 | 151 | 0 | 1091.5 |
+| F03 | played to its natural end | 3260 | 544 | 59 | 3 | 68 | 89 | 28 | 0 | 76.1 |
+| F04 | played to its natural end | 16395 | 294 | 363 | 1 | 34 | 427 | 2505 | 42 | 31.9 |
+| F05 | played to its natural end | 4540 | 1050 | 266 | 106 | 1819 | 62 | 0 | 0 | 0.6 |
+| F06 | panicked in play | 19235 | 21 | 569 | 0 | 16 | 246 | 110 | 18 | 130.0 |
+| F07 | played to its natural end | 95285 | 304 | 1995 | 34 | 1034 | 460 | 1248 | 53 | 10.5 |
+| F08 | played to its natural end | 275 | 493 | 16 | 3 | 68 | 7 | 0 | 0 | 14.0 |
+| F09 | played to its natural end | 49042 | 1001 | 1029 | 0 | 2 | 115 | 429 | 23 | 519.3 |
 | F10 | played to its natural end | 257 | 56 | 15 | 15 | - | 2 | 0 | 0 | 1.8 |
-| F11 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
-| F12 | stopped at the sweep's cap | 2000 | 165 | 43 | 0 | 7 | 7 | 234 | 7 | 2.2 |
-| F13 | stopped at the sweep's cap | 2000 | 337 | 55 | 0 | 11 | 8 | 17 | 7 | 1.0 |
-| F14 | stopped at the sweep's cap | 2000 | 72 | 68 | 0 | 16 | 82 | 2 | 16 | 7.7 |
-| F15 | stopped at the sweep's cap | 2000 | 61 | 117 | 0 | 16 | 78 | 13 | 7 | 4.3 |
+| F11 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.1 |
+| F12 | played to its natural end | 151894 | 202 | 3161 | 0 | 7 | 96 | 8106 | 90 | 1.7 |
+| F13 | played to its natural end | 9926 | 3035 | 220 | 0 | 11 | 20 | 140 | 0 | 12.8 |
+| F14 | panicked in play | 13015 | 18 | 392 | 0 | 16 | 301 | 556 | 31 | 18.8 |
+| F15 | played to its natural end | 74070 | 96 | 4357 | 0 | 16 | 860 | 1623 | 346 | 4.5 |
 | F16 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 3.1 |
-| F17 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.3 |
-| F18 | stopped at the sweep's cap | 2000 | 1921 | 66 | 8 | 153 | 5 | 0 | 0 | 0.3 |
-| F19 | played to its natural end | 923 | 175 | 15 | 7 | 416 | 0 | 2 | 0 | 1.0 |
-| F20 | stopped at the sweep's cap | 2000 | 3032 | 117 | 85 | 1462 | 51 | 0 | 0 | 0.5 |
-| F21 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.1 |
-| F22 | stopped at the sweep's cap | 2000 | 433 | 55 | 13 | 238 | 4 | 0 | 0 | 1.6 |
+| F17 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 75.1 |
+| F18 | played to its natural end | 13860 | 218 | 271 | 94 | 3380 | 26 | 0 | 0 | 105.1 |
+| F19 | played to its natural end | 923 | 710 | 15 | 0 | 17 | 0 | 2 | 0 | 2019.4 |
+| F20 | played to its natural end | 30921 | 150 | 1818 | 97 | 1666 | 2274 | 10435 | 54 | 1.1 |
+| F21 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 2.2 |
+| F22 | played to its natural end | 4273 | 2094 | 88 | 88 | - | 12 | 0 | 0 | 33.0 |
 | F23 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
 | F24 | load_error_missing_map|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
-| F25 | stopped at the sweep's cap | 2000 | 571 | 49 | 0 | 5 | 7 | 23 | 7 | 1.1 |
-| F26 | stopped at the sweep's cap | 2000 | 279 | 61 | 1 | 34 | 110 | 19 | 36 | 1.4 |
-| F27 | stopped at the sweep's cap | 2000 | 282 | 45 | 0 | 17 | 0 | 32 | 0 | 1.2 |
-| F28 | stopped at the sweep's cap | 2000 | 477 | 57 | 0 | 9 | 33 | 25 | 33 | 1.8 |
-| F29 | stopped at the sweep's cap | 2000 | 237 | 71 | 2 | 51 | 58 | 1 | 6 | 1.9 |
-| F30 | played to its natural end | 1301 | 126 | 34 | 3 | 68 | 34 | 0 | 0 | 1.9 |
-| F31 | stopped at the sweep's cap | 2000 | 250 | 45 | 0 | 5 | 79 | 22 | 13 | 55.3 |
-| F32 | stopped at the sweep's cap | 2000 | 378 | 46 | 0 | 17 | 11 | 9 | 1 | 1.2 |
-| F33 | stopped at the sweep's cap | 2000 | 4392 | 117 | 117 | - | 3 | 0 | 0 | 5.1 |
-| F34 | stopped at the sweep's cap | 2000 | 367 | 65 | 0 | 14 | 12 | 13 | 59 | 1.0 |
-| F35 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.2 |
-| F36 | stopped at the sweep's cap | 2000 | 247 | 63 | 0 | 2 | 15 | 4 | 5 | 0.7 |
-| F37 | stopped at the sweep's cap | 2000 | 349 | 59 | 2 | 40 | 8 | 19 | 8 | 1.2 |
-| F38 | played to its natural end | 260 | 1712 | 15 | 0 | 17 | 4 | 0 | 0 | 0.3 |
-| F39 | stopped at the sweep's cap | 2000 | 255 | 59 | 0 | 17 | 17 | 14 | 11 | 1.2 |
-| F40 | stopped at the sweep's cap | 2000 | 32 | 45 | 0 | 9 | 706 | 115 | 31 | 2.6 |
-| F41 | stopped at the sweep's cap | 2000 | 317 | 59 | 0 | 6 | 50 | 13 | 9 | 2.6 |
-| F42 | stopped at the sweep's cap | 2000 | 276 | 117 | 28 | 493 | 10 | 1 | 1 | 1.6 |
-| F43 | stopped at the sweep's cap | 2000 | 884 | 117 | 0 | 17 | 16 | 0 | 0 | 0.6 |
-| F44 | stopped at the sweep's cap | 2000 | 779 | 117 | 0 | 17 | 17 | 0 | 0 | 0.7 |
+| F25 | played to its natural end | 22593 | 3060 | 477 | 0 | 5 | 0 | 241 | 0 | 1.9 |
+| F26 | played to its natural end | 90451 | 111 | 2636 | 1 | 34 | 1425 | 16909 | 106 | 2.2 |
+| F27 | played to its natural end | 8605 | 3784 | 142 | 0 | 17 | 1 | 370 | 0 | 1.4 |
+| F28 | played to its natural end | 63544 | 192 | 1337 | 0 | 9 | 215 | 926 | 31 | 236.6 |
+| F29 | played to its natural end | 6586 | 687 | 166 | 2 | 51 | 97 | 235 | 8 | 4.7 |
+| F30 | played to its natural end | 1301 | 615 | 34 | 3 | 68 | 35 | 0 | 0 | 2.2 |
+| F31 | played to its natural end | 10513 | 582 | 222 | 0 | 5 | 118 | 1380 | 5 | 1249.3 |
+| F32 | played to its natural end | 4474 | 2132 | 82 | 0 | 17 | 36 | 10 | 1 | 382.8 |
+| F33 | played to its natural end | 12446 | 3423 | 732 | 177 | 3026 | 82 | 0 | 0 | 0.3 |
+| F34 | played to its natural end | 50457 | 128 | 1072 | 0 | 14 | 177 | 2851 | 114 | 81.6 |
+| F35 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
+| F36 | played to its natural end | 108796 | 452 | 3204 | 0 | 2 | 478 | 1592 | 376 | 0.6 |
+| F37 | played to its natural end | 16579 | 163 | 362 | 23 | 397 | 128 | 86 | 14 | 115.6 |
+| F38 | played to its natural end | 260 | 2537 | 15 | 15 | - | 4 | 0 | 0 | 0.2 |
+| F39 | played to its natural end | 63410 | 1114 | 1336 | 0 | 17 | 130 | 636 | 19 | 1.3 |
+| F40 | played to its natural end | 25601 | 39 | 536 | 0 | 9 | 4733 | 9733 | 435 | 6.6 |
+| F41 | played to its natural end | 57057 | 474 | 1204 | 0 | 6 | 198 | 983 | 39 | 4.6 |
+| F42 | played to its natural end | 10712 | 1579 | 630 | 95 | 1632 | 175 | 215 | 1 | 2.1 |
+| F43 | played to its natural end | 7108 | 684 | 418 | 146 | 2499 | 185 | 0 | 0 | 0.2 |
+| F44 | played to its natural end | 22414 | 432 | 1318 | 126 | 2159 | 639 | 1302 | 21 | 0.2 |
 | F45 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
-| F46 | played to its natural end | 120 | 757 | 6 | 6 | - | 0 | 0 | 0 | 1313.6 |
-| F47 | played to its natural end | 5 | 1 | 0 | 0 | - | 13 | 0 | 0 | 2.5 |
-| F48 | played to its natural end | 444 | 149 | 26 | 26 | - | 8 | 0 | 0 | 9.2 |
-| F49 | stopped at the sweep's cap | 2000 | 410 | 76 | 0 | 17 | 100 | 24 | 22 | 2.5 |
-| F50 | stopped at the sweep's cap | 2000 | 463 | 83 | 0 | 17 | 35 | 33 | 35 | 4.0 |
-| F51 | stopped at the sweep's cap | 2000 | 420 | 45 | 0 | 5 | 50 | 6 | 10 | 2.9 |
-| F52 | stopped at the sweep's cap | 2000 | 410 | 68 | 3 | 68 | 104 | 2 | 0 | 2.3 |
-| F53 | stopped at the sweep's cap | 2000 | 390 | 68 | 17 | 306 | 104 | 7 | 8 | 1.5 |
-| F54 | stopped at the sweep's cap | 2000 | 284 | 49 | 16 | 449 | 46 | 7 | 11 | 1.2 |
-| F55 | stopped at the sweep's cap | 2000 | 797 | 65 | 0 | 17 | 11 | 23 | 11 | 2.8 |
-| F56 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
-| F57 | stopped at the sweep's cap | 2000 | 572 | 109 | 0 | 17 | 102 | 36 | 16 | 2.2 |
+| F46 | played to its natural end | 120 | 1773 | 6 | 6 | - | 0 | 0 | 0 | 522.6 |
+| F47 | played to its natural end | 5 | 1 | 0 | 0 | - | 13 | 0 | 0 | 1.8 |
+| F48 | played to its natural end | 444 | 828 | 26 | 26 | - | 8 | 0 | 0 | 88.9 |
+| F49 | played to its natural end | 11793 | 729 | 280 | 0 | 17 | 159 | 1625 | 11 | 168.8 |
+| F50 | played to its natural end | 3571 | 675 | 116 | 0 | 17 | 78 | 82 | 5 | 7.0 |
+| F51 | played to its natural end | 46106 | 231 | 962 | 0 | 5 | 299 | 757 | 43 | 2.8 |
+| F52 | played to its natural end | 190322 | 157 | 5607 | 3 | 68 | 1647 | 45840 | 636 | 2.2 |
+| F53 | played to its natural end | 115753 | 201 | 3414 | 17 | 306 | 1020 | 21036 | 395 | 20.3 |
+| F54 | played to its natural end | 16059 | 508 | 341 | 39 | 1554 | 707 | 520 | 10 | 0.9 |
+| F55 | played to its natural end | 28805 | 811 | 622 | 0 | 17 | 84 | 288 | 32 | 4.1 |
+| F56 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 1.1 |
+| F57 | played to its natural end | 28711 | 1011 | 664 | 0 | 17 | 555 | 8485 | 92 | 2.3 |
 | F58 | failed_film_wrong_version|s | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0.0 |
-| F59 | stopped at the sweep's cap | 2000 | 355 | 48 | 0 | 16 | 18 | 1 | 2 | 0.3 |
-| F60 | stopped at the sweep's cap | 2000 | 604 | 73 | 26 | 455 | 35 | 0 | 0 | 0.8 |
-| F61 | stopped at the sweep's cap | 2000 | 796 | 117 | 117 | - | 10 | 0 | 0 | 0.6 |
-| F62 | stopped at the sweep's cap | 2000 | 584 | 117 | 117 | - | 0 | 0 | 0 | 0.8 |
+| F59 | played to its natural end | 20478 | 171 | 432 | 0 | 16 | 120 | 103 | 49 | 1.1 |
+| F60 | played to its natural end | 83657 | 742 | 2475 | 43 | 989 | 511 | 1789 | 70 | 0.7 |
+| F61 | played to its natural end | 5038 | 2703 | 294 | 142 | 2431 | 56 | 0 | 0 | 0.5 |
+| F62 | played to its natural end | 50029 | 923 | 2942 | 1757 | 29886 | 10 | 0 | 0 | 3.1 |

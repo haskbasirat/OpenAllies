@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 fn root() -> PathBuf {
-    PathBuf::from(std::env::var("AA_GAME_ROOT").unwrap_or_else(|_| r"<game root>".into()))
+    PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"))
 }
 
 fn data() -> Arc<GameData> {
@@ -474,6 +474,319 @@ fn mission_progress_census() {
             eprintln!("    NOTE {n}");
         }
     }
+}
+
+/// Follows every mission as a person would, as far as a test can: what the enabled triggers
+/// wait on is what the script asks of the player, so the player selects what it asks to have
+/// selected, sends the UI command it listens to, walks all its regiments into the area it
+/// watches, attacks (and so captures) the thing it waits to see dead or captured, and recruits
+/// what it counts. The others are computer players, as in a campaign. Prints how far each
+/// mission gets and what it still asks when the time is up: the objectives open, the script's
+/// last steps, the armed conditions. `AA_TRIGGER_MAP`, `AA_TRIGGER_SECONDS`.
+#[test]
+#[ignore]
+fn mission_person_census() {
+    use aa_play::ids::Thing;
+    use aa_play::triggers::{ScriptThing, armed, script_thing};
+    use aa_play::world::Command;
+    use aa_play::Unit;
+    let maps = root().join("reconstruction").join("assets").join("original").join("Data").join("Maps");
+    let mut ids: Vec<String> = Vec::new();
+    for e in std::fs::read_dir(maps.join("Campaign")).unwrap().filter_map(|e| e.ok()) {
+        if let Some(n) = e.file_name().to_str().and_then(|n| n.strip_suffix(".RMP")) {
+            ids.push(format!("Campaign/{n}"));
+        }
+    }
+    ids.sort();
+    let only = std::env::var("AA_TRIGGER_MAP").ok();
+    let seconds: u32 = std::env::var("AA_TRIGGER_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(1800);
+    let walk = std::env::var_os("AA_TRIGGER_WALK").is_some();
+    let make = |id: &str, person: Option<usize>| {
+        let data = data();
+        let map = Arc::new(GameMap::load_with(&root(), id, &data).unwrap_or_else(|e| panic!("{id}: {e:#}")));
+        let mut players = Vec::new();
+        for (start, &slot) in map.player_slots.iter().enumerate() {
+            let s = &map.slots[slot];
+            let nation = s.nation.clone().filter(|n| data.nation(n).is_some()).unwrap_or_else(|| if s.team == 0 { "usa".into() } else { "ger".into() });
+            let team = if s.team == u32::MAX || s.team_id.is_empty() { map.teams.len() as u32 + start as u32 } else { s.team };
+            let p = PlayerSetup { name: s.id.clone(), nation, team, color: [255, 255, 255], controller: if person == Some(start) { Controller::Human } else { Controller::Computer(1) }, start };
+            if person == Some(start) {
+                players.insert(0, p);
+            } else {
+                players.push(p);
+            }
+        }
+        let setup = SkirmishSetup { map_id: id.into(), players, starting_resources: None, seed: 1 };
+        let mut w = World::new_skirmish(data, map, &setup).unwrap_or_else(|e| panic!("{id}: {e:#}"));
+        assert!(aa_play::triggers::attach(&mut w, &root()), "{id}: no TRIGGERS");
+        w
+    };
+    for id in ids {
+        if only.as_ref().is_some_and(|o| !id.contains(o.as_str())) {
+            continue;
+        }
+        // the slot the script gives objectives first, the mission's player
+        let mut dry = make(&id, None);
+        let mut person = None;
+        for _ in 0..16 * 60 {
+            dry.step(Vec::new());
+            person = dry.kingdoms.iter().enumerate().find(|(_, k)| !aa_play::triggers::objectives(&dry, k.id).is_empty()).map(|(i, _)| i);
+            if person.is_some() {
+                break;
+            }
+        }
+        drop(dry);
+        let mut w = make(&id, Some(person.unwrap_or(0)));
+        let k = w.kingdoms[0].id;
+        let script_name = aa_play::triggers::kingdom_script_name(&w, k).unwrap_or_default();
+        let t0 = std::time::Instant::now();
+        let mut fired: Vec<String> = Vec::new();
+        let mut was_on: std::collections::BTreeMap<u32, bool> = aa_play::triggers::trigger_states(&w).into_iter().map(|t| (t.0, t.2)).collect();
+        let mut objectives = Vec::new();
+        let mut result = 0;
+        let mut orders: std::collections::BTreeMap<String, f32> = Default::default();
+        let mut pending: Vec<Command> = Vec::new();
+        let mut goal: Option<(String, f32)> = None;
+        let mut tried = 0usize;
+        for tick in 0..16 * seconds {
+            w.step(std::mem::take(&mut pending));
+            if tick % 16 != 0 {
+                continue;
+            }
+            for (i, name, on) in aa_play::triggers::trigger_states(&w) {
+                let was = was_on.insert(i, on).unwrap_or(false);
+                if was && !on {
+                    fired.push(format!("{:.0} {name}", w.time));
+                }
+            }
+            if tick % (16 * 120) == 0 {
+                eprintln!("  {id} T {:.0} after {:?}", w.time, t0.elapsed());
+            }
+            objectives = aa_play::triggers::objectives(&w, k).into_iter().map(|o| (o.key.clone(), o.state)).collect::<Vec<_>>();
+            result = aa_play::triggers::mission_result(&w, k);
+            if result != 0 || w.winner.is_some() {
+                break;
+            }
+            // the script holds a person's hands back during its cutscenes
+            if aa_play::triggers::cutscene(&w) {
+                continue;
+            }
+            let own: Vec<Unit> = w.orgs.iter().filter(|o| o.alive && o.kingdom == k && w.data.def(o.def).max_attachments.is_none()).map(|o| Unit::Org(o.id)).collect();
+            let mine = |w: &World, kingdom: &str| kingdom.is_empty() || kingdom.eq_ignore_ascii_case(&script_name) || aa_play::triggers::kingdom_script_name(w, k).is_some_and(|n| n.eq_ignore_ascii_case(kingdom));
+            let actor_of = |w: &World, parameter: &str| match script_thing(w, parameter) {
+                Some(ScriptThing::Thing(Thing::Actor(x))) => Some(x),
+                Some(ScriptThing::Thing(Thing::Org(x))) => w.orgs.get(x as usize).and_then(|o| o.members.first().copied()),
+                _ => None,
+            };
+            // what the regiments are asked to go for: an actor to attack or a place to stand
+            let mut goals: Vec<(String, Option<aa_play::ActorId>, glam::Vec2)> = Vec::new();
+            let trigger_list = armed(&w);
+            for a in &trigger_list {
+                for e in &a.waits {
+                    let p = |i: usize| e.parameters.get(i).map(String::as_str).unwrap_or("");
+                    match e.name.as_str() {
+                        "event_script_heard" => {
+                            if aa_play::triggers::listening(&w, p(0)) {
+                                aa_play::triggers::script_heard(&mut w, p(0));
+                                // the button a person pressed does what it says
+                                if let Some(ids) = p(0).strip_prefix("ActorDataSelectCommand ")
+                                    && let Some(def) = w.data.find(ids)
+                                {
+                                    let building = w.actors.iter().find(|x| x.alive && x.kingdom == Some(k) && w.data.def(x.def).recruits.contains(&def)).map(|x| x.id);
+                                    if let Some(building) = building {
+                                        pending.push(Command::Recruit { kingdom: k, building, def });
+                                    }
+                                }
+                            }
+                        }
+                        "actor_selected_by_kingdom" if mine(&w, p(1)) => {
+                            let unit = match script_thing(&w, p(0)) {
+                                Some(ScriptThing::Thing(Thing::Actor(x))) => Some(Unit::Actor(x)),
+                                Some(ScriptThing::Thing(Thing::Org(x))) => Some(Unit::Org(x)),
+                                _ => None,
+                            };
+                            if let Some(u) = unit {
+                                aa_play::triggers::set_selection(&mut w, k, vec![u]);
+                            }
+                        }
+                        "actor_data_selected_by_kingdom" if mine(&w, p(1)) => {
+                            let found = w.actors.iter().find(|x| x.alive && x.kingdom == Some(k) && w.data.def(x.def).id.eq_ignore_ascii_case(p(0))).map(|x| Unit::Actor(x.id));
+                            let found = found.or_else(|| w.orgs.iter().find(|o| o.alive && o.kingdom == k && w.data.def(o.def).id.eq_ignore_ascii_case(p(0))).map(|o| Unit::Org(o.id)));
+                            if let Some(u) = found {
+                                aa_play::triggers::set_selection(&mut w, k, vec![u]);
+                            }
+                        }
+                        "actor_enters_area" | "actor_inside_area" => {
+                            // a named actor of the player's walks there; another's is not the player's to walk
+                            let asked = actor_of(&w, p(0));
+                            if asked.is_none_or(|x| w.actor(x).is_some_and(|x| x.kingdom == Some(k)))
+                                && let Some(ScriptThing::Area(at)) = script_thing(&w, p(1))
+                            {
+                                goals.push((format!("area {}", p(1)), None, at));
+                            }
+                        }
+                        "actor_captured_by_kingdom" | "actor_owned_by_kingdom" if mine(&w, p(1)) => {
+                            if let Some(x) = actor_of(&w, p(0)).and_then(|x| w.actor(x)).filter(|x| x.alive && x.kingdom != Some(k)) {
+                                let city = w.data.def(x.def).city;
+                                goals.push((format!("take {}", p(0)), (!city || walk).then_some(x.id), x.pos.truncate()));
+                            }
+                        }
+                        "actor_destroys_actor" | "actor_is_dead" | "actor_visible_to_kingdom" => {
+                            let which = if e.name == "actor_destroys_actor" { 1 } else { 0 };
+                            let team = |who: Option<aa_play::KingdomId>| who.and_then(|q| w.kingdoms.iter().find(|x| x.id == q)).map(|x| x.team);
+                            if let Some(x) = actor_of(&w, p(which)).and_then(|x| w.actor(x)).filter(|x| x.alive && team(x.kingdom) != team(Some(k))) {
+                                goals.push((format!("kill {}", p(which)), Some(x.id), x.pos.truncate()));
+                            }
+                        }
+                        // the default defeat of another side: its forces fall
+                        "kingdom_default_lose" if walk && !mine(&w, p(0)) => {
+                            let them: Vec<aa_play::ActorId> = w.actors.iter().filter(|x| x.alive && x.kingdom.and_then(|q| aa_play::triggers::kingdom_script_name(&w, q)).is_some_and(|n| n.eq_ignore_ascii_case(p(0))) && w.data.def(x.def).health > 0.0).map(|x| x.id).collect();
+                            if let Some(by) = w.orgs.iter().filter(|o| o.alive && o.kingdom == k).flat_map(|o| o.members.iter().copied()).next() {
+                                for a in them {
+                                    aa_play::combat::aid_kill(&mut w, a, by);
+                                }
+                            }
+                        }
+                        // engaged or routing: the player attacks it
+                        "actor_has_state" if p(1) == "0x4" || p(1) == "0xe" => {
+                            if let Some(x) = actor_of(&w, p(0)).and_then(|x| w.actor(x)).filter(|x| x.alive && x.kingdom != Some(k)) {
+                                goals.push((format!("engage {}", p(0)), Some(x.id), x.pos.truncate()));
+                            }
+                        }
+                        // attached to an HQ of the player's, the regiments it names
+                        "actor_has_state" if p(1) == "0x29" => {
+                            let org = match script_thing(&w, p(0)) {
+                                Some(ScriptThing::Thing(Thing::Org(o))) => Some(o),
+                                Some(ScriptThing::Thing(Thing::Actor(x))) => w.actor(x).and_then(|x| x.org),
+                                _ => None,
+                            };
+                            let hq = w.orgs.iter().filter(|o| o.alive && o.kingdom == k && w.data.def(o.def).max_attachments.is_some()).find_map(|o| o.members.first().copied());
+                            if let (Some(org), Some(hq)) = (org, hq)
+                                && orders.get(p(0)).is_none_or(|&t| w.time - t > 30.0)
+                            {
+                                orders.insert(p(0).to_string(), w.time);
+                                pending.push(Command::Attach { kingdom: k, org, hq });
+                            }
+                        }
+                        "kingdom_recruits_actor" if mine(&w, p(0)) => {
+                            let Some(def) = w.data.find(p(1)) else { continue };
+                            let building = w.actors.iter().find(|x| x.alive && x.kingdom == Some(k) && w.data.def(x.def).recruits.contains(&def)).map(|x| x.id);
+                            if let Some(building) = building
+                                && orders.get(p(1)).is_none_or(|&t| w.time - t > 30.0)
+                            {
+                                orders.insert(p(1).to_string(), w.time);
+                                pending.push(Command::Recruit { kingdom: k, building, def });
+                            }
+                        }
+                        "kingdom_finishes_construction_on_actor" if mine(&w, p(0)) => {
+                            let Some(def) = w.data.find(p(1)) else { continue };
+                            let truck = w.actors.iter().find(|x| x.alive && x.kingdom == Some(k) && w.data.def(x.def).unpacks_to == Some(def)).map(|x| (x.id, x.pos.truncate()));
+                            if let Some((truck, at)) = truck
+                                && orders.get(p(1)).is_none_or(|&t| w.time - t > 30.0)
+                            {
+                                orders.insert(p(1).to_string(), w.time);
+                                pending.push(Command::Deploy { kingdom: k, truck, at: at + glam::Vec2::new(-12.0, -12.0), facing: 0.0 });
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // AA_TRIGGER_WALK: what the script asks of the fight simply happens, so the census
+            // shows how far the script goes whatever the battle would have done
+            if walk {
+                for (name, target, _) in &goals {
+                    match target {
+                        Some(x) if name.starts_with("take") => {
+                            if w.actor(*x).is_some_and(|a| a.alive && a.kingdom != Some(k)) {
+                                aa_play::triggers::aid_capture(&mut w, *x, k);
+                            }
+                        }
+                        Some(_) if name.starts_with("engage") => {}
+                        Some(x) => {
+                            if let Some(by) = w.orgs.iter().filter(|o| o.alive && o.kingdom == k).flat_map(|o| o.members.iter().copied()).next() {
+                                let list: Vec<aa_play::ActorId> = match w.actor(*x).and_then(|a| a.org) {
+                                    Some(o) => w.orgs[o as usize].members.clone(),
+                                    None => vec![*x],
+                                };
+                                for a in list {
+                                    aa_play::combat::aid_kill(&mut w, a, by);
+                                }
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                goals.retain(|g| g.1.is_none() || g.0.starts_with("engage"));
+            }
+            if !own.is_empty() && !goals.is_empty() {
+                let key = goal.take().filter(|(g, since): &(String, f32)| goals.iter().any(|x| x.0 == *g) && w.time - *since < 120.0);
+                let (name, since) = key.unwrap_or_else(|| {
+                    let next = (tried..tried + goals.len()).map(|i| i % goals.len()).next().unwrap();
+                    tried += 1;
+                    (goals[next].0.clone(), w.time)
+                });
+                if let Some(g) = goals.iter().find(|x| x.0 == name) {
+                    if orders.get(&name).is_none_or(|&t| w.time - t > 30.0) {
+                        orders.insert(name.clone(), w.time);
+                        pending.push(match g.1 {
+                            Some(target) => Command::Attack { kingdom: k, units: own.clone(), target },
+                            None => Command::Move { kingdom: k, units: own.clone(), to: g.2, attack_move: true },
+                        });
+                    }
+                }
+                goal = Some((name, since));
+            }
+        }
+        let states = aa_play::triggers::trigger_states(&w);
+        let off = states.iter().filter(|(_, _, e)| !e).count();
+        eprintln!("PERSON {id}: slot {person:?} {:?} game {:.0} s, result {result}, winner {:?}, triggers off {off}/{}", t0.elapsed(), w.time, w.winner, states.len());
+        eprintln!("    objectives {objectives:?}");
+        for f in fired.iter().rev().take(6).rev() {
+            eprintln!("    fired {f}");
+        }
+        for a in armed(&w).iter().filter(|a| a.waits.iter().any(|e| e.name != "activation_time")).take(12) {
+            eprintln!("    asks {}: {}", a.name, a.waits.iter().map(|e| format!("{}({})", e.name, e.parameters.join(","))).collect::<Vec<_>>().join(" "));
+        }
+        for n in &w.triggers.notes {
+            eprintln!("    NOTE {n}");
+        }
+        let units: Vec<String> = w.orgs.iter().filter(|o| o.alive && o.kingdom == k).map(|o| w.data.def(o.def).id.clone()).chain(w.actors.iter().filter(|a| a.alive && a.kingdom == Some(k) && a.org.is_none()).map(|a| w.data.def(a.def).id.clone())).collect();
+        eprintln!("    OWN {units:?}");
+    }
+}
+
+/// 4D7960 from a trigger's object_destroyed: the damage record stands, so the Destroyed event
+/// can name who hit the thing last (54BE10). Element 3 asks for a killer: Tutorial 1's
+/// T 02.070 waits on this and the script's rout of the Germans.
+#[test]
+#[ignore]
+fn a_scripted_kill_keeps_its_attacker() {
+    use aa_play::ids::Thing;
+    use aa_play::triggers::{ScriptThing, script_thing};
+    let mut w = world("Campaign/tutorial01");
+    w.step(Vec::new());
+    let Some(ScriptThing::Thing(Thing::Org(org))) = script_thing(&w, "0x840") else { panic!("no German regiment") };
+    let by = w.actors.iter().find(|a| a.alive && a.kingdom == Some(w.kingdoms[0].id)).map(|a| a.id).expect("a player's actor");
+    for m in w.orgs[org as usize].members.clone() {
+        aa_play::combat::aid_kill(&mut w, m, by);
+    }
+    for _ in 0..3 {
+        w.step(Vec::new());
+    }
+    assert!(!w.orgs[org as usize].alive);
+    assert_eq!(w.combat.org(org).and_then(|c| c.last_hit).map(|h| h.0), Some(by));
+}
+
+/// The ability axis08's script uses (its rockets) is a general's, so `trigger_use` has its data
+/// when the generals are installed; a world without them notes it as not modelled.
+#[test]
+#[ignore]
+fn a_general_holds_the_ability_of_the_scripts() {
+    let g = aa_play::special_ops::GeneralData::load(&root(), &data()).unwrap();
+    let op = g.generals.iter().flat_map(|x| x.abilities.iter()).find(|o| o.id.eq_ignore_ascii_case("v_weapons")).expect("v_weapons");
+    assert_eq!(op.area, 12.0);
+    assert!(op.projectile.is_some());
 }
 
 /// 4F1E10's last loop: every kingdom has its first snapshot at the start, the score

@@ -173,7 +173,8 @@ fn entered_with(world: &mut World, st: &mut CombatState, a: ActorId, who: Key) {
     }
     s.intruders.insert(0, t);
     let owner = crate::scheduler::Owner::Component(a, SLOT);
-    if !world.is_scheduled(owner) {
+    // 0x4F0460: not while the world loads (GWorld +28's mode, gone once it runs).
+    if !world.is_scheduled(owner) && world.session_started {
         world.schedule_periodic_at(crate::trace::sites::DEFENDER_ENTERED, crate::scheduler::EVERY_TICK, owner, 0);
         world.schedule_after(crate::scheduler::DEFERRED, owner, 0, LIST_SECONDS);
     }
@@ -222,6 +223,18 @@ fn target_exists(world: &World, t: TargetRef) -> bool {
 pub(crate) fn tick(world: &mut World, a: ActorId) {
     if !world.actors.get(a as usize).is_some_and(|x| x.alive && !x.removed) {
         return;
+    }
+    // Defender +0x30 (0x566F80: the modifiers changed, +0x2C the new radius): the first
+    // Tick after it moves the ZOC (0x515F40 at the thing's position).
+    if let Some(mut e) = crate::fog::take_engine(world) {
+        let key = Key::Actor(a);
+        let control = e.def_of(world, key).control;
+        let radius = match crate::zones::modifier_add(world, key, "CONTROL_RANGE") {
+            Some(add) => crate::zones::clamp_add(control, add, world.data.rule_ci("ModifierAttributeClampAdd").unwrap_or(1.0)),
+            None => control,
+        };
+        e.zoc_radius(world, key, radius);
+        crate::fog::put_engine(world, e);
     }
     let mut st = std::mem::take(&mut world.combat);
     if st.actors.len() < world.actors.len() || st.orgs.len() < world.orgs.len() || st.rules.is_none() {

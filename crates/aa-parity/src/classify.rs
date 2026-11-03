@@ -25,7 +25,7 @@ pub const ACTOR_COMMAND_MAPPING: [(&str, Option<&str>); 39] = [
     ("commission", Some("Order Commission (refused: no settlement host)")),
     ("recruit", Some("Recruit")),
     ("set_rally_point", Some("SetRallyPoint")),
-    ("recruit_location", Some("Order RecruitAt (lands at the point: no flight yet)")),
+    ("recruit_location", Some("Order RecruitAt")),
     ("structure_cancel_queued", Some("Order CancelQueued")),
     ("construction_cancel", Some("Order ConstructionCancel")),
     ("sell", Some("Sell")),
