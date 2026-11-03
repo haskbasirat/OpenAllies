@@ -39,6 +39,9 @@
 //!   the exact 46EF30 overlap (aa_spatial::shape_overlap) of its blocking shape
 //!   (4EA0F0; an organization's leader point) and the area's; the areas update
 //!   right before the manager instead of at their queue-0 delivery;
+//! - the actor states of `actor_has_state` (word +0x100 and on, names 0x477FC0): the
+//!   ones aa-play can answer are read from its orders, combat and supply state
+//!   ([`Host::state_bits`]), the others stay off;
 //! - 4D7960 (object_destroyed) brings the body to zero health; the death,
 //!   and its Destroyed event, follow in the next tick's combat pass;
 //! - 554B30 placement is the ring search of 554850 with the occupancy test of
@@ -69,7 +72,7 @@
 //! client's UI commands, ui/objectives.rs), `set_difficulty` (the session's
 //! launch), `objectives` (the objectives display, ui/panels.rs).
 use crate::data::DefClass;
-use crate::world::{ActorId, Command, Event, KingdomId, OrgId, Unit, World};
+use crate::world::{ActorId, Command, Event, KingdomId, Order, OrgId, Unit, World};
 use aa_numeric::Precision;
 use aa_triggers::{
     actions::{AbilityRequest, CameraFields, Command as TriggerCommand, SpawnRequest},
@@ -784,11 +787,16 @@ fn load(world: &mut World, rmp: Vec<u8>, language: &str, suns: Vec<SunData>, dif
 pub fn tick(world: &mut World) {
     if !world.triggers.probed {
         world.triggers.probed = true;
-        match find_root() {
-            Some(root) => {
-                attach(world, &root);
+        // A generated world has no map file and so no TRIGGERS chunk (54D3D0 runs
+        // in the map load 0x4FC600): looking for one would only open the whole
+        // archive for nothing, 1.5 s on the battle's first tick.
+        if world.map.generated.is_none() {
+            match find_root() {
+                Some(root) => {
+                    attach(world, &root);
+                }
+                None => world.triggers.notes.push("the install was not found: the map's triggers do not run".into()),
             }
-            None => world.triggers.notes.push("the install was not found: the map's triggers do not run".into()),
         }
         if let Some(ids) = world.triggers.rule_sun.take() {
             apply_rule_sun(world, &ids);
@@ -1833,30 +1841,77 @@ impl aa_triggers::elements::Services for Host<'_> {
     /// Actor+100/+104: the states aa-play tracks (5 mind_exhausted, 19
     /// out_of_supply, 21 under construction, 22 entrenched).
     fn state_bits(&self, actor: Object) -> Result<u64> {
+        // the state indices of 0x477FC0 that the shipped scripts read or aa-play knows;
+        // an index with no reader here stays off
+        const MIND_ATTACKING: u32 = 0x00;
+        const MIND_ENGAGED: u32 = 0x04;
+        const MIND_EXHAUSTED: u32 = 0x05;
+        const MIND_MOVING: u32 = 0x08;
+        const MIND_RETREATING: u32 = 0x0D;
+        const MIND_ROUTING: u32 = 0x0E;
+        const OUT_OF_SUPPLY: u32 = 0x13;
+        const CONSTRUCTION: u32 = 0x15;
+        const ENTRENCHED: u32 = 0x16;
+        const DEAD: u32 = 0x17;
+        const STRUCTURE_PACKING: u32 = 0x19;
+        const STRUCTURE_UNPACKING: u32 = 0x1A;
+        const MIND_PACKING: u32 = 0x23;
+        const MIND_UNPACKING: u32 = 0x24;
+        const HQ_ATTACHED: u32 = 0x29;
         let mut bits = 0u64;
+        let mut set = |state: u32, on: bool| {
+            if on {
+                bits |= 1 << state;
+            }
+        };
         match split(actor) {
             (tag::ACTOR, a) => {
                 if let Some(b) = self.world.books.actor(a as ActorId) {
-                    if b.out_of_supply {
-                        bits |= 1 << 19;
+                    set(OUT_OF_SUPPLY, b.out_of_supply);
+                    set(CONSTRUCTION, b.constructing);
+                }
+                if let Some(x) = self.world.actors.get(a as usize) {
+                    use crate::world::Activity;
+                    set(DEAD, !x.alive);
+                    set(STRUCTURE_PACKING, x.activity == Activity::Packing);
+                    set(STRUCTURE_UNPACKING, x.activity == Activity::Unpacking);
+                    set(MIND_PACKING, x.activity == Activity::Packing);
+                    set(MIND_UNPACKING, x.activity == Activity::Unpacking);
+                    // a lone actor's Mind; a member's state is its organization's
+                    match x.org.and_then(|g| self.world.orgs.get(g as usize)) {
+                        Some(o) => {
+                            set(MIND_MOVING, matches!(o.order, Order::Move { .. } | Order::Deploy { .. }));
+                            set(MIND_ATTACKING, matches!(o.order, Order::Attack { .. }));
+                            set(HQ_ATTACHED, o.hq.is_some());
+                        }
+                        None => {
+                            set(MIND_MOVING, matches!(x.order, Order::Move { .. } | Order::Deploy { .. }));
+                            set(MIND_ATTACKING, matches!(x.order, Order::Attack { .. }));
+                        }
                     }
-                    if b.constructing {
-                        bits |= 1 << 21;
+                    if let Some(c) = x.org.and_then(|g| self.world.combat.org(g)) {
+                        set(MIND_ENGAGED, c.routing.is_none() && !c.exhausted && c.engaging());
+                        set(MIND_ROUTING, c.routing.is_some());
+                    } else {
+                        set(MIND_ENGAGED, x.combat.target.is_some());
                     }
                 }
             }
             (tag::ORG, g) => {
-                if self.world.books.org(g as OrgId).is_some_and(|b| b.out_of_supply) {
-                    bits |= 1 << 19;
-                }
+                set(OUT_OF_SUPPLY, self.world.books.org(g as OrgId).is_some_and(|b| b.out_of_supply));
                 if let Some(c) = self.world.combat.org(g as OrgId) {
-                    if c.exhausted {
-                        bits |= 1 << 5;
-                    }
-                    if c.entrenched {
-                        bits |= 1 << 22;
-                    }
+                    set(MIND_EXHAUSTED, c.exhausted);
+                    set(ENTRENCHED, c.entrenched);
+                    set(MIND_ENGAGED, c.routing.is_none() && !c.exhausted && c.engaging());
+                    set(MIND_ROUTING, c.routing.is_some());
                 }
+                if let Some(o) = self.world.orgs.get(g as usize) {
+                    set(DEAD, !o.alive);
+                    set(MIND_MOVING, matches!(o.order, Order::Move { .. } | Order::Deploy { .. }));
+                    set(MIND_ATTACKING, matches!(o.order, Order::Attack { .. }));
+                    set(HQ_ATTACHED, o.hq.is_some());
+                }
+                set(MIND_RETREATING, crate::orders::retreating(self.world, g as OrgId));
             }
             _ => {}
         }

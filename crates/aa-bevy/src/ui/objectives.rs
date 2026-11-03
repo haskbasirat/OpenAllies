@@ -25,10 +25,6 @@
 //! * speech (7476E0) and sounds (7474F0) to the sound queue; the chat lines
 //!   (40BC50 / 40BF70, message type 0xF GENERIC_EVENT) to the message log.
 //!
-//! Compare against the original: the banner panel keeps its data height
-//! (`0x60D9D0` measures the text, 735C00, and sets the panel height to it
-//! plus a pad).
-//!
 //! The UI commands of the triggers (50D120 on the UI script): `MoveCamera`
 //! (0x43DD10), `CameraFollow` (0x43E150) and `ShakeCamera` (0x43E020) go to the
 //! camera (`crate::camera`), each ignored when it names another kingdom than
@@ -58,8 +54,7 @@
 //! PlayVideo (545C60 -> 0x411070) is `campaign/cinematic.rs`.
 //!
 //! Still not presented, each logged once when it happens: the
-//! weather, a VFX on an actor (50D230, no shipped map uses it) and team command
-//! flares' markers. The flash of a UI button
+//! weather and a VFX on an actor (50D230, no shipped map uses it). The flash of a UI button
 //! (50C880: the TutorialWidget of a command, 0x619BF0, virtual +B4 = 0x5EE2F0)
 //! toggles the button's TARGETED state every AVar UIFlashToggleSeconds,
 //! UIFlashTogglesWhenTargeted times, over the action button that shows the
@@ -135,8 +130,10 @@ const EVENTS: [&str; 0x3e] = [
 ];
 
 const BANNER_PANEL: &str = "Game/DisplayBannerPanel";
-const BANNER_LABEL: &str = "Game/DisplayBannerPanel/DisplayBanner";
-const BANNER_BACKGROUND: &str = "Game/DisplayBannerPanel/DisplayBannerBackground";
+// the panel's children are named by their data path (0x6182B0), which a widget
+// path cannot reach: `banner_child`
+const BANNER_LABEL: &str = "DisplayBannerPanel/DisplayBanner";
+const BANNER_BACKGROUND: &str = "DisplayBannerPanel/DisplayBannerBackground";
 const COUNTER: &str = "UI/Game/time_message.tgi:Counter";
 
 /// The interface's banner words (+19C duration, +1A0 last timer value, +1A4
@@ -149,6 +146,8 @@ pub struct ScenarioUi {
     banner_1a4: u64,
     banner_1a8: bool,
     banner_visible: bool,
+    /// The music a trigger started (747630).
+    music: Option<String>,
     counter_attached: bool,
     /// The world the notices belong to (a new battle starts over).
     world_tick: u64,
@@ -296,8 +295,22 @@ fn effect_progress(transition: aa_play::triggers::TransitionView, now: f32) -> O
     }
 }
 
-fn set_alpha(ui: &mut aa_ui::ui::Ui, path: &str, alpha: f32) {
-    ui.with_widget(path, |w| {
+/// A child of the banner panel.
+fn banner_child<R>(ui: &mut aa_ui::ui::Ui, name: &str, f: impl FnOnce(&mut aa_ui::widget::Widget) -> R) -> Option<R> {
+    let mut out = None;
+    let found = ui.with_widget(BANNER_PANEL, |p| {
+        if let Some(c) = p.children.iter_mut().find(|c| c.name == name) {
+            out = Some(f(c));
+        }
+    });
+    if out.is_none() {
+        warn!("scenario UI: no widget {name} in {BANNER_PANEL} (panel found: {found})");
+    }
+    out
+}
+
+fn set_alpha(ui: &mut aa_ui::ui::Ui, name: &str, alpha: f32) {
+    banner_child(ui, name, |w| {
         for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
             match &mut ve.kind {
                 aa_ui::ve::VeKind::Label(l) => l.color[3] = alpha,
@@ -325,12 +338,29 @@ fn show_banner(s: &mut ScenarioUi, ui: &mut aa_ui::ui::Ui, text: &str, ms: u32, 
     }
     info!("display banner ({ms} ms): {text}");
     set_alpha(ui, BANNER_LABEL, 1.0);
-    ui.set_label(BANNER_LABEL, text);
+    // the label's vtable+C8 SetText; the font and the width of its rect for the
+    // measure below
+    let label = banner_child(ui, BANNER_LABEL, |w| {
+        let mut found = None;
+        for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+            if let aa_ui::ve::VeKind::Label(l) = &mut ve.kind {
+                l.text = text.to_string();
+                found = Some((l.font.clone(), ve.layout.outer.raw[2]));
+            }
+        }
+        found
+    });
     set_alpha(ui, BANNER_BACKGROUND, 1.0);
     s.banner_19c = ms;
     s.banner_1a4 = 0;
     s.banner_1a8 = paused;
     s.banner_1a0 = ui.now_ms;
+    // 735C00 at the label's width, then 0x5EF0D0: the panel's height is the
+    // text's plus [0xA30DE0] (10.0)
+    if let Some(Some((font, width))) = label {
+        let (_, height, _) = ui.measure_text(&font, text, width);
+        ui.with_widget(BANNER_PANEL, |p| aa_ui::geometry::set_height(p, height + 10.0));
+    }
     set_visible(ui, BANNER_PANEL, true);
     s.banner_visible = true;
 }
@@ -545,11 +575,43 @@ pub fn update(
             }
             // 7476E0's music voice (747630): the same queue, its sound's category
             aa_play::triggers::Notice::Music(Some(ids)) => {
+                s.music = Some(ids.clone());
                 if let Some(q) = sfx.as_mut() {
                     q.play.push(crate::audio::Sfx { ids: ids.clone(), place: crate::audio::Place::Global, owner: None, voice: None, looping: true });
                 }
             }
-            aa_play::triggers::Notice::Music(None) => log_once(&mut s.logged, "stopping the game music from a trigger is not presented".into()),
+            // 747630 without a sound: the script's music stops
+            aa_play::triggers::Notice::Music(None) => {
+                if let (Some(q), Some(ids)) = (sfx.as_mut(), s.music.take()) {
+                    q.stop.push((ids, None));
+                }
+            }
+            // 572E50: the flare where it stands for the kingdom's side (labelled
+            // rendition: aa-play has no flare actor, so it does not select or target),
+            // and the game event: 0x19 / 0x1B for the local kingdom, 0x1A / 0x1C for an ally
+            aa_play::triggers::Notice::Flare { kingdom, ids, at, actor, seconds } => {
+                let own = *kingdom == local;
+                let ally = matches!(aa_play::setup::relation(&b.world, Some(local), Some(*kingdom)), 0 | 1);
+                if own || ally {
+                    marks.transports.push(super::order_marks::TransportRun { kingdom: *kingdom, ids: ids.clone(), from: *at, to: [at[0], at[1]], seconds: *seconds });
+                    let flare = b.world.data.find(ids).map(|d| front.ui.strings.resolve(&b.world.data.def(d).name)).unwrap_or_else(|| ids.clone());
+                    let target = actor.and_then(|u| match u {
+                        aa_play::Unit::Actor(a) => b.world.actor(a).map(|x| x.def),
+                        aa_play::Unit::Org(o) => b.world.orgs.get(o as usize).map(|g| g.def),
+                    });
+                    let target = target.map(|d| front.ui.strings.resolve(&b.world.data.def(d).name));
+                    let name = b.world.kingdoms.get(*kingdom as usize).map(|k| k.name.clone()).unwrap_or_default();
+                    let spot = Some(Vec2::new(at[0], at[1]));
+                    if let Some(h) = front.hud.as_mut() {
+                        match (own, target) {
+                            (true, None) => h.events.fire(&mut front.ui, "my_flare_created", &[flare.as_str()], spot, Some(*kingdom)),
+                            (true, Some(t)) => h.events.fire(&mut front.ui, "my_flare_created_on_actor", &[flare.as_str(), t.as_str()], spot, Some(*kingdom)),
+                            (false, None) => h.events.fire(&mut front.ui, "ally_flare_created", &[flare.as_str(), name.as_str()], spot, Some(local)),
+                            (false, Some(t)) => h.events.fire(&mut front.ui, "ally_flare_created_on_actor", &[flare.as_str(), t.as_str(), name.as_str()], spot, Some(local)),
+                        }
+                    }
+                }
+            }
             // 543BA0: the transport on its way (the sim's Drop lands the cargo)
             aa_play::triggers::Notice::Transport { kingdom, ids, from, to, seconds } => {
                 marks.transports.push(super::order_marks::TransportRun { kingdom: *kingdom, ids: ids.clone(), from: *from, to: *to, seconds: *seconds });

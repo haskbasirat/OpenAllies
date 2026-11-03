@@ -11,7 +11,9 @@
 //!   anchored_tooltips: x 1024, y 521, width 346, `0x5EDED0`): right edge
 //!   at x, bottom at y, the text wrapped to the width minus the padding;
 //!   elsewhere it follows the pointer and wraps at UiTooltipsMaxWidth (0.5)
-//!   of the screen width.
+//!   of the screen width, unless the interface on show is anchored too
+//!   ([`Tooltips::anchor`]: 5F2D60 reads it from any interface's data; with
+//!   anchored_tooltip_should_expand_downward +A4 the left and top are x and y).
 //!
 //! The text comes from the widget's `tooltip_name` / `ToolTip` data, or
 //! from the game HUD for the action and formation buttons.
@@ -23,6 +25,9 @@ const SHARED_TIP: &str = "UI/Shared/tooltip.tgi:ToolTipShared";
 
 #[derive(Default)]
 pub struct Tooltips {
+    /// The anchored tooltips of the interface on show outside the game: x, y,
+    /// width (+94, +98, +9C) and whether it expands downward (+A4).
+    pub anchor: Option<(f32, f32, f32, bool)>,
     /// The widget (path) the pointer rests on and since when (ms).
     hover: Option<(String, u64)>,
     /// A press hid the tooltip of this widget.
@@ -155,6 +160,13 @@ impl Tooltips {
             let width = aw + 0.5;
             let height = th + 2.0 * py + 0.5;
             ((ax - width) * g.sx, (ay - height) * g.sy, width * g.sx, height * g.sy)
+        } else if let Some((ax, ay, aw, down)) = self.anchor {
+            // 0x5EDED0: the same, or from the anchor down and to the right
+            let (_, th, _) = ui.measure_text(&label_font, full, (aw - 2.0 * px).max(1.0));
+            let width = aw + 0.5;
+            let height = th + 2.0 * py + 0.5;
+            let (left, top) = if down { (ax, ay) } else { (ax - width, ay - height) };
+            (left * g.sx, top * g.sy, width * g.sx, height * g.sy)
         } else {
             let max = Some(ui.uvars.get_f32("UiTooltipsMaxWidth")).filter(|m| *m > 0.0).unwrap_or(0.5) * sw / g.sx;
             let (tw, _, _) = ui.measure_text(&label_font, full, 100_000.0);

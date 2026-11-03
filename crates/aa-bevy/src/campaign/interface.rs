@@ -6,14 +6,13 @@
 //! 965A10, the turn status 935760 and the battle block 93694D..936A07); the
 //! game menu (94B100) and the Start Battle dialog (94D9D0).
 //!
-//! Refused with a log line until it is built: the politics display. The saved-game
+//! The politics display (932930, 950290) is [`MetaGameUi::refresh_politics`]. The saved-game
 //! dialogs (68DB60 / 68DCE0 type 3) are campaign/saves.rs. The RTS battle launch is
 //! campaign/battle.rs; the history dialog (94AD40) is the whole message log;
-//! the purchasing dialog (94BFE0) lists the shop rows, the technologies without
-//! their icons and tooltips (94CAE0).
+//! the purchasing dialog (94BFE0) lists the shop rows (94C7B0, 94CAE0).
 //! The help popups (94A5C0) are campaign/help.rs. The tooltips of the army rows
-//! (94DFE0, 94C7B0: 6388F0 the name, 63C160 the divisions, 638D90 the description) and
-//! of the quick battle (94E610) are [`MetaGameUi::tooltip`].
+//! (94DFE0, 94BC50), of the technology rows (94BE50) and of the quick battle (94E610)
+//! are [`MetaGameUi::tooltip`], written as the tooltip builder 638690 does ([`TipBody`]).
 //! The object display's portrait (96AD80, 96B1D0 -> 96ABF0: the army's own model in
 //! the ModelWidget) is drawn by `ui::portrait`. Not built at all: the Play button's
 //! tooltip (94E920),
@@ -91,39 +90,111 @@ pub struct MetaGameUi {
     battle_dialog: Option<bool>,
     /// The dynamic tooltips of the open dialog: (the widget's path, name, text).
     tips: Vec<(String, String, String)>,
+    /// The game's folder (the data of the technologies, `crate::preload::game_data`).
+    game_root: std::path::PathBuf,
+    /// PoliticsDisplayToggle: the display is on, and what it shows.
+    politics: bool,
+    politics_rows: Vec<String>,
 }
 
-/// The tooltip of an army row (94DFE0 / 94C7B0): the Thing's name, the divisions it
+/// `+0x120` of the interface, made by 935130 (932930).
+const POLITICS: &str = "MetaGame/UI/metagame_politics_display.tgi:MetaGamePoliticsDisplay";
+const POLITICS_NAME: &str = "MetaGamePoliticsDisplay";
+const TAG_POLITICS: u64 = 9500;
+
+/// The tooltip builder 638690 after its name (6388F0: `ui::tooltip` writes the name and
+/// the blank line after it): +0 the text, +4 the break owed to the next value.
+#[derive(Default)]
+struct TipBody {
+    text: String,
+    pending: bool,
+}
+
+impl TipBody {
+    /// 638B70 with its callers' break (63C160, 63D3D0, 63B8C0, 63BFD0): `\n` when a value
+    /// comes and a break is owed, `\n%s<SetX=%d>%s` of the label and the value (the first
+    /// `\n` only after other text; without a label the value alone).
+    fn row(&mut self, label: &str, value: &str, x: i32) {
+        if !value.is_empty() && self.pending {
+            self.text.push('\n');
+            self.pending = false;
+        }
+        if !self.text.is_empty() {
+            self.text.push('\n');
+        }
+        if !label.is_empty() {
+            self.text.push_str(&format!("{label}<SetX={x}>"));
+        }
+        self.text.push_str(value);
+    }
+
+    /// 638D90: after other text a blank line, then the description.
+    fn description(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if !self.text.is_empty() {
+            self.text.push_str("\n\n");
+        }
+        self.text.push_str(text);
+        self.pending = false;
+    }
+
+    /// 63D3D0: `Cost` and `%lc %.0f` of the money's glyph, not for a cost of 0.
+    fn cost(&mut self, ui: &Ui, cost: i32, x: i32) {
+        if cost != 0 {
+            let value = money_glyph(ui).map(|g| format!("{g} {cost}")).unwrap_or_else(|| cost.to_string());
+            self.row(&ui.strings.resolve("#ui_tooltip_item_title_cost"), &value, x);
+        }
+    }
+}
+
+/// 638B70's column x: the AVar UITabWidth (index 0x56, `[B39990]+0x158`, registered at
+/// 0x403B1E) times 5C1DB0 (the window's height over the reference height), truncated.
+fn tab_x(ui: &Ui) -> i32 {
+    let tab = ui.avars.get("UITabWidth").and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(100.0);
+    (tab * ui.screen.height as f32 / ui.reference.height.max(1.0)) as i32
+}
+
+/// The tooltip of an army row (94DFE0 without a cost, 94BC50 with one): the Thing's name, the divisions it
 /// starts with (63C160), the MetaGameComponent's tooltip (638D90).
-fn army_tip(ui: &Ui, game: &Game, d: usize) -> (String, String) {
+fn army_tip(ui: &Ui, game: &Game, d: usize, cost: Option<i32>) -> (String, String) {
     let data = &game.campaign.data;
-    let mut body = String::new();
-    for i in &data.armies[d].divisions {
+    let x = tab_x(ui);
+    let mut body = TipBody::default();
+    if let Some(cost) = cost {
+        body.cost(ui, cost, x);
+    }
+    // 63C160(list, 1, 0): a break before and after; the list is built head first
+    // from +0x5B8's array, so the last division comes first
+    let list = &data.armies[d].divisions;
+    if !list.is_empty() {
+        body.pending = true;
+    }
+    for i in list.iter().rev() {
         if let Some(div) = data.divisions.get(*i) {
-            if !body.is_empty() {
-                body.push('\n');
-            }
-            body.push_str(&ui.strings.resolve(&div.name));
+            body.row("", &ui.strings.resolve(&div.name), x);
         }
     }
-    let tooltip = ui.strings.resolve(&data.armies[d].tooltip);
-    if !tooltip.is_empty() {
-        if !body.is_empty() {
-            body.push_str("\n\n");
-        }
-        body.push_str(&tooltip);
+    if !list.is_empty() {
+        body.pending = true;
     }
-    (army_name(ui, game, d), body)
+    body.description(&ui.strings.resolve(&data.armies[d].tooltip));
+    (army_name(ui, game, d), body.text)
+}
+
+/// The technology's name (the Property's +0x10), as the rows and the messages write it.
+fn technology_name(ui: &Ui, data: Option<&aa_play::GameData>, ids: &str) -> String {
+    data.and_then(|d| d.property(ids)).map(|p| ui.strings.resolve(&p.name)).unwrap_or_else(|| ids.to_string())
 }
 
 /// `0x94E610`: the Quick Battle button's tooltip: per side (63C2A0) its name, its
 /// armies, its kingdom's technologies and its win chance (95F370; the defender's the
-/// rest of 1). The row's column (638B70) is the AVar tab width of the battle tooltips,
-/// 100 reference pixels here as the HUD's (labelled until the AVar is identified).
+/// rest of 1). The row's column is 638B70's ([`tab_x`]).
 fn quick_tip(ui: &Ui, game: &Game) -> Option<(String, String)> {
     let t = game.campaign.pending_battle().ok().flatten()?;
     let odds = f32::from_bits(game.campaign.attack_odds_bits(t, aa_numeric::Precision::Double53).ok()?);
-    let x = (100.0 * ui.screen.height as f32 / ui.reference.height.max(1.0)) as i32;
+    let x = tab_x(ui);
     let row = |label: &str, value: String| format!("{}<SetX={x}>{value}", ui.strings.resolve(label));
     let mut lines = Vec::new();
     for (side, label, chance) in [(Side::Attacker, "#metagame_tooltip_quickbattle_attacker", odds), (Side::Defender, "#metagame_tooltip_quickbattle_defender", 1.0 - odds)] {
@@ -272,6 +343,10 @@ fn income(game: &Game, k: usize) -> i32 {
 }
 
 impl MetaGameUi {
+    pub fn with_root(game_root: &std::path::Path) -> Self {
+        Self { game_root: game_root.to_path_buf(), ..Default::default() }
+    }
+
     fn tree() -> Widget {
         let mut iface = Widget::new(C::Interface, &format!("{IFACE_FILE}:{IFACE}"), false);
         // 94F6E0: the control panel's children
@@ -353,6 +428,7 @@ impl MetaGameUi {
         self.last.clear();
         self.upgrade_shown = None;
         self.divisions_shown = None;
+        self.politics_rows.clear();
         if let Some(d) = self.dialog {
             self.open(ui, game, d);
         }
@@ -373,6 +449,9 @@ impl MetaGameUi {
     /// The per-frame update.
     pub fn update(&mut self, ui: &mut Ui, game: &mut Game) {
         self.help.update(ui, game);
+        if self.politics {
+            self.refresh_politics(ui, game);
+        }
         if let Some(involved) = self.battle_dialog.take() {
             self.help.ask(ui, game, if involved { super::help::START_BATTLE_SELECTED } else { super::help::WATCH_BATTLE_SELECTED }, None);
         }
@@ -675,7 +754,10 @@ impl MetaGameUi {
 
     /// `0x94C7B0` / `0x94CAE0`: one row per shop entry of the local
     /// kingdom (kingdom data +0xDC): `PurchaseArmy <ids>` / `PurchaseTechnology
-    /// <ids>`, the icon, the name and the cost (937350).
+    /// <ids>`, the icon on the PushItem's Decal (964F90: the Thing's +0xF0, the
+    /// Property's action_button_icon +0x30), the name and the cost (937350). A
+    /// technology the kingdom owns (959FF0) has its row disabled. The rows' tooltips
+    /// are 94BC50 and 94BE50.
     fn fill_purchase(&mut self, ui: &mut Ui, game: &Game) {
         let Some(l) = game.campaign.local else { return };
         let c = &game.campaign.data.campaigns[game.campaign.state.campaign];
@@ -683,13 +765,13 @@ impl MetaGameUi {
         let glyph = money_glyph(ui);
         let base = "MetaGamePurchasingDialog";
         let file = "MetaGame/UI/metagame_purchasing.tgi:MetaGamePurchasingDialog";
-        let mut add = |ui: &mut Ui, page: &str, list: &str, command: String, name: String, cost: i32, tag: u64| {
+        let add = |ui: &mut Ui, page: &str, list: &str, command: String, name: String, cost: i32, tag: u64| {
             let vp = format!("Root/{base}/{page}/{list}");
             let mut row = Widget::new(C::Panel, "Client", false);
             let mut push = Widget::new(C::PushButton, "PushItem", false);
             push.command = Some(command);
+            push.add_child(Widget::new(C::Decal, "Decal", false));
             row.add_child(push);
-            row.add_child(Widget::new(C::Decal, "Decal", false));
             row.add_child(Widget::new(C::Label, "Column0", false));
             row.add_child(Widget::new(C::Label, "Column1", false));
             if let Ok(n) = ui.store.node(&format!("{file}/{page}/{list}")) {
@@ -711,25 +793,76 @@ impl MetaGameUi {
             let Some(ids) = r.ids.clone() else { continue };
             let name = game.data.thing_name(&ids).map(|k| ui.strings.resolve(k)).unwrap_or_else(|| ids.clone());
             add(ui, "MetaGamePurchasingArmyPage", "MetaGamePurchaseArmyList", format!("PurchaseArmy {ids}"), name, r.cost, 9600 + i as u64);
-            // 94C7B0: the Thing's icon (+0xF0) on the Decal, the tooltip as the army rows'
+            // 94C7B0: the Thing's icon (+0xF0) on the Decal; 94BC50 the tooltip
             if let Some(path) = ui.find_tag(9600 + i as u64) {
                 let icon = game.data.thing_icon(&ids).map(|t| format!("/{}", t.trim_start_matches('/')));
                 let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
-                ui.with_widget(&format!("{rel}/Decal"), |w| {
+                ui.with_widget(&format!("{rel}/PushItem/Decal"), |w| {
                     for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
                         set_decal_texture(ve, &icon);
                     }
                 });
                 if let Some(d) = game.campaign.data.armies.iter().position(|a| a.ids.eq_ignore_ascii_case(&ids)) {
-                    let (name, body) = army_tip(ui, game, d);
+                    let (name, body) = army_tip(ui, game, d, Some(r.cost));
                     self.tips.push((path, name, body));
                 }
             }
         }
+        // the Property of a technology: GameData for its name, requirements and
+        // modifier lines, the data file for its button icon and description
+        let data = crate::preload::game_data(&self.game_root).ok();
+        let resources = crate::ui::hud::load_resources(ui);
+        let mut art = std::collections::HashMap::new();
+        for n in crate::ui::datafile::load(&ui.store.root, "Properties/properties_technologies.tgi").iter() {
+            let Some(id) = n.get("IDS") else { continue };
+            let clean = |s: Option<&str>| s.unwrap_or_default().trim_matches('"').trim().to_string();
+            let repair: Vec<bool> = n.children_named("Modifier").map(|m| m.get("repair").is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))).collect();
+            art.insert(id.to_ascii_lowercase(), (clean(n.get("action_button_icon")), clean(n.get("description")), repair));
+        }
+        let owned = game.campaign.state.kingdoms[l].technologies.clone();
+        let x = tab_x(ui);
         for (i, r) in shop.technologies.iter().enumerate() {
             let Some(ids) = r.ids.clone() else { continue };
-            let name = ui.strings.resolve(&format!("#{ids}_name"));
-            add(ui, "MetaGamePurchasingTechnologyPage", "MetaGamePurchaseTechnologyList", format!("PurchaseTechnology {ids}"), name, r.cost, 9700 + i as u64);
+            let name = technology_name(ui, data.as_deref(), &ids);
+            let tag = 9700 + i as u64;
+            add(ui, "MetaGamePurchasingTechnologyPage", "MetaGamePurchaseTechnologyList", format!("PurchaseTechnology {ids}"), name.clone(), r.cost, tag);
+            let Some(path) = ui.find_tag(tag) else { continue };
+            let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
+            let (icon, description, repair) = art.get(&ids.to_ascii_lowercase()).cloned().unwrap_or_default();
+            // a relative icon is below Properties/
+            let icon = (!icon.is_empty() && !icon.eq_ignore_ascii_case("null")).then(|| if icon.starts_with('/') { icon } else { format!("/Properties/{icon}") });
+            let enabled = !owned.iter().any(|t| t.eq_ignore_ascii_case(&ids));
+            ui.with_widget(&format!("{rel}/PushItem/Decal"), |w| {
+                for ve in w.sub_ve.iter_mut().chain(w.view.iter_mut()) {
+                    set_decal_texture(ve, &icon);
+                }
+            });
+            ui.with_widget(&format!("{rel}/PushItem"), |w| w.set_enabled(enabled));
+            // 94BE50: the name, the cost, 63B8C0 "Affects" with what the property
+            // requires of an actor, 63BFD0(1, 0) the modifier lines, 638D90 the description
+            let mut body = TipBody::default();
+            body.cost(ui, r.cost, x);
+            if let Some(p) = data.as_ref().and_then(|d| d.property(&ids)) {
+                let list: Vec<String> = p.required_properties.iter().map(|q| technology_name(ui, data.as_deref(), q)).collect();
+                if !list.is_empty() {
+                    body.row(&ui.strings.resolve("#ui_tooltip_item_title_required_properties"), &list.join(", "), x);
+                }
+                let lines: Vec<String> = p
+                    .modifiers
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(k, m)| crate::ui::modifiers::describe(ui, data.as_ref()?, &resources, m, repair.get(k).copied().unwrap_or(false)))
+                    .collect();
+                if !lines.is_empty() {
+                    body.pending = true;
+                    for l in &lines {
+                        body.row("", l, x);
+                    }
+                    body.pending = true;
+                }
+            }
+            body.description(&ui.strings.resolve(&description));
+            self.tips.push((path, name, body.text));
         }
         ui.viewport_refresh(&format!("Root/{base}/MetaGamePurchasingArmyPage/MetaGamePurchaseArmyList"));
         ui.viewport_refresh(&format!("Root/{base}/MetaGamePurchasingTechnologyPage/MetaGamePurchaseTechnologyList"));
@@ -847,7 +980,7 @@ impl MetaGameUi {
             row.tag = tag;
             ui.viewport_add(&vp, row);
             let Some(path) = ui.find_tag(tag) else { continue };
-            let (name, body) = army_tip(ui, game, d);
+            let (name, body) = army_tip(ui, game, d, None);
             self.tips.push((path.clone(), name, body));
             let rel = path.strip_prefix("Root/").unwrap_or(&path).to_string();
             ui.set_label(&format!("{rel}/Column0"), &format.replace("%d", &count.to_string()));
@@ -1136,7 +1269,7 @@ impl MetaGameUi {
                 let ids = words.next()?;
                 if let Some(mut cmd) = Campaign::command("purchasetech") {
                     cmd.technology = Some(ids.to_string());
-                    let name = ui.strings.resolve(&format!("#{ids}_name"));
+                    let name = technology_name(ui, crate::preload::game_data(&self.game_root).ok().as_deref(), ids);
                     self.purchase_request(ui, game, cmd, &name);
                 }
                 Some(Out::None)
@@ -1165,12 +1298,87 @@ impl MetaGameUi {
                 self.close(ui);
                 Some(Out::SaveDialog)
             }
-            "politicsdisplaytoggle" | "gamesave" | "cycleselection" => {
+            // 9375C0: the display on or off (the toggle button flips itself)
+            "politicsdisplaytoggle" => {
+                self.politics = !self.politics;
+                self.politics_rows.clear();
+                if self.politics {
+                    self.refresh_politics(ui, game);
+                } else {
+                    ui.disconnect(POLITICS_NAME);
+                    ui.layout();
+                }
+                Some(Out::None)
+            }
+            "gamesave" | "cycleselection" => {
                 bevy::log::warn!("MetaGame command {command} refused: its screen is not built");
                 Some(Out::None)
             }
             _ => None,
         }
+    }
+
+    /// The politics display: per kingdom with a kingdom actor a label (634D70 the
+    /// kingdom's glyph and name, `<SetX=%d>%lc` the relation's glyph at offset_relation
+    /// for the others; 950290 `<SetX=%d>%s` the money and income 9374F0 at
+    /// offset_resources; SetX in window pixels, 5C1DB0), laid out as the game's display:
+    /// offset_top, `separation` apart, the panel's height after offset_bottom.
+    fn refresh_politics(&mut self, ui: &mut Ui, game: &Game) {
+        use aa_metagame::battle::KingdomRelations;
+        let node = ui.store.node(POLITICS).ok();
+        let num = |k: &str, d: f32| node.as_ref().and_then(|n| n.float(k).ok()).unwrap_or(d);
+        let glyph = |ui: &Ui, k: &str| node.as_ref().map(|n| n.string_or_empty(k)).and_then(|n| ui.strings.glyphs.get(&n.to_ascii_lowercase()).copied());
+        let scale = ui.screen.height as f32 / ui.reference.height.max(1.0);
+        let (relation_x, resources_x) = ((num("offset_relation", 190.0) * scale) as i32, (num("offset_resources", 230.0) * scale) as i32);
+        let money = money_glyph(ui);
+        let local = game.campaign.local_actor();
+        let mut rows = Vec::new();
+        for (k, kingdom) in game.campaign.state.kingdoms.iter().enumerate() {
+            let Some(actor) = game.campaign.actor(k) else { continue };
+            let mut text = message_kingdom(ui, game, k);
+            if let Some(l) = local.filter(|l| *l != actor) {
+                let key = if game.campaign.relations.enemy(actor, l) { "glyph_enemy" } else { "glyph_ally" };
+                if let Some(g) = glyph(ui, key) {
+                    text.push_str(&format!("<SetX={relation_x}>{g}"));
+                }
+            }
+            if let Some(g) = money {
+                text.push_str(&format!("<SetX={resources_x}>{}", resources_text(g, kingdom.resources, income(game, k))));
+            }
+            rows.push(text);
+        }
+        if rows == self.politics_rows && ui.widget(&format!("Root/{POLITICS_NAME}")).is_some() {
+            return;
+        }
+        self.politics_rows = rows.clone();
+        ui.disconnect(POLITICS_NAME);
+        let mut d = Widget::new(C::Panel, POLITICS, false);
+        d.add_child(Widget::new(C::Decal, "Background", false));
+        for i in 0..rows.len() {
+            let mut l = Widget::new(C::Label, "Label", false);
+            l.tag = TAG_POLITICS + i as u64;
+            d.add_child(l);
+        }
+        aa_ui::screens::show(ui, d);
+        let alpha = num("transparency", 0.0).clamp(0.0, 1.0);
+        ui.with_widget(&format!("{POLITICS_NAME}/Background"), |w| {
+            if let Some(aa_ui::ve::ViewElement { kind: aa_ui::ve::VeKind::Decal(dc), .. }) = &mut w.sub_ve {
+                dc.color[3] = alpha;
+            }
+        });
+        let (top, bottom, sep) = (num("offset_top", 20.0), num("offset_bottom", 20.0), num("separation", 3.0));
+        let label_h = 15.0;
+        let n = rows.len() as f32;
+        let h = top + n * label_h + (n - 1.0).max(0.0) * sep + bottom;
+        ui.with_widget(POLITICS_NAME, |w| aa_ui::geometry::set_height(w, h));
+        for (i, text) in rows.iter().enumerate() {
+            let Some(p) = ui.find_tag(TAG_POLITICS + i as u64) else { continue };
+            let rel = p.strip_prefix("Root/").unwrap_or(&p).to_string();
+            let y = top + i as f32 * (label_h + sep);
+            ui.with_widget(&rel, |w| aa_ui::controls::set_bounds(&mut w.root.outer, [23.0, y, 340.0, label_h], 0x300));
+            ui.set_label(&rel, text);
+        }
+        ui.layout();
     }
 
     /// `0x956E40`: the left click of the hot mode on a territory: the
@@ -1263,7 +1471,7 @@ impl MetaGameUi {
                         // 9528B0
                         (Some(OrderEffect::Process(_)), 7) => {
                             let tech = command.technology.clone().unwrap_or_default();
-                            let tech = ui.strings.resolve(&format!("#{tech}_name"));
+                            let tech = technology_name(ui, crate::preload::game_data(&self.game_root).ok().as_deref(), &tech);
                             let text = ui.strings.format("metagame_purchased_technology|ss", &[&name, &tech]);
                             ui.messages.send(&uv, "METAGAME_PURCHASE", &text, None);
                         }

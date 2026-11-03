@@ -221,7 +221,7 @@ impl CampaignUi {
             screen: Screen::Choose,
             choose: choose::Chooser::default(),
             game: None,
-            iface: interface::MetaGameUi::default(),
+            iface: interface::MetaGameUi::with_root(root.parent().unwrap_or(root)),
             missions: missions::Chooser::default(),
             debriefed: debriefing::Shown::default(),
             movie: None,
@@ -284,6 +284,20 @@ impl CampaignUi {
     }
 
     /// Build the current campaign page.
+    /// 5F2D60: the anchored tooltips of the interface on show (the purchasing dialog
+    /// has the same as the interface's), `None` for one without them.
+    pub fn tooltip_anchor(&self, ui: &mut Ui) -> Option<(f32, f32, f32, bool)> {
+        let file = match self.screen {
+            Screen::Map => "MetaGame/UI/metagame_interface.tgi:MetaGame",
+            Screen::Choose => "MetaGame/UI/choose_dynamic_campaign.tgi:ChooseDynamicCampaign",
+            _ => return None,
+        };
+        let n = ui.store.node(file).ok()?;
+        n.bool("anchored_tooltips").ok().filter(|on| *on)?;
+        let v = |k: &str| n.float(k).unwrap_or(0.0);
+        Some((v("anchored_tooltip_x"), v("anchored_tooltip_y"), v("anchored_tooltip_width"), n.bool("anchored_tooltip_should_expand_downward").unwrap_or(false)))
+    }
+
     pub fn show(&mut self, ui: &mut Ui) {
         match self.screen {
             Screen::Choose => {

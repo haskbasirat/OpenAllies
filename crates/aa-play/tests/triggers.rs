@@ -409,6 +409,73 @@ fn the_tutorial_goes_on_when_the_script_hears_its_command() {
     assert!(list.iter().all(|o| o.primary), "{list:?}");
 }
 
+/// How far a mission gets with the local kingdom under a computer player: the
+/// census of the campaign (`AA_TRIGGER_MAP` a part of the id, `AA_TRIGGER_SECONDS`
+/// game seconds, 600 by default): per mission the objectives with their states,
+/// the triggers run, the result, every note, and the game time of each change.
+#[test]
+#[ignore]
+fn mission_progress_census() {
+    let maps = root().join("reconstruction").join("assets").join("original").join("Data").join("Maps");
+    let mut ids: Vec<String> = Vec::new();
+    for (dir, prefix) in [(maps.join("Campaign"), "Campaign/"), (maps.clone(), "")] {
+        for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()) {
+            let name = e.file_name();
+            if let Some(n) = name.to_str().and_then(|n| n.strip_suffix(".RMP"))
+                && (!prefix.is_empty() || n.starts_with("tutorial"))
+            {
+                ids.push(format!("{prefix}{n}"));
+            }
+        }
+    }
+    ids.sort();
+    let only = std::env::var("AA_TRIGGER_MAP").ok();
+    let seconds: u32 = std::env::var("AA_TRIGGER_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(600);
+    for id in ids {
+        if only.as_ref().is_some_and(|o| !id.contains(o.as_str())) {
+            continue;
+        }
+        let data = data();
+        let map = Arc::new(GameMap::load_with(&root(), &id, &data).unwrap_or_else(|e| panic!("{id}: {e:#}")));
+        let mut players = Vec::new();
+        for (start, &slot) in map.player_slots.iter().enumerate() {
+            let s = &map.slots[slot];
+            let nation = s.nation.clone().filter(|n| data.nation(n).is_some()).unwrap_or_else(|| if s.team == 0 { "rus".into() } else { "ger".into() });
+            players.push(PlayerSetup { name: s.id.clone(), nation, team: s.team, color: [255, 255, 255], controller: Controller::Computer(1), start });
+        }
+        let setup = SkirmishSetup { map_id: id.clone(), players, starting_resources: None, seed: 1 };
+        let mut w = World::new_skirmish(data, map, &setup).unwrap_or_else(|e| panic!("{id}: {e:#}"));
+        assert!(aa_play::triggers::attach(&mut w, &root()), "{id}: no TRIGGERS");
+        let kingdoms: Vec<u32> = w.kingdoms.iter().map(|k| k.id).collect();
+        let t = std::time::Instant::now();
+        let mut last = Vec::new();
+        let mut ended = None;
+        for tick in 0..16 * seconds {
+            w.step(Vec::new());
+            if tick % 16 == 0 {
+                // whichever kingdoms the script gives objectives
+                let now: Vec<_> = kingdoms.iter().flat_map(|&k| aa_play::triggers::objectives(&w, k).into_iter().map(move |o| (k, o.key.clone(), o.state))).collect();
+                if now != last {
+                    eprintln!("  {id} T {:.0}: {now:?}", w.time);
+                    last = now;
+                }
+                let r: Vec<(u32, u32)> = kingdoms.iter().map(|&k| (k, aa_play::triggers::mission_result(&w, k))).filter(|x| x.1 != 0).collect();
+                if ended.is_none() && (!r.is_empty() || w.winner.is_some()) {
+                    ended = Some(w.time);
+                    eprintln!("  {id} T {:.0}: results {r:?} winner {:?}", w.time, w.winner);
+                    break;
+                }
+            }
+        }
+        let states = aa_play::triggers::trigger_states(&w);
+        let off = states.iter().filter(|(_, _, e)| !e).count();
+        eprintln!("MISSION {id}: {:?} game {:.0} s, triggers off {off}/{}, objectives {:?}, ended {ended:?}", t.elapsed(), w.time, states.len(), last);
+        for n in &w.triggers.notes {
+            eprintln!("    NOTE {n}");
+        }
+    }
+}
+
 /// 4F1E10's last loop: every kingdom has its first snapshot at the start, the score
 /// graph's point 0; the 60 s timer (4E37D0) adds the next.
 #[test]

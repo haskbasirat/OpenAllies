@@ -341,9 +341,11 @@ fn ribbon_mesh(points: &[Vec3; 3], t: f32, color: [f32; 4]) -> Mesh {
     mesh
 }
 
-/// The unlit, blended material of the ribbons.
+/// The unlit, blended material of the ribbons. `floating_ui_vfx` of the arrow's data:
+/// over the map; the blended territories would otherwise be drawn after it (the blended
+/// phase sorts by the entity's origin, and a ribbon's is the map's corner).
 fn materials_ribbon(materials: &mut Assets<StandardMaterial>) -> Handle<StandardMaterial> {
-    materials.add(StandardMaterial { base_color: Color::WHITE, unlit: true, alpha_mode: AlphaMode::Blend, cull_mode: None, ..default() })
+    materials.add(StandardMaterial { base_color: Color::WHITE, unlit: true, alpha_mode: AlphaMode::Blend, cull_mode: None, depth_bias: 1.0e6, ..default() })
 }
 
 /// Spawn the meshes of a model under a parent.
@@ -703,6 +705,13 @@ pub fn sync(
         }
         v.path = path;
         v.territory = Some(to);
+    }
+    // the ribbons' pipeline is made with the scene: a first selection would otherwise
+    // not see its arrows' ribbons, gone again before the pipeline is compiled
+    if scene.ribbon_material.is_none() {
+        let material = materials_ribbon(&mut std_materials);
+        commands.spawn((Mesh3d(meshes.add(ribbon_mesh(&[Vec3::ZERO; 3], 0.0, [0.0; 4]))), MeshMaterial3d(material.clone()), Transform::default(), MapEntity, bevy::camera::visibility::NoFrustumCulling));
+        scene.ribbon_material = Some(material);
     }
     // 934D50: the arrows follow the selection
     let show_arrows = front.ui.uvars.get_bool("MetaGameViewShowVFXArrows");
