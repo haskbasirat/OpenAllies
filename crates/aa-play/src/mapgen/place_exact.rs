@@ -94,6 +94,7 @@ impl Balance for ObjectBalance<'_, '_> {
 /// Component slots whose InitCreate is 0x563FD0 (queue 1, `crate::creation`).
 const QUEUE_ONE: [u32; 8] = [6, 7, 8, 11, 15, 22, 25, 29];
 const ECONOMY: u32 = 9;
+const DENIZEN: u32 = 10;
 const ELEMENT: u32 = 8;
 const ORGANIZATION: u32 = 7;
 const AIRCRAFT: u32 = 23;
@@ -326,7 +327,7 @@ impl Placement<'_> {
             if bit == 29 && !(def.zone_radius > 0.0) {
                 continue;
             }
-            if QUEUE_ONE.contains(&bit) || (bit == ECONOMY && def.supply_required) {
+            if QUEUE_ONE.contains(&bit) || (bit == ECONOMY && def.supply_required) || (bit == DENIZEN && def.denizen_registers) {
                 components.push((rng.state(), bit as u8));
                 rng.at(0x50B2EA).next_u32();
             } else if bit == HQ {

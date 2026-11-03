@@ -553,15 +553,17 @@ Restored:
 - production queues
 - the Supply's stock
 - the periodic and deferred queues (`UPDATABLES`)
+- Minds (`saved_world::apply_saved_minds`): stack, pending and current commands, the Move state with its path, the fighting states the Mind hosts (Kill, Chasing, Reform, Engage with its list), the Mover's speed and destination, the Character's mode. A saved GTID in a Mind word or a command becomes what the hosted Mind names a thing by
+- what `crate::combat` and `crate::morale` still hold of a regiment's Mind: the rout, the exhausted state, the entrenched and exhausted state bits
+
+A rendition, labelled in the film's notes: a Mind on a state `aa-play` does not host (a guard, a retreat, an explore, a lone actor's kill) has its saved command given again as a new order, with the stream put back. 3 of them on the first film below, where the first version of this round gave 17.
 
 Held by a save, with no place in aa-play yet:
 
 | what | what happens instead |
 |---|---|
-| Minds (stack, pending and current commands) | the Mind starts idle in Sleep; element and regiment payloads decode (`aa_mind::saved_load`) but are not applied. The aircraft Mind (51C3C0) is not ported |
-| Movers (speed, destination, path) | a unit moving at the save stands until the film's next order |
+| The aircraft Mind (51C3C0) | not ported: an aircraft in flight is not created |
 | aircraft in flight, projectiles in flight, trailers, corpses | not created; the notes count them per film |
-| Character stances | the default stance |
 | a Mobile Deployment under way | not resumed |
 | fog memories (GObject's sightings) | start empty |
 | kingdom statistics | start over (0x4F1E10) |
@@ -571,6 +573,7 @@ Held by a save, with no place in aa-play yet:
 **Against the original.** Two films of saved games on v14 data were played on the QA copy under `FightSampler`, about 360 ticks each.
 
 - **Things:** every native actor at the first sample has its thing here, by GTID, in both films (0 missing).
+- **State at the first sample, first film, after this round:** every thing's height equals the original's: a thing's height after a load is the ground under it, not the saved word, which lags (163 of 163 things whose word differs). 600 of 612 healths equal; the rest are 1 ulp off (a technology's scale, `0x561D40`, on the nations with technologies) or hits of the first tick from projectiles in flight. Regiment Mind states agreed on 109 of 111 before the Mind took the fighting states. With them hosted, some regiments read Reform where the original reads Engage at the first sample; that is not traced yet. The ZOD, RZOD and supply radii now match, which removes the largest group of the fog lane (first film: 33 causes to 23). Production still shows no difference over all 220 sampled ticks.
 - **The world stream is exact.** The load draws once per record part, in record order. In the first film that is 6,337 draws: the Mind jitter (0x530E50), Economy (0x56F280), Supply (0x58B0E0), each DynamicDoodad (0x5904A0, 0x58F960), aircraft (0x576B20), the mover countdown (0x50AB10) and the first admission to each city (0x564300, from the record's publish 0x4FB514). After them the stream equals the native first getter of the battle on both films.
 - **Production:** the production lane of the state comparison shows no difference over all 220 sampled ticks of the first film.
 - **What differs from the first sampled tick, by lane:**
@@ -578,7 +581,9 @@ Held by a save, with no place in aa-play yet:
   - combat and movement: the Minds, Movers and leftovers above; the thing's height at the same x, y and `under_siege` state bit 20 are not explained yet
   - the world stream, which diverges during the first update because of these
 
-**Natively a loaded world keeps stale modifiers.** The organization's Load reads its morale before the InitExisting applies the kingdom's properties to its members, and +60 stands until something refreshes it. At level 0 a technology's MORALE counts once, for the organization (45 + 1). At a higher level it counts for every member, because the level refreshed them (45 + 10 * 1.5). The restore copies this. The same staleness shows in the Detection and Supply radii: a technology's DETECTION_RANGE add is not in them after a load (18 where aa-play reads 23). aa-play has no place for a stale radius yet.
+**Natively a loaded world keeps stale modifiers.** The organization's Load reads its morale before the InitExisting applies the kingdom's properties to its members, and +60 stands until something refreshes it. At level 0 a technology's MORALE counts once, for the organization (45 + 1). At a higher level it counts for every member, because the level refreshed them (45 + 10 * 1.5). The restore copies this. The same staleness shows in the Detection and Supply radii: a technology's DETECTION_RANGE add is not in them after a load (18, not 23). `ActorBooks::saved_techs` keeps them so until the kingdom's technologies change. The state bit 20 (under siege) also stands as saved until its next refresh (`ActorBooks::saved_siege`: a hit, the Element Tick).
+
+**Where the saved films still differ.** On the first film the original's first update after the load makes no draw at all (its first sample's stream is the load's end) and ours makes 27; on the second film the original's first update draws too. Not read yet: which delivery draws in ours there. Also still different: 35 aircraft and 4 projectiles in flight on the first film, and on the second, as read last round, a morale maximum of 46 where ours reads 50 on 9 organizations.
 
 **The never-closed film (F24).** The original on a copy: the file is not in the dialog's list (the log says `RESOURCE: exception loading header`), and its name typed into the dialog gives the box `File missing: '<name>'`. The refusal here is the same text.
 
@@ -586,7 +591,7 @@ Held by a save, with no place in aa-play yet:
 
 Every film of this census run through `aa_parity::playback` in `Report` mode, on the working tree of 2026-11-02 (`tests/playback.rs`, `sweep_every_film_of_the_corpus`; `AA_FILM_SWEEP_OUT` writes this text). `aa-parity corpus` does not write this section, so it needs putting back after a regeneration.
 
-The whole corpus to its natural ends takes hours while other builds run, so the run below stops each film at 2000 ticks (`AA_FILM_SWEEP_CAP`). An earlier build of the same round played F01, F04, F06, F09 and F12 to their natural ends with no panic; the rest of the films that used to refuse have not been played past the cap. Run it uncapped on a quiet machine.
+The whole corpus to its natural ends takes hours while other builds run, so the run below stops each film at 2000 ticks (`AA_FILM_SWEEP_CAP`). An earlier build of the same round played F01, F04, F06, F09 and F12 to their natural ends with no panic; the rest of the films that used to refuse have not been played past the cap. Run it uncapped on a quiet machine. A run without the cap on the next round's tree did not finish in its time: F06, a film of a saved game with its Minds applied, and F18 got to their natural ends with no panic (21924 and 13859 ticks), F06 still out of step at its first checkpoint, F18 at tick 3380.
 
 Before these sources, 25 films refused with `unknown CreateGWorld failure`: 8 saved games, 15 on a profile's nation, 2 on a profile's campaign map. In the rows below none does. The refusals left are the original's own: `failed_film_wrong_version|s` (the version check 0x5A3980 stays native) and `load_error_missing_map|s` for the film that was never closed.
 

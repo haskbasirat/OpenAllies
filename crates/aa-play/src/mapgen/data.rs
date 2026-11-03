@@ -348,6 +348,9 @@ pub(super) struct ThingDef {
     pub components: u32,
     /// EconomyComponent [Resources] supply_required.
     pub supply_required: bool,
+    /// 0x568750 registers the DenizenComponent on queue 1: a non-empty inventory (the
+    /// guard range is 0 without one, 0x4676DC). A mod's city can have one.
+    pub denizen_registers: bool,
     /// MoverComponent trailer_actor ids.
     pub trailer: Option<String>,
     /// needs_space_for_settlement_zone, or a settlement / city actor
@@ -796,6 +799,9 @@ impl RmgData {
                 if let Some(resources) = child(&economy, "Resources") {
                     def.supply_required = bl(&resources, "supply_required").unwrap_or(false);
                 }
+            }
+            if let Some(denizen) = child(&node, "DenizenComponent") {
+                def.denizen_registers = !children(&denizen, "Inventory").is_empty();
             }
             if let Some(mover) = child(&node, "MoverComponent") {
                 def.trailer = st(&mover, "trailer_actor").filter(|s| !s.eq_ignore_ascii_case("null"));

@@ -13,11 +13,13 @@
 //! organization's members, leader, morale, experience, attack efficiency and layout,
 //! the Supply's stock, the production queues and the world queues (UPDATABLES).
 //!
-//! A rendition, said so in the notes: the command a saved Mind is on is given again as a
-//! new order ([`resume_saved_commands`]), until the saved Minds are applied.
+//! The Minds go on as saved ([`apply_saved_minds`]): stacks, pending and current commands,
+//! the Move state with its path, the Mover's speed and destination, the Character's mode.
+//! A rendition, said so in the notes: a Mind on a state `aa-play` does not host yet (kill,
+//! guard, retreat, explore) has its saved command given again as a new order.
 use crate::data::{DefId, GameData};
 use crate::map::{GameMap, SavedOwner, SavedPeriodic};
-use crate::scheduler::{DEFERRED, Owner, THINK};
+use crate::scheduler::{DEFERRED, Kept, Owner, THINK};
 use crate::special_ops::GeneralData;
 use crate::world::{Controller, Kingdom, KingdomId, World};
 use aa_mapworld::kingdoms::KingdomRecord;
@@ -124,11 +126,32 @@ pub(crate) fn extra_placed(entry: &SavedEntry) -> crate::map::PlacedThing {
         class_code: p.class_code,
         breakable: None,
         load_fails: false,
+        saved_city: false,
         organization: None,
         member_of: None,
         components: Vec::new(),
         current_component: None,
         mind: None,
+    }
+}
+
+/// What `crate::movement::restore_saved_minds` reads of a saved thing: its Mind, its
+/// other components (the Mover, the Character) and, of an organization, the words its
+/// Move state goes by.
+pub(crate) fn saved_mind_parts(placed: &mut crate::map::PlacedThing, index: usize, things: &SavedThings) {
+    let thing = &things.entries[index].thing;
+    placed.mind = thing.mind.clone();
+    placed.components = thing.components.clone();
+    placed.current_component = thing.tail.as_ref().map(|t| t.current_component);
+    if let Some(o) = &thing.organization {
+        placed.organization = Some(crate::map::PlacedOrganization {
+            members: things.entries.iter().enumerate().filter_map(|(m, e)| e.organization.filter(|(of, _)| *of == index).map(|(_, slot)| (slot, m))).collect(),
+            leader: o.leader,
+            morale_bits: o.morale_bits,
+            formation: o.formation,
+            position_bits: o.position_bits,
+            offsets: o.offsets.clone(),
+        });
     }
 }
 
@@ -150,9 +173,24 @@ pub fn load_map(map_id: &str, bytes: Vec<u8>, data: &GameData, name: Option<Stri
 
 /// The actor state word's bits used here (the 0x477FC0 names, in order).
 const STATE_OUT_OF_SUPPLY: u32 = 1 << 19;
+const STATE_UNDER_SIEGE: u32 = 1 << 20;
 const STATE_CONSTRUCTION: u32 = 1 << 21;
 const STATE_DEAD: u32 = 1 << 23;
 const STATE_FALLING: u32 = 1 << 24;
+const STATE_MIND_EXHAUSTED: u32 = 1 << 5;
+const STATE_ENTRENCHED: u32 = 1 << 22;
+
+/// A regiment Mind's embedded states (`aa_mind::regiment_load::STATE_LIST`).
+const CAI_SLEEP: u32 = 0x34;
+const CAI_RAMPAGE: u32 = 0x54;
+const CAI_MOVE: u32 = 0x68;
+const CAI_KILL: u32 = 0xc0;
+const CAI_CHASING: u32 = 0x120;
+const CAI_REFORM: u32 = 0x1b8;
+const CAI_ENGAGE: u32 = 0x1cc;
+const CAI_ROUT: u32 = 0x20c;
+const CAI_EXHAUSTED: u32 = 0x270;
+const CAI_UNPACK: u32 = 0x280;
 
 /// Build the world a saved game holds. `controller` says who plays a kingdom, by its
 /// map slot id; a film has no computer player attached, and a kingdom's name is its
@@ -359,6 +397,7 @@ pub fn restore(
             }
             world.ids.restore_scope = false;
             world.ids.clear_request(index);
+            world.books.org_mut(o).saved_techs = Some(world.books.kingdom(k).map_or(0, |b| b.technologies.len()));
             for (slot, component) in &thing.components {
                 if *slot == 17
                     && let SavedComponent::Experience { word_08, .. } = component
@@ -417,12 +456,12 @@ pub fn restore(
     for k in 0..world.kingdoms.len() as u32 {
         crate::economy::publish(&mut world, k);
     }
-    let resumed = resume_saved_commands(&mut world, &things, &kept);
+    let resumed = apply_saved_minds(&mut world, &things, &kept);
     world.begin_battle();
 
     if resumed > 0 {
         notes.push(format!(
-            "a rendition: {resumed} commands the saved Minds were on were given again as new orders, without the Minds' states and their Movers' paths"
+            "a rendition: {resumed} Minds on a state aa-play does not host (a kill, a guard, a retreat, an explore) had their saved commands given again as new orders"
         ));
     }
     notes.push(format!(
@@ -447,36 +486,151 @@ pub fn restore(
         }
     }
     notes.push(
-        "not restored, aa-play has no place for them yet: the Minds' states, the Movers' paths, Character stances, \
-         a Mobile Deployment under way, fog memories (GObject's sightings), kingdom statistics, the AI's state, recruit lists, \
-         GGroups, trigger state, denizen groups in flight"
+        "not restored, aa-play has no place for them yet: a Mobile Deployment under way, fog memories (GObject's sightings), \
+         kingdom statistics, the AI's state, recruit lists, GGroups, trigger state, denizen groups in flight"
             .to_owned(),
     );
     Ok(Restored { world, notes })
 }
 
-/// A rendition until the saved Minds are applied (`aa_mind::saved_load::apply_with_commands`
-/// on the hosted Mind and its movement state): the command a saved organization or lone
-/// actor is on (Mind +3C, else its first pending) is given again, so that what walked at
-/// the save walks on. Natively nothing is ordered here; the stream stays the load's.
-/// Returns how many.
-fn resume_saved_commands(world: &mut World, things: &SavedThings, kept: &BTreeMap<usize, Kept>) -> u32 {
+/// The Minds' Loads over what the record pass made (`crate::movement::restore_saved_minds`:
+/// 0x536340 and 0x528C20 with the Mover and the Character), then what `crate::combat`
+/// holds of a regiment's Mind, by the state on top of its saved stack: the engage list
+/// (+1D8's records through 51FE60), the rout (+21C), the reform (+1C8), the exhausted
+/// state, and the order a Move state walks. No draws.
+///
+/// A rendition, said so in the notes: a state `aa-play` does not host as a Mind (a kill,
+/// a guard, a retreat, an explore) is entered by giving its saved command again as a new
+/// order. Natively nothing is ordered here; the stream stays the load's. Returns how many.
+fn apply_saved_minds(world: &mut World, things: &SavedThings, kept: &BTreeMap<usize, Kept>) -> u32 {
+    use aa_mind::saved_load::{Saved, decode};
+    use crate::world::{Order, Unit};
+    crate::movement::restore_saved_minds(world, kept);
     let stream = world.native_rng;
-    let mut resumed = 0;
-    for (&index, k) in kept {
+    let now = world.time;
+    let mut st = std::mem::take(&mut world.combat);
+    st.prepare(world);
+    let mut again = Vec::new();
+    for (&index, &k) in kept {
         let entry = &things.entries[index];
         if entry.organization.is_some() {
             continue;
         }
         let Some(bytes) = entry.thing.mind.as_deref() else { continue };
-        let (kind, unit, kingdom) = match *k {
-            Kept::Org(o) => (Kind::Regiment, crate::world::Unit::Org(o), world.orgs[o as usize].kingdom),
+        match k {
+            Kept::Org(o) => {
+                let Ok((Saved::Regiment(r), _)) = decode(Kind::Regiment, bytes) else { continue };
+                let Some(base) = r.base.as_ref() else { continue };
+                let state = entry.thing.record.actor.as_ref().map_or(0, |a| a.state_low);
+                let i = o as usize;
+                st.orgs[i].exhausted = state & STATE_MIND_EXHAUSTED != 0;
+                st.orgs[i].entrenched = state & STATE_ENTRENCHED != 0;
+                for &[priority, gtid] in r.engage_records.iter().flatten() {
+                    let target = match world.ids.thing(gtid) {
+                        Some(crate::ids::Thing::Actor(a)) => crate::combat::TargetRef::Actor(a),
+                        Some(crate::ids::Thing::Org(t)) => crate::combat::TargetRef::Org(t),
+                        _ => continue,
+                    };
+                    crate::combat::insert_engage(&mut st, o, target, priority as i32);
+                }
+                let word = |offset: u32| {
+                    r.stores.iter().rev().find_map(|s| match *s {
+                        aa_mind::saved_load::Store::Word { offset: of, value } if of == offset => Some(value),
+                        _ => None,
+                    })
+                };
+                let walks = saved_walk(base);
+                let top = base.stack.as_ref().and_then(|s| s.first().copied());
+                // The Mind holds the fighting states on the ports (`movement::regiment::fight`)
+                // unless its stack has a state that it does not.
+                let on_mind = crate::movement::fight_state(world, o).is_some();
+                let named = |offset: u32| match word(offset).and_then(|g| world.ids.thing(g)) {
+                    Some(crate::ids::Thing::Actor(a)) => Some(crate::combat::TargetRef::Actor(a)),
+                    Some(crate::ids::Thing::Org(t)) => Some(crate::combat::TargetRef::Org(t)),
+                    _ => None,
+                };
+                match top {
+                    Some(CAI_KILL) if on_mind => {
+                        if let Some(t) = named(CAI_KILL + 0x10)
+                            && let Some(rep) = crate::combat::representative(world, t)
+                        {
+                            let order = Order::Attack { target: rep };
+                            st.orgs[i].explicit = Some(t);
+                            st.orgs[i].seen_order = Some(order.clone());
+                            crate::movement::restored_order(world, Unit::Org(o), order);
+                        }
+                    }
+                    Some(CAI_CHASING) if on_mind => {
+                        if let Some(rep) = named(CAI_CHASING + 0x10).and_then(|t| crate::combat::representative(world, t)) {
+                            let order = Order::Attack { target: rep };
+                            st.orgs[i].saved_order = Some(walks.unwrap_or(Order::Idle));
+                            st.orgs[i].auto_order = Some(order.clone());
+                            st.orgs[i].seen_order = Some(order.clone());
+                            crate::movement::restored_order(world, Unit::Org(o), order);
+                        }
+                    }
+                    Some(CAI_REFORM) if on_mind => {}
+                    Some(CAI_ENGAGE) => {
+                        if let Some(rep) = st.orgs[i].current_target().and_then(|t| crate::combat::representative(world, t)) {
+                            let order = Order::Attack { target: rep };
+                            st.orgs[i].saved_order = Some(walks.unwrap_or(Order::Idle));
+                            st.orgs[i].auto_order = Some(order.clone());
+                            st.orgs[i].seen_order = Some(order.clone());
+                            crate::movement::restored_order(world, Unit::Org(o), order);
+                        }
+                    }
+                    Some(CAI_ROUT) => {
+                        let since = word(CAI_ROUT + 0x10).map_or(now, f32::from_bits);
+                        st.orgs[i].routing = Some(crate::combat::Rout { since, destination: None, next_think: now });
+                    }
+                    Some(CAI_REFORM) => {
+                        let since = word(CAI_REFORM + 0x10).map_or(now, f32::from_bits);
+                        st.orgs[i].reform = Some(crate::combat::Reform { since, next_think: now });
+                    }
+                    Some(CAI_EXHAUSTED) => st.orgs[i].exhausted_state = true,
+                    Some(CAI_MOVE) => {
+                        if let Some(order) = walks {
+                            st.orgs[i].seen_order = Some(order.clone());
+                            crate::movement::restored_order(world, Unit::Org(o), order);
+                        }
+                    }
+                    Some(CAI_SLEEP | CAI_RAMPAGE | CAI_UNPACK) | None => {}
+                    Some(_) => again.push(index),
+                }
+            }
+            Kept::Actor(a) => {
+                if !data_has_element_mind(world, a) {
+                    continue;
+                }
+                let Ok((Saved::Element(e), _)) = decode(Kind::Element, bytes) else { continue };
+                let Some(base) = e.base.as_ref() else { continue };
+                use aa_mind::uai_thinks::element as offsets;
+                match base.stack.as_ref().and_then(|s| s.first().copied()) {
+                    Some(offsets::MOVE) => {
+                        if let Some(order) = saved_walk(base) {
+                            crate::movement::restored_order(world, Unit::Actor(a), order);
+                        }
+                    }
+                    Some(offsets::SLEEP | offsets::DEPLOY | offsets::UNPACK | offsets::REATTACH) | None => {}
+                    Some(offsets::ENGAGE | offsets::KILL) if world.actors[a as usize].org.is_some() => {}
+                    Some(_) => again.push(index),
+                }
+            }
+        }
+    }
+    world.combat = st;
+    let mut resumed = 0;
+    for index in again {
+        let entry = &things.entries[index];
+        let Some(bytes) = entry.thing.mind.as_deref() else { continue };
+        let (kind, unit, kingdom) = match kept[&index] {
+            Kept::Org(o) => (Kind::Regiment, Unit::Org(o), world.orgs[o as usize].kingdom),
             Kept::Actor(a) => match world.actors[a as usize].kingdom {
-                Some(kingdom) if data_has_element_mind(world, a) => (Kind::Element, crate::world::Unit::Actor(a), kingdom),
-                _ => continue,
+                Some(kingdom) => (Kind::Element, Unit::Actor(a), kingdom),
+                None => continue,
             },
         };
-        let Ok((saved, _)) = aa_mind::saved_load::decode(kind, bytes) else { continue };
+        let Ok((saved, _)) = decode(kind, bytes) else { continue };
         let Some(base) = saved.base() else { continue };
         let Some(c) = base.current_command.as_ref().or_else(|| base.commands.first()) else { continue };
         let name = c.definition.as_deref().map_or_else(String::new, utf16).to_ascii_lowercase();
@@ -488,15 +642,19 @@ fn resume_saved_commands(world: &mut World, things: &SavedThings, kept: &BTreeMa
             _ => None,
         };
         let target_unit = match target {
-            Some(crate::ids::Thing::Actor(a)) => Some(crate::world::Unit::Actor(a)),
-            Some(crate::ids::Thing::Org(o)) => Some(crate::world::Unit::Org(o)),
+            Some(crate::ids::Thing::Actor(a)) => Some(Unit::Actor(a)),
+            Some(crate::ids::Thing::Org(o)) => Some(Unit::Org(o)),
             _ => None,
         };
         let order = |order| crate::world::Command::Order { kingdom, units: vec![unit], order };
         let command = match (name.as_str(), target_actor) {
             ("kill", Some(target)) => crate::world::Command::Attack { kingdom, units: vec![unit], target },
+            // 0x527E30 -> 0x51D920: a move on a hostile target is the Kill state.
+            ("move", Some(target)) => {
+                world.apply(crate::world::Command::Order { kingdom, units: vec![unit], order: crate::orders::ActorOrder::MoveOnto });
+                crate::world::Command::Attack { kingdom, units: vec![unit], target }
+            }
             ("kill", None) if c.flags & 4 != 0 => crate::world::Command::Move { kingdom, units: vec![unit], to: at, attack_move: true },
-            ("move", _) if c.flags & 4 != 0 => crate::world::Command::Move { kingdom, units: vec![unit], to: at, attack_move: false },
             ("guard", _) => order(crate::orders::ActorOrder::Guard { target: target_unit, at, aux: None }),
             ("retreat", _) if c.flags & 4 != 0 => order(crate::orders::ActorOrder::Retreat { target: target_actor, at }),
             ("explore", _) if c.flags & 4 != 0 => order(crate::orders::ActorOrder::Explore { at, scalar: None }),
@@ -507,6 +665,21 @@ fn resume_saved_commands(world: &mut World, things: &SavedThings, kept: &BTreeMa
     }
     world.native_rng = stream;
     resumed
+}
+
+/// The walk a saved Mind's command asks for: a `move` or a `kill` at a point.
+fn saved_walk(base: &aa_mind::saved_load::Base) -> Option<crate::world::Order> {
+    let c = base.current_command.as_ref().or_else(|| base.commands.first())?;
+    if c.flags & 4 == 0 {
+        return None;
+    }
+    let name = c.definition.as_deref().map_or_else(String::new, utf16).to_ascii_lowercase();
+    let to = glam::Vec2::new(f32::from_bits(c.position_bits[0]), f32::from_bits(c.position_bits[1]));
+    match name.as_str() {
+        "move" => Some(crate::world::Order::Move { to, attack_move: false }),
+        "kill" => Some(crate::world::Order::Move { to, attack_move: true }),
+        _ => None,
+    }
 }
 
 fn data_has_element_mind(world: &World, a: u32) -> bool {
@@ -572,7 +745,13 @@ fn saved_component_values(world: &mut World, things: &SavedThings, kept: &BTreeM
                 for (slot, component) in &thing.components {
                     match component {
                         SavedComponent::Body(body) if *slot == 0 => {
-                            world.actors[i].health = st.actors[i].max_health * f32::from_bits(body.health_multiplier_bits);
+                            // The Load's fraction of the definition's maximum, then what
+                            // 0x561D40 does when the maximum changes: old / max * new, in
+                            // 53 bits.
+                            let base = world.data.def(world.actors[i].def).health;
+                            let max = st.actors[i].max_health;
+                            let loaded = (f64::from(f32::from_bits(body.health_multiplier_bits)) * f64::from(base)) as f32;
+                            world.actors[i].health = if max == base { loaded } else { (f64::from(loaded) / f64::from(base) * f64::from(max)) as f32 };
                         }
                         SavedComponent::Supply(supply) => {
                             let max = world.data.def(world.actors[i].def).supply_stockpile_max;
@@ -646,21 +825,17 @@ fn record_pass_draws(world: &mut World, things: &SavedThings, kept: &BTreeMap<us
     }
 }
 
-/// What a kept record became.
-#[derive(Clone, Copy, Debug)]
-enum Kept {
-    Actor(u32),
-    Org(u32),
-}
-
 /// A thing's saved words on its actor: where it stands, its health and states.
 fn apply_actor(world: &mut World, a: u32, thing: &SavedThing, _index: usize, _notes: &mut Vec<String>) {
     let position = thing.record.thing.position_bits.map(f32::from_bits);
     let def = world.actors[a as usize].def;
     let kingdom = world.actors[a as usize].kingdom;
     let max = crate::production::max_health(world, kingdom, def);
+    // A thing's height after the load is the ground under it, whatever word the save holds
+    // (it lags, 0x4EEB40): on the traces of two films, every thing that stands.
+    let z = world.map.height_at(glam::Vec2::new(position[0], position[1]));
     let actor = &mut world.actors[a as usize];
-    actor.pos = glam::Vec3::new(position[0], position[1], position[2]);
+    actor.pos = glam::Vec3::new(position[0], position[1], z);
     let state = thing.record.actor.as_ref().map_or(0, |p| p.state_low);
     for (slot, component) in &thing.components {
         if *slot == 0
@@ -675,6 +850,8 @@ fn apply_actor(world: &mut World, a: u32, thing: &SavedThing, _index: usize, _no
     // -> 0x4CEF10), which aa-play applies from the kingdom's own list.
     let of_kingdom: Vec<String> = kingdom.and_then(|k| world.books.kingdom(k)).map_or_else(Vec::new, |b| b.technologies.clone());
     let books = world.books.actor_mut(a);
+    books.saved_techs = Some(of_kingdom.len());
+    books.saved_siege = state & STATE_UNDER_SIEGE != 0;
     books.out_of_supply = state & STATE_OUT_OF_SUPPLY != 0;
     books.constructing = state & STATE_CONSTRUCTION != 0;
     books.properties = thing
