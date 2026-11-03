@@ -218,48 +218,14 @@ pub fn own_profile() -> Option<std::path::PathBuf> {
 }
 
 /// Where the converted art of a loose data folder is kept: `<own profile>/art/<key>`,
-/// one folder for each data folder, written by `research/film-sources/convert_overlay.py`
-/// (the same exporter as the stock art). The profile's data itself is never written.
+/// one folder for each data folder, written as a battle asks for it (`aa_assets::convert`,
+/// the same exporter as the stock art). The profile's data itself is never written.
 pub fn art_folder(data_folder: &std::path::Path) -> Option<std::path::PathBuf> {
     use sha2::{Digest, Sha256};
     let path = data_folder.to_string_lossy().replace('\\', "/").to_lowercase();
     let digest = Sha256::digest(path.trim_end_matches('/').as_bytes());
     let key: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
     Some(own_profile()?.join("art").join(key))
-}
-
-/// The art of a data folder is not converted yet: its conversion starts in the background
-/// (one at a time per folder, `<art>/converting.log` says how far it is) and the next
-/// battle on the folder draws it. This one draws what the stock art holds. The profile's
-/// data is only read. Without the exporter or a Python this says so and goes on.
-pub fn convert_art(reconstruction: &std::path::Path, folder: &std::path::Path, art: &std::path::Path) {
-    let Some(script) = reconstruction.parent().map(|game| game.join("rust-rebuild/research/film-sources/convert_overlay.py")).filter(|s| s.is_file()) else {
-        warn!("film: the art of {} is not converted and the converter is not at hand; what the folder alone holds is not drawn", folder.display());
-        return;
-    };
-    let log = art.join("converting.log");
-    // A conversion under way writes its log; one that died an hour ago does not stop the next.
-    let running = std::fs::metadata(&log).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() < 3600);
-    if running {
-        info!("film: the art of {} is being converted, see {}", folder.display(), log.display());
-        return;
-    }
-    let started = std::fs::create_dir_all(art).and_then(|_| std::fs::File::create(&log)).and_then(|out| {
-        let err = out.try_clone()?;
-        let mut command = std::process::Command::new("python");
-        command.arg(&script).arg(folder).arg(art).stdin(std::process::Stdio::null()).stdout(out).stderr(err);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            // CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS: the battle keeps the machine.
-            command.creation_flags(0x0800_0000 | 0x0000_4000);
-        }
-        command.spawn()
-    });
-    match started {
-        Ok(child) => info!("film: converting the art of {} in the background (process {}); the next battle on it draws it", folder.display(), child.id()),
-        Err(e) => warn!("film: the art of {} is not converted, what the folder alone holds is not drawn; the converter did not start: {e}", folder.display()),
-    }
 }
 
 /// The float clamp of `0x76F370`.

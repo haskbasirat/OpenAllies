@@ -157,16 +157,9 @@ pub struct AssetStore {
     models: ModelManifest,
     /// A profile's own art, converted the way the stock art is: consulted first.
     /// Shared by every clone of the store, so one battle sets it for all its readers.
-    art: std::sync::Arc<std::sync::RwLock<Option<ArtOverlay>>>,
+    art: std::sync::Arc<std::sync::RwLock<Option<std::sync::Arc<crate::convert::FolderArt>>>>,
 }
 
-/// The converted art of one loose data folder (`research/film-sources/convert_overlay.py`):
-/// `<root>/assets/converted/...` beside its own model manifest.
-#[derive(Debug, Clone)]
-struct ArtOverlay {
-    root: PathBuf,
-    models: ModelManifest,
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PreparedInstance {
@@ -263,18 +256,16 @@ impl AssetStore {
     pub fn root(&self) -> &Path {
         &self.root
     }
-    /// The art of a battle on a profile's data: `root` holds what its conversion
-    /// wrote, `None` (or a folder with no conversion) leaves the stock art alone.
-    pub fn set_art_overlay(&self, root: Option<&Path>) {
-        let overlay = root.and_then(|root| {
-            let path = root.join("assets/converted/models/manifest.json");
-            let bytes = fs::read(path).ok()?;
-            let models: ModelManifest = serde_json::from_slice(&bytes).ok()?;
-            Some(ArtOverlay { root: root.to_path_buf(), models })
-        });
+    /// The art of a battle on a profile's data: `(data folder, where its conversion is
+    /// kept)`, `None` leaves the stock art alone.
+    pub fn set_art_overlay(&self, folder: Option<(&Path, &Path)>) {
+        let overlay = folder.map(|(data, output)| std::sync::Arc::new(crate::convert::FolderArt::new(data, output, Some(&self.root.join("assets/original/Data")))));
         if let Ok(mut art) = self.art.write() {
             *art = overlay;
         }
+    }
+    fn overlay(&self) -> Option<std::sync::Arc<crate::convert::FolderArt>> {
+        self.art.read().ok().and_then(|art| art.clone())
     }
     pub fn maps(&self) -> &[MapInfo] {
         &self.maps
@@ -288,11 +279,18 @@ impl AssetStore {
     /// Resolves only allowlisted local asset URL namespaces and checks symlinks.
     pub fn resolve_url(&self, url: &str) -> Result<PathBuf> {
         if let Some(path) = url.strip_prefix("/assets/")
-            && let Ok(art) = self.art.read()
-            && let Some(overlay) = art.as_ref()
+            && let Some(overlay) = self.overlay()
         {
-            let file = overlay.root.join("assets").join(relative_parts(path)?);
-            if file.is_file() {
+            let path = relative_parts(path)?;
+            let own = if let Some(rel) = path.strip_prefix("converted/textures/") {
+                overlay.texture(rel)
+            } else if let Some(rel) = path.strip_prefix("original/Data/") {
+                // The folder's own original files: a NIF of a model fix, a PNG a model names.
+                overlay.original(rel)
+            } else {
+                None
+            };
+            if let Some(file) = own {
                 return Ok(file);
             }
         }
@@ -453,12 +451,21 @@ impl AssetStore {
             .map(String::as_str)
             .ok_or_else(|| AssetError::UnknownModel(resource_path.into()))
     }
+    /// The model is one the battle's data folder holds and the stock data does not hold as
+    /// it is: its conversion ([`crate::convert`]) already made the audited corrections.
+    pub fn model_is_overlaid(&self, resource_path: &str) -> bool {
+        self.overlay().is_some_and(|o| o.holds_model(resource_path))
+    }
     pub fn load_model(&self, resource_path: &str) -> Result<ModelAsset> {
         // A model the profile's data holds replaces the archive's, as the file does.
-        let key = relative_parts(resource_path)?.to_lowercase();
-        let own = self.art.read().ok().and_then(|art| art.as_ref().and_then(|o| o.models.by_path.get(&key).cloned()));
-        if let Some(url) = own {
-            return self.read_path(&self.resolve_url(&url)?);
+        let path = relative_parts(resource_path)?;
+        match self.overlay().and_then(|o| o.model(&path)) {
+            Some(Ok(file)) => return self.read_path(&file),
+            // One that does not convert falls back on the archive's of that name, if any.
+            Some(Err(reason)) if self.model_url(resource_path).is_err() => {
+                return Err(AssetError::Invalid(format!("{resource_path}: {reason}")));
+            }
+            _ => {}
         }
         let url = self.model_url(resource_path)?;
         self.read_path(&self.resolve_url(url)?)

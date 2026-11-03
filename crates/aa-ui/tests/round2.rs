@@ -272,10 +272,10 @@ fn edit_box_takes_focus_and_text() {
     // the first click selects everything and takes the edit focus
     click(&mut ui, &e);
     assert!(ui.widget(&e).unwrap().flags & wf::EDIT_FOCUS != 0);
-    ui.text_input("player");
-    assert_eq!(ui.editbox_text(&e).as_deref(), Some("player"));
+    ui.text_input("Alpha");
+    assert_eq!(ui.editbox_text(&e).as_deref(), Some("Alpha"));
     assert!(ui.key_down(aa_ui::ui_controls::UiKey::Backspace));
-    assert_eq!(ui.editbox_text(&e).as_deref(), Some("player"));
+    assert_eq!(ui.editbox_text(&e).as_deref(), Some("Alph"));
     // max_characters = AVar LANNicknameMaxLength (code default 18)
     ui.text_input("abcdefghijklmnopqrstuvwxyz");
     assert_eq!(ui.editbox_text(&e).unwrap().chars().count(), 18);
@@ -285,5 +285,5 @@ fn edit_box_takes_focus_and_text() {
     // Enter has no commit command here: not consumed (falls to hotkeys)
     assert!(!ui.key_down(aa_ui::ui_controls::UiKey::Enter));
     let effects = o.command(&mut ui, "OptionsOK").unwrap();
-    assert!(effects.iter().any(|f| matches!(f, Effect::Nickname(n) if n.starts_with("Haskabc"))));
+    assert!(effects.iter().any(|f| matches!(f, Effect::Nickname(n) if n.starts_with("Alphabc"))));
 }

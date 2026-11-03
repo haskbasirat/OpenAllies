@@ -1432,6 +1432,7 @@ impl Custom {
                     object_counts: Default::default(),
                     heroes: 0,
                     seed: game_seed,
+                    additional_actors: Vec::new(),
                 };
                 (rmc.clone(), Some(params))
             }
@@ -1523,7 +1524,7 @@ mod tests {
     /// gives nothing.
     #[test]
     fn the_original_film_folder_follows_0x85b040() {
-        assert_eq!(original_personal_folder(Some(r"<user profile>\Documents"), "A&A", Path::new("game")), PathBuf::from("<user profile>/Documents/A&A"));
+        assert_eq!(original_personal_folder(Some(r"C:\Users\x\Documents"), "A&A", Path::new("game")), PathBuf::from("C:/Users/x/Documents/A&A"));
         assert_eq!(original_personal_folder(Some("D:/Docs/"), "A&A", Path::new("game")), PathBuf::from("D:/Docs/A&A"));
         assert_eq!(original_personal_folder(Some(""), "A&A", Path::new("game")), Path::new("game").join("Profile"));
         assert_eq!(original_personal_folder(None, "A&A", Path::new("game")), Path::new("game").join("Profile"));

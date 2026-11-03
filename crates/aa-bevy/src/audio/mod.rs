@@ -71,6 +71,7 @@ impl Plugin for SoundPlugin {
         app.add_audio_source::<MixerAsset>()
             .init_resource::<SfxQueue>()
             .init_resource::<VoiceSeen>()
+            .init_resource::<CarriedMusic>()
             .add_systems(Startup, start_output)
             .add_systems(OnExit(AppState::Battle), leave_battle)
             .add_systems(
@@ -90,12 +91,25 @@ impl Plugin for SoundPlugin {
 /// shows; a NULL keeps what is playing, so the title music goes on through single
 /// player, staging and credits, and the game's silent interface ends it. The buttons'
 /// `set_sound` and the other UI sounds come through [`SfxQueue`].
+///
+/// The game's music is LOCAL, so the world's end (0x43E400 -> 0x7459F0) leaves it playing,
+/// and `victory_music` and `defeat_music` are `null` (0x747630 of NULL does nothing;
+/// `win_interface_music` and `loss_interface_music` are defined but no data or code names
+/// them): it goes on behind the score, the debriefing, staging and the chooser until the
+/// title music replaces it, or the next game's. Compare against the original (labelled
+/// rendition): the music is another manager's here, so it starts its track again ([`CarriedMusic`]).
 #[derive(Resource)]
 struct MenuSound {
     manager: Manager,
     files: Files,
     music: bool,
+    /// What plays is the last game's music.
+    carried: bool,
 }
+
+/// The music of the game that ended, for [`menu_sound`].
+#[derive(Resource, Default)]
+struct CarriedMusic(Option<String>);
 
 struct NoWorld;
 impl manager::World for NoWorld {
@@ -125,6 +139,7 @@ fn menu_sound(
     menu: Option<ResMut<MenuSound>>,
     mut queue: ResMut<SfxQueue>,
     mut started: Local<bool>,
+    mut carried: ResMut<CarriedMusic>,
 ) {
     use crate::ui::front::Page;
     let Some(front) = front else { return };
@@ -148,17 +163,26 @@ fn menu_sound(
             return;
         };
         let manager = Manager::new(bank.vars.clone(), defs.clone(), output.0.clone());
-        commands.insert_resource(MenuSound { manager, files: Files::new(&reconstruction, Some(bank)), music: false });
+        commands.insert_resource(MenuSound { manager, files: Files::new(&reconstruction, Some(bank)), music: false, carried: false });
         return;
     };
     let menu = &mut *menu;
     let world = NoWorld;
     menu.files.poll();
     user_volumes(&front.ui, &mut menu.manager);
-    let music = !in_battle && front.page != Page::Loading && front.page != Page::Game;
-    if !music && menu.music {
+    // the loading page has no music of its own: the game's first tick replaces what plays (4F96D0)
+    let music = front.page != Page::Game;
+    if menu.music && (!music || (menu.carried && front.page == Page::MainMenu)) {
         menu.manager.stop_all();
         menu.music = false;
+        menu.carried = false;
+    }
+    if music && !menu.music && !in_battle && front.page != Page::MainMenu
+        && let Some(ids) = carried.0.take()
+    {
+        menu.music = true;
+        menu.carried = true;
+        menu.manager.play(&ids, Place::Global, None, None, true, &world);
     }
     if music && !menu.music && front.page == Page::MainMenu {
         menu.music = true;
@@ -252,10 +276,18 @@ impl Files {
         }
     }
     fn locate(&self, path: &str) -> Option<PathBuf> {
+        if let Some(own) = self.own(path) {
+            return Some(own);
+        }
         if let Some(bank) = &self.bank {
             return bank.files.get(&path.replace('\\', "/").to_ascii_lowercase()).cloned();
         }
         self.roots.iter().find_map(|r| crate::effects::bones::find_file(r, path))
+    }
+    /// The sound as the battle's data folder holds it (`bones::folder`).
+    fn own(&self, path: &str) -> Option<PathBuf> {
+        let folder = crate::effects::bones::folder()?;
+        crate::effects::bones::find_in(&folder, path)
     }
     fn poll(&mut self) {
         let done: Vec<_> = self.rx.lock().map(|rx| rx.try_iter().collect()).unwrap_or_default();
@@ -272,7 +304,9 @@ impl manager::Files for Files {
         if let Some(p) = self.pcm.get(&key) {
             return p.clone();
         }
-        if let Some(p) = self.bank.as_ref().and_then(|b| b.pcm.get(&key.replace('\\', "/"))) {
+        if self.own(path).is_none()
+            && let Some(p) = self.bank.as_ref().and_then(|b| b.pcm.get(&key.replace('\\', "/")))
+        {
             self.pcm.insert(key, Some(p.clone()));
             return Some(p.clone());
         }
@@ -317,6 +351,8 @@ struct Sound {
     /// Spatial buckets of the emitters that react to units (8 m cells).
     disturbable: HashMap<(i32, i32), Vec<usize>>,
     music_started: bool,
+    /// The game's music (4F96D0).
+    music: Option<String>,
     capturing: bool,
     time: f32,
     rng: u32,
@@ -376,9 +412,10 @@ fn read_vars(reconstruction: &std::path::Path) -> Vars {
     Vars::read(&texts)
 }
 
-fn leave_battle(mut commands: Commands, sound: Option<ResMut<Sound>>, mut queue: ResMut<SfxQueue>) {
+fn leave_battle(mut commands: Commands, sound: Option<ResMut<Sound>>, mut queue: ResMut<SfxQueue>, mut carried: ResMut<CarriedMusic>) {
     if let Some(mut s) = sound {
         s.manager.stop_all();
+        carried.0 = s.music.take();
     }
     queue.objects.clear();
     commands.remove_resource::<Sound>();
@@ -501,7 +538,7 @@ fn update(
         let vars = bank.vars.clone();
         let defs = Arc::new(data.0.audio.clone());
         let manager = Manager::new(vars, defs, output.0.clone());
-        let mut s = Sound { manager, files: Files::new(&reconstruction, Some(bank)), emitters: Vec::new(), disturbable: HashMap::new(), music_started: false, capturing: false, time: 0.0, rng: 0x2545_F491 };
+        let mut s = Sound { manager, files: Files::new(&reconstruction, Some(bank)), emitters: Vec::new(), disturbable: HashMap::new(), music_started: false, music: None, capturing: false, time: 0.0, rng: 0x2545_F491 };
         // Map-placed audio doodads.
         for p in &battle.world.map.placed {
             if let Some(def) = data.0.ambient.get(&p.thing_id.to_ascii_lowercase()) {
@@ -532,6 +569,7 @@ fn update(
         let music = nation.as_ref().and_then(|n| data.0.nation_music.get(n.trim_start_matches("nation_")).cloned());
         if let Some(ids) = music {
             sound.manager.play(&ids, Place::Global, Some(battle.local), None, true, &bw);
+            sound.music = Some(ids);
         }
     }
     let dt = if battle.paused { 0.0 } else { time.delta_secs() * battle.speed };

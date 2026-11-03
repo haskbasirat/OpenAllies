@@ -306,7 +306,33 @@ fn local_matrix(node: &aa_animation::RigNode, track: Option<&NodeTrack>, time: f
 }
 
 /// Case-insensitive file lookup below `root` for a Data-relative path.
+/// The loose data folder the battle lies on (a profile's `data`, a mod): its files replace
+/// the archive's, as the original's file system has them do (0x85B040). `None` for the stock
+/// data. Set while a film on a folder loads, cleared when the battle ends.
+static FOLDER: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
+
+pub fn set_folder(folder: Option<PathBuf>) {
+    if let Ok(mut f) = FOLDER.write() {
+        *f = folder;
+    }
+}
+
+pub fn folder() -> Option<PathBuf> {
+    FOLDER.read().ok().and_then(|f| f.clone())
+}
+
+/// A file of the original data, by case-insensitive path: the battle's folder first.
 pub fn find_file(root: &Path, rel: &str) -> Option<PathBuf> {
+    if root.ends_with("assets/original/Data")
+        && let Some(folder) = folder()
+        && let Some(own) = find_in(&folder, rel)
+    {
+        return Some(own);
+    }
+    find_in(root, rel)
+}
+
+pub fn find_in(root: &Path, rel: &str) -> Option<PathBuf> {
     let direct = root.join(rel);
     if direct.exists() {
         return Some(direct);

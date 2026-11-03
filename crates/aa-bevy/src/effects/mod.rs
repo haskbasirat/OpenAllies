@@ -22,6 +22,7 @@ pub mod nif;
 pub mod player;
 pub mod render;
 pub mod view;
+pub mod weather;
 
 use crate::audio::{Place, Sfx, SfxQueue};
 use crate::battle_view::{ActorView, render_yaw, to_render};
@@ -69,6 +70,7 @@ impl Plugin for EffectsPlugin {
             .add_systems(Update, take_point_vfx.after(crate::input::battle_input).before(run).run_if(in_state(AppState::Battle)))
             .add_systems(Update, take_waypoints.after(crate::ui::order_marks::fill_waypoints).before(run).run_if(in_state(AppState::Battle)))
             .add_systems(Update, take_ghost_arrow.after(crate::input::battle_input).before(run).run_if(in_state(AppState::Battle)))
+            .add_systems(Update, take_shore.before(run).run_if(in_state(AppState::Battle)))
             .add_systems(Update, upload_atlas.run_if(not(resource_exists::<FxAtlas>)))
             .add_systems(Update, (bench::recoil_shots, bench::death_shots).after(EffectsSet).run_if(in_state(AppState::Battle)))
             .add_systems(
@@ -147,13 +149,26 @@ pub struct Preloaded {
     /// The texture array, taken by the first battle (later battles keep
     /// its handle in FxAtlas).
     atlas: Mutex<Option<Image>>,
+    /// The tables of a data folder, not the stock data's: it keeps its own texture array.
+    on_folder: bool,
+    folder_atlas: Mutex<Option<Handle<Image>>>,
 }
 
 /// The preload job: `things` are every Thing of the rules (GameData defs)
 /// with its model.
 pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded> {
+    preload_from(things, None)
+}
+
+/// The same for a battle on a data folder (`bones::folder` is set by now): its catalog, its
+/// effect NIFs and textures over the stock ones.
+pub fn preload_on(things: &[(String, Option<String>)], folder: &Path) -> anyhow::Result<Preloaded> {
+    preload_from(things, Some(folder))
+}
+
+fn preload_from(things: &[(String, Option<String>)], folder: Option<&Path>) -> anyhow::Result<Preloaded> {
     let ids: Vec<String> = things.iter().map(|(id, _)| id.clone()).collect();
-    let mut l = load(&ids)?;
+    let mut l = load(&ids, folder)?;
     // The node tables of the models whose effects sit at bones.
     let at_bones = |fx: &data::ActorFx| {
         let lists = [&fx.created, &fx.destroyed, &fx.health, &fx.selected, &fx.constructed, &fx.start_moving, &fx.stop_moving, &fx.enter, &fx.leave];
@@ -173,6 +188,8 @@ pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded>
         notes: l.notes,
         seconds: l.seconds,
         atlas: Mutex::new(Some(atlas)),
+        on_folder: folder.is_some(),
+        folder_atlas: Mutex::new(None),
     })
 }
 
@@ -248,6 +265,34 @@ fn actor_state(world: &aa_play::World, a: &aa_play::Actor, state: &str) -> bool 
     }
 }
 
+/// The map's doodads of the water's edge (`crate::water::ShoreDoodads`), each playing its
+/// model on the one clock.
+fn take_shore(shore: Option<Res<crate::water::ShoreDoodads>>, state: Option<ResMut<FxState>>) {
+    let (Some(shore), Some(mut state)) = (shore, state) else { return };
+    if state.shore_of == Some(shore.battle) {
+        return;
+    }
+    state.shore_of = Some(shore.battle);
+    let nif: &'static NifTable = state.nif;
+    let white = state.white;
+    let list: Vec<(Vec3, Player)> = shore
+        .list
+        .iter()
+        .filter_map(|(key, place)| {
+            nif.effects.get(key).map(|fx| {
+                let mut player = Player::new(fx, *place, 1.0, f32::INFINITY, 1, white);
+                // The player lights a sprite as diffuse * 0.8. These stand under the map's sun:
+                // their 0.588 material takes ambient 0.8 + diffuse 1 * N.L, about white. A
+                // labelled rendition: a sun that changes in the battle is not followed.
+                player.tint = bevy::math::Vec4::new(2.0, 2.0, 2.0, 1.0);
+                (place.w_axis.truncate(), player)
+            })
+        })
+        .collect();
+    info!("water: {} of {} doodads at the water's edge play their models", list.len(), shore.list.len());
+    state.shore = list;
+}
+
 /// The placement's facing arrow (ui::placement::Ghost.arrow).
 fn take_ghost_arrow(ghost: Option<Res<crate::ui::placement::Ghost>>, state: Option<ResMut<FxState>>) {
     let Some(mut state) = state else { return };
@@ -304,16 +349,18 @@ fn start_loading(mut commands: Commands, battle: Option<Res<Battle>>, existing: 
 struct Retry;
 
 fn spawn_loader(commands: &mut Commands, battle: &Battle) {
-    let _ = battle;
+    let folder = bones::folder();
+    let things: Vec<(String, Option<String>)> = if folder.is_some() { battle.world.data.defs.iter().map(|d| (d.id.clone(), d.model.clone())).collect() } else { Vec::new() };
     let slot = Arc::new(Mutex::new(None));
     let out = slot.clone();
     // The preload job (started with the game) did the work; this waits for
     // it off the main thread if it is still running.
     std::thread::spawn(move || {
         let root = reconstruction_root().and_then(|r| r.parent().map(Path::to_path_buf));
-        let result = match root {
-            Some(root) => crate::preload::effects(&root).map_err(|e| format!("{e:#}")),
-            None => Err("the reconstruction folder was not found".to_owned()),
+        let result = match (root, folder) {
+            (Some(root), Some(folder)) => crate::preload::effects_on(&root, &folder, &things).map_err(|e| format!("{e:#}")),
+            (Some(root), None) => crate::preload::effects(&root).map_err(|e| format!("{e:#}")),
+            (None, _) => Err("the reconstruction folder was not found".to_owned()),
         };
         *out.lock().unwrap() = Some(result);
     });
@@ -324,6 +371,25 @@ fn spawn_loader(commands: &mut Commands, battle: &Battle) {
 /// (drawn from their converted PNG when there is one), `original:` Data
 /// paths, `embedded:` images the extractor decoded into `texture_dir`.
 fn load_layer(reconstruction: &Path, texture_dir: &Path, key: &str) -> Option<image::RgbaImage> {
+    // The folder's own texture, as the file it is.
+    if !key.starts_with("embedded:")
+        && let Some(folder) = bones::folder()
+    {
+        let rel = key.strip_prefix("original:").unwrap_or(key).replace('\\', "/");
+        if let Some(file) = bones::find_in(&folder, &rel)
+            && let Ok(bytes) = std::fs::read(&file)
+        {
+            let lower = rel.to_ascii_lowercase();
+            let image = if lower.ends_with(".dds") || lower.ends_with(".tga") {
+                aa_assets::convert::decode_texture(&rel, &bytes).ok().and_then(|(w, h, pixels)| image::RgbaImage::from_raw(w, h, pixels))
+            } else {
+                image::load_from_memory(&bytes).ok().map(|i| i.to_rgba8())
+            };
+            if image.is_some() {
+                return image;
+            }
+        }
+    }
     let path = if let Some(name) = key.strip_prefix("embedded:") {
         Some(texture_dir.join(name))
     } else if let Some(rel) = key.strip_prefix("original:") {
@@ -338,14 +404,21 @@ fn load_layer(reconstruction: &Path, texture_dir: &Path, key: &str) -> Option<im
     image::open(path).ok().map(|i| i.to_rgba8())
 }
 
-fn load(ids: &[String]) -> anyhow::Result<Loaded> {
+fn load(ids: &[String], folder: Option<&Path>) -> anyhow::Result<Loaded> {
     let start = Instant::now();
     let reconstruction = reconstruction_root().ok_or_else(|| anyhow::anyhow!("the reconstruction folder was not found"))?;
     let install = reconstruction.parent().ok_or_else(|| anyhow::anyhow!("install root"))?.to_path_buf();
     let mut notes = Vec::new();
-    let tables = Arc::new(data::load(&install, ids)?);
     // The effect table built from the original NIFs (extract.rs), cached.
-    let cache = data::cache_dir(&install);
+    let mut cache = data::cache_dir(&install);
+    let tables = match folder {
+        Some(folder) => {
+            let data = aa_play::data::DataFolder::new(folder)?;
+            cache = cache.join("folders").join(&data.key()[..16]);
+            Arc::new(data::load_on(&install, &data, &cache, ids)?)
+        }
+        None => Arc::new(data::load(&install, ids)?),
+    };
     let table_dir = cache.join("nif_textures");
     let nif = nif_table(&reconstruction, &cache, &table_dir, &tables, &mut notes);
     let nif: &'static NifTable = Box::leak(Box::new(nif));
@@ -384,9 +457,11 @@ fn load(ids: &[String]) -> anyhow::Result<Loaded> {
 /// current, else extracted from the original NIFs (about a second).
 fn nif_table(reconstruction: &Path, cache: &Path, texture_dir: &Path, tables: &FxTables, notes: &mut Vec<String>) -> NifTable {
     let mut models: Vec<String> = tables.vfx.values().filter(|d| d.category == "VFXMODEL" && !d.model.is_empty()).map(|d| d.model.clone()).collect();
+    models.extend(weather::MODELS.iter().map(|m| m.to_string()));
+    models.extend(crate::water::SHORE_MODELS.iter().map(|m| (*m).to_owned()));
     models.sort();
     models.dedup();
-    let key = format!("aa-bevy-nif-effects-2:{}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256, models.len());
+    let key = format!("aa-bevy-nif-effects-3:{}:{}", aa_rules::sources::BASELINE_LEDGER_SHA256, models.len());
     let path = cache.join("nif_effects.json");
     if let Ok(bytes) = std::fs::read(&path)
         && let Ok(t) = serde_json::from_slice::<NifTable>(&bytes)
@@ -675,6 +750,11 @@ pub struct FxState {
     decal_entity: Entity,
     /// Actors fog hides from the local player this frame (their effects hidden).
     fog_hidden: std::collections::HashSet<ActorId>,
+    /// The doodads at the water's edge: where each stands, its model playing.
+    shore: Vec<(Vec3, Player)>,
+    /// The battle `shore` was taken from.
+    shore_of: Option<u64>,
+    shore_clock: f32,
     view: View,
     focus: Vec3,
     warned: std::collections::HashSet<String>,
@@ -682,6 +762,9 @@ pub struct FxState {
     lit: HashMap<String, LitBatch>,
     /// The original Data folder (animated model NIFs).
     data_root: PathBuf,
+    /// World+290 on the screen (0x725340).
+    weather: weather::Weather,
+    weather_blocks: Vec<Vec2>,
     /// The first battle frame: the map's own actors exist already built.
     first_frame: bool,
     /// Bone world matrices of this frame, by (actor, bone name hash).
@@ -733,7 +816,7 @@ fn poll_loading(
     let Some(task) = task else { return };
     // upload_atlas took the texture array this frame: its handle arrives
     // with the next one.
-    if kept_atlas.is_none() && crate::preload::effects_ready().is_some_and(|l| l.atlas.lock().unwrap().is_none()) {
+    if bones::folder().is_none() && kept_atlas.is_none() && crate::preload::effects_ready().is_some_and(|l| l.atlas.lock().unwrap().is_none()) {
         return;
     }
     let Some(result) = task.0.lock().unwrap().take() else { return };
@@ -762,14 +845,24 @@ fn poll_loading(
         loaded.layers,
         loaded.seconds
     );
-    let atlas = match (loaded.atlas.lock().unwrap().take(), kept_atlas) {
-        (Some(image), _) => {
+    let own_atlas = if loaded.on_folder {
+        let mut kept = loaded.folder_atlas.lock().unwrap();
+        if kept.is_none() {
+            *kept = loaded.atlas.lock().unwrap().take().map(|image| images.add(image));
+        }
+        kept.clone()
+    } else {
+        None
+    };
+    let atlas = match (own_atlas, loaded.atlas.lock().unwrap().take(), kept_atlas) {
+        (Some(h), _, _) => h,
+        (None, Some(image), _) => {
             let h = images.add(image);
             commands.insert_resource(FxAtlas(h.clone()));
             h
         }
-        (None, Some(kept)) => kept.0.clone(),
-        (None, None) => images.add(Image::default()),
+        (None, None, Some(kept)) => kept.0.clone(),
+        (None, None, None) => images.add(Image::default()),
     };
     let quads_mesh = meshes.add(render::empty_mesh());
     let decal_mesh = meshes.add(render::empty_mesh());
@@ -814,12 +907,17 @@ fn poll_loading(
         quads_entity,
         decal_entity,
         fog_hidden: Default::default(),
+        shore: Vec::new(),
+        shore_of: None,
+        shore_clock: 0.0,
         view: View::default(),
         focus: Vec3::ZERO,
         warned: Default::default(),
         quads: Vec::new(),
         lit: HashMap::new(),
         data_root: loaded.reconstruction.join("assets/original/Data"),
+        weather: weather::Weather::new(&loaded.reconstruction.join("assets/original/Data")),
+        weather_blocks: Vec::new(),
         first_frame: true,
         bone_cache: HashMap::new(),
         def_bones: Vec::new(),
@@ -2176,6 +2274,16 @@ impl FxState {
                     for f in fx.leave.iter().filter(|f| before.contains(&f.state) && !on.contains(&f.state)) {
                         self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
                     }
+                    // What the state's WhenEnter attached goes with it: the aspect's model it
+                    // hangs on is replaced. The original's `building_pack`, a looping NIF with
+                    // no stop in the data, ends with the unpacking (read from its frames; the
+                    // native call is not traced), and its last particles fade.
+                    for f in fx.enter.iter().filter(|f| f.attached && before.contains(&f.state) && !on.contains(&f.state)) {
+                        for e in self.effects.iter_mut().filter(|e| e.owner == ctx.actor && e.ids.eq_ignore_ascii_case(&f.ids)) {
+                            e.player.stop();
+                            e.permanent = false;
+                        }
+                    }
                     for f in fx.enter.iter().filter(|f| on.contains(&f.state) && !before.contains(&f.state)) {
                         self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
                     }
@@ -2267,8 +2375,24 @@ impl FxState {
         });
     }
 
+    /// 0x725340: the weather effect follows World+290 and runs with the frame.
+    fn step_weather(&mut self, dt: f32, frame: &Frame) {
+        let world = frame.world;
+        let ids = if aa_play::triggers::loaded(world) { aa_play::triggers::weather(world) } else { (!world.map.weather.is_empty()).then(|| world.map.weather.clone()) };
+        if ids.is_none() && self.weather_blocks.is_empty() {
+            return;
+        }
+        let ground = |x: f32, y: f32| frame.ground.map_or(0.0, |g| (g.0)(x, -y));
+        let (width, height) = (world.map.width as f32 * world.map.cell_size, world.map.height as f32 * world.map.cell_size);
+        let view = self.view;
+        weather::visible_blocks(&view, &ground, width, height, &mut self.weather_blocks);
+        let seed = self.next_seed();
+        self.weather.step(dt, ids.as_deref(), self.nif, self.white, seed, &view, &ground, &self.weather_blocks);
+    }
+
     fn step(&mut self, dt: f32, frame: &Frame, spawn: &mut Spawn, transforms: &mut Query<(&mut Transform, Option<&mut Mesh3d>), Without<ActorView>>) {
         self.time += dt;
+        self.step_weather(dt, frame);
         // Delayed FXCs.
         let now = self.time;
         let due: Vec<Delayed> = {
@@ -2412,6 +2536,23 @@ impl FxState {
                 break;
             }
             e.player.render(&view, &mut quads, MAX_QUADS);
+        }
+        self.weather.render(&view, &mut quads, MAX_QUADS);
+        // The shore's models, near what the camera looks at: all on one clock, so one
+        // that comes back into view is where the others are.
+        let reach = view.eye.distance(self.focus) * 2.0 + 30.0;
+        let focus = self.focus;
+        let clock = self.shore_clock;
+        for (at, player) in &mut self.shore {
+            if quads.len() >= MAX_QUADS {
+                break;
+            }
+            if at.distance(focus) > reach {
+                continue;
+            }
+            player.age = clock;
+            player.update(0.0, 0);
+            player.render(&view, &mut quads, MAX_QUADS);
         }
         for t in &self.tracers {
             let head_d = (t.t * t.speed).min(t.dist);
@@ -2671,6 +2812,7 @@ fn run(
     }
     let drawn_map: HashMap<ActorId, Mat4> = drawn.iter().map(|(v, t)| (v.id, t.to_matrix())).collect();
     state.bone_cache.clear();
+    state.shore_clock += time.delta_secs();
     let frame = Frame { world: &battle.world, ground: ground.as_deref(), drawn: &drawn_map, local: battle.local };
     let _ = frame.local;
     // Object animations of removed actors are forgotten.

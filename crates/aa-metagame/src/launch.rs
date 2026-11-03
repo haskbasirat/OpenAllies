@@ -795,6 +795,31 @@ pub fn participants<R: KingdomRelations, E: LaunchEnv>(
     Launch { state, data, relations, env, precision }.participants(t)
 }
 
+/// What the tooltip of the Play button (`0x94E920`) reads of a battle before it starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BattleReview {
+    /// `0x9459F0`: the side stockpile bonuses, in the registry's order (binary32 bits).
+    pub friendly: Vec<u32>,
+    pub hostile: Vec<u32>,
+    /// `0x9488B0`: the additional actors with their participant's campaign kingdom
+    /// data, armies then divisions per participant.
+    pub actors: Vec<(Option<usize>, String)>,
+}
+
+/// [`BattleReview`] of the battle in MG territory `t`.
+pub fn battle_review<R: KingdomRelations, E: LaunchEnv>(state: &MgState, data: &MetaGameData, relations: &R, t: usize, env: &E, precision: Precision) -> Result<BattleReview> {
+    let launch = Launch { state, data, relations, env, precision };
+    let list = launch.participants(t)?;
+    let (friendly, hostile) = launch.side_stockpiles(t, &list)?;
+    let mut actors = Vec::new();
+    for p in &list {
+        for (_, actor) in launch.additional_actors(std::slice::from_ref(p)) {
+            actors.push((p.kingdom, actor));
+        }
+    }
+    Ok(BattleReview { friendly, hostile, actors })
+}
+
 /// `0x948EF0` (`KKC_MetaGameRTSLauncher::RequestGame`) for MG territory
 /// `t`: participants and every order up to and including `Launch`.
 pub fn battle_setup<R: KingdomRelations, E: LaunchEnv>(

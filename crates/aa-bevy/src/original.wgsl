@@ -35,6 +35,11 @@ struct Look {
     // The terrain's NiTextureEffects (723E00, 71D6A0): x, y repeats per metre of
     // the detail and macro maps on the native ground (0 = none).
     ground: vec4<f32>,
+    // A `lirp` tint (717E40): rgb the colour, a how far the final colour goes to it.
+    lirp: vec4<f32>,
+    // The terrain's cloud shadow (723E00, Terrain +0x34): x, y repeats per metre (0 =
+    // none), z, w its motion in repeats per second (71E020).
+    cloud: vec4<f32>,
 }
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> look: Look;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var mask_texture: texture_2d<f32>;
@@ -47,6 +52,8 @@ struct Look {
 @group(#{MATERIAL_BIND_GROUP}) @binding(105) var detail_sampler: sampler;
 @group(#{MATERIAL_BIND_GROUP}) @binding(106) var macro_texture: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(107) var macro_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(108) var cloud_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(109) var cloud_sampler: sampler;
 
 // Native metres per fog texel and the original texture density
 // (AVar TerrainFogPixelsPerMeter = 2): the original fog texture holds two
@@ -168,6 +175,16 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // values; the shadow quad and the fog layer multiply the result.
     let light = clamp(look.emissive.rgb + look.ambient.rgb * sun_ambient + look.diffuse.rgb * sun_diffuse * lambert, vec3<f32>(0.0), vec3<f32>(1.0));
     var colour = to_gamma(base.rgb) * light * shadow * (1.0 - fog_at(in.world_position.xyz));
+#ifdef VERTEX_COLORS
+    if look.ground.z > 0.5 {
+        // The water (7377F0): NiVertexColorProperty source 2, lighting 1, the vertex colour
+        // is the ambient and the diffuse, clamped by the fixed function, and the texture
+        // MODULATEs that. The attribute holds the colour on the gamma scale.
+        let lit = clamp(in.color.rgb * (sun_ambient + sun_diffuse * lambert), vec3<f32>(0.0), vec3<f32>(1.0));
+        let texel = base.rgb / max(in.color.rgb, vec3<f32>(0.0001));
+        colour = to_gamma(texel) * lit * shadow * (1.0 - fog_at(in.world_position.xyz));
+    }
+#endif
     // The world-parallel texture effects of the terrain (723E00), by the stages 8A57A0
     // sets for projected lights: the first alone (SELECTARG1), the next ADD, which a
     // stage saturates, then the base texture MODULATE, then the diffuse MODULATE. One
@@ -182,7 +199,15 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     } else if look.ground.y > 0.0 {
         colour = colour * macro_map;
     }
+    // The cloud map, a NiTextureEffect of the projected shadow kind (723E00): its grey
+    // darkens what is drawn.
+    let cloud_uv = ground * look.cloud.xy + look.cloud.zw * view_bindings::globals.time;
+    let cloud = textureSample(cloud_texture, cloud_sampler, cloud_uv).rgb;
+    if look.cloud.x > 0.0 {
+        colour = colour * cloud;
+    }
     // emissive.w: AlphaMode::Add (ONE / ONE), whose blend state takes alpha 0
+    colour = mix(colour, look.lirp.rgb, look.lirp.a);
     out.color = vec4<f32>(to_linear(colour), select(base.a, 0.0, look.emissive.w > 0.5));
     return out;
 }

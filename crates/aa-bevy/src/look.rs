@@ -36,6 +36,10 @@ pub struct OriginalLook {
     #[texture(106)]
     #[sampler(107)]
     pub macro_map: Option<Handle<Image>>,
+    /// The Biome's cloud_texture (`params.cloud`).
+    #[texture(108)]
+    #[sampler(109)]
+    pub cloud: Option<Handle<Image>>,
 }
 
 #[derive(ShaderType, Debug, Clone)]
@@ -53,6 +57,12 @@ pub struct LookParams {
     /// The terrain's texture effects: x and y repeats per metre of the detail and
     /// macro maps (0 = none).
     pub ground: Vec4,
+    /// A `lirp` VFXTintModifier (717E40 -> 716870, the model's last stage): rgb the colour,
+    /// a how far the final colour goes to it (0 = none).
+    pub lirp: Vec4,
+    /// The terrain's cloud shadow: x, y repeats per metre (0 = none), z, w its motion
+    /// in repeats per second.
+    pub cloud: Vec4,
 }
 
 impl MaterialExtension for OriginalLook {
@@ -166,6 +176,8 @@ fn params(ambient: [f32; 3], diffuse: [f32; 3], emissive: [f32; 3], alpha: (f32,
         sun: sun_to_light().extend(0.0),
         shadow: Vec4::new(shadow[0], shadow[1], shadow[2], 1.0),
         ground: Vec4::ZERO,
+        lirp: Vec4::ZERO,
+        cloud: Vec4::ZERO,
     }
 }
 
@@ -443,7 +455,7 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
             metallic: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: look_params, mask: None, fog: Some(FOG_IMAGE), detail: None, macro_map: None },
+        extension: OriginalLook { params: look_params, mask: None, fog: Some(FOG_IMAGE), detail: None, macro_map: None, cloud: None },
     }
 }
 
@@ -464,6 +476,12 @@ pub struct GroundMaps {
     pub macro_per_metre: f32,
     /// TerrainExtraQuality.
     pub on: bool,
+    /// The cloud shadow of the Biome's CloudInfo (0x723E00, the effect at Terrain +0x34):
+    /// a projected shadow, its texture, repeats per metre (1 / cloud_scale, 50 m without
+    /// one) and its motion in repeats per second.
+    pub cloud: Option<Handle<Image>>,
+    pub cloud_per_metre: Vec2,
+    pub cloud_motion: Vec2,
 }
 
 /// `<Data>/Terrain/<biome>.tgi` as 0x4B8E80 reads it, with the v14 runtime's files
@@ -471,7 +489,9 @@ pub struct GroundMaps {
 pub fn load_ground_maps(reconstruction: &std::path::Path, biome: &str, images: &mut Assets<Image>, on: bool) -> GroundMaps {
     let install = reconstruction.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
     let roots = [install.join("reconstruction/native-game/runtime-expanded-v14/Data"), reconstruction.join("assets/original/Data")];
-    let read = |rel: &str| roots.iter().find_map(|r| std::fs::read(r.join(rel.trim_start_matches('/'))).ok());
+    // A battle on a data folder reads its own first (`effects::bones::folder`).
+    let folder = crate::effects::bones::folder();
+    let read = |rel: &str| folder.iter().chain(roots.iter()).find_map(|r| std::fs::read(r.join(rel.trim_start_matches('/'))).ok());
     let mut out = GroundMaps { detail_per_metre: 1.0 / 0.8, macro_per_metre: 1.0 / 80.0, on, ..GroundMaps::default() };
     let Some(text) = read(&format!("Terrain/{biome}.tgi")).map(|b| String::from_utf8_lossy(&b).into_owned()) else { return out };
     let value = |key: &str| {
@@ -491,7 +511,49 @@ pub fn load_ground_maps(reconstruction: &std::path::Path, biome: &str, images: &
     let repetition = |key: &str, default: f32| value(key).and_then(|v| v.parse::<f32>().ok()).filter(|r| *r != 0.0).unwrap_or(default);
     out.detail_per_metre = 1.0 / repetition("detail_repetition", 0.8);
     out.macro_per_metre = 1.0 / repetition("macro_repetition", 80.0);
+    // 0x723E00: direction normalized, over the scale, per axis; 0x71E020 moves the map by
+    // that times a speed that wanders between cloud_min_velocity and cloud_max_velocity on
+    // the view's own random numbers. Here it holds their middle (a labelled rendition: the
+    // wander has nothing to compare with).
+    let pair = |key: &str| value(key).and_then(|v| {
+        let mut parts = v.split(',').map(|p| p.trim().parse::<f32>().ok());
+        Some(Vec2::new(parts.next()??, parts.next()??))
+    });
+    let number = |key: &str| value(key).and_then(|v| v.parse::<f32>().ok());
+    if let Some(path) = value("cloud_texture")
+        && let Some(bytes) = read(&path).or_else(|| read(&path.to_ascii_lowercase()))
+        && let Some(cloud) = cloud_image(&bytes)
+    {
+        out.cloud = Some(images.add(cloud));
+        let scale = pair("cloud_scale").unwrap_or(Vec2::ZERO);
+        let scale = Vec2::new(if scale.x == 0.0 { 50.0 } else { scale.x }, if scale.y == 0.0 { 50.0 } else { scale.y });
+        let direction = pair("cloud_movement_direction").filter(|d| *d != Vec2::ZERO).unwrap_or(Vec2::X).normalize();
+        let speed = (number("cloud_min_velocity").unwrap_or(0.0) + number("cloud_max_velocity").unwrap_or(0.0)) * 0.5;
+        out.cloud_per_metre = Vec2::ONE / scale;
+        out.cloud_motion = direction / scale * speed;
+    }
     out
+}
+
+/// The cloud map, a TGA: repeating (wrap 3), filtered without mips (filter 1).
+fn cloud_image(bytes: &[u8]) -> Option<Image> {
+    let rgba = image::load_from_memory_with_format(bytes, image::ImageFormat::Tga).ok()?.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let mut image = Image::new(
+        bevy::render::render_resource::Extent3d { width, height, depth_or_array_layers: 1 },
+        bevy::render::render_resource::TextureDimension::D2,
+        rgba.into_raw(),
+        bevy::render::render_resource::TextureFormat::Rgba8Unorm,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = bevy::image::ImageSampler::Descriptor(bevy::image::ImageSamplerDescriptor {
+        address_mode_u: bevy::image::ImageAddressMode::Repeat,
+        address_mode_v: bevy::image::ImageAddressMode::Repeat,
+        mag_filter: bevy::image::ImageFilterMode::Linear,
+        min_filter: bevy::image::ImageFilterMode::Linear,
+        ..bevy::image::ImageSamplerDescriptor::default()
+    });
+    Some(image)
 }
 
 /// A DXT3 DDS with its mips as an RGBA image that repeats, filtered through its
@@ -592,6 +654,9 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
         p.flags.x = 1.0;
     }
     p.ground = ground_params(ground);
+    if ground.cloud.is_some() {
+        p.cloud = Vec4::new(ground.cloud_per_metre.x, ground.cloud_per_metre.y, ground.cloud_motion.x, ground.cloud_motion.y);
+    }
     OriginalMaterial {
         base: StandardMaterial {
             base_color: Color::srgba(color[0], color[1], color[2], 1.0),
@@ -603,7 +668,30 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
             reflectance: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE), detail: ground.detail.clone(), macro_map: ground.macro_map.clone() },
+        extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE), detail: ground.detail.clone(), macro_map: ground.macro_map.clone(), cloud: ground.cloud.clone() },
+    }
+}
+
+/// The material of the terrain's water (0x7377F0): no NiMaterialProperty, the vertex
+/// colour is the ambient and the diffuse (NiVertexColorProperty source 2, lighting 1), the
+/// texture MODULATE, NiAlphaProperty 0xED, z test without z write. `order` keeps it after
+/// the terrain's layers and before every other transparent thing.
+pub fn water_material(texture: Option<Handle<Image>>, order: usize) -> OriginalMaterial {
+    let mut p = params([1.0; 3], [1.0; 3], [0.0; 3], (0.0, 0.0));
+    // The shader's mark for a colour that is the ambient and the diffuse.
+    p.ground.z = 1.0;
+    OriginalMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: texture,
+            alpha_mode: AlphaMode::Blend,
+            depth_bias: -1.0e8 + order as f32 * 1000.0,
+            cull_mode: None,
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
+            ..default()
+        },
+        extension: OriginalLook { params: p, mask: None, fog: Some(FOG_IMAGE), detail: None, macro_map: None, cloud: None },
     }
 }
 

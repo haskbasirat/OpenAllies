@@ -3,7 +3,7 @@
 //! lookup is case-insensitive), the `%s` resolution-folder rule for UI art,
 //! and image header sizes.
 //!
-//! `%s` rule, `0x490ED0` (`0x490ed0`): the property text is formatted with
+//! `%s` rule, `0x490ED0` (`0x490ED0`): the property text is formatted with
 //! the screen width (`swprintf(L"%d", *(int*)0xB396D0)`), normalised and
 //! looked up; if that file does not exist the original text is used with the
 //! `%s` and everything up to and including the next `/` (or `\`) removed. So

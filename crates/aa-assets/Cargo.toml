@@ -7,6 +7,8 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+aa-formats = { path = "../aa-formats" }
+image = { version = "0.25", default-features = false, features = ["png", "tga"] }
 serde.workspace = true
 serde_json.workspace = true
 rayon.workspace = true

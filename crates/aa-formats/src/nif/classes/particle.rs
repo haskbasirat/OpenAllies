@@ -434,15 +434,16 @@ fn psys_modifier_ctlr(s: &mut Stream, f: &mut Fields) -> R {
     Ok(())
 }
 
-/// NiPSysEmitterCtlr 8B8B60 (also the initial-radius, speed and
-/// modifier-active controllers, 8E3B20): modifier controller and data link.
+/// NiPSysEmitterCtlr 8B8B60 (also the initial-radius, speed, declination, life-span,
+/// planar-angle, gravity-strength and modifier-active controllers, 8E3B20, read from their
+/// vtables): modifier controller and data link.
 pub(crate) fn psys_emitter_ctlr(s: &mut Stream, f: &mut Fields) -> R {
     psys_modifier_ctlr(s, f)?;
     f.put("data", Value::Link(s.link_id()?));
     Ok(())
 }
 
-/// NiPSysUpdateCtlr 8E1A30 is NiTimeController's loader.
+/// NiPSysUpdateCtlr and NiPSysResetOnLoopCtlr 8E1A30 are NiTimeController's loader.
 pub(crate) fn psys_update_ctlr(s: &mut Stream, f: &mut Fields) -> R {
     time_controller(s, f)
 }

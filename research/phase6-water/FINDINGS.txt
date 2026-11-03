@@ -84,3 +84,23 @@ crete-static-grid-fixed.png is the corrected stricter same-ID candidate
 (8,719cells). A later conservative interior subset supported10,901cells.
 These are intermediate snapshots. Final raw-source/native-selection water
 uses14,169Crete water/neighbor cells and its final capture/report is authoritative.
+
+The battle client (2026-11-03)
+crates/aa-bevy/src/water.rs draws the terrain's water, which the battle client had not drawn at
+all: rivers and seas were their dry beds (the "purple" ground of a night film). The same native
+rules as above, from the world's live height maps, so a building's flatten moves the surface too.
+Added to what is above:
+- NiFlipController over all the terrain's frames, 1 / anim_fps, looping (0x7377F0).
+- The texture translation 0x736D50: the fraction of the terrain's cloud scroll (0x71E020).
+- The fixed function of NiVertexColorProperty source 2, lighting 1 in the shader: the vertex
+  colour times (light ambient + light diffuse * N.L), clamped, then the texture MODULATE. Over
+  1 before the clamp on the map's sun, which is what makes the water as bright as it is.
+- The doodads at the water's edge (0x55B4E0, water_doodad_IDS: waves, ripples): their NIFs hold
+  animated, blended quads with embedded textures, so they play as effects on one clock. They
+  were the "grey stepped strip": the converted mesh has neither texture nor animation.
+Open:
+- Blending happens on linear values in the client, on gamma values in the original; a shallow
+  edge reads a little lighter or darker than the original's.
+- The saved GMap+5C cells are read for a map file; a generated map uses regular quads. The
+  native rebuild of those cells after a paint is not ported.
+- All doodads at the edge run on one clock; the original's phase per doodad was not read.

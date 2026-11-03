@@ -61,6 +61,18 @@ pub fn effects(root: &Path) -> Result<Arc<crate::effects::Preloaded>> {
         crate::effects::preload(&things)
     })
 }
+/// The effect data of a battle on a data folder: read once per folder in a run, and its
+/// tables are cached on disk by what the folder holds.
+pub fn effects_on(_root: &Path, folder: &Path, things: &[(String, Option<String>)]) -> Result<Arc<crate::effects::Preloaded>> {
+    static ON: std::sync::Mutex<Vec<(std::path::PathBuf, Arc<crate::effects::Preloaded>)>> = std::sync::Mutex::new(Vec::new());
+    let mut on = ON.lock().map_err(|_| anyhow::anyhow!("effect tables lock"))?;
+    if let Some((_, loaded)) = on.iter().find(|(f, _)| f == folder) {
+        return Ok(loaded.clone());
+    }
+    let loaded = Arc::new(crate::effects::preload_on(things, folder)?);
+    on.push((folder.to_path_buf(), loaded.clone()));
+    Ok(loaded)
+}
 pub fn sounds(reconstruction: &Path) -> Result<Arc<crate::audio::SoundBank>> {
     get(&SOUNDS, || crate::audio::SoundBank::load(reconstruction))
 }

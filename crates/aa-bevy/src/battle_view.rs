@@ -1665,11 +1665,17 @@ pub fn draw_ghost(
     }
     if state.shown_tint != g.illegal {
         let list = if g.illegal { &state.tinted } else { &state.plain };
+        // A part spawned this frame is not there yet: the tint is shown when all took it
+        // (0x693A10 / 0x693A80 act on the ghost's every update).
+        let mut all = true;
         for (part, m) in state.parts.iter().zip(list.iter()) {
-            if let Ok(mut mm) = mats.get_mut(*part) {
-                mm.0 = m.clone();
+            match mats.get_mut(*part) {
+                Ok(mut mm) => mm.0 = m.clone(),
+                Err(_) => all = false,
             }
         }
-        state.shown_tint = g.illegal;
+        if all {
+            state.shown_tint = g.illegal;
+        }
     }
 }

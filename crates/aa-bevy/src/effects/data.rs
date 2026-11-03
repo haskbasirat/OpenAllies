@@ -856,6 +856,31 @@ pub fn load_audio(game_root: &Path) -> anyhow::Result<BTreeMap<String, AudioDef>
     Ok(audio)
 }
 
+/// The tables of a data folder's things, from its catalog; `cache` is the folder's own.
+pub fn load_on(game_root: &Path, folder: &aa_play::data::DataFolder, cache: &Path, actor_ids: &[String]) -> anyhow::Result<FxTables> {
+    let mut ids: Vec<String> = actor_ids.iter().map(|s| s.to_ascii_lowercase()).collect();
+    ids.sort();
+    ids.dedup();
+    let key = format!("{CACHE_VERSION}:{}:{}", folder.key(), ids.len());
+    let path = cache.join("fx.json");
+    if let Ok(bytes) = std::fs::read(&path)
+        && let Ok(t) = serde_json::from_slice::<FxTables>(&bytes)
+        && t.source_key == key
+    {
+        return Ok(t);
+    }
+    let mut t = extract(folder.catalog(game_root)?, &ids);
+    t.source_key = key;
+    let _ = std::fs::create_dir_all(cache);
+    if let Ok(bytes) = serde_json::to_vec(&t) {
+        let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+        if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+    Ok(t)
+}
+
 pub fn load(game_root: &Path, actor_ids: &[String]) -> anyhow::Result<FxTables> {
     let mut ids: Vec<String> = actor_ids.iter().map(|s| s.to_ascii_lowercase()).collect();
     ids.sort();

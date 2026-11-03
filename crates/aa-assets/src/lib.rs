@@ -4,6 +4,7 @@
 //! and Z height. Converted models already use `(native X, native Z, -native Y)`;
 //! their hierarchy transforms and vertical UV flip are already baked in.
 
+pub mod convert;
 mod model;
 mod store;
 mod terrain;

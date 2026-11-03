@@ -37,7 +37,7 @@ pub struct CampaignPlugin;
 impl Plugin for CampaignPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<map::MapScene>()
-            .add_systems(Update, (map::sync, map::camera, map::pick, map::minimap).chain().after(crate::ui::front::frame))
+            .add_systems(Update, (map::sync, map::camera, map::pick, map::drag_ghost, map::tints, map::minimap).chain().after(crate::ui::front::frame))
             .add_systems(Update, cinematic::play.after(crate::ui::front::frame))
             // after the film of the battle has read the launch orders
             .add_systems(Update, battle::start.after(crate::film_record::start).before(crate::session::step_battle).run_if(in_state(crate::session::AppState::Battle)));

@@ -158,6 +158,8 @@ pub struct Front {
     battle_speed_limits: (f32, f32),
     /// The film being opened (`KKC_ResourceManagerTaskLoadFilm`, 0x5A3980).
     film_load: Option<FilmLoad>,
+    /// The game's text while a film on a profile's data speaks that data's.
+    stock_strings: Option<aa_ui::resources::StringTable>,
     /// The End of Film box is up: it has neither an accept nor a cancel
     /// button, Enter and Esc do nothing (0x66E790, [O]).
     film_box_without_keys: bool,
@@ -265,6 +267,7 @@ impl Front {
             campaign_winner: None,
             battle_speed_limits: (-2.0, 2.0),
             film_load: None,
+            stock_strings: None,
             film_box_without_keys: false,
             observer_music: false,
             film_oos_told: false,
@@ -293,16 +296,11 @@ impl Front {
         crate::session::set_load_status("app_status_loading_data");
         std::thread::spawn(move || {
             let started = Instant::now();
-            // A film on a profile's data (lead's decision 6) draws that data's art:
-            // its conversion lies over the stock art until the battle ends.
-            let art = data.definition_overlay().and_then(crate::session::art_folder);
-            if let (Some(art), Some(folder)) = (&art, data.definition_overlay())
-                && !art.join("assets/converted/models/manifest.json").is_file()
-            {
-                crate::session::convert_art(&reconstruction, folder, art);
-            }
+            // A film on a profile's data (lead's decision 6) draws that data's art,
+            // converted as it is asked for, until the battle ends.
             if let Ok(store) = crate::preload::store(&reconstruction) {
-                store.set_art_overlay(art.as_deref());
+                let art = data.definition_overlay().and_then(crate::session::art_folder);
+                store.set_art_overlay(data.definition_overlay().zip(art.as_deref()));
             }
             // what the client has loaded already
             data.preloaded.game = crate::preload::game_data(&game_root).ok();
@@ -318,6 +316,15 @@ impl Front {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| open_film(&path, &data, sync)))
                 .unwrap_or_else(|_| Err(FilmFailure::CreateWorld { detail: "the film's load panicked".into() }));
             info!("film: opened in {:.2} s", started.elapsed().as_secs_f32());
+            // Its effects and sounds too; the first film on a folder reads them here,
+            // under the loading screen, not in the battle.
+            crate::effects::bones::set_folder(data.definition_overlay().map(Path::to_path_buf));
+            if let (Some(folder), Ok((world, _))) = (data.definition_overlay(), &result) {
+                let things: Vec<(String, Option<String>)> = world.data.defs.iter().map(|d| (d.id.clone(), d.model.clone())).collect();
+                if let Err(e) = crate::preload::effects_on(&game_root, folder, &things) {
+                    warn!("film: the effects of {} did not load: {e:#}", folder.display());
+                }
+            }
             if let Ok(mut s) = out.lock() {
                 *s = Some(result);
             }
@@ -1534,6 +1541,9 @@ pub fn frame(
     // RequestFinished: the world's scores for the score screen (slot 5); the
     // world itself ends with the battle state (scene::leave_battle)
     if out.leave {
+        if let Some(strings) = f.stock_strings.take() {
+            f.ui.strings = strings;
+        }
         if let Some(b) = battle.as_deref() {
             f.score_data = Some(score_data(&f.ui, b, &f.kingdom_names));
             // 0x658FF0: SaveFilm while the game's film exists (0x772BB0)
@@ -1655,6 +1665,10 @@ pub fn frame(
         match result {
             Ok((world, player)) => match film_launch(&world, &player) {
                 Some(launch) => {
+                    if let Some(folder) = crate::effects::bones::folder() {
+                        f.stock_strings.get_or_insert_with(|| f.ui.strings.clone());
+                        f.ui.strings.add_folder(&folder);
+                    }
                     commands.insert_resource(crate::session::PendingFilm(std::sync::Mutex::new(Some((world, player)))));
                     start(f, &mut commands, &mut next, launch);
                 }

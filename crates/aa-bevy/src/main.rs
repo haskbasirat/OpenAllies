@@ -18,6 +18,7 @@ mod terrain;
 mod textures;
 mod ui;
 mod units;
+mod water;
 
 use bevy::prelude::*;
 

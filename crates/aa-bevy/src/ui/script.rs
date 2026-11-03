@@ -32,11 +32,14 @@
 //! seconds at most, 300 by default): `{"until_listen": "<UI command>"}` waits until
 //! the script listens to that command, `{"until_trigger": "<name prefix>", "on": false}`
 //! until that trigger is on or off (off by default); the actor kind `slot:<GTID slot>`
-//! is the map's thing of that low word; `{"click_command": "<UI command>"}` clicks the
+//! is the map's thing of that low word, `name:<name>` the map's named thing, `def:<IDS>`
+//! the actors of that definition or of an organization of it; `{"click_command": "<UI command>"}` clicks the
 //! action button that shows that command, or logs that none does;
 //! `{"rclick_world": [x, y]}` / `{"click_world": [x, y]}` / `{"move_world": [x, y]}` /
 //! `{"look_at_point": [x, y]}` take a native ground point; `{"destroy": "enemy"}` kills
-//! every hostile actor by the real death path, for the end of a battle.
+//! every hostile actor by the real death path, for the end of a battle. `"track": true` on
+//! `click_actor` keeps the pointer on the actor until the click is done, as a hand follows
+//! it while the camera moves.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -417,6 +420,18 @@ pub fn run(
         let matches = |id: aa_play::ActorId, what: &str| -> bool {
             let Some(a) = w.actor(id).filter(|a| a.alive) else { return false };
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
+            // an actor of that definition, or a member of an organization of that definition
+            if let Some(ids) = what.strip_prefix("def:") {
+                return w.data.def(a.def).id.eq_ignore_ascii_case(ids) || a.org.and_then(|o| w.orgs.get(o as usize)).is_some_and(|o| w.data.def(o.def).id.eq_ignore_ascii_case(ids));
+            }
+            // a name of the map's name table (a named organization of the script)
+            if let Some(name) = what.strip_prefix("name:") {
+                return match aa_play::triggers::script_thing(w, name) {
+                    Some(aa_play::triggers::ScriptThing::Thing(aa_play::ids::Thing::Actor(x))) => x == id,
+                    Some(aa_play::triggers::ScriptThing::Thing(aa_play::ids::Thing::Org(o))) => a.org == Some(o),
+                    _ => false,
+                };
+            }
             if let Some(slot) = what.strip_prefix("slot:") {
                 let slot = u16::from_str_radix(slot.trim_start_matches("0x"), 16).unwrap_or(0);
                 return match w.ids.thing_at_slot(slot) {
@@ -449,6 +464,15 @@ pub fn run(
             requests.zoom = Some(z as f32);
             s.next();
             return;
+        }
+        // a click that follows its actor
+        if let (Some(what), Some(_)) = (kind("track"), step.get("click_at"))
+            && let Ok((cam, cam_tf)) = cameras.single()
+            && let Some(p) = views.iter().filter(|(v, _)| matches(v.id, &what)).find_map(|(_, tf)| cam.world_to_viewport(cam_tf, tf.translation() + Vec3::Y * 0.3).ok())
+        {
+            let f = p / logical;
+            let at = s.at;
+            s.steps[at] = serde_json::json!({ "click_at": [f.x, f.y], "track": what });
         }
         // a native ground point
         let point = |key: &str| step.get(key).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32));
@@ -552,7 +576,7 @@ pub fn run(
                     let f = p / logical + off;
                     info!("script: {key} {what} actor {id} at {:.3},{:.3}", f.x, f.y);
                     let at = s.at;
-                    s.steps[at] = serde_json::json!({ out: [f.x, f.y] });
+                    s.steps[at] = if step.get("track").is_some() { serde_json::json!({ out: [f.x, f.y], "track": what }) } else { serde_json::json!({ out: [f.x, f.y] }) };
                 }
                 None => {
                     let seen: Vec<_> = views.iter().filter(|(v, _)| matches(v.id, &what)).map(|(v, tf)| (v.id, cam.world_to_viewport(cam_tf, tf.translation()).ok())).collect();

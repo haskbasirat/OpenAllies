@@ -14,9 +14,8 @@
 //! (94DFE0, 94BC50), of the technology rows (94BE50) and of the quick battle (94E610)
 //! are [`MetaGameUi::tooltip`], written as the tooltip builder 638690 does ([`TipBody`]).
 //! The object display's portrait (96AD80, 96B1D0 -> 96ABF0: the army's own model in
-//! the ModelWidget) is drawn by `ui::portrait`. Not built at all: the Play button's
-//! tooltip (94E920),
-//! CycleSelection (933DB0). The computer turn's camera
+//! the ModelWidget) is drawn by `ui::portrait`. The Play button's tooltip is 94E920
+//! ([`rts_tip`]). Not built at all: CycleSelection (933DB0). The computer turn's camera
 //! follow (933320) is campaign/map.rs.
 //! The end of the campaign (938E10 -> 50D370) shows the mission box.
 use super::Game;
@@ -181,6 +180,68 @@ fn army_tip(ui: &Ui, game: &Game, d: usize, cost: Option<i32>) -> (String, Strin
     }
     body.description(&ui.strings.resolve(&data.armies[d].tooltip));
     (army_name(ui, game, d), body.text)
+}
+
+/// `0x94E920`: the Play button's tooltip: "RTS Battle", then per side the row builder
+/// 63C6B0: its kingdom, Units (the additional actors of its participants, 9488B0, 639FE0),
+/// Money (the side's stockpile bonus, 9459F0, on the default stockpile ResourceStockpileDefault
+/// `[B39AB0]+0x110`, each stockpiled resource `%lc%.0f` of its floor, 5C4BD0), Capabilities
+/// (the technologies of the side's divisions, 945D10), Technologies (the kingdom's, 945C90,
+/// 63A0F0: `%d (%s)` of the first three and an ellipsis).
+fn rts_tip(ui: &Ui, game: &Game, data: &aa_play::GameData) -> Option<(String, String)> {
+    let t = game.campaign.pending_battle().ok().flatten()?;
+    let resources: Vec<String> = data.resources.iter().map(|r| r.id.clone()).collect();
+    let env = super::battle::env(game, resources);
+    let review = aa_metagame::launch::battle_review(&game.campaign.state, &game.campaign.data, &game.campaign.relations, t, &env, aa_numeric::Precision::Double53).map_err(|e| bevy::log::warn!("the battle's tooltip: {e}")).ok()?;
+    let x = tab_x(ui);
+    let base = data.rule_ci("ResourceStockpileDefault").unwrap_or(0.0);
+    let glyph = money_glyph(ui);
+    let mut body = TipBody::default();
+    for (side, label, kingdom, stock) in [
+        (Side::Attacker, "#metagame_tooltip_rtsbattle_attacker", game.campaign.side_armies(t, Side::Attacker).first().and_then(|&a| game.campaign.kingdom_of_actor(game.campaign.state.army(a).owner)), &review.hostile),
+        (Side::Defender, "#metagame_tooltip_rtsbattle_defender", game.campaign.defending_kingdom(t).ok().flatten(), &review.friendly),
+    ] {
+        let Some(k) = kingdom else { continue };
+        let name = kingdom_name(ui, game, k);
+        body.row(&ui.strings.resolve(label), &name, x);
+        let actor_data = game.campaign.state.kingdoms[k].data;
+        let units: Vec<String> = review.actors.iter().filter(|a| a.0 == Some(actor_data)).filter_map(|a| data.find(&a.1)).map(|d| ui.strings.resolve(&data.def(d).name)).collect();
+        body.row(&ui.strings.resolve("#metagame_tooltip_rtsbattle_units"), &units.join(", "), x);
+        let money: String = data
+            .resources
+            .iter()
+            .zip(stock)
+            .filter(|(r, _)| r.kind == aa_play::data::ResourceKind::Stockpiled)
+            .map(|(_, bits)| format!("{}{:.0}", glyph.map(String::from).unwrap_or_default(), (f32::from_bits(*bits) + base).floor()))
+            .collect();
+        body.row(&ui.strings.resolve("#metagame_tooltip_rtsbattle_money"), &money, x);
+        // 945D10: each technology once, in the order of the side's armies and divisions
+        let mut capabilities: Vec<String> = Vec::new();
+        for a in game.campaign.side_armies(t, side) {
+            for d in &game.campaign.state.army(a).divisions {
+                for tech in game.campaign.data.divisions[d.0 as usize].technologies.iter().flatten() {
+                    if !capabilities.iter().any(|c| c.eq_ignore_ascii_case(tech)) {
+                        capabilities.push(tech.clone());
+                    }
+                }
+            }
+        }
+        let capabilities: Vec<String> = capabilities.iter().map(|c| technology_name(ui, Some(data), c)).collect();
+        body.row(&ui.strings.resolve("#metagame_tooltip_rtsbattle_capabilities"), &capabilities.join(", "), x);
+        let techs = &game.campaign.state.kingdoms[k].technologies;
+        let techs_text = if techs.is_empty() {
+            "0".to_string()
+        } else {
+            let mut names: Vec<String> = techs.iter().take(3).map(|c| technology_name(ui, Some(data), c)).collect();
+            if techs.len() > 3 {
+                names.push(ui.strings.resolve("#grammar_ellipsis"));
+            }
+            format!("{} ({})", techs.len(), names.join(", "))
+        };
+        body.row(&ui.strings.resolve("#metagame_tooltip_rtsbattle_techs"), &techs_text, x);
+        body.pending = true;
+    }
+    Some((ui.strings.resolve("#metagame_tooltip_rtsbattle_title"), body.text))
 }
 
 /// The technology's name (the Property's +0x10), as the rows and the messages write it.
@@ -920,7 +981,7 @@ impl MetaGameUi {
     /// territory, the first attacker's kingdom (955420) and the defending
     /// kingdom (955EB0) by name, Play for a battle the local player is part of
     /// (94D620) and Watch otherwise, Cancel on the local player's turn (94D5D0).
-    /// The army lists are 94DFE0; the tooltip of the Play button (94E920) is not built.
+    /// The army lists are 94DFE0; the tooltip of the Play button is 94E920 ([`rts_tip`]).
     fn fill_battle(&mut self, ui: &mut Ui, game: &Game) {
         let Some(t) = game.campaign.pending_battle().ok().flatten() else { return };
         let base = "MetaGameStartBattleDialog";
@@ -938,6 +999,10 @@ impl MetaGameUi {
         self.tips.clear();
         if let Some((name, text)) = quick_tip(ui, game) {
             self.tips.push((format!("Root/{base}/MetaGameButtonStartBattleQuickBattle"), name, text));
+        }
+        if let Some((name, text)) = crate::preload::game_data(&self.game_root).ok().and_then(|data| rts_tip(ui, game, &data)) {
+            self.tips.push((format!("Root/{base}/MetaGameButtonStartBattlePlay"), name.clone(), text.clone()));
+            self.tips.push((format!("Root/{base}/MetaGameButtonStartBattleWatch"), name, text));
         }
         self.fill_army_list(ui, game, t, Side::Attacker, "MetaGameAttackerPanel", "AttackerArmyList", 9800);
         self.fill_army_list(ui, game, t, Side::Defender, "MetaGameDefenderPanel", "DefenderArmyList", 9900);

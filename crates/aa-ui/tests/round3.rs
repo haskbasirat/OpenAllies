@@ -114,8 +114,8 @@ fn edit_box_clipboard_commands() {
     let ev = ui.take_events();
     assert!(ev.iter().any(|x| matches!(x, UiEvent::Clipboard { text } if text == "Commander")));
     assert_eq!(ui.editbox_text(e).as_deref(), Some(""));
-    ui.paste("player\nsecond line");
-    assert_eq!(ui.editbox_text(e).as_deref(), Some("player"));
+    ui.paste("Alpha\nsecond line");
+    assert_eq!(ui.editbox_text(e).as_deref(), Some("Alpha"));
 }
 
 #[test]

@@ -53,8 +53,10 @@
 //!
 //! PlayVideo (545C60 -> 0x411070) is `campaign/cinematic.rs`.
 //!
-//! Still not presented, each logged once when it happens: the
-//! weather and a VFX on an actor (50D230, no shipped map uses it). The flash of a UI button
+//! The weather (World+290) is `effects/weather.rs`.
+//!
+//! Still not presented, logged once when it happens: a VFX on an actor (50D230, no
+//! shipped map uses it). The flash of a UI button
 //! (50C880: the TutorialWidget of a command, 0x619BF0, virtual +B4 = 0x5EE2F0)
 //! toggles the button's TARGETED state every AVar UIFlashToggleSeconds,
 //! UIFlashTogglesWhenTargeted times, over the action button that shows the
@@ -202,6 +204,20 @@ fn set_targeted(ui: &mut aa_ui::ui::Ui, path: &str, on: bool) {
             w.flags &= !aa_ui::state::widget_flag::TARGETED;
         }
     });
+}
+
+/// The flash of every widget that sends `command` (0x619BF0's table by the command's name).
+fn flash_command(w: &mut aa_ui::widget::Widget, command: &str, on: bool) {
+    if w.command.as_deref().is_some_and(|c| c.trim().eq_ignore_ascii_case(command)) {
+        if on {
+            w.flags |= aa_ui::state::widget_flag::TARGETED;
+        } else {
+            w.flags &= !aa_ui::state::widget_flag::TARGETED;
+        }
+    }
+    for c in &mut w.children {
+        flash_command(c, command, on);
+    }
 }
 
 /// Whether a flash that started `elapsed_ms` ago is lit, and whether it still
@@ -696,6 +712,10 @@ pub fn update(
             let on = lit && running;
             if let Some(path) = panel_button(&command) {
                 set_targeted(&mut front.ui, path, on);
+            } else {
+                // the other TutorialWidgets: the formation buttons ("FormationChange 0 %i"),
+                // the floater's ShowButton, an ability's button
+                flash_command(&mut front.ui.root, command.trim_end_matches("%i").trim(), on);
             }
             for (i, slot) in &slots {
                 if slot.as_ref().and_then(|c| native_text(&b.world, c)).is_some_and(|t| t.eq_ignore_ascii_case(&command)) {

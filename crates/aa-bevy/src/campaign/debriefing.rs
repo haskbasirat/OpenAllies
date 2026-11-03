@@ -21,10 +21,9 @@
 //! The world is gone when this page shows here (the original keeps it behind the
 //! menus until the next one starts), so [`MissionResult`] holds what Activate reads.
 //!
-//! Compare against the original: the victory and defeat music (`0x747630` of the
-//! interface's `victory_music` / `defeat_music`) are `null` in the shipped file,
-//! which stops the game's music: this client's menu music starts as it does for
-//! every menu page.
+//! The victory and defeat music (`0x747630` of the interface's `victory_music` /
+//! `defeat_music`) are `null` in the shipped file, which does nothing: the game's music
+//! goes on (`audio::menu_sound`).
 use aa_ui::ui::Ui;
 use aa_ui::widget::{Widget, WidgetClass as C};
 use std::sync::Arc;

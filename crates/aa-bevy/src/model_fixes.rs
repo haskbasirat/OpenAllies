@@ -1066,6 +1066,24 @@ impl ModelFixes {
             store.root() == self.root,
             "Model corrections belong to a different asset store"
         );
+        // A model of the battle's data folder has no audit: its conversion made the
+        // corrections (`aa_assets::convert`). Only the ambient is the NIF's still.
+        if store.model_is_overlaid(&model.source) {
+            let source = model.source.replace('\\', "/");
+            let meshes: Vec<(&str, &[String])> = model.meshes.iter().map(|m| (m.name.as_str(), m.hierarchy.as_slice())).collect();
+            let ambients = store
+                .resolve_url(&format!("/assets/original/Data/{source}"))
+                .ok()
+                .and_then(|p| fs::read(p).ok())
+                .map(|bytes| nif_ambients(&bytes, &meshes))
+                .unwrap_or_else(|| vec![None; meshes.len()]);
+            for (mesh, ambient) in model.meshes.iter().zip(ambients) {
+                if let Some(ambient) = ambient {
+                    crate::look::record_ambient(&mesh.material, ambient);
+                }
+            }
+            return Ok(FixStats { meshes_before: model.meshes.len(), meshes_after: model.meshes.len(), ..Default::default() });
+        }
         let key = resource_key(&model.source)?;
         let entry = self
             .entries

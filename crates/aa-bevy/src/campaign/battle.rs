@@ -16,10 +16,10 @@
 //!   StartMission) and AddKingdomAdditionalActor go to the world when the
 //!   battle exists ([`PendingBattle`]).
 //!
-//! Compare against the original: the additional actors are placed in rings
-//! around the kingdom's start location on free ground (the native placement,
-//! KKC_WorldCreatorRandom's `_ki.additional_actors`, is not ported: labelled
-//! rendition). A battle the local player is not part of ("Watch") runs with an
+//! The additional actors go to the generator (`RandomMapParams::additional_actors`,
+//! KKC_RMCPlaceWorldParametersActorsStage 0x594930), each to the kingdom it merges into.
+//!
+//! A battle the local player is not part of ("Watch") runs with an
 //! observer (`Battle::observer`). The AI's general of a computer kingdom stays
 //! the nation's random pick (CreateExplicitAi with an empty profile).
 use super::{BattleLaunch, BattleOrigin, Game};
@@ -175,8 +175,10 @@ pub fn from_orders(setup: &BattleSetup, parts: &aa_play::mapgen::CreatorParts, d
             pending.bonus.push((i, r, a));
         }
     }
+    let mut additional_actors = Vec::new();
     for (k, a) in raw_actors {
         if let Some(i) = index(&rows, &k) {
+            additional_actors.push((rows[i].rmc.clone(), a.clone()));
             pending.actors.push((i, a));
         }
     }
@@ -207,6 +209,7 @@ pub fn from_orders(setup: &BattleSetup, parts: &aa_play::mapgen::CreatorParts, d
         object_counts: Default::default(),
         heroes: 0,
         seed,
+        additional_actors,
     };
     let factions: Vec<(usize, Option<String>)> = rows.iter().enumerate().filter(|(_, r)| r.faction.is_some()).map(|(i, r)| (i, r.faction.clone())).collect();
     let human_rmc = rows.iter().find(|r| r.human).map(|r| r.rmc.clone());
@@ -237,7 +240,7 @@ pub fn launch(game: &Game, root: &Path, seed: u64) -> Result<(BattleLaunch, Pend
     let width = f32::from_bits(setup.map_size.0);
     let height = f32::from_bits(setup.map_size.1);
     let maps = crate::preload::random_maps(root).map_err(|e| format!("{e:#}"))?;
-    let probe = aa_play::mapgen::RandomMapParams { rmc: setup.rmc.clone(), width, height, sides: 0, teams: Vec::new(), terrain_weights: Vec::new(), object_counts: Default::default(), heroes: 0, seed };
+    let probe = aa_play::mapgen::RandomMapParams { rmc: setup.rmc.clone(), width, height, sides: 0, teams: Vec::new(), terrain_weights: Vec::new(), object_counts: Default::default(), heroes: 0, seed , additional_actors: Vec::new() };
     let parts = maps.creator_parts(&probe).map_err(|e| format!("{e:#}"))?;
     Ok(from_orders(&setup, &parts, &data, width, height, seed))
 }
@@ -304,6 +307,7 @@ mod tests {
         // a merged kingdom's bonus is skipped, its actors go to the kingdom it merges into
         assert_eq!(pending.bonus, [(0, "money".to_string(), 7f32.to_bits())]);
         assert_eq!(pending.actors, [(1, "tank".to_string())]);
+        assert_eq!(battle.random.as_ref().unwrap().additional_actors, [("kingdom_attacker_1".to_string(), "tank".to_string())]);
         assert_eq!(meta.local_attacker, Some(false));
         assert_eq!((meta.attacker.as_str(), meta.defender.as_str()), ("kingdom_attacker_1", "kingdom_defender"));
     }

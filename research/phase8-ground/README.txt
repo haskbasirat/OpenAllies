@@ -41,3 +41,20 @@ Proof
 crates/aa-play/tests/ground_native.rs: the FNV-1a hash of the whole base map after every
 brush of a film of (2v2)Kursk, as a read-only sampler read it from the running original,
 and the GTIDs of the doodads each brush cleared.
+
+A building's place on the ground, read and compared (2026-11-03)
+- The model is rigid. The view's root takes its Z from the height query at the thing's
+  position, 0x43D050(xy, 0x222) (0x45B530, 0x45BDE0, 0x459E10). Only the Thing flag
+  conform_to_terrain tilts a model (the vehicle and trailer templates); no building template
+  sets it. The brush covers the blocking shape (10 x 10 m on an HQ), not the model.
+- Side by side at the same camera and tick: QA film Farmhouses4FFA_0, HQ at (276,32), brush at
+  tick 742, the ground rises 5.6 m in 16 m to the east. The original and the client stand the
+  same, tents whole.
+- The "hillside" of the smoke test, Normandy Breakout (305,195), is no hill: base 2.0, overlay
+  -0.6, the bank of a river. The overlay stays when the base is flattened, so the ground under
+  the shape follows the bank. The client drew no water then, so it looked like a slope with
+  the tents dug in. A person's film of that spot cannot show it in the original yet: a film of
+  ours on that map goes out of sync at about tick 944, before a truck gets there.
+- Real films' unpacks on steep ground, for a later look (up to the highest point within 14 m):
+  f7db9ec0f3 (180,483) 10.5 m, d5e480bd97 (98,420) 8.7 m, 5f026cdacd (435,602) 7.7 m. The two
+  tried in the QA copy go out of sync there at once: they were recorded on another build.

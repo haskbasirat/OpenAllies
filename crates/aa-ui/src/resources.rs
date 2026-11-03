@@ -118,6 +118,24 @@ impl StringTable {
             files.extend(list_tgi(&store.root, dir));
         }
         let mut table = StringTable { glyphs, special, ..Default::default() };
+        table.read_tables(store, files);
+        table
+    }
+
+    /// A loose data folder's tables over these: a battle on a profile's data (a mod) speaks
+    /// its text, as the original does on that profile (its file system reads the folder
+    /// first, 0x85B040). A key the folder does not hold stays the game's.
+    pub fn add_folder(&mut self, folder: &std::path::Path) {
+        let mut store = TgiStore::new(crate::fs::DataRoot::new(folder));
+        let mut files = Vec::new();
+        for dir in ["Localization", "Localization/SAI", "Localization/RandomMap", "Localization/Hotkeys/Actions"] {
+            files.extend(list_tgi(&store.root, dir));
+        }
+        self.read_tables(&mut store, files);
+    }
+
+    fn read_tables(&mut self, store: &mut TgiStore, files: Vec<String>) {
+        let table = self;
         for f in files {
             let Ok(root) = store.load_file(&f) else { continue };
             for text in root.children.iter().filter(|c| c.name.eq_ignore_ascii_case("Text")) {
@@ -134,7 +152,6 @@ impl StringTable {
                 }
             }
         }
-        table
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {

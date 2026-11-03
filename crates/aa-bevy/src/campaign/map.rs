@@ -32,13 +32,19 @@
 //! flat ribbon along the path, from the wing colour at `node_alpha`.
 //!
 //! The double click (957540) selects an army and centres on it. Dragging an army
-//! (957130) and letting go over a territory runs the right click's command. Compare
-//! against the original (labelled rendition): the drag's ghost model at the pointer
-//! (956F40 -> 693AE0) and its cursor states (9571D0) are not drawn.
+//! (957130) and letting go over a territory runs the right click's command. The drag's
+//! ghost (956F40 -> 693AE0, 957470 -> 693D10) is the army's model at the pointer, at the
+//! alpha of AVar VFXGhosting, red (VFXIllegalPlacement, 693A10 / 693A80) while 9571D0 says
+//! no ([`drag_ghost`]). Compare against the original (labelled rendition): of 9571D0's
+//! answers only no territory (2), out of range (8) and another battle waiting (10) are read.
 //!
-//! Not built: the VFX object names, the focus and selection tints of the doodads'
-//! View (`territory_focus_vfx`, `territory_select_vfx`, the 932D80 highlights of
-//! an alias territory's Thing), and the army's move animation.
+//! The doodads' View: the territory under the pointer takes `territory_focus_vfx`, the
+//! selected one `territory_select_vfx`, and with UVar MetaGameViewShowVFXMovement the
+//! territories the selected army of the kingdom whose turn it is can reach take
+//! `territory_friendly_tint` or `territory_enemy_tint` (933840, 93ABF0, 954BE0) ([`tints`]).
+//!
+//! Not built: the VFX object names, the 932D80 highlights of an alias territory's Thing
+//! (View +0xDC), and the army's move animation.
 use super::Game;
 use crate::look::{self, OriginalMaterial};
 use crate::textures::{self, Kind};
@@ -76,7 +82,28 @@ struct TerritoryView {
     /// The doodad's entity once spawned, with the team colour it was spawned in.
     entity: Option<Entity>,
     team: [u8; 3],
+    /// Its parts' materials as the model has them, for the View's modifiers.
+    parts: Vec<TerritoryPart>,
+    /// The tint running (colour, absolute, its maximum) and when it began (0x449920).
+    tint: Option<([f32; 3], bool, f32, f32)>,
+    /// What [`tints`] last left on the parts.
+    shown: ([f32; 3], bool, f32, bool),
 }
+
+struct TerritoryPart {
+    material: Handle<OriginalMaterial>,
+    ambient: Vec4,
+    diffuse: Vec4,
+    alpha: f32,
+}
+
+/// mg_vfx.tgi: `territory_friendly_tint`, `territory_enemy_tint`, `territory_focus_vfx`
+/// (`lirp`, `tint_max`), all with `enhance_duration` 0.2 and `fade_duration` 0.
+const FRIENDLY_TINT: [f32; 3] = [0.3, 1.0, 0.3];
+const ENEMY_TINT: [f32; 3] = [1.0, 0.3, 0.3];
+const FOCUS_TINT: [f32; 3] = [1.0, 1.0, 1.0];
+const FOCUS_TINT_MAX: f32 = 0.3;
+const TINT_ENHANCE: f32 = 0.2;
 
 /// A model waiting for its spawn: where, which model, and the territory it is
 /// the doodad of.
@@ -84,6 +111,15 @@ struct ToSpawn {
     at: Vec3,
     path: String,
     territory: Option<usize>,
+}
+
+/// The ghost of a dragged army (956F40): the offset of the model from the pointer at the
+/// press (the arguments of 693AE0).
+struct DragGhost {
+    entity: Entity,
+    parts: Vec<TerritoryPart>,
+    offset: Vec2,
+    illegal: bool,
 }
 
 struct ArmyView {
@@ -102,6 +138,9 @@ const UPLOAD_PER_FRAME: usize = 32 << 20;
 
 #[derive(Resource, Default)]
 pub struct MapScene {
+    /// The territory under the pointer, for the pointer's place.
+    focus: Option<usize>,
+    focus_at: Option<Vec2>,
     game: Option<u64>,
     loading: Option<Arc<Mutex<Option<LoadedSet>>>>,
     ready: bool,
@@ -129,6 +168,7 @@ pub struct MapScene {
     /// A left press on an army (957130): where, which; and whether it became a drag.
     press: Option<(Vec2, ArmyId)>,
     dragging: bool,
+    ghost: Option<DragGhost>,
     /// The last left click on an army, for the double click (957540).
     last_click: Option<(f32, ArmyId)>,
 }
@@ -357,16 +397,220 @@ fn spawn_model(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<OriginalMaterial>,
     team_color: [u8; 3],
-) {
+) -> Vec<TerritoryPart> {
+    let mut parts = Vec::new();
     for m in model.meshes.iter().filter(|m| !m.indices.is_empty()) {
         let kind = crate::scene::kind(&m.material, team_color);
         let texture = m.material.texture.as_ref().and_then(|t| textures.get(&(t.clone(), kind)).cloned());
         if m.material.texture.is_some() && texture.is_none() {
             warn!("campaign map: no texture {:?} {kind:?}", m.material.texture);
         }
-        let handle = materials.add(crate::scene::standard(&m.material, texture));
+        let material = crate::scene::standard(&m.material, texture);
+        let look = &material.extension.params;
+        let (ambient, diffuse) = (look.ambient, look.diffuse);
+        let alpha = material.base.base_color.alpha();
+        let handle = materials.add(material);
+        parts.push(TerritoryPart { material: handle.clone(), ambient, diffuse, alpha });
         let child = commands.spawn((Mesh3d(meshes.add(crate::scene::model_mesh(m))), MeshMaterial3d(handle), Transform::default())).id();
         commands.entity(parent).add_child(child);
+    }
+    parts
+}
+
+/// 933840 with 93ABF0: the territories the selected army can reach (940470 with the alias
+/// partners), for an army of the kingdom whose turn it is, friendly (954BE0: an owner that
+/// does not regard that kingdom as an enemy) or not.
+fn wanted_tints(game: &Game, show: bool) -> Vec<(usize, bool)> {
+    let Some(army) = game.selected_army.filter(|_| show) else { return Vec::new() };
+    let state = &game.campaign.state;
+    let a = state.army(army);
+    let current = state.current.and_then(|k| game.campaign.actor(k));
+    if current != Some(a.owner) {
+        return Vec::new();
+    }
+    let map = game.campaign.data.campaigns[state.campaign].map.unwrap_or(0);
+    let defs = &game.campaign.data.maps[map].territories;
+    let of_def = |d: usize| state.territories.iter().position(|t| t.definition == d);
+    let mut out: Vec<usize> = move_range(game, army);
+    for t in out.clone() {
+        if let Some(p) = defs[state.territories[t].definition].alias_partner.and_then(of_def)
+            && !out.contains(&p)
+        {
+            out.push(p);
+        }
+    }
+    out.into_iter().map(|t| (t, state.owner_actor(t).is_some_and(|o| !aa_metagame::battle::KingdomRelations::enemy(&game.campaign.relations, o, a.owner)))).collect()
+}
+
+/// The territory under a ground point: its topography triangles.
+fn territory_at(scene: &MapScene, game: &Game, ground: Vec2) -> Option<usize> {
+    let map = game.campaign.data.campaigns[game.campaign.state.campaign].map.unwrap_or(0);
+    for (ti, view) in scene.territories.iter().enumerate() {
+        let Some(model) = view.model.as_ref().and_then(|m| scene.models.get(m)) else { continue };
+        let def = &game.campaign.data.maps[map].territories[game.campaign.state.territories[ti].definition];
+        let local = ground - Vec2::new(f32::from_bits(def.location[0]), f32::from_bits(def.location[1]));
+        // model space is render space: (x, -y) on the ground
+        let p = Vec2::new(local.x, -local.y);
+        let inside = model.meshes.iter().filter(|m| m.hierarchy.iter().any(|h| h.eq_ignore_ascii_case("Topography"))).any(|m| {
+            m.indices.chunks_exact(3).any(|tri| {
+                let v = |i: u32| {
+                    let q = m.vertices[i as usize].position;
+                    Vec2::new(q[0], q[2])
+                };
+                point_in_triangle(p, v(tri[0]), v(tri[1]), v(tri[2]))
+            })
+        });
+        if inside {
+            return Some(ti);
+        }
+    }
+    None
+}
+
+/// The drag of an army (957130): its ghost follows the pointer (957470), tinted when it
+/// could not go there (9571D0).
+pub fn drag_ghost(
+    mut commands: Commands,
+    mut scene: ResMut<MapScene>,
+    front: Res<crate::ui::front::Front>,
+    cams: Query<(&Camera, &GlobalTransform), With<MapCamera>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
+    mut transforms: Query<&mut Transform>,
+) {
+    let active = scene.dragging && front.page == crate::ui::front::Page::Campaign && front.campaign.screen == super::Screen::Map;
+    let (Some(game), Some((_, army)), true) = (front.campaign.game.as_ref(), scene.press, active) else {
+        if let Some(g) = scene.ghost.take() {
+            commands.entity(g.entity).despawn();
+        }
+        return;
+    };
+    let Ok((camera, tf)) = cams.single() else { return };
+    let Some(ground) = front.pointer.pos.and_then(|p| pointer_ground(camera, tf, p)) else { return };
+    if scene.ghost.is_none() {
+        let Some(view) = scene.armies.get(&army.0) else { return };
+        let (pos, rotation, definition, owner) = (view.pos, transforms.get(view.entity).map(|t| t.rotation).unwrap_or_default(), view.definition, view.owner);
+        let def = &game.campaign.data.armies[definition];
+        let kd = game.campaign.kingdom_of_actor(aa_metagame::battle::KingdomActor(owner));
+        let tc = kd.map_or([255; 3], |k| team(kingdom_color(game, k)));
+        let Some(model) = game.data.model(&def.ids).and_then(|m| scene.models.get(&m.to_ascii_lowercase())).cloned() else { return };
+        let e = commands.spawn((Transform::from_translation(to_render(pos)).with_rotation(rotation), Visibility::default(), MapEntity)).id();
+        let parts = spawn_model(&mut commands, e, &model, &scene.textures, &mut meshes, &mut materials, tc);
+        // AVar VFXGhosting: `ghost_vfx`, the alpha modifier with alpha 0.5
+        for part in &parts {
+            if let Some(mut m) = materials.get_mut(&part.material) {
+                let m = &mut *m;
+                m.base.base_color.set_alpha(0.5);
+                m.base.alpha_mode = AlphaMode::Blend;
+            }
+        }
+        scene.ghost = Some(DragGhost { entity: e, parts, offset: pos.truncate() - ground, illegal: false });
+    }
+    let territory = territory_at(&scene, game, ground);
+    let illegal = match territory {
+        None => true,
+        Some(t) => {
+            !wanted_tints(game, true).iter().any(|r| r.0 == t)
+                || game.campaign.pending_battle().ok().flatten().is_some_and(|p| p != t)
+        }
+    };
+    let Some(g) = scene.ghost.as_mut() else { return };
+    if let Ok(mut transform) = transforms.get_mut(g.entity) {
+        transform.translation = to_render((ground + g.offset).extend(MAP_Z));
+    }
+    if g.illegal != illegal {
+        g.illegal = illegal;
+        // VFXIllegalPlacement: `illegal_placement_vfx`, colour 1,0,0, at once
+        let mix = if illegal { Vec4::new(1.0, 0.0, 0.0, 1.0) } else { Vec4::ONE };
+        for part in &g.parts {
+            if let Some(mut m) = materials.get_mut(&part.material) {
+                m.extension.params.ambient = part.ambient * mix;
+                m.extension.params.diffuse = part.diffuse * mix;
+            }
+        }
+    }
+}
+
+/// The ground point under the pointer on the map's plane.
+fn pointer_ground(camera: &Camera, tf: &GlobalTransform, pos: Vec2) -> Option<Vec2> {
+    let ray = camera.viewport_to_world(tf, pos).ok()?;
+    // the ground plane at the map height (render y = 2.0)
+    if ray.direction.y.abs() < 1e-5 {
+        return None;
+    }
+    let t = (MAP_Z - ray.origin.y) / ray.direction.y;
+    if t <= 0.0 {
+        return None;
+    }
+    let hit = ray.origin + *ray.direction * t;
+    Some(Vec2::new(hit.x, -hit.z))
+}
+
+/// The doodads' View modifiers on their materials. 0x449920's type 1: a tint comes up over
+/// its `enhance_duration` to its maximum and goes at once (`fade_duration` 0); 0x717E40 mixes
+/// the material's colours toward the tint's by that much, or, for `lirp`, the final colour
+/// toward the colour itself (716870). `territory_select_vfx` is the alpha modifier with alpha 1.
+pub fn tints(
+    mut scene: ResMut<MapScene>,
+    front: Res<crate::ui::front::Front>,
+    cams: Query<(&Camera, &GlobalTransform), With<MapCamera>>,
+    time: Res<Time>,
+    mut materials: ResMut<Assets<OriginalMaterial>>,
+) {
+    if !scene.ready {
+        return;
+    }
+    let showing = front.page == crate::ui::front::Page::Campaign && front.campaign.screen == super::Screen::Map;
+    let Some(game) = front.campaign.game.as_ref().filter(|_| showing) else { return };
+    let pos = front.pointer.pos;
+    if pos != scene.focus_at {
+        scene.focus_at = pos;
+        let over = super::map_pointer_over_world(&front) && front.ui.message_box.is_none() && front.campaign.iface.dialog.is_none();
+        scene.focus = if over {
+            pos.and_then(|p| cams.single().ok().and_then(|(c, tf)| pointer_ground(c, tf, p))).and_then(|g| territory_at(&scene, game, g))
+        } else {
+            None
+        };
+    }
+    let now = time.elapsed_secs();
+    let reach = wanted_tints(game, front.ui.uvars.get_bool("MetaGameViewShowVFXMovement"));
+    let focus = scene.focus;
+    let selected = game.selected_territory;
+    for (i, view) in scene.territories.iter_mut().enumerate() {
+        // priority 1 of the focus over the priority 0 of the others
+        let want = if focus == Some(i) {
+            Some((FOCUS_TINT, true, FOCUS_TINT_MAX))
+        } else {
+            reach.iter().find(|r| r.0 == i).map(|r| (if r.1 { FRIENDLY_TINT } else { ENEMY_TINT }, false, 1.0))
+        };
+        match (want, view.tint) {
+            (Some(w), Some(run)) if (w.0, w.1) == (run.0, run.1) => {}
+            (Some(w), _) => view.tint = Some((w.0, w.1, w.2, now)),
+            (None, _) => view.tint = None,
+        }
+        let (color, absolute, amount) = view.tint.map_or(([1.0; 3], false, 0.0), |(c, a, max, from)| (c, a, ((now - from) / TINT_ENHANCE).min(max)));
+        let is_selected = selected == Some(i);
+        let shown = (color, absolute, amount, is_selected);
+        if view.shown == shown {
+            continue;
+        }
+        view.shown = shown;
+        for part in &view.parts {
+            let Some(mut m) = materials.get_mut(&part.material) else { continue };
+            let m = &mut *m;
+            let params = &mut m.extension.params;
+            if absolute {
+                params.ambient = part.ambient;
+                params.diffuse = part.diffuse;
+                params.lirp = Vec4::new(color[0], color[1], color[2], amount);
+            } else {
+                let mix = Vec4::new(1.0 + (color[0] - 1.0) * amount, 1.0 + (color[1] - 1.0) * amount, 1.0 + (color[2] - 1.0) * amount, 1.0);
+                params.ambient = part.ambient * mix;
+                params.diffuse = part.diffuse * mix;
+                params.lirp = Vec4::ZERO;
+            }
+            m.base.base_color.set_alpha(if is_selected { 1.0 } else { part.alpha });
+        }
     }
 }
 
@@ -611,7 +855,7 @@ pub fn sync(
             if let Some(path) = &model_path {
                 scene.to_spawn.push_back(ToSpawn { at: to_render(at), path: path.clone(), territory: Some(i) });
             }
-            scene.territories.push(TerritoryView { model: model_path, entity: None, team: NO_OWNER_TEAM });
+            scene.territories.push(TerritoryView { model: model_path, entity: None, team: NO_OWNER_TEAM, parts: Vec::new(), tint: None, shown: ([1.0; 3], false, 0.0, false) });
         }
     }
     if scene.spawn_wait > 0 {
@@ -624,25 +868,28 @@ pub fn sync(
             let MapScene { models, textures, .. } = &*scene;
             let Some(model) = models.get(&next.path) else { continue };
             let e = commands.spawn((Transform::from_translation(next.at), Visibility::default(), MapEntity)).id();
-            spawn_model(&mut commands, e, model, textures, &mut meshes, &mut materials, color);
+            let parts = spawn_model(&mut commands, e, model, textures, &mut meshes, &mut materials, color);
             let size: usize = model.meshes.iter().map(|m| m.vertices.len() * 48 + m.indices.len() * 4).sum();
             budget = budget.saturating_sub(size.max(1 << 16));
             if let Some(t) = next.territory.and_then(|t| scene.territories.get_mut(t)) {
                 t.entity = Some(e);
                 t.team = color;
+                t.parts = parts;
             }
         }
     }
     // a territory that changed hands: its doodad in the new owner's colour
     for i in 0..scene.territories.len() {
         let color = territory_team(game, i);
-        let TerritoryView { entity, team, model: path } = &scene.territories[i];
+        let TerritoryView { entity, team, model: path, .. } = &scene.territories[i];
         let (Some(e), true, Some(path)) = (*entity, *team != color, path.clone()) else { continue };
         let MapScene { models, textures, territories, .. } = &mut *scene;
         let Some(model) = models.get(&path) else { continue };
         commands.entity(e).despawn_related::<Children>();
-        spawn_model(&mut commands, e, model, textures, &mut meshes, &mut materials, color);
+        let parts = spawn_model(&mut commands, e, model, textures, &mut meshes, &mut materials, color);
         territories[i].team = color;
+        territories[i].parts = parts;
+        territories[i].shown = ([1.0; 3], false, 0.0, false);
     }
     // armies: spawn, respawn on type or owner change, despawn the dead
     let live: Vec<(u32, usize, u32)> = game
@@ -678,7 +925,7 @@ pub fn sync(
                 .id();
             if let Some(model) = game.data.model(&def.ids).and_then(|m| scene.models.get(&m.to_ascii_lowercase())) {
                 let model = model.clone();
-                spawn_model(&mut commands, e, &model, &scene.textures, &mut meshes, &mut materials, tc);
+                let _ = spawn_model(&mut commands, e, &model, &scene.textures, &mut meshes, &mut materials, tc);
             }
             let territory = game.campaign.state.army(id).territory;
             scene.armies.insert(i, ArmyView { entity: e, definition, owner, pos, path: Vec::new(), speed: 0.0, territory });
@@ -942,17 +1189,7 @@ pub fn pick(
     }
     let Some(pos) = front.pointer.pos else { return };
     let Ok((camera, tf)) = cams.single() else { return };
-    let Ok(ray) = camera.viewport_to_world(tf, pos) else { return };
-    // the ground plane at the map height (render y = 2.0)
-    if ray.direction.y.abs() < 1e-5 {
-        return;
-    }
-    let t = (MAP_Z - ray.origin.y) / ray.direction.y;
-    if t <= 0.0 {
-        return;
-    }
-    let hit = ray.origin + *ray.direction * t;
-    let ground = Vec2::new(hit.x, -hit.z);
+    let Some(ground) = pointer_ground(camera, tf, pos) else { return };
     let ui = &mut front.ui;
     let super::CampaignUi { iface, game, .. } = &mut front.campaign;
     let Some(game) = game.as_mut() else { return };
@@ -978,30 +1215,7 @@ pub fn pick(
         }
     }
     // the territory under the point: its topography triangles
-    let map = game.campaign.data.campaigns[game.campaign.state.campaign].map.unwrap_or(0);
-    let mut territory = None;
-    if army.is_none() {
-        for (ti, view) in scene.territories.iter().enumerate() {
-            let Some(model) = view.model.as_ref().and_then(|m| scene.models.get(m)) else { continue };
-            let def = &game.campaign.data.maps[map].territories[game.campaign.state.territories[ti].definition];
-            let local = ground - Vec2::new(f32::from_bits(def.location[0]), f32::from_bits(def.location[1]));
-            // model space is render space: (x, -y) on the ground
-            let p = Vec2::new(local.x, -local.y);
-            let inside = model.meshes.iter().filter(|m| m.hierarchy.iter().any(|h| h.eq_ignore_ascii_case("Topography"))).any(|m| {
-                m.indices.chunks_exact(3).any(|tri| {
-                    let v = |i: u32| {
-                        let q = m.vertices[i as usize].position;
-                        Vec2::new(q[0], q[2])
-                    };
-                    point_in_triangle(p, v(tri[0]), v(tri[1]), v(tri[2]))
-                })
-            });
-            if inside {
-                territory = Some(ti);
-                break;
-            }
-        }
-    }
+    let territory = if army.is_none() { territory_at(&scene, game, ground) } else { None };
     if let Some(cmd) = game.targeting.take() {
         if let (true, Some(t)) = (left, territory) {
             iface.hot_territory(ui, game, cmd, t);

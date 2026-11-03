@@ -2,7 +2,7 @@
 //! animation rigs from the user's install. Owner: lead (battle renderer).
 //! The display-only HQ, soldiers and tank of the Development 12 test stay
 //! until the aa-play world draws real units.
-use crate::{camera, session, terrain, textures, units};
+use crate::{camera, session, terrain, textures, units, water};
 
 use aa_animation::AnimatedAsset;
 use aa_parity::playback::FilmPlayer;
@@ -100,6 +100,8 @@ struct Loaded {
     /// The generator's game map for a random map (an original map loads its own).
     game_map: Option<aa_play::GameMap>,
     terrain: Vec<terrain::Draw>,
+    /// The terrain's water, until `setup` draws it.
+    water: Option<water::Water>,
     images: Option<Vec<((String, Kind), Image)>>,
     failures: Vec<String>,
     hq_at: Vec2,
@@ -359,6 +361,9 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
             steps.mark("new skirmish");
             // The original computer players (Data/SAI profiles); cached after the first load.
             aa_play::ai::attach(&mut world, crate::preload::ai_data(root)?);
+            // KKC_SAI seeds its RNG once from a millisecond clock (0x7A0AA0), so no two games
+            // play alike. The launch seed varies the same way and is the same on every LAN node.
+            aa_play::ai::set_seed(&mut world, setup.seed as u32);
             steps.mark("ai data");
             // The generals the setup screen chose for the computer slots (kingdom id = player index).
             for (player, profile) in &profiles {
@@ -407,6 +412,15 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
             }
         }
     }
+    let saved_cells = water::saved_cells_of(&store, &scene.map.terrain);
+    let water_built = match water::build(&store, &scene.map.terrain, world.map.native_terrain.as_deref(), &world.map.biome, saved_cells.as_ref(), &mut requests) {
+        Ok(water) => Some(water),
+        Err(e) => {
+            warn!("water: {e:#}");
+            None
+        }
+    };
+    steps.mark("water");
     let (images, failures) = textures::decode(&store, requests);
     steps.mark("textures");
     // A loaded map keeps its saved Sun (4FC600 -> 4EDBD0); a generated world
@@ -426,6 +440,7 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
         scene,
         game_map,
         terrain,
+        water: water_built,
         images: Some(images),
         failures,
         hq_at,
@@ -543,7 +558,7 @@ impl Plugin for ScenePlugin {
             .add_systems(OnExit(session::AppState::Battle), leave_battle)
             .add_plugins(crate::battle_view::BattleViewPlugin)
             .init_resource::<TerrainQuality>()
-            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain, follow_ground.after(stream_terrain), clear_doodads, terrain_quality, look::apply_sun).run_if(in_state(session::AppState::Battle)));
+            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain, follow_ground.after(stream_terrain), water::flip, clear_doodads, terrain_quality, look::apply_sun).run_if(in_state(session::AppState::Battle)));
         if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
@@ -575,7 +590,7 @@ struct HudText;
 
 /// What `setup` and `stream_terrain` spawned: map objects, terrain layers,
 /// the sun and the camera.
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct SceneEntity;
 
 /// The battle ended (`RequestFinished` 0x6125A0, ui/front.rs): its drawing
@@ -603,6 +618,7 @@ fn leave_battle(mut commands: Commands, scene: Query<Entity, With<SceneEntity>>)
     if let Some(store) = crate::ui::reconstruction_root().and_then(|r| crate::preload::store(&r).ok()) {
         store.set_art_overlay(None);
     }
+    crate::effects::bones::set_folder(None);
 }
 
 pub fn standard(m: &aa_assets::Material, texture: Option<Handle<Image>>) -> OriginalMaterial {
@@ -660,11 +676,16 @@ fn setup(
         warn!("{f}");
     }
     let tex = tex.handles;
+    if let Some(water) = loaded.water.take() {
+        let order = loaded.terrain.len();
+        water::spawn(&mut commands, water, &tex, order, &mut meshes, &mut materials, SceneEntity);
+    }
     // Terrain layers stream in over the next frames (`stream_terrain`).
     if std::env::var_os("AA_BEVY_NO_TERRAIN").is_none() {
         let biome = loaded.world.as_ref().map(|w| w.map.biome.clone()).unwrap_or_default();
         let on = front_quality.as_deref().is_none_or(|f| f.ui.uvars.get_bool("TerrainExtraQuality"));
         let ground = crate::ui::reconstruction_root().map(|r| look::load_ground_maps(&r, &biome, &mut images, on)).unwrap_or_default();
+        commands.insert_resource(water::WaterScroll(ground.cloud_motion));
         info!("terrain effects of biome {biome:?}: detail {} macro {} on {on}", ground.detail.is_some(), ground.macro_map.is_some());
         commands.insert_resource(TerrainStream { ground, textures: tex.clone(), next: 0, frames: 0 });
     }
@@ -674,6 +695,7 @@ fn setup(
         parts.insert(key.clone(), model_parts(model, NEUTRAL_TEAM, &tex, &mut meshes, &mut materials));
     }
     let mut objects = 0usize;
+    let mut shore = Vec::new();
     // Placements the world turned into actors (or removed with unused slots).
     let world = loaded.world.take().expect("battle world");
     let scenery: std::collections::HashSet<usize> = world.books.scenery.iter().copied().collect();
@@ -708,6 +730,12 @@ fn setup(
         let transform = Transform::from_translation(Vec3::from_array(p.position))
             .with_rotation(Quat::from_rotation_y(p.yaw_radians))
             .with_scale(Vec3::splat(p.scale));
+        // The doodads of the water's edge play as effects (their quads are animated and
+        // blended, with textures of their own).
+        if let Some(key) = p.model_key.as_deref().and_then(water::shore_model) {
+            shore.push((key, transform.to_matrix()));
+            continue;
+        }
         // Only things with a shadow cast one (0x49DC40): shadow_type NONE
         // (tall grass, logs, docks...) or no shadow_texture casts nothing.
         // The sun's shadow map stands in for STENCIL volumes and, until the
@@ -728,6 +756,7 @@ fn setup(
         }
         objects += 1;
     }
+    commands.insert_resource(water::ShoreDoodads::new(shore));
     // Ground height in render space for the camera and units.
     // Corner heights once (the per-query metadata parse is too slow per frame),
     // then the same bilinear sampling as `TerrainMap::height_at_native`.
@@ -847,6 +876,9 @@ fn setup(
         // No multisampling: the original's edges are aliased (its
         // screenshots; dgVoodoo.conf Antialiasing "appdriven").
         Msaa::Off,
+        // The original's shadows are stencil volumes, hard edged: the least filtering
+        // the shadow map has.
+        bevy::light::ShadowFilteringMethod::Hardware2x2,
         Transform::default(),
         camera::RtsCamera {
             focus,
@@ -929,7 +961,7 @@ fn layer_mesh(draw: &terrain::Draw) -> Mesh {
 /// through the render query 0x122 (0x4F0E50), so a thing that flattened the base map
 /// (`aa_play::ground`, 0x4EB500 -> 0x551140 -> 0x50C310 -> 0x71D270 marks the touched
 /// terrain blocks) changes them. Only the layers that hold a touched tile are made again.
-fn follow_ground(battle: Option<Res<session::Battle>>, loaded: Option<ResMut<Loaded>>, drawn_corners: Option<Res<DrawnCorners>>, mut quality: ResMut<TerrainQuality>, mut meshes: ResMut<Assets<Mesh>>) {
+fn follow_ground(battle: Option<Res<session::Battle>>, loaded: Option<ResMut<Loaded>>, drawn_corners: Option<Res<DrawnCorners>>, mut quality: ResMut<TerrainQuality>, mut meshes: ResMut<Assets<Mesh>>, water_view: Option<ResMut<water::WaterView>>) {
     let (Some(battle), Some(mut loaded)) = (battle, loaded) else { return };
     let Some(native) = battle.world.map.native_terrain.as_ref() else { return };
     let quality = &mut *quality;
@@ -959,10 +991,12 @@ fn follow_ground(battle: Option<Res<session::Battle>>, loaded: Option<ResMut<Loa
     };
     let scale = (native.tile_shift as i32 - native.shift as i32).max(0);
     let mut touched = std::collections::BTreeSet::new();
+    let mut water_rects = Vec::new();
     for rect in &native.changes[quality.ground_seen..] {
         // A tile's corners, and the normals of the corners around a changed one.
         let (x0, y0) = (((rect[0] >> scale) - 2).max(0), ((rect[1] >> scale) - 2).max(0));
         let (x1, y1) = (((rect[2] >> scale) + 1).min(width - 1), ((rect[3] >> scale) + 1).min(height - 1));
+        water_rects.push([x0, y0, x1, y1]);
         if let Some(drawn) = &drawn_corners {
             let mut drawn = drawn.0.write().unwrap_or_else(|e| e.into_inner());
             for y in y0..=(y1 + 1) {
@@ -986,6 +1020,9 @@ fn follow_ground(battle: Option<Res<session::Battle>>, loaded: Option<ResMut<Loa
         }
     }
     quality.ground_seen = native.changes.len();
+    if let Some(mut view) = water_view {
+        water::follow_ground(&mut view, native, &water_rects, &mut meshes);
+    }
     for layer in touched {
         // A layer still to come takes the new heights when it is created.
         if let Some(handle) = quality.meshes.get(layer) {

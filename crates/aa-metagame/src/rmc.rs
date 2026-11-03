@@ -1224,7 +1224,7 @@ impl Loader<'_> {
                             count += 1;
                         }
                     }
-                    // No loaded group matched (`a stack word == 0`): the group
+                    // No loaded group matched: the group
                     // being loaded (its own IDS at `this+8`, not yet in the
                     // lists) is compared the same way; only a mismatch there
                     // is fatal, and a self match adds no restriction.

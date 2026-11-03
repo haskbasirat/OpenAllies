@@ -68,6 +68,13 @@ const TEXTURE_EXT: [&str; 5] = ["dds", "tga", "png", "jpg", "bmp"];
 impl Textures {
     pub fn new(data_root: &Path, out_dir: PathBuf) -> Self {
         let mut t = Self { out_dir, ..Self::default() };
+        t.add_root(data_root);
+        t
+    }
+
+    /// The texture files of one more folder; a later one replaces an earlier one's file.
+    fn add_root(&mut self, data_root: &Path) {
+        let t = self;
         let mut stack = vec![data_root.to_path_buf()];
         while let Some(dir) = stack.pop() {
             let Ok(entries) = std::fs::read_dir(&dir) else { continue };
@@ -88,7 +95,6 @@ impl Textures {
                 t.by_name.entry(name).or_default().push(rel);
             }
         }
-        t
     }
 
     fn intern(&mut self, key: String) -> i32 {
@@ -1125,7 +1131,7 @@ pub fn extract(file: &NifFile, nif_rel: &str, textures: &mut Textures) -> Option
 /// debris and the special-operation set pieces (bombers, rockets, emblems)
 /// are both: their opaque meshes play as animated models (anim.rs) and
 /// their blended sprites and particles here.
-pub const INCLUDE: [&str; 13] = [
+pub const INCLUDE: [&str; 17] = [
     "gunshot/",
     "tankshot/",
     "artilleryshot/",
@@ -1139,6 +1145,12 @@ pub const INCLUDE: [&str; 13] = [
     "construction/pack",
     "specialops/",
     "deathdebris/",
+    // The doodads of a water's edge (0x55B4E0: water_doodad_IDS): models of animated,
+    // blended quads with their own textures, which the converted meshes do not hold.
+    "doodads/shared/waves/",
+    "doodads/temperate/temperatelakeripples/",
+    "doodads/tropical/tropicalriverripples/",
+    "weather/",
 ];
 
 /// Build the table for the VFX models (`effects/...` / `projectiles/...`,
@@ -1146,6 +1158,9 @@ pub const INCLUDE: [&str; 13] = [
 /// the client's table.
 pub fn build(data_root: &Path, models: &[String], texture_dir: PathBuf) -> NifTable {
     let mut textures = Textures::new(data_root, texture_dir);
+    if let Some(folder) = super::bones::folder() {
+        textures.add_root(&folder);
+    }
     let mut effects = HashMap::new();
     let mut failures = HashMap::new();
     let mut seen = std::collections::HashSet::new();
