@@ -11,6 +11,7 @@
 //! `{"text": "abc"}`,
 //! `{"until_state": "Battle"}` (wait for an AppState, 120 s at most),
 //! `{"until_box": seconds}` (wait for a message box, the end of a film),
+//! `{"until_tick": n}` (wait for the world's tick n, 600 s at most),
 //! `{"look_at": "enemy"}` (camera to the enemy unit nearest the own HQ),
 //! `{"click_actor": kind}` / `{"rclick_actor": kind}` / `{"dclick_actor": kind}`
 //! (kind "enemy", "enemy_building", "own_unit", "own_building", "own_truck",
@@ -27,7 +28,15 @@
 //! same for a single actor, a truck); `{"tint_actions": [r, g,
 //! b]}` (or null) draws every action button tinted, a verification aid for
 //! texture effect modes 2 and 3; `{"stats": "label"}` logs each kingdom's
-//! counts and the selection's orders.
+//! counts and the selection's orders. For following a mission's script (`"limit"`
+//! seconds at most, 300 by default): `{"until_listen": "<UI command>"}` waits until
+//! the script listens to that command, `{"until_trigger": "<name prefix>", "on": false}`
+//! until that trigger is on or off (off by default); the actor kind `slot:<GTID slot>`
+//! is the map's thing of that low word; `{"click_command": "<UI command>"}` clicks the
+//! action button that shows that command, or logs that none does;
+//! `{"rclick_world": [x, y]}` / `{"click_world": [x, y]}` / `{"move_world": [x, y]}` /
+//! `{"look_at_point": [x, y]}` take a native ground point; `{"destroy": "enemy"}` kills
+//! every hostile actor by the real death path, for the end of a battle.
 use super::front::PointerInput;
 use crate::session::AppState;
 use bevy::prelude::*;
@@ -146,7 +155,9 @@ impl Script {
         // {"press_at": [fx, fy]} / {"release_at": [fx, fy]}: the pointer
         // there, then only a left press / only a left release (a held drag
         // the script can photograph halfway; move_at moves it meanwhile)
-        if let Some((v, press)) = step.get("press_at").map(|v| (v, true)).or(step.get("release_at").map(|v| (v, false))) {
+        // ({"rpress_at": ...} / {"rrelease_at": ...}: the same for the right button)
+        let right_held = step.get("rpress_at").is_some() || step.get("rrelease_at").is_some();
+        if let Some((v, press)) = step.get("press_at").or(step.get("rpress_at")).map(|v| (v, true)).or(step.get("release_at").or(step.get("rrelease_at")).map(|v| (v, false))) {
             let t = Vec2::new(self.frac(v, 0) * self.size.x, self.frac(v, 1) * self.size.y);
             if self.phase == 0 {
                 self.pointer = Some(t);
@@ -154,7 +165,12 @@ impl Script {
                 self.phase = 1;
             } else {
                 input.pos = Some(t);
-                if press { input.left_pressed = true } else { input.left_released = true }
+                match (right_held, press) {
+                    (false, true) => input.left_pressed = true,
+                    (false, false) => input.left_released = true,
+                    (true, true) => input.right_pressed = true,
+                    (true, false) => input.right_released = true,
+                }
                 self.next();
             }
             return;
@@ -314,6 +330,45 @@ pub fn run(
         s.next();
         return;
     }
+    // {"destroy": "enemy"}: a verification aid, every hostile actor dies by the real
+    // death path, so the battle's end comes as it comes after a fight
+    if let (Some(_), Some(b)) = (s.step().and_then(|v| v.get("destroy")), battle.as_mut()) {
+        let local_team = b.world.kingdoms.iter().find(|k| k.id == b.local).map(|k| k.team);
+        let enemies: Vec<aa_play::KingdomId> = b.world.kingdoms.iter().filter(|k| !k.independent && Some(k.team) != local_team).map(|k| k.id).collect();
+        let list: Vec<aa_play::ActorId> = b.world.actors.iter().filter(|a| a.alive && a.kingdom.is_some_and(|k| enemies.contains(&k))).map(|a| a.id).collect();
+        info!("script: destroying {} actors of {enemies:?}", list.len());
+        // as the trigger's 4D7960: the death follows in the next tick's combat pass
+        for a in list {
+            b.world.actors[a as usize].health = 0.0;
+        }
+        s.next();
+        return;
+    }
+    // follow the mission's script: until the script listens to a command, until a
+    // trigger is on or off
+    if let (Some(step), Some(b)) = (s.step().cloned(), battle.as_ref()) {
+        let limit = step.get("limit").and_then(|v| v.as_f64()).unwrap_or(300.0) as f32;
+        let mut wanted = None;
+        if let Some(c) = step.get("until_listen").and_then(|v| v.as_str()) {
+            wanted = Some((format!("the script to listen to {c}"), aa_play::triggers::listening(&b.world, c)));
+        }
+        if let Some(name) = step.get("until_trigger").and_then(|v| v.as_str()) {
+            let on = step.get("on").and_then(|v| v.as_bool()).unwrap_or(false);
+            let state = aa_play::triggers::trigger_states(&b.world).iter().find(|t| t.1.starts_with(name)).map(|t| t.2);
+            wanted = Some((format!("trigger {name} to be {on}"), state == Some(on)));
+        }
+        if let Some((what, done)) = wanted {
+            s.timer += time.delta_secs();
+            if done {
+                info!("script: waited {:.1} s for {what} (game time {:.1})", s.timer, b.world.time);
+                s.next();
+            } else if s.timer > limit {
+                warn!("script: gave up waiting for {what} after {limit} s (game time {:.1})", b.world.time);
+                s.next();
+            }
+            return;
+        }
+    }
     // {"stats": "label"}: a verification aid, a log line per kingdom and the
     // selection's orders
     if let Some(label) = s.step().and_then(|v| v.get("stats")).and_then(|v| v.as_str()).map(str::to_string) {
@@ -362,6 +417,14 @@ pub fn run(
         let matches = |id: aa_play::ActorId, what: &str| -> bool {
             let Some(a) = w.actor(id).filter(|a| a.alive) else { return false };
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
+            if let Some(slot) = what.strip_prefix("slot:") {
+                let slot = u16::from_str_radix(slot.trim_start_matches("0x"), 16).unwrap_or(0);
+                return match w.ids.thing_at_slot(slot) {
+                    Some(aa_play::ids::Thing::Actor(x)) => x == id,
+                    Some(aa_play::ids::Thing::Org(o)) => a.org == Some(o),
+                    _ => false,
+                };
+            }
             match what {
                 // a hostile object with a body (not a start-location marker),
                 // units before buildings
@@ -385,6 +448,54 @@ pub fn run(
         if let Some(z) = step.get("zoom").and_then(|v| v.as_f64()) {
             requests.zoom = Some(z as f32);
             s.next();
+            return;
+        }
+        // a native ground point
+        let point = |key: &str| step.get(key).and_then(|v| v.as_array()).map(|a| Vec2::new(a.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32, a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32));
+        if let Some(p) = point("look_at_point") {
+            requests.look_at = Some(p);
+            s.next();
+            return;
+        }
+        for (key, out) in [("rclick_world", "rclick_at"), ("click_world", "click_at"), ("move_world", "move_at")] {
+            let Some(p) = point(key) else { continue };
+            let Ok((cam, cam_tf)) = cameras.single() else { return };
+            let at = crate::battle_view::to_render(p.extend(w.map.height_at(p)));
+            match cam.world_to_viewport(cam_tf, at) {
+                Ok(v) => {
+                    let f = v / logical;
+                    info!("script: {key} {p:?} at {:.3},{:.3}", f.x, f.y);
+                    let at = s.at;
+                    s.steps[at] = serde_json::json!({ out: [f.x, f.y] });
+                }
+                Err(e) => {
+                    warn!("script: {key} {p:?}: {e:?}");
+                    s.next();
+                }
+            }
+            return;
+        }
+        // the action button that shows a command
+        if let Some(command) = kind("click_command") {
+            let slot = front.as_ref().and_then(|f| f.hud.as_ref()).and_then(|h| {
+                h.slot_command_list().iter().position(|c| c.as_ref().and_then(|c| super::objectives::native_text(w, c)).is_some_and(|t| t.eq_ignore_ascii_case(&command)))
+            });
+            let rect = slot.and_then(|i| {
+                let name = if i == 0 { "ActionButtonsButton".to_string() } else { format!("ActionButtonsButton#{i}") };
+                front.as_ref().and_then(|f| f.ui.widget_by(&format!("Game/ControlPanel/ActionButtons/{name}")).map(|x| x.root.outer.rect))
+            });
+            match rect {
+                Some(r) => {
+                    let (x, y) = ((r.l + r.r) * 0.5 / s.size.x, (r.t + r.b) * 0.5 / s.size.y);
+                    info!("script: click_command {command} at {x:.3},{y:.3}");
+                    let at = s.at;
+                    s.steps[at] = serde_json::json!({ "click_at": [x, y] });
+                }
+                None => {
+                    warn!("script: no action button shows {command}: {:?}", front.as_ref().and_then(|f| f.hud.as_ref()).map(|h| h.slot_command_list().iter().flatten().filter_map(|c| super::objectives::native_text(w, c)).collect::<Vec<_>>()));
+                    s.next();
+                }
+            }
             return;
         }
         if let Some(what) = kind("look_at") {
@@ -476,6 +587,11 @@ pub fn run(
             if s.timer > 120.0 {
                 warn!("script: state {want} not reached (still {now})");
             }
+            s.next();
+        }
+    } else if let Some(want) = step.get("until_tick").and_then(|v| v.as_u64()) {
+        s.timer += dt;
+        if battle.as_ref().is_some_and(|b| b.world.tick >= want) || s.timer > 600.0 {
             s.next();
         }
     } else if let Some(limit) = step.get("until_box").and_then(|v| v.as_f64()) {

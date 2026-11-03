@@ -51,10 +51,14 @@ dependencies = [
  "aa-formats",
  "aa-mapworld",
  "aa-metagame",
+ "aa-netcode",
  "aa-numeric",
+ "aa-orders",
  "aa-parity",
  "aa-play",
  "aa-rules",
+ "aa-runtime",
+ "aa-simulation",
  "aa-ui",
  "ab_glyph",
  "anyhow",
@@ -176,6 +180,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-netcode"
+version = "0.1.0"
+dependencies = [
+ "aa-mapworld",
+ "aa-numeric",
+ "aa-orders",
+ "aa-rules",
+ "aa-runtime",
+ "aa-simulation",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aa-numeric"
 version = "0.1.0"
 dependencies = [
@@ -218,6 +237,7 @@ dependencies = [
  "aa-animation",
  "aa-assets",
  "aa-body",
+ "aa-combat",
  "aa-economy",
  "aa-heightfield",
  "aa-mapworld",
@@ -260,6 +280,36 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "aa-runtime"
+version = "0.1.0"
+dependencies = [
+ "aa-actors",
+ "aa-animation",
+ "aa-body",
+ "aa-combat",
+ "aa-economy",
+ "aa-heightfield",
+ "aa-mapworld",
+ "aa-metagame",
+ "aa-mind",
+ "aa-movement",
+ "aa-navigation",
+ "aa-numeric",
+ "aa-orders",
+ "aa-production",
+ "aa-rules",
+ "aa-simulation",
+ "aa-spatial",
+ "aa-trig",
+ "aa-triggers",
+ "aa-world",
+ "aa-zones",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

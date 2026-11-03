@@ -167,6 +167,10 @@ pub fn update(
 ) {
     // the banner preview: the selected organization's composed banner
     draw.banner = banners.selected.as_ref().and_then(|m| std_materials.get(m)).and_then(|m| m.base_color_texture.clone());
+    let group: std::collections::HashMap<u32, Handle<Image>> = banners.by_org.iter().filter_map(|(o, m)| Some((*o, std_materials.get(m)?.base_color_texture.clone()?))).collect();
+    if draw.group_banners != group {
+        draw.group_banners = group;
+    }
     let found = draw.list.commands.iter().find_map(|c| match &c.kind {
         aa_ui::draw::DrawKind::External { rect, model: Some(model), .. } if c.widget.ends_with("PortraitButton/Portrait") => Some((*rect, model.clone())),
         _ => None,

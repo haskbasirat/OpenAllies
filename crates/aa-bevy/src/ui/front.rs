@@ -60,6 +60,9 @@ pub enum Page {
     /// kind 3, menu slot 9): ChooseFilm (0x6455B0, `UI/Menus/choose_film.tgi`)
     /// shows the menu background and only the film mode of the file dialog.
     ChooseFilm,
+    /// `MultiplayerMenu` (0x653780) and the LAN `LobbyMenu` (0x64AB20): `crate::net`.
+    Multiplayer,
+    Lobby,
 }
 
 /// What a launch inserts for the loader, kept for the score screen's
@@ -170,6 +173,11 @@ pub struct Front {
     pub session_film: Option<aa_parity::recording::FilmOpened>,
     /// The score screen's film save dialog (`0x68DCE0(5, 0, 0)`).
     save_film: Option<crate::film_record::SaveFilmDialog>,
+    /// The multiplayer session (`crate::net`).
+    pub lan: crate::net::Lan,
+    /// The battle that just ended was a session's: its score screen's Exit
+    /// goes to the lobby.
+    lan_left_game: bool,
 }
 
 /// The background open of a film.
@@ -187,7 +195,6 @@ fn film_sync_mode() -> SyncMode {
 
 /// Commands the front end does not run yet (their screens are not built).
 const NOT_BUILT: &[&str] = &[
-    "RequestMultiplayer",
     "RequestEditor",
     "CheckForUpdates",
 ];
@@ -228,6 +235,8 @@ impl Front {
             last_press: None,
             root: root.to_path_buf(),
             custom,
+            lan: crate::net::Lan::new(root.to_path_buf()),
+            lan_left_game: false,
             hud: None,
             loading_finished: false,
             press_on_ui: false,
@@ -290,7 +299,7 @@ impl Front {
             if let (Some(art), Some(folder)) = (&art, data.definition_overlay())
                 && !art.join("assets/converted/models/manifest.json").is_file()
             {
-                warn!("film: the art of {} is not converted, what it alone holds is not drawn: python research/film-sources/convert_overlay.py {:?} {:?}", folder.display(), folder, art);
+                crate::session::convert_art(&reconstruction, folder, art);
             }
             if let Ok(store) = crate::preload::store(&reconstruction) {
                 store.set_art_overlay(art.as_deref());
@@ -550,7 +559,10 @@ impl Front {
                 self.credits = Some(aa_ui::credits::Credits::show(&mut self.ui, now));
                 self.credits_end_posted = false;
             }
+            Page::Staging if self.lan.active() => self.lan.sync_staging(&mut self.ui, &mut self.custom, true),
             Page::Staging => self.custom.show(&mut self.ui),
+            Page::Multiplayer => crate::net::multiplayer_menu(&mut self.ui),
+            Page::Lobby => crate::net::lobby_menu(&mut self.ui),
             Page::Loading => {
                 screens::loading_screen(&mut self.ui, false);
                 self.refresh_loading(progress);
@@ -651,6 +663,42 @@ impl Front {
                 return;
             }
         }
+        // the multiplayer menus and the staging of a networked session (`crate::net`)
+        if matches!(self.page, Page::Multiplayer | Page::Lobby) {
+            if let Some(a) = self.lan.lobby_command(&mut self.ui, &mut self.custom, command) {
+                if self.ui.message_box.is_some() {
+                    self.remember_dialog();
+                }
+                self.lan_action(a, out);
+                return;
+            }
+        }
+        if self.page == Page::Staging && self.lan.active() {
+            if let Some(a) = self.lan.staging_command(&mut self.ui, &mut self.custom, command, widget) {
+                self.lan_action(a, out);
+                return;
+            }
+            if let Some(action) = self.custom.command(&mut self.ui, command, widget) {
+                if self.ui.message_box.is_some() {
+                    self.remember_dialog();
+                }
+                if std::mem::take(&mut self.custom.net_dialog_choice) {
+                    self.lan.after_custom_command(&mut self.custom);
+                }
+                match action {
+                    // StagingExit: 0x651990 leaves the session
+                    super::custom::Action::Exit => {
+                        self.lan.leave();
+                        self.custom.net_reset();
+                        self.show(Page::Lobby);
+                    }
+                    // StagingLaunch 0x65DE80 -> 0x651950
+                    super::custom::Action::Launch => self.lan.start_launch(),
+                    _ => {}
+                }
+                return;
+            }
+        }
         if matches!(self.page, Page::Staging | Page::ChooseFilm) {
             if let Some(action) = self.custom.command(&mut self.ui, command, widget) {
                 if self.ui.message_box.is_some() {
@@ -727,7 +775,14 @@ impl Front {
                                 self.show(Page::Campaign);
                             } else {
                                 self.custom.scoring_available(self.score_data.is_some());
+                                // a left session goes back to the lobby (0x651990 ran)
+                                if self.lan_left_game {
+                                    self.lan_left_game = false;
+                                    self.custom.net_reset();
+                                    self.show(Page::Lobby);
+                                } else {
                                 self.show(if self.film_from_menu { Page::ChooseFilm } else { Page::Staging });
+                                }
                             }
                         }
                         scoring::Outcome::Replay => out.replay = true,
@@ -756,6 +811,13 @@ impl Front {
             "" => {}
             "Quit" => self.quit = true,
             "RequestSinglePlayer" => self.show(Page::SinglePlayer),
+            // 0x650A80: the multiplayer menu (slot of MultiplayerMenu 0x653780)
+            "RequestMultiplayer" => {
+                self.lan.local_name = self.lan_name.clone().unwrap_or_else(|| self.ui.strings.resolve("#default_lan_name"));
+                self.lan.warm(&self.ui, &mut self.custom);
+                self.show(Page::Multiplayer);
+            }
+            "LobbyExit" => self.show(Page::Multiplayer),
             "RequestMainMenu" => self.show(Page::MainMenu),
             // main menu Options (0x650700) / game menu Options
             "OpenOptionsMenu" | "OptionsDialog" => self.open_options(size, ""),
@@ -825,6 +887,28 @@ impl Front {
             }
             other if NOT_BUILT.contains(&other) => info!("UI command {other}: its screen is not built yet"),
             other => info!("UI command not handled yet: {other}"),
+        }
+    }
+
+    /// What the session asked of the front end (`crate::net`).
+    fn lan_action(&mut self, action: crate::net::Action, out: &mut FrameOut) {
+        use crate::net::Action as A;
+        match action {
+            A::None => {}
+            A::Staging => {
+                self.film_from_menu = false;
+                self.show(Page::Staging);
+            }
+            A::Lobby => {
+                self.custom.net_reset();
+                self.show(Page::Lobby);
+            }
+            A::LoadWorld => out.lan_load = true,
+            A::BeginPlay => {
+                self.loading_finished = false;
+                self.show(Page::Game);
+            }
+            A::SessionLost => out.leave = true,
         }
     }
 
@@ -1052,6 +1136,8 @@ fn start(f: &mut Front, commands: &mut Commands, next: &mut NextState<AppState>,
 #[derive(Default)]
 pub struct FrameOut {
     pub launch: bool,
+    /// `LanEvent::LoadWorld`: the session's launch task builds the battle.
+    pub lan_load: bool,
     pub ready: bool,
     pub game: Vec<super::hud::GameAction>,
     /// RequestFinished: leave the battle for the score screen.
@@ -1170,7 +1256,16 @@ pub fn frame(
                 if let Some(b) = battle.as_mut() {
                     b.paused = true;
                 }
-                screens::loading_finished(&mut f.ui);
+                if f.lan.active() {
+                    // 0x6E8C00: no Continue in a multiplayer launch; the battle
+                    // joins the session and the task is reported (304)
+                    if let Some(b) = battle.as_mut() {
+                        let (kingdoms, _) = f.lan.kingdoms(&f.custom);
+                        f.lan.attach(b, kingdoms);
+                    }
+                } else {
+                    screens::loading_finished(&mut f.ui);
+                }
                 None
             }
             // the score screen while the battle state is left
@@ -1319,6 +1414,15 @@ pub fn frame(
         f.film_box_without_keys = false;
     }
     let mut out = FrameOut::default();
+    // the session's frame, and its events (`crate::net`)
+    if f.lan.active() {
+        let staging = f.page == Page::Staging;
+        let Front { lan, ui, custom, .. } = f;
+        let actions = lan.pump(ui, staging, custom);
+        for a in actions {
+            f.lan_action(a, &mut out);
+        }
+    }
     for e in f.ui.take_events() {
         match e {
             UiEvent::Command { command, widget } => f.command(&command, &widget, size, &mut out),
@@ -1327,7 +1431,9 @@ pub fn frame(
                 f.effects(effects);
             }
             UiEvent::Select { widget, index, param } => {
-                if f.page == Page::Staging {
+                if f.page == Page::Staging && f.lan.active() {
+                    f.lan.staging_select(&mut f.ui, &mut f.custom, &widget, &param);
+                } else if f.page == Page::Staging {
                     f.custom.select(&mut f.ui, &widget, index, &param);
                 }
             }
@@ -1459,6 +1565,13 @@ pub fn frame(
                 f.campaign.mission_ended(&f.ui, result);
             }
         }
+        if f.lan.active() {
+            f.lan.leave();
+            f.lan_left_game = true;
+        } else if f.lan.in_battle {
+            f.lan.in_battle = false;
+            f.lan_left_game = true;
+        }
         let mission_page = f.campaign.screen == crate::campaign::Screen::Debriefing || (f.campaign.screen == crate::campaign::Screen::Missions && f.campaign.battle.is_none() && f.film_load.is_none() && f.score_data.as_ref().is_some_and(|d| d.kind == 0));
         commands.remove_resource::<Battle>();
         next.set(AppState::Menu);
@@ -1483,6 +1596,14 @@ pub fn frame(
             None => commands.remove_resource::<crate::campaign::battle::PendingBattle>(),
         }
     }
+    // KKC_Session::Launch 0x77A950 -> 0x775EE0: the launch task of a session
+    if out.lan_load {
+        if let Some(seed) = f.lan.launch_seed() {
+            f.custom.net_seed(u64::from(seed));
+        }
+        f.custom.net_fill_implicit();
+        out.launch = true;
+    }
     if out.launch && f.custom.film().is_some() {
         f.launch_film();
     } else if out.launch {
@@ -1506,6 +1627,11 @@ pub fn frame(
             f.last_launch = Some(launch.clone());
             f.clear_message_log();
             start(f, &mut commands, &mut next, launch);
+            // (a session's battle: `Battle::local` follows its player; scene.rs)
+            if f.lan.active() {
+                let (_, local) = f.lan.kingdoms(&f.custom);
+                commands.insert_resource(crate::session::PendingLocalKingdom(local));
+            }
         }
     }
     // the score screen's Replay: a film starts again (0x6590B0, +0x54 == 4:
@@ -1573,6 +1699,7 @@ pub fn frame(
         let hud = f.hud.as_ref();
         let campaign_iface = (f.page == Page::Campaign).then_some(&f.campaign.iface);
         let dynamic = |p: &str| hud.and_then(|h| h.tooltip(p)).or_else(|| campaign_iface.and_then(|i| i.tooltip(p)));
+        f.tooltips.anchor = if f.page == Page::Campaign { f.campaign.tooltip_anchor(&mut f.ui) } else { None };
         f.tooltips.frame(&mut f.ui, pointer, pressed, now, game, &dynamic);
     }
     f.ui.layout();

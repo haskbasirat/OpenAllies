@@ -46,6 +46,25 @@ pub enum Action {
     FilmDialogCancelled,
 }
 
+/// A LAN session's kingdom record as the staging shows it (`crate::net`).
+#[derive(Clone, Debug)]
+pub struct NetRow {
+    pub ids: String,
+    pub occupant: Option<Occupant>,
+    /// A computer player: its SAI (`None` = random).
+    pub ai: Option<Option<String>>,
+    pub nation: Option<String>,
+    pub faction: Option<String>,
+    pub handicap: Option<String>,
+}
+
+/// What a session stages, by name (`crate::net`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum NetSource {
+    Map { title: String, size: (i32, i32) },
+    Random { rmc: String, size: (f32, f32), terrain: Vec<(String, f32)> },
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum Occ {
     Open,
@@ -462,6 +481,10 @@ pub struct Custom {
     /// The film dialog's remembered name (+0x120, the preferences block
     /// `[0xB39D04]+0x18`: saved with the profile, `Front::save_settings`).
     remembered_film: Option<PathBuf>,
+    /// The people of a LAN session by record IDS (`crate::net`).
+    net_occupants: Option<HashMap<String, Occupant>>,
+    /// A map dialog chose a map since the last look (`crate::net`).
+    pub net_dialog_choice: bool,
 }
 
 /// The staging screen's game data (nations, SAIs, rules, RMCs), parsed on a
@@ -496,6 +519,8 @@ impl Custom {
             launched_factions: Vec::new(),
             scoring: false,
             remembered_film: None,
+            net_occupants: None,
+            net_dialog_choice: false,
         }
     }
 
@@ -716,6 +741,149 @@ impl Custom {
         s
     }
 
+    // --- a LAN session's view (`crate::net`): every node rebuilds this
+    // session from the replicated one, so it shows and launches the same.
+
+    /// The session's stage, as a dialog left it.
+    pub fn net_source(&self) -> Option<NetSource> {
+        let s = self.session.as_ref()?;
+        Some(match &s.source {
+            Source::Map(m) => NetSource::Map { title: m.title.clone(), size: m.size },
+            Source::Random { rmc, size, terrain } => {
+                let names = self.data.as_ref().and_then(|d| d.rmcs.iter().find(|r| r.ids.eq_ignore_ascii_case(rmc)));
+                let terrain = terrain.iter().enumerate().map(|(i, v)| (names.and_then(|r| r.terrains.get(i)).map_or_else(String::new, |t| t.terrain_ids.clone()), *v)).collect();
+                NetSource::Random { rmc: rmc.clone(), size: *size, terrain }
+            }
+            Source::Film(_) => return None,
+        })
+    }
+
+    /// The applied team format (+0x28).
+    pub fn net_format(&self) -> String {
+        self.session.as_ref().map_or_else(String::new, |s| s.format.clone())
+    }
+
+    /// The stage of the replicated session: its map or RMC, its rules (IDS,
+    /// native kind, raw value), its format.
+    pub fn net_set_source(&mut self, ui: &Ui, source: &NetSource, format: &str, rows: &[(String, u32, u32)]) {
+        let values: Option<Vec<RuleValue>> = (!rows.is_empty()).then(|| {
+            let data = self.data(ui);
+            rows.iter()
+                .filter_map(|(ids, kind, raw)| {
+                    let rule = data.rules.iter().find(|r| r.ids.eq_ignore_ascii_case(ids))?;
+                    let value = match kind {
+                        0 => (*raw & 0xff != 0).to_string(),
+                        1 => (*raw as i32).to_string(),
+                        2 => format!("{}", f32::from_bits(*raw)),
+                        _ => rule.enum_values.get(*raw as usize)?.0.clone(),
+                    };
+                    Some(RuleValue { ids: rule.ids.clone(), value })
+                })
+                .collect()
+        });
+        let s = match source {
+            NetSource::Map { title, .. } => {
+                let Some(m) = super::gamedata::read_map(&ui.store.root, &format!("Maps/{title}.RMP")) else {
+                    warn!("lan: no map {title}");
+                    return;
+                };
+                let rules = values.unwrap_or_else(|| {
+                    let data = self.data(ui);
+                    dialogs::default_rules(data)
+                });
+                Some(self.map_session(ui, &m, rules))
+            }
+            NetSource::Random { rmc, size, terrain } => {
+                let weights = (!terrain.is_empty()).then(|| terrain.iter().map(|t| t.1).collect());
+                self.rmc_session(ui, rmc, Some(*size), weights, values)
+            }
+        };
+        if let Some(s) = s {
+            self.session = Some(self.reset_teams(ui, s, format, Vec::new()));
+        }
+    }
+
+    /// The people and the choices of every record.
+    pub fn net_rows(&mut self, rows: Vec<NetRow>) {
+        let mut occupants = HashMap::new();
+        if let Some(s) = self.session.as_mut() {
+            for r in &mut s.records {
+                let Some(row) = rows.iter().find(|x| x.ids.eq_ignore_ascii_case(&r.ids)) else {
+                    r.occ = Occ::Open;
+                    continue;
+                };
+                r.occ = match (&row.ai, &row.occupant) {
+                    (Some(sai), _) => Occ::Ai(sai.clone()),
+                    (None, Some(o)) => {
+                        occupants.insert(r.ids.clone(), o.clone());
+                        Occ::Human
+                    }
+                    (None, None) => Occ::Open,
+                };
+                r.nation = row.nation.clone().or_else(|| r.fixed_nation.clone());
+                r.faction = row.faction.clone().or_else(|| r.fixed_faction.clone());
+                r.handicap = row.handicap.clone();
+            }
+        }
+        self.net_occupants = Some(occupants);
+    }
+
+    pub fn net_state(&mut self, ui: &Ui) -> StagingState {
+        self.build_state(ui)
+    }
+
+    pub fn net_show(&mut self, ui: &mut Ui, state: StagingState) {
+        self.state = state.clone();
+        self.staging = Some(Staging::show(ui, state));
+        self.dialog = None;
+        self.after_update(ui);
+    }
+
+    pub fn net_set_state(&mut self, ui: &mut Ui, state: StagingState) {
+        self.state = state.clone();
+        if let Some(st) = &mut self.staging {
+            st.set_state(ui, state);
+        }
+        self.after_update(ui);
+    }
+
+    /// A launch's draws are the session's (the map seed): the same on every node.
+    pub fn net_seed(&mut self, seed: u64) {
+        self.seed = seed | 1;
+    }
+
+    /// The record of a staging slot widget.
+    pub fn net_slot_ids(&self, ui: &Ui, widget: &str) -> Option<String> {
+        let i = self.slot_record(ui, widget)?;
+        self.session.as_ref()?.records.get(i).map(|r| r.ids.clone())
+    }
+
+    /// The records a launch makes players of, in the setup's order.
+    pub fn net_player_records(&self) -> Vec<String> {
+        let Some(s) = &self.session else { return Vec::new() };
+        s.records.iter().filter(|r| r.playable && !r.independent && r.occ != Occ::Open).map(|r| r.ids.clone()).collect()
+    }
+
+    /// 0x776580 at a launch: a required kingdom without a player gets an
+    /// implicit computer player (a random general).
+    pub fn net_fill_implicit(&mut self) {
+        if let Some(s) = self.session.as_mut() {
+            for r in &mut s.records {
+                if r.occ == Occ::Open && r.required && r.playable && !r.independent && r.team.is_some() && r.open {
+                    r.occ = Occ::Ai(None);
+                }
+            }
+        }
+    }
+
+    /// Leaving the session: the next staging is an offline one again.
+    pub fn net_reset(&mut self) {
+        self.session = None;
+        self.staging = None;
+        self.net_occupants = None;
+        self.net_dialog_choice = false;
+    }
+
     /// `RequestCustom`: a fresh single-player session on the default RMC.
     pub fn enter(&mut self, ui: &mut Ui) {
         let rmc_ids = ui.avars.get("StagingSinglePlayerDefaultRMCIds").map(aa_ui::node::unquote).unwrap_or_default();
@@ -740,6 +908,7 @@ impl Custom {
     /// The staging screen's view of the session.
     fn build_state(&mut self, ui: &Ui) -> StagingState {
         let player = self.player_name(ui);
+        let net = self.net_occupants.clone();
         let Some(s) = self.session.clone() else {
             return StagingState { networked: false, local_is_host: true, ..Default::default() };
         };
@@ -770,6 +939,7 @@ impl Custom {
             for r in members {
                 let occupant = match &r.occ {
                     Occ::Open => Occupant::None,
+                    Occ::Human if net.as_ref().is_some_and(|n| n.contains_key(&r.ids)) => net.as_ref().and_then(|n| n.get(&r.ids).cloned()).unwrap_or_default(),
                     Occ::Human => Occupant::Human { name: player.clone(), local: true, on_host: true, ready: false, ping_ms: 0, download: None, swap_from: false, swap_to: false },
                     Occ::Ai(sai) => Occupant::Ai {
                         name: sai.as_ref().and_then(|id| sais.iter().find(|x| &x.0 == id)).map(|x| x.1.clone()).unwrap_or_else(|| random.clone()),
@@ -945,6 +1115,7 @@ impl Custom {
                     return Some(Action::FilmChosen);
                 }
                 Some(Outcome::Map { map, rules }) => {
+                    self.net_dialog_choice = true;
                     let previous = self.session.as_ref().map(|s| s.format.clone()).unwrap_or_default();
                     let people = self.people();
                     let s = self.map_session(ui, &map, rules);
@@ -954,6 +1125,7 @@ impl Custom {
                     return Some(Action::None);
                 }
                 Some(Outcome::Random { rmc, size, terrain, rules, prefs }) => {
+                    self.net_dialog_choice = true;
                     self.rmc_prefs = prefs;
                     let previous = self.session.as_ref().map(|s| s.format.clone()).unwrap_or_default();
                     let people = self.people();
@@ -1197,9 +1369,15 @@ impl Custom {
                 Occ::Human => {
                     // the loading screen reads the staging record's nation
                     // (0x6E83A0 -> 0x50DC00 +0x18): none for "Random"
-                    local_nation = r.nation.as_ref().and_then(|n| data.nation(n)).map(|n| n.short.clone());
+                    let net = self.net_occupants.as_ref().and_then(|n| n.get(&r.ids));
+                    if !matches!(net, Some(Occupant::Human { local: false, .. })) {
+                        local_nation = r.nation.as_ref().and_then(|n| data.nation(n)).map(|n| n.short.clone());
+                    }
                     factions.push((players.len(), r.faction.clone()));
-                    player.clone()
+                    match net {
+                        Some(Occupant::Human { name, .. }) => name.clone(),
+                        _ => player.clone(),
+                    }
                 }
                 _ => {
                     let wanted = nation.map(|n| n.ids.clone());

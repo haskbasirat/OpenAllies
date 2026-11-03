@@ -43,6 +43,12 @@ use bevy::prelude::*;
 /// What the HUD asks the battle side to do (consumed by `input.rs`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameAction {
+    /// A mini's portrait (`DisplayObjectSelect <gtid> 0`, `0x6277E0`): that object alone.
+    SelectThing(u32),
+    /// A mini's button: an order for one thing, without selecting it (`0x612A70` with
+    /// its `<gtid>`).
+    OrderFor { gtid: u32, order: aa_play::orders::ActorOrder },
+    TargetFor { gtid: u32, order: TargetOrder },
     /// `stop` for the selection.
     Stop,
     /// `recruit`: queue an organization at a building.
@@ -107,8 +113,6 @@ pub enum TargetOrder {
     Guard,
     /// `explore` (9): explore the clicked area.
     Explore,
-    /// `hq_attach` (0x1F): attach to the clicked own HQ.
-    AttachHq,
     /// `set_rally_point` (0x10) of a building.
     Rally(aa_play::ActorId),
     /// A general ability's targeting state (`UseFactionAbility %i`,
@@ -295,7 +299,7 @@ const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResour
 
 /// The resource registry in declaration order (Data/Game/resources.tgi,
 /// `[0xB36530]+0x34`).
-fn load_resources(ui: &mut Ui) -> Vec<HudResource> {
+pub(crate) fn load_resources(ui: &mut Ui) -> Vec<HudResource> {
     let mut rows: Vec<(String, u8, String, Option<String>, Vec<(String, f32)>)> = Vec::new();
     for n in super::datafile::load(&ui.store.root, "Game/resources.tgi").iter().filter(|c| c.name.eq_ignore_ascii_case("Resource")) {
         let kind = RESOURCE_KINDS.iter().find(|(t, _)| n.template().is_some_and(|x| x.eq_ignore_ascii_case(t))).map(|(_, k)| *k);
@@ -658,6 +662,7 @@ impl GameHud {
         self.slot_tips = buttons.iter().map(|a| a.as_ref().and_then(|a| view.tip(ui, &a.command))).collect();
         self.formation_tips = match view.selection() {
             HudSelection::Company(c) => c.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(),
+            HudSelection::Group(g) => g.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(),
             _ => Vec::new(),
         };
         self.hud.update(ui, &view);
@@ -793,7 +798,8 @@ impl GameHud {
                     let at = Some(a.pos.truncate());
                     if *kingdom == b.local {
                         events.push(("actor_captured", vec![actor_name(ui, a)], at, local));
-                    } else if self.owned_before.get(actor).is_some_and(|k| *k == b.local) {
+                    } else if self.owned_before.get(actor).is_some_and(|k| *k == b.local) && aa_play::fog::actor_visible(w, *actor, Some(b.local)) {
+                        // The event's reader asks actor vt+0x70 `0x4D3B80` (visible to the player).
                         events.push(("actor_captured_by_enemy", vec![actor_name(ui, a), kingdom_name(Some(*kingdom))], at, local));
                     }
                 }
@@ -938,6 +944,23 @@ impl GameHud {
         if let Some(rest) = cmd.strip_prefix("UseFactionAbility") {
             return Some(rest.trim().parse::<usize>().ok().and_then(|i| super::abilities::command(ui, &self.abilities, i)).into_iter().collect());
         }
+        // a mini's portrait (0x6277E0): that object alone
+        if let Some(rest) = cmd.strip_prefix("DisplayObjectSelect ") {
+            let gtid = rest.split_whitespace().next().and_then(|g| g.parse::<u32>().ok());
+            return Some(gtid.map(GameAction::SelectThing).into_iter().collect());
+        }
+        // a mini's RetreatRoutButton (0x62E9C0): "ActorCommand <ids> <gtid>", the
+        // command for that one organization (0x612A70, Facing +0x3C)
+        if let Some(rest) = cmd.strip_prefix("ActorCommand ") {
+            let mut words = rest.split_whitespace();
+            if let (Some(ids), Some(gtid)) = (words.next(), words.next().and_then(|g| g.parse::<u32>().ok())) {
+                return Some(match ids {
+                    "retreat" => vec![GameAction::TargetFor { gtid, order: TargetOrder::Run }],
+                    "rout" => vec![GameAction::OrderFor { gtid, order: aa_play::orders::ActorOrder::Rout }],
+                    _ => Vec::new(),
+                });
+            }
+        }
         Some(match cmd {
             // ControlPanel ButtonMenu -> the in-game menu (0x5C0C40)
             "OpenGameMenuDialog" => {
@@ -1061,8 +1084,10 @@ impl GameHud {
         };
         let text = ui.strings.resolve(key);
         ui.set_label("GameMenuDialog/ButtonFinished", &text);
-        if self.in_film {
-            ui.with_widget("GameMenuDialog/ButtonLoad", |w| w.set_enabled(false));
+        // 0x61D5D0 enables them from the session (0x76AD40); a battle cannot be saved
+        // or loaded in this port yet, so both stay disabled, as an unavailable item is.
+        for button in ["GameMenuDialog/ButtonLoad", "GameMenuDialog/ButtonSave"] {
+            ui.with_widget(button, |w| w.set_enabled(false));
         }
         ui.with_widget("GameMenuDialog/ButtonConnectionStatus", |w| w.set_enabled(false));
         ui.layout();
@@ -1824,6 +1849,51 @@ impl View<'_> {
     /// A truck or another single actor (the SimpleActor display is not
     /// ported in aa-ui; the company display shows its name, owner, health,
     /// economy and state, without members).
+    /// GroupDisplay SetSelection `0x6296C0`: up to six objects in the selection's
+    /// order; the last names the Name and Owner labels (`0x626310`).
+    fn group_selection(&self) -> HudSelection {
+        use aa_ui::hud::{GroupInfo, MiniInfo, MiniKind};
+        let (Some(b), Some(w)) = (self.battle, self.world()) else { return HudSelection::None };
+        let mut group = GroupInfo { name: String::new(), owner: None, minis: Vec::new(), formations: Vec::new() };
+        for u in b.selection.iter().take(6) {
+            let Some(gtid) = aa_play::player_orders::native::gtid_of_unit(w, *u) else { continue };
+            match *u {
+                Unit::Org(id) => {
+                    let Some(o) = w.orgs.get(id as usize).filter(|o| o.alive) else { continue };
+                    let Some(c) = self.company_for_org(o) else { continue };
+                    let own = o.kingdom == b.local;
+                    // 0x62D6B0: retreat (7), else rout (8), when the kingdom may give it
+                    let bits = aa_play::orders::guess::action_bits(w, *u);
+                    let retreat = own.then(|| if bits >> 7 & 1 != 0 { Some("retreat") } else if bits >> 8 & 1 != 0 { Some("rout") } else { None }).flatten().map(|c| format!("ActorCommand {c} {gtid}"));
+                    let bars: Vec<f32> = c.slots.iter().filter(|s| s.position as i32 != c.leader_slot).filter_map(|s| s.unit.as_ref().map(|u| u.health)).take(9).collect();
+                    // 0x628490: the formations join, at most three
+                    for f in c.formations.iter().filter(|_| own) {
+                        if group.formations.len() < 3 && !group.formations.iter().any(|x| x.id == f.id) {
+                            group.formations.push(f.clone());
+                        }
+                    }
+                    group.name = c.name.clone();
+                    group.owner = c.owner.clone();
+                    group.minis.push(MiniInfo {
+                        gtid,
+                        kind: MiniKind::Company { org: id, health: c.portrait_model.is_some().then_some(c.health), morale: c.morale, attack_efficiency: c.attack_efficiency, bars, retreat },
+                    });
+                }
+                Unit::Actor(id) => {
+                    let Some(a) = w.actor(id) else { continue };
+                    let def = w.data.def(a.def);
+                    group.name = self.display_name(a.def, a.kingdom, None);
+                    group.owner = self.owner(a.kingdom);
+                    group.minis.push(MiniInfo { gtid, kind: MiniKind::Simple { icon: def.icon.clone(), health: (a.health / def.health.max(1e-6)).clamp(0.0, 1.0) } });
+                }
+            }
+        }
+        if group.minis.is_empty() {
+            return HudSelection::None;
+        }
+        HudSelection::Group(Box::new(group))
+    }
+
     fn company_for_actor(&self, a: &aa_play::Actor) -> Option<CompanyInfo> {
         let w = self.world()?;
         let def = w.data.def(a.def);
@@ -2397,6 +2467,9 @@ impl HudWorld for View<'_> {
 
     fn selection(&self) -> HudSelection {
         let (Some(b), Some(w)) = (self.battle, self.world()) else { return HudSelection::None };
+        if b.selection.len() > 1 {
+            return self.group_selection();
+        }
         let Some(first) = b.selection.first() else { return HudSelection::None };
         match *first {
             Unit::Org(id) => {

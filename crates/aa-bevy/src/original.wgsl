@@ -32,6 +32,9 @@ struct Look {
     sun: vec4<f32>,
     // rgb: StencilShadowColorMultiplier (AVar C0)
     shadow: vec4<f32>,
+    // The terrain's NiTextureEffects (723E00, 71D6A0): x, y repeats per metre of
+    // the detail and macro maps on the native ground (0 = none).
+    ground: vec4<f32>,
 }
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> look: Look;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var mask_texture: texture_2d<f32>;
@@ -40,6 +43,10 @@ struct Look {
 // 0x71C290): one texel per 4 m GMap tile of the native ground, 0 visible,
 // TerrainFogGrayPercentage * 255 explored, 255 never explored.
 @group(#{MATERIAL_BIND_GROUP}) @binding(103) var fog_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(104) var detail_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(105) var detail_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(106) var macro_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(107) var macro_sampler: sampler;
 
 // Native metres per fog texel and the original texture density
 // (AVar TerrainFogPixelsPerMeter = 2): the original fog texture holds two
@@ -160,7 +167,21 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // * light diffuse * N.L), then MODULATE with the texture, all on gamma
     // values; the shadow quad and the fog layer multiply the result.
     let light = clamp(look.emissive.rgb + look.ambient.rgb * sun_ambient + look.diffuse.rgb * sun_diffuse * lambert, vec3<f32>(0.0), vec3<f32>(1.0));
-    let colour = to_gamma(base.rgb) * light * shadow * (1.0 - fog_at(in.world_position.xyz));
+    var colour = to_gamma(base.rgb) * light * shadow * (1.0 - fog_at(in.world_position.xyz));
+    // The world-parallel texture effects of the terrain (723E00), by the stages 8A57A0
+    // sets for projected lights: the first alone (SELECTARG1), the next ADD, which a
+    // stage saturates, then the base texture MODULATE, then the diffuse MODULATE. One
+    // alone goes straight with the diffuse (8A5D..: MODULATE, ARG2 diffuse).
+    let ground = vec2<f32>(in.world_position.x, -in.world_position.z);
+    let detail = textureSample(detail_texture, detail_sampler, ground * look.ground.x).rgb;
+    let macro_map = textureSample(macro_texture, macro_sampler, ground * look.ground.y).rgb;
+    if look.ground.x > 0.0 && look.ground.y > 0.0 {
+        colour = colour * min(detail + macro_map, vec3<f32>(1.0));
+    } else if look.ground.x > 0.0 {
+        colour = colour * detail;
+    } else if look.ground.y > 0.0 {
+        colour = colour * macro_map;
+    }
     // emissive.w: AlphaMode::Add (ONE / ONE), whose blend state takes alpha 0
     out.color = vec4<f32>(to_linear(colour), select(base.a, 0.0, look.emissive.w > 0.5));
     return out;

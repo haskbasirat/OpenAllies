@@ -42,6 +42,11 @@ aa-metagame = { path = "../aa-metagame" }
 # The film reader and player (research/byte-exact/FILM-PLAYBACK.md): the film
 # dialog, the film session and the tick driver.
 aa-parity = { path = "../aa-parity", features = ["play"] }
+# LAN multiplayer (net/): the original's session layer.
+aa-netcode = { path = "../aa-netcode" }
+aa-orders = { path = "../aa-orders" }
+aa-runtime = { path = "../aa-runtime" }
+aa-simulation = { path = "../aa-simulation" }
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both

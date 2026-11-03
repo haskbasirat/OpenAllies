@@ -255,6 +255,16 @@ impl Manager {
         }
     }
 
+    /// The user's volumes (`[B39940]`, registration indices 0x8F..0x93): the options
+    /// dialog writes them, the manager reads them every update.
+    pub fn set_user_volumes(&mut self, main: f32, d2: f32, d3: f32, speech: f32, music: f32) {
+        self.vars.main = main;
+        self.vars.d2 = d2;
+        self.vars.d3 = d3;
+        self.vars.speech = speech;
+        self.vars.music = music;
+    }
+
     pub fn playing_count(&self) -> usize {
         self.instances.iter().filter(|i| i.playing).count()
     }

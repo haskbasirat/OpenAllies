@@ -23,7 +23,7 @@ use std::time::Instant;
 use textures::Kind;
 use std::sync::Mutex;
 
-pub const TITLE: &str = "Axis & Allies - Bevy test (Development 22)";
+pub const TITLE: &str = "Axis & Allies - Bevy test (Development 23)";
 /// Team colours mixed into team-masked textures: the direct start's player
 /// colour when the kingdom colour table is missing (display choice), and
 /// the replacement colour of a thing without a kingdom colour: AVar 30
@@ -542,7 +542,8 @@ impl Plugin for ScenePlugin {
             .add_systems(OnEnter(session::AppState::Battle), setup)
             .add_systems(OnExit(session::AppState::Battle), leave_battle)
             .add_plugins(crate::battle_view::BattleViewPlugin)
-            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain, look::apply_sun).run_if(in_state(session::AppState::Battle)));
+            .init_resource::<TerrainQuality>()
+            .add_systems(Update, (hud, crate::debug_battle::spawn, stream_terrain, follow_ground.after(stream_terrain), clear_doodads, terrain_quality, look::apply_sun).run_if(in_state(session::AppState::Battle)));
         if let Some((path, seconds)) = self.args.shot.clone() {
             app.insert_resource(ShotPlan { path, seconds, taken: false, frames: 0 }).add_systems(Update, screenshot);
         }
@@ -588,6 +589,7 @@ fn leave_battle(mut commands: Commands, scene: Query<Entity, With<SceneEntity>>)
     commands.remove_resource::<TerrainStream>();
     commands.remove_resource::<Loaded>();
     commands.remove_resource::<camera::Ground>();
+    commands.remove_resource::<DrawnCorners>();
     commands.remove_resource::<crate::battle_view::Library>();
     commands.remove_resource::<look::SceneSun>();
     commands.insert_resource(session::ObjectAnimations::default());
@@ -648,6 +650,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<OriginalMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    pending_local: Option<Res<session::PendingLocalKingdom>>,
+    front_quality: Option<Res<crate::ui::front::Front>>,
 ) {
     let setup_started = Instant::now();
     let decoded = loaded.images.take().unwrap_or_default();
@@ -658,7 +662,11 @@ fn setup(
     let tex = tex.handles;
     // Terrain layers stream in over the next frames (`stream_terrain`).
     if std::env::var_os("AA_BEVY_NO_TERRAIN").is_none() {
-        commands.insert_resource(TerrainStream { textures: tex.clone(), next: 0, frames: 0 });
+        let biome = loaded.world.as_ref().map(|w| w.map.biome.clone()).unwrap_or_default();
+        let on = front_quality.as_deref().is_none_or(|f| f.ui.uvars.get_bool("TerrainExtraQuality"));
+        let ground = crate::ui::reconstruction_root().map(|r| look::load_ground_maps(&r, &biome, &mut images, on)).unwrap_or_default();
+        info!("terrain effects of biome {biome:?}: detail {} macro {} on {on}", ground.detail.is_some(), ground.macro_map.is_some());
+        commands.insert_resource(TerrainStream { ground, textures: tex.clone(), next: 0, frames: 0 });
     }
     // Every placed map object with a resolved model.
     let mut parts = HashMap::new();
@@ -678,6 +686,7 @@ fn setup(
         .filter(|(i, _)| !scenery.contains(i))
         .map(|(_, p)| key(&p.thing_id, p.position[0], p.position[1]))
         .collect();
+    let placed_at: HashMap<_, usize> = world.books.scenery.iter().filter_map(|&i| world.map.placed.get(i).map(|p| (key(&p.thing_id, p.position[0], p.position[1]), i))).collect();
     let mut modes = std::collections::BTreeMap::new();
     let mut shadow_counts = std::collections::BTreeMap::new();
     let no_objects = std::env::var_os("AA_BEVY_NO_OBJECTS").is_some();
@@ -710,6 +719,9 @@ fn setup(
             let mut entity = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform, SceneEntity));
             if !casts {
                 entity.insert(bevy::light::NotShadowCaster);
+            }
+            if let Some(&placed) = placed_at.get(&key(&p.thing_id, p.position[0], -p.position[2])) {
+                entity.insert(PlacedScenery(placed));
             }
             let mode = materials.get(material).map(|m| format!("{:?}", m.base.alpha_mode)).unwrap_or_default();
             *modes.entry(mode).or_insert(0usize) += 1;
@@ -760,7 +772,11 @@ fn setup(
         );
     }
     let world_heights = corners.clone();
+    // The drawn ground as `follow_ground` keeps it.
+    let corners = Arc::new(std::sync::RwLock::new(corners));
+    commands.insert_resource(DrawnCorners(corners.clone()));
     let ground = move |x: f32, z: f32| {
+        let corners = corners.read().unwrap_or_else(|e| e.into_inner());
         let (gx, gy) = ((x / cell).clamp(0.0, gw as f32), (-z / cell).clamp(0.0, gh as f32));
         let (x0, y0) = (gx.floor() as u32, gy.floor() as u32);
         let (x1, y1) = ((x0 + 1).min(gw), (y0 + 1).min(gh));
@@ -777,27 +793,34 @@ fn setup(
     // over the local player's first building (its Corps HQ). A film's viewer
     // has no kingdom: half the map's width and height ([O]: lookat=(160,160)
     // on a 320x320 map).
+    let local_kingdom = pending_local.as_ref().and_then(|l| l.0).unwrap_or(0);
     let film_view = loaded.film.is_some().then(|| Vec2::new(world.map.width as f32 * world.map.cell_size * 0.5, world.map.height as f32 * world.map.cell_size * 0.5));
     let hq_at = film_view
-        .or_else(|| camera::start_location(&world, 0))
+        .or_else(|| camera::start_location(&world, local_kingdom))
         .or_else(|| {
             world
                 .actors
                 .iter()
-                .find(|a| a.kingdom == Some(0) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
+                .find(|a| a.kingdom == Some(local_kingdom) && !a.removed && world.data.def(a.def).class == Some(aa_play::DefClass::Building) && !world.data.def(a.def).invisible)
                 .map(|a| a.pos.truncate())
         })
         .map(|p| Vec2::new(p.x, -p.y))
         .unwrap_or(hq_at);
     let hq_y = ground(hq_at.x, hq_at.y);
-    let mut battle = session::Battle::new(world, 0);
+    let mut battle = session::Battle::new(world, local_kingdom);
     if let Some(player) = loaded.film.take() {
         battle.attach_film(player);
     }
+    // a session's observer: no kingdom of its own
+    if pending_local.as_ref().is_some_and(|l| l.0.is_none()) {
+        battle.observe();
+    }
+    commands.remove_resource::<session::PendingLocalKingdom>();
     commands.insert_resource(battle);
     commands.insert_resource(crate::battle_view::Library::new(loaded.store.clone(), &loaded.rigs, loaded.fixes.clone()));
     // The battle's sun (look::apply_sun hands it to this light every frame).
     let sun = loaded.sun.clone();
+    look::set_sun_for_night(sun.diffuse);
     let to_light = if std::env::var_os("AA_BEVY_SUN_DIR").is_some() { sun_dir() } else { sun.to_light() };
     commands.insert_resource(look::SceneSun { direction: Vec3::new(-to_light.x, to_light.z, -to_light.y).normalize_or_zero(), ..sun });
     // Sun with cascaded shadows over the battlefield: Bevy's shadow map
@@ -854,15 +877,155 @@ fn setup(
     info!("Bevy test: {objects} objects, {} terrain layers, {} textures, loaded in {:.1} s", loaded.terrain.len(), tex.len(), loaded.seconds);
 }
 
+/// The corner heights of the drawn terrain behind `camera::Ground`.
+#[derive(Resource)]
+struct DrawnCorners(Arc<std::sync::RwLock<Vec<f32>>>);
+
+/// A drawn doodad: its index in `GameMap::placed`, for ClearDoodads 0x4F5560
+/// (`aa_play::books::Notice::DoodadCleared`).
+#[derive(Component)]
+struct PlacedScenery(usize);
+
 /// Terrain layers still to be created. Every new mesh and material is
 /// prepared by the renderer in the frame it appears; a big map has about
 /// 2000 layers (Berlin 1976, ~0.1 ms each), so they are spread over the
 /// frames the loading screen still covers instead of one 0.2 s frame.
 #[derive(Resource)]
 struct TerrainStream {
+    /// The biome's texture effects (0x723E00).
+    ground: look::GroundMaps,
     textures: HashMap<(String, Kind), Handle<Image>>,
     next: usize,
     frames: u32,
+}
+
+/// The terrain's materials and texture effects: 0x71FAC0 hands UVar TerrainExtraQuality
+/// to 0x71D6A0 at every terrain update, so the options dialog turns them on and off
+/// in a running battle.
+#[derive(Resource, Default)]
+struct TerrainQuality {
+    materials: Vec<Handle<OriginalMaterial>>,
+    ground: look::GroundMaps,
+    /// The mesh of every terrain layer created so far, in layer order.
+    meshes: Vec<Handle<Mesh>>,
+    /// The world's ground changes the layers follow already.
+    ground_seen: usize,
+    /// Tile -> (layer, first vertex) of its quads, made when the ground first changes.
+    quads: Vec<Vec<(u32, u32)>>,
+}
+
+/// One terrain layer's mesh from what the terrain plan made.
+fn layer_mesh(draw: &terrain::Draw) -> Mesh {
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, draw.positions.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, draw.normals.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, draw.uvs.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, draw.cell_uvs.clone());
+    mesh.insert_indices(Indices::U32(draw.indices.clone()));
+    mesh
+}
+
+/// The drawn ground follows the world's: the terrain's vertices are the base map
+/// through the render query 0x122 (0x4F0E50), so a thing that flattened the base map
+/// (`aa_play::ground`, 0x4EB500 -> 0x551140 -> 0x50C310 -> 0x71D270 marks the touched
+/// terrain blocks) changes them. Only the layers that hold a touched tile are made again.
+fn follow_ground(battle: Option<Res<session::Battle>>, loaded: Option<ResMut<Loaded>>, drawn_corners: Option<Res<DrawnCorners>>, mut quality: ResMut<TerrainQuality>, mut meshes: ResMut<Assets<Mesh>>) {
+    let (Some(battle), Some(mut loaded)) = (battle, loaded) else { return };
+    let Some(native) = battle.world.map.native_terrain.as_ref() else { return };
+    let quality = &mut *quality;
+    if native.changes.len() <= quality.ground_seen {
+        return;
+    }
+    let map = &loaded.scene.map.terrain;
+    let (width, height, cell) = (map.width as i32, map.height as i32, map.cell_size);
+    if quality.quads.is_empty() {
+        quality.quads = vec![Vec::new(); (width * height) as usize];
+        for (layer, draw) in loaded.terrain.iter().enumerate() {
+            for (quad, corner) in draw.positions.chunks_exact(4).enumerate() {
+                let x = (corner[0][0] / cell).round() as i32;
+                let y = (-corner[0][2] / cell).round() as i32;
+                if x >= 0 && y >= 0 && x < width && y < height {
+                    quality.quads[(y * width + x) as usize].push((layer as u32, quad as u32 * 4));
+                }
+            }
+        }
+    }
+    let h = |x: i32, y: i32| battle.world.map.height_at(Vec2::new(x as f32 * cell, y as f32 * cell));
+    let normal = |x: i32, y: i32| {
+        // The same normal as aa_assets' terrain preparation.
+        let (xa, xb) = ((x - 1).max(0), (x + 1).min(width));
+        let (ya, yb) = ((y - 1).max(0), (y + 1).min(height));
+        Vec3::new(-(h(xb, y) - h(xa, y)) / ((xb - xa) as f32 * cell), 1.0, (h(x, yb) - h(x, ya)) / ((yb - ya) as f32 * cell)).normalize_or_zero().to_array()
+    };
+    let scale = (native.tile_shift as i32 - native.shift as i32).max(0);
+    let mut touched = std::collections::BTreeSet::new();
+    for rect in &native.changes[quality.ground_seen..] {
+        // A tile's corners, and the normals of the corners around a changed one.
+        let (x0, y0) = (((rect[0] >> scale) - 2).max(0), ((rect[1] >> scale) - 2).max(0));
+        let (x1, y1) = (((rect[2] >> scale) + 1).min(width - 1), ((rect[3] >> scale) + 1).min(height - 1));
+        if let Some(drawn) = &drawn_corners {
+            let mut drawn = drawn.0.write().unwrap_or_else(|e| e.into_inner());
+            for y in y0..=(y1 + 1) {
+                for x in x0..=(x1 + 1) {
+                    drawn[(y * (width + 1) + x) as usize] = h(x, y);
+                }
+            }
+        }
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let corners = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)].map(|(cx, cy)| (h(cx, cy), normal(cx, cy)));
+                for &(layer, first) in &quality.quads[(y * width + x) as usize] {
+                    let draw = &mut loaded.terrain[layer as usize];
+                    for (i, (height, normal)) in corners.iter().enumerate() {
+                        draw.positions[first as usize + i][1] = *height;
+                        draw.normals[first as usize + i] = *normal;
+                    }
+                    touched.insert(layer as usize);
+                }
+            }
+        }
+    }
+    quality.ground_seen = native.changes.len();
+    for layer in touched {
+        // A layer still to come takes the new heights when it is created.
+        if let Some(handle) = quality.meshes.get(layer) {
+            let _ = meshes.insert(handle, layer_mesh(&loaded.terrain[layer]));
+        }
+    }
+}
+
+/// A doodad ClearDoodads 0x4F5560 removed leaves the screen.
+fn clear_doodads(battle: Option<Res<session::Battle>>, mut seen: Local<usize>, drawn: Query<(Entity, &PlacedScenery)>, mut commands: Commands) {
+    let Some(battle) = battle else { return };
+    let cleared = &battle.world.books.cleared_doodads;
+    if cleared.len() < *seen {
+        *seen = 0;
+    }
+    if cleared.len() == *seen {
+        return;
+    }
+    let gone: std::collections::HashSet<usize> = cleared[*seen..].iter().copied().collect();
+    *seen = cleared.len();
+    for (entity, placed) in &drawn {
+        if gone.contains(&placed.0) {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn terrain_quality(front: Option<Res<crate::ui::front::Front>>, mut quality: ResMut<TerrainQuality>, mut materials: ResMut<Assets<OriginalMaterial>>) {
+    let Some(front) = front else { return };
+    let on = front.ui.uvars.get_bool("TerrainExtraQuality");
+    if on == quality.ground.on || quality.materials.is_empty() {
+        return;
+    }
+    quality.ground.on = on;
+    let params = look::ground_params(&quality.ground);
+    for m in &quality.materials {
+        if let Some(mut material) = materials.get_mut(m) {
+            material.extension.params.ground = params;
+        }
+    }
 }
 
 /// Terrain layers created per frame (about 20 ms of renderer preparation).
@@ -875,21 +1038,26 @@ fn stream_terrain(
     stream: Option<ResMut<TerrainStream>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<OriginalMaterial>>,
+    mut quality: ResMut<TerrainQuality>,
 ) {
     let (Some(loaded), Some(mut stream)) = (loaded, stream) else { return };
+    if stream.next == 0 {
+        quality.materials.clear();
+        quality.meshes.clear();
+        quality.quads.clear();
+        quality.ground_seen = 0;
+        quality.ground = stream.ground.clone();
+    }
     let end = (stream.next + TERRAIN_LAYERS_PER_FRAME).min(loaded.terrain.len());
     for (order, draw) in loaded.terrain.iter().enumerate().take(end).skip(stream.next) {
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, draw.positions.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, draw.normals.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, draw.uvs.clone());
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, draw.cell_uvs.clone());
-        mesh.insert_indices(Indices::U32(draw.indices.clone()));
+        let mesh = meshes.add(layer_mesh(draw));
+        quality.meshes.push(mesh.clone());
         let texture = draw.texture.as_ref().and_then(|t| stream.textures.get(&(t.clone(), Kind::Color)).cloned());
         let mask = draw.mask.as_ref().and_then(|m| stream.textures.get(&(m.texture.clone(), Kind::Mask)).cloned());
         let mask = mask.zip(draw.mask.as_ref().map(|m| m.rows));
-        let material = materials.add(look::terrain_material(texture, draw.color, mask, order));
-        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material), bevy::light::NotShadowCaster, SceneEntity));
+        let material = materials.add(look::terrain_material(texture, draw.color, mask, order, &stream.ground));
+        quality.materials.push(material.clone());
+        commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), bevy::light::NotShadowCaster, SceneEntity));
     }
     stream.next = end;
     stream.frames += 1;

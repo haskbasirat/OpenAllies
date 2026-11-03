@@ -25,13 +25,16 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-10";
+const CACHE_VERSION: &str = "aa-bevy-fx-12";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Fxc {
     /// CREATE_VFX, STOP_VFX, PLAY_SFX, STOP_SFX, EQUIPMENT, PLAY_OBJECT_ANIMATION...
     pub kind: String,
+    /// `actor_state` of a WhenEnter / WhenLeave command (0x42C1B0), lower case.
+    #[serde(default)]
+    pub state: String,
     /// VFX_IDS / audio_ids / object_animation_IDS, lower case.
     pub ids: String,
     /// SELF, TARGET_THING, SOURCE_GROUND, TARGET_GROUND,
@@ -89,6 +92,11 @@ pub struct ActorFx {
     pub health: Vec<Fxc>,
     pub start_moving: Vec<Fxc>,
     pub stop_moving: Vec<Fxc>,
+    /// The thing's root WhenEnter and WhenLeave, each for its `actor_state` (0x4985E0).
+    #[serde(default)]
+    pub enter: Vec<Fxc>,
+    #[serde(default)]
+    pub leave: Vec<Fxc>,
     /// Aspect `aspect_death` model, Data-relative ("%s" already expanded
     /// with the View resource_prefix).
     pub death_model: Option<String>,
@@ -228,6 +236,9 @@ pub struct VfxDef {
     pub rotate_dps: f32,
     /// VFXProjectedTextureLit: lit by the world like the ground.
     pub respect_lighting: bool,
+    /// VFXTintModifier (`component = TINT`): (enhance, fade, tint_max), `repeating`.
+    #[serde(default)]
+    pub tint: Option<(f32, f32, f32, bool)>,
 }
 
 /// An Audio definition as 46C3A0 LoadData stores it (template_audio.tgi).
@@ -380,6 +391,7 @@ pub fn relative(folder: &str, value: &str) -> String {
 fn fxc(n: &ResolvedNode<'_>) -> Fxc {
     Fxc {
         kind: text(n, "type").unwrap_or_default().to_ascii_uppercase(),
+        state: text(n, "actor_state").filter(|s| !s.eq_ignore_ascii_case("null")).unwrap_or_default().to_ascii_lowercase(),
         ids: text(n, "VFX_IDS")
             .or_else(|| text(n, "audio_ids"))
             .or_else(|| text(n, "object_animation_IDS"))
@@ -427,6 +439,8 @@ fn weapon_fx(catalog: &ActorCatalog, ability: &ResolvedNode<'_>) -> WeaponFx {
 fn actor_fx(catalog: &ActorCatalog, id: &str) -> Option<ActorFx> {
     let actor = catalog.resolved_actor(id).ok()?;
     let mut fx = ActorFx::default();
+    fx.enter = list(&actor, "WhenEnter");
+    fx.leave = list(&actor, "WhenLeave");
     for component in ["PerformerComponent", "DefenderComponent"] {
         if let Ok(Some(c)) = actor.child(component) {
             for ability in c.children("Ability").unwrap_or_default() {
@@ -603,6 +617,7 @@ fn vfx_def(node: &ResolvedNode<'_>) -> VfxDef {
     let flags = node.child("Flags").ok().flatten();
     let flag_any = |name: &str| flag(node, name).or_else(|| flags.as_ref().and_then(|f| flag(f, name)));
     VfxDef {
+        tint: text(node, "component").filter(|c| c.eq_ignore_ascii_case("TINT")).map(|_| (num(node, "enhance_duration").unwrap_or(1.0), num(node, "fade_duration").unwrap_or(0.0), num(node, "tint_max").unwrap_or(1.0), flag_any("repeating").unwrap_or(false))),
         category: text(node, "category").unwrap_or_default().to_ascii_uppercase(),
         model: text_with_folder(node, "model").map(|(v, f)| relative(&f, &v).to_ascii_lowercase()).unwrap_or_default(),
         permanent: flag_any("permanent").unwrap_or(false),
@@ -818,6 +833,29 @@ fn cache_path(game_root: &Path) -> PathBuf {
 
 /// The tables for `actor_ids`, from the cache when it matches, else from the
 /// original catalog (seconds), then cached.
+/// The audio definitions alone, for the menus' sound: the cache of [`load`] when it
+/// fits this data, else the catalog.
+pub fn load_audio(game_root: &Path) -> anyhow::Result<BTreeMap<String, AudioDef>> {
+    let prefix = format!("{CACHE_VERSION}:{}:", aa_rules::sources::BASELINE_LEDGER_SHA256);
+    if let Ok(bytes) = std::fs::read(cache_path(game_root))
+        && let Ok(t) = serde_json::from_slice::<FxTables>(&bytes)
+        && t.source_key.starts_with(&prefix)
+    {
+        return Ok(t.audio);
+    }
+    let mut sources = aa_play::data::Sources::open(game_root)?;
+    let catalog = ActorCatalog::load_v14(&mut sources.files).map_err(|e| anyhow::anyhow!("loading the original rules catalog: {e}"))?;
+    let mut audio = BTreeMap::new();
+    if let Some(registry) = catalog.native_data_registry("Audio") {
+        for entry in &registry.entries {
+            if let Ok(node) = catalog.native_data_node(entry) {
+                audio.insert(entry.ids.to_ascii_lowercase(), audio_def(&node, &entry.ids));
+            }
+        }
+    }
+    Ok(audio)
+}
+
 pub fn load(game_root: &Path, actor_ids: &[String]) -> anyhow::Result<FxTables> {
     let mut ids: Vec<String> = actor_ids.iter().map(|s| s.to_ascii_lowercase()).collect();
     ids.sort();

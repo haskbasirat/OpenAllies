@@ -75,6 +75,8 @@ struct Key {
 pub struct BannerArt {
     /// The banner material of the object display's organization.
     pub selected: Option<Handle<StandardMaterial>>,
+    /// The selected organizations' banners (a GroupDisplay's minis).
+    pub by_org: HashMap<u32, Handle<StandardMaterial>>,
     loaded: bool,
     quad: Handle<Mesh>,
     size: f32,
@@ -394,6 +396,8 @@ pub fn update(
         _ => None,
     }).collect();
     let mut focused: Vec<u32> = sel.hover.and_then(|id| w.actor(id)).and_then(|a| a.org).into_iter().collect();
+    // the dragged box's candidates (0x4371A0: view flag 0x8000)
+    focused.extend(sel.box_candidates.iter().filter_map(|u| if let Unit::Org(o) = u { Some(*o) } else { None }));
     for u in &b.selection {
         match u {
             Unit::Org(o) => focused.push(*o),
@@ -412,6 +416,7 @@ pub fn update(
         None => None,
     };
     art.selected = None;
+    art.by_org.clear();
     // an organization the local kingdom does not see has no banner
     for o in w.orgs.iter().filter(|o| o.alive && aa_play::fog::org_visible(w, o.id, Some(b.local))) {
         let def = w.data.def(o.def);
@@ -489,6 +494,9 @@ pub fn update(
         let m = art.material(data, &key, &mut images, &mut materials);
         if shown_org == Some(o.id) {
             art.selected = Some(m.clone());
+        }
+        if selected.contains(&o.id) {
+            art.by_org.insert(o.id, m.clone());
         }
         // constant screen size (banner_focus_vfx constant_screen_size; the
         // original banners keep their screen size over the zoom range, see

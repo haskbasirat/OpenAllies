@@ -184,10 +184,49 @@ pub struct CompanyInfo {
     pub properties: Vec<String>,
 }
 
+/// One object of a GroupDisplay (SetSelection `0x6296C0`, a mini from `0x625670`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MiniInfo {
+    /// The thing's id: `DisplayObjectSelect <gtid> 0` (`0x6277E0`).
+    pub gtid: u32,
+    pub kind: MiniKind,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum MiniKind {
+    /// SimpleActorMini `0x62AE90`: the icon and the Health bar (`0x628DD0`).
+    Simple { icon: Option<String>, health: f32 },
+    /// CompanyMini `0x62FF20`: the banner as the portrait (`0x62F1B0`), PrimaryHealth
+    /// with a leader, Morale and AttackEfficiency with their targets, the members'
+    /// HealthBars (`0x62EB90`), and RetreatRoutButton's command (`0x62D6B0`).
+    Company {
+        org: u32,
+        health: Option<f32>,
+        morale: (f32, f32),
+        attack_efficiency: (f32, f32),
+        bars: Vec<f32>,
+        retreat: Option<String>,
+    },
+}
+
+/// A selection of several objects (GroupDisplay `0x62C3C0`, vtable `0xA5CEB8`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupInfo {
+    /// `0x626310`, of the last object processed.
+    pub name: String,
+    pub owner: Option<OwnerInfo>,
+    /// At most six, in the selection's order.
+    pub minis: Vec<MiniInfo>,
+    /// `0x628490`: the controllable organizations' formations merged, at most three;
+    /// the panel goes when one or none is left.
+    pub formations: Vec<Formation>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum HudSelection {
     None,
     Company(Box<CompanyInfo>),
+    Group(Box<GroupInfo>),
     /// A selection whose display is not ported yet.
     Unsupported(&'static str),
 }
@@ -380,6 +419,63 @@ fn company_display(ui: &Ui) -> Widget {
     d
 }
 
+/// SimpleActorMini `0x62AE90` over MiniDisplay `0x62AD70` (`0x628940`, icons: its
+/// data says `uses_icon`; DescriptionLabel lies outside the mini's rectangle).
+fn simple_mini() -> Widget {
+    let mut m = w(C::Panel, "SimpleActorMini");
+    let mut pb = w(C::PushButton, "PortraitButton");
+    pb.client_name = "Icon".into();
+    pb.add_child(w(C::Decal, "Icon"));
+    m.add_child(pb);
+    m.add_child(w(C::StatusBar, "Health"));
+    m.set_visible(false);
+    m
+}
+
+/// CompanyMini `0x62FF20`.
+fn company_mini() -> Widget {
+    let mut m = w(C::Panel, "CompanyMini");
+    let mut pb = w(C::PushButton, "PortraitButton");
+    pb.client_name = "ModelPortrait".into();
+    pb.add_child(w(C::Model, "ModelPortrait"));
+    m.add_child(pb);
+    m.add_child(w(C::StatusBar, "PrimaryHealth"));
+    m.add_child(w(C::StatusBar, "Morale"));
+    m.add_child(w(C::StatusBar, "AttackEfficiency"));
+    let mut bars = w(C::Panel, "HealthBars");
+    for _ in 0..9 {
+        let mut b = w(C::Decal, "HealthBarBorder");
+        b.set_visible(false);
+        bars.add_child(b);
+        let mut h = w(C::StatusBar, "Health");
+        h.set_visible(false);
+        bars.add_child(h);
+    }
+    m.add_child(bars);
+    m.add_child(Widget::push_button("RetreatRoutButton", false, ""));
+    m.set_visible(false);
+    m
+}
+
+/// GroupDisplay `0x62C3C0`: Name and Owner (`UIGroupDisplayUseNameLabel`), the
+/// FormationButtons panel, the pools of six SimpleActorMini (ids 0-5), six CompanyMini
+/// (6-11) and six SettlementMini (12-17). No selection of this port holds a settlement.
+fn group_display(ui: &Ui) -> Widget {
+    let mut d = w(C::Panel, "GroupDisplay");
+    if ui.avars.flag("UIGroupDisplayUseNameLabel").unwrap_or(false) {
+        d.add_child(label("Name"));
+        d.add_child(label("Owner"));
+    }
+    d.add_child(formation_buttons());
+    for _ in 0..6 {
+        d.add_child(simple_mini());
+    }
+    for _ in 0..6 {
+        d.add_child(company_mini());
+    }
+    d
+}
+
 /// CompanyUnits `0x62F550`: 9 CompanyUnit statics.
 fn company_units() -> Widget {
     let mut p = w(C::Panel, "CompanyUnits");
@@ -476,6 +572,8 @@ pub struct Hud {
     last_idle_ms: Option<u64>,
     /// Owned sub-displays not in the tree (ObjectDisplay +0x88..+0x94).
     stash: Vec<Widget>,
+    /// GroupDisplay +0x8C: `mini_display_offset`.
+    group_offset: f32,
     selection: Option<&'static str>,
     groups_placed: bool,
     /// Registry IDS the EconomyBar / EconomicImpact children were built for.
@@ -644,6 +742,7 @@ impl Hud {
             last_experience_ms: None,
             last_idle_ms: None,
             stash: Vec::new(),
+            group_offset: 0.0,
             selection: None,
             groups_placed: false,
             built_ids: resource_ids.to_vec(),
@@ -697,6 +796,14 @@ impl Hud {
                 }
             }
             hud.stash.insert(0, cd);
+            let mut gd = group_display(ui);
+            gd.load(&mut ui.store, Some((&n, &root)), Some(10), &resolve);
+            // 0x62C3C0: the panel's data is FormationButtons, its name GroupFormationButtons
+            if let Some(f) = gd.children.iter_mut().find(|c| c.name == "FormationButtons") {
+                f.name = "GroupFormationButtons".into();
+            }
+            hud.group_offset = n.child("GroupDisplay").and_then(|g| g.float("mini_display_offset").ok()).unwrap_or(0.0);
+            hud.stash.push(gd);
         }
         (hud, g)
     }
@@ -1155,6 +1262,7 @@ impl Hud {
         };
         let want: Option<&'static str> = match &sel {
             HudSelection::Company(_) => Some("CompanyDisplay"),
+            HudSelection::Group(_) => Some("GroupDisplay"),
             _ => None,
         };
         if want != self.selection {
@@ -1179,6 +1287,7 @@ impl Hud {
         }
         match sel {
             HudSelection::Company(c) => self.company(ui, &format!("{od}/CompanyDisplay"), &c),
+            HudSelection::Group(g) => self.group(ui, &format!("{od}/GroupDisplay"), &g),
             HudSelection::Unsupported(what) => self.diagnostics_once(&format!("unsupported selection display: {what}")),
             HudSelection::None => {}
         }
@@ -1194,6 +1303,99 @@ impl Hud {
             if let Some(x) = take_child(ui, disp, name) {
                 self.stash.push(x);
             }
+        }
+    }
+
+    /// SetSelection `0x6296C0` and the minis' refresh: each object takes a mini of its
+    /// kind, x = i * floor((width - formation panel width) / 6), y = mini_display_offset.
+    fn group(&mut self, ui: &mut Ui, d: &str, group: &GroupInfo) {
+        let g = ui.geo();
+        ui.set_label(rel(&format!("{d}/Name")), &group.name);
+        let owner = group.owner.as_ref().map(|o| owner_text(ui, o)).unwrap_or_default();
+        ui.set_label(rel(&format!("{d}/Owner")), &owner);
+        let width = |ui: &Ui, p: &str| ui.widget(p).map_or(0.0, |x| (x.root.outer.rect.r - x.root.outer.rect.l) / g.sx);
+        let panel = format!("{d}/GroupFormationButtons");
+        let step = ((width(ui, d) - width(ui, &panel)) * (1.0f32 / 6.0)).floor();
+        let (mut simple, mut company) = (0, 0);
+        for (i, mini) in group.minis.iter().take(6).enumerate() {
+            let x = i as f32 * step;
+            match &mini.kind {
+                MiniKind::Simple { icon, health } => {
+                    let p = format!("{d}/{}", seg("SimpleActorMini", simple));
+                    simple += 1;
+                    ui.with_widget(rel(&p), |w| w.set_visible(true));
+                    ui.set_position(&p, x, self.group_offset);
+                    ui.with_widget(rel(&format!("{p}/PortraitButton")), |w| w.command = Some(format!("DisplayObjectSelect {} 0", mini.gtid)));
+                    set_decal_texture(ui, &format!("{p}/PortraitButton/Icon"), icon.clone());
+                    set_status(ui, &format!("{p}/Health"), *health);
+                }
+                MiniKind::Company { org, health, morale, attack_efficiency, bars, retreat } => {
+                    let p = format!("{d}/{}", seg("CompanyMini", company));
+                    company += 1;
+                    ui.with_widget(rel(&p), |w| w.set_visible(true));
+                    ui.set_position(&p, x, self.group_offset);
+                    ui.with_widget(rel(&format!("{p}/PortraitButton")), |w| w.command = Some(format!("DisplayObjectSelect {} 0", mini.gtid)));
+                    set_model(ui, &format!("{p}/PortraitButton/ModelPortrait"), Some(format!("banner:{org}")));
+                    let has_leader = health.is_some();
+                    ui.with_widget(rel(&format!("{p}/PrimaryHealth")), |w| w.set_visible(has_leader));
+                    if let Some(h) = health {
+                        set_status(ui, &format!("{p}/PrimaryHealth"), *h);
+                    }
+                    set_status(ui, &format!("{p}/Morale"), morale.0);
+                    set_target(ui, &format!("{p}/Morale"), morale.1);
+                    set_status(ui, &format!("{p}/AttackEfficiency"), attack_efficiency.0);
+                    set_target(ui, &format!("{p}/AttackEfficiency"), attack_efficiency.1);
+                    self.mini_bars(ui, &format!("{p}/HealthBars"), bars, g);
+                    let shown = retreat.is_some();
+                    ui.with_widget(rel(&format!("{p}/RetreatRoutButton")), |w| {
+                        w.set_visible(shown);
+                        w.command = retreat.clone();
+                    });
+                }
+            }
+        }
+        for i in simple..6 {
+            ui.with_widget(rel(&format!("{d}/{}", seg("SimpleActorMini", i))), |w| w.set_visible(false));
+        }
+        for i in company..6 {
+            ui.with_widget(rel(&format!("{d}/{}", seg("CompanyMini", i))), |w| w.set_visible(false));
+        }
+        // 0x629845: one formation or none, and the panel goes
+        let forms = group.formations.len() > 1;
+        ui.with_widget(rel(&panel), |w| w.set_visible(forms));
+        ui.layout();
+        if forms {
+            self.formations(ui, &panel, &group.formations, g);
+        }
+    }
+
+    /// HealthBars `0x62EB90`: two bars a row from the border separations, a bar's
+    /// frame around it.
+    fn mini_bars(&mut self, ui: &mut Ui, p: &str, bars: &[f32], g: k::Geo) {
+        let Ok(node) = ui.store.node("UI/Game/object_display.tgi:ObjectDisplay/GroupDisplay/CompanyMini/HealthBars") else { return };
+        let f = |k: &str| node.float(k).unwrap_or(0.0);
+        let (sep, hb, vb) = (f("bar_separation"), f("horizontal_border_separation"), f("vertical_border_separation"));
+        let health = |i: usize| format!("{p}/{}", seg("Health", i));
+        let border = |i: usize| format!("{p}/{}", seg("HealthBarBorder", i));
+        let (bw, bh) = ui.widget(&health(0)).map_or((0.0, 0.0), |x| ((x.root.outer.rect.r - x.root.outer.rect.l) / g.sx, (x.root.outer.rect.b - x.root.outer.rect.t) / g.sy));
+        let (mut x, mut y, mut first) = (hb, vb, true);
+        for i in 0..9 {
+            let shown = i < bars.len();
+            ui.with_widget(rel(&health(i)), |w| w.set_visible(shown));
+            ui.with_widget(rel(&border(i)), |w| w.set_visible(shown));
+            if !shown {
+                continue;
+            }
+            ui.set_position(&health(i), x, y);
+            ui.set_position(&border(i), (x - hb).max(0.0), (y - vb).max(0.0));
+            set_status(ui, &health(i), bars[i]);
+            if first {
+                x += bw + sep;
+            } else {
+                x = hb;
+                y += bh + sep;
+            }
+            first = !first;
         }
     }
 

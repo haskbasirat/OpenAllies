@@ -285,7 +285,8 @@ pub fn update(
     let mut focus: Vec<(Handle<StandardMaterial>, Transform)> = Vec::new();
     let now = time.elapsed_secs();
     let lit = flash.actors.iter().filter(|(_, s)| flash.lit(**s, now)).map(|(a, _)| *a);
-    for id in sel.hover.filter(|_| !sel.hover_banner).into_iter().chain(lit) {
+    let boxed = sel.box_candidates.iter().filter_map(|u| if let Unit::Actor(a) = u { Some(*a) } else { None });
+    for id in sel.hover.filter(|_| !sel.hover_banner).into_iter().chain(lit).chain(boxed) {
         if let (Some(a), Some((pos, children))) = (w.actor(id), by_id.get(&id)) {
             let building = w.data.def(a.def).class == Some(aa_play::DefClass::Building);
             let relation = aa_play::setup::relation(w, Some(b.local), a.kingdom) as usize;
@@ -420,7 +421,7 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
                 // the commands' cursor_ids (Data/Game/actor_commands*.tgi)
                 Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) => return "move".into(),
                 Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
-                Some(crate::ui::hud::TargetOrder::Guard) | Some(crate::ui::hud::TargetOrder::AttachHq) => return "guard".into(),
+                Some(crate::ui::hud::TargetOrder::Guard) => return "guard".into(),
                 // bombard.tgi cursor_ids, and cursor_invalid_ids while the
                 // point is out of the first selected object's reach
                 // (0x620C30: command type 1 only); actor_commands.tgi repair

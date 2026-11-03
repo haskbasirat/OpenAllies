@@ -177,8 +177,8 @@ fn placement_impact(mut front: ResMut<front::Front>, place: Option<Res<placement
 /// This frame's game event effects (ui/game_events.rs): the messages'
 /// type sounds and the events' sounds to the sound queue (2-D, or at the
 /// event's ground point), their pings to the minimap. The front end's UI
-/// sounds (`Front::sounds`) join them as 2-D sounds; the sound manager only
-/// exists in a battle, so in the menus they are dropped.
+/// sounds (`Front::sounds`) join them as 2-D sounds, for the battle's sound manager
+/// or the menus' (audio/mod.rs `menu_sound`).
 fn game_event_fx(
     mut front: ResMut<front::Front>,
     mut art: ResMut<minimap::MinimapArt>,
@@ -187,9 +187,7 @@ fn game_event_fx(
 ) {
     let front = &mut *front;
     let ui_sounds = std::mem::take(&mut front.sounds);
-    if battle.is_some()
-        && let Some(q) = sfx.as_mut()
-    {
+    if let Some(q) = sfx.as_mut() {
         for ids in ui_sounds {
             q.play.push(crate::audio::Sfx { ids, place: crate::audio::Place::Global, owner: None, voice: None, looping: false });
         }

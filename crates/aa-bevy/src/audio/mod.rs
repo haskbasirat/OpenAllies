@@ -79,8 +79,101 @@ impl Plugin for SoundPlugin {
                     voices.after(crate::input::battle_input).before(crate::session::step_battle),
                     voices_consumed.after(crate::session::step_battle),
                     update.after(crate::effects::EffectsSet).run_if(in_state(AppState::Battle)),
+                    menu_sound.after(crate::ui::front::frame),
                 ),
             );
+    }
+}
+
+/// The sound of the interfaces outside a battle. `interface_music` of an interface
+/// (`0x5C0B50`, Interface +0xB0: `UI/Menus/main.tgi` main_title_music) plays when it
+/// shows; a NULL keeps what is playing, so the title music goes on through single
+/// player, staging and credits, and the game's silent interface ends it. The buttons'
+/// `set_sound` and the other UI sounds come through [`SfxQueue`].
+#[derive(Resource)]
+struct MenuSound {
+    manager: Manager,
+    files: Files,
+    music: bool,
+}
+
+struct NoWorld;
+impl manager::World for NoWorld {
+    fn object_position(&self, _object: u64) -> Option<Vec3> {
+        None
+    }
+    fn relation(&self, _kingdom: Option<u32>) -> Option<u32> {
+        None
+    }
+}
+
+static MENU_DEFS: std::sync::OnceLock<Option<Arc<std::collections::BTreeMap<String, crate::effects::data::AudioDef>>>> = std::sync::OnceLock::new();
+
+/// The user's volumes as the options dialog leaves them.
+fn user_volumes(ui: &aa_ui::ui::Ui, manager: &mut Manager) {
+    let v = &ui.uvars;
+    manager.set_user_volumes(v.get_f32("AudioMainVolume"), v.get_f32("Audio2DVolume"), v.get_f32("Audio3DVolume"), v.get_f32("AudioSpeechVolume"), v.get_f32("AudioMusicVolume"));
+}
+
+#[allow(clippy::too_many_arguments)]
+fn menu_sound(
+    mut commands: Commands,
+    time: Res<Time>,
+    state: Res<State<AppState>>,
+    front: Option<Res<crate::ui::front::Front>>,
+    output: Option<Res<Output>>,
+    menu: Option<ResMut<MenuSound>>,
+    mut queue: ResMut<SfxQueue>,
+    mut started: Local<bool>,
+) {
+    use crate::ui::front::Page;
+    let Some(front) = front else { return };
+    let in_battle = *state.get() == AppState::Battle;
+    let Some(mut menu) = menu else {
+        if in_battle {
+            return;
+        }
+        let Some(reconstruction) = crate::effects::reconstruction_root() else { return };
+        if !*started {
+            *started = true;
+            crate::preload::sounds_request(reconstruction.clone());
+            let install = reconstruction.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            std::thread::spawn(move || {
+                let defs = crate::effects::data::load_audio(&install).map_err(|e| warn!("sound: the menus' definitions: {e:#}")).ok();
+                let _ = MENU_DEFS.set(defs.map(Arc::new));
+            });
+        }
+        let (Some(bank), Some(Some(defs)), Some(output)) = (crate::preload::sounds_ready(), MENU_DEFS.get(), output) else {
+            queue.play.clear();
+            return;
+        };
+        let manager = Manager::new(bank.vars.clone(), defs.clone(), output.0.clone());
+        commands.insert_resource(MenuSound { manager, files: Files::new(&reconstruction, Some(bank)), music: false });
+        return;
+    };
+    let menu = &mut *menu;
+    let world = NoWorld;
+    menu.files.poll();
+    user_volumes(&front.ui, &mut menu.manager);
+    let music = !in_battle && front.page != Page::Loading && front.page != Page::Game;
+    if !music && menu.music {
+        menu.manager.stop_all();
+        menu.music = false;
+    }
+    if music && !menu.music && front.page == Page::MainMenu {
+        menu.music = true;
+        let id = menu.manager.play("main_title_music", Place::Global, None, None, true, &world);
+        info!("sound: interface music main_title_music, {id:?}");
+    }
+    if !in_battle {
+        for s in std::mem::take(&mut queue.play) {
+            menu.manager.play(&s.ids, s.place, s.owner, s.voice, s.looping, &world);
+        }
+        queue.stop.clear();
+    }
+    menu.manager.update(time.elapsed_secs_f64(), None, &mut menu.files, &world);
+    for m in menu.manager.missing.drain(..) {
+        warn!("sound: {m}");
     }
 }
 
@@ -346,6 +439,15 @@ fn voices(battle: Option<Res<Battle>>, data: Option<Res<FxData>>, mut queue: Res
         let (kingdom, units, aggressive) = match c {
             Command::Move { kingdom, units, attack_move, .. } => (*kingdom, units, *attack_move),
             Command::Attack { kingdom, units, .. } => (*kingdom, units, true),
+            // 0x61EEF0: the attack voice when the target is hostile (vt+0x140),
+            // else the move voice; the voice of the selection's 0x436600 object
+            Command::Hot { kingdom, units, target, .. } => {
+                let hostile = target.and_then(|t| match t {
+                    Unit::Org(o) => world.orgs.get(o as usize).map(|o| o.kingdom),
+                    Unit::Actor(a) => world.actor(a).and_then(|a| a.kingdom),
+                });
+                (*kingdom, units, aa_play::setup::relation(world, Some(*kingdom), hostile) == aa_play::books::ENEMY && target.is_some())
+            }
             _ => continue,
         };
         if kingdom != battle.local {
@@ -378,6 +480,7 @@ fn update(
     sound: Option<ResMut<Sound>>,
     mut queue: ResMut<SfxQueue>,
     cameras: Query<&crate::camera::NativeCamera>,
+    front: Res<crate::ui::front::Front>,
 ) {
     let (Some(battle), Some(data), Some(output)) = (battle, data, output) else {
         queue.play.clear();
@@ -421,6 +524,7 @@ fn update(
     let world = &battle.world;
     let bw = BattleWorld { world, local: battle.local, objects: queue.objects.clone() };
     sound.files.poll();
+    user_volumes(&front.ui, &mut sound.manager);
     // 4F96D0 first-tick music: the local player's nation game_music, looping.
     if !sound.music_started {
         sound.music_started = true;

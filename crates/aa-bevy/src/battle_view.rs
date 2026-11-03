@@ -36,6 +36,7 @@ impl Plugin for BattleViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, sync_actors.run_if(in_state(crate::session::AppState::Battle)));
         app.add_systems(Update, draw_ghost.after(crate::input::battle_input).run_if(in_state(crate::session::AppState::Battle)));
+        app.init_resource::<ActorTints>().add_systems(Update, (crate::effects::publish_tints.after(crate::effects::EffectsSet), apply_tints.after(crate::effects::publish_tints)).run_if(in_state(crate::session::AppState::Battle)));
         app.add_systems(OnExit(crate::session::AppState::Battle), leave_battle);
     }
 }
@@ -823,6 +824,7 @@ fn corpse_sink(world: &World, actor: &aa_play::Actor, tables: Option<&crate::eff
 /// One drawn actor: a parent with its transform and one child per model mesh.
 #[derive(Component)]
 pub struct ActorView {
+    // (see `apply_tints` for the parts' tinted materials)
     pub id: ActorId,
     rig: Option<Arc<Rig>>,
     parts: Vec<Entity>,
@@ -834,6 +836,60 @@ pub struct ActorView {
     up: (Vec3, Vec3),
     tick: u64,
     look: Look,
+}
+
+/// The actors' colours from VFXTintModifier (`effects::publish_tints`, `0x717E40`).
+#[derive(Resource, Default)]
+pub struct ActorTints(pub HashMap<ActorId, [f32; 3]>);
+
+/// A part wearing a copy of its material with the actor's tint.
+#[derive(Component)]
+struct TintedPart {
+    plain: Handle<OriginalMaterial>,
+    tinted: Handle<OriginalMaterial>,
+}
+
+/// The tint multiplies the material's colours (`0x717E40`): each part of a tinted
+/// actor gets its own copy for as long as the tint lasts.
+fn apply_tints(mut commands: Commands, tints: Res<ActorTints>, views: Query<&ActorView>, mut parts: Query<(&mut MeshMaterial3d<OriginalMaterial>, Option<&TintedPart>)>, mut materials: ResMut<Assets<OriginalMaterial>>, mut any: Local<bool>) {
+    if tints.0.is_empty() && !*any {
+        return;
+    }
+    *any = !tints.0.is_empty();
+    for view in &views {
+        let tint = tints.0.get(&view.id);
+        for &p in &view.parts {
+            let Ok((mut mat, tinted)) = parts.get_mut(p) else { continue };
+            match (tint, tinted) {
+                (Some(c), None) => {
+                    let Some(mut copy) = materials.get(&mat.0).cloned() else { continue };
+                    let plain = mat.0.clone();
+                    let p3 = Vec4::new(c[0], c[1], c[2], 1.0);
+                    copy.extension.params.ambient *= p3;
+                    copy.extension.params.diffuse *= p3;
+                    let new = materials.add(copy);
+                    mat.0 = new.clone();
+                    commands.entity(p).insert(TintedPart { plain, tinted: new });
+                }
+                (Some(c), Some(t)) if mat.0 == t.tinted => {
+                    let Some(base) = materials.get(&t.plain).map(|m| (m.extension.params.ambient, m.extension.params.diffuse)) else { continue };
+                    let p3 = Vec4::new(c[0], c[1], c[2], 1.0);
+                    if let Some(mut m) = materials.get_mut(&t.tinted) {
+                        m.extension.params.ambient = base.0 * p3;
+                        m.extension.params.diffuse = base.1 * p3;
+                    }
+                }
+                (None, Some(t)) => {
+                    if mat.0 == t.tinted {
+                        mat.0 = t.plain.clone();
+                    }
+                    materials.remove(&t.tinted);
+                    commands.entity(p).remove::<TintedPart>();
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 /// Native (x, y ground, z up) -> render (x, z, -y).

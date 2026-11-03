@@ -272,6 +272,36 @@ fn a_default_position_moves_a_regiment_and_rallies_a_building() {
     assert_eq!(guess(&w, Unit::Org(o), Fields { flags: 0x41c, target: 0 }, false), Some(7));
 }
 
+/// The commands 0x620760 and 0x6210B0 build: the census of real films holds a person's
+/// ground move as 0x1C and an order on a thing as 0x11; a named command adds 0x40.
+#[test]
+fn a_right_press_builds_the_native_flags() {
+    use aa_play::player_orders::native::hot_wire;
+    let (mut w, ids) = world();
+    let o = org(&mut w, ids.regiment, 0, Vec2::new(20.0, 20.0));
+    let e = org(&mut w, ids.regiment, 1, Vec2::new(70.0, 70.0));
+    w.step(vec![]);
+    let p = Vec2::new(40.0, 40.0);
+    let flags = |w: &World, c, t, at, aux, alt| hot_wire(w, c, t, at, aux, alt, false).unwrap().flags;
+    assert_eq!(flags(&w, None, None, Some(p), Some(Vec2::ZERO), false), 0x1c);
+    assert_eq!(flags(&w, None, None, Some(p), None, false), 0x14, "a structure's rally point");
+    assert_eq!(flags(&w, None, Some(Unit::Org(e)), None, None, false), 0x11);
+    assert_eq!(flags(&w, None, None, Some(p), Some(Vec2::Y), true), 0x41c);
+    assert_eq!(flags(&w, Some(5), None, Some(p), Some(Vec2::Y), false), 0x5c);
+    let dragged = hot_wire(&w, None, None, Some(p), Some(Vec2::Y), false, true).unwrap();
+    assert_eq!(dragged.auxiliary, [0, 1.0f32.to_bits()]);
+    assert!(dragged.trailing, "Shift or Ctrl is +0x3C");
+    // without a decree stream the unit still guesses its own command
+    let before = w.actor(w.orgs[o as usize].members[0]).unwrap().pos;
+    w.step(vec![Command::Hot { kingdom: 0, units: vec![Unit::Org(o)], command: None, target: None, at: Some(p), aux: Some(Vec2::Y), alt: false, queue: false }]);
+    for _ in 0..60 {
+        w.step(vec![]);
+    }
+    assert_ne!(w.actor(w.orgs[o as usize].members[0]).unwrap().pos, before);
+    // a selection's change is nothing to the world
+    w.step(vec![Command::Select { kingdom: 0, units: vec![Unit::Org(o)] }]);
+}
+
 /// 0x4DA570 on an actor: repair is hot for a friendly damaged structure, else
 /// move follows; kill is not hot (the move handler 0x527E30 turns it into one).
 #[test]

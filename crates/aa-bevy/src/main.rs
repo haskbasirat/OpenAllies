@@ -8,6 +8,7 @@ mod debug_battle;
 mod effects;
 mod film_record;
 mod model_fixes;
+mod net;
 mod look;
 mod input;
 mod preload;

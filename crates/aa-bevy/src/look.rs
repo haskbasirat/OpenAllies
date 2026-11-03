@@ -29,6 +29,13 @@ pub struct OriginalLook {
     /// The fog texture (always `FOG_IMAGE`).
     #[texture(103)]
     pub fog: Option<Handle<Image>>,
+    /// The terrain's two NiTextureEffects (0x723E00; `params.ground`).
+    #[texture(104)]
+    #[sampler(105)]
+    pub detail: Option<Handle<Image>>,
+    #[texture(106)]
+    #[sampler(107)]
+    pub macro_map: Option<Handle<Image>>,
 }
 
 #[derive(ShaderType, Debug, Clone)]
@@ -43,6 +50,9 @@ pub struct LookParams {
     /// rgb: the stencil shadow multiplier (AVar C0
     /// StencilShadowColorMultiplier, the camera's shadow quad 7016A0).
     pub shadow: Vec4,
+    /// The terrain's texture effects: x and y repeats per metre of the detail and
+    /// macro maps (0 = none).
+    pub ground: Vec4,
 }
 
 impl MaterialExtension for OriginalLook {
@@ -155,7 +165,21 @@ fn params(ambient: [f32; 3], diffuse: [f32; 3], emissive: [f32; 3], alpha: (f32,
         emissive: Vec4::new(emissive[0], emissive[1], emissive[2], 0.0),
         sun: sun_to_light().extend(0.0),
         shadow: Vec4::new(shadow[0], shadow[1], shadow[2], 1.0),
+        ground: Vec4::ZERO,
     }
+}
+
+static NIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 4EE070: the sun's diffuse (+38..+40) adds up below SVar SunNightThreshold. A `nightonly`
+/// VFX is hidden while it is not (4446F0).
+pub fn is_night() -> bool {
+    NIGHT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The world's Sun as 4EE070 reads it.
+pub fn set_sun_for_night(diffuse: [f32; 3]) {
+    NIGHT.store(diffuse[0] + diffuse[1] + diffuse[2] < vars().sun_night_threshold, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// The original's lighting variables (Data/AVars*.tgi, Data/Game/SVars*.tgi
@@ -172,6 +196,8 @@ pub struct OriginalVars {
     /// NiAlphaProperty 0x243 blends ZERO / SRCCOLOR, so a shadowed pixel is
     /// multiplied by this colour).
     pub stencil_shadow_color: [f32; 3],
+    /// SVar SunNightThreshold (4EE070).
+    pub sun_night_threshold: f32,
     /// The new world's Sun from the SVars (4EE1F0 at world init 4F27E0):
     /// SunDirection (normalised by 4453A0), SunDimmer, SunDiffuse,
     /// SunAmbient, SunSpecular.
@@ -186,6 +212,7 @@ impl Default for OriginalVars {
             terrain_diffuse: 1.0,
             sun_dimmer_when_paused: 0.8,
             stencil_shadow_color: [0.7, 0.7, 0.6],
+            sun_night_threshold: 1.6,
             sun: SceneSun { direction: Vec3::new(1.0, 1.0, -2.0).normalize(), diffuse: [1.0; 3], ambient: [1.0; 3], specular: [0.0; 3], dimmer: 1.0 },
         }
     }
@@ -251,6 +278,7 @@ fn read_vars(reconstruction: &std::path::Path) -> Option<OriginalVars> {
     one("terrainambient", &mut vars.terrain_ambient);
     one("terraindiffuse", &mut vars.terrain_diffuse);
     one("sundimmermultiplierwhenpaused", &mut vars.sun_dimmer_when_paused);
+    one("sunnightthreshold", &mut vars.sun_night_threshold);
     three("stencilshadowcolormultiplier", &mut vars.stencil_shadow_color);
     let mut direction = [1.0, 1.0, -2.0];
     three("sundirection", &mut direction);
@@ -346,6 +374,7 @@ pub fn apply_sun(
         Some(([diffuse, ambient, _specular], dimmer)) => (diffuse, ambient, dimmer),
         None => (sun.diffuse, sun.ambient, sun.dimmer),
     };
+    set_sun_for_night(diffuse);
     let dimmer = dimmer * if paused { vars().sun_dimmer_when_paused } else { 1.0 };
     let scaled = |c: [f32; 3]| Color::linear_rgb(c[0] * dimmer, c[1] * dimmer, c[2] * dimmer);
     let colour = scaled(ambient_colour);
@@ -414,13 +443,144 @@ pub fn model_material(m: &aa_assets::Material, texture: Option<Handle<Image>>) -
             metallic: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: look_params, mask: None, fog: Some(FOG_IMAGE) },
+        extension: OriginalLook { params: look_params, mask: None, fog: Some(FOG_IMAGE), detail: None, macro_map: None },
     }
+}
+
+/// The biome's two texture effects (Biome 0x4B8E80: `detail_texture` +0x88 with
+/// `detail_repetition` +0x90, `macro_texture` +0x8C with `macro_repetition` +0x94).
+/// 0x723E00 makes a NiTextureEffect of each: filter 2, wrap 3 (S and T), mode 0
+/// (projected light), coordinates 0 (world parallel), the matrix `1 / repetition`
+/// on X and Y: one repeat per `repetition` metres of the native ground. A repetition
+/// of 0 is 0.8 m (0xA16F30) and 80 m (0xA88E50); the shipped biomes give none.
+/// 0x71FAC0 -> 0x71D6A0 attaches them to the terrain's quads while the UVar
+/// TerrainExtraQuality holds (the renderer's stage count gates them too: five stages
+/// for the detail, six for the macro beside it; every card has those now).
+#[derive(Clone, Debug, Default)]
+pub struct GroundMaps {
+    pub detail: Option<Handle<Image>>,
+    pub macro_map: Option<Handle<Image>>,
+    pub detail_per_metre: f32,
+    pub macro_per_metre: f32,
+    /// TerrainExtraQuality.
+    pub on: bool,
+}
+
+/// `<Data>/Terrain/<biome>.tgi` as 0x4B8E80 reads it, with the v14 runtime's files
+/// before the original's; textures are the DDS mip chains of `Data/Textures/Beauty`.
+pub fn load_ground_maps(reconstruction: &std::path::Path, biome: &str, images: &mut Assets<Image>, on: bool) -> GroundMaps {
+    let install = reconstruction.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+    let roots = [install.join("reconstruction/native-game/runtime-expanded-v14/Data"), reconstruction.join("assets/original/Data")];
+    let read = |rel: &str| roots.iter().find_map(|r| std::fs::read(r.join(rel.trim_start_matches('/'))).ok());
+    let mut out = GroundMaps { detail_per_metre: 1.0 / 0.8, macro_per_metre: 1.0 / 80.0, on, ..GroundMaps::default() };
+    let Some(text) = read(&format!("Terrain/{biome}.tgi")).map(|b| String::from_utf8_lossy(&b).into_owned()) else { return out };
+    let value = |key: &str| {
+        text.lines().find_map(|l| {
+            let (k, v) = l.split(";;").next()?.split_once('=')?;
+            (k.trim().eq_ignore_ascii_case(key)).then(|| v.trim().to_owned())
+        })
+    };
+    let mut image = |key: &str| {
+        let path = value(key)?;
+        let bytes = read(&path).or_else(|| read(&path.to_ascii_lowercase()))?;
+        let image = dds_image(&bytes)?;
+        Some(images.add(image))
+    };
+    out.detail = image("detail_texture");
+    out.macro_map = image("macro_texture");
+    let repetition = |key: &str, default: f32| value(key).and_then(|v| v.parse::<f32>().ok()).filter(|r| *r != 0.0).unwrap_or(default);
+    out.detail_per_metre = 1.0 / repetition("detail_repetition", 0.8);
+    out.macro_per_metre = 1.0 / repetition("macro_repetition", 80.0);
+    out
+}
+
+/// A DXT3 DDS with its mips as an RGBA image that repeats, filtered through its
+/// mips (the effects' filter 2).
+fn dds_image(b: &[u8]) -> Option<Image> {
+    let u = |o: usize| b.get(o..o + 4).map(|v| u32::from_le_bytes([v[0], v[1], v[2], v[3]]));
+    if b.get(0..4)? != b"DDS " || b.get(84..88)? != b"DXT3" {
+        return None;
+    }
+    let (height, width, mips) = (u(12)? as usize, u(16)? as usize, u(28)?.max(1) as usize);
+    let mut data = Vec::new();
+    let mut at = 128;
+    let (mut w, mut h) = (width, height);
+    let mut levels = 0;
+    for _ in 0..mips {
+        let (bw, bh) = (w.div_ceil(4), h.div_ceil(4));
+        let size = bw * bh * 16;
+        let blocks = b.get(at..at + size)?;
+        let mut level = vec![0u8; w * h * 4];
+        for by in 0..bh {
+            for bx in 0..bw {
+                let block = &blocks[(by * bw + bx) * 16..][..16];
+                let c0 = u16::from_le_bytes([block[8], block[9]]);
+                let c1 = u16::from_le_bytes([block[10], block[11]]);
+                let rgb = |c: u16| [i32::from(c >> 11 & 31) * 255 / 31, i32::from(c >> 5 & 63) * 255 / 63, i32::from(c & 31) * 255 / 31];
+                let (a, d) = (rgb(c0), rgb(c1));
+                let colours = [a, d, [(2 * a[0] + d[0]) / 3, (2 * a[1] + d[1]) / 3, (2 * a[2] + d[2]) / 3], [(a[0] + 2 * d[0]) / 3, (a[1] + 2 * d[1]) / 3, (a[2] + 2 * d[2]) / 3]];
+                let bits = u32::from_le_bytes([block[12], block[13], block[14], block[15]]);
+                let alpha = u64::from_le_bytes([block[0], block[1], block[2], block[3], block[4], block[5], block[6], block[7]]);
+                for py in 0..4 {
+                    for px in 0..4 {
+                        let (x, y) = (bx * 4 + px, by * 4 + py);
+                        if x >= w || y >= h {
+                            continue;
+                        }
+                        let i = py * 4 + px;
+                        let c = colours[(bits >> (2 * i) & 3) as usize];
+                        let o = (y * w + x) * 4;
+                        level[o] = c[0] as u8;
+                        level[o + 1] = c[1] as u8;
+                        level[o + 2] = c[2] as u8;
+                        level[o + 3] = ((alpha >> (4 * i) & 15) * 17) as u8;
+                    }
+                }
+            }
+        }
+        data.extend_from_slice(&level);
+        at += size;
+        levels += 1;
+        if w == 1 && h == 1 {
+            break;
+        }
+        (w, h) = ((w / 2).max(1), (h / 2).max(1));
+    }
+    use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
+    let mut image = Image::new(
+        bevy::render::render_resource::Extent3d { width: width as u32, height: height as u32, depth_or_array_layers: 1 },
+        bevy::render::render_resource::TextureDimension::D2,
+        data[..width * height * 4].to_vec(),
+        bevy::render::render_resource::TextureFormat::Rgba8Unorm,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    );
+    image.data = Some(data);
+    image.texture_descriptor.mip_level_count = levels;
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        address_mode_w: ImageAddressMode::Repeat,
+        mag_filter: ImageFilterMode::Linear,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        ..ImageSamplerDescriptor::default()
+    });
+    Some(image)
+}
+
+/// `LookParams::ground` of these maps.
+pub fn ground_params(ground: &GroundMaps) -> Vec4 {
+    Vec4::new(
+        if ground.on && ground.detail.is_some() { ground.detail_per_metre } else { 0.0 },
+        if ground.on && ground.macro_map.is_some() { ground.macro_per_metre } else { 0.0 },
+        0.0,
+        0.0,
+    )
 }
 
 /// One terrain layer: the variation texture, and for transitions the
 /// original mask with its compositor rows. `order` stacks layers.
-pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: Option<(Handle<Image>, [[f32; 4]; 2])>, order: usize) -> OriginalMaterial {
+pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: Option<(Handle<Image>, [[f32; 4]; 2])>, order: usize, ground: &GroundMaps) -> OriginalMaterial {
     let overlay = mask.is_some();
     // 723E00: the terrain's NiMaterialProperty is white (B322A4) times
     // TerrainAmbient / TerrainDiffuse, no specular or emissive (B43E68)
@@ -431,6 +591,7 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
         p.mask_v = Vec4::from_array(rows[1]);
         p.flags.x = 1.0;
     }
+    p.ground = ground_params(ground);
     OriginalMaterial {
         base: StandardMaterial {
             base_color: Color::srgba(color[0], color[1], color[2], 1.0),
@@ -442,7 +603,7 @@ pub fn terrain_material(texture: Option<Handle<Image>>, color: [f32; 4], mask: O
             reflectance: 0.0,
             ..default()
         },
-        extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE) },
+        extension: OriginalLook { params: p, mask: mask.map(|m| m.0), fog: Some(FOG_IMAGE), detail: ground.detail.clone(), macro_map: ground.macro_map.clone() },
     }
 }
 

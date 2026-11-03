@@ -63,6 +63,11 @@ pub fn load_status() -> &'static str {
     LOAD_STATUS.lock().map(|s| *s).unwrap_or("app_status_loading_data")
 }
 
+/// A session's launch: the kingdom of the local player (`crate::net`), none
+/// for an observer. Without it the local kingdom is the first.
+#[derive(Resource, Clone, Debug)]
+pub struct PendingLocalKingdom(pub Option<KingdomId>);
+
 /// The running battle.
 #[derive(Resource)]
 pub struct Battle {
@@ -104,6 +109,10 @@ pub struct Battle {
     /// Seconds to the next admin tick (Admin+0x28C, 1/16 s of real time, not
     /// scaled by the game speed).
     admin_clock: f32,
+    /// A LAN session runs this battle (`crate::net`): its frame driver gives
+    /// the world ticks and the decrees give the commands. (Appended by the
+    /// multiplayer owner.)
+    pub lan: Option<crate::net::game::Link>,
 }
 
 /// No kingdom: the value of [`Battle::local`] without a view kingdom.
@@ -111,7 +120,7 @@ pub const NO_KINGDOM: KingdomId = KingdomId::MAX;
 
 impl Battle {
     pub fn new(world: World, local: KingdomId) -> Self {
-        Self { world, local, selection: Vec::new(), pending: Vec::new(), paused: false, speed: 1.0, accumulator: 0.0, frame_events: Vec::new(), observer: false, film: None, film_events: Vec::new(), recorder: None, admin_clock: 0.0 }
+        Self { world, local, selection: Vec::new(), pending: Vec::new(), paused: false, speed: 1.0, accumulator: 0.0, frame_events: Vec::new(), observer: false, film: None, film_events: Vec::new(), recorder: None, admin_clock: 0.0, lan: None }
     }
 
     /// The player's kingdom (0x5C0E30): none while observing.
@@ -219,6 +228,40 @@ pub fn art_folder(data_folder: &std::path::Path) -> Option<std::path::PathBuf> {
     Some(own_profile()?.join("art").join(key))
 }
 
+/// The art of a data folder is not converted yet: its conversion starts in the background
+/// (one at a time per folder, `<art>/converting.log` says how far it is) and the next
+/// battle on the folder draws it. This one draws what the stock art holds. The profile's
+/// data is only read. Without the exporter or a Python this says so and goes on.
+pub fn convert_art(reconstruction: &std::path::Path, folder: &std::path::Path, art: &std::path::Path) {
+    let Some(script) = reconstruction.parent().map(|game| game.join("rust-rebuild/research/film-sources/convert_overlay.py")).filter(|s| s.is_file()) else {
+        warn!("film: the art of {} is not converted and the converter is not at hand; what the folder alone holds is not drawn", folder.display());
+        return;
+    };
+    let log = art.join("converting.log");
+    // A conversion under way writes its log; one that died an hour ago does not stop the next.
+    let running = std::fs::metadata(&log).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() < 3600);
+    if running {
+        info!("film: the art of {} is being converted, see {}", folder.display(), log.display());
+        return;
+    }
+    let started = std::fs::create_dir_all(art).and_then(|_| std::fs::File::create(&log)).and_then(|out| {
+        let err = out.try_clone()?;
+        let mut command = std::process::Command::new("python");
+        command.arg(&script).arg(folder).arg(art).stdin(std::process::Stdio::null()).stdout(out).stderr(err);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS: the battle keeps the machine.
+            command.creation_flags(0x0800_0000 | 0x0000_4000);
+        }
+        command.spawn()
+    });
+    match started {
+        Ok(child) => info!("film: converting the art of {} in the background (process {}); the next battle on it draws it", folder.display(), child.id()),
+        Err(e) => warn!("film: the art of {} is not converted, what the folder alone holds is not drawn; the converter did not start: {e}", folder.display()),
+    }
+}
+
 /// The float clamp of `0x76F370`.
 fn clamp_speed(v: f32, lo: f32, hi: f32) -> f32 {
     if v < lo {
@@ -245,6 +288,14 @@ pub struct PendingFilm(pub std::sync::Mutex<Option<(World, FilmPlayer)>>);
 /// Fixed 16 Hz simulation, decoupled from the frame rate.
 pub fn step_battle(time: Res<Time>, battle: Option<ResMut<Battle>>) {
     let Some(mut battle) = battle else { return };
+    // a LAN battle: the session's frame driver (0x75CA70) runs it
+    if battle.lan.is_some() {
+        let before = battle.world.clock.tick;
+        crate::net::game::step(&mut battle);
+        // the drawing between ticks (`tick_fraction`)
+        battle.accumulator = if battle.world.clock.tick != before { 0.0 } else { battle.accumulator + time.delta_secs() * battle.speed };
+        return;
+    }
     battle.frame_events.clear();
     // an observer has no kingdom to give orders for (0x61EE60)
     if battle.local_kingdom().is_none() {
@@ -266,8 +317,13 @@ pub fn step_battle(time: Res<Time>, battle: Option<ResMut<Battle>>) {
             recorder.admin_tick();
         }
     }
+    // Natively the world ticks on its own thread and none is dropped: the admin clock
+    // (0x755290, 0x76B780) keeps the game time it owes, however long the frames take.
+    // Here they share the frame: eight ticks at least, then as many as 50 ms hold, and
+    // what is left waits for the next frame, up to two seconds of play.
+    let started = std::time::Instant::now();
     let mut steps = 0;
-    while battle.accumulator >= aa_play::DT && steps < 8 {
+    while battle.accumulator >= aa_play::DT && (steps < 8 || started.elapsed().as_secs_f32() < 0.05) {
         battle.accumulator -= aa_play::DT;
         let commands = std::mem::take(&mut battle.pending);
         // a film's world tick: its record, then the update (0x752AE0); the
@@ -285,8 +341,9 @@ pub fn step_battle(time: Res<Time>, battle: Option<ResMut<Battle>>) {
         battle.world.events = events;
         steps += 1;
     }
-    if steps == 8 {
-        battle.accumulator = 0.0;
+    let owed = 2.0 * battle.speed;
+    if battle.accumulator > owed {
+        battle.accumulator = owed;
     }
 }
 

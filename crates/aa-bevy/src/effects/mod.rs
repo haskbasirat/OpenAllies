@@ -156,7 +156,7 @@ pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded>
     let mut l = load(&ids)?;
     // The node tables of the models whose effects sit at bones.
     let at_bones = |fx: &data::ActorFx| {
-        let lists = [&fx.created, &fx.destroyed, &fx.health, &fx.selected, &fx.constructed, &fx.start_moving, &fx.stop_moving];
+        let lists = [&fx.created, &fx.destroyed, &fx.health, &fx.selected, &fx.constructed, &fx.start_moving, &fx.stop_moving, &fx.enter, &fx.leave];
         lists.iter().any(|l| l.iter().any(|f| !f.location.is_empty())) || fx.weapons.iter().any(|w| w.start.iter().chain(&w.do_).chain(&w.end).any(|f| !f.location.is_empty()))
     };
     let models: Vec<String> = things.iter().filter(|(id, _)| l.tables.actors.get(&id.to_ascii_lowercase()).is_some_and(at_bones)).filter_map(|(_, m)| m.clone()).collect();
@@ -179,6 +179,74 @@ pub fn preload(things: &[(String, Option<String>)]) -> anyhow::Result<Preloaded>
 /// The effect texture array of the run (kept across battles).
 #[derive(Resource)]
 struct FxAtlas(Handle<Image>);
+
+/// A VFXTintModifier running on an actor (`0x449920`).
+struct ActorTint {
+    actor: ActorId,
+    ids: String,
+    color: [f32; 3],
+    enhance: f32,
+    fade: f32,
+    max: f32,
+    repeating: bool,
+    /// View +0xC8 and +0xD0: when the way up, and down, began.
+    enhance_from: Option<f32>,
+    fade_from: Option<f32>,
+}
+
+impl ActorTint {
+    /// The percentage of `0x449920`'s type 1.
+    fn step(&mut self, now: f32) -> f32 {
+        let mut pct = self.max;
+        if let Some(from) = self.fade_from {
+            pct = self.max - (now - from) / self.fade.max(1e-6);
+            if self.repeating && pct <= 0.0 {
+                self.fade_from = None;
+                pct = 0.0;
+                self.enhance_from = (self.enhance > 0.0).then_some(now);
+            }
+        }
+        if let Some(from) = self.enhance_from {
+            pct = (now - from) / self.enhance.max(1e-6);
+            if pct <= 0.0 {
+                pct = 0.0001;
+            }
+            if self.max < pct {
+                self.enhance_from = None;
+                self.fade_from = (self.fade > 0.0).then_some(now);
+                pct = self.max;
+            }
+        }
+        pct.clamp(0.0, 1.0)
+    }
+}
+
+/// What the tints leave to the battle view this frame.
+pub fn publish_tints(state: Option<ResMut<FxState>>, mut out: ResMut<crate::battle_view::ActorTints>) {
+    let Some(mut state) = state else {
+        if !out.0.is_empty() {
+            out.0.clear();
+        }
+        return;
+    };
+    let now = state.time;
+    out.0 = state.tint_colours(now);
+}
+
+/// An actor state (0x477FC0's names) as the world holds it; `false` for what it does
+/// not hold yet.
+fn actor_state(world: &aa_play::World, a: &aa_play::Actor, state: &str) -> bool {
+    use aa_play::Activity;
+    match state {
+        "structure_packing" => a.activity == Activity::Packing,
+        "structure_unpacking" => a.activity == Activity::Unpacking,
+        // 0x4D1490: Actor +100 bit 21, under construction, until it is whole
+        "construction" | "active_construction" => world.books.actor(a.id).is_some_and(|b| b.constructing),
+        "under_siege" => aa_play::supply::under_siege(world, a.id),
+        "out_of_supply" => world.books.actor(a.id).is_some_and(|b| b.out_of_supply),
+        _ => false,
+    }
+}
 
 /// The placement's facing arrow (ui::placement::Ghost.arrow).
 fn take_ghost_arrow(ghost: Option<Res<crate::ui::placement::Ghost>>, state: Option<ResMut<FxState>>) {
@@ -593,6 +661,10 @@ pub struct FxState {
     seen: Vec<bool>,
     /// Seen while unpacking: WhenConstructed waits for the end of it.
     unbuilt: HashSet<ActorId>,
+    /// The actor states of a thing with WhenEnter / WhenLeave lists that held last tick.
+    actor_states: HashMap<ActorId, Vec<String>>,
+    /// VFXTintModifier on an actor (`under_siege_vfx`, `out_of_supply_vfx`), by its IDS.
+    tints: Vec<ActorTint>,
     seen_orgs: Vec<bool>,
     frequency: HashMap<(u32, usize), u32>,
     parts: HashMap<(String, [u8; 3]), Slot>,
@@ -731,6 +803,8 @@ fn poll_loading(
         moving: Vec::new(),
         seen: Vec::new(),
         unbuilt: HashSet::new(),
+        actor_states: HashMap::new(),
+        tints: Vec::new(),
         seen_orgs: Vec::new(),
         frequency: HashMap::new(),
         parts: HashMap::new(),
@@ -1067,6 +1141,7 @@ impl FxState {
                     e.player.stop();
                     e.permanent = false;
                 }
+                self.tints.retain(|t| !(Some(t.actor) == ctx.actor && t.ids == fxc.ids));
             }
             "STOP_SFX" => {
                 spawn.sfx.stop.push((fxc.ids.clone(), ctx.actor.map(|a| Place::Object(a as u64))));
@@ -1090,15 +1165,37 @@ impl FxState {
         }
     }
 
+    /// The tints of this frame (`0x449920`, its time the real clock with
+    /// `force_real_time`, flag 26): up over `enhance_duration`, down over
+    /// `fade_duration`, again while `repeating`; the colour is lerp(white, colour, pct)
+    /// (`0x717E40`). Of several on one actor the later one shows.
+    fn tint_colours(&mut self, now: f32) -> HashMap<ActorId, [f32; 3]> {
+        let mut out = HashMap::new();
+        for t in &mut self.tints {
+            let pct = t.step(now);
+            let c = t.color;
+            out.insert(t.actor, [1.0 + (c[0] - 1.0) * pct, 1.0 + (c[1] - 1.0) * pct, 1.0 + (c[2] - 1.0) * pct]);
+        }
+        out
+    }
+
     fn create_vfx(&mut self, fxc: &Fxc, ctx: Ctx, frame: &Frame, spawn: &mut Spawn, list: ListKind) {
+        if let (Some(def), Some(actor)) = (self.tables.vfx.get(&fxc.ids), ctx.actor)
+            && let Some((enhance, fade, max, repeating)) = def.tint
+        {
+            let color = def.color;
+            self.tints.retain(|t| !(t.actor == actor && t.ids == fxc.ids));
+            self.tints.push(ActorTint { actor, ids: fxc.ids.clone(), color, enhance, fade, max, repeating, enhance_from: Some(self.time), fade_from: None });
+            return;
+        }
         let Some(def) = self.tables.vfx.get(&fxc.ids).cloned() else {
             if self.warned.insert(fxc.ids.clone()) {
                 warn!("effects: VFX {} has no definition", fxc.ids);
             }
             return;
         };
-        if def.nightonly {
-            // compare: battle maps are daytime here (no day/night state yet).
+        // 4446F0: hidden while it is not night (4EE070); here looked at when it is made.
+        if def.nightonly && !crate::look::is_night() {
             return;
         }
         let Some((mut placement, attach, position_only)) = self.resolve(fxc, &ctx, frame) else { return };
@@ -1651,6 +1748,20 @@ impl FxState {
         let world = frame.world;
         let (from, to) = (Vec2::new(t.from[0], t.from[1]), Vec2::new(t.to[0], t.to[1]));
         let span = from.distance(to);
+        // a team command flare (572E50): its View's model (`%sActor.nif` / `%sLocation.nif`
+        // of the resource prefix) where it stands, for its time; no time: until the end
+        if span <= 0.0 && t.ids.to_ascii_lowercase().ends_with("_flare") {
+            let team = world.kingdoms.get(t.kingdom as usize).filter(|k| !k.independent).map_or(crate::scene::NEUTRAL_TEAM, |k| k.color);
+            let tables = self.tables.clone();
+            let Some(prefix) = tables.actors.get(&t.ids.to_ascii_lowercase()).and_then(|f| f.resource_prefix.clone()) else { return };
+            let path = format!("{prefix}{}.nif", if t.ids.to_ascii_lowercase().contains("_actor_") { "Actor" } else { "Location" });
+            self.request_model(&path, team, true);
+            self.next_object += 1;
+            let at = to_render(Vec3::new(from.x, from.y, t.from[2]));
+            let end = if t.seconds > 0.0 { self.time + t.seconds } else { f32::MAX };
+            self.planes.push(Plane { key: (model_key(&path, true), team), from: at, dir: Vec3::Z, speed: 0.0, start: self.time, arrive: end, end, entity: None, object: crate::audio::effect_object(self.next_object), shots: 0 });
+            return;
+        }
         if t.seconds <= 0.0 || span <= 0.0 {
             return;
         }
@@ -2055,6 +2166,22 @@ impl FxState {
             let fx = self.fx_of(frame.world, a.def);
             let fx = fx.as_deref();
             lap(0, &mut clock);
+            // The states 0x4D64F0 sets, and their lists (0x4985E0): what entered and left
+            // since the last tick. Only the states the world can tell apart run.
+            if let Some(fx) = fx.filter(|f| !f.enter.is_empty() || !f.leave.is_empty()) {
+                let on: Vec<String> = fx.enter.iter().chain(&fx.leave).map(|f| f.state.clone()).filter(|s| actor_state(frame.world, a, s)).collect();
+                let before = self.actor_states.get(&a.id).cloned().unwrap_or_default();
+                if on != before {
+                    let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
+                    for f in fx.leave.iter().filter(|f| before.contains(&f.state) && !on.contains(&f.state)) {
+                        self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                    }
+                    for f in fx.enter.iter().filter(|f| on.contains(&f.state) && !before.contains(&f.state)) {
+                        self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                    }
+                    self.actor_states.insert(a.id, on);
+                }
+            }
             let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
             if !self.seen[i] {
                 self.seen[i] = true;
@@ -2404,7 +2531,7 @@ impl FxState {
                 return None;
             }
         };
-        let mut material = crate::look::terrain_material(Some(image), [1.0; 4], None, 0);
+        let mut material = crate::look::terrain_material(Some(image), [1.0; 4], None, 0, &crate::look::GroundMaps::default());
         material.base.alpha_mode = AlphaMode::Blend;
         material.base.depth_bias = 0.0;
         let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::RENDER_WORLD);

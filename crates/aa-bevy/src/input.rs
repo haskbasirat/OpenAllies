@@ -33,12 +33,26 @@
 //!   (`0x6409A0`) under the class rule (`0x640A40`); then `0x640FA0`: with
 //!   more than six, the six nearest to the centroid of the selection (or
 //!   of the candidates).
-//! * Right click with own movable units selected: an actor under the
-//!   cursor (any owner) is followed (move with a target,
-//!   `Command::Follow`), otherwise move to the ground point. Over the
-//!   minimap (its widget takes only the left button, `0x5D77A0`) the
-//!   right press reaches the world with the minimap's point (`0x6203F0` ->
-//!   `0x5D74B0`): a move there.
+//! * What is under the cursor (`0x43D240` FindObjectAt): every drawn object
+//!   the ray meets (its model bound and the model's box in model space,
+//!   `0x454AC0` -> `0x715C10`); of those the nearest by the distance from the
+//!   eye to the object's position (`0x436480`, `0x5E05D0`), not to the point
+//!   the ray enters its box, so a soldier in front of a building's box stays
+//!   the soldier. The hover (`0x436650` -> `0x43DC70`) keeps a single selected
+//!   object while the cursor still meets it; a click on it again goes to the
+//!   nearest object behind it (`0x437B20`).
+//! * Right press with a selection (`0x620760`): the default order, no command
+//!   named. The hovered object (through `0x6409A0`, a soldier stands for his
+//!   regiment) is its target and it goes at once. Otherwise the ground point;
+//!   when a selected object has a hot location command that takes a direction
+//!   (`0x620A00`: definition +0x40 and +0x2C bit 5, move) the facing state
+//!   (GameInterface+0xE4, `0x621230`) holds the order until the right button
+//!   comes up: past the drag threshold (`0x688AA0`) `facing_arrow_vfx` stands at
+//!   the press point and the direction follows the cursor (`0x688990`), and the
+//!   release sends it with that direction, or zero (`0x6210B0`). Over the minimap
+//!   (its widget takes only the left button, `0x5D77A0`) the right press reaches
+//!   the world with the minimap's point (`0x6203F0` -> `0x5D74B0`): a zero
+//!   direction at once. Each unit guesses its command on every machine (`0x4DA570`).
 //! * Order feedback (`0x6229F0`): an accepted location order plays
 //!   `move_vfx` at its point (`crate::ui::order_marks`); the unit's
 //!   waypoint flag shows the command given (`order_marks::Issued`).
@@ -89,13 +103,95 @@ pub struct Selecting {
     /// The armed bombard cannot reach the ground point under the cursor
     /// (the cursor_invalid_ids cursor, `0x620C30`).
     pub bombard_invalid: bool,
+    /// The facing state's order while the right button is down.
+    facing: Option<FacingDrag>,
+    /// The replicated selection (what the requests have said).
+    replicated: Vec<Unit>,
+    /// The one thing an armed order is for (a mini's button), not the selection.
+    armed_unit: Option<Unit>,
+    /// Tracker +0x14/+0x18: the last right press.
+    right_press: Vec2,
+    /// The dragged box's candidates (`0x4371A0`).
+    pub box_candidates: Vec<Unit>,
+}
+
+/// The facing drag state GameInterface+0xE4 (ctor `0x6232F0`, vtable `0xA5C580`)
+/// with the order `0x620A90` hands it (+0x38).
+#[derive(Clone, Copy, Debug)]
+struct FacingDrag {
+    /// The order's location (VWorld+0x184 at the press, +0x1B4).
+    at: Vec2,
+    /// Input+0x28 at the press: Alt, and Shift or Ctrl.
+    alt: bool,
+    queue: bool,
+    /// Tracker +0x14/+0x18: the last right press, which `0x688AA0` measures from
+    /// whichever button holds the state.
+    press: Vec2,
+    /// +8: the drag passed the threshold (`0x688AA0`).
+    dragging: bool,
+    /// +0x0C: the direction (`0x688990`, `0x44B600`).
+    aim: Vec2,
+    /// +0x34: the left button holds it: an action button's order (`0x6229F0`).
+    left: bool,
+    /// The ActorCommand an action button named, and its waypoint flag.
+    command: Option<(u32, &'static str)>,
+}
+
+/// What `0x620760` sends over the world or the minimap.
+fn send_hot(b: &mut Battle, target: Option<Unit>, at: Option<Vec2>, aux: Option<Vec2>, alt: bool, queue: bool) {
+    let units = b.selection.iter().rev().copied().collect();
+    let kingdom = b.local;
+    b.pending.push(Command::Hot { kingdom, units, command: None, target, at, aux, alt, queue });
+}
+
+/// 0x61E150 -> `0x436950`: some selected object of the local kingdom takes this
+/// default order (`0x4CF430`: its guess `0x4DA570`, then vt+0x154).
+fn can_send_hot(b: &Battle, target: Option<Unit>, at: bool, aux: bool, alt: bool) -> bool {
+    let mut flags = 0x10;
+    if at {
+        flags |= 4;
+    }
+    if aux {
+        flags |= 8;
+    }
+    if alt {
+        flags |= 0x400;
+    }
+    let mut word = 0;
+    if let Some(t) = target {
+        let Some(g) = aa_play::player_orders::native::gtid_of_unit(&b.world, t) else { return false };
+        flags |= 1;
+        word = g;
+    }
+    let fields = aa_play::orders::guess::Fields { flags, target: word };
+    b.selection.iter().any(|u| unit_kingdom(b, *u) == Some(b.local) && aa_play::orders::guess::guess(&b.world, *u, fields, false).is_some())
+}
+
+fn unit_kingdom(b: &Battle, u: Unit) -> Option<aa_play::KingdomId> {
+    match u {
+        Unit::Org(o) => b.world.orgs.get(o as usize).map(|o| o.kingdom),
+        Unit::Actor(a) => b.world.actor(a).and_then(|a| a.kingdom),
+    }
+}
+
+/// `0x620A00`: a selected object has a command that a location can start
+/// (definition +0x40) and that takes a direction (+0x2C bit 5), so the right
+/// press waits for its drag.
+fn takes_direction(b: &Battle) -> bool {
+    use aa_play::orders::guess::{DEFINITION_COUNT, action_bits, requirement, row};
+    b.selection.iter().any(|u| {
+        let bits = action_bits(&b.world, *u);
+        (0..DEFINITION_COUNT).any(|i| bits >> i & 1 != 0 && row(i).hot_location && row(i).requirements & requirement::AUXILIARY != 0)
+    })
 }
 
 /// A pickable actor this frame.
 struct Pick {
     id: ActorId,
-    /// Distance along the cursor ray (hit) or None.
-    dist: Option<f32>,
+    /// The cursor ray meets the object (`0x454AC0`).
+    hit: bool,
+    /// The eye to the object's position (`0x436480`).
+    dist: f32,
     /// Screen position (physical pixels) of the actor's origin.
     screen: Option<Vec2>,
     /// Screen rectangle (physical pixels) of its model bounds, when a box
@@ -223,6 +319,42 @@ fn select_one(b: &mut Battle, class: &mut u32, u: Unit) {
 /// `0x640B20`: the object's class fits the selection's.
 fn compatible(b: &Battle, class: u32, u: Unit) -> bool {
     class == 0 || class_bits(b, u, class) != 0
+}
+
+/// `0x4367A0` over the release or the dragged rectangle: every drawn object whose model
+/// reaches into it, through its regiment (`0x6409A0`), targetable (`0x5C19E0` ->
+/// `0x45B470`), under the class rule (`0x640A40`), head-inserted. The hovered object
+/// `0x4377B0` also takes is never there: the box state's vt+0x20 turns the hover off
+/// (`0x5C1E70`).
+fn box_candidates(b: &Battle, picks: &[Pick], lo: Vec2, hi: Vec2) -> Vec<Unit> {
+    let mut inside: Vec<&Pick> = picks
+        .iter()
+        .filter(|pk| pk.rect.or(pk.screen.map(|s| (s, s))).is_some_and(|(rlo, rhi)| rlo.x <= hi.x && rlo.y <= hi.y && rhi.x >= lo.x && rhi.y >= lo.y))
+        .collect();
+    // the view list in creation order
+    inside.sort_by_key(|pk| pk.id);
+    let mut candidates: Vec<Unit> = Vec::new();
+    let mut class = 0;
+    for pk in inside {
+        let Some(u) = unit_of(b, pk.id) else { continue };
+        let targetable = match u {
+            Unit::Org(o) => b.world.orgs.get(o as usize).is_some_and(|o| b.world.data.def(o.def).targetable),
+            Unit::Actor(x) => b.world.actor(x).is_some_and(|x| b.world.data.def(x.def).targetable),
+        };
+        if candidates.contains(&u) || !targetable {
+            continue;
+        }
+        let c = class_bits(b, u, class);
+        if c == 0 {
+            continue;
+        }
+        if c > class && c & 0x93 == 0 {
+            candidates.clear();
+        }
+        class = c;
+        candidates.insert(0, u);
+    }
+    candidates
 }
 
 /// `0x640FA0`: select a list under the six-object cap; with more than the
@@ -479,8 +611,27 @@ pub fn battle_input(
                     let m = &b.world.map;
                     requests.look_at = Some(Vec2::new(u * m.width as f32 * m.cell_size, v * m.height as f32 * m.cell_size));
                 }
+                GameAction::SelectThing(gtid) => {
+                    if let Some(u) = b.world.ids.thing(*gtid).and_then(aa_play::ids::unit) {
+                        b.selection = vec![u];
+                    }
+                }
+                GameAction::OrderFor { gtid, order } => {
+                    if let Some(u) = b.world.ids.thing(*gtid).and_then(aa_play::ids::unit) {
+                        b.pending.push(Command::Order { kingdom: local, units: vec![u], order: order.clone() });
+                    }
+                }
+                GameAction::TargetFor { gtid, order } => {
+                    sel.armed_unit = b.world.ids.thing(*gtid).and_then(aa_play::ids::unit);
+                    sel.armed = Some(order.clone());
+                }
                 GameAction::TogglePause => b.paused = !b.paused,
-                GameAction::SetPaused(p) => b.paused = *p,
+                // (the menu's pause is a single player's: a session goes on, 0x76AEE0)
+                GameAction::SetPaused(p) => {
+                    if b.lan.is_none() {
+                        b.paused = *p;
+                    }
+                }
                 GameAction::SetSpeed(s) => b.set_speed_exponent(s.max(1e-6).log2()),
                 GameAction::CameraZoom(z) => requests.zoom = Some(*z),
                 GameAction::SpeedUp => b.speed_step(1.0),
@@ -528,29 +679,49 @@ pub fn battle_input(
     let cursor = front.pointer.pos;
     let _ = &buttons;
     let ray = cursor.and_then(|c| camera.viewport_to_world(cam_tf, c / scale).ok());
-    // pick: the nearest actor whose model bounds the ray crosses
+    // FindObjectAt 0x43D240: every object the ray meets, the nearest by position
     let mut picks = Vec::new();
-    let want_rects = front.pointer.left_released && sel.drag.is_some();
+    let want_rects = sel.drag.is_some();
     for (view, tf, children) in &views {
         let Some(a) = b.world.actor(view.id) else { continue };
         // what the fog hides cannot be picked
         if !a.alive || !crate::ui::fog::drawn(&b, view.id) {
             continue;
         }
-        let mut dist: Option<f32> = None;
+        // 0x715C10: the model's bound sphere, then its box in model space (the
+        // parts' boxes as one: `(model+8)+0x4C` is the whole model's, 0x715D40)
+        let mut hit_model = false;
         if let Some(r) = ray {
+            let at = tf.translation();
+            let mut radius = 0.0f32;
             for child in children.into_iter().flatten() {
                 let Ok((aabb, ptf)) = parts.get(*child) else { continue };
-                let inv = ptf.affine().inverse();
-                let o = inv.transform_point3(r.origin);
-                let d = inv.transform_vector3(*r.direction);
-                let (min, max) = (Vec3::from(aabb.center - aabb.half_extents), Vec3::from(aabb.center + aabb.half_extents));
-                if let Some(t) = slab(o, d, min, max) {
-                    let world_t = (ptf.transform_point(o + d * t) - r.origin).length();
-                    dist = Some(dist.map_or(world_t, |x: f32| x.min(world_t)));
+                let world_centre = ptf.transform_point(Vec3::from(aabb.center));
+                let reach = ptf.affine().matrix3.mul_vec3a(aabb.half_extents).length().max(ptf.affine().transform_vector3a(aabb.half_extents).length());
+                radius = radius.max((world_centre - at).length() + reach * 1.8);
+            }
+            let to = at - r.origin;
+            let along = to.dot(*r.direction);
+            if radius > 0.0 && to.length_squared() - along * along <= radius * radius {
+                let inv = tf.affine().inverse();
+                let mut model: Option<(Vec3, Vec3)> = None;
+                for child in children.into_iter().flatten() {
+                    let Ok((aabb, ptf)) = parts.get(*child) else { continue };
+                    let (c, h) = (Vec3::from(aabb.center), Vec3::from(aabb.half_extents));
+                    for i in 0..8 {
+                        let corner = c + h * Vec3::new(if i & 1 == 0 { -1.0 } else { 1.0 }, if i & 2 == 0 { -1.0 } else { 1.0 }, if i & 4 == 0 { -1.0 } else { 1.0 });
+                        let q = inv.transform_point3(ptf.transform_point(corner));
+                        model = Some(model.map_or((q, q), |(lo, hi)| (lo.min(q), hi.max(q))));
+                    }
+                }
+                if let Some((lo, hi)) = model {
+                    hit_model = slab(inv.transform_point3(r.origin), inv.transform_vector3(*r.direction), lo, hi).is_some();
                 }
             }
         }
+        // 0x5C19E0's tail (0x45B470): what is not targetable is not found
+        let hit_model = hit_model && b.world.data.def(a.def).targetable;
+        let dist = ray.map_or(f32::MAX, |r| (tf.translation() - r.origin).length());
         let screen = camera.world_to_viewport(cam_tf, tf.translation()).ok().map(|p| p * scale);
         let mut rect: Option<(Vec2, Vec2)> = None;
         if want_rects {
@@ -566,9 +737,15 @@ pub fn battle_input(
                 }
             }
         }
-        picks.push(Pick { id: view.id, dist, screen, rect });
+        picks.push(Pick { id: view.id, hit: hit_model, dist, screen, rect });
     }
-    let mut hit = picks.iter().filter(|p| p.dist.is_some()).min_by(|x, y| x.dist.unwrap().total_cmp(&y.dist.unwrap())).map(|p| (p.id, p.dist.unwrap()));
+    // the view list in creation order: 0x5E05D0, the later of two equally near
+    picks.sort_by_key(|pk| pk.id);
+    let mut hits: Vec<(ActorId, f32)> = picks.iter().filter(|p| p.hit).map(|p| (p.id, p.dist)).collect();
+    let mut hit = hits.iter().copied().fold(None, |best: Option<(ActorId, f32)>, h| match best {
+        Some(b) if b.1 < h.1 => Some(b),
+        _ => Some(h),
+    });
     // an organization's banner (its view) picks the organization: the
     // camera-facing square of the last drawn frame
     let mut on_banner = false;
@@ -576,21 +753,31 @@ pub fn battle_input(
         let (right, up) = (cam_tf.right(), cam_tf.up());
         for (o, centre, half) in &bn.placed {
             let t = (*centre - r.origin).dot(*r.direction);
-            if t <= 0.0 || hit.is_some_and(|(_, d)| d <= t) {
+            if t <= 0.0 {
                 continue;
             }
             let local = r.origin + *r.direction * t - *centre;
             if local.dot(*right).abs() <= *half && local.dot(*up).abs() <= *half {
                 let member = b.world.orgs.get(*o as usize).and_then(|g| g.members.iter().copied().find(|m| b.world.actor(*m).is_some_and(|a| a.alive)));
                 if let Some(m) = member {
-                    hit = Some((m, t));
-                    on_banner = true;
+                    let d = (*centre - r.origin).length();
+                    hits.push((m, d));
+                    if !hit.is_some_and(|(_, best)| best < d) {
+                        hit = Some((m, d));
+                        on_banner = true;
+                    }
                 }
             }
         }
     }
     let hit = hit.map(|(id, _)| id);
-    sel.hover = hit.filter(|_| !front.pointer_over_ui);
+    // 0x43DC70: a single selected object the ray still meets stays the hovered one
+    let single = match b.selection.as_slice() {
+        [u] => hits.iter().map(|h| h.0).find(|id| unit_of(&b, *id) == Some(*u) || Unit::Actor(*id) == *u),
+        _ => None,
+    };
+    let hovered = single.or(hit);
+    sel.hover = hovered.filter(|_| !front.pointer_over_ui);
     // the armed general ability's cursor (faction_ability_target_valid)
     sel.ability_valid = match sel.armed {
         Some(TargetOrder::Ability(i)) => crate::ui::abilities::valid_target(&b.world, local, i, sel.hover),
@@ -604,6 +791,7 @@ pub fn battle_input(
         sel.armed = None;
         sel.press = None;
         sel.drag = None;
+        sel.facing = None;
         sel.ability_valid = false;
         sel.bombard_invalid = false;
         requests.blocked = false;
@@ -678,7 +866,20 @@ pub fn battle_input(
     }
     // left button on the world
     if front.pointer.left_pressed && !front.press_on_ui {
-        if let Some(c) = cursor {
+        // 0x6229F0: an action button's location order whose command takes a direction
+        // (+0x2C bit 5) goes through the facing state, the left button holding it
+        let held = match sel.armed {
+            Some(TargetOrder::Move) => Some((5, "waypoint_move_actor")),
+            Some(TargetOrder::Run) => Some((7, "waypoint_run_actor")),
+            Some(TargetOrder::Guard) if hit.is_none() => Some((2, "waypoint_defend_actor")),
+            Some(TargetOrder::Explore) => Some((9, "waypoint_explore_actor")),
+            _ => None,
+        }
+        .filter(|(c, _)| aa_play::orders::guess::row(*c).requirements & aa_play::orders::guess::requirement::AUXILIARY != 0);
+        if let (Some(command), Some(g), Some(_)) = (held, ray.and_then(|r| ground_hit(&b, r)), cursor) {
+            let press = sel.right_press;
+            sel.facing = Some(FacingDrag { at: g.truncate(), alt: false, queue: add, press, dragging: false, aim: Vec2::ZERO, left: true, command: Some(command) });
+        } else if let Some(c) = cursor {
             match place.active.as_mut() {
                 // 0x6887C0: an illegal spot does not place (the reason is
                 // reported); a legal one fixes the ghost at the press point
@@ -699,49 +900,19 @@ pub fn battle_input(
         }
     }
     requests.blocked = sel.drag.is_some();
+    // 0x437DC0 -> 0x4371A0: the candidates of the dragged box, every frame (view flag
+    // 0x8000, the focus VFX)
+    sel.box_candidates = match sel.drag {
+        Some((p, c)) => box_candidates(&b, &picks, p.min(c), p.max(c)),
+        None => Vec::new(),
+    };
     if front.pointer.left_released {
         if let Some((p, _)) = sel.press.take() {
             if let Some((a, c)) = sel.drag.take() {
                 // box select (0x5CCB70: 0x436460 clears, then 0x4377B0;
                 // Shift/Ctrl keeps the selection)
                 let (lo, hi) = (a.min(c), a.max(c));
-                let mut inside: Vec<&Pick> = picks
-                    .iter()
-                    .filter(|pk| pk.rect.or(pk.screen.map(|s| (s, s))).is_some_and(|(rlo, rhi)| rlo.x <= hi.x && rlo.y <= hi.y && rhi.x >= lo.x && rhi.y >= lo.y))
-                    .collect();
-                // the view list in creation order
-                inside.sort_by_key(|pk| pk.id);
-                // 0x4367A0 / 0x640A40: the candidates through their regiment
-                // (0x6409A0), targetable ones only (0x5C19E0 -> 0x45B470),
-                // under the class rule, head-inserted
-                let mut candidates: Vec<Unit> = Vec::new();
-                let mut cand_class = 0;
-                let mut candidate = |b: &Battle, u: Unit, candidates: &mut Vec<Unit>| {
-                    let targetable = match u {
-                        Unit::Org(o) => b.world.orgs.get(o as usize).is_some_and(|o| b.world.data.def(o.def).targetable),
-                        Unit::Actor(x) => b.world.actor(x).is_some_and(|x| b.world.data.def(x.def).targetable),
-                    };
-                    if candidates.contains(&u) || !targetable {
-                        return;
-                    }
-                    let c = class_bits(b, u, cand_class);
-                    if c == 0 {
-                        return;
-                    }
-                    if c > cand_class && c & 0x93 == 0 {
-                        candidates.clear();
-                    }
-                    cand_class = c;
-                    candidates.insert(0, u);
-                };
-                // (0x4377B0 also takes the hovered object, which the box
-                // state never has: its vt+0x20 turns the hover off,
-                // 0x5C1E70)
-                for pk in inside {
-                    if let Some(u) = unit_of(&b, pk.id) {
-                        candidate(&*b, u, &mut candidates);
-                    }
-                }
+                let candidates = box_candidates(&b, &picks, lo, hi);
                 if !add {
                     b.selection.clear();
                 }
@@ -787,7 +958,10 @@ pub fn battle_input(
                     // move (5), Run (7), guard (2) and explore (9): a location,
                     // for guard also the clicked object
                     TargetOrder::Move | TargetOrder::Run | TargetOrder::Guard | TargetOrder::Explore => {
-                        let units = own_movable(&b);
+                        let units = match sel.armed_unit.take() {
+                            Some(u) => vec![u],
+                            None => own_movable(&b),
+                        };
                         // guard an object: its position
                         let object = hit.filter(|_| matches!(order, TargetOrder::Guard)).and_then(|id| b.world.actor(id)).map(|a| a.pos.truncate());
                         if let Some(to) = object.or(ground.map(|g| g.truncate())) {
@@ -817,16 +991,6 @@ pub fn battle_input(
                                 match order {
                                     Some(order) => b.pending.push(Command::Order { kingdom: local, units, order }),
                                     None => b.pending.push(Command::Move { kingdom: local, units, to, attack_move: false }),
-                                }
-                            }
-                        }
-                    }
-                    TargetOrder::AttachHq => {
-                        let hq = hit.filter(|id| b.world.actor(*id).is_some_and(|a| a.kingdom == Some(local)) && aa_play::production::hq_org(&b.world, *id).is_some());
-                        if let Some(hq) = hq {
-                            for u in b.selection.clone() {
-                                if let Unit::Org(org) = u {
-                                    b.pending.push(Command::Attach { kingdom: local, org, hq });
                                 }
                             }
                         }
@@ -904,10 +1068,21 @@ pub fn battle_input(
                         }
                     }
                     // 0x640CF0 -> 0x437B20: the hit alone (none on bare
-                    // ground)
+                    // ground); a single selected object the ray meets again gives
+                    // way to the nearest hit behind it
                     (false, _) => {
+                        let behind = match b.selection.as_slice() {
+                            [one] => hits.iter().find(|h| unit_of(&b, h.0) == Some(*one) || Unit::Actor(h.0) == *one).map(|s| s.1).and_then(|d| {
+                                hits.iter().filter(|h| d < h.1 && unit_of(&b, h.0) != Some(*one)).fold(None, |best: Option<(ActorId, f32)>, h| match best {
+                                    Some(x) if x.1 < h.1 => Some(x),
+                                    _ => Some(*h),
+                                })
+                            }),
+                            _ => None,
+                        };
+                        let pick = behind.and_then(|h| unit_of(&b, h.0)).or(unit);
                         b.selection.clear();
-                        if let Some(u) = unit {
+                        if let Some(u) = pick {
                             let mut class = 0;
                             select_one(&mut b, &mut class, u);
                         }
@@ -956,89 +1131,94 @@ pub fn battle_input(
         if sel.armed.take().is_some() || sel.drag.take().is_some() {
             sel.press = None;
         } else if let Some((u, v)) = on_minimap.filter(|(u, v)| (0.0..=1.0).contains(u) && (0.0..=1.0).contains(v)) {
-            let units = own_movable(&b);
-            if !units.is_empty() {
+            if !b.selection.is_empty() {
                 let m = &b.world.map;
                 let to = Vec2::new(u * m.width as f32 * m.cell_size, v * m.height as f32 * m.cell_size);
-                debug!("order: move {units:?} to {to:?} (minimap)");
+                let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
+                // 0x620976: flag 8 with the zero vector at 0xB279C0, sent at once,
+                // then the marker 0x43DB10.
+                debug!("order: default at {to:?} (minimap)");
                 order_marks::move_command(&mut marks, to);
-                issued.give(&units, to, "waypoint_move_actor");
-                b.pending.push(Command::Move { kingdom: local, units, to, attack_move: false });
+                issued.give(&own_movable(&b), to, "waypoint_move_actor");
+                send_hot(&mut b, None, Some(to), Some(Vec2::ZERO), alt, add);
             }
         }
     }
-    if front.pointer.right_pressed && !front.pointer_over_ui {
+    // Tracker +0x14/+0x18 (0x5BF2F0)
+    if front.pointer.right_pressed && let Some(c) = cursor {
+        sel.right_press = c;
+    }
+    // the facing state (GameInterface+0xE4): a modal state, the press it holds
+    // until its button comes up
+    if let Some(mut f) = sel.facing {
+        if let Some(c) = cursor {
+            // 0x688AA0: past the threshold from the right press (tracker +0x14)
+            if !f.dragging && (f.press - c).abs().element_sum() >= DRAG_THRESHOLD {
+                f.dragging = true;
+            }
+            // 0x688990: from the press point to the pointer's, when it is not zero
+            if f.dragging {
+                if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
+                    let d = g.truncate() - f.at;
+                    if d.x != 0.0 || d.y != 0.0 {
+                        let l = d.length();
+                        f.aim = if l <= 1e-6 { Vec2::ZERO } else { d / l };
+                    }
+                }
+            }
+        }
+        sel.facing = Some(f);
+        // 0x6886B0 -> 0x6210B0: flag 8 with the direction, or zero without a drag
+        if f.left && front.pointer.left_released {
+            sel.facing = None;
+            sel.armed = None;
+            let aim = if f.dragging { f.aim } else { Vec2::ZERO };
+            let units = match sel.armed_unit.take() {
+                Some(u) => vec![u],
+                None => own_movable(&b),
+            };
+            if let (false, Some((command, vfx))) = (units.is_empty(), f.command) {
+                order_marks::move_command(&mut marks, f.at);
+                issued.give(&units, f.at, vfx);
+                b.pending.push(Command::Hot { kingdom: local, units, command: Some(command), target: None, at: Some(f.at), aux: Some(aim), alt: false, queue: f.queue });
+            }
+        } else if !f.left && front.pointer.right_released {
+            sel.facing = None;
+            let aim = if f.dragging { f.aim } else { Vec2::ZERO };
+            if can_send_hot(&b, None, true, true, f.alt) {
+                debug!("order: default at {:?}, direction {aim:?}", f.at);
+                order_marks::move_command(&mut marks, f.at);
+                issued.give(&own_movable(&b), f.at, "waypoint_move_actor");
+                send_hot(&mut b, None, Some(f.at), Some(aim), f.alt, f.queue);
+            }
+        }
+    } else if front.pointer.right_pressed && !front.pointer_over_ui {
         if sel.armed.take().is_some() || sel.drag.take().is_some() {
             sel.press = None;
-        } else {
-            let units = own_movable(&b);
-            if !units.is_empty() {
-                // 0x620760 -> GuessCommandData 0x4DA570: over a pickable
-                // actor (own, allied, enemy, neutral, a building) only the
-                // target is sent, and the first command whose
-                // can_hot_command_actor allows it is move (kill's is
-                // switched off in the data), and the move handler 0x527E30
-                // takes a hostile actor down the kill path: the selection
-                // attacks it, or follows a friend. An actor order plays no
-                // move VFX. Alt+right is HotkeyAltRightClickCommand, retreat
-                // (0x4DA570 flag bit 10 picks it as the hot index).
-                let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
-                if alt {
-                    let order = match hit {
-                        Some(t) => Some(aa_play::orders::ActorOrder::Retreat { target: Some(t), at: Vec2::ZERO }),
-                        None => ray.and_then(|r| ground_hit(&b, r)).map(|g| aa_play::orders::ActorOrder::Retreat { target: None, at: g.truncate() }),
-                    };
-                    if let Some(order) = order {
-                        b.pending.push(Command::Order { kingdom: local, units, order });
-                    }
-                } else if let Some(t) = hit {
-                    // each recipient guesses its own command (0x61EEF0 ->
-                    // 0x4DA570 per actor): repair (3, can_hot_command_actor)
-                    // comes before move for one that can repair a target
-                    // meeting repair's flags
-                    let (repairers, others): (Vec<Unit>, Vec<Unit>) = units.into_iter().partition(|u| hot_repair(&b, *u, t));
-                    if !repairers.is_empty() {
-                        debug!("order: repair {t} with {repairers:?}");
-                        b.pending.push(Command::Repair { kingdom: local, units: repairers, target: t });
-                    }
-                    if !others.is_empty() {
-                        if aa_play::orders::hostile_to(&b.world, local, t) {
-                            // 0x527E30: bombard when the layout fires indirect
-                            // (0x578AC0, 0x57A5E0), else the kill state 0x51D920.
-                            let (bombard, attack): (Vec<Unit>, Vec<Unit>) = others.into_iter().partition(|u| matches!(u, Unit::Org(o) if aa_play::orders::guess::bombard_layout(&b.world, *o)));
-                            if !bombard.is_empty() {
-                                b.pending.push(Command::Bombard { kingdom: local, units: bombard, target: aa_play::AbilityTarget::Actor(t) });
-                            }
-                            if !attack.is_empty() {
-                                debug!("order: kill {t} with {attack:?}");
-                                // The hot command on an actor is move (0x4DA570: repair,
-                                // construct, move), not kill: 0x527E30's Kill state has the
-                                // Mind's kind 5, mind_moving, the desired formation (0x51D8F0).
-                                b.pending.push(Command::Order { kingdom: local, units: attack.clone(), order: aa_play::orders::ActorOrder::MoveOnto });
-                                b.pending.push(Command::Attack { kingdom: local, units: attack, target: t });
-                            }
-                        } else {
-                            debug!("order: follow {t} with {others:?}");
-                            b.pending.push(Command::Follow { kingdom: local, units: others, target: t });
-                        }
-                    }
-                } else if let Some(g) = ray.and_then(|r| ground_hit(&b, r)) {
-                    debug!("order: move {units:?} to {g:?}");
-                    order_marks::move_command(&mut marks, g.truncate());
-                    issued.give(&units, g.truncate(), "waypoint_move_actor");
-                    b.pending.push(Command::Move { kingdom: local, units, to: g.truncate(), attack_move: false });
+        } else if !b.selection.is_empty() {
+            // 0x620760: the default order. Alt is 0x4D9B30's flag 0x400, which
+            // 0x4DA570 reads as the hot command HotkeyAltRightClickCommand; Shift
+            // or Ctrl is +0x3C.
+            let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
+            // 0x4363B0: the hovered object's vt+0x54, a soldier his regiment
+            if let Some(t) = hovered.and_then(|id| unit_of(&b, id)) {
+                // 0x61E150, then 0x61EEF0
+                if can_send_hot(&b, Some(t), false, false, alt) {
+                    debug!("order: default on {t:?}");
+                    send_hot(&mut b, Some(t), None, None, alt, add);
                 }
-            } else if let [Unit::Actor(a)] = b.selection.as_slice() {
-                // A lone own structure: 0x4DA570 takes its hot location command,
-                // set_rally_point (16, non_group_command).
-                let a = *a;
-                let flags = aa_play::orders::guess::Fields { flags: 0x14, target: 0 };
-                if b.world.actor(a).is_some_and(|x| x.kingdom == Some(local))
-                    && aa_play::orders::guess::guess(&b.world, Unit::Actor(a), flags, false) == Some(aa_play::orders::guess::SET_RALLY_POINT)
-                    && let Some(g) = ray.and_then(|r| ground_hit(&b, r))
-                {
-                    order_marks::move_command(&mut marks, g.truncate());
-                    b.pending.push(Command::SetRallyPoint { kingdom: local, building: a, at: g.truncate() });
+            } else if let (Some(g), Some(c)) = (ray.and_then(|r| ground_hit(&b, r)).map(|g| g.truncate()), cursor) {
+                if takes_direction(&b) {
+                    // 0x620A90 -> 0x621230: the state holds it
+                    sel.facing = Some(FacingDrag { at: g, alt, queue: add, press: c, dragging: false, aim: Vec2::ZERO, left: false, command: None });
+                } else {
+                    // 0x620A51: at once, then the marker. A lone own structure's is
+                    // set_rally_point (16, 0x14 and no direction).
+                    debug!("order: default at {g:?}");
+                    if can_send_hot(&b, None, true, false, alt) {
+                        order_marks::move_command(&mut marks, g);
+                        send_hot(&mut b, None, Some(g), None, alt, add);
+                    }
                 }
             }
         }
@@ -1051,11 +1231,27 @@ pub fn battle_input(
     if alive.len() != b.selection.len() {
         b.selection = alive;
     }
+    // 0x436AD0, 0x436B90, 0x436C50: the requests of a selection that changed. What
+    // left it by dying or going out of sight sends nothing.
+    let gone: Vec<Unit> = sel.replicated.iter().copied().filter(|u| !b.selection.contains(u) && match u {
+        Unit::Org(o) => !b.world.orgs.get(*o as usize).is_some_and(|o| o.alive),
+        Unit::Actor(a) => !b.world.actor(*a).is_some_and(|a| a.alive),
+    }).collect();
+    sel.replicated.retain(|u| !gone.contains(u));
+    let oldest_first: Vec<Unit> = b.selection.iter().rev().copied().collect();
+    if oldest_first != sel.replicated {
+        sel.replicated = oldest_first.clone();
+        b.pending.push(Command::Select { kingdom: local, units: oldest_first });
+    }
     // the placement ends with its armed order (placed or cancelled)
     if !matches!(sel.armed, Some(TargetOrder::Deploy(_)) | Some(TargetOrder::Construct(_))) {
         place.active = None;
     }
-    let g = placement::ghost_of(&b.world, local, &place);
+    let mut g = placement::ghost_of(&b.world, local, &place);
+    // 0x620230: VFXSelectFacing at the press point while a move's facing is dragged
+    if let Some(f) = sel.facing.filter(|f| f.dragging) {
+        g.arrow = Some((Vec3::new(f.at.x, f.at.y, b.world.map.height_at(f.at)), f.aim.y.atan2(f.aim.x)));
+    }
     if *ghost != g {
         *ghost = g;
     }
@@ -1097,59 +1293,6 @@ fn bombard_relation(b: &Battle, u: Unit, point: Vec2) -> u8 {
         Unit::Actor(a) if alive(a) => aa_play::combat::tasks::point_relation(w, a, point),
         Unit::Actor(_) => 6,
     }
-}
-
-/// Actor command repair's behaviour flags (aa-rules native_actor_command:
-/// 0x1B00): an actor target (0x100) with a ConstructionComponent (0x200),
-/// damaged (0x800) and friendly (0x1000).
-const REPAIR_FLAGS: u32 = 0x1B00;
-
-/// The target description GuessCommandData (`0x4DA570`) builds for actor
-/// `t` as `kingdom` sees it: 0x100 an actor; 0x2000 hostile (virtual
-/// +0x140), 0x1000 friendly (+0x138); for an actor outside the organization
-/// component 0x200 with a ConstructionComponent (actor +0x9C), 0x400 also
-/// under construction (actor state 21), 0x800 damaged (Body +0x10 below
-/// +0x14).
-fn target_flags(b: &Battle, kingdom: aa_play::KingdomId, t: ActorId) -> u32 {
-    let w = &b.world;
-    let Some(a) = w.actor(t) else { return 0 };
-    let d = w.data.def(a.def);
-    let mut f = 0x100;
-    match aa_play::setup::relation(w, Some(kingdom), a.kingdom) {
-        aa_play::books::SELF | aa_play::books::FRIEND => f |= 0x1000,
-        aa_play::books::ENEMY => f |= 0x2000,
-        _ => {}
-    }
-    if d.has_component("ConstructionComponent") {
-        f |= 0x200;
-        if w.books.actor(t).is_some_and(|x| x.constructing) {
-            f |= 0x400;
-        }
-    }
-    if a.health < aa_play::production::max_health(w, a.kingdom, a.def) {
-        f |= 0x800;
-    }
-    f
-}
-
-/// Whether own unit `u` has the repair command (`0x530510`: a member whose
-/// performer has an ability with a HEAL effect, `0x57E1C0` -> `0x4BE970`).
-fn has_repair(b: &Battle, u: Unit) -> bool {
-    let w = &b.world;
-    let heals = |id: ActorId| w.actor(id).is_some_and(|a| a.alive && w.data.def(a.def).weapons.iter().any(|x| !x.defender && x.effects.iter().any(|e| e.kind_name == "HEAL")));
-    match u {
-        Unit::Org(o) => w.orgs.get(o as usize).is_some_and(|o| o.members.iter().any(|m| heals(*m))),
-        Unit::Actor(a) => heals(a),
-    }
-}
-
-/// `0x4DA570` for a right click on actor `t` with recipient `u`: the
-/// commands are tried by type, and of kill, bombard, guard and repair only
-/// repair is a hot command for an actor in the data
-/// (can_hot_command_actor); it is taken when `u` has it and the target's
-/// description holds all of repair's flags (otherwise move follows).
-fn hot_repair(b: &Battle, u: Unit, t: ActorId) -> bool {
-    has_repair(b, u) && target_flags(b, b.local, t) & REPAIR_FLAGS == REPAIR_FLAGS
 }
 
 /// What a viewer without a kingdom may still do (the orders that have no
