@@ -21,3 +21,4 @@
 - [ ] No files from the original game (art, audio, video, maps, rules data, executables, decompiled code, traces) are included.
 - [ ] The game still builds and runs; `cargo test -p aa-play --release` passes (or the tests I couldn't run are listed above).
 - [ ] Each file keeps its line endings.
+- [ ] I have read and agree to the [OpenAllies Contributor Agreement](https://github.com/haskbasirat/OpenAllies/blob/main/CLA.md). The project's owner will own this contribution and can relicense it.

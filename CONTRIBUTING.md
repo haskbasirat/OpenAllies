@@ -57,7 +57,7 @@ If you plan a large change, open an issue first so the work isn't duplicated.
 - Describe the original behaviour your change matches, with its addresses.
 - Add screenshots for visible changes, ideally ours next to the original's.
 - List the tests you ran.
-- Fill in the pull request template's checklist.
+- Fill in the pull request template's checklist, including the Contributor Agreement.
 
 ## Reporting bugs and differences
 
@@ -70,4 +70,10 @@ Never attach the original game's files to an issue. Screenshots and short descri
 
 ## License
 
-OpenAllies is licensed under the [GNU General Public License, version 3 or later](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
+OpenAllies is licensed under the [Mozilla Public License 2.0](LICENSE).
+
+## Contributor Agreement
+
+Every contribution needs the [OpenAllies Contributor Agreement](CLA.md). Please read it before you start work. In short: when your contribution is accepted, the project's owner owns it, and can change the project's license, including to a closed-source license, or sell the project, without asking or paying you. Versions already published stay available under the license they were published with.
+
+A pull request without the agreement won't be merged.

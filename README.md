@@ -7,7 +7,7 @@
   <img alt="Edition 2024" src="https://img.shields.io/badge/edition-2024-6e5523">
   <img alt="Engine: Bevy 0.19" src="https://img.shields.io/badge/engine-Bevy%200.19-232326">
   <img alt="Platforms: Windows x64 today; Windows ARM64, macOS and Linux planned" src="https://img.shields.io/badge/platforms-Windows%20x64%20%C2%B7%20ARM64%20%C2%B7%20macOS%20%C2%B7%20Linux%20(planned)-2f6f9f">
-  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-3b7f2f"></a>
+  <a href="LICENSE"><img alt="License: MPL-2.0" src="https://img.shields.io/badge/license-MPL--2.0-3b7f2f"></a>
   <img alt="Status: playable test build" src="https://img.shields.io/badge/status-playable%20test%20build-c77d00">
 </p>
 
@@ -178,10 +178,17 @@ HANDOFF.txt  running continuation log for developers
 3. Never add features or interface elements the original does not have.
 4. List what still has to be compared with the running original.
 5. Never commit files taken from the original game.
+6. Agree to the [Contributor Agreement](CLA.md): the project's owner owns accepted contributions and can relicense them.
 
 ## License
 
-OpenAllies is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License**, version 3 or (at your option) any later version. See [`LICENSE`](LICENSE) for the full text.
+OpenAllies is licensed under the **Mozilla Public License 2.0**. See [`LICENSE`](LICENSE) for the full text.
+
+> This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+That notice applies to every source file in this repository. Versions published before this change were released under the GNU General Public License, version 3 or later, and remain available under it.
+
+Contributions are accepted under the [Contributor Agreement](CLA.md).
 
 The license covers the OpenAllies source code only. It does not cover the original game, whose files you need from your own copy.
 
