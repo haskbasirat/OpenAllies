@@ -185,6 +185,7 @@ pub fn exploring(world: &World, org: OrgId) -> bool {
 /// (0x52A420 leaves the old state). `World::apply` calls this first.
 pub(crate) fn superseded(world: &mut World, command: &Command) {
     let clear = |world: &mut World, unit: Unit| {
+        crate::combat::tasks::superseded(world, unit);
         world.orders.repair_kept.retain(|u| *u != unit);
         let org = match unit {
             Unit::Org(o) => Some(o),

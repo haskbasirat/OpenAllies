@@ -290,17 +290,13 @@ fn our_film_against_the_original_s_trace() {
     let root = game_root();
     let path = PathBuf::from(std::env::var_os("AA_SHADOW_FILM").expect("AA_SHADOW_FILM"));
     let registries = aa_parity::registries::Registries::load_v14(&root, true).unwrap();
-    replay::set_property_ids(registries.property_ids.clone());
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
     let film = Film::read(&path, &registries).unwrap();
     let trace = NativeTrace::read(PathBuf::from(std::env::var_os("AA_SHADOW_TRACE").expect("AA_SHADOW_TRACE")).as_path()).unwrap();
     let mut data = FilmData::new(&root);
     data.force_playback = true;
     let (mut world, _) = open_film(&path, &data, SyncMode::Strict).unwrap();
     let mut comparison = StateComparison::new();
-    let mut pairing = replay::Pairing::new(world.ids.next_slot(), &trace.names);
+    let mut pairing = replay::Pairing::for_our_film(world.ids.next_slot(), &trace.names);
     let last = trace.ticks.keys().last().copied().unwrap_or(0);
     let forcing = Forcing { rng: std::env::var_os("AA_SHADOW_FORCE").is_some(), ..Forcing::default() };
     let watches: Vec<(u32, u32, u32)> = std::env::var("AA_SHADOW_WATCH").map_or(Vec::new(), |t| {
@@ -319,7 +315,7 @@ fn our_film_against_the_original_s_trace() {
     let report = replay::run_observed(
         &film,
         &mut world,
-        &registries.object_ids,
+        &registries,
         Some(last),
         false,
         &replay::Aliases::new(),

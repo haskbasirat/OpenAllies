@@ -25,12 +25,6 @@ const FILMS: &[(&str, &str)] = &[
     ("Berlin2v2_1", "(2v2)Berlin"),
 ];
 
-fn install(registries: &Registries) {
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    replay::set_property_ids(registries.property_ids.clone());
-}
-
 fn fixture(label: &str) -> Option<Value> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/qa_films_fight_20261101.json");
     let all: Value = serde_json::from_str(std::fs::read_to_string(path).ok()?.trim_start_matches('\u{feff}')).ok()?;
@@ -66,7 +60,6 @@ fn native_names(root: &Path, trace: String) -> BTreeMap<u32, String> {
 fn the_fight_films_fight() {
     let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
     let registries = Registries::load_v14(&root, true).unwrap();
-    install(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     let mut no_equivalent = 0usize;
@@ -94,7 +87,7 @@ fn the_fight_films_fight() {
         let report = replay::run_observed(
             &film,
             &mut world,
-            &registries.object_ids,
+            &registries,
             None,
             false,
             &aliases,
@@ -194,7 +187,6 @@ fn order_rows() {
     let label = std::env::var("AA_ORDER_ROWS_FILM").expect("AA_ORDER_ROWS_FILM");
     let to: u32 = std::env::var("AA_ORDER_ROWS_TO").ok().and_then(|v| v.parse().ok()).unwrap_or(3000);
     let registries = Registries::load_v14(&root, true).unwrap();
-    install(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let (label, map) = FILMS.iter().find(|(l, _)| *l == label).unwrap();
     let film = Film::read(&root.join(ARCHIVE).join(format!("{label}.RFM")), &registries).unwrap();
@@ -210,7 +202,7 @@ fn order_rows() {
     let aliases = Default::default();
     let names = native_names(&root, trace_of(label));
     let mut pairing = replay::Pairing::new(world.ids.next_slot(), &names);
-    let report = replay::run_observed(&film, &mut world, &registries.object_ids, Some(to), false, &aliases, Some(&mut pairing), &mut |step, w, _| {
+    let report = replay::run_observed(&film, &mut world, &registries, Some(to), false, &aliases, Some(&mut pairing), &mut |step, w, _| {
         for e in &w.events {
             if std::env::var_os("AA_ORDER_EVENTS").is_some() {
                 eprintln!("{step}: {e:?}");
@@ -292,7 +284,6 @@ fn order_rows() {
 fn order_gone() {
     let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
     let registries = Registries::load_v14(&root, true).unwrap();
-    install(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     for (label, map) in FILMS {
@@ -310,7 +301,7 @@ fn order_gone() {
         let mut cursor = u32::from(start);
         let mut made: BTreeMap<u16, (u32, u16)> = BTreeMap::new();
         let mut last_alive: BTreeMap<u16, u32> = BTreeMap::new();
-        let report = replay::run_observed(&film, &mut world, &registries.object_ids, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
+        let report = replay::run_observed(&film, &mut world, &registries, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
             let Some(p) = p else { return };
             while cursor < u32::from(w.ids.next_slot()) {
                 let ours = cursor as u16;
@@ -377,7 +368,6 @@ fn order_effects() {
     use std::io::BufRead;
     let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
     let registries = Registries::load_v14(&root, true).unwrap();
-    install(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     let show = std::env::var("AA_EFFECTS_SHOW").ok();
@@ -408,7 +398,7 @@ fn order_effects() {
         let mut pairing = replay::Pairing::new(world.ids.next_slot(), &names);
         // (tick, native slot) -> (native state, ours, what ours is)
         let mut samples: BTreeMap<(u32, u16), (&'static str, &'static str, String)> = BTreeMap::new();
-        let report = replay::run_observed(&film, &mut world, &registries.object_ids, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
+        let report = replay::run_observed(&film, &mut world, &registries, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
             let Some(rows) = lines.get(&step) else { return };
             for (gtid, native) in rows {
                 let ours = p.and_then(|p| p.ours(*gtid)).and_then(|g| w.ids.thing_at_slot(g as u16));
@@ -478,7 +468,6 @@ fn mind_state_confusion() {
     use std::io::BufRead;
     let root = PathBuf::from(std::env::var_os("AA_GAME_ROOT").expect("AA_GAME_ROOT"));
     let registries = Registries::load_v14(&root, true).unwrap();
-    install(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     for (label, map) in FILMS {
@@ -509,7 +498,7 @@ fn mind_state_confusion() {
         let mut pairing = replay::Pairing::new(world.ids.next_slot(), &names);
         let mut table: BTreeMap<(&'static str, &'static str), usize> = BTreeMap::new();
         let mut absent: BTreeMap<&'static str, usize> = BTreeMap::new();
-        replay::run_observed(&film, &mut world, &registries.object_ids, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
+        replay::run_observed(&film, &mut world, &registries, None, false, &aliases, Some(&mut pairing), &mut |step, w, p| {
             let Some(rows) = lines.get(&step) else { return };
             for (gtid, native) in rows {
                 let ours = p.and_then(|p| p.ours(*gtid)).and_then(|g| w.ids.thing_at_slot(g as u16));

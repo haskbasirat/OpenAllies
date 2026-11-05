@@ -385,12 +385,6 @@ fn getters_against_film(film: &Film, stats: &TraceStats) -> (usize, Option<Value
     (checked, None)
 }
 
-fn install_id_tables(registries: &Registries) {
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    replay::set_property_ids(registries.property_ids.clone());
-}
-
 /// Rewrites the fixture. Only with `AA_FIGHT_FILMS_WRITE=1`, after recording.
 #[test]
 #[ignore = "rewrites the local fixture from the QA films; set AA_GAME_ROOT and AA_FIGHT_FILMS_WRITE"]
@@ -458,7 +452,6 @@ fn fight_films_decode_to_their_recorded_aggregates() {
 fn fight_films_replay_into_aa_play() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
-    install_id_tables(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     for c in FILMS {
@@ -493,7 +486,7 @@ fn fight_films_replay_into_aa_play() {
             world.actors.len(),
             world.native_rng.state
         );
-        let report = replay::run(&film, &mut world, &registries.object_ids, None, false);
+        let report = replay::run(&film, &mut world, &registries, None, false);
         eprintln!(
             "{}: {} steps, {} checkpoints checked, {} matched; first difference {}",
             c.label,
@@ -560,7 +553,6 @@ fn fight_film_traces_account_for_their_checkpoints() {
 fn fight_films_native_state_first_divergence_per_lane() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
-    install_id_tables(&registries);
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let only = std::env::var("AA_FIGHT_FILMS_ONLY").ok();
     for c in FILMS {
@@ -578,7 +570,7 @@ fn fight_films_native_state_first_divergence_per_lane() {
         let report = replay::run_observed(
             &film,
             &mut world,
-            &registries.object_ids,
+            &registries,
             Some(last),
             false,
             &replay::Aliases::new(),

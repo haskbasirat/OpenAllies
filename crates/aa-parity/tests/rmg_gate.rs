@@ -485,10 +485,6 @@ fn random_film_native_state() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/film-corpus/films");
     let path = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).find(|p| p.file_stem().is_some_and(|n| n.to_string_lossy().starts_with(&only))).expect("film");
     let registries = Registries::load_v14(&root, true).unwrap();
-    replay::set_property_ids(registries.property_ids.clone());
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
     let film = Film::read(&path, &registries).unwrap();
     let trace_path = std::env::var_os("AA_RMG_GATE_TRACE").map_or_else(|| qa_traces().join(format!("rmg-state-{}.txt", &only[..10.min(only.len())])), PathBuf::from);
     let trace = NativeTrace::read(&trace_path).unwrap();
@@ -511,7 +507,7 @@ fn random_film_native_state() {
     let report = replay::run_observed(
         &film,
         &mut world,
-        &registries.object_ids,
+        &registries,
         Some(last),
         false,
         &replay::Aliases::new(),

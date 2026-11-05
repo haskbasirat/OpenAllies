@@ -31,6 +31,7 @@ use crate::chain;
 use crate::decree::{Decree, id};
 use crate::film::{Film, FilmDecree, KingdomInfo, SessionPlayer};
 use crate::mapping::{Mapped, Mapper, PlayIds};
+use crate::registries::Registries;
 use crate::slog::{self, decree_s_entries};
 use aa_orders::net::sync::{DEFAULT_MAX_ENTRIES, Synchronizer};
 use aa_orders::payload::Field;
@@ -576,6 +577,8 @@ pub type Aliases = BTreeMap<u16, aa_play::Unit>;
 /// Things of the map keep their saved ids on both sides.
 #[derive(Clone, Debug, Default)]
 pub struct Pairing {
+    /// The film was recorded by aa-play (see [`Pairing::for_our_film`]).
+    pub film_is_ours: bool,
     first_slot: u16,
     scan: u32,
     pending: BTreeMap<String, std::collections::VecDeque<u32>>,
@@ -606,6 +609,11 @@ impl Pairing {
             pending,
             ..Default::default()
         }
+    }
+    /// The pairing of a film of ours against a trace of the original playing it: the
+    /// film's orders name our own things, whatever the original made of them.
+    pub fn for_our_film(first_slot: u16, names: &BTreeMap<u32, String>) -> Self {
+        Self { film_is_ours: true, ..Self::new(first_slot, names) }
     }
     /// Pair the things aa-play created since the last call.
     pub fn update(&mut self, world: &World) {
@@ -769,14 +777,14 @@ impl crate::mapping::NativeIds for Aliased<'_> {
 pub fn run(
     film: &Film,
     world: &mut World,
-    object_ids: &[String],
+    registries: &Registries,
     max_steps: Option<u32>,
     stop_at_difference: bool,
 ) -> ReplayReport {
     run_aliased(
         film,
         world,
-        object_ids,
+        registries,
         max_steps,
         stop_at_difference,
         &Aliases::new(),
@@ -787,7 +795,7 @@ pub fn run(
 pub fn run_aliased(
     film: &Film,
     world: &mut World,
-    object_ids: &[String],
+    registries: &Registries,
     max_steps: Option<u32>,
     stop_at_difference: bool,
     aliases: &Aliases,
@@ -795,7 +803,7 @@ pub fn run_aliased(
     run_observed(
         film,
         world,
-        object_ids,
+        registries,
         max_steps,
         stop_at_difference,
         aliases,
@@ -803,24 +811,6 @@ pub fn run_aliased(
         &mut |_, _, _| {},
     )
 }
-
-/// SharedPropertyData slot -> property IDS for every replay of this process,
-/// set once by the caller (`Registries::property_ids`, computed from the data
-/// and proven against the original's 194 live IDS in `tests/registry_counts.rs`).
-/// Unset: research orders stay unresolved. The library does not use this: a
-/// [`FilmDriver`] is handed the tables of its own data set ([`IdTables`]).
-pub fn set_property_ids(ids: Vec<String>) {
-    let _ = PROPERTY_IDS.set(ids);
-}
-static PROPERTY_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-
-/// FormationData slot -> formation IDS for every replay of this process, set
-/// once by the caller (`Registries::formation_ids`). Unset: set_formation
-/// orders stay unresolved.
-pub fn set_formation_ids(ids: Vec<String>) {
-    let _ = FORMATION_IDS.set(ids);
-}
-static FORMATION_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
 /// The native id tables of the data set a film plays on (`Registries`).
 #[derive(Clone, Copy, Debug)]
@@ -831,10 +821,23 @@ pub struct IdTables<'a> {
     pub property_ids: &'a [String],
     /// FormationData slot -> formation IDS.
     pub formation_ids: &'a [String],
-    /// AbilityDefinition slot -> IDS (empty: `mapping::set_ability_ids`).
+    /// AbilityDefinition slot -> IDS.
     pub ability_ids: &'a [String],
-    /// OrganizationLayout slot -> IDS (empty: `mapping::set_layout_ids`).
+    /// OrganizationLayout slot -> IDS.
     pub layout_ids: &'a [String],
+}
+
+impl<'a> IdTables<'a> {
+    /// The tables of `registries`, the data set the film plays on.
+    pub fn of(registries: &'a Registries) -> Self {
+        Self {
+            object_ids: &registries.object_ids,
+            property_ids: &registries.property_ids,
+            formation_ids: &registries.formation_ids,
+            ability_ids: &registries.ability_ids,
+            layout_ids: &registries.layout_ids,
+        }
+    }
 }
 
 /// S (`[0xB36560]`) as the film check 0x77D050 sees it: the native
@@ -1135,20 +1138,14 @@ fn rename_kingdom(
 pub fn run_observed(
     film: &Film,
     world: &mut World,
-    object_ids: &[String],
+    registries: &Registries,
     max_steps: Option<u32>,
     stop_at_difference: bool,
     aliases: &Aliases,
     mut pairing: Option<&mut Pairing>,
     observe: &mut dyn FnMut(u32, &mut World, Option<&Pairing>),
 ) -> ReplayReport {
-    let tables = IdTables {
-        object_ids,
-        property_ids: PROPERTY_IDS.get().map_or(&[], |v| v.as_slice()),
-        formation_ids: FORMATION_IDS.get().map_or(&[], |v| v.as_slice()),
-        ability_ids: &[],
-        layout_ids: &[],
-    };
+    let tables = IdTables::of(registries);
     let mut report = ReplayReport::default();
     let mut driver = FilmDriver::new(film, world);
     let intervals = slog::account(film);
@@ -1169,7 +1166,8 @@ pub fn run_observed(
             world,
             tables,
             aliases,
-            pairing.as_deref(),
+            // A film of ours names our own things: the pairing is for the comparison.
+            pairing.as_deref().filter(|p| !p.film_is_ours),
             false,
             &mut |signal, world| {
                 if let DecreeSignal::Mapped {

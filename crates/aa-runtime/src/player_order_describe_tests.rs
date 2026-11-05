@@ -97,7 +97,9 @@ fn player_order_describe_61f210_native_rows_replay() {
         assert!(events.iter().filter(|e| e[0] == "timer").all(|e| e[1] == "0xb396e0"));
         logged += 1;
     }
-    assert!(logged > 3000 && silent > 0 && outside > 0, "{logged} {silent} {outside}");
+    // 652 cases in each of 2 images at 3 precisions. A NULL first actor goes straight to
+    // 4ED360 and vt+B4 false refuses before any description, so 3912 rows log 1608 times.
+    assert_eq!((logged, silent, outside), (1608, 1536, 768));
 }
 
 #[test]

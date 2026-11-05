@@ -421,13 +421,7 @@ impl FilmPlayer {
                         stats,
                         ..
                     } = self;
-                    let tables = IdTables {
-                        object_ids: &set.registries.object_ids,
-                        property_ids: &set.registries.property_ids,
-                        formation_ids: &set.registries.formation_ids,
-                        ability_ids: &set.registries.ability_ids,
-                        layout_ids: &set.registries.layout_ids,
-                    };
+                    let tables = IdTables::of(&set.registries);
                     let strict = *sync == SyncMode::Strict;
                     let mut sink = |signal: DecreeSignal<'_>, _: &mut World| {
                         take_signal(signal, record, strict, running, mismatched, stats, &mut events)

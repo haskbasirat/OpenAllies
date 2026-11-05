@@ -1042,7 +1042,7 @@ pub fn map_tick(
 /// registration order (`formation_ids`, `Registries::formation_ids`: the +C
 /// ordinal of 0x481C70, count 5 measured live, the slot order itself inferred
 /// from that registration). AbilityDefinition references go through
-/// [`set_ability_ids`] to the general's list by IDS. Selector references are not
+/// the data set's table to the general's list by IDS. Selector references are not
 /// mapped and stay `None` (the mapper then reports `Mapped::Unresolved`).
 pub struct PlayIds<'a> {
     pub world: &'a aa_play::World,
@@ -1052,9 +1052,9 @@ pub struct PlayIds<'a> {
     pub property_ids: &'a [String],
     /// FormationData slot -> formation IDS (empty: unmapped).
     pub formation_ids: &'a [String],
-    /// AbilityDefinition slot -> IDS of this data set (empty: [`set_ability_ids`]).
+    /// AbilityDefinition slot -> IDS of this data set.
     pub ability_ids: &'a [String],
-    /// OrganizationLayout slot -> IDS of this data set (empty: [`set_layout_ids`]).
+    /// OrganizationLayout slot -> IDS of this data set.
     pub layout_ids: &'a [String],
 }
 impl NativeIds for PlayIds<'_> {
@@ -1082,12 +1082,7 @@ impl NativeIds for PlayIds<'_> {
         self.world.data.find(self.object_ids.get(object as usize)?)
     }
     fn layout(&self, layout: u32) -> Option<String> {
-        let table = if self.layout_ids.is_empty() {
-            LAYOUT_IDS.get()?.as_slice()
-        } else {
-            self.layout_ids
-        };
-        table.get(layout as usize).cloned()
+        self.layout_ids.get(layout as usize).cloned()
     }
     fn formation(&self, org: OrgId, formation: u32) -> Option<usize> {
         let id = self.formation_ids.get(formation as usize)?;
@@ -1103,12 +1098,7 @@ impl NativeIds for PlayIds<'_> {
         self.property_ids.get(property as usize).cloned()
     }
     fn general_ability(&self, kingdom: KingdomId, ability: u32) -> Option<u32> {
-        let table = if self.ability_ids.is_empty() {
-            ABILITY_IDS.get()?.as_slice()
-        } else {
-            self.ability_ids
-        };
-        let id = table.get(ability as usize)?;
+        let id = self.ability_ids.get(ability as usize)?;
         let general = aa_play::special_ops::general(self.world, kingdom)?;
         general
             .abilities
@@ -1142,22 +1132,6 @@ impl NativeIds for PlayIds<'_> {
         }
     }
 }
-
-/// AbilityDefinition slot -> IDS for every replay of this process
-/// (`Registries::ability_ids`), set once by the caller like the formation and
-/// property tables. Unset: 70 FactionUseAbility stays unresolved.
-pub fn set_ability_ids(ids: Vec<String>) {
-    let _ = ABILITY_IDS.set(ids);
-}
-static ABILITY_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-
-/// OrganizationLayout slot -> IDS (`Registries::layout_ids`), set once by the
-/// caller like the formation table. Unset: a recruit's ParameterSet is taken
-/// to name the definition's own layout, as every film of the corpus does.
-pub fn set_layout_ids(ids: Vec<String>) {
-    let _ = LAYOUT_IDS.set(ids);
-}
-static LAYOUT_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
 #[cfg(test)]
 mod tests {

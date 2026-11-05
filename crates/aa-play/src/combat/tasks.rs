@@ -371,6 +371,31 @@ pub(crate) fn end_guard_bombard(world: &mut World, st: &mut CombatState, o: OrgI
     end_org(world, st, o, None);
 }
 
+/// A command to `unit` (0x4ED360, `orders::superseded`): the order's Process pushes its own
+/// Mind state over the task's, so the task ends whatever the order reads now. A member's
+/// command goes to its organization.
+pub(crate) fn superseded(world: &mut World, unit: Unit) {
+    let org = match unit {
+        Unit::Org(o) => Some(o),
+        Unit::Actor(a) => world.actors.get(a as usize).and_then(|x| x.org),
+    };
+    let mut st = std::mem::take(&mut world.combat);
+    if let Some(o) = org
+        && st.orgs.get(o as usize).is_some_and(|s| s.task.is_some())
+    {
+        end_org(world, &mut st, o, None);
+    }
+    if let Unit::Actor(a) = unit
+        && let Some(s) = st.actors.get_mut(a as usize)
+        && s.task.is_some()
+    {
+        s.task = None;
+        s.task_order = None;
+        s.aim = None;
+    }
+    world.combat = st;
+}
+
 fn end_org(world: &mut World, st: &mut CombatState, o: OrgId, order: Option<Order>) {
     st.orgs[o as usize].task = None;
     st.orgs[o as usize].task_order = None;
@@ -394,7 +419,13 @@ fn set_org_order(world: &mut World, st: &mut CombatState, o: OrgId, order: Order
 pub(super) fn org_think(world: &mut World, st: &mut CombatState, o: OrgId) -> bool {
     let i = o as usize;
     let Some(task) = st.orgs[i].task.clone() else { return false };
-    // A new order replaced the Mind state.
+    // The task's own move ending (0x5222E0 pops the embedded Move and the order reads Idle)
+    // brings the task's state back on top: it thinks on. A person's order ended it already
+    // (`superseded`); any other change of the order replaced the Mind state.
+    let moved = matches!(st.orgs[i].task_order, Some(Order::Move { .. })) && world.orgs[i].order == Order::Idle;
+    if moved {
+        st.orgs[i].task_order = Some(Order::Idle);
+    }
     if st.orgs[i].task_order.as_ref().is_some_and(|t| *t != world.orgs[i].order) {
         end_org(world, st, o, None);
         return false;
@@ -597,6 +628,10 @@ fn org_bombard(world: &mut World, st: &mut CombatState, o: OrgId, target: Abilit
 pub(super) fn lone_think(world: &mut World, st: &mut CombatState, a: ActorId) -> bool {
     let i = a as usize;
     let Some(task) = st.actors[i].task.clone() else { return false };
+    // As `org_think`: the task's own move ending is not a new order.
+    if matches!(st.actors[i].task_order, Some(Order::Move { .. })) && world.actors[i].order == Order::Idle {
+        st.actors[i].task_order = Some(Order::Idle);
+    }
     if st.actors[i].task_order.as_ref().is_some_and(|t| *t != world.actors[i].order) {
         st.actors[i].task = None;
         st.actors[i].task_order = None;

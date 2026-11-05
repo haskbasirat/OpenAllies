@@ -1075,14 +1075,53 @@ fn indexed(a: &crate::world::Actor) -> bool {
     a.alive && !a.removed && a.kingdom.is_some()
 }
 
+/// One row per actor or organization of the battle, kept beside the thing.
+///
+/// Natively this state is in the thing itself (its Mind, its Performer), so it is there
+/// from the thing's creation and no code can reach it too early. Here
+/// [`CombatState::prepare`] makes the rows, and a thing's Mind can think before that pass
+/// comes: queue 0 and the deferred queue run ahead of `combat::tick`, and the systems after
+/// it make things too. A row not made yet therefore reads as the blank state of a thing
+/// just made and is made by a write, so that no thing can index past the end.
+#[derive(Clone, Debug, Default)]
+pub struct Rows<T> {
+    rows: Vec<T>,
+    blank: T,
+}
+impl<T> std::ops::Deref for Rows<T> {
+    type Target = Vec<T>;
+    fn deref(&self) -> &Vec<T> {
+        &self.rows
+    }
+}
+impl<T> std::ops::DerefMut for Rows<T> {
+    fn deref_mut(&mut self) -> &mut Vec<T> {
+        &mut self.rows
+    }
+}
+impl<T> std::ops::Index<usize> for Rows<T> {
+    type Output = T;
+    fn index(&self, i: usize) -> &T {
+        self.rows.get(i).unwrap_or(&self.blank)
+    }
+}
+impl<T: Default> std::ops::IndexMut<usize> for Rows<T> {
+    fn index_mut(&mut self, i: usize) -> &mut T {
+        if self.rows.len() <= i {
+            self.rows.resize_with(i + 1, T::default);
+        }
+        &mut self.rows[i]
+    }
+}
+
 /// Combat and morale state of the battle (`World::combat`).
 #[derive(Clone, Debug, Default)]
 pub struct CombatState {
     pub rules: Option<Arc<Rules>>,
     pub extras: Option<Arc<Extras>>,
     data_key: usize,
-    pub orgs: Vec<OrgCombat>,
-    pub actors: Vec<ActorCombat>,
+    pub orgs: Rows<OrgCombat>,
+    pub actors: Rows<ActorCombat>,
     grid: Grid,
     /// Team of each kingdom id.
     teams: Vec<Option<u32>>,
@@ -2198,6 +2237,11 @@ pub(crate) fn engage_keeps_thing(world: &World, st: &CombatState, org: OrgId, t:
 pub(crate) fn member_choice(world: &mut World, st: &mut CombatState, m: ActorId, handed: Option<TargetRef>, bad: &[ActorId]) -> Option<ActorId> {
     let id = attached_org(world, &world.actors[m as usize])?;
     let i = id as usize;
+    // A member made since the last pass thinks first on queue 0 or the deferred queue:
+    // natively its state and its regiment's are there from their creation.
+    if st.actors.len() <= m as usize || st.orgs.len() <= i || st.rules.is_none() {
+        st.prepare(world);
+    }
     if world.time < st.actors[m as usize].roe_retry_at {
         return None;
     }
@@ -2536,6 +2580,14 @@ fn queue_other_deaths(world: &mut World, st: &mut CombatState) {
 
 /// The start of `4F9970`: `5147C0` on each zone of GWorld `+1A4`.
 pub fn zoc_rescans(world: &mut World) {
+    // Natively the rules are in the data manager from the load. Here the first pass makes
+    // them, and on the first update a thing's Mind thinks before `tick` (queue 0, the deferred
+    // queue): the tables are there before anything of the update can ask.
+    if world.combat.rules.is_none() {
+        let mut st = std::mem::take(&mut world.combat);
+        st.definition_tables(world);
+        world.combat = st;
+    }
     for o in 0..world.combat.orgs.len() {
         if !std::mem::take(&mut world.combat.orgs[o].zoc_rescan) {
             continue;
@@ -3407,6 +3459,21 @@ pub fn org_state(world: &World, org: OrgId) -> Option<&OrgCombat> {
 #[cfg(test)]
 mod native_tests {
     use super::*;
+
+    /// A thing whose row is not made yet reads as a thing just made, and a write makes it:
+    /// no index of a thing can fall past the end.
+    #[test]
+    fn a_row_not_made_yet_reads_blank() {
+        let mut rows = Rows::<ActorCombat>::default();
+        assert_eq!(rows.len(), 0);
+        assert!(!rows[7].initialized);
+        assert_eq!(rows.len(), 0, "a read makes nothing");
+        rows[7].initialized = true;
+        assert_eq!(rows.len(), 8);
+        assert!(rows[7].initialized);
+        assert!(!rows[3].initialized);
+        assert!(!rows[8].initialized);
+    }
 
     /// 4CA400 keeps the chain on the x87 stack and stores once:
     /// (0.7f * 5 - 2) * 0.8f is stored as 0x3F999999, where rounding every

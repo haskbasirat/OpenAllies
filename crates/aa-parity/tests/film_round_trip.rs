@@ -426,6 +426,13 @@ fn replay_film(path: &Path, recorded: &Recorded) {
     assert_eq!(stats.checkpoints_matched, stats.checkpoints_checked, "checkpoints");
     assert_eq!(end, Some((recorded.digests.len(), false)), "the natural end");
     assert!(stats.unresolved.is_empty(), "unresolved orders");
+    // The census tools run the same decree loop: `replay::run` reads what the player reads.
+    let film = film_of(path);
+    let (mut again, _) = open_film(path, &FilmData::new(game_root()), SyncMode::Report).unwrap_or_else(|e| panic!("open_film: {e:?}"));
+    let report = aa_parity::replay::run(&film, &mut again, &registries(), None, false);
+    assert_eq!((report.matched as u64, report.checked as u64), (stats.checkpoints_matched, stats.checkpoints_checked), "replay::run and the player");
+    let (r, d) = (recorded.digests.last().expect("a film of ticks"), digest(&again));
+    assert_eq!((r.world, r.rng_state, r.s_end, r.s_hash), (d.world, d.rng_state, d.s_end, d.s_hash), "replay::run's world");
 }
 
 fn check_film(recorded: &Recorded, ticks: u32) -> Film {
@@ -587,21 +594,31 @@ fn metagame_battle_round_trip() {
     let maps = aa_play::mapgen::RandomMapData::load(&root).unwrap();
     let catalog = maps.catalog();
     let info = catalog.rmcs.iter().find(|r| r.ids == catalog.default_rmc).unwrap();
-    let params = aa_play::mapgen::RandomMapParams::defaults(info, 3, 0x0BAD_F00D);
+    let mut params = aa_play::mapgen::RandomMapParams::defaults(info, 3, 0x0BAD_F00D);
     let slots = maps.generate(&params).unwrap().map;
     let setup = setup(&slots, Controller::Computer(1), params.seed, 1);
-    let battle = recording::random_battle(&maps, &data(), &params, &setup, &[]).unwrap();
-    let map = Arc::new(battle.generated.map.clone());
     let none = vec![StartPick::default(); setup.players.len()];
     let open = vec![StartPick { random_nation: false, random_general: true }; setup.players.len()];
+    // What the launch orders add: a thing of the battle without them.
+    let plain = recording::random_battle(&maps, &data(), &params, &setup, &[]).unwrap();
+    let plain = World::new_skirmish_with(data(), Arc::new(plain.generated.map.clone()), &setup, &none).unwrap();
+    let actor = plain.orgs.first().map(|o| plain.data.def(o.def).id.clone()).unwrap_or_else(|| plain.data.def(plain.actors[0].def).id.clone());
+    let things = |w: &World| w.actors.iter().filter(|a| w.data.def(a.def).id == actor).count() + w.orgs.iter().filter(|o| w.data.def(o.def).id == actor).count();
+    let without = things(&plain);
+    // 0x594930 places KingdomInfo +0x5C's actors in the generator (AddKingdomAdditionalActor
+    // 0x945840 fills it, a film's kingdom rows bring it back): the battle is generated with
+    // them, as the client does it and as the film's replay will.
+    params.additional_actors = vec![(setup.players[0].name.clone(), actor.clone()), (setup.players[2].name.clone(), actor.clone())];
+    let battle = recording::random_battle(&maps, &data(), &params, &setup, &[]).unwrap();
+    let map = Arc::new(battle.generated.map.clone());
     let mut world = World::new_skirmish_with(data(), map, &setup, &none).unwrap();
+    assert!(things(&world) > without, "the launch orders' actors stand on the map: {} against {without}", things(&world));
     aa_play::ai::attach(&mut world, ai());
     aa_play::special_ops::attach(&mut world, generals());
     for (k, general) in battle.generals.iter().enumerate() {
         aa_play::special_ops::set_general(&mut world, k as u32, general.as_deref());
     }
     client_start(&mut world);
-    let actor = world.orgs.first().map(|o| world.data.def(o.def).id.clone()).unwrap_or_else(|| world.data.def(world.actors[0].def).id.clone());
     let resource = world.data.resources[0].id.clone();
     let extras = recording::BattleExtras {
         properties: vec![(0, "metagame_test_technology".to_owned())],

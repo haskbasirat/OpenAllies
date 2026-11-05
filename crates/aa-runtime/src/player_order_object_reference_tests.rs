@@ -39,12 +39,22 @@ fn player_order_object_reference_native_rows_replay() {
             }
             "read" => {
                 let count = input["count"].as_u64().unwrap() as usize;
-                let value = input["value"].as_u64().unwrap() as u32;
+                // The oracle stores `value << bit`. 0x40D5D0 reads across a byte with its
+                // fragment packing (the first byte's bits land in the top byte), so 0x76A960
+                // judges the value as read: 1107 stored at bit 5 reads as 906.
+                let (bit, width) = (input["bit"].as_u64().unwrap() as u8, input["bits"].as_u64().unwrap() as u8);
+                let stored = input["value"].as_u64().unwrap() << bit | input["noise"].as_u64().unwrap() << (bit + width);
+                let bytes = stored.to_le_bytes();
+                let mut cursor = aa_orders::Cursor::with_bounds(&bytes, aa_orders::Position { byte: 0, bit }, 64).unwrap();
+                let value = cursor.read_uint(width).unwrap();
+                let position = aa_orders::Position { byte: out["byte"].as_u64().unwrap() as usize, bit: out["bit"].as_u64().unwrap() as u8 };
+                assert_eq!(cursor.position(), position, "{row}");
                 let kinds = input["kinds"].as_array().unwrap();
                 let mut asked = None;
                 let result = reader_76a960::<String>(value, count, |v| {
                     asked = Some(v);
-                    Ok(kinds[v as usize].as_u64().map(|k| k as u32))
+                    // The oracle lists 48 slots at most; past them its heap reads NULL.
+                    Ok(kinds.get(v as usize).and_then(|k| k.as_u64()).map(|k| k as u32))
                 })
                 .unwrap();
                 assert_eq!(result.map(|v| v as u64), out["resolved"].as_u64(), "{row}");

@@ -42,13 +42,6 @@ fn env_path(var: &str, default: &Path) -> PathBuf {
     std::env::var_os(var).map_or_else(|| default.to_path_buf(), PathBuf::from)
 }
 
-fn install_id_tables(registries: &Registries) {
-    replay::set_property_ids(registries.property_ids.clone());
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
-}
-
 struct Run {
     comparison: StateComparison,
     report: replay::ReplayReport,
@@ -202,7 +195,7 @@ fn run(
     let report = replay::run_observed(
         film,
         &mut world,
-        &registries.object_ids,
+        &registries,
         Some(last),
         false,
         &replay::Aliases::new(),
@@ -443,7 +436,6 @@ fn berlin_native_state_census() {
         saved_deferred(&root)
     );
     eprintln!("FormationData slots: {:?}", registries.formation_ids);
-    install_id_tables(&registries);
     let only = std::env::var("AA_PARITY_CENSUS_RUNS").unwrap_or_default();
     let runs = [
         ("free", Forcing::default()),

@@ -115,12 +115,6 @@ fn berlin_film_replays_into_aa_play() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
     let film = Film::read(&film_path(), &registries).unwrap();
-    // The id tables, computed from the data; `tests/registry_counts.rs` proves
-    // the SharedProperty slots against the original.
-    replay::set_formation_ids(registries.formation_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
-    replay::set_property_ids(registries.property_ids.clone());
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let map = Arc::new(aa_play::GameMap::load_with(&root, MAP, &data).unwrap());
 
@@ -161,7 +155,7 @@ fn berlin_film_replays_into_aa_play() {
         "every record-2 selection resolves to its player's Corps HQ"
     );
 
-    let report = replay::run(&film, &mut world, &registries.object_ids, None, false);
+    let report = replay::run(&film, &mut world, &registries, None, false);
     print_difference("replay", &report);
     assert_eq!(report.steps as usize, film.world_ticks());
     assert_eq!(report.checked, film.checkpoints.len());
@@ -188,7 +182,7 @@ fn berlin_film_replays_into_aa_play() {
     if first.is_some_and(|c| c.tick == 17 && c.ours.0 == c.film.0) {
         let mut world = replay::build(&plan, &root, data, map).unwrap();
         world.native_rng.state = MEASURED_FIRST_GETTER_STATE;
-        let next = replay::run(&film, &mut world, &registries.object_ids, None, true);
+        let next = replay::run(&film, &mut world, &registries, None, true);
         print_difference("measured battle-start state", &next);
         assert!(
             next.matched >= 23,

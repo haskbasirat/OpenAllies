@@ -146,11 +146,12 @@ struct Lab<'a> {
     gate: bool,
     god: bool,
     fade: u32,
+    fog_debug: u32,
     kingdoms: Vec<(&'static str, u32, u32)>,
 }
 impl<'a> Lab<'a> {
     fn new(c: &'a Value) -> Self {
-        Self { c, calls: Vec::new(), looked_up: false, fog: Vec::new(), kingdom: None, variation_changed: false, e4: 1, gate: false, god: false, fade: 0, kingdoms: Vec::new() }
+        Self { c, calls: Vec::new(), looked_up: false, fog: Vec::new(), kingdom: None, variation_changed: false, e4: 1, gate: false, god: false, fade: 0, fog_debug: 0, kingdoms: Vec::new() }
     }
     fn byte(&self, key: &str) -> u8 {
         self.c.get(key).map_or(0, |v| u(v) as u8)
@@ -187,6 +188,7 @@ impl Reads for Lab<'_> {
             Uvar::SettlementDebug25 => self.byte("u25"),
             Uvar::GuardDebug27 => self.byte("u27"),
             Uvar::ControlDebug29 => self.byte("u29"),
+            Uvar::FogDebug31 => self.fog_debug as u8,
             _ => 0,
         })
     }
@@ -296,15 +298,27 @@ fn frames_7208d0_725340_match_native() {
                 lab.fog = step["fog"].as_array().unwrap().iter().map(u).collect();
                 lab.e4 = u(&step["app_e4"]);
                 let block = &mut blocks[u(&step["block"]) as usize];
-                block.update_7208d0(2, d0, &globals, clock.delta_13c, &mut lab, p).unwrap();
+                let result = block.update_7208d0(2, d0, &globals, clock.delta_13c, &mut lab, p);
                 let calls: Vec<Value> = lab.calls.iter().filter(|c| c[0] != "40FCA0").cloned().collect();
-                assert_eq!(&calls, want["calls"].as_array().unwrap(), "{p:?}");
+                let wanted = want["calls"].as_array().unwrap();
+                if lab.fog_debug != 0 {
+                    // UVar 31 against the +14A cache (0x71B500) sets +14B: the original runs
+                    // 0x71CE70, the debug overlay, and the port says it is not ported. All
+                    // that comes before it is the same, and +141 was cleared by an earlier step.
+                    assert!(result.unwrap_err().contains("71CE70"), "{p:?}");
+                    assert_eq!(wanted.last(), Some(&json!(["71CE70"])), "{p:?}");
+                    assert_eq!(&calls[..], &wanted[..wanted.len() - 1], "{p:?}");
+                } else {
+                    result.unwrap();
+                    assert_eq!(&calls, wanted, "{p:?}");
+                }
                 let mut got = block_state(block);
                 let rev = u(&got["revision"]);
                 got["revision"] = json!(rev);
                 assert_eq!(got, want["block"], "seed {} {p:?} step {step}", c["seed"]);
             } else {
                 let k = step["kingdom"].as_str().map(|k| if k == "k" { "k" } else { "j" });
+                lab.fog_debug = u(&step["fog_debug"]);
                 clock.update_725340(&mut globals, Ok(u(&step["time_ms"])), Ok(k), u(&c["gray_64"]), Ok(u(&step["fog_debug"]) as u8), p).unwrap();
                 let got = json!({"b403c8": globals.fog_debug_b403c8, "b403c9": globals.reblend_b403c9,
                     "b285d4": globals.explored_b285d4, "w138": clock.seconds_138, "w13c": clock.delta_13c,

@@ -57,15 +57,11 @@ fn the_library_and_the_gate_agree_on_berlin() {
     let root = game_root();
     let registries = Registries::load_v14(&root, true).unwrap();
     let film = Film::read(&berlin(), &registries).unwrap();
-    replay::set_formation_ids(registries.formation_ids.clone());
-    replay::set_property_ids(registries.property_ids.clone());
-    aa_parity::mapping::set_ability_ids(registries.ability_ids.clone());
-    aa_parity::mapping::set_layout_ids(registries.layout_ids.clone());
     let data = Arc::new(aa_play::GameData::load(&root).unwrap());
     let map = Arc::new(aa_play::GameMap::load_with(&root, BERLIN_MAP, &data).unwrap());
     let plan = replay::plan(&film, &data, &map).unwrap();
     let mut gate_world = replay::build(&plan, &root, data, map).unwrap();
-    let gate = replay::run(&film, &mut gate_world, &registries.object_ids, None, false);
+    let gate = replay::run(&film, &mut gate_world, &registries, None, false);
 
     let (mut world, mut player) =
         open_film(&berlin(), &FilmData::for_film(&root, &berlin()), SyncMode::Report).unwrap();
@@ -254,6 +250,9 @@ fn report_plays_to_the_end_and_tells_the_mismatch_once() {
     assert_eq!(player.next_record(), player.film_ticks());
 }
 
+/// World ticks the sweep runs on after a film's end.
+const KEEP_WATCHING_TICKS: u32 = 1000;
+
 fn corpus_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/film-corpus")
 }
@@ -367,6 +366,13 @@ fn sweep_every_film_of_the_corpus() {
                         }
                         if cap.is_some_and(|c| player.stats().ticks >= c) {
                             break;
+                        }
+                    }
+                    // A person may keep watching past the end (0x751B07: only the world
+                    // runs from then on), so that must not crash either.
+                    if ended {
+                        for _ in 0..KEEP_WATCHING_TICKS {
+                            player.step(&mut world);
                         }
                     }
                 }));
