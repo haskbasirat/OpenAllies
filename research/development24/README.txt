@@ -296,7 +296,10 @@ WHAT WAS AND WAS NOT TESTED
   copies on one PC, over the PC's own LAN address, in sync for the whole battle. Both
   films of that battle replay with every checkpoint matching.
 - Online: two copies on one PC signed in to Epic's live service, hosted, found and
-  joined a game, launched it, and stayed in sync for 1197 game ticks.
+  joined a game, launched it, and stayed in sync.
+- This build itself, over LAN and online: each player recruited an HQ regiment and
+  moved it, both screens showed both regiments walking to the same places, and the two
+  worlds stayed identical on every tick (935 ticks online, 943 over LAN).
 - Nothing has been tried between two PCs, through a router, or over the Internet yet.
   That is what this build is for: please say what happens.
 - Known problems: maps are not transferred, so both players need the map (the stock
