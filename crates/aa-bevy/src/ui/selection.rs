@@ -419,7 +419,7 @@ fn cursor_ids(front: &super::front::Front, sel: Option<&Selecting>, edge: Option
                 Some(crate::ui::hud::TargetOrder::Attack) => return "attack".into(),
                 Some(crate::ui::hud::TargetOrder::Deploy(_)) => return "unpack".into(),
                 // the commands' cursor_ids (Data/Game/actor_commands*.tgi)
-                Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) => return "move".into(),
+                Some(crate::ui::hud::TargetOrder::Move) | Some(crate::ui::hud::TargetOrder::Rally(_)) | Some(crate::ui::hud::TargetOrder::RecruitAt(..)) => return "move".into(),
                 Some(crate::ui::hud::TargetOrder::Run) => return "retreat".into(),
                 Some(crate::ui::hud::TargetOrder::Guard) => return "guard".into(),
                 // bombard.tgi cursor_ids, and cursor_invalid_ids while the

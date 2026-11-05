@@ -789,6 +789,16 @@ struct Look {
     turrets: Vec<Option<view::TurretView>>,
     /// An aircraft waiting in its hangar (parts hidden).
     in_hangar: bool,
+    /// What falls (StanceFalling, actor state 24): AspectFalling's own model, shown over
+    /// the hidden parts, with the time it started and the frame shown.
+    falling: Option<FallingView>,
+}
+
+struct FallingView {
+    model: Arc<AnimModel>,
+    parts: Vec<Entity>,
+    start: f32,
+    shown: usize,
 }
 
 /// An aircraft created in its airfield's or carrier's hangar waits there
@@ -936,6 +946,7 @@ fn stance_aspect<'a>(stances: &'a [StanceFx], world: &World, actor: &aa_play::Ac
         "dead" => dead,
         "structure_packing" => actor.activity == Activity::Packing,
         "structure_unpacking" => actor.activity == Activity::Unpacking,
+        "falling" => aa_play::transport::is_falling(world, actor.id),
         _ => false,
     };
     // A dead actor's health is 0, under every stance's health level; only
@@ -1098,6 +1109,9 @@ fn set_up(
                 library.animated.request(&m, look.team);
             }
         }
+    }
+    if let Some(m) = aspect_model(fx, "falling") {
+        library.animated.request(&m, look.team);
     }
 }
 
@@ -1454,8 +1468,56 @@ pub fn sync_actors(
             }
             view.look.in_hangar = hangar;
         }
+        // A paratrooper's fall: the stance's AspectFalling is a model of its own, soldier
+        // and parachute, with `disable_animations` (template_aspect_aa.tgi); the
+        // WhenLeave parachute_close plays where it ends.
+        let falling = aa_play::transport::is_falling(world, actor.id);
+        if falling && view.look.falling.is_none()
+            && let Some(path) = tables.as_deref().and_then(|t| t.actors.get(&world.data.def(actor.def).id.to_ascii_lowercase())).and_then(|fx| aspect_model(fx, "falling"))
+            && let Some(Some(m)) = library.animated.get(&path, view.look.team, &mut meshes, &mut materials, &mut images)
+        {
+            let mut parts = Vec::new();
+            for (frames, material) in m.parts.iter() {
+                if let Some(first) = frames.first() {
+                    parts.push(commands.spawn((Mesh3d(first.clone()), MeshMaterial3d(material.clone()), ChildOf(entity))).id());
+                }
+            }
+            view.look.falling = Some(FallingView { model: m, parts, start: world.time, shown: 0 });
+            for p in &view.parts {
+                if let Ok((_, _, mut v)) = parts_q.get_mut(*p) {
+                    *v = Visibility::Hidden;
+                }
+            }
+        }
+        if let Some(f) = view.look.falling.as_mut() {
+            if falling {
+                let shown = crate::effects::anim::frame_at(f.model.frames, f.model.looping, world.time - f.start);
+                if shown != f.shown {
+                    f.shown = shown;
+                    for (part, (frames, _)) in f.parts.iter().zip(f.model.parts.iter()) {
+                        if let Some(h) = frames.get(shown).or(frames.last())
+                            && let Ok((mut m, _, _)) = parts_q.get_mut(*part)
+                        {
+                            m.0 = h.clone();
+                        }
+                    }
+                }
+            } else {
+                for p in f.parts.drain(..) {
+                    commands.entity(p).despawn();
+                }
+                view.look.falling = None;
+                for p in &view.parts {
+                    if let Ok((_, _, mut v)) = parts_q.get_mut(*p) {
+                        *v = Visibility::Inherited;
+                    }
+                }
+                // (the equipment's parts are hidden again below)
+                view.look.applied = None;
+            }
+        }
         // Equipment shown / hidden (FXC_Equipment).
-        if !view.look.in_hangar && view.look.applied.as_ref() != Some(&view.look.hidden) && !view.look.equipment.is_empty() {
+        if !view.look.in_hangar && view.look.falling.is_none() && view.look.applied.as_ref() != Some(&view.look.hidden) && !view.look.equipment.is_empty() {
             for (i, eq) in view.look.equipment.iter().enumerate() {
                 let Some(eq) = eq else { continue };
                 if let Some(&part) = view.parts.get(i)

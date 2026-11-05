@@ -1001,6 +1001,14 @@ pub fn battle_input(
                             b.pending.push(Command::SetRallyPoint { kingdom: local, building, at: g.truncate() });
                         }
                     }
+                    // recruit_location (0x11): 0x583A70 with the point
+                    TargetOrder::RecruitAt(building, def) => {
+                        if let Some(g) = ground {
+                            order_marks::move_command(&mut marks, g.truncate());
+                            let order = aa_play::orders::ActorOrder::RecruitAt { def, at: g.truncate(), parameters: None };
+                            b.pending.push(Command::Order { kingdom: local, units: vec![Unit::Actor(building)], order });
+                        }
+                    }
                     // bombard (1) at the clicked enemy, else the ground point
                     TargetOrder::Bombard => {
                         let units = own_movable(&b);

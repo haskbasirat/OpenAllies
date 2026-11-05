@@ -115,6 +115,8 @@ pub enum TargetOrder {
     Explore,
     /// `set_rally_point` (0x10) of a building.
     Rally(aa_play::ActorId),
+    /// `recruit_location` (0x11): a deployment menu's item, by transport to the clicked ground.
+    RecruitAt(aa_play::ActorId, aa_play::DefId),
     /// A general ability's targeting state (`UseFactionAbility %i`,
     /// ui/abilities.rs, combat owner).
     Ability(usize),
@@ -181,6 +183,8 @@ struct ButtonInfo {
 enum ActionPage {
     Main,
     Recruit(aa_play::ActorId),
+    /// `recruit_location` (`0x5F7350`, flag 0x800000): what comes by transport.
+    RecruitLocation(aa_play::ActorId),
     /// `research` (`0x5F77B0`): the structure's research items.
     Research(aa_play::ActorId),
     /// `construct` (`0x5F7350`, flag 0x40000): the structures the selected
@@ -605,7 +609,7 @@ impl GameHud {
         }
         // a recruit or research page whose building left the selection
         // closes
-        if let ActionPage::Recruit(id) | ActionPage::Research(id) = self.page {
+        if let ActionPage::Recruit(id) | ActionPage::RecruitLocation(id) | ActionPage::Research(id) = self.page {
             if selected_structure(b) != Some(id) || b.world.actor(id).is_none() {
                 self.page = ActionPage::Main;
             }
@@ -996,6 +1000,11 @@ impl GameHud {
                 self.page = ActionPage::Recruit(arg?);
                 None
             }
+            "recruit_location_page" => {
+                self.page = ActionPage::RecruitLocation(arg?);
+                None
+            }
+            "recruit_at" => Some(GameAction::Target(TargetOrder::RecruitAt(arg?, arg2?))),
             "recruit_back" => {
                 self.page = ActionPage::Main;
                 None
@@ -1183,6 +1192,7 @@ impl GameHud {
             KeyCode::KeyF => &["set_rally_point"],
             KeyCode::KeyP => &["pack", "unpack"],
             KeyCode::KeyD => &["recruit_page"],
+            KeyCode::KeyL => &["recruit_location_page"],
             KeyCode::KeyC => &["recruit_back", "hq_attach"],
             KeyCode::Delete => &["sell", "hq_detach", "disband"],
             _ => return None,
@@ -2137,7 +2147,7 @@ impl View<'_> {
         let resolve = |k: &str| if k.is_empty() { String::new() } else { self.name(k) };
         let w = self.world()?;
         match verb {
-            "recruit" => {
+            "recruit" | "recruit_at" => {
                 // a recruit page item (0x5F64A0): the organization's name,
                 // then the "Requires" row while a requirement is missing
                 // (0x63BDF0), the "Cost" and "Upkeep" rows with the values
@@ -2278,6 +2288,7 @@ impl View<'_> {
             "command_cancel" => Some((resolve(&self.command_cancel.name), resolve(&self.command_cancel.tooltip))),
             "team_command" => self.team_commands.get(arg? as usize).map(|t| (resolve(&t.name), resolve(&t.tooltip))),
             "recruit_page" => self.command("recruit").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
+            "recruit_location_page" => self.command("recruit_location").map(|c| (resolve(&c.name), resolve(&c.tooltip))),
             "sell" => {
                 let c = self.command("sell")?;
                 let a = w.actor(arg?)?;
@@ -2408,7 +2419,8 @@ impl HudWorld for View<'_> {
             }
             return Some(HudImpact { upkeep, cost: vec![0.0; self.resources.len()] });
         }
-        let rest = self.hovered?.strip_prefix("AAPlay recruit ")?;
+        let hovered = self.hovered?;
+        let rest = hovered.strip_prefix("AAPlay recruit ").or_else(|| hovered.strip_prefix("AAPlay recruit_at "))?;
         let def = rest.split_whitespace().nth(1)?.parse::<u32>().ok()?;
         let d = w.data.def(def);
         let mut upkeep = self.econ_of(def);
@@ -2530,7 +2542,8 @@ impl HudWorld for View<'_> {
                 return v;
             }
             match self.page {
-                ActionPage::Recruit(id) => {
+                ActionPage::Recruit(id) | ActionPage::RecruitLocation(id) => {
+                    let by_air = matches!(self.page, ActionPage::RecruitLocation(_));
                     let id = *id;
                     let Some(a) = w.actor(id) else { return vec![None; 12] };
                     let def = w.data.def(a.def);
@@ -2539,7 +2552,11 @@ impl HudWorld for View<'_> {
                     // finds its requirements met (code 0); code 2 leaves its
                     // slot empty. The price is not part of it: an unaffordable
                     // recruit is refused when pressed (0x6157B0 -> 0x582950).
-                    for (i, r) in def.recruits.iter().take(11).enumerate() {
+                    // Flag 0x200000 (recruit) passes over what has ActorData +0x184,
+                    // a transport, 0x800000 (recruit_location) over what has none:
+                    // neither takes a slot.
+                    let entries = def.recruits.iter().filter(|r| w.data.def(**r).transport_actor.is_some() == by_air);
+                    for (i, r) in entries.take(11).enumerate() {
                         let code = aa_play::production::recruit_requirements(w, id, *r).code;
                         if code == 2 {
                             continue;
@@ -2547,7 +2564,7 @@ impl HudWorld for View<'_> {
                         let rd = w.data.def(*r);
                         v[i] = Some(HudAction {
                             texture: rd.icon.clone().unwrap_or_default(),
-                            command: format!("AAPlay recruit {id} {r}"),
+                            command: if by_air { format!("AAPlay recruit_at {id} {r}") } else { format!("AAPlay recruit {id} {r}") },
                             enabled: code == 0,
                             selected: false,
                             targeted: false,
@@ -2743,7 +2760,14 @@ impl HudWorld for View<'_> {
                         if let Some(a) = w.actor(*id).filter(|a| own(a.kingdom)) {
                             let def = w.data.def(a.def);
                             if !def.recruits.is_empty() {
-                                acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
+                                // 0x582C40 (0x581F30): `recruit` for a list with an entry
+                                // without a transport, `recruit_location` for one with
+                                if def.recruits.iter().any(|r| w.data.def(*r).transport_actor.is_none()) {
+                                    acts.extend(self.act("recruit", format!("AAPlay recruit_page {id}")));
+                                }
+                                if def.recruits.iter().any(|r| w.data.def(*r).transport_actor.is_some()) {
+                                    acts.extend(self.act("recruit_location", format!("AAPlay recruit_location_page {id}")));
+                                }
                                 acts.extend(self.act("set_rally_point", format!("AAPlay set_rally_point {id}")));
                             }
                             // a ResearchComponent (actor +0xB4): research

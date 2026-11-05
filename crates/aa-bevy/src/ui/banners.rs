@@ -28,9 +28,9 @@
 //! the same fraction of the screen height as at the default zoom, while the
 //! soldiers are 1.6x larger).
 //!
-//! Compare against the original: the badge each HQ gets (here: per
-//! kingdom, HQ organizations in creation order take the nation's badges in
-//! list order), the banner raise / fade AVars (BannerRaiseHeight 2,
+//! The badge of an HQ is its HQ number (0x4E2640, see `HqNumbers`).
+//!
+//! Compare against the original: the banner raise / fade AVars (BannerRaiseHeight 2,
 //! BannerRaiseSpeed 0.5, BannerFadeDurationMS 1000) are not modelled, and
 //! the morale bar's height over the banner is read from
 //! hd-v10-original-hq.png (1.7 m over the banner centre).
@@ -85,6 +85,7 @@ pub struct BannerArt {
     banners: HashMap<String, String>,
     /// nation short id -> badge texture paths (data paths).
     badges: HashMap<String, Vec<String>>,
+    hq_numbers: HqNumbers,
     layers: HashMap<String, Option<image::RgbaImage>>,
     composed: HashMap<Key, Handle<StandardMaterial>>,
     focus: Vec<Handle<StandardMaterial>>,
@@ -337,21 +338,79 @@ pub fn relation_colors() -> [[f32; 3]; 4] {
     [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.8, 0.8, 0.8], [1.0, 0.0, 0.0]]
 }
 
-/// The HQ badge of every HQ organization: per kingdom, in creation order,
-/// the nation's badges in list order.
-fn hq_badges(w: &aa_play::World, art: &BannerArt) -> HashMap<u32, String> {
-    let mut out = HashMap::new();
-    let mut next: HashMap<u32, usize> = HashMap::new();
-    for o in &w.orgs {
-        if !w.data.def(o.def).has_component("HQComponent") {
-            continue;
+/// The HQ numbers of a battle. 0x4E2640: the word the HQ's InitCreate drew, modulo the
+/// nation's badge count (kingdom +0x234, +0x40); when that number is on the kingdom's used
+/// list (+0x36C), the lowest one free instead, none when all are used. An HQ that goes
+/// gives its number back (0x574550 -> 0x4E3C30).
+#[derive(Default)]
+struct HqNumbers {
+    /// Organization -> (the word drawn, its number).
+    numbers: HashMap<u32, (u32, Option<usize>)>,
+    /// Kingdom -> its used numbers.
+    used: HashMap<u32, Vec<usize>>,
+    tick: u64,
+}
+
+impl HqNumbers {
+    /// The word's number, with this kingdom's list of `used` numbers.
+    fn pick(draw: u32, count: usize, used: &[usize]) -> Option<usize> {
+        if count == 0 {
+            return None;
         }
-        let Some(k) = w.kingdoms.iter().find(|k| k.id == o.kingdom) else { continue };
-        let Some(list) = art.badges.get(&lower(&k.nation)).filter(|l| !l.is_empty()) else { continue };
-        let i = next.entry(o.kingdom).or_default();
-        out.insert(o.id, list[*i % list.len()].clone());
-        *i += 1;
+        let first = draw as usize % count;
+        if !used.contains(&first) {
+            return Some(first);
+        }
+        (0..count).find(|n| !used.contains(n))
     }
+
+    fn update(&mut self, w: &aa_play::World, badges: &HashMap<String, Vec<String>>) {
+        // a new battle
+        let same_world = w.tick >= self.tick && self.numbers.iter().all(|(o, (draw, _))| w.books.orgs.get(*o as usize).and_then(|b| b.hq_draw) == Some(*draw));
+        if !same_world {
+            *self = Self::default();
+        }
+        self.tick = w.tick;
+        for o in &w.orgs {
+            let Some(draw) = w.books.orgs.get(o.id as usize).and_then(|b| b.hq_draw) else { continue };
+            if !o.alive {
+                // (the number of one that never got one here is nobody's)
+                if let Some((_, Some(n))) = self.numbers.get(&o.id).copied()
+                    && let Some(used) = self.used.get_mut(&o.kingdom)
+                {
+                    used.retain(|u| *u != n);
+                    self.numbers.insert(o.id, (draw, None));
+                }
+                continue;
+            }
+            if self.numbers.contains_key(&o.id) {
+                continue;
+            }
+            let Some(k) = w.kingdoms.iter().find(|k| k.id == o.kingdom) else { continue };
+            let count = badges.get(&lower(&k.nation)).map_or(0, |l| l.len());
+            let used = self.used.entry(o.kingdom).or_default();
+            let number = Self::pick(draw, count, used);
+            if let Some(n) = number {
+                used.push(n);
+            }
+            self.numbers.insert(o.id, (draw, number));
+        }
+    }
+}
+
+/// The HQ badge of every HQ organization: its number's badge of the nation's list.
+fn hq_badges(w: &aa_play::World, art: &mut BannerArt) -> HashMap<u32, String> {
+    let mut numbers = std::mem::take(&mut art.hq_numbers);
+    numbers.update(w, &art.badges);
+    let mut out = HashMap::new();
+    for o in w.orgs.iter().filter(|o| o.alive) {
+        let Some((_, Some(n))) = numbers.numbers.get(&o.id) else { continue };
+        let Some(k) = w.kingdoms.iter().find(|k| k.id == o.kingdom) else { continue };
+        if let Some(badge) = art.badges.get(&lower(&k.nation)).and_then(|l| l.get(*n)) {
+            out.insert(o.id, badge.clone());
+        }
+    }
+    art.hq_numbers = numbers;
     out
 }
 
@@ -383,7 +442,7 @@ pub fn update(
     let w = &b.world;
     let data = &front.ui.store.root;
     let view_pos: HashMap<u32, Vec3> = views.iter().map(|(v, tf)| (v.id, tf.translation())).collect();
-    let badges = hq_badges(w, &art);
+    let badges = hq_badges(w, &mut art);
     let flash_on = (time.elapsed_secs() / FLASH_SECONDS) as u64 % 2 == 0;
     // the focused organizations (0x458ED0: the focus VFX runs for an
     // object flagged hovered or selected, 0x8000 / 0x10000, or whose

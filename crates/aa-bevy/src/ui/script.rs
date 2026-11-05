@@ -55,6 +55,10 @@ pub struct Script {
     frames: u32,
     pointer: Option<Vec2>,
     size: Vec2,
+    /// The kingdoms whose first shot was logged.
+    fired: Vec<aa_play::KingdomId>,
+    /// Frames and their longest time since the last stats line, for its frame rate.
+    since_stats: (u32, f32, f32),
 }
 
 impl Script {
@@ -62,7 +66,7 @@ impl Script {
         let path = std::env::var_os("AA_UI_SCRIPT")?;
         let text = std::fs::read_to_string(&path).map_err(|e| error!("AA_UI_SCRIPT {:?}: {e}", path)).ok()?;
         let steps: Vec<Value> = serde_json::from_str(&text).map_err(|e| error!("AA_UI_SCRIPT: {e}")).ok()?;
-        Some(Self { steps, at: 0, phase: 0, timer: 0.0, frames: 0, pointer: None, size: Vec2::ONE })
+        Some(Self { steps, at: 0, phase: 0, timer: 0.0, frames: 0, pointer: None, size: Vec2::ONE, fired: Vec::new(), since_stats: (0, 0.0, 0.0) })
     }
 
     fn step(&self) -> Option<&Value> {
@@ -260,6 +264,36 @@ fn key_code(name: &str) -> Option<KeyCode> {
     })
 }
 
+/// The events of this frame that tell how a side plays, as log lines of a scripted run.
+fn log_play(s: &mut Script, b: &crate::session::Battle) {
+    let w = &b.world;
+    let name = |k: aa_play::KingdomId| w.kingdoms.iter().find(|x| x.id == k).map_or("?", |x| x.name.as_str());
+    let time = w.tick as f32 * aa_play::DT;
+    let def = |a: aa_play::ActorId| w.actor(a).map_or("?", |x| w.data.def(x.def).id.as_str());
+    let org = |o: aa_play::OrgId| w.orgs.get(o as usize).map_or("?", |g| w.data.def(g.def).id.as_str());
+    for e in &b.frame_events {
+        match e {
+            aa_play::Event::Recruited { kingdom, org: o, actor } => info!("play {time:.1} recruited {} {} {}", name(*kingdom), o.map_or("", |o| org(o)), actor.map_or("", |a| def(a))),
+            aa_play::Event::Deployed { building } => info!("play {time:.1} deployed {} {} at {:?}", w.actor(*building).and_then(|a| a.kingdom).map_or("?", |k| name(k)), def(*building), w.actor(*building).map(|a| a.pos.truncate())),
+            aa_play::Event::Captured { actor, kingdom } => info!("play {time:.1} captured {} by {}", def(*actor), name(*kingdom)),
+            aa_play::Event::SpecialOperation { kingdom, ability, at, .. } => info!("play {time:.1} ability {ability} by {} at {at:?}", name(*kingdom)),
+            aa_play::Event::Routed { org: o } => info!("play {time:.1} routed {} of {}", org(*o), w.orgs.get(*o as usize).map_or("?", |g| name(g.kingdom))),
+            aa_play::Event::OrgDestroyed { org: o } => info!("play {time:.1} destroyed {} of {}", org(*o), w.orgs.get(*o as usize).map_or("?", |g| name(g.kingdom))),
+            aa_play::Event::KingdomDefeated { kingdom } => info!("play {time:.1} defeated {}", name(*kingdom)),
+            aa_play::Event::Victory { team } => info!("play {time:.1} victory team {team}"),
+            aa_play::Event::Refused { kingdom, reason } => info!("play {time:.1} refused {}: {reason}", name(*kingdom)),
+            aa_play::Event::ConstructionStarted { actor, kingdom } => info!("play {time:.1} construction {} by {}", def(*actor), name(*kingdom)),
+            aa_play::Event::Fired { shooter, .. } => {
+                if let Some(k) = w.actor(*shooter).and_then(|a| a.kingdom).filter(|k| !s.fired.contains(k)) {
+                    s.fired.push(k);
+                    info!("play {time:.1} first shot of {} by {}", name(k), def(*shooter));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Timed steps (wait, shot, until_state, exit).
 pub fn run(
     mut commands: Commands,
@@ -277,6 +311,13 @@ pub fn run(
     mut front: Option<ResMut<super::front::Front>>,
 ) {
     let Some(mut s) = script else { return };
+    // A scripted run logs what tells how a side plays, whoever it is.
+    if let Some(b) = battle.as_ref() {
+        log_play(&mut s, b);
+    }
+    s.since_stats.0 += 1;
+    s.since_stats.1 += time.delta_secs();
+    s.since_stats.2 = s.since_stats.2.max(time.delta_secs());
     // {"tint_actions": [r, g, b]} / {"tint_actions": null}: a verification
     // aid that draws every action button tinted (texture effect mode 2, 3
     // when disabled), for the renderer's tint stages
@@ -377,7 +418,8 @@ pub fn run(
     if let Some(label) = s.step().and_then(|v| v.get("stats")).and_then(|v| v.as_str()).map(str::to_string) {
         if let Some(b) = battle.as_ref() {
             let w = &b.world;
-            info!("stats {label}: tick {} winner {:?}", w.tick, w.winner);
+            info!("stats {label}: tick {} winner {:?} fps {:.1} longest frame {:.0} ms actors {}", w.tick, w.winner, s.since_stats.0 as f32 / s.since_stats.1.max(0.001), s.since_stats.2 * 1000.0, w.actors.iter().filter(|a| a.alive).count());
+            s.since_stats = (0, 0.0, 0.0);
             for k in w.kingdoms.iter().filter(|k| !k.independent) {
                 let alive = |a: &&aa_play::Actor| a.alive && a.kingdom == Some(k.id);
                 let buildings = w.actors.iter().filter(alive).filter(|a| w.data.def(a.def).class == Some(aa_play::DefClass::Building)).count();
@@ -385,6 +427,22 @@ pub fn run(
                 let dead = w.actors.iter().filter(|a| !a.alive && a.kingdom == Some(k.id)).count();
                 let orgs = w.orgs.iter().filter(|o| o.alive && o.kingdom == k.id).count();
                 info!("stats {label}: {} {} team {} orgs {orgs} units {units} buildings {buildings} dead {dead} money {:.0} defeated {}", k.name, k.nation, k.team, k.stockpile[aa_play::data::MONEY], k.defeated);
+                // where its men stand, what its regiments are told, what it holds
+                let men: Vec<Vec2> = w.actors.iter().filter(alive).filter(|a| a.org.is_some() && w.data.def(a.def).class != Some(aa_play::DefClass::Building)).map(|a| a.pos.truncate()).collect();
+                let mean = men.iter().copied().sum::<Vec2>() / men.len().max(1) as f32;
+                let spread = men.iter().map(|p| p.distance(mean)).fold(0.0, f32::max);
+                let (mut idle, mut moving, mut attacking, mut deploying) = (0, 0, 0, 0);
+                for o in w.orgs.iter().filter(|o| o.alive && o.kingdom == k.id) {
+                    match o.order {
+                        aa_play::Order::Idle => idle += 1,
+                        aa_play::Order::Move { .. } => moving += 1,
+                        aa_play::Order::Attack { .. } => attacking += 1,
+                        aa_play::Order::Deploy { .. } => deploying += 1,
+                    }
+                }
+                let cities = w.actors.iter().filter(alive).filter(|a| w.data.def(a.def).city).count();
+                let hqs = w.actors.iter().filter(alive).filter(|a| !w.data.def(a.def).recruits.is_empty()).count();
+                info!("stats {label}: {} men at {mean:.0} spread {spread:.0}, orders idle {idle} move {moving} attack {attacking} deploy {deploying}, cities {cities} recruiters {hqs}", k.name);
             }
             for u in &b.selection {
                 info!("stats {label}: command mask {:#x} guess at a point {:?}", aa_play::orders::guess::action_bits(w, *u), aa_play::orders::guess::guess(w, *u, aa_play::orders::guess::Fields { flags: 0x14, target: 0 }, b.selection.len() > 1));
@@ -413,7 +471,9 @@ pub fn run(
     }
     // actor steps become pointer steps at the actor's screen position
     if let (Some(step), Some(b)) = (s.step().cloned(), &battle) {
-        let kind = |k: &str| step.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        // ("$nation" in a name: the local kingdom's nation)
+        let nation = b.world.kingdoms.iter().find(|k| k.id == b.local).map(|k| k.nation.clone()).unwrap_or_default();
+        let kind = |k: &str| step.get(k).and_then(|v| v.as_str()).map(|s| s.replace("$nation", &nation));
         let w = &b.world;
         let team = |k: Option<aa_play::KingdomId>| k.and_then(|k| w.kingdoms.iter().find(|x| x.id == k)).map(|x| x.team);
         let local_team = team(Some(b.local));

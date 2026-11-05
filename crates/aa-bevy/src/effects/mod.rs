@@ -261,6 +261,8 @@ fn actor_state(world: &aa_play::World, a: &aa_play::Actor, state: &str) -> bool 
         "construction" | "active_construction" => world.books.actor(a.id).is_some_and(|b| b.constructing),
         "under_siege" => aa_play::supply::under_siege(world, a.id),
         "out_of_supply" => world.books.actor(a.id).is_some_and(|b| b.out_of_supply),
+        // state 24: the WhenLeave parachute_close of a paratrooper
+        "falling" => aa_play::transport::is_falling(world, a.id),
         _ => false,
     }
 }

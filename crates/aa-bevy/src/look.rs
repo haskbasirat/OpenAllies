@@ -684,7 +684,8 @@ pub fn water_material(texture: Option<Handle<Image>>, order: usize) -> OriginalM
         base: StandardMaterial {
             base_color: Color::WHITE,
             base_color_texture: texture,
-            alpha_mode: AlphaMode::Blend,
+            // (the shader's `over_bed` writes a premultiplied colour)
+            alpha_mode: AlphaMode::Premultiplied,
             depth_bias: -1.0e8 + order as f32 * 1000.0,
             cull_mode: None,
             perceptual_roughness: 1.0,

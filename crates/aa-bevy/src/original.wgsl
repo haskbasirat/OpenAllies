@@ -98,6 +98,23 @@ fn to_linear(c: vec3<f32>) -> vec3<f32> {
     return select(hi, lo, c <= vec3<f32>(0.04045));
 }
 
+// The colour of a river bed on the gamma scale, the point of `over_bed`.
+const WATER_BED = vec3<f32>(0.55, 0.53, 0.38);
+
+// The water's NiAlphaProperty 0xED (SRCALPHA / INVSRCALPHA) runs on gamma values in the
+// original and on linear values here, which lets the brown bed through: the deep band
+// goes grey and purple. On gamma values the result is to_linear(a s + (1 - a) to_gamma(d));
+// a premultiplied blend writes p + (1 - k') d, so this writes the line that touches that
+// curve at the bed's colour: exact there, a first order approximation elsewhere.
+fn over_bed(s: vec3<f32>, a: f32) -> vec4<f32> {
+    let bed = to_linear(WATER_BED);
+    let on_gamma = a * s + (1.0 - a) * WATER_BED;
+    let e = vec3<f32>(0.01);
+    let slope = (to_linear(on_gamma + e) - to_linear(on_gamma - e)) / (to_linear(WATER_BED + e) - to_linear(WATER_BED - e)) * (1.0 - a);
+    let k = clamp((slope.r + slope.g + slope.b) / 3.0, 0.0, 1.0);
+    return vec4<f32>(max(to_linear(on_gamma) - k * bed, vec3<f32>(0.0)), 1.0 - k);
+}
+
 fn alpha_passes(a: f32, func: u32, threshold: f32) -> bool {
     switch func {
         case 2u: { return a < threshold; }
@@ -208,6 +225,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     }
     // emissive.w: AlphaMode::Add (ONE / ONE), whose blend state takes alpha 0
     colour = mix(colour, look.lirp.rgb, look.lirp.a);
+#ifdef VERTEX_COLORS
+    if look.ground.z > 0.5 {
+        out.color = over_bed(colour, base.a);
+        return out;
+    }
+#endif
     out.color = vec4<f32>(to_linear(colour), select(base.a, 0.0, look.emissive.w > 0.5));
     return out;
 }

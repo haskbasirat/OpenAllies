@@ -135,7 +135,10 @@ pub fn created(world: &mut World, def: DefId, made: Made) {
                 }
             }
         } else if bit == HQ {
-            world.random_u32_at(sites::HQ_NUMBER);
+            let draw = world.random_u32_at(sites::HQ_NUMBER);
+            if let Made::Org(o) = made {
+                world.books.org_mut(o).hq_draw = Some(draw);
+            }
         } else if bit == DENIZEN {
             // 0x568750 (with the InitExisting 0x5687E0 a created actor also
             // runs): queue 1 when the guard range is positive or the

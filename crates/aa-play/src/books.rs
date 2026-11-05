@@ -383,6 +383,10 @@ pub struct Deployment {
 pub struct OrgBooks {
     /// Organization +50[slot]: health rebuilt so far for an empty slot.
     pub progress: Vec<f32>,
+    /// The word the HQ InitCreate drew (0x574610 -> 0x4E2640). It picks the HQ's number, the
+    /// nation's badge on its banner, by the kingdom's used list, which only the view reads.
+    #[serde(default)]
+    pub hq_draw: Option<u32>,
     /// As `ActorBooks::saved_techs`.
     #[serde(default)]
     pub saved_techs: Option<usize>,
