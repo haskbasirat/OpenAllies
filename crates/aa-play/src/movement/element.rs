@@ -1505,8 +1505,15 @@ impl element_move::World for Host<'_> {
             let zone_slots = if self.world.fog.engine.as_ref().is_some_and(|e| e.has_zoc(o)) { vec![None, None, None, None, Some(actor)] } else { Vec::new() };
             return Ok(element_move::Actor { flags: 0, position: bits(org.anchor), mover: None, mind: None, component74: None, organization: Some(actor), element: None, component88: None, component_d0: false, kingdom_slots: zone_slots });
         }
+        // An object of the map: Thing +8 and its place, no Mind or Mover.
+        if space::is_scenery(actor) {
+            let m = self.ms.space.as_ref().and_then(|s| s.index.member(actor + 1).ok()).ok_or_else(|| err("object absent"))?;
+            return Ok(element_move::Actor { flags: m.actor.flags, position: m.actor.position, mover: None, mind: None, component74: None, organization: None, element: None, component88: None, component_d0: false, kingdom_slots: Vec::new() });
+        }
         let a = self.world.actors.get(actor as usize).ok_or_else(|| err("actor absent"))?;
-        let flags = u32::from(!a.alive || a.removed);
+        // Thing +8: `0x52FE60`'s bits 0 and 29 (mode 2's 5 m applies to a thing with a Mover
+        // only), `0x537B90`'s bit 10 before the soft shapes, bit 29 of a thing collided with.
+        let flags = space::thing_flags(self.ms, self.world, actor);
         Ok(element_move::Actor {
             flags,
             position: bits(a.pos.truncate()),
@@ -1639,8 +1646,16 @@ impl element_move::World for Host<'_> {
     fn accepts_target_property(&mut self, _: u32, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
         Ok(false)
     }
-    fn soft_shapes_in_range(&mut self, _: u32, _: u32, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
-        Ok(false)
+    /// `0x4EA0F0` of the source and of the target (position, facing, virtual +0x10), then
+    /// `0x46F100(target, range, source, false)`: a Move at a blocking thing ends touching it.
+    fn soft_shapes_in_range(&mut self, source: u32, target: u32, range: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
+        let Some(s) = self.ms.space.as_ref() else { return Ok(false) };
+        let place = |thing: u32| -> aa_mind::Result<aa_spatial::geometry::Placement> {
+            let m = s.index.member(space::actor_key(thing)).map_err(err)?;
+            Ok(aa_spatial::geometry::Placement { shape: m.soft.clone(), facing: m.actor.facing, position: m.actor.position })
+        };
+        let (from, to) = (place(source)?, place(target)?);
+        aa_spatial::range::shapes_in_range(&to, &from, range, false, PC).map_err(err)
     }
     fn mind_target(&mut self, _: MindId, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<Option<u32>> {
         Ok(None)

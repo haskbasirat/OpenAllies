@@ -751,6 +751,9 @@ fn building_footprints_block_cells() {
     // actor's Move now plans through those (`0x5336B0`), not through the tile footprint.
     hq.blocking = true;
     hq.blocking_words = soft_box(10.0, 10.0);
+    // The tile lists hold a thing by its soft shape (`0x4EA0F0`, `0x4F0E70`); a shipped
+    // building's is the same box as its blocking shape.
+    hq.soft_shape = soft_box(10.0, 10.0);
     data.by_id.insert(hq.id.clone(), data.defs.len() as u32);
     data.defs.push(hq);
     let hq_def = data.defs.len() as u32 - 1;
@@ -1136,12 +1139,20 @@ fn real_orders(mut w: World) {
     let b = spawn(&mut w, rifle, 0, b_at);
     seconds(&mut w, 1.0);
     let target = *w.orgs[b as usize].members.last().unwrap();
-    let on = open(&w, b_at + dir * 50.0);
+    // Sideways, away from the enemy: on a generated map the bases are close, this regiment
+    // walks into their fire and a dead target ends the follow (0x52FD00 bit 0).
+    let on = open(&w, b_at + Vec2::new(-dir.y, dir.x) * 50.0);
     w.step(vec![Command::Move { kingdom: 0, units: vec![Unit::Org(b)], to: on, attack_move: false }, Command::Follow { kingdom: 0, units: vec![Unit::Org(a)], target }]);
     seconds(&mut w, 5.0);
     assert!(w.orgs[a as usize].members.iter().any(|&m| movement::actor_moving(&w, m)), "the follower walks");
     assert!(step_until(&mut w, 150.0, |w| org_settled(w, b) && (anchor(w, a) - pos(w, target)).length() <= 0.6 * 18.0 + 2.0), "follower at {:?}, target {:?}", anchor(&w, a), pos(&w, target));
-    assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }), "still following");
+    // While the target lives the follow holds; shot on the way (a generated map's bases
+    // are close) it ends the order (0x52FD00 bit 0).
+    if w.actors[target as usize].alive {
+        assert!(matches!(w.orgs[a as usize].order, Order::Move { .. }), "still following");
+    } else {
+        assert_eq!(w.orgs[a as usize].order, Order::Idle);
+    }
     w.step(vec![Command::Stop { kingdom: 0, units: vec![Unit::Org(a), Unit::Org(b)] }]);
     // A selection: each keeps its place around the goal.
     let (p, q) = (open(&w, c - dir * 40.0), open(&w, c - dir * 62.0));
@@ -1176,6 +1187,144 @@ fn real_berlin_orders_as_a_person_gives_them() {
     let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
     let w = World::new_skirmish(data, map, &two_humans("(2v2)Berlin", [0, 2])).expect("new_skirmish");
     real_orders(w);
+}
+
+/// A person giving orders for 200 s on a real map and two generated ones: trucks and
+/// regiments told to go somewhere new when they end an order, some in the middle of a
+/// walk, and now and then a right click on their own HQ. Nobody may stand on a Move:
+/// a unit either walks or its order has ended within 15 s.
+#[test]
+#[ignore]
+fn real_maps_nobody_stands_on_a_move() {
+    use aa_play::mapgen::{RandomMapData, RandomMapParams};
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
+    let data = Arc::new(GameData::load(&root).expect("GameData::load"));
+    let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
+    let mut worlds = vec![("berlin".to_string(), World::new_skirmish(data.clone(), map, &two_humans("(2v2)Berlin", [0, 2])).expect("new_skirmish"))];
+    let rmg = RandomMapData::load(&root).expect("random map data");
+    let info = rmg.catalog().rmcs.into_iter().find(|r| r.ids == "rmc_southerneurope").expect("rmc");
+    for seed in [7, 11] {
+        let generated = rmg.generate(&RandomMapParams::defaults(&info, 2, seed)).expect("generate");
+        worlds.push((format!("random{seed}"), World::new_skirmish(data.clone(), Arc::new(generated.map), &two_humans("generated", [0, 1])).expect("new_skirmish")));
+    }
+    for (name, mut w) in worlds {
+        let (truck_def, rifle) = (data.find("rus_truck_supply").unwrap(), data.find("regiment_rus_infantry").unwrap());
+        let hq = w.actors.iter().find(|a| a.kingdom == Some(0) && w.data.def(a.def).id.ends_with("_corps")).map(|a| a.id).unwrap();
+        let home = w.actors[hq as usize].pos.truncate();
+        let mut seed = 12345u32;
+        let mut unit = move || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed >> 8) as f32 / (1u32 << 24) as f32
+        };
+        let (mw, mh) = (w.map.width as f32 * w.map.cell_size, w.map.height as f32 * w.map.cell_size);
+        let mut point = |w: &World| -> Vec2 {
+            for _ in 0..200 {
+                let p = home + Vec2::new(unit() * 2.0 - 1.0, unit() * 2.0 - 1.0) * 110.0;
+                if p.x < 8.0 || p.y < 8.0 || p.x > mw - 8.0 || p.y > mh - 8.0 {
+                    continue;
+                }
+                let m = &w.map;
+                if m.flags[((p.y / m.cell_size) as u32 * m.width + (p.x / m.cell_size) as u32) as usize] & (BLOCKED | NOT_LAND_PASSABLE) == 0 {
+                    return p;
+                }
+            }
+            home
+        };
+        let mut units = Vec::new();
+        for i in 0..24 {
+            let p = point(&w);
+            units.push(Unit::Actor(w.spawn_actor(truck_def, Some(0), w.ground(p), i as f32)));
+        }
+        for _ in 0..8 {
+            let p = point(&w);
+            units.push(Unit::Org(aa_play::production::spawn_organization(&mut w, rifle, 0, p, 0.5, None)));
+        }
+        for _ in 0..16 {
+            w.step(Vec::new());
+        }
+        let mut last: std::collections::HashMap<Unit, (Vec2, u32)> = Default::default();
+        let (mut orders, mut stuck) = (0, Vec::new());
+        for tick in 0..3200u32 {
+            let mut commands = Vec::new();
+            for (i, &u) in units.iter().enumerate() {
+                let (at, order, moving, ok) = match u {
+                    Unit::Actor(a) => (w.actors[a as usize].pos.truncate(), w.actors[a as usize].order.clone(), movement::actor_moving(&w, a), w.actors[a as usize].alive),
+                    Unit::Org(o) => (w.orgs[o as usize].anchor, w.orgs[o as usize].order.clone(), w.orgs[o as usize].members.iter().any(|&m| movement::actor_moving(&w, m)), w.orgs[o as usize].alive),
+                };
+                if !ok {
+                    continue;
+                }
+                let e = last.entry(u).or_insert((at, tick));
+                if (at - e.0).length() > 0.05 || moving {
+                    *e = (at, tick);
+                }
+                let on_a_move = matches!(order, Order::Move { .. });
+                if !on_a_move || (tick + i as u32 * 37) % 311 == 0 {
+                    *e = (at, tick);
+                    orders += 1;
+                    let to = point(&w);
+                    if orders % 11 == 0 {
+                        commands.push(Command::Hot { kingdom: 0, units: vec![u], command: None, target: Some(Unit::Actor(hq)), at: None, aux: None, alt: false, queue: false });
+                    } else {
+                        commands.push(Command::Move { kingdom: 0, units: vec![u], to, attack_move: false });
+                    }
+                } else if tick - e.1 > 240 {
+                    stuck.push(format!("{name} t{tick} {u:?} at {at:?} since t{}", e.1));
+                    *e = (at, tick);
+                }
+            }
+            w.step(commands);
+        }
+        eprintln!("{name}: {orders} orders, {} stood on a Move", stuck.len());
+        assert!(stuck.is_empty(), "{stuck:#?}");
+        assert!(orders > 100, "{orders} orders");
+    }
+}
+
+/// The place of the original's film (Berlin, a computer's infantry HQ, its truck stops
+/// at (181.42, 413.21) at tick 688): the box of the building and its 2 m of padding
+/// (`0x49BD10`, BuildingPaddingMeters) reach water. The truck stands, no building, and the
+/// regiment's Unpack tries twice and ends 33 ticks later (721), with no film difference.
+#[test]
+#[ignore]
+fn real_berlin_unpack_refused_where_the_original_refuses() {
+    let root = std::path::PathBuf::from(std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game"));
+    let data = Arc::new(GameData::load(&root).expect("GameData::load"));
+    let map = Arc::new(GameMap::load_with(&root, "(2v2)Berlin", &data).expect("Berlin"));
+    let mut w = World::new_skirmish(data.clone(), map, &two_humans("(2v2)Berlin", [0, 1])).expect("new_skirmish");
+    w.step(Vec::new());
+    let building = data.def(data.find("ger_truck_infantry").unwrap()).unpacks_to.unwrap();
+    let site = Vec2::new(181.36, 413.24);
+    let (at, _) = aa_play::deploy::placement(&w, building, site, 0.0);
+    assert_eq!(at, Vec2::new(181.0, 413.0));
+    let up = Vec2::new(0.0, -1.0);
+    assert!(aa_play::deploy::spot_clear_facing(&w, building, at, up, None).is_err());
+    // A little inland it fits: the same building with its padding clear of the water.
+    assert_eq!(aa_play::deploy::spot_clear_facing(&w, building, Vec2::new(181.0, 405.0), up, None), Ok(()));
+    let regiment = data.find("regiment_ger_hq_infantry").unwrap();
+    let o = aa_play::production::spawn_organization(&mut w, regiment, 1, Vec2::new(165.0, 380.0), 1.0, None);
+    for _ in 0..16 {
+        w.step(Vec::new());
+    }
+    let truck = w.orgs[o as usize].members[0];
+    w.step(vec![Command::Deploy { kingdom: 1, truck, at: site, facing: 0.0 }]);
+    let mut stopped = 0;
+    for tick in 1..600 {
+        w.step(Vec::new());
+        if movement::actor_moving(&w, truck) {
+            stopped = tick;
+        }
+        if w.orgs[o as usize].order == Order::Idle {
+            eprintln!("regiment's Unpack ended {} ticks after the truck stopped", tick - stopped);
+            assert!((28..=40).contains(&(tick - stopped)), "{}", tick - stopped);
+            break;
+        }
+        assert!(tick < 590, "still on its order");
+    }
+    assert!(!w.actors[truck as usize].removed);
+    assert_eq!(w.actors[truck as usize].order, Order::Idle);
+    assert!((pos(&w, truck) - site).length() < 0.2, "{:?}", pos(&w, truck));
+    assert!(w.events.iter().any(|e| matches!(e, aa_play::Event::Refused { kingdom: 1, .. })) || w.actors.iter().all(|a| a.def != building));
 }
 
 #[test]

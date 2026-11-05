@@ -86,9 +86,40 @@ pub fn placement(world: &World, building: DefId, at: Vec2, facing: f32) -> (Vec2
     (at, facing)
 }
 
+/// `0x530960`'s default: an order with no direction words hands (0, -1) to its state.
+const NO_DIRECTION: Vec2 = Vec2::new(0.0, -1.0);
+/// The native x87 precision of the simulation thread.
+const PC: aa_numeric::Precision = aa_numeric::Precision::Double53;
+
+fn shape_of(words: [u32; 6]) -> aa_spatial::collision::Shape {
+    aa_spatial::collision::Shape { kind: words[0], radius_bits: words[1], bounds: [words[2], words[3], words[4], words[5]] }
+}
+/// Definition virtual +0x28 `0x49BD10`: the blocking shape, for a blocking static thing
+/// (flags 0x20000400) grown by `BuildingPaddingMeters` (GameData +0x44): a circle's
+/// radius, each half extent of a box, rebuilt as a rectangle. The walls `0x49BD10` leaves
+/// alone have no truck.
+fn padded_shape(world: &World, def: &crate::data::Def) -> aa_spatial::collision::Shape {
+    let original = shape_of(def.blocking_words);
+    if def.thing_flags & 0x2000_0400 != 0x2000_0400 || original.kind > 3 {
+        return original;
+    }
+    let clearance = f64::from(world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0));
+    if original.kind <= 1 {
+        let radius = (clearance + f64::from(f32::from_bits(original.radius_bits))) as f32;
+        return aa_spatial::collision::Shape { kind: 1, radius_bits: radius.to_bits(), bounds: [0; 4] };
+    }
+    let mut dims = [0u32; 2];
+    for a in [1usize, 0] {
+        let half = f64::from(f32::from_bits(original.bounds[a + 2])) + clearance;
+        dims[a] = ((half + half) as f32).to_bits();
+    }
+    aa_rules::objects::shape(3, &dims, PC).map_or(original, |s| shape_of(s.words))
+}
+
 /// Whether the building's blocking footprint at `at` fits: inside the map,
 /// on land-passable unblocked cells and clear of every other building's
-/// footprint (`ignore` is the deploying truck itself).
+/// footprint (`ignore` is the deploying truck itself). The placement ghost, a
+/// construction and a computer's site; the unpack itself is [`spot_clear_facing`].
 pub fn spot_clear(world: &World, building: DefId, at: Vec2, ignore: Option<ActorId>) -> Result<(), String> {
     let d = world.data.def(building);
     let half = d.blocking_size.map_or(Vec2::ZERO, |s| Vec2::new(s[0], s[1]) * 0.5);
@@ -124,6 +155,75 @@ pub fn spot_clear(world: &World, building: DefId, at: Vec2, ignore: Option<Actor
         let p = a.pos.truncate();
         if lo.x < p.x + oh.x && hi.x > p.x - oh.x && lo.y < p.y + oh.y && hi.y > p.y - oh.y {
             return Err("another building is in the way".into());
+        }
+    }
+    Ok(())
+}
+
+/// `0x4F3640` as `0x575C80` calls it for the building a truck unpacks into: definition virtual
+/// +0x28's shape at the snapped point. Outside the map is 3; then `0x4F0A70` -> `0x553BA0`:
+/// a tile under the shape with a flag of mask +0x3C, or the blocking shape of a thing with
+/// Thing flags 10 and 29, a structure or an object of the map, that overlaps it. A building
+/// that fits here can still be 2 m from water: the padding is what refuses it. Rendition:
+/// codes 4 and 7 read a settlement's fields no truck's building has.
+pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2, ignore: Option<ActorId>) -> Result<(), String> {
+    use aa_spatial::geometry::Placement;
+    use aa_spatial::shape_overlap::overlaps;
+    let d = world.data.def(building);
+    let shape = padded_shape(world, d);
+    let bits = |v: Vec2| [v.x.to_bits(), v.y.to_bits()];
+    let placed = Placement { shape, facing: bits(facing), position: bits(at) };
+    let map = &world.map;
+    let reach = aa_spatial::geometry::world_bounds(&placed, PC).map_or(0.0, |b| {
+        let (x, y) = (f32::from_bits(b[2]) - f32::from_bits(b[0]), f32::from_bits(b[3]) - f32::from_bits(b[1]));
+        0.5 * x.abs().max(y.abs())
+    });
+    if map.width > 0 {
+        let extent = Vec2::new(map.width as f32, map.height as f32) * map.cell_size;
+        if aa_spatial::query::outside(&placed, bits(extent), PC).unwrap_or(true) {
+            return Err("the spot is outside the map".into());
+        }
+        let c = map.cell_size;
+        let half = c * 0.5;
+        // The cell's own square, GMap +0x30 as `0x556689` makes it (`QueryGeometry`).
+        let corner = (f64::from(half) * f64::from(half) * 2.0).sqrt() as f32;
+        let tile_shape = aa_spatial::collision::Shape { kind: 2, radius_bits: corner.to_bits(), bounds: [(-half).to_bits(), (-half).to_bits(), half.to_bits(), half.to_bits()] };
+        let (lo, hi) = (at - Vec2::splat(reach), at + Vec2::splat(reach));
+        let (x0, y0) = ((lo.x / c).floor().max(0.0) as u32, (lo.y / c).floor().max(0.0) as u32);
+        let (x1, y1) = (((hi.x / c).floor() as u32).min(map.width - 1), ((hi.y / c).floor() as u32).min(map.height - 1));
+        let mask = if d.thing_flags & (1 << 21) != 0 { crate::map::NOT_WATER_PASSABLE } else { crate::map::NOT_LAND_PASSABLE };
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                if map.flags[(y * map.width + x) as usize] & mask == 0 {
+                    continue;
+                }
+                let tile = Placement { shape: tile_shape.clone(), facing: bits(NO_DIRECTION), position: bits(Vec2::new(x as f32 * c + half, y as f32 * c + half)) };
+                if overlaps(&tile, &placed, PC).unwrap_or(true) {
+                    return Err("the ground there cannot hold the building".into());
+                }
+            }
+        }
+    }
+    // Far above any shape shipped: what is farther cannot touch.
+    let near = reach + 40.0;
+    // Rendition: other structures by their unpadded boxes, as before. With the padding the
+    // Berlin film's step 3473 unpack is refused where the original made the building; the
+    // cause is not found.
+    spot_clear(world, building, at, ignore)?;
+    for &index in &world.books.scenery {
+        let Some(p) = map.placed.get(index) else { continue };
+        let position = Vec2::new(p.position[0], p.position[1]);
+        if (position - at).length_squared() > near * near {
+            continue;
+        }
+        let Some(thing) = world.data.find(&p.thing_id) else { continue };
+        let od = world.data.def(thing);
+        if od.thing_flags & 0x2000_0400 != 0x2000_0400 {
+            continue;
+        }
+        let other = Placement { shape: shape_of(od.blocking_words), facing: bits(Vec2::new(p.facing[0], p.facing[1])), position: bits(position) };
+        if overlaps(&placed, &other, PC).unwrap_or(true) {
+            return Err("an object of the map is in the way".into());
         }
     }
     Ok(())
@@ -217,8 +317,12 @@ pub fn tick(world: &mut World) {
 
 /// `0x575C80` from `KKC_UAIStateUnpack` 0x5372B0: the building is created in
 /// place of the truck, snapped there (0x4F3640, [`placement`]); its Supply waits
-/// for the end of the unpacking (crate::creation). A spot the building cannot
-/// stand on ends the order (`tai_error_unpack`).
+/// for the end of the unpacking (crate::creation). A spot the building cannot stand on:
+/// the truck's state has ended (0x5372B0's +0x1B0 either way). A truck with no organization
+/// reports `tai_error_unpack` itself and the order ends. A regiment's unit says nothing: its
+/// regiment's Unpack `0x526E60` sees it has not unpacked, sends the action again, thinks
+/// in a second, and after two tries reports the error and ends (the original on film:
+/// the truck stands from tick 688, the regiment leaves its Unpack at 721).
 pub fn unpack_now(world: &mut World, a: ActorId) {
     if !live(world, a) {
         return;
@@ -229,17 +333,18 @@ pub fn unpack_now(world: &mut World, a: ActorId) {
     let Some(building) = world.data.def(actor.def).unpacks_to else { return };
     let kingdom = actor.kingdom;
     let org = actor.org;
-    // 0x575C80 places the building where the truck stands (the Unpack state's Enter
-    // drove it to the order's point, as near as the map lets it).
-    let at = actor.pos.truncate();
+    // 0x575C80 places the building where the truck stands less its +0x538 (the Unpack
+    // state's Enter drove it to the order's point, as near as the map lets it).
+    let at = actor.pos.truncate() - Vec2::from(world.data.def(actor.def).packed_position_offset);
     let (at, facing) = placement(world, building, at, facing);
-    if let Err(reason) = spot_clear(world, building, at, Some(a)) {
-        world.actors[a as usize].order = Order::Idle;
-        if let Some(o) = org {
-            world.orgs[o as usize].order = Order::Idle;
-        }
-        if let Some(kingdom) = kingdom {
-            world.events.push(Event::Refused { kingdom, reason });
+    // An axis_locked building stands at (0, -1), the words of an order with no direction.
+    let words = if world.data.def(building).axis_locked { NO_DIRECTION } else { crate::formation::facing_vector(facing) };
+    if let Err(reason) = spot_clear_facing(world, building, at, words, Some(a)) {
+        if org.is_none() {
+            world.actors[a as usize].order = Order::Idle;
+            if let Some(kingdom) = kingdom {
+                world.events.push(Event::Refused { kingdom, reason });
+            }
         }
         return;
     }

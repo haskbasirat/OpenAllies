@@ -308,10 +308,11 @@ impl Regiment<'_> {
             return Ok(());
         }
         if self.is_current(a, MOVE)? {
-            // 0x52FD00: a live target that is not the regiment itself holds the
-            // state: think again in 1 s.
+            // 0x5222E0 -> 0x52FD00: a live target with a Mover (Thing +8 bits 0 and 29
+            // clear), not the regiment itself, holds the state: think again in 1 s. A
+            // structure has none: the regiment is there and the state ends.
             if let Some(t) = self.order().target {
-                if self.world.actor(t).is_some_and(|x| x.alive && !x.removed) {
+                if self.world.actor(t).is_some_and(|x| x.alive && !x.removed) && space::thing_flags(self.ms, self.world, t) & 0x2000_0000 == 0 {
                     think_in(self.world, self.o, 1.0);
                     return Ok(());
                 }
@@ -1135,6 +1136,12 @@ impl cai_thinks::unpack::UnpackThinkWorld for Regiment<'_> {
         let mind = MindId(key(self.o));
         aa_mind::pop(mind, a, self)?;
         set_order(self.world, self.ms, Owner::Org(self.o), Order::Idle);
+        // The unit that did not unpack: `Command::Deploy` wrote the order on it too.
+        if let Some(unit) = self.leader()
+            && matches!(self.world.actors[unit as usize].order, Order::Deploy { .. })
+        {
+            self.world.actors[unit as usize].order = Order::Idle;
+        }
         Ok(())
     }
 }

@@ -798,8 +798,8 @@ fn solve_job_ignoring(pathfinder: &mut Pathfinder, occupancy: &Occupancy, map: &
 /// Movement state kept beside the battle state (`World::movement`).
 #[derive(Default, Debug)]
 pub struct MovementState {
-    orgs: Vec<OrgMove>,
-    actors: Vec<ActorMove>,
+    orgs: crate::combat::Rows<OrgMove>,
+    actors: crate::combat::Rows<ActorMove>,
     /// Blocking radius (m) by `DefId` from the definitions' ObjectData
     /// blocking shape (e.g. infantry CIRCLE 0.35, medium tank 0.8 in
     /// Templates/template_unit_aa.tgi). Actors without one never block.

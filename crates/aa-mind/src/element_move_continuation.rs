@@ -204,6 +204,11 @@ pub fn recover_turn<W: RecoveryGeometryWorld>(
         .sqrt(precision))?
         .store_f32()
         .map_err(err)?;
+        // Standing exactly on the head node the original divides by zero and goes on with
+        // a NaN direction, which no later test passes: no recovery here either.
+        if b(distance)?.is_zero() {
+            return Ok(false);
+        }
         let inverse = b(num(
             num(Binary::from_u32(1).div(&b(distance)?, precision))?.store_f32(),
         )?)?;
