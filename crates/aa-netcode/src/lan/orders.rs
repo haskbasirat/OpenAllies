@@ -1389,8 +1389,15 @@ impl Orders<'_, '_, '_, '_> {
                                     let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
                                     st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });
                                 }
-                                // 0x74FE30 starts sending the file.
-                                2 => return Err(Error::Unsupported("0x74FE30 map file transfer in a LAN session")),
+                                // 0x74FE30 starts sending the file. The transfer is not
+                                // built here (file.rs has the codec): the host says so,
+                                // as it does for a file that may not travel (status 3),
+                                // and the player stays not ready.
+                                2 => {
+                                    let key = if st.session.launch.field_0c == 5 { "map_will_not_transfer_host_film|ss" } else { "map_will_not_transfer_host|ss" };
+                                    let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
+                                    st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });
+                                }
                                 _ => return Ok(()),
                             }
                             // 0x74EA20: UpdateMapStatus {client+8, status, 1.0f}.

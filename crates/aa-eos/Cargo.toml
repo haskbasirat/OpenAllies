@@ -1,0 +1,20 @@
+[package]
+name = "aa-eos"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+license = "MPL-2.0"
+description = "Online play through Epic Online Services: sign-in, lobbies and a datagram link. The SDK is loaded at run time."
+
+[dependencies]
+# Raw bindings: only the types and constants are used, and every function
+# signature is checked against them (src/api.rs). Pinned: unproven, one star.
+eos-sys = "=0.1.1"
+libloading = "0.8"
+
+# Its own workspace, as aa-bevy has: Epic's bindings stay out of the main
+# workspace's lock file, so nobody building the game without the `eos` feature
+# of aa-bevy resolves them.
+[workspace]
+resolver = "3"

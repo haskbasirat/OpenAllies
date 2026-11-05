@@ -24,6 +24,10 @@
 //! The NetNode session id (NetNode+0xB0 = trunc(clock * 10.0) at Init
 //! 0x764190) and the clock (NetNode+0x58, binary32 seconds) are explicit
 //! inputs.
+//!
+//! The socket itself sits behind [`Transport`]: UDP for a LAN and a direct
+//! address ([`UdpTransport`]), and another path (EOS P2P) gives the same
+//! datagrams to the same sequencing, session and lockstep above it.
 use crate::{Error, Result};
 use aa_orders::commands::WireWriter;
 use aa_orders::net::transport::{finalize, Received, Sequencing, X87Precision};
@@ -35,6 +39,57 @@ use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 pub const MAX_DATAGRAM: usize = 65_535;
 /// 0x764950: 0x411FA0 with 13 possibilities.
 pub const PACKET_TYPES: usize = 13;
+
+/// Carries datagrams between the players of a session. Best effort, as UDP is:
+/// a datagram may be lost, repeated or reordered, and the layers above (the
+/// transport header of [`UdpNode`], the reliable channels) cope with that.
+///
+/// A peer is a [`SocketAddr`], which must be IPv4 and must mean the same peer on
+/// every node of the session: the session snapshot sends these addresses to the
+/// other peers (`PeerAddress`, 32 + 16 bits on the wire). A backend without IP
+/// addresses gives each peer a stable virtual one.
+pub trait Transport: Send {
+    /// This node's own address on the path.
+    fn local_addr(&self) -> Result<SocketAddr>;
+    /// Send one datagram. An error is a failed send of this datagram only; the
+    /// session goes on if the path recovers.
+    fn send_to(&mut self, bytes: &[u8], to: SocketAddr) -> Result<()>;
+    /// One waiting datagram into `buffer`: its length and sender, `None` when no
+    /// datagram waits. Never blocks.
+    fn recv_from(&mut self, buffer: &mut [u8]) -> Result<Option<(usize, SocketAddr)>>;
+}
+
+/// [`Transport`] over a UDP socket: a LAN and a direct address.
+pub struct UdpTransport {
+    socket: UdpSocket,
+}
+impl UdpTransport {
+    pub fn new(socket: UdpSocket) -> Result<Self> {
+        socket.set_nonblocking(true)?;
+        Ok(Self { socket })
+    }
+}
+impl Transport for UdpTransport {
+    fn local_addr(&self) -> Result<SocketAddr> {
+        Ok(self.socket.local_addr()?)
+    }
+    fn send_to(&mut self, bytes: &[u8], to: SocketAddr) -> Result<()> {
+        self.socket.send_to(bytes, to)?;
+        Ok(())
+    }
+    fn recv_from(&mut self, buffer: &mut [u8]) -> Result<Option<(usize, SocketAddr)>> {
+        loop {
+            match self.socket.recv_from(buffer) {
+                Ok(x) => return Ok(Some(x)),
+                Err(e) if e.kind() == ErrorKind::WouldBlock => return Ok(None),
+                // Windows reports an ICMP port-unreachable of an earlier send as
+                // a receive error; the datagram queue continues.
+                Err(e) if e.kind() == ErrorKind::ConnectionReset => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }
+}
 
 /// One remote address (TGC_NetConn, 0xA4 bytes natively).
 #[derive(Debug, Clone)]
@@ -74,7 +129,7 @@ pub enum Dropped {
 }
 
 pub struct UdpNode {
-    socket: UdpSocket,
+    socket: Box<dyn Transport>,
     /// NetNode+0xB0.
     pub own_session: i32,
     pub conns: Vec<UdpConn>,
@@ -86,6 +141,9 @@ pub struct UdpNode {
     /// request key): who asked and the key. LobbyJoinDirectExecute 0x648030 ->
     /// 0x787750 asks before it joins; the game's protocol never starts so.
     pub queries: Vec<(SocketAddr, [u8; 4])>,
+    /// The last datagram this path refused to send. The session goes on: the
+    /// liveness rule of 0x75BD70 ends it if the path stays dead.
+    pub send_failure: Option<String>,
 }
 
 impl UdpNode {
@@ -94,11 +152,14 @@ impl UdpNode {
     }
     /// A node on an already bound socket (the host's port search 0x7641E0).
     pub fn from_socket(socket: UdpSocket, own_session: i32, precision: X87Precision) -> Result<Self> {
-        socket.set_nonblocking(true)?;
-        Ok(Self { socket, own_session, conns: Vec::new(), buffer: vec![0; MAX_DATAGRAM], precision, dropped: Vec::new(), queries: Vec::new() })
+        Ok(Self::on(Box::new(UdpTransport::new(socket)?), own_session, precision))
+    }
+    /// A node on any datagram path.
+    pub fn on(socket: Box<dyn Transport>, own_session: i32, precision: X87Precision) -> Self {
+        Self { socket, own_session, conns: Vec::new(), buffer: vec![0; MAX_DATAGRAM], precision, dropped: Vec::new(), queries: Vec::new(), send_failure: None }
     }
     pub fn local_addr(&self) -> Result<SocketAddr> {
-        Ok(self.socket.local_addr()?)
+        self.socket.local_addr()
     }
     /// 0x764970: the connection for `addr`, created on demand.
     pub fn conn_for(&mut self, addr: SocketAddr) -> usize {
@@ -111,7 +172,8 @@ impl UdpNode {
     /// SendPackets 0x764FA0 for one datagram: header, 4-bit admin type
     /// (0x763A60), body, finalize, sendto, then the sent-time record.
     /// Returns the sequence. The sequence is consumed even if sendto fails
-    /// (as natively); the error is still reported.
+    /// (as natively); the failure is kept in [`Self::send_failure`], and the
+    /// reliable channels above send again what it lost.
     pub fn send(
         &mut self,
         conn: usize,
@@ -128,7 +190,9 @@ impl UdpNode {
         let bytes = finalize(&w)?;
         let addr = c.addr;
         c.seq.sent(sequence, now);
-        self.socket.send_to(&bytes, addr)?;
+        if let Err(e) = self.socket.send_to(&bytes, addr) {
+            self.send_failure = Some(e.to_string());
+        }
         Ok(sequence)
     }
     /// Start of a SendPackets pass: NetConn+8 counters cleared (0x764FA0).
@@ -143,12 +207,11 @@ impl UdpNode {
         let mut out = Vec::new();
         loop {
             let (len, addr) = match self.socket.recv_from(&mut self.buffer) {
-                Ok(x) => x,
-                Err(e) if e.kind() == ErrorKind::WouldBlock => break,
-                // Windows reports an ICMP port-unreachable of an earlier
-                // send as a receive error; the datagram queue continues.
-                Err(e) if e.kind() == ErrorKind::ConnectionReset => continue,
-                Err(e) => return Err(e.into()),
+                Ok(Some(x)) => x,
+                Ok(None) => break,
+                // A path that stopped working is silence: the liveness rule ends it.
+                Err(Error::Io(_)) => break,
+                Err(e) => return Err(e),
             };
             let data = self.buffer[..len].to_vec();
             if len >= 7 && data[..3] == [0xFE, 0xFD, 0x00] {
@@ -166,8 +229,7 @@ impl UdpNode {
     }
     /// One datagram outside the game's protocol (a QR2 reply).
     pub fn send_raw(&mut self, to: SocketAddr, bytes: &[u8]) -> Result<()> {
-        self.socket.send_to(bytes, to)?;
-        Ok(())
+        self.socket.send_to(bytes, to)
     }
     fn accept(&mut self, conn: usize, data: Vec<u8>, now: f32) -> Result<Option<Incoming>> {
         let own = self.own_session;

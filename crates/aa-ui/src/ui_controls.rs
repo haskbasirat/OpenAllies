@@ -1913,10 +1913,11 @@ impl Ui {
         if let Some(c) = command {
             // message box buttons (0x66D7C0): the request's command
             if let Some(i) = c.strip_prefix("MessageBoxButtonAction ").and_then(|i| i.parse::<usize>().ok()) {
-                if let Some(req) = self.message_box.clone() {
+                if self.message_box.is_some() {
+                    let cmd = self.message_box_command(i);
                     self.close_message_box();
-                    if let Some((_, cmd)) = req.buttons.get(i) {
-                        self.events.push(UiEvent::Command { widget: p, command: cmd.clone() });
+                    if let Some(cmd) = cmd {
+                        self.events.push(UiEvent::Command { widget: p, command: cmd });
                     }
                     self.layout();
                     return;

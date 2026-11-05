@@ -70,6 +70,38 @@ fn set_label_text(w: &mut Widget, text: &str) {
 impl Ui {
     /// Show a message box (`_Display` 0x66DF90) on top of Root, modal.
     pub fn show_message_box(&mut self, path: &str, req: MessageBoxRequest) {
+        self.display_message_box(path, req, None);
+    }
+
+    /// `0x66EE00`: a message box asking for a line of text, its editbox holding
+    /// `text` selected. A button's command with `%s` gets what was typed
+    /// ([`Self::message_box_command`]).
+    pub fn show_prompt_box(&mut self, path: &str, req: MessageBoxRequest, text: &str) {
+        self.display_message_box(path, req, Some(text));
+    }
+
+    /// The command of button `i` of the box on show, `%s` standing for its
+    /// editbox's text (`0x66D4A6`); read before the box closes.
+    pub fn message_box_command(&self, i: usize) -> Option<String> {
+        let req = self.message_box.as_ref()?;
+        let command = req.buttons.get(i)?.1.clone();
+        let edit = self.modal.as_ref().map(|name| format!("Root/{name}/MessageBoxEditbox"));
+        match edit.as_ref().filter(|_| command.contains("%s")).and_then(|p| self.editbox_text(p)) {
+            Some(text) => Some(command.replace("%s", &text)),
+            None => Some(command),
+        }
+    }
+
+    /// The text of the box on show, for the box that counts down (`0x66D360`'s
+    /// timeout, +0xF8 and +0x100 of `_Display`): the size stays.
+    pub fn set_message_box_text(&mut self, text: &str) {
+        let Some(name) = self.modal.clone() else { return };
+        let label = format!("{name}/MessageBoxLabel");
+        self.with_widget(&label, |w| set_label_text(w, text));
+        self.layout();
+    }
+
+    fn display_message_box(&mut self, path: &str, req: MessageBoxRequest, edit: Option<&str>) {
         let mut mb = build(path);
         self.load_widget(&mut mb, None);
         let node = self.store.node(path).ok();
@@ -114,6 +146,11 @@ impl Ui {
         let n = n_raw.min(3);
         let button_path = |i: usize| if i == 0 { format!("{path_mb}/MessageBoxButton") } else { format!("{path_mb}/MessageBoxButton#{i}") };
         let mut avail = max[1] - two_b;
+        let edit_path = format!("{path_mb}/MessageBoxEditbox");
+        let edit_h = if edit.is_some() { self.widget_by(&edit_path).map(|w| g::height(w, screen, reference, p)).unwrap_or(0.0) } else { 0.0 };
+        if edit.is_some() {
+            avail -= edit_h + spacing;
+        }
         if n_raw > 0 {
             let bh = self.widget_by(&button_path(0)).map(|w| g::height(w, screen, reference, p)).unwrap_or(0.0);
             avail -= bh + spacing;
@@ -125,6 +162,18 @@ impl Ui {
         } else {
             th + border
         };
+        // the editbox under the text (0x66DF90, the request's edit flag): visible, its text
+        // selected and the keyboard's (0x5D0BB0(0))
+        if let Some(text) = edit {
+            y += spacing;
+            self.with_widget(&edit_path, |w| {
+                g::set_top(w, y, screen, reference, p);
+                w.set_visible(true);
+            });
+            self.editbox_set_text(&format!("Root/{edit_path}"), text);
+            self.focus_editbox(&format!("Root/{edit_path}"));
+            y += edit_h;
+        }
         if n != 0 {
             let (bw, bh) = self
                 .widget_by(&button_path(0))
@@ -181,6 +230,10 @@ impl Ui {
             self.with_widget(&button_path(0), |x| g::set_left(x, w * 0.5 - bw * 0.5, screen, reference, p));
         }
         self.with_widget(&label_path, |x| g::set_width(x, w - two_b));
+        if edit.is_some() {
+            let ew = self.widget_by(&edit_path).map(|x| g::width(x, screen, reference, p)).unwrap_or(0.0);
+            self.with_widget(&edit_path, |x| g::set_left(x, w * 0.5 - ew * 0.5, screen, reference, p));
+        }
         self.layout();
         let (iw, ih) = (reference.width, reference.height);
         self.with_widget(&path_mb, |x| g::set_position(x, iw * 0.5 - w * 0.5, ih * 0.5 - h * 0.5, screen, reference, p));

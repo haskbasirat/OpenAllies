@@ -50,6 +50,7 @@ version = "0.1.0"
 dependencies = [
  "aa-animation",
  "aa-assets",
+ "aa-eos",
  "aa-formats",
  "aa-mapworld",
  "aa-metagame",
@@ -101,6 +102,14 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "serde",
+]
+
+[[package]]
+name = "aa-eos"
+version = "0.1.0"
+dependencies = [
+ "eos-sys",
+ "libloading",
 ]
 
 [[package]]
@@ -2869,6 +2878,15 @@ dependencies = [
  "rustversion",
  "scopeguard",
  "simdutf8",
+]
+
+[[package]]
+name = "eos-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0f37c3e675d4bc5f105cb4b7784dc9d0fb4001704a1e2a1605aba17bf68d16a"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

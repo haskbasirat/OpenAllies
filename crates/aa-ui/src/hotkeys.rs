@@ -91,8 +91,8 @@ impl Ui {
                     _ => None,
                 };
                 if let Some(i) = i.filter(|&i| i < req.buttons.len().min(3)) {
+                    let cmd = self.message_box_command(i).unwrap_or_default();
                     self.close_message_box();
-                    let cmd = req.buttons[i].1.clone();
                     self.events.push(UiEvent::Command { widget: "MessageBox".into(), command: cmd });
                     self.layout();
                     return true;

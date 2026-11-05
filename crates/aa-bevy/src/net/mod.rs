@@ -9,19 +9,24 @@
 //! rebuilt from `aa_netcode::lobby::Session`, so what a person sees and what a
 //! launch builds are the replicated session's.
 //!
-//! Not built, each with its reason (research/phase8-net/README.txt section 13):
-//! the LAN game list (`LobbyJoin`: the original's list comes from GameSpy's LAN
-//! browse by UDP broadcast, and this port opens nothing beyond the address a
-//! person types), and the Internet lobby (GameSpy).
+//! The datagrams of a session go through `aa_netcode::udp::Transport`: UDP here
+//! for a LAN and a direct address, and [`Lan::host_with`] / [`Lan::join_with`]
+//! take any other path. Everything above it is the same.
 pub mod data;
+#[cfg(feature = "eos")]
+pub mod eos;
+#[cfg(not(feature = "eos"))]
+#[path = "eos_off.rs"]
+pub mod eos;
 pub mod game;
 
 use crate::session::Battle;
 use crate::ui::custom::{Custom, NetRow, NetSource};
 use aa_netcode::lan::registries::{self, NativeRegistries};
-use aa_netcode::lan::{self, descriptor as d, HostOptions, LanConfig, LanData, LanEvent, LanNode, NoWorld};
+use aa_netcode::lan::{self, browse, descriptor as d, HostOptions, LanConfig, LanData, LanEvent, LanNode, NoWorld};
 use aa_netcode::lobby::{self, LaunchSettings, Session};
 use aa_netcode::session::PlayerId;
+use aa_netcode::udp::Transport;
 use aa_orders::payload::Field;
 use aa_play::player_orders::native::{Outbox, Replay, Tables};
 use aa_ui::staging::{Occupant, StagingState};
@@ -30,7 +35,7 @@ use aa_ui::widget::{Widget, WidgetClass as C};
 use bevy::log::{info, warn};
 use data::{text, units, Data};
 use std::collections::BTreeMap;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -56,21 +61,23 @@ pub fn multiplayer_menu(ui: &mut Ui) {
     ui.layout();
 }
 
-/// `0x64AB20` LobbyMenu in LAN mode (`0x648270`): the LAN buttons; the game
-/// list stays empty (module documentation).
+/// `0x64AB20` LobbyMenu in LAN mode: the children of Init `0x648270` this mode
+/// shows (`0x647F00`, no-chat `0x647DC0(3)`: the browser takes the `full_` bounds
+/// of the file, ChatPanel and the room list stay hidden).
 pub fn lobby_menu(ui: &mut Ui) {
     ui.clear();
     aa_ui::screens::menu_backdrop(ui);
     let mut m = Widget::new(C::Interface, LOBBY, false);
+    let mut logo = Widget::new(C::Decal, "GameSpyLogoDecal", false);
+    logo.set_enabled(false);
+    m.add_child(logo);
     let mut browser = Widget::new(C::Panel, "ServerBrowserPanel", false);
     browser.add_child(Widget::composite(C::Listbox, "ServerListBox", false));
     for header in ["PasswordButton", "ServerNameButton", "PlayersButton", "PingButton", "MapButton"] {
         browser.add_child(Widget::toggle_button(header, false, ""));
     }
     m.add_child(browser);
-    let mut refresh = Widget::push_button("RefreshButton", false, "");
-    refresh.set_enabled(false);
-    m.add_child(refresh);
+    m.add_child(Widget::push_button("RefreshButton", false, "LobbyRefreshServerList"));
     let mut server_info = Widget::push_button("ServerInfoButton", false, "");
     server_info.set_enabled(false);
     m.add_child(server_info);
@@ -80,9 +87,18 @@ pub fn lobby_menu(ui: &mut Ui) {
     }
     m.add_child(lan);
     aa_ui::screens::show(ui, m);
-    // nothing to join from a list: LobbyJoin 0x64A280 needs a selected game
+    // nothing to join yet: LobbyJoin 0x64A280 needs a selected game
     ui.with_widget("LobbyMenu/LANButtonsPanel/JoinButton", |w| w.set_enabled(false));
+    // 0x647DC0(3): the bounds [full_L .. full_B], whose size is 719 x 662
+    if let Some((w, h)) = ui.store.node(LOBBY).ok().and_then(|n| Some((full_size(&n, "full_R")?, full_size(&n, "full_B")?))) {
+        ui.with_widget("LobbyMenu/ServerBrowserPanel", |p| aa_ui::geometry::set_size(p, w, h));
+    }
     ui.layout();
+}
+
+/// `string full_R = +719` of the lobby's file, as a size.
+fn full_size(node: &aa_ui::node::UiNode, key: &str) -> Option<f32> {
+    node.string_or_empty(key).trim().trim_start_matches('+').parse().ok()
 }
 
 /// What the module asks of the front end.
@@ -106,6 +122,32 @@ struct Warm {
     data: Option<Arc<Data>>,
 }
 
+/// Makes the path of a join again: a game with a password asks, and the next
+/// attempt is a new connection.
+pub type TransportMaker = Box<dyn FnMut() -> aa_netcode::Result<Box<dyn Transport>> + Send + Sync>;
+
+/// The address the person typed, being resolved (`0x6EC460`, `0x7877E0`).
+struct Resolving {
+    label: String,
+    /// `None` until the lookup answered.
+    answer: Arc<Mutex<Option<Option<SocketAddr>>>>,
+}
+
+/// The wait for a session (`0x64A350`: the box with its timeout).
+struct Joining {
+    /// The game as the box names it.
+    label: String,
+    addr: SocketAddr,
+    /// UDP unless the path is another (`Lan::join_with`).
+    maker: Option<TransportMaker>,
+    started: std::time::Instant,
+    /// UVar JoinTimeout.
+    seconds: i32,
+    shown: i32,
+    /// The password of this attempt.
+    password: String,
+}
+
 /// The front end's side of a LAN session.
 pub struct Lan {
     pub node: SharedNode,
@@ -125,6 +167,14 @@ pub struct Lan {
     pub own_ready: bool,
     /// The file the digest of every world tick goes to (`AA_LAN_DIGEST`).
     digest_path: Option<PathBuf>,
+    resolving: Option<Resolving>,
+    joining: Option<Joining>,
+    /// The LAN list, while the lobby is open.
+    browser: Option<browse::Browser>,
+    /// A password box waits for a session that refused (`Joining` stays).
+    asking_password: bool,
+    /// The Internet button's side (`eos.rs`).
+    online: eos::Online,
 }
 
 /// `Lan` needs `Send` for the front end's resource: everything it holds is.
@@ -198,6 +248,11 @@ impl Lan {
             local_name: String::new(),
             own_ready: false,
             digest_path: std::env::var_os("AA_LAN_DIGEST").map(PathBuf::from),
+            resolving: None,
+            joining: None,
+            browser: None,
+            asking_password: false,
+            online: Default::default(),
         }
     }
 
@@ -271,15 +326,14 @@ impl Lan {
 
     /// A lobby command; `None` when it is not one of the lobby's.
     pub fn lobby_command(&mut self, ui: &mut Ui, custom: &mut Custom, cmd: &str) -> Option<Action> {
+        // the Internet button and its lobby (`eos.rs`)
+        if let Some(action) = self.online_command(ui, cmd) {
+            return Some(action);
+        }
         match cmd {
             "RequestLobbyLAN" => {
                 self.dialog = None;
                 return Some(Action::Lobby);
-            }
-            // GameSpy (module documentation)
-            "RequestLobbyInternet" => {
-                info!("the Internet lobby is GameSpy's and is not built");
-                return Some(Action::None);
             }
             // 0x64A6E0: ui_lobby_confirm_exit with LobbyExit
             "LobbyConfirmExit" => {
@@ -287,6 +341,33 @@ impl Lan {
                 let (ok, cancel) = (ui.strings.resolve("#button_ok"), ui.strings.resolve("#button_cancel"));
                 ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, "LobbyExit".into()), (cancel, String::new())] });
                 return Some(Action::None);
+            }
+            // 0x64A6E0 -> LobbyExit: the lobby closes, and its list
+            "LobbyExit" => {
+                self.browser = None;
+                return None;
+            }
+            // 0x6F40C0: the list starts again
+            "LobbyRefreshServerList" => {
+                ui.listbox_clear(SERVER_LIST);
+                ui.with_widget("LobbyMenu/LANButtonsPanel/JoinButton", |w| w.set_enabled(false));
+                if let Some(b) = &mut self.browser {
+                    b.refresh();
+                }
+                return Some(Action::None);
+            }
+            // 0x64A280: the selected game; 0x64A280 asks for one without a selection
+            "LobbyJoin" => return Some(self.join_selected(ui)),
+            // 0x75D460 RequestCancelJoin, the box's button and its timeout
+            "LobbyCancelJoin" => {
+                self.cancel_join();
+                return Some(Action::None);
+            }
+            // 0x414C84: the password box's answer
+            c if c.starts_with("ServerPassword ") => {
+                let password = c["ServerPassword ".len()..].trim().trim_matches('"').to_string();
+                self.asking_password = false;
+                return Some(self.retry_with_password(ui, password));
             }
             // 0x6471B0: CreateGameDialog
             "LobbyHost" => {
@@ -297,7 +378,14 @@ impl Lan {
                 self.open_join(ui);
                 return Some(Action::None);
             }
-            "CreateGameCancel" | "JoinDirectCancel" => {
+            "CreateGameCancel" => {
+                self.close_dialog(ui);
+                return Some(Action::None);
+            }
+            // 0x6EC640 (the box of 0x6EC460 too): the dialog closes, and the
+            // answer of the name's lookup finds nobody waiting
+            "JoinDirectCancel" => {
+                self.resolving = None;
                 self.close_dialog(ui);
                 return Some(Action::None);
             }
@@ -330,9 +418,8 @@ impl Lan {
         d.add_child(Widget::push_button("CancelButton", false, "CreateGameCancel"));
         aa_ui::screens::show(ui, d);
         self.dialog = Some("CreateGameDialog");
-        // the name of the last game, the profile's nickname until there is one
-        // (0x6EB530)
-        let name = self.local_name.clone();
+        // 0x6EB530: ui_lobby_default_game_name with the profile's nickname
+        let name = ui.strings.format("ui_lobby_default_game_name|s", &[&self.local_name]);
         ui.editbox_set_text(&format!("{CREATE_ROOT}/GameNameEditbox"), &name);
         let list = format!("{CREATE_ROOT}/MaxPlayersDropDown");
         let lo = ui.avars.float("MultiplayerMinNumPlayers").unwrap_or(2.0) as i32;
@@ -402,59 +489,231 @@ impl Lan {
         };
         let config = self.config(Vec::new());
         match LanNode::host(&config, &options, launch, Box::new(ArcData(data.clone()))) {
-            Ok(mut node) => {
-                info!("lan: hosting on {:?}", node.local_addr());
-                if !format.is_empty() {
-                    let _ = node.request(d::SET_TEAMS_REQUEST, &[Field::Text(units(&format))]);
-                }
-                if let Ok(mut n) = self.node.lock() {
-                    *n = Some(node);
-                }
-                self.dirty = true;
-                self.source = None;
-                let _ = custom;
-                Action::Staging
-            }
+            Ok(node) => self.hosted(node, &format),
             Err(e) => {
                 // 0x75B00B: no port of the range bound
                 let text = ui.strings.format("networking_unable_to_bind|d", &[&port.to_string()]);
                 warn!("lan: host failed: {e}");
-                let ok = ui.strings.resolve("#button_ok");
-                ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+                box_ok(ui, text);
                 Action::None
             }
         }
     }
 
-    /// `0x6EC460` -> LobbyJoinDirectExecute "%s %d" `0x648030` -> `0x787750`.
+    fn hosted(&mut self, mut node: LanNode, format: &str) -> Action {
+        info!("lan: hosting on {:?}", node.local_addr());
+        if !format.is_empty() {
+            let _ = node.request(d::SET_TEAMS_REQUEST, &[Field::Text(units(format))]);
+        }
+        if let Ok(mut n) = self.node.lock() {
+            *n = Some(node);
+        }
+        self.browser = None;
+        self.dirty = true;
+        self.source = None;
+        Action::Staging
+    }
+
+    /// The name and password of a host on another path come from that path's
+    /// lobby; everything else is [`Self::create`]'s. The staging opens on the
+    /// action this returns (`Front::lan_action`, `Action::Staging`).
+    pub fn host_with(&mut self, ui: &mut Ui, transport: Box<dyn Transport>, game_name: &str, password: &str, max_players: i32, allow_observers: bool) -> Result<Action, String> {
+        let data = self.wait_data().ok_or("no session data")?;
+        let rmc = ui.avars.get("StagingMultiPlayerDefaultRMCIds").map(aa_ui::node::unquote).unwrap_or_default();
+        let w = ui.avars.float("StagingMultiPlayerDefaultRMCWidth").unwrap_or(384.0);
+        let h = ui.avars.float("StagingMultiPlayerDefaultRMCHeight").unwrap_or(384.0);
+        let format = ui.avars.get("StagingMultiPlayerDefaultRMCTeamConfig").map(aa_ui::node::unquote).unwrap_or_default();
+        let mut launch = LaunchSettings { mode: 0, game_type: 2, field_0c: 1, random_map: Some(units(&rmc)), ..Default::default() };
+        launch.map_random.header = data.rmc_header(&units(&rmc)).unwrap_or_default();
+        launch.map_random.size_x = w as u32;
+        launch.map_random.size_y = h as u32;
+        launch.state.field_10 = 1;
+        launch.state.field_18 = 4;
+        launch.state.field_1c = 1;
+        let options = HostOptions { game_name: units(game_name), password: units(password), max_players, allow_observers, port: 0, ports_to_try: 0, bind: Ipv4Addr::UNSPECIFIED };
+        let config = self.config(Vec::new());
+        let node = LanNode::host_on(transport, &config, &options, launch, Box::new(ArcData(data))).map_err(|e| e.to_string())?;
+        Ok(self.hosted(node, &format))
+    }
+
+    /// `0x6EC460`: the box "Resolving address for %s" while the address is looked
+    /// up (`0x7877E0` on GameSpy's thread); `0x6EC8B0` has the answer in [`Self::pump`].
     fn join(&mut self, ui: &mut Ui) -> Action {
+        let address = ui.editbox_text(&format!("{JOIN_ROOT}/IPEditbox")).unwrap_or_default().trim().to_string();
+        let port = ui.editbox_text(&format!("{JOIN_ROOT}/PortEditbox")).and_then(|p| p.trim().parse::<u16>().ok()).unwrap_or(lan::HOST_PORT_DEFAULT);
+        self.close_dialog(ui);
+        let text = ui.strings.format("ui_lobby_join_direct_resolve|s", &[&address]);
+        let cancel = ui.strings.resolve("#button_cancel");
+        ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(cancel, "JoinDirectCancel".into())] });
+        let answer: Arc<Mutex<Option<Option<SocketAddr>>>> = Default::default();
+        let tell = answer.clone();
+        let name = address.clone();
+        std::thread::spawn(move || {
+            // The network layer is IPv4 (the original's 0x781F30).
+            let found = (name.as_str(), port).to_socket_addrs().ok().and_then(|mut a| a.find(SocketAddr::is_ipv4));
+            if let Ok(mut t) = tell.lock() {
+                *t = Some(found);
+            }
+        });
+        self.resolving = Some(Resolving { label: address, answer });
+        Action::None
+    }
+
+    /// `0x64A280`: the selected game of the list (`0x6523C0`). The game's name
+    /// goes in the box.
+    fn join_selected(&mut self, ui: &mut Ui) -> Action {
+        let list = self.browser.as_ref().map(|b| b.games.clone()).unwrap_or_default();
+        let entries = ui.listbox_entries(SERVER_LIST);
+        let Some(game) = ui.listbox_selected(SERVER_LIST).and_then(|s| entries.get(s)).and_then(|e| list.iter().find(|g| g.address.to_string() == e.param)).cloned() else {
+            let text = ui.strings.resolve("#ui_lobby_select_server");
+            box_ok(ui, text);
+            return Action::None;
+        };
+        self.start_join(ui, game.address, game.info.name, None, String::new())
+    }
+
+    /// `0x651A10` / `0x6523C0`: TGC_AdminNode::RequestJoin 0x75D390 and the box
+    /// `0x64A350`.
+    fn start_join(&mut self, ui: &mut Ui, addr: SocketAddr, label: String, mut maker: Option<TransportMaker>, password: String) -> Action {
         let Some(data) = self.wait_data() else {
             warn!("lan: no session data");
             return Action::None;
         };
-        let ip = ui.editbox_text(&format!("{JOIN_ROOT}/IPEditbox")).unwrap_or_default();
-        let port = ui.editbox_text(&format!("{JOIN_ROOT}/PortEditbox")).and_then(|p| p.trim().parse::<u16>().ok()).unwrap_or(lan::HOST_PORT_DEFAULT);
-        self.close_dialog(ui);
-        let Ok(ip) = ip.trim().parse::<Ipv4Addr>() else {
-            let ok = ui.strings.resolve("#button_ok");
-            let text = ui.strings.resolve("#ui_lobby_connect_failed");
-            ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
-            return Action::None;
+        let config = self.config(units(&password));
+        let node = match maker.as_mut() {
+            Some(make) => make().and_then(|t| LanNode::join_on(t, &config, addr, Box::new(ArcData(data)))),
+            None => LanNode::join(&config, addr, Box::new(ArcData(data))),
         };
-        let config = self.config(Vec::new());
-        match LanNode::join(&config, SocketAddr::from((ip, port)), Box::new(ArcData(data))) {
+        match node {
             Ok(node) => {
-                info!("lan: joining {ip}:{port}");
+                info!("lan: joining {addr}");
                 if let Ok(mut n) = self.node.lock() {
                     *n = Some(node);
                 }
+                self.browser = None;
                 self.dirty = true;
                 self.source = None;
-                Action::None
+                let seconds = ui.store.node("UVars.tgi:Vars").ok().and_then(|n| n.int("JoinTimeout").ok()).unwrap_or(60);
+                let joining = Joining { label, addr, maker, started: std::time::Instant::now(), seconds, shown: seconds, password };
+                let text = joining_text(ui, &joining.label, seconds);
+                let cancel = ui.strings.resolve("#button_cancel");
+                ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(cancel, "LobbyCancelJoin".into())] });
+                self.joining = Some(joining);
             }
             Err(e) => {
                 warn!("lan: join failed: {e}");
-                Action::None
+                let text = ui.strings.resolve("#ui_lobby_connect_failed");
+                box_ok(ui, text);
+            }
+        }
+        Action::None
+    }
+
+    /// A join on another path, with `label` in the box; the address is the host's
+    /// on that path. `maker` makes the path, again for a second attempt when the
+    /// game asked for a password.
+    pub fn join_with(&mut self, ui: &mut Ui, maker: TransportMaker, addr: SocketAddr, label: String) -> Action {
+        self.start_join(ui, addr, label, Some(maker), String::new())
+    }
+
+    /// 0x75D460: the node leaves, the box is gone by then.
+    fn cancel_join(&mut self) {
+        self.joining = None;
+        self.asking_password = false;
+        self.with_node(LanNode::leave);
+        // nothing was joined: nothing is left to tell the host for long
+        if let Ok(mut n) = self.node.lock()
+            && n.as_ref().is_some_and(|node| !node.joined())
+        {
+            *n = None;
+        }
+    }
+
+    fn retry_with_password(&mut self, ui: &mut Ui, password: String) -> Action {
+        let Some(j) = self.joining.take() else { return Action::None };
+        self.start_join(ui, j.addr, j.label, j.maker, password)
+    }
+
+    /// The lobby came up (Activate `0x6495F0`): the list asks (`0x6F40C0(1)`),
+    /// and the first time, a nickname (`+0x200 = !profile+0x28`, `0x649475`).
+    pub fn lobby_shown(&mut self, ui: &mut Ui, first_time: bool) {
+        // AA_LAN_BROWSE=127.0.0.1 keeps a test on this machine
+        let broadcast = match std::env::var("AA_LAN_BROWSE").ok().and_then(|b| b.parse::<Ipv4Addr>().ok()) {
+            Some(ip) if ip.is_loopback() => None,
+            Some(ip) => Some(ip),
+            None => Some(Ipv4Addr::BROADCAST),
+        };
+        match browse::Browser::new(broadcast) {
+            Ok(b) => self.browser = Some(b),
+            Err(e) => warn!("lan: the game list: {e}"),
+        }
+        if first_time {
+            let text = ui.strings.resolve("#ui_lobby_prompt_lan_nickname");
+            let (ok, cancel) = (ui.strings.resolve("#button_ok"), ui.strings.resolve("#button_cancel"));
+            let name = self.local_name.clone();
+            let cmd = "LobbySetLANNickname \"%s\"".to_string();
+            ui.show_prompt_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, cmd), (cancel, String::new())] }, &name);
+        }
+    }
+
+    /// One frame of the lobby: the list's answers, the address being looked up,
+    /// the box of a join.
+    fn lobby_frame(&mut self, ui: &mut Ui, actions: &mut Vec<Action>) {
+        // Update 0x649380: Join only with a selected game (0x6F3930)
+        if self.browser.is_some() {
+            let selected = ui.listbox_selected(SERVER_LIST).is_some();
+            let mut changed = false;
+            ui.with_widget("LobbyMenu/LANButtonsPanel/JoinButton", |w| {
+                if (w.flags & 4 != 0) != selected {
+                    w.set_enabled(selected);
+                    changed = true;
+                }
+            });
+            if changed {
+                ui.layout();
+            }
+        }
+        if let Some(b) = &mut self.browser
+            && b.pump()
+        {
+            let keep = ui.listbox_selected(SERVER_LIST).and_then(|s| ui.listbox_entries(SERVER_LIST).get(s).map(|e| e.param.clone()));
+            ui.listbox_clear(SERVER_LIST);
+            for (i, g) in b.games.iter().enumerate() {
+                let row = format!("{}    {}/{}    {}    {}", g.info.name, g.info.players, g.info.max_players, g.ping_ms, g.info.map);
+                ui.listbox_add(SERVER_LIST, &row, &g.address.to_string());
+                if keep.as_deref() == Some(&*g.address.to_string()) {
+                    ui.listbox_select(SERVER_LIST, i, false);
+                }
+            }
+            ui.layout();
+        }
+        if let Some(r) = &self.resolving
+            && let Some(found) = r.answer.lock().ok().and_then(|mut a| a.take())
+        {
+            let label = r.label.clone();
+            self.resolving = None;
+            ui.close_message_box();
+            match found {
+                // 0x6EC8B0: the address as the box says it, inet_ntoa of the answer
+                Some(addr) => actions.push(self.start_join(ui, addr, addr.ip().to_string(), None, String::new())),
+                None => {
+                    let text = ui.strings.format("ui_lobby_join_direct_failed|s", &[&label]);
+                    box_ok(ui, text);
+                }
+            }
+        }
+        if !self.asking_password
+            && let Some(j) = &mut self.joining
+        {
+            let left = j.seconds - j.started.elapsed().as_secs() as i32;
+            if left <= 0 {
+                self.cancel_join();
+                let text = ui.strings.resolve("#ui_lobby_connect_failed");
+                box_ok(ui, text);
+            } else if left != j.shown {
+                j.shown = left;
+                let text = joining_text(ui, &j.label, left);
+                ui.set_message_box_text(&text);
             }
         }
     }
@@ -686,12 +945,19 @@ impl Lan {
         state.local_ready = me.is_some_and(|p| p.status == 1 || p.status == 2);
         state.observers = s.players.iter().filter(|p| !p.ai && !p.film && p.kingdom.is_empty()).map(|p| occupant_of(p, local, we_host, s)).collect();
         state.can_join_team = vec![true; state.teams.len()];
+        // 0x6673A0: PlayersListbox, the people of the session
+        let people: Vec<(String, u32)> = s.players.iter().filter(|p| !p.ai && !p.film).map(|p| (text(&p.name), p.id)).collect();
         drop(guard);
         if show {
             custom.net_show(ui, state);
         } else {
             custom.net_set_state(ui, state);
         }
+        ui.listbox_clear(PLAYERS_LIST);
+        for (name, id) in people {
+            ui.listbox_add(PLAYERS_LIST, &name, &id.to_string());
+        }
+        ui.layout();
         self.dirty = false;
     }
 
@@ -699,6 +965,8 @@ impl Lan {
     /// ask of the front end.
     pub fn pump(&mut self, ui: &mut Ui, staging_page: bool, custom: &mut Custom) -> Vec<Action> {
         let mut actions = Vec::new();
+        self.lobby_frame(ui, &mut actions);
+        self.online_frame(ui, &mut actions);
         if !self.in_battle {
             let events = self.node.lock().ok().and_then(|mut n| {
                 let node = n.as_mut()?;
@@ -719,6 +987,11 @@ impl Lan {
             match e {
                 LanEvent::Joined { player } => {
                     info!("lan: joined as player {player}");
+                    if self.node.lock().is_ok_and(|n| n.as_ref().is_none_or(LanNode::leaving)) {
+                        continue;
+                    }
+                    self.joining = None;
+                    ui.close_message_box();
                     self.dirty = true;
                     actions.push(Action::Staging);
                 }
@@ -758,14 +1031,34 @@ impl Lan {
                     let line = ui.strings.format("public_chat|ss", &[&name, &status]);
                     send_message(ui, &line);
                 }
-                LanEvent::PeerTimedOut { address } => warn!("lan: no datagram from {address:?}"),
+                // 0x75BD70: the silence is counted down (the connection dialog's
+                // text; the dialog itself is not built)
+                LanEvent::PeerTimedOut { address } => {
+                    warn!("lan: no datagram from {address:?}");
+                    let line = ui.strings.format("csd_disconnecting_in_seconds|d", &[&(lan::LOST_PATIENCE as i32).to_string()]);
+                    send_message(ui, &line);
+                }
                 LanEvent::ConnectRefused { reason, info } => warn!("lan: refused {} (reason {reason})", text(&info.name)),
+                LanEvent::BadDatagram { address, error } => warn!("lan: a datagram from {address:?} refused: {error}"),
                 LanEvent::Paused { paused, .. } => info!("lan: paused {paused}"),
                 LanEvent::Disconnected { reason } => {
                     info!("lan: disconnected, reason {reason:?}");
-                    let key = reason.and_then(|r| aa_netcode::packets::REASON_KEYS.get(r as usize).copied());
+                    // 0x414C2A: a game with a password asks for it, and again when it was wrong
+                    if reason == Some(1) && self.joining.is_some() {
+                        let tried = self.joining.as_ref().is_some_and(|j| !j.password.is_empty());
+                        let key = if tried { "#networking_disconnect_prompt_incorrect_password" } else { "#networking_disconnect_prompt_password" };
+                        let text = ui.strings.resolve(key);
+                        let (ok, cancel) = (ui.strings.resolve("#button_ok"), ui.strings.resolve("#button_cancel"));
+                        if let Ok(mut n) = self.node.lock() {
+                            *n = None;
+                        }
+                        self.asking_password = true;
+                        ui.show_prompt_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, "ServerPassword \"%s\"".into()), (cancel, "LobbyCancelJoin".into())] }, "");
+                        continue;
+                    }
+                    self.joining = None;
                     // (type 8 without a backup server to take over: the host quit)
-                    let line = key.map(|k| format!("#{k}")).unwrap_or_else(|| "#networking_disconnect_quit".into());
+                    let line = reason.and_then(disconnect_key).unwrap_or_else(|| "#networking_disconnect_quit".into());
                     actions.push(self.end_session(ui, &line));
                 }
                 LanEvent::Left => {
@@ -807,6 +1100,16 @@ impl Lan {
         self.with_node(|node| {
             if let Err(e) = node.start_launch() {
                 warn!("lan: launch: {e}");
+            }
+        });
+    }
+
+    /// The launch's world did not load: the other nodes are told (304 with
+    /// status 4, 0x74FEC0), and every peer's session ends (0x773AE0).
+    pub fn load_failed(&mut self) {
+        self.with_node(|node| {
+            if let Err(e) = node.report_world_loaded(false) {
+                warn!("lan: task status: {e}");
             }
         });
     }
@@ -871,6 +1174,27 @@ impl Lan {
             }
         });
     }
+}
+
+const SERVER_LIST: &str = "Root/LobbyMenu/ServerBrowserPanel/ServerListBox";
+const PLAYERS_LIST: &str = "Root/StagingMenu/StagingChatPanel/PlayersListBoxPanel/PlayersListbox";
+
+fn box_ok(ui: &mut Ui, text: String) {
+    let ok = ui.strings.resolve("#button_ok");
+    ui.show_message_box(aa_ui::message_box::SHARED, aa_ui::message_box::MessageBoxRequest { text, buttons: vec![(ok, String::new())] });
+}
+
+/// `0x64A350`: ui_lobby_joining_game_format, a new line, ui_lobby_join_timeout.
+fn joining_text(ui: &Ui, label: &str, seconds: i32) -> String {
+    let joining = ui.strings.format("ui_lobby_joining_game_format|s", &[label]);
+    let timeout = ui.strings.format("ui_lobby_join_timeout|d", &[&seconds.to_string()]);
+    format!("{joining}\n{timeout}")
+}
+
+/// The text of a ClientDisconnectDecree's reason (`packets::REASON_KEYS`, 0x75A780).
+fn disconnect_key(reason: u32) -> Option<String> {
+    let key = aa_netcode::packets::REASON_KEYS.get(reason as usize)?;
+    Some(if key.starts_with("networking_") { format!("#{key}") } else { format!("#networking_disconnect_{key}") })
 }
 
 fn send_message(ui: &mut Ui, line: &str) {

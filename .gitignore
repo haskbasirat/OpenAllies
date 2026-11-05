@@ -176,3 +176,11 @@ __pycache__/
 
 # Third-party packages.
 *.whl
+
+# Epic's SDK and this product's online settings: never in the repository.
+/SDK/
+eos-sdk/
+EOSSDK-*
+libEOSSDK-*
+openallies-ids.txt
+client-secret.txt

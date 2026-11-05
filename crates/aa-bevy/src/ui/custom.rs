@@ -504,6 +504,8 @@ pub fn warm(root: aa_ui::fs::DataRoot) {
 impl Custom {
     pub fn new(root: &Path) -> Self {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
+        // (AA_UI_SEED: a scripted run's launch, the same map and draws each time)
+        let seed = std::env::var("AA_UI_SEED").ok().and_then(|s| s.parse::<u64>().ok()).map_or(seed, |s| s | 1);
         Self {
             root: root.to_path_buf(),
             data: None,
@@ -1409,7 +1411,10 @@ impl Custom {
                 team,
                 color: [(c[0] * 255.0).round() as u8, (c[1] * 255.0).round() as u8, (c[2] * 255.0).round() as u8],
                 controller,
-                start: index,
+                // a random map has a start location for each side it was made
+                // with (`RandomMapParams::sides`, the occupied seats); a map's are
+                // its records'
+                start: if matches!(s.source, Source::Random { .. }) { players.len() } else { index },
             });
         }
         let money = s.rules.iter().find(|r| r.ids.eq_ignore_ascii_case("ResourceStockpileDefault")).and_then(|r| r.value.parse::<f32>().ok());

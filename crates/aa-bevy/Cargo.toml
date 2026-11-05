@@ -47,6 +47,14 @@ aa-netcode = { path = "../aa-netcode" }
 aa-orders = { path = "../aa-orders" }
 aa-runtime = { path = "../aa-runtime" }
 aa-simulation = { path = "../aa-simulation" }
+# Online play through Epic Online Services (net/eos.rs). Its library is found at
+# run time, so nothing of Epic's but the bindings is needed to build.
+aa-eos = { path = "../aa-eos", optional = true }
+
+[features]
+# The Internet button. Without it LAN and a direct address work as ever, and
+# a release needs no Epic file beside the program.
+eos = ["dep:aa-eos"]
 
 # A separate workspace on purpose: Bevy's naga_oil enables codespan-reporting's
 # termcolor feature, which breaks the wgpu-27 naga the client builds when both

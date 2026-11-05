@@ -28,6 +28,10 @@
 //!   node executes (0x75BBC0). In game the host also sends synchronizer S
 //!   (299, 0x74E670); 0x752F60 compares it for film players only.
 //!
+//! The datagrams travel through [`crate::udp::Transport`]: UDP for a LAN and a
+//! direct address ([`LanNode::host`], [`LanNode::join`]), any other path through
+//! [`LanNode::host_on`] and [`LanNode::join_on`].
+//!
 //! The datagrams come from the ported codecs of this crate (transport header,
 //! admin packet types 2/4/5/8/10/11, channels, order payloads), each proven on
 //! its own by its oracle (research/phase8-net/README.txt). This composition has
@@ -48,7 +52,8 @@
 //! * the end-of-session check 0x76F600 and the session timing 0x41C180;
 //! * the connect checksums and the map check: [`LanConfig`] carries what the
 //!   caller computed, a client reports it has the map without looking
-//!   (`SnapshotEffects`), a file transfer (status 2) is refused;
+//!   (`SnapshotEffects`); for a file transfer (status 2, 0x74FE30) the host says
+//!   the map will not transfer, as for status 3;
 //! * of FinalizeLaunchSettings 0x776B20 everything but the seed, of 0x7791F0
 //!   everything but 0x778D10 and the removal of the AIs;
 //! * GameSpy, backup servers, a film recorder inside the node (the client
@@ -71,7 +76,7 @@ use crate::packets::{
 };
 use crate::send::{wanted_packet_type, GateConn, GateNode};
 use crate::session::{read_and_validate_connect, write_connect, ConnectInfo, ConnectVerdict, HostConnectState, PeerAddress, PlayerId};
-use crate::udp::UdpNode;
+use crate::udp::{Transport, UdpNode, UdpTransport};
 use crate::{Error, Result};
 use aa_numeric::Precision;
 use aa_orders::net::admin::AdminNode;
@@ -87,6 +92,7 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+pub mod browse;
 pub mod orders;
 pub mod registries;
 
@@ -110,6 +116,8 @@ pub const MAX_DRIVER_STEPS: usize = 64;
 /// every other connection (seconds since NetConn+0x2C).
 pub const SERVER_TIMEOUT: f32 = 3.0;
 pub const PEER_TIMEOUT: f32 = 2.0;
+/// A frame later than this after the last one was our own stall (seconds).
+const STALL: f32 = 1.0;
 /// [0xA874AC]: a leaving node shuts down after 2.5 s.
 pub const LEAVE_DELAY: f32 = 2.5;
 /// AdminConn +0x44 starts at 15 s of patience (0x75BD70 takes 1/s while lagging).
@@ -189,6 +197,9 @@ pub enum LanEvent {
     /// No datagram from a connection for [`PEER_TIMEOUT`] /
     /// [`SERVER_TIMEOUT`] (0x75BD70).
     PeerTimedOut { address: PeerAddress },
+    /// A datagram its reader refused. The session goes on: a host with an open
+    /// port hears whatever a network sends it.
+    BadDatagram { address: PeerAddress, error: String },
 }
 
 /// Game data a session's codecs read (registry counts, name lookups,
@@ -366,6 +377,11 @@ pub(crate) struct State {
     pub pause_ended: f32,
     pub pause_votes: Vec<PeerLink>,
     pub pause_last_paused: Vec<(PeerLink, f32)>,
+    /// The clock of the last frame, and until when silence is not counted after
+    /// a frame of our own that took long (a world loading): the original's network
+    /// thread runs on through it, ours cannot.
+    pub last_frame: f32,
+    pub grace_until: f32,
     /// AdminNode+0x2CD: when the node started to leave.
     pub leaving: Option<f32>,
     /// The leave delay ran out: the node sends nothing more.
@@ -513,6 +529,8 @@ impl State {
             pause_ended: -10000.0,
             pause_votes: Vec::new(),
             pause_last_paused: Vec::new(),
+            last_frame: 0.0,
+            grace_until: 0.0,
             leaving: None,
             left: false,
         })
@@ -639,10 +657,16 @@ impl LanNode {
             Some(s) => s,
             None => return Err(last.map(Error::from).unwrap_or_else(|| Error::Protocol("no port to bind".into()))),
         };
+        Self::host_on(Box::new(UdpTransport::new(socket)?), config, options, launch, data)
+    }
+
+    /// [`Self::host`] on any datagram path (`options.port` and `options.bind` are
+    /// the socket's, unused here).
+    pub fn host_on(transport: Box<dyn Transport>, config: &LanConfig, options: &HostOptions, launch: LaunchSettings, data: Box<dyn LanData + Send + Sync>) -> Result<Self> {
         let pc = Precision::Double53;
         let start = node_timer();
         let session_id = node_session_id(start, pc)?;
-        let udp = UdpNode::from_socket(socket, session_id, X87Precision::Double)?;
+        let udp = UdpNode::on(transport, session_id, X87Precision::Double);
         let mut st = State::new(Role::Host, udp)?;
         st.start = start;
         let mut node = Self { admin: AdminNode::new(0)?, driver: new_driver(DriverRole::Host, pc)?, gate: Gate::default(), st, data, world_clock_hint: None, stopped: false };
@@ -654,15 +678,20 @@ impl LanNode {
     /// Connect to a host (LobbyJoinDirectExecute "ip port" 0x648030 ->
     /// 0x787750): an ephemeral client socket, then Connect packets.
     pub fn join(config: &LanConfig, host: SocketAddr, data: Box<dyn LanData + Send + Sync>) -> Result<Self> {
-        let pc = Precision::Double53;
         // 0.0.0.0 natively; a host on this machine keeps the socket on loopback.
         let bind: SocketAddr = match host {
             SocketAddr::V4(v4) if v4.ip().is_loopback() => "127.0.0.1:0".parse().map_err(err)?,
             _ => "0.0.0.0:0".parse().map_err(err)?,
         };
+        Self::join_on(Box::new(UdpTransport::new(UdpSocket::bind(bind)?)?), config, host, data)
+    }
+
+    /// [`Self::join`] on any datagram path; `host` is the host's address on it.
+    pub fn join_on(transport: Box<dyn Transport>, config: &LanConfig, host: SocketAddr, data: Box<dyn LanData + Send + Sync>) -> Result<Self> {
+        let pc = Precision::Double53;
         let start = node_timer();
         let session_id = node_session_id(start, pc)?;
-        let udp = UdpNode::bind(bind, session_id, X87Precision::Double)?;
+        let udp = UdpNode::on(transport, session_id, X87Precision::Double);
         let mut st = State::new(Role::Client, udp)?;
         st.start = start;
         let host_addr = peer_address(host)?;
@@ -809,6 +838,10 @@ impl LanNode {
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.st.udp.local_addr()
     }
+    /// The node is on its way out ([`Self::leave`]).
+    pub fn leaving(&self) -> bool {
+        self.st.leaving.is_some() || self.st.left
+    }
     pub fn joined(&self) -> bool {
         self.st.role == Role::Host || self.st.joined
     }
@@ -869,6 +902,10 @@ impl LanNode {
     /// driver frames, the host's countdown, send.
     pub fn frame(&mut self, game: &mut dyn LanGame) -> Result<Vec<LanEvent>> {
         self.tick_time()?;
+        if self.st.now - self.st.last_frame > STALL {
+            self.st.grace_until = self.st.now + SERVER_TIMEOUT;
+        }
+        self.st.last_frame = self.st.now;
         if self.st.left {
             return Ok(std::mem::take(&mut self.st.events));
         }
@@ -959,13 +996,23 @@ impl LanNode {
         self.st.udp.dropped.clear();
         self.answer_queries()?;
         for inc in incoming {
-            let addr = peer_address(self.st.udp.conns[inc.conn].addr)?;
+            // (a V6 address never comes from the IPv4 sockets of this layer)
+            let Ok(addr) = peer_address(self.st.udp.conns[inc.conn].addr) else { continue };
+            if let Err(e) = self.receive_one(inc, addr, now) {
+                self.st.event(LanEvent::BadDatagram { address: addr, error: e.to_string() });
+            }
+        }
+        Ok(())
+    }
+
+    fn receive_one(&mut self, inc: crate::udp::Incoming, addr: PeerAddress, now: f32) -> Result<()> {
+        {
             // A client talks to its session's peers only.
             let index = match self.st.role {
                 Role::Host => self.st.ensure_conn(addr)?,
                 Role::Client => match self.st.conn_index(addr) {
                     Some(i) => i,
-                    None => continue,
+                    None => return Ok(()),
                 },
             };
             // A datagram ends a reported silence: the original's network thread
@@ -1314,6 +1361,9 @@ impl LanNode {
     /// silent that long has lost the session (no backup server takes over).
     fn liveness(&mut self) -> Result<()> {
         let now = self.st.now;
+        if now < self.st.grace_until {
+            return Ok(());
+        }
         let host_addr = self.st.host_addr;
         let mut timed = Vec::new();
         let mut lost = Vec::new();

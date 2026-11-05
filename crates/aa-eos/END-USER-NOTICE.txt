@@ -1,0 +1,37 @@
+DRAFT - NOT YET REVIEWED. The project owner must read this against the Epic Online
+Services agreement they accepted, clause 3.1(c), and take legal advice if in doubt,
+before any release carries it. Delete these three lines when that is done.
+
+EPIC ONLINE SERVICES: NOTICE TO END USERS OF OPENALLIES
+
+OpenAllies can use software and services of Epic Games, Inc. and its affiliates
+("Epic") for online play: the Epic Online Services software development kit and the
+library EOSSDK-Win64-Shipping.dll, and the online services they connect to
+(together, "Epic's Materials").
+
+This notice forms part of the licence under which you use OpenAllies. OpenAllies is
+made and offered by its own authors. Epic is not a party to that licence, did not
+make OpenAllies, and has no obligation to you in connection with it.
+
+TO THE FULLEST EXTENT THE LAW ALLOWS, EPIC'S MATERIALS ARE PROVIDED "AS IS" AND "AS
+AVAILABLE", WITH ALL FAULTS AND WITHOUT ANY WARRANTY. THE AUTHORS OF OPENALLIES, AND
+EPIC, DISCLAIM ALL REPRESENTATIONS, WARRANTIES AND CONDITIONS RELATED TO EPIC'S
+MATERIALS, WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING ANY OF MERCHANTABILITY,
+SATISFACTORY QUALITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AVAILABILITY,
+SECURITY, TITLE AND NON-INFRINGEMENT.
+
+TO THE FULLEST EXTENT THE LAW ALLOWS, NEITHER EPIC NOR THE AUTHORS OF OPENALLIES ARE
+LIABLE TO YOU FOR ANY LOSS OR DAMAGE ARISING OUT OF OR RELATED TO EPIC'S MATERIALS,
+WHETHER DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE, AND WHETHER
+IN CONTRACT, TORT OR OTHERWISE, EVEN IF TOLD SUCH LOSS OR DAMAGE WAS POSSIBLE.
+
+Some places do not allow some of these exclusions, so some of them may not apply to
+you. Nothing here limits a right that the law of your country does not let a licence
+take away.
+
+Online play is optional. To play online, the game creates an anonymous identifier for
+your device and your Windows user with Epic, and sends Epic your nickname, the games
+you host or join, and connection data needed to reach other players. LAN play and
+playing by direct address do not use Epic's Materials.
+
+Epic Online Services and Epic Games are trademarks of Epic Games, Inc.

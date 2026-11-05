@@ -587,11 +587,51 @@ Two of our clients: two copies on their own hidden desktops, loopback, scratch
   now sets own_admin_clock = false (one checkpoint per 17 world ticks); a film of
   that build has not been run yet.
 
+Development 24: what a person meets on the way in (no oracle of their own; the
+  native functions named are read from the decompiled code, and every one was
+  run in two of our clients on this machine, screenshots in the lane's notes):
+  * the datagram path is a trait, aa_netcode::udp::Transport: UdpTransport for a
+    LAN and a direct address, LanNode::host_on / join_on for any other path
+    (EOS P2P). Everything above it is unchanged.
+  * the lobby in LAN mode as 0x647F00 sets it: the GameSpy logo, the room list
+    and the chat hidden, the browser with the full_ bounds of the file
+    (0x647DC0(3)), Refresh live, Join only with a selected game.
+  * the LAN list (lan/browse.rs): the QR2 query of 0x787750 on the port range
+    HostPortDefault .. + NetworkNumPortsToTry, to the broadcast address and to
+    this machine, three times per Refresh and when the lobby opens; the answers
+    are our hosts' answer_queries. Join on a selected game is 0x64A280 ->
+    0x6523C0. AA_LAN_BROWSE=127.0.0.1 keeps a test off the network. That the
+    original's lobby lists our host, or ours the original, is not tried.
+  * the nickname the first time (0x649475: +0x200 = !profile+0x28): the prompt
+    box 0x66EE00 with its editbox (aa-ui message_box.rs show_prompt_box),
+    LobbySetLANNickname "%s" (0x647560) stores it in the profile.
+  * Join Direct as the dialog does it (0x6EC460 -> 0x7877E0 -> 0x6EC8B0 ->
+    0x651A10): "Resolving address for %s", a host name or an address, IPv4;
+    ui_lobby_join_direct_failed when it does not resolve; then the box of
+    0x64A350, "Joining '%s', please wait ..." and "Timeout in %d seconds"
+    counting down from UVar JoinTimeout (60), Cancel = LobbyCancelJoin
+    (0x75D460). Nobody answering: at 0 the join is cancelled and
+    ui_lobby_connect_failed shows. The dialog's path sends no QR2 query.
+  * a game with a password: reason 1 of the ClientDisconnectDecree asks
+    (0x414C2A, networking_disconnect_prompt_password, then _incorrect_password),
+    ServerPassword "%s" joins again with it. The other reasons show their
+    networking_disconnect_* text (REASON_KEYS holds some of them short).
+  * a client without the map (status 2 of SetMapTransferStatus, 0x7554B0) gets
+    the host's map_will_not_transfer_host message instead of ending the host's
+    frame; the transfer itself (0x74FE30, file.rs) is still not built.
+  * one datagram a reader refuses no longer ends the session
+    (LanEvent::BadDatagram); a frame of our own that took more than 1 s (a world
+    loading) starts 3 s in which silence is not counted, since the original's
+    network thread does not stop for it.
+  * a launch whose world fails to load reports task status 4 (0x74FEC0), so every
+    node ends the session (0x773AE0) instead of waiting.
+  * a random map's start locations follow the occupied seats (a computer player
+    in Team 2 of 8v8 stopped the load: "start 8 is not one of the map's 2").
+
 Not built, on purpose or for lack of time (research/byte-exact/NEXT-ROUND.md
 "Multiplayer" has the order of the next steps):
-  * the LAN game list: GameSpy's browse by UDP broadcast; a person joins by
-    address. The first-time nickname prompt ui_lobby_prompt_lan_nickname: the
-    Options page's nickname is used. The Internet lobby (GameSpy).
+  * the Internet lobby (GameSpy); the connection status dialog (CSD) of 0x75BD70:
+    a silent peer gives the line csd_disconnecting_in_seconds in the chat only.
   * heartbeat 0x75B820 with crate::heartbeat: lan.rs runs the rule of 0x75BD70 in
     short (module documentation), no lag dialog, no backup server.
   * the function behind the data checksum (a measured constant for the stock

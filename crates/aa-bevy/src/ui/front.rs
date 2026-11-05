@@ -569,7 +569,14 @@ impl Front {
             Page::Staging if self.lan.active() => self.lan.sync_staging(&mut self.ui, &mut self.custom, true),
             Page::Staging => self.custom.show(&mut self.ui),
             Page::Multiplayer => crate::net::multiplayer_menu(&mut self.ui),
-            Page::Lobby => crate::net::lobby_menu(&mut self.ui),
+            // the Internet button's lobby (`crate::net::eos`)
+            Page::Lobby if self.lan.internet_lobby(&mut self.ui, self.lan_name.is_none()) => {}
+            Page::Lobby => {
+                crate::net::lobby_menu(&mut self.ui);
+                // 0x649475: the first time, a nickname (profile+0x28)
+                let first_time = self.lan_name.is_none();
+                self.lan.lobby_shown(&mut self.ui, first_time);
+            }
             Page::Loading => {
                 screens::loading_screen(&mut self.ui, false);
                 self.refresh_loading(progress);
@@ -825,6 +832,12 @@ impl Front {
                 self.show(Page::Multiplayer);
             }
             "LobbyExit" => self.show(Page::Multiplayer),
+            // 0x647560: the profile's nickname (0x41E3B0)
+            c if c.starts_with("LobbySetLANNickname ") => {
+                let name = c["LobbySetLANNickname ".len()..].trim().trim_matches('"').to_string();
+                self.effects(vec![aa_ui::options::Effect::Nickname(name)]);
+                self.lan.local_name = self.lan_name.clone().unwrap_or_else(|| self.ui.strings.resolve("#default_lan_name"));
+            }
             "RequestMainMenu" => self.show(Page::MainMenu),
             // main menu Options (0x650700) / game menu Options
             "OpenOptionsMenu" | "OptionsDialog" => self.open_options(size, ""),
@@ -1246,6 +1259,7 @@ pub fn frame(
             Page::Loading | Page::Game => {
                 // back from a load that failed (LoadProgress.error) or a game
                 if let Some(err) = progress.as_ref().and_then(|p| p.error.clone()) {
+                    f.lan.load_failed();
                     f.custom.load_failed(&mut f.ui, &err);
                     f.message(&err);
                     commands.insert_resource(LoadProgress::default());
@@ -1422,10 +1436,16 @@ pub fn frame(
     }
     let mut out = FrameOut::default();
     // the session's frame, and its events (`crate::net`)
-    if f.lan.active() {
+    if f.lan.active() || f.page == Page::Lobby || f.lan.online_busy() {
         let staging = f.page == Page::Staging;
         let Front { lan, ui, custom, .. } = f;
         let actions = lan.pump(ui, staging, custom);
+        if f.ui.message_box.is_some() && !actions.is_empty() {
+            f.remember_dialog();
+        } else if f.ui.message_box.is_none() {
+            // a box the session closed this frame stays closed on the next page
+            f.dialog = None;
+        }
         for a in actions {
             f.lan_action(a, &mut out);
         }
