@@ -22,8 +22,8 @@ The goal is a game so close to the original that a player can barely tell the di
 
 | | |
 |:---:|:---:|
-| ![The original main menu](docs/screenshots/main-menu.jpg) | ![The original Custom game setup screen](docs/screenshots/custom-setup.jpg) |
-| The original main menu, drawn from the game's own layout files | The original Custom game setup screen |
+| ![The main menu backdrop](docs/screenshots/main-menu.jpg) | ![The original Custom game setup screen](docs/screenshots/custom-setup.jpg) |
+| The main menu backdrop (the menu and the logos are cropped out) | The original Custom game setup screen |
 | ![The original random map options](docs/screenshots/random-map.jpg) | ![A battle at the Russian Corps HQ](docs/screenshots/battle.jpg) |
 | The random map generator with the original options | Infantry fighting at a Russian Corps HQ: banners, flag, ground patch |
 | ![A selected regiment and the unit panel](docs/screenshots/selection.jpg) | ![Regiment banners on Fall of Berlin](docs/screenshots/banners.jpg) |
