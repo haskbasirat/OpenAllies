@@ -250,6 +250,11 @@ pub fn publish_tints(state: Option<ResMut<FxState>>, mut out: ResMut<crate::batt
     out.0 = state.tint_colours(now);
 }
 
+/// Whether the actor is still under construction (0x4D1490: Actor +100 bit 21).
+fn under_construction(world: &aa_play::World, a: aa_play::ActorId) -> bool {
+    world.books.actor(a).is_some_and(|b| b.constructing)
+}
+
 /// An actor state (0x477FC0's names) as the world holds it; `false` for what it does
 /// not hold yet.
 fn actor_state(world: &aa_play::World, a: &aa_play::Actor, state: &str) -> bool {
@@ -2304,8 +2309,9 @@ impl FxState {
                     lap(2, &mut clock);
                     // compare: WhenConstructed runs when the actor first
                     // exists built (map buildings, finished deployments): a
-                    // building that is still unpacking gets it when done.
-                    if a.alive && a.activity == Activity::Unpacking {
+                    // building that is still unpacking, or still under
+                    // construction (Actor +100 bit 21), gets it when done.
+                    if a.alive && (a.activity == Activity::Unpacking || under_construction(frame.world, a.id)) {
                         self.unbuilt.insert(a.id);
                     } else if a.alive {
                         self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
@@ -2315,7 +2321,7 @@ impl FxState {
                 continue;
             }
             let Some(fx) = fx else { continue };
-            if a.activity != Activity::Unpacking && self.unbuilt.remove(&a.id) && a.alive {
+            if a.activity != Activity::Unpacking && !under_construction(frame.world, a.id) && self.unbuilt.remove(&a.id) && a.alive {
                 self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
             }
             if def.health > 0.0 && !fx.health.is_empty() {

@@ -181,8 +181,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
                     view_bindings::view.view_from_world[2].z,
                     view_bindings::view.view_from_world[3].z
                 ), pbr_input.world_position);
+                // The quad's stencil test (enabled, NOTEQUAL against the
+                // reference, mask all bits) passes or fails per pixel: a
+                // pixel takes the whole multiplier or none of it, so the
+                // filtered shadow-map value is cut at one half, not blended.
                 let lit = shadows::fetch_directional_shadow(0u, pbr_input.world_position, n, view_z, pbr_input.frag_coord.xy);
-                shadow = mix(look.shadow.rgb, vec3<f32>(1.0), lit);
+                shadow = select(vec3<f32>(1.0), look.shadow.rgb, lit < 0.5);
             }
         }
     }
