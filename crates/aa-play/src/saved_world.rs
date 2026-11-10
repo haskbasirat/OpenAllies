@@ -177,6 +177,8 @@ const STATE_UNDER_SIEGE: u32 = 1 << 20;
 const STATE_CONSTRUCTION: u32 = 1 << 21;
 const STATE_DEAD: u32 = 1 << 23;
 const STATE_FALLING: u32 = 1 << 24;
+/// An in-place unpack under way (`crate::zones` `unpacking`; bit 27 once it ends).
+const STATE_UNPACKING: u32 = 1 << 26;
 const STATE_MIND_EXHAUSTED: u32 = 1 << 5;
 const STATE_ENTRENCHED: u32 = 1 << 22;
 
@@ -815,14 +817,47 @@ fn record_pass_draws(world: &mut World, things: &SavedThings, kept: &BTreeMap<us
             if member.organization.is_some_and(|(of, _)| of == index)
                 && let Some(def) = data.find(&utf16(&member.thing.record.thing_id_utf16))
             {
-                crate::creation::saved_record(world, def);
+                record_draws(world, def, &member.thing);
                 publish(world, index, m);
             }
         }
         if let Some(def) = data.find(&utf16(&entry.thing.record.thing_id_utf16)) {
-            crate::creation::saved_record(world, def);
+            record_draws(world, def, &entry.thing);
             publish(world, index, index);
         }
+    }
+}
+
+/// One record's draws in the record pass before its publish. A thing saved in the middle
+/// of an in-place unpack (+0x100 bit 26) has only the components 0x4D21A0 makes while it
+/// unpacks (Construction, Body, Properties, Wall, Structure, Detection, Element, Economy,
+/// MobileDeployment and City, the rule `crate::creation` keeps for a created thing), so
+/// its InitExisting runs no Supply, aircraft or Mover: those come with the deferred end
+/// of the unpacking (0x576319 -> 0x4D21A0(1)). On the native trace of a film of a saved
+/// game, a mechanized HQ saved at st 0x4001000 runs its Supply's 0x58B0E0 only at that
+/// end, 76 ticks into the film, and the load draws one fewer than every Supply would.
+/// Everything else is [`crate::creation::saved_record`].
+fn record_draws(world: &mut World, def: DefId, thing: &SavedThing) {
+    let state = thing.record.actor.as_ref().map_or(0, |a| a.state_low);
+    if state & STATE_UNPACKING == 0 {
+        crate::creation::saved_record(world, def);
+        return;
+    }
+    use crate::trace::sites;
+    let data = world.data.clone();
+    let d = data.def(def);
+    let has = |bit: u32| d.components & (1 << bit) != 0;
+    // Element (8) without Organization (7) or Aircraft (23): the Load's Mind jitter.
+    if has(8) && !has(7) && !has(23) {
+        world.random_u32_at(sites::MIND_JITTER);
+    }
+    // Economy (9), made while unpacking.
+    if has(9) && d.supply_required {
+        world.random_u32_at(sites::ECONOMY_INIT);
+    }
+    // Its DynamicDoodads draw as any record's do: not measured on an unpacking thing.
+    for _ in 0..d.doodad_components {
+        world.random_u32_at(sites::INIT_EXISTING_DOODAD);
     }
 }
 

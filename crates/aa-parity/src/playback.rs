@@ -1260,10 +1260,27 @@ pub fn check_film_choice(path: &Path, data: &FilmData) -> Result<(), FilmFailure
     // Called on the UI's thread: the RMC is checked only if the data set is loaded
     // already. `open_film` checks it in any case.
     let set = loaded_data_set(data);
+    if set.as_ref().is_some_and(|s| !header_factions_defined(&head.header, &s.registries)) {
+        return Err(missing());
+    }
     let rmcs = set.as_ref().map(|s| s.registries.rmc_ids.as_slice());
     find_source(&head.header, data, rmcs)
         .map(|_| ())
         .ok_or_else(|| FilmFailure::SourceFileNotFound { name: name.clone() })
+}
+
+/// The header read of 0x59F570 resolves the kingdoms' faction ids (KKC_FactionData): one
+/// the data set does not define throws, the film gets no row in the dialog and its name,
+/// typed, shows `load_error_missing_map|s`. The original on a stock profile with a film
+/// of a mod's data: the log's `exception loading header ... Unknown IDS <id> for class
+/// KKC_FactionData`, then `File missing: '<name>'`.
+fn header_factions_defined(header: &FilmHeader, registries: &Registries) -> bool {
+    factions_defined(header.creator_kingdoms.iter().chain(&header.header_kingdoms).map(|k| k.faction.as_str()), &registries.faction_ids)
+}
+
+/// Every non-empty id of `factions` is one of `defined` (ids compare without case).
+fn factions_defined<'a>(mut factions: impl Iterator<Item = &'a str>, defined: &[String]) -> bool {
+    factions.all(|f| f.is_empty() || defined.iter().any(|d| d.eq_ignore_ascii_case(f)))
 }
 
 /// Open a film: builds the world and its player (0x5A3980, 0x7757F0). Blocking,
@@ -1284,6 +1301,9 @@ pub fn open_film(
     let head = film::read_header(bytes.clone()).map_err(|_| missing())?;
     let create_world = |detail: String| FilmFailure::CreateWorld { detail };
     let set = data_set(data).map_err(|e| create_world(format!("the data set: {e:#}")))?;
+    if !header_factions_defined(&head.header, &set.registries) {
+        return Err(missing());
+    }
     if !data.force_playback {
         match film::film_version_check(&head.header.map_header, &set.version, FILM_BUILD) {
             FilmVersionCheck::Accepted => {}
@@ -1584,5 +1604,16 @@ mod tests {
         let build = FilmFailure::WrongBuild { build: 4129.7 };
         assert_eq!(build.key(), "failed_film_wrong_build|g");
         assert_eq!(build.argument(), FailureArgument::Number(4129.7));
+    }
+
+    /// A header naming a faction the data lacks does not read (a mod's film on the stock
+    /// data: `Unknown IDS Govorov for class KKC_FactionData`); an empty faction (a closed
+    /// or random side) needs none, and the ids compare without case.
+    #[test]
+    fn a_header_faction_the_data_lacks_fails_the_read() {
+        let defined = vec!["Zhukov".to_owned(), "Rommel".to_owned()];
+        assert!(factions_defined(["zhukov", "", "ROMMEL"].into_iter(), &defined));
+        assert!(!factions_defined(["zhukov", "Govorov"].into_iter(), &defined));
+        assert!(factions_defined(std::iter::empty(), &defined));
     }
 }
