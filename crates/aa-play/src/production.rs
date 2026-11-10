@@ -257,9 +257,10 @@ pub fn slot_element(world: &World, o: OrgId, slot: usize) -> Option<DefId> {
 /// Organization member creation 57AD30 -> 4FBF40 for an empty `slot`: at
 /// the door of the nearest structure that recruits it (DeploymentInfo
 /// creation_offset turned by the structure facing, facing its deployment
-/// point, which it then walks to; 4FACA0 + 57D860), else at the slot's
-/// formation position around the organization (578290 + 57D950). None when
-/// the slot is occupied or has no definition.
+/// point, which it then walks to; 4FACA0 + 57D860), else at the
+/// organization's point plus its stored slot entry, moved to a free place
+/// (578290 + 57D950; `movement::member_place`). None when the slot is
+/// occupied, has no definition or has no free place.
 pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId> {
     let org = world.orgs.get(o as usize).filter(|x| x.alive)?;
     let org_def = org.def;
@@ -277,13 +278,21 @@ pub fn spawn_member(world: &mut World, o: OrgId, slot: usize) -> Option<ActorId>
             let to = s.pos.truncate() + rotate(sd.deployment_offset.unwrap_or([0.0, 0.0]), s.facing);
             (door, angle_of(to - door).unwrap_or(s.facing), (to != door).then_some(to))
         }
-        None => {
-            let def = world.data.def(org_def);
-            let leader = def.leader_slot.map(usize::from).filter(|&l| l < def.slots.len());
-            let leader_offset = leader.map_or([0.0, 0.0], |l| def.slots[l].1);
-            let local = [offset[0] - leader_offset[0], offset[1] - leader_offset[1]];
-            (crate::supply::org_position(world, o) + rotate(local, heading), heading, None)
-        }
+        None => match crate::movement::member_place(world, o, slot, member_def) {
+            // The organization's point plus its stored slot entry, then a free place
+            // within ten rings (0x578290); none free creates no member.
+            Some(Some(at)) => (at, heading, None),
+            Some(None) => return None,
+            // No stored table yet: the earlier rendition (the definition's offset
+            // from its leader slot, turned by the heading), not the original's rule.
+            None => {
+                let def = world.data.def(org_def);
+                let leader = def.leader_slot.map(usize::from).filter(|&l| l < def.slots.len());
+                let leader_offset = leader.map_or([0.0, 0.0], |l| def.slots[l].1);
+                let local = [offset[0] - leader_offset[0], offset[1] - leader_offset[1]];
+                (crate::supply::org_position(world, o) + rotate(local, heading), heading, None)
+            }
+        },
     };
     let a = spawn_single(world, member_def, Some(kingdom), pos, facing);
     world.actors[a as usize].org = Some(o);

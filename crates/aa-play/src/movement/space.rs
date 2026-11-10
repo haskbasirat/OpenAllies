@@ -54,6 +54,34 @@ pub(super) fn place_near(ms: &mut MovementState, world: &World, id: ActorId, poi
     ms.space = Some(s);
 }
 
+/// `0x554AD0(point, direction, definition, rings, 0)` -> `0x554850` for a definition with
+/// no thing yet: the step is the definition +0x3C, at least a quarter tile, and the mask
+/// 0x600 for a definition +0x1C bit 21 (0x500 else); every blocking thing counts. The
+/// native AL: false when the point and every ring are taken (the point is then
+/// unchanged). None: the map's things are not indexed.
+pub(super) fn place_near_definition(ms: &mut MovementState, world: &World, def: u32, point: &mut [u32; 2], direction: [u32; 2], rings: i32) -> Option<bool> {
+    let mut s = ms.space.take()?;
+    let d = world.data.def(def);
+    let large = d.thing_flags & WATER != 0;
+    // An arithmetic refusal of the port keeps the point, as `place_near` does.
+    let mut found = true;
+    if let Ok(radius_bits) = aa_spatial::placement::wrapper_radius(d.blocking_words[1], world.map.cell_size.to_bits(), PC) {
+        let search = aa_spatial::placement::PlacementSearch { shape: shape(d.blocking_words), radius_bits, rings, keep_direction: true, strict: false, large };
+        let mut facing = direction;
+        let mut policy = Policy { ms: &*ms, world };
+        let Space { index, geometry, .. } = &mut *s;
+        let mut at = *point;
+        if let Ok(ok) = aa_spatial::placement::find_free_placement(index, geometry, &mut at, &mut facing, &search, &mut policy) {
+            found = ok;
+            if ok {
+                *point = at;
+            }
+        }
+    }
+    ms.space = Some(s);
+    Some(found)
+}
+
 /// The index key and GTID of an actor (key 0 is no one).
 pub(super) fn actor_key(id: ActorId) -> u32 {
     id + 1

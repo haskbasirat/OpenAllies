@@ -2944,6 +2944,31 @@ pub(crate) fn open_position_for(world: &mut World, def: crate::data::DefId, poin
     world.movement = ms;
     at
 }
+/// `0x4FBF40` with no structure recruiting the member, for slot `slot` of organization `o`:
+/// the organization's point (+BC/+C0) plus the slot's entry of its stored table (+0x78),
+/// then `0x578290` -> `0x554AD0(point, owner facing +0x2C, definition, 10, 0)`. None: the
+/// organization has no stored entry for the slot. Some(None): the point and its ten rings
+/// are taken, so the original creates no member (`0x4FBF40` returns 0).
+pub(crate) fn member_place(world: &mut World, o: OrgId, slot: usize, def: crate::data::DefId) -> Option<Option<Vec2>> {
+    let mut ms = std::mem::take(&mut world.movement);
+    let entry = ms.orgs.get(o as usize).and_then(|om| om.slots.get(slot).copied().map(|offset| (om.goal, om.facing, offset)));
+    let Some((goal, facing, offset)) = entry else {
+        world.movement = ms;
+        return None;
+    };
+    let goal = goal.unwrap_or(world.orgs[o as usize].anchor);
+    let mut point = bits2(goal + offset);
+    if ms.space.is_none() {
+        ms.prepare(world);
+    }
+    if let Some(mut s) = ms.space.take() {
+        s.add_new(&ms, world);
+        ms.space = Some(s);
+    }
+    let found = space::place_near_definition(&mut ms, world, def, &mut point, bits2(facing), 10).unwrap_or(true);
+    world.movement = ms;
+    Some(found.then(|| Vec2::new(f32::from_bits(point[0]), f32::from_bits(point[1]))))
+}
 fn bits2(v: Vec2) -> [u32; 2] {
     [v.x.to_bits(), v.y.to_bits()]
 }
