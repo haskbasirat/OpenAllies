@@ -1985,9 +1985,11 @@ impl cont::World for Host<'_> {
     fn result_path(&mut self, _: StateId, p: &mut Payload, _: &mut Arena) -> aa_mind::Result<u32> {
         self.result_path_530f40(p)
     }
-    fn wait(&mut self, _: StateId, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<()> {
-        self.schedule_mind(ONE_BITS);
-        Ok(())
+    /// `0x536F40` when `0x530F40(1)` answers 1: `0x52E130` (no timer), a single
+    /// node still 0.5 m away or more fails the Move, any other head counts as
+    /// reached.
+    fn wait(&mut self, _: StateId, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<()> {
+        self.node_or_failed_52e130(p, a)
     }
     /// `0x534A40`.
     fn collision_plan(&mut self, _: StateId, obstacle: cont::Obstacle, direction: [u32; 2], p: &mut Payload, a: &mut Arena) -> aa_mind::Result<()> {

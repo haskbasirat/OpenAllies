@@ -225,6 +225,21 @@ struct OrgMove {
     /// `orgs[o].anchor`) interpolates to (`0x57C680` / `0x57C080`); None
     /// until first used, then the anchor it started at.
     goal: Option<Vec2>,
+    /// The organization thing's GActor +0xF8 ([`org_update_terrain`]); None
+    /// until the thing first moves (then the terrain under where it stood).
+    terrain: Option<OrgTerrain>,
+}
+
+/// GActor +0xF8 of an organization thing: `0x4D4130` on it reads its own tile
+/// (`0x54ECE0`, it has no element), the tile's TerrainData (variation +0x1C).
+#[derive(Clone, Debug, PartialEq)]
+struct OrgTerrain {
+    /// The tile (+0x44/+0x48) it was taken at.
+    cell: [i32; 2],
+    /// The TerrainData, by its Terrain id (None off the map).
+    terrain: Option<String>,
+    /// Its speed cap (TerrainData +0x38).
+    cap: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -261,9 +276,10 @@ struct ActorMove {
     walk: Option<MemberWalk>,
     /// Mind +0x184 is 2: the Reattach (+0x178) is current.
     reattaching: bool,
-    /// GActor +0xF8 as the Mover reads it: the terrain speed cap and the
-    /// tile (+0x44/+0x48) it was taken at (`0x4D4130`, see [`terrain_cap`]).
-    terrain: Option<([i32; 2], f32)>,
+    /// GActor +0xF8 as the Mover reads it: the terrain speed cap, with the
+    /// tile (+0x44/+0x48) and the Element +0x1C it was taken at (`0x4D4130`,
+    /// see [`terrain_cap`]).
+    terrain: Option<([i32; 2], bool, f32)>,
     /// Walking to its organization's task goal ([`approach_task`]).
     task: Option<Vec2>,
     /// The hosted Mind's UAIStateMove fields ([`element`]); out while a port
@@ -2729,26 +2745,83 @@ fn tile_terrain(world: &World, p: Vec2) -> ([i32; 2], f32) {
 /// The Mover's terrain speed cap, GActor +0xF8 (KKC_GActor::UpdateTerrain
 /// `0x4D4130`, re-evaluated when a position commit changes the actor's
 /// tile +0x44/+0x48): a member attached to a living organization (Element +0x1C)
-/// takes the organization thing's terrain (`0x570560`: the tile under the
-/// organization's position), anything else its own tile. Its first value,
+/// takes the organization thing's stored terrain (`0x570560`: its GActor +0xF8,
+/// kept by `org_update_terrain`), anything else its own tile. Its first value,
 /// at the creation placement, is its own tile (the Berlin film: a ger
 /// truck capped at 2.0 from its first tile change, by its regiment's
-/// forest, while its own tile is grass).
+/// forest, while its own tile is grass). A change of Element +0x1C
+/// (`0x5709D0`) runs `0x4D4130` too: here the cap is taken again when the
+/// byte differs from the one it was taken with.
 fn terrain_cap(ms: &mut MovementState, world: &World, id: ActorId) -> f32 {
     let (cell, own) = tile_terrain(world, pos2(world, id));
+    let org = world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive));
+    let attached = org.is_some() && element::element_attached(world, id);
     let cached = ms.actors[id as usize].terrain;
-    if let Some((at, cap)) = cached
+    if let Some((at, was, cap)) = cached
         && at == cell
+        && was == attached
     {
         return cap;
     }
-    let org = world.actors[id as usize].org.filter(|&o| world.orgs.get(o as usize).is_some_and(|x| x.alive));
     let cap = match (cached, org) {
-        (Some(_), Some(o)) if element::element_attached(world, id) => tile_terrain(world, world.orgs[o as usize].anchor).1,
+        (Some(_), Some(o)) if attached => org_terrain(ms, world, o).cap,
         _ => own,
     };
-    ms.actors[id as usize].terrain = Some((cell, cap));
+    ms.actors[id as usize].terrain = Some((cell, attached, cap));
     cap
+}
+
+/// The TerrainData under `p` (`0x54ECE0`) as the organization thing keeps it.
+fn org_terrain_at(world: &World, p: Vec2) -> OrgTerrain {
+    let (cell, cap) = tile_terrain(world, p);
+    let terrain = world
+        .map
+        .cell_of(p)
+        .and_then(|(x, y)| world.map.cell_variation.get((y * world.map.width + x) as usize))
+        .and_then(|&v| world.map.variations.get(v as usize))
+        .and_then(|id| world.data.terrain.find(id))
+        .map(|t| t.terrain.to_ascii_lowercase());
+    OrgTerrain { cell, terrain, cap }
+}
+/// Organization thing +0xF8, what an attached member takes (`0x570560`).
+fn org_terrain(ms: &MovementState, world: &World, o: OrgId) -> OrgTerrain {
+    match ms.orgs.get(o as usize).and_then(|om| om.terrain.clone()) {
+        Some(t) => t,
+        None => org_terrain_at(world, world.orgs[o as usize].anchor),
+    }
+}
+
+/// The organization thing's position changed from `before` (its position set
+/// `0x4EE5C0`): KKC_GActor::UpdateTerrain `0x4D4130` on it. When its TerrainData
+/// changed, its organization component (+0x7C) runs `0x579EB0`: `0x4D4130` on
+/// every member (`0x4364C0` with third word 0, attached or not), right away,
+/// so members that step after the leader this tick already read the new cap.
+/// A member attached to the organization takes the thing's new terrain
+/// (`0x570560`), any other its own tile; a member without speed is static
+/// (Thing flag bit 29) and `0x4D4130` leaves it.
+fn org_update_terrain(ms: &mut MovementState, world: &World, o: OrgId, before: Vec2) {
+    let anchor = world.orgs[o as usize].anchor;
+    if anchor == before || ms.orgs.len() <= o as usize {
+        return;
+    }
+    let old = ms.orgs[o as usize].terrain.take().unwrap_or_else(|| org_terrain_at(world, before));
+    let new = if tile_terrain(world, anchor).0 == old.cell { old.clone() } else { org_terrain_at(world, anchor) };
+    let changed = new.terrain != old.terrain;
+    let cap = new.cap;
+    ms.orgs[o as usize].terrain = Some(new);
+    if !changed {
+        return;
+    }
+    for m in alive_members(world, o).collect::<Vec<_>>() {
+        if def_of(world, m).speed_max <= 0.0 {
+            continue;
+        }
+        let (cell, own) = tile_terrain(world, pos2(world, m));
+        let attached = element::element_attached(world, m);
+        if let Some(s) = ms.actors.get_mut(m as usize) {
+            s.terrain = Some((cell, attached, if attached { cap } else { own }));
+        }
+    }
 }
 
 fn write_facing(ms: &mut MovementState, world: &mut World, id: ActorId) {
@@ -3039,7 +3112,10 @@ fn set_goal(ms: &mut MovementState, world: &mut World, o: OrgId, point: Vec2, ru
 /// shape (`0x553BA0`, mask 0x400). True when it stands at the goal (an
 /// arithmetic refusal ends the interpolation as arrived).
 fn interpolate(ms: &mut MovementState, world: &mut World, o: OrgId, rules: &MoveRules) -> bool {
-    interpolate_native(ms, world, o, rules).unwrap_or(true)
+    let before = world.orgs[o as usize].anchor;
+    let arrived = interpolate_native(ms, world, o, rules).unwrap_or(true);
+    org_update_terrain(ms, world, o, before);
+    arrived
 }
 fn interpolate_native(ms: &mut MovementState, world: &mut World, o: OrgId, rules: &MoveRules) -> Option<bool> {
     use aa_numeric::Fast;
