@@ -290,8 +290,9 @@ pub fn decode_record(
 /// without branching on it); a film of a saved game has mode 2 in its creator.
 pub fn decode_film_header(chunk: &aa_mapworld::Chunk) -> Result<(MapHeader, DerivedCreator)> {
     // A saved game's own header, when a film's chain walks through it (0x59F600):
-    // its stream keeps the text of its localized strings (0x49AD70).
-    if matches!(MapHeader::rules_mode(chunk), Ok(2 | 4)) {
+    // its stream keeps the text of its localized strings (0x49AD70). Saved means
+    // the mode's saved-game flag that 0x4981A0 registers: modes 2, 4, 5 and 6.
+    if MapHeader::rules_mode(chunk).is_ok_and(aa_mapworld::world::saved_game_mode) {
         return Ok(MapHeader::decode_saved(chunk)?);
     }
     Ok(MapHeader::decode_any_creator(chunk)?)

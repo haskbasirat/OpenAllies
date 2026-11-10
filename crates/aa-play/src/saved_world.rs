@@ -225,6 +225,10 @@ pub fn restore(
     world.clock.step = aa_simulation::FloatBits(w.delta_bits);
     world.tick = u64::from(w.word_dc);
     world.time = f32::from_bits(w.word_e4);
+    // +198, m_next_structure_queue_item_id, read from version 27 on (0x4FC600; below
+    // that the constructor's 0 stands): the last id the queue item constructors
+    // (0x5895B0, 0x5896E0, 0x589830, 0x589920) gave, as `Books::next_item` keeps it.
+    world.books.next_item = w.word_198.unwrap_or(0);
     crate::scheduler::sync_clock(&mut world);
 
     // The kingdoms: every saved one, the majors first as a battle has them.
@@ -458,7 +462,12 @@ pub fn restore(
     for k in 0..world.kingdoms.len() as u32 {
         crate::economy::publish(&mut world, k);
     }
-    let resumed = apply_saved_minds(&mut world, &things, &kept);
+    let (resumed, idle_performers) = apply_saved_minds(&mut world, &things, &kept);
+    if idle_performers > 0 {
+        notes.push(format!(
+            "not restored: {idle_performers} abilities under way past the turret wait (their Performers' timed events are on the deferred queue): they start idle"
+        ));
+    }
     world.begin_battle();
 
     if resumed > 0 {
@@ -503,8 +512,9 @@ pub fn restore(
 ///
 /// A rendition, said so in the notes: a state `aa-play` does not host as a Mind (a kill,
 /// a guard, a retreat, an explore) is entered by giving its saved command again as a new
-/// order. Natively nothing is ordered here; the stream stays the load's. Returns how many.
-fn apply_saved_minds(world: &mut World, things: &SavedThings, kept: &BTreeMap<usize, Kept>) -> u32 {
+/// order. Natively nothing is ordered here; the stream stays the load's. Returns how many,
+/// and how many active Performers [`restore_performers`] left idle.
+fn apply_saved_minds(world: &mut World, things: &SavedThings, kept: &BTreeMap<usize, Kept>) -> (u32, u32) {
     use aa_mind::saved_load::{Saved, decode};
     use crate::world::{Order, Unit};
     crate::movement::restore_saved_minds(world, kept);
@@ -512,6 +522,7 @@ fn apply_saved_minds(world: &mut World, things: &SavedThings, kept: &BTreeMap<us
     let now = world.time;
     let mut st = std::mem::take(&mut world.combat);
     st.prepare(world);
+    let idle = restore_performers(world, &mut st, things, kept);
     let mut again = Vec::new();
     for (&index, &k) in kept {
         let entry = &things.entries[index];
@@ -666,7 +677,113 @@ fn apply_saved_minds(world: &mut World, things: &SavedThings, kept: &BTreeMap<us
         resumed += 1;
     }
     world.native_rng = stream;
-    resumed
+    (resumed, idle)
+}
+
+/// The PerformerComponent's Load 0x57F970 (its Save is 0x57FE50) over what `crate::combat`
+/// keeps of it. No draws.
+/// - Every turret entry (+4C): +0 the yaw, +4 the yaw before, +8 when it last aimed, and,
+///   when its +C flag is saved set, +10 the point of another ability's target. A saved
+///   entry past the definition's turrets goes into the last one, as the Load does.
+/// - +5C, the turret update being on, as `TurretState::active` of the turrets 0x57EF00
+///   updates: those whose definition can reset (0x45DD10, byte +30).
+/// - Of a Performer that is its thing's active component (the record tail's +E4 is slot
+///   5): +10 the stage, +28 the target, +2C the point, +38 the ability's index and +34 its
+///   ability (+14[+38], which the Load sets), +3C the start, +40 the animation's length,
+///   +44 the event kind and +58 the turret. Only the turret wait (stage 0) and done (4)
+///   are taken: the other stages wait on timed events of the deferred queue, which
+///   `crate::combat` does not read back; those Performers start idle and are counted.
+///
+/// - Each ability's +10, its last use, as the recharge left on the port.
+///
+/// Not taken: +20 (a fraction of +24, a maximum the port has no place for), a turret's
+/// +18, and the abilities' other words.
+///
+/// On the native trace of a saved game's film (F06), the first update then draws what the
+/// original draws, value for value.
+fn restore_performers(world: &mut World, st: &mut crate::combat::CombatState, things: &SavedThings, kept: &BTreeMap<usize, Kept>) -> u32 {
+    use crate::combat::x87;
+    use aa_body::F32;
+    let data = world.data.clone();
+    let mut idle = 0;
+    for (&index, k) in kept {
+        let Kept::Actor(a) = *k else { continue };
+        let thing = &things.entries[index].thing;
+        let Some(p) = thing.components.iter().find_map(|(_, c)| if let SavedComponent::Performer(p) = c { Some(p) } else { None }) else {
+            continue;
+        };
+        let i = a as usize;
+        let def = data.def(world.actors[i].def);
+        // `combat::performer`'s own list: the definition's abilities but the Defender's.
+        let abilities: Vec<u32> = def.weapons.iter().enumerate().filter(|(_, w)| !w.defender).map(|(k, _)| k as u32).collect();
+        // The abilities' Loads, in +14's order: an ability's +10 is when it was last used
+        // (-FLT_MAX: never), from which 0x4C83E0 counts its recharge. The port keeps the
+        // recharge left, as `combat::use_performed` sets it at the use frame.
+        let multiplier = crate::special_ops::mods(world, a).map_or(1.0, |m| (1.0 + m.recharge).max(st.rules().clamp_multiply));
+        let now = world.time;
+        for (&weapon, saved) in abilities.iter().zip(&p.abilities.values) {
+            let last_use = f32::from_bits(saved.word_10);
+            let w = &def.weapons[weapon as usize];
+            let left = if last_use > -f32::MAX {
+                x87::store(x87::sub(x87::load(w.recharge_time / multiplier), x87::sub(x87::load(now), x87::load(last_use)))).max(0.0)
+            } else {
+                0.0
+            };
+            if let Some(r) = world.actors[i].combat.recharge.get_mut(weapon as usize) {
+                *r = left;
+            }
+        }
+        let Some(c) = st.actors.get_mut(i) else { continue };
+        for (b, saved) in p.states.values.iter().enumerate() {
+            let Some(e) = c.turrets.len().checked_sub(1).map(|last| b.min(last)) else { break };
+            let s = &mut c.turrets[e];
+            s.yaw = f32::from_bits(saved.words_00_04[0]);
+            s.prev = f32::from_bits(saved.words_00_04[1]);
+            if let Some(w) = saved.word_08 {
+                s.last_used = f32::from_bits(w);
+            }
+            if saved.present_byte.is_some_and(|f| f != 0)
+                && let Some(point) = saved.words_10_14
+            {
+                s.aim = Some(glam::Vec2::new(f32::from_bits(point[0]), f32::from_bits(point[1])));
+            }
+        }
+        let on = p.byte_5c.is_some_and(|b| b != 0);
+        for (s, t) in c.turrets.iter_mut().zip(&def.turrets) {
+            s.active = on && t.can_reset;
+        }
+        let current = thing.tail.as_ref().is_some_and(|t| t.current_component == 5);
+        if !current {
+            continue;
+        }
+        let stage = p.word_10 as i32;
+        if stage != 0 && stage != crate::combat::performer::DONE {
+            idle += 1;
+            continue;
+        }
+        let target_id = match world.ids.thing(p.word_28) {
+            Some(crate::ids::Thing::Actor(t)) => t + 1,
+            _ => 0,
+        };
+        c.performer.current = true;
+        c.performer.events.clear();
+        c.performer.state = Some(aa_combat::performer::Performer {
+            owner: a,
+            stage,
+            active_ability: usize::try_from(p.ability_index).ok().and_then(|k| abilities.get(k).copied()),
+            abilities,
+            mana: F32::ZERO,
+            target_id,
+            target_position: [F32(p.words_2c_30[0]), F32(p.words_2c_30[1])],
+            active_index: p.ability_index,
+            started_at: F32(p.words_3c_40[0]),
+            animation_length: F32(p.words_3c_40[1]),
+            event_kind: p.word_44.unwrap_or(1),
+            animation: None,
+            turret_index: p.word_58 as i32,
+        });
+    }
+    idle
 }
 
 /// The walk a saved Mind's command asks for: a `move` or a `kill` at a point.
@@ -924,8 +1041,10 @@ fn restore_queue(world: &mut World, a: u32, thing: &SavedThing, notes: &mut Vec<
             },
             None => own_def,
         };
+        // Its saved id (from Structure version 13 on); the world's next id is GWORLD
+        // +198 (`restore`), not derived from the items. An older item has no saved id:
+        // not measured.
         let id = item.id.unwrap_or(world.books.next_item);
-        world.books.next_item = world.books.next_item.max(id.saturating_add(1));
         items.push(crate::books::QueueItem {
             id,
             def,
