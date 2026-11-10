@@ -930,9 +930,9 @@ mod animation_blend_tests {
     /// template_animation.tgi sets animation_blend on moves and idles and
     /// template_character.tgi animation_blend_time 0.25. Only the unused
     /// AttackIdleAnimation / ProjectileIdleAnimation templates name a
-    /// sister_anim_type (the units' attack idles are IdleAnimation), so no
-    /// shipped animation has one. The paratrooper's landing is a summon
-    /// animation (Landing.kf).
+    /// sister_anim_type (the units' attack idles are IdleAnimation); this
+    /// test checks the rifleman and the paratrooper, the next one every
+    /// actor. The paratrooper's landing is a summon animation (Landing.kf).
     #[test]
     fn blend_fields_from_the_original_data() {
         let Some(root) = std::env::var_os("AA_GAME_ROOT") else {
@@ -952,5 +952,32 @@ mod animation_blend_tests {
             }
         }
         assert!(t.actors["rus_paratrooper"].view.animations.iter().any(|a| a.kind == "SUMMON" && a.kf.to_ascii_lowercase().ends_with("landing.kf")));
+    }
+
+    /// Over every actor of the original data: no animation names a
+    /// sister_anim_type, and none is a HitAnimation (type HIT, 6), which
+    /// AA.exe never picks by type (only 0x563CA0 and 0x563D50 call 45EB70,
+    /// for fidgets and summons) and plays only by name through the script
+    /// command 0x65 (0x542E60 -> 0x45EBB0).
+    #[test]
+    fn no_shipped_animation_is_a_hit_or_has_a_sister() {
+        let Some(root) = std::env::var_os("AA_GAME_ROOT") else {
+            eprintln!("hit animation test skipped: no AA_GAME_ROOT");
+            return;
+        };
+        let mut sources = aa_play::data::Sources::open(Path::new(&root)).unwrap();
+        let catalog = ActorCatalog::load_v14(&mut sources.files).unwrap();
+        let ids: Vec<String> = catalog.actors.iter().map(|a| a.id.clone()).collect();
+        let t = extract(&catalog, &ids);
+        let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
+        for (id, fx) in &t.actors {
+            for a in fx.view.animations.iter().chain(fx.view.anim_sets.iter().flat_map(|(_, l)| l)) {
+                *kinds.entry(a.kind.clone()).or_default() += 1;
+                assert_ne!(a.kind, "HIT", "{id} {}", a.ids);
+                assert_eq!(a.sister, None, "{id} {}", a.ids);
+            }
+        }
+        eprintln!("animations of {} actors by type: {kinds:?}", t.actors.len());
+        assert!(kinds.get("IDLE").is_some_and(|n| *n > 0));
     }
 }
