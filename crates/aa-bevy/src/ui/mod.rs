@@ -23,6 +23,8 @@ pub mod names;
 /// The map triggers' banner, counter, objective events and speech
 /// (appended by the scenarios owner).
 pub mod objectives;
+/// The map scripts' team command flares as the view shows them.
+pub mod flares;
 pub mod order_marks;
 pub mod panels;
 pub mod placement;

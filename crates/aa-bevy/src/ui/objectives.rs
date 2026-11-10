@@ -163,6 +163,8 @@ pub struct ScenarioUi {
     flashing: Vec<(String, u64)>,
     /// AA_BEVY_TRIGGER_LOG: the triggers' enabled flags last seen.
     trigger_log: Vec<(u32, String, bool)>,
+    /// The flare things' FlareComponents (`ui::flares`), read at the first flare.
+    flares: Option<super::flares::FlareTable>,
 }
 
 /// The views' flash starts (+98, application seconds, 0x459600).
@@ -605,27 +607,35 @@ pub fn update(
                 }
             }
             // 572E50: the flare where it stands for the kingdom's side (labelled
-            // rendition: aa-play has no flare actor, so it does not select or target),
-            // and the game event: 0x19 / 0x1B for the local kingdom, 0x1A / 0x1C for an ally
+            // rendition: aa-play has no flare actor, so it does not select or target;
+            // `ui::flares`), and the game event 0x19 / 0x1B for the local kingdom only:
+            // the trigger's recipient is the flare's kingdom, so no ally event 0x1A / 0x1C
             aa_play::triggers::Notice::Flare { kingdom, ids, at, actor, seconds } => {
-                let own = *kingdom == local;
+                let own = super::flares::event_for(local, *kingdom);
                 let ally = matches!(aa_play::setup::relation(&b.world, Some(local), Some(*kingdom)), 0 | 1);
+                let data = s.flares.get_or_insert_with(|| super::flares::FlareTable::load(&front.ui.store.root)).get(ids);
+                let ground = b.world.map.height_at(Vec2::new(at[0], at[1]));
+                let from = super::flares::shown_at(*at, actor.is_some(), &data, ground);
+                let time = super::flares::duration(*seconds, &data);
+                // verification aid (AA_BEVY_TRIGGER_LOG): every scripted flare
+                if std::env::var_os("AA_BEVY_TRIGGER_LOG").is_some() {
+                    info!("flare {ids} of kingdom {kingdom} on {actor:?} at {at:?}: shown {} at {from:?} for {time:?} s", own || ally);
+                }
                 if own || ally {
-                    marks.transports.push(super::order_marks::TransportRun { kingdom: *kingdom, ids: ids.clone(), from: *at, to: [at[0], at[1]], seconds: *seconds });
+                    marks.transports.push(super::order_marks::TransportRun { kingdom: *kingdom, ids: ids.clone(), from, to: [from[0], from[1]], seconds: time.unwrap_or(0.0) });
+                }
+                if own {
                     let flare = b.world.data.find(ids).map(|d| front.ui.strings.resolve(&b.world.data.def(d).name)).unwrap_or_else(|| ids.clone());
                     let target = actor.and_then(|u| match u {
                         aa_play::Unit::Actor(a) => b.world.actor(a).map(|x| x.def),
                         aa_play::Unit::Org(o) => b.world.orgs.get(o as usize).map(|g| g.def),
                     });
                     let target = target.map(|d| front.ui.strings.resolve(&b.world.data.def(d).name));
-                    let name = b.world.kingdoms.get(*kingdom as usize).map(|k| k.name.clone()).unwrap_or_default();
                     let spot = Some(Vec2::new(at[0], at[1]));
                     if let Some(h) = front.hud.as_mut() {
-                        match (own, target) {
-                            (true, None) => h.events.fire(&mut front.ui, "my_flare_created", &[flare.as_str()], spot, Some(*kingdom)),
-                            (true, Some(t)) => h.events.fire(&mut front.ui, "my_flare_created_on_actor", &[flare.as_str(), t.as_str()], spot, Some(*kingdom)),
-                            (false, None) => h.events.fire(&mut front.ui, "ally_flare_created", &[flare.as_str(), name.as_str()], spot, Some(local)),
-                            (false, Some(t)) => h.events.fire(&mut front.ui, "ally_flare_created_on_actor", &[flare.as_str(), t.as_str(), name.as_str()], spot, Some(local)),
+                        match target {
+                            None => h.events.fire(&mut front.ui, "my_flare_created", &[flare.as_str()], spot, Some(*kingdom)),
+                            Some(t) => h.events.fire(&mut front.ui, "my_flare_created_on_actor", &[flare.as_str(), t.as_str()], spot, Some(*kingdom)),
                         }
                     }
                 }
@@ -692,6 +702,9 @@ pub fn update(
             }
             // 76F370 (game_speed_set 68): the speed exponent
             aa_play::triggers::Notice::GameSpeed(exponent) => b.speed = 2f32.powf(*exponent).clamp(0.25, 4.0),
+            // change_weather (108) writes World+290, which the renderer's update
+            // 0x725340 follows every frame (`effects/weather.rs` reads it)
+            aa_play::triggers::Notice::Weather(_) => {}
             other => {
                 // the Debug text up to its fields: one line per kind
                 let text = format!("{other:?}");
