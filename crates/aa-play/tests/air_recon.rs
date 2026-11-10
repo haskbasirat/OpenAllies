@@ -138,6 +138,65 @@ fn air_recon_order_flies_to_the_point_and_lands() {
     assert!(d.slots.iter().all(|s| s.occupant != Some(f)), "housed again");
 }
 
+/// The takeoff speeds against the original's trace of a film. In the corpus
+/// film of a saved game (sha256 0c01c516...) a ger kingdom with
+/// tech_superchargers (SPEED_MAX +0.25) sends ger_fighters off its
+/// airfields; the native sampler read each one's Mover +0x20 per tick:
+/// 0, then 3.0 (taxi_speed) for 35 or 36 ticks, then ten values speeding up
+/// to the Mover's +0x28 of 13.75 (speed_max 11 x 1.25), in one of two bit
+/// families (the slot's position rounds differently). Here the same tech is
+/// given to the ger kingdom on Berlin and the recon fighter must fly the
+/// same speeds: the top speed bit for bit, the ten steps within 2e-5.
+#[test]
+#[ignore]
+fn takeoff_speeds_match_the_original() {
+    const NATIVE: [[u32; 10]; 2] = [
+        [0x404f2bf2, 0x406c2b97, 0x40869d2d, 0x409974d7, 0x40aeefb1, 0x40c76c3d, 0x40e35637, 0x41019439, 0x4113b778, 0x412864a5],
+        [0x404f2c0c, 0x406c2bb5, 0x40869d3f, 0x409974eb, 0x40aeefc8, 0x40c76c57, 0x40e35655, 0x4101944a, 0x4113b78b, 0x412864bc],
+    ];
+    let mut w = berlin_world();
+    let (ger, a, at, _) = airfield(&mut w);
+    let n = w.data.resources.len();
+    w.books.kingdom_mut(ger, n).technologies.push("tech_superchargers".into());
+    let fighter = w.data.find("ger_fighter").expect("ger_fighter");
+    let middle = Vec2::new(w.map.width as f32, w.map.height as f32) * w.map.cell_size * 0.5;
+    let target = at + (middle - at).normalize() * 120.0;
+    let first = w.actors.len() as u32;
+    w.apply(Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Point(target) });
+    let f = (first..w.actors.len() as u32).find(|&x| w.actors[x as usize].def == fighter).expect("the recon fighter");
+    assert_eq!(air::flight::top_speed(&w, f).to_bits(), 13.75f32.to_bits(), "speed_max 11 x (1 + 0.25)");
+    let mut speeds = Vec::new();
+    let mut last_pos = w.actors[f as usize].pos;
+    let mut stalls = Vec::new();
+    for step in 0..400 {
+        w.step(vec![]);
+        if air::current_state(&w, f) == Some(QUEUED) {
+            continue;
+        }
+        let v = w.books.actor(f).and_then(|b| b.flight_mover.as_ref()).map_or(0.0, |m| m.speed);
+        let p = w.actors[f as usize].pos;
+        if !speeds.is_empty() && v != 0.0 && p == last_pos {
+            stalls.push(step);
+        }
+        last_pos = p;
+        speeds.push(v.to_bits());
+        if v.to_bits() == 13.75f32.to_bits() && speeds.len() > 60 {
+            break;
+        }
+    }
+    let taxi = speeds.iter().filter(|&&v| v == 3.0f32.to_bits()).count();
+    let rising: Vec<u32> = speeds.iter().copied().filter(|&v| v != 0 && v != 3.0f32.to_bits() && v != 13.75f32.to_bits()).collect();
+    eprintln!("taxi {taxi} ticks, rising {:?}, stalls {stalls:?}", rising.iter().map(|&v| f32::from_bits(v)).collect::<Vec<_>>());
+    // The native trace also has ticks where a taxiing fighter stands still at 3.0
+    // (the taxi counts of 36 and 37 there are 35 moving ticks plus one or two such
+    // ticks), so a stall here is not by itself a difference.
+    assert!((35..=37).contains(&taxi), "3.0 for 35 to 37 ticks, as in the original's trace: {taxi}");
+    assert_eq!(rising.len(), 10, "ten steps up to the top speed");
+    let close = |family: &[u32; 10]| rising.iter().zip(family).all(|(&o, &n)| (f32::from_bits(o) / f32::from_bits(n) - 1.0).abs() < 2e-5);
+    assert!(close(&NATIVE[0]) || close(&NATIVE[1]), "the original's takeoff speeds: {rising:x?}");
+    assert_eq!(speeds.last().copied(), Some(13.75f32.to_bits()));
+}
+
 /// The aircraft of the ger_airfield as the loader keeps them: what an air
 /// attack would release (the bomber's abilities) and what a recon fighter
 /// sees with (its speed and operational height). Prints only.

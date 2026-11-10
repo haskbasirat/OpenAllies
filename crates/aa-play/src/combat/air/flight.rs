@@ -16,9 +16,12 @@
 //! - The legs (0x516740 / 0x560ED0 -> 0x560DB0, [`fly_to`]) to the move
 //!   state's goal.
 //! - Each step's pose goes through 0x576BB0 ([`AircraftWorld::commit_pose`]
-//!   below): the clamp into the map with the Mover's +0x88 flag and the map
-//!   exit 0x4D04B0 / entry 0x4D7EA0, Mover +0x20, the position commit
-//!   0x4EE5C0 and the facing (actor virtual +0x54).
+//!   below): the clamp into the map with the Mover's +0x88 flag, the map
+//!   exit 0x4D04B0 / entry 0x4D7EA0 in part (bit 30 only), Mover +0x20,
+//!   the position commit 0x4EE5C0 and the facing (actor virtual +0x54,
+//!   stored without 0x4EE9F0's normalising).
+//! - The top speed (Mover +0x28, actor virtual +0x104) carries the
+//!   kingdom's SPEED_MAX modifiers ([`top_speed`]).
 //!
 //! Between ticks the Mover's speed (+0x20), requested speed (+0x24) and
 //! +0x88 flag and the actor's facing (+0x2C..+0x34) are kept as [`Mover`];
@@ -30,8 +33,10 @@
 //! is not run). Not ported: formation flight (the group legs 0x560A70 /
 //! 0x561080) and the attack release (0x57E030 on the Performer, the bomb):
 //! a MoveTick with a pending ability stops with a note. 0x576B20's
-//! activation of the Mover (0x4CFC10 -> Mover +0x3C, 0x576790) also fires
-//! the ActorData +0x24C trigger list (0x42A590); that is not run here.
+//! activation of the Mover (0x4CFC10) also sets actor+0xE4 (the current
+//! Mover), calls the old Mover's +0x40, and the new Mover's +0x3C
+//! (0x576790) runs 0x50B250 and fires the ActorData +0x24C trigger list
+//! (0x42A590); none of that is run here.
 use crate::scheduler::{EVERY_TICK, Owner};
 use crate::trace::sites;
 use crate::world::{ActorId, World};
@@ -247,9 +252,10 @@ impl AircraftWorld for Host<'_> {
     fn actor_speed(&mut self, unit: &mut AircraftUnit) -> AircraftResult<Binary> {
         Binary::from_f32_bits(unit.mover.speed.to_bits()).map_err(world_error)
     }
-    /// Actor virtual +0x104: the definition's top speed.
+    /// Actor virtual +0x104 (0x4CEEA0): the Mover's +0x28, the top speed with
+    /// its modifiers ([`top_speed`]).
     fn formation_speed(&mut self, _: &mut AircraftUnit) -> AircraftResult<Binary> {
-        let v = self.world.data.def(self.world.actors[self.a as usize].def).speed_max;
+        let v = top_speed(self.world, self.a);
         Binary::from_f32_bits(v.to_bits()).map_err(world_error)
     }
     fn group_disbanded(&mut self, _: GroupKey, _: &mut AircraftUnit) -> AircraftResult<bool> {
@@ -319,18 +325,22 @@ impl FallingWorld for Commit<'_> {
     fn ground_height(&mut self, _: [f32; 2], _: &mut MoverState, _: &mut FallingState, _: &mut ActorMotion) -> aa_movement::Result<Binary> {
         not_a_fall("0x4F0E50")
     }
-    /// 0x4D04B0: actor virtual +0x50(0) and actor flag +8 bit 30 (the
-    /// aircraft's `hidden`).
+    /// 0x4D04B0: actor flag +8 bit 30 (the aircraft's `hidden`). Its call of
+    /// actor virtual +0x50(0) is not run: 0x4D4A10 -> 0x4EE840 sets or
+    /// clears flag +8 bit 10 (the definition's `blocking`), lists the actor
+    /// in the tiles again (0x4EE4C0) and passes the call to the organization
+    /// (+0x168).
     fn left_map(&mut self, _: &mut ActorMotion) -> aa_movement::Result<()> {
         if let Some(x) = self.world.books.actor_mut(self.a).aircraft.as_mut() {
             x.hidden = true;
         }
         Ok(())
     }
-    /// 0x4D7EA0: actor virtual +0x50(ActorData +0x1C bit 10) and flag +8 bit
-    /// 30 clear, as the runway release (`crate::denizen::runway_release`).
-    /// Its 0x4D67F0 and 0x4EB6E0, which work only with actor flag +8 bit 10,
-    /// are not ported.
+    /// 0x4D7EA0: flag +8 bit 30 clear, as the runway release
+    /// (`crate::denizen::runway_release`). Not run: its first call, actor
+    /// virtual +0x50(ActorData +0x1C bit 10), which may set flag +8 bit 10
+    /// (see `left_map`), and after it 0x4D67F0 and 0x4EB6E0, which act only
+    /// with that bit.
     fn entered_map(&mut self, _: &mut ActorMotion) -> aa_movement::Result<()> {
         if let Some(x) = self.world.books.actor_mut(self.a).aircraft.as_mut() {
             x.hidden = false;
@@ -344,7 +354,10 @@ impl FallingWorld for Commit<'_> {
         crate::movement::thing_moved(self.world, self.a);
         Ok(())
     }
-    /// Actor virtual +0x54.
+    /// Actor virtual +0x54, stored as given. Not ported: 0x4EEC50 skips the
+    /// write when flag +8 bit 17 is set, else 0x4EE9F0 normalises the
+    /// vector again (in XY when bit 12 is clear, 0x4453A0 when set),
+    /// updates the spatial shape with bit 26 and runs 0x50C270.
     fn set_facing(&mut self, facing: [f32; 3], actor: &mut ActorMotion) -> aa_movement::Result<()> {
         actor.facing = facing;
         self.world.actors[self.a as usize].facing = facing[1].atan2(facing[0]);
@@ -364,6 +377,25 @@ impl FallingWorld for Commit<'_> {
     }
 }
 
+/// The aircraft's top speed with its modifiers, as the Mover's +0x28 holds
+/// it: the definition's speed_max times the kingdom's SPEED_MAX MULTIPLY sum
+/// (0x502A70) and the actor's enchantments, as `crate::movement`'s Mover
+/// +0x28. The original's trace of a film (a saved game whose kingdom has a
+/// SPEED_MAX technology) shows a ger_fighter's +0x28 at 13.75, its
+/// speed_max 11 times 1.25, and its takeoff leg speeding up to 13.75 at the
+/// rate that top speed gives.
+pub fn top_speed(world: &World, a: ActorId) -> f32 {
+    let actor = &world.actors[a as usize];
+    let def = world.data.def(actor.def);
+    let factor = actor.kingdom.map_or(1.0, |k| crate::production::multiply_factor(world, k, &def.properties, "SPEED_MAX"));
+    let enchanted = crate::special_ops::mods(world, a).map_or(0.0, |m| m.speed);
+    if enchanted != 0.0 {
+        let clamp = world.data.rule_ci("ModifierAttributeClampMultiply").unwrap_or(0.05);
+        return def.speed_max * (factor + enchanted).max(clamp);
+    }
+    def.speed_max * factor
+}
+
 fn unit_of(world: &World, a: ActorId, aircraft: AircraftState, mover: &Mover) -> AircraftUnit {
     let d = world.data.def(world.actors[a as usize].def);
     let air = d.aircraft.clone().unwrap_or_default();
@@ -377,7 +409,7 @@ fn unit_of(world: &World, a: ActorId, aircraft: AircraftState, mover: &Mover) ->
         },
         motion: ActorMotion { position: [p.x, p.y, p.z], facing: mover.facing, flags: 0, has_mind: true, has_character: false, character_stopped: false, terrain_speed_limit: 0.0 },
         mover: mover_of(mover),
-        mover_limits: MoverLimits { max_speed: d.speed_max, turn_radius: d.turn_radius },
+        mover_limits: MoverLimits { max_speed: top_speed(world, a), turn_radius: d.turn_radius },
         aircraft,
     }
 }
@@ -393,12 +425,16 @@ fn with_unit<R>(world: &mut World, a: ActorId, f: impl FnOnce(&mut AircraftUnit,
     let (exhausted, outside_map) = (host.exhausted, host.outside_map);
     let mut failed = mover.failed;
     let mut note = None;
-    if let Err(e) = &result {
-        let text = format!("aircraft {a} flight: {e}");
-        if failed.as_deref() != Some(text.as_str()) {
-            note = Some(text.clone());
-            failed = Some(text);
+    match &result {
+        Err(e) => {
+            let text = format!("aircraft {a} flight: {e}");
+            if failed.as_deref() != Some(text.as_str()) {
+                note = Some(text.clone());
+                failed = Some(text);
+            }
         }
+        // A good call ends the repeat: the same error later is noted again.
+        Ok(_) => failed = None,
     }
     if let Some(b) = world.books.actors.get_mut(a as usize) {
         if let Some(x) = b.aircraft.as_mut() {

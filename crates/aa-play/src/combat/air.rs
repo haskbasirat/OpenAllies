@@ -594,10 +594,10 @@ impl aa_mind::World for Host<'_> {
         arena.state_mut(state)?.status = 2;
         match offset {
             off::MOVE => {
-                // 0x518010: +0x34 = the Mover's maximum speed, the followed
-                // target's position (+0x38 / +0x3C), the path cleared, the
-                // formation left, +0x48 = 0.
-                let speed = b(self.def(a).speed_max);
+                // 0x518010: +0x34 = the Mover's maximum speed (+0x28, with
+                // its modifiers), the followed target's position (+0x38 /
+                // +0x3C), the path cleared, the formation left, +0x48 = 0.
+                let speed = b(flight::top_speed(self.world, a));
                 self.set_word(arena, a, off::MOVE + 0x34, speed);
                 if let Some(t) = self.lookup(self.word(arena, a, off::MOVE + 0x14)) {
                     let [x, y, _] = self.position3(t);
@@ -777,9 +777,10 @@ impl AircraftWorld for Host<'_> {
         self.after.push(After::Destroy(mind.0));
         Ok(())
     }
-    /// Actor virtual +0x104: its top speed.
+    /// Actor virtual +0x104 (0x4CEEA0): the Mover's +0x28, its top speed
+    /// with its modifiers.
     fn actor_virtual_104(&mut self, mind: MindId) -> Result<Binary> {
-        num(self.def(mind.0).speed_max)
+        num(flight::top_speed(self.world, mind.0))
     }
     fn definition_word(&mut self, mind: MindId, offset: u32) -> Result<u32> {
         self.definition_word_of(mind.0, offset)
