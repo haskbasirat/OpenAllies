@@ -8,9 +8,11 @@
 //! the hops after it as kind-2 nodes; path +0x18 names that region for `0x52CAE0`.
 //!
 //! **Renditions:** walls are not hosted, so `0x4F2220` finds no structure, a tile
-//! holds no wall thing for `0x53CA30` and `0x53CB70`'s wall cost.
+//! holds no wall thing for `0x53CA30` (`aa_spatial::goal_displacement`) and
+//! `0x53CB70`'s wall cost.
 use super::space::{self, Policy, Space};
 use super::*;
+use aa_spatial::goal_displacement as gd;
 use aa_navigation::region::{self, RegionRoute};
 use aa_navigation::region_search::{self, RegionGraph};
 use aa_navigation::search::{self, SearchGrid};
@@ -239,9 +241,45 @@ impl endpoint::World for Host<'_, '_> {
         self.query = query;
         Ok(accepted)
     }
-    /// `0x53CA30`. Rendition: no tile holds a wall thing.
-    fn displace_blocked(&mut self, _: [u32; 2], _: &mut [u32; 2]) -> endpoint::Result<bool> {
-        Ok(false)
+    /// `0x53CA30`.
+    fn displace_blocked(&mut self, fallback: [u32; 2], candidate: &mut [u32; 2]) -> endpoint::Result<bool> {
+        let map = self.map;
+        gd::displace_blocked(&map, fallback, candidate, PC, self).map_err(end)
+    }
+}
+impl gd::DisplacementWorld for Host<'_, '_> {
+    type Object = ActorKey;
+    /// `0x45BC70` on tile +0x1C. Only a thing with a Wall component (+0x90) owns a
+    /// tile (`0x54F6F0` / `0x54F780`). No shipped thing has one and [`space`] hosts
+    /// none, so no tile holds an owner.
+    fn tile_owner(&mut self, _: usize) -> gp::Result<Option<ActorKey>> {
+        Ok(None)
+    }
+    /// `0x4CED60`.
+    fn owner_virtual_100(&mut self, owner: ActorKey) -> gp::Result<bool> {
+        Ok(gp::CrossingWorld::actor_virtual_100(self, owner)?.is_some())
+    }
+    /// `0x552340` on Solve's descriptor.
+    fn excludes(&mut self, owner: ActorKey) -> gp::Result<bool> {
+        let mut descriptor = self.query.descriptor.clone();
+        let excluded = aa_spatial::collision::excluded(owner, &mut descriptor, &mut self.view()).map_err(gpe)?;
+        self.query.descriptor = descriptor;
+        Ok(excluded)
+    }
+    fn owner_pose(&mut self, owner: ActorKey) -> gp::Result<gd::OwnerPose> {
+        let m = self.index.member(owner).map_err(gpe)?;
+        Ok(gd::OwnerPose { position_bits: m.actor.position, facing_bits: m.actor.facing })
+    }
+    /// The source's virtual +0xB4, then its Mind's +0xA4: the element Mind's
+    /// `0x52D780`, its Reattach is current.
+    fn source_refers_to_candidate(&mut self) -> gp::Result<bool> {
+        let Some(source) = self.query.descriptor.source_actor else {
+            return Ok(false);
+        };
+        if !self.index.member(source).map_err(gpe)?.actor_category {
+            return Ok(false);
+        }
+        Ok(self.policy.ms.actors.get(space::key_actor(source) as usize).is_some_and(|a| a.reattaching))
     }
 }
 impl search::SearchWorld for Host<'_, '_> {

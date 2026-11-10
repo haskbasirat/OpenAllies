@@ -683,12 +683,15 @@ impl Pathfinder {
 /// 53D340/552640, materialization 53D500/53CF40 and the tile walk 4DD150
 /// (`aa_spatial::tile_walk`), all at the simulation's PC53, with
 /// `aa_numeric::Fast` arithmetic. Not modelled here, as in the f32
-/// reference: wall actors on tiles (53CB70's wall cost), the object
-/// displacement 53CA30 and the region pre-pass 53DC00 (no region topology).
+/// reference: wall actors on tiles (53CB70's wall cost and the owner that
+/// 53CA30 moves the goal around) and the region pre-pass 53DC00 (no region
+/// topology).
 mod exact {
     use super::{Grid, PathRules, Request, Route, Status, Waypoint};
     use aa_navigation::{OwnedPath, cost, endpoint, materialize, search, solver};
     use aa_numeric::{Fast, Precision};
+    use aa_spatial::goal_displacement as gd;
+    use aa_spatial::gworld_placement as gp;
     use aa_spatial::tile_walk::{TileGrid, TileWalk};
     use glam::Vec2;
     use std::cmp::Ordering;
@@ -729,10 +732,29 @@ mod exact {
             let cell = [Fast::from_f32_bits(point[0])?.truncate_i32()? >> shift, Fast::from_f32_bits(point[1])?.truncate_i32()? >> shift];
             Ok(!self.grid.blocked(cell))
         }
-        /// 0x53CA30 moves the point around a blocking object; objects do not
-        /// own tiles here.
-        fn displace_blocked(&mut self, _: [u32; 2], _: &mut [u32; 2]) -> endpoint::Result<bool> {
-            Ok(false)
+        /// 0x53CA30 moves the point around the object that owns its tile.
+        fn displace_blocked(&mut self, fallback: [u32; 2], candidate: &mut [u32; 2]) -> endpoint::Result<bool> {
+            let map = gp::GMapView { width: self.tile.width, height: self.tile.height, coordinate_shift: self.tile.coordinate_shift, cell_size_bits: self.tile.cell_size_bits, extent_bits: self.extent };
+            gd::displace_blocked(&map, fallback, candidate, PC, self).map_err(|e| endpoint::Error::World(e.to_string()))
+        }
+    }
+    impl gd::DisplacementWorld for Host<'_, '_> {
+        type Object = u32;
+        /// 0x45BC70 on tile +0x1C: objects do not own tiles here.
+        fn tile_owner(&mut self, _: usize) -> gp::Result<Option<u32>> {
+            Ok(None)
+        }
+        fn owner_virtual_100(&mut self, _: u32) -> gp::Result<bool> {
+            Err(gp::Error::World("no tile owners".into()))
+        }
+        fn excludes(&mut self, _: u32) -> gp::Result<bool> {
+            Err(gp::Error::World("no tile owners".into()))
+        }
+        fn owner_pose(&mut self, _: u32) -> gp::Result<gd::OwnerPose> {
+            Err(gp::Error::World("no tile owners".into()))
+        }
+        fn source_refers_to_candidate(&mut self) -> gp::Result<bool> {
+            Err(gp::Error::World("no tile owners".into()))
         }
     }
     impl search::SearchWorld for Host<'_, '_> {
@@ -962,5 +984,19 @@ mod tests {
         let r = Pathfinder::default().solve(&map, &PathRules::default(), &Request { from: Vec2::new(10.0, 60.0), to: Vec2::new(82.0, 60.0), class: MoverClass::Land, max_speed: 0.0 });
         assert_eq!(r.status, Status::Reached);
         assert!(r.goal.x < 80.0 && r.goal.x > 70.0, "{:?}", r.goal);
+    }
+
+    /// 0x53CA30 moves a goal only around the owner in tile +0x1C, and only a thing
+    /// with a Wall component owns a tile (0x54F6F0 / 0x54F780): no shipped thing
+    /// has one, so the hosts' tile owner is always none.
+    #[test]
+    #[ignore = "needs AA_GAME_ROOT"]
+    fn no_shipped_thing_owns_a_tile() {
+        let root = std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game");
+        let data = crate::data::GameData::load(std::path::Path::new(&root)).expect("GameData::load");
+        let walls: Vec<&str> = data.defs.iter().filter(|d| d.has_component("WallComponent")).map(|d| d.id.as_str()).collect();
+        // The component masks are read: the buildings have a Structure component.
+        assert!(data.defs.iter().any(|d| d.has_component("StructureComponent")));
+        assert!(walls.is_empty(), "{walls:?}");
     }
 }

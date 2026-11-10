@@ -4,7 +4,8 @@
 //! the element Mind's [`Host`]. Census cause M5.
 //!
 //! **Renditions:** `0x4F3C40`'s region and structure-crossing steps (no walls hosted)
-//! answer clear; `0x53CA30` (a destination moved around a blocking object) answers no.
+//! answer clear; `0x53CA30` (a destination moved around a blocking object,
+//! `aa_spatial::goal_displacement`) finds no tile owner.
 use super::element::Host;
 use super::*;
 use aa_navigation::low_path::{self, ActorPose, ActorShape, ContinuationWorld, LowPathSettings, LowPathWorld, Options, SpatialHit};
@@ -14,6 +15,8 @@ use aa_navigation::MoveState;
 use aa_numeric::Binary;
 use aa_spatial::collision::{self, Descriptor, Shape};
 use aa_spatial::geometry::Placement;
+use aa_spatial::goal_displacement as gd;
+use aa_spatial::gworld_placement as gp;
 use aa_spatial::index::SpatialIndex;
 use aa_spatial::index_world::CollisionView;
 use aa_spatial::query::{self, PreparedQuery, QueryGeometry};
@@ -112,9 +115,44 @@ impl aa_navigation::endpoint::World for Endpoint<'_, '_, '_> {
         }
         Ok(true)
     }
-    /// Rendition of `0x53CA30`.
-    fn displace_blocked(&mut self, _: [u32; 2], _: &mut [u32; 2]) -> aa_navigation::endpoint::Result<bool> {
+    /// `0x53CA30`.
+    fn displace_blocked(&mut self, fallback: [u32; 2], candidate: &mut [u32; 2]) -> aa_navigation::endpoint::Result<bool> {
+        let g = self.space.index.grid().clone();
+        let map = gp::GMapView { width: g.dimensions[0], height: g.dimensions[1], coordinate_shift: g.coordinate_shift, cell_size_bits: g.cell_size_bits, extent_bits: self.space.geometry.extent_bits };
+        gd::displace_blocked(&map, fallback, candidate, PC, self).map_err(|e| aa_navigation::endpoint::Error::World(e.to_string()))
+    }
+}
+impl gd::DisplacementWorld for Endpoint<'_, '_, '_> {
+    type Object = u32;
+    /// `0x45BC70` on tile +0x1C. Only a thing with a Wall component (+0x90) owns a
+    /// tile (`0x54F6F0` / `0x54F780`). No shipped thing has one and [`space`] hosts
+    /// none, so no tile holds an owner.
+    fn tile_owner(&mut self, _: usize) -> gp::Result<Option<u32>> {
+        Ok(None)
+    }
+    /// `0x4CED60`: no structure or wall parent is hosted.
+    fn owner_virtual_100(&mut self, _: u32) -> gp::Result<bool> {
         Ok(false)
+    }
+    /// `0x552340` on the query.
+    fn excludes(&mut self, owner: u32) -> gp::Result<bool> {
+        let view = &mut CollisionView { index: &mut self.space.index, policy: &mut *self.policy };
+        collision::excluded(owner, &mut self.query.descriptor, view).map_err(|e| gp::Error::World(e.to_string()))
+    }
+    fn owner_pose(&mut self, owner: u32) -> gp::Result<gd::OwnerPose> {
+        let m = self.space.index.member(owner)?;
+        Ok(gd::OwnerPose { position_bits: m.actor.position, facing_bits: m.actor.facing })
+    }
+    /// The source's virtual +0xB4, then its Mind's +0xA4: the element Mind's
+    /// `0x52D780`, its Reattach is current.
+    fn source_refers_to_candidate(&mut self) -> gp::Result<bool> {
+        let Some(source) = self.query.descriptor.source_actor else {
+            return Ok(false);
+        };
+        if !self.space.index.member(source)?.actor_category {
+            return Ok(false);
+        }
+        Ok(self.policy.ms.actors.get(space::key_actor(source) as usize).is_some_and(|a| a.reattaching))
     }
 }
 

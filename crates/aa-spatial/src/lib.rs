@@ -363,6 +363,7 @@ pub mod overlaps;
 pub mod placement;
 pub mod water_areas;
 pub mod gworld_placement;
+pub mod goal_displacement;
 pub mod loaded_object_placement;
 
 pub mod creation_placement;
