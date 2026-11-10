@@ -2278,18 +2278,27 @@ impl FxState {
                 let before = self.actor_states.get(&a.id).cloned().unwrap_or_default();
                 if on != before {
                     let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
-                    for f in fx.leave.iter().filter(|f| before.contains(&f.state) && !on.contains(&f.state)) {
+                    // At load (0x465002 -> 0x42B8E0) each WhenEnter CREATE_VFX that is
+                    // attached (+0x65), whose VFX is permanent (lifetime 1, 0x494F30) and
+                    // that has no duration of its own (0x428360) gets a StopVFX of the same
+                    // actor_state (0x42B3B0) at the head of WhenLeave. So when the state ends
+                    // that VFX is stopped first (0x428C80 -> 0x42EA40: emission ends, live
+                    // particles finish). `building_pack` ends this way with the unpacking:
+                    // 0x5762FA sets structure_normal, which clears structure_unpacking.
+                    // Each stop is put in front of the list, so they run in reverse order.
+                    let stops: Vec<Fxc> = fx
+                        .enter
+                        .iter()
+                        .rev()
+                        .filter(|f| before.contains(&f.state) && !on.contains(&f.state))
+                        .filter(|f| f.kind == "CREATE_VFX" && f.attached && f.duration == 0.0 && self.tables.vfx.get(&f.ids).is_some_and(|d| d.permanent))
+                        .map(|f| Fxc { kind: "STOP_VFX".into(), state: f.state.clone(), ids: f.ids.clone(), target_flags: f.target_flags.clone(), terrain_group: f.terrain_group.clone(), frequency: 1, ..Default::default() })
+                        .collect();
+                    for f in &stops {
                         self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
                     }
-                    // What the state's WhenEnter attached goes with it: the aspect's model it
-                    // hangs on is replaced. The original's `building_pack`, a looping NIF with
-                    // no stop in the data, ends with the unpacking (read from its frames; the
-                    // native call is not traced), and its last particles fade.
-                    for f in fx.enter.iter().filter(|f| f.attached && before.contains(&f.state) && !on.contains(&f.state)) {
-                        for e in self.effects.iter_mut().filter(|e| e.owner == ctx.actor && e.ids.eq_ignore_ascii_case(&f.ids)) {
-                            e.player.stop();
-                            e.permanent = false;
-                        }
+                    for f in fx.leave.iter().filter(|f| before.contains(&f.state) && !on.contains(&f.state)) {
+                        self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
                     }
                     for f in fx.enter.iter().filter(|f| on.contains(&f.state) && !before.contains(&f.state)) {
                         self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
@@ -2307,10 +2316,15 @@ impl FxState {
                     lap(1, &mut clock);
                     self.run_list(&fx.created, ctx, frame, spawn, ListKind::Created);
                     lap(2, &mut clock);
-                    // compare: WhenConstructed runs when the actor first
-                    // exists built (map buildings, finished deployments): a
-                    // building that is still unpacking, or still under
-                    // construction (Actor +100 bit 21), gets it when done.
+                    // WhenConstructed (ActorData +0xE4): the actor's init 0x4D7230
+                    // runs it only when actor state 21 is off, and a construction
+                    // site has it on from creation (0x4F9DE1); OnConstructionFinished
+                    // 0x565B00 runs it once the state is cleared. So a building under
+                    // construction (Actor +100 bit 21) gets it when done.
+                    // compare: a building still unpacking waits too. Natively the
+                    // unpack's TakeOverIdentity (0x575C80 -> 0x4D6130 -> 0x4D5EA0)
+                    // runs it as the building replaces the truck; held here until
+                    // effects follow the unpack aspect's own bones.
                     if a.alive && (a.activity == Activity::Unpacking || under_construction(frame.world, a.id)) {
                         self.unbuilt.insert(a.id);
                     } else if a.alive {
