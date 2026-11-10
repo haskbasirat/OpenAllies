@@ -552,6 +552,8 @@ fn deliver(world: &mut World, event: Delivery) {
         Some(Owner::Doodad(index, _)) => crate::doodad::breakable(world, index),
         // (movement owner) Mover Tick 0x577E50.
         Some(Owner::Mover(a)) if crate::transport::flying(world, a) => crate::transport::flight_tick(world, a),
+        // (air) an air base's aircraft: the same Mover Tick on its own flight.
+        Some(Owner::Mover(a)) if crate::combat::air::flight::flies(world, a) => crate::combat::air::flight::tick(world, a),
         Some(Owner::Fall(a)) => crate::transport::fall_tick(world, a),
         Some(Owner::Mover(a)) => crate::movement::mover_tick(world, a),
         // (core) the aircraft Mind's queue-4 update 0x51A1A0.

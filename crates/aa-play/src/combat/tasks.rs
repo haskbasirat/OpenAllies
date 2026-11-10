@@ -238,6 +238,10 @@ fn bombard_point(world: &World, st: &CombatState, kingdom: Option<crate::world::
 
 /// Apply a HUD order; Err is the refusal reason.
 pub fn command(world: &mut World, command: &Command) -> Result<(), String> {
+    // (air) the air base's orders, 0x56E730.
+    if let Command::AirAttack { kingdom, building, target } | Command::AirRecon { kingdom, building, target } = command {
+        return super::air::base_orders::apply(world, *kingdom, *building, *target, matches!(command, Command::AirAttack { .. }));
+    }
     let mut st = std::mem::take(&mut world.combat);
     st.prepare(world);
     let result = apply(world, &mut st, command);

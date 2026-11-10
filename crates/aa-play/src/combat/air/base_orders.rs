@@ -1,0 +1,50 @@
+//! An air base's HUD orders: the Denizen actor command handler 0x56E730 for
+//! air_recon (0x1A) and air_attack (0x19). Owner: air.
+//!
+//! 0x4D9B60 delivers a command only when the actor takes it (virtual +0x38:
+//! the command mask 0x4D1350, the Denizen's contributor 0x569C70). 0x56E730
+//! then, by the command index less 0x17 (its jump table 0x56E838):
+//! - air_attack: a target (command flag bit 0) the registry resolves
+//!   (0x530F10) goes to 0x56D5A0(target); else a location (flag bit 2) to
+//!   0x56D7C0(x, y); else the command fails;
+//! - air_recon: a location goes to 0x56DA00(x, y); else the command fails
+//!   (an actor target alone carries no location).
+//!
+//! The purchase is `crate::denizen::purchase` (aa-production
+//! `purchase_denizen`): false when the kingdom cannot afford it (the
+//! notice), true otherwise, even when no aircraft could be created.
+//!
+//! **Not yet:** air_attack stays refused here. Its aircraft would take off,
+//! but the attack state (`super::attack`) and the release of the bomb
+//! (MoveTick's 0x57E030 on the Performer) are not switched on, so a bomber
+//! would fly without striking.
+use crate::books::AirOrder;
+use crate::denizen::{COMMAND_AIR_ATTACK, COMMAND_AIR_RECON};
+use crate::world::{AbilityTarget, ActorId, KingdomId, Unit, World};
+
+/// 0x4D9B60 -> 0x56E730 for an air order of `kingdom` to `building`; Err is
+/// the refusal reason.
+pub(crate) fn apply(world: &mut World, kingdom: KingdomId, building: ActorId, target: AbilityTarget, attack: bool) -> Result<(), String> {
+    let index = if attack { COMMAND_AIR_ATTACK } else { COMMAND_AIR_RECON };
+    if !crate::orders::mask::takes(world, kingdom, Unit::Actor(building), index) {
+        return Err(if attack { "no aircraft ready for an air attack" } else { "no aircraft ready for an air recon" }.into());
+    }
+    let order = if attack {
+        match target {
+            AbilityTarget::Actor(t) if world.ids.actor(t).is_some() => AirOrder::AttackActor(t),
+            AbilityTarget::Point(p) => AirOrder::AttackPoint(p),
+            AbilityTarget::Actor(_) => return Err("no target for the air attack".into()),
+        }
+    } else {
+        match target {
+            AbilityTarget::Point(p) => AirOrder::Recon(p),
+            AbilityTarget::Actor(_) => return Err("an air recon needs a location".into()),
+        }
+    };
+    if attack {
+        let _ = order;
+        return Err("air attack: the aircraft attack and its release are not ported yet".into());
+    }
+    let (paid, _) = crate::denizen::purchase(world, building, order);
+    if paid { Ok(()) } else { Err("cannot afford the air recon".into()) }
+}

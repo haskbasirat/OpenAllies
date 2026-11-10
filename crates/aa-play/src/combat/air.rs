@@ -40,6 +40,9 @@ use std::collections::BTreeMap;
 /// (core, temporary) the attack states while they are written.
 #[cfg(feature = "air-b2")]
 mod attack;
+/// (air) an air base's orders (0x56E730) and its aircraft's flight.
+pub(crate) mod base_orders;
+pub mod flight;
 
 /// The simulation thread's x87 precision.
 const PC: Precision = Precision::Double53;
@@ -455,7 +458,7 @@ impl Host<'_> {
                 // replace_path once it exists).
                 self.leave_formation(a)?;
                 self.clear_path(a)?;
-                crate::movement::fly_to(self.world, a, goal, dir.unwrap_or(Vec3::ZERO));
+                flight::fly_to(self.world, a, goal, dir.unwrap_or(Vec3::ZERO));
                 let (x, y) = (self.word(arena, a, off::MOVE + 0x18), self.word(arena, a, off::MOVE + 0x1c));
                 self.set_word(arena, a, off::MOVE + 0x40, x);
                 self.set_word(arena, a, off::MOVE + 0x44, y);
@@ -813,7 +816,7 @@ impl AircraftWorld for Host<'_> {
         self.set_word(arena, a, off::MOVE + 0x2c, direction[2]);
         let point = Vec3::new(f(position[0]), f(position[1]), f(position[2]));
         let dir = Vec3::new(f(direction[0]), f(direction[1]), f(direction[2]));
-        crate::movement::fly_to(self.world, a, point, dir);
+        flight::fly_to(self.world, a, point, dir);
         Ok(())
     }
     /// 0x428430: any component unequal (unordered counts as unequal).

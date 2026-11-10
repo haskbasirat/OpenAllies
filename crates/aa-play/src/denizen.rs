@@ -34,7 +34,10 @@
 //! - an aircraft landing back into its slot (OnIdentityTaken 0x56A980);
 //! - the aircraft Mind (AAI.cpp).
 //!
-//! The orders stay refused until the aircraft fly.
+//! The HUD's air_recon reaches [`purchase`] through 0x56E730
+//! (`crate::combat::air::base_orders`) and its fighter flies
+//! (`crate::combat::air::flight`); air_attack stays refused until the
+//! attack state and its release are on.
 use crate::books::{AirOrder, DenizenBooks, DenizenSlot, Mission, Notice};
 use crate::data::{DefId, DenizenDef};
 use crate::scheduler::{DEFERRED, Owner};
@@ -438,6 +441,8 @@ fn launch(world: &mut World, base: ActorId, dd: &DenizenDef, slot: usize, mode: 
     let heading = Vec2::new(o[0] * dir.y + o[1] * dir.x, -dir.x * o[0] + o[1] * dir.y);
     let facing = if heading.length_squared() > 0.0 { heading.y.atan2(heading.x) } else { facing };
     let id = world.spawn_actor(def, kingdom, pos, facing);
+    // (air) 0x4F9C10's Mover registration 0x576B20, as a transport's.
+    crate::combat::air::flight::registered(world, id);
     let now = world.time;
     world.books.actor_mut(id).created_at = now;
     world.actors[id as usize].health = crate::production::max_health(world, kingdom, def);

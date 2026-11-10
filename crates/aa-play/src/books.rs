@@ -183,6 +183,9 @@ pub struct ActorBooks {
     /// A denizen aircraft's link to its base (CreateDenizen 0x56CC10).
     #[serde(default)]
     pub aircraft: Option<AircraftBooks>,
+    /// (air) A base aircraft's Mover between MoveTicks (`crate::combat::air::flight`).
+    #[serde(default)]
+    pub flight_mover: Option<crate::combat::air::flight::Mover>,
 }
 
 /// A DenizenComponent (Denizen.cpp, component slot 10; constructor
