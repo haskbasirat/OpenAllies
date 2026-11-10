@@ -2183,6 +2183,7 @@ impl aa_triggers::actions::Effects for Host<'_> {
         let b = self.world.books.kingdom_mut(k, n);
         if !b.technologies.iter().any(|t| t.eq_ignore_ascii_case(&id)) {
             b.technologies.push(id);
+            crate::combat::kingdom_property_added(self.world, k);
         }
         Ok(())
     }

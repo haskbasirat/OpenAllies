@@ -689,6 +689,7 @@ impl research::Research for Host<'_> {
         let kb = self.world.books.kingdom_mut(kingdom, n);
         if !kb.technologies.iter().any(|t| t.eq_ignore_ascii_case(&name)) {
             kb.technologies.push(name);
+            crate::combat::kingdom_property_added(self.world, kingdom);
         }
         Ok(())
     }

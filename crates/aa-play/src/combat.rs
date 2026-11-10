@@ -3322,8 +3322,12 @@ pub(crate) fn periodic_damage(world: &mut World, st: &mut CombatState, target: A
 
 /// Maximum health from the definition, the regiment's level and the
 /// enchantments (HEALTH multipliers add; floored at
-/// ModifierAttributeClampMultiply). Current health is kept, at most the new
-/// maximum.
+/// ModifierAttributeClampMultiply).
+///
+/// A change of the HEALTH multiplier (attribute 19) reaches the Body through the
+/// MULTIPLY modifier's handler `4FE260` (case `4FE2A5`), which calls `561D40` with
+/// its last argument 1 ([`rescaled_health`]). The handler runs only when the
+/// multiplier changed, so an unchanged maximum leaves the health alone.
 pub(crate) fn refresh_max_health(world: &mut World, st: &mut CombatState, actor: ActorId) {
     let i = actor as usize;
     let Some(a) = world.actors.get(i) else { return };
@@ -3333,15 +3337,56 @@ pub(crate) fn refresh_max_health(world: &mut World, st: &mut CombatState, actor:
     if let Some(m) = crate::special_ops::mods(world, actor) {
         sum += m.health;
     }
-    let max = world.data.def(a.def).health * (1.0 + sum).max(st.rules().clamp_multiply);
+    // 45D730 -> 5014F0: the definition's health times the stored multiplier, left
+    // unstored on the FPU; `+14` keeps it stored.
+    let exact = x87::mul(ld(world.data.def(a.def).health), ld((1.0 + sum).max(st.rules().clamp_multiply)));
+    let max = fstp(exact);
     if st.actors.len() <= i {
         st.actors.resize_with(i + 1, ActorCombat::default);
     }
-    st.actors[i].max_health = max;
-    let a = &mut world.actors[i];
-    if a.health > max {
-        a.health = max;
+    let old = std::mem::replace(&mut st.actors[i].max_health, max);
+    if old.to_bits() == max.to_bits() {
+        return;
     }
+    let a = &mut world.actors[i];
+    a.health = rescaled_health(a.health, old, exact);
+}
+
+/// `561D40` with its last argument 1: the share fstp(current / old maximum) is
+/// stored first, then times the unstored new maximum `exact` and stored; below 1
+/// (0x9F32E0) the health is 1, above the new maximum it is the stored maximum.
+/// A maximum never set (no Body state yet) only caps the health.
+fn rescaled_health(current: f32, old: f32, exact: f64) -> f32 {
+    let max = fstp(exact);
+    if old <= 0.0 {
+        return current.min(max);
+    }
+    let share = fstp(x87::div(ld(current), ld(old)));
+    let scaled = fstp(x87::mul(ld(share), exact));
+    if scaled < 1.0 {
+        1.0
+    } else if exact < f64::from(scaled) {
+        max
+    } else {
+        scaled
+    }
+}
+
+/// `4E3AD0`: the kingdom gains a property, and each of its actors takes it
+/// (`4CEF10` -> `5817A0` -> `502B30`); where that changes an actor's HEALTH
+/// multiplier, its Body is refreshed ([`refresh_max_health`]). An actor whose
+/// combat state is not set up yet takes its maximum from the kingdom when it is.
+pub(crate) fn kingdom_property_added(world: &mut World, kingdom: KingdomId) {
+    let mut st = std::mem::take(&mut world.combat);
+    if st.rules.is_some() {
+        for i in 0..world.actors.len() {
+            let a = &world.actors[i];
+            if a.kingdom == Some(kingdom) && a.alive && !a.removed && st.actors.get(i).is_some_and(|s| s.initialized) {
+                refresh_max_health(world, &mut st, i as ActorId);
+            }
+        }
+    }
+    world.combat = st;
 }
 
 /// Death (`5625C0` zero health -> death queue -> BeginDeath), kill credit,
@@ -3580,6 +3625,37 @@ mod native_tests {
         assert_eq!(experience_ratio(0.0, -1.0, 20.0, &rules), x87::add(x87::mul(-1.0 / 20.0, 0.5), 0.5));
         assert_eq!(experience_ratio(5.0, -1.0, 0.0, &rules), 0.0);
         assert_eq!(experience_clamped(100.0, 1.0, &rules), rules.experience_maximum);
+    }
+
+    /// 561D40 with its last argument 1, against the fight films' traces. Kursk: a
+    /// +10% HEALTH technology lands between ticks 5672 and 5680 and every American
+    /// soldier goes from 200 / 200 to 220 / 220. Berlin2v2_1: a +20% one lands
+    /// between 14560 and 14568 on wounded Russians; the maximum becomes 0x43700001
+    /// (200 x 1.2 stored) and each health keeps its share, to the bit, only when
+    /// the share is stored and the new maximum is not.
+    #[test]
+    fn a_new_health_maximum_keeps_the_share_of_health() {
+        let exact = |health: f32, factor: f32| x87::mul(ld(health), ld(factor));
+        assert_eq!(rescaled_health(200.0, 200.0, exact(200.0, 1.1)).to_bits(), 0x435c_0000);
+        assert_eq!(rescaled_health(150.0, 150.0, exact(150.0, 1.1)).to_bits(), 165f32.to_bits());
+        assert_eq!(fstp(exact(200.0, 1.2)).to_bits(), 0x4370_0001);
+        for (before, after) in [
+            (0x4339_4af9, 0x435e_59f8),
+            (0x431e_0000, 0x433d_999a),
+            (0x4337_0000, 0x435b_999b),
+            (0x42d5_e6e2, 0x4300_5754),
+            (0x42ef_1032, 0x430f_701e),
+            (0x4336_d08e, 0x435b_60ab),
+            (0x433d_4a56, 0x4363_2602),
+            (0x4318_73e0, 0x4336_f174),
+            (0x4338_0000, 0x435c_ccce),
+            (0x432a_53a3, 0x434c_645e),
+        ] {
+            assert_eq!(rescaled_health(f32::from_bits(before), 200.0, exact(200.0, 1.2)).to_bits(), after, "{before:#x}");
+        }
+        assert_eq!(rescaled_health(0.5, 200.0, exact(200.0, 1.1)), 1.0);
+        assert_eq!(rescaled_health(220.0, 220.0, exact(200.0, 1.0)), 200.0);
+        assert_eq!(rescaled_health(300.0, 0.0, exact(200.0, 1.0)), 200.0);
     }
 }
 
