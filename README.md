@@ -89,10 +89,10 @@ Legend: ✅ working, 🚧 in progress, ⏳ not started.
 | Films: watching | 🚧 | The full film screens: list, viewing any side, speed, end of film, scoring and replay. Most films drift from what really happened partway through: see [Matching the original](#matching-the-original) |
 | Films: recording | ✅ | Battles record films in the original's format, and the original game can open them |
 | Campaign missions | 🚧 | Mission list, saved progress, scripts, scripted cameras, movies, debriefing. Tutorial 1 runs through its first fight. Not all missions have been played through |
-| World War II | 🚧 | The strategic map, buying armies, fighting battles and returning to the map, saves, politics. Some tooltips are not built |
-| Multiplayer | 🚧 | LAN with a game list, Join Direct by address or host name, and online play through Epic Online Services (optional `eos` feature). Tested between two copies on one PC: both players' orders cross, the worlds stay identical, and the films replay. Not yet tried between two PCs. No map transfer or host migration. The original can join our staging screen but cannot launch with us |
-| Saved games | 🚧 | Saved worlds load well enough to start films of saved games, partly. Saving and loading a battle is not built, and those buttons are grey |
-| Editor | ⏳ | |
+| World War II | 🚧 | The strategic map, buying armies, fighting battles and returning to the map, saves, politics. The original's own saved campaigns load too. Some tooltips are not built |
+| Multiplayer | 🚧 | LAN with a game list, Join Direct by address or host name, and online play through Epic Online Services (optional `eos` feature). Tested between two copies on one PC: both players' orders cross, the worlds stay identical, and the films replay. Not yet tried between two PCs. A joiner without the map gets it in the original's way, but only if it joined before the map was chosen, and a battle on a received custom map does not load yet. No host migration. The original can join our staging screen but cannot launch with us |
+| Saved games | 🚧 | Saved worlds load well enough to start films of saved games. The save writer re-encodes every one of the original's saves exactly, but does not yet write a live battle, so Save and Load are still grey |
+| Editor | 🚧 | Only the start: a port plan ([`research/phase8-editor/README.txt`](research/phase8-editor/README.txt)) and the map file writer, which rebuilds every shipped map byte for byte. No editor screens yet |
 | Windows ARM64, macOS, Linux | ⏳ | Planned for the finished game; today Windows x64 only |
 
 Each system lists the behaviours still to be compared with the original game; dated progress notes live in [`HANDOFF.txt`](HANDOFF.txt) and [`docs/`](docs/).
@@ -101,17 +101,17 @@ Each system lists the behaviours still to be compared with the original game; da
 
 The original game records every battle as a film: only the players' orders, plus a checkpoint of its random number stream every 17 game ticks. A film plays back correctly only if the game produces exactly the same results from those orders. So replaying the original's films is the hardest test there is: a checkpoint matches only if every earlier random draw happened in the same order.
 
-Where this stands on 5 November 2026 (Development 24):
+Where this stands on 10 November 2026:
 
 | Test | Result |
 |---|---|
-| A 2-against-2 Berlin film, matching checkpoints in order | **140 of 266**, about 53% of the film, up from 32 at the start of November. This film has almost no fighting |
+| A 2-against-2 Berlin film, matching checkpoints in order | **240 of 266**, about 90% of the film, up from 32 at the start of November and 140 in Development 24. This film has almost no fighting |
 | Real recorded films that open | **52 of 62**. The other 10 refuse with the original's own messages (9 made by another version of the game, 1 never finished) |
 | Real films with no mismatch | **At least 6**: a short Market Garden game played by a person, and 5 random-map films, 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data. Other short random-map films still drift early |
 | A longer Berlin game played by a person | **94 of 271**, exact for its first 3,380 ticks, about 3.5 minutes |
 | Films recorded by OpenAllies, replayed in OpenAllies | **Every checkpoint**: 204 of 204 and 240 of 240 in the runs checked, with real fighting |
 | Random map generator | **12 of 12** maps compared equal the original's world: every object, both height layers, tiles and the final random state |
-| Films we record, opened in the original | The original opens them. A Berlin game between computers stays in sync for 40 of its 88 checkpoints when last measured (77 before the computer's new goal selection changed its orders) |
+| Films we record, opened in the original | The original opens them. A Berlin game between computers, recorded by OpenAllies, plays in the original with every checkpoint in sync: 117 of 117 in the latest run |
 | Fighting, 4 films with real battles: units reaching zero health, ours against the original | 8 / 27, 82 / 107, 94 / 119, 129 / 133. These numbers move a lot with small fixes, because the games have already drifted apart before the fighting starts. The first film is far off |
 
 Next: the remaining movement differences, which decide most of the Berlin film, then the computer's orders and exact fights. Details and the ordered list of causes are in [`research/byte-exact/PARITY-CENSUS.md`](research/byte-exact/PARITY-CENSUS.md) and [`research/byte-exact/FILM-PLAYBACK.md`](research/byte-exact/FILM-PLAYBACK.md).
@@ -135,6 +135,7 @@ A Cargo workspace of focused crates, roughly bottom to top:
 | `aa-orders`, `aa-transfer`, `aa-netcode` | Player commands and the multiplayer protocol |
 | `aa-eos` | Online play through Epic Online Services: sign-in, lobbies and a datagram link; the SDK is loaded at run time. Its own Cargo workspace |
 | `aa-metagame` | The World War II strategic mode |
+| `aa-editor` | The editor, from its first piece: the map file writer and the original's zlib 1.1.4 deflater |
 | `aa-parity` | Films: reading, playing and recording them, and comparing a replay with the original |
 | `aa-client` | The earlier wgpu client and asset viewer |
 
