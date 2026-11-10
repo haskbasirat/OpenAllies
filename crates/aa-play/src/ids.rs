@@ -447,6 +447,11 @@ impl NativeIds {
     pub fn highest_slot(&self) -> i32 {
         self.registry.highest_slot()
     }
+    /// The generation of `slot`, live or free: what the IDMGR save 0x4EFD30
+    /// writes for each slot below the highest (`crate::saved_write`).
+    pub fn generation_at(&self, slot: u16) -> u16 {
+        self.registry.generation_at(slot)
+    }
 }
 
 /// The unit a thing is ordered as: an organization, or an actor (a member
