@@ -12,7 +12,11 @@
 //! Compare against the original: the restriction profiles of missions are
 //! not loaded (a skirmish has none); the cost is the definition's quote
 //! without the builder's modifier context; a placement the footprint test of
-//! `crate::deploy` refuses stands for a failed 0x4F9C10 creation.
+//! `crate::deploy` refuses stands for a failed 0x4F9C10 creation. Rendition:
+//! neither 0x563160 nor 0x4F9C10 nor InitCreate 0x4D6F10 reaches a placement
+//! test (0x4F3640, 0x4EF6A0, 0x4EFA40) by a direct call; 0x4F9C10 fails when
+//! InitCreate (+0xE8) fails. The original tests the spot before the order: the
+//! ghost (0x693EF0) and the computer's site search (0x5553E0).
 use crate::books::{ConstructRefusal, Notice};
 use crate::data::DefId;
 use crate::world::{ActorId, Event, KingdomId, World};

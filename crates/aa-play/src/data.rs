@@ -445,6 +445,11 @@ pub struct Def {
     /// static or moving actor), what 0x4EB500 tests.
     #[serde(default)]
     pub thing_flags: u32,
+    /// ActorData +0x4E0: `[ConstructionComponent] required_object_ids` (ActorData loader
+    /// `0x464BD0`, read at `0x467BA9`), the definition a placement query of this one
+    /// leaves out (descriptor +0x24, `0x4F3640` -> `0x552340`). None when NULL or absent.
+    #[serde(default)]
+    pub required_object: Option<String>,
     /// A `[TrackInfo]` with track_type CONTINUOUS (ActorData +25C, 0x4D7450).
     #[serde(default)]
     pub continuous_tracks: bool,
@@ -1078,7 +1083,7 @@ pub(crate) mod loader {
     };
 
     pub(crate) const PC: Precision = Precision::Double53;
-    const CACHE_VERSION: &str = "aa-play-gamedata-v38";
+    const CACHE_VERSION: &str = "aa-play-gamedata-v39";
 
     fn f(bits: u32) -> f32 {
         f32::from_bits(bits)
@@ -1790,8 +1795,11 @@ pub(crate) mod loader {
             def.blocking_words = object.blocking.words;
             def.soft_shape = object.soft.words;
         }
-        if let Ok(flags) = catalog.native_final_flags(ThingRef::registered(id), PC) {
-            def.thing_flags = flags;
+        // A definition whose final flags do not load keeps 0 (no blocking, no static flag):
+        // the note says so, as the placement queries read this word.
+        match catalog.native_final_flags(ThingRef::registered(id), PC) {
+            Ok(flags) => def.thing_flags = flags,
+            Err(e) => note("final flags", &e),
         }
         let node = match catalog.resolved_actor(ThingRef::registered(id)) {
             Ok(n) => n,
@@ -1845,6 +1853,7 @@ pub(crate) mod loader {
             def.conform_to_terrain = bl(&flags, "conform_to_terrain").unwrap_or(false);
         }
         let null = |v: &String| v.is_empty() || v.eq_ignore_ascii_case("null");
+        def.required_object = node.child("ConstructionComponent").ok().flatten().and_then(|c| st(&c, "required_object_ids")).filter(|v| !null(v));
         for s in node.children("Stance").unwrap_or_default() {
             def.stances.push(StanceDef {
                 ids: st(&s, "ids").or_else(|| st(&s, "IDS")).unwrap_or_default().to_ascii_lowercase(),

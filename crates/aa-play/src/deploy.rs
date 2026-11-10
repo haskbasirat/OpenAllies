@@ -94,6 +94,8 @@ const PC: aa_numeric::Precision = aa_numeric::Precision::Double53;
 /// sets bit 29 because the placement record names the truck (+0x3C, its GTID) and bit 10
 /// always, so flags 10 and 29 whatever the building's own flags.
 const UNPACK_REQUIRED: u32 = 0x2000_0400;
+/// Thing flag bit 18, `[Flags] ethereal`: with it `0x4F3640` skips the tile and thing query.
+const ETHEREAL: u32 = 0x4_0000;
 
 /// A thing of the tile lists (GWorld+0x30) as `0x558280` mode 2 reads it.
 #[derive(Clone, Debug)]
@@ -133,6 +135,12 @@ fn listed_in_the_way(placed: &aa_spatial::geometry::Placement, cells: Option<(&a
     aa_spatial::shape_overlap::overlaps(placed, &other, PC).unwrap_or(true)
 }
 
+/// Descriptor +0x24 as `0x4F3640` fills it: the definition's ActorData +0x4E0 when it is
+/// non-null; `0x552340` then leaves out every thing of that definition.
+fn required_definition(world: &World, def: &crate::data::Def) -> Option<DefId> {
+    def.required_object.as_deref().and_then(|id| world.data.find(id))
+}
+
 fn shape_of(words: [u32; 6]) -> aa_spatial::collision::Shape {
     aa_spatial::collision::Shape { kind: words[0], radius_bits: words[1], bounds: [words[2], words[3], words[4], words[5]] }
 }
@@ -163,8 +171,12 @@ fn pad_shape(original: aa_spatial::collision::Shape, thing_flags: u32, clearance
 
 /// Whether the building's blocking footprint at `at` fits: inside the map,
 /// on land-passable unblocked cells and clear of every other building's
-/// footprint (`ignore` is the deploying truck itself). The placement ghost, a
-/// construction and a computer's site; the unpack itself is [`spot_clear_facing`].
+/// footprint (`ignore` is the deploying truck itself). Rendition, for a construct item's
+/// ghost, a construction and a computer's site; the unpack itself is [`spot_clear_facing`],
+/// the Unpack ghost [`ghost_spot_clear`]. Not ported: the original's ghost (`0x693EF0` ->
+/// `0x6215D0`) and site search (`0x5553E0`) run `0x4F3640` on a record without a GTID, which
+/// takes the padded shape (unless GWorld +0x28 +0xA8 is set), requires only Thing flag 10, and
+/// first tests `0x4F1660` (code 5); BuildActor `0x563160` reaches no `0x4F3640` call directly.
 pub fn spot_clear(world: &World, building: DefId, at: Vec2, ignore: Option<ActorId>) -> Result<(), String> {
     let d = world.data.def(building);
     let half = d.blocking_size.map_or(Vec2::ZERO, |s| Vec2::new(s[0], s[1]) * 0.5);
@@ -211,11 +223,31 @@ pub fn spot_clear(world: &World, building: DefId, at: Vec2, ignore: Option<Actor
 /// Thing flags 10 and 29, a structure or an object of the map, that overlaps it. A building
 /// that fits here can still be 2 m from water: the padding is what refuses it. Rendition:
 /// codes 4 and 7 read a settlement's fields no truck's building has.
+///
+/// `0x4F3640` runs the `0x4F0A70` query only when the definition's flag bit 18 (ethereal,
+/// 0x40000) is clear, the record's byte +0x52 is 0 and its fourth argument is null or lacks
+/// Thing flag bit 12. `0x575C80` zeroes +0x52 (its local at record +0x52) and passes 0, so
+/// only bit 18 can skip it here: an ethereal building is then refused only outside the map.
 pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2, ignore: Option<ActorId>) -> Result<(), String> {
+    replacing_query(world, building, at, facing, ignore, true)
+}
+
+/// `0x4F3640` on the Unpack ghost's record: `0x693EF0` builds it with kind +0x38 = 0 and
+/// `0x6215D0` gives it the truck's GTID (+0x3C) before the call. With +0x3C set and a kind
+/// other than 3, `0x4F370D` takes the definition's ObjectData +0x38 shape, the blocking shape
+/// without `BuildingPaddingMeters`; the rest is the unpack's query ([`spot_clear_facing`]).
+/// So the original's ghost can show a spot as legal that the unpack, padded, then refuses.
+pub fn ghost_spot_clear(world: &World, building: DefId, at: Vec2, facing: Vec2, truck: Option<ActorId>) -> Result<(), String> {
+    replacing_query(world, building, at, facing, truck, false)
+}
+
+/// `0x4F3640` for a record that names the actor it replaces (+0x3C), so the query is strict
+/// (descriptor flags 0x20000400): `unpack` is the record kind 3 of `0x575C80`.
+fn replacing_query(world: &World, building: DefId, at: Vec2, facing: Vec2, ignore: Option<ActorId>, unpack: bool) -> Result<(), String> {
     use aa_spatial::geometry::Placement;
     use aa_spatial::shape_overlap::overlaps;
     let d = world.data.def(building);
-    let shape = padded_shape(world, d);
+    let shape = if unpack { padded_shape(world, d) } else { shape_of(d.blocking_words) };
     let bits = |v: Vec2| [v.x.to_bits(), v.y.to_bits()];
     let placed = Placement { shape, facing: bits(facing), position: bits(at) };
     let map = &world.map;
@@ -228,6 +260,11 @@ pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2,
         if aa_spatial::query::outside(&placed, bits(extent), PC).unwrap_or(true) {
             return Err("the spot is outside the map".into());
         }
+    }
+    if d.thing_flags & ETHEREAL != 0 {
+        return Ok(());
+    }
+    if map.width > 0 {
         let c = map.cell_size;
         let half = c * 0.5;
         // The cell's own square, GMap +0x30 as `0x556689` makes it (`QueryGeometry`).
@@ -249,14 +286,14 @@ pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2,
             }
         }
     }
-    // The things: `0x558280` mode 2 over the cells under the padded shape. The `0x552340`
+    // The things: `0x558280` mode 2 over the cells under the query's shape. The `0x552340`
     // exclusions of this descriptor: the truck (+0x20); a thing of the building's
-    // `required_object_ids` definition (+0x24, ActorData +0x4E0), which aa-play loads for
-    // no definition (as `construct` and the movement lists); no source actor (+0x1C) and
-    // no filter (+0x34). Its hostility test (+0x2C) only reads things without flag 29, which
-    // the required flags already leave out, and its `settlement_wall` test (ActorData
-    // +0x1A8) only applies when the building lacks flags 0x20000400, which a building with a
-    // truck has (`padded_shape`).
+    // `required_object_ids` definition (+0x24, ActorData +0x4E0, [`required_definition`]);
+    // no source actor (+0x1C) and no filter (+0x34). Its hostility test (+0x2C) only reads
+    // things without flag 29, which the required flags already leave out, and its
+    // `settlement_wall` test (ActorData +0x1A8) only applies when the building lacks flags
+    // 0x20000400, which a building with a truck has (`padded_shape`).
+    let required = required_definition(world, d);
     let grid = (map.width > 0 && map.cell_size > 0.0).then(|| aa_spatial::collision::Grid {
         dimensions: [map.width as i32, map.height as i32],
         coordinate_shift: (map.cell_size as u32).trailing_zeros(),
@@ -271,7 +308,7 @@ pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2,
         r.is_finite() && f64::from(d.x.max(d.y)) > margin + r
     };
     for a in &world.actors {
-        if a.removed || !a.alive || Some(a.id) == ignore {
+        if a.removed || !a.alive || Some(a.id) == ignore || Some(a.def) == required {
             continue;
         }
         let od = world.data.def(a.def);
@@ -298,6 +335,9 @@ pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2,
         let Some(p) = map.placed.get(index) else { continue };
         let position = Vec2::new(p.position[0], p.position[1]);
         let Some(thing) = world.data.find(&p.thing_id) else { continue };
+        if Some(thing) == required {
+            continue;
+        }
         let od = world.data.def(thing);
         if far(position, &od.blocking_words, &od.soft_shape) {
             continue;
@@ -475,6 +515,16 @@ mod tests {
     }
 
     #[test]
+    fn the_ghost_tests_the_unpadded_shape() {
+        // `ghost_spot_clear` takes ObjectData +0x38 (x 47..53), the unpack the padded
+        // shape (45..55): a 4 m building 1.5 m beyond the HQ's edge, from 54.5.
+        let neighbour = thing(rect(4.0, 4.0), 56.5, 50.0, [0.0, -1.0]);
+        let ghost = Placement { shape: rect(6.0, 6.0), ..hq() };
+        assert!(!listed_in_the_way(&ghost, None, &neighbour));
+        assert!(listed_in_the_way(&hq(), None, &neighbour));
+    }
+
+    #[test]
     fn a_neighbour_is_tested_by_its_rotated_shape() {
         // 20 m by 2 m centred at y 64.5: along x (facing (0, -1)) it spans y 63.5..65.5,
         // turned by facing (1, 0) it spans y 54.5..74.5 and reaches the padded HQ.
@@ -492,6 +542,43 @@ mod tests {
         assert!(!listed_in_the_way(&hq(), None, &unit));
         unit.flags = 0x2000_0400 | 1 << 21;
         assert!(listed_in_the_way(&hq(), None, &unit));
+    }
+
+    /// The shipped data the unpack query relies on: each building a truck unpacks into
+    /// carries flags 10 and 29 (so `0x552340`'s settlement-wall test never applies) and not
+    /// bit 18 (so `0x4F3640` runs its query); no truck carries flag 29 (so the ghost's
+    /// ignored thing changes nothing); the final flags load for every definition with a
+    /// blocking shape; and which definitions name a `required_object_ids`.
+    #[test]
+    #[ignore = "needs AA_GAME_ROOT"]
+    fn shipped_unpack_buildings() {
+        let root = std::env::var("AA_GAME_ROOT").expect("set AA_GAME_ROOT to the folder of the installed game");
+        let data = crate::data::GameData::load(std::path::Path::new(&root)).expect("GameData::load");
+        let mut buildings = Vec::new();
+        for truck in data.defs.iter().filter(|d| d.unpacks_to.is_some()) {
+            let b = data.def(truck.unpacks_to.unwrap());
+            eprintln!("{} -> {}: flags {:#010x} axis_locked {} required {:?}", truck.id, b.id, b.thing_flags, b.axis_locked, b.required_object);
+            assert_eq!(truck.thing_flags & 0x2000_0000, 0, "{} carries flag 29", truck.id);
+            buildings.push(b);
+        }
+        assert!(!buildings.is_empty());
+        for b in &buildings {
+            assert_eq!(b.thing_flags & UNPACK_REQUIRED, UNPACK_REQUIRED, "{}", b.id);
+            assert_eq!(b.thing_flags & ETHEREAL, 0, "{}", b.id);
+        }
+        let failed: Vec<&String> = data.load_notes.iter().filter(|n| n.contains(": final flags: ")).collect();
+        // RANDOM_ACTOR (native kind 19) placeholders stand for a concrete definition chosen
+        // when one is made; their flag finalizer is not ported and nothing tests them.
+        let blocks = |d: &crate::data::Def| (d.blocking_words != [0; 6] || d.blocking_size.is_some() || d.blocking) && d.category != "RANDOM_ACTOR";
+        let placeholders = data.defs.iter().filter(|d| d.category == "RANDOM_ACTOR" && failed.iter().any(|n| n.starts_with(&format!("{}: ", d.id)))).count();
+        let blocking_failed: Vec<&&String> = failed.iter().filter(|n| data.defs.iter().any(|d| blocks(d) && n.starts_with(&format!("{}: ", d.id)))).collect();
+        eprintln!("final flags failed for {} definitions ({placeholders} RANDOM_ACTOR), {} other with a blocking shape: {blocking_failed:?}", failed.len(), blocking_failed.len());
+        assert!(blocking_failed.is_empty());
+        let required: Vec<(&str, &str)> = data.defs.iter().filter_map(|d| d.required_object.as_deref().map(|r| (d.id.as_str(), r))).collect();
+        eprintln!("required_object_ids: {required:?}");
+        for (_, r) in &required {
+            assert!(data.find(r).is_some(), "{r} is not a definition");
+        }
     }
 
     #[test]

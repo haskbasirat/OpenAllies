@@ -17,18 +17,26 @@
 //! 5. `along = (ref.y - pos.y) * facing.y + stored(ref.x - pos.x) * facing.x`
 //!    with the owner position +0x20/+0x24; only `ref.x - pos.x` is stored to
 //!    binary32 (`0x53CAEF`). When `along` compares below `0x9F32DC` (binary32
-//!    0.0; unordered does not negate: `test ah,5` + `jp`), both facing words
-//!    are multiplied by `0x9FDC48` (binary32 -1.0) and stored.
+//!    0.0; in the native an unordered compare does not negate: `test ah,5` +
+//!    `jp`), both facing words are multiplied by `0x9FDC48` (binary32 -1.0)
+//!    and stored.
 //! 6. With the cell size at GMap +8: `x = stored(facing.x * cell + x)` (the
 //!    product stays in the register) and `y = stored(stored(facing.y * cell)
 //!    + y)`. Return 1; the caller tests the moved point with `0x53CE40` again.
 //!
-//! The tile word +0x1C is written only by `0x54F6F0` (a thing joins the
-//! tile's list) and `0x54F780` (a thing leaves it), both through `0x54ED80`,
-//! and only for a thing whose virtual +0xB4 holds, whose word +0x90 (its Wall
-//! component) is nonnull and that `0x54EE60` places on the tile: the owner is
-//! a wall piece. Its virtual +0x100 is then `0x4CED60`, the Structure +0x10
-//! parent or the Wall's `0x58CB30` parent.
+//! Divergence: [`Binary::from_f32_bits`] refuses a NaN or infinite word, so a
+//! non-finite owner pose or candidate is an `Err` here where the native goes
+//! on (with an unordered `along` it keeps the facing). Only reachable when a
+//! tile has an owner and the data hold non-finite words.
+//!
+//! The tile word +0x1C has two writers. `0x54F6F0` (a thing joins the tile's
+//! list) stores through `0x54ED80`; `0x54F780` (a thing leaves it) stores
+//! directly (`mov [ebx+0x1c],0` at `0x54F79F`, then `mov [ebx+0x1c],ecx` at
+//! `0x54F7E6` for the next list member). Both store zero or a thing whose
+//! virtual +0xB4 holds, whose word +0x90 (its Wall component) is nonnull and
+//! that `0x54EE60` places on the tile: the owner is a wall piece. Its virtual
+//! +0x100 is then `0x4CED60`, the Structure (+0x94) +0x10 parent or the Wall's
+//! `0x58CB30` parent.
 use crate::gworld_placement::{outside_world, GMapView, Result, ZERO_BITS};
 use aa_numeric::{Binary, Precision};
 use std::cmp::Ordering;

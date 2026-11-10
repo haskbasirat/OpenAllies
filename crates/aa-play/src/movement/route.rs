@@ -255,7 +255,10 @@ impl gd::DisplacementWorld for Host<'_, '_> {
     fn tile_owner(&mut self, _: usize) -> gp::Result<Option<ActorKey>> {
         Ok(None)
     }
-    /// `0x4CED60`.
+    /// Rendition of `0x4CED60` (Structure +0x94 then +0x10, else the Wall's `0x58CB30`
+    /// parent): it asks [`gp::CrossingWorld::actor_virtual_100`], which in this host always
+    /// answers None, because no hosted thing has a Structure or Wall parent. Unreachable
+    /// while `tile_owner` is None; port `0x4CED60` before hosting wall things.
     fn owner_virtual_100(&mut self, owner: ActorKey) -> gp::Result<bool> {
         Ok(gp::CrossingWorld::actor_virtual_100(self, owner)?.is_some())
     }

@@ -97,9 +97,26 @@ pub struct GhostModel {
 
 /// The legality test of a spot: the building's footprint fits there and,
 /// for Unpack, the truck can drive there to unpack (the checks
-/// Command::Deploy makes).
+/// Command::Deploy makes). The ghost's facing as it starts ([`DEFAULT_FACING`]);
+/// [`problem_facing`] takes the dragged one.
 pub fn problem(world: &aa_play::World, truck: Option<ActorId>, building: DefId, at: Vec2) -> Option<String> {
-    if let Err(e) = aa_play::deploy::spot_clear(world, building, at, truck) {
+    problem_facing(world, truck, building, at, DEFAULT_FACING)
+}
+
+/// [`problem`] with the ghost's facing (rad). For Unpack the footprint test is
+/// `0x4F3640` on the ghost's record (`0x693EF0` -> `0x6215D0`, kind 0 with the truck's
+/// GTID): the unpadded blocking shape at the ghost's facing, an axis_locked one at
+/// native (0, -1) ([`aa_play::deploy::ghost_spot_clear`]). A construct item keeps the
+/// rendition [`aa_play::deploy::spot_clear`].
+pub fn problem_facing(world: &aa_play::World, truck: Option<ActorId>, building: DefId, at: Vec2, facing: f32) -> Option<String> {
+    let clear = match truck {
+        Some(_) => {
+            let words = if world.data.def(building).axis_locked { Vec2::new(0.0, -1.0) } else { aa_play::formation::facing_vector(facing) };
+            aa_play::deploy::ghost_spot_clear(world, building, at, words, truck)
+        }
+        None => aa_play::deploy::spot_clear(world, building, at, truck),
+    };
+    if let Err(e) = clear {
         return Some(e);
     }
     truck.and_then(|t| aa_play::movement::deploy_spot_problem(world, t, at))
