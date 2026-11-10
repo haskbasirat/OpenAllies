@@ -1245,8 +1245,13 @@ impl regiment_update::World for Update<'_, '_> {
         think_in(self.host.world, self.host.o, f32::from_bits(delay));
         Ok(())
     }
-    /// `0x763B90`: the arrivals were drained by the Sleep, or wait for it.
+    /// `0x763B90` on Mind +0x2BC (`0x524985`), after the Think and its fallback
+    /// schedule: every arrival still listed is dropped, whatever the state did with
+    /// them (the Sleep drains them, a moving Move sends each a slot path, a Move that
+    /// plans or dispatches leaves them).
     fn clear_arrivals(&mut self, _: MindId) -> aa_mind::Result<()> {
+        let o = self.host.o;
+        self.host.ms.orgs[o as usize].pending.clear();
         Ok(())
     }
 }

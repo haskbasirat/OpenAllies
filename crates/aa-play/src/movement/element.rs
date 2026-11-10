@@ -1800,7 +1800,7 @@ impl result_plan::World for PlanHost<'_, '_> {
         Ok(query.as_ref().map_or(result_plan::CollisionContext { words: [0; 22] }, uai::context_from_query))
     }
     fn resolve_actor(&self, id: u32) -> Option<result_plan::Object> {
-        (id != 0 && (id - 1) & ORG == 0 && alive(self.host.world, id - 1)).then_some(result_plan::Object(id - 1))
+        (id != 0 && (id - 1) & ORG == 0 && alive(self.host.world, id - 1)).then(|| result_plan::Object(id - 1))
     }
     fn replacement_actor(&self, object: result_plan::Object) -> result_plan::Object {
         object
