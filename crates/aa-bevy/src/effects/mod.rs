@@ -201,6 +201,8 @@ struct FxAtlas(Handle<Image>);
 struct ActorTint {
     actor: ActorId,
     ids: String,
+    /// The CREATE_VFX that made it (see `Effects::src_of`).
+    src: usize,
     color: [f32; 3],
     enhance: f32,
     fade: f32,
@@ -560,7 +562,14 @@ struct LiveFx {
     permanent: bool,
     critical: bool,
     chain: Vec<Fxc>,
+    /// Where `chain` lies in the FX tables (0 = a copy's), so its commands
+    /// keep their identity when they run.
+    chain_src: usize,
     ctx: Ctx,
+    /// The CREATE_VFX that made it (instance +0x7C, set by 0x444520; see
+    /// `Effects::src_of`) and when, for the newest-first view list.
+    src: usize,
+    born: u64,
 }
 
 struct Tracer {
@@ -610,9 +619,94 @@ fn decal_order(kind: &str) -> u8 {
     }
 }
 
+/// A command's AT as its index in the AT table (0x497E20): SELF 0,
+/// TARGET_THING 1, SOURCE_GROUND 2 ... MAP_CENTER 6.
+fn at_index(f: &Fxc) -> u8 {
+    match f.at.as_str() {
+        "SELF" => 0,
+        "TARGET_THING" => 1,
+        "SOURCE_GROUND" => 2,
+        "TARGET_GROUND" => 3,
+        "SOURCE_ABILITY_POSITION" => 4,
+        "TARGET_HIT_POSITION" => 5,
+        _ => 6,
+    }
+}
+
+/// A CREATE_VFX's `attached` (+0x65) after 0x42C5E0, which clears it for AT 2-6.
+fn attached(f: &Fxc) -> bool {
+    f.attached && at_index(f) < 2
+}
+
+/// 0x42B8E0 as 0x465002 calls it on WhenEnter: for each command, first its
+/// ChainImmediate (+8) and Chain (+0x10) lists, then the command itself. A
+/// CREATE_VFX (vtable+0x24) that is attached, whose VFX is permanent (lifetime
+/// 1, 0x494F30) and that has no duration of its own (0x428360) gets a StopVFX
+/// (0x42B3B0) unless its health_trigger_type is RELATIVE_DECREASE or
+/// RELATIVE_INCREASE. Pushed in this order (each at the head of WhenLeave),
+/// with the CREATE_VFX's identity and AT.
+fn state_stops(list: &[Fxc], vfx: &std::collections::BTreeMap<String, VfxDef>, out: &mut Vec<(Fxc, usize, u8)>) {
+    for f in list {
+        state_stops(&f.chain_immediate, vfx, out);
+        state_stops(&f.chain, vfx, out);
+        if f.kind == "CREATE_VFX"
+            && attached(f)
+            && f.duration == 0.0
+            && vfx.get(&f.ids).is_some_and(|d| d.permanent)
+            && !matches!(f.health_trigger.as_str(), "RELATIVE_DECREASE" | "RELATIVE_INCREASE")
+        {
+            // 0x42B3B0 copies frequency, delay, health, the target and terrain
+            // filters and actor_state, and turns ABSOLUTE_BELOW and ABSOLUTE_ABOVE
+            // round; another trigger stays at the constructor's none (0x42AF90).
+            let health_trigger = match f.health_trigger.as_str() {
+                "ABSOLUTE_BELOW" => "ABSOLUTE_ABOVE",
+                "ABSOLUTE_ABOVE" => "ABSOLUTE_BELOW",
+                _ => "",
+            };
+            let stop = Fxc {
+                kind: "STOP_VFX".into(),
+                state: f.state.clone(),
+                ids: f.ids.clone(),
+                target_flags: f.target_flags.clone(),
+                terrain_group: f.terrain_group.clone(),
+                frequency: f.frequency,
+                delay: f.delay,
+                health: f.health,
+                health_trigger: health_trigger.into(),
+                ..Default::default()
+            };
+            out.push((stop, f as *const Fxc as usize, at_index(f)));
+        }
+    }
+}
+
+/// The data's StopVFX of one list (0x42C900, after its chains as 0x42C1B0
+/// loads them first): the CREATE_VFX it acts on is the first one of its VFX
+/// that the same map saw (0x42C5E0 adds a CREATE_VFX only when its VFX is not
+/// in it yet).
+fn stop_targets(list: &[Fxc], first: &mut HashMap<String, (usize, u8)>, out: &mut HashMap<usize, (usize, u8)>) {
+    for f in list {
+        stop_targets(&f.chain_immediate, first, out);
+        stop_targets(&f.chain, first, out);
+        match f.kind.as_str() {
+            "CREATE_VFX" => {
+                first.entry(f.ids.clone()).or_insert((f as *const Fxc as usize, at_index(f)));
+            }
+            "STOP_VFX" => {
+                if let Some(t) = first.get(&f.ids) {
+                    out.insert(f as *const Fxc as usize, *t);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 struct Delayed {
     at: f32,
     fxc: Fxc,
+    /// The identity of the command `fxc` copies.
+    src: usize,
     ctx: Ctx,
     list: ListKind,
 }
@@ -778,6 +872,16 @@ pub struct FxState {
     bone_cache: HashMap<(ActorId, u64), Mat4>,
     def_bones: Vec<Option<Arc<bones::Source>>>,
     def_fx: Vec<Option<Arc<data::ActorFx>>>,
+    /// The StopVFX that 0x42B8E0 puts at the head of each def's WhenLeave, in
+    /// the order they run (see `state_stops`).
+    def_stops: Vec<Option<Arc<Vec<Fxc>>>>,
+    /// The CREATE_VFX each StopVFX of a WhenEnter / WhenLeave pair acts on
+    /// (StopVFX +0x3C) and that command's AT index, by the StopVFX's identity.
+    stop_target: HashMap<usize, (usize, u8)>,
+    /// While a delayed or chained copy runs: (its address, the original's).
+    copy_of: Option<(usize, usize)>,
+    /// Count of effect instances made, for their order on a view's list.
+    born: u64,
     /// Decal meshes need rebuilding (set changed, fading, camera moved).
     decals_dirty: bool,
     decal_eye: Vec3,
@@ -929,6 +1033,10 @@ fn poll_loading(
         bone_cache: HashMap::new(),
         def_bones: Vec::new(),
         def_fx: Vec::new(),
+        def_stops: Vec::new(),
+        stop_target: HashMap::new(),
+        copy_of: None,
+        born: 0,
         decals_dirty: true,
         decal_eye: Vec3::ZERO,
         decal_time: 0.0,
@@ -1080,10 +1188,51 @@ impl FxState {
             self.def_fx.resize(i + 1, None);
         }
         if self.def_fx[i].is_none() {
-            let fx = self.tables.actors.get(&world.data.def(def).id.to_ascii_lowercase()).cloned().unwrap_or_default();
-            self.def_fx[i] = Some(Arc::new(fx));
+            let fx = Arc::new(self.tables.actors.get(&world.data.def(def).id.to_ascii_lowercase()).cloned().unwrap_or_default());
+            // Both live as long as this Effects, so the commands' addresses
+            // stay their identity.
+            let mut made = Vec::new();
+            state_stops(&fx.enter, &self.tables.vfx, &mut made);
+            // Each is pushed at the head of WhenLeave: they run in reverse.
+            made.reverse();
+            let stops = Arc::new(made.iter().map(|(s, _, _)| s.clone()).collect::<Vec<_>>());
+            for (s, (_, create, at)) in stops.iter().zip(&made) {
+                self.stop_target.insert(s as *const Fxc as usize, (*create, *at));
+            }
+            // The data's own StopVFX (0x42C900): the first CREATE_VFX of its
+            // VFX loaded before it with the same map (0x464F68: WhenEnter,
+            // then WhenLeave).
+            let mut first = HashMap::new();
+            for list in [&fx.enter, &fx.leave] {
+                stop_targets(list, &mut first, &mut self.stop_target);
+            }
+            if self.def_stops.len() <= i {
+                self.def_stops.resize(i + 1, None);
+            }
+            self.def_stops[i] = Some(stops);
+            self.def_fx[i] = Some(fx);
         }
         self.def_fx[i].clone()
+    }
+
+    /// The identity a command runs as: its address in the FX tables, or the
+    /// original's while a delayed or chained copy of it runs. Natively each
+    /// VFX instance keeps the CREATE_VFX that made it (+0x7C, 0x444520) and a
+    /// StopVFX looks for that pointer (0x42EA40).
+    fn src_of(&self, fxc: &Fxc) -> usize {
+        let at = fxc as *const Fxc as usize;
+        match self.copy_of {
+            Some((copy, original)) if copy == at => original,
+            _ => at,
+        }
+    }
+
+    /// Run a copy of a command as the command `src` (0 = as itself).
+    #[allow(clippy::too_many_arguments)]
+    fn run_copy(&mut self, fxc: &Fxc, src: usize, ctx: Ctx, frame: &Frame, spawn: &mut Spawn, list: ListKind, now_delay: bool) {
+        let before = if src != 0 { self.copy_of.replace((fxc as *const Fxc as usize, src)) } else { self.copy_of };
+        self.run_fxc(fxc, ctx, frame, spawn, list, now_delay);
+        self.copy_of = before;
     }
 
     fn filter_ok(&mut self, fxc: &Fxc, frame: &Frame, target: Option<ActorId>) -> bool {
@@ -1201,7 +1350,8 @@ impl FxState {
             return;
         }
         if fxc.delay > 0.0 && !now_delay {
-            self.delayed.push(Delayed { at: self.time + fxc.delay, fxc: fxc.clone(), ctx, list });
+            let src = self.src_of(fxc);
+            self.delayed.push(Delayed { at: self.time + fxc.delay, fxc: fxc.clone(), src, ctx, list });
             return;
         }
         match fxc.kind.as_str() {
@@ -1241,13 +1391,44 @@ impl FxState {
                 };
                 spawn.sfx.play.push(Sfx { ids: fxc.ids.clone(), place, owner, voice: ctx.actor.map(|a| a as u64), looping: fxc.looping });
             }
-            "STOP_VFX" => {
-                for e in self.effects.iter_mut().filter(|e| e.ids == fxc.ids && e.owner == ctx.actor) {
-                    e.player.stop();
-                    e.permanent = false;
+            "STOP_VFX" => match self.stop_target.get(&self.src_of(fxc)).copied() {
+                // 0x428C80: the CREATE_VFX's AT (+0x40) picks the thing: SELF the
+                // actor, TARGET_THING the target, any other none. 0x454A70 ->
+                // 0x42EA40 stops the first instance on that thing's view list
+                // (+0x9C, newest first: 0x42E6E0) that this CREATE_VFX made; only
+                // attached instances are on it (0x43CD00 -> 0x455310).
+                Some((create, at)) => {
+                    let thing = match at {
+                        0 => ctx.actor,
+                        1 => ctx.target,
+                        _ => None,
+                    };
+                    if let Some(thing) = thing {
+                        let stopped = match self.effects.iter_mut().filter(|e| e.src == create && e.attach.as_ref().is_some_and(|(a, _)| *a == thing)).max_by_key(|e| e.born) {
+                            Some(e) => {
+                                e.player.stop();
+                                e.permanent = false;
+                                true
+                            }
+                            None => false,
+                        };
+                        let tints = self.tints.len();
+                        self.tints.retain(|t| !(t.actor == thing && t.src == create));
+                        if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                            info!("fx: stop {} ({}) on actor {thing} at tick {}: instance {stopped}, tint {}", fxc.ids, fxc.state, frame.world.tick, tints != self.tints.len());
+                        }
+                    }
                 }
-                self.tints.retain(|t| !(Some(t.actor) == ctx.actor && t.ids == fxc.ids));
-            }
+                // compare: a StopVFX of another list (the WhenEnter / WhenLeave map is
+                // the one ported) stops what the actor shows of that VFX.
+                None => {
+                    for e in self.effects.iter_mut().filter(|e| e.ids == fxc.ids && e.owner == ctx.actor) {
+                        e.player.stop();
+                        e.permanent = false;
+                    }
+                    self.tints.retain(|t| !(Some(t.actor) == ctx.actor && t.ids == fxc.ids));
+                }
+            },
             "STOP_SFX" => {
                 spawn.sfx.stop.push((fxc.ids.clone(), ctx.actor.map(|a| Place::Object(a as u64))));
             }
@@ -1290,7 +1471,8 @@ impl FxState {
         {
             let color = def.color;
             self.tints.retain(|t| !(t.actor == actor && t.ids == fxc.ids));
-            self.tints.push(ActorTint { actor, ids: fxc.ids.clone(), color, enhance, fade, max, repeating, enhance_from: Some(self.time), fade_from: None });
+            let src = self.src_of(fxc);
+            self.tints.push(ActorTint { actor, ids: fxc.ids.clone(), src, color, enhance, fade, max, repeating, enhance_from: Some(self.time), fade_from: None });
             return;
         }
         let Some(def) = self.tables.vfx.get(&fxc.ids).cloned() else {
@@ -1446,6 +1628,10 @@ impl FxState {
             };
             let seed = self.next_seed();
             let player = Player::new(fx, place, 1.0, emit_until, seed, self.white);
+            let src = self.src_of(fxc);
+            let chain_src = if src == fxc as *const Fxc as usize { fxc.chain.as_ptr() as usize } else { 0 };
+            self.born += 1;
+            let born = self.born;
             self.effects.push(LiveFx {
                 player,
                 attach,
@@ -1456,7 +1642,10 @@ impl FxState {
                 permanent: def.permanent && duration <= 0.0,
                 critical: def.critical,
                 chain: fxc.chain.clone(),
+                chain_src,
                 ctx,
+                src,
+                born,
             });
             if !animated_model(&key) {
                 return;
@@ -2278,27 +2467,30 @@ impl FxState {
                 let before = self.actor_states.get(&a.id).cloned().unwrap_or_default();
                 if on != before {
                     let ctx = Ctx { actor: Some(a.id), target: None, at: None, target_ground: None, shooter_ground: Some(a.pos), kingdom: None, hit: None };
-                    // At load (0x465002 -> 0x42B8E0) each WhenEnter CREATE_VFX that is
-                    // attached (+0x65), whose VFX is permanent (lifetime 1, 0x494F30) and
-                    // that has no duration of its own (0x428360) gets a StopVFX of the same
-                    // actor_state (0x42B3B0) at the head of WhenLeave. So when the state ends
-                    // that VFX is stopped first (0x428C80 -> 0x42EA40: emission ends, live
-                    // particles finish). `building_pack` ends this way with the unpacking:
-                    // 0x5762FA sets structure_normal, which clears structure_unpacking.
-                    // Each stop is put in front of the list, so they run in reverse order.
-                    let stops: Vec<Fxc> = fx
-                        .enter
-                        .iter()
-                        .rev()
-                        .filter(|f| before.contains(&f.state) && !on.contains(&f.state))
-                        .filter(|f| f.kind == "CREATE_VFX" && f.attached && f.duration == 0.0 && self.tables.vfx.get(&f.ids).is_some_and(|d| d.permanent))
-                        .map(|f| Fxc { kind: "STOP_VFX".into(), state: f.state.clone(), ids: f.ids.clone(), target_flags: f.target_flags.clone(), terrain_group: f.terrain_group.clone(), frequency: 1, ..Default::default() })
-                        .collect();
-                    for f in &stops {
-                        self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                    // Each state that ended runs its WhenLeave (0x4D64F0 -> 0x4D16B0 ->
+                    // 0x4D0A00), whose head holds the StopVFX made at load (`state_stops`):
+                    // so a state's permanent attached VFX is stopped first (emission ends,
+                    // live particles finish). `building_pack` ends this way with the
+                    // unpacking: 0x5762FA sets structure_normal, which clears
+                    // structure_unpacking. A stop with no actor_state (a chained
+                    // command's) passes for any state (0x42A770).
+                    let stops = self.def_stops.get(a.def as usize).cloned().flatten().unwrap_or_default();
+                    let mut left: Vec<&String> = Vec::new();
+                    for s in before.iter().filter(|s| !on.contains(s)) {
+                        if !left.contains(&s) {
+                            left.push(s);
+                        }
                     }
-                    for f in fx.leave.iter().filter(|f| before.contains(&f.state) && !on.contains(&f.state)) {
-                        self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                    if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                        info!("fx: actor {} ({}) states {before:?} -> {on:?} at tick {}, activity {:?}", a.id, def.id, frame.world.tick, a.activity);
+                    }
+                    for s in left {
+                        for f in stops.iter().filter(|f| f.state.is_empty() || f.state == *s) {
+                            self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                        }
+                        for f in fx.leave.iter().filter(|f| f.state == *s) {
+                            self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
+                        }
                     }
                     for f in fx.enter.iter().filter(|f| on.contains(&f.state) && !before.contains(&f.state)) {
                         self.run_fxc(f, ctx, frame, spawn, ListKind::Other, false);
@@ -2336,6 +2528,9 @@ impl FxState {
             }
             let Some(fx) = fx else { continue };
             if a.activity != Activity::Unpacking && !under_construction(frame.world, a.id) && self.unbuilt.remove(&a.id) && a.alive {
+                if std::env::var_os("AA_BEVY_FX_STATS").is_some() {
+                    info!("fx: actor {} ({}) WhenConstructed at tick {}", a.id, def.id, frame.world.tick);
+                }
                 self.run_list(&fx.constructed, ctx, frame, spawn, ListKind::Constructed);
             }
             if def.health > 0.0 && !fx.health.is_empty() {
@@ -2423,7 +2618,7 @@ impl FxState {
             due
         };
         for d in due {
-            self.run_fxc(&d.fxc, d.ctx, frame, spawn, d.list, true);
+            self.run_copy(&d.fxc, d.src, d.ctx, frame, spawn, d.list, true);
         }
         // A wreck is the actor's aspect_death model: it stays where the
         // actor's view is, so it sinks with the corpse (0x457DF0).
@@ -2492,14 +2687,17 @@ impl FxState {
             if e.player.finished() {
                 let e = self.effects.swap_remove(k);
                 if !e.chain.is_empty() {
-                    chains.push((e.chain, e.ctx));
+                    chains.push((e.chain, e.chain_src, e.ctx));
                 }
                 continue;
             }
             k += 1;
         }
-        for (chain, ctx) in chains {
-            self.run_list(&chain, ctx, frame, spawn, ListKind::Other);
+        for (chain, base, ctx) in chains {
+            for (n, f) in chain.iter().enumerate() {
+                let src = if base != 0 { base + n * std::mem::size_of::<Fxc>() } else { 0 };
+                self.run_copy(f, src, ctx, frame, spawn, ListKind::Other, false);
+            }
         }
         // Tracers.
         self.tracers.retain_mut(|t| {
@@ -2956,4 +3154,104 @@ fn model_key(path: &str, animated: bool) -> String {
 /// extractor leaves them to the model pipeline).
 fn animated_model(key: &str) -> bool {
     key.starts_with("deathdebris/") || key.starts_with("flags/") || key.starts_with("specialops/") || key.starts_with("waypoints/")
+}
+
+#[cfg(test)]
+mod state_stop_tests {
+    use super::*;
+
+    fn create(state: &str, ids: &str, at: &str) -> Fxc {
+        Fxc { kind: "CREATE_VFX".into(), state: state.into(), ids: ids.into(), at: at.into(), attached: true, frequency: 1, health: -1.0, health_trigger: "ABSOLUTE_BELOW".into(), ..Default::default() }
+    }
+
+    /// 0x42B8E0 / 0x42B3B0 / 0x42C5E0 on hand-made lists: chains first, the
+    /// copied fields, the BELOW / ABOVE swap and the commands that get none.
+    #[test]
+    fn stops_follow_the_load_rules() {
+        let mut vfx = std::collections::BTreeMap::new();
+        vfx.insert("loop".to_owned(), VfxDef { permanent: true, ..Default::default() });
+        vfx.insert("once".to_owned(), VfxDef { permanent: false, ..Default::default() });
+        let mut a = create("structure_packing", "loop", "SELF");
+        a.frequency = 3;
+        a.delay = 0.5;
+        a.health = 0.25;
+        a.target_flags = "+infantry".into();
+        a.chain = vec![create("", "loop", "TARGET_THING")];
+        a.chain_immediate = vec![create("", "loop", "SELF")];
+        let ground = create("structure_packing", "loop", "SOURCE_GROUND");
+        let once = create("structure_packing", "once", "SELF");
+        let mut timed = create("structure_packing", "loop", "SELF");
+        timed.duration = 2.0;
+        let mut relative = create("structure_packing", "loop", "SELF");
+        relative.health_trigger = "RELATIVE_DECREASE".into();
+        let mut above = create("structure_unpacking", "loop", "TARGET_THING");
+        above.health_trigger = "ABSOLUTE_ABOVE".into();
+        let enter = vec![a, ground, once, timed, relative, above];
+        let mut out = Vec::new();
+        state_stops(&enter, &vfx, &mut out);
+        let at = |f: &Fxc| f as *const Fxc as usize;
+        let made: Vec<usize> = out.iter().map(|(_, c, _)| *c).collect();
+        assert_eq!(made, vec![at(&enter[0].chain_immediate[0]), at(&enter[0].chain[0]), at(&enter[0]), at(&enter[5])]);
+        assert_eq!(out.iter().map(|(_, _, a)| *a).collect::<Vec<_>>(), vec![0, 1, 0, 1]);
+        let s = &out[2].0;
+        assert_eq!((s.kind.as_str(), s.state.as_str(), s.frequency, s.delay, s.health), ("STOP_VFX", "structure_packing", 3, 0.5, 0.25));
+        assert_eq!((s.target_flags.as_str(), s.health_trigger.as_str()), ("+infantry", "ABSOLUTE_ABOVE"));
+        assert_eq!(out[3].0.health_trigger, "ABSOLUTE_BELOW");
+        assert!(out[0].0.state.is_empty());
+    }
+
+    /// 0x42C900: a StopVFX acts on the first CREATE_VFX of its VFX loaded
+    /// before it (chains before their command), across WhenEnter then WhenLeave.
+    #[test]
+    fn data_stops_take_the_first_creator() {
+        let mut first_enter = create("structure_packing", "pack", "SELF");
+        first_enter.chain_immediate = vec![create("", "pack", "TARGET_THING")];
+        let enter = vec![first_enter, create("structure_unpacking", "pack", "SELF")];
+        let mut early = Fxc { kind: "STOP_VFX".into(), state: "structure_normal".into(), ids: "late".into(), ..Default::default() };
+        early.chain = vec![create("", "late", "SELF")];
+        let leave = vec![Fxc { kind: "STOP_VFX".into(), state: "structure_unpacking".into(), ids: "pack".into(), ..Default::default() }, early];
+        let mut first = HashMap::new();
+        let mut out = HashMap::new();
+        for list in [&enter, &leave] {
+            stop_targets(list, &mut first, &mut out);
+        }
+        let at = |f: &Fxc| f as *const Fxc as usize;
+        assert_eq!(out.get(&at(&leave[0])), Some(&(at(&enter[0].chain_immediate[0]), 1)));
+        assert_eq!(out.get(&at(&leave[1])), Some(&(at(&leave[1].chain[0]), 0)));
+    }
+
+    /// The shipped buildings (AA_GAME_ROOT): every StopVFX of their WhenLeave
+    /// finds a creator, and the load-made stops are the permanent attached
+    /// WhenEnter VFX, building_pack among them.
+    #[test]
+    fn shipped_building_state_stops() {
+        let Some(root) = std::env::var_os("AA_GAME_ROOT") else {
+            eprintln!("state stop test skipped: no AA_GAME_ROOT");
+            return;
+        };
+        let mut sources = aa_play::data::Sources::open(Path::new(&root)).unwrap();
+        let catalog = aa_rules::actors::ActorCatalog::load_v14(&mut sources.files).unwrap();
+        let ids = ["gbr_depot_ammo".to_owned(), "gbr_airfield".to_owned()];
+        let t = data::extract(&catalog, &ids);
+        for id in &ids {
+            let Some(fx) = t.actors.get(id) else { continue };
+            let mut out = Vec::new();
+            state_stops(&fx.enter, &t.vfx, &mut out);
+            for (s, _, at) in &out {
+                eprintln!("{id}: stop {} at leave of {} (AT {at})", s.ids, s.state);
+            }
+            let mut first = HashMap::new();
+            let mut targets = HashMap::new();
+            for list in [&fx.enter, &fx.leave] {
+                stop_targets(list, &mut first, &mut targets);
+            }
+            for f in fx.leave.iter().filter(|f| f.kind == "STOP_VFX") {
+                eprintln!("{id}: data stop {} at leave of {}", f.ids, f.state);
+                assert!(targets.contains_key(&(f as *const Fxc as usize)), "{id}: {} has no creator", f.ids);
+            }
+            if id == "gbr_depot_ammo" {
+                assert!(out.iter().any(|(s, _, _)| s.ids == "building_pack" && s.state == "structure_unpacking"));
+            }
+        }
+    }
 }

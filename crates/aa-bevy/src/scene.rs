@@ -740,6 +740,13 @@ fn setup(
         // (tall grass, logs, docks...) or no shadow_texture casts nothing.
         // The sun's shadow map stands in for STENCIL volumes and, until the
         // ground blobs are drawn, for TEXTURE / PROJECTED shadows.
+        // compare: the view's shadow (0x458A20) is the lower of the data's type
+        // and RenderLODShadows (default 1, TEXTURE; STENCIL needs a stencil
+        // buffer, and STENCIL data under a PROJECTED setting is TEXTURE). A
+        // STENCIL view casts with its model's Sg geometry only (0x458AB0 shows
+        // it through 0x457960; other views cull it), a TEXTURE view lays its
+        // shadow_texture along the sun (0x7183F0), a PROJECTED one renders
+        // itself (0x718930); here the drawn meshes cast.
         let shadow = loaded.shadows.as_ref().and_then(|s| s.get(&p.thing_id));
         *shadow_counts.entry(format!("{shadow:?}")).or_insert(0usize) += 1;
         let casts = shadow != Some(crate::preload::ShadowType::None);
