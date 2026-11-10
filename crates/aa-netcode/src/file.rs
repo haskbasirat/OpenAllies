@@ -810,3 +810,13 @@ pub fn start_file_transfer<F: FileStore>(
     *generation = generation.wrapping_add(1);
     sender.start(channel, name)
 }
+
+/// 0x858030 TGC_File::ComputeChecksum(0) on the map resource opened by
+/// KKC_Resource::OpenAs 0x5AA2E0: seek to 0 (+0x34), the size (+0x30), then
+/// one byte at a time (+0, into a zeroed dword) `crc = crc * 7 + byte`, 32-bit
+/// wrapping. The host's HostSetLoadMap process 0x75EEB0 sends it with
+/// SetSessionLoadMap (91); a client compares it in SendUpdateMapStatus
+/// 0x770B70.
+pub fn map_checksum(bytes: &[u8]) -> u32 {
+    bytes.iter().fold(0u32, |crc, &b| crc.wrapping_mul(7).wrapping_add(u32::from(b)))
+}

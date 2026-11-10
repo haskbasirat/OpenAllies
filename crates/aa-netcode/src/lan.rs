@@ -42,18 +42,22 @@
 //! client's front end is crates/aa-bevy/src/net.
 //!
 //! Not ported, and what happens instead:
-//! * heartbeat 0x75B820 and the lag votes (`crate::heartbeat` has them proven,
-//!   nothing here calls it). [`LanNode::frame`] runs the rule of 0x75BD70 in
+//! * heartbeat 0x75B820 and the lag votes (`crate::heartbeat` has them proven;
+//!   here only the host's UpdateFileTransferStatus loop of 0x75B820 runs,
+//!   [`transfer`]). [`LanNode::frame`] runs the rule of 0x75BD70 in
 //!   short: a silent connection is no longer connected and its datagrams
 //!   restore it (the original's network thread does not stall with a frame,
 //!   ours can), and after the 15 s of patience the host drops its player
 //!   (reason 4, without the dialog that asks for a vote); no backup server
 //!   takes over: a client that lost its host has lost the session;
 //! * the end-of-session check 0x76F600 and the session timing 0x41C180;
-//! * the connect checksums and the map check: [`LanConfig`] carries what the
-//!   caller computed, a client reports it has the map without looking
-//!   (`SnapshotEffects`); for a file transfer (status 2, 0x74FE30) the host says
-//!   the map will not transfer, as for status 3;
+//! * the connect checksums: [`LanConfig`] carries what the caller computed.
+//!   The map check 0x770B70 and the transfer (status 2, 0x74FE30, progress
+//!   0x74F310) run when the front end gives a profile directory and a map
+//!   lookup ([`LanData::profile_directory`], [`LanData::map_lookup`],
+//!   [`transfer`]); without them a client reports it has the map without
+//!   looking and the host says a map will not transfer, as for status 3. The
+//!   RMC data checksum of 0x7770B0 is not computed;
 //! * of FinalizeLaunchSettings 0x776B20 everything but the seed, of 0x7791F0
 //!   everything but 0x778D10 and the removal of the AIs;
 //! * GameSpy, backup servers, a film recorder inside the node (the client
@@ -72,7 +76,7 @@ use crate::lobby::{
     Session,
 };
 use crate::packets::{
-    self, AdminConn, ConnEvent, NetworkAvars, NoFileTransfer, NodeHistories, Roles,
+    self, AdminConn, ConnEvent, NetworkAvars, NodeHistories, Roles,
 };
 use crate::send::{wanted_packet_type, GateConn, GateNode};
 use crate::session::{read_and_validate_connect, write_connect, ConnectInfo, ConnectVerdict, HostConnectState, PeerAddress, PlayerId};
@@ -95,6 +99,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 pub mod browse;
 pub mod orders;
 pub mod registries;
+pub mod transfer;
 
 pub use orders::descriptor;
 use registries::NativeRegistries;
@@ -200,6 +205,10 @@ pub enum LanEvent {
     /// A datagram its reader refused. The session goes on: a host with an open
     /// port hears whatever a network sends it.
     BadDatagram { address: PeerAddress, error: String },
+    /// Host: FileSender::Start 0x761540 could not open the file a client
+    /// asked for (TGC_FileException; the catch that ends it natively is not
+    /// traced): the transfer did not start.
+    TransferFailed { address: PeerAddress, error: String },
 }
 
 /// Game data a session's codecs read (registry counts, name lookups,
@@ -229,6 +238,17 @@ pub trait LanData {
     /// kingdoms in file order), `None` for an unknown name.
     fn rmc_header(&self, _rmc: &[u16]) -> Option<lobby::MapHeader> {
         None
+    }
+    /// [[0xB36540]+0x90]+4: the directory a sent file is read from and a
+    /// received one written to (directory + the session's file name,
+    /// 0x761540 / 0x7619A0). `None`: no file channel (`transfer`).
+    fn profile_directory(&self) -> Option<Vec<u16>> {
+        None
+    }
+    /// 0x59F570 on a session file and 0x858030 over the resource
+    /// (SendUpdateMapStatus 0x770B70).
+    fn map_lookup(&self, _file: &[u16]) -> transfer::MapLookup {
+        transfer::MapLookup::Unchecked
     }
 }
 
@@ -282,7 +302,7 @@ pub enum Role {
 pub(crate) struct Conn {
     pub addr: PeerAddress,
     pub admin: AdminConn,
-    pub file: NoFileTransfer,
+    pub file: transfer::ConnFile,
     /// AdminPeer +0x34 task status (0x752FC0).
     pub task: u32,
     /// The liveness timeout was reported.
@@ -351,6 +371,8 @@ pub(crate) struct State {
     pub own_6c: u8,
     pub own_task: u32,
     pub own_identity: PeerIdentity,
+    /// The node's own AdminPeer +0x40 (UpdateMapStatus 0x74BBB0).
+    pub own_40: u32,
     /// AdminNode+0x2AC: the session peers in list order.
     pub peers: Vec<PeerLink>,
     /// Client: the host connection's address; joining state.
@@ -386,6 +408,8 @@ pub(crate) struct State {
     pub leaving: Option<f32>,
     /// The leave delay ran out: the node sends nothing more.
     pub left: bool,
+    /// [`LanData::profile_directory`] when the node was made.
+    pub profile_dir: Option<Vec<u16>>,
 }
 
 /// One session node (host or client).
@@ -500,6 +524,7 @@ impl State {
             own_6c: 1,
             own_task: 0,
             own_identity: PeerIdentity::default(),
+            own_40: 0,
             peers: Vec::new(),
             host_addr: None,
             connect: None,
@@ -533,6 +558,7 @@ impl State {
             grace_until: 0.0,
             leaving: None,
             left: false,
+            profile_dir: None,
         })
     }
 
@@ -551,7 +577,8 @@ impl State {
             return Ok(i);
         }
         self.udp.conn_for(socket_of(addr));
-        self.conns.push(Conn { addr, admin: AdminConn::new()?, file: NoFileTransfer::new(&self.avars), task: 0, timed_out: false, lost_at: None });
+        let file = transfer::ConnFile::new(&self.avars, self.profile_dir.as_deref())?;
+        self.conns.push(Conn { addr, admin: AdminConn::new()?, file, task: 0, timed_out: false, lost_at: None });
         Ok(self.conns.len() - 1)
     }
     pub(crate) fn we_are_host(&self) -> bool {
@@ -669,6 +696,7 @@ impl LanNode {
         let udp = UdpNode::on(transport, session_id, X87Precision::Double);
         let mut st = State::new(Role::Host, udp)?;
         st.start = start;
+        st.profile_dir = data.profile_directory();
         let mut node = Self { admin: AdminNode::new(0)?, driver: new_driver(DriverRole::Host, pc)?, gate: Gate::default(), st, data, world_clock_hint: None, stopped: false };
         node.tick_time()?;
         node.start_host(config, options, launch)?;
@@ -694,6 +722,7 @@ impl LanNode {
         let udp = UdpNode::on(transport, session_id, X87Precision::Double);
         let mut st = State::new(Role::Client, udp)?;
         st.start = start;
+        st.profile_dir = data.profile_directory();
         let host_addr = peer_address(host)?;
         st.ensure_conn(host_addr)?;
         st.host_addr = Some(host_addr);
@@ -822,6 +851,19 @@ impl LanNode {
     /// The local SessionPlayer id (AdminNode+8).
     pub fn local_player(&self) -> Option<u32> {
         self.st.local_player
+    }
+    /// A player's map status as its staging row reads it (0x69D6B2):
+    /// 0x74B050 tests +0x3C == 2 (downloading), 0x74B060 loads +0x40 (the
+    /// fraction UpdateMapStatus 0x74BBB0 stored). `None` without a peer.
+    pub fn map_status(&self, player: u32) -> Option<(u32, f32)> {
+        match self.st.player_link(player)? {
+            PeerLink::Node => Some((self.st.own_identity.field_3c, f32::from_bits(self.st.own_40))),
+            PeerLink::Conn(addr) => {
+                let c = self.st.conns.iter().find(|c| c.addr == addr)?;
+                Some((c.admin.base.field_3c as u32, f32::from_bits(c.admin.base.field_40 as u32)))
+            }
+            _ => None,
+        }
     }
     /// True while the session runs (the driver's node).
     pub fn running(&self) -> bool {
@@ -1064,6 +1106,13 @@ impl LanNode {
                 }
                 (Role::Client, packets::TYPE_SERVER_TO_CLIENT) => {
                     events = packets::read_server_to_client(conn, &mut view, &mut r, roles, inc.most_recent, file)?;
+                    // Catch@0x761BCD: the receiver could not open its file:
+                    // 0x40BC50(&0xB399B0, 0x11) with the localized key.
+                    for log in file.take_log() {
+                        if let crate::file::FileLog::OpenFailed { .. } = log {
+                            st.events.push(LanEvent::Message { kind: 0x11, key: "networking_file_transfer_could_not_write".into(), args: Vec::new(), number: None });
+                        }
+                    }
                 }
                 (Role::Client, packets::TYPE_SERVER_DISCONNECT) => {
                     // Timeout 0x75A250 on the conn first: connected cleared
@@ -1139,7 +1188,7 @@ impl LanNode {
             let State { conns, client, session, sync_a, .. } = st;
             let conn = &mut conns[index].admin;
             let mut data = orders::DataView { data: &*self.data };
-            let mut snap = orders::SnapshotEffects { deferred: Vec::new(), view };
+            let mut snap = orders::SnapshotEffects { deferred: Vec::new(), view, data: &*self.data };
             let out = lobby::process_private_messages(conn, client, session, sync_a, &mut data, &mut snap, &view, env)?;
             (out, snap.deferred)
         };
@@ -1224,12 +1273,12 @@ impl LanNode {
                 self.st.deferred.version_ack = true;
             }
             // SendUpdateRMCMapStatus 0x7770B0 / SendUpdateMapStatus 0x770B70:
-            // TGC_SetMapTransferStatusOrderRequest (3) {status 1, file, +0x154}.
-            orders::SnapshotEffect::MapStatus { file } => {
+            // TGC_SetMapTransferStatusOrderRequest (3) {status, file, +0x154}.
+            orders::SnapshotEffect::MapStatus { file, status } => {
                 let word = self.st.session.field_154;
                 self.st.deferred.requests.push((
                     descriptor::SET_MAP_TRANSFER_STATUS_REQUEST,
-                    vec![Field::Bounded { n: 4, value: 1 }, Field::Text(file), Field::Uint { width: 32, value: word }],
+                    vec![Field::Bounded { n: 4, value: status }, Field::Text(file), Field::Uint { width: 32, value: word }],
                 ));
             }
         }
@@ -1449,8 +1498,9 @@ impl LanNode {
                 };
                 let avars = st.avars;
                 let we_are_host = st.role == Role::Host;
+                let transfer_status = aconn.base.transfer_status;
                 let wanted = {
-                    let mut backlog = || aconn.backlogged(&view, we_are_host, &avars, crate::NativeImage::V14, 0, file);
+                    let mut backlog = || aconn.backlogged(&view, we_are_host, &avars, crate::NativeImage::V14, transfer_status, file);
                     wanted_packet_type(&gn, &gc, now.to_bits(), &mut backlog, st.precision)?
                 };
                 let udp = &mut st.udp;
@@ -1813,7 +1863,32 @@ impl sim::NetworkSeams for Seams<'_, '_, '_> {
         orders::client_replay(self, index).map_err(sim_err)
     }
     fn heartbeat(&mut self) -> sim::Result<()> {
-        // 0x75B820 is not run (module documentation): LanNode::liveness reports.
+        // 0x75B820: only its host loop runs here (the server's backup
+        // requests, DisconnectLostPlayers, the lag refresh and the backup
+        // decrees do not: module documentation; LanNode::liveness reports).
+        // Every connection of +0x2AC, in list order: 0x74F310
+        // UpdateFileTransferStatus (transfer::ConnFile).
+        if self.st.role != Role::Host {
+            return Ok(());
+        }
+        let links = self.st.peers.clone();
+        for link in links {
+            let lobby::PeerLink::Conn(addr) = link else { continue };
+            let Some(c) = self.st.conns.iter_mut().find(|c| c.addr == addr) else { continue };
+            if c.admin.base.transfer_status != 2 {
+                continue;
+            }
+            let Some((progress, size)) = c.file.progress().map_err(sim_err)? else { continue };
+            if progress == size {
+                c.admin.base.transfer_status = 1;
+            }
+            let fields = [
+                Field::Player(c.admin.base.player.unwrap_or(0)),
+                Field::Bounded { n: 4, value: c.admin.base.transfer_status as u32 },
+                Field::Uint { width: 32, value: transfer::fraction(progress, size).to_bits() },
+            ];
+            self.emit(descriptor::UPDATE_MAP_STATUS_REQUEST, &fields)?;
+        }
         Ok(())
     }
     fn backup_clients(&mut self) -> sim::Result<Vec<sim::BackupClient>> {

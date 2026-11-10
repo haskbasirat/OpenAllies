@@ -618,7 +618,19 @@ Development 24: what a person meets on the way in (no oracle of their own; the
     networking_disconnect_* text (REASON_KEYS holds some of them short).
   * a client without the map (status 2 of SetMapTransferStatus, 0x7554B0) gets
     the host's map_will_not_transfer_host message instead of ending the host's
-    frame; the transfer itself (0x74FE30, file.rs) is still not built.
+    frame, when the front end gives no profile directory. With one
+    (lan/transfer.rs, LanData::profile_directory and map_lookup) the session
+    runs the original's steps: SendUpdateMapStatus 0x770B70 (status 2 for a
+    missing file, 1 for the same checksum, nothing for a different one;
+    checksum 0x858030 = crc*7 + byte), 0x7554B0 -> 0x74FE30 on the client's
+    connection with [session+0x5C], the blocks in the type-5 section, and the
+    host heartbeat's 0x74F310 UpdateMapStatus (305) with acked/size until
+    +0x38 is 1; the staging row shows +0x40 while +0x3C is 2 (0x69D6B2,
+    staging_percent_downloaded|d). tests/lan_transfer.rs: two nodes on
+    loopback, 6437 and 2560 bytes arrive byte for byte. The client front end
+    gives no profile directory yet: its session file is a map title, not the
+    resource name the original sends, and [[0xB36540]+0x90]+4 is not
+    identified.
   * one datagram a reader refuses no longer ends the session
     (LanEvent::BadDatagram); a frame of our own that took more than 1 s (a world
     loading) starts 3 s in which silence is not counted, since the original's

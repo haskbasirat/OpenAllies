@@ -630,13 +630,14 @@ impl StagingHost for StagingEffects {
 /// What the snapshot reader left for the node.
 pub(crate) enum SnapshotEffect {
     State(u32),
-    MapStatus { file: Vec<u16> },
+    MapStatus { file: Vec<u16>, status: u32 },
 }
-pub(crate) struct SnapshotEffects {
+pub(crate) struct SnapshotEffects<'d> {
     pub deferred: Vec<SnapshotEffect>,
     pub view: lobby::NodeView,
+    pub data: &'d dyn LanData,
 }
-impl lobby::SnapshotHost for SnapshotEffects {
+impl lobby::SnapshotHost for SnapshotEffects<'_> {
     fn change_to_state(&mut self, session: &mut Session, state: u32, arg: u32) -> Result<()> {
         let node = StagingNode { view: self.view, took_over: 0, ordering_player: None, local_player: None, internet: false };
         let mut fx = StagingEffectsLite::default();
@@ -646,14 +647,38 @@ impl lobby::SnapshotHost for SnapshotEffects {
         }
         Ok(())
     }
-    fn update_map_status(&mut self, _session: &mut Session, _rmc: bool, file: &[u16], _crc: u32, source_check: bool) -> Result<bool> {
-        // 0x7770B0 / 0x770B70: without a source check the client reports
-        // SetMapTransferStatus(1). The RMC data checksum 0x59E240 and the
-        // map file CRC are not computed by this port.
-        if !source_check {
-            self.deferred.push(SnapshotEffect::MapStatus { file: file.to_vec() });
+    fn update_map_status(&mut self, session: &mut Session, rmc: bool, file: &[u16], crc: u32, source_check: bool) -> Result<bool> {
+        // 0x7770B0: without a source check the client reports
+        // SetMapTransferStatus(1); its RMC data checksum 0x59E240 is not
+        // computed by this port.
+        if rmc {
+            if !source_check {
+                self.deferred.push(SnapshotEffect::MapStatus { file: session.launch.file.clone(), status: 1 });
+            }
+            return Ok(true);
         }
-        Ok(true)
+        Ok(map_status_effect(self.data, session, file, crc, source_check, &mut self.deferred))
+    }
+}
+/// 0x770B70 SendUpdateMapStatus on a client (super::transfer::map_status):
+/// the request carries the session's file [session+0x5C] and +0x154.
+pub(crate) fn map_status_effect(data: &dyn LanData, session: &Session, file: &[u16], crc: u32, source_check: bool, out: &mut Vec<SnapshotEffect>) -> bool {
+    use super::transfer::MapStatus as M;
+    match super::transfer::map_status(data.map_lookup(file), file, crc, source_check) {
+        M::Request { status, returns } => {
+            out.push(SnapshotEffect::MapStatus { file: session.launch.file.clone(), status });
+            returns
+        }
+        // Status 3. Its message map_will_not_transfer_client_film_source|s
+        // names [[session+0x68]+0x24], a field this port does not have.
+        M::FilmSource => {
+            out.push(SnapshotEffect::MapStatus { file: session.launch.file.clone(), status: 3 });
+            false
+        }
+        // The kind 0xE event of 0x770E8A is not ported (what reads it is
+        // not traced): nothing is sent, as natively.
+        M::Differs => false,
+        M::Nothing { returns } => returns,
     }
 }
 /// The staging host of the snapshot's ChangeToState (no settings slots on a
@@ -1389,14 +1414,32 @@ impl Orders<'_, '_, '_, '_> {
                                     let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
                                     st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });
                                 }
-                                // 0x74FE30 starts sending the file. The transfer is not
-                                // built here (file.rs has the codec): the host says so,
-                                // as it does for a file that may not travel (status 3),
-                                // and the player stays not ready.
+                                // 0x755747: 0x74FE30 on the connection with the
+                                // session's file [session+0x5C] (transfer::ConnFile),
+                                // then straight to the end (0x755763): the progress
+                                // goes out with 0x74F310 from the heartbeat. A
+                                // front end without a profile directory has no
+                                // file channel: the host says the map will not
+                                // transfer, as for status 3, and the player stays
+                                // not ready.
                                 2 => {
-                                    let key = if st.session.launch.field_0c == 5 { "map_will_not_transfer_host_film|ss" } else { "map_will_not_transfer_host|ss" };
-                                    let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
-                                    st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });
+                                    let name = st.session.launch.file.clone();
+                                    let started = match link.and_then(|l| st.conns.iter_mut().find(|c| PeerLink::Conn(c.addr) == l)) {
+                                        Some(c) => match c.file.start(&mut c.admin.file_generation, &name) {
+                                            Ok(s) => Some(s),
+                                            Err(e) => {
+                                                st.events.push(LanEvent::TransferFailed { address: c.addr, error: e.to_string() });
+                                                None
+                                            }
+                                        },
+                                        None => Some(false),
+                                    };
+                                    if started == Some(false) {
+                                        let key = if st.session.launch.field_0c == 5 { "map_will_not_transfer_host_film|ss" } else { "map_will_not_transfer_host|ss" };
+                                        let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
+                                        st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });
+                                    }
+                                    return Ok(());
                                 }
                                 _ => return Ok(()),
                             }
@@ -1424,8 +1467,10 @@ impl Orders<'_, '_, '_, '_> {
                     let status = uint(fields, 1)?;
                     let crc = uint(fields, 2)?;
                     match st.player_link(player) {
-                        // (the node's own +0x40 is not part of its identity here)
-                        Some(PeerLink::Node) => st.own_identity.field_3c = status,
+                        Some(PeerLink::Node) => {
+                            st.own_identity.field_3c = status;
+                            st.own_40 = crc;
+                        }
                         Some(l) => {
                             if let Some(c) = st.conn_of_link(&l) {
                                 c.admin.base.field_3c = status as i32;
@@ -1610,8 +1655,15 @@ impl Orders<'_, '_, '_, '_> {
         // 0x781DD0.
         session.info_text.clear();
         if st.role != Role::Host {
+            // 0x779780 -> 0x770B70(file, crc, 0).
+            let mut effects = Vec::new();
+            map_status_effect(self.data, &st.session, &file, crc, false, &mut effects);
             let word = st.session.field_154;
-            st.deferred.requests.push((d::SET_MAP_TRANSFER_STATUS_REQUEST, vec![Field::Bounded { n: 4, value: 1 }, Field::Text(file), Field::Uint { width: 32, value: word }]));
+            for e in effects {
+                if let SnapshotEffect::MapStatus { file, status } = e {
+                    st.deferred.requests.push((d::SET_MAP_TRANSFER_STATUS_REQUEST, vec![Field::Bounded { n: 4, value: status }, Field::Text(file), Field::Uint { width: 32, value: word }]));
+                }
+            }
         }
         self.reseat(st)
     }

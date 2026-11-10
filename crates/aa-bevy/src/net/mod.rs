@@ -926,7 +926,7 @@ impl Lan {
             let nation = def(registries::NATIONS, k.nation);
             let faction = def(registries::FACTIONS, k.faction);
             let handicap = def(registries::HANDICAPS, k.ai_handicap);
-            let occupant = s.players.iter().find(|p| p.kingdom == k.name).map(|p| occupant_of(p, local, we_host, s));
+            let occupant = s.players.iter().find(|p| p.kingdom == k.name).map(|p| occupant_of(p, local, we_host, s, downloading(node, p.id)));
             let ai = s.players.iter().find(|p| p.kingdom == k.name).filter(|p| p.ai).map(|p| (!p.text_14.is_empty()).then(|| text(&p.text_14)));
             rows.push(NetRow { ids, occupant, ai, nation, faction, handicap });
         }
@@ -943,7 +943,7 @@ impl Lan {
         let me = local.and_then(|id| s.players.iter().find(|p| p.id == id));
         state.local_has_kingdom = me.is_some_and(|p| !p.kingdom.is_empty());
         state.local_ready = me.is_some_and(|p| p.status == 1 || p.status == 2);
-        state.observers = s.players.iter().filter(|p| !p.ai && !p.film && p.kingdom.is_empty()).map(|p| occupant_of(p, local, we_host, s)).collect();
+        state.observers = s.players.iter().filter(|p| !p.ai && !p.film && p.kingdom.is_empty()).map(|p| occupant_of(p, local, we_host, s, downloading(node, p.id))).collect();
         state.can_join_team = vec![true; state.teams.len()];
         // 0x6673A0: PlayersListbox, the people of the session
         let people: Vec<(String, u32)> = s.players.iter().filter(|p| !p.ai && !p.film).map(|p| (text(&p.name), p.id)).collect();
@@ -1040,6 +1040,7 @@ impl Lan {
                 }
                 LanEvent::ConnectRefused { reason, info } => warn!("lan: refused {} (reason {reason})", text(&info.name)),
                 LanEvent::BadDatagram { address, error } => warn!("lan: a datagram from {address:?} refused: {error}"),
+                LanEvent::TransferFailed { address, error } => warn!("lan: the file for {address:?} did not open: {error}"),
                 LanEvent::Paused { paused, .. } => info!("lan: paused {paused}"),
                 LanEvent::Disconnected { reason } => {
                     info!("lan: disconnected, reason {reason:?}");
@@ -1202,13 +1203,19 @@ fn send_message(ui: &mut Ui, line: &str) {
     ui.messages.send(&uv, "GENERIC_EVENT", line, None);
 }
 
-fn occupant_of(p: &lobby::SessionPlayer, local: Option<u32>, we_host: bool, s: &Session) -> Occupant {
+/// 0x69D6B2: a row shows the download (0x74B050: +0x3C is 2) and its
+/// fraction (0x74B060: +0x40).
+fn downloading(node: &LanNode, player: u32) -> Option<f32> {
+    node.map_status(player).filter(|s| s.0 == 2).map(|s| s.1)
+}
+
+fn occupant_of(p: &lobby::SessionPlayer, local: Option<u32>, we_host: bool, s: &Session, download: Option<f32>) -> Occupant {
     let is_local = Some(p.id) == local;
     let on_host = matches!(p.link, lobby::PeerLink::Node) && we_host || (!we_host && s.players.iter().next().is_some_and(|h| h.id == p.id));
     if p.ai {
         Occupant::Ai { name: text(&p.name), client: String::new(), sai: (!p.text_14.is_empty()).then(|| text(&p.text_14)), local: we_host }
     } else {
-        Occupant::Human { name: text(&p.name), local: is_local, on_host, ready: p.status == 1 || p.status == 2, ping_ms: 0, download: None, swap_from: false, swap_to: false }
+        Occupant::Human { name: text(&p.name), local: is_local, on_host, ready: p.status == 1 || p.status == 2, ping_ms: 0, download, swap_from: false, swap_to: false }
     }
 }
 

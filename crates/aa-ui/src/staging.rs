@@ -685,7 +685,9 @@ impl Staging {
         visible(wdg, "HostIcon", matches!(mode, Mode::Human | Mode::Observer) && on_host);
         match download {
             Some(p) => {
-                set_text(wdg, "Progress", &ui.strings.format("staging_percent_downloaded|d", &[&((p * 100.0) as i32).to_string()]));
+                // 0x69D756: fmul [0x9F2408] (100.0) in the UI thread's x87 precision
+                // (PC24 under Direct3D), then _ftol truncates.
+                set_text(wdg, "Progress", &ui.strings.format("staging_percent_downloaded|d", &[&(ui.precision.r(f64::from(p) * 100.0) as i32).to_string()]));
                 visible(wdg, "Progress", true);
             }
             None => visible(wdg, "Progress", false),
