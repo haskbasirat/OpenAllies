@@ -21,9 +21,10 @@
 //!    0.5 m of it (`0x58B130`).
 //!
 //! The flight is `aa_movement::aircraft` and `aircraft_legs`, the fall
-//! `aa_movement::falling`: exact ports, here given their world. Only a transport's Mover is
-//! on the queue: **an air base's aircraft do not fly yet** ([`crate::movement::fly_to`]
-//! keeps its no-op for them, NEXT-ROUND's aircraft list).
+//! `aa_movement::falling`: exact ports, here given their world. An air base's aircraft fly
+//! on the same ports in `crate::combat::air::flight`, whose pose commit runs the whole
+//! `0x576BB0` (`falling::commit_pose`: the map exit and entry, `0x4EE5C0`); a transport's
+//! commit below still sets the pose alone.
 //!
 //! **Renditions:** the structure's own aircraft (`0x56DC50`) needs the runway flight, so
 //! that branch flies in from the edge too. `0x554850`'s search around a landing point that

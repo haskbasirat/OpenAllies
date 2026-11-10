@@ -17,7 +17,23 @@
 //! **Not yet:** air_attack stays refused here. Its aircraft would take off,
 //! but the attack state (`super::attack`) and the release of the bomb
 //! (MoveTick's 0x57E030 on the Performer) are not switched on, so a bomber
-//! would fly without striking.
+//! would fly without striking. What the release still needs:
+//! - MoveTick (0x56130E..0x5613E1) with an armed ability (flight +0xA4, an
+//!   Ability whose +4 definition's +0x54 bit 3 gives the descriptor flag 2;
+//!   +0x54 is the flag word 0x4BEE20 builds, `Weapon::flags`: ger_bomb1's
+//!   0x9008 has bit 3, bombard):
+//!   0x4C8300 (the descriptor: the flags, eleven words cleared), the target
+//!   handle +0x94 or else the point +0x98, then 0x4C8F20(descriptor, 1), and
+//!   when it answers 0, 0x57E030 on actor+0x74. +0x94 and +0xA4 clear after.
+//! - 0x57E030: with a definition +0x44 other than 0, an impulse on the
+//!   source (descriptor +8) along the target-to-source line (0x4453A0,
+//!   0x50C6F0) when the source's definition has +0x168 bit 1; then the use
+//!   0x4C9E90 -> 0x4C9550 from the Performer's start (+0x3C) when the
+//!   ability is its current one (+0x34), else from the world time; then the
+//!   Performer's mana +0x20 less the definition's +0x40.
+//! - The use at a point: `crate::combat` uses an ability on an actor only.
+//! - Most of the corpus's air_attack wires name a target (flags 0x51): the
+//!   attack on an actor follows it through 0x518A30, not ported.
 use crate::books::AirOrder;
 use crate::denizen::{COMMAND_AIR_ATTACK, COMMAND_AIR_RECON};
 use crate::world::{AbilityTarget, ActorId, KingdomId, Unit, World};
@@ -27,7 +43,9 @@ use crate::world::{AbilityTarget, ActorId, KingdomId, Unit, World};
 pub(crate) fn apply(world: &mut World, kingdom: KingdomId, building: ActorId, target: AbilityTarget, attack: bool) -> Result<(), String> {
     let index = if attack { COMMAND_AIR_ATTACK } else { COMMAND_AIR_RECON };
     if !crate::orders::mask::takes(world, kingdom, Unit::Actor(building), index) {
-        return Err(if attack { "no aircraft ready for an air attack" } else { "no aircraft ready for an air recon" }.into());
+        // The mask (0x4D1350) refuses it: not the owner, not live, or no
+        // aircraft of the order ready.
+        return Err(if attack { "the air base does not take air_attack now" } else { "the air base does not take air_recon now" }.into());
     }
     let order = if attack {
         match target {

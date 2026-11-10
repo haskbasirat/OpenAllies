@@ -4,6 +4,7 @@
 //! (`aa_play::combat::air::flight`). Run with
 //! `cargo test -p aa-play --test air_recon --release -- --ignored --nocapture`.
 use aa_play::combat::air;
+use aa_play::fog::TileView;
 use aa_play::world::AbilityTarget;
 use aa_play::{Command, GameData, GameMap};
 use glam::Vec2;
@@ -78,6 +79,7 @@ fn air_recon_order_flies_to_the_point_and_lands() {
     let target = at + (middle - at).normalize() * 120.0;
     let before = w.books.kingdom(ger).unwrap().stockpiled[money];
     let first = w.actors.len() as u32;
+    assert_ne!(aa_play::fog::point_view(&w, Some(ger), target), TileView::Visible, "the recon point is not seen before the order");
     w.events.clear();
     w.apply(Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Point(target) });
     assert!(!w.events.iter().any(|e| matches!(e, aa_play::world::Event::Refused { .. })), "{:?}", w.events);
@@ -86,6 +88,8 @@ fn air_recon_order_flies_to_the_point_and_lands() {
     let f = (first..w.actors.len() as u32).find(|&x| w.actors[x as usize].def == fighter).expect("the recon fighter");
     assert!(air::flight::flies(&w, f));
     assert!(w.is_scheduled(aa_play::scheduler::Owner::Mover(f)), "0x576B20 registers the Mover");
+    let mover = w.books.actor(f).and_then(|b| b.flight_mover.clone()).expect("the Mover");
+    assert_eq!(mover.requested.to_bits(), 0.1f32.to_bits(), "0x55E600: a new Mover's +0x24 is 0, below 0.1");
     assert_eq!(air::current_state(&w, f), Some(QUEUED), "waits in the hangar behind aai_queued");
     let hangar = w.actors[f as usize].pos;
     w.step(vec![]);
@@ -95,6 +99,7 @@ fn air_recon_order_flies_to_the_point_and_lands() {
     let mut nearest = f32::MAX;
     let mut highest = f32::MIN;
     let mut detecting = false;
+    let mut revealed = None;
     let mut steps = 0;
     while steps < 20_000 && !w.actors[f as usize].removed {
         w.step(vec![]);
@@ -110,9 +115,15 @@ fn air_recon_order_flies_to_the_point_and_lands() {
             highest = highest.max(p.z - w.map.height_at(p.truncate()));
             detecting |= w.is_scheduled(aa_play::scheduler::Owner::Component(f, aa_play::zones::DETECTION_SLOT));
         }
+        if revealed.is_none() && aa_play::fog::point_view(&w, Some(ger), target) == TileView::Visible {
+            revealed = Some((w.time, s, p.truncate().distance(target)));
+        }
     }
+    eprintln!("the recon point first seen by the kingdom: {revealed:?}");
     eprintln!("{steps} steps, nearest {nearest:.2} m, highest {highest:.2} m over ground, detection on its queue {detecting}, notes {:?}", w.books.minds.notes);
     assert!(w.books.minds.notes.is_empty(), "{:?}", w.books.minds.notes);
+    let mover = w.books.actor(f).and_then(|b| b.flight_mover.clone()).expect("the Mover");
+    assert!(!mover.outside_map && mover.failed.is_none(), "inside the map all the way (0x576BB0's +0x88), no flight error: {mover:?}");
     assert!(w.actors[f as usize].removed, "the fighter landed and entered its base");
     assert!(hangar.distance(start) < 1e-3, "Mind +0x1B0: no move while queued");
     for s in [TAKEOFF, RECON, JOIN, LANDING] {
@@ -120,6 +131,7 @@ fn air_recon_order_flies_to_the_point_and_lands() {
     }
     assert!(nearest < 5.0, "reached the recon point: {nearest}");
     assert!(detecting, "the fighter's Detection (sight 18) is on its queue while it scouts");
+    assert!(revealed.is_some(), "the kingdom sees the recon point through the fighter's Detection");
     assert!(start.truncate().distance(target) > 100.0);
     assert!(highest > 0.5 * operational, "{highest} vs operational_height {operational}");
     let d = w.books.actor(a).and_then(|q| q.denizen.clone()).unwrap();
@@ -157,25 +169,95 @@ fn air_base_aircraft_abilities() {
     }
 }
 
-/// 0x56E730's refusals: air_recon carries a location only; air_attack is
-/// not switched on yet; an airfield with no recon aircraft ready does not
-/// take the command (0x4D9B60's mask).
+/// MoveTick 0x5612F0 opens with Mind virtual +0x1B0 (0x51C1D0): while
+/// aai_queued is current the tick does nothing, even for an aircraft that
+/// has a path. Two recons are ordered at once: the second fighter waits on
+/// the runway for the release delay (0x5695B0). It is given legs (0x560DB0)
+/// while it waits in the hangar: it stands until the runway releases it,
+/// then flies.
+#[test]
+#[ignore]
+fn queued_aircraft_with_a_path_stands() {
+    let mut w = berlin_world();
+    let (ger, a, at, _) = airfield(&mut w);
+    let middle = Vec2::new(w.map.width as f32, w.map.height as f32) * w.map.cell_size * 0.5;
+    let target = at + (middle - at).normalize() * 120.0;
+    let first = w.actors.len() as u32;
+    w.apply(Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Point(target) });
+    w.apply(Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Point(target) });
+    let fighter = w.data.find("ger_fighter").expect("ger_fighter");
+    let fighters: Vec<u32> = (first..w.actors.len() as u32).filter(|&x| w.actors[x as usize].def == fighter).collect();
+    eprintln!("recon fighters {fighters:?}");
+    let f = *fighters.last().expect("the recon fighters");
+    assert_eq!(air::current_state(&w, f), Some(QUEUED));
+    air::flight::fly_to(&mut w, f, glam::Vec3::new(target.x, target.y, 30.0), None);
+    let segments = |w: &aa_play::World| w.books.actor(f).and_then(|b| b.aircraft.as_ref()).map_or(0, |x| x.flight.path.segments.len());
+    assert!(segments(&w) > 0, "0x560DB0 gave the queued fighter legs");
+    let hangar = w.actors[f as usize].pos;
+    let mut queued_ticks = 0;
+    while air::current_state(&w, f) == Some(QUEUED) && queued_ticks < 400 {
+        w.step(vec![]);
+        if air::current_state(&w, f) == Some(QUEUED) {
+            queued_ticks += 1;
+            assert_eq!(w.actors[f as usize].pos, hangar, "tick {queued_ticks}: queued, MoveTick moves nothing");
+        }
+    }
+    assert!(queued_ticks > 0, "the fighter waited in the hangar");
+    assert_ne!(air::current_state(&w, f), Some(QUEUED), "the runway released it");
+    for _ in 0..100 {
+        w.step(vec![]);
+    }
+    eprintln!("queued {queued_ticks} ticks, then at {:?} from {hangar:?}", w.actors[f as usize].pos);
+    // The given leg was built at speed 0 and stays first on the path (the
+    // takeoff's 0x516740 appends to it), so the fighter only creeps: what
+    // shows here is that MoveTick runs once it is not queued.
+    assert!(w.actors[f as usize].pos.distance(hangar) > 1e-3, "released, its MoveTick runs");
+}
+
+/// 0x56E730's refusals, each by its reason: air_recon carries a location
+/// only; air_attack is not switched on yet; 0x4D9B60's mask refuses another
+/// kingdom's order and an airfield with no recon aircraft ready.
 #[test]
 #[ignore]
 fn air_orders_refused() {
     let mut w = berlin_world();
     let (ger, a, _, _) = airfield(&mut w);
     let first = w.actors.len();
-    let refused = |w: &aa_play::World| w.events.iter().any(|e| matches!(e, aa_play::world::Event::Refused { .. }));
+    let refusal = |w: &aa_play::World| {
+        w.events.iter().find_map(|e| match e {
+            aa_play::world::Event::Refused { reason, .. } => Some(reason.clone()),
+            _ => None,
+        })
+    };
     let corps = (0..w.actors.len() as u32).find(|&x| w.actors[x as usize].kingdom == Some(ger) && w.data.def(w.actors[x as usize].def).id.ends_with("_corps")).unwrap();
     w.step(vec![Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Actor(corps) }]);
-    assert!(refused(&w));
+    let r = refusal(&w).expect("air_recon on an actor");
+    assert!(r.contains("needs a location"), "{r}");
     w.step(vec![Command::AirAttack { kingdom: ger, building: a, target: AbilityTarget::Point(Vec2::new(10.0, 10.0)) }]);
-    assert!(refused(&w));
+    let r = refusal(&w).expect("air_attack");
+    assert!(r.contains("not ported"), "past the mask, the attack itself: {r}");
     // Not the owner.
     let rus = (0..w.kingdoms.len() as u32).find(|&k| w.kingdoms[k as usize].nation == "rus").unwrap();
     w.step(vec![Command::AirRecon { kingdom: rus, building: a, target: AbilityTarget::Point(Vec2::new(10.0, 10.0)) }]);
-    assert!(refused(&w));
+    let r = refusal(&w).expect("another kingdom's air_recon");
+    assert!(r.contains("does not take air_recon"), "{r}");
+    // No recon fighter at full health: 0x5696B0 leaves the recon group out
+    // of +0x3C at its next refresh.
+    let fighter = w.data.find("ger_fighter").expect("ger_fighter");
+    if let Some(d) = w.books.actor_mut(a).denizen.as_mut() {
+        for s in d.slots.iter_mut().filter(|s| s.def == fighter) {
+            s.health = 1.0;
+        }
+    }
+    let mut steps = 0;
+    while aa_play::denizen::enabled(&w, a, aa_play::denizen::COMMAND_AIR_RECON) && steps < 200 {
+        w.step(vec![]);
+        steps += 1;
+    }
+    assert!(!aa_play::denizen::enabled(&w, a, aa_play::denizen::COMMAND_AIR_RECON), "no recon aircraft ready after {steps} steps");
+    w.step(vec![Command::AirRecon { kingdom: ger, building: a, target: AbilityTarget::Point(Vec2::new(10.0, 10.0)) }]);
+    let r = refusal(&w).expect("air_recon with nothing ready");
+    assert!(r.contains("does not take air_recon"), "{r}");
     let aircraft = (first..w.actors.len()).filter(|&x| w.data.def(w.actors[x].def).aircraft.is_some()).count();
     assert_eq!(aircraft, 0, "no aircraft created");
 }
