@@ -56,9 +56,14 @@ use std::sync::Arc;
 use view::View;
 
 /// The SAI RNG object (`[B36528]+2C`): `85D8A0` seeding, `85D840` draws.
-/// KKC_SAI's constructor 0x7A0AA0 seeds it once with 0x59ABA0, the
-/// milliseconds of a QueryPerformanceCounter timer, so natively it differs
-/// from run to run; aa-play takes the seed from [`set_seed`] (0 by default).
+/// KKC_SAI's constructor 0x7A0AA0 seeds it once with 0x59ABA0 on the
+/// application timer at 0xB396E0, the milliseconds a QueryPerformanceCounter
+/// reading is past the timer's start, so natively it differs from run to run.
+/// KKC_Application::Init builds the one KKC_SAI after the main menu (the call
+/// at 0x41ABB6, kept at the application's +118); the other callers of 0x85D8A0
+/// seed their own generators (0x785780, 0x785850 on the stack, 0x8B0FC0 its
+/// object's), so the battles of one run draw on one stream. aa-play takes the
+/// seed from [`set_seed`] (0 by default) for each battle.
 #[derive(Clone, Copy, Debug)]
 pub struct SaiRng {
     pub state: u32,

@@ -5,6 +5,10 @@
 //! - `7B7750` over the selected DEFEND_REGION goals and `7B7D30` over the
 //!   selected ATTACK goals: the goal's actors take targets (`7B5300`) or go
 //!   back to their region (the goal's +5C, guard);
+//! - `7B8540` over the selected CONSTRUCT goals and `7B8800` over the
+//!   selected UNPACK goals (not played, see [`think`]);
+//! - the records whose attack target is gone ([`stale_targets`]);
+//! - `7B6810` over every record (not played, see [`think`]);
 //! - `7B4FE0`: the formation of each organization, by its goal and how
 //!   threatened its region is.
 //!
@@ -491,6 +495,37 @@ fn defend_think(c: &Ctx<'_, '_>, player: &mut Player, region: u32, actors: &[usi
     }
 }
 
+/// `7B8AC0` after the UNPACK goals, over the player's records (+60, list +24): a
+/// record alive in the attack state (+30 kind 0) whose target handle (+4) is no
+/// longer valid (its generation changed or its slot is empty) loses the target,
+/// and keeps the kind. Under a DEFEND_REGION goal (+10, virtual +4 is 2) the
+/// record takes a new holding state instead (`7A1070(1)`, `7A0FC0`), whose region
+/// (+8) is the attack state's. A handle stays valid until the thing leaves the
+/// world (`crate::ids::sweep`), not when it dies. The null handle of an attack
+/// state without a target (`7A1070(0)`, the attack goals' execution) is never
+/// valid: slot 0 is reserved and holds nothing.
+fn stale_targets(c: &Ctx<'_, '_>, player: &mut Player) {
+    let ids = &c.view.world.ids;
+    let assigned = &player.memory.assigned;
+    for (o, s) in player.rai.states.iter_mut() {
+        if s.kind != StateKind::Attack {
+            continue;
+        }
+        let valid = s.target.is_some_and(|target| match target {
+            Unit::Actor(a) => ids.actor(a).is_some(),
+            Unit::Org(x) => ids.org(x).is_some(),
+        });
+        if valid {
+            continue;
+        }
+        if assigned.get(o).is_some_and(|a| matches!(a.key, Key::Defend(_))) {
+            *s = OrderState { region: s.region, ..OrderState::new(StateKind::Defend) };
+        } else {
+            s.target = None;
+        }
+    }
+}
+
 /// `7B7D30`: an attack goal's actors that are not waiting for an order or
 /// recovering: with an attacker (`432ED0`, `4CFE90`), or within attack_distance
 /// of the goal's region, or a bombarder (`7A22A0`). The target thing itself first
@@ -643,6 +678,24 @@ pub fn think(view: &View<'_>, bound: &Bound, data: &AiData, regions: &Regions, i
             attack_think(&c, player, a, actors, &mut commands);
         }
     }
+    // 7B8540 (CONSTRUCT, goal +50) and 7B8800 (UNPACK, goal +4C, set by the
+    // UNPACK virtual +74 7CB3F0 when it takes an actor out of the recover state):
+    // with that byte set, 7A5E10 runs on the goal's living actors and the pass
+    // ends when none stays; then the living ones, less the builder (7C13F0) or
+    // the unpacking actor (+3C) and those in the recover state, hold the goal's
+    // region (virtual +20) through 7B7750. Not played: aa-play has no CONSTRUCT
+    // goal, and an UNPACK goal holds only its truck, its key.
+    stale_targets(&c, player);
+    // 7B6810 over every record (+2C) is not played. The things a record's thing
+    // and its attached things shell (7AE950 over their +128) each get an
+    // attack_actor_flare (7B0610: attack_bombarder_flare_duration, the +910
+    // priority of the record's goal type or +90C without a goal, not additive).
+    // The DenizenComponents (+88) of the record's thing and its attached things
+    // are recalled (order 24) when nothing is shelled; else, by their +10 values
+    // against the hostile influence of the region (7B96E0) and the values of the
+    // things shelled (4D0180), sallied (order 23) or recalled. A record that shells, at rest
+    // (4CEDE0), not engaged (+100 bit 4), its +20 byte clear, with itself or an
+    // attached thing disabled (79F390), goes to its RECOVER goal (7B5210).
     formations(&c, player, &mut commands);
     let profile = &data.profiles[player.profile];
     enqueue(player, data, c.now, r.reaction_time, profile.max_rai_commands, commands);
