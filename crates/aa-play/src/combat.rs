@@ -2987,19 +2987,31 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
     // the ability's target filter, which decides friend or enemy). The query is
     // 558040 mode 1 (aa_spatial::circle_actors): (soft radius + area)^2 >= dx^2 +
     // dy^2 at PC53 with dx stored, so a building counts from its own radius.
+    // 558280 only meets the things in the tile lists of the circle's tile
+    // rectangle ([`tiles_meet`]).
+    let grid = area_grid(world);
+    let circle = aa_spatial::geometry::Placement {
+        shape: aa_spatial::collision::Shape { kind: 1, radius_bits: w.area.to_bits(), bounds: [0; 4] },
+        facing: [0, 0],
+        position: [center.x.to_bits(), center.y.to_bits()],
+    };
+    let listed = |c: ActorId| tiles_meet(&grid, &circle, &range_placement(world, c));
     found.retain(|&c| {
         let x = &world.actors[c as usize];
         let reach = x87::add(ld(world.data.def(x.def).soft_radius), ld(w.area));
         let dx = ld(fstp(x87::sub(ld(x.pos.x), ld(center.x))));
         let dy = x87::sub(ld(x.pos.y), ld(center.y));
-        targetable(world, c) && x87::mul(reach, reach) >= x87::add(x87::mul(dy, dy), x87::mul(dx, dx)) && admits(world, st, shooter, w, c)
+        targetable(world, c) && listed(c) && x87::mul(reach, reach) >= x87::add(x87::mul(dy, dy), x87::mul(dx, dx)) && admits(world, st, shooter, w, c)
     });
     if w.max_targets > 0 {
-        found.sort_by(|&a, &b| {
-            let da = world.actors[a as usize].pos.truncate().distance_squared(center);
-            let db = world.actors[b as usize].pos.truncate().distance_squared(center);
-            da.total_cmp(&db)
-        });
+        // 4C8560 with the comparator 4C8360: the nearer to the point first, by
+        // dx*dx + dy*dy from the point unstored at PC53 (an unordered pair is equal).
+        let d2 = |a: ActorId| {
+            let p = world.actors[a as usize].pos;
+            let (dy, dx) = (x87::sub(ld(center.y), ld(p.y)), x87::sub(ld(center.x), ld(p.x)));
+            x87::add(x87::mul(dx, dx), x87::mul(dy, dy))
+        };
+        found.sort_by(|&a, &b| d2(a).partial_cmp(&d2(b)).unwrap_or(std::cmp::Ordering::Equal));
         found.truncate(w.max_targets as usize);
     }
     // 4C9550 phase 3 (aa_combat::execution::use_ability): attenuated when
@@ -3035,6 +3047,29 @@ fn deliver(world: &mut World, st: &mut CombatState, shooter: ActorId, weapon: us
         apply_hit(world, st, shooter, w, c, scale);
     }
     st.scratch = found;
+}
+
+/// `558280` of an area query (`558040` mode 1) visits only the tile lists of the
+/// circle's tile rectangle, and a thing is listed in every tile of its soft shape's
+/// tile rectangle (`aa_spatial::index`). So a building whose soft radius reaches the
+/// circle (the radius is the corner of a square) but none of whose tiles is in the
+/// circle's rectangle is never met. A rectangle that cannot be computed meets.
+fn tiles_meet(grid: &aa_spatial::collision::Grid, circle: &aa_spatial::geometry::Placement, thing: &aa_spatial::geometry::Placement) -> bool {
+    let rect = |p| aa_spatial::geometry::tile_rectangle(grid, p, aa_numeric::Precision::Double53).ok();
+    match (rect(circle), rect(thing)) {
+        (Some(a), Some(b)) => (0..2).all(|i| b.min[i] <= a.max[i] && b.max[i] >= a.min[i]),
+        _ => true,
+    }
+}
+
+/// The map's tile grid as GWorld+0x30 holds it (the tile lists of the queries).
+fn area_grid(world: &World) -> aa_spatial::collision::Grid {
+    let map = &world.map;
+    aa_spatial::collision::Grid {
+        dimensions: [map.width as i32, map.height as i32],
+        coordinate_shift: (map.cell_size as u32).trailing_zeros(),
+        cell_size_bits: map.cell_size.to_bits(),
+    }
 }
 
 /// The shooter fires under a Bombard Mind state: its hit is the event kind 3
@@ -3497,6 +3532,41 @@ mod native_tests {
         assert!(better(&Some(c(5, 1.0, 9.0)), &c(5, 1.00005, 4.0)), "scores tie, nearer wins");
         assert!(!better(&Some(c(5, 1.0, 100.0)), &c(5, 1.0, 100.00005)), "equal distances keep the best");
         assert!(!better(&Some(c(5, 1.0, 4.0)), &c(5, 1.0, 9.0)));
+    }
+
+    /// The original playing the Berlin2v2_1 QA film: between the samples of ticks 5616
+    /// and 5624 the standing Russian riflemen at (102.63271, 124.67430) and (103.70242,
+    /// 124.89987) each lose 66 (three full-scale hits of power 27 against defence 5) and
+    /// the 16 m berlin_city_center block at (100.13373, 116.30146) loses 81 (three of
+    /// 27): area hits, as of the paratroopers' thrown grenade (area 2). The 10 m
+    /// weurope_cityblock10x10_01 at (101.66621, 133.15886) keeps its 500 for the whole
+    /// film, although its soft radius (the square's corner, 5 * sqrt 2) and the area
+    /// reach both points. Its tiles (from y = 128.16, tile 64) are outside the circle's
+    /// tile rectangle (tiles 61 to 63); the city centre's reach tile 62.
+    #[test]
+    fn an_area_meets_only_the_things_listed_in_its_tiles() {
+        let grid = aa_spatial::collision::Grid { dimensions: [224, 224], coordinate_shift: 1, cell_size_bits: 2f32.to_bits() };
+        // aa_rules::objects shape(): SQUARE of side s is [2, |(s/2, s/2)|, -s/2, -s/2, s/2, s/2].
+        let square = |side: f32, x: u32, y: u32, facing: [u32; 2]| {
+            let h = side * 0.5;
+            aa_spatial::geometry::Placement {
+                shape: aa_spatial::collision::Shape { kind: 2, radius_bits: (h * h + h * h).sqrt().to_bits(), bounds: [(-h).to_bits(), (-h).to_bits(), h.to_bits(), h.to_bits()] },
+                facing,
+                position: [x, y],
+            }
+        };
+        let centre = square(16.0, 0x42c8_4478, 0x42e8_9a59, [0, 0xbf80_0000]);
+        let block = square(10.0, 0x42cb_551a, 0x4305_28ab, [0xbf80_0000, 0]);
+        for (x, y) in [(0x42cd_43f2u32, 0x42f9_593eu32), (0x42cf_67a3, 0x42f9_ccbc)] {
+            let circle = aa_spatial::geometry::Placement { shape: aa_spatial::collision::Shape { kind: 1, radius_bits: 2f32.to_bits(), bounds: [0; 4] }, facing: [0, 0], position: [x, y] };
+            assert!(tiles_meet(&grid, &circle, &centre));
+            assert!(!tiles_meet(&grid, &circle, &block));
+            // The radius test alone (558450) would take the block.
+            let (px, py) = (f32::from_bits(x), f32::from_bits(y));
+            let reach = f32::from_bits(block.shape.radius_bits) + 2.0;
+            let (dx, dy) = (px - f32::from_bits(block.position[0]), py - f32::from_bits(block.position[1]));
+            assert!(reach * reach >= dx * dx + dy * dy);
+        }
     }
 
     /// 571820 / 571960: the ratio stays unstored until the multiplier
