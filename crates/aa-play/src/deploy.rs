@@ -90,6 +90,48 @@ pub fn placement(world: &World, building: DefId, at: Vec2, facing: f32) -> (Vec2
 const NO_DIRECTION: Vec2 = Vec2::new(0.0, -1.0);
 /// The native x87 precision of the simulation thread.
 const PC: aa_numeric::Precision = aa_numeric::Precision::Double53;
+/// The Thing +8 flags the unpack query requires of a thing (descriptor +0x38): `0x4F3640`
+/// sets bit 29 because the placement record names the truck (+0x3C, its GTID) and bit 10
+/// always, so flags 10 and 29 whatever the building's own flags.
+const UNPACK_REQUIRED: u32 = 0x2000_0400;
+
+/// A thing of the tile lists (GWorld+0x30) as `0x558280` mode 2 reads it.
+#[derive(Clone, Debug)]
+struct Listed {
+    /// Thing +8.
+    flags: u32,
+    /// Actor virtual +0xC: the thing's own blocking shape, unpadded.
+    blocking: aa_spatial::collision::Shape,
+    /// The shape whose tile rectangle lists the thing in its cells (`0x5539B0`).
+    soft: aa_spatial::collision::Shape,
+    /// Thing +0x20/+0x24.
+    position: [u32; 2],
+    /// Thing +0x2C/+0x30.
+    facing: [u32; 2],
+}
+
+/// `0x558280` mode 2 for one thing listed in the cells `0x5534F0` gives the query
+/// (`cells`, None without a map): the thing must be listed in one of them, carry the
+/// required flags, and `0x46EF30` must find our padded shape over `0x4CF210`'s
+/// descriptor of it, its own unpadded shape at its position and facing. `0x4EFB20`
+/// (each thing once) and the order of the walk do not change whether one hits. The
+/// `0x552340` exclusions are the caller's.
+fn listed_in_the_way(placed: &aa_spatial::geometry::Placement, cells: Option<(&aa_spatial::collision::Grid, aa_spatial::geometry::TileRect)>, thing: &Listed) -> bool {
+    use aa_spatial::geometry::{tile_rectangle, Placement};
+    if thing.flags & UNPACK_REQUIRED != UNPACK_REQUIRED {
+        return false;
+    }
+    if let Some((grid, query)) = cells {
+        let listing = Placement { shape: thing.soft.clone(), facing: thing.facing, position: thing.position };
+        if let Ok(own) = tile_rectangle(grid, &listing, PC) {
+            if (0..2).any(|a| own.max[a] < query.min[a] || own.min[a] > query.max[a]) {
+                return false;
+            }
+        }
+    }
+    let other = Placement { shape: thing.blocking.clone(), facing: thing.facing, position: thing.position };
+    aa_spatial::shape_overlap::overlaps(placed, &other, PC).unwrap_or(true)
+}
 
 fn shape_of(words: [u32; 6]) -> aa_spatial::collision::Shape {
     aa_spatial::collision::Shape { kind: words[0], radius_bits: words[1], bounds: [words[2], words[3], words[4], words[5]] }
@@ -99,11 +141,14 @@ fn shape_of(words: [u32; 6]) -> aa_spatial::collision::Shape {
 /// radius, each half extent of a box, rebuilt as a rectangle. The walls `0x49BD10` leaves
 /// alone have no truck.
 fn padded_shape(world: &World, def: &crate::data::Def) -> aa_spatial::collision::Shape {
-    let original = shape_of(def.blocking_words);
-    if def.thing_flags & 0x2000_0400 != 0x2000_0400 || original.kind > 3 {
+    let clearance = f64::from(world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0));
+    pad_shape(shape_of(def.blocking_words), def.thing_flags, clearance)
+}
+
+fn pad_shape(original: aa_spatial::collision::Shape, thing_flags: u32, clearance: f64) -> aa_spatial::collision::Shape {
+    if thing_flags & 0x2000_0400 != 0x2000_0400 || original.kind > 3 {
         return original;
     }
-    let clearance = f64::from(world.data.rule_ci("BuildingPaddingMeters").unwrap_or(2.0));
     if original.kind <= 1 {
         let radius = (clearance + f64::from(f32::from_bits(original.radius_bits))) as f32;
         return aa_spatial::collision::Shape { kind: 1, radius_bits: radius.to_bits(), bounds: [0; 4] };
@@ -204,25 +249,67 @@ pub fn spot_clear_facing(world: &World, building: DefId, at: Vec2, facing: Vec2,
             }
         }
     }
-    // Far above any shape shipped: what is farther cannot touch.
-    let near = reach + 40.0;
-    // Rendition: other structures by their unpadded boxes, as before. With the padding the
-    // Berlin film's step 3473 unpack is refused where the original made the building; the
-    // cause is not found.
-    spot_clear(world, building, at, ignore)?;
+    // The things: `0x558280` mode 2 over the cells under the padded shape. The `0x552340`
+    // exclusions of this descriptor: the truck (+0x20); a thing of the building's
+    // `required_object_ids` definition (+0x24, ActorData +0x4E0), which aa-play loads for
+    // no definition (as `construct` and the movement lists); no source actor (+0x1C) and
+    // no filter (+0x34). Its hostility test (+0x2C) only reads things without flag 29, which
+    // the required flags already leave out, and its `settlement_wall` test (ActorData
+    // +0x1A8) only applies when the building lacks flags 0x20000400, which a building with a
+    // truck has (`padded_shape`).
+    let grid = (map.width > 0 && map.cell_size > 0.0).then(|| aa_spatial::collision::Grid {
+        dimensions: [map.width as i32, map.height as i32],
+        coordinate_shift: (map.cell_size as u32).trailing_zeros(),
+        cell_size_bits: map.cell_size.to_bits(),
+    });
+    let query = grid.as_ref().and_then(|g| aa_spatial::geometry::tile_rectangle(g, &placed, PC).ok().map(|r| (g, r)));
+    // A thing whose shapes reach no cell of the query cannot be listed there (f64, wide).
+    let margin = f64::from(reach) + 2.0 * f64::from(map.cell_size.max(1.0)) + 1.0;
+    let far = |position: Vec2, a: &[u32; 6], b: &[u32; 6]| {
+        let r = f64::from(f32::from_bits(a[1]).abs().max(f32::from_bits(b[1]).abs()));
+        let d = (position - at).abs();
+        r.is_finite() && f64::from(d.x.max(d.y)) > margin + r
+    };
+    for a in &world.actors {
+        if a.removed || !a.alive || Some(a.id) == ignore {
+            continue;
+        }
+        let od = world.data.def(a.def);
+        let position = a.pos.truncate();
+        if far(position, &od.blocking_words, &od.soft_shape) {
+            continue;
+        }
+        // Rendition: Thing +8 as the definition leaves it; a building's facing words from
+        // its angle (aa-play keeps no others for a thing without a Mover).
+        let thing = Listed {
+            flags: od.thing_flags,
+            blocking: shape_of(od.blocking_words),
+            soft: shape_of(od.soft_shape),
+            position: bits(position),
+            // an axis_locked thing stands on the exact (0, -1), which its angle
+            // cannot hold (ground::facing_words).
+            facing: bits(if od.axis_locked { NO_DIRECTION } else { crate::formation::facing_vector(a.facing) }),
+        };
+        if listed_in_the_way(&placed, query, &thing) {
+            return Err("another building is in the way".into());
+        }
+    }
     for &index in &world.books.scenery {
         let Some(p) = map.placed.get(index) else { continue };
         let position = Vec2::new(p.position[0], p.position[1]);
-        if (position - at).length_squared() > near * near {
-            continue;
-        }
         let Some(thing) = world.data.find(&p.thing_id) else { continue };
         let od = world.data.def(thing);
-        if od.thing_flags & 0x2000_0400 != 0x2000_0400 {
+        if far(position, &od.blocking_words, &od.soft_shape) {
             continue;
         }
-        let other = Placement { shape: shape_of(od.blocking_words), facing: bits(Vec2::new(p.facing[0], p.facing[1])), position: bits(position) };
-        if overlaps(&placed, &other, PC).unwrap_or(true) {
+        let thing = Listed {
+            flags: od.thing_flags,
+            blocking: shape_of(od.blocking_words),
+            soft: shape_of(od.soft_shape),
+            position: bits(position),
+            facing: bits(Vec2::new(p.facing[0], p.facing[1])),
+        };
+        if listed_in_the_way(&placed, query, &thing) {
             return Err("an object of the map is in the way".into());
         }
     }
@@ -354,4 +441,71 @@ pub fn unpack_now(world: &mut World, a: ActorId) {
     world.ids.unpack_scope = false;
     world.books.actor_mut(b).deploy = Some(Deployment { kind: DeployKind::Unpacking, into: building, started: now, done_at: now + length });
     world.set_activity(b, Activity::Unpacking);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aa_spatial::collision::{Grid, Shape};
+    use aa_spatial::geometry::{tile_rectangle, Placement};
+
+    fn rect(width: f32, height: f32) -> Shape {
+        shape_of(aa_rules::objects::shape(3, &[width.to_bits(), height.to_bits()], PC).unwrap().words)
+    }
+    fn circle(radius: f32) -> Shape {
+        shape_of(aa_rules::objects::shape(1, &[radius.to_bits()], PC).unwrap().words)
+    }
+    fn words(x: f32, y: f32) -> [u32; 2] {
+        [x.to_bits(), y.to_bits()]
+    }
+    fn thing(shape: Shape, x: f32, y: f32, facing: [f32; 2]) -> Listed {
+        Listed { flags: UNPACK_REQUIRED, soft: shape.clone(), blocking: shape, position: words(x, y), facing: words(facing[0], facing[1]) }
+    }
+    /// A 6 m square HQ padded by the shipped 2 m: x and y 45..55, facing (0, -1).
+    fn hq() -> Placement {
+        Placement { shape: pad_shape(rect(6.0, 6.0), UNPACK_REQUIRED, 2.0), facing: words(0.0, -1.0), position: words(50.0, 50.0) }
+    }
+
+    #[test]
+    fn hq_needs_the_padding_clear_of_another_building() {
+        // The HQ's own edge is at x 53: a 4 m building 1.5 m beyond it reaches 54.5.
+        assert!(listed_in_the_way(&hq(), None, &thing(rect(4.0, 4.0), 56.5, 50.0, [0.0, -1.0])));
+        // 2.5 m beyond it, from 55.5: clear of the padded 55.
+        assert!(!listed_in_the_way(&hq(), None, &thing(rect(4.0, 4.0), 57.5, 50.0, [0.0, -1.0])));
+    }
+
+    #[test]
+    fn a_neighbour_is_tested_by_its_rotated_shape() {
+        // 20 m by 2 m centred at y 64.5: along x (facing (0, -1)) it spans y 63.5..65.5,
+        // turned by facing (1, 0) it spans y 54.5..74.5 and reaches the padded HQ.
+        let long = rect(20.0, 2.0);
+        assert!(!listed_in_the_way(&hq(), None, &thing(long.clone(), 50.0, 64.5, [0.0, -1.0])));
+        assert!(listed_in_the_way(&hq(), None, &thing(long, 50.0, 64.5, [1.0, 0.0])));
+    }
+
+    #[test]
+    fn only_things_with_flags_10_and_29_count() {
+        let mut unit = thing(rect(4.0, 4.0), 52.0, 50.0, [0.0, -1.0]);
+        unit.flags = 0x400;
+        assert!(!listed_in_the_way(&hq(), None, &unit));
+        unit.flags = 0x2000_0000;
+        assert!(!listed_in_the_way(&hq(), None, &unit));
+        unit.flags = 0x2000_0400 | 1 << 21;
+        assert!(listed_in_the_way(&hq(), None, &unit));
+    }
+
+    #[test]
+    fn a_thing_counts_only_where_its_cells_list_it() {
+        // 4 m cells: the query's cells are x 11..13. A thing at x 58 listed by a 0.5 m soft
+        // circle stands in cell 14 only, though its 8 m blocking box reaches 54.
+        let grid = Grid { dimensions: [32, 32], coordinate_shift: 2, cell_size_bits: 4.0f32.to_bits() };
+        let placed = hq();
+        let cells = tile_rectangle(&grid, &placed, PC).unwrap();
+        assert_eq!((cells.min, cells.max), ([11, 11], [13, 13]));
+        let mut other = thing(rect(8.0, 8.0), 58.0, 50.0, [0.0, -1.0]);
+        assert!(listed_in_the_way(&placed, Some((&grid, cells)), &other));
+        other.soft = circle(0.5);
+        assert!(!listed_in_the_way(&placed, Some((&grid, cells)), &other));
+        assert!(listed_in_the_way(&placed, None, &other));
+    }
 }
