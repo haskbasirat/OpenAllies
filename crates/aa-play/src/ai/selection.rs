@@ -194,15 +194,16 @@ impl Bind<'_, '_, '_> {
             _ => false,
         }
     }
-    fn affordable(&self, gi: usize, res: Resources<'_>) -> bool {
-        let g = &self.goals[gi];
-        let rate = self.c.ego.saving_time_limit / 60.0;
+    /// `7A3860(resources, relaxed)` on the goal's cost (`Ctx::affordable`): the
+    /// purchase resources only, with the rate unless `relaxed`.
+    fn affordable(&self, gi: usize, res: Resources<'_>, relaxed: bool) -> bool {
+        let at = |r: &[u32], i: usize| r.get(i).map_or(0.0, |x| f32::from_bits(*x));
         let have: [f32; 3] = match res {
             Resources::Null => return true,
-            Resources::Running(r) => [r.first().map_or(0.0, |x| f32::from_bits(*x)), r.get(1).map_or(0.0, |x| f32::from_bits(*x)), r.get(2).map_or(0.0, |x| f32::from_bits(*x))],
+            Resources::Running(r) => [at(r, 0), at(r, 1), at(r, 2)],
             Resources::Economy => self.c.view.stockpile,
         };
-        (0..3).all(|r| g.cost[r] <= have[r] + self.c.view.income[r].max(0.0) * rate)
+        self.c.affordable(&self.goals[gi].cost, &have, relaxed)
     }
     fn adjust_cv(&mut self, gi: usize, a: Id, sign: f32) {
         let v = self.cv_of(gi, a) * sign;
@@ -316,8 +317,8 @@ impl GoalBaseWorld for Bind<'_, '_, '_> {
         let normaliser = if self.c.ego.max_travel_time > 0.0 { self.c.ego.max_travel_time } else { f32::MAX };
         Ok(TravelWeighting { normaliser: normaliser.to_bits(), exponent: self.c.ego.travel_time_exponent.to_bits(), crt: CrtEnvironment::SSE2_DOUBLE53 })
     }
-    fn affordable(&mut self, _: &mut State<'_>, goal: GoalId, resources: Resources<'_>, _relaxed: bool) -> Result<bool> {
-        Ok(Bind::affordable(self, goal as usize, resources))
+    fn affordable(&mut self, _: &mut State<'_>, goal: GoalId, resources: Resources<'_>, relaxed: bool) -> Result<bool> {
+        Ok(Bind::affordable(self, goal as usize, resources, relaxed))
     }
     fn finalize(&mut self, _: &mut State<'_>, _goal: GoalId, _resources: Resources<'_>, _draw: bool) -> Result<()> {
         Ok(())
@@ -403,8 +404,8 @@ impl AssignWorld for Bind<'_, '_, '_> {
     fn actor_can_serve(&mut self, s: &mut State<'_>, actor: Id, goal: GoalId) -> Result<bool> {
         Ok(self.can_serve(s, actor, goal, true))
     }
-    fn affordable(&mut self, _: &mut State<'_>, goal: GoalId, running: &[u32], _relaxed: bool) -> Result<bool> {
-        Ok(Bind::affordable(self, goal as usize, Resources::Running(running)))
+    fn affordable(&mut self, _: &mut State<'_>, goal: GoalId, running: &[u32], relaxed: bool) -> Result<bool> {
+        Ok(Bind::affordable(self, goal as usize, Resources::Running(running), relaxed))
     }
     fn priority_with_actors(&mut self, s: &mut State<'_>, goal: GoalId) -> Result<Binary> {
         goal_base::priority_with_actors(self, s, goal, None, None, P)
@@ -560,7 +561,7 @@ pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_o
             for gi in 0..bind.goals.len() {
                 if bind.goals[gi].base > 0.0 {
                     let id = gi as GoalId;
-                    let v = if Bind::affordable(&bind, gi, Resources::Economy) { goal_base::priority_with_actors(&mut bind, &mut s, id, None, None, P)?.store_f32().map_err(|e| aa_mind::Error::World(format!("{e}")))? } else { 0 };
+                    let v = if Bind::affordable(&bind, gi, Resources::Economy, false) { goal_base::priority_with_actors(&mut bind, &mut s, id, None, None, P)?.store_f32().map_err(|e| aa_mind::Error::World(format!("{e}")))? } else { 0 };
                     s.ctl.goal_mut(id)?.current = v;
                 }
             }

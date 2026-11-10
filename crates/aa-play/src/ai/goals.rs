@@ -161,6 +161,40 @@ impl Ctx<'_, '_> {
         }
         out
     }
+    /// The resource definition word `+0x18` of the money, ammo and oil slots
+    /// (registry `[B36530]+34`): 0 STOCKPILED, the only resources the goal
+    /// engine buys with (`7A3860`, `7A39C0`, `7A3980` test it against 0);
+    /// 1 UPKEEP; 2 LIMITED_CONSUMED. Game/resources.tgi makes money a
+    /// PurchaseResource and ammo and oil UpkeepResources. A slot the registry
+    /// lacks has no entry natively, so it is never bought with. Synthetic data
+    /// without a registry buys with money alone, as `value::Econ` reads it.
+    pub fn purchase_kinds(&self) -> [u32; 3] {
+        let data = &self.view.world.data;
+        if data.resources.is_empty() {
+            return [0, 1, 1];
+        }
+        RESOURCES.map(|name| {
+            data.resource_index(name).and_then(|r| data.resources.get(r)).map_or(1, |r| match r.kind {
+                crate::data::ResourceKind::Stockpiled => 0,
+                crate::data::ResourceKind::Upkeep => 1,
+                crate::data::ResourceKind::LimitedConsumed => 2,
+            })
+        })
+    }
+    /// `7A3860` of the goal engine on `cost` (`affordable_7a3860`), with the
+    /// kingdom's books: +0x1A0 provided and +0x1B8 consumed per resource.
+    pub fn affordable(&self, cost: &[f32; 3], have: &[f32; 3], relaxed: bool) -> bool {
+        let v = self.view;
+        let books = v.world.books.kingdom(v.kingdom);
+        let kinds = self.purchase_kinds();
+        let slots = std::array::from_fn(|i| {
+            // As `View::income` reads the books; without them the view's rate.
+            let flow = books.zip(v.world.data.resource_index(RESOURCES[i])).and_then(|(b, r)| Some((*b.provided.get(r)?, *b.consumed.get(r)?)));
+            let (provided, consumed) = flow.unwrap_or((v.income[i], 0.0));
+            PurchaseSlot { word18: kinds[i], provided, consumed }
+        });
+        affordable_7a3860(&slots, self.ego.saving_time_limit, self.now, cost, have, relaxed)
+    }
     /// Unit limit a recruit consumes (the LIMITED_CONSUMED upkeep).
     pub fn unit_need(&self, d: DefId) -> f32 {
         let w = self.view.world;
@@ -1747,6 +1781,105 @@ impl<'a, 'b, 'w> Assign<'a, 'b, 'w> {
 // ---------------------------------------------------------------------------
 // Execution
 
+/// One money/ammo/oil slot of `7A3860`: the resource definition word +0x18
+/// and the kingdom's books +0x1A0 (provided) and +0x1B8 (consumed).
+#[derive(Clone, Copy, Debug)]
+struct PurchaseSlot {
+    word18: u32,
+    provided: f32,
+    consumed: f32,
+}
+
+/// `7A3860` through its exact port `aa_mind::sai::goal_priority::affordable`:
+/// every purchase resource (word +0x18 of 0) of `cost` must fit `have` plus,
+/// unless `relaxed` (the native byte argument), the rate (provided minus
+/// consumed, left out when negative) times `saving_time_limit` scaled by the
+/// binary32 1/60 at 0xA1B268, in x87 double precision.
+///
+/// The settlement reserve (ego +0x278 amount, +0x27C time, +0x280 maximum
+/// settlements) is not loaded by `data::Ego`; its maximum is 0 in all 75
+/// shipped egos, so the native `settlements < maximum` never holds and the
+/// reserve is 0. Its services (`79E4B0`, goal virtual +0x48) are refused.
+fn affordable_7a3860(slots: &[PurchaseSlot; 3], saving_time_limit: f32, now: f32, cost: &[f32; 3], have: &[f32; 3], relaxed: bool) -> bool {
+    use aa_mind::sai::goal_priority as gp;
+    let resources = (0..3)
+        .map(|i| gp::ResourceSlot { definition_word18: slots[i].word18, economy_1a0: slots[i].provided.to_bits(), economy_1b8: slots[i].consumed.to_bits(), available: have[i].to_bits() })
+        .collect();
+    let context = gp::Context {
+        // [B36534]+E0, read only by the settlement reserve.
+        world_time: now.to_bits(),
+        settlements: 0,
+        ego: gp::EgoGoalSettings {
+            default_fuzziness: 0,
+            default_inertia: 0,
+            priorities: Vec::new(),
+            saving_time_limit: saving_time_limit.to_bits(),
+            settlement_reserved_amount: 0,
+            settlement_reserved_time: 0,
+            settlement_reserved_max_settlements: 0,
+        },
+        resources,
+    };
+    let mut goal = gp::Goal { status: 0, fuzzy: 0, costs: cost.map(f32::to_bits).to_vec(), inertia_applied: 0, priority: 0 };
+    // The port refuses non-finite x87 values (natively an unordered compare
+    // passes); such a test is taken here as not affordable.
+    gp::affordable(&mut goal, relaxed, &context, &mut NoReserve, aa_numeric::Precision::Double53).unwrap_or(false)
+}
+
+/// `7A39C0`, the payment before a goal executes (`kinds` the words +0x18,
+/// `saving` the engine's +0x20): while the engine saves, a goal with a
+/// positive purchase cost (`7A3980`) is refused; a goal the stock affords
+/// (`7A3860` relaxed) has each purchase resource of its cost taken from the
+/// stock (`fld`, `fsub`, `fstp`); one the stock affords only with the rate
+/// (`7A3860` not relaxed) starts the saving.
+fn pay_7a39c0(cost: &[f32; 3], stock: &mut [f32; 3], kinds: &[u32; 3], saving: &mut bool, affordable: impl Fn(&[f32; 3], &[f32; 3], bool) -> bool) -> bool {
+    if *saving && (0..3).rev().any(|r| kinds[r] == 0 && cost[r] > 0.0) {
+        return false;
+    }
+    if affordable(cost, stock, true) {
+        for r in (0..3).rev() {
+            if kinds[r] == 0 {
+                stock[r] = x87_sub(stock[r], cost[r]);
+            }
+        }
+        return true;
+    }
+    if affordable(cost, stock, false) {
+        *saving = true;
+    }
+    false
+}
+
+/// The goal services `7A3860` calls only for the settlement reserve, which
+/// is never applied here (`affordable_7a3860`).
+struct NoReserve;
+
+impl aa_mind::sai::goal_priority::GoalWorld for NoReserve {
+    fn goal_type(&mut self, _: &mut aa_mind::sai::goal_priority::Goal) -> aa_mind::Result<u32> {
+        Err(aa_mind::Error::World("goal type outside the goal engine".into()))
+    }
+    fn base_priority(&mut self, _: &mut aa_mind::sai::goal_priority::Goal) -> aa_mind::Result<()> {
+        Err(aa_mind::Error::World("base priority outside the goal engine".into()))
+    }
+    fn settlement_reserve_exempt(&mut self, _: &mut aa_mind::sai::goal_priority::Goal) -> aa_mind::Result<bool> {
+        Err(aa_mind::Error::World("the settlement reserve is not played".into()))
+    }
+    fn sai_count(&mut self, _: &mut aa_mind::sai::goal_priority::Goal) -> aa_mind::Result<i32> {
+        Err(aa_mind::Error::World("the settlement reserve is not played".into()))
+    }
+    fn sai_random(&mut self) -> aa_mind::Result<u32> {
+        Err(aa_mind::Error::World("no SAI draw in the affordability test".into()))
+    }
+}
+
+/// `fld`, `fsub`, `fstp dword` at x87 double precision (7A39C0's payment).
+fn x87_sub(a: f32, b: f32) -> f32 {
+    use aa_numeric::{Binary, Precision};
+    let d = Binary::from_f32_bits(a.to_bits()).and_then(|x| x.sub(&Binary::from_f32_bits(b.to_bits())?, Precision::Double53)).and_then(|d| d.store_f32());
+    // Only a non-finite operand is refused by the port.
+    d.map_or(a - b, f32::from_bits)
+}
+
 fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng, goals: &[Goal], log: &mut Vec<String>) {
     let w = c.view.world;
     let me = c.view.kingdom;
@@ -1755,32 +1888,20 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
     let mut used_buildings: Vec<ActorId> = Vec::new();
     let mut assigned = BTreeMap::new();
     // 7A59C0: the selected goals run in order of their current priority
-    // (comparator 7A3070, goal +0x34). 7A39C0 pays each from the running
-    // stockpile (7A3860 without income: the purchase resources, money);
-    // a goal it cannot pay now but could within saving_time_limit
-    // (7A3860 with income) starts saving, and no later goal with a purchase
-    // cost runs this think (7A3980). Goals without a cost always run.
+    // (comparator 7A3070, goal +0x34), each paid by 7A39C0 from the running
+    // copy of the kingdom stock (+0x1C4). 7A39C0: while the engine saves
+    // (engine +0x20, cleared at the start of the think by 7A9840) a goal with
+    // a positive purchase cost (7A3980) is refused; a goal the stock affords
+    // (7A3860 relaxed, without the rate) has each purchase resource of its
+    // cost taken from the stock; one the stock affords only with
+    // saving_time_limit of the rate (7A3860 not relaxed) starts the saving.
+    // Goals without a cost always run: a zero cost fits the stock, which the
+    // economy tick 4E9C40 never leaves below zero.
     let mut order: Vec<usize> = (0..goals.len()).filter(|&i| goals[i].selected).collect();
     order.sort_by(|&a, &b| goals[b].current.partial_cmp(&goals[a].current).unwrap_or(std::cmp::Ordering::Equal));
-    let saving_rate = c.ego.saving_time_limit / 60.0;
+    let kinds = c.purchase_kinds();
     let mut saving = false;
-    let mut pay = |cost: [f32; 3], stock: &mut [f32; 3]| -> bool {
-        let money = cost[0];
-        if money <= 0.0 {
-            return true;
-        }
-        if saving {
-            return false;
-        }
-        if money <= stock[0] + 1e-3 {
-            stock[0] -= money;
-            return true;
-        }
-        if money <= stock[0] + c.view.income[0].max(0.0) * saving_rate + 1e-3 {
-            saving = true;
-        }
-        false
-    };
+    let mut pay = |cost: [f32; 3], stock: &mut [f32; 3]| -> bool { pay_7a39c0(&cost, stock, &kinds, &mut saving, |k, h, r| c.affordable(k, h, r)) };
     for gi in order {
         let g = &goals[gi];
         match g.kind {
@@ -2183,4 +2304,109 @@ fn explored_share(c: &Ctx<'_, '_>, r: u32) -> f32 {
         }
     }
     if all == 0 { 1.0 } else { seen as f32 / all as f32 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// (engine +0x20 saving byte, ego saving_time_limit, per money/ammo/oil slot
+    /// (resource word +0x18, books +0x1A0, +0x1B8, available), the goal's costs)
+    /// and then the result byte, the saving byte and the available vector after
+    /// the call. Measured by running the original 7A39C0, with 7A3980 and 7A3860,
+    /// unchanged in an x86 emulator at x87 double precision, with the seams of
+    /// research/phase8-ai/native_goal_priority.py and no settlement reserve.
+    type PayCase = (u8, u32, [(u32, u32, u32, u32); 3], [u32; 3], u8, u8, [u32; 3]);
+    const PAY_7A39C0: [PayCase; 76] = [
+        (0, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 1, 0, [0x43480000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x00000000, 0x00000000, 0x43960000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 1, 0, [0x00000000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x00000000, 0x00000000, 0x4395feb8), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 0, [0x4395feb8, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x42f00000, 0x41a00000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x00000000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x42f00000, 0x41a0cccd, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 0, [0x00000000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41a00000, 0x42f00000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 0, [0x00000000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x00000000, 0x00000000, 0x42c80000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x00000000, 0x42480000, 0x4e6e6b28], 1, 0, [0x42c80000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x00000000, 0x3f800000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x00000000, 0x42480000, 0x4e6e6b28], 1, 0, [0x00000000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41880000, 0x00000000, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x437a0000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41855532, 0x00000000, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 0, [0x437a0000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x42480000, 0x4205554d, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x437a0000, 0x42c80000, 0x00000000]),
+        (0, 0x00000000, [(0, 0x00000000, 0x00000000, 0x3dcccccd), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x3e4ccccd, 0x42480000, 0x4e6e6b28], 0, 0, [0x3dcccccd, 0x42c80000, 0x00000000]),
+        (0, 0x42700000, [(0, 0x00000000, 0x00000000, 0x449a5225), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x449a5000, 0x42480000, 0x4e6e6b28], 1, 0, [0x3d894000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41de28f6, 0x00000000, 0x4185999a), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x42c80000, 0x42480000, 0x4e6e6b28], 0, 1, [0x4185999a, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x40555556, 0x00000000, 0x42b40000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x42c80000, 0x42480000, 0x4e6e6b28], 0, 1, [0x42b40000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x43fa0000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x00000000, 0x00000000, 0x43960000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x43960000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x00000000, 0x00000000, 0x4395feb8), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x4395feb8, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x42f00000, 0x41a00000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x00000000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x42f00000, 0x41a0cccd, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x00000000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41a00000, 0x42f00000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x00000000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x00000000, 0x00000000, 0x42c80000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x00000000, 0x42480000, 0x4e6e6b28], 1, 1, [0x42c80000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x00000000, 0x3f800000, 0x00000000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x00000000, 0x42480000, 0x4e6e6b28], 1, 1, [0x00000000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41880000, 0x00000000, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x437a0000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41855532, 0x00000000, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x437a0000, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x42480000, 0x4205554d, 0x437a0000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x437a0000, 0x42c80000, 0x00000000]),
+        (1, 0x00000000, [(0, 0x00000000, 0x00000000, 0x3dcccccd), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x3e4ccccd, 0x42480000, 0x4e6e6b28], 0, 1, [0x3dcccccd, 0x42c80000, 0x00000000]),
+        (1, 0x42700000, [(0, 0x00000000, 0x00000000, 0x449a5225), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x449a5000, 0x42480000, 0x4e6e6b28], 0, 1, [0x449a5225, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41de28f6, 0x00000000, 0x4185999a), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x42c80000, 0x42480000, 0x4e6e6b28], 0, 1, [0x4185999a, 0x42c80000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x40555556, 0x00000000, 0x42b40000), (1, 0x40a00000, 0x41000000, 0x42c80000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x42c80000, 0x42480000, 0x4e6e6b28], 0, 1, [0x42b40000, 0x42c80000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (0, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 0, [0x43fa0000, 0x42200000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (0, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x43fa0000, 0x42200000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (1, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 1, 0, [0x43480000, 0x42200000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (1, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x43fa0000, 0x42200000, 0x00000000]),
+        (0, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (2, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 1, 0, [0x43480000, 0x42200000, 0x00000000]),
+        (1, 0x43340000, [(0, 0x41f00000, 0x41200000, 0x43fa0000), (2, 0x40a00000, 0x41000000, 0x42200000), (1, 0x00000000, 0x00000000, 0x00000000)], [0x43960000, 0x42480000, 0x4e6e6b28], 0, 1, [0x43fa0000, 0x42200000, 0x00000000]),
+        (1, 0x43382180, [(2, 0x42923670, 0x424ed03d, 0x43d4bdb6), (0, 0xc10d40ff, 0x427e1de4, 0x43c8459f), (0, 0x421f9ed6, 0x4231b19d, 0x437cf230)], [0x00000000, 0x00000000, 0x00000000], 1, 1, [0x43d4bdb6, 0x43c8459f, 0x437cf230]),
+        (1, 0x4390b8f0, [(0, 0x41645dd4, 0x42669744, 0x43daac97), (0, 0x4288fbae, 0x41ce6ee8, 0x432819f5), (1, 0x4231a1ea, 0x40838adc, 0x408590ee)], [0x00000000, 0x00000000, 0x41d80b80], 1, 1, [0x43daac97, 0x432819f5, 0x408590ee]),
+        (0, 0x438c5aba, [(0, 0x4229e501, 0x425aac36, 0x42b8955b), (2, 0x41382bbd, 0x41d4289b, 0x4422d4e5), (1, 0x41825283, 0x42650146, 0x442469dd)], [0x43f6fcbe, 0x43768333, 0x43c7539d], 0, 0, [0x42b8955b, 0x4422d4e5, 0x442469dd]),
+        (0, 0x4334a641, [(1, 0x42672611, 0x4246300c, 0x4390bf37), (0, 0x4243abf1, 0xc0c122e6, 0x442c58ab), (2, 0x3e867556, 0x41d580ff, 0x43fd892e)], [0x441399ce, 0x43fe0646, 0x43685ca5], 1, 0, [0x4390bf37, 0x43355620, 0x43fd892e]),
+        (1, 0x432f6962, [(0, 0x414a54a1, 0x41c745ed, 0x43c29aeb), (0, 0x401d79bb, 0x422c4a6b, 0x4414b679), (1, 0x4280b624, 0x42769262, 0x42633893)], [0x42ca5ff3, 0x00000000, 0x00000000], 0, 1, [0x43c29aeb, 0x4414b679, 0x42633893]),
+        (0, 0x438045aa, [(0, 0x4235cb67, 0x41a25054, 0x4426ff79), (0, 0x40e2ea7f, 0x428de14f, 0x43e70326), (1, 0x4197eb7b, 0xc1610f8a, 0x42cbbfd4)], [0x00000000, 0x436c58d6, 0x440fb546], 1, 0, [0x4426ff79, 0x4361ad76, 0x42cbbfd4]),
+        (0, 0x4386084c, [(0, 0x4269f59f, 0x4265bd8e, 0x42ec9d6a), (0, 0x4280071a, 0x425eeca6, 0x439ca4f0), (2, 0x41ab88cb, 0x422e459b, 0x428a7c54)], [0x43596967, 0x00000000, 0x00000000], 0, 0, [0x42ec9d6a, 0x439ca4f0, 0x428a7c54]),
+        (0, 0x42b04702, [(0, 0x4248dc43, 0x3fa54b33, 0x442e9193), (0, 0x41e328d1, 0x423cd07f, 0x43e0752e), (1, 0x4224d601, 0x42904579, 0x441a3592)], [0x00000000, 0x00000000, 0x43f17da3], 1, 0, [0x442e9193, 0x43e0752e, 0x441a3592]),
+        (1, 0x4198d450, [(0, 0x422b4c77, 0x420cdf0e, 0x438321a6), (0, 0x4274dd88, 0x425b4949, 0x438baace), (0, 0x42297158, 0x419b0924, 0x43e3cdc7)], [0x43b1bce7, 0x00000000, 0x00000000], 0, 1, [0x438321a6, 0x438baace, 0x43e3cdc7]),
+        (0, 0x42e20029, [(2, 0x42957daa, 0x42672aca, 0x42de5c68), (0, 0xc12d23b8, 0x42094dd6, 0x42cb9269), (0, 0x4259d380, 0xc0b9dcf6, 0x44132462)], [0x00000000, 0x43ab8944, 0x440e69ea], 0, 0, [0x42de5c68, 0x42cb9269, 0x44132462]),
+        (0, 0x43408075, [(2, 0x427c132e, 0x41a5a3b9, 0x440369ff), (0, 0x429123c9, 0x421774e2, 0x42505eae), (2, 0x41a86f5f, 0x3fd746dd, 0x440a89f0)], [0x437597df, 0x00000000, 0x00000000], 1, 0, [0x440369ff, 0x42505eae, 0x440a89f0]),
+        (1, 0x4353cb8a, [(1, 0xc1188799, 0xc11c4547, 0x435d8eb4), (2, 0xc019c817, 0x422d5dcb, 0x43aaeb41), (2, 0x3fed2f4d, 0xc0ffbac3, 0x43e399b7)], [0x00000000, 0x00000000, 0x00000000], 1, 1, [0x435d8eb4, 0x43aaeb41, 0x43e399b7]),
+        (0, 0x4390e967, [(0, 0x4253bcfa, 0x426e9c9c, 0x44105369), (0, 0x4281fc94, 0xc15cc7f3, 0x43983976), (0, 0x419c3e97, 0xc1352ee6, 0x43130e4c)], [0x4401c3c7, 0x43d531b5, 0x43cc54ca], 0, 0, [0x44105369, 0x43983976, 0x43130e4c]),
+        (1, 0x4362d9bd, [(0, 0x4137ed2b, 0x4274f94e, 0x43821392), (0, 0x4286f96f, 0x4294ea8b, 0x4113f683), (2, 0x4264e651, 0x42560fd7, 0x44152fdd)], [0x44089ec4, 0x429d33dc, 0x00000000], 0, 1, [0x43821392, 0x4113f683, 0x44152fdd]),
+        (1, 0x43820198, [(1, 0x420ad520, 0x4278b46c, 0x42888bcb), (0, 0x429cd361, 0x421664f4, 0x4403f502), (2, 0x42106c96, 0x4292b145, 0x4389df35)], [0x00000000, 0x00000000, 0x00000000], 1, 1, [0x42888bcb, 0x4403f502, 0x4389df35]),
+        (1, 0x428f6ab6, [(1, 0x41bf16a9, 0x4284c2a5, 0x43cf499c), (0, 0xc0d76c0f, 0x409f9f2b, 0x441670c0), (0, 0xc0f998d3, 0x41a0aa6c, 0x4422c0f2)], [0x43802505, 0x42d99656, 0x438530a0], 0, 1, [0x43cf499c, 0x441670c0, 0x4422c0f2]),
+        (0, 0x428ba736, [(0, 0x429f14a9, 0x41ef64e3, 0x43845f18), (2, 0xc154e487, 0xc0899095, 0x442b5cb6), (1, 0xc0f0525f, 0x419483d6, 0x4400abc9)], [0x43d67d9d, 0x00000000, 0x433fbc51], 0, 0, [0x43845f18, 0x442b5cb6, 0x4400abc9]),
+        (1, 0x430f1ac1, [(1, 0x426f3076, 0x41a55e29, 0x43a165e5), (0, 0x41a88dc5, 0x428eb0ac, 0x43ac1732), (2, 0xc0aa6bd9, 0xc191fb22, 0x433c3653)], [0x435bfa3a, 0x43dc49c3, 0x00000000], 0, 1, [0x43a165e5, 0x43ac1732, 0x433c3653]),
+        (0, 0x437a1e28, [(2, 0x425f6637, 0x4109ceeb, 0x4339d318), (2, 0x4288110c, 0x421de1ee, 0x42972ad4), (2, 0xc034692b, 0x425b0ab3, 0x43bec741)], [0x00000000, 0x00000000, 0x43834fcc], 1, 0, [0x4339d318, 0x42972ad4, 0x43bec741]),
+        (0, 0x430bbb62, [(2, 0x41fcb180, 0x427d2b3b, 0x432bed38), (1, 0x426046ad, 0x429ae2ab, 0x41d7fc9e), (0, 0x40a34851, 0x4291a1c2, 0x43cc2c24)], [0x00000000, 0x00000000, 0x43ade029], 1, 0, [0x432bed38, 0x41d7fc9e, 0x42725fd8]),
+        (1, 0x4393b84d, [(2, 0x42610c58, 0x42802d5c, 0x4310d57c), (1, 0x4212a8ec, 0xc1065f70, 0x43bff6cf), (0, 0x422fca37, 0x41fba87d, 0x43c1e3e7)], [0x00000000, 0x00000000, 0x43c859be], 0, 1, [0x4310d57c, 0x43bff6cf, 0x43c1e3e7]),
+        (0, 0x42ba08f6, [(0, 0xc0f08323, 0x41c37d7b, 0x437e4c9b), (0, 0xc1982d73, 0x424e02c0, 0x438c2c71), (0, 0x42970b6b, 0x4211cef9, 0x4422d334)], [0x00000000, 0x44106c74, 0x42c74497], 0, 0, [0x437e4c9b, 0x438c2c71, 0x4422d334]),
+        (1, 0x42bc6f06, [(0, 0x4188a23f, 0x41cfb27f, 0x43baca84), (2, 0x4287dfaf, 0x40ceaae6, 0x43a93b05), (2, 0x40ff12ea, 0xc10a6926, 0x42cc2417)], [0x00000000, 0x42af835a, 0x43004991], 1, 1, [0x43baca84, 0x43a93b05, 0x42cc2417]),
+        (1, 0x437ab63f, [(1, 0xbfa21c69, 0x3ffb6bdd, 0x44289df4), (0, 0x42010f54, 0x4023682a, 0x44272dad), (0, 0x41c42393, 0x42010b69, 0x43404758)], [0x4407345b, 0x00000000, 0x00000000], 1, 1, [0x44289df4, 0x44272dad, 0x43404758]),
+        (1, 0x434ad0c7, [(0, 0x4216da28, 0xc129dcbd, 0x442a4d61), (0, 0x42073350, 0x415c3310, 0x44259516), (0, 0x413a3bdf, 0x429f2c74, 0x441d3607)], [0x43860ab6, 0x42e173e0, 0x433433d6], 0, 1, [0x442a4d61, 0x44259516, 0x441d3607]),
+        (1, 0x437c5136, [(0, 0xc10e359f, 0x41f24010, 0x430b0846), (1, 0x42664827, 0x423c92b4, 0x435230fe), (1, 0x41f4a964, 0x421652e7, 0x436f2ca4)], [0x00000000, 0x4384dd0c, 0x441596ee], 1, 1, [0x430b0846, 0x435230fe, 0x436f2ca4]),
+        (0, 0x41d1e868, [(1, 0x425f0a36, 0x41baa4b8, 0x434d1f3b), (2, 0x42824d8b, 0x4122921f, 0x438fe7d4), (2, 0x42450f88, 0x426544e7, 0x4208230b)], [0x00000000, 0x43f59195, 0x00000000], 1, 0, [0x434d1f3b, 0x438fe7d4, 0x4208230b]),
+        (1, 0x42e5e05b, [(1, 0x41a51d9f, 0x422e7d46, 0x43df069c), (1, 0x4221f076, 0x41abf213, 0x4412b175), (2, 0x423f3192, 0x41c8c359, 0x43aad9fe)], [0x00000000, 0x44011e84, 0x00000000], 1, 1, [0x43df069c, 0x4412b175, 0x43aad9fe]),
+        (1, 0x4250e6e2, [(1, 0xc11d1533, 0x40c7113c, 0x40c45ef2), (1, 0x423086c4, 0x424901e5, 0x440c281e), (1, 0x42410721, 0xc168d39e, 0x42dc8462)], [0x424f2e23, 0x00000000, 0x43e0eb1e], 1, 1, [0x40c45ef2, 0x440c281e, 0x42dc8462]),
+        (1, 0x4380c928, [(0, 0x424c4399, 0x4201c5cf, 0x42bc5ca4), (0, 0x40af6b89, 0xc035a349, 0x43f9fcf2), (0, 0x42418db3, 0x42980f1e, 0x42cb3792)], [0x440a14db, 0x440143a6, 0x43c003d2], 0, 1, [0x42bc5ca4, 0x43f9fcf2, 0x42cb3792]),
+        (0, 0x42b2954d, [(0, 0x4273e529, 0x42856e5f, 0x43002108), (0, 0x3ef5692b, 0x41f6b56f, 0x442338c4), (0, 0x3fbc63dc, 0x428c21f7, 0x43ca980b)], [0x00000000, 0x43b6aa7f, 0x00000000], 1, 0, [0x43002108, 0x438fc709, 0x43ca980b]),
+        (0, 0x435b0421, [(0, 0x428d8c78, 0xc126453f, 0x438c4994), (2, 0x42639545, 0xc0b23587, 0x43326e67), (0, 0x41a356e5, 0xc14da562, 0x441374ee)], [0x00000000, 0x00000000, 0x00000000], 1, 0, [0x438c4994, 0x43326e67, 0x441374ee]),
+        (1, 0x436665d0, [(0, 0xc199049e, 0x42865d1e, 0x43de8151), (2, 0xc12aebf2, 0x42161234, 0x438cbf20), (0, 0x414f936a, 0x41e9507c, 0x41f7a516)], [0x43ad30b9, 0x00000000, 0x00000000], 0, 1, [0x43de8151, 0x438cbf20, 0x41f7a516]),
+        (0, 0x4386510a, [(0, 0x41d55d5a, 0x424018a6, 0x42ad49c1), (2, 0x4254b200, 0x405e4316, 0x4405c89a), (0, 0x41594ae1, 0x4298a3a9, 0x43ab2ed5)], [0x00000000, 0x00000000, 0x00000000], 1, 0, [0x42ad49c1, 0x4405c89a, 0x43ab2ed5]),
+        (1, 0x428e2c02, [(0, 0x406d41aa, 0xc0f709c6, 0x440c5d2d), (2, 0x41bb6669, 0x427280bc, 0x434b00f4), (2, 0x428757de, 0x400d1361, 0x42756d70)], [0x430825ab, 0x440eef4d, 0x43f8b54f], 0, 1, [0x440c5d2d, 0x434b00f4, 0x42756d70]),
+        (1, 0x434e077f, [(0, 0x4298c7e6, 0x4241d2c9, 0x43ff8945), (0, 0x4010cdd9, 0x423b9df3, 0x439ec20f), (1, 0x42803d30, 0x42766987, 0x43bc2936)], [0x44136808, 0x00000000, 0x00000000], 0, 1, [0x43ff8945, 0x439ec20f, 0x43bc2936]),
+        (0, 0x42fb8ade, [(0, 0x41ad0ec7, 0x41f5abfe, 0x441cbb63), (0, 0xc198ccc9, 0xc10e10de, 0x43b56a50), (0, 0x404ab235, 0x418c1719, 0x43a1d9a5)], [0x00000000, 0x00000000, 0x00000000], 1, 0, [0x441cbb63, 0x43b56a50, 0x43a1d9a5]),
+        (1, 0x435a83b5, [(1, 0x4180f257, 0x4204fec9, 0x438556f0), (2, 0x426438ce, 0x41cf6a04, 0x4355da70), (2, 0x4106e915, 0x40c49e0f, 0x4318633c)], [0x43ba846b, 0x43c41acd, 0x439bd95c], 1, 1, [0x438556f0, 0x4355da70, 0x4318633c]),
+        (1, 0x4392d670, [(2, 0x427277dd, 0x427a208a, 0x43db97e0), (1, 0xc14526d8, 0x4206a63e, 0x42ed8307), (0, 0xc04d2e9b, 0x424bcc73, 0x43cd55d1)], [0x43f09548, 0x00000000, 0x00000000], 1, 1, [0x43db97e0, 0x42ed8307, 0x43cd55d1]),
+        (1, 0x42d8a841, [(2, 0x426ee924, 0x4201f8ca, 0x429922c4), (0, 0x424825ef, 0x4278a8af, 0x43c75fac), (1, 0x42768e42, 0xc0adeb49, 0x421fa691)], [0x00000000, 0x43fbf467, 0x440c9680], 0, 1, [0x429922c4, 0x43c75fac, 0x421fa691]),
+    ];
+
+    #[test]
+    fn payment_follows_7a39c0() {
+        for (n, (saving, limit, res, costs, paid, saved, after)) in PAY_7A39C0.iter().enumerate() {
+            let slots = res.map(|(word18, a, b, _)| PurchaseSlot { word18, provided: f32::from_bits(a), consumed: f32::from_bits(b) });
+            let kinds = res.map(|r| r.0);
+            let mut stock = res.map(|r| f32::from_bits(r.3));
+            let cost = costs.map(f32::from_bits);
+            let mut s = *saving != 0;
+            let limit = f32::from_bits(*limit);
+            let got = pay_7a39c0(&cost, &mut stock, &kinds, &mut s, |k, h, r| affordable_7a3860(&slots, limit, 120.0, k, h, r));
+            assert_eq!((got, s, stock.map(f32::to_bits)), (*paid != 0, *saved != 0, *after), "case {n}");
+        }
+    }
 }
