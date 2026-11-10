@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 const PC: Precision = Precision::Double53;
 /// Bump when the extracted layout changes.
-const CACHE_VERSION: &str = "aa-bevy-fx-12";
+const CACHE_VERSION: &str = "aa-bevy-fx-13";
 
 /// One FX system command (template_fx.tgi `FXC` and its specialisations).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -159,6 +159,10 @@ pub struct ViewFx {
     /// animation1..5 IDS and idle_animation IDS (lower case).
     #[serde(default)]
     pub abilities: Vec<AbilityAnims>,
+    /// CharacterComponent animation_blend_time (464BD0 at 0x465118 stores it
+    /// in the component at +0x1C8; template_character.tgi gives 0.25).
+    #[serde(default)]
+    pub blend_time: f32,
 }
 
 /// One Stance (template_stance.tgi).
@@ -201,6 +205,12 @@ pub struct AnimFx {
     pub weight: f32,
     pub damage_threshold: f32,
     pub damage_filter: i32,
+    /// animation_blend (461F70: anim +0x18).
+    #[serde(default)]
+    pub blend: bool,
+    /// sister_anim_type (461F70: anim +0x1C), upper case; None for null.
+    #[serde(default)]
+    pub sister: Option<String>,
     pub start: Vec<Fxc>,
     pub do_: Vec<Fxc>,
     pub end: Vec<Fxc>,
@@ -549,6 +559,7 @@ fn view_fx(actor: &ResolvedNode<'_>, fx: &mut ActorFx) {
         fx.view.idle_loops = [num(&view, "idle_loops_min").map_or(1, |v| v as i32), num(&view, "idle_loops_max").map_or(3, |v| v as i32)];
     }
     if let Ok(Some(character)) = actor.child("CharacterComponent") {
+        fx.view.blend_time = num(&character, "animation_blend_time").unwrap_or(0.25);
         for a in character.children("Animation").unwrap_or_default() {
             fx.view.animations.push(anim_fx(&a, prefix.as_deref()));
         }
@@ -606,6 +617,8 @@ fn anim_fx(a: &ResolvedNode<'_>, prefix: Option<&str>) -> AnimFx {
         weight: num(a, "weight").unwrap_or(1.0),
         damage_threshold: num(a, "damage_threshold").unwrap_or(0.0),
         damage_filter: num(a, "damage_filter").map_or(-1, |f| f as i32),
+        blend: flag(a, "animation_blend").unwrap_or(false),
+        sister: text(a, "sister_anim_type").map(|s| s.to_ascii_uppercase()),
         start: list(a, "WhenStart"),
         do_: list(a, "WhenDo"),
         end: list(a, "WhenEnd"),
@@ -907,4 +920,37 @@ pub fn load(game_root: &Path, actor_ids: &[String]) -> anyhow::Result<FxTables> 
         }
     }
     Ok(t)
+}
+
+#[cfg(test)]
+mod animation_blend_tests {
+    use super::*;
+
+    /// The blend fields as the original data gives them (AA_GAME_ROOT):
+    /// template_animation.tgi sets animation_blend on moves and idles and
+    /// template_character.tgi animation_blend_time 0.25. Only the unused
+    /// AttackIdleAnimation / ProjectileIdleAnimation templates name a
+    /// sister_anim_type (the units' attack idles are IdleAnimation), so no
+    /// shipped animation has one. The paratrooper's landing is a summon
+    /// animation (Landing.kf).
+    #[test]
+    fn blend_fields_from_the_original_data() {
+        let Some(root) = std::env::var_os("AA_GAME_ROOT") else {
+            eprintln!("blend fields test skipped: no AA_GAME_ROOT");
+            return;
+        };
+        let mut sources = aa_play::data::Sources::open(Path::new(&root)).unwrap();
+        let catalog = ActorCatalog::load_v14(&mut sources.files).unwrap();
+        let t = extract(&catalog, &["rus_infantry".to_owned(), "rus_paratrooper".to_owned()]);
+        for id in ["rus_infantry", "rus_paratrooper"] {
+            let v = &t.actors[id].view;
+            assert_eq!(v.blend_time, 0.25, "{id}");
+            for a in &v.animations {
+                eprintln!("{id}: {} {} blend {} sister {:?} ({})", a.kind, a.ids, a.blend, a.sister, a.kf);
+                assert_eq!(a.blend, matches!(a.kind.as_str(), "MOVE" | "IDLE"), "{id} {}", a.ids);
+                assert_eq!(a.sister, None, "{id} {}", a.ids);
+            }
+        }
+        assert!(t.actors["rus_paratrooper"].view.animations.iter().any(|a| a.kind == "SUMMON" && a.kf.to_ascii_lowercase().ends_with("landing.kf")));
+    }
 }

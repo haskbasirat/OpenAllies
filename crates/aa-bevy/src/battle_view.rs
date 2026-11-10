@@ -74,6 +74,9 @@ pub struct Library {
     extras: HashMap<String, Option<Arc<Extras>>>,
     /// KF clips baked on the models (the character animations a rig lacks).
     kf: HashMap<(String, String, bool), KfSlot>,
+    /// Blends between character animations (`blend_clip`) and when each was
+    /// last asked for (unused ones are dropped).
+    blends: HashMap<BlendKey, (KfSlot, f32)>,
     /// Aspect models with their own timelines (buildings).
     pub animated: view::AnimatedModels,
     data_root: PathBuf,
@@ -134,6 +137,7 @@ impl Library {
             textures: HashMap::new(),
             extras: HashMap::new(),
             kf: HashMap::new(),
+            blends: HashMap::new(),
             animated,
             data_root,
             failures: Vec::new(),
@@ -282,6 +286,70 @@ impl Library {
             self.failures.push(format!("animation {kf} on {model} could not be baked"));
         }
         self.kf.insert(key, KfSlot::Ready(clip.clone()));
+        Some(clip)
+    }
+
+    /// The blend from `from` into the KF `to` over `time` seconds, baked on
+    /// `model` like `kf_clip` (None while baking, Some(None) if it cannot
+    /// be played). The original (7170F0 -> 0x884940 -> 0x883CD0, updated by
+    /// 0x884060 and each controller's 0x8BFD30) captures every node of the
+    /// new sequence as it stands, holds the new sequence at its first frame
+    /// and moves each node there in a straight line over the blend time:
+    /// weight (now - start) / time, translation and scale lerped, rotation
+    /// slerped the short way. Nodes only the old sequence moved keep their
+    /// pose. Each 20 Hz frame here is that pose, skinned.
+    #[allow(clippy::too_many_arguments)]
+    fn blend_clip(&mut self, model: &str, from: &Pose, to: &str, time: f32, all_meshes: bool, now: f32, meshes: &mut Assets<Mesh>) -> Option<Option<Arc<KfClip>>> {
+        let key = BlendKey { model: model.to_ascii_lowercase(), from: from.clone(), to: to.to_ascii_lowercase(), time: time.to_bits(), all_meshes };
+        if !self.blends.contains_key(&key) {
+            // Blends nobody has shown for a while are dropped with their meshes.
+            self.blends.retain(|_, (_, used)| now - *used < BLEND_KEEP);
+            let slot = Arc::new(std::sync::Mutex::new(None));
+            let out = slot.clone();
+            let (store, fixes, root, model, from, to) = (self.store.clone(), self.fixes.clone(), self.data_root.clone(), model.to_owned(), from.clone(), to.to_owned());
+            rayon::spawn(move || {
+                let decoded = (|| -> Option<KfDecoded> {
+                    let mut prepared = store.load_model(&model).ok()?.prepare().ok()?;
+                    let _ = fixes.apply(&store, &mut prepared);
+                    let parts: Vec<&aa_assets::PreparedMesh> = prepared.meshes.iter().filter(|m| all_meshes || !m.indices.is_empty()).collect();
+                    let converted: Vec<(String, usize)> = parts.iter().map(|m| (m.name.clone(), m.vertices.len())).collect();
+                    let read = |rel: &str| crate::effects::bones::find_file(&root, rel).and_then(|p| std::fs::read(p).ok()).and_then(|b| aa_formats::nif::load(&b).ok());
+                    let file = read(&model)?;
+                    let scene = crate::effects::extract::scene(&file);
+                    let bind = |name: &str| scene.nodes.iter().find(|n| n.name.eq_ignore_ascii_case(name)).map_or(Mat3::IDENTITY, |n| Mat3::from_quat(Quat::from_xyzw(n.q[0], n.q[1], n.q[2], n.q[3]).normalize()));
+                    let tracks_of = |kf: &str| read(kf).map(|f| crate::effects::extract::kf_tracks(&f, &bind, Some(1.0)).0);
+                    let tracks = blend_tracks(&scene.nodes, &tracks_of, &from, &to, time)?;
+                    let baked = crate::effects::anim::bake_clip(&file, &tracks, time, false, &converted)?;
+                    let mut frames = Vec::with_capacity(baked.frames);
+                    for f in 0..baked.frames {
+                        let mut list = Vec::with_capacity(parts.len());
+                        for (i, mesh) in parts.iter().enumerate() {
+                            let mut m = model_mesh(mesh);
+                            if let Some((pos, nrm)) = baked.parts.get(i).and_then(|p| p.frames.as_ref()).and_then(|fr| fr.get(f)) {
+                                m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos.clone());
+                                m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, nrm.clone());
+                            }
+                            list.push(m);
+                        }
+                        frames.push(list);
+                    }
+                    Some((frames, time))
+                })();
+                *out.lock().unwrap() = Some(decoded);
+            });
+            self.blends.insert(key.clone(), (KfSlot::Loading(slot), now));
+        }
+        let (slot, used) = self.blends.get_mut(&key)?;
+        *used = now;
+        let decoded = match slot {
+            KfSlot::Ready(c) => return Some(c.clone()),
+            KfSlot::Loading(slot) => slot.lock().unwrap().take()?,
+        };
+        let clip = decoded.map(|(frames, duration)| Arc::new(KfClip { frames: frames.into_iter().map(|list| list.into_iter().map(|m| meshes.add(m)).collect()).collect(), duration }));
+        if clip.is_none() {
+            self.failures.push(format!("blend into {to} on {model} could not be baked"));
+        }
+        self.blends.insert(key, (KfSlot::Ready(clip.clone()), now));
         Some(clip)
     }
 
@@ -455,6 +523,121 @@ struct KfClip {
     duration: f32,
 }
 type KfDecoded = (Vec<Vec<Mesh>>, f32);
+
+/// The pose the parts show, as a blend captures it (0x8BFD30 reads each
+/// node's translation, rotation and scale when the blend starts).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Pose {
+    /// A 20 Hz frame of a KF clip.
+    Kf { kf: String, frame: u32 },
+    /// A frame of a blend that was still running.
+    Blend { from: Box<Pose>, to: String, time: u32, frame: u32 },
+}
+
+impl Pose {
+    fn depth(&self) -> usize {
+        match self {
+            Pose::Kf { .. } => 1,
+            Pose::Blend { from, .. } => 1 + from.depth(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BlendKey {
+    model: String,
+    from: Pose,
+    to: String,
+    time: u32,
+    all_meshes: bool,
+}
+
+/// Seconds a baked blend is kept after it was last shown.
+const BLEND_KEEP: f32 = 10.0;
+
+/// A node's local transform as translation, rotation and uniform scale.
+fn trs(m: Mat4) -> (Vec3, Quat, f32) {
+    let (s, r, t) = m.to_scale_rotation_translation();
+    (t, r, s.x)
+}
+
+/// Every node's local transform in `pose` and whether an animation moves it
+/// (`nodes_of`: the model's nodes driven by a KF's tracks).
+#[allow(clippy::type_complexity)]
+fn pose_of(pose: &Pose, nodes_of: &mut dyn FnMut(&str) -> Option<Vec<crate::effects::nif::Node>>) -> Option<(Vec<(Vec3, Quat, f32)>, Vec<bool>)> {
+    match pose {
+        Pose::Kf { kf, frame } => {
+            let nodes = nodes_of(kf)?;
+            let t = *frame as f32 / crate::effects::anim::RATE;
+            Some((nodes.iter().map(|n| trs(n.local(t))).collect(), nodes.iter().map(|n| n.kf.is_some()).collect()))
+        }
+        Pose::Blend { from, to, time, frame } => {
+            let (mut p, mut moved) = pose_of(from, nodes_of)?;
+            let nodes = nodes_of(to)?;
+            let time = f32::from_bits(*time).max(1.0e-6);
+            let s = (*frame as f32 / crate::effects::anim::RATE / time).clamp(0.0, 1.0);
+            for (i, n) in nodes.iter().enumerate() {
+                if n.kf.is_none() || i >= p.len() {
+                    continue;
+                }
+                let d = trs(n.local(0.0));
+                let a = p[i];
+                p[i] = (a.0 + (d.0 - a.0) * s, a.1.slerp(d.1, s), a.2 + (d.2 - a.2) * s);
+                moved[i] = true;
+            }
+            Some((p, moved))
+        }
+    }
+}
+
+type Tracks = Vec<(String, crate::effects::nif::Keyframes)>;
+
+/// The tracks that bake a blend (`Library::blend_clip`) on a model's
+/// `nodes`: per node of the new KF, a straight line from its pose in `from`
+/// to the new KF's first frame over `time`; a node only `from` moved stays
+/// where it is. `tracks_of` reads a KF's tracks.
+fn blend_tracks(nodes: &[crate::effects::nif::Node], tracks_of: &dyn Fn(&str) -> Option<Tracks>, from: &Pose, to: &str, time: f32) -> Option<Tracks> {
+    use crate::effects::nif::{KeyGroup, Keyframes, Node, Timing};
+    let mut clips: HashMap<String, Vec<Node>> = HashMap::new();
+    let mut nodes_of = |kf: &str| -> Option<Vec<Node>> {
+        if let Some(n) = clips.get(kf) {
+            return Some(n.clone());
+        }
+        let mut driven = nodes.to_vec();
+        // As bake_clip: each track drives the first node of its name.
+        for (name, k) in tracks_of(kf)? {
+            if let Some(n) = driven.iter_mut().find(|n| n.name.eq_ignore_ascii_case(&name)) {
+                n.kf = Some(k);
+            }
+        }
+        clips.insert(kf.to_owned(), driven.clone());
+        Some(driven)
+    };
+    let (source, moved) = pose_of(from, &mut nodes_of)?;
+    let target = nodes_of(to)?;
+    let key = |v: &[f32], t: f32| std::iter::once(t).chain(v.iter().copied()).collect::<Vec<f32>>();
+    let mut tracks = Vec::new();
+    for (i, n) in target.iter().enumerate() {
+        let first = !n.name.is_empty() && !target[..i].iter().any(|m| m.name.eq_ignore_ascii_case(&n.name));
+        if !first || (n.kf.is_none() && !moved[i]) {
+            continue;
+        }
+        let p = source[i];
+        let d = if n.kf.is_some() { trs(n.local(0.0)) } else { p };
+        tracks.push((
+            n.name.clone(),
+            Keyframes {
+                timing: Timing { start: 0.0, stop: time, freq: 1.0, phase: 0.0, cycle: 2 },
+                t: Some(KeyGroup { i: 1, k: vec![key(&p.0.to_array(), 0.0), key(&d.0.to_array(), time)] }),
+                q: Some(KeyGroup { i: 1, k: vec![key(&p.1.to_array(), 0.0), key(&d.1.to_array(), time)] }),
+                s: Some(KeyGroup { i: 1, k: vec![key(&[p.2], 0.0), key(&[d.2], time)] }),
+                e: None,
+            },
+        ));
+    }
+    Some(tracks)
+}
+
 enum KfSlot {
     Loading(Arc<std::sync::Mutex<Option<Option<KfDecoded>>>>),
     Ready(Option<Arc<KfClip>>),
@@ -474,6 +657,8 @@ pub struct CharacterDef {
     stances: Vec<StanceFx>,
     abilities: Vec<AbilityAnims>,
     idle_loops: [i32; 2],
+    /// CharacterComponent animation_blend_time (component +0x1C8).
+    blend_time: f32,
 }
 
 impl CharacterDef {
@@ -485,8 +670,20 @@ impl CharacterDef {
             stances: fx.view.stances.clone(),
             abilities: fx.view.abilities.clone(),
             idle_loops: fx.view.idle_loops,
+            blend_time: fx.view.blend_time,
         }
     }
+}
+
+/// View variable 16 "AnimationBlending" (registered at 0x420048 with 1;
+/// console.txt ships it as 1), which 7170F0 tests before any blend.
+const ANIMATION_BLENDING: bool = true;
+
+/// 497020 over the type list 499FF0 builds: idle, fidget, move, die,
+/// ability, summon, hit; a name matches the first type it starts with.
+fn anim_type(name: &str) -> Option<usize> {
+    const TYPES: [&str; 7] = ["idle", "fidget", "move", "die", "ability", "summon", "hit"];
+    TYPES.iter().position(|t| name.get(..t.len()).is_some_and(|p| p.eq_ignore_ascii_case(t)))
 }
 
 /// What the Character is playing (its state +28 and the event it waits for).
@@ -503,6 +700,10 @@ enum Mode {
     Ability,
     /// The ability's idle animation between uses (563BA0, Performer busy).
     AbilityIdle,
+    /// A summon animation (563D50, state 2): a paratrooper's landing once
+    /// its fall ends (0x577E04 clears actor state 24, then 4D64A0), then the
+    /// idle again (563E10 event 2).
+    Summon,
     Die,
 }
 
@@ -531,6 +732,15 @@ struct Character {
     /// they bake instead of falling back to the rig).
     drawn: bool,
     weapon: Option<u32>,
+    /// The pose the parts show (None: no KF frame yet).
+    shown: Option<Pose>,
+    /// A blend into `current` running: the pose it started from and when.
+    blend: Option<(Pose, f32)>,
+    /// Seconds the new animation's KF waits at its first frame (the blend
+    /// time; 0x884060 leaves the sequence offset at the blend's end).
+    delay: f32,
+    /// The actor was falling (actor state 24) at the last update.
+    falling: bool,
 }
 
 impl Character {
@@ -548,6 +758,10 @@ impl Character {
             rng: (actor as u32).wrapping_mul(2_654_435_761) ^ 0x5eed,
             drawn: false,
             weapon: None,
+            shown: None,
+            blend: None,
+            delay: 0.0,
+            falling: false,
         }
     }
 
@@ -587,7 +801,13 @@ impl Character {
     /// 45DA40 weighted: a random point in the total weight, the first
     /// animation whose weight takes it to zero.
     fn fidget(&mut self) -> Option<Anim> {
-        let fidgets: Vec<Anim> = self.list().iter().filter(|a| a.kind == "FIDGET").cloned().collect();
+        self.pick("FIDGET")
+    }
+
+    /// 45EB70: a weighted random animation of a type (fidget 563CA0 and
+    /// summon 563D50 pick the same way).
+    fn pick(&mut self, kind: &str) -> Option<Anim> {
+        let fidgets: Vec<Anim> = self.list().iter().filter(|a| a.kind == kind).cloned().collect();
         if fidgets.len() <= 1 {
             return fidgets.into_iter().next();
         }
@@ -640,6 +860,19 @@ impl Character {
         if fired.is_some() {
             self.weapon = fired;
         }
+        // 0x577E04: the fall is over (actor state 24 off); 4D64A0 plays a
+        // summon animation of the set (563D50) on a living Character.
+        let falling = aa_play::transport::is_falling(world, actor.id);
+        let landed = std::mem::replace(&mut self.falling, falling) && !falling;
+        if landed
+            && actor.alive
+            && !matches!(actor.activity, Activity::Dying | Activity::Dead)
+            && let Some(s) = self.pick("SUMMON")
+        {
+            self.until = now + s.length.max(0.05);
+            self.switch(Some(s), Mode::Summon, now, hidden);
+            return true;
+        }
         let (want, mode): (Option<Anim>, Mode) = match actor.activity {
             Activity::Dying | Activity::Dead => {
                 if self.mode == Mode::Die {
@@ -673,7 +906,7 @@ impl Character {
                 }
             }
             _ => match self.mode {
-                Mode::Idle | Mode::Fidget if now < self.until => return restart,
+                Mode::Idle | Mode::Fidget | Mode::Summon if now < self.until => return restart,
                 Mode::Idle => match self.fidget() {
                     // 563CA0: the idle repetitions are over: a fidget.
                     Some(f) => {
@@ -720,7 +953,31 @@ impl Character {
         if let Some(w) = &want {
             equipment(&w.start, hidden);
         }
-        let keep_phase = self.current.as_ref().is_some_and(|c| c.kind == "MOVE") && want.as_ref().is_some_and(|w| w.kind == "MOVE");
+        // 44F7B0: the new animation asks for a blend when its animation_blend
+        // is set and nothing was shown before, it is the same animation, or
+        // the animation shown is not of its sister_anim_type. 7170F0 blends
+        // only into another sequence, with AnimationBlending on, a sequence
+        // playing and a blend time above 0.
+        let asks = want.as_ref().is_some_and(|w| {
+            w.blend
+                && match &self.current {
+                    None => true,
+                    Some(c) => Arc::ptr_eq(c, w) || anim_type(&c.kind) != w.sister.as_deref().and_then(anim_type),
+                }
+        });
+        let other = match (&self.current, &want) {
+            (Some(c), Some(w)) => !(c.kf == w.kf && c.ids == w.ids),
+            _ => true,
+        };
+        let from = self.shown.clone().filter(|s| s.depth() < 8);
+        self.blend = match from {
+            Some(from) if ANIMATION_BLENDING && asks && other && self.def.blend_time > 0.0 && want.as_ref().is_some_and(|w| !w.kf.is_empty()) => Some((from, now)),
+            _ => None,
+        };
+        self.delay = if self.blend.is_some() { self.def.blend_time } else { 0.0 };
+        // A blend holds the new sequence at its first frame (0x884940 with
+        // no text key: frame 0), so a move starts its cycle again.
+        let keep_phase = self.blend.is_none() && self.current.as_ref().is_some_and(|c| c.kind == "MOVE") && want.as_ref().is_some_and(|w| w.kind == "MOVE");
         if !keep_phase {
             self.phase = 0.0;
         }
@@ -1145,7 +1402,7 @@ fn animate_character(
         if log {
             let c = ch.current.as_ref();
             info!(
-                "character: actor {} {} [{}] {:?} speed {:.2} -> {:?} {} {} ({}) length {}",
+                "character: actor {} {} [{}] {:?} speed {:.2} -> {:?} {} {} ({}) length {} blend {}",
                 actor.id,
                 world.data.def(actor.def).id,
                 ch.set.map_or("normal", |i| ch.def.sets[i].0.as_str()),
@@ -1155,7 +1412,8 @@ fn animate_character(
                 c.map_or("-", |a| a.kind.as_str()),
                 c.map_or("-", |a| a.ids.as_str()),
                 c.map_or("-", |a| a.kf.as_str()),
-                c.map_or(0.0, |a| a.length)
+                c.map_or(0.0, |a| a.length),
+                if ch.blend.is_some() { ch.def.blend_time } else { 0.0 }
             );
         }
     }
@@ -1168,24 +1426,58 @@ fn animate_character(
         equipment(std::slice::from_ref(cues[ch.cues]), hidden);
         ch.cues += 1;
     }
+    // 7170F0 / 884060: a blend into this animation is running.
+    let mut blended: Option<Arc<Vec<Handle<Mesh>>>> = None;
+    if let Some((from, start)) = ch.blend.clone() {
+        let age = now - start;
+        let time = ch.def.blend_time;
+        if age < time {
+            match library.blend_clip(model, &from, &a.kf, time, rig.is_some(), now, meshes) {
+                Some(Some(clip)) => {
+                    let f = crate::effects::anim::frame_at(clip.frames.len(), false, age);
+                    blended = clip.frames.get(f).map(|l| Arc::new(l.clone()));
+                    if blended.is_some() {
+                        ch.shown = Some(Pose::Blend { from: Box::new(from), to: a.kf.clone(), time: time.to_bits(), frame: f as u32 });
+                    }
+                }
+                // Still baking: the parts keep the pose the blend starts from.
+                None => return ch.drawn,
+                // It cannot be baked: the animation plays at once.
+                Some(None) => {
+                    ch.blend = None;
+                    ch.delay = 0.0;
+                }
+            }
+        } else {
+            ch.blend = None;
+        }
+    }
     // 499FF0: idle and move loop, the other types play once.
     let looping = matches!(a.kind.as_str(), "MOVE" | "IDLE");
     let length = a.length.max(0.05);
     // 4DB170: a move's rate is speed / walk_distance.
     let rate_move = if a.kind == "MOVE" { actor.motion.speed.max(0.0) / a.walk_distance.max(0.05) } else { 1.0 };
-    let frame: Option<Arc<Vec<Handle<Mesh>>>> = if a.kf.is_empty() {
+    // The KF runs from the blend's end (ch.delay after the start).
+    let since = elapsed - ch.delay;
+    let frame: Option<Arc<Vec<Handle<Mesh>>>> = if blended.is_some() {
+        blended
+    } else if a.kf.is_empty() {
         None
     } else {
         match library.kf_clip(model, &a.kf, looping, rig.is_some(), meshes) {
             Some(Some(clip)) => {
                 // 44F7B0: KF time = gameplay time x KF length / length.
                 let d = clip.duration.max(1.0 / FRAME_RATE);
-                if a.kind == "MOVE" {
-                    ch.phase += dt * rate_move * d / length;
+                if a.kind == "MOVE" && since > 0.0 {
+                    ch.phase += dt.min(since) * rate_move * d / length;
                 }
-                let t = if a.kind == "MOVE" { ch.phase } else { elapsed * d / length };
+                let t = if a.kind == "MOVE" { ch.phase } else { since.max(0.0) * d / length };
                 let f = crate::effects::anim::frame_at(clip.frames.len(), looping, t);
-                clip.frames.get(f).map(|l| Arc::new(l.clone()))
+                let l = clip.frames.get(f).map(|l| Arc::new(l.clone()));
+                if l.is_some() {
+                    ch.shown = Some(Pose::Kf { kf: a.kf.clone(), frame: f as u32 });
+                }
+                l
             }
             _ => None,
         }
@@ -1739,5 +2031,86 @@ pub fn draw_ghost(
         if all {
             state.shown_tint = g.illegal;
         }
+    }
+}
+
+#[cfg(test)]
+mod blend_tests {
+    use super::*;
+
+    /// 497020 matches the type names in 499FF0's order by prefix.
+    #[test]
+    fn animation_types() {
+        assert_eq!(anim_type("IDLE"), Some(0));
+        assert_eq!(anim_type("MOVE"), Some(2));
+        assert_eq!(anim_type("ABILITY"), Some(4));
+        assert_eq!(anim_type("SUMMON"), Some(5));
+        assert_eq!(anim_type("HIT"), Some(6));
+        assert_eq!(anim_type("null"), None);
+    }
+
+    /// A blend from frame 7 of the rifleman's Walk into his Idle, baked on
+    /// the original model: its first frame is the walk's frame 7 and its
+    /// last the idle's first frame (0x8BFD30 at weight 0 and 1); between,
+    /// the skinned vertices are neither.
+    #[test]
+    fn blend_runs_from_the_shown_pose_to_the_first_frame() {
+        let Some(root) = crate::effects::reconstruction_root().map(|r| r.join("assets/original/Data")) else {
+            eprintln!("blend test skipped: no original data");
+            return;
+        };
+        let read = |rel: &str| crate::effects::bones::find_file(&root, rel).and_then(|p| std::fs::read(p).ok()).and_then(|b| aa_formats::nif::load(&b).ok());
+        let Some(file) = read("Units/RUS/RUSInfantry/RUSInfantry.nif") else {
+            eprintln!("blend test skipped: no RUSInfantry.nif");
+            return;
+        };
+        let scene = crate::effects::extract::scene(&file);
+        let converted: Vec<(String, usize)> = scene
+            .geometry
+            .iter()
+            .filter_map(|&(obj, _, _)| {
+                let o = &file.objects[obj].fields;
+                let name = o.string("name").flatten().map(|b| String::from_utf8_lossy(b).into_owned()).unwrap_or_default();
+                let data = o.link("data").and_then(|l| file.target(l))?;
+                Some((name, file.objects[data].fields.f32s("vertices").map_or(0, |v| v.len() / 3)))
+            })
+            .collect();
+        let bind = |name: &str| scene.nodes.iter().find(|n| n.name.eq_ignore_ascii_case(name)).map_or(Mat3::IDENTITY, |n| Mat3::from_quat(Quat::from_xyzw(n.q[0], n.q[1], n.q[2], n.q[3]).normalize()));
+        let tracks_of = |kf: &str| read(kf).map(|f| crate::effects::extract::kf_tracks(&f, &bind, Some(1.0)));
+        let walk = "Shared/Animations/Units/Infantry/Walk.kf";
+        let idle = "Shared/Animations/Units/Infantry/Idle.kf";
+        let (walk_tracks, walk_len) = tracks_of(walk).unwrap();
+        let (idle_tracks, idle_len) = tracks_of(idle).unwrap();
+        let old = crate::effects::anim::bake_clip(&file, &walk_tracks, walk_len, true, &converted).unwrap();
+        let new = crate::effects::anim::bake_clip(&file, &idle_tracks, idle_len, true, &converted).unwrap();
+        let from = Pose::Kf { kf: walk.into(), frame: 7 };
+        let tracks = blend_tracks(&scene.nodes, &|kf: &str| tracks_of(kf).map(|t| t.0), &from, idle, 0.25).unwrap();
+        let blend = crate::effects::anim::bake_clip(&file, &tracks, 0.25, false, &converted).unwrap();
+        assert_eq!(blend.frames, 6);
+        let gap = |a: &crate::effects::anim::Baked, fa: usize, b: &crate::effects::anim::Baked, fb: usize| {
+            let mut worst = 0.0f32;
+            for (pa, pb) in a.parts.iter().zip(&b.parts) {
+                if let (Some(x), Some(y)) = (&pa.frames, &pb.frames) {
+                    for (u, v) in x[fa].0.iter().zip(&y[fb].0) {
+                        worst = worst.max((Vec3::from(*u) - Vec3::from(*v)).length());
+                    }
+                }
+            }
+            worst
+        };
+        eprintln!(
+            "blend test: {} parts, walk {} frames, start gap {:e}, end gap {:e}, walk-idle gap {:e}, middle {:e} / {:e}",
+            converted.len(),
+            old.frames,
+            gap(&blend, 0, &old, 7),
+            gap(&blend, 5, &new, 0),
+            gap(&old, 7, &new, 0),
+            gap(&blend, 2, &old, 7),
+            gap(&blend, 2, &new, 0)
+        );
+        assert!(gap(&blend, 0, &old, 7) < 1e-3, "start {}", gap(&blend, 0, &old, 7));
+        assert!(gap(&blend, 5, &new, 0) < 1e-3, "end {}", gap(&blend, 5, &new, 0));
+        assert!(gap(&old, 7, &new, 0) > 1e-2, "walk and idle differ");
+        assert!(gap(&blend, 2, &old, 7) > 1e-3 && gap(&blend, 2, &new, 0) > 1e-3);
     }
 }
