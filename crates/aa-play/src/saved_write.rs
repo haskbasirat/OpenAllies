@@ -32,33 +32,39 @@
 //!   GThing's part, and with them `TEAMS` ([`TeamsChunk`]: the count +170, a
 //!   presence byte and a record for each team) and `KINGDOMS` ([`KingdomsChunk`]: the
 //!   word +158, the count +14C, a presence byte and a record for each kingdom), each
-//!   the inverse of `aa_mapworld`'s reader. These write a decoded chunk again; what
-//!   `aa-play` keeps of a team or kingdom is not written into them yet (a team's +4C
-//!   and +58 are its relations to every kingdom and every team; a kingdom's record
-//!   holds its stockpiles, recruitment, AI and the rest);
-//! - the frame of `DYNAMIC_THINGS` and its index ([`ThingsChunk`]): each record's
-//!   head, GThing, GObject and GActor prefix are written from `aa_mapworld`'s
-//!   inventory, the rest of each record (components, Mind) is still the saved bytes;
+//!   the inverse of `aa_mapworld`'s reader;
+//! - the frame of `DYNAMIC_THINGS` and its index ([`ThingsChunk`], 0x4F24C0: a word 0
+//!   and the version 11, the records, then the index's word 0, the count and each
+//!   record's length);
+//! - a thing's GActor tail ([`thing_tail`], [`Out::component`]): the masks, every
+//!   saved component in the Load's order, an organization with its members' records
+//!   ([`Out::organization`], [`Out::walked_record`]), then the actor's own words,
+//!   each the inverse of `aa_mapworld`'s component readers and saved-world walk
+//!   (`tests::original_saved_things_re_encode_from_the_walk`, `components_read_back`);
 //! - `UPDATABLES` ([`UpdatablesChunk`]): the Updatable table's count and the five
-//!   world queues, written again from a decoded chunk.
+//!   world queues.
 //!
-//! Not written yet, each by the original's writer named: `MAP` and `MAP_HEADER` (the
-//! map resource), `RULES` (GWorld+0C), `TERRAIN` (+30), `HEIGHT_MAP` (+34),
-//! `MOUNTAIN_HEIGHT_MAP` (+38, then the byte +275 in the same chunk), `RESTRICTION_GROUPS`
-//! (0x503FA0), `OBJECTIVES` (count +254 and each objective's Save, then the word
-//! +25C), `USED_REQUIRED_OBJECTS` and `DYNAMIC_THINGS` with their indexes (0x4F24C0:
-//! a word 0 and the version 11, then 0x4F1B90 for every live thing in the GTID
-//! manager's slot order that its virtuals +B0 / +A8 / +AC / +B4 select, then the
-//! `_INDEX` chunk with a word 0, the count and each record's length; on the
-//! original's saves the lengths and the 8 head bytes add up to the chunk), `TRIGGERS` (0x54C830),
-//! `DENIZEN_GROUPS` (0x56A2A0), `SUN` (+4C), `UPDATABLES` (the word at *+280, then
-//! the lists +1E8, +208, +1AC, +1C0, +1D4). A campaign battle (rules mode 4) also
-//! writes `METAGAME` after `KINGDOMS` (0x938960). So a battle cannot be saved from
-//! `aa-play` yet: a file with these chunks taken from the map would load as the
-//! battle's start, not as it stands.
+//! Written from the world (`of_world`), the rest of each chunk as the battle was
+//! loaded: `GWORLD`, `IDMGR`; in `KINGDOMS` the stockpiles and the Commander ([`KingdomsChunk::of_world`]); in `DYNAMIC_THINGS` which things
+//! are still live and where they stand ([`ThingsChunk::of_world`]). Not written from
+//! the world yet: the components' contents (health, supply, queues), the Minds, the
+//! actor state, a thing made since the load, a researched property, `TEAMS`,
+//! `UPDATABLES` (`crate::scheduler`'s queues) and `MISC_DATA`.
+//!
+//! Not written at all yet, each by the original's writer named: `MAP` and
+//! `MAP_HEADER` (the map resource), `RULES` (GWorld+0C), `TERRAIN` (+30),
+//! `HEIGHT_MAP` (+34), `MOUNTAIN_HEIGHT_MAP` (+38, then the byte +275 in the same
+//! chunk), `RESTRICTION_GROUPS` (0x503FA0), `OBJECTIVES` (count +254 and each
+//! objective's Save, then the word +25C), `USED_REQUIRED_OBJECTS` with its index,
+//! `TRIGGERS` (0x54C830), `DENIZEN_GROUPS` (0x56A2A0), `SUN` (+4C). A campaign
+//! battle (rules mode 4) also writes `METAGAME` after `KINGDOMS` (0x938960). So a
+//! battle cannot be saved from `aa-play` yet: these chunks taken from the map would
+//! load as the battle's start, not as it stands.
 
-use aa_mapworld::actor_payload::{ActorPayload, CountedList, UpdatablePayload};
+use aa_mapworld::actor_payload::{ActorPayload, ActorTail, CountedList, PropertiesPayload, UpdatablePayload};
 use aa_mapworld::inventory::ObjectState;
+use aa_mapworld::saved_components::{SavedComponent, StructurePayload};
+use aa_mapworld::saved_world::{DamageRecord, SavedOrganization, SavedProperty, SavedQueueItem, SavedThing};
 use aa_mapworld::kingdoms::{
     AbilityState, Commander, KingdomPayload, Kingdoms, PropertyState, ReferenceWord, StrategicState, TeamRecord, Teams,
 };
@@ -518,6 +524,14 @@ impl Out {
             self.word(props.version);
             self.words(&props.property_classes);
         }
+        self.actor_tail_end(t);
+        Some(())
+    }
+
+    /// GActor's Save after its components, what `ActorTail` reads after them: the
+    /// current component, +158, the words and texts its version adds, the four lists
+    /// and +174.
+    pub fn actor_tail_end(&mut self, t: &ActorTail) {
         self.word(t.current_component as u32);
         self.some_word(t.word_158);
         self.some_word(t.legacy_word_15c);
@@ -541,7 +555,6 @@ impl Out {
             self.counted(&l.list_130, |o, v| v.iter().for_each(|&w| o.word(w)));
         }
         self.some_word(t.word_174);
-        Some(())
     }
 
     fn recruitment(&mut self, r: &Recruitment) {
@@ -719,6 +732,69 @@ impl KingdomsChunk {
         Kingdoms::decode_stream(chunk, world_version, true).ok().map(Self)
     }
 
+    /// The kingdoms of `world` as they stand, `self` the KINGDOMS of the saved game the
+    /// battle was restored from (`crate::saved_world::restore`, which numbers the
+    /// kingdoms as here: the majors, +190 == 0, in slot order, then the others). What
+    /// `aa-play` keeps of a kingdom is written into its record, the rest is the record
+    /// as loaded:
+    /// - each stockpile of the list +1C4, from `KingdomBooks::stockpiled` (the restore
+    ///   takes it from there);
+    /// - the byte +23B stays as loaded: 0x4E6DB0 sets it to 1 at mission start and
+    ///   every kingdom record of the original's saves has 1, beaten ones included (a
+    ///   win or loss is +0x19C through 0x4E9720, not written from the world yet);
+    /// - the Commander's balance +0xC and each ability's last use +10 (-FLT_MAX for
+    ///   never, 0x4C8650), from `special_ops::Commander`.
+    ///
+    /// `Err` when the world holds what the record cannot say yet: a technology the
+    /// loaded properties list lacks, or a general the loaded record has no state for.
+    pub fn of_world(&self, world: &crate::world::World) -> Result<Self, String> {
+        let mut out = self.clone();
+        let majors = out.0.slots.iter().filter_map(|s| s.record.as_ref()).filter(|r| r.payload.word_190 == 0).count();
+        let (mut major, mut other) = (0u32, majors as u32);
+        let data = world.data.clone();
+        for slot in &mut out.0.slots {
+            let Some(r) = slot.record.as_mut() else { continue };
+            let k = if r.payload.word_190 == 0 {
+                major += 1;
+                major - 1
+            } else {
+                other += 1;
+                other - 1
+            };
+            let name = String::from_utf16_lossy(&r.thing.name_utf16);
+            world.kingdoms.get(k as usize).filter(|w| w.id == k).ok_or_else(|| format!("kingdom {name}: not in the world"))?;
+            let books = world.books.kingdom(k);
+            for res in &mut r.payload.resources_1c4.values {
+                let id = String::from_utf16_lossy(&res.reference_utf16);
+                if let (Some(i), Some(b)) = (data.resource_index(&id), books)
+                    && let Some(v) = b.stockpiled.get(i)
+                {
+                    res.word = v.to_bits();
+                }
+            }
+            let saved: Vec<String> = r
+                .payload
+                .properties
+                .iter()
+                .flat_map(|l| l.values.iter())
+                .map(|p| String::from_utf16_lossy(&p.reference_utf16))
+                .filter(|p| data.property(p).is_some())
+                .collect();
+            let held = books.map_or(&[][..], |b| &b.technologies[..]);
+            if held.len() != saved.len() || held.iter().zip(&saved).any(|(a, b)| !a.eq_ignore_ascii_case(b)) {
+                return Err(format!("kingdom {name}: its technologies {held:?} are not the loaded {saved:?} (a property record is not written yet)"));
+            }
+            if let Some(c) = world.special_ops.commanders.get(k as usize).filter(|c| c.general.is_some()) {
+                let state = r.payload.commander.as_mut().and_then(|c| c.state.as_mut()).ok_or_else(|| format!("kingdom {name}: a general without a saved Commander"))?;
+                state.word_0c = c.experience.to_bits();
+                for (a, last) in state.abilities.values.iter_mut().zip(&c.last_use) {
+                    a.word_10 = last.map_or((-f32::MAX).to_bits(), f32::to_bits);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// `None` for a kingdom the writer cannot write yet (a saved component other
     /// than Properties, which the reader refuses too).
     pub fn encode(&self) -> Option<Vec<u8>> {
@@ -803,6 +879,722 @@ impl ThingsChunk {
         }
         (data.0, index.0)
     }
+}
+
+/// `DYNAMIC_THINGS` and its index written from a world ([`ThingsChunk::of_world`]),
+/// with what was not.
+#[derive(Clone, Debug, Default)]
+pub struct WrittenThings {
+    pub data: Vec<u8>,
+    pub index: Vec<u8>,
+    /// Records whose thing has left the world's GTID manager (and organization members
+    /// that have), left out: 0x4F24C0 writes the live things of the manager.
+    pub dropped: usize,
+    /// Organizations whose tail is not written yet, by GTID with [`thing_tail`]'s
+    /// reason: their members stand where the save had them.
+    pub members_as_saved: Vec<(u32, String)>,
+    /// Live actors and organizations the loaded chunk has no record of (made since
+    /// the load): not written.
+    pub not_written: Vec<u32>,
+}
+
+impl ThingsChunk {
+    /// The things of `world` as they stand, `self` the DYNAMIC_THINGS of the saved
+    /// game it was restored from (`crate::saved_world::restore`, which gives each
+    /// restored thing its record's GTID). Each record whose GTID is still live is
+    /// written again, the rest of it as loaded, with where aa-play has the thing: the
+    /// x and y of GThing's position (+0x10, +0x14; the z is the saved one, which the
+    /// restore does not read: it takes the ground), of an actor its `pos`, of an
+    /// organization its `anchor`, of an organization's members theirs (its tail
+    /// written again by [`Out::walked_record`]).
+    ///
+    /// In part: the components (health, supply, queues), the Minds and the actor
+    /// state are the saved ones, and a thing made since the load is not written
+    /// ([`WrittenThings::not_written`]).
+    pub fn of_world(&self, world: &crate::world::World, world_version: u32) -> WrittenThings {
+        use crate::ids::Thing;
+        let mut out = WrittenThings::default();
+        let mut written = std::collections::BTreeSet::new();
+        let at = |thing: Thing| match thing {
+            Thing::Actor(a) => Some(world.actors[a as usize].pos.truncate()),
+            Thing::Org(o) => Some(world.orgs[o as usize].anchor),
+            _ => None,
+        };
+        let place = |t: &mut ThingState, xy: Option<glam::Vec2>| {
+            if let Some(xy) = xy {
+                t.position_bits[0] = xy.x.to_bits();
+                t.position_bits[1] = xy.y.to_bits();
+            }
+        };
+        let mut records: Vec<(usize, Vec<u8>)> = Vec::new();
+        for p in &self.0.placements {
+            let Some(thing) = world.ids.thing(p.serialized_id) else {
+                out.dropped += 1;
+                continue;
+            };
+            written.insert(p.serialized_id);
+            let mut p = p.clone();
+            place(&mut p.thing, at(thing));
+            let mut bytes = Out::default();
+            let whole = matches!(thing, Thing::Org(_)).then(|| -> Result<Out, String> {
+                let mut t = aa_mapworld::saved_world::walk(p.clone(), world_version, 1, &mut crate::saved_world::Minds).map_err(|e| e.to_string())?;
+                if let Some(e) = &t.partial {
+                    return Err(e.clone());
+                }
+                // A member that has left the world is written as an empty slot.
+                for (_, m) in t.organization.iter_mut().flat_map(|o| o.members.iter_mut()) {
+                    match world.ids.thing(m.record.serialized_id) {
+                        Some(member) => {
+                            written.insert(m.record.serialized_id);
+                            place(&mut m.record.thing, at(member));
+                        }
+                        None => out.dropped += 1,
+                    }
+                }
+                let mut b = Out::default();
+                b.record_head(&p.thing_id_utf16, p.class_code, p.serialized_id);
+                b.thing(&p.thing);
+                if let Some(o) = &p.object {
+                    b.object(o);
+                }
+                // The kingdoms' memories of it and its GActor prefix, which the walk
+                // reads past the object, are written as saved.
+                let drained = t.record.opaque_tail_span.offset - p.opaque_tail_span.offset;
+                if drained > 0 {
+                    b.0.extend(&p.opaque_tail[..drained]);
+                } else {
+                    let a = p.actor.as_ref().ok_or("no GActor prefix")?;
+                    b.word(a.version);
+                    b.word(a.owner_handle);
+                    b.word(a.state_low);
+                    b.some_word(a.state_high);
+                }
+                let keep = |m: &SavedThing| world.ids.thing(m.record.serialized_id).is_some();
+                b.0.extend(thing_tail_over(&t, world_version, Over { saved: p.opaque_tail.get(drained..), keep: &keep })?);
+                Ok(b)
+            });
+            match whole {
+                Some(Ok(b)) => bytes = b,
+                Some(Err(e)) => {
+                    out.members_as_saved.push((p.serialized_id, e));
+                    bytes.placement(&p);
+                }
+                None => bytes.placement(&p),
+            }
+            records.push((p.record_ordinal, bytes.0));
+        }
+        for u in &self.0.unsupported {
+            // A group or a record the inventory does not frame, as saved while its
+            // thing lives.
+            let gtid = aa_mapworld::inventory::decode_group_record(&u.raw, u.record_ordinal).ok().map(|g| g.serialized_id);
+            if gtid.is_some_and(|g| world.ids.thing(g).is_none()) {
+                out.dropped += 1;
+                continue;
+            }
+            written.extend(gtid);
+            records.push((u.record_ordinal, u.raw.clone()));
+        }
+        records.sort_by_key(|r| r.0);
+        let (mut data, mut index) = (Out::default(), Out::default());
+        data.word(0);
+        data.word(self.0.data_header_word);
+        index.word(0);
+        index.word(records.len() as u32);
+        for (_, bytes) in &records {
+            index.word(bytes.len() as u32);
+            data.0.extend(bytes);
+        }
+        out.not_written = world
+            .ids
+            .iter()
+            .filter(|(id, thing)| matches!(thing, Thing::Actor(_) | Thing::Org(_)) && !written.contains(&id.raw()))
+            .map(|(id, _)| id.raw())
+            .collect();
+        (out.data, out.index) = (data.0, index.0);
+        out
+    }
+}
+
+/// The order GActor's Load 0x4D8CF0 reads the saved components in (`ActorTail`):
+/// slot 15, the others up from 0, the Mind (slot 4) last.
+pub fn component_order() -> impl Iterator<Item = u8> {
+    std::iter::once(15).chain((0..31).filter(|s| *s != 15 && *s != 4)).chain(std::iter::once(4))
+}
+
+fn units(s: &str) -> Vec<u16> {
+    s.encode_utf16().collect()
+}
+
+impl Out {
+    /// A saved component as `SavedComponent::decode_prefix` reads it, each word where
+    /// that reader takes it. `None` for what that reader refuses too: a Properties
+    /// component with property objects, an Element with a damage history, a
+    /// Structure with a queue, a Denizen with commands (the walk's own readers keep
+    /// those: [`thing_tail`]). The Mind, the Transport, the Organization and the HQ are
+    /// their saved bytes.
+    pub fn component(&mut self, c: &SavedComponent) -> Option<()> {
+        match c {
+            SavedComponent::Hq(v) => self.0.extend(&v.bytes),
+            SavedComponent::Mind(v) => self.0.extend(&v.bytes),
+            SavedComponent::Transport(v) => self.0.extend(&v.bytes),
+            SavedComponent::Organization(v) => self.0.extend(&v.bytes),
+            SavedComponent::Body(b) => {
+                self.word(b.version);
+                if let Some(u) = &b.updatable {
+                    self.updatable(u);
+                }
+                self.some_word(b.dying_started_bits);
+                self.word(b.health_multiplier_bits);
+                self.some_word(b.sink_duration_bits);
+                self.some_word(b.last_heal_time_bits);
+            }
+            SavedComponent::Character(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                self.word(v.word_28);
+                self.some_word(v.legacy_word);
+                self.word(v.animation_kind as u32);
+                self.word(v.animation_index as u32);
+                self.word(v.animation_version);
+                self.word(v.elapsed_bits);
+                self.word(v.resumed_at_bits);
+                self.word(v.rate_bits);
+                self.byte(v.active_byte);
+                self.some_word(v.variant.map(|w| w as u32));
+            }
+            SavedComponent::Construction(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                self.counted(&v.words_10, |o, &w| o.word(w));
+                if let Some(l) = &v.words_1c {
+                    self.counted(l, |o, &w| o.word(w));
+                }
+                self.some_text(&v.reference_28_utf16);
+                for w in v.legacy_upgrade_words.iter().flatten() {
+                    self.word(*w);
+                }
+            }
+            SavedComponent::Performer(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                self.word(v.word_10);
+                self.word(v.multiplier_20);
+                self.word(v.word_28);
+                v.words_2c_30.iter().for_each(|&w| self.word(w));
+                self.word(v.ability_index as u32);
+                v.words_3c_40.iter().for_each(|&w| self.word(w));
+                self.counted(&v.states, |o, s| {
+                    s.words_00_04.iter().for_each(|&w| o.word(w));
+                    o.some_word(s.word_08);
+                    if let Some(b) = s.present_byte {
+                        o.byte(b);
+                    }
+                    for w in s.words_10_14.iter().flatten() {
+                        o.word(*w);
+                    }
+                    o.some_word(s.word_18);
+                });
+                self.word(v.word_58);
+                self.some_word(v.word_44);
+                self.counted(&v.abilities, Self::ability);
+                if let Some(b) = v.byte_5c {
+                    self.byte(b);
+                }
+            }
+            SavedComponent::Mover(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                v.vector_10.iter().for_each(|&w| self.word(w));
+                self.word(v.word_20);
+                self.word(v.word_24);
+                self.some_word(v.speed_multiplier_bits);
+                for w in v.legacy_vector.iter().flatten() {
+                    self.word(*w);
+                }
+                self.word(v.word_44);
+                self.word(v.word_48);
+                for b in [v.byte_4c, v.byte_54].into_iter().flatten() {
+                    self.byte(b);
+                }
+                for w in v.vector_38.iter().flatten() {
+                    self.word(*w);
+                }
+                self.some_word(v.word_50);
+                if let Some(b) = v.byte_56 {
+                    self.byte(b);
+                }
+                self.some_word(v.word_58);
+                if let Some(b) = v.byte_5c {
+                    self.byte(b);
+                }
+                for w in v.vector_60.iter().flatten() {
+                    self.word(*w);
+                }
+                if let Some(b) = v.byte_6c {
+                    self.byte(b);
+                }
+                for w in v.vector_70.iter().chain(&v.vector_7c).flatten() {
+                    self.word(*w);
+                }
+            }
+            SavedComponent::Denizen(v) => {
+                if v.command_count.is_some_and(|n| n as i32 > 0) {
+                    return None;
+                }
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                for b in [v.byte_20, v.byte_21].into_iter().flatten() {
+                    self.byte(b);
+                }
+                if let Some(l) = &v.occupants {
+                    self.counted(l, |o, p| p.iter().for_each(|&w| o.word(w)));
+                }
+                self.some_word(v.word_34);
+                if let Some(l) = &v.handles {
+                    self.counted(l, |o, &w| o.word(w));
+                }
+                self.some_word(v.command_count);
+            }
+            SavedComponent::Supply(v) => {
+                self.word(v.version);
+                if let Some(u) = &v.updatable {
+                    self.updatable(u);
+                }
+                self.some_word(v.amount_multiplier_bits);
+                self.some_word(v.word_1c);
+            }
+            SavedComponent::Recruit(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                if let Some(b) = v.byte_1c {
+                    self.byte(b);
+                }
+                for w in v.words_14.iter().flatten() {
+                    self.word(*w);
+                }
+                if let Some(l) = &v.legacy {
+                    self.word(l.serialized_count);
+                    for (name, flag) in &l.items {
+                        self.text(name);
+                        self.byte(*flag);
+                    }
+                    self.word(l.word_after);
+                    if let Some(b) = l.byte_v2 {
+                        self.byte(b);
+                    }
+                }
+            }
+            SavedComponent::Defender(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                if let Some(l) = &v.abilities {
+                    self.counted(l, Self::ability);
+                }
+                if let Some(l) = &v.pairs {
+                    self.counted(l, |o, p| p.iter().for_each(|&w| o.word(w)));
+                }
+            }
+            SavedComponent::Research(v) => {
+                self.updatable(&v.updatable);
+                self.word(v.version);
+                self.counted(&v.references, |o, t| o.text(t));
+            }
+            SavedComponent::Lair { updatable, version, words, word_1c, word_20 } => {
+                self.updatable(updatable);
+                self.word(*version);
+                self.counted(words, |o, &w| o.word(w));
+                self.word(*word_1c);
+                self.word(*word_20);
+            }
+            SavedComponent::City { updatable, version, words } => {
+                self.updatable(updatable);
+                self.word(*version);
+                if let Some(l) = words {
+                    self.counted(l, |o, &w| o.word(w));
+                }
+            }
+            SavedComponent::Structure(v) => return self.structure(v, &[]).ok(),
+            SavedComponent::Properties(v) => return self.properties(v, &[]).ok(),
+            SavedComponent::UpdatableOnly { updatable, version } => {
+                self.updatable(updatable);
+                self.word(*version);
+            }
+            SavedComponent::Experience { version, word_08 } => {
+                self.word(*version);
+                self.word(*word_08);
+            }
+            SavedComponent::Element { .. } => return self.element(c, &[], GWORLD_VERSION).ok(),
+            SavedComponent::MobileDeployment { updatable, version, word_10, word_14, discarded_resources } => {
+                self.updatable(updatable);
+                self.word(*version);
+                self.word(*word_10);
+                self.some_word(*word_14);
+                if let Some(v) = discarded_resources {
+                    self.resources(v);
+                }
+            }
+        }
+        Some(())
+    }
+
+    /// A ResourceVector (4CD3F0): version 0, the count, the values.
+    fn resources(&mut self, v: &[u32]) {
+        self.word(0);
+        self.words(v);
+    }
+
+    /// The Properties component (581AE0) with its property objects (503B10, and a
+    /// version 0 word more of a class 1 object from version 3, 503BC0), what the walk
+    /// reads: a class word each, -1 for none.
+    pub fn properties(&mut self, p: &PropertiesPayload, objects: &[SavedProperty]) -> Result<(), String> {
+        self.updatable(&p.updatable);
+        self.word(p.version);
+        self.word(p.property_classes.len() as u32);
+        let mut objects = objects.iter();
+        for &class in &p.property_classes {
+            self.word(class);
+            if class == u32::MAX {
+                continue;
+            }
+            let o = objects.next().filter(|o| o.class == class).ok_or("slot 6: a property class without its object")?;
+            self.property(&o.state);
+            if class == 1 && o.state.version > 2 {
+                self.word(0);
+                self.word(o.word_18.ok_or("slot 6: a modifier property without its word")?);
+            }
+        }
+        if objects.next().is_some() {
+            return Err("slot 6: more property objects than classes".into());
+        }
+        Ok(())
+    }
+
+    /// A damage record (4C0BA0) at world version 20 or later (below that a byte or a
+    /// word the walk passes over).
+    fn damage(&mut self, words: [u32; 2], damage_type: &str, more: [u32; 2], word_14: Option<u32>, word_18: Option<u32>, world_version: u32) -> Result<(), String> {
+        if world_version < 0x14 {
+            return Err(format!("a damage record of world version {world_version}"));
+        }
+        words.iter().for_each(|&w| self.word(w));
+        self.text(&units(damage_type));
+        more.iter().for_each(|&w| self.word(w));
+        self.word(word_14.ok_or("a damage record without +14")?);
+        self.word(word_18.ok_or("a damage record without +18")?);
+        Ok(())
+    }
+
+    /// The Element component (570FA0) with its damage history.
+    pub fn element(&mut self, c: &SavedComponent, history: &[DamageRecord], world_version: u32) -> Result<(), String> {
+        let SavedComponent::Element { version, updatable, legacy_byte, history_count } = c else {
+            return Err("slot 8: not an Element".into());
+        };
+        self.word(*version);
+        if let Some(u) = updatable {
+            self.updatable(u);
+        }
+        if let Some(b) = legacy_byte {
+            self.byte(*b);
+        }
+        if let Some(n) = history_count {
+            if (*n as i32).max(0) as usize != history.len() {
+                return Err("slot 8: the history is not the saved count".into());
+            }
+            self.word(*n);
+            for d in history {
+                self.damage([d.word_00, d.word_04], &d.damage_type, [d.word_0c, d.word_10], d.word_14, d.word_18, world_version)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The Structure component (58A770) with its queue items (58A470): the item's id
+    /// from version 13, its kind, the recruit's ActorData or the research's property,
+    /// the location of kind 2, then what was paid, asked and held.
+    pub fn structure(&mut self, s: &StructurePayload, queue: &[SavedQueueItem]) -> Result<(), String> {
+        self.structure_over(s, queue, None)
+    }
+
+    /// [`Out::structure`] over its saved bytes (`saved`, from the component's start):
+    /// the 4C3050 reference before an item's own layout, which the walk passes over,
+    /// is the saved one.
+    pub fn structure_over(&mut self, s: &StructurePayload, queue: &[SavedQueueItem], saved: Option<&[u8]>) -> Result<(), String> {
+        let start = self.0.len();
+        self.word(s.version);
+        if let Some(u) = &s.updatable {
+            self.updatable(u);
+        }
+        self.word(s.discarded_object_handle);
+        if let Some(n) = s.legacy_reference_count {
+            if n as i32 > 0 {
+                return Err("slot 13: a version 0 reference list (the walk passes over it)".into());
+            }
+            self.word(n);
+        }
+        if let Some(n) = s.queue_count {
+            if (n as i32).max(0) as usize != queue.len() {
+                return Err("slot 13: the queue is not the saved count".into());
+            }
+            self.word(n);
+        }
+        for item in queue {
+            if s.version == 9 {
+                return Err("slot 13: a version 9 queue item (its last word is passed over)".into());
+            }
+            if s.version > 12 {
+                self.word(item.id.ok_or("slot 13: an item without its id")?);
+            }
+            self.word(item.kind);
+            match item.kind {
+                0 | 2 => {
+                    self.text(&units(item.actor.as_deref().ok_or("slot 13: a recruit without its ActorData")?));
+                    match &item.layout {
+                        None => self.byte(0),
+                        Some((id, parameters)) => {
+                            let saved = saved.ok_or("slot 13: an item with its own layout (the walk keeps no reference)")?;
+                            // The saved presence byte and reference.
+                            let at = self.0.len() - start;
+                            let n = saved.get(at + 1..at + 3).map(|b| usize::from(u16::from_le_bytes([b[0], b[1]]))).ok_or("slot 13: the saved reference")?;
+                            self.0.extend(saved.get(at..at + 3 + n * 2).ok_or("slot 13: the saved reference")?);
+                            // The layout's Load 4C3180: version 0, its IDS, the parameters.
+                            self.word(0);
+                            self.text(&units(id));
+                            self.word(parameters.len() as u32);
+                            for p in parameters {
+                                self.text(&units(p));
+                            }
+                        }
+                    }
+                    if item.kind == 2 {
+                        item.location.ok_or("slot 13: a kind 2 item without a location")?.iter().for_each(|&w| self.word(w));
+                    }
+                }
+                1 => self.text(&units(item.research.as_deref().ok_or("slot 13: research without its property")?)),
+                k => return Err(format!("slot 13: item kind {k}")),
+            }
+            if s.version > 3 {
+                self.resources(&item.paid);
+                self.resources(&item.requested);
+            }
+            if s.version > 7 {
+                self.resources(&item.current);
+            }
+        }
+        for w in [s.word_20, s.word_2c, s.word_24, s.word_28, s.word_34].into_iter().flatten() {
+            self.word(w);
+        }
+        Ok(())
+    }
+
+    /// An Organization (57D130): its Updatable, version, layout (4C3180), the slots
+    /// with each member's record, then its words. The walk keeps a member's slot word
+    /// and passes over an empty slot's; each slot is written as its index, or -1 when
+    /// empty (on the original's saves every organization reads back so:
+    /// `tests::original_saved_things_re_encode_from_the_walk`).
+    pub fn organization(&mut self, o: &SavedOrganization, world_version: u32) -> Result<(), String> {
+        self.organization_over(o, world_version, Over::walk()).map(|_| ())
+    }
+
+    /// [`Out::organization`] over its saved bytes (`over.saved`, from the
+    /// Organization's start): a member's part the walk does not keep is taken from
+    /// there, and a member `over.keep` refuses is written as an empty slot. Returns how
+    /// many bytes further on the saved Organization ends than the written one.
+    pub fn organization_over(&mut self, o: &SavedOrganization, world_version: u32, over: Over<'_>) -> Result<isize, String> {
+        let start = self.0.len();
+        let mut shift = 0isize;
+        match o.updatable_id {
+            Some(id) => {
+                self.word(1);
+                self.word(id as u32);
+            }
+            None => self.word(0),
+        }
+        self.word(o.version);
+        self.word(0);
+        self.text(&units(&o.layout));
+        self.word(o.parameters.len() as u32);
+        for p in &o.parameters {
+            self.text(&units(p));
+        }
+        self.word(o.slots);
+        let mut members = o.members.iter().peekable();
+        for i in 0..o.slots as i32 {
+            match members.peek() {
+                Some((slot, _)) if *slot == i => {
+                    let (_, m) = members.next().ok_or("slot 7: member")?;
+                    if !(over.keep)(m) {
+                        // The saved slot word and record, written as an empty slot.
+                        self.word(u32::MAX);
+                        shift += m.consumed as isize;
+                        continue;
+                    }
+                    self.word(i as u32);
+                    let at = (self.0.len() - start) as isize + shift;
+                    let saved = over.saved.and_then(|s| s.get(at as usize..));
+                    let before = self.0.len();
+                    self.walked_record_over(m, world_version, Over { saved, keep: over.keep })?;
+                    shift += m.consumed as isize - (self.0.len() - before) as isize;
+                }
+                _ => self.word(u32::MAX),
+            }
+        }
+        if members.next().is_some() {
+            return Err("slot 7: a member whose slot word is not its index".into());
+        }
+        if (2..=6).contains(&o.version) || o.version == 0 {
+            return Err(format!("slot 7: organization version {} (the walk passes over words)", o.version));
+        }
+        for s in &o.recruit_singles {
+            self.text(&units(s));
+        }
+        self.word(o.leader as u32);
+        self.word(o.morale_bits);
+        self.word(o.formation as u32);
+        self.some_word(o.secondary_formation.map(|w| w as u32));
+        for off in &o.offsets {
+            off.iter().for_each(|&w| self.word(w));
+        }
+        for &w in &o.words_50 {
+            self.word(w);
+        }
+        if o.version >= 4 {
+            self.word(o.word_84.ok_or("slot 7: no +84")?);
+            self.0.extend(o.bytes_8c.ok_or("slot 7: no +8C")?);
+            let (w90, w94, ids, w9c, wa0) = o.damage.as_ref().ok_or("slot 7: no damage record")?;
+            self.damage([*w90, *w94], ids, [*w9c, *wa0], o.word_a4, o.word_a8, world_version)?;
+        }
+        self.some_word(o.word_88);
+        self.some_word(o.created_at_bits);
+        for w in o.position_bits.iter().flatten() {
+            self.word(*w);
+        }
+        self.some_word(o.word_d0);
+        self.some_word(o.word_d4);
+        Ok(shift)
+    }
+
+    /// A walked record whole (an organization's member, or a top-level record): the
+    /// head, GThing, GObject, an all-absent list of the kingdoms' memories (one 0 byte
+    /// each from object version 5), the GActor prefix, then [`thing_tail`].
+    pub fn walked_record(&mut self, t: &SavedThing, world_version: u32) -> Result<(), String> {
+        self.walked_record_over(t, world_version, Over::walk())
+    }
+
+    /// [`Out::walked_record`] of an organization's member over its saved bytes
+    /// (`over.saved`, from the member's start, where the walk counts its spans from):
+    /// what the walk reads past the object, the kingdoms' memories of it and its
+    /// GActor prefix, is written as saved, and its tail by [`thing_tail_over`].
+    pub fn walked_record_over(&mut self, t: &SavedThing, world_version: u32, over: Over<'_>) -> Result<(), String> {
+        let p = &t.record;
+        let start = self.0.len();
+        self.record_head(&p.thing_id_utf16, p.class_code, p.serialized_id);
+        self.thing(&p.thing);
+        if let Some(o) = &p.object {
+            self.object(o);
+        }
+        let head = self.0.len() - start;
+        if let Some(o) = p.object.as_ref().filter(|o| o.nested_count.is_some_and(|n| n != 0)) {
+            if let Some(saved) = over.saved {
+                let drained = p.opaque_tail_span.offset.checked_sub(head).ok_or("the memories' span")?;
+                self.0.extend(saved.get(head..head + drained).ok_or("the saved memories")?);
+                let tail = thing_tail_over(t, world_version, Over { saved: saved.get(head + drained..), keep: over.keep })?;
+                self.0.extend(tail);
+                return Ok(());
+            }
+            if !t.sightings.is_empty() {
+                return Err("the kingdoms' memories of it (the walk passes over two words of each)".into());
+            }
+            if o.version < 5 {
+                return Err(format!("a memory list of object version {}", o.version));
+            }
+            self.0.extend(std::iter::repeat_n(0u8, (o.nested_count.unwrap_or(0) as i32).max(0) as usize));
+        }
+        let a = p.actor.as_ref().ok_or("no GActor prefix")?;
+        self.word(a.version);
+        self.word(a.owner_handle);
+        self.word(a.state_low);
+        self.some_word(a.state_high);
+        let at = self.0.len() - start;
+        let tail = thing_tail_over(t, world_version, Over { saved: over.saved.and_then(|s| s.get(at..)), keep: over.keep })?;
+        self.0.extend(tail);
+        Ok(())
+    }
+}
+
+/// What [`thing_tail_over`] may take from the saved bytes it writes again.
+#[derive(Clone, Copy)]
+pub struct Over<'a> {
+    /// The saved bytes the thing was walked from, from where the writing starts.
+    pub saved: Option<&'a [u8]>,
+    /// Whether an organization's member is written; one that is not is written as an
+    /// empty slot (-1).
+    pub keep: &'a dyn Fn(&SavedThing) -> bool,
+}
+
+fn keep_all(_: &SavedThing) -> bool {
+    true
+}
+
+impl Over<'static> {
+    /// Nothing but what the walk keeps, every member.
+    pub fn walk() -> Self {
+        Over { saved: None, keep: &keep_all }
+    }
+}
+
+/// A walked thing's GActor tail (`aa_mapworld::saved_world::walk`): the two masks,
+/// each saved component in [`component_order`], then [`Out::actor_tail_end`]. `Err`
+/// names what the walk does not keep: a Denizen's (slot 10), an aircraft's (23) or a
+/// Transport's (24) words, or a part the component writers refuse.
+pub fn thing_tail(t: &SavedThing, world_version: u32) -> Result<Vec<u8>, String> {
+    thing_tail_over(t, world_version, Over::walk())
+}
+
+/// [`thing_tail`] over the saved tail (`over.saved`, from the tail's start): a
+/// Denizen (slot 10) is read there with `SavedComponent::decode_prefix` and written
+/// again, a Structure item's layout reference is the saved one
+/// ([`Out::structure_over`]), and an organization's members are written by
+/// [`Out::organization_over`].
+pub fn thing_tail_over(t: &SavedThing, world_version: u32, over: Over<'_>) -> Result<Vec<u8>, String> {
+    let tail = t.tail.as_ref().ok_or("no GActor tail")?;
+    let mut out = Out::default();
+    let mut shift = 0isize;
+    out.word(tail.default_components_mask);
+    out.word(tail.saved_components_mask);
+    let mut components = t.components.iter();
+    for slot in component_order() {
+        if tail.saved_components_mask & (1 << slot) == 0 {
+            continue;
+        }
+        let saved = over.saved.and_then(|s| s.get((out.0.len() as isize + shift) as usize..));
+        match slot {
+            4 => out.0.extend(t.mind.as_ref().ok_or("slot 4: no Mind")?),
+            7 => shift += out.organization_over(t.organization.as_ref().ok_or("slot 7: no Organization")?, world_version, Over { saved, keep: over.keep })?,
+            10 if saved.is_some() => {
+                let s = saved.unwrap_or_default();
+                let (c, n) = SavedComponent::decode_prefix(10, s).map_err(|e| format!("slot 10: {e}"))?;
+                let before = out.0.len();
+                out.component(&c).ok_or("slot 10: refused")?;
+                if out.0[before..] != s[..n] {
+                    return Err("slot 10: not written as saved".into());
+                }
+            }
+            10 | 23 | 24 => return Err(format!("slot {slot}: the walk keeps only part of it")),
+            _ => {
+                let (s, c) = components.next().ok_or_else(|| format!("slot {slot}: not walked"))?;
+                if *s != slot {
+                    return Err(format!("slot {slot}: the walk holds slot {s}"));
+                }
+                match c {
+                    SavedComponent::Properties(p) => out.properties(p, &t.properties)?,
+                    SavedComponent::Element { .. } => out.element(c, &t.element_history, world_version)?,
+                    SavedComponent::Structure(s) => out.structure_over(s, &t.queue, saved)?,
+                    _ => out.component(c).ok_or_else(|| format!("slot {slot}: refused"))?,
+                }
+            }
+        }
+    }
+    out.actor_tail_end(tail);
+    Ok(out.0)
 }
 
 /// One world queue as its Save writes it: version 0, the current bucket, the bucket
@@ -951,6 +1743,190 @@ mod tests {
         assert_eq!(MiscData::decode(&empty), Some(MiscData::default()));
     }
 
+    /// Every component writer against `aa_mapworld`'s reader of the same slot, at the
+    /// newest version the reader takes (where the most optional words are present) and
+    /// at an older one where a version adds or drops words.
+    #[test]
+    fn components_read_back() {
+        use aa_mapworld::saved_components::*;
+        let u = |id| UpdatablePayload { version: 1, serialized_id: Some(id) };
+        let words = |v: &[u32]| CountedList { serialized_count: v.len() as u32, values: v.to_vec() };
+        let ability = aa_mapworld::kingdoms::AbilityState { version: 1, word_0c: 1, word_10: 0xff7f_ffff, word_14: 3, byte_18: 1, words: Some(words(&[7, 8])) };
+        let cases: Vec<(u8, SavedComponent)> = vec![
+            (0, SavedComponent::Body(BodyPayload { version: 4, updatable: Some(u(9)), dying_started_bits: Some(0xbf80_0000), health_multiplier_bits: 0x3f40_0000, sink_duration_bits: Some(5), last_heal_time_bits: Some(6) })),
+            (0, SavedComponent::Body(BodyPayload { version: 1, updatable: None, dying_started_bits: Some(1), health_multiplier_bits: 0x3f80_0000, sink_duration_bits: None, last_heal_time_bits: None })),
+            (
+                3,
+                SavedComponent::Mover(MoverPayload {
+                    updatable: u(3),
+                    version: 8,
+                    vector_10: [1, 2, 3],
+                    word_20: 4,
+                    word_24: 5,
+                    speed_multiplier_bits: Some(0x3f80_0000),
+                    legacy_vector: None,
+                    word_44: 6,
+                    word_48: 7,
+                    byte_4c: None,
+                    byte_54: Some(1),
+                    vector_38: Some([8, 9, 10]),
+                    word_50: Some(11),
+                    byte_56: Some(0),
+                    word_58: Some(12),
+                    byte_5c: Some(1),
+                    vector_60: Some([13, 14, 15]),
+                    byte_6c: Some(0),
+                    vector_70: Some([16, 17, 18]),
+                    vector_7c: Some([19, 20, 21]),
+                }),
+            ),
+            (
+                3,
+                SavedComponent::Mover(MoverPayload {
+                    updatable: UpdatablePayload { version: 0, serialized_id: None },
+                    version: 3,
+                    vector_10: [1, 2, 3],
+                    word_20: 4,
+                    word_24: 5,
+                    speed_multiplier_bits: None,
+                    legacy_vector: Some([6, 7, 8]),
+                    word_44: 9,
+                    word_48: 10,
+                    byte_4c: Some(1),
+                    byte_54: Some(0),
+                    vector_38: Some([11, 12, 13]),
+                    word_50: Some(14),
+                    byte_56: None,
+                    word_58: None,
+                    byte_5c: None,
+                    vector_60: None,
+                    byte_6c: None,
+                    vector_70: None,
+                    vector_7c: None,
+                }),
+            ),
+            (
+                2,
+                SavedComponent::Character(CharacterPayload {
+                    updatable: u(4),
+                    version: 2,
+                    word_28: 1,
+                    legacy_word: None,
+                    animation_kind: -1,
+                    animation_index: 3,
+                    animation_version: 0,
+                    elapsed_bits: 5,
+                    resumed_at_bits: 6,
+                    rate_bits: 7,
+                    active_byte: 1,
+                    variant: Some(-1),
+                }),
+            ),
+            (
+                15,
+                SavedComponent::Construction(ConstructionPayload {
+                    updatable: u(5),
+                    version: 1,
+                    words_10: words(&[1, 2, 3]),
+                    words_1c: Some(words(&[4])),
+                    reference_28_utf16: Some(Vec::new()),
+                    legacy_upgrade_words: None,
+                }),
+            ),
+            (
+                5,
+                SavedComponent::Performer(PerformerPayload {
+                    updatable: u(6),
+                    version: 9,
+                    word_10: 1,
+                    multiplier_20: 2,
+                    word_28: 3,
+                    words_2c_30: [4, 5],
+                    ability_index: -1,
+                    words_3c_40: [6, 7],
+                    states: CountedList {
+                        serialized_count: 1,
+                        values: vec![PerformerStateEntry { words_00_04: [8, 9], word_08: Some(10), present_byte: Some(1), words_10_14: Some([11, 12]), word_18: Some(13) }],
+                    },
+                    word_58: 14,
+                    word_44: Some(15),
+                    abilities: CountedList { serialized_count: 1, values: vec![ability.clone()] },
+                    byte_5c: Some(0),
+                }),
+            ),
+            (
+                10,
+                SavedComponent::Denizen(DenizenPayload {
+                    updatable: u(7),
+                    version: 4,
+                    byte_20: Some(1),
+                    byte_21: Some(0),
+                    occupants: Some(CountedList { serialized_count: 1, values: vec![[1, 2]] }),
+                    word_34: Some(3),
+                    handles: Some(words(&[4, 5])),
+                    command_count: Some(0),
+                }),
+            ),
+            (11, SavedComponent::Supply(SupplyPayload { version: 2, updatable: Some(u(8)), amount_multiplier_bits: Some(0x3f00_0000), word_1c: Some(1) })),
+            (11, SavedComponent::Supply(SupplyPayload { version: 0, updatable: None, amount_multiplier_bits: None, word_1c: None })),
+            (16, SavedComponent::Recruit(RecruitPayload { updatable: u(9), version: 3, byte_1c: Some(1), words_14: Some([1, 2]), legacy: None })),
+            (
+                16,
+                SavedComponent::Recruit(RecruitPayload {
+                    updatable: u(9),
+                    version: 2,
+                    byte_1c: Some(0),
+                    words_14: None,
+                    legacy: Some(LegacyRecruitQueue { serialized_count: 1, items: vec![(units("a"), 0)], word_after: 3, byte_v2: Some(1) }),
+                }),
+            ),
+            (
+                20,
+                SavedComponent::Defender(DefenderPayload {
+                    updatable: u(10),
+                    version: 2,
+                    abilities: Some(CountedList { serialized_count: 1, values: vec![ability] }),
+                    pairs: Some(CountedList { serialized_count: 1, values: vec![[1, 2]] }),
+                }),
+            ),
+            (21, SavedComponent::Research(ResearchPayload { updatable: u(11), version: 0, references: CountedList { serialized_count: 1, values: vec![units("prop")] } })),
+            (25, SavedComponent::Lair { updatable: u(12), version: 0, words: words(&[1]), word_1c: 2, word_20: 3 }),
+            (29, SavedComponent::City { updatable: u(13), version: 1, words: Some(words(&[1, 2])) }),
+            (
+                13,
+                SavedComponent::Structure(StructurePayload {
+                    version: 13,
+                    updatable: Some(u(14)),
+                    discarded_object_handle: 0,
+                    legacy_reference_count: None,
+                    queue_count: Some(0),
+                    word_20: Some(1),
+                    word_2c: Some(2),
+                    word_24: Some(0x7f7f_ffff),
+                    word_28: Some(u32::MAX),
+                    word_34: Some(3),
+                }),
+            ),
+            (6, SavedComponent::Properties(PropertiesPayload { updatable: u(15), version: 1, property_classes: vec![u32::MAX, u32::MAX] })),
+            (9, SavedComponent::UpdatableOnly { updatable: u(16), version: 0 }),
+            (17, SavedComponent::Experience { version: 0, word_08: 0x4000_0000 }),
+            (8, SavedComponent::Element { version: 3, updatable: Some(u(17)), legacy_byte: None, history_count: Some(0) }),
+            (8, SavedComponent::Element { version: 1, updatable: Some(u(17)), legacy_byte: Some(1), history_count: None }),
+            (19, SavedComponent::MobileDeployment { updatable: u(18), version: 2, word_10: 1, word_14: Some(2), discarded_resources: Some(vec![3, 4]) }),
+        ];
+        for (slot, c) in cases {
+            let mut out = Out::default();
+            out.component(&c).unwrap_or_else(|| panic!("slot {slot} refused"));
+            let (back, n) = SavedComponent::decode_prefix(slot, &out.0).unwrap_or_else(|e| panic!("slot {slot}: {e}"));
+            assert_eq!(n, out.0.len(), "slot {slot}");
+            assert_eq!(back, c, "slot {slot}");
+        }
+        // What the reader refuses is refused here too.
+        let busy = SavedComponent::Element { version: 3, updatable: None, legacy_byte: None, history_count: Some(1) };
+        assert_eq!(Out::default().component(&busy), None);
+        assert_eq!(Out::default().component(&SavedComponent::Properties(PropertiesPayload { updatable: u(1), version: 1, property_classes: vec![0] })), None);
+    }
+
     /// A chunk file of uncompressed chunks (the reader takes a chunk whose bytes
     /// are not a zlib stream as stored).
     fn container(chunks: &[(String, Vec<u8>)]) -> Vec<u8> {
@@ -1014,6 +1990,34 @@ mod tests {
         MapArchive::from_bytes(bytes.to_vec()).unwrap().decode_chunk("IDMGR", 1 << 30).unwrap().bytes
     }
 
+    /// A saved game's KINGDOMS, decoded, and its bytes.
+    fn kingdoms_of(bytes: &[u8]) -> (KingdomsChunk, Vec<u8>) {
+        let chunk = MapArchive::from_bytes(bytes.to_vec()).unwrap().decode_chunk("KINGDOMS", 1 << 30).unwrap();
+        (KingdomsChunk::decode(&chunk, GWORLD_VERSION).expect("KINGDOMS"), chunk.bytes)
+    }
+
+    /// A general's balance and the last use of each ability, as bits.
+    type GeneralBits = Option<(u32, Vec<Option<u32>>)>;
+
+    /// What a restore keeps of each kingdom, as bits: the stockpiles, whether it is out
+    /// of the game, its general.
+    fn kingdom_state(world: &crate::world::World) -> Vec<(Vec<u32>, bool, GeneralBits)> {
+        world
+            .kingdoms
+            .iter()
+            .map(|k| {
+                let stock = world.books.kingdom(k.id).map_or_else(Vec::new, |b| b.stockpiled.iter().map(|v| v.to_bits()).collect());
+                let general = world
+                    .special_ops
+                    .commanders
+                    .get(k.id as usize)
+                    .filter(|c| c.general.is_some())
+                    .map(|c| (c.experience.to_bits(), c.last_use.iter().map(|t| t.map(f32::to_bits)).collect()));
+                (stock, k.defeated, general)
+            })
+            .collect()
+    }
+
     /// `bytes`' chunks with `written` in place of the chunks of the same names.
     fn with_chunks(bytes: &[u8], written: &[(&str, Vec<u8>)]) -> Vec<u8> {
         let archive = MapArchive::from_bytes(bytes.to_vec()).unwrap();
@@ -1039,8 +2043,9 @@ mod tests {
     }
 
     /// A battle restored from an original saved game and written at once: its IDMGR
-    /// is the file's byte for byte, and so is its GWORLD but for +198, which the
-    /// restore does not put in `Books::next_item` yet (printed).
+    /// is the file's byte for byte, and so is its GWORLD but for the stream +D4 (the
+    /// saved one drawn on by the load's record pass) and +198 where the restore does
+    /// not put GWORLD's +198 in `Books::next_item` (printed).
     #[test]
     #[ignore = "needs the game data (AA_GAME_ROOT) and an original saved game (AA_SAVED_GAME)"]
     fn a_restored_world_writes_the_saved_words() {
@@ -1083,9 +2088,25 @@ mod tests {
         }
         let gworld = GworldWords::of_world(&world, &loaded);
         let idmgr = IdmgrWords::of_world(&world);
-        let file = with_chunks(&saved.bytes, &[("GWORLD", gworld.encode()), ("IDMGR", idmgr.encode().unwrap())]);
+        let mut chunks = vec![("GWORLD", gworld.encode()), ("IDMGR", idmgr.encode().unwrap())];
+        // A kingdom that finished a research since the save holds a property the
+        // writer has no record for yet: then the saved KINGDOMS stays (printed).
+        let kingdoms = match kingdoms_of(&saved.bytes).0.of_world(&world) {
+            Ok(k) => k.encode(),
+            Err(e) => {
+                eprintln!("KINGDOMS not written from the world: {e}");
+                None
+            }
+        };
+        chunks.extend(kingdoms.clone().map(|k| ("KINGDOMS", k)));
+        let file = with_chunks(&saved.bytes, &chunks);
         assert_eq!(gworld_of(&file), gworld);
         let restored = saved.restore(&file);
+        if let Some(kingdoms) = kingdoms {
+            // The kingdoms restore as they were played.
+            assert_eq!(kingdom_state(&restored), kingdom_state(&world), "the kingdoms of the written file");
+            assert_eq!(kingdoms_of(&file).0.of_world(&restored).unwrap().encode().unwrap(), kingdoms, "KINGDOMS written again");
+        }
         assert_eq!(restored.clock, world.clock);
         assert_eq!(restored.tick, world.tick);
         assert_eq!(restored.time.to_bits(), world.time.to_bits());
@@ -1110,6 +2131,133 @@ mod tests {
         assert!(differ.iter().all(|d| d.starts_with("+198 ") || d.starts_with("+D4 ")), "{differ:?}");
     }
 
+    /// Where each thing stands, by GTID: an actor's x and y, an organization's anchor.
+    fn positions(world: &crate::world::World) -> std::collections::BTreeMap<u32, [u32; 2]> {
+        use crate::ids::Thing;
+        world
+            .ids
+            .iter()
+            .filter_map(|(id, thing)| {
+                let xy = match thing {
+                    Thing::Actor(a) => world.actors[a as usize].pos.truncate(),
+                    Thing::Org(o) => world.orgs[o as usize].anchor,
+                    _ => return None,
+                };
+                Some((id.raw(), [xy.x.to_bits(), xy.y.to_bits()]))
+            })
+            .collect()
+    }
+
+    /// A battle restored from an original saved game and played on for 64 ticks, its
+    /// GWORLD, IDMGR, KINGDOMS and DYNAMIC_THINGS written from the world: the restore
+    /// of that file has every thing the played world has (by GTID) where the played
+    /// world has it, the things that moved since the save included.
+    #[test]
+    #[ignore = "needs the game data (AA_GAME_ROOT) and an original saved game (AA_SAVED_GAME)"]
+    fn a_played_world_restores_where_its_things_stood() {
+        let saved = Saved::open();
+        let start = positions(&saved.restore(&saved.bytes));
+        let mut world = saved.restore(&saved.bytes);
+        let loaded = gworld_of(&saved.bytes);
+        for _ in 0..64 {
+            world.step(Vec::new());
+        }
+        let archive = MapArchive::from_bytes(saved.bytes.clone()).unwrap();
+        let things = ThingsChunk::decode(&archive).unwrap().of_world(&world, GWORLD_VERSION);
+        let mut chunks = vec![
+            ("GWORLD", GworldWords::of_world(&world, &loaded).encode()),
+            ("IDMGR", IdmgrWords::of_world(&world).encode().unwrap()),
+            ("DYNAMIC_THINGS", things.data.clone()),
+            ("DYNAMIC_THINGS_INDEX", things.index.clone()),
+        ];
+        match kingdoms_of(&saved.bytes).0.of_world(&world) {
+            Ok(k) => chunks.push(("KINGDOMS", k.encode().unwrap())),
+            Err(e) => eprintln!("KINGDOMS not written from the world: {e}"),
+        }
+        let file = with_chunks(&saved.bytes, &chunks);
+        let restored = saved.restore(&file);
+        let (played, back) = (positions(&world), positions(&restored));
+        let moved = played.iter().filter(|(id, xy)| start.get(id).is_some_and(|s| s != *xy)).count();
+        let differ: Vec<_> = played.iter().filter(|(id, xy)| back.get(id).is_some_and(|b| b != *xy)).map(|(id, _)| format!("{id:#x}")).collect();
+        let missing: Vec<_> = played.keys().filter(|id| !back.contains_key(id)).map(|id| format!("{id:#x}")).collect();
+        let extra: Vec<_> = back.keys().filter(|id| !played.contains_key(id)).map(|id| format!("{id:#x}")).collect();
+        eprintln!(
+            "{} things played, {moved} moved since the save; restored: {} differ, {} missing, {} extra; written: {} dropped, {} organizations with members as saved {:?}, {} not written",
+            played.len(),
+            differ.len(),
+            missing.len(),
+            extra.len(),
+            things.dropped,
+            things.members_as_saved.len(),
+            things.members_as_saved.iter().take(3).collect::<Vec<_>>(),
+            things.not_written.len()
+        );
+        assert!(differ.is_empty(), "positions differ: {differ:?}");
+        let unwritten: Vec<String> = things.not_written.iter().map(|id| format!("{id:#x}")).collect();
+        assert!(missing.iter().all(|m| unwritten.contains(m)), "missing {missing:?}, not written {unwritten:?}");
+        assert!(extra.is_empty(), "restored but not played: {extra:?}");
+    }
+
+    /// What a played world written and restored still lacks, printed, not asserted:
+    /// by GTID, the things that stand elsewhere or differ in health from the unsaved
+    /// world's, at the restore and after 32 more ticks of both, and the streams.
+    #[test]
+    #[ignore = "needs the game data (AA_GAME_ROOT) and an original saved game (AA_SAVED_GAME)"]
+    fn a_played_world_and_its_restore_played_on() {
+        use crate::ids::Thing;
+        let saved = Saved::open();
+        let mut world = saved.restore(&saved.bytes);
+        let loaded = gworld_of(&saved.bytes);
+        for _ in 0..64 {
+            world.step(Vec::new());
+        }
+        let archive = MapArchive::from_bytes(saved.bytes.clone()).unwrap();
+        let things = ThingsChunk::decode(&archive).unwrap().of_world(&world, GWORLD_VERSION);
+        let mut chunks = vec![
+            ("GWORLD", GworldWords::of_world(&world, &loaded).encode()),
+            ("IDMGR", IdmgrWords::of_world(&world).encode().unwrap()),
+            ("DYNAMIC_THINGS", things.data),
+            ("DYNAMIC_THINGS_INDEX", things.index),
+        ];
+        if let Ok(k) = kingdoms_of(&saved.bytes).0.of_world(&world) {
+            chunks.push(("KINGDOMS", k.encode().unwrap()));
+        }
+        let mut restored = saved.restore(&with_chunks(&saved.bytes, &chunks));
+        let standing = |w: &crate::world::World| -> std::collections::BTreeMap<u32, ([u32; 2], Option<u32>)> {
+            w.ids
+                .iter()
+                .filter_map(|(id, thing)| match thing {
+                    Thing::Actor(a) => {
+                        let a = &w.actors[a as usize];
+                        Some((id.raw(), ([a.pos.x.to_bits(), a.pos.y.to_bits()], Some(a.health.to_bits()))))
+                    }
+                    Thing::Org(o) => Some((id.raw(), ([w.orgs[o as usize].anchor.x.to_bits(), w.orgs[o as usize].anchor.y.to_bits()], None))),
+                    _ => None,
+                })
+                .collect()
+        };
+        let report = |a: &crate::world::World, b: &crate::world::World| {
+            let (x, y) = (standing(a), standing(b));
+            let elsewhere = x.iter().filter(|(id, s)| y.get(id).is_some_and(|t| t.0 != s.0)).count();
+            let health = x.iter().filter(|(id, s)| y.get(id).is_some_and(|t| t.1 != s.1)).count();
+            let missing = x.keys().filter(|id| !y.contains_key(id)).count();
+            let extra = y.keys().filter(|id| !x.contains_key(id)).count();
+            format!(
+                "tick {} / {}, streams {}, {} things: {elsewhere} stand elsewhere, {health} differ in health, {missing} missing, {extra} extra",
+                a.clock.tick,
+                b.clock.tick,
+                if a.native_rng.state == b.native_rng.state { "equal" } else { "differ" },
+                x.len()
+            )
+        };
+        eprintln!("at the restore: {}", report(&world, &restored));
+        for _ in 0..32 {
+            world.step(Vec::new());
+            restored.step(Vec::new());
+        }
+        eprintln!("32 ticks on: {}", report(&world, &restored));
+    }
+
     /// Every saved game in `AA_SAVED_GAMES` that `saved_world` restores, written at
     /// once: the IDMGR is the file's byte for byte, and the GWORLD is the file's but
     /// for the stream (the saved one drawn on by the load's record pass) and +198
@@ -1131,6 +2279,7 @@ mod tests {
             .collect();
         files.sort();
         let (mut restored, mut refused, mut next_item_differs) = (0usize, Vec::new(), 0usize);
+        let (mut things_exact, mut things_dropped, mut members_as_saved) = (0usize, 0usize, 0usize);
         for path in &files {
             let bytes = std::fs::read(path).unwrap();
             if MapArchive::from_bytes(bytes.clone()).is_err() {
@@ -1151,9 +2300,123 @@ mod tests {
             let differ = differences(&written, &loaded);
             assert!(differ.iter().all(|d| d.starts_with("+198 ") || d.starts_with("+D4 ")), "{} {differ:?}", path.display());
             next_item_differs += usize::from(differ.iter().any(|d| d.starts_with("+198 ")));
+            let (kingdoms, saved_bytes) = kingdoms_of(&bytes);
+            let written = kingdoms.of_world(&world).unwrap_or_else(|e| panic!("{} KINGDOMS: {e}", path.display()));
+            assert_eq!(written.encode(), Some(saved_bytes), "{} KINGDOMS from the world", path.display());
+            // DYNAMIC_THINGS from the world: the saved chunk but for the records of the
+            // things the restore does not make (dropped, counted).
+            let archive = MapArchive::from_bytes(bytes.clone()).unwrap();
+            let things = ThingsChunk::decode(&archive).unwrap().of_world(&world, GWORLD_VERSION);
+            if things.dropped == 0 {
+                assert_eq!(things.data, archive.decode_chunk("DYNAMIC_THINGS", 1 << 30).unwrap().bytes, "{} DYNAMIC_THINGS", path.display());
+                assert_eq!(things.index, archive.decode_chunk("DYNAMIC_THINGS_INDEX", 1 << 30).unwrap().bytes, "{} DYNAMIC_THINGS_INDEX", path.display());
+                things_exact += 1;
+            }
+            things_dropped += things.dropped;
+            members_as_saved += things.members_as_saved.len();
         }
-        eprintln!("{restored} saved games restored and written: IDMGR exact, GWORLD exact but the stream; +198 differs in {next_item_differs}; refused {refused:?}");
+        eprintln!(
+            "{restored} saved games restored and written: IDMGR and KINGDOMS exact, GWORLD exact but the stream; +198 differs in {next_item_differs}; \
+             DYNAMIC_THINGS exact in {things_exact} (the others drop {things_dropped} records of things not restored), {members_as_saved} organizations with members as saved; refused {refused:?}"
+        );
         assert!(restored > 0, "no saved game restored");
+    }
+
+    fn saved_files() -> Vec<std::path::PathBuf> {
+        let folder = std::env::var_os("AA_SAVED_GAMES").expect("AA_SAVED_GAMES");
+        let mut files: Vec<_> = std::fs::read_dir(folder)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("RSG")))
+            .collect();
+        files.sort();
+        files
+    }
+
+    /// Every DYNAMIC_THINGS record of every saved game in `AA_SAVED_GAMES`, walked
+    /// whole (`aa_mapworld::saved_world::walk`, an organization's members inside it)
+    /// and written again from what the walk keeps ([`thing_tail`],
+    /// [`Out::walked_record`]): each tail the writers take is the saved tail byte for
+    /// byte, and each whole record is the saved record. The records they do not take
+    /// are counted by the reason.
+    #[test]
+    #[ignore = "reads the original's saved games: set AA_SAVED_GAMES to a folder of them"]
+    fn original_saved_things_re_encode_from_the_walk() {
+        let mut reasons: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut still: std::collections::BTreeMap<String, usize> = Default::default();
+        let (mut files, mut tails, mut records, mut slots, mut over) = (0usize, 0usize, 0usize, [0usize; 31], 0usize);
+        for path in saved_files() {
+            let Ok(archive) = MapArchive::from_bytes(std::fs::read(&path).unwrap()) else { continue };
+            files += 1;
+            let version = WorldState::decode(&archive.decode_chunk("GWORLD", 1 << 30).unwrap()).unwrap().version;
+            let inventory = Inventory::decode(&archive, 1 << 30).unwrap();
+            let groups = inventory.unsupported.iter().filter_map(|u| aa_mapworld::inventory::decode_group_record(&u.raw, u.record_ordinal).ok());
+            for p in inventory.placements.iter().cloned().chain(groups) {
+                let mut whole = Out::default();
+                whole.placement(&p);
+                let (raw_tail, raw_offset) = (p.opaque_tail.clone(), p.opaque_tail_span.offset);
+                let thing = match aa_mapworld::saved_world::walk(p, version, 1, &mut crate::saved_world::Minds) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        *reasons.entry(format!("walk: {}", e.to_string().chars().take(60).collect::<String>())).or_default() += 1;
+                        continue;
+                    }
+                };
+                if let Some(e) = &thing.partial {
+                    *reasons.entry(format!("walk: {}", e.chars().take(60).collect::<String>())).or_default() += 1;
+                    continue;
+                }
+                if thing.tail.is_none() {
+                    *reasons.entry("no GActor".into()).or_default() += 1;
+                    continue;
+                }
+                match thing_tail(&thing, version) {
+                    Ok(tail) => {
+                        // A group's own words follow its GActor tail.
+                        if thing.record.class_code == 8 {
+                            assert!(thing.record.opaque_tail.starts_with(&tail), "{} group {}", path.display(), thing.record.record_ordinal);
+                        } else {
+                            assert_eq!(tail, thing.record.opaque_tail, "{} record {}", path.display(), thing.record.record_ordinal);
+                        }
+                        tails += 1;
+                        let mask = thing.tail.as_ref().unwrap().saved_components_mask;
+                        (0..31).filter(|s| mask & (1 << s) != 0).for_each(|s| slots[s] += 1);
+                        if thing.record.class_code != 8 && thing.sightings.is_empty() {
+                            let mut again = Out::default();
+                            again.walked_record(&thing, version).unwrap();
+                            assert_eq!(again.0, whole.0, "{} whole record {}", path.display(), thing.record.record_ordinal);
+                            records += 1;
+                        }
+                    }
+                    Err(e) => {
+                        *reasons.entry(e).or_default() += 1;
+                        // Over the saved tail, as `ThingsChunk::of_world` writes an
+                        // organization: what the walk does not keep is taken from it.
+                        let drained = thing.record.opaque_tail_span.offset - raw_offset;
+                        match thing_tail_over(&thing, version, Over { saved: raw_tail.get(drained..), keep: &keep_all }) {
+                            Ok(tail) => {
+                                assert!(thing.record.opaque_tail.starts_with(&tail), "{} record {} over the saved tail", path.display(), thing.record.record_ordinal);
+                                if thing.record.class_code != 8 {
+                                    assert_eq!(tail.len(), thing.record.opaque_tail.len(), "{} record {}", path.display(), thing.record.record_ordinal);
+                                }
+                                over += 1;
+                            }
+                            Err(e) => *still.entry(e).or_default() += 1,
+                        }
+                    }
+                }
+            }
+        }
+        eprintln!("{files} saved games: {tails} GActor tails written again exactly ({records} whole records); saved components in them by slot {slots:?}");
+        for (why, n) in &reasons {
+            eprintln!("  not written: {n} x {why}");
+        }
+        eprintln!("of those, written over the saved tail exactly: {over}");
+        for (why, n) in &still {
+            eprintln!("  still not written: {n} x {why}");
+        }
+        assert!(tails > 0);
     }
 
     /// Every saved game in `AA_SAVED_GAMES` (a folder of the original's `.RSG`
