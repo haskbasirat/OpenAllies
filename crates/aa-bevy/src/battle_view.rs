@@ -83,6 +83,8 @@ pub struct Library {
     /// What the bakes of a model share (`BakeBase`), shared with the loader
     /// threads.
     bases: Bases,
+    /// "model|kf" and parts a loader thread was asked to read (`read_tracks`).
+    tracks_asked: HashSet<(String, bool)>,
     /// Aspect models with their own timelines (buildings).
     pub animated: view::AnimatedModels,
     data_root: PathBuf,
@@ -146,6 +148,7 @@ impl Library {
             held_used: HashMap::new(),
             blends: HashMap::new(),
             bases: Bases::default(),
+            tracks_asked: HashSet::new(),
             animated,
             data_root,
             failures: Vec::new(),
@@ -239,6 +242,26 @@ impl Library {
         });
         self.extras.insert(key, extras.clone());
         extras
+    }
+
+    /// Reads on a loader thread, once per model, KF and parts, the tracks of
+    /// KFs a Character may switch into later (fidgets, summons, deaths), so the
+    /// switch's held-node check (`held_of`) does not read them on the main
+    /// thread.
+    fn read_tracks(&mut self, model: &str, all_meshes: bool, kfs: Vec<String>) {
+        let lower = model.to_ascii_lowercase();
+        let kfs: Vec<String> = kfs.into_iter().filter(|kf| self.tracks_asked.insert((format!("{lower}|{}", kf.to_ascii_lowercase()), all_meshes))).collect();
+        if kfs.is_empty() {
+            return;
+        }
+        let (bases, store, fixes, root, model) = (self.bases.clone(), self.store.clone(), self.fixes.clone(), self.data_root.clone(), model.to_owned());
+        rayon::spawn(move || {
+            if let Some(base) = base_of(&bases, &store, &fixes, &root, &model, all_meshes) {
+                for kf in &kfs {
+                    let _ = base.tracks(kf);
+                }
+            }
+        });
     }
 
     /// A character animation's KF clip baked on `model` (effects/anim.rs
@@ -507,7 +530,7 @@ impl Rig {
     }
 }
 
-//// A KF clip baked on a model: per frame (20 Hz) one mesh per part.
+/// A KF clip baked on a model: per frame (20 Hz) one mesh per part.
 struct KfClip {
     frames: Vec<Vec<Handle<Mesh>>>,
     duration: f32,
@@ -843,7 +866,14 @@ enum Mode {
     AbilityIdle,
     /// A summon animation (563D50, state 2): a paratrooper's landing once
     /// its fall ends (0x577E04 clears actor state 24, then 4D64A0), then the
-    /// idle again (563E10 event 2).
+    /// idle again (563E10 event 2). Only another 563770 cuts it: a move
+    /// (5774A0), a shot (57ED20, then 563640: mode 0 and the Character's
+    /// events dropped) or the death; or the Character leaving mode 2
+    /// through 563BA0 (a Mind state's 4CFC80), which the sim's Character
+    /// mirrors. A Performer that only has a target does not: its event
+    /// handler 0x57F040 (case 2: the ability idle through 0x4DB0A0 ->
+    /// 0x4CE700 -> 563770) returns at once unless actor+0xE4 is the
+    /// Performer, and 563D50 made the Character the active component.
     Summon,
     Die,
 }
@@ -1092,12 +1122,22 @@ impl Character {
                     }
                 } else if self.mode == Mode::Ability && now < self.until {
                     return restart;
+                } else if self.mode == Mode::Summon && landing && now < self.until {
+                    // With no shot the landing plays on: the Performer's
+                    // other way to 563770, its event handler 0x57F040, returns
+                    // at once while the Character is the active component
+                    // (actor+0xE4, set by 563D50). The landing's end (563E10
+                    // event 2 -> 563BA0) starts the ability idle.
+                    return restart;
                 } else {
                     (ability.idle.as_ref().and_then(|i| self.lookup(i, "IDLE")).or_else(|| self.first("IDLE")), Mode::AbilityIdle)
                 }
             }
             _ => match self.mode {
-                Mode::Idle | Mode::Fidget | Mode::Summon if now < self.until => return restart,
+                Mode::Idle | Mode::Fidget if now < self.until => return restart,
+                // The landing ends with the sim's Character leaving mode 2
+                // (its event 2, or 563BA0 from a Mind state) or at its length.
+                Mode::Summon if now < self.until && landing => return restart,
                 Mode::Idle => match self.fidget() {
                     // 563CA0: the idle repetitions are over: a fidget.
                     Some(f) => {
@@ -1554,9 +1594,16 @@ fn set_up(
                 }
             }
         }
+        let mut later: Vec<String> = Vec::new();
+        for a in ch.def.base.iter().chain(ch.def.sets.iter().flat_map(|(_, l)| l.iter())) {
+            if !a.kf.is_empty() && !wanted.iter().any(|(k, _)| *k == a.kf) && !later.contains(&a.kf) {
+                later.push(a.kf.clone());
+            }
+        }
         for (kf, looping) in wanted {
             let _ = library.kf_clip(&look.model, &kf, looping, all_meshes, None, meshes);
         }
+        library.read_tracks(&look.model, all_meshes, later);
         look.character = Some(ch);
     }
     // A truck that unpacks: its building's unpacking aspect is decoded now,
@@ -1640,6 +1687,9 @@ fn animate_character(
         if log && ch.held.is_some() {
             info!("character: actor {} keeps the pose of nodes {} does not drive", actor.id, a.kf);
         }
+        if log && base.is_none() && shown.is_some() {
+            info!("character: actor {} switches to {} without a blend: the model's data is still loading", actor.id, a.kf);
+        }
     }
     // WhenDoAtTime cues (gameplay seconds into the animation).
     let elapsed = now - ch.started;
@@ -1673,7 +1723,11 @@ fn animate_character(
     }
     // 884060 while a blend runs, and on its last update: the offset is
     // first frame / rate - the blend's end, so the KF runs from frame 0 at
-    // the blend's end (until a new start or rate).
+    // the blend's end (until a new start or rate). The end's 882880 ->
+    // 8827D0(1) adds controller +0x28 / frequency - +0x24 only when +0x24
+    // (the last time 89E9B0 saw) is set: 882EB0 cleared it (Stop, 89E990)
+    // when the sequence started, and the blend's updates pass time
+    // frame 0 / rate = 0, which leaves +0x28 = +0x24 = 0, so it adds 0.
     if let Some((_, start)) = &ch.blend {
         let end = start + ch.def.blend_time;
         ch.offset = -end;

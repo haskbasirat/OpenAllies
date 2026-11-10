@@ -980,4 +980,53 @@ mod animation_blend_tests {
         eprintln!("animations of {} actors by type: {kinds:?}", t.actors.len());
         assert!(kinds.get("IDLE").is_some_and(|n| *n > 0));
     }
+
+    /// KKC_FXCPlayHitEffect (FXC type PLAY_HIT_EFFECT, loaded by 0x42CF40,
+    /// run by the Execute that follows 0x42A920) is no animation: it springs
+    /// a named pivot node of the target's view (0x4548B0 with stiffness,
+    /// vel_decay, vel_falloff, max_angle; 0x451CA0 with the impulse scaled by
+    /// damage / max_damage x max_impulse). Over every .tgi of the original
+    /// data, only the templates name it or the HitAnimation, and the UVars
+    /// flag HitAnimations (view variable 17) has no reader, so the shipped
+    /// game never plays either.
+    #[test]
+    fn no_shipped_file_uses_a_hit_effect_or_a_hit_animation() {
+        let Some(root) = std::env::var_os("AA_GAME_ROOT") else {
+            eprintln!("hit effect test skipped: no AA_GAME_ROOT");
+            return;
+        };
+        let mut sources = aa_play::data::Sources::open(Path::new(&root)).unwrap();
+        let mut files = 0;
+        let mut found: Vec<(String, &str)> = Vec::new();
+        for entry in sources.files.catalog() {
+            let path = entry.logical_path.replace('\\', "/");
+            if !path.to_ascii_lowercase().ends_with(".tgi") {
+                continue;
+            }
+            let bytes = sources.files.read(&entry.logical_path).unwrap().bytes;
+            let text = if bytes.starts_with(&[0xff, 0xfe]) {
+                let units: Vec<u16> = bytes[2..].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                String::from_utf16_lossy(&units)
+            } else {
+                String::from_utf8_lossy(&bytes).into_owned()
+            };
+            let text = text.to_ascii_lowercase();
+            files += 1;
+            for word in ["play_hit_effect", "playhiteffect", "hitanimation"] {
+                if text.contains(word) {
+                    found.push((path.clone(), word));
+                }
+            }
+        }
+        eprintln!("hit effect / hit animation over {files} .tgi files: {found:?}");
+        assert!(files > 1000, "{files}");
+        for (path, word) in &found {
+            let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+            let allowed = match *word {
+                "hitanimation" => name == "template_animation.tgi" || name == "uvars.tgi",
+                _ => name == "template_fx.tgi",
+            };
+            assert!(allowed, "{path} names {word}");
+        }
+    }
 }
