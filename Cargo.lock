@@ -120,6 +120,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aa-editor"
+version = "0.1.0"
+dependencies = [
+ "aa-formats",
+ "aa-mapworld",
+]
+
+[[package]]
 name = "aa-formats"
 version = "0.1.0"
 

@@ -1,0 +1,14 @@
+[package]
+name = "aa-editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+license.workspace = true
+description = "The original's map editor: map file writer and its zlib 1.1.4 deflater"
+
+[dependencies]
+
+[dev-dependencies]
+aa-formats = { path = "../aa-formats" }
+aa-mapworld = { path = "../aa-mapworld" }
