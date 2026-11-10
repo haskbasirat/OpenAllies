@@ -82,3 +82,5 @@ pub mod minds;
 pub mod triggers;
 // film-sources: a saved game's world (`aa_mapworld::saved_world`).
 pub mod saved_world;
+/// Writing a saved game (GWorld's Save 0x4F2DB0), in part.
+pub mod saved_write;
