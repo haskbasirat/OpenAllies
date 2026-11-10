@@ -197,11 +197,10 @@ impl Bind<'_, '_, '_> {
     /// `7A3860(resources, relaxed)` on the goal's cost (`Ctx::affordable`): the
     /// purchase resources only, with the rate unless `relaxed`.
     fn affordable(&self, gi: usize, res: Resources<'_>, relaxed: bool) -> bool {
-        let at = |r: &[u32], i: usize| r.get(i).map_or(0.0, |x| f32::from_bits(*x));
-        let have: [f32; 3] = match res {
+        let have: Vec<f32> = match res {
             Resources::Null => return true,
-            Resources::Running(r) => [at(r, 0), at(r, 1), at(r, 2)],
-            Resources::Economy => self.c.view.stockpile,
+            Resources::Running(r) => r.iter().map(|x| f32::from_bits(*x)).collect(),
+            Resources::Economy => self.c.stock(),
         };
         self.c.affordable(&self.goals[gi].cost, &have, relaxed)
     }
@@ -473,9 +472,63 @@ fn mask(c: &Ctx<'_, '_>, o: usize) -> u64 {
     m
 }
 
+/// `7A3070`, the comparator of the goal execution `7A59C0`: the current priorities
+/// (+34) of the two goals, the left one `a`. Equal (with +0/-0) gives 0, `a` higher
+/// gives -1, and `a` lower or an unordered pair gives 1 (`fucompp`, `test ah,44`,
+/// `jp`; then `fcomp`, `test ah,41`, `je`).
+pub(super) fn current_order_7a3070(a: f32, b: f32) -> i32 {
+    if a == b {
+        0
+    } else if a > b {
+        -1
+    } else {
+        1
+    }
+}
+
+/// `7A3370`, the goal engine's list merge sort, on a list held head first. A list of
+/// two or more is split by `4C82A0` (the first part takes the larger half, found by a
+/// slow and a fast walk), both parts are sorted and `638400` merges them: it takes the
+/// left node while `cmp(left, right)` is negative and the right node otherwise, so of
+/// two equal goals the later one comes first.
+pub(super) fn merge_sort_7a3370<T: Copy>(list: Vec<T>, cmp: &mut impl FnMut(T, T) -> i32) -> Vec<T> {
+    if list.len() < 2 {
+        return list;
+    }
+    let mut first = list;
+    let second = first.split_off(first.len().div_ceil(2));
+    let first = merge_sort_7a3370(first, cmp);
+    let second = merge_sort_7a3370(second, cmp);
+    let mut out = Vec::with_capacity(first.len() + second.len());
+    let (mut i, mut j) = (0, 0);
+    while i < first.len() && j < second.len() {
+        if cmp(first[i], second[j]) < 0 {
+            out.push(first[i]);
+            i += 1;
+        } else {
+            out.push(second[j]);
+            j += 1;
+        }
+    }
+    out.extend_from_slice(&first[i..]);
+    out.extend_from_slice(&second[j..]);
+    out
+}
+
+/// `7A59C0`'s order of the selected goals: it walks the 23 buckets in type order and each
+/// bucket's selected list (+10) from its head, pushing every goal at the head of a new list,
+/// and sorts that list by current priority with `7A3370` and `7A3070`. Equal goals so run
+/// in the walk's order.
+fn execution_order(ctl: &Controller, current: impl Fn(GoalId) -> f32) -> Vec<GoalId> {
+    let mut list: Vec<GoalId> = ctl.buckets.iter().flat_map(|b| b.lists[engine::SELECTED].iter().flatten().copied()).collect();
+    list.reverse();
+    merge_sort_7a3370(list, &mut |a, b| current_order_7a3070(current(a), current(b)))
+}
+
 /// `7A93B0` over the goals of a think: fills `selected`, `current` and `actors` (and a
-/// plane's `airfield`, and `sum_*` for the execution's worth), and returns the actors held.
-pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_orders: bool, log: &mut Vec<String>) -> BTreeMap<Key, Vec<OrgId>> {
+/// plane's `airfield`, and `sum_*` for the execution's worth), and returns the actors held
+/// and the order in which `7A59C0` runs the selected goals (indices into `goals`).
+pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_orders: bool, log: &mut Vec<String>) -> (BTreeMap<Key, Vec<OrgId>>, Vec<usize>) {
     let orgs = &c.view.orgs;
     let fields = if air_orders { airfields(c, false) } else { Vec::new() };
     let recons = if air_orders { airfields(c, true) } else { Vec::new() };
@@ -546,7 +599,8 @@ pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_o
     }
     roster.pools = pools.into_iter().map(|l| { let n = l.len() as i32; Some(ActorList::from_actors(l, n)) }).collect();
     let range: Vec<f32> = orgs.iter().map(|o| if bombards(c, o) { bombard_range(c, o) } else { 0.0 }).collect();
-    let economy: Vec<u32> = c.view.stockpile.iter().map(|x| x.to_bits()).collect();
+    // The kingdom's stock (+0x1C4) in registry order, copied for each pass.
+    let economy: Vec<u32> = c.stock().iter().map(|x| x.to_bits()).collect();
     let mut bind = Bind { c, player, goals, roster, range, fields, recons };
     let outcome = (|| -> Result<()> {
         let mut roster = std::mem::take(&mut bind.roster);
@@ -569,10 +623,19 @@ pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_o
         bind.roster = roster;
         engine::select_goals(&mut ctl, &economy, &mut bind, P)
     })();
+    let failed = outcome.is_err();
     if let Err(e) = outcome {
         log.push(format!("goal selection: {e}"));
     }
     let Bind { goals, roster, fields, recons, .. } = bind;
+    // After a failed selection the bucket lists are incomplete (the original would
+    // have stopped); the selected goals then run in the order of `goals`.
+    let run: Vec<usize> = if failed {
+        (0..goals.len()).filter(|&gi| ctl.goal(gi as GoalId).is_ok_and(|s| s.status == 2) && goals[gi].base > 0.0).collect()
+    } else {
+        let current = |id: GoalId| ctl.goal(id).map_or(0.0, |s| f32::from_bits(s.current));
+        execution_order(&ctl, current).into_iter().map(|id| id as usize).filter(|&gi| goals.get(gi).is_some_and(|g| g.base > 0.0)).collect()
+    };
     let mut holding = BTreeMap::new();
     for (gi, g) in goals.iter_mut().enumerate() {
         let id = gi as GoalId;
@@ -606,5 +669,35 @@ pub(super) fn select(c: &Ctx<'_, '_>, player: &Player, goals: &mut [Goal], air_o
             a.add(goals, gi, o);
         }
     }
-    holding
+    (holding, run)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{current_order_7a3070, merge_sort_7a3370};
+
+    /// research/phase8-ai/native_goal_merge.py: the original 7A3370 (with 4C82A0, 638400
+    /// and the comparator 7A3070) run unchanged on lists of goals. The port must make the
+    /// same comparator calls in the same order, with the same results, and end in the same
+    /// order.
+    #[test]
+    fn execution_sort_follows_7a3370() {
+        let d: serde_json::Value = serde_json::from_str(include_str!("../../../../research/phase8-ai/native-goal-merge.json")).unwrap();
+        let cases = d["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 54);
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let keys: Vec<f32> = case["keys"].as_array().unwrap().iter().map(|k| f32::from_bits(k.as_u64().unwrap() as u32)).collect();
+            let mut calls: Vec<[i64; 3]> = Vec::new();
+            let order = merge_sort_7a3370((0..keys.len()).collect(), &mut |a, b| {
+                let r = current_order_7a3070(keys[a], keys[b]);
+                calls.push([a as i64, b as i64, r as i64]);
+                r
+            });
+            let want: Vec<usize> = case["order"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+            let want_calls: Vec<[i64; 3]> = case["compares"].as_array().unwrap().iter().map(|c| std::array::from_fn(|i| c[i].as_i64().unwrap())).collect();
+            assert_eq!(calls, want_calls, "{name}: comparator calls");
+            assert_eq!(order, want, "{name}: order");
+        }
+    }
 }

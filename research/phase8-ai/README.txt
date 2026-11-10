@@ -126,6 +126,13 @@ Round 2 - SAI goal engine
 7A6930 7A6A90 7A67B0  aa_mind::sai::goal_base::{add_actor, remove_actor, reevaluate}
 7A5600 7A3D30 7AFB00  aa_mind::sai::goal_base::{deselect, release_all, return_to_pool}
 7A0F80 7ACF50 59E240  aa_mind::sai::goal_base::{set_owner, actor_count}
+Goal execution 7A59C0 (aa-play, unit tests in crates/aa-play/src/ai)
+7A39C0 (+7A3980)  aa_play ai::goals::pay_7a39c0                native-goal-pay.json (76; producer native_goal_pay.py)
+7A3860            aa_play ai::goals::affordable_7a3860 (whole cost vectors,
+                  unordered values)                            native-goal-afford.json (226)
+7A3370 4C82A0 638400 7A3070
+                  aa_play ai::selection::{merge_sort_7a3370, current_order_7a3070}
+                                                               native-goal-merge.json (54, 7078 compares)
 Round 2 - combat-facing Mind/company states (combat agent seams)
 521060 523DD0 524C10 51EFB0 51F040 523EA0 51FE60
                   aa_mind::cai_engage::{can_add, add_target, mind_add_target,

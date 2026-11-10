@@ -161,38 +161,76 @@ impl Ctx<'_, '_> {
         }
         out
     }
-    /// The resource definition word `+0x18` of the money, ammo and oil slots
-    /// (registry `[B36530]+34`): 0 STOCKPILED, the only resources the goal
-    /// engine buys with (`7A3860`, `7A39C0`, `7A3980` test it against 0);
-    /// 1 UPKEEP; 2 LIMITED_CONSUMED. Game/resources.tgi makes money a
-    /// PurchaseResource and ammo and oil UpkeepResources. A slot the registry
-    /// lacks has no entry natively, so it is never bought with. Synthetic data
-    /// without a registry buys with money alone, as `value::Econ` reads it.
-    pub fn purchase_kinds(&self) -> [u32; 3] {
+    /// A definition's whole cost vector with its organization slots in
+    /// resource registry order (`production::quote`), the vector a goal that
+    /// buys it carries. Synthetic data without a registry has the
+    /// definitions' money, ammo and oil fields as its three resources.
+    pub fn cost_vector(&self, d: DefId) -> Vec<f32> {
+        let w = self.view.world;
+        if w.data.resources.is_empty() {
+            return self.quote(d, crate::production::Vector::Cost).to_vec();
+        }
+        crate::production::quote(w, d, crate::production::Vector::Cost)
+    }
+    /// The resource definition word `+0x18` of every registry entry
+    /// (`[B36530]+34`), in registry order: 0 STOCKPILED, the only resources
+    /// the goal engine buys with (`7A3860`, `7A39C0`, `7A3980` test it
+    /// against 0); 1 UPKEEP; 2 LIMITED_CONSUMED. Game/resources.tgi makes
+    /// money a PurchaseResource and ammo and oil UpkeepResources. Synthetic
+    /// data without a registry buys with money alone, as `value::Econ` reads
+    /// it.
+    pub fn purchase_kinds(&self) -> Vec<u32> {
         let data = &self.view.world.data;
         if data.resources.is_empty() {
-            return [0, 1, 1];
+            return vec![0, 1, 1];
         }
-        RESOURCES.map(|name| {
-            data.resource_index(name).and_then(|r| data.resources.get(r)).map_or(1, |r| match r.kind {
+        data.resources
+            .iter()
+            .map(|r| match r.kind {
                 crate::data::ResourceKind::Stockpiled => 0,
                 crate::data::ResourceKind::Upkeep => 1,
                 crate::data::ResourceKind::LimitedConsumed => 2,
             })
-        })
+            .collect()
+    }
+    /// The kingdom's stock (+0x1C4) in registry order, the array the goal
+    /// engine copies for a think (`7A93B0`, `7A59C0`). Without the books (or
+    /// a registry) the view's money, ammo and oil.
+    pub fn stock(&self) -> Vec<f32> {
+        let v = self.view;
+        let data = &v.world.data;
+        if data.resources.is_empty() {
+            return v.stockpile.to_vec();
+        }
+        match v.world.books.kingdom(v.kingdom) {
+            Some(b) => (0..data.resources.len()).map(|r| b.stockpiled.get(r).copied().unwrap_or(0.0)).collect(),
+            None => {
+                let mut s = vec![0.0; data.resources.len()];
+                for (slot, name) in RESOURCES.iter().enumerate() {
+                    if let Some(r) = data.resource_index(name) {
+                        s[r] = v.stockpile[slot];
+                    }
+                }
+                s
+            }
+        }
     }
     /// `7A3860` of the goal engine on `cost` (`affordable_7a3860`), with the
     /// kingdom's books: +0x1A0 provided and +0x1B8 consumed per resource.
-    pub fn affordable(&self, cost: &[f32; 3], have: &[f32; 3], relaxed: bool) -> bool {
+    pub fn affordable(&self, cost: &[f32], have: &[f32], relaxed: bool) -> bool {
         let v = self.view;
         let books = v.world.books.kingdom(v.kingdom);
         let kinds = self.purchase_kinds();
-        let slots = std::array::from_fn(|i| {
-            // As `View::income` reads the books; without them the view's rate.
-            let flow = books.zip(v.world.data.resource_index(RESOURCES[i])).and_then(|(b, r)| Some((*b.provided.get(r)?, *b.consumed.get(r)?)));
-            let (provided, consumed) = flow.unwrap_or((v.income[i], 0.0));
-            PurchaseSlot { word18: kinds[i], provided, consumed }
-        });
+        let synthetic = v.world.data.resources.is_empty();
+        let slots: Vec<PurchaseSlot> = (0..kinds.len())
+            .map(|i| {
+                // As `View::income` reads the books; without them the view's rate.
+                let flow = if synthetic { None } else { books.and_then(|b| Some((*b.provided.get(i)?, *b.consumed.get(i)?))) };
+                let slot = if synthetic { Some(i) } else { RESOURCES.iter().position(|name| v.world.data.resource_index(name) == Some(i)) };
+                let (provided, consumed) = flow.unwrap_or_else(|| (slot.and_then(|s| v.income.get(s).copied()).unwrap_or(0.0), 0.0));
+                PurchaseSlot { word18: kinds[i], provided, consumed }
+            })
+            .collect();
         affordable_7a3860(&slots, self.ego.saving_time_limit, self.now, cost, have, relaxed)
     }
     /// Unit limit a recruit consumes (the LIMITED_CONSUMED upkeep).
@@ -299,7 +337,10 @@ pub struct Goal {
     pub static_cv: f32,
     pub allied_cv: f32,
     pub required: Option<usize>,
-    pub cost: [f32; 3],
+    /// The goal's cost vector (+0x1C, count +0x20) in resource registry order.
+    /// The base constructor 7A66E0 leaves it empty (count 0), so a goal whose
+    /// class sets no cost passes 7A3860 and has nothing taken in 7A93B0.
+    pub cost: Vec<f32>,
     pub recruit: Option<(DefId, ActorId)>,
     pub site: Option<(Vec2, f32, u32)>,
     pub explore: Option<usize>,
@@ -336,7 +377,7 @@ impl Goal {
             static_cv: 0.0,
             allied_cv: 0.0,
             required: None,
-            cost: [0.0; 3],
+            cost: Vec::new(),
             recruit: None,
             site: None,
             explore: None,
@@ -391,17 +432,28 @@ pub fn think(
     recruit_goals(&c, &val, data, rng, &mut goals);
     research_goals(&c, &mut goals);
     attach_goals(&c, &val, &mut goals);
-    for g in &mut goals {
-        finalize(g, ego, &player.memory, rng);
+    // 7A7700 -> goal +0x60 -> 7A67B0 -> 7A5200(economy, 1): 7A5200 first tests
+    // 7A3860(economy, not relaxed); a goal the stock and saving_time_limit of
+    // the rate do not cover gets priority 0 there and returns, with no fuzz
+    // drawn and no goal CSV row.
+    let stock = c.stock();
+    let covered: Vec<bool> = goals.iter().map(|g| c.affordable(&g.cost, &stock, false)).collect();
+    for (g, &covered) in goals.iter_mut().zip(&covered) {
+        if covered {
+            finalize(g, ego, &player.memory, rng);
+        } else {
+            g.base = 0.0;
+        }
     }
     if logging {
         // The original's own dump, 7A5200 under SAIDebug with GoalPriorityCSV.
-        log.extend(goals.iter().filter_map(|g| goal_row(&c, g, &player.memory)));
+        log.extend(goals.iter().zip(&covered).filter(|(_, covered)| **covered).filter_map(|(g, _)| goal_row(&c, g, &player.memory)));
     }
     // 7A93B0: candidates sorted by base priority (comparator 7A30B0).
     goals.sort_by(|a, b| b.base.partial_cmp(&a.base).unwrap_or(std::cmp::Ordering::Equal));
     // 7A93B0, through the exact ports.
-    player.memory.holding = super::selection::select(&c, player, &mut goals, air_orders, log);
+    let run;
+    (player.memory.holding, run) = super::selection::select(&c, player, &mut goals, air_orders, log);
     if logging {
         let bombarders: Vec<String> = c.view.orgs.iter().filter(|o| o.owner == c.view.me && bombards(&c, o)).map(|o| c.def(o.def).id.clone()).collect();
         if !bombarders.is_empty() {
@@ -432,7 +484,7 @@ pub fn think(
         }
     }
     player.memory.defend_things = goals.iter().filter(|g| g.kind == data::DEFEND_REGION).map(|g| (g.region, g.thing)).collect();
-    execute(&c, data, player, rng, &goals, log);
+    execute(&c, data, player, rng, &goals, &run, log);
     player.memory.selected = goals.iter().filter(|g| g.selected).map(|g| (g.key, g.fuzzy)).collect();
 }
 
@@ -1406,7 +1458,7 @@ fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mu
                 let Some(b) = location(d, rng) else { continue };
                 let base = priority + val.recruit_value(d, false, true, rng);
                 let mut g = Goal::new(Key::Recruit(index, d), data::RECRUIT, base, 0, Vec2::ZERO);
-                g.cost = c.quote(d, crate::production::Vector::Cost);
+                g.cost = c.cost_vector(d);
                 g.recruit = Some((d, b));
                 *per_def.entry(d).or_default() += 1;
                 made.push(g);
@@ -1434,7 +1486,7 @@ fn recruit_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, data: &AiData, rng: &mu
                     let Some(b) = location(d, rng) else { break };
                     let base = val.recruit_value(d, true, true, rng);
                     let mut g = Goal::new(Key::Recruit(k, d), data::RECRUIT, base, 0, Vec2::ZERO);
-                    g.cost = c.quote(d, crate::production::Vector::Cost);
+                    g.cost = c.cost_vector(d);
                     g.recruit = Some((d, b));
                     *per_def.entry(d).or_default() += 1;
                     made.push(g);
@@ -1538,11 +1590,8 @@ fn research_goals(c: &Ctx<'_, '_>, goals: &mut Vec<Goal>) {
             }
             seen.push(tech.clone());
             let mut g = Goal::new(Key::Research(b.id, i as u32), data::RESEARCH, c.ego.tech_priority(&tech), c.region_of(b.pos), b.pos);
-            for (slot, name) in RESOURCES.iter().enumerate() {
-                if let Some(r) = w.data.resource_index(name) {
-                    g.cost[slot] = item.cost.get(r).copied().unwrap_or(0.0);
-                }
-            }
+            // The item's cost vector in registry order.
+            g.cost = (0..w.data.resources.len()).map(|r| item.cost.get(r).copied().unwrap_or(0.0)).collect();
             g.research = Some((b.id, item.property.clone()));
             goals.push(g);
         }
@@ -1588,8 +1637,7 @@ fn attach_goals(c: &Ctx<'_, '_>, val: &Val<'_, '_, '_>, goals: &mut Vec<Goal>) {
         let value = c.cv(org.def) * c.ego.attach_cv_multiplier + val.actor_priority(org.def, false);
         let mut g = Goal::new(Key::Attach(o.id), data::ATTACH, value, c.region_of(o.pos), o.pos);
         let factor = w.data.rule_ci("HQAttachCostPercentage").unwrap_or(0.0);
-        let cost = c.quote(org.def, crate::production::Vector::Cost);
-        g.cost = [cost[0] * factor, cost[1] * factor, cost[2] * factor];
+        g.cost = c.cost_vector(org.def).iter().map(|x| x * factor).collect();
         g.attach = Some((o.id, hq));
         goals.push(g);
     }
@@ -1800,10 +1848,19 @@ struct PurchaseSlot {
 /// settlements) is not loaded by `data::Ego`; its maximum is 0 in all 75
 /// shipped egos, so the native `settlements < maximum` never holds and the
 /// reserve is 0. Its services (`79E4B0`, goal virtual +0x48) are refused.
-fn affordable_7a3860(slots: &[PurchaseSlot; 3], saving_time_limit: f32, now: f32, cost: &[f32; 3], have: &[f32; 3], relaxed: bool) -> bool {
+///
+/// 7A3860 walks the goal's whole cost vector (count +0x20) from its last
+/// entry, each against the registry entry and the stock of the same index;
+/// an index past the registry or the stock reads here as not purchased and
+/// as an empty stock.
+fn affordable_7a3860(slots: &[PurchaseSlot], saving_time_limit: f32, now: f32, cost: &[f32], have: &[f32], relaxed: bool) -> bool {
     use aa_mind::sai::goal_priority as gp;
-    let resources = (0..3)
-        .map(|i| gp::ResourceSlot { definition_word18: slots[i].word18, economy_1a0: slots[i].provided.to_bits(), economy_1b8: slots[i].consumed.to_bits(), available: have[i].to_bits() })
+    let slot = |i: usize| slots.get(i).copied().unwrap_or(PurchaseSlot { word18: 1, provided: 0.0, consumed: 0.0 });
+    let resources = (0..cost.len())
+        .map(|i| {
+            let s = slot(i);
+            gp::ResourceSlot { definition_word18: s.word18, economy_1a0: s.provided.to_bits(), economy_1b8: s.consumed.to_bits(), available: have.get(i).copied().unwrap_or(0.0).to_bits() }
+        })
         .collect();
     let context = gp::Context {
         // [B36534]+E0, read only by the settlement reserve.
@@ -1820,10 +1877,43 @@ fn affordable_7a3860(slots: &[PurchaseSlot; 3], saving_time_limit: f32, now: f32
         },
         resources,
     };
-    let mut goal = gp::Goal { status: 0, fuzzy: 0, costs: cost.map(f32::to_bits).to_vec(), inertia_applied: 0, priority: 0 };
-    // The port refuses non-finite x87 values (natively an unordered compare
-    // passes); such a test is taken here as not affordable.
-    gp::affordable(&mut goal, relaxed, &context, &mut NoReserve, aa_numeric::Precision::Double53).unwrap_or(false)
+    let mut goal = gp::Goal { status: 0, fuzzy: 0, costs: cost.iter().map(|x| x.to_bits()).collect(), inertia_applied: 0, priority: 0 };
+    match gp::affordable(&mut goal, relaxed, &context, &mut NoReserve, aa_numeric::Precision::Double53) {
+        Ok(v) => v,
+        // The port refuses non-finite x87 values; the original runs on.
+        Err(_) => affordable_unordered(&|i| slot(i), saving_time_limit, cost, have, relaxed),
+    }
+}
+
+/// `7A3860` where the exact port stops at a non-finite value (an infinite or
+/// NaN cost, stock, book or rate), with the original's flag tests. Each value
+/// is a binary32 and the x87 runs at double precision, so binary64 gives the
+/// same results here: the rate is `fld [ego+274]`, `fmul [A1B268]` (the
+/// binary32 1/60), `fstp dword`; `fcom 0.0`, `test ah,5`, `jnp` drops a
+/// negative provided-minus-consumed but multiplies an unordered one, so it
+/// stays NaN; the cost is then compared with that plus the stock (`fcompp`,
+/// `test ah,41`, `je`), which refuses only an ordered cost above it, so an
+/// unordered compare passes. The reserve is 0 (`affordable_7a3860`).
+fn affordable_unordered(slot: &dyn Fn(usize) -> PurchaseSlot, saving_time_limit: f32, cost: &[f32], have: &[f32], relaxed: bool) -> bool {
+    let rate = (f64::from(saving_time_limit) * f64::from(f32::from_bits(0x3C88_8889))) as f32;
+    for i in (0..cost.len()).rev() {
+        let s = slot(i);
+        if s.word18 != 0 {
+            continue;
+        }
+        let extra = if relaxed {
+            0.0
+        } else {
+            let difference = f64::from(s.provided) - f64::from(s.consumed);
+            if difference < 0.0 { 0.0 } else { difference * f64::from(rate) }
+        };
+        // (`fsub` of the zero reserve leaves every value as it is.)
+        let value = extra + f64::from(have.get(i).copied().unwrap_or(0.0));
+        if f64::from(cost[i]) > value {
+            return false;
+        }
+    }
+    true
 }
 
 /// `7A39C0`, the payment before a goal executes (`kinds` the words +0x18,
@@ -1832,14 +1922,18 @@ fn affordable_7a3860(slots: &[PurchaseSlot; 3], saving_time_limit: f32, now: f32
 /// (`7A3860` relaxed) has each purchase resource of its cost taken from the
 /// stock (`fld`, `fsub`, `fstp`); one the stock affords only with the rate
 /// (`7A3860` not relaxed) starts the saving.
-fn pay_7a39c0(cost: &[f32; 3], stock: &mut [f32; 3], kinds: &[u32; 3], saving: &mut bool, affordable: impl Fn(&[f32; 3], &[f32; 3], bool) -> bool) -> bool {
-    if *saving && (0..3).rev().any(|r| kinds[r] == 0 && cost[r] > 0.0) {
+fn pay_7a39c0(cost: &[f32], stock: &mut [f32], kinds: &[u32], saving: &mut bool, affordable: impl Fn(&[f32], &[f32], bool) -> bool) -> bool {
+    // Like 7A3860, both walks run over the goal's cost vector from its end.
+    let purchased = |r: usize| kinds.get(r).is_some_and(|&k| k == 0);
+    if *saving && (0..cost.len()).rev().any(|r| purchased(r) && cost[r] > 0.0) {
         return false;
     }
     if affordable(cost, stock, true) {
-        for r in (0..3).rev() {
-            if kinds[r] == 0 {
-                stock[r] = x87_sub(stock[r], cost[r]);
+        for r in (0..cost.len()).rev() {
+            if purchased(r)
+                && let Some(s) = stock.get_mut(r)
+            {
+                *s = x87_sub(*s, cost[r]);
             }
         }
         return true;
@@ -1880,15 +1974,22 @@ fn x87_sub(a: f32, b: f32) -> f32 {
     d.map_or(a - b, f32::from_bits)
 }
 
-fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng, goals: &[Goal], log: &mut Vec<String>) {
+fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng, goals: &[Goal], run: &[usize], log: &mut Vec<String>) {
     let w = c.view.world;
     let me = c.view.kingdom;
     let mut commands = Vec::new();
-    let mut stock = c.view.stockpile;
+    let mut stock = c.stock();
     let mut used_buildings: Vec<ActorId> = Vec::new();
     let mut assigned = BTreeMap::new();
-    // 7A59C0: the selected goals run in order of their current priority
-    // (comparator 7A3070, goal +0x34), each paid by 7A39C0 from the running
+    // 7A59C0: the selected goals run in `run` order (selection::select: the
+    // buckets' selected lists merge-sorted by 7A3370 with the comparator
+    // 7A3070 on the current priority +0x34, equal goals in bucket order).
+    // Before paying, 7A59C0 skips a goal whose virtual +0x14 is non-zero; for
+    // RECRUIT that is 7A5D80, the goal's +0x2C byte, which the constructor
+    // 7A66E0 clears and no pass sets for a recruit goal (7A45B0 tests the
+    // +0x1C target, the null handle of 7A5DA0; 7CFEA0 rebuilds the recruit
+    // goals every think), so a recruit goal is never skipped there.
+    // Each goal is paid by 7A39C0 from the running
     // copy of the kingdom stock (+0x1C4). 7A39C0: while the engine saves
     // (engine +0x20, cleared at the start of the think by 7A9840) a goal with
     // a positive purchase cost (7A3980) is refused; a goal the stock affords
@@ -1897,11 +1998,10 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
     // saving_time_limit of the rate (7A3860 not relaxed) starts the saving.
     // Goals without a cost always run: a zero cost fits the stock, which the
     // economy tick 4E9C40 never leaves below zero.
-    let mut order: Vec<usize> = (0..goals.len()).filter(|&i| goals[i].selected).collect();
-    order.sort_by(|&a, &b| goals[b].current.partial_cmp(&goals[a].current).unwrap_or(std::cmp::Ordering::Equal));
+    let order = run.iter().copied().filter(|&i| goals.get(i).is_some_and(|g| g.selected));
     let kinds = c.purchase_kinds();
     let mut saving = false;
-    let mut pay = |cost: [f32; 3], stock: &mut [f32; 3]| -> bool { pay_7a39c0(&cost, stock, &kinds, &mut saving, |k, h, r| c.affordable(k, h, r)) };
+    let mut pay = |cost: &[f32], stock: &mut [f32]| -> bool { pay_7a39c0(cost, stock, &kinds, &mut saving, |k, h, r| c.affordable(k, h, r)) };
     for gi in order {
         let g = &goals[gi];
         match g.kind {
@@ -1909,7 +2009,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                 let Some((d, b)) = g.recruit else { continue };
                 // 7A39C0 pays first; then 7CDA10 sends the recruit order,
                 // one per recruiter up to build_queue_max_items.
-                if !pay(g.cost, &mut stock) || used_buildings.contains(&b) {
+                if !pay(&g.cost, &mut stock) || used_buildings.contains(&b) {
                     continue;
                 }
                 used_buildings.push(b);
@@ -1920,7 +2020,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
             data::RESEARCH => {
                 let Some((b, tech)) = g.research.clone() else { continue };
                 // 7D0820: one order per building up to build_queue_max_items.
-                if !pay(g.cost, &mut stock) || used_buildings.contains(&b) {
+                if !pay(&g.cost, &mut stock) || used_buildings.contains(&b) {
                     continue;
                 }
                 used_buildings.push(b);
@@ -1929,7 +2029,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
             }
             data::ATTACH => {
                 let Some((org, hq)) = g.attach else { continue };
-                if !pay(g.cost, &mut stock) {
+                if !pay(&g.cost, &mut stock) {
                     continue;
                 }
                 log.push(format!("attach {} to {} (priority {:.0})", c.def(w.orgs[org as usize].def).id, c.def(w.actors[hq as usize].def).id, g.base));
@@ -2003,7 +2103,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                 // position), paid with the AirAttackCost; the goal's +40
                 // takes the attack time.
                 let (Some(t), Some(field)) = (g.target_actor, g.airfield) else { continue };
-                if !pay(g.cost, &mut stock) {
+                if !pay(&g.cost, &mut stock) {
                     continue;
                 }
                 let target = if crate::fog::actor_visible(w, t, Some(me)) { AbilityTarget::Actor(t) } else { AbilityTarget::Point(g.target) };
@@ -2016,7 +2116,7 @@ fn execute(c: &Ctx<'_, '_>, data: &AiData, player: &mut Player, rng: &mut SaiRng
                 // region from the airfield, the air_recon order there, paid
                 // with the AirReconCost.
                 let Some(field) = g.airfield else { continue };
-                if !pay(g.cost, &mut stock) {
+                if !pay(&g.cost, &mut stock) {
                     continue;
                 }
                 let from = w.actors[field as usize].pos.truncate();
@@ -2407,6 +2507,25 @@ mod tests {
             let limit = f32::from_bits(*limit);
             let got = pay_7a39c0(&cost, &mut stock, &kinds, &mut s, |k, h, r| affordable_7a3860(&slots, limit, 120.0, k, h, r));
             assert_eq!((got, s, stock.map(f32::to_bits)), (*paid != 0, *saved != 0, *after), "case {n}");
+        }
+    }
+
+    /// research/phase8-ai/native_goal_afford.py: the original 7A3860 on whole cost
+    /// vectors over registries of 1 to 7 resources, with NaN and infinite costs, stocks,
+    /// books and saving_time_limit (an unordered compare passes), relaxed and not.
+    #[test]
+    fn affordability_follows_7a3860_with_unordered_values() {
+        let d: serde_json::Value = serde_json::from_str(include_str!("../../../../research/phase8-ai/native-goal-afford.json")).unwrap();
+        let cases = d["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 226);
+        let bits = |v: &serde_json::Value| f32::from_bits(v.as_u64().unwrap() as u32);
+        for case in cases {
+            let res = case["resources"].as_array().unwrap();
+            let slots: Vec<PurchaseSlot> = res.iter().map(|r| PurchaseSlot { word18: r["word18"].as_u64().unwrap() as u32, provided: bits(&r["word1a0"]), consumed: bits(&r["word1b8"]) }).collect();
+            let have: Vec<f32> = res.iter().map(|r| bits(&r["available"])).collect();
+            let cost: Vec<f32> = case["costs"].as_array().unwrap().iter().map(bits).collect();
+            let got = affordable_7a3860(&slots, bits(&case["saving_time_limit"]), 120.0, &cost, &have, case["relaxed"].as_u64() == Some(1));
+            assert_eq!(got, case["affordable"].as_u64() == Some(1), "{}", case["name"]);
         }
     }
 }
