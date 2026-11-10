@@ -7,6 +7,7 @@ use aa_netcode::lan::LanData;
 use aa_netcode::lobby::{self, KingdomSetup, MapHeader, Session};
 use aa_runtime::simulation::SpeedSettings;
 use aa_simulation::FloatBits;
+use aa_ui::fs::DataRoot;
 use aa_ui::resources::StringTable;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -54,7 +55,13 @@ pub struct Data {
     pub strings: StringTable,
     pub rmcs: HashMap<String, Vec<RecordInfo>>,
     pub rmc_teams: HashMap<String, usize>,
+    /// The scenario maps by resource name (lower case, `maps/(2v2)berlin.rmp`:
+    /// what the session's file [session+0x5C] holds).
     pub maps: HashMap<String, (Vec<RecordInfo>, usize)>,
+    /// Lower-case file title -> resource name.
+    pub titles: HashMap<String, String>,
+    /// The game's data, searched after the work depot (0x59F570).
+    pub root: DataRoot,
     /// Nation IDS -> Faction IDS.
     pub factions: HashMap<String, Vec<String>>,
     pub countdown: i32,
@@ -100,7 +107,7 @@ pub fn rmc_records(r: &Rmc) -> Vec<RecordInfo> {
 }
 
 impl Data {
-    pub fn new(reg: NativeRegistries, game: GameParts, maps: &[MapInfo], strings: StringTable, countdown: i32, rule: impl Fn(&str, f32) -> f32) -> Arc<Self> {
+    pub fn new(reg: NativeRegistries, game: GameParts, maps: &[MapInfo], root: DataRoot, strings: StringTable, countdown: i32, rule: impl Fn(&str, f32) -> f32) -> Arc<Self> {
         let speed = SpeedSettings {
             game_speed_min: FloatBits::from_f32(rule("GameSpeedMin", -2.0)),
             game_speed_max: FloatBits::from_f32(rule("GameSpeedMax", 2.0)),
@@ -113,11 +120,29 @@ impl Data {
             strings,
             rmcs: game.rmcs,
             rmc_teams: game.rmc_teams,
-            maps: maps.iter().map(|m| (m.title.to_ascii_lowercase(), (map_records(m), m.teams.len()))).collect(),
+            maps: maps.iter().map(|m| (m.path.to_ascii_lowercase(), (map_records(m), m.teams.len()))).collect(),
+            titles: maps.iter().map(|m| (m.title.to_ascii_lowercase(), m.path.clone())).collect(),
+            root,
             factions: game.factions,
             countdown,
             speed,
         })
+    }
+
+    /// The resource name and records of a listed map by its file title.
+    pub fn map_by_title(&self, title: &str) -> Option<(&str, &[RecordInfo])> {
+        let path = self.titles.get(&title.to_ascii_lowercase())?;
+        Some((path.as_str(), self.maps.get(&path.to_ascii_lowercase())?.0.as_slice()))
+    }
+
+    /// 0x59F570 on a resource name, then its bytes: the work depot first,
+    /// then the game's data, read afresh (a received map counts at once).
+    pub fn map_bytes(&self, file: &[u16]) -> Option<Vec<u8>> {
+        let name = text(file);
+        if name.is_empty() {
+            return None;
+        }
+        crate::ui::gamedata::read_resource(&self.root, &name)
     }
 
     /// The registry index of an IDS, case-insensitive.
@@ -218,7 +243,7 @@ impl LanData for Data {
         self.rmcs.contains_key(&lower(key)).then(|| key.to_vec())
     }
     fn scenario(&self, key: &[u16]) -> Option<Vec<u16>> {
-        self.maps.contains_key(&lower(key)).then(|| key.to_vec())
+        (self.maps.contains_key(&lower(key)) || self.map_bytes(key).is_some()).then(|| key.to_vec())
     }
     fn format(&self, key: &str, args: &[Vec<u16>]) -> Vec<u16> {
         let a: Vec<String> = args.iter().map(|x| text(x)).collect();
@@ -249,5 +274,20 @@ impl LanData for Data {
     }
     fn rmc_header(&self, rmc: &[u16]) -> Option<MapHeader> {
         Some(self.header(self.rmcs.get(&lower(rmc))?))
+    }
+    /// The work depot with its separator (`gamedata::work_depot`): the host
+    /// reads a sent map from it and a client writes a received one into it.
+    fn profile_directory(&self) -> Option<Vec<u16>> {
+        let dir = crate::ui::gamedata::work_depot()?;
+        let mut d = units(&dir.to_string_lossy());
+        if d.last().is_some_and(|&c| c != u16::from(b'\\') && c != u16::from(b'/')) {
+            d.push(u16::from(b'\\'));
+        }
+        Some(d)
+    }
+    /// 0x59F570 on the session's file, then 0x858030 over its bytes
+    /// (SendUpdateMapStatus 0x770B70).
+    fn map_lookup(&self, file: &[u16]) -> aa_netcode::lan::transfer::MapLookup {
+        aa_netcode::lan::transfer::MapLookup::of_bytes(self.map_bytes(file).as_deref())
     }
 }

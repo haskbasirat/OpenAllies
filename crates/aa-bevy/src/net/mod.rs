@@ -290,7 +290,7 @@ impl Lan {
             let maps: Vec<_> = crate::ui::gamedata::list_maps(&store).iter().filter_map(|p| crate::ui::gamedata::read_map(&store, p)).collect();
             let rules = crate::preload::game_data(&root).ok();
             let rule = |name: &str, default: f32| rules.as_ref().and_then(|d| d.rule_ci(name)).unwrap_or(default);
-            let data = Data::new(reg, game, &maps, strings, countdown, rule);
+            let data = Data::new(reg, game, &maps, store, strings, countdown, rule);
             if let Ok(mut s) = slot.lock() {
                 s.data = Some(data);
             }
@@ -860,12 +860,18 @@ impl Lan {
         self.source = Some(wanted.clone());
         match wanted {
             NetSource::Map { title, size } => {
-                let Some((records, _)) = data.maps.get(&title.to_ascii_lowercase()) else { return };
+                // KKC_HostSetLoadMapOrder::Process 0x75EEB0: the file dialog's
+                // name (+0xE4, the resource name: `SetSessionLoadMap(Maps/...RMP)`
+                // in the original's log) is looked up (0x59F570) and its data
+                // checksummed (0x858030) for SetSessionLoadMap.
+                let Some((path, records)) = data.map_by_title(&title) else { return };
                 let game = lobby::GameSettings { header: data.header(records), conditions, ..Default::default() };
-                let file = units(&title);
+                let file = units(path);
+                let Some(bytes) = data.map_bytes(&file) else { return };
+                let crc = aa_netcode::file::map_checksum(&bytes);
                 let format = custom.net_format();
                 self.with_node(|node| {
-                    match lan::load_map_fields(&file, &game, 0, node.data()) {
+                    match lan::load_map_fields(&file, &game, crc, node.data()) {
                         Ok(fields) => {
                             let _ = node.request(d::SET_SESSION_LOAD_MAP_REQUEST, &fields);
                             let _ = node.request(d::SET_MAP_SIZE_REQUEST, &[Field::Uint { width: 32, value: size.0 as u32 }, Field::Uint { width: 32, value: size.1 as u32 }]);
@@ -910,7 +916,10 @@ impl Lan {
         // the source
         let format = text(&s.info_text);
         let source = source_of(s);
-        if self.source.as_ref() != source.as_ref() || custom.net_format() != format {
+        // a map this node lacks is staged once it has arrived (the transfer
+        // ends with an UpdateMapStatus, which marks the staging dirty)
+        let missing = matches!(&source, Some(NetSource::Map { title, .. }) if crate::ui::gamedata::read_map(&ui.store.root, &format!("Maps/{title}.RMP")).is_none());
+        if (self.source.as_ref() != source.as_ref() || custom.net_format() != format) && !missing {
             if let Some(src) = &source {
                 custom.net_set_source(ui, src, &format, &rule_rows(&data, &s.launch.active_map().conditions));
             }
@@ -1040,7 +1049,6 @@ impl Lan {
                 }
                 LanEvent::ConnectRefused { reason, info } => warn!("lan: refused {} (reason {reason})", text(&info.name)),
                 LanEvent::BadDatagram { address, error } => warn!("lan: a datagram from {address:?} refused: {error}"),
-                LanEvent::TransferFailed { address, error } => warn!("lan: the file for {address:?} did not open: {error}"),
                 LanEvent::Paused { paused, .. } => info!("lan: paused {paused}"),
                 LanEvent::Disconnected { reason } => {
                     info!("lan: disconnected, reason {reason:?}");
@@ -1228,9 +1236,17 @@ fn source_of(s: &Session) -> Option<NetSource> {
             let terrain = s.launch.rmc_settings.list_4.iter().map(|r| (text(&r.name), f32::from_bits(r.value))).collect();
             Some(NetSource::Random { rmc, size: (map.size_x as f32, map.size_y as f32), terrain })
         }
-        2 => Some(NetSource::Map { title: text(&s.launch.file), size: (map.size_x as i32, map.size_y as i32) }),
+        // the session's file is the resource name (Maps/(2v2)Berlin.RMP);
+        // `Custom` names a map by its file title
+        2 => Some(NetSource::Map { title: map_title(&text(&s.launch.file)), size: (map.size_x as i32, map.size_y as i32) }),
         _ => None,
     }
+}
+
+/// The file title of a resource name: `Maps/(2v2)Berlin.RMP` -> `(2v2)Berlin`.
+fn map_title(file: &str) -> String {
+    let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
+    name.rsplit_once('.').map_or(name, |(stem, _)| stem).to_string()
 }
 
 /// `Custom`'s rule rows (IDS, native kind, raw) as the creator's conditions:

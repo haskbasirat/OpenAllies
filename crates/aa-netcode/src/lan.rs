@@ -205,10 +205,6 @@ pub enum LanEvent {
     /// A datagram its reader refused. The session goes on: a host with an open
     /// port hears whatever a network sends it.
     BadDatagram { address: PeerAddress, error: String },
-    /// Host: FileSender::Start 0x761540 could not open the file a client
-    /// asked for (TGC_FileException; the catch that ends it natively is not
-    /// traced): the transfer did not start.
-    TransferFailed { address: PeerAddress, error: String },
 }
 
 /// Game data a session's codecs read (registry counts, name lookups,
@@ -241,7 +237,11 @@ pub trait LanData {
     }
     /// [[0xB36540]+0x90]+4: the directory a sent file is read from and a
     /// received one written to (directory + the session's file name,
-    /// 0x761540 / 0x7619A0). `None`: no file channel (`transfer`).
+    /// 0x761540 / 0x7619A0). [0xB36540] is the resource manager (ctor
+    /// 0x5B0400) and +0x90 its work depot, the profile's `data` folder the
+    /// game saves resources into (0x5B1C70 "%s%s" with the resource's name,
+    /// 0x411790 the campaign saves "%s%s/%s.%s"); the string ends with its
+    /// separator. `None`: no file channel (`transfer`).
     fn profile_directory(&self) -> Option<Vec<u16>> {
         None
     }

@@ -93,7 +93,8 @@ pub fn map_status(lookup: MapLookup, file: &[u16], crc: u32, source_check: bool)
         MapLookup::Found { crc: mine } if mine != crc => {
             if source_check {
                 MapStatus::FilmSource
-            } else if file.windows(2).any(|w| w == [0x2E, 0x2E]) {
+            } else if file[..file.iter().position(|&c| c == 0).unwrap_or(file.len())].windows(2).any(|w| w == [0x2E, 0x2E]) {
+                // wcsstr (0x4054B0) stops at the first NUL.
                 MapStatus::Nothing { returns: false }
             } else {
                 MapStatus::Differs
@@ -206,11 +207,14 @@ impl FileReceiving for ConnFile {
     }
 }
 
-/// 0x74F310 fraction: fild progress, fild size, fdiv, fstp binary32 under
-/// the session's precision control (both operands are exact integers; the
-/// quotient rounded to 53 bits, then stored).
+/// 0x74F310 fraction (0x74F3C7..0x74F403): fild progress, fstp dword; fild
+/// size, fstp dword; then fld dword, fdiv dword, fstp dword. Both operands
+/// are rounded to binary32 (nearest) before the divide, and a quotient of
+/// two binary32 values rounded to 24, 53 or 64 bits and then stored as
+/// binary32 is the correctly rounded binary32 quotient under every
+/// precision control, so the thread's setting does not matter.
 pub(crate) fn fraction(progress: i32, size: i32) -> f32 {
-    (f64::from(progress) / f64::from(size)) as f32
+    progress as f32 / size as f32
 }
 
 #[cfg(test)]

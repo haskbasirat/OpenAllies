@@ -1417,24 +1417,33 @@ impl Orders<'_, '_, '_, '_> {
                                 // 0x755747: 0x74FE30 on the connection with the
                                 // session's file [session+0x5C] (transfer::ConnFile),
                                 // then straight to the end (0x755763): the progress
-                                // goes out with 0x74F310 from the heartbeat. A
-                                // front end without a profile directory has no
-                                // file channel: the host says the map will not
-                                // transfer, as for status 3, and the player stays
-                                // not ready.
+                                // goes out with 0x74F310 from the heartbeat.
+                                //
+                                // When 0x761540 cannot open the file it throws, and
+                                // nothing on the way catches it: 0x74FE30, 0x7554B0,
+                                // 0x75DFF0, the request handler 0x413DC0, 0x766CE0,
+                                // 0x74D710, 0x751B60, 0x752E60, the host tick
+                                // 0x755290, 0x75CA70 and TGC_NetNode::Update 0x765410
+                                // have no try block (research/phase8-net/
+                                // native_eh_frames.py). 0x765410 is the callback
+                                // (0x41ABDC -> 0x85E7B0) of the application's thread
+                                // +0x150, the thread named SIM (0x417982), started by
+                                // 0x85E430; its filter 0x85F520 reports "thread SIM
+                                // caught unhandled exception" (0x85F330). Here the
+                                // error leaves the session's frame.
+                                //
+                                // A front end without a profile directory has no
+                                // file channel (a port-only case): the host says
+                                // the map will not transfer, with the message of
+                                // status 3 but without its UpdateMapStatus, and the
+                                // player stays not ready.
                                 2 => {
                                     let name = st.session.launch.file.clone();
                                     let started = match link.and_then(|l| st.conns.iter_mut().find(|c| PeerLink::Conn(c.addr) == l)) {
-                                        Some(c) => match c.file.start(&mut c.admin.file_generation, &name) {
-                                            Ok(s) => Some(s),
-                                            Err(e) => {
-                                                st.events.push(LanEvent::TransferFailed { address: c.addr, error: e.to_string() });
-                                                None
-                                            }
-                                        },
-                                        None => Some(false),
+                                        Some(c) => c.file.start(&mut c.admin.file_generation, &name).map_err(|e| Error::Protocol(format!("0x761540 threw (uncaught up to the SIM thread's filter 0x85F520): {e}")))?,
+                                        None => false,
                                     };
-                                    if started == Some(false) {
+                                    if !started {
                                         let key = if st.session.launch.field_0c == 5 { "map_will_not_transfer_host_film|ss" } else { "map_will_not_transfer_host|ss" };
                                         let name = st.session.players.iter().find(|p| p.id == player).map(|p| p.name.clone()).unwrap_or_default();
                                         st.events.push(LanEvent::Message { kind: 0x10, key: key.into(), args: vec![name, file.clone()], number: None });

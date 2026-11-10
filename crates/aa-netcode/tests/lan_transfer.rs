@@ -32,7 +32,9 @@ fn units(s: &str) -> Vec<u16> {
     s.encode_utf16().collect()
 }
 
-const MAP: &str = "Maps\\(2v2)Transfer.RMP";
+/// A resource name as the original's session carries it
+/// (`SetSessionLoadMap(Maps/Campaign/...RMP)` in its log).
+const MAP: &str = "Maps/(2v2)Transfer.RMP";
 
 struct Data {
     reg: NativeRegistries,
@@ -170,14 +172,12 @@ fn map_bytes(len: usize) -> Vec<u8> {
 struct Seen {
     joined: bool,
     messages: Vec<String>,
-    failed: Vec<String>,
 }
 fn note(seen: &mut Seen, events: Vec<LanEvent>) {
     for e in events {
         match e {
             LanEvent::Joined { .. } => seen.joined = true,
             LanEvent::Message { key, .. } => seen.messages.push(key),
-            LanEvent::TransferFailed { error, .. } => seen.failed.push(error),
             _ => {}
         }
     }
@@ -245,7 +245,7 @@ fn transfer_of(len: usize) {
     let mut seen_downloading = Vec::new();
     let start = Instant::now();
     loop {
-        assert!(start.elapsed() < Duration::from_secs(60), "the transfer did not end: {:?} {:?}", p.client_status(), p.hs.failed);
+        assert!(start.elapsed() < Duration::from_secs(60), "the transfer did not end: {:?}", p.client_status());
         let (h, c) = p.client_status();
         if let Some((2, f)) = c {
             seen_downloading.push(f);
@@ -255,7 +255,6 @@ fn transfer_of(len: usize) {
         }
         p.frame();
     }
-    assert!(p.hs.failed.is_empty(), "{:?}", p.hs.failed);
     assert!(!seen_downloading.is_empty(), "the client saw itself downloading (0x74F310 status 2)");
     assert!(seen_downloading.windows(2).all(|w| w[0] <= w[1]), "acknowledged progress only grows: {seen_downloading:?}");
     assert!(seen_downloading.iter().all(|&f| f < 1.0));
@@ -328,7 +327,41 @@ fn lan_transfer_host_without_a_channel_says_so() {
     let mut p = Pair::with(host_data, data(&cd));
     p.order_map(aa_netcode::file::map_checksum(&bytes));
     p.until("the host's message", |p| p.hs.messages.iter().any(|m| m == "map_will_not_transfer_host|ss"));
-    let (h, _) = p.client_status();
-    assert_ne!(h.map(|s| s.0), Some(1));
+    // no UpdateMapStatus followed (0x74BBB0 never stored +0x3C)
+    for _ in 0..50 {
+        p.frame();
+    }
+    let (h, c) = p.client_status();
+    assert_eq!(h.map(|s| s.0), Some(0));
+    assert_eq!(c.map(|s| s.0), Some(0));
+    assert!(!cd.join(MAP).exists());
+}
+
+/// A host with a file channel but without the file: 0x761540 throws and no
+/// frame of the order path catches it (the original's SIM thread ends in its
+/// unhandled-exception filter 0x85F520); here the host's frame fails.
+#[test]
+fn lan_transfer_host_without_the_file_fails_its_frame() {
+    let (hd, cd) = (scratch("nofile-host"), scratch("nofile-client"));
+    let bytes = map_bytes(3000);
+    let mut p = Pair::new(&hd, &cd);
+    let mut game = aa_netcode::lobby::GameSettings::default();
+    for k in ["north", "south"] {
+        game.header.kingdoms.push(KingdomSetup { name: units(k), flag_28: true, ..Default::default() });
+    }
+    let fields = aa_netcode::lan::load_map_fields(&units(MAP), &game, aa_netcode::file::map_checksum(&bytes), p.host.data()).unwrap();
+    p.host.request(descriptor::SET_SESSION_LOAD_MAP_REQUEST, &fields).unwrap();
+    let start = Instant::now();
+    let error = loop {
+        assert!(start.elapsed() < Duration::from_secs(30), "the host's frame never failed");
+        let (mut hg, mut cg) = (aa_netcode::lan::NoWorld, aa_netcode::lan::NoWorld);
+        match p.host.frame(&mut hg) {
+            Ok(events) => note(&mut p.hs, events),
+            Err(e) => break e.to_string(),
+        }
+        note(&mut p.cs, p.client.frame(&mut cg).unwrap());
+        std::thread::sleep(Duration::from_millis(2));
+    };
+    assert!(error.contains("0x761540"), "{error}");
     assert!(!cd.join(MAP).exists());
 }

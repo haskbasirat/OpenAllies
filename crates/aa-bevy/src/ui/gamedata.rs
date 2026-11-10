@@ -422,12 +422,40 @@ fn utf16(v: &[u16]) -> String {
     String::from_utf16_lossy(v).trim_end_matches('\0').to_string()
 }
 
-/// Read one scenario map's header (MAP_HEADER chunk) and text table.
+/// The work depot: the profile's `data` folder, [[0xB36540]+0x90] of the
+/// original (the resource manager's depot it saves resources into, 0x5B1C70,
+/// and the folder a received map is written to, 0x7619A0). The manager
+/// warns when it is not the top-most depot (0x5B1C70), so its files are found
+/// before the game's own.
+pub fn work_depot() -> Option<std::path::PathBuf> {
+    crate::session::own_profile().map(|p| p.join("data"))
+}
+
+/// The work depot as a data root, read afresh (a map may arrive at any time).
+fn depot_root() -> Option<DataRoot> {
+    work_depot().filter(|d| d.is_dir()).map(DataRoot::new)
+}
+
+/// The bytes of a data-relative resource, the work depot first.
+pub fn read_resource(data: &DataRoot, path: &str) -> Option<Vec<u8>> {
+    match depot_root().filter(|d| d.exists(path)) {
+        Some(d) => d.read(path).ok(),
+        None => data.read(path).ok(),
+    }
+}
+
+/// Read one scenario map's header (MAP_HEADER chunk) and text table, each
+/// from the top-most depot that has it.
 pub fn read_map(data: &DataRoot, path: &str) -> Option<MapInfo> {
-    let bytes = data.read(path).ok()?;
+    let bytes = read_resource(data, path)?;
     let archive = aa_mapworld::archive::MapArchive::from_bytes(bytes).ok()?;
     let header = aa_mapworld::header::MapHeader::decode(&archive.decode_chunk("MAP_HEADER", 64 << 20).ok()?).ok()?;
-    let strings = map_strings(data, path);
+    let tgi = match path.rsplit_once('.') {
+        Some((stem, _)) => format!("{stem}.TGI"),
+        None => format!("{path}.TGI"),
+    };
+    let depot = depot_root().filter(|d| d.exists(&tgi));
+    let strings = map_strings(depot.as_ref().unwrap_or(data), path);
     let text = |key: &str| -> String {
         let k = lower(key.trim_start_matches('#'));
         strings.get(&k).cloned().unwrap_or_else(|| key.to_string())
@@ -473,7 +501,15 @@ pub fn read_map(data: &DataRoot, path: &str) -> Option<MapInfo> {
 }
 
 /// The Scenario Map scan (`0x68E340`): the `Maps/*.RMP` files; the find
-/// loop skips directories (Campaign, DeveloperMaps, TrailerMaps).
+/// loop skips directories (Campaign, DeveloperMaps, TrailerMaps). The work
+/// depot's maps (saved or received there) are listed too, its spelling first.
 pub fn list_maps(data: &DataRoot) -> Vec<String> {
-    files_with(data, "Maps", ".rmp", false)
+    let mut out = depot_root().map(|d| files_with(&d, "Maps", ".rmp", false)).unwrap_or_default();
+    for p in files_with(data, "Maps", ".rmp", false) {
+        if !out.iter().any(|o| o.eq_ignore_ascii_case(&p)) {
+            out.push(p);
+        }
+    }
+    out.sort_by_key(|s| s.to_ascii_lowercase());
+    out
 }
