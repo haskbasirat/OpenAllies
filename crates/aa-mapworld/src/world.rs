@@ -135,12 +135,19 @@ pub struct WorldInventory {
     pub opaque_initialization: Vec<OpaqueSection>,
     pub absent_sections: Vec<String>,
 }
+/// The saved-game flag of a WorldRuleMode: byte 0 of the mode's descriptor that
+/// 4981A0 registers (read by 511860 through 59E520). It is set for `savegame` (2),
+/// `savegame_metagame_rts` (4), `savegame_metagame_map` (5, a saved World War II
+/// campaign) and `savegame_campaign` (6); clear for `playable`, `cutscene`, `film`.
+pub fn saved_game_mode(mode: u32) -> bool {
+    matches!(mode, 2 | 4 | 5 | 6)
+}
 impl WorldInventory {
-    /// A saved game's stream: its rules' mode is `savegame` or
-    /// `savegame_metagame_rts` (4981A0), and its localized strings hold their
-    /// text after the key (0x49AD70).
+    /// A saved game's stream: its rules' mode has the saved-game flag
+    /// ([`saved_game_mode`]), and its localized strings hold their text after the
+    /// key (0x49AD70).
     pub fn is_saved_game(&self) -> bool {
-        self.header.as_ref().is_some_and(|h| matches!(h.rules.mode, 2 | 4))
+        self.header.as_ref().is_some_and(|h| saved_game_mode(h.rules.mode))
     }
     pub fn decode(map: &MapArchive, max_chunk_bytes: u64) -> Result<Self> {
         let world = WorldState::decode(&map.decode_chunk("GWORLD", max_chunk_bytes)?)?;
@@ -155,7 +162,7 @@ impl WorldInventory {
         let mut opaque_initialization = Vec::new();
         let mut absent_sections = Vec::new();
         let header_chunk = map.decode_chunk("MAP_HEADER", max_chunk_bytes)?;
-        let saved = matches!(crate::header::MapHeader::rules_mode(&header_chunk), Ok(2 | 4));
+        let saved = crate::header::MapHeader::rules_mode(&header_chunk).is_ok_and(saved_game_mode);
         let decoded = if saved {
             crate::header::MapHeader::decode_saved(&header_chunk).map(|(header, _)| header)
         } else {

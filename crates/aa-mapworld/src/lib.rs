@@ -6,6 +6,7 @@ pub mod actor_finish;
 pub mod commander_restore;
 pub mod archive;
 pub mod bootstrap;
+pub mod campaign_save;
 pub mod class_conversion;
 pub mod definition_counts;
 pub mod dynamic_doodad;

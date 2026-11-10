@@ -491,7 +491,8 @@ impl CampaignUi {
                     choose::Out::Exit => Some(Action::Exit),
                     // 932A00 -> 68DB60(3, flag 1)
                     choose::Out::Load => {
-                        self.saves = saves::Dialog::open(ui, false, "");
+                        let original = saves::original_folder(ui, self.root.parent().unwrap_or(&self.root));
+                        self.saves = saves::Dialog::open(ui, false, "", original);
                         Some(Action::None)
                     }
                     choose::Out::New { campaign, faction } => {
@@ -578,7 +579,8 @@ impl CampaignUi {
                     interface::Out::LaunchBattle => self.rts_launch(ui),
                     // 9375C0: MetaGameLoadDialog -> 68DB60(3, ..)
                     interface::Out::LoadDialog => {
-                        self.saves = saves::Dialog::open(ui, false, "");
+                        let original = saves::original_folder(ui, self.root.parent().unwrap_or(&self.root));
+                        self.saves = saves::Dialog::open(ui, false, "", original);
                         Some(Action::None)
                     }
                     // 9375C0: MetaGameSaveDialog -> 68DCE0(3, ..)
@@ -588,7 +590,7 @@ impl CampaignUi {
                             let c = &g.campaign.data.campaigns[g.campaign.state.campaign];
                             format!("{} {round}", ui.strings.resolve(&c.name))
                         });
-                        self.saves = saves::Dialog::open(ui, true, &name.unwrap_or_default());
+                        self.saves = saves::Dialog::open(ui, true, &name.unwrap_or_default(), None);
                         Some(Action::None)
                     }
                 }

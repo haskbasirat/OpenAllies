@@ -10,8 +10,13 @@
 //! native map world's other chunks hold of a campaign is not written: the armies
 //! are the chunk `AA_ARMIES` here (each army's type, owner and the native army
 //! component record 93EEA0), the local kingdom `AA_LOCAL`. AA.exe cannot load these
-//! files, and the original's own saved campaigns are not read yet (their armies are
-//! in DYNAMIC_THINGS). Labelled rendition; open item.
+//! files. Labelled rendition; open item.
+//!
+//! The original's own saved campaigns are read too ([`decode_original`]): the load
+//! dialog lists the original's folder as well (`<personal folder>/data/` + the same
+//! AVar, read-only, as the film dialog does), and a file without `AA_ARMIES` is the
+//! original's (`aa_mapworld::campaign_save`): its METAGAME payload, and each army's
+//! MetaGame component (slot 27, 940740) from its actor record in DYNAMIC_THINGS.
 use super::Game;
 use aa_metagame::battle::KingdomActor;
 use aa_metagame::chunk_file::{ChunkFileReader, ChunkFileWriter};
@@ -54,6 +59,10 @@ fn registries(game_data: &super::data::CampaignData, help_popups: Vec<String>) -
     for x in &d.divisions {
         shared_properties.extend(x.technologies.iter().flatten().cloned());
     }
+    // the data manager `[B3AA2C]` holds each SharedProperty once; the shops and the
+    // divisions name the same technologies again
+    let mut seen = std::collections::HashSet::new();
+    shared_properties.retain(|ids| seen.insert(ids.to_ascii_lowercase()));
     SaveRegistries {
         factions: game_data.view.nations.values().flat_map(|n| n.factions.iter().map(|f| f.ids.clone())).collect(),
         shared_properties,
@@ -97,10 +106,50 @@ fn take_u32(b: &[u8], at: &mut usize) -> Result<u32, String> {
     Ok(u32::from_le_bytes(v.try_into().map_err(|_| "a word")?))
 }
 
+/// The original's saved campaign: the METAGAME payload (93A3B0) and the armies of
+/// DYNAMIC_THINGS, each a Thing of the army types with its MetaGame component
+/// (940740). The payload names kingdoms and armies by their actors' handles: each
+/// kingdom record's `+0x0C` with its campaign kingdom (`+0x08`), and each army
+/// record's serialized handle; an army's owner is its actor's owner handle. The
+/// local kingdom is the campaign's `default_kingdom`, the rule of a new campaign
+/// (9447E0 -> 76AC60); what the original binds on a load is not established.
+pub fn decode_original(bytes: &[u8], game_data: &super::data::CampaignData, help_popups: Vec<String>) -> Result<(MgState, Option<usize>), String> {
+    let data = &game_data.meta;
+    let save = aa_mapworld::campaign_save::read(bytes.to_vec(), 256 << 20, None).map_err(|e| e.to_string())?;
+    let parsed = parse_metagame(&save.metagame, data, &registries(game_data, help_popups)).map_err(|e| e.to_string())?;
+    let territories = parsed.image.territories.len();
+    let campaign = parsed.image.campaign.ok_or("a saved campaign without its campaign")?;
+    let c = data.campaigns.get(campaign).ok_or("no such campaign")?;
+    let kingdom_actors: Vec<(KingdomActor, u32)> =
+        parsed.image.kingdoms.iter().filter(|k| k.actor != 0).filter_map(|k| k.data.map(|d| (KingdomActor(d as u32), k.actor))).collect();
+    let mut armies: Vec<Option<MgArmy>> = Vec::with_capacity(save.armies.len());
+    let mut handles = Vec::with_capacity(save.armies.len());
+    for (i, a) in save.armies.iter().enumerate() {
+        let definition = data.armies.iter().position(|d| d.ids.eq_ignore_ascii_case(&a.thing_id)).ok_or_else(|| format!("army {} is not an army type", a.thing_id))?;
+        let owner = kingdom_actors.iter().find(|(_, h)| *h == a.owner_handle).map(|(k, _)| *k).ok_or_else(|| format!("army {} has no kingdom ({:#x})", a.thing_id, a.owner_handle))?;
+        let (image, n) = ArmyComponentImage::parse(&a.component, data, territories).map_err(|e| e.to_string())?;
+        if n != a.component.len() {
+            return Err(format!("army {}: its component is {} bytes, 940740 read {n}", a.thing_id, a.component.len()));
+        }
+        let mut army = MgArmy { definition, owner, divisions: Vec::new(), fought: 0, territory: None, path: Vec::new(), waypoints: Vec::new() };
+        image.apply_to(&mut army).map_err(|e| e.to_string())?;
+        armies.push(Some(army));
+        handles.push((ArmyId(i as u32), a.serialized_id));
+    }
+    let ids = EngineIdentities { kingdom_actors, armies: handles };
+    let names = c.kingdoms.iter().enumerate().map(|(k, x)| (KingdomActor(k as u32), x.ids.clone())).collect();
+    let state = parsed.into_state(&ids, armies, names).map_err(|e| e.to_string())?.state;
+    let local = state.kingdoms.iter().position(|k| k.data == c.default_kingdom);
+    Ok((state, local))
+}
+
 /// What a file holds: the state and the local kingdom.
 pub fn decode(bytes: &[u8], game_data: &super::data::CampaignData, help_popups: Vec<String>) -> Result<(MgState, Option<usize>), String> {
     let data = &game_data.meta;
     let mut r = ChunkFileReader::open("campaign", bytes).map_err(|e| e.to_string())?;
+    if !r.open_chunk(CHUNK_ARMIES, false).map_err(|e| e.to_string())? {
+        return decode_original(bytes, game_data, help_popups);
+    }
     let payload = r.chunk(CHUNK_METAGAME).map_err(|e| e.to_string())?;
     let parsed = parse_metagame(payload, data, &registries(game_data, help_popups)).map_err(|e| e.to_string())?;
     let territories = parsed.image.territories.len();
@@ -142,6 +191,14 @@ fn folder(ui: &Ui) -> Option<PathBuf> {
     crate::session::own_profile().map(|p| p.join("data").join(path))
 }
 
+/// The original's folder of saved campaigns, read-only: its personal folder's
+/// `data/` (as the film dialog finds it, `ui::custom::film_dirs`) and the same AVar.
+pub fn original_folder(ui: &Ui, game_root: &Path) -> Option<PathBuf> {
+    let path = ui.avars.get("PathDynamicCampaignSavedGames").map(aa_ui::node::unquote).unwrap_or_else(|| "DynamicCampaignSave/".into());
+    let films = crate::ui::custom::film_dirs(ui, game_root).into_iter().find(|d| d.read_only)?;
+    films.path.parent().map(|data| data.join(path))
+}
+
 /// `0x68E340`: the files of the folder, newest first.
 fn list(dir: &Path) -> Vec<(String, PathBuf, std::time::SystemTime)> {
     let mut out = Vec::new();
@@ -174,6 +231,8 @@ pub enum Outcome {
 pub struct Dialog {
     save: bool,
     dir: PathBuf,
+    /// The load mode's second folder: the original's saved campaigns ([`original_folder`]).
+    original: Option<PathBuf>,
     rows: Vec<(String, PathBuf)>,
     selected: Option<usize>,
     confirming: Option<PathBuf>,
@@ -186,8 +245,9 @@ fn root(save: bool) -> &'static str {
 impl Dialog {
     /// Init `0x68D280` and Activate of the mode: the list, the preview panel, the
     /// edit box and the three buttons.
-    pub fn open(ui: &mut Ui, save: bool, default_name: &str) -> Option<Self> {
+    pub fn open(ui: &mut Ui, save: bool, default_name: &str, original: Option<PathBuf>) -> Option<Self> {
         let dir = folder(ui)?;
+        let original = original.filter(|o| !save && *o != dir);
         let mut d = Widget::new(C::TopLevel, if save { SAVE_DIALOG } else { LOAD_DIALOG }, true);
         let mut sp = Widget::composite(C::Panel, "SelectPanel", false);
         let mut lb = Widget::composite(C::Listbox, "SelectListBox", false);
@@ -213,7 +273,7 @@ impl Dialog {
         let key = if save { "#staging_file_save_button" } else { "#staging_file_load_button" };
         let label = ui.strings.resolve(key);
         ui.set_label(&format!("{name}/SelectButton/Client"), &label);
-        let mut this = Self { save, dir, rows: Vec::new(), selected: None, confirming: None };
+        let mut this = Self { save, dir, original, rows: Vec::new(), selected: None, confirming: None };
         this.fill(ui);
         if save {
             ui.editbox_set_text(&format!("Root/{name}/DescriptionEditBox"), default_name);
@@ -228,7 +288,11 @@ impl Dialog {
     }
 
     fn fill(&mut self, ui: &mut Ui) {
-        let rows = list(&self.dir);
+        let mut rows = list(&self.dir);
+        if let Some(o) = &self.original {
+            rows.extend(list(o));
+            rows.sort_by(|a, b| b.2.cmp(&a.2));
+        }
         ui.listbox_clear(&self.list_path());
         self.rows = rows.iter().map(|(n, p, _)| (n.clone(), p.clone())).collect();
         for (n, p) in &self.rows {
@@ -355,4 +419,53 @@ pub fn save(game: &Game, target: &Path) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     std::fs::write(target, bytes).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The original's saved campaigns on this computer (read-only): its profile's
+    /// folder and the hidden-desktop test copies' profiles. None: nothing to read.
+    fn original_saves(game_root: &Path) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            dirs.push(Path::new(&home).join("Documents/A&A/data/DynamicCampaignSave"));
+        }
+        if let Ok(rd) = std::fs::read_dir(game_root.join("reconstruction/qa-runs")) {
+            dirs.extend(rd.flatten().map(|e| e.path().join("game/Profile/data/DynamicCampaignSave")));
+        }
+        let mut out: Vec<PathBuf> = dirs.iter().flat_map(|d| list(d).into_iter().map(|(_, p, _)| p)).collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn loads_every_original_campaign_save() {
+        let game_root = std::env::var_os("AA_GAME_ROOT").map(PathBuf::from).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."));
+        let saves = original_saves(&game_root);
+        if saves.is_empty() {
+            eprintln!("no original World War II campaign save on this computer");
+            return;
+        }
+        let data = super::super::data::load(&game_root).expect("the campaign data");
+        let reconstruction = game_root.join("reconstruction");
+        let root = aa_ui::fs::DataRoot::with_overlay(reconstruction.join("assets/original/Data"), reconstruction.join("native-game/runtime-expanded-v14/Data"));
+        let help: Vec<String> = crate::ui::datafile::load(&root, "MetaGame/mg_help_popup.tgi")
+            .iter()
+            .filter(|c| c.name.eq_ignore_ascii_case("MGHelpPopup"))
+            .map(|n| n.get("ids").unwrap_or_default().trim_matches('"').to_string())
+            .collect();
+        for path in saves {
+            let bytes = std::fs::read(&path).unwrap();
+            let (state, local) = decode(&bytes, &data, help.clone()).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert!(local.is_some(), "{}: no local kingdom", path.display());
+            let armies = state.armies.iter().flatten().count();
+            assert!(armies > 0);
+            for a in state.armies.iter().flatten() {
+                assert!(a.territory.is_some(), "{}: an army without its territory", path.display());
+            }
+            eprintln!("{}: {} kingdoms, {armies} armies", path.file_name().unwrap().to_string_lossy(), state.kingdoms.len());
+        }
+    }
 }
