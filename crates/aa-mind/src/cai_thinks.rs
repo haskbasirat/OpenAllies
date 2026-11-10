@@ -17,6 +17,7 @@ pub mod pack;
 pub mod rampage;
 pub mod reform;
 pub mod repair;
+pub mod repair_accept;
 pub mod siege;
 pub mod siege_target;
 pub mod stack_action;

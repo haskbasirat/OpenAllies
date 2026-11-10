@@ -488,3 +488,4 @@ impl Economy {
     }
 }
 pub mod borrowed_flows;
+pub mod structure_statistics;

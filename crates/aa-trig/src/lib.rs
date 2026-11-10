@@ -4,6 +4,7 @@
 mod angle;
 pub use angle::{signed_angle, signed_angle_extended};
 pub mod turning;
+pub mod fast_normalize;
 
 use aa_numeric::{Binary, Precision};
 

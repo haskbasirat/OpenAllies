@@ -643,4 +643,7 @@ pub fn ground_step<W: GroundWorld, T: GroundTurning>(
     Ok(outcome(StepKind::Advanced))
 }
 pub mod aircraft;
+pub mod aircraft_follow;
 pub mod borrowed_formation;
+pub mod group_orders;
+pub mod mover_activation;

@@ -9,6 +9,7 @@ pub mod action_mask;
 pub mod cai_engage;
 pub mod cai_engage_think;
 pub mod cai_guard;
+pub mod cai_home;
 pub mod cai_member_added;
 pub mod cai_reactions;
 pub mod cai_rout;

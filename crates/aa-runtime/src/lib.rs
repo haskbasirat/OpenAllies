@@ -427,4 +427,5 @@ pub mod view_flags_service;
 
 pub mod view_terrain_fog;
 pub mod view_fx_execute;
+pub mod view_blast_impulse;
 pub mod audio_data_fields;

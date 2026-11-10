@@ -1,6 +1,7 @@
 //! Native trigger records and ordered world-manager execution.
 #![forbid(unsafe_code)]
 pub mod actions;
+pub mod compare;
 pub mod crt;
 pub mod decode;
 pub mod elements;

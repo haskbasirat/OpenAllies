@@ -51,6 +51,8 @@ pub mod structure_actions;
 pub mod denizen_actions;
 pub mod actor_init_null;
 pub mod object_init_null;
+pub mod object_accepts;
+pub mod defender_range;
 
 pub mod actor_registration;
 pub mod overlap_list;
