@@ -105,7 +105,7 @@ Where this stands on 10 November 2026:
 
 | Test | Result |
 |---|---|
-| A 2-against-2 Berlin film, matching checkpoints in order | **240 of 266**, about 90% of the film, up from 32 at the start of November and 140 in Development 24. This film has almost no fighting |
+| A 2-against-2 Berlin film, matching checkpoints in order | **250 of 266**, about 94% of the film, up from 32 at the start of November and 140 in Development 24. This film has almost no fighting |
 | Real recorded films that open | **52 of 62**. The other 10 refuse with the original's own messages (9 made by another version of the game, 1 never finished) |
 | Real films with no mismatch | **At least 6**: a short Market Garden game played by a person, and 5 random-map films, 4 to their natural end and 1 over its first 4,000 ticks. 3 of them are on modded data. Other short random-map films still drift early |
 | A longer Berlin game played by a person | **94 of 271**, exact for its first 3,380 ticks, about 3.5 minutes |
