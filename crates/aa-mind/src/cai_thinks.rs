@@ -9,6 +9,7 @@
 use crate::{Arena, MindId, Result, StateId, World};
 
 pub mod bombard;
+pub mod bombard_activate;
 pub mod construct;
 pub mod explore;
 pub mod join;

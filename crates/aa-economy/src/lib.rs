@@ -9,8 +9,10 @@
 mod binary;
 pub mod kingdom_load;
 pub mod kingdom_registry;
+pub mod kingdom_bases;
 pub mod kingdom_init;
 pub mod kingdom_start;
+pub mod kingdom_structure_list;
 pub mod restrictions;
 pub mod statistics;
 pub mod statistics_live;

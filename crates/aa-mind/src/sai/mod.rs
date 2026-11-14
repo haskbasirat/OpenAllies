@@ -10,9 +10,11 @@
 //!
 //! These modules therefore model each native routine exactly, with explicit
 //! world services; scheduling/threads are a caller concern.
+pub mod actor_map;
 pub mod actor_notify;
 pub mod assign;
 pub mod bridge;
+pub mod chance;
 pub mod crt_qsort;
 pub mod data;
 pub mod ego;

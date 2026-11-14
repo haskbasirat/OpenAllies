@@ -13,6 +13,8 @@ use std::cmp::Ordering;
 pub mod damage;
 pub mod dying;
 pub mod credit;
+pub mod kill_rewards;
+pub mod member_properties;
 pub mod economy_modifiers;
 pub mod experience;
 pub mod experience_amounts;

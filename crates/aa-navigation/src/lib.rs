@@ -7,11 +7,13 @@ pub use action_world::TryActionWorld;
 pub mod ai_startup;
 pub mod control;
 pub mod cost;
+pub mod company_leader_node;
 pub mod company_move;
 pub mod endpoint;
 pub mod formation_follow;
 pub mod low_path;
 pub mod materialize;
+pub mod overlap_escape;
 pub mod preparation;
 pub mod region;
 pub mod region_search;
@@ -22,6 +24,8 @@ pub mod solver;
 pub mod startup;
 pub mod topology;
 pub mod topology_builder;
+pub mod turn_circle;
+pub mod path_match;
 
 /// Exact native node payload; links are owned by the collection, not the payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

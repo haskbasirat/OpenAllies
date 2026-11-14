@@ -11,6 +11,7 @@ pub mod falling;
 pub mod formation;
 pub mod mover;
 pub mod target;
+pub mod transport_drop;
 
 use aa_numeric::{Fast as Binary, Precision};
 use serde::{Deserialize, Serialize};
@@ -644,6 +645,9 @@ pub fn ground_step<W: GroundWorld, T: GroundTurning>(
 }
 pub mod aircraft;
 pub mod aircraft_follow;
+pub mod aircraft_follow_target;
+pub mod aircraft_move_state;
+pub mod aircraft_rotate;
 pub mod borrowed_formation;
 pub mod group_orders;
 pub mod mover_activation;

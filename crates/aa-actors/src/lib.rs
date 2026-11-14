@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 
 pub mod ability_flags;
+pub mod activation;
+pub mod actor_flags;
 pub mod attachment;
 pub mod components;
 pub mod construction_actions;
@@ -17,6 +19,8 @@ pub mod structure_state;
 pub mod supply_state;
 pub mod creation;
 pub mod ground_states;
+pub mod health_fraction;
+pub mod landing;
 pub mod element_position;
 pub mod economy_values;
 pub mod init_create;
@@ -24,6 +28,8 @@ pub mod lair_city_state;
 pub mod leaf_init;
 pub mod state;
 pub mod state_effects;
+pub mod state_refcount;
+pub mod group_records;
 pub mod loading;
 pub mod registry;
 pub mod owned;
@@ -56,8 +62,13 @@ pub mod defender_range;
 
 pub mod actor_registration;
 pub mod overlap_list;
+pub mod siege_site;
+pub mod terrain_refresh;
 pub mod detection_memory;
 
 pub mod actor_init_existing;
 pub mod city_candidates;
 pub mod organization_spawn;
+pub mod mobile_timing;
+pub mod organization_helpers;
+pub mod denizen_slots;

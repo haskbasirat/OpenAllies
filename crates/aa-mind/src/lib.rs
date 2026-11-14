@@ -2,10 +2,19 @@
 //! callbacks connect state entry/exit and scheduling to the live engine.
 #![forbid(unsafe_code)]
 
+pub mod aai_mind_activate;
+pub mod aai_attack_aim;
+pub mod aai_attack_phase;
+pub mod aai_attack_point;
+pub mod aai_attack_release;
+pub mod aai_guard_activate;
+pub mod aai_guard_command;
+pub mod aai_mind_dispatch;
 pub mod ability_decision;
 pub mod ability_motion;
 pub mod action;
 pub mod action_mask;
+pub mod cai_behavior;
 pub mod cai_engage;
 pub mod cai_engage_think;
 pub mod cai_guard;
@@ -22,6 +31,7 @@ pub mod decision_score;
 pub mod disable_command;
 pub mod element_command;
 pub mod element_update;
+pub mod element_speed;
 pub mod element_move;
 pub mod element_move_continuation;
 pub mod moving_target;
@@ -29,7 +39,12 @@ pub mod recover_select;
 pub mod rout_score;
 pub mod rout_select;
 pub mod sai;
+pub mod state_helpers;
 pub mod uai_kill;
+pub mod unreachable_memory;
+pub mod uai_reattach_event;
+pub mod uai_unpack_events;
+pub mod state_priority;
 pub mod uai_thinks;
 pub mod x87;
 
