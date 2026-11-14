@@ -216,17 +216,26 @@ pub(super) fn enter(host: &mut Regiment<'_>, state: StateId, offset: u32, a: &mu
                 }
             }
         }
-        // 0x525CA0: status 2, 0x523EA0, the formation faces the tail (0x57BF30).
+        // 0x525CA0: status 2, 0x523EA0, then the formation faces the list's tail (state
+        // +0x14): the listed thing's own +0x20 / +0x24 (an organization's is its own
+        // point, not a member's) less the organization's, each stored to binary32,
+        // 0x409230, and 0x57BF30 with the result whatever it is. Engage +0x18 (the
+        // Siege state's Mind +0x10C while it is on the stack, else 0) and the byte
+        // +0x1C (0) have no store here.
         ENGAGE => {
             a.state_mut(state)?.status = 2;
             let mut targets = host.list();
             cai_engage::refresh_targets(&mut targets, state, a, host)?;
             host.store_list(&targets);
-            if let Some(t) = targets.nodes.last().and_then(|n| resolve_gtid(host.world, n.gtid)).and_then(|t| combat::representative(host.world, t)) {
-                let d = pos2(host.world, t) - host.world.orgs[host.o as usize].anchor;
-                if d.length_squared() > 0.0 {
-                    set_org_facing(host.ms, host.world, host.o, d.normalize());
-                }
+            if let Some(t) = targets.nodes.last().and_then(|n| resolve_gtid(host.world, n.gtid)) {
+                let at = match t {
+                    TargetRef::Org(o) => host.world.orgs[o as usize].anchor,
+                    TargetRef::Actor(x) => pos2(host.world, x),
+                };
+                let own = host.world.orgs[host.o as usize].anchor;
+                let mut d = [at.x - own.x, at.y - own.y];
+                aa_movement::transport_drop::normalize2(&mut d, PC).map_err(err)?;
+                set_org_facing(host.ms, host.world, host.o, Vec2::new(d[0], d[1]));
             }
         }
         // 0x529420: status 2, the embedded states leave, Mind +0x2B4 the direction, 0x51EE20.
@@ -869,22 +878,28 @@ fn chase_begin(host: &mut Regiment<'_>, t: Option<TargetRef>, a: &mut Arena) -> 
     Ok(false)
 }
 
-/// `0x51F600`: with the Kill state on the stack and its target there, the regiment is
-/// farther from the Move's destination than its leader: no reform.
-fn skip_reform(host: &mut Regiment<'_>, a: &Arena) -> bool {
+/// `0x51F600`: with the Kill state (Mind +0xC0) on the stack (`0x52A8A0`) and its
+/// target (Mind +0xD0) live, the regiment (organization +0x20 / +0x24) is farther from
+/// the Move state's path goal (Mind +0x7C / +0x80) than its leader: no reform. Both
+/// squared distances stay on the x87 stack (`dx*dx + dy*dy`, no binary32 store) and
+/// the test is a strict, ordered "greater". When the Kill is not on the stack the
+/// original asks the Siege state (Mind +0xF8, target Mind +0x108), which has no site
+/// here.
+fn skip_reform(host: &mut Regiment<'_>, a: &Arena) -> aa_mind::Result<bool> {
     if current_target(host, a).is_none() {
-        return false;
+        return Ok(false);
     }
-    let dest = host.order().destination;
-    let Some(leader) = host.leader() else { return false };
-    let lead = pos2(host.world, leader);
-    let own = host.world.orgs[host.o as usize].anchor;
-    let d = |p: Vec2| fstp_len2(dest, p);
-    d(own) > d(lead)
-}
-fn fstp_len2(a: Vec2, b: Vec2) -> f32 {
-    let (dy, dx) = (a.y - b.y, a.x - b.x);
-    dy * dy + dx * dx
+    let goal = bits(host.order().path_dest);
+    let Some(leader) = host.leader() else { return Ok(false) };
+    let lead = bits(pos2(host.world, leader));
+    let own = bits(host.world.orgs[host.o as usize].anchor);
+    let n = |b: u32| Binary::from_f32_bits(b).map_err(err);
+    let len2 = |p: [u32; 2]| -> aa_mind::Result<Binary> {
+        let dy = n(goal[1])?.sub(&n(p[1])?, PC).map_err(err)?;
+        let dx = n(goal[0])?.sub(&n(p[0])?, PC).map_err(err)?;
+        dx.mul(&dx, PC).map_err(err)?.add(&dy.mul(&dy, PC).map_err(err)?, PC).map_err(err)
+    };
+    Ok(len2(own)?.compare(&len2(lead)?) == std::cmp::Ordering::Greater)
 }
 
 /// Mind virtual +0x140 `EventTargetGone` `0x521F90`.
@@ -912,7 +927,7 @@ pub(super) fn target_gone(host: &mut Regiment<'_>, g: u32, a: &mut Arena) -> aa_
         if chase_continues(host, k, a) && chase_begin(host, resolve_gtid(host.world, k), a)? {
             return Ok(());
         }
-        if !skip_reform(host, a) {
+        if !skip_reform(host, a)? {
             let reform = host.state(REFORM)?;
             aa_mind::activate(reform, 1, a, host)?;
             think_in(host.world, host.o, immediate);

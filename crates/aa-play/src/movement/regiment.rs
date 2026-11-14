@@ -1375,43 +1375,75 @@ fn ms_note(host: &mut Regiment<'_>, what: String) {
     host.ms.note(what);
 }
 
-/// `0x51F7A0`: the leader's node consumes the regiment's while the state is not its
-/// Unpack's own wait: `0x52CDB0` the path's head, `0x57BF30` the next node's facing;
-/// at the last, inside the arrival radius, Mind +0x144.
+/// `0x51F7A0` on its exact port (`aa_navigation::company_leader_node`). The regiment
+/// path is the Move state's (Mind +0x9C, the Mind's virtual +0x44 `0x5247A0`), whatever
+/// state is current; the two `0x52A000` tests are on Mind +0x1CC (Engage) and
+/// Mind +0x34 (Sleep).
 fn node_reached(host: &mut Regiment<'_>, leader: ActorId, leader_nodes: usize, a: &mut Arena) -> aa_mind::Result<()> {
-    let o = host.o;
-    if host.is_current(a, fight::ENGAGE)? || host.is_current(a, SLEEP)? {
-        return Ok(());
-    }
-    if host.ms.orgs[o as usize].leader != Some(leader) || host.ms.orgs[o as usize].order.path.is_empty() {
-        return Ok(());
-    }
-    // Regiment path +0xC, `0x51E8D0` on the leader's, `0x52CDB0`.
-    let mut route = owned_path(&host.ms.orgs[o as usize].order);
-    if route.kind1_count < leader_nodes as i32 {
-        return Ok(());
-    }
-    if let Some(node) = route.nodes.first().copied() {
-        match node.words[4] {
-            1 => route.kind1_count -= 1,
-            2 => route.kind2_count -= 1,
-            _ => {}
-        }
-        route.nodes.remove(0);
-        route.dirty = true;
-    }
-    host.ms.orgs[o as usize].order.route = Some(route);
-    host.ms.orgs[o as usize].order.path.remove(0);
-    if let Some(head) = host.ms.orgs[o as usize].order.path.first() {
-        let dir = head.dir;
-        if dir != Vec2::ZERO {
-            set_org_facing(host.ms, host.world, o, dir);
-        }
-    }
-    let at = bits(host.world.orgs[o as usize].anchor);
-    let order = &host.ms.orgs[o as usize].order;
-    if order.path.is_empty() && order.active && !order.capped && aa_mind::within_arrival(at, bits(order.path_dest), PC)? {
-        host.finished(a)?;
-    }
+    let mut route = owned_path(&host.ms.orgs[host.o as usize].order);
+    let mut world = LeaderNode { host, a, leader_nodes: leader_nodes as i32, consumed: false };
+    aa_navigation::company_leader_node::leader_node_reached(leader, &mut route, &mut world, PC).map_err(err)?;
     Ok(())
+}
+
+/// The services of `0x51F7A0` for one regiment. The port works on a copy of the
+/// regiment path; [`LeaderNode::consume`] applies the same `0x52CDB0` to the
+/// [`OrderMove`] before the first callback that follows it, so `0x57BF30` and Mind
+/// +0x144 see the path as the original's do.
+struct LeaderNode<'h, 'w> {
+    host: &'h mut Regiment<'w>,
+    a: &'h mut Arena,
+    /// `0x51E8D0` on the leader's path.
+    leader_nodes: i32,
+    consumed: bool,
+}
+impl LeaderNode<'_, '_> {
+    /// `0x52CDB0` on the regiment path: both callbacks after it come here first.
+    fn consume(&mut self) {
+        if std::mem::replace(&mut self.consumed, true) {
+            return;
+        }
+        let order = &mut self.host.ms.orgs[self.host.o as usize].order;
+        let mut route = owned_path(order);
+        aa_navigation::company_leader_node::remove_head(&mut route);
+        if !order.path.is_empty() {
+            order.path.remove(0);
+        }
+        order.route = Some(route);
+    }
+}
+impl aa_navigation::company_leader_node::LeaderNodeWorld for LeaderNode<'_, '_> {
+    fn state_is_current(&mut self, offset: u32) -> aa_navigation::Result<bool> {
+        self.host.is_current(self.a, offset).map_err(nav)
+    }
+    /// Organization +0x7C +0x40; a regiment without one matches no actor.
+    fn leader(&mut self) -> aa_navigation::Result<u32> {
+        Ok(self.host.ms.orgs[self.host.o as usize].leader.unwrap_or(u32::MAX))
+    }
+    fn leader_path_nodes(&mut self, _: u32) -> aa_navigation::Result<i32> {
+        Ok(self.leader_nodes)
+    }
+    /// `0x57BF30` with the new head's +8 / +0xC, unconditionally.
+    fn face(&mut self, point: [u32; 2]) -> aa_navigation::Result<()> {
+        self.consume();
+        set_org_facing(self.host.ms, self.host.world, self.host.o, vec2(point));
+        Ok(())
+    }
+    /// Mind +0x74: 2 while the Move state is entered.
+    fn move_status(&mut self) -> aa_navigation::Result<u32> {
+        self.consume();
+        Ok(u32::from(self.host.order().active) * 2)
+    }
+    /// Move state +0x14 / +0x18.
+    fn move_goal(&mut self) -> aa_navigation::Result<[u32; 2]> {
+        Ok(bits(self.host.order().path_dest))
+    }
+    fn organization_position(&mut self) -> aa_navigation::Result<[u32; 2]> {
+        Ok(bits(self.host.world.orgs[self.host.o as usize].anchor))
+    }
+    /// Mind +0x144 `0x5222E0`; the element's node reached drops the result.
+    fn mind_virtual_144(&mut self) -> aa_navigation::Result<bool> {
+        self.host.finished(self.a).map_err(nav)?;
+        Ok(true)
+    }
 }
