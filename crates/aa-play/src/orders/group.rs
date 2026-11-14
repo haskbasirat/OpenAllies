@@ -546,9 +546,11 @@ fn with_group<R>(world: &mut World, key: u32, f: impl FnOnce(&mut Group, &World)
 }
 
 fn schedule(world: &mut World, key: u32, delay: f32) {
-    // vt+4 = 0x50AD80: vt+10 0x529CD0 cancels what is pending (0x50B250).
+    // vt+4 = 0x50AD80: vt+10 0x529CD0 cancels what is pending (0x50B250), then the
+    // event joins the deferred queue at GWorld+208, the one that delivers Updatable
+    // vt+1C (the group's table at 0xA29464 has 0x4E0880 there; its vt+18 is empty).
     world.unschedule(Owner::Group(key));
-    world.schedule_after(crate::scheduler::DEFERRED, Owner::Group(key), 0, delay);
+    world.schedule_after(crate::scheduler::THINK, Owner::Group(key), 0, delay);
 }
 
 /// 0x4DFF30: `unit` leaves its group; the last one out destroys it (0x4F6760).
