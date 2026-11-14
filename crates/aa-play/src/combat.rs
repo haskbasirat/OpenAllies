@@ -1931,6 +1931,7 @@ fn roe_backoff(world: &World, st: &mut CombatState, actor: ActorId) -> bool {
     back
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug)]
 struct Candidate {
     actor: ActorId,
@@ -1939,21 +1940,92 @@ struct Candidate {
     distance2: f32,
 }
 
-/// `52F010`: true when `c` beats `best` (priority, then score beyond 1e-4,
-/// then the nearer target; squared distances within 1e-4 are equal,
-/// `455000` with `[A02790]`).
+/// `52F010` (aa_combat::member_choice::rank, the x87 differences at PC53):
+/// true when `c` beats `best` (priority, then score beyond 1e-4, then the
+/// nearer target; squared distances within 1e-4 are equal, `455000` with
+/// `[A02790]`).
+#[cfg(test)]
 fn better(best: &Option<Candidate>, c: &Candidate) -> bool {
-    let Some(b) = best else { return true };
-    if b.priority != c.priority {
-        return c.priority > b.priority;
+    use aa_combat::member_choice::{rank, Decision as Record};
+    let record = |c: &Candidate| Record { ability: 1, kind: 1, status: 0, score: c.score.to_bits(), target: c.actor + 1, distance2: c.distance2.to_bits(), priority: c.priority };
+    let b = best.as_ref().map_or_else(Record::initial, record);
+    rank(&b, &record(c), false, aa_numeric::Precision::Double53).is_ok_and(|r| r > 0)
+}
+
+/// The services of `534700` (aa_combat::member_choice::choose) for one
+/// shooter. A handle is an actor id + 1 (0 is null).
+///
+/// **Rendition:** the query (`558150` / `5580F0` with `558750`) is the
+/// candidate list the caller collected, in its order, not the original's
+/// tile-list scan or the organization's cached list (`57A780`).
+struct ChoiceWorld<'a> {
+    world: &'a mut World,
+    st: &'a CombatState,
+    shooter: ActorId,
+    candidates: &'a [ActorId],
+    next: usize,
+}
+impl aa_combat::member_choice::MemberChoiceWorld for ChoiceWorld<'_> {
+    /// Actor `+74`: the Performer holds the definition's abilities.
+    fn has_performer(&mut self) -> aa_combat::Result<bool> {
+        Ok(!self.world.data.def(self.world.actors[self.shooter as usize].def).weapons.is_empty())
     }
-    if !((b.score - c.score).abs() < EPSILON) {
-        return b.score <= c.score;
+    fn organization(&mut self) -> aa_combat::Result<Option<u32>> {
+        Ok(attached_org(self.world, &self.world.actors[self.shooter as usize]).map(|o| o + 1))
     }
-    if (b.distance2 - c.distance2).abs() < EPSILON {
-        return false;
+    fn query_begin(&mut self, _: aa_combat::member_choice::Query) -> aa_combat::Result<()> {
+        self.next = 0;
+        Ok(())
     }
-    !(b.distance2 < c.distance2)
+    fn query_next(&mut self) -> aa_combat::Result<Option<u32>> {
+        let c = self.candidates.get(self.next).map(|c| c + 1);
+        self.next += 1;
+        Ok(c)
+    }
+    fn query_end(&mut self) -> aa_combat::Result<()> {
+        Ok(())
+    }
+    /// Candidate virtual `+1C(filter)`: both callers pass no filter.
+    fn candidate_matches(&mut self, _: u32, _: u32) -> aa_combat::Result<bool> {
+        Ok(true)
+    }
+    /// Mind virtual `+A0`: the callers list what the Mind considers (the
+    /// regiment's engage list, `52DCA0` -> `5210D0`); never the element itself.
+    fn mind_considers(&mut self, candidate: u32) -> aa_combat::Result<bool> {
+        Ok(candidate - 1 != self.shooter)
+    }
+    /// `530E00`: the callers drop what the Move could not reach beforehand.
+    fn remembered_unreachable(&mut self, _: u32) -> aa_combat::Result<bool> {
+        Ok(false)
+    }
+    /// Actor virtual `+16C(candidate)`: the candidate is its enemy.
+    fn actor_accepts(&mut self, candidate: u32) -> aa_combat::Result<bool> {
+        let kingdom = |a: ActorId| self.world.actors[a as usize].kingdom;
+        Ok(self.st.hostile(kingdom(self.shooter), kingdom(candidate - 1)))
+    }
+    fn priority(&mut self, candidate: u32) -> aa_combat::Result<i32> {
+        Ok(element_priority(self.world, self.st, self.shooter, candidate - 1))
+    }
+    /// `5340C0(candidate, null, &record, 0)` past its early exits (the
+    /// callers test the ROE back-off): it writes all seven words, without an
+    /// ability 0, kind 1, status 3 and score -1. The distance is its stored
+    /// `dx*dx + dy*dy` of the unstored differences.
+    fn decide(&mut self, candidate: u32, record: &mut aa_combat::member_choice::Decision) -> aa_combat::Result<()> {
+        let c = candidate - 1;
+        let d = decide(self.world, self.st, self.shooter, c);
+        let (s, t) = (self.world.actors[self.shooter as usize].pos, self.world.actors[c as usize].pos);
+        let (dx, dy) = (x87::sub(ld(s.x), ld(t.x)), x87::sub(ld(s.y), ld(t.y)));
+        *record = aa_combat::member_choice::Decision {
+            ability: d.as_ref().map_or(0, |d| d.weapon as u32 + 1),
+            kind: 1,
+            status: d.as_ref().map_or(3, |d| u32::from(d.status)),
+            score: d.as_ref().map_or(-1.0f32, |d| d.score).to_bits(),
+            target: candidate,
+            distance2: fstp(x87::add(x87::mul(dy, dy), x87::mul(dx, dx))).to_bits(),
+            priority: record.priority,
+        };
+        Ok(())
+    }
 }
 
 /// `4D4420`: `actor` (or its organization) is attacking `us` (or our organization).
@@ -2038,27 +2110,13 @@ fn element_priority(world: &World, st: &CombatState, shooter: ActorId, target: A
 /// engage target object); then its `5340C0` decision ranked by `52F010`.
 /// The distance is `5340C0`'s stored `dy*dy + dx*dx`.
 fn choose(world: &mut World, st: &CombatState, shooter: ActorId, candidates: &[ActorId], engage_object: Option<ActorId>, min_priority: i32) -> Option<ActorId> {
-    let mut best: Option<Candidate> = None;
-    for &c in candidates {
-        if c == shooter {
-            continue;
-        }
-        let priority = element_priority(world, st, shooter, c);
-        if priority == 0
-            || best.is_some_and(|b| priority < b.priority)
-            || (Some(c) != engage_object && priority < min_priority)
-        {
-            continue;
-        }
-        let Some(d) = decide(world, st, shooter, c) else { continue };
-        let (s, t) = (world.actors[shooter as usize].pos, world.actors[c as usize].pos);
-        let (dx, dy) = (x87::sub(ld(s.x), ld(t.x)), x87::sub(ld(s.y), ld(t.y)));
-        let cand = Candidate { actor: c, priority, score: d.score, distance2: fstp(x87::add(x87::mul(dy, dy), x87::mul(dx, dx))) };
-        if better(&best, &cand) {
-            best = Some(cand);
-        }
-    }
-    best.map(|c| c.actor)
+    let p = world.actors[shooter as usize].pos;
+    let mut host = ChoiceWorld { world, st, shooter, candidates, next: 0 };
+    // The point and radius only start the query, which is the given list.
+    aa_combat::member_choice::choose([p.x.to_bits(), p.y.to_bits()], 0, None, min_priority, None, engage_object.map(|a| a + 1), &mut host, aa_numeric::Precision::Double53)
+        .ok()
+        .flatten()
+        .map(|handle| handle - 1)
 }
 
 /// `527240` for the regiment Mind: its current target is the explicit
@@ -2291,6 +2349,9 @@ pub(crate) fn member_decision(world: &mut World, st: &mut CombatState, m: ActorI
     }
     decide(world, st, m, target).map(|d| (d.weapon, u32::from(d.status)))
 }
+
+/// [`member_decision`] with the record's score (`+0xC`), which `0x536840` compares.
+pub(crate) fn member_record(world: &mut World, st: &mut CombatState, m: ActorId, target: ActorId) -> Option<(usize, u32, f32)> { if roe_backoff(world, st, m) { None } else { decide(world, st, m, target).map(|d| (d.weapon, u32::from(d.status), d.score)) } }
 
 /// `0x57E670` above `0x4BE6C0` of the ability: another ability of the Performer
 /// weighs more (aa_combat::weights::maximum).
@@ -3577,6 +3638,17 @@ mod native_tests {
         assert!(better(&Some(c(5, 1.0, 9.0)), &c(5, 1.00005, 4.0)), "scores tie, nearer wins");
         assert!(!better(&Some(c(5, 1.0, 100.0)), &c(5, 1.0, 100.00005)), "equal distances keep the best");
         assert!(!better(&Some(c(5, 1.0, 4.0)), &c(5, 1.0, 9.0)));
+        // choose() hands every candidate to the rank, also one whose 5340C0
+        // found no ability (ability 0, status 3, score -1): it never becomes
+        // the best, as aa-play's old loop skipped it.
+        use aa_combat::member_choice::{rank, Decision};
+        let none = Decision { target: 8, priority: 5, ..Decision::initial() };
+        assert_eq!(rank(&Decision::initial(), &none, false, aa_numeric::Precision::Double53).unwrap(), 0);
+        let some = Decision { ability: 1, kind: 1, status: 0, score: 1f32.to_bits(), target: 3, distance2: 4f32.to_bits(), priority: 5 };
+        assert_eq!(rank(&some, &none, false, aa_numeric::Precision::Double53).unwrap(), -1);
+        // With the bypass flag (actor +16C refused) the priorities are not compared.
+        let low = Decision { priority: 1, score: 2f32.to_bits(), ..some };
+        assert_eq!(rank(&some, &low, true, aa_numeric::Precision::Double53).unwrap(), 1);
     }
 
     /// The original playing the Berlin2v2_1 QA film: between the samples of ticks 5616
