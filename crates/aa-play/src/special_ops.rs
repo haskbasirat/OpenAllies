@@ -1360,7 +1360,7 @@ fn apply_effect(world: &mut World, kingdom: KingdomId, gi: usize, index: usize, 
                 if e.kind == MORALE_GAIN {
                     crate::morale::gain(world, &mut st, o, amount);
                 } else {
-                    crate::morale::lose(world, &mut st, o, amount);
+                    crate::morale::lose_kind(world, &mut st, o, amount, 0);
                 }
                 world.combat = st;
             }

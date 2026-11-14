@@ -1047,8 +1047,6 @@ pub(crate) fn attach_city_blocks(world: &mut World) {
 /// city under siege provides no supply (0x58ACE0). The neutral buildings of
 /// the old owner around the city change hands with it.
 pub fn city_tick(world: &mut World, c: ActorId) {
-    use crate::books::{ENEMY, FRIEND};
-    let n = world.kingdoms.len();
     {
         let Some(city) = world.actors.get(c as usize) else { return };
         if !city.alive || city.removed {
@@ -1086,80 +1084,150 @@ pub fn city_tick(world: &mut World, c: ActorId) {
             return;
         }
     }
-    // 0x5647A0: City +0x20 = 0 first
-    world.books.actor_mut(c).city_siege = false;
-    {
-        let city = &world.actors[c as usize];
-        let owner = city.kingdom;
-        // 0x5647A0 over the City+18 candidates (the city itself never is one:
-        // it has no Performer and belongs to its owner).
-        let listed = world.books.actor(c).map(|b| b.city_candidates.clone()).unwrap_or_default();
-        let candidates: Vec<CityCandidate> = listed.iter().filter_map(|&who| candidate(world, who)).collect();
-        let mut present = vec![0.0f32; n];
-        let mut any = false;
-        for cand in &candidates {
-            if (cand.kingdom as usize) < n {
-                present[cand.kingdom as usize] += cand.current;
-                any = true;
-            }
+    // 0x5647A0 through the exact port: City +0x20 = 0 first, the sums over City+18
+    // head first, the zone's decision, then 0x4D5230 for another owner.
+    let list = world.books.actor(c).map(|b| b.city_candidates.clone()).unwrap_or_default();
+    let mut host = CityHost { world, city: c, list, captured: None };
+    if aa_combat::city_capture::tick(&mut host, CITY_PRECISION).is_err() {
+        return;
+    }
+    let Some(Some(w)) = host.captured else { return };
+    world.actors[c as usize].kingdom = Some(w);
+    world.events.push(crate::world::Event::Captured { actor: c, kingdom: w });
+    // 0x4D8450 -> 0x5643A0: City+10, the blocks, go with it.
+    for b in world.books.actor(c).map(|k| k.city_blocks.clone()).unwrap_or_default() {
+        if let Some(a) = world.actors.get_mut(b as usize).filter(|a| !a.removed) {
+            a.kingdom = Some(w);
         }
-        let rel = |a: usize, b: usize| world.books.relation(&world.kingdoms, Some(a as u32), Some(b as u32));
-        let (decide, siege) = match owner {
-            None => (any, false),
-            Some(o) => {
-                // over City+18 head first: an allied candidate (+0x138: owned
-                // or a friend) adds its value to the allied sum (0x564846 ..
-                // 0x564854 `fadd`/`fstp` of the same local) and to the defence
-                // when owned (+0x134); an enemy (+0x140) adds to the attack
-                let o = o as usize;
-                let (mut defend, mut attack, mut ally) = (0.0f32, 0.0f32, 0.0f32);
-                for cand in &candidates {
-                    let k = cand.kingdom as usize;
-                    if k >= n {
-                        continue;
-                    }
-                    let r = rel(k, o);
-                    if k == o || r == FRIEND {
-                        ally += cand.current;
-                        if k == o {
-                            defend += cand.current;
-                        }
-                    } else if r == ENEMY {
-                        attack += cand.current;
-                    }
-                }
-                let decide = attack > 0.0 && defend <= 0.0;
-                // 0x5648BC: under siege unless the attack is below the allied sum
-                (decide, !decide && !(attack < ally))
-            }
-        };
-        if !decide {
-            // 0x5648E8: held under siege
-            world.books.actor_mut(c).city_siege = siege;
-            return;
+    }
+    // 0x4D5230 -> 0x4CF0F0: the contribution moves to the new owner at once.
+    crate::economy::refresh(world);
+}
+
+/// The x87 precision control of the simulation thread, for the exact City tick.
+const CITY_PRECISION: aa_numeric::Precision = aa_numeric::Precision::Double53;
+/// The object handle of the City+18 candidate at an index; a kingdom's handle is its id.
+const CITY_CANDIDATE: u32 = 0x4000_0000;
+
+/// The world services of the exact City tick (`aa_combat::city_capture::World`,
+/// 0x5647A0) for one city: City+18 in list order (a node is its index), the
+/// kingdoms in World +154 order (a kingdom's +18C is its id).
+struct CityHost<'a> {
+    world: &'a mut World,
+    city: ActorId,
+    list: Vec<crate::books::CityCandidateRef>,
+    /// The winner 0x4D5230 was called with.
+    captured: Option<Option<KingdomId>>,
+}
+
+impl CityHost<'_> {
+    /// The kingdom an object stands for: a candidate's owner, or the kingdom itself.
+    fn kingdom_of(&self, object: u32) -> Option<KingdomId> {
+        if object & CITY_CANDIDATE == 0 {
+            return Some(object);
         }
-        // threat[k]: the value of the candidates whose kingdom k regards as
-        // an enemy (kingdom virtual +0x140)
-        let threat: Vec<f32> = (0..n).map(|k| (0..n).filter(|&e| e != k && rel(k, e) == ENEMY).map(|e| present[e]).sum()).collect();
-        let winner = (0..n).find(|&k| {
-            threat[k] <= 0.0
-                && present[k] > 0.0
-                && !(0..n).any(|f| f != k && rel(k, f) == FRIEND && (present[k] < present[f] || threat[f] > 0.0))
+        let who = *self.list.get((object & !CITY_CANDIDATE) as usize)?;
+        candidate(self.world, who).map(|c| c.kingdom)
+    }
+    fn relation(&self, object: u32, other: Option<u32>) -> Option<u8> {
+        let k = self.kingdom_of(object)?;
+        Some(self.world.books.relation(&self.world.kingdoms, Some(k), Some(other?)))
+    }
+}
+
+impl aa_combat::city_capture::World for CityHost<'_> {
+    fn city_owner(&mut self) -> aa_combat::Result<Option<u32>> {
+        Ok(self.world.actors[self.city as usize].kingdom)
+    }
+    fn set_under_siege(&mut self, value: bool) -> aa_combat::Result<()> {
+        self.world.books.actor_mut(self.city).city_siege = value;
+        Ok(())
+    }
+    fn first_candidate(&mut self) -> aa_combat::Result<Option<u32>> {
+        Ok((!self.list.is_empty()).then_some(0))
+    }
+    fn next_node(&mut self, node: u32) -> aa_combat::Result<Option<u32>> {
+        Ok(((node as usize) + 1 < self.list.len()).then_some(node + 1))
+    }
+    fn resolve_node(&mut self, node: u32) -> aa_combat::Result<Option<u32>> {
+        Ok(self.kingdom_of(CITY_CANDIDATE | node).map(|_| CITY_CANDIDATE | node))
+    }
+    fn owner(&mut self, object: u32) -> aa_combat::Result<Option<u32>> {
+        Ok(self.kingdom_of(object))
+    }
+    /// Virtual +0x134: the other's own.
+    fn virtual_134(&mut self, object: u32, other: Option<u32>) -> aa_combat::Result<bool> {
+        Ok(other.is_some() && self.kingdom_of(object) == other)
+    }
+    /// Virtual +0x138: the other's own or its friend's.
+    fn virtual_138(&mut self, object: u32, other: Option<u32>) -> aa_combat::Result<bool> {
+        Ok((other.is_some() && self.kingdom_of(object) == other) || self.relation(object, other) == Some(crate::books::FRIEND))
+    }
+    /// Virtual +0x140: the other's enemy.
+    fn virtual_140(&mut self, object: u32, other: Option<u32>) -> aa_combat::Result<bool> {
+        Ok(self.relation(object, other) == Some(crate::books::ENEMY))
+    }
+    /// 0x4D0180, unstored: a lone thing's through the exact port (0x57DC40, the
+    /// Denizen +10); an organization's is its +68, a binary32.
+    fn combat_value(&mut self, object: u32) -> aa_combat::Result<aa_numeric::Binary> {
+        let who = self.list.get((object & !CITY_CANDIDATE) as usize).copied();
+        match who {
+            Some(crate::books::CityCandidateRef::Actor(a)) => aa_combat::candidate_value::value(a, &mut CityValue { world: self.world }, CITY_PRECISION),
+            Some(who) => {
+                let current = candidate(self.world, who).map_or(0.0, |c| c.current);
+                Ok(aa_numeric::Binary::from_f32_bits(current.to_bits())?)
+            }
+            None => Err(aa_combat::Error::Invalid("city host: no such candidate")),
+        }
+    }
+    fn kingdom_count(&mut self) -> aa_combat::Result<i32> {
+        Ok(self.world.kingdoms.len() as i32)
+    }
+    fn kingdom_slot(&mut self, index: i32) -> aa_combat::Result<Option<u32>> {
+        Ok(usize::try_from(index).ok().filter(|&i| i < self.world.kingdoms.len()).map(|i| i as u32))
+    }
+    fn kingdom_index(&mut self, kingdom: u32) -> aa_combat::Result<i32> {
+        Ok(kingdom as i32)
+    }
+    /// 0x4D5230: the owner change is the caller's, after the tick.
+    fn capture(&mut self, winner: Option<u32>, _: &aa_body::damage::DamageRecord) -> aa_combat::Result<()> {
+        self.captured = Some(winner);
+        Ok(())
+    }
+}
+
+/// The components 0x4D0180 reads of a lone thing: the Performer +60 with its Body's
+/// health and maximum, and the Denizen +10. (aa-play has no Settlement occupants.)
+struct CityValue<'a> {
+    world: &'a World,
+}
+
+impl aa_combat::candidate_value::World for CityValue<'_> {
+    fn organization_current(&mut self, _: u32) -> aa_combat::Result<Option<aa_body::F32>> {
+        Ok(None)
+    }
+    fn component98_current(&mut self, _: u32) -> aa_combat::Result<Option<aa_body::F32>> {
+        Ok(None)
+    }
+    fn performer(&mut self, actor: u32) -> aa_combat::Result<Option<(aa_body::F32, Option<[aa_body::F32; 2]>)>> {
+        let Some(value) = actor_performer_value(self.world, actor) else { return Ok(None) };
+        let x = &self.world.actors[actor as usize];
+        let body = self.world.data.def(x.def).has_component("BodyComponent").then(|| {
+            let max = self
+                .world
+                .combat
+                .actors
+                .get(actor as usize)
+                .filter(|c| c.initialized && c.max_health > 0.0)
+                .map_or_else(|| crate::production::max_health(self.world, x.kingdom, x.def), |c| c.max_health);
+            [aa_body::F32(x.health.to_bits()), aa_body::F32(max.to_bits())]
         });
-        let Some(w) = winner.map(|k| k as u32) else { return };
-        if Some(w) == owner {
-            return;
-        }
-        world.actors[c as usize].kingdom = Some(w);
-        world.events.push(crate::world::Event::Captured { actor: c, kingdom: w });
-        // 0x4D8450 -> 0x5643A0: City+10, the blocks, go with it.
-        for b in world.books.actor(c).map(|k| k.city_blocks.clone()).unwrap_or_default() {
-            if let Some(a) = world.actors.get_mut(b as usize).filter(|a| !a.removed) {
-                a.kingdom = Some(w);
-            }
-        }
-        // 0x4D5230 -> 0x4CF0F0: the contribution moves to the new owner at once.
-        crate::economy::refresh(world);
+        // 57DC40 divides by the Body's maximum; a Body without one is not met.
+        let body = body.filter(|[_, max]| f32::from_bits(max.0) > 0.0);
+        Ok(Some((aa_body::F32(value.to_bits()), body)))
+    }
+    fn denizen_current(&mut self, actor: u32) -> aa_combat::Result<Option<aa_body::F32>> {
+        Ok(self.world.books.actor(actor).and_then(|b| b.denizen.as_ref()).map(|d| aa_body::F32(d.value.to_bits())))
     }
 }
 /// The organization's own position (its GActor +20/+24): set at its

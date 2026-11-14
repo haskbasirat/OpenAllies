@@ -31,6 +31,9 @@ use crate::combat::{
 };
 use crate::world::{Event, Order, OrgId, World};
 use crate::DT;
+use aa_body::{F32, damage::DamageRecord, experience::Request, properties::ModifierState};
+use aa_combat::morale as exact;
+use aa_numeric::{Binary, Precision};
 
 pub fn tick(world: &mut World) {
     let mut st = std::mem::take(&mut world.combat);
@@ -342,42 +345,246 @@ fn gain_x87(world: &mut World, st: &mut CombatState, id: OrgId, amount: f64) {
     if max < *m {
         *m = max;
     }
-    if state(&st.orgs[i], world.orgs[i].morale) != 0 {
+    if state_exact(world, st, id) != 0 {
         st.orgs[i].exhausted = false;
     }
 }
 
-/// `579660` / `lose_amount`: subtract (not below 0); a transition to
-/// exhausted or wavering triggers the Mind reaction.
-pub(crate) fn lose(world: &mut World, st: &mut CombatState, id: OrgId, amount: f32) {
-    let i = id as usize;
-    if !world.orgs[i].alive || st.orgs[i].destroyed || amount <= 0.0 {
-        return;
-    }
-    let before = state(&st.orgs[i], world.orgs[i].morale);
-    let m = fstp(x87::sub(ld(world.orgs[i].morale), ld(amount)));
-    world.orgs[i].morale = if m < 0.0 { 0.0 } else { m };
-    let after = state(&st.orgs[i], world.orgs[i].morale);
-    if after == 0 {
-        st.orgs[i].exhausted = true;
-    }
-    if after != before {
-        match after {
-            0 => {
-                crate::movement::mind_morale_reaction(world, st, id, true);
-            }
-            1 => {
-                crate::movement::mind_morale_reaction(world, st, id, false);
-            }
-            _ => {}
-        }
+/// The x87 precision control the game runs at (PC53).
+const PRECISION: Precision = Precision::Double53;
+
+/// World +D8, the session mode: mode 6 suppresses every morale loss (`579660`,
+/// `579AB0`, `57A0A0`, `57CD70`). aa-play does not hold the word: its worlds are
+/// battles, which are not in mode 6.
+const SESSION_MODE: u32 = 0;
+
+fn bits(value: f32) -> F32 {
+    F32(value.to_bits())
+}
+
+/// The OrganizationComponent fields the exact morale port reads, from where aa-play
+/// holds them: +5C the morale, +60 the maximum, +B8 the breakpoint, +64 the living
+/// members, the +4C/+4D latches and the +84/+88 attack efficiency. The other fields
+/// are not read by the routines called here.
+fn record(world: &World, st: &CombatState, id: OrgId) -> exact::Organization {
+    let o = &st.orgs[id as usize];
+    exact::Organization {
+        owner: id,
+        morale: bits(world.orgs[id as usize].morale),
+        maximum: bits(o.morale_max),
+        breakpoint: bits(o.breakpoint),
+        living: o.living,
+        engaged_latch: o.engaged_latch,
+        engage_latch: o.engage_latch,
+        attack_efficiency: bits(o.attack_efficiency),
+        attack_efficiency_desired: bits(o.attack_efficiency_desired),
+        byte8d: false,
+        last_damage: DamageRecord { source_id: 0, allegiance_id: 0, damage_type: 0, amount: F32::ZERO, time: F32::ZERO, event_kind: 0, reason: 0 },
+        leader: None,
+        primary: None,
+        regroup_started: F32::ZERO,
+        entrench_base: F32::ZERO,
+        flare_pending: false,
+        flare_word: 0,
+        marker_pending: false,
+        watched_target: 0,
+        current_combat_value: F32::ZERO,
+        maximum_combat_value: F32::ZERO,
+        field_d8: F32::ZERO,
     }
 }
 
-/// `579AB0` on a retreat order out of an engagement (MoraleRetreatPenalty).
+/// The settings-cache values of the exact morale port, from the rules.
+fn settings(world: &World, r: &combat::Rules) -> exact::Settings {
+    exact::Settings {
+        engagement_loss: bits(r.morale_engagement_loss),
+        engagement_loss_factor_max: bits(r.morale_engagement_loss_factor_max),
+        retreat_penalty: bits(r.morale_retreat_penalty),
+        slayer_base: bits(r.morale_slayer_base),
+        slayer_min: bits(r.morale_slayer_min),
+        slayer_max: bits(r.morale_slayer_max),
+        breaker_base: bits(r.morale_breaker_base),
+        breaker_min: bits(r.morale_breaker_min),
+        breaker_max: bits(r.morale_breaker_max),
+        replenish: bits(r.morale_replenish),
+        supply_bonus: bits(r.morale_supply_bonus),
+        attack_efficiency_climbing: bits(r.attack_efficiency_climbing),
+        attack_efficiency_falling: bits(r.attack_efficiency_falling),
+        experience: aa_body::experience_amounts::Settings {
+            minimum: bits(r.experience_minimum),
+            maximum: bits(r.experience_maximum),
+            kill: bits(r.experience_kill),
+            capture: bits(world.data.rule_ci("ExperienceCaptureMultiplier").unwrap_or(0.0)),
+            rout: bits(r.experience_rout),
+            engagement: bits(r.experience_engage),
+            default_value: bits(r.experience_default),
+        },
+    }
+}
+
+/// The world services of the exact morale port (`aa_combat::morale::World`) for one
+/// organization: its owner actor's words, its Mind and its modifiers as aa-play
+/// holds them.
+struct Host<'a> {
+    world: &'a mut World,
+    st: &'a mut CombatState,
+    id: OrgId,
+}
+
+type ExactResult<T> = aa_combat::Result<T>;
+
+impl Host<'_> {
+    /// The Organization's fields back into the game.
+    fn store(&mut self, organization: &exact::Organization) {
+        self.world.orgs[self.id as usize].morale = f32::from_bits(organization.morale.0);
+    }
+    /// A Mind reaction with the live Organization: the game reads the morale the
+    /// reaction is about, and what the reaction changes is read back.
+    fn reaction(&mut self, organization: &mut exact::Organization, exhausted: bool) {
+        self.store(organization);
+        crate::movement::mind_morale_reaction(self.world, self.st, self.id, exhausted);
+        let fresh = record(self.world, self.st, self.id);
+        organization.morale = fresh.morale;
+        organization.maximum = fresh.maximum;
+        organization.breakpoint = fresh.breakpoint;
+    }
+    fn unbound<T>(&self, what: &'static str) -> ExactResult<T> {
+        Err(aa_combat::Error::World(format!("morale host: {what} is not bound")))
+    }
+}
+
+impl exact::World for Host<'_> {
+    fn session_mode(&self) -> ExactResult<u32> {
+        Ok(SESSION_MODE)
+    }
+    /// The owner actor's words: +8 bit 0 destructed; +100 bit 19 out of supply
+    /// (organization state 19); +104 bit 2, state 34, which the filling of the
+    /// leader slot copies from the leader (`57CBA0` -> `4D1080`): the leader is an
+    /// unpacked unit.
+    fn actor(&self, actor: u32) -> ExactResult<exact::Actor> {
+        let i = actor as usize;
+        let (Some(org), Some(s)) = (self.world.orgs.get(i), self.st.orgs.get(i)) else {
+            return self.unbound("an actor that is not an organization");
+        };
+        let destructed = !org.alive || s.destroyed;
+        let leader = crate::ids::target_actor(self.world, crate::world::Unit::Org(actor));
+        let unpacked = !org.members.is_empty()
+            && leader.and_then(|l| self.world.actors.get(l as usize)).is_some_and(|a| self.world.data.def(a.def).packs_to.is_some());
+        let out_of_supply = self.world.books.org(actor).is_some_and(|b| b.out_of_supply);
+        Ok(exact::Actor {
+            flags8: u32::from(destructed),
+            flags100: if out_of_supply { 0x80000 } else { 0 },
+            flags104: if unpacked { 4 } else { 0 },
+            engaged: s.is_engaged(),
+            has_organization: true,
+            membership: None,
+        })
+    }
+    /// The regiment's Mind (actor +70) and its +28/+2C words.
+    fn mind(&self, actor: u32) -> ExactResult<Option<exact::Mind>> {
+        let key = crate::minds::ORGANIZATION_MIND | actor;
+        let minds = &self.world.books.minds;
+        Ok(Some(exact::Mind { word28: minds.word(key, 0x28), word2c: minds.word(key, 0x2c) }))
+    }
+    /// Mind virtual +5C (`51D450` -> `52A8A0`): the Exhausted state is on the stack.
+    fn mind_declines(&mut self, _: &mut exact::Organization) -> ExactResult<bool> {
+        Ok(self.st.orgs[self.id as usize].exhausted_state)
+    }
+    fn mind_exhausted(&mut self, organization: &mut exact::Organization) -> ExactResult<()> {
+        self.reaction(organization, true);
+        Ok(())
+    }
+    fn mind_wavering(&mut self, organization: &mut exact::Organization) -> ExactResult<()> {
+        self.reaction(organization, false);
+        Ok(())
+    }
+    /// `4D64F0`: the morale routines set and clear actor state 5, mind_exhausted.
+    fn set_state(&mut self, _: &mut exact::Organization, state: u8, enabled: bool) -> ExactResult<()> {
+        if state != 5 {
+            return self.unbound("an actor state other than 5");
+        }
+        self.st.orgs[self.id as usize].exhausted = enabled;
+        Ok(())
+    }
+    /// `4CF110`: the owner's modifiers. Only the flags are read here: bit 3 is the
+    /// fourth registered FLAG modifier (`4C1110`), BERSERK.
+    fn modifier(&mut self, _: &mut exact::Organization) -> ExactResult<Option<ModifierState>> {
+        let mut modifier = ModifierState::new(0);
+        if crate::special_ops::org_has_flag(self.world, self.id, "BERSERK") {
+            modifier.flags |= 8;
+        }
+        Ok(Some(modifier))
+    }
+    fn state_group(&mut self, _: &mut exact::Organization, _: u32) -> ExactResult<Option<exact::StateDescriptor>> {
+        self.unbound("4D49B0")
+    }
+    fn actor_value(&mut self, _: &mut exact::Organization, _: u32, _: Precision) -> ExactResult<Binary> {
+        self.unbound("4D01E0")
+    }
+    fn definition4f4(&self, _: u32) -> ExactResult<F32> {
+        self.unbound("definition +4F4")
+    }
+    fn organization_maximum(&self, _: u32) -> ExactResult<F32> {
+        self.unbound("another organization's +60")
+    }
+    fn member_slots(&self, _: &exact::Organization) -> ExactResult<i32> {
+        self.unbound("definition +4C")
+    }
+    fn engage_target(&mut self, _: &mut exact::Organization) -> ExactResult<Option<u32>> {
+        self.unbound("Mind virtual +90")
+    }
+    fn target_eligible(&mut self, _: u32) -> ExactResult<bool> {
+        self.unbound("4C8330")
+    }
+    fn award(&mut self, _: &mut exact::Organization, _: u32, _: Request) -> ExactResult<()> {
+        self.unbound("4CE770")
+    }
+}
+
+/// `578140` through the exact port: 2 with a busy Mind (+28 or +2C), without a
+/// maximum or above the breakpoint; 0 at no morale or when the Mind declines; else 1.
+fn state_exact(world: &mut World, st: &mut CombatState, id: OrgId) -> u8 {
+    let mut organization = record(world, st, id);
+    let mut host = Host { world, st, id };
+    exact::state(&mut organization, &mut host).unwrap_or(2)
+}
+
+/// The morale loss without the BERSERK gate, through the exact port of `579660`
+/// with kind 4: what the trigger's `579750` passes, and the gates of the member
+/// removal `57CD70` (session mode 6, owner +8 bit 0, `4D1080`, a busy Mind; its
+/// `4CF110` result is not tested), whose subtraction and reactions are the same.
+pub(crate) fn lose(world: &mut World, st: &mut CombatState, id: OrgId, amount: f32) {
+    lose_kind(world, st, id, amount, 4);
+}
+
+/// `579660(amount, kind)` through the exact port `aa_combat::morale::lose`: not in
+/// session mode 6, not a destructed owner, not `4D1080` (an unpacked leader's
+/// organization), not BERSERK unless the kind is 3 or 4, not with a busy Mind; then
+/// any amount is subtracted (not below 0), a changed state calls the Mind reaction
+/// (`51F9F0` exhausted, `51F920` wavering) and state 0 sets actor state 5.
+pub(crate) fn lose_kind(world: &mut World, st: &mut CombatState, id: OrgId, amount: f32, kind: u32) {
+    let i = id as usize;
+    if world.orgs.get(i).is_none() || st.orgs.get(i).is_none() {
+        return;
+    }
+    let mut organization = record(world, st, id);
+    let mut host = Host { world, st, id };
+    let _ = exact::lose(&mut organization, bits(amount), kind, &mut host, PRECISION);
+    host.store(&organization);
+}
+
+/// `579AB0` on a retreat order out of an engagement (MoraleRetreatPenalty), through
+/// the exact port: the gates of `579660` without the kind exception.
 pub(crate) fn retreat_penalty(world: &mut World, st: &mut CombatState, id: OrgId) {
-    let p = st.rules().morale_retreat_penalty;
-    lose(world, st, id, p);
+    let i = id as usize;
+    if world.orgs.get(i).is_none() || st.orgs.get(i).is_none() {
+        return;
+    }
+    let settings = settings(world, st.rules());
+    let mut organization = record(world, st, id);
+    let mut host = Host { world, st, id };
+    let _ = exact::retreat_penalty(&mut organization, &settings, &mut host, PRECISION);
+    host.store(&organization);
 }
 
 /// `578F10` slayer gain of the killer's organization:
@@ -529,7 +736,8 @@ fn maintenance(world: &mut World, st: &mut CombatState, id: OrgId, dt: f32) {
             let rate = 1.0 + st.extras().def(world.orgs[i].def).entrench_morale_loss;
             loss = fstp(x87::div(ld(loss), ld(rate.max(rules.clamp_multiply))));
         }
-        lose(world, st, id, loss);
+        // The gates of 57A0A0 are those of 579660 without the kind exception.
+        lose_kind(world, st, id, loss, 0);
     }
     st.orgs[i].engaged_latch = engaged;
     if !world.orgs[i].alive || st.orgs[i].destroyed {
