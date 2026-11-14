@@ -15,7 +15,7 @@
 use super::*;
 use crate::combat::{self, TargetRef};
 use aa_mind::uai_kill::{self, KillDecision, PerformerState};
-use aa_mind::uai_thinks::uai_engage;
+use aa_mind::uai_thinks::{result_collision_thing as collision_thing, uai_engage};
 
 /// Engage +0x10 and +0x18, Kill +0x10, as Mind offsets.
 const ENGAGE_TARGET: u32 = offsets::ENGAGE + 0x10;
@@ -403,6 +403,10 @@ impl uai_engage::EngageThinkWorld for Stack<'_, '_> {
     /// `0x5351C0(mode, object)`.
     fn kill_select(&mut self, _: MindId, mode: u32, object: u32, a: &mut Arena) -> aa_mind::Result<()> {
         let host = &self.host;
+        // The actor's Mover (+0x6C) is there with its falling byte (+0x56) clear.
+        if crate::transport::is_falling(host.world, host.id) {
+            return Ok(());
+        }
         if !combat::element_can_use(host.world, &host.world.combat, host.id, object) {
             return Ok(());
         }
@@ -438,6 +442,122 @@ impl uai_engage::EngageThinkWorld for Stack<'_, '_> {
     }
     fn engage_reaction_range(&mut self) -> aa_mind::Result<u32> {
         Ok(self.host.world.combat.rules.as_deref().map_or(0.3f32, |r| r.engage_reaction_range).to_bits())
+    }
+}
+
+/// `0x536840` (`aa_mind::uai_thinks::result_collision_thing`): the Move met a thing on
+/// its path. With the Engage active and the Kill not, an enemy the element can attack
+/// goes to the Kill (`0x5358A0`); with the Kill active it replaces the Kill's target
+/// when its `0x5340C0` record is the better one (`0x5351C0`). True when it was taken.
+///
+/// Every test ahead of the two states' status only reads (the thing's category, the
+/// enemy relation, `0x4D4FF0`), and with neither state active the answer is false: that
+/// case is answered here without them.
+pub(super) fn result_collision_thing(stack: &mut Stack<'_, '_>, thing: u32, a: &mut Arena) -> aa_mind::Result<bool> {
+    let minds = &stack.host.world.books.minds;
+    let id = stack.host.id;
+    let active = |offset: u32| minds.state(id, offset).and_then(|s| a.states.get(&s)).is_some_and(|s| s.status == 2);
+    if !active(offsets::ENGAGE) && !active(offsets::KILL) {
+        return Ok(false);
+    }
+    collision_thing::result_collision_thing(Some(thing), &mut CollisionWorld { stack, a }, PC)
+}
+
+/// `0x5358A0(object)`: unless the Kill is active on it already, an active Move leaves
+/// (`0x529C20`) and the Kill takes it (`0x5351C0(0, object)`).
+fn hand_to_kill(stack: &mut Stack<'_, '_>, object: ActorId, a: &mut Arena) -> aa_mind::Result<()> {
+    let kill = stack.host.state(offsets::KILL)?;
+    if a.state(kill)?.status == 2 && stack.host.word(KILL_TARGET) == thing_gtid(object) {
+        return Ok(());
+    }
+    let mv = stack.host.state(offsets::MOVE)?;
+    if a.state(mv)?.status == 2 {
+        aa_mind::World::leave(stack, mv, a)?;
+    }
+    let id = stack.host.id;
+    uai_engage::EngageThinkWorld::kill_select(stack, MindId(id), 0, object, a)
+}
+
+struct CollisionWorld<'k, 'h, 'w> {
+    stack: &'k mut Stack<'h, 'w>,
+    a: &'k mut Arena,
+}
+
+impl collision_thing::CollisionThingWorld for CollisionWorld<'_, '_, '_> {
+    /// Thing virtual +0xB4: an actor, not an object of the map or an organization.
+    fn thing_is_actor(&mut self, thing: u32) -> aa_mind::Result<bool> {
+        Ok(thing & ORG == 0 && !space::is_scenery(thing))
+    }
+    /// Actor virtual +0x16C (`0x4D1F40` -> +0x140): the thing's owner is an enemy.
+    fn actor_accepts(&mut self, thing: u32) -> aa_mind::Result<bool> {
+        let world = &*self.stack.host.world;
+        let kingdom = |t: ActorId| world.actors.get(t as usize).and_then(|x| x.kingdom);
+        Ok(crate::setup::relation(world, kingdom(self.stack.host.id), kingdom(thing)) == crate::books::ENEMY)
+    }
+    /// `0x4D4FF0(thing, 1, 0)` on the element.
+    fn relation(&mut self, thing: u32, _: u32, _: u32) -> aa_mind::Result<i32> {
+        let host = &self.stack.host;
+        Ok(i32::from(!alive(host.world, thing) || !combat::element_can_use(host.world, &host.world.combat, host.id, thing)))
+    }
+    fn engage_status(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.a.state(self.stack.host.state(offsets::ENGAGE)?)?.status)
+    }
+    fn kill_status(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.a.state(self.stack.host.state(offsets::KILL)?)?.status)
+    }
+    fn kill_target(&mut self) -> aa_mind::Result<u32> {
+        Ok(self.stack.host.word(KILL_TARGET))
+    }
+    fn resolve(&mut self, gtid: u32) -> aa_mind::Result<Option<u32>> {
+        Ok(gtid.checked_sub(1).filter(|&t| t & ORG == 0 && alive(self.stack.host.world, t)))
+    }
+    fn actor_position(&mut self) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(pos2(self.stack.host.world, self.stack.host.id)))
+    }
+    fn object_position(&mut self, object: u32) -> aa_mind::Result<[u32; 2]> {
+        Ok(bits(pos2(self.stack.host.world, object)))
+    }
+    /// `0x5340C0(target, null, &record, 0)`: a null target and the ROE back-off leave
+    /// the record without an ability, as does a target no ability admits; else the best
+    /// ability with its score (+0xC), the stored squared distance (+0x14) and the
+    /// element's priority for the target (+0x18, Mind virtual +0x1AC).
+    fn choose(&mut self, target: Option<u32>, record: &mut KillDecision) -> aa_mind::Result<u32> {
+        let Some(t) = target else {
+            record.status = 3;
+            return Ok(3);
+        };
+        let id = self.stack.host.id;
+        let mut st = std::mem::take(&mut self.stack.host.world.combat);
+        let decision = combat::member_record(self.stack.host.world, &mut st, id, t);
+        self.stack.host.world.combat = st;
+        record.target = t;
+        let Some((weapon, status, score)) = decision else {
+            record.status = 3;
+            return Ok(3);
+        };
+        let world = &*self.stack.host.world;
+        // A handle, never null: the comparison only asks whether there is one.
+        record.ability = weapon as u32 + 1;
+        record.status = status;
+        record.score = score.to_bits();
+        record.priority = combat::member_priority(world, id, t);
+        use combat::x87::{add, load, mul, store, sub};
+        let (s, o) = (world.actors[id as usize].pos, world.actors[t as usize].pos);
+        let (dx, dy) = (sub(load(s.x), load(o.x)), sub(load(s.y), load(o.y)));
+        record.distance2 = store(add(mul(dx, dx), mul(dy, dy))).to_bits();
+        Ok(status)
+    }
+    fn engage(&mut self, thing: u32) -> aa_mind::Result<()> {
+        hand_to_kill(self.stack, thing, self.a)
+    }
+    fn kill(&mut self, mode: u32, thing: u32) -> aa_mind::Result<()> {
+        let id = self.stack.host.id;
+        uai_engage::EngageThinkWorld::kill_select(self.stack, MindId(id), mode, thing, self.a)
+    }
+    /// Mind +8 virtual +4(0, 0).
+    fn schedule(&mut self, delay_bits: u32, _: u32) -> aa_mind::Result<()> {
+        self.stack.host.schedule_mind(delay_bits);
+        Ok(())
     }
 }
 

@@ -10,9 +10,9 @@
 //! state of a higher priority defers. The element states of other systems (Bombard, Repair,
 //! Join, Unload) still live in `crate::combat` and reach the Mind as plain moves.
 //!
-//! **Renditions, each marked at its place.** `0x536840` (a thing met is taken as a
-//! target) stands aside for the combat states; `0x5709D0`'s Element +1C byte is read
-//! from the zones engine (census F2); the idle state's overlap escape is not hosted.
+//! **Renditions, each marked at its place.** `0x5709D0`'s Element +1C byte is read
+//! from the zones engine (census F2); the overlap escape (`0x4D1820`) skips a map
+//! object at the head of the overlap list.
 use super::*;
 use aa_mind::uai_thinks::element as offsets;
 use aa_mind::{
@@ -769,6 +769,110 @@ fn with_space_of<T>(ms: &mut MovementState, world: &World, f: impl FnOnce(&mut s
     };
     ms.space = Some(s);
     Some(r)
+}
+
+/// `fcos` and `fsin` of one to seven eighths of a turn (k times the binary32 pi/4 at
+/// `0xA019F0`), as binary64 words: the values the port's oracle holds for `0x4D04D0`.
+const EIGHTH_TURNS: [(u64, u64); 7] = [
+    (0x3fe6_a09e_5e33_3598, 0x3fe6_a09e_6ecb_41fe),
+    (0xbe67_77a5_cf72_cecc, 0x3fef_ffff_ffff_fff7),
+    (0xbfe6_a09e_7f63_4e57, 0x3fe6_a09e_4d9b_2926),
+    (0xbfef_ffff_ffff_ffde, 0xbe77_77a5_cf72_cec6),
+    (0xbfe6_a09e_3d03_1ca8, 0xbfe6_a09e_8ffb_5aa4),
+    (0x3e81_99bc_5b96_1b0d, 0xbfef_ffff_ffff_ffb3),
+    (0x3fe6_a09e_a093_66e6, 0xbfe6_a09e_2c6b_101e),
+];
+
+impl Host<'_> {
+    /// `0x4D1820`: entries of things that no longer resolve leave the head of the
+    /// overlap list (actor +0x110); from the first that does, `0x4D04D0`
+    /// (`aa_navigation::overlap_escape::escape_from`) looks for a clear place around it.
+    /// The list holds things a moving actor passed; an object of the map gives none.
+    fn overlap_escape(&mut self) -> aa_mind::Result<Option<[u32; 2]>> {
+        let id = self.id;
+        if self.ms.space.is_none() {
+            return Ok(None);
+        }
+        let other = loop {
+            let Some(first) = self.am().overlaps.first().map(|e| e.reference) else { return Ok(None) };
+            match self.ms.space.as_ref().and_then(|s| s.index.resolve_reference(first)) {
+                Some(key) => break space::key_actor(key),
+                None => {
+                    self.am().overlaps.remove(0);
+                }
+            }
+        };
+        if space::is_scenery(other) {
+            return Ok(None);
+        }
+        // 0x4CF210: the other thing's shape (virtual +0xC) radius and its position.
+        let snapshot = aa_navigation::overlap_escape::Other { radius: def_of(self.world, other).blocking_words[1], position: bits(pos2(self.world, other)) };
+        let mut world = Escape { host: self, failed: false };
+        let point = aa_navigation::overlap_escape::escape_from(&mut world, id, snapshot, PC).map_err(err)?;
+        Ok(point.filter(|_| !world.failed))
+    }
+}
+
+/// The services of `0x4D04D0`.
+struct Escape<'h, 'w> {
+    host: &'h mut Host<'w>,
+    /// The actor's query could not be made: no place is given.
+    failed: bool,
+}
+
+impl aa_navigation::overlap_escape::World for Escape<'_, '_> {
+    fn overlap_head(&mut self, _: u32) -> aa_navigation::Result<Option<u32>> {
+        Ok(self.host.am().overlaps.first().map(|e| e.reference))
+    }
+    fn pop_overlap_head(&mut self, _: u32) -> aa_navigation::Result<()> {
+        if !self.host.am().overlaps.is_empty() {
+            self.host.am().overlaps.remove(0);
+        }
+        Ok(())
+    }
+    /// The space index resolves a reference whole ([`Host::overlap_escape`] walks the
+    /// list): a head that resolves answers its own generation.
+    fn registry_generation(&mut self, _: u32) -> aa_navigation::Result<u16> {
+        let head = self.host.am().overlaps.first().map_or(0, |e| e.reference);
+        Ok((head >> 16) as u16)
+    }
+    fn registry_object(&mut self, _: u32) -> aa_navigation::Result<Option<u32>> {
+        let head = self.host.am().overlaps.first().map_or(0, |e| e.reference);
+        Ok(self.host.ms.space.as_ref().and_then(|s| s.index.resolve_reference(head)).map(space::key_actor))
+    }
+    fn position(&mut self, thing: u32) -> aa_navigation::Result<[u32; 2]> {
+        Ok(bits(pos2(self.host.world, thing)))
+    }
+    fn snapshot_radius(&mut self, thing: u32) -> aa_navigation::Result<u32> {
+        Ok(def_of(self.host.world, thing).blocking_words[1])
+    }
+    /// Actor virtual +0x10: its soft shape's radius.
+    fn own_radius(&mut self, actor: u32) -> aa_navigation::Result<u32> {
+        Ok(def_of(self.host.world, actor).soft_shape[1])
+    }
+    fn cos_sin(&mut self, angle: &Binary) -> aa_navigation::Result<(Binary, Binary)> {
+        let eighth = Binary::from_f32_bits(0x3f49_0fdb)?;
+        for (k, &(cos, sin)) in EIGHTH_TURNS.iter().enumerate() {
+            if Binary::from_i32(k as i32 + 1).mul(&eighth, PC)?.compare(angle) == std::cmp::Ordering::Equal {
+                return Ok((Binary::from_f64_bits(cos)?, Binary::from_f64_bits(sin)?));
+            }
+        }
+        Err(aa_navigation::Error::World("overlap escape: not an eighth of a turn".into()))
+    }
+    /// `0x554350(actor, 0)`, `0x552250(point)`, `0x553BA0`: nothing is hit.
+    fn free_at(&mut self, actor: u32, point: [u32; 2]) -> aa_navigation::Result<bool> {
+        let free = self
+            .host
+            .with_space(|s, policy| {
+                let mut query = space::query_for(s, policy, actor, false)?;
+                query.set_position(&s.index, point, &*policy).ok()?;
+                Some(!space::first_hit(s, policy, &query).blocked())
+            })
+            .flatten();
+        // Without the query the search ends with no place.
+        self.failed |= free.is_none();
+        Ok(free.unwrap_or(true))
+    }
 }
 
 /// `0x5774A0`'s query: `0x554350(actor, 0)`, `0x552250(xy)`, `0x553BA0`.
@@ -1956,10 +2060,10 @@ impl cont::World for Host<'_> {
         node_reached::apply(state, p, a, PC, self)?;
         Ok(())
     }
-    /// `0x536840`: the engage and kill decision through `0x5358A0` belongs to the
-    /// combat states, not hosted here: no thing is taken as a target.
-    fn avoid_actor(&mut self, _: StateId, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<bool> {
-        Ok(false)
+    /// `0x536840`: with the Engage or the Kill active, an enemy met on the path is
+    /// taken as the Kill's target ([`fight::result_collision_thing`]).
+    fn avoid_actor(&mut self, _: StateId, actor: u32, p: &mut Payload, a: &mut Arena) -> aa_mind::Result<bool> {
+        fight::result_collision_thing(&mut Stack { host: self, p }, actor, a)
     }
     fn refresh_visibility(&mut self, _: u32, _: &mut Payload, _: &mut Arena) -> aa_mind::Result<()> {
         Ok(())
@@ -2639,8 +2743,7 @@ impl uai_sleep::SleepThinkWorld for Stack<'_, '_> {
     /// `0x4D1820`: a place off the first thing it stands on. A (2v2)Kursk horse that
     /// stopped on another walks off at its next Think.
     fn actor_pending_point(&mut self, _: MindId) -> aa_mind::Result<Option<[u32; 2]>> {
-        let id = self.host.id;
-        Ok(space::overlap_point(self.host.ms, self.host.world, id))
+        self.host.overlap_escape()
     }
     fn move_activate(&mut self, _: MindId, request: aa_navigation::Activation, a: &mut Arena) -> aa_mind::Result<bool> {
         let Stack { host, p } = self;
