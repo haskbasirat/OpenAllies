@@ -23,7 +23,7 @@ use std::time::Instant;
 use textures::Kind;
 use std::sync::Mutex;
 
-pub const TITLE: &str = "Axis & Allies - Bevy test (Development 24)";
+pub const TITLE: &str = "Axis & Allies - Bevy test (Development 25)";
 /// Team colours mixed into team-masked textures: the direct start's player
 /// colour when the kingdom colour table is missing (display choice), and
 /// the replacement colour of a thing without a kingdom colour: AVar 30
