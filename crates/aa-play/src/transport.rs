@@ -47,6 +47,15 @@ const PC: Precision = Precision::Double53;
 const DROP_SPEED: f32 = 0.5;
 /// `[A033BC]`: `0x52A1F0`, squared metres from the way out.
 const OUT_SQUARED: f32 = 0.25;
+/// The SVar `Gravity` as its constructor leaves it (kind 2, word 0xC2443334: one unit
+/// in the last place below -49.05f), read through the SVar cache +0x2C by `0x577380` and
+/// the fall. A rules file that names it replaces it.
+const GRAVITY_DEFAULT_BITS: u32 = 0xc244_3334;
+
+/// SVar cache +0x2C.
+fn gravity(world: &World) -> f32 {
+    world.data.rule_ci("Gravity").unwrap_or(f32::from_bits(GRAVITY_DEFAULT_BITS))
+}
 
 /// The TransportComponent while it holds a cargo.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -234,11 +243,39 @@ fn lead_distance(world: &World, t: &Transport, height: f32, speed: f32) -> f32 {
     most
 }
 
-/// `0x577380`: `sqrt(height / gravity * -2) * speed - fall_drag`, at least 0.
+/// `0x577380` (`aa_movement::transport_drop::launch_carry`), stored to binary32 as both
+/// callers keep it (`0x5179E0` across its next calls, `0x58B180` in its kept maximum; a
+/// stored value compares with the kept one as the extended one does). The x87 indefinite
+/// of a negative height stays a NaN.
 fn fall_distance(world: &World, def: DefId, height: f32, speed: f32) -> f32 {
-    let gravity = world.data.rule_ci("Gravity").unwrap_or(-49.05);
-    let v = (f64::from(height) / f64::from(gravity) * -2.0).sqrt() * f64::from(speed) - f64::from(world.data.def(def).fall_drag);
-    if v < 0.0 { 0.0 } else { v as f32 }
+    let drag = world.data.def(def).fall_drag;
+    match aa_movement::transport_drop::launch_carry(height, speed, drag, gravity(world), PC) {
+        Ok(Some(v)) => v.store_f32().map_or(0.0, f32::from_bits),
+        Ok(None) => f32::from_bits(aa_movement::transport_drop::INDEFINITE_F32),
+        Err(_) => 0.0,
+    }
+}
+
+/// The store points of `0x5179E0` from 0x517A85 (the control word's 53 bits are a
+/// binary64 here): the y difference is stored to binary32 and the x difference stays on
+/// the stack; the length is extended, above `[A32448]` (1e-4f) its reciprocal is stored
+/// to binary32 and both unit components stay on the stack; the x product with the lead
+/// (state +0x1C) is stored before its subtraction and the y product is not. Returns the
+/// first drop point (+0x20/+0x24) and the direction (+0x28/+0x2C).
+fn aim_point(plane: [f32; 2], point: [f32; 2], lead: f32) -> ([f32; 2], [f32; 2]) {
+    let dy = (f64::from(point[1]) - f64::from(plane[1])) as f32;
+    let dx = f64::from(point[0]) - f64::from(plane[0]);
+    let length = (dx * dx + f64::from(dy) * f64::from(dy)).sqrt();
+    let (mut ux, mut uy) = (0.0f64, 0.0f64);
+    if length > f64::from(f32::from_bits(0x38d1_b717)) {
+        let inverse = f64::from((1.0 / length) as f32);
+        ux = dx * inverse;
+        uy = inverse * f64::from(dy);
+    }
+    let lead = f64::from(lead);
+    let along_x = (ux * lead) as f32;
+    let first = [(f64::from(point[0]) - f64::from(along_x)) as f32, (f64::from(point[1]) - uy * lead) as f32];
+    (first, [ux as f32, uy as f32])
 }
 
 /// `0x5179E0`'s arithmetic: state +0x14/+0x18 the point; the first drop point and the
@@ -253,15 +290,7 @@ pub(crate) fn aim(world: &mut World, a: ActorId, point: [u32; 2]) -> Option<([u3
     let lead = (f64::from(delay) * f64::from((t.count - 1) / 2) * f64::from(half) + f64::from(fall)) as f32;
     let p = world.actors[a as usize].pos;
     let (px, py) = (f32::from_bits(point[0]), f32::from_bits(point[1]));
-    let (dx, dy) = (px - p.x, py - p.y);
-    let length = (dx * dx + dy * dy).sqrt();
-    let (mut ux, mut uy) = (0.0f32, 0.0f32);
-    if length > 1e-4 {
-        let inverse = 1.0 / length;
-        ux = dx * inverse;
-        uy = inverse * dy;
-    }
-    let first = [px - ux * lead, py - uy * lead];
+    let (first, [ux, uy]) = aim_point([p.x, p.y], [px, py], lead);
     if let Some(t) = world.books.actor_mut(a).transport.as_mut() {
         t.direction = [ux, uy];
         t.at = first;
@@ -274,13 +303,15 @@ pub(crate) fn aim(world: &mut World, a: ActorId, point: [u32; 2]) -> Option<([u3
 /// counted as it will be: the drop itself runs when the Mind's world returns.
 pub(crate) fn next_point(world: &mut World, a: ActorId) -> Option<([u32; 2], [u32; 2])> {
     let d = world.data.def(world.actors[a as usize].def);
-    let step = (f64::from(d.transport_delay) * f64::from(d.speed_max)) as f32;
+    // 0x517BF6..0x517C1C: the step stays on the stack, and each product is added to the
+    // point before the binary32 store.
+    let step = f64::from(d.transport_delay) * f64::from(d.speed_max);
     let t = world.books.actor_mut(a).transport.as_mut()?;
     if t.dropped + 1 >= t.count {
         return None;
     }
-    t.at[0] += step * t.direction[0];
-    t.at[1] += step * t.direction[1];
+    t.at[0] = (step * f64::from(t.direction[0]) + f64::from(t.at[0])) as f32;
+    t.at[1] = (step * f64::from(t.direction[1]) + f64::from(t.at[1])) as f32;
     Some(([t.at[0].to_bits(), t.at[1].to_bits()], [t.direction[0].to_bits(), t.direction[1].to_bits()]))
 }
 
@@ -373,28 +404,30 @@ pub(crate) fn drop_one(world: &mut World, a: ActorId) {
     begin_fall(world, m, facing, speed);
 }
 
-/// The tail of `0x58BCB0`: the thing takes the plane's speed (`0x576BB0`), and its fall aims
-/// (`0x5770A0`) at where `0x577380` carries it, along the plane's way.
+/// The tail of `0x58BCB0` (`0x58C11F`): the thing takes the plane's speed (`0x576BB0`), and
+/// its fall aims (`0x5770A0`) at where `0x577380` carries it along its facing
+/// (`aa_movement::transport_drop::fall_target`: the store points of the original).
+/// Rendition: `0x554850(target, direction, definition +0x38, 1.0, 16, 0, 0, 0)` is not
+/// run, so a taken landing point stands and no thing is destroyed (`0x4F53D0`) for want
+/// of one.
 fn begin_fall(world: &mut World, m: ActorId, facing: [f32; 3], speed: f32) {
     let def = world.actors[m as usize].def;
     let p = world.actors[m as usize].pos;
-    let height = p.z - world.map.height_at(p.truncate());
     let drag = world.data.def(def).fall_drag;
-    let carry = fall_distance(world, def, height, speed);
-    let mut unit = [facing[0], facing[1], 0.0];
-    let length = (unit[0] * unit[0] + unit[1] * unit[1]).sqrt();
-    if length > 0.0 {
-        let inverse = 1.0 / length;
-        unit = [unit[0] * inverse, unit[1] * inverse, 0.0];
-    }
     let bounds = map_bounds(world);
-    let mut xy = [unit[0] * carry + p.x, unit[1] * carry + p.y];
-    let _ = falling::clamp_to_interior(bounds, &mut xy, PC);
     let mut mover = plain_mover(speed);
     let mut state = FallingState { drag: 0.0, orient_to_motion: 0, direction: [0.0; 3], aimed: 0, aim_point: [0.0; 3], aim_delta: [0.0; 3], outside_map: 0 };
     let mut motion = motion_of(world, m, facing);
+    let gravity = gravity(world);
+    let Ok(ground) = Binary::from_f32_bits(world.map.height_at(p.truncate()).to_bits()) else { return };
     let mut host = FallHost { world, a: m };
+    // 0x576BB0 comes before the carry: the map's interior, Mover +0x20, the pose.
+    if falling::commit_pose(&mut mover, &mut state, &mut motion, [p.x, p.y, p.z], facing, speed, bounds, PC, &mut host).is_err() {
+        return;
+    }
+    let Ok((xy, _)) = aa_movement::transport_drop::fall_target([p.x, p.y, p.z], [facing[0], facing[1]], &ground, speed, drag, gravity, bounds, PC) else { return };
     if falling::begin_aimed_fall(&mut mover, &mut state, &mut motion, drag, xy, 0, PC, &mut host).is_ok() {
+        let facing = motion.facing;
         world.books.actor_mut(m).fall = Some(Fall { speed: mover.speed, state, facing });
     }
 }
@@ -489,7 +522,7 @@ pub fn fall_tick(world: &mut World, a: ActorId) {
     let mut mover = plain_mover(speed);
     mover.falling = true;
     let mut motion = motion_of(world, a, facing);
-    let context = FallContext { delta: tick_length(world), gravity: world.data.rule_ci("Gravity").unwrap_or(-49.05), plane_fall_gravity_tweak: None, map: map_bounds(world), precision: PC };
+    let context = FallContext { delta: tick_length(world), gravity: gravity(world), plane_fall_gravity_tweak: None, map: map_bounds(world), precision: PC };
     let mut host = FallHost { world, a };
     if falling::fall_step(&mut mover, &mut state, &mut motion, &context, &mut host).is_err() {
         world.unschedule(Owner::Fall(a));
@@ -697,5 +730,46 @@ pub fn flight_tick(world: &mut World, a: ActorId) {
     let Some((_, exhausted)) = with_unit(world, a, |unit, host| aircraft::move_tick(unit, delta, PC, host)) else { return };
     if exhausted {
         crate::combat::air::path_finished(world, a);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::aim_point;
+
+    /// The x87 sequence of 0x517A8A..0x517B09 at 53 bits, one step per instruction.
+    fn listing(plane: [f32; 2], point: [f32; 2], lead: f32) -> ([f32; 2], [f32; 2]) {
+        let dy = f64::from((f64::from(point[1]) - f64::from(plane[1])) as f32); // 0x517A90 fstp
+        let dx = f64::from(point[0]) - f64::from(plane[0]); // 0x517A97 fsub, kept
+        let length = (dx * dx + dy * dy).sqrt(); // 0x517AA8 fsqrt
+        let (ux, uy) = if length > f64::from(1.0e-4f32) {
+            let inverse = f64::from((1.0 / length) as f32); // 0x517ABF fstp
+            (dx * inverse, inverse * dy) // 0x517AC5, 0x517ACD, kept
+        } else {
+            (0.0, 0.0)
+        };
+        let lead = f64::from(lead);
+        let along_x = f64::from((ux * lead) as f32); // 0x517AED fstp
+        let y = f64::from(point[1]) - uy * lead; // 0x517AF1 fsubr, product kept
+        ([(f64::from(point[0]) - along_x) as f32, y as f32], [ux as f32, uy as f32])
+    }
+
+    #[test]
+    fn aim_point_follows_the_store_points() {
+        let cases = [
+            ([10.3f32, -7.1], [250.7f32, 133.9], 37.25f32),
+            ([0.1, 0.2], [0.1, 0.2], 5.0),
+            ([1.0e-5, 0.0], [0.0, 0.0], 3.0),
+            ([-512.33, 77.77], [901.01, -333.3], 123.456),
+            ([3.0, 4.0], [3.0001, 4.0], 1.0),
+        ];
+        for (plane, point, lead) in cases {
+            let (first, dir) = aim_point(plane, point, lead);
+            let (want_first, want_dir) = listing(plane, point, lead);
+            assert_eq!(first.map(f32::to_bits), want_first.map(f32::to_bits));
+            assert_eq!(dir.map(f32::to_bits), want_dir.map(f32::to_bits));
+        }
+        // At or below [A32448] (1e-4f) the direction is zero and the point stands.
+        assert_eq!(aim_point([0.1, 0.2], [0.1, 0.2], 5.0), ([0.1, 0.2], [0.0, 0.0]));
     }
 }

@@ -636,6 +636,46 @@ fn drop_single<W: DropWorld>(
     Ok(())
 }
 
+/// The arithmetic of `0x58C11F`..`0x58C239`: the height above the ground
+/// (the x87 return of `0x4F0E50` subtracted from the z of the thing, stored),
+/// the carry `0x577380` stored to binary32, the facing normalised
+/// (`0x409230`), the x product stored before its sum and the y product kept
+/// extended, and the map interior clamp `0x552640`. Returns the fall target
+/// and the normalised direction, the in/out arguments of `0x554850`.
+#[allow(clippy::too_many_arguments)]
+pub fn fall_target(
+    position: [f32; 3],
+    facing: [f32; 2],
+    ground: &Binary,
+    speed: f32,
+    field_1a4: f32,
+    gravity: f32,
+    map: MapBounds,
+    pc: Precision,
+) -> Result<([f32; 2], [f32; 2])> {
+    let above = store(&bin(position[2])?.sub(ground, pc)?)?;
+    let carry = launch_carry(above, speed, field_1a4, gravity, pc)?;
+    let mut direction = facing;
+    normalize2(&mut direction, pc)?;
+    let mut target;
+    match carry {
+        // NaN propagates through the products and sums, and the unordered
+        // compares of 0x552640 leave both coordinates unchanged.
+        None => target = [f32::from_bits(INDEFINITE_F32); 2],
+        Some(carry) => {
+            let carry = bin(store(&carry)?)?;
+            let along_x = store(&bin(direction[0])?.mul(&carry, pc)?)?;
+            let along_y = bin(direction[1])?.mul(&carry, pc)?;
+            target = [
+                store(&bin(along_x)?.add(&bin(position[0])?, pc)?)?,
+                store(&along_y.add(&bin(position[1])?, pc)?)?,
+            ];
+            clamp_to_interior(map, &mut target, pc)?;
+        }
+    }
+    Ok((target, direction))
+}
+
 /// `0x58C11F`: an airborne thing takes the plane's speed and falls aimed at
 /// where `0x577380` carries it along its facing.
 fn fall<W: DropWorld>(
@@ -649,29 +689,11 @@ fn fall<W: DropWorld>(
     let (position, facing) = (view.position, view.facing);
     let speed = store(&world.plane_virtual_18(transport.plane)?)?;
     let height = world.ground_height(xy(position))?;
-    let above = store(&bin(position[2])?.sub(&height, pc)?)?;
     let definition = world.actor(thing)?.definition;
     let field_1a4 = world.definition(definition)?.field_1a4;
     world.commit_pose(thing, position, facing, speed)?;
-    let carry = launch_carry(above, speed, field_1a4, context.gravity, pc)?;
-    let mut direction = [facing[0], facing[1]];
-    normalize2(&mut direction, pc)?;
-    let mut target;
-    match carry {
-        // NaN propagates through the products and sums, and 0x552640's
-        // unordered compares leave both coordinates unchanged.
-        None => target = [f32::from_bits(INDEFINITE_F32); 2],
-        Some(carry) => {
-            let carry = bin(store(&carry)?)?;
-            let along_x = store(&bin(direction[0])?.mul(&carry, pc)?)?;
-            let along_y = bin(direction[1])?.mul(&carry, pc)?;
-            target = [
-                store(&bin(along_x)?.add(&bin(position[0])?, pc)?)?,
-                store(&along_y.add(&bin(position[1])?, pc)?)?,
-            ];
-            clamp_to_interior(context.map, &mut target, pc)?;
-        }
-    }
+    let (mut target, mut direction) =
+        fall_target(position, xy(facing), &height, speed, field_1a4, context.gravity, context.map, pc)?;
     if world.landing_search(&mut target, &mut direction, definition)? {
         world.begin_aimed_fall(thing, field_1a4, target)?;
     } else {
