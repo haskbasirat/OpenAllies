@@ -15,7 +15,7 @@
 use super::*;
 use crate::combat::{self, TargetRef};
 use aa_mind::uai_kill::{self, KillDecision, PerformerState};
-use aa_mind::uai_thinks::{result_collision_thing as collision_thing, uai_engage};
+use aa_mind::uai_thinks::{result_collision_thing as collision_thing, uai_avoid, uai_engage};
 
 /// Engage +0x10 and +0x18, Kill +0x10, as Mind offsets.
 const ENGAGE_TARGET: u32 = offsets::ENGAGE + 0x10;
@@ -157,34 +157,107 @@ pub(super) fn leave(stack: &mut Stack<'_, '_>, state: StateId, offset: u32, a: &
     Ok(true)
 }
 
-/// `0x533D90(object)`: the old target goes (its Move leaves), the new one is walked to
-/// (`0x532930(0, object, 2, 0, null)`).
+/// `0x533D90(object)` (`aa_mind::uai_thinks::uai_avoid::set_kill_target`): the old target
+/// goes (its turrets' other targets with it, the Move leaves), the new one is walked to
+/// (`0x532930(0, object, 2, 0, null)`) and, when the element's kingdom sees it, the turrets
+/// of the other abilities turn to it (`0x57DD90`).
 fn set_kill_target(stack: &mut Stack<'_, '_>, object: Option<ActorId>, a: &mut Arena) -> aa_mind::Result<()> {
     let id = stack.host.id;
-    let old = stack.host.word(KILL_TARGET);
-    let new = object.map_or(0, thing_gtid);
-    if old == new {
-        return Ok(());
+    uai_avoid::set_kill_target(MindId(id), object, a, stack)
+}
+
+/// The point the object's virtual +0x88 (`0x4EB920`) answers for a kingdom: `None` unless
+/// the kingdom knows the object (virtual +0x58 `0x4EE3C0`: visible, or seen and static or
+/// remembered); then where the kingdom has it (`0x4EABD0`): its place when visible or a
+/// static map object, else the remembered place.
+fn seen_point(world: &World, object: ActorId, kingdom: Option<crate::world::KingdomId>) -> Option<Vec2> {
+    let here = world.actors.get(object as usize)?.pos.truncate();
+    let Some(k) = kingdom else { return Some(here) };
+    if !crate::ai::view::knows(world, object, k) {
+        return None;
     }
-    if old != 0 {
-        stack.host.set_word(KILL_TARGET, 0);
-        stack.host.world.actors[id as usize].combat.target = None;
-        stack.host.am().chase = None;
-        let mv = stack.host.state(offsets::MOVE)?;
-        if a.state(mv)?.status != 0 {
-            aa_mind::World::leave(stack, mv, a)?;
+    Some(match crate::fog::sighting(world, object, kingdom) {
+        crate::fog::Sighting::Remembered(m) => m.pos.truncate(),
+        _ => here,
+    })
+}
+
+/// `0x57DEA0` on the element's performer: byte +0xC of each of its turret entries (actor
+/// +0x1FC of them) goes, the turrets' other targets.
+fn performer_halt(world: &mut World, id: ActorId) {
+    if let Some(c) = world.combat.actors.get_mut(id as usize) {
+        for s in &mut c.turrets {
+            s.aim = None;
         }
     }
-    if let Some(t) = object {
-        stack.host.set_word(KILL_TARGET, new);
-        stack.host.world.actors[id as usize].combat.target = Some(t);
-        if t != id {
-            let mv = stack.host.state(offsets::MOVE)?;
-            let Stack { host, p } = stack;
-            host.activate_to_object(mv, 0, new, 2, 0, [0, 0], p, a)?;
-        }
+}
+
+impl uai_avoid::KillSelectWorld for Stack<'_, '_> {
+    fn kill_state_target(&mut self, _: MindId) -> aa_mind::Result<u32> {
+        Ok(self.host.word(KILL_TARGET))
     }
-    Ok(())
+    fn set_kill_state_target(&mut self, _: MindId, gtid: u32) -> aa_mind::Result<()> {
+        let id = self.host.id;
+        self.host.set_word(KILL_TARGET, gtid);
+        self.host.world.actors[id as usize].combat.target = gtid.checked_sub(1);
+        if gtid == 0 {
+            self.host.am().chase = None;
+        }
+        Ok(())
+    }
+    /// The Mover's falling byte (+0x56).
+    fn locomotion_byte56(&mut self, _: u32) -> aa_mind::Result<bool> {
+        Ok(crate::transport::is_falling(self.host.world, self.host.id))
+    }
+    /// `0x4D4FF0(object, 1, 0)` on the element.
+    fn actor_relation(&mut self, _: MindId, object: u32, _: u32, _: u32) -> aa_mind::Result<i32> {
+        let host = &self.host;
+        Ok(i32::from(!combat::element_can_use(host.world, &host.world.combat, host.id, object)))
+    }
+    /// `0x4D0D70`: the element leaves the old target's +0x120 list. The game keeps no such
+    /// list: who is targeted is read from every actor's target (the combat state's
+    /// refresh), which the target word's write changes.
+    fn target_released(&mut self, _: u32, _: MindId) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    fn actor_performer(&mut self, _: MindId) -> aa_mind::Result<Option<u32>> {
+        Ok(Some(self.host.id))
+    }
+    fn performer_halt(&mut self, _: u32) -> aa_mind::Result<()> {
+        performer_halt(self.host.world, self.host.id);
+        Ok(())
+    }
+    /// `0x532930(mode, object, 2, 0, null)` on the Move.
+    fn kill_move_to_object(&mut self, _: MindId, mode: u32, object: u32, a3: u32, a4: u32, point: [u32; 2], a: &mut Arena) -> aa_mind::Result<()> {
+        let mv = self.host.state(offsets::MOVE)?;
+        let Stack { host, p } = self;
+        host.activate_to_object(mv, mode, thing_gtid(object), a3, a4, point, p, a).map(|_| ())
+    }
+    fn object_is_actor(&mut self, _: MindId, object: u32) -> aa_mind::Result<bool> {
+        Ok(object == self.host.id)
+    }
+    /// `0x4D3A20`: the element joins the new target's +0x120 list (see `target_released`).
+    fn target_acquired(&mut self, _: u32, _: MindId) -> aa_mind::Result<()> {
+        Ok(())
+    }
+    /// The element's virtual +0x108 (`0x4D1E80`) is its kingdom (+0xE8); the object's
+    /// virtual +0x88 answers whether that kingdom knows it.
+    fn kill_in_reach(&mut self, _: MindId, object: u32) -> aa_mind::Result<bool> {
+        let world = &*self.host.world;
+        Ok(seen_point(world, object, world.actors[self.host.id as usize].kingdom).is_some())
+    }
+    /// `0x57DD90(1, object, point)` with the point the object's virtual +0x88 left.
+    fn kill_approach(&mut self, _: MindId, object: u32) -> aa_mind::Result<()> {
+        let id = self.host.id;
+        let world = &mut *self.host.world;
+        let Some(point) = seen_point(world, object, world.actors[id as usize].kingdom) else { return Ok(()) };
+        let mut st = std::mem::take(&mut world.combat);
+        // Performer +0x34: the ability in use is left out.
+        let active = st.actor(id).and_then(|c| c.performer.active());
+        combat::other_turrets_aim(world, &mut st, id, active, Some(object), point);
+        world.combat = st;
+        Ok(())
+    }
 }
 
 /// The state's virtual +0xC; `None` for another state.
@@ -313,12 +386,7 @@ impl uai_kill::KillThinkWorld for KillWorld<'_, '_, '_> {
     }
     /// `0x57DEA0`: the turrets' other targets go.
     fn stop(&mut self) -> aa_mind::Result<()> {
-        let id = self.stack.host.id as usize;
-        if let Some(c) = self.stack.host.world.combat.actors.get_mut(id) {
-            for s in &mut c.turrets {
-                s.aim = None;
-            }
-        }
+        performer_halt(self.stack.host.world, self.stack.host.id);
         Ok(())
     }
     /// Mind +0x140 `0x52D9C0` with the Engage current: choose again in 0.6 s.
@@ -393,6 +461,7 @@ impl uai_engage::EngageThinkWorld for Stack<'_, '_> {
         let handed = target.map(target_of);
         let mut st = std::mem::take(&mut self.host.world.combat);
         let bad: Vec<ActorId> = self.host.am().bad_targets.iter().map(|b| b.0).collect();
+        combat::or_actors(self.host.ms, self.host.world, &mut st, id);
         let chosen = combat::member_choice(self.host.world, &mut st, id, handed, &bad);
         self.host.world.combat = st;
         Ok(chosen)
@@ -401,23 +470,8 @@ impl uai_engage::EngageThinkWorld for Stack<'_, '_> {
         Ok(self.host.word(KILL_TARGET))
     }
     /// `0x5351C0(mode, object)`.
-    fn kill_select(&mut self, _: MindId, mode: u32, object: u32, a: &mut Arena) -> aa_mind::Result<()> {
-        let host = &self.host;
-        // The actor's Mover (+0x6C) is there with its falling byte (+0x56) clear.
-        if crate::transport::is_falling(host.world, host.id) {
-            return Ok(());
-        }
-        if !combat::element_can_use(host.world, &host.world.combat, host.id, object) {
-            return Ok(());
-        }
-        if host.word(KILL_TARGET) != thing_gtid(object) {
-            let kill = self.host.state(offsets::KILL)?;
-            if a.state(kill)?.status != 2 {
-                aa_mind::activate(kill, mode, a, self)?;
-            }
-            set_kill_target(self, Some(object), a)?;
-        }
-        Ok(())
+    fn kill_select(&mut self, mind: MindId, mode: u32, object: u32, a: &mut Arena) -> aa_mind::Result<()> {
+        uai_avoid::kill_select(mind, mode, Some(object), a, self).map(|_| ())
     }
     /// `0x52E9D0`: back to the slot, the Move thinks.
     fn return_to_slot(&mut self, _: StateId, a: &mut Arena) -> aa_mind::Result<()> {
@@ -466,16 +520,8 @@ pub(super) fn result_collision_thing(stack: &mut Stack<'_, '_>, thing: u32, a: &
 /// `0x5358A0(object)`: unless the Kill is active on it already, an active Move leaves
 /// (`0x529C20`) and the Kill takes it (`0x5351C0(0, object)`).
 fn hand_to_kill(stack: &mut Stack<'_, '_>, object: ActorId, a: &mut Arena) -> aa_mind::Result<()> {
-    let kill = stack.host.state(offsets::KILL)?;
-    if a.state(kill)?.status == 2 && stack.host.word(KILL_TARGET) == thing_gtid(object) {
-        return Ok(());
-    }
-    let mv = stack.host.state(offsets::MOVE)?;
-    if a.state(mv)?.status == 2 {
-        aa_mind::World::leave(stack, mv, a)?;
-    }
     let id = stack.host.id;
-    uai_engage::EngageThinkWorld::kill_select(stack, MindId(id), 0, object, a)
+    uai_avoid::hand_to_kill(MindId(id), Some(object), a, stack).map(|_| ())
 }
 
 struct CollisionWorld<'k, 'h, 'w> {
