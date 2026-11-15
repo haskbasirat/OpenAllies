@@ -128,7 +128,12 @@ fn map_sun(reconstruction: &std::path::Path, id: &str) -> Option<look::SceneSun>
 
 /// The saved Sun of a map or saved game file, chunk "SUN".
 fn file_sun(path: &std::path::Path) -> Option<look::SceneSun> {
-    let archive = aa_mapworld::MapArchive::from_bytes(std::fs::read(path).ok()?).ok()?;
+    bytes_sun(std::fs::read(path).ok()?)
+}
+
+/// The saved Sun of a map file's bytes, chunk "SUN".
+fn bytes_sun(bytes: Vec<u8>) -> Option<look::SceneSun> {
+    let archive = aa_mapworld::MapArchive::from_bytes(bytes).ok()?;
     let chunk = archive.decode_chunk("SUN", 1 << 16).ok()?;
     look::SceneSun::from_map_chunk(&chunk.bytes)
 }
@@ -277,9 +282,20 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
     let root = args.assets.parent().context("the install root above the reconstruction folder")?;
     let mut map_id = None;
     let mut random_generals = None;
-    let (mut scene, game_map) = match source {
+    // A map of the work depot (one a LAN host sent, or one placed in the
+    // profile's data): the resource lookup 0x59F570 finds it before the game's
+    // own, and its world and scene come from the file, as a saved game's do.
+    let mut depot_file = None;
+    let (scene, game_map) = match source {
         MapSource::File(id) => {
-            let scene = store.load_scene(&id, HeightMode::NativeConditional)?;
+            let scene = match crate::ui::gamedata::depot_map(&id) {
+                Some(bytes) => {
+                    info!("map {id}: the work depot's file ({} bytes)", bytes.len());
+                    depot_file = Some(bytes);
+                    None
+                }
+                None => Some(store.load_scene(&id, HeightMode::NativeConditional)?),
+            };
             map_id = Some(id);
             (scene, None)
         }
@@ -300,28 +316,14 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
             let map = generated.map.clone();
             let scene = generated_scene(&store, generated)?;
             session::set_load_status("app_status_verifying_map");
-            (scene, Some(map))
+            (Some(scene), Some(map))
         }
         MapSource::Generated(generated) => {
             session::set_load_status("app_status_verifying_map");
-            (generated_scene(&store, *generated)?, None)
+            (Some(generated_scene(&store, *generated)?), None)
         }
     };
     steps.mark("map scene");
-    // The audited original-NIF corrections (shadow helpers, team colour
-    // flags, alpha states), exactly as the wgpu client applies them.
-    let fixes = crate::preload::fixes(&args.assets)?;
-    {
-        use rayon::prelude::*;
-        scene.models.par_iter_mut().for_each(|(key, model)| {
-            if let Err(e) = fixes.apply(&store, model) {
-                eprintln!("model fixes {key}: {e:#}");
-            }
-        });
-    }
-    steps.mark("model fixes");
-    let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
-    steps.mark("terrain layers");
     let (mut world, film) = match film {
         // The film's own world (0x5A3980 made it from the film's map).
         Some((world, player)) => {
@@ -334,9 +336,17 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
             steps.mark("game data");
             let random_map = game_map.is_some();
             let map_id = map_id.clone().unwrap_or_else(|| "random".to_owned());
-            let world_map = match &game_map {
-                Some(m) => m.clone(),
-                None => aa_play::GameMap::load_with(root, &map_id, &data)?,
+            let world_map = match (&game_map, &depot_file) {
+                (Some(m), _) => m.clone(),
+                // The name the file gives itself, in its own text table.
+                (None, Some(bytes)) => {
+                    let name = aa_parity::film::read_header(bytes.clone()).ok().and_then(|h| {
+                        let key = String::from_utf16_lossy(&h.header.map_header.name_key);
+                        (!key.is_empty()).then(|| h.map_string(&key))
+                    });
+                    aa_play::GameMap::load_file(&map_id, bytes.clone(), &data, name)?
+                }
+                (None, None) => aa_play::GameMap::load_with(root, &map_id, &data)?,
             };
             steps.mark("game map");
             let setup = setup.unwrap_or_else(|| default_setup(&map_id, &data));
@@ -379,6 +389,35 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
             (world, None)
         }
     };
+    // A depot map's battlefield: its own terrain and the things its world left
+    // as scenery (`RandomMapData::scene_of_file`, as for a saved game's film).
+    let mut depot_sun = None;
+    let from_depot = depot_file.is_some();
+    let mut scene = match (scene, depot_file.take()) {
+        (Some(scene), _) => scene,
+        (None, Some(bytes)) => {
+            depot_sun = Some(bytes_sun(bytes.clone()));
+            let rmg = crate::preload::random_maps(root)?;
+            let generated = rmg.scene_of_file(&world.map, bytes, &world.books.scenery)?;
+            generated_scene(&store, generated)?
+        }
+        (None, None) => anyhow::bail!("no scene for the battle map"),
+    };
+    steps.mark("depot scene");
+    // The audited original-NIF corrections (shadow helpers, team colour
+    // flags, alpha states), exactly as the wgpu client applies them.
+    let fixes = crate::preload::fixes(&args.assets)?;
+    {
+        use rayon::prelude::*;
+        scene.models.par_iter_mut().for_each(|(key, model)| {
+            if let Err(e) = fixes.apply(&store, model) {
+                eprintln!("model fixes {key}: {e:#}");
+            }
+        });
+    }
+    steps.mark("model fixes");
+    let terrain = terrain::build(&scene.map.terrain, &scene.terrain)?;
+    steps.mark("terrain layers");
     // First start location: where the Test skirmish put the local HQ.
     let hq_at = scene
         .map
@@ -388,6 +427,7 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
         .find(|p| p.thing_id == "start_loc")
         .map(|p| Vec2::new(p.render_position()[0], p.render_position()[2]))
         .or_else(|| game_map.as_ref().and_then(|m| m.start_locations.first()).map(|p| Vec2::new(p.x, -p.y)))
+        .or_else(|| from_depot.then(|| world.map.start_locations.first().map(|p| Vec2::new(p.x, -p.y))).flatten())
         .unwrap_or(Vec2::new(scene.terrain.bounds.max[0] * 0.5, scene.terrain.bounds.min[2] * 0.5));
     session::set_load_status("app_status_loading_resources");
     // The map's Biome texture subfolder (Arctic, Desert, Tropical) for every
@@ -426,7 +466,11 @@ fn load(args: &Args, source: MapSource, setup: Option<aa_play::SkirmishSetup>, p
     // A loaded map keeps its saved Sun (4FC600 -> 4EDBD0); a generated world
     // has the SVars sun of 4EE1F0 (the RMCs list no suns for 5925E0).
     let source_file = film.as_ref().and_then(|p| p.scene().source_file.as_deref());
-    let mut sun = map_id.as_deref().and_then(|id| map_sun(&args.assets, id)).or_else(|| source_file.and_then(file_sun)).unwrap_or_else(|| look::vars().sun);
+    let map_file_sun = match depot_sun {
+        Some(sun) => sun,
+        None => map_id.as_deref().and_then(|id| map_sun(&args.assets, id)),
+    };
+    let mut sun = map_file_sun.or_else(|| source_file.and_then(file_sun)).unwrap_or_else(|| look::vars().sun);
     let film_rule = film.as_ref().and_then(|p| p.film().header.map_header.creator.rules.rules.iter().find(|r| String::from_utf16_lossy(&r.key).eq_ignore_ascii_case("Sun")).map(|r| r.value));
     if let Some(ids) = apply_sun_rule(&mut sun, &args.assets, sun_rule.as_deref(), film_rule) {
         aa_play::triggers::set_rule_sun(&mut world, &ids);

@@ -207,6 +207,14 @@ impl LanData for ArcData {
     fn rmc_header(&self, rmc: &[u16]) -> Option<lobby::MapHeader> {
         self.0.rmc_header(rmc)
     }
+    // Without these two the trait's defaults stood in: no file channel on
+    // the host and an unchecked map (status 1) on every client.
+    fn profile_directory(&self) -> Option<Vec<u16>> {
+        self.0.profile_directory()
+    }
+    fn map_lookup(&self, file: &[u16]) -> aa_netcode::lan::transfer::MapLookup {
+        self.0.map_lookup(file)
+    }
 }
 
 /// [0xB36530]+8 of the stock v14 data, as the original sent it in a Connect
@@ -864,16 +872,25 @@ impl Lan {
                 // name (+0xE4, the resource name: `SetSessionLoadMap(Maps/...RMP)`
                 // in the original's log) is looked up (0x59F570) and its data
                 // checksummed (0x858030) for SetSessionLoadMap.
-                let Some((path, records)) = data.map_by_title(&title) else { return };
+                let Some((path, records)) = data.map_by_title(&title) else {
+                    warn!("lan: map {title} is not in the map list; no order sent");
+                    self.source = None;
+                    return;
+                };
                 let game = lobby::GameSettings { header: data.header(records), conditions, ..Default::default() };
                 let file = units(path);
-                let Some(bytes) = data.map_bytes(&file) else { return };
+                let Some(bytes) = data.map_bytes(&file) else {
+                    warn!("lan: map {title} could not be read; no order sent");
+                    self.source = None;
+                    return;
+                };
                 let crc = aa_netcode::file::map_checksum(&bytes);
                 let format = custom.net_format();
                 self.with_node(|node| {
                     match lan::load_map_fields(&file, &game, crc, node.data()) {
                         Ok(fields) => {
-                            let _ = node.request(d::SET_SESSION_LOAD_MAP_REQUEST, &fields);
+                            let sent = node.request(d::SET_SESSION_LOAD_MAP_REQUEST, &fields);
+                            info!("lan: SetSessionLoadMap {} crc {crc:#x}: {sent:?}", text(&file));
                             let _ = node.request(d::SET_MAP_SIZE_REQUEST, &[Field::Uint { width: 32, value: size.0 as u32 }, Field::Uint { width: 32, value: size.1 as u32 }]);
                             if !format.is_empty() {
                                 let _ = node.request(d::SET_TEAMS_REQUEST, &[Field::Text(units(&format))]);
@@ -918,8 +935,12 @@ impl Lan {
         let source = source_of(s);
         // a map this node lacks is staged once it has arrived (the transfer
         // ends with an UpdateMapStatus, which marks the staging dirty)
-        let missing = matches!(&source, Some(NetSource::Map { title, .. }) if crate::ui::gamedata::read_map(&ui.store.root, &format!("Maps/{title}.RMP")).is_none());
-        if (self.source.as_ref() != source.as_ref() || custom.net_format() != format) && !missing {
+        let changed = self.source.as_ref() != source.as_ref() || custom.net_format() != format;
+        if changed {
+            info!("lan: the session stages mode {} file {:?}", s.launch.mode, text(&s.launch.file));
+        }
+        let missing = changed && matches!(&source, Some(NetSource::Map { .. }) if crate::ui::gamedata::read_map(&ui.store.root, &text(&s.launch.file)).is_none());
+        if changed && !missing {
             if let Some(src) = &source {
                 custom.net_set_source(ui, src, &format, &rule_rows(&data, &s.launch.active_map().conditions));
             }
@@ -927,6 +948,8 @@ impl Lan {
         }
         // the rows
         let local = node.local_player();
+        let statuses: Vec<(u32, (u32, f32))> = s.players.iter().filter_map(|p| Some((p.id, node.map_status(p.id)?))).collect();
+        info!("lan: map status (player, (+0x3C, +0x40)) {statuses:?}, local {local:?}");
         let we_host = node.role() == lan::Role::Host;
         let mut rows = Vec::new();
         for k in &s.launch.active_map().header.kingdoms {
@@ -1015,6 +1038,7 @@ impl Lan {
                     actions.push(self.end_session(ui, "#ui_lobby_connect_failed"));
                 }
                 LanEvent::Message { key, args, number, .. } => {
+                    info!("lan: message {key}");
                     let a: Vec<String> = args.iter().map(|x| text(x)).collect();
                     let mut b: Vec<&str> = a.iter().map(String::as_str).collect();
                     let n = number.map(|n| n.to_string());

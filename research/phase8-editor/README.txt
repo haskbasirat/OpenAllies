@@ -32,6 +32,21 @@ it is listed under UNKNOWN.
   session has a SetSessionEditor decree order (65F0A0, handler 65FD00);
   when it is sent is not traced yet.
 - Leaving: RequestFinishedConfirm (Exit Editor), QuitConfirm.
+- Seen in the original on a hidden desktop (round 4: the QA copy's test
+  profile ran RequestEditor from the main menu): the log shows
+  Session::Reset(), KKC_Session::SetNewState(3), Launch(),
+  CreateBlankMapGenerateTask(), ChangeToState(3,6,1), application state
+  3 -> 6 -> 5, "VWorld::Init, set camera to (96,96)" and "connect Editor".
+  The first screen is the top bar (File, Map, Edit, Options, Layer, Scenario,
+  Tools, first letters yellow) and the minimap at the bottom left over a
+  blank grass map with doodads. No layer panel is open.
+- The editor's Load (OpenLoadDialog) opens UI/Menus/menu_file_dialog.tgi
+  MenuFileDialog: the list, the name box, Load (its command is FileOK, as the
+  log shows), Delete, Cancel, and the refresh and new-folder icons. It lists
+  the profile's Profile/data/Maps folder (AVar PathMaps = Maps/): empty when
+  the folder is missing, "(2v2)Berlin.RMP" once that file is there. FileOK
+  asks ui_file_dialog_load_map_confirmation ("Any unsaved changes to the
+  current map will be lost.  Continue anyway?", Ok / Cancel) first.
 
 
 2. SCREENS (Data/UI/Editor/*.tgi, art under UI/<res>/Editor)
@@ -97,7 +112,7 @@ editor interface):
 - Objectives: add, remove, change description, toggle required.
 - Clear: ClearMap, ClearObjects, ClearActors, ClearTriggers. Undo, Redo.
 - Session: EditorPrepareMap, EditorVerifyMap, EditorSave.
-User variables of the editor (aa-ui view_variable_registration.rs 158-163):
+User variables of the editor (aa-ui view_variable_registration.rs, indices 158-163):
 EditorMapStringsSeparate, EditorNewMapAutoDoodify, EditorAutoVerifyOnSave,
 EditorSAIActiveInTest, EditorCameraUnlocked, MapSaveCompressed (default
 true); also TestMapTemporaryFile, TestMapTemporaryFilePrefix,
@@ -110,8 +125,10 @@ CameraEditorPreviewTime, EditorShowCustomizeButton.
   (ResourceManagerTaskLoadGame LoadForEditor; "loading test map in editor -
   fixing MapResource"; failed_to_load_savegame_in_editor), the UI layouts and
   strings above, and the game data the map refers to.
-- Writes: .RMP maps. The map save (4F2DB0) writes the chunks in this order
-  (the order of all 80 shipped maps; 68 have the bracketed pair):
+- Writes: .RMP maps. All 80 shipped maps have their chunks in this order
+  (68 have the bracketed pair). The map save (4F2DB0) also has branches the
+  shipped maps do not take: METAGAME after KINGDOMS (a campaign save) and
+  STATIC_THINGS (aa-metagame chunk_file.rs, aa-mapworld campaign_save.rs):
     MAP (stored raw) MAP_HEADER GWORLD RULES TERRAIN HEIGHT_MAP
     MOUNTAIN_HEIGHT_MAP IDMGR RESTRICTION_GROUPS TEAMS OBJECTIVES KINGDOMS
     [USED_REQUIRED_OBJECTS USED_REQUIRED_OBJECTS_INDEX] DYNAMIC_THINGS
@@ -133,29 +150,49 @@ CameraEditorPreviewTime, EditorShowCustomizeButton.
   source_timestamp.
 
 
-5. DONE IN THIS ROUND
----------------------
-crates/aa-editor (new workspace member):
-- deflate.rs: the zlib 1.1.4 deflater, ported (the lazy matcher used by
-  levels 4 to 9, the Huffman trees and block output, the zlib header and
-  Adler-32 trailer). Streaming like the original: write = deflate with no
-  flush, finish = deflate with finish.
+5. DONE SO FAR
+--------------
+Round 3, crates/aa-editor (new workspace member):
+- The zlib 1.1.4 deflater, ported (the lazy matcher used by levels 4 to 9,
+  the Huffman trees and block output, the zlib header and Adler-32
+  trailer). Streaming like the original's chunk compressor: write = deflate
+  with no flush (8B7520), finish = deflate with finish (8B76B0).
 - map_file.rs: the map file writer, the exact inverse of
-  aa_mapworld::MapArchive: header, chunks in order from 0x0C, raw or level-6
-  compressed payloads, 0x60-byte records. The stale flag bits are taken as
-  data so an existing map re-encodes to itself; a new map writes 0 there.
+  aa_mapworld::MapArchive.
 - Proof: tests/shipped_maps.rs reads every .RMP in the original Data.rwd
   with our reader, writes it again and compares: 80 maps, 1736 chunks (1656
   compressed) are identical byte for byte. A second test feeds every
-  compressed chunk to the compressor in small pieces (1 to 300 bytes, as the
-  original's save writes field by field): all 1656 are identical too. Run
-  with cargo test -p aa-editor -- --include-ignored (needs AA_GAME_ROOT).
-Also useful elsewhere: films and saved games use the same chunk file. Our
-aa-metagame chunk_file writer (used by the film writers in aa-parity and
-aa-runtime and by the campaign saves) compresses with another zlib, format
-compatible but not byte identical, and aa-play saved_write.rs writes its
-chunks uncompressed. Both can use aa_editor::deflate (no dependencies) to
-write the original's bytes.
+  compressed chunk to the compressor in small pieces (1 to 300 bytes; the
+  original save's write sizes are not traced, so this covers that
+  assumption): all 1656 are identical too. Run with
+  cargo test -p aa-editor -- --include-ignored (needs AA_GAME_ROOT).
+Round 4, one writer and one deflater:
+- The deflater moved to aa-formats (zlib_deflate.rs), the lowest crate,
+  with zlib 1.1.4's sync flush (not used by the chunk compressor, whose
+  methods call deflate with 0 and 4 only; AA.exe's sync flushes are on the
+  stream at +0x74 of another class: 8D8830, 915D00, 917E10, 917FF0) and a
+  ZlibEncoder stream type shaped like flate2's.
+- aa-metagame chunk_file.rs (films, campaign saves) now compresses through
+  it: its one import line names aa_formats::zlib_deflate instead of flate2,
+  so its compressed chunks are the original's bytes. Its flush publishes the
+  bytes emitted so far and does not touch the stream (the chunk compressor
+  has no flush; 8B7520 hands every output byte to the file after each
+  deflate call).
+- aa-editor map_file.rs is now built on that chunk file writer. The
+  differences are settled: names follow chunk_file (an empty name is the
+  original's error; a zero unit or 32 units or more is refused, as wcsncpy
+  would store it unterminated); flag bits 1..63 are one value per file
+  (stale_flag_bits / set_stale_flag_bits), which the shipped-map test now
+  checks on all 80 maps. rewrite_map(path, bytes) reads a map and writes it
+  back.
+- The client's editor entry (crates/aa-bevy/src/editor/): RequestEditor
+  shows the Editor interface and the top bar; OpenLoadDialog opens
+  MenuFileDialog over our profile's data/Maps (AVar PathMaps); FileOK asks
+  the load confirmation in the editor's message box; EditorSave and
+  EditorSave "<file>" write the loaded map through rewrite_map. The blank
+  map, the world view, the minimap, the MenuWidget class (labels and
+  drop-downs of the top bar) and every tool are not built; the UI script's
+  editor_command step sends the File menu's commands for now.
 
 
 6. PORT PLAN (smallest provable step first)
@@ -167,8 +204,9 @@ write the original's bytes.
    MAP_HEADER, HEIGHT_MAP, MOUNTAIN_HEIGHT_MAP, TERRAIN, SUN, MAPSTRINGS),
    then the world chunks (IDMGR, RULES, TEAMS, KINGDOMS, OBJECTIVES,
    RESTRICTION_GROUPS, TRIGGERS, DENIZEN_GROUPS, the thing lists and their
-   indexes, UPDATABLES, MISC_DATA). Then 4F2DB0 itself: the order, the
-   optional pair, and MapSaveCompressed. At the end a whole map loaded with
+   indexes, UPDATABLES, MISC_DATA). Then 4F2DB0 itself: the order, its
+   branches (the USED_REQUIRED_OBJECTS pair, METAGAME after KINGDOMS,
+   STATIC_THINGS) and MapSaveCompressed. At the end a whole map loaded with
    our loader and saved with our save is the shipped file.
 3. The editor session: SetSessionEditor and the editor decree orders, one
    group at a time (scenario and sides first, they only change data;
@@ -187,9 +225,22 @@ write the original's bytes.
 
 7. UNKNOWN (not yet found in the original)
 ------------------------------------------
-- What RequestEditor opens first (a blank map, the New Map dialog, or the
-  last map), and the File menu items the code adds.
-- Where the editor saves and loads by default (the file dialog's folder).
+- Found in round 4: RequestEditor opens a blank generated map
+  (CreateBlankMapGenerateTask); the load dialog lists Profile/data/Maps; the
+  save dialog (6ADE70 -> 66AB30 in save mode over PathMaps) commits
+  EditorSave "%s". Still unknown: the blank map's generator and settings,
+  and the File menu items the code adds (6ACC00 builds the top bar).
+- The original's own save is a world save, not a container round trip.
+  Loading (2v2)Berlin.RMP from Profile/data/Maps and running EditorSave
+  rewrote that file (439,158 bytes; the shipped one has 439,309) and wrote
+  (2v2)Berlin.TGI (the map strings, 818 bytes, beside it; its text differs
+  from the shipped .TGI from byte 107). 18 of the 22 chunks are identical to
+  the shipped ones after decoding and as stored; MAP_HEADER (from decoded
+  byte 2658), GWORLD (from byte 4), TERRAIN (from byte 420505) and KINGDOMS
+  (from byte 845) differ, and the record flags carry a new stale value. Our
+  client's EditorSave writes the loaded chunks back unchanged, so it gives
+  the loaded file's bytes, not the original's: the world save (4F2DB0) and
+  the strings file are the next port.
 - The file EditorMapStringsSeparate writes the map strings to.
 - The editor's hotkeys, and which orders Undo and Redo cover (the strings
   undo_place, undo_paste, undo_drag and their redo_ forms exist, 6A86A0 to

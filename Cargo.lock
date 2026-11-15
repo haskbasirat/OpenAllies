@@ -125,6 +125,8 @@ version = "0.1.0"
 dependencies = [
  "aa-formats",
  "aa-mapworld",
+ "aa-metagame",
+ "flate2",
 ]
 
 [[package]]

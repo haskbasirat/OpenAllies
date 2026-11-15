@@ -905,6 +905,7 @@ impl Front {
                     self.remember_dialog();
                 }
             }
+            other if crate::editor::command(&mut self.ui, other) => {}
             other if NOT_BUILT.contains(&other) => info!("UI command {other}: its screen is not built yet"),
             other => info!("UI command not handled yet: {other}"),
         }
@@ -1708,6 +1709,7 @@ pub fn frame(
     // the in-game action hotkeys go to the HUD's buttons first
     if f.page == Page::Game {
         if let Some(hud) = f.hud.as_mut() {
+            hud.set_key_modifiers(ctrl, shift, keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight));
             game_keys.retain(|k| match hud.hotkey(&mut f.ui, *k) {
                 Some(acts) => {
                     out.game.extend(acts);

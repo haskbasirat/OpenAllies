@@ -337,6 +337,69 @@ fn lan_transfer_host_without_a_channel_says_so() {
     assert!(!cd.join(MAP).exists());
 }
 
+/// The host chooses the map before anyone joins; the joiner learns it from
+/// the join snapshot and asks for the file there. KKC_Session::SerializeState
+/// 0x77AAC0 reads the player records first (0x74AFD0 binds the joining
+/// record to the node, Node+8) and runs SendUpdateMapStatus 0x770B70 after
+/// them. The request template takes that Node+8 (0x766C10 / 0x76AC60), and the
+/// node is already active: TGC_AdminNode::Join 0x75AE20 stored +0x2C0 = 1
+/// (0x75AE8C, read by 0x766CD0). So SetMapTransferStatus(2) goes out with the
+/// joiner's own player, and the host starts the transfer.
+///
+/// The host frames first: the staging launch of LanNode::host cleared its
+/// +0x6C (ResetOrderVersion 0x74DBC0(0)) and queued its OrderVersionAck for the
+/// first frame (0x766D40 after the state callback). A request written before
+/// that ack meets 0x766C40 with +0x6C = 0 and is refused without a decree.
+#[test]
+fn lan_transfer_to_a_client_that_joins_later() {
+    let (hd, cd) = (scratch("late-host"), scratch("late-client"));
+    let bytes = map_bytes(292_534);
+    put(&hd, &bytes);
+    let mut host = LanNode::host(&config("Host"), &options(), launch(), data(&hd)).unwrap();
+    let mut hs = Seen::default();
+    let mut game = aa_netcode::lobby::GameSettings::default();
+    for k in ["north", "south"] {
+        game.header.kingdoms.push(KingdomSetup { name: units(k), flag_28: true, ..Default::default() });
+    }
+    let fields = aa_netcode::lan::load_map_fields(&units(MAP), &game, aa_netcode::file::map_checksum(&bytes), host.data()).unwrap();
+    // two admin ticks (1/16 s each): the first frame's ack has been executed
+    let start = Instant::now();
+    while host.admin_time() < 0.125 {
+        assert!(start.elapsed() < Duration::from_secs(10), "the host's admin clock does not run");
+        note(&mut hs, host.frame(&mut aa_netcode::lan::NoWorld).unwrap());
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(host.request(descriptor::SET_SESSION_LOAD_MAP_REQUEST, &fields).unwrap());
+    let start = Instant::now();
+    while host.session().launch.mode != 2 {
+        assert!(start.elapsed() < Duration::from_secs(10), "the host's own order never ran (mode {})", host.session().launch.mode);
+        note(&mut hs, host.frame(&mut aa_netcode::lan::NoWorld).unwrap());
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let port = host.local_addr().unwrap().port();
+    let client = LanNode::join(&config("Client"), format!("127.0.0.1:{port}").parse().unwrap(), data(&cd)).unwrap();
+    let mut p = Pair { host, client, hs, cs: Seen::default() };
+    p.until("join", |p| p.cs.joined && p.host.session().players.len() == 2 && p.client.session().players.len() == 2);
+    assert_eq!(p.client.session().launch.mode, 2, "the snapshot carries the map");
+    let mut seen_downloading = Vec::new();
+    let start = Instant::now();
+    loop {
+        assert!(start.elapsed() < Duration::from_secs(30), "the transfer did not end: {:?}", p.client_status());
+        let (h, c) = p.client_status();
+        if let Some((2, f)) = c {
+            seen_downloading.push(f);
+        }
+        if h == Some((1, 1.0)) && c == Some((1, 1.0)) {
+            break;
+        }
+        p.frame();
+    }
+    assert!(!seen_downloading.is_empty(), "the client saw itself downloading (0x74F310 status 2)");
+    assert!(seen_downloading.windows(2).all(|w| w[0] <= w[1]), "acknowledged progress only grows: {seen_downloading:?}");
+    let received = std::fs::read(cd.join(MAP)).expect("0x7619A0 wrote profile directory + name");
+    assert!(received == bytes, "the file arrived byte for byte");
+}
+
 /// A host with a file channel but without the file: 0x761540 throws and no
 /// frame of the order path catches it (the original's SIM thread ends in its
 /// unhandled-exception filter 0x85F520); here the host's frame fails.

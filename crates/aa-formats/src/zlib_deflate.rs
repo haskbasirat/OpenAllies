@@ -29,13 +29,18 @@
 //! > 3. This notice may not be removed or altered from any source distribution.
 //!
 //! [`Deflater::write`] is `deflate(Z_NO_FLUSH)` on the bytes given (all of them
-//! are consumed, as the original's output buffer is drained between calls),
-//! and [`Deflater::finish`] is `deflate(Z_FINISH)`. The window starts zeroed;
-//! zlib 1.1.4 leaves it as the allocator returned it. Window bytes past the
-//! input are compared only within the last 258 bytes of a stream, where a
-//! match is clipped to the bytes that remain, but they can still decide which
-//! earlier match is taken there. With the zeroed window every shipped map
-//! chunk comes out identical (tests/shipped_maps.rs).
+//! are consumed: the compressor's write, 8B7520, calls deflate with no flush
+//! until its input is used up and drains its 4 KiB output buffer after every
+//! call), [`Deflater::sync_flush`] is one `deflate(Z_SYNC_FLUSH)` and
+//! [`Deflater::finish`] is `deflate(Z_FINISH)`. The window starts zeroed:
+//! 8B72E0 leaves the stream's zalloc, zfree and opaque 0, so zlib 1.1.4
+//! allocates it with its default zcalloc (calloc). With it every shipped map
+//! chunk comes out identical (aa-editor tests/shipped_maps.rs).
+//!
+//! This is the one deflater of the workspace: the map file writer of
+//! aa-editor uses it directly, and [`ZlibEncoder`] gives the chunk file
+//! writer of aa-metagame (films, saves) the same bytes through a
+//! `std::io::Write` stream.
 
 const MIN_MATCH: usize = 3;
 const MAX_MATCH: usize = 258;
@@ -783,6 +788,17 @@ pub struct Deflater {
     adler_a: u32,
     adler_b: u32,
     total_in: u64,
+    /// `last_flush` (deflateReset: `Z_NO_FLUSH`).
+    last_flush: Flush,
+}
+
+/// The flush argument of `deflate` the port covers (`Z_NO_FLUSH` 0,
+/// `Z_SYNC_FLUSH` 2, `Z_FINISH` 4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Flush {
+    No = 0,
+    Sync = 2,
+    Finish = 4,
 }
 
 impl Deflater {
@@ -824,6 +840,7 @@ impl Deflater {
             adler_a: 1,
             adler_b: 0,
             total_in: 0,
+            last_flush: Flush::No,
         };
         // deflate(): header (Z_DEFLATED + (w_bits-8)<<4) << 8, level flags
         // (level-1)>>1 capped at 3 (zlib 1.1.4's formula), check bits.
@@ -846,18 +863,40 @@ impl Deflater {
         &self.trees.out
     }
 
-    /// `deflate(Z_NO_FLUSH)` on `input` (all of it is consumed).
+    /// `deflate(Z_NO_FLUSH)` on `input` (all of it is consumed). An empty
+    /// input makes no call, as 8B7520 loops only while input remains.
     pub fn write(&mut self, input: &[u8]) {
-        if !input.is_empty() || self.lookahead != 0 {
-            let mut pos = 0;
-            self.deflate_slow(input, &mut pos, false);
+        if input.is_empty() {
+            return;
         }
+        self.last_flush = Flush::No;
+        let mut pos = 0;
+        self.deflate_slow(input, &mut pos, Flush::No);
+    }
+
+    /// One `deflate(Z_SYNC_FLUSH)` with no input: every pending byte goes out
+    /// in a block that does not end the stream, then the empty stored block
+    /// (`_tr_stored_block(s, 0, 0, 0)`) aligns the output to a byte. As in
+    /// zlib 1.1.4, a second flush with no write in between does nothing (the
+    /// `flush <= old_flush` refusal, `Z_BUF_ERROR`). The chunk compressor
+    /// never does this (its methods call deflate with 0 and 4 only); AA.exe's
+    /// sync flushes are on the stream at +0x74 of another class (8D8830,
+    /// 915D00, 917E10, 917FF0).
+    pub fn sync_flush(&mut self) {
+        let old = std::mem::replace(&mut self.last_flush, Flush::Sync);
+        if Flush::Sync <= old {
+            return;
+        }
+        let mut pos = 0;
+        self.deflate_slow(&[], &mut pos, Flush::Sync);
+        self.trees.stored_block(&[], false);
     }
 
     /// `deflate(Z_FINISH)`: the last block and the Adler-32 trailer.
     pub fn finish(mut self) -> Vec<u8> {
         let mut pos = 0;
-        self.deflate_slow(&[], &mut pos, true);
+        self.last_flush = Flush::Finish;
+        self.deflate_slow(&[], &mut pos, Flush::Finish);
         let adler = (self.adler_b << 16) | self.adler_a;
         self.trees.out.extend_from_slice(&adler.to_be_bytes());
         self.trees.out
@@ -1000,7 +1039,7 @@ impl Deflater {
     }
 
     /// `deflate_slow`.
-    fn deflate_slow(&mut self, input: &[u8], pos: &mut usize, finish: bool) {
+    fn deflate_slow(&mut self, input: &[u8], pos: &mut usize, flush: Flush) {
         // A local of zlib 1.1.4's deflate_slow: NIL on entry, and not reset
         // at a position too near the end to insert (its value is then only
         // used for a search whose result is clipped below MIN_MATCH).
@@ -1008,7 +1047,7 @@ impl Deflater {
         loop {
             if self.lookahead < MIN_LOOKAHEAD {
                 self.fill_window(input, pos);
-                if self.lookahead < MIN_LOOKAHEAD && !finish {
+                if self.lookahead < MIN_LOOKAHEAD && flush == Flush::No {
                     return;
                 }
                 if self.lookahead == 0 {
@@ -1073,7 +1112,81 @@ impl Deflater {
             self.trees.tally(0, c);
             self.match_available = false;
         }
-        self.flush_block(true);
+        self.flush_block(flush == Flush::Finish);
+    }
+}
+
+/// `Compression::new(level)` for [`ZlibEncoder`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Compression(u32);
+
+impl Compression {
+    pub fn new(level: u32) -> Self {
+        Compression(level)
+    }
+    pub fn level(&self) -> u32 {
+        self.0
+    }
+}
+
+/// The chunk compressor (vtable ABD8DC, built by 8B72E0) as a zlib stream
+/// writer, shaped like `flate2`'s `write::ZlibEncoder<Vec<u8>>` so a writer
+/// built on that type keeps its code: `write` is the compressor's write
+/// (8B7520, [`Deflater::write`]), [`ZlibEncoder::get_ref`] is the stream
+/// emitted so far (whole bytes; 8B7520 hands every output byte to the file
+/// after each deflate call) and [`ZlibEncoder::finish`] is its finish
+/// (8B76B0: deflate with `Z_FINISH`, then deflateEnd). `flush` does not touch
+/// the stream: the compressor has no flush of its own, so flushing the file
+/// can only publish the bytes already emitted. Only levels 4 to 9 are
+/// ported: another level panics in [`ZlibEncoder::new`].
+pub struct ZlibEncoder<W = Vec<u8>> {
+    prefix: W,
+    deflater: Deflater,
+}
+
+impl ZlibEncoder<Vec<u8>> {
+    /// The stream is appended to `prefix` when it is finished.
+    pub fn new(prefix: Vec<u8>, level: Compression) -> Self {
+        let level = u8::try_from(level.0).ok().and_then(|l| Deflater::new(l).ok());
+        let deflater = level.expect("ZlibEncoder: only zlib levels 4 to 9 are ported");
+        ZlibEncoder { prefix, deflater }
+    }
+
+    /// The compressed bytes emitted so far (bits still in the bit buffer
+    /// are not included until a flush or the finish writes them out).
+    pub fn get_ref(&self) -> &[u8] {
+        self.deflater.output()
+    }
+
+    pub fn total_in(&self) -> u64 {
+        self.deflater.total_in()
+    }
+
+    /// `deflate(Z_FINISH)`; returns the prefix followed by the stream.
+    pub fn finish(self) -> std::io::Result<Vec<u8>> {
+        let mut out = self.prefix;
+        out.extend_from_slice(&self.deflater.finish());
+        Ok(out)
+    }
+}
+
+impl std::io::Write for ZlibEncoder<Vec<u8>> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.deflater.write(buf);
+        Ok(buf.len())
+    }
+    /// The bytes emitted so far are already in [`ZlibEncoder::get_ref`].
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<W> std::fmt::Debug for ZlibEncoder<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZlibEncoder")
+            .field("total_in", &self.deflater.total_in)
+            .field("emitted", &self.deflater.trees.out.len())
+            .finish()
     }
 }
 
@@ -1099,7 +1212,7 @@ mod tests {
     }
 
     /// A regression check without game data (the proof is
-    /// tests/shipped_maps.rs): 300,000 bytes of random, repetitive, text-like
+    /// aa-editor tests/shipped_maps.rs): 300,000 bytes of random, repetitive, text-like
     /// and small-alphabet runs, which take stored, dynamic and lazy-match
     /// paths and window slides. Expected: stock zlib's level-6 output for
     /// the same bytes (length and FNV-1a 64), which equals the original's on
@@ -1135,5 +1248,47 @@ mod tests {
     fn levels_outside_the_lazy_matcher_are_refused() {
         assert!(Deflater::new(3).is_err());
         assert!(Deflater::new(10).is_err());
+    }
+
+    /// zlib 1.1.4's sync flush: the pending block, then the empty stored
+    /// block `00 00 ff ff` on a byte boundary; a repeated flush adds
+    /// nothing; a flush with nothing pending still writes an empty block
+    /// (1.1.4 flushes the block unconditionally) and its marker.
+    #[test]
+    fn sync_flush_ends_on_the_empty_stored_block() {
+        let mut d = Deflater::new(6).unwrap();
+        d.write(b"hello hello hello");
+        d.sync_flush();
+        let first = d.output().to_vec();
+        assert_eq!(&first[first.len() - 4..], &[0, 0, 0xff, 0xff]);
+        d.sync_flush();
+        assert_eq!(d.output(), &first[..]);
+        d.write(b"");
+        d.sync_flush();
+        assert_eq!(d.output(), &first[..], "an empty write makes no deflate call");
+        let mut e = Deflater::new(6).unwrap();
+        e.sync_flush();
+        // header, an empty static block (3 header bits and the 7-bit
+        // end-of-block code), the stored block's 3 header bits, the padding
+        // to a byte, then its length 0 and its complement
+        assert_eq!(hex(e.output()), "789c02000000ffff");
+    }
+
+    #[test]
+    fn the_stream_writer_matches_the_deflater() {
+        use std::io::Write;
+        let mut z = ZlibEncoder::new(Vec::new(), Compression::new(6));
+        z.write_all(b"hello").unwrap();
+        assert_eq!(z.finish().unwrap(), compress(b"hello", 6).unwrap());
+        // a flush between writes leaves the stream as one write would make it
+        let mut z = ZlibEncoder::new(Vec::new(), Compression::new(6));
+        let parts = [&b"abc"[..], b"defabc", b"", b"abcabcabc"];
+        for part in parts {
+            z.write_all(part).unwrap();
+            let before = z.get_ref().to_vec();
+            z.flush().unwrap();
+            assert_eq!(z.get_ref(), &before[..]);
+        }
+        assert_eq!(z.finish().unwrap(), compress(&parts.concat(), 6).unwrap());
     }
 }

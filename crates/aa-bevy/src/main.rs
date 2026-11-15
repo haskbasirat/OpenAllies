@@ -5,6 +5,7 @@ mod battle_view;
 mod camera;
 mod campaign;
 mod debug_battle;
+mod editor;
 mod effects;
 mod film_record;
 mod model_fixes;
@@ -13,9 +14,11 @@ mod look;
 mod input;
 mod preload;
 mod scene;
+mod screenshot;
 mod session;
 mod terrain;
 mod textures;
+mod tracks;
 mod ui;
 mod units;
 mod water;
@@ -65,7 +68,9 @@ fn main() -> anyhow::Result<()> {
     // original effects and sound (effects.rs adds the sound plugin)
     .add_plugins(effects::EffectsPlugin)
     // the World War II campaign's strategic map (campaign/)
-    .add_plugins(campaign::CampaignPlugin);
+    .add_plugins(campaign::CampaignPlugin)
+    .add_plugins(tracks::TracksPlugin);
+    app.add_plugins(screenshot::ScreenshotPlugin);
     app.run();
     Ok(())
 }

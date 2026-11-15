@@ -269,8 +269,16 @@ impl LanData for Data {
         if format.is_empty() {
             return None;
         }
-        let (records, teams) = self.session_records(session)?;
-        format_open(records, teams, &format).get(record).copied()
+        if let Some((records, teams)) = self.session_records(session) {
+            return format_open(records, teams, &format).get(record).copied();
+        }
+        // A map that arrived after the startup list (a received map in the
+        // work depot): its header, read afresh once the file is there.
+        if session.launch.mode == 0 {
+            return None;
+        }
+        let map = crate::ui::gamedata::read_map(&self.root, &text(&session.launch.file))?;
+        format_open(&map_records(&map), map.teams.len(), &format).get(record).copied()
     }
     fn rmc_header(&self, rmc: &[u16]) -> Option<MapHeader> {
         Some(self.header(self.rmcs.get(&lower(rmc))?))

@@ -1,9 +1,10 @@
 //! Every map the original ships (`Data.rwd`, `*.RMP`) is read with our map
-//! reader and written again with the editor's map file writer; the result
-//! must be the shipped file, byte for byte. This proves the container
-//! layout, the record fields and the zlib 1.1.4 level-6 deflater on 1,656
-//! compressed chunks of real data.
-use aa_editor::map_file::{write_map, ChunkSource};
+//! reader and written again with the editor's map file writer (the shared
+//! chunk file writer of aa-metagame and the zlib 1.1.4 deflater of
+//! aa-formats); the result must be the shipped file, byte for byte. This
+//! proves the container layout, the record fields and the level-6 deflater
+//! on 1,656 compressed chunks of real data.
+use aa_editor::map_file::{rewrite_map, stale_flag_bits, write_map, ChunkSource};
 use aa_mapworld::archive::Encoding;
 use aa_mapworld::MapArchive;
 
@@ -21,6 +22,7 @@ fn every_shipped_map_re_encodes_byte_for_byte() {
         .collect();
     assert!(!maps.is_empty(), "no maps in Data.rwd");
     let (mut chunks, mut compressed, mut failures) = (0usize, 0usize, Vec::new());
+    let mut stale_values = std::collections::BTreeSet::new();
     for (index, path) in &maps {
         let mut original = Vec::new();
         rwd.copy_entry(*index, &mut original).unwrap();
@@ -30,29 +32,39 @@ fn every_shipped_map_re_encodes_byte_for_byte() {
             .iter()
             .map(|row| archive.decode_chunk(&row.name, u64::MAX).unwrap())
             .collect();
+        // bits 1..63 of the flags word: one value shared by every record
+        let stale = stale_flag_bits(&original).unwrap_or_else(|| panic!("{path}: records disagree in flag bits 1..63"));
         let sources: Vec<ChunkSource<'_>> = decoded
             .iter()
             .map(|c| {
                 let flags = c.directory.source_timestamp;
                 assert_eq!(c.encoding == Encoding::Zlib, flags & 1 != 0, "{path} {}: flag bit 0 vs encoding", c.directory.name);
-                ChunkSource { name: &c.directory.name, flags, payload: &c.bytes }
+                assert_eq!(flags & !1, stale, "{path} {}", c.directory.name);
+                ChunkSource { name: &c.directory.name, compressed: flags & 1 != 0, payload: &c.bytes }
             })
             .collect();
         chunks += sources.len();
-        compressed += sources.iter().filter(|s| s.flags & 1 != 0).count();
-        let written = write_map(&sources).unwrap();
+        compressed += sources.iter().filter(|s| s.compressed).count();
+        stale_values.insert(stale);
+        let written = write_map(path, &sources, stale).unwrap();
+        assert!(rewrite_map(path, &original).unwrap() == written, "{path}: rewrite_map");
         if written != original {
             let at = written.iter().zip(&original).position(|(a, b)| a != b).unwrap_or(written.len().min(original.len()));
             failures.push(format!("{path}: first difference at byte {at} (written {}, shipped {})", written.len(), original.len()));
         }
     }
-    eprintln!("{} maps, {chunks} chunks ({compressed} compressed) re-encoded", maps.len());
+    eprintln!(
+        "{} maps, {chunks} chunks ({compressed} compressed) re-encoded; {} distinct stale flag values",
+        maps.len(),
+        stale_values.len()
+    );
     assert!(failures.is_empty(), "{} of {} maps differ:\n{}", failures.len(), maps.len(), failures.join("\n"));
 }
 
-/// The original's map save hands the compressor many small writes (one per
-/// saved field) rather than one buffer. The streaming path (deflate with no
-/// flush on each piece) must give the same bytes on the shipped chunks.
+/// The original's map save may hand the compressor many small writes rather
+/// than one buffer (its write sizes are not traced; this is an assumption).
+/// The streaming path (deflate with no flush on each piece) must give the
+/// same bytes on the shipped chunks either way.
 #[test]
 #[ignore = "requires AA_GAME_ROOT (the original game's Data.rwd)"]
 fn shipped_chunks_compress_the_same_in_small_writes() {

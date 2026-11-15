@@ -38,7 +38,7 @@
 //! The engine file object (open, short reads) is not
 //! part of this module: reading past the end of the file is refused.
 use crate::{Error, Result};
-use flate2::{Compression,write::ZlibEncoder};
+use aa_formats::zlib_deflate::{Compression, ZlibEncoder};
 use std::io::Write;
 
 /// `'TGCK'` header magic (859380).

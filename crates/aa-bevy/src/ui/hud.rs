@@ -297,6 +297,22 @@ pub struct GameHud {
     observer_page: usize,
     /// Action panel +0x1B8: the kingdoms of the buttons shown.
     observer_list: Vec<aa_play::KingdomId>,
+    /// The hotkey table (start script and the `HotkeyConfiguration`
+    /// file, aa_ui::hotkeys) and the configuration it holds.
+    hotkeys: aa_ui::hotkeys::HotkeyTable,
+    hotkey_configuration: String,
+    /// The modifier flags of this frame's keys (alt 0x10, shift 0x20,
+    /// ctrl 0x40).
+    key_modifiers: u32,
+    /// Each action slot's command as the original's button carries it
+    /// (0x5F5710 compares a VERIFY hotkey's command with it), for the
+    /// shown, enabled buttons.
+    slot_native: Vec<Option<String>>,
+    /// Each action slot holds a shown, enabled button (0x5EFAB0).
+    slot_enabled: Vec<bool>,
+    /// The formation buttons shown: `CompanyFormationButtons` or
+    /// `GroupFormationButtons`.
+    formation_widget: Option<&'static str>,
 }
 
 const RESOURCE_KINDS: [(&str, u8); 3] = [("PurchaseResource", 0), ("UpkeepResource", 1), ("LimitedConsumedResource", 2)];
@@ -432,6 +448,94 @@ fn load_team_commands(ui: &mut Ui) -> Vec<TeamCommand> {
             tooltip: n.get("tooltip").unwrap_or_default().trim_matches('"').to_string(),
         })
         .collect()
+}
+
+/// An action button's command as the original's button carries it, the
+/// text a VERIFY hotkey's command is compared with (0x5F5710): the
+/// objectives' `native_text`, and the buttons it does not spell (the
+/// button data of `CommandAll`, `ActorCommandCancel`, `CancelTeamCommands`,
+/// the `structure_cancel_queued`, `construction_cancel`, `escort_on`,
+/// `escort_off` and `rout` actor commands). A team command (disabled in
+/// this client) has no text.
+fn button_command_text(world: &World, command: &str, _team: &[TeamCommand]) -> Option<String> {
+    if let Some(rest) = command.strip_prefix("AAPlay ") {
+        let verb = rest.split_whitespace().next().unwrap_or("");
+        let text = match verb {
+            "command_all" => Some("CommandAll".to_string()),
+            "command_cancel" => Some("ActorCommandCancel".to_string()),
+            "team_back" => Some("CancelTeamCommands".to_string()),
+            "recruit_back" => Some("ActorCommand structure_cancel_queued".to_string()),
+            "construction_cancel" | "escort_on" | "escort_off" | "rout" => Some(format!("ActorCommand {verb}")),
+            "team_command" => return None,
+            _ => None,
+        };
+        if text.is_some() {
+            return text;
+        }
+    }
+    super::objectives::native_text(world, command)
+}
+
+/// The original's key code (the 0xB27B20 values, Windows virtual keys) of
+/// a key.
+fn virtual_key(key: KeyCode) -> Option<u32> {
+    use KeyCode as K;
+    let letter = |k: K| -> Option<u32> {
+        let order = [
+            K::KeyA, K::KeyB, K::KeyC, K::KeyD, K::KeyE, K::KeyF, K::KeyG, K::KeyH, K::KeyI, K::KeyJ, K::KeyK, K::KeyL, K::KeyM,
+            K::KeyN, K::KeyO, K::KeyP, K::KeyQ, K::KeyR, K::KeyS, K::KeyT, K::KeyU, K::KeyV, K::KeyW, K::KeyX, K::KeyY, K::KeyZ,
+        ];
+        order.iter().position(|x| *x == k).map(|i| 0x41 + i as u32)
+    };
+    if let Some(c) = letter(key) {
+        return Some(c);
+    }
+    let digits = [K::Digit0, K::Digit1, K::Digit2, K::Digit3, K::Digit4, K::Digit5, K::Digit6, K::Digit7, K::Digit8, K::Digit9];
+    if let Some(i) = digits.iter().position(|x| *x == key) {
+        return Some(0x30 + i as u32);
+    }
+    let numpad = [K::Numpad0, K::Numpad1, K::Numpad2, K::Numpad3, K::Numpad4, K::Numpad5, K::Numpad6, K::Numpad7, K::Numpad8, K::Numpad9];
+    if let Some(i) = numpad.iter().position(|x| *x == key) {
+        return Some(0x60 + i as u32);
+    }
+    let fkeys = [K::F1, K::F2, K::F3, K::F4, K::F5, K::F6, K::F7, K::F8, K::F9, K::F10, K::F11, K::F12];
+    if let Some(i) = fkeys.iter().position(|x| *x == key) {
+        return Some(0x70 + i as u32);
+    }
+    Some(match key {
+        K::Space => 0x20,
+        K::Enter | K::NumpadEnter => 0x0d,
+        K::Tab => 0x09,
+        K::Escape => 0x1b,
+        K::Backspace => 0x08,
+        K::Insert => 0x2d,
+        K::Home => 0x24,
+        K::Pause => 0x13,
+        K::PageUp => 0x21,
+        K::PageDown => 0x22,
+        K::Delete => 0x2e,
+        K::End => 0x23,
+        K::ArrowLeft => 0x25,
+        K::ArrowRight => 0x27,
+        K::ArrowUp => 0x26,
+        K::ArrowDown => 0x28,
+        K::NumpadSubtract => 0x6d,
+        K::NumpadAdd => 0x6b,
+        K::NumpadDecimal => 0x6e,
+        K::Equal => 0xbb,
+        K::Minus => 0xbd,
+        K::Backquote => 0xc0,
+        K::PrintScreen => 0x2c,
+        K::Semicolon => 0xba,
+        K::Comma => 0xbc,
+        K::Period => 0xbe,
+        K::Slash => 0xbf,
+        K::Backslash => 0xdc,
+        K::Quote => 0xde,
+        K::BracketLeft => 0xdb,
+        K::BracketRight => 0xdd,
+        _ => return None,
+    })
 }
 
 /// The numbered name of an actor (`0x4D8AB0`, the number per kingdom and
@@ -593,6 +697,12 @@ impl GameHud {
             in_film: false,
             observer_page: 0,
             observer_list: Vec::new(),
+            hotkeys: ui.hotkey_table(),
+            hotkey_configuration: ui.uvars.get_str("HotkeyConfiguration"),
+            key_modifiers: 0,
+            slot_native: vec![None; 12],
+            slot_enabled: vec![false; 12],
+            formation_widget: None,
         };
         if let Some(b) = battle {
             g.update(ui, b);
@@ -663,12 +773,21 @@ impl GameHud {
         };
         let buttons = view.action_buttons();
         self.slot_commands = buttons.iter().map(|a| a.as_ref().map(|a| a.command.clone())).collect();
+        self.slot_native = buttons.iter().map(|a| a.as_ref().filter(|a| a.enabled).and_then(|a| button_command_text(&b.world, &a.command, &self.team_commands))).collect();
+        self.slot_enabled = buttons.iter().map(|a| a.as_ref().is_some_and(|a| a.enabled)).collect();
         self.slot_tips = buttons.iter().map(|a| a.as_ref().and_then(|a| view.tip(ui, &a.command))).collect();
-        self.formation_tips = match view.selection() {
-            HudSelection::Company(c) => c.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(),
-            HudSelection::Group(g) => g.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(),
-            _ => Vec::new(),
+        (self.formation_tips, self.formation_widget) = match view.selection() {
+            HudSelection::Company(c) => (c.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(), Some("CompanyFormationButtons")),
+            HudSelection::Group(g) => (g.formations.iter().map(|f| view.formation_name(f.id as usize)).collect(), Some("GroupFormationButtons")),
+            _ => (Vec::new(), None),
         };
+        // OptionsHotkeySelect (0x67B650): a new configuration replaces the
+        // action and formation hotkeys
+        let configuration = ui.uvars.get_str("HotkeyConfiguration");
+        if configuration != self.hotkey_configuration {
+            self.hotkeys = ui.hotkey_table();
+            self.hotkey_configuration = configuration;
+        }
         self.hud.update(ui, &view);
         if self.observing {
             // no local kingdom: neither the group floater nor the abilities
@@ -1115,94 +1234,105 @@ impl GameHud {
         self.menu_open
     }
 
-    /// The classic action hotkeys (Localization/Hotkeys/Actions/
-    /// hotkeys_standard_aa.txt, `game|action|verify "ActorCommand <ids>"`):
-    /// a key fires the action button showing that command.
+    /// The modifiers held with this frame's keys (alt, shift, ctrl).
+    pub fn set_key_modifiers(&mut self, ctrl: bool, shift: bool, alt: bool) {
+        use aa_ui::hotkeys::key_flag;
+        self.key_modifiers = if ctrl { key_flag::CTRL } else { 0 } | if shift { key_flag::SHIFT } else { 0 } | if alt { key_flag::ALT } else { 0 };
+    }
+
+    /// 0x40FCA0 for the Game interface's hotkeys: ACTION | VERIFY holds
+    /// while a shown, enabled action button carries the command (0x5F5710,
+    /// `_wcsicmp`); DEV, EDITORDEV, EDITBOX, ALLOW_CHEATS and TESTMODE do
+    /// not hold in a battle of this client (no developer mode, no edit box
+    /// in the Game interface's list, no cheats, not the test mode);
+    /// FORMATION | VERIFY compares the formation buttons' commands, which
+    /// no shipped hotkey uses.
+    fn hotkey_context(&self, flags: u32, command: &str) -> bool {
+        use aa_ui::hotkeys::context_flag as cf;
+        if flags & (cf::DEV | cf::EDITORDEV | cf::EDITBOX | cf::ALLOW_CHEATS | cf::TESTMODE) != 0 {
+            return false;
+        }
+        if flags & cf::VERIFY != 0 {
+            if flags & cf::ACTION != 0 {
+                return self.slot_native.iter().flatten().any(|c| c.eq_ignore_ascii_case(command));
+            }
+            if flags & cf::FORMATION != 0 {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 0x497220 + 0x5EFAB0 for the widgets the battle hotkeys name: the
+    /// Game interface, the shown formation buttons, the shown, enabled
+    /// action buttons and the control panel's display buttons.
+    fn hotkey_widget_active(&self, widget: &str) -> bool {
+        let numbered = |prefix: &str| widget.get(..prefix.len()).filter(|p| p.eq_ignore_ascii_case(prefix)).and_then(|_| widget[prefix.len()..].parse::<usize>().ok());
+        if widget.eq_ignore_ascii_case("game") {
+            return true;
+        }
+        if let Some(i) = numbered("ActionButtonsButton_") {
+            return self.slot_commands.get(i).is_some_and(Option::is_some) && self.slot_enabled.get(i).copied().unwrap_or(false);
+        }
+        if let Some(f) = self.formation_widget {
+            if let Some(i) = numbered(&format!("{f}_")) {
+                return i < self.formation_tips.len();
+            }
+        }
+        ["ButtonObjectives", "ButtonTechnology", "ButtonMessageLog", "ButtonPolitics"].iter().any(|w| w.eq_ignore_ascii_case(widget))
+    }
+
+    /// A key press in the battle (0x5EFC70 over the hotkey table,
+    /// aa_ui::hotkeys): the widgets' own hotkeys (a press of the formation
+    /// buttons, the action buttons of the visual configurations, the
+    /// control panel's display buttons), then the Game interface's list
+    /// (Find 0x40A610: the VERIFY hotkeys of the action buttons shown, the
+    /// priorities of the observer and team keys). A command of the Game
+    /// interface's list runs as the action button carrying it would run it;
+    /// a command this client has no handler for leaves the key to the
+    /// camera and group keys.
     pub fn hotkey(&mut self, ui: &mut Ui, key: KeyCode) -> Option<Vec<GameAction>> {
-        // hotkeys_standard_aa.txt, Observer Commands (`game|action|verify|1`):
-        // 0 no kingdom, 1..9 and q, w the panel's first eleven
-        if self.observing {
-            let digit = match key {
-                KeyCode::Digit0 => Some(None),
-                KeyCode::Digit1 => Some(Some(0)),
-                KeyCode::Digit2 => Some(Some(1)),
-                KeyCode::Digit3 => Some(Some(2)),
-                KeyCode::Digit4 => Some(Some(3)),
-                KeyCode::Digit5 => Some(Some(4)),
-                KeyCode::Digit6 => Some(Some(5)),
-                KeyCode::Digit7 => Some(Some(6)),
-                KeyCode::Digit8 => Some(Some(7)),
-                KeyCode::Digit9 => Some(Some(8)),
-                KeyCode::KeyQ => Some(Some(9)),
-                KeyCode::KeyW => Some(Some(10)),
-                _ => None,
-            };
-            if let Some(slot) = digit {
-                let cmd = match slot {
-                    Some(i) => format!("SelectObservingKingdom {i}"),
-                    None => "SelectObservingKingdom".to_string(),
-                };
+        use aa_ui::hotkeys::{Fire, key_flag};
+        let code = virtual_key(key)?;
+        let flags = key_flag::DOWN | self.key_modifiers;
+        let mut pressed: Option<String> = None;
+        {
+            let buttons = self.hotkeys.widgets().filter(|w| !w.eq_ignore_ascii_case("game") && !w.eq_ignore_ascii_case("root")).map(str::to_string).collect::<Vec<_>>();
+            for w in buttons {
+                if let Some(Fire::Press(p)) = self.hotkeys.key_event(&w, code, flags, |f, c| self.hotkey_context(f, c), |x| self.hotkey_widget_active(x)) {
+                    pressed = Some(p);
+                    break;
+                }
+            }
+        }
+        if let Some(widget) = pressed {
+            let numbered = |prefix: &str| widget.get(..prefix.len()).filter(|p| p.eq_ignore_ascii_case(prefix)).and_then(|_| widget[prefix.len()..].parse::<usize>().ok());
+            if let Some(i) = numbered("ActionButtonsButton_") {
+                let cmd = self.slot_commands.get(i).cloned().flatten()?;
                 return self.command(ui, &cmd);
             }
-        }
-        // the formation buttons: q / w / e (CompanyFormationButtons_0..2)
-        let formation = match key {
-            KeyCode::KeyQ => Some(0),
-            KeyCode::KeyW => Some(1),
-            KeyCode::KeyE => Some(2),
-            _ => None,
-        };
-        if let Some(i) = formation {
-            if i < self.formation_tips.len() {
+            if let Some(i) = self.formation_widget.and_then(|f| numbered(&format!("{f}_"))) {
                 self.heard.push(format!("FormationChange {i}"));
+                return Some(vec![GameAction::SetFormation(i)]);
             }
-            return (i < self.formation_tips.len()).then(|| vec![GameAction::SetFormation(i)]);
-        }
-        // F1..F4: the control panel's display buttons
-        if self.panels.hotkey(ui, key) {
-            if let Some(cmd) = super::panels::Panels::hotkey_command(key) {
-                self.heard.push(cmd.to_string());
+            // F1..F4: the control panel's display buttons
+            if self.panels.hotkey(ui, key) {
+                if let Some(cmd) = super::panels::Panels::hotkey_command(key) {
+                    self.heard.push(cmd.to_string());
+                }
+                return Some(Vec::new());
             }
-            return Some(Vec::new());
+            return None;
         }
-        // the idle buttons: F5 idle builder, F6 idle detached organization
-        match key {
-            KeyCode::F5 => return Some(vec![GameAction::CycleIdle(1)]),
-            KeyCode::F6 => return Some(vec![GameAction::CycleIdle(2)]),
-            _ => {}
-        }
-        // hotkeys_custom.txt: y / h / n / j "UseFactionAbility 0..3"
-        let ability = match key {
-            KeyCode::KeyY => Some(0),
-            KeyCode::KeyH => Some(1),
-            KeyCode::KeyN => Some(2),
-            KeyCode::KeyJ => Some(3),
-            _ => None,
+        let fire = self.hotkeys.key_event("game", code, flags, |f, c| self.hotkey_context(f, c), |x| self.hotkey_widget_active(x));
+        let Some(Fire::Command(cmd)) = fire else { return None };
+        // an action button's command: the button's own
+        let slot = self.slot_native.iter().position(|c| c.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(&cmd)));
+        let run = match slot {
+            Some(i) => self.slot_commands.get(i).cloned().flatten()?,
+            None => cmd,
         };
-        if let Some(i) = ability {
-            return self.command(ui, &format!("UseFactionAbility {i}"));
-        }
-        let verbs: &[&str] = match key {
-            KeyCode::KeyS => &["stop"],
-            KeyCode::KeyA => &["kill", "command_all"],
-            KeyCode::KeyM => &["move"],
-            KeyCode::KeyR => &["retreat"],
-            KeyCode::KeyG => &["guard"],
-            KeyCode::KeyX => &["explore"],
-            KeyCode::KeyF => &["set_rally_point"],
-            KeyCode::KeyP => &["pack", "unpack"],
-            KeyCode::KeyD => &["recruit_page"],
-            KeyCode::KeyL => &["recruit_location_page"],
-            KeyCode::KeyC => &["recruit_back", "hq_attach"],
-            KeyCode::Delete => &["sell", "hq_detach", "disband"],
-            _ => return None,
-        };
-        let cmd = self.slot_commands.iter().flatten().find(|c| {
-            let v = c.strip_prefix("AAPlay ").and_then(|r| r.split_whitespace().next()).unwrap_or("");
-            verbs.contains(&v)
-        })?;
-        let cmd = cmd.clone();
-        self.command(ui, &cmd)
+        self.command(ui, &run)
     }
 
     /// The action slots' commands of this frame (the script's button flash).
@@ -2826,5 +2956,32 @@ impl HudWorld for View<'_> {
             }
         }
         v
+    }
+}
+
+#[cfg(test)]
+mod hotkey_tests {
+    use super::*;
+
+    /// Every key the client maps has a name in the original's key table,
+    /// and the action hotkeys' letters and digits are the table's.
+    #[test]
+    fn virtual_keys_are_the_key_table_codes() {
+        use aa_ui::hotkeys::{KEY_NAMES, key_code};
+        let keys = [
+            KeyCode::KeyA, KeyCode::KeyZ, KeyCode::Digit0, KeyCode::Digit9, KeyCode::Numpad4, KeyCode::F1, KeyCode::F12,
+            KeyCode::Delete, KeyCode::Escape, KeyCode::Tab, KeyCode::Minus, KeyCode::Equal, KeyCode::Backslash,
+            KeyCode::BracketLeft, KeyCode::BracketRight, KeyCode::Backquote, KeyCode::PrintScreen, KeyCode::Pause,
+            KeyCode::NumpadSubtract, KeyCode::NumpadAdd, KeyCode::Home, KeyCode::End, KeyCode::PageUp, KeyCode::PageDown,
+        ];
+        for k in keys {
+            let c = virtual_key(k).unwrap_or_else(|| panic!("{k:?}"));
+            assert!(KEY_NAMES.iter().any(|(_, v)| *v == c), "{k:?} {c:#x}");
+        }
+        assert_eq!(virtual_key(KeyCode::KeyA), key_code("a"));
+        assert_eq!(virtual_key(KeyCode::Delete), key_code("delete"));
+        assert_eq!(virtual_key(KeyCode::Numpad4), key_code("numpad-left"));
+        assert_eq!(virtual_key(KeyCode::Equal), key_code("plus"));
+        assert_eq!(virtual_key(KeyCode::Backquote), key_code("grave"));
     }
 }

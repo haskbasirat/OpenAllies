@@ -7,5 +7,6 @@
 
 pub mod nif;
 pub mod rwd;
+pub mod zlib_deflate;
 
 pub use rwd::{ArchiveError, Chunk, Entry, RwdArchive};

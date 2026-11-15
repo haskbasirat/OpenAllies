@@ -1178,6 +1178,10 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
     if world.orders.groups.delivering {
         return Some(command);
     }
+    if let Command::SetFormation { kingdom, orgs, .. } = &command {
+        set_formation_leaves(world, *kingdom, orgs);
+        return Some(command);
+    }
     let Some(mut request) = Request::of(&command) else { return Some(command) };
     if request.aux.is_none() {
         request.aux = world.orders.next_aux;
@@ -1228,6 +1232,27 @@ pub fn selection(world: &mut World, command: Command) -> Option<Command> {
     }
     world.orders.selection_center = spread;
     None
+}
+
+/// The set_formation command's kind, the definition's +0xC.
+const SET_FORMATION: u32 = 0x21;
+
+/// 0x4ED360 for a set_formation (kind 0x21). With group settings at the
+/// selection's +0x20 (a selection of more than one thing) the kind 0x21 test
+/// keeps it from the group (0x4DFE20) and from 0x4DFF30. A selection of one
+/// thing has no settings there, the test is not made, and a thing that takes
+/// the command (vt+0x150) leaves its group (0x4DFF30) before 0x4D9B60.
+fn set_formation_leaves(world: &mut World, kingdom: KingdomId, orgs: &[u32]) {
+    let units: Vec<Unit> = orgs.iter().map(|&o| Unit::Org(o)).collect();
+    let selected = units.iter().filter(|&&u| alive(world, u)).count();
+    if selected >= 2 || world.orders.selection_center.is_some() || world.orders.groups.live.is_empty() {
+        return;
+    }
+    for u in units {
+        if accepts(world, kingdom, u, SET_FORMATION) {
+            leave(world, u);
+        }
+    }
 }
 
 /// 0x4ED280: the centre of the things of a selection that live; None for none.

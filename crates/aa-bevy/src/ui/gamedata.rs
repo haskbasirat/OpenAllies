@@ -436,6 +436,15 @@ fn depot_root() -> Option<DataRoot> {
     work_depot().filter(|d| d.is_dir()).map(DataRoot::new)
 }
 
+/// A scenario map the work depot holds, `Maps/<id>.RMP` (a map received from
+/// a LAN host, 0x7619A0, or one placed in the profile's data), read afresh.
+/// The resource lookup 0x59F570 finds it before the game's own file.
+pub fn depot_map(map_id: &str) -> Option<Vec<u8>> {
+    let depot = depot_root()?;
+    let path = format!("Maps/{map_id}.RMP");
+    depot.exists(&path).then(|| depot.read(&path).ok()).flatten()
+}
+
 /// The bytes of a data-relative resource, the work depot first.
 pub fn read_resource(data: &DataRoot, path: &str) -> Option<Vec<u8>> {
     match depot_root().filter(|d| d.exists(path)) {

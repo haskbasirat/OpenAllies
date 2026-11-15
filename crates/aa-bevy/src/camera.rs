@@ -1,6 +1,6 @@
 //! The original gameplay camera (AA.exe, ported in aa-runtime
 //! native_camera*.rs; behaviour-faithful f32 here):
-//! * fixed yaw -45 deg (CameraYaw, forced while UVar CameraRotate is false,
+//! * yaw -45 deg (CameraYaw, forced while UVar CameraRotate is false,
 //!   0x6FEA20) and pitch 40 deg (CameraPitch, pinned), FOV 15 deg on a
 //!   frustum whose aspect stays 4:3 (Camera+0x230 = 0.75, 0x6FDF80), near
 //!   1, far 512;
@@ -16,6 +16,18 @@
 //! * mouse wheel: one notch = 0.1 zoom (0x5EFCCC / 0x43BC80); Page Up/Down
 //!   zoom by CameraScaleZoom (the last requested zoom) * CameraScrollSpeed
 //!   per second (0x5C29B0); Home / End = closest / farthest zoom.
+//! * the rotation of hotkeys_core.txt: numpad-left / numpad-right turn the
+//!   yaw by CameraScaleYaw * CameraScrollSpeed degrees per second (yawleft
+//!   0x5C2930 -> 0x5C2090 -> 0x700440), numpad-up / numpad-down the pitch by
+//!   CameraScalePitch * CameraScrollSpeed (0x5C2970 -> 0x5C20F0 -> 0x7004A0),
+//!   both through the limits 0x6FEA20 of 0x6FF220, which keep CameraYaw while
+//!   UVar CameraRotate is off and CameraPitch outside a cutscene; the middle
+//!   button turns the yaw by CameraRotateSpeed degrees per pixel of
+//!   horizontal cursor travel about the target, only with CameraRotate on
+//!   (BeginCameraRotate 0x5C21C0 -> 0x5CCEB0, moves 0x5CCF00 -> 0x6FEBA0 +
+//!   0x6FF200, EndCameraRotate 0x5C1370 -> 0x5CC870); numpad-5 DefaultAngles
+//!   (VWorld command 0x43BB10, registered by 0x442C00) sets CameraYaw,
+//!   CameraPitch and the default zoom (0x6FFE60 -> 0x700A90).
 //! * the screen edge starts scrolling only while the world view is the
 //!   widget under the cursor (0x5CD420 / 0x5EFA80); keys and a running
 //!   scroll then also take the edge, and nothing pans while the cursor is
@@ -109,6 +121,12 @@ pub struct NativeCamera {
     /// their first axis (0x6FE6B0 only ever pushes that one).
     shake: f32,
     shake_velocity: f32,
+    /// KKC_UI+48 while it is the UI's active camera state (+C0).
+    rotate: Option<RotateDrag>,
+    /// Arrow keys held when the rotation took the active state from the
+    /// scroller (0x5E0570 -> 0x5CC7C0 clears its key bits; a held key does not
+    /// repeat into BeginScroll): they scroll again only once pressed anew.
+    dropped_keys: u32,
 }
 
 /// Camera+2C4..+338 of 0x701110.
@@ -164,21 +182,70 @@ fn move_fraction(now: f32, start: f32, duration: f32, ease: bool) -> f32 {
 /// The original's camera limits 0x6FEA20: (min zoom, max zoom, min pitch, max
 /// pitch, forced yaw). In cutscene mode (0x6FE9C0: World+275) the AVars
 /// CameraZoomMin / CameraZoomMax and CameraPitchMin to 1.5525 rad with a free
-/// yaw; otherwise the gameplay zoom range, CameraPitch and CameraYaw.
-fn limits(cutscene: bool, zoom_min: f32, zoom_max: f32) -> (f32, f32, f32, f32, Option<f32>) {
+/// yaw; otherwise the gameplay zoom range, CameraPitch, and CameraYaw unless
+/// `free_yaw` (UVar CameraRotate, UVar table +0xB4) is set.
+fn limits(cutscene: bool, free_yaw: bool, zoom_min: f32, zoom_max: f32) -> (f32, f32, f32, f32, Option<f32>) {
     if cutscene {
         (zoom_min, zoom_max, PITCH_MIN_DEG.to_radians(), 1.5525, None)
     } else {
         let p = PITCH_DEG.to_radians();
-        (ZOOM_MIN, ZOOM_MAX, p, p, Some(YAW_DEG.to_radians()))
+        (ZOOM_MIN, ZOOM_MAX, p, p, (!free_yaw).then(|| YAW_DEG.to_radians()))
+    }
+}
+
+/// The binary32 constants the rotation code multiplies by: 0x9FC064
+/// (degrees to radians), 0x9FDA94 (radians to degrees), 0x9F4580 (0.001).
+const DEG2RAD: f32 = f32::from_bits(0x3c8e_fa35);
+const RAD2DEG: f32 = f32::from_bits(0x4265_2ee1);
+const MILLI: f32 = f32::from_bits(0x3a83_126f);
+/// AVar CameraPitch's registered range (+14 / +18: 10 to 80 degrees), which
+/// 0x5C20F0 clamps a pitch impulse to before CameraPitchMin.
+const PITCH_RANGE_DEG: (f32, f32) = (10.0, 80.0);
+
+/// 0x5C2090 (yawleft `direction` 1, yawright -1): the yaw after one impulse
+/// tick of `ms` milliseconds, in the original's order of operations.
+fn yaw_5c2090(yaw: f32, direction: f32, ms: u32, scale_yaw: f32, speed: f32) -> f32 {
+    let amount = scale_yaw * speed * ms as f32 * MILLI;
+    amount * (direction * DEG2RAD) + yaw
+}
+
+/// 0x5C20F0 (PitchUp 1, PitchDown -1): the pitch in degrees clamped to
+/// CameraPitch's range, then raised to CameraPitchMin, back in radians.
+fn pitch_5c20f0(pitch: f32, direction: f32, ms: u32, scale_pitch: f32, speed: f32, range: (f32, f32), minimum: f32) -> f32 {
+    let amount = scale_pitch * speed * ms as f32 * MILLI;
+    let mut degrees = (amount * (direction * DEG2RAD) + pitch) * RAD2DEG;
+    if degrees < range.0 {
+        degrees = range.0;
+    } else if degrees > range.1 {
+        degrees = range.1;
+    }
+    if degrees < minimum {
+        degrees = minimum;
+    }
+    degrees * DEG2RAD
+}
+
+/// KKC_UI+48, the rotate state of BeginCameraRotate (0x5CCEB0): +4 the rate
+/// in radians per pixel, +8 the last cursor x (none until the first move,
+/// +10).
+#[derive(Clone, Debug)]
+struct RotateDrag {
+    rate: f32,
+    last: Option<i32>,
+}
+
+impl RotateDrag {
+    /// 0x5CCF00: the yaw to turn to for the cursor at `x`, or None when the
+    /// horizontal travel times the rate is zero.
+    fn mouse_move(&mut self, x: i32, yaw: f32) -> Option<f32> {
+        let last = *self.last.get_or_insert(x);
+        self.last = Some(x);
+        let value = x.wrapping_sub(last) as f32 * self.rate;
+        (value != 0.0).then(|| yaw - value)
     }
 }
 
 impl NativeCamera {
-    pub fn view_dir() -> Vec3 {
-        let (y, p) = (YAW_DEG.to_radians(), PITCH_DEG.to_radians());
-        Vec3::new(y.sin() * p.cos(), y.cos() * p.cos(), -p.sin())
-    }
     /// The view direction at the camera's yaw and pitch now.
     pub fn view_dir_now(&self) -> Vec3 {
         let (y, p) = (self.yaw, self.pitch);
@@ -304,7 +371,52 @@ impl NativeCamera {
             stored_zoom: ZOOM_DEFAULT,
             shake: 0.0,
             shake_velocity: 0.0,
+            rotate: None,
+            dropped_keys: 0,
         }
+    }
+
+    /// 0x6FF220 for a new yaw and pitch: both, and the zoom, through the limits
+    /// of 0x6FEA20 (the target and its height are kept by the caller).
+    fn pose_6ff220(&mut self, yaw: f32, pitch: f32, limit: (f32, f32, f32, f32, Option<f32>)) {
+        let (zoom_min, zoom_max, pitch_min, pitch_max, forced_yaw) = limit;
+        self.yaw = forced_yaw.unwrap_or(yaw);
+        self.pitch = if pitch_min <= pitch {
+            if pitch_max < pitch { pitch_max } else { pitch }
+        } else {
+            pitch_min
+        };
+        if self.zoom < zoom_min {
+            self.zoom = zoom_min;
+        } else if zoom_max < self.zoom {
+            self.zoom = zoom_max;
+        }
+    }
+
+    /// 0x700440: 0x6FF220 with a new yaw, unless it is the camera's already.
+    fn yaw_700440(&mut self, yaw: f32, limit: (f32, f32, f32, f32, Option<f32>)) {
+        if self.yaw != yaw {
+            let pitch = self.pitch;
+            self.pose_6ff220(yaw, pitch, limit);
+        }
+    }
+
+    /// 0x7004A0: 0x6FF220 with a new pitch, unless it is the camera's already.
+    fn pitch_7004a0(&mut self, pitch: f32, limit: (f32, f32, f32, f32, Option<f32>)) {
+        if self.pitch != pitch {
+            let yaw = self.yaw;
+            self.pose_6ff220(yaw, pitch, limit);
+        }
+    }
+
+    /// DefaultAngles 0x43BB10 -> 0x700A90 with 0x6FFE60's zoom (AVar
+    /// CameraZoomGameplayDefault, CameraZoomDefault in cutscene mode: 1 both):
+    /// CameraYaw through 0x700440, CameraPitch through 0x7004A0, the zoom
+    /// through 0x7005F0.
+    fn default_angles_43bb10(&mut self, limit: (f32, f32, f32, f32, Option<f32>)) {
+        self.yaw_700440(YAW_DEG * DEG2RAD, limit);
+        self.pitch_7004a0(PITCH_DEG * DEG2RAD, limit);
+        self.set_zoom_7005f0(ZOOM_DEFAULT);
     }
 
     /// 0x701110 (the follow ends; a move never starts while the camera is
@@ -399,6 +511,7 @@ pub fn update(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     logical: Res<ButtonInput<bevy::input::keyboard::Key>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut wheel: MessageReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
     ground: Option<Res<Ground>>,
@@ -416,6 +529,12 @@ pub fn update(
     let scale_pan = uv("CameraScalePan", 10.0);
     // UVar 34 CameraScaleZoom (UVars.tgi 0.5, or the profile's last zoom)
     let scale_zoom_uvar = front.as_ref().map(|f| f.ui.uvars.get_f32("CameraScaleZoom")).filter(|v| v.is_finite());
+    // the rotation's UVars (UVar table +0xB4, +0x30, +0x2C, +0x38)
+    let uv_any = |name: &str, default: f32| front.as_ref().map(|f| f.ui.uvars.get_f32(name)).filter(|v| v.is_finite()).unwrap_or(default);
+    let free_yaw = front.as_ref().is_some_and(|f| f.ui.uvars.get_bool("CameraRotate"));
+    let scale_yaw = uv_any("CameraScaleYaw", 10.0);
+    let scale_pitch = uv_any("CameraScalePitch", 10.0);
+    let rotate_speed = uv_any("CameraRotateSpeed", 0.5);
     // the UI takes the keyboard while an edit box has focus or a dialog is up
     let ui_busy = front.as_ref().is_some_and(|f| f.ui.message_box.is_some() || f.hud.as_ref().is_some_and(|h| h.menu_open()));
     let dt_us = (time.delta_secs() * 1.0e6).clamp(10_000.0, 100_000.0);
@@ -467,7 +586,7 @@ pub fn update(
         let cutscene = battle.as_ref().is_some_and(|b| aa_play::triggers::cutscene(&b.world));
         let view_now = battle.as_ref().map_or(0.0, |b| b.world.time + crate::session::tick_fraction(b) * aa_play::DT);
         let real_now = time.elapsed_secs();
-        let limit = limits(cutscene, ZOOM_SCRIPT_MIN, ZOOM_SCRIPT_MAX);
+        let limit = limits(cutscene, free_yaw, ZOOM_SCRIPT_MIN, ZOOM_SCRIPT_MAX);
         for request in std::mem::take(&mut requests.script) {
             match &request {
                 ScriptRequest::Move { at, .. } => {
@@ -518,25 +637,65 @@ pub fn update(
         // 5C92F0 / 5CD320 run the scroller and the impulses only while the
         // application is active (App+34 bit 1, window activation)
         let active = window.is_none_or(|w| w.focused);
+        use bevy::input::keyboard::Key;
+        // the arrows' scroll bits (BeginScroll 5CD560 / EndScroll 5CCD30)
+        const ARROWS: [(KeyCode, u32); 4] = [(KeyCode::ArrowLeft, 4), (KeyCode::ArrowRight, 8), (KeyCode::ArrowUp, 1), (KeyCode::ArrowDown, 2)];
+        let held = ARROWS.iter().filter(|(k, _)| keys.pressed(*k)).fold(0, |a, (_, bit)| a | bit);
+        let pressed_anew = ARROWS.iter().any(|(k, _)| keys.just_pressed(*k));
+        cam.dropped_keys &= held;
+        // +button3 / -button3 (vworld): BeginCameraRotate 5C21C0 only with UVar
+        // CameraRotate on or the cutscene camera (6FE9C0); 5CCEB0 needs a
+        // non-zero rate and takes the UI's active state from the scroller
+        // (5E0570), EndCameraRotate 5CC870 gives it back
+        if active && !ui_busy && over_world && mouse.just_pressed(MouseButton::Middle) && (free_yaw || cutscene) {
+            let rate = rotate_speed * DEG2RAD;
+            if rate != 0.0 {
+                cam.rotate = Some(RotateDrag { rate, last: None });
+                cam.scrolling = false;
+                cam.dropped_keys = held;
+            }
+        }
+        if mouse.just_released(MouseButton::Middle) {
+            cam.rotate = None;
+        }
+        // an arrow pressed anew starts the scroller (5CD560), ending the rotation
+        if active && !ui_busy && pressed_anew {
+            cam.rotate = None;
+        }
+        // 5C1AF0 -> 5CCF00 on each cursor move while the rotation is active:
+        // 6FEBA0 turns the camera, 6FF200 puts the target back (a locked
+        // camera, +214, does not turn)
+        if active {
+            let yaw = cam.yaw;
+            let turned = match (cam.rotate.as_mut(), cursor) {
+                (Some(r), Some((c, _))) => r.mouse_move(c.x.floor() as i32, yaw),
+                _ => None,
+            };
+            if let Some(yaw) = turned.filter(|_| !requests.blocked) {
+                cam.yaw = yaw;
+            }
+        }
         if !requests.blocked && !ui_busy && active {
             // scroll bits: arrows (+left/+right/+up/+down) ...
+            let bits = held & !cam.dropped_keys;
             let mut s = Vec2::ZERO;
-            if keys.pressed(KeyCode::ArrowLeft) {
+            if bits & 4 != 0 {
                 s.x -= 1.0;
             }
-            if keys.pressed(KeyCode::ArrowRight) {
+            if bits & 8 != 0 {
                 s.x += 1.0;
             }
-            if keys.pressed(KeyCode::ArrowUp) {
+            if bits & 1 != 0 {
                 s.y += 1.0;
             }
-            if keys.pressed(KeyCode::ArrowDown) {
+            if bits & 2 != 0 {
                 s.y -= 1.0;
             }
             // ... and the outermost pixels (5CCC90); an edge only starts a
-            // scroll with the world view under the cursor (5CD420/5EFA80),
-            // an active scroller keeps taking it (5CD410)
-            let edge_counts = over_world || cam.scrolling || s != Vec2::ZERO;
+            // scroll with the world view under the cursor and no rotation
+            // active (5CD420/5EFA80), an active scroller keeps taking it
+            // (5CD410)
+            let edge_counts = (over_world && cam.rotate.is_none()) || cam.scrolling || s != Vec2::ZERO;
             if let Some((c, size)) = cursor.filter(|_| edge_counts) {
                 if c.x <= 0.0 {
                     s.x = -1.0;
@@ -563,7 +722,8 @@ pub fn update(
                     let factor = v / speed;
                     let k = scale_pan * speed * ms / 1000.0;
                     let (sx, sy) = (factor * s.x * k, factor * s.y * k);
-                    let d = NativeCamera::view_dir();
+                    // 700500: along the camera's direction now (+114 / +118)
+                    let d = cam.view_dir_now();
                     let next = Vec2::new(cam.target.x + sx * d.y + sy * d.x, cam.target.y + sy * d.y - sx * d.x);
                     cam.look_at(next, pad);
                 }
@@ -592,9 +752,30 @@ pub fn update(
                 cam.set_zoom_7005f0(value);
                 stored = Some(cam.scale_zoom);
             }
+            // +yawleft / +yawright / +pitchup / +pitchdown on numpad-left,
+            // -right, -up and -down, and DefaultAngles on numpad-5: the
+            // numpad's own key codes, sent only with NumLock on (the logical
+            // key is then the digit); each impulse tick runs 5C2090 / 5C20F0
+            let numpad = |code: KeyCode, digit: &'static str| keys.pressed(code) && logical.pressed(Key::Character(digit.into()));
+            let ticks = ms as u32;
+            for (code, digit, direction) in [(KeyCode::Numpad4, "4", 1.0f32), (KeyCode::Numpad6, "6", -1.0)] {
+                if numpad(code, digit) {
+                    let yaw = yaw_5c2090(cam.yaw, direction, ticks, scale_yaw, speed);
+                    cam.yaw_700440(yaw, limit);
+                }
+            }
+            for (code, digit, direction) in [(KeyCode::Numpad8, "8", 1.0f32), (KeyCode::Numpad2, "2", -1.0)] {
+                if numpad(code, digit) {
+                    let pitch = pitch_5c20f0(cam.pitch, direction, ticks, scale_pitch, speed, PITCH_RANGE_DEG, PITCH_MIN_DEG);
+                    cam.pitch_7004a0(pitch, limit);
+                }
+            }
+            if keys.just_pressed(KeyCode::Numpad5) && logical.pressed(Key::Character("5".into())) {
+                cam.default_angles_43bb10(limit);
+                stored = Some(cam.scale_zoom);
+            }
             // ZoomMin / ZoomMax (43BC20 / 43BC50): home / end and the
             // NumLock-off numpad-home / numpad-end (the logical keys)
-            use bevy::input::keyboard::Key;
             if keys.just_pressed(KeyCode::Home) || logical.just_pressed(Key::Home) {
                 cam.set_zoom_7005f0(ZOOM_MIN);
                 stored = Some(cam.scale_zoom);
@@ -666,7 +847,7 @@ mod tests {
         cam.move_to(&request, 0.0, 0.0, 3.0);
         let flat = |_: Vec2| 3.0;
         // in cutscene mode the pose is free
-        let limit = limits(true, 0.1, 1.5);
+        let limit = limits(true, false, 0.1, 1.5);
         cam.step_move(1.0, 0.0, limit, false, &flat);
         assert_eq!((cam.target.x, cam.target.y), (20.0, 30.0));
         assert!(cam.moving.is_some());
@@ -677,9 +858,121 @@ mod tests {
         // out of it the yaw, the pitch and the zoom range are the gameplay's
         let request = ScriptRequest::Move { until: 1.0, realtime: false, at: Vec2::ZERO, zoom: 5.0, pitch: 0.5, yaw: 1.0, ease: false };
         cam.move_to(&request, 0.0, 0.0, 0.0);
-        cam.step_move(1.0, 0.0, limits(false, 0.1, 1.5), true, &flat);
+        cam.step_move(1.0, 0.0, limits(false, false, 0.1, 1.5), true, &flat);
         assert!((cam.yaw - YAW_DEG.to_radians()).abs() < 1e-5 && (cam.pitch - PITCH_DEG.to_radians()).abs() < 1e-5);
         assert_eq!(cam.zoom, ZOOM_MAX);
+    }
+
+    /// Rows the original's own camera code produced (research/phase8-camera-
+    /// input, binary32 words, single precision): the camera's yaw +2BC -45 deg
+    /// and pitch +2B8 40 deg, UVars CameraScrollSpeed 2, CameraScaleYaw and
+    /// CameraScalePitch 10, the impulse's microseconds, and the yaw or pitch
+    /// it handed to 0x6FF220.
+    #[test]
+    fn rotation_impulses_give_the_originals_words() {
+        let w = f32::from_bits;
+        let (yaw, pitch, speed, scale) = (w(3209236443), w(1060288706), w(1073741824), w(1092616192));
+        for (direction, dt, expected) in [(1.0, 1176256512u32, 3209177879u32), (-1.0, 1182938453, 3209330145)] {
+            let ms = (w(dt) * MILLI) as u32;
+            assert_eq!(yaw_5c2090(yaw, direction, ms, scale, speed).to_bits(), expected);
+        }
+        // CameraPitch's range 10..80 and a CameraPitchMin of 15 in these rows
+        for (direction, dt, expected) in [(1.0, 1176256512u32, 1060347270u32), (-1.0, 1182938453, 1060195004)] {
+            let ms = (w(dt) * MILLI) as u32;
+            let got = pitch_5c20f0(pitch, direction, ms, scale, speed, (w(1092616192), w(1117782016)), w(1097859072));
+            assert_eq!(got.to_bits(), expected);
+        }
+        // the whole set of single-precision rows, where the fixture is at hand
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../research/phase8-camera-input/native-camera-input.json");
+        let Ok(text) = std::fs::read_to_string(path) else { return };
+        let fixture: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let word = |v: &serde_json::Value| v.as_u64().unwrap() as u32;
+        let mut checked = 0;
+        for row in fixture["sections"]["impulses"].as_array().unwrap() {
+            let function = row["function"].as_str().unwrap();
+            if row["precision"] != "Single24" || !["yawleft", "yawright", "PitchUp", "PitchDown"].contains(&function) {
+                continue;
+            }
+            let camera = &row["camera"];
+            let calls = row["calls"].as_array().unwrap();
+            if camera["0x214"].as_u64().is_some_and(|v| v != 0) {
+                // a locked camera never moves
+                assert!(calls.is_empty());
+                checked += 1;
+                continue;
+            }
+            let (yaw, pitch) = (w(word(&camera["0x2bc"])), w(word(&camera["0x2b8"])));
+            let ms = (w(word(&row["dt"])) * MILLI) as u32;
+            let uvar = |o: &str| w(word(&row["uvars"][o]));
+            let range = &row["pitch_avar"];
+            let (got, index, current) = match function {
+                "yawleft" => (yaw_5c2090(yaw, 1.0, ms, uvar("0x30"), uvar("0x18")), 3, yaw),
+                "yawright" => (yaw_5c2090(yaw, -1.0, ms, uvar("0x30"), uvar("0x18")), 3, yaw),
+                _ => {
+                    let direction = if function == "PitchUp" { 1.0 } else { -1.0 };
+                    let p = pitch_5c20f0(pitch, direction, ms, uvar("0x2c"), uvar("0x18"), (w(word(&range[1])), w(word(&range[2]))), w(word(&range[3])));
+                    (p, 4, pitch)
+                }
+            };
+            match calls.first() {
+                Some(call) => assert_eq!(got.to_bits(), word(&call[1][index]), "{row}"),
+                // 0x700440 / 0x7004A0 skip an unchanged value
+                None => assert_eq!(got, current, "{row}"),
+            }
+            checked += 1;
+        }
+        // 12 rows each of yawleft and yawright, 36 each of PitchUp and PitchDown
+        assert_eq!(checked, 96);
+    }
+
+    /// The middle-button rows of the same fixture: CameraRotateSpeed 0.5 and
+    /// 1.5 degrees per pixel, the cursor steps and the yaw 0x6FEBA0 was given
+    /// (from the camera's -45 deg each time).
+    #[test]
+    fn the_middle_button_turn_gives_the_originals_words() {
+        let w = f32::from_bits;
+        let yaw = w(3209236443);
+        let mut r = RotateDrag { rate: w(1056964608) * DEG2RAD, last: None };
+        assert_eq!(r.rate.to_bits(), 1007614517);
+        assert_eq!(r.mouse_move(400, yaw), None);
+        assert_eq!(r.mouse_move(410, yaw).map(f32::to_bits), Some(3210700531));
+        assert_eq!(r.mouse_move(405, yaw).map(f32::to_bits), Some(3208504399));
+        assert_eq!(r.mouse_move(405, yaw), None);
+        assert_eq!(r.mouse_move(-20, yaw).map(f32::to_bits), Some(1077614955));
+        let mut r = RotateDrag { rate: w(1071644672) * DEG2RAD, last: None };
+        assert_eq!(r.mouse_move(100, yaw), None);
+        assert_eq!(r.mouse_move(99, yaw).map(f32::to_bits), Some(3208724012));
+        assert_eq!(r.mouse_move(300, yaw).map(f32::to_bits), Some(3235747398));
+    }
+
+    #[test]
+    fn camera_rotate_frees_only_the_yaw_and_default_angles_reset_the_view() {
+        let (yaw0, pitch0) = (YAW_DEG.to_radians(), PITCH_DEG.to_radians());
+        assert_eq!((yaw0, pitch0), (YAW_DEG * DEG2RAD, PITCH_DEG * DEG2RAD));
+        let mut cam = NativeCamera::new(Vec3::ZERO, Vec2::splat(1000.0));
+        // CameraRotate off: 0x6FEA20 puts CameraYaw back
+        let yaw = yaw_5c2090(cam.yaw, 1.0, 100, 10.0, 2.0);
+        cam.yaw_700440(yaw, limits(false, false, 0.1, 1.5));
+        assert_eq!(cam.yaw, yaw0);
+        // on: the yaw turns, the pitch stays CameraPitch outside a cutscene
+        let free = limits(false, true, 0.1, 1.5);
+        cam.yaw_700440(yaw, free);
+        assert_eq!(cam.yaw, yaw);
+        let pitch = pitch_5c20f0(cam.pitch, 1.0, 100, 10.0, 2.0, PITCH_RANGE_DEG, PITCH_MIN_DEG);
+        assert!(pitch > cam.pitch);
+        cam.pitch_7004a0(pitch, free);
+        assert_eq!((cam.yaw, cam.pitch), (yaw, pitch0));
+        // a cutscene's camera takes any pitch from CameraPitchMin
+        cam.pitch_7004a0(pitch, limits(true, true, 0.1, 1.5));
+        assert_eq!(cam.pitch, pitch);
+        // the option off again: the turned yaw stays until the next 0x6FF220
+        cam.pitch_7004a0(pitch0, limits(false, false, 0.1, 1.5));
+        assert_eq!((cam.yaw, cam.pitch), (yaw0, pitch0));
+        // DefaultAngles: CameraYaw, CameraPitch and the default zoom, stored
+        cam.yaw_700440(yaw, free);
+        cam.set_zoom_7005f0(2.0);
+        cam.default_angles_43bb10(free);
+        assert_eq!((cam.yaw, cam.pitch, cam.zoom, cam.scale_zoom), (yaw0, pitch0, ZOOM_DEFAULT, ZOOM_DEFAULT));
     }
 
     #[test]
