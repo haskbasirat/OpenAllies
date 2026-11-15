@@ -905,7 +905,6 @@ impl Front {
                     self.remember_dialog();
                 }
             }
-            other if crate::editor::command(&mut self.ui, other) => {}
             other if NOT_BUILT.contains(&other) => info!("UI command {other}: its screen is not built yet"),
             other => info!("UI command not handled yet: {other}"),
         }

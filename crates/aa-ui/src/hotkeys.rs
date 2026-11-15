@@ -797,6 +797,9 @@ mod tests {
         assert_eq!(fire(0x31, 1, &[]), cmd("SelectGroup group_1"));
         // hotkeys_custom.txt on the Game interface
         assert_eq!(fire(0x74, 1, &[]), cmd("CycleSelection 2"));
+        assert_eq!(fire(0x75, 1, &[]), cmd("CycleSelection 1"));
+        assert_eq!(fire(0x09, 1, &[]), cmd("CycleSelection 0"));
+        assert_eq!(fire(0x09, 1 | key_flag::SHIFT, &[]), cmd("CycleSelection 100"));
         assert_eq!(fire(0x48, 1, &[]), cmd("UseFactionAbility 1"));
         // ctrl-h is Root's (ToggleHotkeyDisplay, a command AA.exe does not have)
         assert_eq!(fire(0x48, 1 | key_flag::CTRL, &[]), None);

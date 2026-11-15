@@ -5,7 +5,6 @@ mod battle_view;
 mod camera;
 mod campaign;
 mod debug_battle;
-mod editor;
 mod effects;
 mod film_record;
 mod model_fixes;

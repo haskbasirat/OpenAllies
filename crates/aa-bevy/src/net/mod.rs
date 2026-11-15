@@ -32,7 +32,7 @@ use aa_play::player_orders::native::{Outbox, Replay, Tables};
 use aa_ui::staging::{Occupant, StagingState};
 use aa_ui::ui::Ui;
 use aa_ui::widget::{Widget, WidgetClass as C};
-use bevy::log::{info, warn};
+use bevy::log::{debug, info, warn};
 use data::{text, units, Data};
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
@@ -937,7 +937,7 @@ impl Lan {
         // ends with an UpdateMapStatus, which marks the staging dirty)
         let changed = self.source.as_ref() != source.as_ref() || custom.net_format() != format;
         if changed {
-            info!("lan: the session stages mode {} file {:?}", s.launch.mode, text(&s.launch.file));
+            debug!("lan: the session stages mode {} file {:?}", s.launch.mode, text(&s.launch.file));
         }
         let missing = changed && matches!(&source, Some(NetSource::Map { .. }) if crate::ui::gamedata::read_map(&ui.store.root, &text(&s.launch.file)).is_none());
         if changed && !missing {
@@ -948,8 +948,6 @@ impl Lan {
         }
         // the rows
         let local = node.local_player();
-        let statuses: Vec<(u32, (u32, f32))> = s.players.iter().filter_map(|p| Some((p.id, node.map_status(p.id)?))).collect();
-        info!("lan: map status (player, (+0x3C, +0x40)) {statuses:?}, local {local:?}");
         let we_host = node.role() == lan::Role::Host;
         let mut rows = Vec::new();
         for k in &s.launch.active_map().header.kingdoms {
@@ -1038,7 +1036,7 @@ impl Lan {
                     actions.push(self.end_session(ui, "#ui_lobby_connect_failed"));
                 }
                 LanEvent::Message { key, args, number, .. } => {
-                    info!("lan: message {key}");
+                    debug!("lan: message {key}");
                     let a: Vec<String> = args.iter().map(|x| text(x)).collect();
                     let mut b: Vec<&str> = a.iter().map(String::as_str).collect();
                     let n = number.map(|n| n.to_string());
