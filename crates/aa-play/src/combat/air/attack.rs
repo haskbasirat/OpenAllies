@@ -18,7 +18,6 @@ use aa_mind::uai_thinks::aai_attack;
 const HALF: f32 = 0.5;
 const MINUS_HALF: f32 = -0.5;
 const BACKOFF: f32 = 1.75;
-const AHEAD: f32 = 0.9;
 
 impl Host<'_> {
     fn attack_word(&self, arena: &Arena, a: ActorId, k: u32) -> u32 {
@@ -285,37 +284,7 @@ impl Host<'_> {
     /// +0x94 (a target), and +0xA4 the ability. False when no ability can
     /// ever be used (code 3).
     fn release_check(&mut self, arena: &mut Arena, a: ActorId) -> Result<(bool, u32)> {
-        let me = self.world.actors[a as usize].pos;
-        let heading = Vec2::new(self.world.actors[a as usize].facing.cos(), self.world.actors[a as usize].facing.sin());
-        let distance = if self.byte(a, 0x1d0) == 0 {
-            let d = Vec2::new(f(self.attack_word(arena, a, 0x24)) - me.x, f(self.attack_word(arena, a, 0x28)) - me.y);
-            d.x * heading.x + d.y * heading.y
-        } else {
-            let t = self.attack_target(arena, a).ok_or_else(|| fail("0x51B290 without a target"))?;
-            let tp = self.world.actors[t as usize].pos;
-            (tp - me).x * heading.x + (tp - me).y * heading.y
-        };
-        let target = self.attack_target(arena, a);
-        let point = Vec3::new(f(self.attack_word(arena, a, 0x24)), f(self.attack_word(arena, a, 0x28)), f(self.attack_word(arena, a, 0x2c)));
-        let (status, ability) = self.valid_ability(a, target, point, false);
-        match status {
-            0 => {
-                if AHEAD <= distance {
-                    let actor_target = self.byte(a, off::ATTACK + 0x20) != 0;
-                    let g = self.attack_word(arena, a, 0x18);
-                    let fl = self.flight_mut(a)?;
-                    if actor_target {
-                        fl.attack_target = g;
-                    } else {
-                        fl.attack_point = [point.x, point.y, point.z];
-                    }
-                    fl.pending_ability = ability.map(|i| aa_movement::aircraft::AbilityKey(i as u32));
-                }
-                Ok((true, b(distance)))
-            }
-            3 => Ok((false, b(distance))),
-            _ => Ok((true, b(distance))),
-        }
+        aa_mind::aai_attack_release::release(&mut Release { host: self, arena, a }, PC)
     }
 
     /// 0x4C8F20(context, 1) for ability `i` of `a` at `target` / `point`,
@@ -508,3 +477,68 @@ impl aai_attack::AirAttackThinkWorld for Host<'_> {
 /// (kept for the dog-fight branches).
 #[allow(dead_code)]
 const CRUISE_SCALES: [f32; 3] = [HALF, MINUS_HALF, BACKOFF];
+
+/// The reads and calls of 0x51B290 for one aircraft.
+struct Release<'h, 'w> {
+    host: &'h mut Host<'w>,
+    arena: &'h mut Arena,
+    a: ActorId,
+}
+
+impl aa_mind::aai_attack_release::AttackReleaseWorld for Release<'_, '_> {
+    type Object = ActorId;
+    type Ability = usize;
+    fn dogfighter(&mut self) -> Result<u8> {
+        Ok(self.host.byte(self.a, 0x1d0))
+    }
+    fn target_slot(&mut self) -> Result<Option<ActorId>> {
+        Ok(self.host.attack_target(self.arena, self.a))
+    }
+    fn object_position(&mut self, object: Option<ActorId>) -> Result<[u32; 3]> {
+        object.map(|t| self.host.position3(t)).ok_or_else(|| fail("0x51B290 without a target"))
+    }
+    fn owner_position(&mut self) -> Result<[u32; 3]> {
+        Ok(self.host.position3(self.a))
+    }
+    /// The owner's +0x2C..+0x34 heading words as its flight Mover keeps them.
+    fn owner_heading(&mut self) -> Result<[u32; 3]> {
+        let mover = self.host.world.books.actor(self.a).and_then(|x| x.flight_mover.as_ref()).ok_or_else(|| fail("0x51B290 without a flight Mover"))?;
+        Ok(mover.facing.map(b))
+    }
+    fn aim_point(&mut self) -> Result<[u32; 3]> {
+        Ok([self.host.attack_word(self.arena, self.a, 0x24), self.host.attack_word(self.arena, self.a, 0x28), self.host.attack_word(self.arena, self.a, 0x2c)])
+    }
+    /// 0x4453A0 in place on the stored difference.
+    fn normalize3(&mut self, v: [u32; 3]) -> Result<[u32; 3]> {
+        let mut d = v.map(f);
+        aa_movement::falling::normalize(&mut d, PC).map_err(|e| fail(format!("0x4453A0: {e:?}")))?;
+        Ok(d.map(b))
+    }
+    /// 0x409230 in place on the stored difference.
+    fn normalize2(&mut self, v: [u32; 2]) -> Result<[u32; 2]> {
+        let mut d = [f(v[0]), f(v[1])];
+        aa_movement::transport_drop::normalize2(&mut d, PC).map_err(|e| fail(format!("0x409230: {e:?}")))?;
+        Ok([b(d[0]), b(d[1])])
+    }
+    fn pick_ability(&mut self, slot: Option<ActorId>, aim: [u32; 3]) -> Result<(u32, Option<usize>)> {
+        Ok(self.host.valid_ability(self.a, slot, Vec3::new(f(aim[0]), f(aim[1]), f(aim[2])), false))
+    }
+    fn attack_object_byte(&mut self) -> Result<u8> {
+        Ok(self.host.byte(self.a, off::ATTACK + 0x20))
+    }
+    fn target_gtid(&mut self) -> Result<u32> {
+        Ok(self.host.attack_word(self.arena, self.a, 0x18))
+    }
+    fn arm_object(&mut self, gtid: u32) -> Result<()> {
+        self.host.flight_mut(self.a)?.attack_target = gtid;
+        Ok(())
+    }
+    fn arm_point(&mut self, point: [u32; 3]) -> Result<()> {
+        self.host.flight_mut(self.a)?.attack_point = [f(point[0]), f(point[1]), f(point[2])];
+        Ok(())
+    }
+    fn arm_ability(&mut self, ability: Option<usize>) -> Result<()> {
+        self.host.flight_mut(self.a)?.pending_ability = ability.map(|i| aa_movement::aircraft::AbilityKey(i as u32));
+        Ok(())
+    }
+}

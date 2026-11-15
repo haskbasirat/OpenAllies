@@ -1121,22 +1121,75 @@ impl aai_landing::LandingThinkWorld for Host<'_> {
 
 // ---- the public entry points -------------------------------------------
 
+/// Mind+0x1D0: the dog-fighter byte 0x517C60 writes and the attack states
+/// (0x51A920, 0x51B290) read.
+const DOGFIGHTER: u32 = 0x1d0;
+
+/// The facts and calls of 0x517C60 for one aircraft.
+struct InitExisting<'h, 'w> {
+    host: &'h mut Host<'w>,
+    arena: &'h mut Arena,
+    a: ActorId,
+}
+
+impl aa_mind::aai_mind_activate::World for InitExisting<'_, '_> {
+    type Error = Error;
+    fn stack_empty(&mut self) -> Result<bool> {
+        Ok(self.arena.mind(mind_id(self.a))?.stack.is_empty())
+    }
+    fn clear_188_owner_byte_7c(&mut self) -> Result<()> {
+        self.host.set_byte(self.a, MOVE_FORMATION, 0);
+        Ok(())
+    }
+    fn join_formation(&mut self, _mode: u32) -> Result<()> {
+        self.host.leave_formation(self.a)
+    }
+    fn activate_188(&mut self, mode: u32) -> Result<()> {
+        self.host.activate(self.arena, self.a, off::QUEUED, mode).map(|_| ())
+    }
+    /// 0x529EC0: Mind virtual +0x1A0 (0x517D00) with an empty stack, else
+    /// virtual +0xB8 (0x4B2830, an empty function); AL is 1 either way.
+    fn base_activate(&mut self) -> Result<u8> {
+        let mind = mind_id(self.a);
+        if self.arena.mind(mind)?.stack.is_empty() {
+            aa_mind::World::reset_default(self.host, mind, self.arena)?;
+        }
+        Ok(1)
+    }
+    /// Performer +0x18: the loaded Performer's abilities in order (the
+    /// DefenderComponent abilities appended after them are not in it).
+    fn ability_count(&mut self) -> Result<i32> {
+        Ok(self.host.def(self.a).weapons.iter().filter(|w| !w.defender).count() as i32)
+    }
+    /// The ability definition's +0x3C projectile definition and its +0x2B4
+    /// ProjectileComponent type (0 ANTIGRAV, 1 LOB, 2 BOMB).
+    fn ability_3c_word_2b4(&mut self, index: i32) -> Result<Option<u32>> {
+        let w = self.host.def(self.a).weapons.iter().filter(|w| !w.defender).nth(index as usize).ok_or_else(|| fail(format!("ability {index}")))?;
+        let Some(id) = w.projectile.as_ref() else { return Ok(None) };
+        let Some(p) = self.host.world.data.find(id) else { return Ok(None) };
+        Ok(Some(match self.host.world.data.def(p).projectile_type.as_deref().map(str::to_ascii_uppercase).as_deref() {
+            Some("BOMB") => 2,
+            Some("LOB") => 1,
+            _ => 0,
+        }))
+    }
+    fn set_dogfighter(&mut self, value: u8) -> Result<()> {
+        self.host.set_byte(self.a, DOGFIGHTER, value);
+        Ok(())
+    }
+}
+
 /// The aircraft Mind's InitExisting 0x517C60 (a created aircraft): with an
 /// empty stack, the move state's +0x48 clears, the formation is left and
-/// queued is activated (mode 2); then 0x529EC0.
+/// queued is activated (mode 2); then 0x529EC0; then Mind+0x1D0 is set when
+/// any ability has no projectile, or one of type 0.
 pub fn init_existing(world: &mut World, a: ActorId) {
-    with_host(world, |arena, host| {
-        let mind = mind_id(a);
-        if arena.mind(mind)?.stack.is_empty() {
-            host.set_byte(a, MOVE_FORMATION, 0);
-            host.leave_formation(a)?;
-            host.activate(arena, a, off::QUEUED, 2)?;
-        }
-        if arena.mind(mind)?.stack.is_empty() {
-            aa_mind::World::reset_default(host, mind, arena)?;
-        }
-        Ok(())
-    });
+    with_host(world, |arena, host| aa_mind::aai_mind_activate::activate(&mut InitExisting { host, arena, a }).map(|_| ()));
+}
+
+/// Mind+0x1D0 (0x517C60): whether the aircraft attacks as a dog-fighter.
+pub fn dogfighter(world: &World, a: ActorId) -> bool {
+    world.books.minds.hosted.get(&a).and_then(|h| h.bytes.get(&DOGFIGHTER)).copied().unwrap_or(0) != 0
 }
 
 /// Mind virtual +0x184 (0x518980): takeoff (mode 2), then think now.

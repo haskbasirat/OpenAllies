@@ -320,3 +320,25 @@ fn air_orders_refused() {
     let aircraft = (first..w.actors.len()).filter(|&x| w.data.def(w.actors[x].def).aircraft.is_some()).count();
     assert_eq!(aircraft, 0, "no aircraft created");
 }
+
+/// 0x517C60 writes Mind+0x1D0 for a created aircraft: set when any ability
+/// has no projectile definition (+0x3C) or one whose ProjectileComponent
+/// type (+0x2B4) is 0 (ANTIGRAV; LOB is 1 and BOMB 2). The bombs of the
+/// bomber are BOMB projectiles, so it stays a bomber; the fighter is a
+/// dog-fighter.
+#[test]
+#[ignore]
+fn created_aircraft_dogfighter_byte() {
+    let mut w = berlin_world();
+    let ger = (0..w.kingdoms.len() as u32).find(|&k| w.kingdoms[k as usize].nation == "ger").expect("ger kingdom");
+    let mut seen = Vec::new();
+    for id in ["ger_bomber", "ger_fighter"] {
+        let def = w.data.find(id).expect(id);
+        let kinds: Vec<_> = w.data.def(def).weapons.iter().map(|x| (x.id.clone(), x.projectile.clone(), x.projectile.as_ref().and_then(|p| w.data.find(p)).map(|p| w.data.def(p).projectile_type.clone()))).collect();
+        let a = aa_play::production::spawn_single(&mut w, def, Some(ger), Vec2::new(300.0, 300.0), 0.0);
+        let byte = air::dogfighter(&w, a);
+        eprintln!("{id}: Mind+0x1D0 = {byte}; abilities {kinds:?}");
+        seen.push(byte);
+    }
+    assert_eq!(seen, [false, true]);
+}
