@@ -90,6 +90,8 @@ pub struct Rules {
     pub attacker_bonus: f32,
     pub engage_reaction_range: f32,
     pub kill_target_highest: bool,
+    /// UAICachedORActorListTimeout (`0x5781B0`, `0x57A780`).
+    pub or_list_timeout: f32,
     pub clamp_add: f32,
     pub clamp_multiply: f32,
     pub default_radius: f32,
@@ -177,6 +179,7 @@ impl Rules {
             attacker_bonus: r.get("AbilityScoreAttackerBonus", 0.5),
             engage_reaction_range: r.get("EngageReactionTimeRange", 0.3),
             kill_target_highest: r.get("KillTargetIsHighestPriority", 1.0) != 0.0,
+            or_list_timeout: r.get("UAICachedORActorListTimeout", 1.0),
             clamp_add: r.get("ModifierAttributeClampAdd", 1.0),
             clamp_multiply: r.get("ModifierAttributeClampMultiply", 0.05),
             default_radius: r.get("DefaultRadius", 0.5),
@@ -822,6 +825,9 @@ pub struct Reform {
 #[derive(Clone, Debug, Default)]
 pub struct OrgCombat {
     pub initialized: bool,
+    /// OrganizationComponent `+C4`/`+C8`/`+CC`: the cached list of actors in the
+    /// operational range (`0x57A780`), as actor ids + 1.
+    pub or_list: aa_combat::or_actor_list::CachedActorList,
     /// A saved game's organization: the living count its +60 was read at. The Load
     /// reads +60 before the kingdom's properties reach the members, and it stands
     /// until a change of modifiers (`saved_world`); the periodic refresh leaves it.
@@ -1126,6 +1132,9 @@ pub struct CombatState {
     /// Team of each kingdom id.
     teams: Vec<Option<u32>>,
     scratch: Vec<ActorId>,
+    /// What [`or_actors`] found for the member `or_for`, until its choice reads it.
+    or_found: Vec<ActorId>,
+    or_for: Option<ActorId>,
     deaths: Vec<ActorId>,
     pub projectiles: Vec<Projectile>,
     /// (core) Kingdom relations (`World::books.relations`, native values
@@ -2300,36 +2309,20 @@ pub(crate) fn member_choice(world: &mut World, st: &mut CombatState, m: ActorId,
     if st.actors.len() <= m as usize || st.orgs.len() <= i || st.rules.is_none() {
         st.prepare(world);
     }
+    // The query runs before `0x5340C0` tests the ROE back-off of each find.
+    if st.or_for.take() != Some(m) {
+        let mut ms = std::mem::take(&mut world.movement);
+        or_actors(&mut ms, world, st, m);
+        world.movement = ms;
+        st.or_for = None;
+    }
     if world.time < st.actors[m as usize].roe_retry_at {
         return None;
     }
-    let pos = st.orgs[i].position;
-    let range = world.data.def(world.orgs[i].def).operational_range;
-    // 466D3D: +304 = fstp(operational_range * operational_range).
-    let r2 = fstp(x87::mul(ld(range), ld(range)));
-    let within = |world: &World, a: ActorId| {
-        let p = world.actors[a as usize].pos;
-        let (dy, dx) = (x87::sub(ld(pos.y), ld(p.y)), x87::sub(ld(pos.x), ld(p.x)));
-        x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= ld(r2)
-    };
-    let mut candidates = std::mem::take(&mut st.scratch);
-    candidates.clear();
-    for n in &st.orgs[i].engage {
-        match n.target {
-            TargetRef::Org(o) => {
-                for &x in &world.orgs[o as usize].members {
-                    if alive(world, x) && within(world, x) && !candidates.contains(&x) {
-                        candidates.push(x);
-                    }
-                }
-            }
-            TargetRef::Actor(a) => {
-                if alive(world, a) && within(world, a) && !candidates.contains(&a) {
-                    candidates.push(a);
-                }
-            }
-        }
-    }
+    let mut candidates = std::mem::take(&mut st.or_found);
+    // Element Mind virtual +A0 (`0x5210D0` on the regiment's engage list), the
+    // first test `0x534700` makes of a find.
+    candidates.retain(|&c| c != m && engage_keeps(world, st, id, c));
     // 530E00: what its Move could not reach is out for a while.
     candidates.retain(|c| !bad.contains(c));
     let engage_object = match handed {
@@ -2337,8 +2330,139 @@ pub(crate) fn member_choice(world: &mut World, st: &mut CombatState, m: ActorId,
         _ => None,
     };
     let chosen = choose(world, st, m, &candidates, engage_object, 2);
-    st.scratch = candidates;
+    st.or_found = candidates;
     chosen
+}
+
+/// The services of `0x5781B0`, `0x57A780` and `0x558150` for one organization.
+struct OrListWorld<'a> {
+    ms: &'a mut crate::movement::MovementState,
+    world: &'a World,
+    org: OrgId,
+    timeout: f32,
+    position: Vec2,
+    range: f32,
+    /// The finds of the live scan (`0x5580F0` on the caller's iterator).
+    live: Option<Vec<ActorId>>,
+    /// The map's things are not in tile lists: no scan can run.
+    unindexed: bool,
+}
+impl OrListWorld<'_> {
+    fn scan(&mut self, position: [u32; 2], radius: u32) -> Vec<ActorId> {
+        match crate::movement::circle_actors(self.ms, self.world, position, radius) {
+            Some(found) => found,
+            None => {
+                self.unindexed = true;
+                Vec::new()
+            }
+        }
+    }
+}
+impl aa_combat::or_actor_list::OrActorListWorld for OrListWorld<'_> {
+    fn timeout(&mut self) -> aa_combat::Result<u32> {
+        Ok(self.timeout.to_bits())
+    }
+    fn moving(&mut self) -> aa_combat::Result<bool> {
+        Ok(crate::movement::org_moving_in(self.ms, self.world, self.org))
+    }
+    fn time(&mut self) -> aa_combat::Result<u32> {
+        Ok(self.world.time.to_bits())
+    }
+    fn position(&mut self) -> aa_combat::Result<[u32; 2]> {
+        Ok([self.position.x.to_bits(), self.position.y.to_bits()])
+    }
+    fn operational_range(&mut self) -> aa_combat::Result<u32> {
+        Ok(self.range.to_bits())
+    }
+    fn query(&mut self, position: [u32; 2], radius: u32) -> aa_combat::Result<Vec<u32>> {
+        Ok(self.scan(position, radius).into_iter().map(|a| a + 1).collect())
+    }
+    fn begin_live(&mut self, position: [u32; 2], radius: u32) -> aa_combat::Result<()> {
+        self.live = Some(self.scan(position, radius));
+        Ok(())
+    }
+}
+
+/// The cached branch of `0x558750`: the registry and `0x578470`.
+struct OrNextWorld<'a> {
+    world: &'a World,
+    position: Vec2,
+    /// Definition `+304`.
+    r2: f32,
+}
+impl aa_combat::or_actor_list::CachedNextWorld for OrNextWorld<'_> {
+    fn resolve(&mut self, gtid: u32) -> aa_combat::Result<Option<u32>> {
+        Ok(self.world.actors.get(gtid.wrapping_sub(1) as usize).filter(|a| !a.removed).map(|_| gtid))
+    }
+    /// `0x578470`: dy then dx (component minus actor), and the unstored x87 sum
+    /// `dx*dx + dy*dy` compared with +304 (`fcomp`; less or equal, unordered false).
+    fn within_range(&mut self, actor: u32) -> aa_combat::Result<bool> {
+        let p = self.world.actors[actor as usize - 1].pos;
+        let (dy, dx) = (x87::sub(ld(self.position.y), ld(p.y)), x87::sub(ld(self.position.x), ld(p.x)));
+        Ok(x87::add(x87::mul(dx, dx), x87::mul(dy, dy)) <= ld(self.r2))
+    }
+}
+
+/// `0x558150(organization component)` and `0x558750` until null for the element `m`
+/// of a regiment, as `0x534700` runs them: the actors in the organization's
+/// operational range. While the organization stands and UAICachedORActorListTimeout
+/// is above 0 they come from its cached list (`0x57A780`: rebuilt from the circle
+/// scan when empty or older than the timeout, kept in reverse scan order), each
+/// tested by `0x578470`; else from a live scan. Kept in the state for
+/// [`member_choice`] of the same member.
+///
+/// **Rendition:** a map whose things are not in tile lists gives the regiment's
+/// engage list expanded to its living members within `0x578470`.
+pub(crate) fn or_actors(ms: &mut crate::movement::MovementState, world: &mut World, st: &mut CombatState, m: ActorId) {
+    st.or_for = None;
+    st.or_found.clear();
+    let Some(id) = attached_org(world, &world.actors[m as usize]) else { return };
+    let i = id as usize;
+    if st.actors.len() <= m as usize || st.orgs.len() <= i || st.rules.is_none() {
+        st.prepare(world);
+    }
+    // Actor +74: without a Performer `0x534700` starts no query.
+    if world.data.def(world.actors[m as usize].def).weapons.is_empty() {
+        return;
+    }
+    let world = &*world;
+    let position = st.orgs[i].position;
+    let range = world.data.def(world.orgs[i].def).operational_range;
+    // 466D3D: +304 = fstp(operational_range * operational_range).
+    let r2 = fstp(x87::mul(ld(range), ld(range)));
+    let mut found = std::mem::take(&mut st.or_found);
+    found.clear();
+    let mut list = std::mem::take(&mut st.orgs[i].or_list);
+    let timeout = st.rules().or_list_timeout;
+    let mut host = OrListWorld { ms, world, org: id, timeout, position, range, live: None, unindexed: false };
+    let mut next = OrNextWorld { world, position, r2 };
+    match aa_combat::or_actor_list::begin(&mut list, &mut host, aa_numeric::Precision::Double53) {
+        Ok(Some(mut cursor)) => {
+            while let Ok(Some(actor)) = aa_combat::or_actor_list::next_cached(&mut cursor, &list, &mut next) {
+                found.push(actor - 1);
+            }
+        }
+        Ok(None) => found.extend(host.live.take().unwrap_or_default()),
+        Err(_) => {}
+    }
+    if host.unindexed {
+        list = Default::default();
+        found.clear();
+        let mut add = |a: ActorId| {
+            if alive(world, a) && aa_combat::or_actor_list::CachedNextWorld::within_range(&mut next, a + 1).unwrap_or(false) && !found.contains(&a) {
+                found.push(a);
+            }
+        };
+        for n in &st.orgs[i].engage {
+            match n.target {
+                TargetRef::Org(o) => world.orgs[o as usize].members.iter().for_each(|&x| add(x)),
+                TargetRef::Actor(a) => add(a),
+            }
+        }
+    }
+    st.orgs[i].or_list = list;
+    st.or_found = found;
+    st.or_for = Some(m);
 }
 
 /// `0x5340C0(target, null, &record, 0)` of an element: its ROE and the best ability,
@@ -2855,10 +2979,15 @@ fn turret_can_turn(t: &crate::data::TurretDef) -> bool {
     t.yaw_rate - EPSILON > 0.0 && t.yaw_half_range - EPSILON > 0.0
 }
 
-/// `4C76A0`: the turret offset turned by the actor's facing.
+/// `4C76A0`: the turret offset turned by the actor's facing; each word is stored once
+/// after the chain at the running precision (`aa_combat::turret_geometry`).
 fn turret_offset(t: &crate::data::TurretDef, facing: Vec2) -> Vec2 {
-    let o = Vec2::from(t.offset);
-    Vec2::new(facing.x * o.x - facing.y * o.y, facing.x * o.y + facing.y * o.x)
+    use aa_body::F32;
+    let words = |v: [f32; 2]| [F32(v[0].to_bits()), F32(v[1].to_bits())];
+    match aa_combat::turret_geometry::turned_offset(words(t.offset), words(facing.to_array()), aa_numeric::Precision::Double53) {
+        Ok([x, y]) => Vec2::new(f32::from_bits(x.0), f32::from_bits(y.0)),
+        Err(_) => Vec2::ZERO,
+    }
 }
 
 /// `4C76E0`: a turret limited to less than the full turn reaches `point`
@@ -2874,44 +3003,142 @@ fn turret_in_arc(t: &crate::data::TurretDef, pos: Vec2, facing: f32, point: Vec2
     d.dot(dir) >= t.yaw_half_range_cos
 }
 
-/// `57DEE0`: one tick of turning toward `target` (yaw_rotation_per_sec x
-/// the tick), the short way round; true when the turret reached it.
-fn turret_step(s: &mut TurretState, rate: f32, target: f32) -> bool {
-    let mut cur = s.yaw;
-    let mut target = target;
-    let step = rate * DT;
-    let d = (target - cur).abs();
-    if TAU - d < d {
-        if cur >= target {
-            target += TAU;
-        } else {
-            cur += TAU;
-        }
+/// What `57DEE0`, `57E730` and `57EF00` read of the world and the owner: its turrets
+/// (index 0 alone for one turn or aim) and, for `4C76E0`, the facing angle.
+struct TurretHost {
+    time: f32,
+    pos: Vec2,
+    facing: Vec2,
+    facing_angle: f32,
+    turrets: Vec<crate::data::TurretDef>,
+}
+
+impl TurretHost {
+    fn new(time: f32, pos: Vec2, facing: Vec2, t: &crate::data::TurretDef) -> Self {
+        Self { time, pos, facing, facing_angle: 0.0, turrets: vec![t.clone()] }
     }
-    s.prev = cur;
-    let (yaw, reached) = if cur >= target {
-        let v = cur - step;
-        if v > target { (v, false) } else { (target, true) }
-    } else {
-        let v = cur + step;
-        if v < target { (v, false) } else { (target, true) }
-    };
-    s.yaw = yaw;
+}
+
+impl aa_combat::turret::TurnWorld for TurretHost {
+    fn time(&self) -> aa_combat::Result<aa_body::F32> {
+        Ok(aa_body::F32(self.time.to_bits()))
+    }
+    fn tick_length(&self) -> aa_combat::Result<aa_body::F32> {
+        Ok(aa_body::F32(DT.to_bits()))
+    }
+    fn turret_count(&self, _: u32) -> aa_combat::Result<i32> {
+        Ok(i32::try_from(self.turrets.len()).unwrap_or(i32::MAX))
+    }
+    fn turret(&self, _: u32, index: usize) -> aa_combat::Result<aa_combat::turret::TurretDefinition> {
+        use aa_body::F32;
+        let t = self.turrets.get(index).ok_or(aa_combat::Error::Invalid("turret index outside the definition"))?;
+        Ok(aa_combat::turret::TurretDefinition {
+            yaw_start: F32(t.yaw_start.to_bits()),
+            rate: F32(t.yaw_rate.to_bits()),
+            offset: [F32(t.offset[0].to_bits()), F32(t.offset[1].to_bits())],
+            reset_time: F32(t.reset_time.to_bits()),
+            can_reset: t.can_reset,
+        })
+    }
+    fn position(&self, _: u32) -> aa_combat::Result<[aa_body::F32; 2]> {
+        Ok([aa_body::F32(self.pos.x.to_bits()), aa_body::F32(self.pos.y.to_bits())])
+    }
+    fn facing(&self, _: u32) -> aa_combat::Result<[aa_body::F32; 2]> {
+        Ok([aa_body::F32(self.facing.x.to_bits()), aa_body::F32(self.facing.y.to_bits())])
+    }
+    // The record's +18 handle is not kept here.
+    fn live_actor(&self, _: u32) -> aa_combat::Result<Option<[aa_body::F32; 2]>> {
+        Ok(None)
+    }
+    // 50C290 tells the view; the view reads `yaw` and `prev`.
+    fn yaw_changed(&mut self, _: u32, _: usize) -> aa_combat::Result<()> {
+        Ok(())
+    }
+    // The +5C latch and its queue draw stay with the callers (`active`, `turret_draws`).
+    fn activate_updates(&mut self) -> aa_combat::Result<()> {
+        Ok(())
+    }
+    fn deactivate_updates(&mut self) -> aa_combat::Result<()> {
+        Ok(())
+    }
+    fn post_stage(&mut self, _: i32) -> aa_combat::Result<()> {
+        Ok(())
+    }
+    fn in_arc(&mut self, _: u32, index: usize, point: [aa_body::F32; 2]) -> aa_combat::Result<bool> {
+        let t = self.turrets.get(index).ok_or(aa_combat::Error::Invalid("turret index outside the definition"))?;
+        let point = Vec2::new(f32::from_bits(point[0].0), f32::from_bits(point[1].0));
+        Ok(turret_in_arc(t, self.pos, self.facing_angle, point))
+    }
+}
+
+/// The Performer `+4C` record of one turret state, for the exact turn and aim.
+fn turret_record(s: &TurretState) -> aa_combat::constructors::OwnedPerformer {
+    turret_records(std::slice::from_ref(s))
+}
+
+/// The Performer `+4C` records of turret states (`+0` yaw, `+4` prev, `+8` last aim,
+/// `+C`/`+10` the pending point), with `+5C` on.
+fn turret_records(states: &[TurretState]) -> aa_combat::constructors::OwnedPerformer {
+    use aa_body::F32;
+    aa_combat::constructors::OwnedPerformer {
+        state: aa_combat::performer::Performer {
+            owner: 0,
+            stage: 4,
+            abilities: Vec::new(),
+            mana: F32::ZERO,
+            target_id: 0,
+            target_position: [F32::ZERO; 2],
+            active_ability: None,
+            active_index: -1,
+            started_at: F32::ZERO,
+            animation_length: F32::ZERO,
+            event_kind: 0,
+            animation: None,
+            turret_index: 0,
+        },
+        maximum_mana: F32::ZERO,
+        turrets: states
+            .iter()
+            .map(|s| {
+                let point = s.aim.unwrap_or(Vec2::ZERO);
+                aa_combat::constructors::Turret {
+                    current_angle: F32(s.yaw.to_bits()),
+                    target_angle: F32(s.prev.to_bits()),
+                    time: F32(s.last_used.to_bits()),
+                    pending: s.aim.is_some(),
+                    target: [F32(point.x.to_bits()), F32(point.y.to_bits()), F32::ZERO],
+                }
+            })
+            .collect(),
+        // On, so the aim leaves the +5C latch to its caller.
+        turret_update_pending: true,
+        word60: 0,
+    }
+}
+
+/// `57DEE0`: one tick of turning toward `target` (yaw_rotation_per_sec x
+/// the tick at the running precision), the short way round (a half turn
+/// counts as the long way); true when the turret reached it.
+#[cfg(test)]
+fn turret_step(s: &mut TurretState, rate: f32, target: f32) -> bool {
+    let t = crate::data::TurretDef { yaw_rate: rate, ..Default::default() };
+    let mut host = TurretHost::new(0.0, Vec2::ZERO, Vec2::X, &t);
+    let mut record = turret_record(s);
+    let reached = aa_combat::turret::turn_step(&mut record, 0, aa_body::F32(target.to_bits()), &mut host, aa_numeric::Precision::Double53);
+    let Ok(reached) = reached else { return true };
+    s.yaw = f32::from_bits(record.turrets[0].current_angle.0);
+    s.prev = f32::from_bits(record.turrets[0].target_angle.0);
     reached
 }
 
 /// `57E730`: turret `i` of `id` turns toward `point` (its yaw in the
-/// actor's frame, `atan(dir) - atan(facing) - pi/2`); the reset timer
-/// restarts. True when it is on the point.
+/// actor's frame, the table atan `85D8D0` of the unit direction minus that
+/// of the facing, minus pi/2); the reset timer restarts. True when it is on
+/// the point. The facing vector is still built from the facing angle.
 fn turret_aim(world: &World, st: &mut CombatState, id: usize, i: usize, t: &crate::data::TurretDef, point: Vec2) -> bool {
     let a = &world.actors[id];
     let f = Vec2::new(a.facing.cos(), a.facing.sin());
-    let d = point - (a.pos.truncate() + turret_offset(t, f));
-    let len = d.length();
-    let dir = if len <= EPSILON { Vec2::ZERO } else { d / len };
-    // 85D8D0: the table atan of (x, y), counter-clockwise in [0, 2 pi).
-    let angle = |v: Vec2| wrap_once(v.y.atan2(v.x));
-    let yaw = wrap_once(angle(dir) - angle(f) - FRAC_PI_2);
+    let pos = a.pos.truncate();
     let now = world.time;
     let Some(c) = st.actors.get_mut(id) else { return true };
     // 0x57E8A3: +0x5C goes on, 0x50AC00(1): one getter when the world is back.
@@ -2919,11 +3146,18 @@ fn turret_aim(world: &World, st: &mut CombatState, id: usize, i: usize, t: &crat
         c.turret_draws.push("queue 0 from 57e8a3");
     }
     let Some(s) = c.turrets.get_mut(i) else { return true };
+    let mut host = TurretHost::new(now, pos, f, t);
+    let mut record = turret_record(s);
+    let words = [aa_body::F32(point.x.to_bits()), aa_body::F32(point.y.to_bits())];
+    let reached = aa_combat::turret::aim(&mut record, 0, words, 0, &mut host, aa_numeric::Precision::Double53);
     s.last_used = now;
     if t.can_reset {
         s.active = true;
     }
-    turret_step(s, t.yaw_rate, yaw)
+    let Ok(reached) = reached else { return true };
+    s.yaw = f32::from_bits(record.turrets[0].current_angle.0);
+    s.prev = f32::from_bits(record.turrets[0].target_angle.0);
+    reached
 }
 
 /// Performer `+5C`: a turret has its update on.
@@ -2972,36 +3206,44 @@ pub(crate) fn other_turrets_aim(world: &mut World, st: &mut CombatState, id: Act
     }
 }
 
-/// `57EF00`: a turret with another ability's target turns to it while it is in its arc
-/// (`4C76E0`, `57E730`); a turret that may reset turns back to `yaw_start - pi/2` once it has
-/// not aimed for `reset_time`; the update stops when all are home.
+/// `57EF00` (`aa_combat::turret::reset_update`), while the Performer's `+5C` is on: for
+/// each turret that may reset, in index order, a pending aim (`+C`, `+10`) continues while
+/// its point is in the arc (`4C76E0`, `57E730`) and clears when it leaves the arc or is on
+/// target; once `reset_time` has passed since its last aim (the difference stored as a
+/// float) it steps back toward `yaw_start - pi/2`. `+5C` stays on while any of them is
+/// busy. A turret that may not reset is not serviced here; its pending aim stays.
 fn turret_reset_tick(world: &World, st: &mut CombatState, id: usize) {
-    let now = world.time;
     let def = world.data.def(world.actors[id].def);
-    let (pos, facing) = (world.actors[id].pos.truncate(), world.actors[id].facing);
-    for (i, t) in def.turrets.iter().enumerate() {
-        let Some(point) = st.actors.get(id).and_then(|c| c.turrets.get(i)).and_then(|s| s.aim) else { continue };
-        if !turret_in_arc(t, pos, facing, point) || turret_aim(world, st, id, i, t, point) {
-            st.actors[id].turrets[i].aim = None;
-        }
-    }
     let Some(c) = st.actors.get_mut(id) else { return };
-    for (s, t) in c.turrets.iter_mut().zip(&def.turrets) {
-        if s.aim.is_some() {
-            continue;
-        }
-        if !s.active || !t.can_reset {
-            s.prev = s.yaw;
-            continue;
-        }
-        if t.reset_time <= now - s.last_used {
-            let rest = wrap_once(t.yaw_start - FRAC_PI_2);
-            if turret_step(s, t.yaw_rate, rest) {
-                s.active = false;
-            }
-        } else {
+    if !turrets_pending(c) {
+        // The update is off; the view holds still.
+        for s in &mut c.turrets {
             s.prev = s.yaw;
         }
+        return;
+    }
+    let a = &world.actors[id];
+    let count = c.turrets.len().min(def.turrets.len());
+    let mut host = TurretHost {
+        time: world.time,
+        pos: a.pos.truncate(),
+        facing: Vec2::new(a.facing.cos(), a.facing.sin()),
+        facing_angle: a.facing,
+        turrets: def.turrets[..count].to_vec(),
+    };
+    let mut record = turret_records(&c.turrets[..count]);
+    if aa_combat::turret::reset_update(&mut record, &mut host, aa_numeric::Precision::Double53).is_err() {
+        return;
+    }
+    for (s, r) in c.turrets.iter_mut().zip(&record.turrets) {
+        s.yaw = f32::from_bits(r.current_angle.0);
+        s.prev = f32::from_bits(r.target_angle.0);
+        s.last_used = f32::from_bits(r.time.0);
+        s.aim = r.pending.then(|| Vec2::new(f32::from_bits(r.target[0].0), f32::from_bits(r.target[1].0)));
+    }
+    // One `+5C` for the Performer.
+    for s in &mut c.turrets {
+        s.active = record.turret_update_pending;
     }
 }
 
@@ -3023,6 +3265,16 @@ fn impacts(world: &mut World, st: &mut CombatState) {
         let p = st.projectiles.remove(i);
         if let Some(t) = p.thing {
             world.ids.removed_transient(t);
+        }
+        // 580660 asks 4C8F20 again in phase 2 before 4C9EF0: a target still there that
+        // the filter (4C8740, 4C5A20) no longer admits takes nothing, and neither does
+        // the area around it. The range and the arc are not asked again (phase 0 only).
+        let refused = p.target.filter(|&t| targetable(world, t) && !st.actors[t as usize].queued_death).is_some_and(|t| {
+            let w = &world.data.def(world.actors[p.shooter as usize].def).weapons[p.weapon];
+            !admits(world, st, p.shooter, w, t)
+        });
+        if refused {
+            continue;
         }
         deliver(world, st, p.shooter, p.weapon, p.target, p.point);
     }
@@ -3756,5 +4008,24 @@ mod turret_tests {
         let mut s = TurretState { yaw: 350f32.to_radians(), ..Default::default() };
         turret_step(&mut s, rate, 10f32.to_radians());
         assert!(s.yaw > 350f32.to_radians(), "turned the long way: {}", s.yaw.to_degrees());
+    }
+
+    #[test]
+    fn turret_update_services_only_turrets_that_may_reset() {
+        let rest = wrap_once(-FRAC_PI_2);
+        let free = crate::data::TurretDef { yaw_rate: 1.0, yaw_half_range: PI, reset_time: 2.0, can_reset: true, ..Default::default() };
+        let fixed = crate::data::TurretDef { can_reset: false, ..free.clone() };
+        let away = TurretState { yaw: rest + 1.0, prev: rest + 1.0, last_used: 0.0, active: true, aim: None };
+        let held = TurretState { yaw: rest, prev: rest, last_used: 0.0, active: true, aim: Some(Vec2::new(5.0, 0.0)) };
+        let mut host = TurretHost { time: 10.0, pos: Vec2::ZERO, facing: Vec2::X, facing_angle: 0.0, turrets: vec![free, fixed] };
+        let mut record = turret_records(&[away, held]);
+        aa_combat::turret::reset_update(&mut record, &mut host, aa_numeric::Precision::Double53).unwrap();
+        // 57EF00: past reset_time the first steps back toward rest by rate x tick.
+        let yaw = f32::from_bits(record.turrets[0].current_angle.0);
+        assert!(yaw < rest + 1.0 && yaw > rest, "{yaw}");
+        assert!(record.turret_update_pending);
+        // The second may not reset: its pending aim stays and it does not turn.
+        assert!(record.turrets[1].pending);
+        assert_eq!(f32::from_bits(record.turrets[1].current_angle.0), rest);
     }
 }

@@ -33,6 +33,9 @@ const PC: Precision = PC53;
 const REMOVED: u32 = 1;
 const DEPLOYING: u32 = 1 << 2;
 const BLOCKING: u32 = 1 << 10;
+/// Bit 14: the Thing's `targetable` flag, cleared at death (`0x4D7960` -> `0x4EE8E0`);
+/// the circle scan `0x5580F0` requires it.
+const TARGETABLE: u32 = 1 << 14;
 const ETHEREAL: u32 = 1 << 18;
 const WATER: u32 = 1 << 21;
 const NO_MOVER: u32 = 1 << 29;
@@ -149,6 +152,9 @@ pub(super) fn thing_flags(ms: &MovementState, world: &World, id: ActorId) -> u32
     } else if def.blocking {
         flags |= BLOCKING;
     }
+    if def.targetable && !a.removed && a.alive {
+        flags |= TARGETABLE;
+    }
     if def.speed_max <= 0.0 {
         flags |= NO_MOVER;
     }
@@ -156,6 +162,37 @@ pub(super) fn thing_flags(ms: &MovementState, world: &World, id: ActorId) -> u32
         flags |= WATER;
     }
     flags
+}
+
+/// `0x4CEDE0` on an organization ([`org_moving`]) with the movement state in hand.
+pub(crate) fn org_moving_in(ms: &MovementState, world: &World, o: OrgId) -> bool {
+    let Some(om) = ms.orgs.get(o as usize) else { return false };
+    org_active(ms, world, o) && om.leader.is_some_and(|l| ms.actors.get(l as usize).is_some_and(|a| a.mover.active))
+}
+
+/// `0x558720` + `0x5580F0(x, y, radius)` + `0x558750` until null + `0x557FD0`
+/// (`aa_spatial::circle_actors`): the actors of the tile lists the circle scan
+/// returns, in its order. `None` when the map's things are not indexed. The actor
+/// virtual `+B4` that `0x558750` asks of each find is the index member's
+/// `actor_category` (true for an actor, false for scenery).
+pub(crate) fn circle_actors(ms: &mut MovementState, world: &World, at: [u32; 2], radius: u32) -> Option<Vec<ActorId>> {
+    let mut s = ms.space.take()?;
+    s.add_new(ms, world);
+    let mut found = Vec::new();
+    {
+        let mut policy = Policy { ms: &*ms, world };
+        let Space { index, geometry, .. } = &mut *s;
+        if let Ok(mut cursor) = aa_spatial::circle_actors::Cursor::begin(index, geometry, at, radius, [0, 0]) {
+            while let Ok(Some(reference)) = cursor.next(index, &mut policy) {
+                if !is_scenery(reference) {
+                    found.push(key_actor(reference));
+                }
+            }
+            let _ = cursor.finish(index);
+        }
+    }
+    ms.space = Some(s);
+    Some(found)
 }
 
 impl Space {

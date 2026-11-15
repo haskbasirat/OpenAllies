@@ -48,6 +48,7 @@ mod element;
 mod regiment;
 /// The tile lists and the collision queries (census M5).
 mod space;
+pub(crate) use space::{circle_actors, org_moving_in};
 /// The route solver `0x53E1F0` on the exact ports (census M7).
 mod route;
 /// The element Move's collision results on the exact ports (census M5).
