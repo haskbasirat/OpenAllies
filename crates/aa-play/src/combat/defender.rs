@@ -22,9 +22,11 @@
 //!   defender (its organization if it has one, `0x4CE6C0`) on the `+0x118` of the
 //!   target's organization or the target: [`DefenderState::engaged_with`].
 //!
-//! The admission `0x4C8F20` is [`super::admission`]; the ability's use is
-//! [`super::use_weapon`]. No getter of these has been met in a film yet, so what
-//! is here is compared with the code and not with a recording.
+//! The Tick and `0x5673B0` run through the port `aa_combat::defender` over the
+//! bindings [`Host`] and [`Reach`]. The admission `0x4C8F20` is
+//! [`super::admission_with`]; the ability's use is [`super::use_weapon`]. No
+//! getter of these has been met in a film yet, so the bindings are compared with
+//! the code and not with a recording.
 use super::{CombatState, TargetRef};
 use crate::world::{ActorId, World};
 use crate::zones::Key;
@@ -76,74 +78,227 @@ fn abilities(world: &World, a: ActorId) -> Vec<usize> {
     world.data.def(x.def).weapons.iter().enumerate().filter(|(_, w)| w.defender).map(|(i, _)| i).collect()
 }
 
-/// `0x5673B0`: some ability could be used on `t`: an actor, targetable (`+8` bit
-/// 14), that one admits by its filter (`0x4C8740`), turret arc (`0x4C84B0`) and
-/// minimum range (`0x4C8460`) and, with a projectile (definition `+0x3C`), within
-/// its range (`0x4BE910`, centre to centre); an organization by any member.
+/// `0x5673B0` through its port (aa_combat::defender::reachable): `a`'s Defender
+/// can reach `t`.
 fn reachable(world: &World, st: &CombatState, a: ActorId, t: TargetRef) -> bool {
+    let state = aa_combat::defender::Defender {
+        owner: handle(a),
+        abilities: abilities(world, a).into_iter().map(|w| w as u32).collect(),
+        intruders: Vec::new(),
+        radius: aa_body::F32::ZERO,
+        radius_dirty: false,
+    };
+    let mut host = Reach { world, st, a, candidate: None };
+    let candidate = resolves(world, ref_handle(t));
+    aa_combat::defender::reachable(&state, candidate, &mut host, PC).unwrap_or(false)
+}
+
+/// The control word the battle runs under (53-bit significand).
+const PC: aa_numeric::Precision = aa_numeric::Precision::Double53;
+/// The mark of an organization in the handles given to the port.
+const ORG: u32 = 0x8000_0000;
+
+/// The port's name of actor `a`: nonzero, as an empty member entry is 0.
+fn handle(a: ActorId) -> u32 {
+    a + 1
+}
+
+fn ref_handle(t: TargetRef) -> u32 {
     match t {
-        TargetRef::Org(o) => world.orgs.get(o as usize).is_some_and(|g| g.alive && g.members.iter().any(|&m| reachable(world, st, a, TargetRef::Actor(m)))),
-        TargetRef::Actor(m) => {
-            let Some(x) = world.actors.get(m as usize).filter(|x| x.alive && !x.removed) else { return false };
-            if !world.data.def(x.def).targetable {
-                return false;
-            }
-            let shooter = &world.actors[a as usize];
-            let data = world.data.clone();
-            let def = data.def(shooter.def);
-            let distance = shooter.pos.truncate().distance(x.pos.truncate());
-            def.weapons.iter().filter(|w| w.defender).any(|w| {
-                super::admits(world, st, a, w, m)
-                    && super::in_turret_arc(world, a, w, x.pos.truncate())
-                    && (w.min_range <= 0.0 || super::in_range(world, a, m, w.min_range, true))
-                    // definition +0x3C: only a projectile's range limits it here
-                    && (w.projectile.is_none() || distance <= w.range)
-            })
-        }
+        TargetRef::Actor(a) => handle(a),
+        TargetRef::Org(o) => ORG | o,
     }
 }
 
-/// `0x566D40` of a candidate: 3 for an aggressive Mind, 2 for what can hurt
-/// (`0x4D03F0` false), then 1 for a body that can be taken or destroyed
-/// (Body and `+0x291` and not invulnerable, or `0x4D1120`), else 0.
-fn threat(world: &World, st: &CombatState, t: ActorId) -> u32 {
-    if super::mind_aggressive(world, st, TargetRef::Actor(t)) {
-        return 3;
-    }
-    if !super::harmless(world, t) {
-        return 2;
-    }
-    let d = world.data.def(world.actors[t as usize].def);
-    let body = d.health > 0.0;
-    if (body && d.destructible && !d.invulnerable) || super::capturable(world, t) { 1 } else { 0 }
+/// The actor behind a handle that is not an organization's.
+fn actor_of(h: u32) -> Option<ActorId> {
+    (h != 0 && h & ORG == 0).then(|| h - 1)
 }
 
-/// `0x567530`: the candidate of one ability over one intruder, members standing
-/// for an organization; the best so far is the highest `0x566D40`, then the nearest
-/// (`0x45E790`, the Defender's position to the candidate's).
-fn better(world: &World, st: &CombatState, a: ActorId, weapon: usize, t: TargetRef, best: &mut (i64, f32), out: &mut Option<ActorId>) {
-    match t {
-        TargetRef::Org(o) => {
-            let Some(g) = world.orgs.get(o as usize) else { return };
-            for &m in &g.members {
-                better(world, st, a, weapon, TargetRef::Actor(m), best, out);
-            }
+fn point_of(world: &World, h: u32) -> aa_combat::Result<[aa_body::F32; 2]> {
+    let x = actor_of(h).and_then(|a| world.actors.get(a as usize)).ok_or(aa_combat::Error::Invalid("position of no actor"))?;
+    Ok([aa_body::F32(x.pos.x.to_bits()), aa_body::F32(x.pos.y.to_bits())])
+}
+
+/// The handle table's answer: an actor that still stands (a dead thing stands
+/// for a handle that no longer resolves), an organization that is alive.
+fn resolves(world: &World, h: u32) -> Option<u32> {
+    let known = match actor_of(h) {
+        Some(a) => world.actors.get(a as usize).is_some_and(|x| x.alive),
+        None => h & ORG != 0 && world.orgs.get((h & !ORG) as usize).is_some_and(|g| g.alive),
+    };
+    known.then_some(h)
+}
+
+/// Actor `+0x7C`: the members of an organization, in the order `World` keeps them.
+fn members_of(world: &World, h: u32) -> Option<Vec<u32>> {
+    if h & ORG == 0 {
+        return None;
+    }
+    Some(world.orgs.get((h & !ORG) as usize).map_or_else(Vec::new, |g| g.members.iter().map(|&m| handle(m)).collect()))
+}
+
+fn weapon_of(world: &World, a: ActorId, weapon: usize) -> aa_combat::Result<&crate::data::Weapon> {
+    world.data.def(world.actors[a as usize].def).weapons.get(weapon).ok_or(aa_combat::Error::Invalid("no such ability"))
+}
+
+/// The services of `0x5673B0` over the battle. An ability is its index in the
+/// definition's weapons.
+struct Reach<'a> {
+    world: &'a World,
+    st: &'a CombatState,
+    a: ActorId,
+    /// The candidate of the context `0x4C8740` was last asked with.
+    candidate: Option<ActorId>,
+}
+
+impl aa_combat::defender::ReachWorld for Reach<'_> {
+    // 0x6A71D0 for every actor class: true.
+    fn qualifies(&mut self, _: u32) -> aa_combat::Result<bool> {
+        Ok(true)
+    }
+    fn organization_members(&mut self, actor: u32) -> aa_combat::Result<Option<Vec<u32>>> {
+        Ok(members_of(self.world, actor))
+    }
+    // +8 bit 14, the only bit asked for: targetable; a thing on its way out has none.
+    fn flags(&self, actor: u32) -> aa_combat::Result<u32> {
+        let x = actor_of(actor).and_then(|a| self.world.actors.get(a as usize)).filter(|x| x.alive && !x.removed);
+        Ok(if x.is_some_and(|x| self.world.data.def(x.def).targetable) { 0x4000 } else { 0 })
+    }
+    fn position(&self, actor: u32) -> aa_combat::Result<[aa_body::F32; 2]> {
+        point_of(self.world, actor)
+    }
+    fn admits(&mut self, ability: u32, context: &mut aa_combat::performer::Context) -> aa_combat::Result<bool> {
+        self.candidate = context.target.and_then(actor_of);
+        let Some(m) = self.candidate else { return Ok(false) };
+        Ok(super::admits(self.world, self.st, self.a, weapon_of(self.world, self.a, ability as usize)?, m))
+    }
+    fn within(&mut self, ability: u32, _: u32, point: [aa_body::F32; 2]) -> aa_combat::Result<bool> {
+        let point = glam::Vec2::new(f32::from_bits(point[0].0), f32::from_bits(point[1].0));
+        Ok(super::in_turret_arc(self.world, self.a, weapon_of(self.world, self.a, ability as usize)?, point))
+    }
+    fn clear(&mut self, ability: u32, _: u32, _: [aa_body::F32; 2]) -> aa_combat::Result<bool> {
+        let w = weapon_of(self.world, self.a, ability as usize)?;
+        let Some(m) = self.candidate else { return Ok(false) };
+        Ok(w.min_range <= 0.0 || super::in_range(self.world, self.a, m, w.min_range, true))
+    }
+    fn has_projectile(&self, ability: u32) -> aa_combat::Result<bool> {
+        Ok(weapon_of(self.world, self.a, ability as usize)?.projectile.is_some())
+    }
+    // 0x4BE910: definition +0x24 through the modifiers (a projectile's 0x501D50,
+    // flag bit 3 0x501DB0), without the fuzzy part. Each modifier result is taken
+    // as its stored binary32 here.
+    fn range(&mut self, ability: u32, _: u32) -> aa_combat::Result<aa_numeric::Fast> {
+        let w = weapon_of(self.world, self.a, ability as usize)?;
+        let key = Key::Actor(self.a);
+        let clamp = self.world.data.rule_ci("ModifierAttributeClampAdd").unwrap_or(1.0);
+        let mut range = w.range;
+        if w.projectile.is_some()
+            && let Some(add) = crate::zones::modifier_add(self.world, key, "PROJECTILE_ABILITY_RANGE")
+        {
+            range = crate::zones::clamp_add(range, add, clamp);
         }
-        TargetRef::Actor(m) => {
-            let Some(x) = world.actors.get(m as usize).filter(|x| x.alive && !x.removed) else { return };
-            let p = i64::from(threat(world, st, m));
-            if p == 0 || p < best.0 {
-                return;
-            }
-            if super::admission(world, st, a, weapon, m) != 0 {
-                return;
-            }
-            let distance = world.actors[a as usize].pos.truncate().distance(x.pos.truncate());
-            if p > best.0 || distance < best.1 {
-                *best = (p, distance);
-                *out = Some(m);
-            }
+        if w.flags & 8 != 0
+            && let Some(add) = crate::zones::modifier_add(self.world, key, "BOMBARD_ABILITY_RANGE")
+        {
+            range = crate::zones::clamp_add(range, add, clamp);
         }
+        Ok(aa_numeric::Fast::from_f32(range)?)
+    }
+}
+
+/// The services of the Tick `0x567960` (aa_combat::defender::tick) over the
+/// battle. An ability is its row in [`DefenderState::targets`].
+struct Host<'a> {
+    world: &'a mut World,
+    st: &'a mut CombatState,
+    a: ActorId,
+}
+
+impl Host<'_> {
+    fn row(&self, ability: u32) -> aa_combat::Result<(usize, Option<ActorId>)> {
+        self.st.actors[self.a as usize].defender.targets.get(ability as usize).copied().ok_or(aa_combat::Error::Invalid("no such ability"))
+    }
+    fn actor(&self, h: u32) -> aa_combat::Result<ActorId> {
+        actor_of(h).filter(|&a| (a as usize) < self.world.actors.len()).ok_or(aa_combat::Error::Invalid("not an actor"))
+    }
+}
+
+impl aa_combat::defender::DefenderWorld for Host<'_> {
+    fn resolve(&self, h: u32) -> aa_combat::Result<Option<u32>> {
+        Ok(resolves(self.world, h))
+    }
+    fn removed(&self, actor: u32) -> aa_combat::Result<bool> {
+        Ok(self.world.actors[self.actor(actor)? as usize].removed)
+    }
+    fn handle_of(&self, actor: u32) -> aa_combat::Result<u32> {
+        Ok(actor)
+    }
+    fn position(&self, actor: u32) -> aa_combat::Result<[aa_body::F32; 2]> {
+        point_of(self.world, actor)
+    }
+    fn ability_target(&self, ability: u32) -> aa_combat::Result<u32> {
+        Ok(self.row(ability)?.1.map_or(0, handle))
+    }
+    // Definition +0x54 bit 3; nothing the battle's use reads from the context.
+    fn ability_kind_flag(&self, ability: u32) -> aa_combat::Result<bool> {
+        Ok(weapon_of(self.world, self.a, self.row(ability)?.0)?.flags & 8 != 0)
+    }
+    fn can_use(&mut self, ability: u32, context: &mut aa_combat::performer::Context, check_range: bool) -> aa_combat::Result<u32> {
+        let (weapon, _) = self.row(ability)?;
+        let Some(t) = context.target.and_then(actor_of) else { return Ok(1) };
+        Ok(super::admission_with(self.world, self.st, self.a, weapon, t, check_range))
+    }
+    fn set_target(&mut self, ability: u32, target: Option<u32>) -> aa_combat::Result<()> {
+        let target = target.and_then(actor_of);
+        if let Some(row) = self.st.actors[self.a as usize].defender.targets.get_mut(ability as usize) {
+            row.1 = target;
+        }
+        Ok(())
+    }
+    // 0x6A71D0 for every actor class: true.
+    fn qualifies(&mut self, _: u32) -> aa_combat::Result<bool> {
+        Ok(true)
+    }
+    fn organization_members(&mut self, actor: u32) -> aa_combat::Result<Option<Vec<u32>>> {
+        Ok(members_of(self.world, actor))
+    }
+    fn aggressive(&mut self, actor: u32) -> aa_combat::Result<bool> {
+        Ok(super::mind_aggressive(self.world, self.st, TargetRef::Actor(self.actor(actor)?)))
+    }
+    fn harmless(&mut self, actor: u32) -> aa_combat::Result<bool> {
+        Ok(super::harmless(self.world, self.actor(actor)?))
+    }
+    // Body, ActorData +0x291 and not invulnerable (the definition's word here).
+    fn body_takeable(&self, actor: u32) -> aa_combat::Result<bool> {
+        let d = self.world.data.def(self.world.actors[self.actor(actor)? as usize].def);
+        Ok(d.health > 0.0 && d.destructible && !d.invulnerable)
+    }
+    fn capturable(&mut self, actor: u32) -> aa_combat::Result<bool> {
+        Ok(super::capturable(self.world, self.actor(actor)?))
+    }
+    // 0x4BE520: the definition's turret index is not -1.
+    fn ability_has_turret(&self, ability: u32) -> aa_combat::Result<bool> {
+        Ok(weapon_of(self.world, self.a, self.row(ability)?.0)?.turret != -1)
+    }
+    // The ability stands for its turret: `aim` finds it through the weapon.
+    fn ability_turret(&self, ability: u32) -> aa_combat::Result<i32> {
+        Ok(ability as i32)
+    }
+    fn aim(&mut self, _: u32, index: i32, _: [aa_body::F32; 2], handle: u32) -> aa_combat::Result<bool> {
+        let (weapon, _) = self.row(index as u32)?;
+        let target = self.actor(handle)?;
+        Ok(super::turret_ready(self.world, self.st, self.a as usize, weapon, target))
+    }
+    fn use_ability(&mut self, _: u32, ability: u32, context: &mut aa_combat::performer::Context) -> aa_combat::Result<()> {
+        let (weapon, _) = self.row(ability)?;
+        let Some(t) = context.target.and_then(actor_of) else { return Ok(()) };
+        super::use_weapon(self.world, self.st, self.a, weapon, t);
+        Ok(())
+    }
+    // The Tick moves the zone itself before the port runs.
+    fn refresh_radius(&mut self, _: u32, _: [aa_body::F32; 2], _: aa_body::F32) -> aa_combat::Result<()> {
+        Ok(())
     }
 }
 
@@ -240,36 +395,16 @@ pub(crate) fn tick(world: &mut World, a: ActorId) {
     if st.actors.len() < world.actors.len() || st.orgs.len() < world.orgs.len() || st.rules.is_none() {
         st.prepare(world);
     }
-    let count = st.actors[a as usize].defender.targets.len();
-    for i in 0..count {
-        let (weapon, mut target) = st.actors[a as usize].defender.targets[i];
-        if let Some(t) = target {
-            if !world.actors.get(t as usize).is_some_and(|x| x.alive && !x.removed) {
-                target = None;
-            } else {
-                match super::admission(world, &st, a, weapon, t) {
-                    0 => {}
-                    // the ability is not ready: nothing for it in this update
-                    7 | 8 => continue,
-                    _ => target = None,
-                }
-            }
-        }
-        if target.is_none_or(|t| threat(world, &st, t) < 2) {
-            let (mut best, mut chosen) = ((-1i64, f32::MAX), None);
-            let list = st.actors[a as usize].defender.intruders.clone();
-            for t in list {
-                better(world, &st, a, weapon, t, &mut best, &mut chosen);
-            }
-            target = chosen;
-        }
-        st.actors[a as usize].defender.targets[i].1 = target;
-        let Some(t) = target else { continue };
-        // 0x4C81D0 / 0x57E730: a turret that turns has to be on it first
-        if !super::turret_ready(world, &mut st, a as usize, weapon, t) {
-            continue;
-        }
-        super::use_weapon(world, &mut st, a, weapon, t);
-    }
+    let mut state = aa_combat::defender::Defender {
+        owner: handle(a),
+        abilities: (0..st.actors[a as usize].defender.targets.len() as u32).collect(),
+        intruders: st.actors[a as usize].defender.intruders.iter().map(|&t| ref_handle(t)).collect(),
+        // +0x2C / +0x30: the zone refresh above stands for them
+        radius: aa_body::F32::ZERO,
+        radius_dirty: false,
+    };
+    let mut host = Host { world: &mut *world, st: &mut st, a };
+    let done = aa_combat::defender::tick(&mut state, &mut host, PC);
+    debug_assert!(done.is_ok(), "defender update: {done:?}");
     world.combat = st;
 }

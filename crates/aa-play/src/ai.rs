@@ -79,9 +79,16 @@ impl SaiRng {
         self.state = wide as u32;
         (wide >> 16) as u32
     }
-    /// `45D400`-style unit draw: `r * 1/(2^32-1)` in [0, 1].
+    /// `0x45D400`: one draw read as a signed integer (plus 2^32 when negative)
+    /// times the binary64 at 0x9FDA98 (2^-32 + 2^-64), in [0, 1]; stored binary32
+    /// here ([`crate::trace::native_unit`]).
     pub fn unit(&mut self) -> f32 {
-        (self.next_u32() as f64 / 4_294_967_295.0) as f32
+        crate::trace::native_unit(self.next_u32())
+    }
+    /// [`SaiRng::unit`] before any store: the x87 product at the 53-bit control
+    /// word, for a caller that goes on with it on the stack.
+    pub fn unit_unstored(&mut self) -> f64 {
+        crate::trace::native_unit_f64(self.next_u32())
     }
     pub fn below(&mut self, n: usize) -> usize {
         if n == 0 { 0 } else { self.next_u32() as usize % n }
@@ -810,5 +817,41 @@ pub(crate) fn enqueue(player: &mut Player, data: &AiData, now: f32, reaction: f3
             }
         }
         player.queue.push_back((due, c));
+    }
+}
+
+#[cfg(test)]
+mod unit_draw_tests {
+    use super::SaiRng;
+
+    /// The binary64 at 0x9FDA98 that 0x45D400 multiplies by.
+    const SCALE: u64 = 0x3df0_0000_0010_0000;
+
+    #[test]
+    fn the_scale_is_two_to_minus_32_plus_two_to_minus_64() {
+        assert_eq!(f64::from_bits(SCALE), 2f64.powi(-32) + 2f64.powi(-64));
+    }
+
+    /// 0x45D400 is one 0x85D840 draw times the scale, rounded once to 53 bits;
+    /// `unit` stores that product as binary32.
+    #[test]
+    fn unit_is_one_draw_times_the_scale() {
+        for seed in [0u32, 1, 0x1234_5678, 0xdead_beef, u32::MAX] {
+            let mut unstored = SaiRng { state: seed };
+            let mut stored = unstored;
+            let mut probe = unstored;
+            let draw = probe.next_u32();
+            let product = f64::from(draw) * f64::from_bits(SCALE);
+            assert_eq!(unstored.unit_unstored().to_bits(), product.to_bits());
+            assert_eq!(stored.unit().to_bits(), (product as f32).to_bits());
+            assert_eq!(unstored.state, probe.state);
+            assert_eq!(stored.state, probe.state);
+        }
+    }
+
+    /// The largest draw reaches 1.0: the range is [0, 1], not [0, 1).
+    #[test]
+    fn the_largest_draw_is_one() {
+        assert_eq!(f64::from(u32::MAX) * f64::from_bits(SCALE), 1.0);
     }
 }
