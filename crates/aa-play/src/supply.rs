@@ -878,10 +878,18 @@ fn actor_performer_value(world: &World, a: ActorId) -> Option<f32> {
 
 /// 57DC40: the Body health ratio (Body +10 / +14), 1 without a Body.
 pub(crate) fn health_ratio(world: &World, a: ActorId) -> f32 {
+    match body_health(world, a) {
+        Some((health, max)) if max > 0.0 => health / max,
+        _ => 1.0,
+    }
+}
+
+/// Body +10 and +14 of an actor, the health and its maximum; none without a Body.
+fn body_health(world: &World, a: ActorId) -> Option<(f32, f32)> {
     let actor = &world.actors[a as usize];
     let d = world.data.def(actor.def);
     if !d.has_component("BodyComponent") {
-        return 1.0;
+        return None;
     }
     let max = world
         .combat
@@ -889,7 +897,19 @@ pub(crate) fn health_ratio(world: &World, a: ActorId) -> f32 {
         .get(a as usize)
         .filter(|c| c.initialized && c.max_health > 0.0)
         .map_or_else(|| crate::production::max_health(world, actor.kingdom, actor.def), |c| c.max_health);
-    if max > 0.0 { actor.health / max } else { 1.0 }
+    Some((actor.health, max))
+}
+
+/// One member's step of the Organization +68 sum in `5788B0`: `57DC40`, the
+/// Performer +60 times health over maximum (times 1 without a Body) left
+/// unstored on the x87 stack, plus the sum so far, stored to binary32.
+fn add_member_value(world: &World, current: f32, member: ActorId, value: f32) -> f32 {
+    use crate::combat::x87::{self, load as ld, store as fstp};
+    let ratio = match body_health(world, member) {
+        Some((health, max)) if max > 0.0 => x87::div(ld(health), ld(max)),
+        _ => ld(1.0),
+    };
+    fstp(x87::add(x87::mul(ratio, ld(value)), ld(current)))
 }
 
 /// 5640A0 kingdom gate: owned by a major (non-independent) kingdom
@@ -962,7 +982,7 @@ fn candidate_of_load(world: &World, who: crate::books::CityCandidateRef) -> Opti
                 match member {
                     Some(m) => {
                         if let Some(v) = actor_performer_value(world, m) {
-                            current += health_ratio(world, m) * v;
+                            current = add_member_value(world, current, m, v);
                             maximum += v;
                         }
                     }
@@ -1088,7 +1108,8 @@ pub fn city_tick(world: &mut World, c: ActorId) {
     // head first, the zone's decision, then 0x4D5230 for another owner.
     let list = world.books.actor(c).map(|b| b.city_candidates.clone()).unwrap_or_default();
     let mut host = CityHost { world, city: c, list, captured: None };
-    if aa_combat::city_capture::tick(&mut host, CITY_PRECISION).is_err() {
+    if let Err(e) = aa_combat::city_capture::tick(&mut host, CITY_PRECISION) {
+        city_port_error(world, c, &e);
         return;
     }
     let Some(Some(w)) = host.captured else { return };
@@ -1102,6 +1123,15 @@ pub fn city_tick(world: &mut World, c: ActorId) {
     }
     // 0x4D5230 -> 0x4CF0F0: the contribution moves to the new owner at once.
     crate::economy::refresh(world);
+}
+
+/// A port error of the City tick is not a rule of the game: it is kept among the
+/// Minds' notes (`Minds::notes`, at most 64) and fails a debug build's tests when
+/// `AA_PLAY_STRICT_PORTS` is set.
+fn city_port_error(world: &mut World, c: ActorId, error: &aa_combat::Error) {
+    let note = format!("city tick 5647A0 of actor {c}: {error}");
+    debug_assert!(std::env::var_os("AA_PLAY_STRICT_PORTS").is_none(), "{note}");
+    world.books.minds.note(note);
 }
 
 /// The x87 precision control of the simulation thread, for the exact City tick.
@@ -1324,4 +1354,61 @@ fn member_max_health(world: &World, m: ActorId) -> f32 {
         .get(m as usize)
         .filter(|c| c.initialized && c.max_health > 0.0)
         .map_or_else(|| crate::production::max_health(world, a.kingdom, a.def), |c| c.max_health)
+}
+
+#[cfg(test)]
+mod tests {
+    //! The city host: the Organization +68 sum (`5788B0`) and its port errors.
+    use super::*;
+    use crate::data::{Def, DefClass, GameData};
+    use crate::map::GameMap;
+    use glam::Vec3;
+    use std::sync::Arc;
+
+    fn body_bit() -> u32 {
+        let bit = aa_rules::native::COMPONENTS.iter().find(|(n, _)| n.eq_ignore_ascii_case("BodyComponent")).map(|(_, b)| *b).expect("BodyComponent");
+        1u32 << bit
+    }
+
+    /// A rifleman with a Body (health 200) and a sandbag without one.
+    fn scene() -> World {
+        let rifleman = Def { id: "rifleman".into(), class: Some(DefClass::Member), health: 200.0, components: body_bit(), ..Default::default() };
+        let sandbag = Def { id: "sandbag".into(), class: Some(DefClass::Member), ..Default::default() };
+        let data = GameData { by_id: [("rifleman".to_string(), 0), ("sandbag".to_string(), 1)].into_iter().collect(), defs: vec![rifleman, sandbag], ..Default::default() };
+        World::empty(Arc::new(data), Arc::new(GameMap::default()), 1)
+    }
+
+    /// `5788B0` adds `57DC40` unstored: binary32 (101 / 200) * 3.3 + 1.7 with the
+    /// product on the x87 stack; storing the product first gives one ulp less.
+    #[test]
+    fn a_damaged_member_adds_its_value_unstored_5788b0() {
+        let mut w = scene();
+        let a = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+        w.actors[a as usize].health = 101.0;
+        assert_eq!(body_health(&w, a), Some((101.0, 200.0)));
+        let sum = add_member_value(&w, 1.7, a, 3.3);
+        assert_eq!(sum.to_bits(), 1_079_473_341);
+        let stored = ((f64::from(101.0f32) / 200.0 * f64::from(3.3f32)) as f32 + 1.7f32).to_bits();
+        assert_eq!(stored, 1_079_473_340);
+    }
+
+    /// `57DC40` without a Body: 1.0 (0x9F32E0) times the Performer +60.
+    #[test]
+    fn a_member_without_a_body_adds_its_whole_value_57dc40() {
+        let mut w = scene();
+        let a = w.spawn_actor(1, Some(0), Vec3::ZERO, 0.0);
+        assert_eq!(body_health(&w, a), None);
+        assert_eq!(add_member_value(&w, 1.7, a, 3.3), 3.3f32 + 1.7f32);
+    }
+
+    #[test]
+    fn a_city_port_error_is_noted() {
+        let mut w = scene();
+        let c = w.spawn_actor(1, Some(0), Vec3::ZERO, 0.0);
+        let mut host = CityHost { world: &mut w, city: c, list: Vec::new(), captured: None };
+        let e = aa_combat::city_capture::World::combat_value(&mut host, CITY_CANDIDATE | 3).expect_err("no such candidate");
+        city_port_error(&mut w, c, &e);
+        assert_eq!(w.books.minds.notes.len(), 1, "{:?}", w.books.minds.notes);
+        assert!(w.books.minds.notes[0].contains("5647A0"), "{:?}", w.books.minds.notes);
+    }
 }

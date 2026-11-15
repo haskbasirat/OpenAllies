@@ -353,9 +353,11 @@ fn gain_x87(world: &mut World, st: &mut CombatState, id: OrgId, amount: f64) {
 /// The x87 precision control the game runs at (PC53).
 const PRECISION: Precision = Precision::Double53;
 
-/// World +D8, the session mode: mode 6 suppresses every morale loss (`579660`,
-/// `579AB0`, `57A0A0`, `57CD70`). aa-play does not hold the word: its worlds are
-/// battles, which are not in mode 6.
+/// World +D8, the world's state: 6 suppresses every morale loss (`579660`,
+/// `579AB0`, `57A0A0`, `57CD70`). Only the setter `4F65B0` writes it: the world's
+/// Init (`4F27E0`) stores 0, the start (`4F9970`) passes 1, 4, 5 and leaves it at
+/// 0, and the Uninit (`4F8690`) passes 6 while the world is torn down. A world
+/// that ticks is in state 0; aa-play has no teardown that runs morale.
 const SESSION_MODE: u32 = 0;
 
 fn bits(value: f32) -> F32 {
@@ -429,6 +431,8 @@ struct Host<'a> {
     world: &'a mut World,
     st: &'a mut CombatState,
     id: OrgId,
+    /// The Mind was asked while a think held the arena (see [`Host::hosted_mind`]).
+    held: std::cell::Cell<bool>,
 }
 
 type ExactResult<T> = aa_combat::Result<T>;
@@ -451,6 +455,44 @@ impl Host<'_> {
     fn unbound<T>(&self, what: &'static str) -> ExactResult<T> {
         Err(aa_combat::Error::World(format!("morale host: {what} is not bound")))
     }
+    /// The hosted regiment Mind of organization `actor` in the arena with its
+    /// Exhausted state (Mind +270); none before aa-play has hosted the Mind. A
+    /// hosted Mind that is not in the arena (a think holds the arena while it
+    /// runs) cannot be read from here: none, with `held` set, which the caller
+    /// reports ([`Host::report_held`]).
+    fn hosted_mind(&self, actor: u32) -> Option<(&aa_mind::Mind, aa_mind::StateId)> {
+        let key = crate::minds::ORGANIZATION_MIND | actor;
+        let minds = &self.world.books.minds;
+        if !minds.is_hosted(key, crate::minds::HostedKind::Regiment) {
+            return None;
+        }
+        let (Some(mind), Some(exhausted)) = (minds.arena.minds.get(&crate::minds::mind_id(key)), minds.state(key, MIND_EXHAUSTED)) else {
+            self.held.set(true);
+            return None;
+        };
+        Some((mind, exhausted))
+    }
+    /// A Mind asked while a think held the arena is a binding gap, not a rule of
+    /// the game: its +28/+2C read 0 and the Exhausted test is aa-play's flag. Kept
+    /// among the Minds' notes.
+    fn report_held(&mut self, what: &str) {
+        if self.held.replace(false) {
+            let note = format!("morale: {what} of organization {} asked its Mind while a think held the arena", self.id);
+            self.world.books.minds.note(note);
+        }
+    }
+}
+
+/// The Exhausted state embedded in the regiment Mind (`51D450` adds 0x270).
+const MIND_EXHAUSTED: u32 = 0x270;
+
+/// A port error is not a rule of the game: it is kept among the Minds' notes
+/// (`Minds::notes`, at most 64) and fails a debug build's tests when
+/// `AA_PLAY_STRICT_PORTS` is set.
+fn port_error(world: &mut World, what: &str, id: OrgId, error: &aa_combat::Error) {
+    let note = format!("morale: {what} of organization {id}: {error}");
+    debug_assert!(std::env::var_os("AA_PLAY_STRICT_PORTS").is_none(), "{note}");
+    world.books.minds.note(note);
 }
 
 impl exact::World for Host<'_> {
@@ -480,15 +522,26 @@ impl exact::World for Host<'_> {
             membership: None,
         })
     }
-    /// The regiment's Mind (actor +70) and its +28/+2C words.
+    /// The regiment's Mind (actor +70) and its +28/+2C words. An organization
+    /// actor always has its Mind (`4CF480` case 4 builds it with the actor), so
+    /// this never reports none; a regiment whose Mind aa-play has not hosted yet
+    /// has the words of a fresh Mind, 0.
     fn mind(&self, actor: u32) -> ExactResult<Option<exact::Mind>> {
-        let key = crate::minds::ORGANIZATION_MIND | actor;
-        let minds = &self.world.books.minds;
-        Ok(Some(exact::Mind { word28: minds.word(key, 0x28), word2c: minds.word(key, 0x2c) }))
+        Ok(Some(match self.hosted_mind(actor) {
+            Some((mind, _)) => exact::Mind { word28: mind.words_24_30[1], word2c: mind.words_24_30[2] },
+            None => exact::Mind { word28: 0, word2c: 0 },
+        }))
     }
-    /// Mind virtual +5C (`51D450` -> `52A8A0`): the Exhausted state is on the stack.
-    fn mind_declines(&mut self, _: &mut exact::Organization) -> ExactResult<bool> {
-        Ok(self.st.orgs[self.id as usize].exhausted_state)
+    /// Mind virtual +5C, `51D450`: `52A8A0` on the state embedded at Mind +270
+    /// (Exhausted), true when any entry of the Mind's state stack is that state,
+    /// a suspended one too. A fresh Mind has an empty stack.
+    fn mind_declines(&mut self, organization: &mut exact::Organization) -> ExactResult<bool> {
+        Ok(match self.hosted_mind(organization.owner) {
+            Some((mind, exhausted)) => mind.stack.contains(&Some(exhausted)),
+            // Not readable from here: aa-play's own flag of the Exhausted state.
+            None if self.held.get() => self.st.orgs[self.id as usize].exhausted_state,
+            None => false,
+        })
     }
     fn mind_exhausted(&mut self, organization: &mut exact::Organization) -> ExactResult<()> {
         self.reaction(organization, true);
@@ -545,8 +598,16 @@ impl exact::World for Host<'_> {
 /// maximum or above the breakpoint; 0 at no morale or when the Mind declines; else 1.
 fn state_exact(world: &mut World, st: &mut CombatState, id: OrgId) -> u8 {
     let mut organization = record(world, st, id);
-    let mut host = Host { world, st, id };
-    exact::state(&mut organization, &mut host).unwrap_or(2)
+    let mut host = Host { world, st, id, held: std::cell::Cell::new(false) };
+    let result = exact::state(&mut organization, &mut host);
+    host.report_held("state 578140");
+    match result {
+        Ok(state) => state,
+        Err(e) => {
+            port_error(world, "state 578140", id, &e);
+            2
+        }
+    }
 }
 
 /// The morale loss without the BERSERK gate, through the exact port of `579660`
@@ -568,9 +629,13 @@ pub(crate) fn lose_kind(world: &mut World, st: &mut CombatState, id: OrgId, amou
         return;
     }
     let mut organization = record(world, st, id);
-    let mut host = Host { world, st, id };
-    let _ = exact::lose(&mut organization, bits(amount), kind, &mut host, PRECISION);
+    let mut host = Host { world, st, id, held: std::cell::Cell::new(false) };
+    let result = exact::lose(&mut organization, bits(amount), kind, &mut host, PRECISION);
     host.store(&organization);
+    host.report_held("loss 579660");
+    if let Err(e) = result {
+        port_error(world, "loss 579660", id, &e);
+    }
 }
 
 /// `579AB0` on a retreat order out of an engagement (MoraleRetreatPenalty), through
@@ -582,9 +647,13 @@ pub(crate) fn retreat_penalty(world: &mut World, st: &mut CombatState, id: OrgId
     }
     let settings = settings(world, st.rules());
     let mut organization = record(world, st, id);
-    let mut host = Host { world, st, id };
-    let _ = exact::retreat_penalty(&mut organization, &settings, &mut host, PRECISION);
+    let mut host = Host { world, st, id, held: std::cell::Cell::new(false) };
+    let result = exact::retreat_penalty(&mut organization, &settings, &mut host, PRECISION);
     host.store(&organization);
+    host.report_held("retreat penalty 579AB0");
+    if let Err(e) = result {
+        port_error(world, "retreat penalty 579AB0", id, &e);
+    }
 }
 
 /// `578F10` slayer gain of the killer's organization:
@@ -819,4 +888,115 @@ fn org_tick(world: &mut World, st: &mut CombatState, id: OrgId) {
 pub fn morale_state(world: &World, org: OrgId) -> Option<u8> {
     let s = world.combat.org(org)?;
     Some(state(s, world.orgs.get(org as usize)?.morale))
+}
+
+#[cfg(test)]
+mod tests {
+    //! The morale host: what the exact port reads of the regiment's Mind.
+    use super::*;
+    use crate::data::{Def, DefClass, GameData};
+    use crate::map::GameMap;
+    use crate::minds::{HostedKind, ORGANIZATION_MIND, mind_id};
+    use crate::world::Organization;
+    use glam::{Vec2, Vec3};
+    use std::sync::Arc;
+
+    struct NoDraws;
+    impl aa_mind::construct::World for NoDraws {
+        fn random_word(&mut self) -> aa_mind::Result<u32> {
+            Ok(0)
+        }
+        fn performer_ability_count(&self, _: u32) -> aa_mind::Result<usize> {
+            Ok(0)
+        }
+        fn set_ability_jitter(&mut self, _: u32, _: usize, _: u32) -> aa_mind::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// One regiment of one rifleman at morale 40 of 100, breakpoint 50: wavering.
+    fn scene() -> (World, CombatState) {
+        let rifleman = Def { id: "rifleman".into(), class: Some(DefClass::Member), health: 200.0, defense: 1.0, targetable: true, damage_factor: vec![1.0; 4], ..Default::default() };
+        let regiment = Def { id: "regiment".into(), class: Some(DefClass::Organization), slots: vec![(0, [0.0, 0.0])], morale_breakpoint: 50.0, ..Default::default() };
+        let data = GameData {
+            by_id: [("rifleman".to_string(), 0), ("regiment".to_string(), 1)].into_iter().collect(),
+            defs: vec![rifleman, regiment],
+            damage_types: ["gunfire", "flame", "explosive", "armor_piercing"].map(String::from).to_vec(),
+            ..Default::default()
+        };
+        let mut w = World::empty(Arc::new(data), Arc::new(GameMap::default()), 1);
+        let a = w.spawn_actor(0, Some(0), Vec3::ZERO, 0.0);
+        w.actors[a as usize].org = Some(0);
+        w.actors[a as usize].slot = Some(0);
+        w.orgs.push(Organization { id: 0, def: 1, kingdom: 0, members: vec![a], hq: None, order: Order::Idle, anchor: Vec2::ZERO, heading: 0.0, morale: 40.0, experience: 0.0, alive: true });
+        let mut st = std::mem::take(&mut w.combat);
+        st.prepare(&mut w);
+        st.orgs[0].morale_max = 100.0;
+        st.orgs[0].breakpoint = 50.0;
+        w.orgs[0].morale = 40.0;
+        (w, st)
+    }
+
+    /// The regiment's Mind as `4CF480` case 4 builds it, in the arena.
+    fn host_mind(w: &mut World) -> aa_mind::StateId {
+        let key = ORGANIZATION_MIND;
+        let built = aa_mind::construct::construct(aa_mind::construct::Kind::Regiment, key, &mut NoDraws, PRECISION).expect("regiment Mind");
+        w.books.minds.install(key, HostedKind::Regiment, built).expect("installed");
+        w.books.minds.state(key, MIND_EXHAUSTED).expect("the Exhausted state at +270")
+    }
+
+    #[test]
+    fn a_fresh_mind_is_idle_578140() {
+        let (mut w, mut st) = scene();
+        assert_eq!(state_exact(&mut w, &mut st, 0), 1);
+        lose_kind(&mut w, &mut st, 0, 10.0, 0);
+        assert_eq!(w.orgs[0].morale, 30.0);
+        assert!(w.books.minds.notes.is_empty(), "{:?}", w.books.minds.notes);
+    }
+
+    #[test]
+    fn a_busy_mind_is_steady_and_loses_nothing_579660() {
+        let (mut w, mut st) = scene();
+        host_mind(&mut w);
+        assert_eq!(state_exact(&mut w, &mut st, 0), 1);
+        for (word, offset) in [(1usize, 0x28u32), (2, 0x2c)] {
+            w.books.minds.arena.minds.get_mut(&mind_id(ORGANIZATION_MIND)).unwrap().words_24_30[word] = 1;
+            assert_eq!(state_exact(&mut w, &mut st, 0), 2, "Mind +{offset:X}");
+            lose_kind(&mut w, &mut st, 0, 10.0, 0);
+            lose_kind(&mut w, &mut st, 0, 10.0, 4);
+            assert_eq!(w.orgs[0].morale, 40.0, "Mind +{offset:X}");
+            w.books.minds.arena.minds.get_mut(&mind_id(ORGANIZATION_MIND)).unwrap().words_24_30[word] = 0;
+        }
+        assert!(w.books.minds.notes.is_empty(), "{:?}", w.books.minds.notes);
+    }
+
+    /// `51D450` -> `52A8A0`: the Exhausted state anywhere on the Mind's stack, not
+    /// aa-play's `exhausted_state` flag.
+    #[test]
+    fn the_exhausted_state_on_the_stack_declines_52a8a0() {
+        let (mut w, mut st) = scene();
+        let exhausted = host_mind(&mut w);
+        st.orgs[0].exhausted_state = true;
+        assert_eq!(state_exact(&mut w, &mut st, 0), 1, "the flag alone is not read");
+        st.orgs[0].exhausted_state = false;
+        let mind = w.books.minds.arena.minds.get_mut(&mind_id(ORGANIZATION_MIND)).unwrap();
+        mind.stack.push_back(Some(exhausted));
+        assert_eq!(state_exact(&mut w, &mut st, 0), 0, "a suspended Exhausted state counts");
+    }
+
+    #[test]
+    fn a_mind_out_of_the_arena_is_noted() {
+        let (mut w, mut st) = scene();
+        host_mind(&mut w);
+        let arena = std::mem::take(&mut w.books.minds.arena);
+        lose_kind(&mut w, &mut st, 0, 10.0, 0);
+        assert_eq!(w.orgs[0].morale, 30.0);
+        assert_eq!(w.books.minds.notes.len(), 1, "{:?}", w.books.minds.notes);
+        assert!(w.books.minds.notes[0].contains("579660"), "{:?}", w.books.minds.notes);
+        st.orgs[0].exhausted_state = true;
+        assert_eq!(state_exact(&mut w, &mut st, 0), 0, "aa-play's flag stands in");
+        w.books.minds.arena = arena;
+        assert_eq!(state_exact(&mut w, &mut st, 0), 1);
+        assert_eq!(w.books.minds.notes.len(), 2, "{:?}", w.books.minds.notes);
+    }
 }
