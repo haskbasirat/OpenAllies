@@ -205,15 +205,19 @@ pub(super) fn enter(host: &mut Regiment<'_>, state: StateId, offset: u32, a: &mu
                 host.walk_to(t, a)?;
             }
         }
-        // 0x523D50: status 2, the start, each member to its slot (0x522890(member, 0)).
+        // 0x523D50: status 2, the start, then 0x522890(member, 0) for each slot of the
+        // organization (+0x28, in slot order: 0x4364C0 with its flag set) that holds a
+        // member whose element is attached (+0x80 +0x1C). No speed test here.
         REFORM => {
             a.state_mut(state)?.status = 2;
             host.set_word(REFORM_START, host.world.clock.begin.0);
-            let members: Vec<ActorId> = alive_members(host.world, host.o).collect();
-            for m in members {
-                if def_of(host.world, m).speed_max > 0.0 {
-                    host.member_command(m, 0, a)?;
-                }
+            let mut members: Vec<(usize, ActorId)> = alive_members(host.world, host.o)
+                .filter(|&m| element::element_attached(host.world, m))
+                .map(|m| (member_slot(host.world, host.o, m), m))
+                .collect();
+            members.sort_by_key(|&(slot, _)| slot);
+            for (_, m) in members {
+                host.member_command(m, 0, a)?;
             }
         }
         // 0x525CA0: status 2, 0x523EA0, then the formation faces the list's tail (state
@@ -1156,17 +1160,25 @@ fn walk_point(host: &mut Regiment<'_>, to: Vec2, auxiliary: [u32; 2], a: &mut Ar
 pub(in crate::movement) fn explore_command(ms: &mut MovementState, world: &mut World, rules: MoveRules, o: OrgId, at: Vec2, scalar: Option<f32>) -> bool {
     let result = with_regiment(ms, world, rules, o, |host, a| -> aa_mind::Result<bool> {
         let explore = host.state(EXPLORE)?;
+        // 0x5249C2: the new waypoint is the command's point as it is; only 0x524100
+        // raises a coordinate below 1.
+        let raw = bits(at);
         let at = Vec2::new(if at.x < 1.0 { 1.0 } else { at.x }, if at.y < 1.0 { 1.0 } else { at.y });
         let [x, y] = bits(at);
         if scalar == Some(1.0) && a.state(explore)?.status == 2 {
+            let [x, y] = raw;
             host.set_word(EXPLORE_POINT, x);
             host.set_word(EXPLORE_POINT + 4, y);
             return Ok(true);
         }
         host.set_word(EXPLORE_POINT, x);
         host.set_word(EXPLORE_POINT + 4, y);
-        let mut target = explore_port::Candidate { x, y, score: 0, count: 0, word: 1 };
-        explore_score(host, &mut target, 0, a)?;
+        // 0x524135..0x524157: the point goes into the state's own target (+0x18 / +0x1C,
+        // kind +0x28 = 1) and that record is the one scored, so its score (+0x20) and
+        // count (+0x24) start as they were and the score's own reads of the target see
+        // the candidate.
+        let mut target = explore_port::Candidate { x, y, score: host.word(EXPLORE_TARGET + 8), count: host.word(EXPLORE_TARGET + 0xc), word: 1 };
+        explore_score(host, &mut target, 0, true, a)?;
         for (k, w) in target.words().into_iter().enumerate() {
             host.set_word(EXPLORE_TARGET + 4 * k as u32, w);
         }
@@ -1189,7 +1201,7 @@ pub(in crate::movement) fn explore_command(ms: &mut MovementState, world: &mut W
 /// moves to the first open place (`0x4F46E0`, radius 2); no place, or a count below the
 /// best's, refuses it. **Rendition:** `ExploreFinishAreaBonus` (the regions of `0x7AA3D0`)
 /// is not added.
-fn explore_score(host: &mut Regiment<'_>, c: &mut explore_port::Candidate, best_count: u32, _: &mut Arena) -> aa_mind::Result<()> {
+fn explore_score(host: &mut Regiment<'_>, c: &mut explore_port::Candidate, best_count: u32, own_target: bool, _: &mut Arena) -> aa_mind::Result<()> {
     let refuse = |c: &mut explore_port::Candidate| {
         c.x = 0xbf80_0000;
         c.y = 0xbf80_0000;
@@ -1219,23 +1231,28 @@ fn explore_score(host: &mut Regiment<'_>, c: &mut explore_port::Candidate, best_
     let way = vec2([host.word(EXPLORE_POINT), host.word(EXPLORE_POINT + 4)]);
     let (dx, dy) = (f64::from(p.x) - f64::from(way.x), f64::from(p.y) - f64::from(way.y));
     score = ((dx * dx + dy * dy).sqrt() * rule(host, "ExploreDistanceMultiplier", -1.0) + f64::from(score)) as f32;
-    let target = vec2([host.word(EXPLORE_TARGET), host.word(EXPLORE_TARGET + 4)]);
+    // The state's target (+0x18 / +0x1C); `own_target`: the candidate is that record.
+    let target = if own_target { p } else { vec2([host.word(EXPLORE_TARGET), host.word(EXPLORE_TARGET + 4)]) };
     let map = &host.world.map;
     let (w, h) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
     if (0.0..w).contains(&target.x) && (0.0..h).contains(&target.y) {
         let own = host.world.orgs[o as usize].anchor;
-        let unit = |v: Vec2| {
-            let l = v.length();
-            if l > 0.0001 { v / l } else { Vec2::ZERO }
-        };
-        let (u, v) = (unit(target - own), unit(p - own));
-        let dot = f64::from(u.x) * f64::from(v.x) + f64::from(v.y) * f64::from(u.y);
+        // 0x52155E..0x5215C3: both differences stored to binary32, 0x409230 on each,
+        // then y*y + x*x on the stack.
+        let less = |a: f32, b: f32| (f64::from(a) - f64::from(b)) as f32;
+        let mut u = [less(target.x, own.x), less(target.y, own.y)];
+        let mut v = [less(p.x, own.x), less(p.y, own.y)];
+        aa_movement::transport_drop::normalize2(&mut u, PC).map_err(err)?;
+        aa_movement::transport_drop::normalize2(&mut v, PC).map_err(err)?;
+        let dot = f64::from(v[1]) * f64::from(u[1]) + f64::from(v[0]) * f64::from(u[0]);
         score = (dot * rule(host, "ExploreDotProductMultiplier", 20.0) + f64::from(score)) as f32;
     }
-    // 0x5216D7: the getter and its draw.
+    // 0x5216D7: the getter and its draw. The unit is not stored: it goes on the stack
+    // straight into the product with the factor (0x5216E6..0x521700).
     let fuzz = rule(host, "ExploreFuzzyFactor", 20.0);
-    let u = crate::trace::native_unit(host.world.random_u32_at("site 5216d7"));
-    c.score = ((f64::from(u) * fuzz + f64::from(score)) as f32).to_bits();
+    let draw = host.world.random_u32_at("site 5216d7");
+    let u = crate::trace::native_unit_f64(draw);
+    c.score = ((u * fuzz + f64::from(score)) as f32).to_bits();
     Ok(())
 }
 
@@ -1304,18 +1321,26 @@ impl explore_port::ExploreThinkWorld for Regiment<'_> {
         let max = self.world.data.rule_ci("ExploreActorRadiusMax").unwrap_or(30.0);
         let draw = self.world.random_u32_at("site 5241b3");
         let direction = aa_movement::formation::random_direction(draw);
-        let u = crate::trace::native_unit(self.world.random_u32_at("site 5241e7"));
-        let radius = (f64::from(u) * f64::from(max - min) + f64::from(min)) as f32;
+        let draw = self.world.random_u32_at("site 5241e7");
         let own = self.world.orgs[self.o as usize].anchor;
-        let x = (f64::from(direction[0]) * f64::from(radius) + f64::from(own.x)) as f32;
-        let y = (f64::from(direction[1]) * f64::from(radius) + f64::from(own.y)) as f32;
-        c.word = 0;
-        c.x = x.to_bits();
-        c.y = y.to_bits();
         let map = &self.world.map;
         let (w, h) = (map.width as f32 * map.cell_size, map.height as f32 * map.cell_size);
-        if (0.0..w).contains(&x) && (0.0..h).contains(&y) {
-            explore_score(self, c, best_count, a)?;
+        // 0x5241A6..0x524256: the span (maximum less minimum) is stored to binary32; the
+        // draw's unit, times the span, plus the minimum stays on the stack (no store);
+        // each direction component times it is stored to binary32, then the
+        // organization's coordinate is added. y is stored before its tests; x is tested
+        // as it stands on the stack (0x524260: not below 0, below the extent).
+        let span = (f64::from(max) - f64::from(min)) as f32;
+        let radius = crate::trace::native_unit_f64(draw) * f64::from(span) + f64::from(min);
+        let across = (f64::from(direction[0]) * radius) as f32;
+        let along = (f64::from(direction[1]) * radius) as f32;
+        let x = f64::from(across) + f64::from(own.x);
+        let y = (f64::from(along) + f64::from(own.y)) as f32;
+        c.word = 0;
+        c.x = (x as f32).to_bits();
+        c.y = y.to_bits();
+        if x >= 0.0 && x < f64::from(w) && y >= 0.0 && y < h {
+            explore_score(self, c, best_count, false, a)?;
         }
         Ok(())
     }
@@ -1334,7 +1359,7 @@ impl explore_port::ExploreThinkWorld for Regiment<'_> {
         };
         [c.x, c.y] = bits(p);
         c.word = 1;
-        explore_score(self, c, best_count, a)
+        explore_score(self, c, best_count, false, a)
     }
     /// `0x4F46E0(organization, &candidate, 4.0)`. **Rendition:** the descriptor is the
     /// leader's.
